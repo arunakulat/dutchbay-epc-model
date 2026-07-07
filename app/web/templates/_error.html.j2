@@ -1,0 +1,49 @@
+{#
+  Error fragment (#843, epic #788) — swapped into ``#results`` when a run fails
+  on user input. NOT a full page; it extends nothing.
+
+  Renders a sanitised, human-readable account of what went wrong and never a
+  stack trace. Two, non-exclusive, sources are supported:
+
+    * ``field_errors`` — a list of ``{field, message}`` items derived by the
+      route from a pydantic ``ValidationError`` (the route flattens each entry's
+      ``loc``/``msg``; the raw exception, input values, and internal types are
+      NOT passed through);
+    * ``message`` — a single summary line for a domain error the engine raises
+      by contract (``ConfigValidationError`` / ``AepProvenanceError`` /
+      ``AepReconciliationError``).
+
+  The route returns this fragment with HTTP 200 or 422 for bad user input — never
+  a 500 — so htmx swaps it in place of the results.
+
+  Security: rendered under an ``autoescape = True`` environment; field names and
+  messages are HTML-escaped.
+#}
+<article class="results-panel results-panel--error" role="alert">
+  <header class="results-panel__header">
+    <h2 class="results-panel__title results-panel__title--error">
+      Could not run the case
+    </h2>
+  </header>
+
+  <div class="banner banner--error">
+    Please correct the inputs below and run again.
+  </div>
+
+  {% if message %}
+  <p class="error-summary">{{ message }}</p>
+  {% endif %}
+
+  {% if field_errors %}
+  <ul class="error-list">
+    {% for item in field_errors %}
+    <li class="error-list__item">
+      <span class="error-list__field">{{ item.field }}</span>
+      <span class="error-list__message">{{ item.message }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% elif not message %}
+  <p class="error-summary">The submitted inputs were not valid.</p>
+  {% endif %}
+</article>

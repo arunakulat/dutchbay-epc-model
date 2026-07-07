@@ -1,0 +1,404 @@
+{#
+  The multi-step wizard page (#843, epic #788).
+
+  A single HTML form split into four visual steps. Back/Next navigation is a
+  small inline vanilla-JS show/hide over the four ``.wizard-step`` panels — no
+  framework, no build step. The final step's Run button submits the whole form
+  via htmx (``hx-post="/wizard/run"``, ``hx-target="#results"``,
+  ``hx-swap="innerHTML"``) so results replace the ``#results`` container in place.
+
+  Field names are the EXACT ``app.models.inputs.WindFarmInputs`` attribute names;
+  the route parses this form straight into that model. Defaults are pre-filled
+  for the DutchBay lendercase so a user can open the wizard and click Run at once.
+
+  Numeric fields use ``inputmode`` / ``step`` hints for usability only; server-side
+  pydantic validation (``extra='forbid'`` and the physical bounds) remains the
+  authority, and invalid input returns the ``_error`` fragment, never a 500.
+#}
+{% extends "base.html.j2" %}
+
+{% block title %}Wizard — DutchBay EPC Model{% endblock %}
+
+{% block header_actions %}
+<form class="site-header__logout" method="post" action="/logout">
+  <button class="btn btn--ghost" type="submit">Sign out</button>
+</form>
+{% endblock %}
+
+{% block content %}
+<section class="wizard">
+  <div class="wizard__intro">
+    <h1 class="wizard__title">Run a project finance case</h1>
+    <p class="wizard__lede">
+      Review the pre-filled DutchBay lendercase inputs, adjust as needed, and run
+      the case. Results and downloadable reports appear below.
+    </p>
+  </div>
+
+  <ol class="wizard__steps" aria-hidden="true">
+    <li class="wizard__step-tab is-active" data-step-tab="1">1. Site &amp; project</li>
+    <li class="wizard__step-tab" data-step-tab="2">2. Commercial &amp; finance</li>
+    <li class="wizard__step-tab" data-step-tab="3">3. Debt (optional)</li>
+    <li class="wizard__step-tab" data-step-tab="4">4. Review &amp; run</li>
+  </ol>
+
+  <form
+    id="wizard-form"
+    class="wizard__form"
+    hx-post="/wizard/run"
+    hx-target="#results"
+    hx-swap="innerHTML"
+    hx-indicator="#run-indicator"
+  >
+    {# ---- Step 1: Site & project ---- #}
+    <fieldset class="wizard-step is-active" data-step="1">
+      <legend class="wizard-step__legend">Site &amp; project</legend>
+
+      <div class="field">
+        <label class="field__label" for="scenario_variant">Scenario variant</label>
+        <select class="field__input" id="scenario_variant" name="scenario_variant">
+          <option value="lendercase" selected>Lender case</option>
+          <option value="basecase">Base case</option>
+          <option value="equitycase">Equity case</option>
+        </select>
+        <p class="field__hint">
+          The committed base scenario your inputs are merged into.
+        </p>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="site_name">Site name</label>
+        <input
+          class="field__input"
+          type="text"
+          id="site_name"
+          name="site_name"
+          value="Dutch Bay"
+          required
+        />
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="location">Location</label>
+        <input
+          class="field__input"
+          type="text"
+          id="location"
+          name="location"
+          value="Kalpitiya, Sri Lanka"
+        />
+        <p class="field__hint">Optional.</p>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="capacity_mw">Capacity (MW)</label>
+          <input
+            class="field__input"
+            type="number"
+            id="capacity_mw"
+            name="capacity_mw"
+            value="150"
+            min="0"
+            step="any"
+            inputmode="decimal"
+            required
+          />
+        </div>
+        <div class="field">
+          <label class="field__label" for="capacity_factor">Capacity factor</label>
+          <input
+            class="field__input"
+            type="number"
+            id="capacity_factor"
+            name="capacity_factor"
+            value="0.35"
+            min="0"
+            max="1"
+            step="any"
+            inputmode="decimal"
+            required
+          />
+          <p class="field__hint">Fraction in (0, 1].</p>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="project_life_years"
+            >Project life (years)</label
+          >
+          <input
+            class="field__input"
+            type="number"
+            id="project_life_years"
+            name="project_life_years"
+            value="25"
+            min="1"
+            max="60"
+            step="1"
+            inputmode="numeric"
+            required
+          />
+        </div>
+        <div class="field">
+          <label class="field__label" for="cod_year"
+            >Commercial operation year</label
+          >
+          <input
+            class="field__input"
+            type="number"
+            id="cod_year"
+            name="cod_year"
+            min="2000"
+            max="2100"
+            step="1"
+            inputmode="numeric"
+          />
+          <p class="field__hint">Optional.</p>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="num_turbines"
+            >Number of turbines</label
+          >
+          <input
+            class="field__input"
+            type="number"
+            id="num_turbines"
+            name="num_turbines"
+            min="1"
+            step="1"
+            inputmode="numeric"
+          />
+          <p class="field__hint">Optional.</p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="hub_height_m">Hub height (m)</label>
+          <input
+            class="field__input"
+            type="number"
+            id="hub_height_m"
+            name="hub_height_m"
+            min="0"
+            step="any"
+            inputmode="decimal"
+          />
+          <p class="field__hint">Optional.</p>
+        </div>
+      </div>
+
+      <div class="wizard-step__nav">
+        <span></span>
+        <button class="btn btn--primary" type="button" data-next>Next</button>
+      </div>
+    </fieldset>
+
+    {# ---- Step 2: Commercial & finance ---- #}
+    <fieldset class="wizard-step" data-step="2">
+      <legend class="wizard-step__legend">Commercial &amp; finance</legend>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="ppa_price_lkr_per_kwh"
+            >PPA price (LKR/kWh)</label
+          >
+          <input
+            class="field__input"
+            type="number"
+            id="ppa_price_lkr_per_kwh"
+            name="ppa_price_lkr_per_kwh"
+            value="22"
+            min="0"
+            step="any"
+            inputmode="decimal"
+            required
+          />
+        </div>
+        <div class="field">
+          <label class="field__label" for="ppa_term_years"
+            >PPA term (years)</label
+          >
+          <input
+            class="field__input"
+            type="number"
+            id="ppa_term_years"
+            name="ppa_term_years"
+            value="20"
+            min="1"
+            max="40"
+            step="1"
+            inputmode="numeric"
+            required
+          />
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="capex_total_usd"
+          >Total capex (USD)</label
+        >
+        <input
+          class="field__input"
+          type="number"
+          id="capex_total_usd"
+          name="capex_total_usd"
+          value="167860000"
+          min="0"
+          step="any"
+          inputmode="decimal"
+          required
+        />
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="opex_annual_usd"
+          >Annual opex (USD)</label
+        >
+        <input
+          class="field__input"
+          type="number"
+          id="opex_annual_usd"
+          name="opex_annual_usd"
+          value="6000000"
+          min="0"
+          step="any"
+          inputmode="decimal"
+          required
+        />
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="fx_start_lkr_per_usd"
+          >Start FX (LKR per USD)</label
+        >
+        <input
+          class="field__input"
+          type="number"
+          id="fx_start_lkr_per_usd"
+          name="fx_start_lkr_per_usd"
+          value="333.79"
+          min="0"
+          step="any"
+          inputmode="decimal"
+          required
+        />
+      </div>
+
+      <div class="wizard-step__nav">
+        <button class="btn btn--ghost" type="button" data-back>Back</button>
+        <button class="btn btn--primary" type="button" data-next>Next</button>
+      </div>
+    </fieldset>
+
+    {# ---- Step 3: Debt (optional) ---- #}
+    <fieldset class="wizard-step" data-step="3">
+      <legend class="wizard-step__legend">Debt (optional)</legend>
+      <p class="wizard-step__note">
+        Leave these blank to inherit the selected scenario variant's financing
+        terms.
+      </p>
+
+      <div class="field-row">
+        <div class="field">
+          <label class="field__label" for="debt_ratio">Debt ratio</label>
+          <input
+            class="field__input"
+            type="number"
+            id="debt_ratio"
+            name="debt_ratio"
+            min="0"
+            max="1"
+            step="any"
+            inputmode="decimal"
+          />
+          <p class="field__hint">Fraction in [0, 1].</p>
+        </div>
+        <div class="field">
+          <label class="field__label" for="target_dscr">Target DSCR</label>
+          <input
+            class="field__input"
+            type="number"
+            id="target_dscr"
+            name="target_dscr"
+            min="0"
+            step="any"
+            inputmode="decimal"
+          />
+        </div>
+      </div>
+
+      <div class="wizard-step__nav">
+        <button class="btn btn--ghost" type="button" data-back>Back</button>
+        <button class="btn btn--primary" type="button" data-next>Next</button>
+      </div>
+    </fieldset>
+
+    {# ---- Step 4: Review & run ---- #}
+    <fieldset class="wizard-step" data-step="4">
+      <legend class="wizard-step__legend">Review &amp; run</legend>
+      <p class="wizard-step__note">
+        Submit the case to compute the lender KPIs, sensitivity charts, and
+        downloadable reports. This runs the same finance engine as the API.
+      </p>
+
+      <div class="wizard-step__nav">
+        <button class="btn btn--ghost" type="button" data-back>Back</button>
+        <button class="btn btn--primary" type="submit">
+          Run case
+          <span id="run-indicator" class="htmx-indicator" aria-hidden="true"
+            >…</span
+          >
+        </button>
+      </div>
+    </fieldset>
+  </form>
+
+  <div id="results" class="results" aria-live="polite"></div>
+</section>
+
+<script>
+  // Minimal, dependency-free step navigation for the wizard form. Shows exactly
+  // one .wizard-step at a time and keeps the numbered step tabs in sync. htmx
+  // handles the actual submit; this only toggles visibility.
+  (function () {
+    "use strict";
+    var steps = Array.prototype.slice.call(
+      document.querySelectorAll(".wizard-step")
+    );
+    var tabs = Array.prototype.slice.call(
+      document.querySelectorAll("[data-step-tab]")
+    );
+    if (!steps.length) {
+      return;
+    }
+    var current = 0;
+
+    function show(index) {
+      current = Math.max(0, Math.min(index, steps.length - 1));
+      steps.forEach(function (step, i) {
+        step.classList.toggle("is-active", i === current);
+      });
+      tabs.forEach(function (tab, i) {
+        tab.classList.toggle("is-active", i === current);
+      });
+    }
+
+    document.addEventListener("click", function (event) {
+      var target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      if (target.closest("[data-next]")) {
+        show(current + 1);
+      } else if (target.closest("[data-back]")) {
+        show(current - 1);
+      }
+    });
+
+    show(0);
+  })();
+</script>
+{% endblock %}

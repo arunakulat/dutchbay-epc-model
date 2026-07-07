@@ -1,0 +1,53 @@
+{#
+  Login page (#843). Posts credentials to ``POST /login`` as a standard form
+  submission (no htmx): on success the route sets the session cookie and issues
+  a 303 redirect to ``/wizard``; on bad credentials it re-renders this page with
+  ``error`` set and HTTP 401. The password field is never echoed back.
+#}
+{% extends "base.html.j2" %}
+
+{% block title %}Sign in — DutchBay EPC Model{% endblock %}
+
+{% block content %}
+<section class="auth">
+  <div class="auth__card">
+    <h1 class="auth__title">Sign in</h1>
+    <p class="auth__intro">
+      Enter your credentials to open the project finance wizard.
+    </p>
+
+    {% if error %}
+    <div class="banner banner--error" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form class="auth__form" method="post" action="/login">
+      <div class="field">
+        <label class="field__label" for="username">Username</label>
+        <input
+          class="field__input"
+          type="text"
+          id="username"
+          name="username"
+          autocomplete="username"
+          value="{{ username|default('') }}"
+          required
+        />
+      </div>
+      <div class="field">
+        <label class="field__label" for="password">Password</label>
+        <input
+          class="field__input"
+          type="password"
+          id="password"
+          name="password"
+          autocomplete="current-password"
+          required
+        />
+      </div>
+      <div class="auth__actions">
+        <button class="btn btn--primary" type="submit">Sign in</button>
+      </div>
+    </form>
+  </div>
+</section>
+{% endblock %}

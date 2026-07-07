@@ -1,0 +1,378 @@
+{#
+  Results fragment (#843, epic #788) — swapped into ``#results`` by htmx after a
+  successful ``POST /wizard/run``. NOT a full page; it extends nothing.
+
+  Renders, from the ``surface`` (an ``app.api.surface.CaseSurface``):
+    * a run header (site, scenario, grade, timestamp);
+    * the lender KPI cards, each showing ``card.display`` verbatim (the report's
+      own formatted string, so numbers match the PDF exactly);
+    * the one-at-a-time tornado as pure-CSS horizontal bars, width proportional
+      to ``|impact_abs|`` normalised to the largest in the set, plus a table;
+    * the Morris and PAWN global-SA screenings as ranked bar-tables;
+    * the capital-risk (Monte-Carlo) headline: covenant-breach probabilities vs
+      their floors, probability-below-hurdle vs the target equity IRR, and the
+      per-metric VaR/CVaR;
+    * three download forms (HTML / PDF / XLSX) whose hidden inputs carry the
+      EXACT submitted ``inputs`` so each download re-runs the case statelessly.
+
+  Every supplementary block (tornado / Morris / PAWN / capital-risk) is ``None``
+  exactly when the report omitted it; each renders a plain "not computed for this
+  run" note instead (CASPER graceful degradation). Bar widths are computed with a
+  guard so a zero or absent maximum never divides by zero.
+
+  ``inputs`` (an ``app.models.inputs.WindFarmInputs``) is supplied alongside
+  ``surface`` so the hidden download fields exactly echo the submission. Field
+  names below equal the model attribute names verbatim.
+
+  Security: rendered under an ``autoescape = True`` environment, so ``site_name``
+  and ``location`` (user input) are HTML-escaped.
+#}
+{% macro hidden_inputs(inputs) -%}
+  {#- Emit one hidden <input> per set WindFarmInputs field. Optional fields that
+      are None are skipped so a blank value is never re-posted (which would fail
+      validation); the download route then re-inherits them from the variant. -#}
+  <input type="hidden" name="scenario_variant" value="{{ inputs.scenario_variant }}" />
+  <input type="hidden" name="site_name" value="{{ inputs.site_name }}" />
+  {% if inputs.location is not none %}
+  <input type="hidden" name="location" value="{{ inputs.location }}" />
+  {% endif %}
+  <input type="hidden" name="capacity_mw" value="{{ inputs.capacity_mw }}" />
+  <input type="hidden" name="capacity_factor" value="{{ inputs.capacity_factor }}" />
+  <input type="hidden" name="project_life_years" value="{{ inputs.project_life_years }}" />
+  {% if inputs.cod_year is not none %}
+  <input type="hidden" name="cod_year" value="{{ inputs.cod_year }}" />
+  {% endif %}
+  {% if inputs.num_turbines is not none %}
+  <input type="hidden" name="num_turbines" value="{{ inputs.num_turbines }}" />
+  {% endif %}
+  {% if inputs.hub_height_m is not none %}
+  <input type="hidden" name="hub_height_m" value="{{ inputs.hub_height_m }}" />
+  {% endif %}
+  <input type="hidden" name="ppa_price_lkr_per_kwh" value="{{ inputs.ppa_price_lkr_per_kwh }}" />
+  <input type="hidden" name="ppa_term_years" value="{{ inputs.ppa_term_years }}" />
+  <input type="hidden" name="capex_total_usd" value="{{ inputs.capex_total_usd }}" />
+  <input type="hidden" name="opex_annual_usd" value="{{ inputs.opex_annual_usd }}" />
+  <input type="hidden" name="fx_start_lkr_per_usd" value="{{ inputs.fx_start_lkr_per_usd }}" />
+  {% if inputs.debt_ratio is not none %}
+  <input type="hidden" name="debt_ratio" value="{{ inputs.debt_ratio }}" />
+  {% endif %}
+  {% if inputs.target_dscr is not none %}
+  <input type="hidden" name="target_dscr" value="{{ inputs.target_dscr }}" />
+  {% endif %}
+{%- endmacro %}
+
+{% macro bar_width(value, maximum) -%}
+  {#- Percentage width for a CSS bar: |value| / max, guarded against a zero or
+      missing maximum. Returns a bare number (percent); callers append '%'. -#}
+  {%- if value is none or not maximum -%}0{%- else -%}
+    {{ ((value | abs) / maximum * 100.0) | round(1) }}
+  {%- endif -%}
+{%- endmacro %}
+
+<article class="results-panel">
+  <header class="results-panel__header">
+    <h2 class="results-panel__title">{{ surface.site_name }}</h2>
+    <dl class="results-panel__meta">
+      <div class="meta-item">
+        <dt>Scenario</dt>
+        <dd>{{ surface.scenario_variant }}</dd>
+      </div>
+      <div class="meta-item">
+        <dt>Status</dt>
+        <dd>{{ surface.status }}</dd>
+      </div>
+      {% if surface.report_grade %}
+      <div class="meta-item">
+        <dt>Grade</dt>
+        <dd>{{ surface.report_grade }}</dd>
+      </div>
+      {% endif %}
+      <div class="meta-item">
+        <dt>Generated</dt>
+        <dd>{{ surface.generated_at }}</dd>
+      </div>
+    </dl>
+  </header>
+
+  {# ---- KPI cards ---- #}
+  <section class="results-section">
+    <h3 class="results-section__title">Lender KPIs</h3>
+    {% if surface.kpi_cards %}
+    <div class="kpi-grid">
+      {% for card in surface.kpi_cards %}
+      <div class="kpi-card">
+        <span class="kpi-card__label">{{ card.label }}</span>
+        <span class="kpi-card__value">{{ card.display }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="note">No KPI cards were produced for this run.</p>
+    {% endif %}
+  </section>
+
+  {# ---- Tornado (one-at-a-time sensitivity) ---- #}
+  <section class="results-section">
+    <h3 class="results-section__title">Sensitivity tornado</h3>
+    {% if surface.tornado and surface.tornado.bars %}
+    {% set tornado_max = surface.tornado.bars | map(attribute='impact_abs') | reject('none') | map('abs') | list | max | default(0) %}
+    <p class="results-section__caption">
+      Target metric: {{ surface.tornado.metric }}. Bar length is each driver's
+      absolute swing relative to the widest.
+    </p>
+    <div class="bars">
+      {% for bar in surface.tornado.bars %}
+      <div class="bar-row">
+        <span class="bar-row__label">{{ bar.label }}</span>
+        <span class="bar-row__track">
+          <span
+            class="bar-row__fill"
+            style="width: {{ bar_width(bar.impact_abs, tornado_max) }}%;"
+          ></span>
+        </span>
+        <span class="bar-row__value">
+          {% if bar.impact_abs is not none %}{{ bar.impact_abs }}{% else %}—{% endif %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th scope="col">Driver</th>
+          <th scope="col">Base</th>
+          <th scope="col">Low case</th>
+          <th scope="col">High case</th>
+          <th scope="col">Impact</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for bar in surface.tornado.bars %}
+        <tr>
+          <td>{{ bar.label }}</td>
+          <td>{% if bar.base is not none %}{{ bar.base }}{% else %}—{% endif %}</td>
+          <td>{% if bar.low_case is not none %}{{ bar.low_case }}{% else %}—{% endif %}</td>
+          <td>{% if bar.high_case is not none %}{{ bar.high_case }}{% else %}—{% endif %}</td>
+          <td>{% if bar.impact_abs is not none %}{{ bar.impact_abs }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="note">Not computed for this run.</p>
+    {% endif %}
+  </section>
+
+  {# ---- Global sensitivity: Morris ---- #}
+  <section class="results-section">
+    <h3 class="results-section__title">Global sensitivity — Morris</h3>
+    {% if surface.global_sa_morris and surface.global_sa_morris.bars %}
+    {% set morris_max = surface.global_sa_morris.bars | map(attribute='mu_star') | reject('none') | map('abs') | list | max | default(0) %}
+    <p class="results-section__caption">
+      Method: {{ surface.global_sa_morris.method }} · Metric:
+      {{ surface.global_sa_morris.metric }}{% if surface.global_sa_morris.n_runs %} ·
+      {{ surface.global_sa_morris.n_runs }} runs{% endif %}. Bar length is
+      elementary-effect mean (mu*) relative to the largest.
+    </p>
+    <div class="bars">
+      {% for bar in surface.global_sa_morris.bars %}
+      <div class="bar-row">
+        <span class="bar-row__label">{{ bar.name }}</span>
+        <span class="bar-row__track">
+          <span
+            class="bar-row__fill"
+            style="width: {{ bar_width(bar.mu_star, morris_max) }}%;"
+          ></span>
+        </span>
+        <span class="bar-row__value">
+          {% if bar.mu_star is not none %}{{ bar.mu_star }}{% else %}—{% endif %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th scope="col">Driver</th>
+          <th scope="col">mu*</th>
+          <th scope="col">sigma</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for bar in surface.global_sa_morris.bars %}
+        <tr>
+          <td>{{ bar.name }}</td>
+          <td>{% if bar.mu_star is not none %}{{ bar.mu_star }}{% else %}—{% endif %}</td>
+          <td>{% if bar.sigma is not none %}{{ bar.sigma }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="note">Not computed for this run.</p>
+    {% endif %}
+  </section>
+
+  {# ---- Global sensitivity: PAWN ---- #}
+  <section class="results-section">
+    <h3 class="results-section__title">Global sensitivity — PAWN</h3>
+    {% if surface.global_sa_pawn and surface.global_sa_pawn.bars %}
+    {% set pawn_max = surface.global_sa_pawn.bars | map(attribute='median_ks') | reject('none') | map('abs') | list | max | default(0) %}
+    <p class="results-section__caption">
+      Method: {{ surface.global_sa_pawn.method }} · Metric:
+      {{ surface.global_sa_pawn.metric }}{% if surface.global_sa_pawn.n_runs %} ·
+      {{ surface.global_sa_pawn.n_runs }} runs{% endif %}. Bar length is the
+      median KS statistic relative to the largest.
+    </p>
+    <div class="bars">
+      {% for bar in surface.global_sa_pawn.bars %}
+      <div class="bar-row">
+        <span class="bar-row__label">{{ bar.name }}</span>
+        <span class="bar-row__track">
+          <span
+            class="bar-row__fill"
+            style="width: {{ bar_width(bar.median_ks, pawn_max) }}%;"
+          ></span>
+        </span>
+        <span class="bar-row__value">
+          {% if bar.median_ks is not none %}{{ bar.median_ks }}{% else %}—{% endif %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th scope="col">Driver</th>
+          <th scope="col">Median KS</th>
+          <th scope="col">KS CV</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for bar in surface.global_sa_pawn.bars %}
+        <tr>
+          <td>{{ bar.name }}</td>
+          <td>{% if bar.median_ks is not none %}{{ bar.median_ks }}{% else %}—{% endif %}</td>
+          <td>{% if bar.ks_cv is not none %}{{ bar.ks_cv }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="note">Not computed for this run.</p>
+    {% endif %}
+  </section>
+
+  {# ---- Capital risk (Monte Carlo) ---- #}
+  <section class="results-section">
+    <h3 class="results-section__title">Capital risk (Monte Carlo)</h3>
+    {% if surface.capital_risk %}
+    {% set cr = surface.capital_risk %}
+    <p class="results-section__caption">
+      Scenario: {{ cr.scenario }} · Model: {{ cr.model_version }} · Method:
+      {{ cr.method }} · {{ cr.n_trials }} trials.
+    </p>
+
+    <table class="data-table">
+      <caption class="data-table__caption">Covenant-breach probability vs floor</caption>
+      <thead>
+        <tr>
+          <th scope="col">Covenant</th>
+          <th scope="col">Breach probability</th>
+          <th scope="col">Floor</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>DSCR</td>
+          <td>{{ cr.dscr_breach_probability }}</td>
+          <td>{{ cr.dscr_floor }}</td>
+        </tr>
+        <tr>
+          <td>LLCR</td>
+          <td>{{ cr.llcr_breach_probability }}</td>
+          <td>{{ cr.llcr_floor }}</td>
+        </tr>
+        <tr>
+          <td>PLCR</td>
+          <td>{{ cr.plcr_breach_probability }}</td>
+          <td>{{ cr.plcr_floor }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <table class="data-table">
+      <caption class="data-table__caption">Equity IRR hurdle</caption>
+      <thead>
+        <tr>
+          <th scope="col">Probability below hurdle</th>
+          <th scope="col">Target equity IRR</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{{ cr.probability_below_hurdle }}</td>
+          <td>{{ cr.target_equity_irr }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    {% if cr.metrics %}
+    <table class="data-table">
+      <caption class="data-table__caption">Return-metric risk (VaR / CVaR)</caption>
+      <thead>
+        <tr>
+          <th scope="col">Metric</th>
+          <th scope="col">Unit</th>
+          <th scope="col">Mean</th>
+          <th scope="col">{{ cr.metrics[0].var_label }}</th>
+          <th scope="col">{{ cr.metrics[0].cvar_label }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in cr.metrics %}
+        <tr>
+          <td>{{ m.metric }}</td>
+          <td>{{ m.unit }}</td>
+          <td>{{ m.mean }}</td>
+          <td>{{ m.var }}</td>
+          <td>{{ m.cvar }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% else %}
+    <p class="note">Not computed for this run.</p>
+    {% endif %}
+  </section>
+
+  {# ---- Downloads (stateless re-run of the same inputs) ---- #}
+  <section class="results-section results-section--downloads">
+    <h3 class="results-section__title">Download full report</h3>
+    <p class="results-section__caption">
+      Each download re-runs the same inputs and returns the full report,
+      including the Monte-Carlo distribution chart not shown above.
+    </p>
+    <div class="download-actions">
+      <form
+        class="download-form"
+        method="post"
+        action="/wizard/report.html"
+        target="_blank"
+        rel="noopener"
+      >
+        {{ hidden_inputs(inputs) }}
+        <button class="btn btn--secondary" type="submit">Open HTML report</button>
+      </form>
+      <form class="download-form" method="post" action="/wizard/report.pdf">
+        {{ hidden_inputs(inputs) }}
+        <button class="btn btn--secondary" type="submit">Download PDF</button>
+      </form>
+      <form class="download-form" method="post" action="/wizard/report.xlsx">
+        {{ hidden_inputs(inputs) }}
+        <button class="btn btn--secondary" type="submit">Download workbook</button>
+      </form>
+    </div>
+  </section>
+</article>
