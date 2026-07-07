@@ -27,6 +27,7 @@ output paths are all argument/config supplied; nothing site-specific is hardcode
 from __future__ import annotations
 
 import json
+import numbers
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
 
@@ -46,17 +47,85 @@ from analytics.gis.geotiff_export import (
 PolygonLike = Union[Mapping[str, Any], Sequence[Any]]
 
 
+def _check_coordinate_tree(node: Any) -> None:
+    """Recursively assert ``node`` is a nested list bottoming out in numeric positions.
+
+    Descends the GeoJSON coordinate nesting (MultiPolygon -> polygon -> ring -> position)
+    and raises ``ValueError`` on any mapping, string or bare scalar found where a numeric
+    position (or a list of them) is expected. This is the pre-flight guard that keeps a
+    malformed geometry out of rasterio's Cython bounds walk (see :func:`_validate_geometry`).
+    """
+    if isinstance(node, (str, bytes, Mapping)):
+        raise ValueError(
+            f"malformed geometry coordinates: found a {type(node).__name__} where a "
+            "numeric position or a list of positions was expected"
+        )
+    if not isinstance(node, Sequence):
+        raise ValueError(
+            f"malformed geometry coordinates: found a non-sequence {node!r}"
+        )
+    if len(node) == 0:
+        raise ValueError("malformed geometry coordinates: empty coordinate list")
+    # A position leaf is a sequence of real numbers: (lon, lat) or (lon, lat, z).
+    if all(isinstance(x, numbers.Real) and not isinstance(x, bool) for x in node):
+        if len(node) < 2:
+            raise ValueError(
+                f"malformed geometry coordinates: position {list(node)!r} has fewer "
+                "than two ordinates"
+            )
+        return
+    # Otherwise a nesting level (polygons / rings): recurse into each child.
+    for child in node:
+        _check_coordinate_tree(child)
+
+
+def _validate_geometry(geom: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate a concrete Polygon/MultiPolygon geometry's coordinate tree, then return it.
+
+    rasterio feeds GeoJSON ``coordinates`` straight to a Cython bounds walk
+    (``rasterio.features._bounds``) that dereferences each leaf as a C double. A stray
+    mapping or string among the coordinates -- e.g. an already-extracted geometry that was
+    accidentally double-wrapped into ``coordinates: [ {geom} ]`` -- is read as a raw
+    pointer and SEGFAULTS the interpreter (exit 139): an uncatchable, whole-process crash
+    at ``mask() -> raster_geometry_mask -> geometry_window -> bounds``. Validating the
+    structure in pure Python first converts that hard crash into a loud, catchable
+    ``ValueError`` (CESSPIT fail-loud), so no malformed geometry ever reaches the C
+    extension.
+    """
+    _check_coordinate_tree(geom.get("coordinates"))
+    return geom
+
+
 def _extract_geometries(polygon: PolygonLike) -> List[Dict[str, Any]]:
     """Normalise ``polygon`` to a list of GeoJSON Polygon/MultiPolygon geometry mappings.
 
     Accepts a bare ring coordinate list, a Polygon/MultiPolygon geometry, a single
-    ``Feature`` or a ``FeatureCollection``. Raising loudly on an empty / unrecognised
-    input is a CESSPIT posture: a clip against no geometry is a config error, not a
-    silent no-op that would look like "everything masked".
+    ``Feature``, a ``FeatureCollection``, or an already-extracted *list* of any of these
+    (e.g. the return value of :func:`load_polygon`). Raising loudly on an empty /
+    unrecognised input is a CESSPIT posture: a clip against no geometry is a config error,
+    not a silent no-op that would look like "everything masked".
+
+    The function is idempotent -- ``_extract_geometries(_extract_geometries(x))`` equals
+    ``_extract_geometries(x)`` -- and that property is load-bearing: :func:`clip_to_polygon`
+    re-extracts whatever it is handed, so feeding it the already-extracted output of
+    :func:`load_polygon` must NOT double-wrap the geometry list into a
+    ``{"type": "Polygon", "coordinates": [ {geom} ]}`` mapping. That double-wrap is a
+    malformed geometry that SEGFAULTS GDAL's coordinate-bounds walk (the bug this guards).
     """
-    # Bare ring coordinate list -> wrap as a Polygon geometry.
+    # A non-string, non-mapping Sequence is either an already-extracted list of
+    # geometry/feature mappings (idempotent re-extraction) or a bare ring coordinate list.
     if isinstance(polygon, Sequence) and not isinstance(polygon, (str, bytes, Mapping)):
-        return [{"type": "Polygon", "coordinates": list(polygon)}]
+        items = list(polygon)
+        if items and all(isinstance(item, Mapping) for item in items):
+            # A list of geometry/feature mappings -> re-extract each. This is what makes
+            # clip_to_polygon(load_polygon(...)) safe: the loaded geometries are
+            # re-normalised, not wrapped as a bare ring into a malformed polygon.
+            nested: List[Dict[str, Any]] = []
+            for item in items:
+                nested.extend(_extract_geometries(item))
+            return nested
+        # A bare ring coordinate list -> wrap as a Polygon geometry.
+        return [_validate_geometry({"type": "Polygon", "coordinates": items})]
 
     if not isinstance(polygon, Mapping):
         raise TypeError(f"unsupported polygon type: {type(polygon)!r}")
@@ -75,7 +144,7 @@ def _extract_geometries(polygon: PolygonLike) -> List[Dict[str, Any]]:
             raise ValueError("Feature has no geometry to clip against")
         return _extract_geometries(geom)
     if gtype in ("Polygon", "MultiPolygon"):
-        return [dict(polygon)]
+        return [_validate_geometry(dict(polygon))]
 
     raise ValueError(
         f"unsupported GeoJSON type {gtype!r}; expected Polygon/MultiPolygon/Feature/"

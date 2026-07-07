@@ -20,6 +20,7 @@ rasterio = pytest.importorskip(
 )  # CASPER: skip when the [gis] extra is absent
 
 from analytics.gis.boundary_clip import (  # noqa: E402
+    _extract_geometries,
     clip_to_polygon,
     clipped_domain_stats,
     load_polygon,
@@ -275,3 +276,62 @@ def test_load_polygon_from_geojson_file(tmp_path):
     props = doc["features"][0]["properties"]
     assert "illustrative placeholder boundary" in props["note"].lower()
     assert props["surveyed"] is False
+
+
+def _sw_quadrant_featurecollection() -> dict:
+    """The :data:`SW_QUADRANT` polygon wrapped in a GeoJSON FeatureCollection."""
+    return {
+        "type": "FeatureCollection",
+        "features": [{"type": "Feature", "properties": {}, "geometry": SW_QUADRANT}],
+    }
+
+
+def test_clip_with_loaded_polygon_does_not_segfault(tmp_path):
+    # REGRESSION: clip_to_polygon(src, load_polygon(...)) is the natural composition and
+    # exactly the reported repro. load_polygon already extracts the geometries; before the
+    # fix clip_to_polygon re-extracted them and, mistaking the list for a bare ring,
+    # double-wrapped it into {"type": "Polygon", "coordinates": [ {geom} ]}. GDAL's
+    # coordinate-bounds walk then dereferenced the nested dict and SEGFAULTED (exit 139).
+    # It must now complete and mask exactly the SW 2x2 quadrant.
+    src = _write_synthetic_raster(tmp_path / "field.tif", _grid_1to16())
+    geojson = tmp_path / "area.geojson"
+    geojson.write_text(json.dumps(_sw_quadrant_featurecollection()))
+
+    summary = clip_to_polygon(
+        src, load_polygon(geojson), tmp_path / "clipped.tif", variable="ws150"
+    )
+    assert summary["stats"]["count"] == 4
+    with rasterio.open(summary["clipped_path"]) as ds:
+        assert np.array_equal(
+            ds.read(1), np.array([[9.0, 10.0], [13.0, 14.0]], dtype="float32")
+        )
+
+
+def test_clip_accepts_list_of_geometries_like_direct_polygon(tmp_path):
+    # A list of geometry mappings (what load_polygon returns) must clip identically to the
+    # bare geometry mapping -- the idempotent-extraction contract, end to end.
+    src = _write_synthetic_raster(tmp_path / "field.tif", _grid_1to16())
+    s_direct = clip_to_polygon(src, SW_QUADRANT, tmp_path / "a.tif", variable="ws150")
+    s_listed = clip_to_polygon(src, [SW_QUADRANT], tmp_path / "b.tif", variable="ws150")
+    assert s_listed["stats"] == s_direct["stats"]
+    assert s_listed["bbox"] == s_direct["bbox"]
+
+
+def test_extract_geometries_is_idempotent():
+    # Re-extracting already-extracted geometries is a no-op (the property clip_to_polygon
+    # relies on). A second pass must not wrap the list into a malformed polygon.
+    once = _extract_geometries(_sw_quadrant_featurecollection())
+    twice = _extract_geometries(once)
+    assert once == twice == [SW_QUADRANT]
+
+
+def test_malformed_geometry_coordinates_raise_not_segfault():
+    # CESSPIT fail-loud: a geometry whose coordinates hide a mapping (the shape the old
+    # double-wrap produced) must raise a catchable ValueError, never reach the rasterio
+    # C-extension and segfault the interpreter.
+    nested = {
+        "type": "Polygon",
+        "coordinates": [{"type": "Polygon", "coordinates": [[[0.0, 0.0], [1.0, 1.0]]]}],
+    }
+    with pytest.raises(ValueError, match="malformed geometry coordinates"):
+        _extract_geometries(nested)
