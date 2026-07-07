@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+# ruff: noqa: E402 — the analytics.* imports below intentionally follow the sys.path
+# repo-root bootstrap (so `python scripts/run_tornado_from_cli.py` works before the
+# editable install); reordering them above the bootstrap would defeat it. Matches the
+# repo's file-level E402 suppression convention (e.g. analytics/mc/aggregate.py).
 """Run v14 tornado sensitivity from the command line.
 
 A thin, CASPER/GWTF-compliant CLI wrapper around the canonical sensitivity engine
