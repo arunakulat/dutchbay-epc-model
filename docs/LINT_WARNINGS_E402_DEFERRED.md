@@ -1,9 +1,19 @@
 # E402 Lint Warnings - Deferred (Import Ordering)
 
-**Status:** Non-blocking - Code functional, style issue only  
-**Priority:** Low (cosmetic)  
-**Created:** 2025-12-24 (Sprint 18 Dolphin #10)  
-**Affected Files:** 72 instances across 23 files
+**Status:** RESOLVED (2026-07-07, #921) — the register's recommended Option 3 (file-level suppression) was adopted repo-wide; `ruff check --select E402 .` now reports **0**. See the Resolution note below. The original register is retained for history.
+**Priority:** Low (cosmetic)
+**Created:** 2025-12-24 (Sprint 18 Dolphin #10)
+**Affected Files (historical):** 72 instances across 23 files → now 0
+
+---
+
+## Resolution (2026-07-07, issue #921)
+
+This deferral is closed. The register's own recommendation — **Option 3 (suppression)** — was carried out during the ruff lint-stack consolidation (#610 / #545): the affected `analytics/mc/*`, `analytics/sensitivity/*`, and legacy `*_v14` shim modules carry a top-of-file `# ruff: noqa: E402` directive (77 such suppressions across the tree). That is the correct treatment because their late imports are intentional — documentation-first modules, and deprecation-warning shims whose imports must follow the `warnings.warn`. The one remaining unsuppressed case, `scripts/run_tornado_from_cli.py` (imports that intentionally follow a `sys.path` repo-root bootstrap), was suppressed the same way under #921.
+
+**Verification:** `ruff check --select E402 .` → 0 across `analytics`, `finance`, `app`, `api`, `scripts`; the default `ruff check .` gate is clean. E402 is not an enforced blocking rule, and no import was reordered (which would have broken the bootstrap / deprecation-warning ordering). KPI-neutral.
+
+The original 2025-12 register follows unchanged for historical reference.
 
 ---
 
@@ -186,7 +196,7 @@ Add to `pyproject.toml`:
 
 ---
 
-**Maintained by:** DutchBay EPC Model Team  
-**Review Cadence:** Sprint planning (if needed)  
-**Last Reviewed:** Sprint 18 (2025-12-24)  
+**Maintained by:** DutchBay EPC Model Team
+**Review Cadence:** Sprint planning (if needed)
+**Last Reviewed:** Sprint 18 (2025-12-24)
 **Dolphins Involved:** #10c (Documentation)
