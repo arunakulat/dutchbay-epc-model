@@ -1,0 +1,5 @@
+driver,minus_label,plus_label,aep_minus_gwh,aep_plus_gwh,base_aep_gwh,swing_gwh,abs_swing_gwh,swing_pct
+wind_speed_bias,-5%,+5%,424.641,521.524,473.84,96.883,96.883,20.45
+power_curve,alt:dtu_reference_10mw,oem:iea_reference_10mw,398.258,473.84,473.84,75.582,75.582,15.95
+shear_exponent,-0.04,+0.04,458.145,489.629,473.84,31.484,31.484,6.64
+losses,-20%,+20%,489.205,458.809,473.84,-30.396,30.396,6.41

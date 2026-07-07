@@ -1,0 +1,46 @@
+{
+  "capacity_factor": 0.3322,
+  "net_site_aep_gwh": 464.36,
+  "gross_aep_gwh": 554.11,
+  "n_turbines": 15,
+  "rated_power_kw": 10638.3,
+  "hub_height_m": 150.0,
+  "source_id": "IEA_REFERENCE_10MW_198_PC",
+  "source_type": "REFERENCE",
+  "power_curve_key": "iea_reference_10mw",
+  "iec_standard": "IEC 61400-12-1:2022",
+  "losses": {
+    "wake_loss_pct": 7.28,
+    "availability_pct": 97.0,
+    "electrical_loss_pct": 2.0,
+    "curtailment_pct": 2.0,
+    "other_pct": 1.0,
+    "total_loss_pct": 14.49
+  },
+  "wake_source": "frozen_config_pct",
+  "exceedance": {
+    "net_aep_p50_gwh": 464.4,
+    "net_aep_p75_gwh": 432.8,
+    "net_aep_p90_1yr_gwh": 404.4,
+    "net_aep_p90_life_gwh": 409.1,
+    "sigma_1yr_pct": 10.07,
+    "sigma_life_pct": 9.29
+  },
+  "uncertainty": {
+    "p50_haircut_pct": 2.0,
+    "correlation": 0.0,
+    "life_years": 20,
+    "modelled_p50_gwh": 473.84
+  },
+  "provenance": {
+    "aep": {
+      "aep_source_id": "IEA_REFERENCE_10MW_198_PC",
+      "source_type": "REFERENCE",
+      "derived_from": [],
+      "iec_standard": "61400-12-1:2022",
+      "certificate": null,
+      "is_placeholder": false
+    }
+  },
+  "generated_by": "analytics.wind.aep_summary_builder"
+}

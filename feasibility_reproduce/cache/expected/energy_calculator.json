@@ -1,0 +1,31 @@
+{
+  "gross": {
+    "average_power_kw": 4607.537313859447,
+    "capacity_factor_gross": 43.310842088110384,
+    "single_turbine_aep_mwh": 40362.02686940876,
+    "windfarm_aep_mwh": 605430.4030411313,
+    "density_velocity_factor": 0.979160571690375
+  },
+  "net": {
+    "gross_aep_mwh": 605430.4030411313,
+    "total_loss_factor": 0.8761585139999999,
+    "individual_losses": {
+      "availability": 0.97,
+      "grid_curtailment": 0.98,
+      "electrical": 0.98,
+      "wake": 0.95,
+      "environmental": 0.99
+    },
+    "net_aep_p50_mwh": 530453.0022589386,
+    "net_aep_p75_mwh": 494406.60315285274,
+    "net_aep_p90_mwh": 461962.17187441734,
+    "capacity_factor_net_p50": 37.94716304400744,
+    "capacity_factor_net_p75": 35.36850182764526,
+    "capacity_factor_net_p90": 33.04751557938214,
+    "pvalue_method": "iec_61400_15_2",
+    "uncertainty_sigma_1yr_pct": 10.074720839804943,
+    "exceedance_correlation": 0.0,
+    "exceedance_life_years": 20,
+    "p50_haircut_pct": 0.0
+  }
+}
