@@ -18,12 +18,14 @@ This module is intentionally thin: the blocking job (``run_wind_job``) is offloa
 to a thread so it never stalls the arq event loop, and all job state lives in
 Redis via :class:`~app.jobs.redis_store.RedisJobStore`.
 
-NOT YET WIRED TO THE HTTP API. ``POST /jobs`` still runs via ``BackgroundTasks``
-against the in-process store; nothing enqueues onto this arq queue yet. The final
-cutover — the route producing to arq and ``get_store`` returning a RedisJobStore —
-is a deliberate, Redis-gated follow-up (it cannot be CI-verified without a live
-Redis). This worker plus :class:`RedisJobStore` are the verified building blocks
-for that step; ``RedisJobStore`` is unit-tested against a fake client.
+WIRED to the HTTP API (opt-in, Redis-gated) via the #663/#837 cutover. When
+``DUTCHBAY_JOBS_BACKEND=redis``, ``POST /jobs``
+(:func:`app.api.jobs_router.enqueue_job`) enqueues onto this arq queue through
+``app.api.jobs_router._enqueue_to_arq``, and ``get_store`` returns a shared
+:class:`RedisJobStore` so the API reports the status this worker writes. The default
+``memory`` backend keeps the in-process ``BackgroundTasks`` path (byte-identical to
+pre-#663). The redis path is opt-in and requires a live Redis, so it is not
+CI-verified; ``RedisJobStore`` is unit-tested against a fake client.
 """
 
 from __future__ import annotations

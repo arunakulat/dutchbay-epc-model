@@ -12,9 +12,10 @@ paths are ``POST /v1/jobs`` etc. (the router itself only owns the ``/jobs`` segm
 The store is resolved through the :func:`get_store` dependency — the single
 injection seam. Tests override it via ``app.dependency_overrides``; the durable
 cross-process path replaces the default with a ``RedisJobStore``. The enqueue
-handler only orchestrates: it creates a queued record and schedules
-:func:`~app.jobs.runner.run_wind_job` via FastAPI ``BackgroundTasks`` (both the
-in-process and the future arq paths drive the same ``run_wind_job``).
+handler only orchestrates: it creates a queued record and dispatches
+:func:`~app.jobs.runner.run_wind_job` — via FastAPI ``BackgroundTasks`` on the
+default ``memory`` backend, or by producing onto the arq queue on the ``redis``
+backend (#663/#837). Both paths drive the same ``run_wind_job``.
 """
 
 from __future__ import annotations
