@@ -58,7 +58,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
+
+from finance.cashflow_v14_utils import (
+    _as_float_or_none,
+    _pct_to_decimal,
+    get_nested,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -107,55 +113,22 @@ class WaccComponents:
 # =============================================================================
 # Helper utilities
 # =============================================================================
-
-
-def _as_float_or_none(value: Any) -> Optional[float]:
-    """Return float(value) or None for non-castable inputs."""
-    try:
-        if value is None:
-            return None
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _pct_to_decimal(raw: Optional[float]) -> Optional[float]:
-    """
-    Interpret a numeric as a percentage if > 1.0, otherwise as a decimal.
-
-    Examples
-    --------
-    24      -> 0.24
-    0.24    -> 0.24
-    None    -> None
-    """
-    if raw is None:
-        return None
-    if raw > 1.0:
-        return raw / 100.0
-    return raw
-
-
-def get_nested(d: Dict[str, Any], keys: List[str], default: Any = None) -> Any:
-    """Safely navigate nested dictionaries by list of keys.
-
-    Parameters
-    ----------
-    d:
-        Root dict (e.g. scenario config).
-    keys:
-        Sequence of keys, e.g. ["tax", "corporate_tax_rate_pct"].
-    default:
-        Value returned if the path is missing or shape is not a dict chain.
-    """
-    current: Any = d
-    for key in keys:
-        if not isinstance(current, dict):
-            return default
-        if key not in current:
-            return default
-        current = current[key]
-    return current
+#
+# `_as_float_or_none`, `_pct_to_decimal` and `get_nested` are imported from
+# `finance.cashflow_v14_utils` — the engine's canonical helper implementations —
+# instead of private mirrors. The mirrors this replaced had drifted in two ways
+# (the cfb3908 "local mirror" lesson):
+#
+# - `_pct_to_decimal` still carried the pre-#573 heuristic: an impossible input
+#   > 100 was silently divided by 100 (150 -> 1.5) where the canonical helper
+#   fail-louds. For every valid input (<= 100, incl. negatives) the two are
+#   byte-identical.
+# - `get_nested` was case-SENSITIVE where the cashflow engine resolves config
+#   keys case-insensitively (exact first), so a title-case scenario (`Tax:`)
+#   priced tax into cashflow but silently dropped it from the WACC build-up.
+#
+# NOTE: `finance.utils.get_nested` (used by debt_v14) is a THIRD, deliberately
+# case-sensitive variant — not interchangeable with this one.
 
 
 def _parse_prudential_spread_bps(raw: Any, default_bps: int = 100) -> int:
