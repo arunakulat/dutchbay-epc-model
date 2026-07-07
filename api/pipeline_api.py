@@ -552,7 +552,7 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
             # Authored, actionable path/validation messages — safe to surface.
             raise HTTPException(
                 status_code=400, detail=f"Could not load config_path: {exc}"
-            )
+            ) from exc
         except OSError as exc:
             # A filesystem error can embed absolute internal paths; log it
             # server-side and return only the class + a generic message
@@ -564,7 +564,7 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
                     f"{type(exc).__name__}: could not load config_path; "
                     "see the server logs."
                 ),
-            )
+            ) from exc
     else:
         cfg = dict(payload.config or {})
 
@@ -600,7 +600,9 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
         ValueError,
     ) as exc:
         # Authored, actionable validation/reconciliation messages — safe to surface.
-        raise HTTPException(status_code=422, detail=f"Pipeline run failed: {exc}")
+        raise HTTPException(
+            status_code=422, detail=f"Pipeline run failed: {exc}"
+        ) from exc
     except Exception as exc:
         # Unexpected engine error: the raw message can embed internal paths/config,
         # so log the full trace server-side and return only the class + a generic
@@ -609,7 +611,7 @@ def run_pipeline(payload: RunPipelineRequest) -> RunPipelineResponse:
         raise HTTPException(
             status_code=422,
             detail=f"{type(exc).__name__}: pipeline run failed; see the server logs.",
-        )
+        ) from exc
 
     kpis = result.get("kpis") or {}
     debt = result.get("debt_result") or {}
