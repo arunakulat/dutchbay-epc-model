@@ -14,7 +14,7 @@
 pandas<3
 # mypy: the lint gate pins the version the typed surface was cleared against
 # (diagnostics change on minors); keep the freeze in lockstep with the workflow pin.
-mypy==1.19.0
+mypy==1.19.1
 # isort 8 / ruff 0.15: mandatory-gate rule churn; bump in a dedicated lint dolphin.
 isort<8
 ruff<0.15
@@ -23,5 +23,5 @@ black<27
 # Typed-surface toolchain held at the gate-cleared releases (newer stub/typing
 # releases change mypy diagnostics; bump them in a dedicated typed-surface dolphin
 # together with the accompanying type fixes):
-pandas-stubs==2.3.3.251201
-requests==2.33.0
+pandas-stubs==2.3.3.260113
+requests==2.34.2
