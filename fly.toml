@@ -32,7 +32,10 @@ primary_region = "sin"
 
   # Async job path: durable cross-process arq + Redis (app/jobs/config.py). The
   # Redis DSN itself is a secret (DUTCHBAY_REDIS_URL via `fly secrets set`).
-  DUTCHBAY_JOBS_BACKEND = "redis"
+  # TEMP (#928 deploy, UNCOMMITTED): "memory" until the org has billing for the
+  # Upstash Redis add-on (trial org, createAddOn blocked). Restore "redis" +
+  # the worker process once `fly redis create` succeeds.
+  DUTCHBAY_JOBS_BACKEND = "memory"
   DUTCHBAY_JOBS_QUEUE = "dutchbay:wind_jobs"
 
   # JWT iss/aud binding - MANDATORY in production (unset => 500). Non-secret.
@@ -54,7 +57,9 @@ primary_region = "sin"
 # -----------------------------------------------------------------------------
 [processes]
   web = "uvicorn app.api.main:app --host 0.0.0.0 --port 8080"
-  worker = "arq app.jobs.worker.WorkerSettings"
+  # TEMP (#928 deploy, UNCOMMITTED): worker removed with the memory backend — an
+  # arq worker with no Redis would crash-loop. Restore alongside "redis" above:
+  # worker = "arq app.jobs.worker.WorkerSettings"
 
 # -----------------------------------------------------------------------------
 # Public HTTP service - attached to the "web" process ONLY. The worker has no
