@@ -1,395 +1,232 @@
-# DutchBay EPC Model – 150MW Wind Farm Financial Model
+# DutchBay EPC Model
 
 [![Test Suite](https://github.com/arunakulat/dutchbay-epc-model/actions/workflows/test-suite.yml/badge.svg)](https://github.com/arunakulat/dutchbay-epc-model/actions/workflows/test-suite.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-> **Production-grade financial modeling suite for renewable energy project development, DFI/Lender analysis, and EPC evaluation.**
+A lender and DFI-grade project-finance model for a 150 MW onshore wind farm (with optional
+BESS and hybrid solar) in Sri Lanka. The model computes a full cashflow waterfall, sizes
+multi-tranche debt against DSCR covenants, applies the Sri Lanka tax regime, runs Monte Carlo
+and global sensitivity analysis, and drives an ERA5 to Weibull to AEP to finance pipeline. It
+emits CSV, Excel, and JSON artifacts and an HTML or PDF lender report.
 
----
-
-## 🚀 Quick Start
-
-See [QUICK_START.md](QUICK_START.md) for setup and the four routines. The
-governance ruleset is [go_with_the_flow_rules_v3_0_clean.csv](go_with_the_flow_rules_v3_0_clean.csv).
-
-### For Developers
+## Quick start
 
 ```bash
-# Clone repository
 git clone https://github.com/arunakulat/dutchbay-epc-model.git
 cd dutchbay-epc-model
 
-# Create virtual environment
 python3.11 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate            # Windows: .venv\Scripts\activate
 
-# Install dependencies (requirements.txt = the pinned reproducibility lock;
-# pyproject.toml is the abstract source of truth — see the [dev] extra for tooling)
-pip install -r requirements.txt
-pip install -e ".[dev]"
+make setup                           # pip install -r requirements.txt + pip install -e ".[dev]"
 
-# Run tests
-pytest tests/
-
-# Run the canonical lender-case pipeline (Hydra CLI — key=value, not --flags)
+# Run the canonical lender-case pipeline (Hydra CLI: key=value, not --flags)
 python run_full_pipeline_v14.py config=scenarios/dutchbay_lendercase_2025Q4.yaml
 ```
 
----
+See [QUICK_START.md](QUICK_START.md) for the four routines and
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full development guide.
 
-## 🏛️ Architecture Overview
+## Architecture overview
 
-### v14 Status
+The canonical, hardened execution path is v14. It provides:
 
-The canonical, hardened execution path (`main`) features:
+- A validated scenario loader with strict YAML/JSON parsing and a schema guard.
+- An annual cashflow engine (CFADS, opex, capex, statutory charges, tax, debt service).
+- Debt modelling: multi-tranche (USD DFI, USD commercial, LKR local), dual-DSCR sizing,
+  DSCR/LLCR/PLCR covenants, interest during construction, and balloon treatment.
+- Isolated IRR/NPV (`finance/irr.py`) and build-up WACC (`finance/wacc_v14.py`).
+- Analytics: sensitivity tornado, global sensitivity (Sobol/Morris/PAWN), Monte Carlo
+  (`analytics/mc/`), and optimization.
+- Multi-technology generation: wind, solar, and BESS producers plus enum-recognised
+  generation types via a config `type` discriminator (`finance/tech_types.py`).
+- Wind resource: ERA5 to Weibull to PyWake bankable AEP (P50/P75/P90), wind rose, and
+  micro-siting (opt-in `[wind]`/`[micrositing]`).
+- GIS-for-wind siting (opt-in `[gis]`) and grid interconnection screening (opt-in `[grid]`,
+  advisory, default-off).
+- Export infrastructure (CSV, Excel, JSON) and an HTML/PDF lender report (`app/reports/`).
 
-- ✅ **Validated scenario loader** with strict YAML/JSON parsing
-- ✅ **Annual cashflow engine** (CFADS, OpEx, CapEx, debt service)
-- ✅ **Debt modeling** (dual-DSCR sizing, DSCR/LLCR/PLCR, balloon treatment)
-- ✅ **Isolated IRR/NPV** (`finance/irr.py`) and build-up WACC (`finance/wacc_v14.py`)
-- ✅ **Analytics** — sensitivity tornado, Monte Carlo (`analytics/mc/`), optimization
-- ✅ **Multi-tech generation** — wind / solar producers + BESS storage + enum-recognised generation
-  types (tidal / hydro / …) via a config `type` enum (`finance/tech_types.py`; hybrid-capable)
-- ✅ **Wind resource** — ERA5 → Weibull → PyWake bankable AEP (P50/P75/P90), wind rose, micro-siting
-- ✅ **GIS siting** — GeoTIFF/GWA/DEM/land-cover/RIX/exclusion/MCDM toolchain (opt-in `[gis]`)
-- ✅ **Grid screening** — advisory design-stage SCR/reactive/ride-through study (opt-in `[grid]`, default-off)
-- ✅ **Export infrastructure** (CSV, Excel, JSON) + HTML/PDF lender report (`app/reports/`)
-- ✅ **CI/CD** — gated `Test Summary` + `fastlane` + `smoke`, mypy, framework-compliance lints
-
-### Core Modules
+### Repository layout
 
 ```
-analytics/                    # Analytics & scenario evaluation
-  ├── evaluation_v14.py      # The single evaluation gateway (evaluate_with_overrides)
-  ├── pipeline_v14_enhanced.py  # Lender-grade pipeline orchestration (run_v14_pipeline)
-  ├── scenario_loader.py     # YAML/JSON config parser
-  ├── core/metrics.py        # Canonical KPI computation
-  ├── sensitivity/           # Sensitivity analysis (tornado, global SA, interaction, optimizer)
-  ├── mc/                    # Monte Carlo engine (analytics.mc.engine)
-  ├── wind/                  # Wind-rose (wind_rose.py) + AEP-summary builder for reports
-  ├── gis/                   # GIS-for-wind siting stack (opt-in [gis]/[micrositing]; see below)
-  ├── grid/                  # Grid interconnection SCREENING study (opt-in [grid]; advisory)
-  ├── dashboard/             # Streamlit sensitivity dashboard (streamlit_app.py; [dashboard])
-  ├── cost/                  # Bottom-up capex/opex cost engine
-  └── fx/                    # FX calibration (BIS/CBSL) + Monte Carlo FX drift
+run_full_pipeline_v14.py       Canonical single-scenario Hydra CLI (wind-to-finance)
+run_scenario_analytics_v14.py  Batch scenario-comparison CLI (lighter, snapshot basis)
+constants.py                   Immutable physical constants and unit conversions only
 
-finance/                      # Financial calculation engine
-  ├── cashflow_v14.py        # Cash flow projections
-  ├── debt_v14.py            # Debt modeling & DSCR
-  ├── irr.py                 # Isolated IRR/NPV (ARCH-02 canonical source)
-  ├── wacc_v14.py            # WACC (ARCH-02 canonical source)
-  └── cashflow_v14_tax.py    # Tax (SL plant/civil split, TLCF, interest WHT)
+analytics/                     Analytics, evaluation gateway, and scenario orchestration
+  evaluation_v14.py            The single evaluation gateway (evaluate_with_overrides)
+  contracts_v14.py             Centralized result contracts (the CCCDIR single source)
+  pipeline_v14_enhanced.py     Lender-grade pipeline orchestration (run_v14_pipeline)
+  scenario_loader.py           YAML/JSON config parser
+  schema_guard.py              Strict pre-flight config validation
+  core/                        Canonical KPI, return, and risk primitives
+  mc/                          Monte Carlo engine (the actual MC code)
+  sensitivity/                 Tornado, global SA (Sobol/Morris/PAWN), optimizer
+  casper/                      Lender risk-block orchestration (P50/P90/P95, breach prob)
+  fx/                          FX calibration (BIS/CBSL) and Monte Carlo FX drift
+  wind/  gis/  grid/           Wind analytics bridge, GIS siting, grid screening
+  cost/  portfolio/            Bottom-up cost engine and hybrid multi-tech aggregation
 
-wind_resource/                # Wind pipeline: ERA5 -> Weibull -> PyWake -> bankable AEP
-  ├── wind_pipeline.py       # Orchestrates the assessment (via scripts/run_wind_analysis_v14.py)
-  ├── weibull_fit.py         # Weibull (k, A) fit from ERA5 time series
-  ├── bankable_aep.py        # Gross AEP + PyWake wake loss + uncertainty budget (P50/P75/P90)
-  └── layout_optimizer.py    # DTU TopFarm micro-siting optimizer (opt-in [micrositing])
-solar_resource/               # pvlib solar producer (hybrid multi-tech; optional [solar] extra)
-api/                          # FastAPI endpoints (pipeline, sensitivity)
-app/                          # Web service, async jobs, and report rendering
-  └── reports/               # HTML (Jinja2) + PDF (WeasyPrint, [report]) lender report,
-                             #   incl. per-tech comparison + interaction-grid chapters
+finance/                       Deterministic financial calculation engine
+  irr.py                       Isolated IRR/NPV (ARCH-02 canonical source)
+  wacc_v14.py                  Build-up WACC (ARCH-02 canonical source)
+  cashflow_v14.py              Core annual cashflow engine (+ tax/fx/production helpers)
+  debt_v14.py                  Debt modelling, tranche sizing, and DSCR
 
-# Coverage gate spans finance + analytics + wind_resource + api + app + solar_resource (>=95%, .coveragerc).
-
-scenarios/                    # Scenario configuration files
-  ├── dutchbay_lendercase_2025Q4.yaml   # Canonical lender case
-  ├── dutchbay_basecase_2025Q4.yaml
-  ├── dutchbay_optimistic_2025Q4.yaml
-  └── dutchbay_pessimistic_2025Q4.yaml
-
-exports/                      # Generated outputs (git-ignored)
-  ├── *.csv
-  ├── *.xlsx
-  └── *.png
-
-tests/                        # Test suite
-  ├── contracts/             # Contract tests
-  ├── analytics/             # Analytics tests
-  └── integration/           # Integration tests
-
-docs/                         # Documentation
-  ├── PIPELINE_ARCHITECTURE.md    # Technical architecture
-  ├── ANALYTICS_INTEGRATION.md    # Analytics module details
-  └── CASPER_MC_INTEGRATION.md    # Monte Carlo / tail-risk integration
+wind_resource/                 ERA5 to Weibull to PyWake bankable AEP pipeline (opt-in [wind])
+solar_resource/                pvlib solar producer for hybrid multi-tech (opt-in [solar])
+app/                           Web service (FastAPI), async jobs (arq/Redis), lender report
+api/                           Legacy standalone FastAPI routers (predecessor to app/api/)
+scripts/                       Operational, CI, build, and analysis tooling
+scenarios/  conf/  config/     Scenario configs, Hydra defaults, and default parameters
+tests/                         Test suite (unit, contract, integration, lint/architecture)
+docs/                          Documentation (see the index below)
 ```
 
----
+Notes on the layout:
 
-## 📊 Key Features
+- The top-level `monte_carlo/` directory holds Monte Carlo scenario YAML files, not engine
+  code; the engine is `analytics/mc/`.
+- Generated outputs (CSV, Excel, PNG, JSON) are written to a git-ignored `exports/`- or
+  `_out/`-style directory; those are runtime artifacts, not source.
+- There are two FastAPI surfaces: the current web service under `app/api/`, and a legacy
+  standalone `api/` package retained for backward compatibility.
 
-### Financial Modeling
-- **Debt Structuring**: Multi-tranche debt (USD DFI, USD commercial, LKR local) with grace periods
-- **Cash Flow Analysis**: CFADS, debt service coverage, operating cash flows
-- **Returns Calculation**: Project IRR, Equity IRR, NPV (project & equity)
-- **Risk Metrics**: DSCR (minimum, average), break-even analysis
+For a complete, per-module reference (purpose, design reasoning, and academic grounding for
+every package), see [docs/MODULE_REFERENCE.md](docs/MODULE_REFERENCE.md).
 
-### Analytics Capabilities
-- **Scenario Analysis**: Compare base, optimistic, pessimistic cases
-- **Sensitivity Analysis**: Tornado charts for key drivers
-- **Monte Carlo Simulation**: Probabilistic modeling (shipped; LHS engine + CASPER tail-risk)
-- **Parameter Validation**: Strict YAML schema enforcement
+## Key features
 
-### Export & Reporting
-- **CSV/Excel**: Timestamped exports, never overwrites
-- **Executive Workbooks**: Board-ready KPI summaries (`analytics/executive_workbook.py`)
-- **JSON/JSONL**: Machine-readable outputs for pipelines
-- **Charts**: Matplotlib-based visualizations
-- **Lender report**: HTML (Jinja2, core dep) + PDF (WeasyPrint, opt-in `[report]`) rendered
-  from `app/reports/`, with a per-technology headline-KPI **comparison chapter**
-  (`app/reports/tech_comparison_emit.py`) and a two-factor **sensitivity interaction grid**
-  (`app/reports/interaction_grid_emit.py`). The PDF backend degrades gracefully — the HTML
-  report always renders; PDF raises a clear `ReportDependencyError` when WeasyPrint is absent.
+### Financial modelling
 
-### Wind Resource & Bankable AEP
-- **ERA5 → bankable AEP pipeline** (`wind_resource/`, opt-in `[wind]`): ERA5/Copernicus
-  ingestion → Weibull (k, A) fit → gross AEP → PyWake wake loss → uncertainty budget →
-  **P50 / P75 / P90** energy. Driven by `scripts/run_wind_analysis_v14.py`; the finance stack
-  consumes a frozen wind-export JSON, so lender runs need no Copernicus credentials.
-- **Wind rose** (`analytics/wind/wind_rose.py`): per-sector directional frequency, consumed
-  by the bankable-AEP wake model and the layout optimizer.
-- **Micro-siting layout optimizer** (`wind_resource/layout_optimizer.py`, opt-in
-  `[micrositing]`): DTU **TopFarm** on PyWake proposes an AEP-maximising candidate layout
-  from a boundary + exclusion mask + wind rose. The optimizer only *proposes* — it is
-  **KPI-neutral**; no headline result depends on it.
+- Multi-tranche debt (USD DFI, USD commercial, LKR local) with grace periods and interest
+  during construction.
+- Cash flow analysis: CFADS, debt service coverage, and operating cash flows.
+- Returns: project IRR, equity IRR, and project and equity NPV, with a robust IRR solver that
+  returns no value rather than a fabricated one on non-convergence.
+- Risk metrics: DSCR (minimum, average), LLCR, PLCR, and break-even analysis.
+- Sri Lanka tax: 30% corporate income tax, plant/civil split depreciation, tax-loss
+  carry-forward, and interest and dividend withholding.
 
-### GIS-for-Wind Siting (opt-in `[gis]`)
-A raster/vector siting toolchain under `analytics/gis/` — all imports CASPER-guarded, so the
-base install needs no GDAL/GIS stack. See [docs/GIS_GEOTIFF_EXPORT.md](docs/GIS_GEOTIFF_EXPORT.md).
-- **GeoTIFF export** (`geotiff_export.py`) — QGIS-ready EPSG:4326 rasters + a data-lake manifest.
-- **Global Wind Atlas** ingest (`gwa_ingest.py`) — ~250 m GWA reference layers.
-- **Copernicus GLO-30 DEM** (`dem_ingest.py`) — 30 m elevation + terrain derivatives.
-- **ESA WorldCover → roughness (z₀)** (`landcover_roughness.py`) — ~10 m land-cover to z₀.
-- **Boundary clip** (`boundary_clip.py`) — clip wind/AEP rasters to a project polygon.
-- **RIX / ΔRIX** (`rix.py`) — terrain-ruggedness envelope diagnostic.
-- **Exclusion mask** (`exclusion_mask.py`) — setback-buffered constraints → buildable-area raster.
-- **GIS-MCDM suitability** (`mcdm_suitability.py`) — AHP-weighted Weighted-Linear-Combination surface.
+### Analytics
 
-### Grid Interconnection Screening (opt-in `[grid]`, advisory)
-An in-house **design-stage** grid study under `analytics/grid/` (SCR@POC via pandapower
-IEC 60909, ANDES LVRT ride-through, reactive/voltage screen). Default-**off** and additive,
-so committed scenarios stay byte-identical (**KPI-neutral**), and its results are **advisory**.
-> **Honesty boundary (stated in the code):** this is **SCREENING / DESIGN-STAGE ONLY — NOT the
-> utility-accepted bankable grid-connection study.** CEB/NSCC require PSS/E or PowerFactory run
-> against their confidential grid base case; the OEM `.dyr/.dll/.pfd` binaries feed *that* study.
-> HVRT / frequency-response cases are reported as honest **NOT-RUN** where the model cannot assert them.
+- Scenario analysis across base, optimistic, and pessimistic cases.
+- Sensitivity: single-factor tornado and variance-based global sensitivity (Sobol first-order
+  and total, Morris elementary effects, PAWN) via SALib.
+- Monte Carlo: Latin Hypercube baseline with optional Sobol QMC, optional rank correlation
+  (Iman-Conover) and Gaussian copula, and CASPER lender risk blocks (P50/P90/P95, CVaR,
+  breach probability).
 
-See [docs/GRID_INTERFACE_SCHEMA.md](docs/GRID_INTERFACE_SCHEMA.md) for the config schema.
+### Wind and solar resource
 
----
+- Wind: ERA5/Copernicus ingestion to Weibull (k, A) fit to gross AEP to PyWake wake loss to an
+  IEC 61400-15-2 uncertainty budget yielding P50/P75/P90 energy. The finance stack consumes a
+  frozen wind-export JSON, so lender runs need no Copernicus credentials.
+- Solar: a pvlib chain (clear-sky, transposition, cell temperature) with an
+  IEC 61724-1 / IEA-PVPS Task 13 P50/P75/P90 build-up, at parity with the wind side.
 
-## 🔧 Development Standards
+### GIS-for-wind siting (opt-in `[gis]`)
 
-### "Go With The Flow" Rules
+A raster/vector siting toolchain under `analytics/gis/` (GeoTIFF export, Global Wind Atlas
+and DEM ingest, land-cover roughness, exclusion masks, RIX terrain diagnostic, and an
+AHP-weighted MCDM suitability surface). All imports are guarded, so the base install needs no
+GIS stack. See [docs/GIS_GEOTIFF_EXPORT.md](docs/GIS_GEOTIFF_EXPORT.md).
 
-These non-negotiable principles ensure production-grade quality:
+### Grid interconnection screening (opt-in `[grid]`, advisory)
 
-1. **Config-Driven**: All parameters in YAML with validation
-2. **Batch-Friendly**: No hardcoded paths, CLI-compatible
-3. **Stateless**: Reproducible results, no mutable globals
-4. **Test-First**: Contract tests for all analytics
-5. **Type-Safe**: Full mypy compliance
+An in-house design-stage grid study under `analytics/grid/` (short-circuit ratio at the point
+of connection via pandapower, ANDES ride-through, reactive/voltage and harmonics screens).
+Default-off and additive, so committed scenarios stay result-identical.
 
-See [go_with_the_flow_rules_v3_0_clean.csv](go_with_the_flow_rules_v3_0_clean.csv) (GWTF v3.0, 64 rules) for the complete standards.
+This is a screening/design-stage study only, not the utility-accepted bankable grid-connection
+study. CEB/NSCC require PSS/E or PowerFactory run against their confidential grid base case,
+and the OEM binaries feed that study. Cases the model cannot assert are reported as an explicit
+"not run". See [docs/GRID_INTERFACE_SCHEMA.md](docs/GRID_INTERFACE_SCHEMA.md).
 
-### Code Quality
+### Export and reporting
+
+- Timestamped CSV/Excel exports and machine-readable JSON/JSONL.
+- Board-ready executive workbooks (`analytics/executive_workbook.py`).
+- An HTML lender report (Jinja2, a core dependency) with an optional PDF backend (WeasyPrint,
+  opt-in `[report]`). The HTML report always renders; the PDF raises a clear dependency error
+  when WeasyPrint is absent.
+
+## Development
+
+The [Development Guide](docs/DEVELOPMENT.md) covers setup, the quality gates, the contribution
+workflow, and governance in full. In brief:
 
 ```bash
-# Type checking (the same strict, full-surface gate CI runs — no --ignore-missing-imports;
-# every untyped third-party dep is declared per-module in mypy.ini)
-mypy finance/ analytics/ wind_resource/ solar_resource/ api/ app/ analysis_tools/ \
-  run_full_pipeline_v14.py run_scenario_analytics_v14.py \
-  dutchbay_bootstrap.py dutchbay_bootstrap_rules.py constants.py
-
-# Linting (ruff replaced flake8 in the consolidated toolchain, #610)
-ruff check analytics/ finance/
-black --check analytics/ finance/
-isort --check-only analytics/ finance/
-
-# Testing with coverage (the 6 engine packages CI gates at >=95%)
-pytest --cov=finance --cov=analytics --cov=wind_resource --cov=api --cov=app --cov=solar_resource --cov-report=html
+make lint        # ruff (mandatory) + black/isort (advisory locally)
+make type        # strict, complete-annotation mypy over the engine surface
+make security    # bandit SAST + pip-audit of the pinned lock
+make test        # pytest -n auto with the 95% coverage floor
 ```
 
-### CI/CD Pipeline
+All parameters live in YAML with strict validation; IRR/NPV/WACC are isolated to
+`finance/`; analytics evaluate only through the contract gateway; and every change flows
+through branch to pull request to green CI to self-merge (never a direct commit to `main`).
+See [go_with_the_flow_rules_v3_0_clean.csv](go_with_the_flow_rules_v3_0_clean.csv) (GWTF v3.0,
+64 rules) for the complete standards.
 
-- **Quick Smoke**: CLI + core analytics (fast feedback)
-- **Full Regression**: Complete v14 pipeline + coverage
-- **Coverage**: the six engine packages (`finance`, `analytics`, `wind_resource`, `api`, `app`, `solar_resource`; untestable CLI/viz/worker infra excluded via `.coveragerc`) are gated at **≥95%**. The **`--cov-fail-under=95`** floor is enforced where the full suite actually runs — the CI test step (`.github/workflows/test-suite.yml`) and `make test` — so coverage cannot silently regress. (As of #439 `pytest.ini`/`pytest.ci.ini`/`tox.ini` were retired; `pyproject.toml` `[tool.pytest.ini_options]` is the single pytest config and `.coveragerc` the single coverage config.)
-- **FX Schema**: Strict enforcement (mapping-only, no scalars)
+## Deployment
 
----
+The web service is a FastAPI application (`app.api.main:app`) with an optional durable async
+job worker (arq + Redis) and an HTML/PDF report layer. The operator runbook for a local Docker
+Compose stack and a production Fly.io deployment is [docs/deploy/DEPLOY.md](docs/deploy/DEPLOY.md).
 
-## 📝 Usage Examples
+The live production deployment currently runs an interim posture with the in-process
+(`memory`) job backend and no worker process, pending managed Redis provisioning (issue #928);
+the runbook documents the full Redis-backed target. The image is built and boot-checked by the
+`docker-build` CI workflow; deployment itself is a manual `fly deploy`.
 
-### Basic Scenario Run
+## Optional install extras
 
-```bash
-# Hydra CLI: override config with key=value (no --flags)
-python run_full_pipeline_v14.py config=scenarios/dutchbay_lendercase_2025Q4.yaml
-```
-
-### Sensitivity Analysis
-
-```bash
-# Canonical Hydra entrypoint (run as a module so `analytics` is importable)
-python -m analytics.cli.cli_sensitivity_hydra \
-  config=scenarios/dutchbay_lendercase_2025Q4.yaml \
-  output_dir=_out/sensitivity
-```
-
-### Python API
-
-```python
-from analytics.evaluation_v14 import evaluate_with_overrides
-
-# The single evaluation gateway (ARCH-04): returns a flat KPI dict.
-kpis = evaluate_with_overrides(
-    "scenarios/dutchbay_lendercase_2025Q4.yaml",
-    overrides={"Financing_Terms.debt_ratio": 0.55},  # optional dotted overrides
-)
-
-print(f"Project IRR: {kpis['project_irr']:.2%}")
-print(f"Min DSCR: {kpis['min_dscr']:.2f}")
-```
-
-### Export to Excel
-
-```python
-from analytics.executive_workbook import build_executive_workbook
-
-# Board-ready workbook from the canonical v14 frames.
-build_executive_workbook(
-    summary_df=summary_df,
-    cashflow_df=cashflow_df,
-    debt_df=debt_df,
-    ratios_df=ratios_df,
-    scenario_summary_df=scenario_summary_df,
-    output_path="exports/executive_summary.xlsx",
-)
-```
-
----
-
-## 📚 Documentation
-
-### For Developers
-- [Architecture Overview](docs/PIPELINE_ARCHITECTURE.md) - Pipeline / technical design
-- [Analytics Integration](docs/ANALYTICS_INTEGRATION.md) - Analytics module details
-- [CASPER / Monte Carlo](docs/CASPER_MC_INTEGRATION.md) - Tail-risk & MC integration
-- [FX / WACC / Equity](docs/FX_WACC_EQUITY_INTEGRATION_v14.md) - Multi-currency + discounting
-- [GIS GeoTIFF Export](docs/GIS_GEOTIFF_EXPORT.md) - Raster export for QGIS
-- [Wind Interface Schema](docs/WIND_INTERFACE_SCHEMA.md) - Wind-export contract + [AEP provenance](docs/AEP_PROVENANCE.md)
-- [Grid Interface Schema](docs/GRID_INTERFACE_SCHEMA.md) - Grid-screening config schema (advisory study)
-
-### For Project Managers
-- [Changelog](CHANGELOG.md) - Version history
-- [Release Process](RELEASING.md) - How to create releases
-- [Security](SECURITY.md) - Security policy
-
----
-
-## 🛣️ Roadmap
-
-### Phase 2: Interactive Analytics (Mostly Complete ✅)
-- [x] Streamlit dashboard for scenario exploration (`analytics/dashboard/streamlit_app.py`)
-- [x] REST API for sensitivity/Monte Carlo (`api/sensitivity_api.py`, `api/pipeline_api.py`)
-- [ ] Real-time parameter validation UI
-
-### Phase 3: Advanced Reporting (Mostly Complete ✅)
-- [x] Automated Excel report generation (`analytics/executive_workbook.py`)
-- [x] Chart export (PNG/SVG) (`analytics/export_helpers.py`)
-- [ ] Health/audit tracking
-
-### Phase 4: Optimization (Mostly Complete ✅)
-- [x] Scenario comparison tools (per-tech report chapter, `app/reports/tech_comparison_emit.py`)
-- [x] Multi-objective optimizer (NSGA-II Pareto search, `analytics/sensitivity/optimizer.py`, opt-in `[pareto]`)
-- [ ] Version control for scenarios
-
-### Phase 5: Stakeholder Deliverables (Planned 📋)
-- [ ] DFI/Lender presentation mode
-- [ ] Board presentation templates
-- [ ] Risk dashboards
-
----
-
-## ⚙️ Technical Requirements
-
-- **Python**: 3.11+
-- **Dependencies**: `pyproject.toml` (abstract source of truth) + `requirements.txt` (pinned lock for CI/reproducibility)
-- **Dev Tools**: the `[dev]` extra — `pip install -e ".[dev]"`
-- **Environment**: macOS, Linux, or Windows with WSL
-
-### Optional install extras
-
-The base install runs the finance engine + Hydra CLI with no heavy scientific stack. Each
-capability below is an **opt-in extra** whose imports are CASPER-guarded (they fail loud with an
-actionable message only when the capability is actually invoked without the extra installed):
+The base install runs the finance engine and Hydra CLI with no heavy scientific stack. Each
+extra below is opt-in and its imports fail at call time (not import time) with an actionable
+message when the extra is absent.
 
 | Extra | Installs | Powers |
 | --- | --- | --- |
-| `[dev]` | ruff/black/isort, mypy + stubs, bandit, pip-audit, pytest stack, hypothesis, build | The full CI gate |
+| `[dev]` | ruff/black/isort, mypy + stubs, bandit, pip-audit, pytest stack, hypothesis, libcst, build | The full CI gate |
 | `[api]` | fastapi, uvicorn | The HTTP API (`api/`, `app/`) |
-| `[dashboard]` | streamlit | Sensitivity dashboard (`analytics/dashboard/streamlit_app.py`) |
-| `[wind]` | cdsapi, xarray, netcdf4, windpowerlib, turbine-models, py-wake | ERA5 → bankable-AEP wind pipeline |
-| `[micrositing]` | topfarm | Micro-siting layout optimizer (DTU TopFarm on PyWake) |
-| `[solar]` | pvlib | Solar producer for hybrid multi-tech |
-| `[pareto]` | pymoo | NSGA-II multi-objective Pareto search |
-| `[gis]` | rasterio, shapely | GIS-for-wind siting raster/vector toolchain |
-| `[report]` | weasyprint, reportlab, geopandas, contextily | PDF lender report + location/context maps |
-| `[jobs]` | arq, redis | Durable cross-process async job worker |
-| `[grid]` | pandapower==3.3.0, andes, opendssdirect.py | Grid interconnection **screening** study (advisory) — install with `PIP_CONSTRAINT=constraints.txt pip install -e ".[grid]"` |
+| `[dashboard]` | streamlit | The sensitivity dashboard |
+| `[wind]` | cdsapi, xarray, netcdf4, windpowerlib, turbine-models, py-wake | The ERA5 to bankable-AEP wind pipeline |
+| `[micrositing]` | topfarm | The micro-siting layout optimizer |
+| `[solar]` | pvlib | The solar producer for hybrid multi-tech |
+| `[pareto]` | pymoo | NSGA-II multi-objective search |
+| `[gis]` | rasterio, shapely | The GIS-for-wind siting toolchain |
+| `[report]` | weasyprint, reportlab, geopandas, contextily | The PDF lender report and location/context maps |
+| `[jobs]` | arq, redis | The durable cross-process async job worker |
+| `[grid]` | pandapower==3.3.0, andes, opendssdirect.py | The grid interconnection screening study (advisory) |
 
----
+Install `[grid]` under the constraints file to protect the core numeric pins:
+`PIP_CONSTRAINT=constraints.txt pip install -e ".[grid]"`.
 
-## 🤝 Contributing
+## Documentation
 
-### Workflow
+- [Development Guide](docs/DEVELOPMENT.md) — setup, gates, workflow, governance
+- [Module Reference](docs/MODULE_REFERENCE.md) — per-module purpose, reasoning, and grounding
+- [Deployment Runbook](docs/deploy/DEPLOY.md) — Docker Compose and Fly.io
+- [Architecture](docs/PIPELINE_ARCHITECTURE.md) — pipeline and technical design
+- [Analytics Integration](docs/ANALYTICS_INTEGRATION.md) — analytics module details
+- [CASPER / Monte Carlo](docs/CASPER_MC_INTEGRATION.md) — tail-risk and MC integration
+- [FX / WACC / Equity](docs/FX_WACC_EQUITY_INTEGRATION_v14.md) — multi-currency and discounting
+- [Wind Interface Schema](docs/WIND_INTERFACE_SCHEMA.md) and [AEP Provenance](docs/AEP_PROVENANCE.md)
+- [Grid Interface Schema](docs/GRID_INTERFACE_SCHEMA.md) — grid-screening config (advisory)
+- [Release Process](RELEASING.md) and [Security Policy](SECURITY.md)
 
-1. Create feature branch: `git checkout -b feature/your-feature`
-2. Make changes following "Go with the Flow" rules
-3. Run tests: `pytest tests/`
-4. Run quality checks: `ruff`, `black`, `isort`, `mypy`
-5. Commit: `git commit -am "feat: Your feature description"`
-6. Push: `git push origin feature/your-feature`
-7. Create Pull Request
+## Project information
 
-### Before Committing
+- Project: Dutch Bay 150 MW wind farm
+- Location: Sri Lanka
+- Technology: onshore wind (with optional BESS and hybrid solar)
+- Status: financial modelling and development phase
+- Repository: [arunakulat/dutchbay-epc-model](https://github.com/arunakulat/dutchbay-epc-model)
 
-```bash
-# Install pre-commit hooks
-pre-commit install
+## License
 
-# Run all checks
-pre-commit run --all-files
-```
+Proprietary. All rights reserved.
 
----
-
-## 📎 Project Information
-
-- **Project**: Dutch Bay 150MW Wind Farm
-- **Location**: Sri Lanka
-- **Technology**: Onshore wind energy
-- **Capacity**: 150 MW
-- **Status**: Financial modeling & development phase
-
----
-
-## 📝 License
-
-Proprietary - All Rights Reserved
-
----
-
-## 👥 Team & Support
-
-- **Repository**: [arunakulat/dutchbay-epc-model](https://github.com/arunakulat/dutchbay-epc-model)
-- **Issues**: Use GitHub Issues for bug reports and feature requests
-- **Documentation**: See `docs/` directory for detailed guides
-
----
-
-**Last Updated**: July 6, 2026
-**Version**: see the `VERSION` file (single source of truth; currently 15.3.0)
+Version: see the `VERSION` file (the single source of truth; currently 15.3.0).
