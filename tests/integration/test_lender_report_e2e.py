@@ -174,6 +174,7 @@ def test_rendered_waterfall_ties_to_the_headline_cfads() -> None:
     )
 
 
+@pytest.mark.slow
 def test_production_path_renders_sensitivity_sections() -> None:
     """The full production builder (``_build_report_context``) additionally computes + renders the
     one-at-a-time tornado and the Morris global-SA sections — covered here so the e2e spans the
@@ -184,6 +185,7 @@ def test_production_path_renders_sensitivity_sections() -> None:
     assert "Sensitivity Tornado" in html and "Global Sensitivity" in html
 
 
+@pytest.mark.slow
 def test_lender_report_renders_through_the_auth_gated_http_route(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
