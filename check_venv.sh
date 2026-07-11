@@ -4,8 +4,8 @@
 #
 # Responsibilities:
 #   - Confirm we are in a DutchBay_EPC_Model checkout.
-#   - Confirm .venv311 exists (shared project venv).
-#   - Optionally activate .venv311 and run dutchbay_bootstrap.py.
+#   - Confirm .venv exists (shared project venv).
+#   - Optionally activate .venv and run dutchbay_bootstrap.py.
 #   - Always print the R21 standard local workflow for humans.
 #
 # Usage:
@@ -57,7 +57,7 @@ print_usage() {
 Usage: ./check_venv.sh [OPTIONS]
 
 Options:
-  --run-bootstrap   Activate .venv311 and run dutchbay_bootstrap.py
+  --run-bootstrap   Activate .venv and run dutchbay_bootstrap.py
   --no-bootstrap    Explicitly skip bootstrap (overrides RUN_BOOTSTRAP=1)
   -h, --help        Show this help and exit
 
@@ -116,36 +116,36 @@ info "check_venv.sh – repo root: ${REPO_ROOT}"
 # Basic repo sanity
 # ---------------------------------------------------------------------------
 
-if [[ ! -f "pyproject.toml" ]] || [[ ! -f "pytest.ini" ]]; then
+if [[ ! -f "pyproject.toml" ]] || [[ ! -f "VERSION" ]]; then
   err "This does not look like the DutchBay_EPC_Model repo root."
-  echo "    Expected pyproject.toml and pytest.ini under: ${REPO_ROOT}"
+  echo "    Expected pyproject.toml and VERSION under: ${REPO_ROOT}"
   echo "    (Hint: run this script from the cloned DutchBay_EPC_Model folder.)"
   exit 1
 fi
 
-ok "Repo markers found (pyproject.toml, pytest.ini)."
+ok "Repo markers found (pyproject.toml, VERSION)."
 
 # ---------------------------------------------------------------------------
 # Virtualenv presence
 # ---------------------------------------------------------------------------
 
-VENV_DIR="${REPO_ROOT}/.venv311"
+VENV_DIR="${REPO_ROOT}/.venv"
 VENV_PY="${VENV_DIR}/bin/python"
 
 if [[ -d "${VENV_DIR}" ]]; then
-  ok "Found .venv311 in repo root."
+  ok "Found .venv in repo root."
 else
-  err ".venv311 not found in repo root."
+  err ".venv not found in repo root."
   echo "   Please create it first, for example:"
   echo "     cd ${REPO_ROOT}"
   echo "     ./setup_venv.sh"
   echo "   or:"
-  echo "     python3 -m venv .venv311"
-  echo "     source .venv311/bin/activate"
+  echo "     python3 -m venv .venv"
+  echo "     source .venv/bin/activate"
   echo "     pip install --upgrade pip"
   echo "     pip install -r requirements.txt && pip install -e \".[dev]\""
   echo ""
-  echo "R21 – Standard local workflow will not run cleanly without .venv311."
+  echo "R21 – Standard local workflow will not run cleanly without .venv."
   exit 1
 fi
 
@@ -162,7 +162,7 @@ fi
 
 if [[ "${RUN_BOOTSTRAP_FLAG}" -eq 1 ]]; then
   echo ""
-  info "[R21] Activating .venv311 and running dutchbay_bootstrap.py ..."
+  info "[R21] Activating .venv and running dutchbay_bootstrap.py ..."
 
   # shellcheck disable=SC1091
   # (project-local venv activation)
@@ -194,7 +194,7 @@ echo ""
 echo "R21 – Standard local workflow (Go-with-the-Flow v3.0):"
 echo ""
 echo "  cd ${REPO_ROOT}"
-echo "  source .venv311/bin/activate"
+echo "  source .venv/bin/activate"
 echo "  python dutchbay_bootstrap.py"
 echo "  pytest"
 echo ""
