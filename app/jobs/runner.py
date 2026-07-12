@@ -11,7 +11,11 @@ finance or wind logic (Dolphin).
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, Mapping
+import shutil
+import tempfile
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterator, Mapping
 
 from app.api.responses import CaseResult
 from app.jobs.models import JobProgress, JobState, WindJobRequest
@@ -22,6 +26,27 @@ logger = logging.getLogger(__name__)
 
 #: Coarse step budget for progress reporting (assessment 1–3, finance 4).
 TOTAL_STEPS = 4
+
+
+@contextmanager
+def _ephemeral_workspace() -> Iterator[Path]:
+    """Yield a per-job scratch dir writable by the runtime user, deleted on exit.
+
+    ``WindPipeline``'s ``cache_dir`` / ``output_dir`` default to the RELATIVE paths
+    ``inputs/wind_data`` / ``outputs/wind_assessment``. Under the non-root container
+    user (uid 10001) those resolve to a location the process cannot create, so the
+    pipeline's ``mkdir`` raises ``PermissionError`` before any ERA5 fetch (#952).
+    Both dirs hold only scratch — the finance-relevant result is the returned
+    mapping, and the report/xlsx downloads re-run statelessly — so each job gets its
+    own ephemeral workspace under the system temp dir (always writable) and it is
+    removed when the job finishes, whether it succeeds or raises.
+    """
+    workspace = Path(tempfile.mkdtemp(prefix="dutchbay-windjob-"))
+    try:
+        yield workspace
+    finally:
+        shutil.rmtree(workspace, ignore_errors=True)
+
 
 #: ``(step, message) -> None`` progress sink handed to the assessment function.
 ProgressFn = Callable[[int, str], None]
@@ -42,18 +67,21 @@ def default_assessment(
     from wind_resource.wind_pipeline import WindPipeline
 
     progress(1, "Initializing wind pipeline + ERA5 fetch")
-    pipeline = WindPipeline(
-        location=request.site_location(),
-        hub_height=request.hub_height_m,
-        turbine_model=request.turbine_model,
-        num_turbines=request.num_turbines,
-    )
-    progress(2, "Running ERA5 → Weibull → AEP assessment")
-    pipeline.run_complete_assessment(
-        start_date=request.start_date, end_date=request.end_date
-    )
-    progress(3, "Exporting wind metrics for finance")
-    return pipeline.export_for_cashflow_model(scenario=request.p_level)
+    with _ephemeral_workspace() as workspace:
+        pipeline = WindPipeline(
+            location=request.site_location(),
+            hub_height=request.hub_height_m,
+            turbine_model=request.turbine_model,
+            num_turbines=request.num_turbines,
+            cache_dir=str(workspace / "cache"),
+            output_dir=str(workspace / "output"),
+        )
+        progress(2, "Running ERA5 → Weibull → AEP assessment")
+        pipeline.run_complete_assessment(
+            start_date=request.start_date, end_date=request.end_date
+        )
+        progress(3, "Exporting wind metrics for finance")
+        return pipeline.export_for_cashflow_model(scenario=request.p_level)
 
 
 def run_wind_job(
