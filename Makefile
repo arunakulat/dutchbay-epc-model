@@ -62,10 +62,12 @@ package:
 	$(PY) -m build
 
 # Regenerate the pinned reproducibility lock from a CLEAN install of pyproject (the
-# abstract source of truth). requirements.txt is THE lock CI installs — there is no
-# separate constraints.txt / requirements.lock (those were retired). Run in a fresh venv.
+# abstract source of truth). requirements.txt is THE lock CI installs; constraints.txt
+# holds the freeze-policy version caps (the versions the mandatory gates were cleared
+# against) and is applied via PIP_CONSTRAINT so the regenerated lock respects them (see
+# the constraints.txt header). Run in a fresh venv.
 lock:
-	$(PIP) install -e ".[dev,api,dashboard,wind,gis,report]"
+	PIP_CONSTRAINT=constraints.txt $(PIP) install -e ".[dev,api,dashboard,wind,gis,report]"
 	$(PIP) freeze --exclude-editable | sort > requirements.txt
 	@echo "Regenerated requirements.txt. Review the diff and re-run 'make audit'."
 

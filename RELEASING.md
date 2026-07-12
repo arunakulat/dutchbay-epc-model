@@ -29,12 +29,14 @@ make lint type security test cov
 ## 2) Refresh the dependency lock (deterministic deployments)
 
 `pyproject.toml` is the single ABSTRACT source of truth (core deps + extras);
-`requirements.txt` is the ONE pinned lock CI installs. There is no separate
-`constraints.txt` / `requirements.lock` (retired). Regenerate the lock from a
-CLEAN venv so it cannot drift or re-accrete non-dependencies:
+`requirements.txt` is the ONE pinned lock CI installs. `constraints.txt` holds the
+freeze-policy version caps (the versions the mandatory gates were cleared against) and
+is applied via `PIP_CONSTRAINT` when regenerating the lock, so the lock respects the
+caps (see the `constraints.txt` header). Regenerate from a CLEAN venv so the lock cannot
+drift or re-accrete non-dependencies:
 
 ```bash
-make lock     # pip install -e ".[dev,api,dashboard,wind,gis,report]" + freeze -> requirements.txt
+make lock     # PIP_CONSTRAINT=constraints.txt pip install -e ".[...]" + freeze -> requirements.txt
 make audit    # re-check the regenerated lock for new CVEs (pip-audit + allowlist)
 ```
 

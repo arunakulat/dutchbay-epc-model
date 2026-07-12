@@ -176,9 +176,9 @@ The web service is a FastAPI application (`app.api.main:app`) with an optional d
 job worker (arq + Redis) and an HTML/PDF report layer. The operator runbook for a local Docker
 Compose stack and a production Fly.io deployment is [docs/deploy/DEPLOY.md](docs/deploy/DEPLOY.md).
 
-The live production deployment currently runs an interim posture with the in-process
-(`memory`) job backend and no worker process, pending managed Redis provisioning (issue #928);
-the runbook documents the full Redis-backed target. The image is built and boot-checked by the
+The production deployment runs the durable async path: the `web` process plus an `arq`
+worker backed by managed Redis (`DUTCHBAY_JOBS_BACKEND=redis`), per the runbook (restored in
+#943 after a brief interim in-process posture). The image is built and boot-checked by the
 `docker-build` CI workflow; deployment itself is a manual `fly deploy`.
 
 ## Optional install extras
