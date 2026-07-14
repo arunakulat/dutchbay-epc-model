@@ -202,7 +202,7 @@ jobs = [
 # ``opendssdirect`` does NOT exist on PyPI. PyWake / windpowerlib are not needed here —
 # they already ride in via [wind]; add them as a follow-up only if a grid path requires them.
 grid = [
-  "pandapower==3.3.0",
+  "pandapower==3.5.4",
   "andes>=2.0",
   "opendssdirect.py>=0.9.4",
 ]
