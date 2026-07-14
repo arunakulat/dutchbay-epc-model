@@ -24,7 +24,7 @@ This script mimics the manual steps used to create/update ./datalake:
 All outputs are written as CSV.
 
 Recommended invocation (per Go-with-the-Flow TOOL-OS-01):
-  ./.venv311/bin/python scripts/datalake_refresh_and_diff.py
+  ./.venv/bin/python scripts/datalake_refresh_and_diff.py
 """
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ def repo_root() -> Path:
 
 
 def venv_python(root: Path) -> str:
-    venv_py = root / ".venv311" / "bin" / "python"
+    venv_py = root / ".venv" / "bin" / "python"
     if venv_py.exists():
         return str(venv_py)
     # fall back to current interpreter
