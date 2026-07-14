@@ -47,6 +47,21 @@ if "analytics" in sys.modules:
 
 analytics = importlib.import_module("analytics")
 
+# 3) Headless matplotlib for the WHOLE suite. Without this, chart-emitting tests
+# (e.g. plot_npv_distribution via the capital-risk report) instantiate the platform GUI
+# backend on developer machines — on macOS the `macosx` backend hard-SEGFAULTS the pytest
+# process when no window server is reachable (sandboxed shells, SSH, tmux). Linux CI was
+# never affected (no DISPLAY → matplotlib already falls back to Agg), so this pins the
+# same non-interactive backend everywhere. Must run BEFORE any test imports pyplot;
+# os.environ is belt-and-braces for xdist workers and subprocesses spawned by tests.
+os.environ.setdefault("MPLBACKEND", "Agg")
+try:
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+except ImportError:  # pragma: no cover - matplotlib is a hard dependency, but stay safe
+    pass
+
 # Optional: Uncomment for debugging path resolution
 # print("Pytest using analytics from:", analytics.__file__)
 # print("Pytest sys.path[0]:", sys.path[0])
