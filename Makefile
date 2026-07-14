@@ -30,8 +30,8 @@ setup:
 # style-drifted vs the current formatter, so black is non-blocking by design).
 lint:
 	ruff check .
-	black --check . || true
-	isort --check-only --profile=black . || true
+	black --check .
+	isort --check-only --profile=black .
 
 # Strict, complete-annotation mypy over the whole typed surface (mirrors CI test-suite.yml).
 type:
