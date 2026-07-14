@@ -376,6 +376,73 @@ def test_run_complete_assessment_force_download_propagates(
 
 
 # ---------------------------------------------------------------------------
+# Injected pre-fetched hub-height series (#965): the async ERA5-timeseries seam
+# ---------------------------------------------------------------------------
+
+
+def test_injected_hub_height_series_skips_fetch_and_extrapolation(
+    patched_stages: None, tmp_path: Path
+) -> None:
+    """When a pre-fetched series is injected (async web path, #965), Steps 1-2 are
+    skipped — the fetcher is never called — and Steps 3-5 still produce the same
+    result structure from the injected ``ws_<hub>m`` column. Mirrors the shape
+    ``era5_retrieval.build_hub_height_series`` returns: a timestamp-INDEXED frame
+    (index name ``timestamp``) already extrapolated to hub height.
+    """
+    pipe = _make_pipeline(tmp_path)
+
+    idx = pd.date_range("2023-01-01", periods=48, freq="h", name="timestamp")
+    series = pd.DataFrame(
+        {
+            WS_COLUMN: [7.0 + (i % 4) for i in range(48)],
+            "wind_shear_alpha": [0.14] * 48,
+            "wd_10m": [200.0] * 48,
+            "wd_100m": [205.0] * 48,
+        },
+        index=idx,
+    )
+
+    results = pipe.run_complete_assessment(
+        start_date="2023-01-01", end_date="2023-12-31", hub_height_series=series
+    )
+
+    # Steps 1-2 skipped: the fake fetcher's download_wind_data was NEVER called.
+    assert _FakeFetcher.instances[-1].download_calls == []
+
+    # Steps 3-5 ran verbatim: same top-level structure and the 48-row dataset.
+    assert set(results) >= {
+        "metadata",
+        "wind_data",
+        "statistical_analysis",
+        "energy_production",
+        "summary",
+    }
+    assert results["metadata"]["data_period"]["data_points"] == 48
+    # wind_data stats computed from the injected ws_150m column.
+    assert results["wind_data"]["mean_ws"] > 0
+    # The calculator received the adapted df carrying the ws_<hub>m column.
+    calc = _FakeCalculator.instances[-1]
+    assert WS_COLUMN in calc.df.columns
+    # JSON persisted as usual.
+    assert list((tmp_path / "out").glob("testsite_assessment_*.json"))
+
+
+def test_injected_series_missing_hub_column_raises(
+    patched_stages: None, tmp_path: Path
+) -> None:
+    """A series whose hub-height column does not match the pipeline fails loud (#965)
+    rather than surfacing a cryptic KeyError deep in the wind-data statistics."""
+    pipe = _make_pipeline(tmp_path)
+    idx = pd.date_range("2023-01-01", periods=24, freq="h", name="timestamp")
+    # Column for a DIFFERENT hub height than the pipeline's 150 m.
+    bad = pd.DataFrame({"ws_119m": [8.0] * 24}, index=idx)
+    with pytest.raises(ValueError, match="missing the expected hub-height column"):
+        pipe.run_complete_assessment(hub_height_series=bad)
+    # Still short-circuited before any fetch.
+    assert _FakeFetcher.instances[-1].download_calls == []
+
+
+# ---------------------------------------------------------------------------
 # export_for_cashflow_model (selector + error/skip branches)
 # ---------------------------------------------------------------------------
 

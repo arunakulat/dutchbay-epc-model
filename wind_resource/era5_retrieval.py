@@ -200,12 +200,27 @@ def ensure_cdsapirc(
     it is written only to the user's ``~/.cdsapirc`` with ``0600`` perms.
     """
     rc = Path(path or os.path.expanduser("~/.cdsapirc"))
-    url = url or os.environ.get("CDSAPI_URL")
-    key = key or os.environ.get("CDSAPI_KEY")
+    env_url = os.environ.get("CDSAPI_URL")
+    env_key = os.environ.get("CDSAPI_KEY")
+    url = url or env_url
+    key = key or env_key
     if url and key:
-        rc.write_text(f"url: {url}\nkey: {key}\n")
-        rc.chmod(0o600)
-        logger.info("Wrote CDS credentials to %s (0600)", rc)
+        try:
+            rc.write_text(f"url: {url}\nkey: {key}\n")
+            rc.chmod(0o600)
+            logger.info("Wrote CDS credentials to %s (0600)", rc)
+        except OSError as exc:
+            # cdsapi.Client() also reads CDSAPI_URL / CDSAPI_KEY from the environment
+            # directly, so an unwritable ~/.cdsapirc (e.g. the non-root container user has
+            # no writable home dir, #965) is NON-FATAL when the env creds are set. Only
+            # fail loudly if there is no environment fallback to fall back on.
+            if not (env_url and env_key):
+                raise
+            logger.warning(
+                "Could not write %s (%s); relying on CDSAPI_URL/CDSAPI_KEY env instead",
+                rc,
+                exc,
+            )
     elif not rc.exists():
         raise FileNotFoundError(
             f"No CDS credentials at {rc}. Get an API token at "
