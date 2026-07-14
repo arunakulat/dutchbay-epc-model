@@ -85,8 +85,8 @@ def test_load_parameters_rejects_unknown_keys(tmp_path: Path):
         cli.load_parameters_from_yaml(bad)
 
 
-@pytest.mark.skipif(not _CONFIG.exists(), reason="lendercase scenario not present")
 def test_single_metric_tornado_csv(tmp_path: Path):
+    assert _CONFIG.exists(), f"committed lendercase scenario missing: {_CONFIG}"
     cli = _load_cli()
     out = tmp_path / "tornado.csv"
     rc = cli.main(
@@ -122,8 +122,8 @@ def test_single_metric_tornado_csv(tmp_path: Path):
     assert df["impact_abs"].is_monotonic_decreasing
 
 
-@pytest.mark.skipif(not _CONFIG.exists(), reason="lendercase scenario not present")
 def test_multi_metric_tags_each_metric(tmp_path: Path):
+    assert _CONFIG.exists(), f"committed lendercase scenario missing: {_CONFIG}"
     cli = _load_cli()
     out = tmp_path / "multi.csv"
     rc = cli.main(
@@ -145,10 +145,6 @@ def test_multi_metric_tags_each_metric(tmp_path: Path):
     assert set(df["metric"]) == {"project_irr", "min_dscr"}
 
 
-@pytest.mark.skipif(
-    not (_CONFIG.exists() and _PARAMS_EXAMPLE.exists()),
-    reason="lendercase scenario or shipped example params not present",
-)
 def test_shipped_example_command_runs(tmp_path: Path):
     """The exact command advertised in --help / the module docstring must work.
 
@@ -156,6 +152,10 @@ def test_shipped_example_command_runs(tmp_path: Path):
     must RESOLVE in the lendercase scenario (the engine rejects unresolved paths),
     so the copy-pasteable example cannot silently exit 2 with an empty CSV.
     """
+    assert _CONFIG.exists(), f"committed lendercase scenario missing: {_CONFIG}"
+    assert (
+        _PARAMS_EXAMPLE.exists()
+    ), f"committed example params missing: {_PARAMS_EXAMPLE}"
     cli = _load_cli()
     out = tmp_path / "example.csv"
     rc = cli.main(
@@ -181,8 +181,8 @@ def test_shipped_example_command_runs(tmp_path: Path):
     }
 
 
-@pytest.mark.skipif(not _CONFIG.exists(), reason="lendercase scenario not present")
 def test_unresolvable_parameter_path_exits_clean(tmp_path: Path, capsys):
+    assert _CONFIG.exists(), f"committed lendercase scenario missing: {_CONFIG}"
     cli = _load_cli()
     bad = tmp_path / "unresolvable.yaml"
     bad.write_text(
@@ -218,10 +218,10 @@ _TORNADO_COLUMNS = [
 ]
 
 
-@pytest.mark.skipif(not _CONFIG.exists(), reason="lendercase scenario not present")
 def test_preset_tax_sweeps_rate_and_holiday_on_project_irr(tmp_path: Path):
     """`--preset tax` sweeps tax.corporate_tax_rate + tax.tax_holiday_years on project_irr,
     with no --parameters needed."""
+    assert _CONFIG.exists(), f"committed lendercase scenario missing: {_CONFIG}"
     cli = _load_cli()
     out = tmp_path / "tax.csv"
     rc = cli.main(["--config", str(_CONFIG), "--preset", "tax", "--output", str(out)])
@@ -239,11 +239,11 @@ def test_preset_tax_sweeps_rate_and_holiday_on_project_irr(tmp_path: Path):
     assert df["impact_abs"].is_monotonic_decreasing
 
 
-@pytest.mark.skipif(not _CONFIG.exists(), reason="lendercase scenario not present")
 def test_preset_dscr_targets_min_dscr_kpi(tmp_path: Path):
     """`--preset dscr` targets the live min_dscr KPI key (the canonical key the gateway
     always emits), NOT the DscrSensitivityConfig 'dscr_min' field default. target_dscr
     moves the covenant metric; gearing/tenor are (correctly) covenant-pinned flat."""
+    assert _CONFIG.exists(), f"committed lendercase scenario missing: {_CONFIG}"
     cli = _load_cli()
     out = tmp_path / "dscr.csv"
     rc = cli.main(["--config", str(_CONFIG), "--preset", "dscr", "--output", str(out)])
@@ -259,8 +259,8 @@ def test_preset_dscr_targets_min_dscr_kpi(tmp_path: Path):
     assert target_row["base_case"] == pytest.approx(1.30, abs=0.02)
 
 
-@pytest.mark.skipif(not _CONFIG.exists(), reason="lendercase scenario not present")
 def test_preset_and_parameters_are_mutually_exclusive(tmp_path: Path, capsys):
+    assert _CONFIG.exists(), f"committed lendercase scenario missing: {_CONFIG}"
     cli = _load_cli()
     rc = cli.main(
         [

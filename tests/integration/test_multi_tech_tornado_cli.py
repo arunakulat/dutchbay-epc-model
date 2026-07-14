@@ -42,8 +42,8 @@ def test_module_imports_without_error():
         assert hasattr(cli, name)
 
 
-@pytest.mark.skipif(not _HYBRID.exists(), reason="hybrid scenario not present")
 def test_csv_columns_tags_and_sorting(tmp_path: Path):
+    assert _HYBRID.exists(), f"committed hybrid scenario missing: {_HYBRID}"
     cli = _load_cli()
     out = tmp_path / "mtt.csv"
     rc = cli.main(
@@ -85,8 +85,8 @@ def test_csv_columns_tags_and_sorting(tmp_path: Path):
     assert wind_top > solar_top
 
 
-@pytest.mark.skipif(not _HYBRID.exists(), reason="hybrid scenario not present")
 def test_default_metrics_when_unspecified(tmp_path: Path):
+    assert _HYBRID.exists(), f"committed hybrid scenario missing: {_HYBRID}"
     cli = _load_cli()
     out = tmp_path / "default.csv"
     rc = cli.main(["--config", str(_HYBRID), "--output", str(out)])
@@ -95,8 +95,8 @@ def test_default_metrics_when_unspecified(tmp_path: Path):
     assert set(df["metric"]) == {"project_irr", "equity_irr", "min_dscr", "balloon_pct"}
 
 
-@pytest.mark.skipif(not _HYBRID.exists(), reason="hybrid scenario not present")
 def test_summary_reports_wind_leader_and_flat_dscr(tmp_path: Path, capsys):
+    assert _HYBRID.exists(), f"committed hybrid scenario missing: {_HYBRID}"
     cli = _load_cli()
     rc = cli.main(["--config", str(_HYBRID), "--output", str(tmp_path / "s.csv")])
     assert rc == 0
@@ -105,10 +105,10 @@ def test_summary_reports_wind_leader_and_flat_dscr(tmp_path: Path, capsys):
     assert "min_dscr is structurally flat" in err
 
 
-@pytest.mark.skipif(not _HYBRID.exists(), reason="hybrid scenario not present")
 def test_storage_block_reported_not_swept(tmp_path: Path, capsys):
     """wind + solar + BESS: the CSV sweeps only the generation techs, and stderr
     names the storage block as present-but-not-swept (no silent drop)."""
+    assert _HYBRID.exists(), f"committed hybrid scenario missing: {_HYBRID}"
     raw = yaml.safe_load(_HYBRID.read_text())
     raw["generation"]["technologies"]["battery"] = {"power_mw": 50, "energy_mwh": 200}
     scenario = tmp_path / "hybrid_with_bess.yaml"
@@ -126,9 +126,9 @@ def test_storage_block_reported_not_swept(tmp_path: Path, capsys):
     assert "NOT swept" in err
 
 
-@pytest.mark.skipif(not _CEB_BESS.exists(), reason="CEB BESS scenario not present")
 def test_standalone_bess_scenario_is_swept(tmp_path: Path, capsys):
     """A standalone storage-only scenario is now swept on its capacity-charge driver."""
+    assert _CEB_BESS.exists(), f"committed CEB BESS scenario missing: {_CEB_BESS}"
     cli = _load_cli()
     out = tmp_path / "bess.csv"
     rc = cli.main(
@@ -141,17 +141,17 @@ def test_standalone_bess_scenario_is_swept(tmp_path: Path, capsys):
     assert "storage/BESS: bess_unit" in capsys.readouterr().err
 
 
-@pytest.mark.skipif(not _WIND_ONLY.exists(), reason="wind-only scenario not present")
 def test_non_multitech_scenario_exits_clean(capsys):
     """A wind-only scenario has no generation.technologies -> clean exit 2, no CSV."""
+    assert _WIND_ONLY.exists(), f"committed wind-only scenario missing: {_WIND_ONLY}"
     cli = _load_cli()
     rc = cli.main(["--config", str(_WIND_ONLY)])
     assert rc == 2
     assert "no sweepable technologies" in capsys.readouterr().err
 
 
-@pytest.mark.skipif(not _HYBRID.exists(), reason="hybrid scenario not present")
 def test_bad_shock_pct_exits_clean(capsys):
+    assert _HYBRID.exists(), f"committed hybrid scenario missing: {_HYBRID}"
     cli = _load_cli()
     rc = cli.main(["--config", str(_HYBRID), "--shock-pct", "1.5"])
     assert rc == 2
