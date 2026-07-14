@@ -225,13 +225,23 @@ def test_compute_build_up_wacc_uses_passed_gearing_and_tax_fallback() -> None:
 
 
 def test_compute_build_up_wacc_invalid_tax_raises() -> None:
-    # tax_rate present but out of [0,1] hits line 480.
+    # An impossible >100 tax now fail-louds in the CANONICAL pct_to_decimal
+    # (the #573 out-of-range gate) before wacc's own range check.
     config: Dict[str, Any] = {
         "wacc": {"cost_of_equity": 0.12, "tax_rate": 150.0},
     }
-    with pytest.raises(ValueError, match="Invalid tax_rate for build_up WACC"):
+    with pytest.raises(ValueError, match="out of range"):
         wacc_v14.compute_build_up_wacc(
             config, debt_to_value=0.5, cost_of_debt_pretax=0.07
+        )
+    # wacc's OWN [0,1] range check stays reachable: a negative rate passes the
+    # canonical conversion unchanged and is rejected here.
+    config_neg: Dict[str, Any] = {
+        "wacc": {"cost_of_equity": 0.12, "tax_rate": -0.3},
+    }
+    with pytest.raises(ValueError, match="Invalid tax_rate for build_up WACC"):
+        wacc_v14.compute_build_up_wacc(
+            config_neg, debt_to_value=0.5, cost_of_debt_pretax=0.07
         )
 
 
@@ -351,9 +361,13 @@ def test_compute_wacc_capm_negative_debt_to_equity_raises() -> None:
 
 
 def test_compute_wacc_capm_invalid_gearing_raises() -> None:
-    # Gearing >= 1 (after pct conversion) is rejected (line 634).
-    with pytest.raises(ValueError, match=r"Invalid gearing"):
+    # An impossible >100 gearing fail-louds in the CANONICAL pct_to_decimal (#573).
+    with pytest.raises(ValueError, match="out of range"):
         wacc_v14.compute_wacc_from_config(_capm_cfg(gearing=120.0))
+    # wacc's OWN check stays reachable: 100 converts to exactly 1.0 (D/V == 1),
+    # which the gearing >= 1 gate rejects.
+    with pytest.raises(ValueError, match=r"Invalid gearing"):
+        wacc_v14.compute_wacc_from_config(_capm_cfg(gearing=100.0))
 
 
 def test_compute_wacc_capm_missing_capital_structure_raises() -> None:
@@ -431,9 +445,12 @@ def test_compute_wacc_capm_missing_tax_raises() -> None:
 
 
 def test_compute_wacc_capm_invalid_tax_raises() -> None:
-    # tax_rate present but out of [0,1] after conversion (line 679).
-    with pytest.raises(ValueError, match="Invalid tax_rate"):
+    # An impossible >100 tax fail-louds in the CANONICAL pct_to_decimal (#573).
+    with pytest.raises(ValueError, match="out of range"):
         wacc_v14.compute_wacc_from_config(_capm_cfg(tax_rate=150.0))
+    # wacc's OWN [0,1] range check stays reachable via a negative rate.
+    with pytest.raises(ValueError, match="Invalid tax_rate"):
+        wacc_v14.compute_wacc_from_config(_capm_cfg(tax_rate=-0.3))
 
 
 # =============================================================================
