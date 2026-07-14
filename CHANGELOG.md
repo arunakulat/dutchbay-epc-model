@@ -5,6 +5,84 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+# changelog.d/843.added.md
+- **HTMX wizard frontend (#843)** — a server-rendered multi-step wizard (`app/web/`) for the
+  web service: cookie-authenticated (an httpOnly JWT reusing the existing auth), a four-step
+  `WindFarmInputs` form, and a results view rendering the `CaseSurface` KPI cards, the
+  sensitivity tornado and Morris/PAWN global-SA as CSS bar charts, the capital-risk headline,
+  and HTML/PDF/XLSX report downloads. The UI reuses the in-process `build_case_surface` /
+  `run_case_report_*` and `login_for_access_token` / `decode_token` functions (no duplicated
+  finance or auth logic) and mounts on the existing FastAPI app; `htmx` is vendored, so there
+  is no build toolchain. Presentation-only surface: `finance/` and `analytics/` are untouched
+  and the canonical KPIs stay byte-identical. Ref #788.
+# changelog.d/845.added.md
+- **Deployment scaffolding (#845)** — containerize the FastAPI web surface
+  (`app.api.main:app`) and the arq worker (`app.jobs.worker.WorkerSettings`) as a single
+  multi-stage image, plus a Fly.io process model (public `web` + private `worker`), a
+  local `docker compose` stack (web + worker + Redis), an environment template covering
+  all 14 `DUTCHBAY_*` variables, an environment-driven secret-provisioning helper
+  (`scripts/provision_web_secrets.py`, reusing `app.api.auth.hash_password`), a
+  `docker-build` CI workflow that builds the image and polls `/health`, and a
+  `docs/deploy/DEPLOY.md` runbook. Deploy-only: no change to the finance engine
+  (`finance/`, `analytics/`), so the canonical KPIs stay byte-identical. Refs #788, #663.
+# changelog.d/923.added.md
+- **D6b enablement-readiness evidence (#923 — flag stays PARKED, canon untouched)** — the
+  user-gated `grid.qsts.finance_wiring.enabled` KPI-mover is NOT enabled (its trigger, a real
+  CEB feeder model at the DutchBay POC, does not exist yet); instead the readiness half is
+  pinned. New `tests/finance/test_self_curtailment_enablement_readiness.py` closes the
+  real-chain gate legs the #915 suite monkeypatched: flag on **without** a real feeder (the
+  exact present-day state) drives the PRODUCTION QSTS→resolver→cashflow chain to an inert
+  refusal and reproduces the pinned 5th-gen canon bit-for-bit end-to-end; a synthetic/demo
+  feeder is refused; a real-looking feeder file without the `[grid]` extra raises the
+  actionable CASPER ImportError (no silent canon). A clearly-labelled DEMO oracle pair
+  (tmp synthetic 3-bus feeder + recording OpenDSS stub — NOT site physics) proves the wiring
+  moves KPIs exactly as designed at an exact 8.0% self-curtailment (measured projIRR
+  −1.007pp, eqIRR −1.636pp, min_dscr −0.0092, matching the #885 reference) while the
+  committed scenario in the same suite stays canon, and that a deemed-paid (grid-instructed)
+  schedule through the real accounting moves NOTHING (CEB SPPA). The missing-input spec —
+  what the real feeder model must contain, where it plugs in, and the sign-off → canon-re-pin
+  sequence — is documented in `docs/knowledge_base/grid_screening_scope.md` §7. KPI-neutral;
+  committed scenarios byte-identical.
+# changelog.d/958.added.md
+- **Wired GWTF R24's advertised docstring-coverage lint test (#958)** — R24 claimed enforcement
+  by a "lint test (`test_docstring_coverage.py`)" that existed nowhere in the tree. Added the real
+  `tests/lint/test_docstring_coverage.py`: it statically measures public-API docstring coverage per
+  top-level package via `ast` (never importing the target, so no optional-dependency exposure and no
+  effect on the coverage denominator) and gates a per-package **ratchet floor** — api 63%, analytics
+  85.5%, finance 91% — that fails on regression (the moment new public code lands without a docstring)
+  and nudges the floor up once a package climbs well above it, mirroring
+  `test_no_direct_finance_pipeline_imports.py`. R24's enforcement text was corrected in the same
+  change to describe this ratchet floor and the correct `tests/lint/` path instead of the never-true
+  "checks that all public functions have non-empty docstrings" (a strict 100% gate would fail today);
+  `test_r24_text_matches_reality` pins that doc<->code reconciliation. Docs/tests only — `finance/`
+  and `analytics/` logic untouched, so the canonical KPIs stay byte-identical. Ref register §4.3 DOC1.
+# changelog.d/964.added.md
+- **External-methodology validation for the five untested areas (#964)** — the 2026-07-12
+  credibility pass left five headline methods carrying no outside citation (returns numerics,
+  covenants/DSRA, tail-risk estimators, solar AEP, FX/curtailment) plus one unconfirmed
+  characterisation (QMC star-discrepancy). New `tests/research/test_methodology_validation_5areas.py`
+  (16 tests) re-derives each engine surface against an **independent** external reference and
+  asserts equality: IRR/NPV/XIRR vs `numpy_financial` and the discounted-cashflow/NPV-root
+  definitions; CVaR/ES vs the Acerbi–Tasche tail-mean AND the Rockafellar–Uryasev minimisation;
+  the Wilson interval vs `scipy.stats.binomtest`; the Conover order-statistic CI vs exact
+  `scipy.stats.binom` coverage; the solar exceedance z-table and P75/P90 vs `scipy.stats.norm.ppf`
+  and the IEC 61724-1 / IEA-PVPS Task 13 normal-quantile + RSS closed form; the FX forward vs
+  covered interest parity; the FX-VaR (`compute_fx_risk_profile` **called on a real block**) vs an
+  independent (1−hedge)·hard-currency·shock reference that fails on the historical inverted-exposure
+  bug; and the CEB-SPPA deemed-energy curtailment treatment (deemed-paid never
+  haircuts; only self-curtailment is a real loss; seam default-off). `docs/METHODOLOGY_VALIDATION_5AREAS.md`
+  records the real citations and verdicts (all five **confirmed**; fund-at-close 6-month DSRA
+  corroborated as market-standard, i.e. NOT a gap) and **flags** the `analytics/sensitivity/optimizer.py`
+  "Koksma–Hlawka error bounds" docstring as an overstated LHS-vs-QMC characterisation (cosmetic,
+  no KPI, no pipeline caller) for a separate docstring dolphin — documented, not silently patched.
+  Verification-only: no engine number changes; the frozen 5th-gen canon stays byte-identical.
+- **Module reference document.** Added `docs/MODULE_REFERENCE.md`, a single per-module
+  reference covering every top-level package (entry points, `analytics/` and its sub-packages,
+  `finance/`, `wind_resource/`, `solar_resource/`, `app/`, `api/`, `scripts/`). For each it
+  states purpose, design reasoning, a key-modules table, the academic/methodological grounding
+  cited in the code, and disclosed interfaces and limitations. Includes an architecture
+  overview, an aggregated academic-grounding index, and a limitations/bankability section.
+  Documentation only.
 - **Solar-only and hybrid+BESS lender scenarios for the cross-technology comparison (#821, #745 follow-up).**
   Added two bankable-input lender configs — `scenarios/dutchbay_solar_only_2025Q4.yaml` (150 MWac
   fixed-tilt PV, CF 0.1685 on the frozen PVGIS TMY) and `scenarios/dutchbay_hybrid_bess_2025Q4.yaml`
@@ -443,6 +521,104 @@ Annual credit-support fees on outstanding senior debt (#737): `Financing_Terms.f
   per-site behavioural review rather than a blanket lint fix.
 
 ### Changed
+- **DSRA watch item #2 dated check recorded (#920, still Open)** — `docs/STANDARDS_WATCH.md`
+  row 2 now carries the 2026-07-11 verification: no executed/indicative lender term sheet
+  exists (Downloads + repo swept; `debt_terms` evidence note unchanged at tier `assumption`),
+  the CEB standardized PPA is verified **silent on DSRA** from the SPPA commercial-terms
+  record (a DSRA is a lender covenant, not a PPA term), and the 6-month target is retained
+  as the market-standard assumption per the repo's PF-methodology KB ("next six months of
+  debt service"). Also corrects the resolver citation (`_build_funding`, not the never-existent
+  `_compute_dsra`) and pins the full four-rung DSRA-months precedence + 6.0 fallback with a
+  new KPI-neutral test
+  (`tests/finance/test_dsra_fund_at_close.py::test_dsra_months_full_precedence_order_and_fallback`).
+  Trigger stays armed — re-confirm on receipt of a term sheet. Canon byte-identical.
+# changelog.d/921.changed.md
+- **E402 import-order deferral closed (#921)** — the Sprint-18 E402 deferral is resolved.
+  The affected `analytics/mc/*`, `analytics/sensitivity/*`, and legacy `*_v14` shim modules
+  already carry a file-level `# ruff: noqa: E402` (the register's own recommended suppression,
+  adopted in #610/#545 for intentional documentation-first and deprecation-shim import
+  ordering); the one residual case (`scripts/run_tornado_from_cli.py`, imports that follow a
+  `sys.path` repo-root bootstrap) is now suppressed the same way. `ruff check --select E402 .`
+  reports 0 and `docs/LINT_WARNINGS_E402_DEFERRED.md` is marked RESOLVED. KPI-neutral; no
+  imports reordered.
+- **Adopt black 26.5.1 in the pre-commit pins (#957).** The `psf/black` hook in
+  `.pre-commit-config.yaml` pinned `rev: "25.11.0"`, drifting from the locked/CI
+  toolchain (`requirements.txt` `black==26.5.1`, `constraints.txt` `black<27`). The hook
+  `rev` is now realigned to `"26.5.1"` (verified tag on `psf/black`) so `pre-commit`
+  formats with the exact black the lockfile installs. Running `black .` under 26.5.1
+  reformatted **zero** files — the committed tree was already 26.5.1-clean, so the
+  anticipated tree-wide reformat was a no-op and no reformat revision was added to
+  `.git-blame-ignore-revs`. Pure tooling-config change: `black --check .`,
+  `isort --check-only .`, and `ruff check .` all pass; the pinned 5th-gen canon KPIs
+  (`test_multitech_generation.py`, 16 passed) are byte-identical. The `black>=24.0`
+  dev-extra floor already admits 26.5.1, so no other black reference pins an older version.
+  The `ruff` pre-commit hook was likewise resynced (`v0.8.3` → `v0.14.14`, matching the
+  locked toolchain; the tree already passes `ruff check .` under 0.14.14), and the
+  `make lint` target's advisory `|| true` on `black`/`isort` was dropped so both are now
+  **blocking** (the tree is clean, so `make lint` stays green) — closing the drift the
+  advisory existed to tolerate.
+- **PR test matrix now gates both supported Python versions (#959).** The `test` and
+  `coverage` matrices in `.github/workflows/test-suite.yml` previously ran Python 3.12
+  only on `pull_request` (3.11 ran only on push-to-main and nightly), so a 3.11-only
+  regression at the supported floor was caught post-merge rather than on the PR. Both
+  matrices now select the FULL `["3.11", "3.12"]` matrix on `pull_request`, so a
+  3.11-only break blocks the PR before merge. Push-to-main stays 3.11-only (a
+  lightweight post-merge re-validation of the floor against the merged tree; 3.12 was
+  just fully validated on the PR) and nightly/dispatch stay both. The 3.11 lane reuses
+  the identical `requirements.txt` + `.[wind,gis]` install path that push/nightly
+  already exercise, so no dep pins change. CI-config only; canon KPIs untouched.
+- **`build_lhs_plan` docstring — LHS/QMC conflation corrected (methodology
+  provenance, #964 §6).** The sampler note called `scipy.stats.qmc.LatinHypercube`
+  "formal LHS with Koksma-Hlawka error bounds". The Koksma-Hlawka inequality bounds
+  *quasi*-Monte-Carlo error via a point set's star discrepancy — a rate that
+  low-discrepancy QMC sequences (Sobol'/Halton) attain but a scrambled Latin
+  Hypercube design does not generically reach; attributing it to LHS conflated the
+  two. Reworded to credit LHS's real benefit — stratified variance reduction of the
+  sample mean for additive/near-additive integrands (Stein 1987, *Technometrics*
+  29(2):143-151) — and to note that Owen's scrambled-net variance results are a
+  separate QMC construction. Docstring-only: `build_lhs_plan` has no
+  pipeline/report/committed-scenario caller (only the on-demand
+  `run_pareto_search(plan_kind="lhs")` tool), no test pins the wording, and the
+  `LatinHypercube` sampler itself is unchanged. KPI-neutral; canon pins pass.
+- **Documentation refresh (README, development guide, schema).** Rewrote `README.md` to
+  drop non-standard styling, correct the architecture tree (`monte_carlo/` holds scenario
+  YAMLs not engine code; generated outputs are git-ignored; `api/` vs `app/api/` explained),
+  and add `Development` and `Deployment` sections that link the new development guide and the
+  deploy runbook. Added `docs/DEVELOPMENT.md` (setup, quality gates, contribution workflow,
+  concurrency/worktrees, CI topology, governance). Corrected `schema.md` to state it documents
+  only the EPC cost-basis parameters and to point to the authoritative config-schema modules
+  (`analytics/config_schema.py`, `analytics/schema_guard.py`). Documentation only; no engine
+  or financial behaviour changed.
+- **Marked the slow report end-to-end tests.** The five report-rendering e2e tests in
+  `tests/app/test_api.py` and `tests/integration/test_lender_report_e2e.py` (which dominate
+  suite wall-time, ~184s / ~38%) now carry `@pytest.mark.slow`, so `pytest -m "not slow"`
+  deselects them during local iteration. The coverage-gated full suite still runs them (no
+  CI lane or make target uses `-m "not slow"`), so coverage and the 95% floor are unaffected.
+# changelog.d/ruff-exclusion-drift.changed.md
+- **Lint-gate exclusion-drift cleanup** — `ruff.toml` carried four phantom exclusions
+  (`analytics/sensitivity_visualization.py` plus three long-deleted root files) and three
+  stale ones. `analytics/fx`, `api` and `constants.py` are now INSIDE the gate: the bare
+  `"api"` entry had also been shadow-excluding `app/api/` (ruff matches basenames), so
+  findings were sitting unseen in both trees after the repo-wide bugbear fixes. Brought
+  the newly-gated code up to standard: 8× `zip(..., strict=True)` in `analytics/fx`
+  (equal length is an existing invariant — `FXHistorySeries.__post_init__` enforces it —
+  so `strict=True` is a no-op assertion, per the #752 convention), 5× `raise … from exc`
+  in `api/` (the #758 convention), 3× `Annotated[T, Depends(...)]` route dependencies in
+  `app/api/jobs_router.py` (FastAPI-recommended; runtime-identical), and the
+  `analytics/fx/__init__` module docstring moved above `from __future__` so it is a real
+  docstring (`__doc__` was `None`). KPI-neutral; canon pins pass.
+# changelog.d/wacc-canonical-helpers.changed.md
+- **WACC helpers consolidated onto the engine's canonical implementations** —
+  `finance/wacc_v14.py` no longer carries private mirrors of `_as_float_or_none`,
+  `_pct_to_decimal` and `get_nested`; it imports them from `finance.cashflow_v14_utils`
+  (the cfb3908 "reuse the engine's exact resolution" doctrine). The mirrors had drifted:
+  wacc's `_pct_to_decimal` still silently mapped impossible `>100` inputs (`150 → 1.5`,
+  pre-#573 heuristic) where the canonical helper fail-louds, and its `get_nested` was
+  case-sensitive where the cashflow engine resolves case-insensitively — so a title-case
+  scenario (`Tax:`) priced tax into cashflow but silently dropped it from the WACC
+  build-up. Byte-identical for every valid input (≤ 100) on canonical lower-case configs;
+  canon oracle pins pass. Three coverage tests updated to assert both the new early
+  out-of-range gate and wacc's own (still-reachable) range checks.
 - **API contract freeze — public surface versioned under `/v1` + tornado response typed (#841, #788 P1).**
   The whole client-data HTTP surface (`/cases*`, `/run-pipeline`, `/sensitivity/*`, `/jobs*`,
   `/token`) is now version-pinned under a `/v1` prefix, so the public contract is stable and a
@@ -659,9 +835,148 @@ CI cost diet (Test Suite workflow): (1) merges to `main` now re-validate on **Py
   byte-identical.
 
 ### Removed
+- **Removed the dead `VERIFY_PACKAGES.sh` script.** It was a December-2025 "Phase 1-2"
+  verification artifact that sourced the nonexistent `.venv311` and checked five
+  modules/tests that no longer exist (`finance/tax_profile.py`, `finance/wacc_integration.py`,
+  `finance/debt/__init__.py`, `finance/core/epc_helper.py`, `tests/test_phase_1_2_refactoring.py`),
+  so it could not run. It is unreferenced anywhere in the repo and is superseded by `make test`
+  and `check_venv.sh`.
 Retired the toy `run_driver_mc` capital-risk stack (#780, user-approved dead-code removal): `run_driver_mc` (independent-Gaussian bootstrap — no LHS/correlation), `run_capital_risk_layer`, `build_driver_mc_tail_snapshot`, `build_driver_mc_tail_report`, the `scripts/run_capital_risk_layer.py` CLI and their tests. Superseded end-to-end by the canonical MC path: `analytics.mc.engine.MonteCarloEngine` (LHS + Iman-Conover) → `build_capital_risk_report_from_mc_result` → the lender report (opt-in caller `app.reports.capital_risk_emit`, #779/#776). The MC-source-agnostic cores (`compute_capital_risk_layer`, `build_case_metadata_from_trials`, `_tail_report_from_trials`, `emit_npv_distribution_from_trials`, `build_capital_risk_report_from_trials`/`_from_mc_result`) are kept; their guards now run on synthetic per-trial arrays. KPI-neutral.
 
 ### Fixed
+# changelog.d/922.fixed.md
+- **Corrected stale async-jobs docstrings (#922)** — `app/jobs/worker.py` no longer claims the
+  arq producer path is "NOT YET WIRED". The cutover shipped in #663/#837: `POST /jobs`
+  (`app.api.jobs_router.enqueue_job`) enqueues onto the arq queue via `_enqueue_to_arq` when
+  `DUTCHBAY_JOBS_BACKEND=redis`, and `get_store` returns a shared `RedisJobStore`; the default
+  `memory` backend keeps the in-process `BackgroundTasks` path (byte-identical to pre-#663).
+  Also corrected `jobs_router.py`'s "future arq paths" phrasing to describe both live dispatch
+  paths. Docstring-only; no behaviour change.
+# changelog.d/937.fixed.md
+- **Cross-suite test-order dependence: 12 fx tests failed after `tests/lint` in one
+  process (#937)** — three import-smoke tests in `tests/lint/test_import_smoke.py`
+  (`test_import_contracts_then_fx`, `test_import_monte_carlo_aep_before_analytics_wind`,
+  `test_import_speed_baseline`) purged `analytics*` entries from `sys.modules` and
+  re-imported in-process to "test fresh". The purge created a second generation of
+  module/class objects while already-collected fx test modules kept first-generation
+  references: the call-time `ScenarioResult` import in `analytics/fx/fx_integration.py`
+  then failed `isinstance()` against gen-1 instances (TypeError), and
+  `@patch("analytics.fx_sensitivity_real...")` landed on the gen-2 module while the
+  gen-1 code under test read gen-1 globals, bypassing the mock (FileNotFoundError).
+  Fixed at the source: the three tests are now fresh-interpreter subprocess probes
+  (the `_cold_probe` helper, same pattern as `tests/lint/test_cold_import_order.py`) —
+  side-effect-free AND a truer cold import than any in-process purge (parent-package
+  attributes and C extensions survive a purge). A regression guard
+  (`tests/lint/test_import_smoke_isolation.py`) re-runs the historical poisoner file
+  plus one victim from each family in a single child pytest process and fails if the
+  leak returns. Tests-only change: `finance/` and `analytics/` are untouched, so the
+  canonical KPIs stay byte-identical.
+Async wind jobs no longer crash with ``PermissionError`` at pipeline init: the
+wind assessment now runs in a per-job ephemeral temp workspace (writable by the
+non-root container user) instead of the relative ``outputs/wind_assessment`` /
+``inputs/wind_data`` defaults, which the uid-10001 runtime user cannot create.
+The workspace holds only scratch and is removed when the job finishes. (#952)
+# changelog.d/956.fixed.md
+- **Committed-scenario test guards now fail loud (#956)** — the
+  `@pytest.mark.skipif(not <scenario>.exists())` guards that silently SKIPPED whole
+  tornado / FX / global-SA / BESS / EPC-margin / tax-vintage slices when a **committed**
+  scenario YAML was renamed or deleted are converted to hard `assert <path>.exists()`
+  checks, so a missing committed scenario now FAILS the relevant test (or, for the
+  module-level guard in `tests/analytics/test_multi_tech_tornado.py`, the module's
+  collection) instead of masking the breakage as a green skip. All six referenced YAMLs
+  were verified git-tracked before converting; 32 guards across eight test files (the 29
+  single-line guards plus three multi-line committed-scenario guards found in the same
+  sweep). Test-only; no `finance/` or `analytics/` logic touched, canon byte-identical.
+- **Stale `.venv311` path drift removed from active scripts.** The canonical
+  developer/CI virtualenv is `.venv`, but several scripts still defaulted to or
+  activated the retired `.venv311`: `scripts/venv_up.sh` (default `VENV_DIR`),
+  `scripts/ci/ci_quick.sh` (venv activation guard), and
+  `scripts/datalake_refresh_and_diff.py` (interpreter resolution + usage docstring)
+  now all reference `.venv`. Snapshot/manifest exclusion lists
+  (`dutchbay_manifest_builder.py`, `make_clean_zip.py`, `scripts/build/make_essential_zip.py`)
+  already skipped both `.venv` and `.venv311` and were left intact. Tooling only;
+  no engine or financial behaviour changed. (#960)
+- **Corrected two cosmetic Sri Lanka tax citations (#963)** — in `finance/cashflow_v14_tax.py`
+  the 30% corporate rate is now pinned to the **First Schedule ("Rates of Income Tax")** of the
+  Inland Revenue Act No. 24 of 2017 (not the Second Schedule), and the plant & machinery
+  depreciation life notes that it can sit under Fourth-Schedule **Class 2 or Class 3** — both
+  5 yr (20%/yr), so the plant rate is robust either way. Comment/docstring-only; no tax rate or
+  computation changed, canon KPIs byte-identical.
+- **Async wind jobs no longer fail at ERA5 with CDS "Your request is too large" (#965)** —
+  the async ``/v1/jobs`` wind path (``app.jobs.runner.default_assessment``) now fetches the
+  CDS ARCO **single-point timeseries** product
+  (``reanalysis-era5-single-levels-timeseries`` via ``wind_resource.era5_retrieval``) instead
+  of the legacy gridded ``ERA5Fetcher``, whose hardcoded full-year hourly AREA request CDS
+  rejects. The finished hub-height series is injected into the canonical ``WindPipeline`` via a
+  new optional ``run_complete_assessment(hub_height_series=...)`` seam (default ``None`` → the
+  existing CLI fetch/extrapolate path is byte-identical), so Steps 3-5 and the
+  ``export_for_cashflow_model`` contract are unchanged (Dolphin — no duplicate wind/finance
+  logic). ``turbine_model`` is now validated at request time on ``WindJobRequest`` against the
+  live ``power_curves.yaml`` keys (new ``energy_calculator.available_turbine_models`` single
+  source of truth), returning an actionable 422 on POST ``/jobs`` rather than a mid-job
+  ``KeyError``. Wind-fetch path only — ``finance/`` and ``analytics/`` are untouched, so the
+  canonical KPIs stay byte-identical. The resulting AEP is SCREENING-grade (single-cell ERA5,
+  no on-site mast, MCP unwired — #961) and is NOT bankable.
+- **`antlr4-python3-runtime` pinned to 4.9.\* to keep the lock installable (#939 fallout).** The weekly
+  Dependabot `python-deps` group swept `antlr4-python3-runtime` 4.9.3 → 4.13.2, which is a
+  `ResolutionImpossible`: `hydra-core==1.3.4` and `omegaconf==2.3.1` — the config stack the whole CLI
+  is built on (GWTF CLI-01, Hydra-only) — both require `antlr4-python3-runtime==4.9.*` (the grammar
+  runtime their parsers were generated against), so `pip install -r requirements.txt` could not resolve.
+  Canon was never at risk (no core numeric lib moved), but no fresh env or CI image could be built from
+  that lock. A `constraints.txt` hard-cap (`antlr4-python3-runtime<4.10`) plus a `.github/dependabot.yml`
+  ignore of semver-major **and** -minor bumps (4.9→4.13 is a minor) now hold it on 4.9.\*; patches within
+  4.9.\* still flow. Lift only in lockstep with a `hydra-core`/`omegaconf` upgrade that regenerates their
+  grammars against a newer antlr runtime. Tooling/lock policy only; no engine or financial behaviour changed.
+# changelog.d/boundary-clip-segfault.fixed.md
+- **`boundary_clip.clip_to_polygon` no longer segfaults on a loaded polygon** — the natural
+  composition `clip_to_polygon(polygon=load_polygon(path))` crashed the interpreter (exit 139)
+  inside rasterio's C extension (`mask -> raster_geometry_mask -> geometry_window -> bounds`).
+  Root cause was a double extraction, not a rasterio bug: `load_polygon` already returns
+  extracted geometries, and `clip_to_polygon` re-extracted them; `_extract_geometries` mistook
+  the geometry *list* for a bare ring coordinate list and wrapped it into a malformed
+  `{"type": "Polygon", "coordinates": [ {geom} ]}`, whose nested mapping GDAL's coordinate
+  bounds walk dereferenced as a C double. `_extract_geometries` is now idempotent (a list of
+  geometry/feature mappings is re-extracted, not wrapped), and a pure-Python coordinate
+  validator (`_validate_geometry`) rejects any geometry whose coordinates hide a mapping,
+  string or short position with a catchable `ValueError` before it can reach the C extension
+  (CESSPIT fail-loud). Add-only GIS/reporting layer; `finance/` and `analytics/` finance paths
+  are untouched and the canonical KPIs stay byte-identical.
+- **`constraints.txt` documentation contradiction fixed.** `RELEASING.md` and the `Makefile`
+  `lock` comment both asserted that `constraints.txt` was "retired", but it is the active
+  freeze-policy caps file (#756) whose own header documents the `PIP_CONSTRAINT=constraints.txt`
+  regeneration recipe. The wording is corrected, and `make lock` now applies
+  `PIP_CONSTRAINT=constraints.txt` so a regenerated `requirements.txt` respects the gate-cleared
+  version caps (pandas<3, mypy==1.19.0, isort<8, ruff<0.15, black<27, ...) instead of producing
+  an unconstrained lock. Tooling/docs only; no engine or financial behaviour changed.
+# changelog.d/grid-free-tests-env-independent.fixed.md
+- **Grid-free tests made environment-independent** — six `tests/grid/*_grid_free.py`
+  tests asserted optional-dependency-ABSENT behaviour (the CASPER `_require_*` guards and
+  closed-form fallbacks) by relying on `pandapower` / `opendssdirect` / `andes` genuinely
+  missing from the venv, so they failed in any dev environment with the `[grid]` extra
+  installed (local `make test` red on a green `main` — the #859 local/CI-divergence class).
+  Absence is now SIMULATED per-test with a poisoned `sys.modules` entry
+  (`monkeypatch.setitem(sys.modules, "<lib>", None)`), which raises the same `ImportError`
+  whether or not the library is installed. No engine code touched; KPI-neutral.
+- **Corrected the README Deployment section.** It described the temporary interim in-process
+  (`memory`) job posture (#928); as of #943 the durable arq + managed-Redis path is restored
+  (`DUTCHBAY_JOBS_BACKEND=redis`, worker process live), so the README now states the current
+  durable posture. Documentation only.
+# changelog.d/tests-headless-mpl.fixed.md
+- **Test suite pinned to the headless matplotlib backend** — `tests/conftest.py` now
+  forces `Agg` (env + `matplotlib.use`) before any test can import pyplot. Chart-emitting
+  tests (e.g. the capital-risk NPV-distribution PNG) previously instantiated the platform
+  GUI backend on developer machines; on macOS the `macosx` backend hard-segfaulted the
+  pytest process (exit 139) in sandboxed/SSH shells with no window server. Linux CI was
+  never affected (no `DISPLAY` → Agg fallback), so this makes local runs match CI.
+  Test-infra only; KPI-neutral.
+- **Developer venv bootstrap scripts corrected.** `setup_venv.sh` created a `venv/`
+  directory (the project uses `.venv`), gated Python 3.9 (the project requires 3.11), and
+  carried a stale "V13"/Desktop-path header; it now targets `.venv`, requires 3.11+, installs
+  the `[dev]` toolchain to match `make setup`, and prints `.venv` activation instructions.
+  `check_venv.sh` required the retired `pytest.ini` file as a repo-root marker (so it always
+  failed the "does not look like the repo root" check) and targeted the nonexistent `.venv311`;
+  it now checks `pyproject.toml` + `VERSION` and targets `.venv`. Tooling only; no engine or
+  financial behaviour changed.
 - **Local mypy on `app/` now matches CI (#859)** — `RedisJobStore`'s `RedisLike`
   parameter type was a plain nominal class, so an installed, typed `redis.Redis`
   (present in the shared dev venv) failed `[arg-type]` at
@@ -716,6 +1031,21 @@ Batch scenario-analytics surface now bears the #737 senior credit-support fee (#
   Each path has a sculpt-pinned repro (prob == 0.0) and a genuine-breach repro (prob > 0).
 
 ### Security
+# changelog.d/944.security.md
+- **Web prod hardening: security headers + docs posture (#944)** — a pure-ASGI
+  `SecurityHeadersMiddleware` (`app/api/security.py`) now stamps `X-Content-Type-Options:
+  nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` and a minimal HTMX-wizard
+  `Content-Security-Policy` (`default-src 'self'`; `frame-ancestors 'none'`; `object-src 'none'`;
+  `base-uri`/`form-action 'self'`; `'unsafe-inline'` still allowed for the wizard's inline
+  bootstrap script + `style="width"` bars) on every response. `Strict-Transport-Security`
+  (2yr + subdomains) is emitted **only** in the production posture (reusing the #858
+  `DUTCHBAY_ENV` switch), so dev never pins `http://localhost`. In production the interactive
+  docs + raw schema (`/docs`, `/redoc`, `/openapi.json`) now return `404` — they embed internal
+  engineering notes (issue refs, backend detail) with no benefit to a B2B client, who consumes
+  the frozen `/v1` contract, not Swagger; they stay reachable in development. Header injection
+  touches only the response start message, so the streaming SSE job-events endpoint is
+  unaffected. App-layer only; `finance/`/`analytics/` untouched and the canonical KPIs stay
+  byte-identical. Refs #928, #858.
 - **JWT auth production posture + residual-gap hardening (#858, a #842 follow-up).**
   `app/api/auth.py` gains an explicit `DUTCHBAY_ENV` posture switch (`production` / `prod`
   engages the hardened mode; anything else keeps the permissive dev/backward-compatible
