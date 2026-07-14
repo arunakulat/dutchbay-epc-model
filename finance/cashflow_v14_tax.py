@@ -7,7 +7,9 @@ contradictory silent defaults, was deleted in #483 / FIN-1).
 
 Tax scope — what the model includes vs excludes (Sri Lanka regime, #483 / FIN-4):
 
-* MODELLED: corporate income tax (CIT, 30%), straight-line depreciation with a
+* MODELLED: corporate income tax (CIT, 30% — the standard company rate, set by the
+  First Schedule ("Rates of Income Tax") of the Sri Lanka Inland Revenue Act
+  No. 24 of 2017, NOT the Second Schedule), straight-line depreciation with a
   plant/civil split, tax-loss carry-forward (6-year SL window, vintage-tracked),
   withholding tax on interest to non-residents (10%) and on dividends (15%, on the
   equity path), and the Social Services Contribution Levy (SSCL, 2.5% of revenue —
@@ -178,7 +180,7 @@ class TaxConfig:
         None  # set → split depreciation (plant vs civil)
     )
     plant_depreciation_years: Optional[int] = (
-        None  # SL Class 2 plant & machinery = 5 yr
+        None  # SL Fourth-Sched Class 2 (or Class 3) plant & machinery = 5 yr (20%/yr either way)
     )
     civil_depreciation_years: Optional[int] = (
         None  # SL Class 4 buildings/civils = 20 yr

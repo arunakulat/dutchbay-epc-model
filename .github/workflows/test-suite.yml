@@ -10,10 +10,10 @@ on:
   pull_request:
     branches: [ main, develop ]
   schedule:
-    # Nightly FULL-matrix run (03:17 UTC): the one place both 3.11 AND 3.12 run
-    # together against main every day. PRs gate on 3.12 only and merges to main
-    # re-validate on 3.11 only (the leg the PR skipped) — this schedule is the
-    # cross-version backstop for anything that slips between those two halves.
+    # Nightly FULL-matrix run (03:17 UTC): exercises both 3.11 AND 3.12 against main
+    # end-to-end every day. PRs now gate on BOTH versions (#959) and merges to main
+    # re-validate 3.11 against the merged tree — this schedule is the daily backstop
+    # that runs the full cross-version matrix against main regardless of PR activity.
     - cron: '17 3 * * *'
   workflow_dispatch:
 
@@ -93,20 +93,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Version matrix by event (CI cost diet):
-        # - pull_request: 3.12 only (the dominant dev/runtime version) — halves the
-        #   PR gate's wall time.
-        # - push to main: 3.11 only — the ONE leg the PR gate skipped. The merged tree's
-        #   3.12 leg was just validated on the PR itself (GWTF: work reaches main only
-        #   through PRs, and the merge-train keeps PRs current before merge), so
-        #   re-running 3.12 post-merge duplicated ~32 runner-minutes per merge for
-        #   near-zero signal.
+        # Version matrix by event:
+        # - pull_request: FULL 3.11+3.12 matrix — both supported Python versions gate
+        #   the merge, so a 3.11-only regression (the supported floor) blocks the PR
+        #   rather than slipping through to post-merge/nightly (#959). The extra
+        #   runner-minutes are spent deliberately: cross-version breakage is caught
+        #   before merge, not after.
+        # - push to main: 3.11 only — a lightweight post-merge re-validation of the
+        #   floor version against the actual merged main tree (which only exists once
+        #   the merge lands); 3.12 was just fully validated on the PR, so re-running it
+        #   here would duplicate ~32 runner-minutes per merge for near-zero signal.
         # - nightly schedule + manual dispatch: FULL 3.11+3.12 matrix — the daily
         #   backstop that exercises both versions against main end-to-end.
         # The required 'Test Summary' check aggregates whatever legs ran (needs.test),
-        # so PR merges are unaffected; a cross-version regression surfaces at
-        # merge-to-main (3.11) or nightly (both) rather than on the PR.
-        python-version: ${{ (github.event_name == 'pull_request') && fromJSON('["3.12"]') || (github.event_name == 'push') && fromJSON('["3.11"]') || fromJSON('["3.11", "3.12"]') }}
+        # so 'success' requires every leg that ran (both versions on a PR) to pass.
+        python-version: ${{ (github.event_name == 'pull_request') && fromJSON('["3.11", "3.12"]') || (github.event_name == 'push') && fromJSON('["3.11"]') || fromJSON('["3.11", "3.12"]') }}
         shard: [1, 2, 3, 4, 5, 6]
 
     steps:
@@ -204,9 +205,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Mirrors the test job's per-event version selection (PR: 3.12; push-to-main:
+        # Mirrors the test job's per-event version selection (PR: 3.11+3.12; push-to-main:
         # 3.11; nightly/dispatch: both) so the gate combines exactly the shards that ran.
-        python-version: ${{ (github.event_name == 'pull_request') && fromJSON('["3.12"]') || (github.event_name == 'push') && fromJSON('["3.11"]') || fromJSON('["3.11", "3.12"]') }}
+        python-version: ${{ (github.event_name == 'pull_request') && fromJSON('["3.11", "3.12"]') || (github.event_name == 'push') && fromJSON('["3.11"]') || fromJSON('["3.11", "3.12"]') }}
 
     steps:
     - name: Checkout repository

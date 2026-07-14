@@ -141,6 +141,33 @@ def test_reserves_nested_dsra_months_is_wired() -> None:
     assert f_override["dsra_target_months"] == pytest.approx(6.0)
 
 
+def test_dsra_months_full_precedence_order_and_fallback() -> None:
+    """#920: pin ALL four rungs of the DSRA-months precedence, pairwise, plus the fallback:
+    ``dsra.target_months -> Financing_Terms.dsra_months -> Financing_Terms.reserves.dsra_months
+    -> 6.0`` (resolved by ``finance.debt_v14._build_funding``).
+
+    Prior coverage pinned rung 1 > rung 3 and each rung individually, but never rung 1 > 2,
+    rung 2 > 3, or the bare 6.0 fallback — so a resolver reshuffle that swapped the legacy
+    ``dsra_months`` key and the canonical ``reserves`` nesting (or dropped the fallback) would
+    have passed. The canonical lender case authors only rung 3 (``reserves.dsra_months: 6``),
+    whose value coincides with the fallback, masking exactly that class of regression.
+    Config-only overrides on test-local copies — canonical economics untouched.
+    """
+    # Rung 1 beats rung 2: an explicit dsra.target_months wins over legacy dsra_months.
+    _, f = _run(dsra={"fund_at_close": True, "target_months": 3}, dsra_months=9)
+    assert f["dsra_target_months"] == pytest.approx(3.0)
+    # Rung 2 beats rung 3: legacy top-level dsra_months wins over the reserves nesting.
+    _, f = _run(
+        dsra={"fund_at_close": True}, dsra_months=9, reserves={"dsra_months": 12}
+    )
+    assert f["dsra_target_months"] == pytest.approx(9.0)
+    # Rung 4: none of the three keys authored -> the 6.0-month fallback (the market-standard
+    # "next six months of debt service", docs/knowledge_base/05_project_finance_methodology.md
+    # section 1.5).
+    _, f = _run(dsra={"fund_at_close": True}, reserves={})
+    assert f["dsra_target_months"] == pytest.approx(6.0)
+
+
 def test_api_surfaces_funding_block() -> None:
     from api.pipeline_api import RunPipelineRequest, run_pipeline
 

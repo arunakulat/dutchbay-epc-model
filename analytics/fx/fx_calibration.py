@@ -194,7 +194,7 @@ def calibrate_fx(
     for name, start, end in regimes:
         r_in = [r for (d, r) in returns if _in_window(d, start, end)]
         # realised log-move across the window (first→last level in-window)
-        lv = [v for (k, v) in zip(keys, vals) if _in_window(k, start, end)]
+        lv = [v for (k, v) in zip(keys, vals, strict=True) if _in_window(k, start, end)]
         cum = (
             math.log(lv[-1] / lv[0])
             if len(lv) >= 2 and lv[0] > 0 and lv[-1] > 0

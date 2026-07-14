@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 analytics.fx - Foreign Exchange Risk Analysis Package
 
@@ -10,6 +8,8 @@ IMPORTANT: This module uses PEP 562 lazy loading to break the import cycle:
 
 Solution: Don't import fx_integration at module import time; defer until first access.
 """
+
+from __future__ import annotations
 
 from typing import Any
 

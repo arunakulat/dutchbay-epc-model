@@ -1,19 +1,18 @@
 line-length = 88
 target-version = "py311"
 
-# We rely on tests and runtime to guard these; Ruff is for library/core sanity.
+# Excluded from the lint gate: frozen legacy trees, one-time utility scripts, and the
+# test suite (guarded by pytest itself). Exclusion-drift cleanup (2026-07-07): the
+# phantom entries (analytics/sensitivity_visualization.py + three long-deleted root
+# files) were dropped, and `analytics/fx`, `api` and `constants.py` were UN-excluded —
+# they now pass the gate, closing the blind spot that let B905 findings sit unseen in
+# analytics/fx after the repo-wide #752 fix. dashboard_demo.py is a non-runnable doc
+# snippet pending relocation out of the package tree.
 extend-exclude = [
   "legacy",
   "scripts",
   "tests",
-  "analytics/fx",
-  "api",
   "analytics/sensitivity/dashboard_demo.py",
-  "analytics/sensitivity_visualization.py",
-  "constants.py",
-  "fix_parameter_range_config.py",
-  "go_with_the_flow_ci_enhanced.py",
-  "go_with_the_flow_ci_v2_final.py",
 ]
 
 [lint]

@@ -64,6 +64,27 @@ from wind_resource.bankable_aep import (
 logger = logging.getLogger(__name__)
 
 
+def available_turbine_models(power_curves_path: Optional[str] = None) -> List[str]:
+    """Return the turbine-model keys defined in ``power_curves.yaml``.
+
+    Single source of truth for the valid ``turbine_model`` names (#965): resolves the
+    SAME default path as :meth:`EnergyCalculator._load_power_curve_from_config`
+    (``wind_resource/config/power_curves.yaml``) and returns its top-level keys, so a
+    request-time validator can reject an unknown model against the exact set the energy
+    calculator will later look up — no forked/hardcoded list to drift.
+    """
+    curves_file = (
+        Path(__file__).parent / "config" / "power_curves.yaml"
+        if power_curves_path is None
+        else Path(power_curves_path)
+    )
+    if not curves_file.exists():
+        raise FileNotFoundError(f"Power curves file not found: {curves_file}")
+    with open(curves_file) as f:
+        power_curves = yaml.safe_load(f)
+    return list(power_curves.keys())
+
+
 class EnergyCalculator:
     """Calculate Annual Energy Production from wind data.
 

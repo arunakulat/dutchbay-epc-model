@@ -1,8 +1,9 @@
 #!/bin/bash
 # =============================================================================
-# DutchBay V13 Virtual Environment Setup & Validation Script
-# Location: /Users/aruna/Desktop/DutchBay_EPC_Extracted/DutchBay_EPC_Model/
-# Purpose: Ensures Python venv exists, is active, and dependencies installed
+# DutchBay EPC Model - Virtual Environment Setup & Validation Script
+# Purpose: Ensures the project .venv exists, is active, and dependencies installed
+# Note: `make setup` is the canonical bootstrap; this script is an equivalent
+#       standalone helper.
 # =============================================================================
 
 set -e  # Exit on error
@@ -15,7 +16,7 @@ NC='\033[0m' # No Color
 
 # Project root (where this script lives)
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
-VENV_DIR="$PROJECT_ROOT/venv"
+VENV_DIR="$PROJECT_ROOT/.venv"
 REQUIREMENTS="$PROJECT_ROOT/requirements.txt"
 
 echo "================================================================================"
@@ -40,19 +41,19 @@ elif command -v python &> /dev/null; then
 else
     echo -e "${RED}✗ Python not found!${NC}"
     echo ""
-    echo "Install Python 3.9+ using Homebrew:"
+    echo "Install Python 3.11+ using Homebrew:"
     echo "  brew install python3"
     echo ""
     echo "Or download from: https://www.python.org/downloads/"
     exit 1
 fi
 
-# Verify Python version (need 3.9+)
+# Verify Python version (the project requires 3.11+)
 PYTHON_VER=$($PYTHON_CMD -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-MIN_VERSION="3.9"
+MIN_VERSION="3.11"
 
 if [ "$(printf '%s\n' "$MIN_VERSION" "$PYTHON_VER" | sort -V | head -n1)" != "$MIN_VERSION" ]; then
-    echo -e "${RED}✗ Python $PYTHON_VER is too old (need 3.9+)${NC}"
+    echo -e "${RED}✗ Python $PYTHON_VER is too old (need 3.11+)${NC}"
     echo "Upgrade Python: brew upgrade python3"
     exit 1
 fi
@@ -104,9 +105,10 @@ echo ""
 echo "Step 4: Installing dependencies..."
 
 if [ -f "$REQUIREMENTS" ]; then
-    echo "Installing from requirements.txt..."
+    echo "Installing from requirements.txt (pinned lock) + the [dev] toolchain..."
     pip install --upgrade pip --quiet
     pip install -r "$REQUIREMENTS" --quiet
+    pip install -e ".[dev]" --quiet
     echo -e "${GREEN}✓${NC} Dependencies installed"
 else
     echo -e "${YELLOW}⚠${NC}  requirements.txt not found. Installing essential packages..."
@@ -152,10 +154,10 @@ echo "  $VENV_DIR"
 echo ""
 echo "To activate manually in future sessions:"
 echo "  cd $PROJECT_ROOT"
-echo "  source venv/bin/activate"
+echo "  source .venv/bin/activate"
 echo ""
 echo "To run Python scripts:"
-echo "  venv/bin/python your_script.py"
+echo "  .venv/bin/python your_script.py"
 echo ""
 echo "To deactivate:"
 echo "  deactivate"

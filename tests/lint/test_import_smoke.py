@@ -29,10 +29,43 @@ Example CI failure diagnosis:
   → Fix: Use TYPE_CHECKING in fx/fx_integration.py
 """
 
+import os
+import subprocess
 import sys
 from importlib import import_module
+from pathlib import Path
 
 import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _cold_probe(code: str) -> "subprocess.CompletedProcess[str]":
+    """Run *code* in a FRESH interpreter — a true cold-import probe.
+
+    Never "simulate" a cold import by purging sys.modules in-process and
+    re-importing: that creates a SECOND generation of module/class objects
+    while already-collected test modules keep first-generation references,
+    splitting class identity (isinstance checks fail) and mock.patch targets
+    (patches land on the new module, code runs the old one) for every test
+    that runs later in the same process (#937). A subprocess is also the
+    stronger test for the stated purpose: parent-package attributes and C
+    extensions survive an in-process purge, so only a fresh interpreter
+    exercises the real cold-import order (same pattern as
+    tests/lint/test_cold_import_order.py).
+    """
+    return subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=REPO_ROOT,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
+        capture_output=True,
+        text=True,
+        # A pathologically hung cold import must fail the probe, not hang the
+        # suite (no global pytest-timeout is configured); 120 s is ~300× the
+        # measured ~0.4 s cold import.
+        timeout=120,
+    )
+
 
 # =============================================================================
 # P0 Critical Imports (must always work)
@@ -207,24 +240,22 @@ def test_import_all_analytics_submodules():
 
 
 def test_import_contracts_then_fx():
-    """Test importing contracts_v14 followed by fx integration.
+    """Test importing contracts_v14 followed by fx integration, cold.
 
-    This specifically tests the P0-1 fix for circular imports.
+    This specifically tests the P0-1 fix for circular imports. Runs in a
+    fresh interpreter so the import order is genuinely contracts-then-fx
+    (in-process, both are already cached by earlier tests — and purging
+    the cache to fake freshness is exactly the #937 leak; see _cold_probe).
     """
-    try:
-        # Clear any cached imports to test fresh
-        for key in list(sys.modules.keys()):
-            if "analytics.fx" in key or "analytics.contracts" in key:
-                del sys.modules[key]
-
-        # Import in order that would trigger circular dep
-        from analytics import contracts_v14
-        from analytics.fx import integrate_fx_into_scenario_result
-
-        assert contracts_v14 is not None
-        assert integrate_fx_into_scenario_result is not None
-    except ImportError as e:
-        pytest.fail(f"Circular import detected (contracts_v14 ↔ fx): {e}")
+    probe = (
+        "from analytics import contracts_v14; "
+        "from analytics.fx import integrate_fx_into_scenario_result; "
+        "assert contracts_v14 is not None; "
+        "assert integrate_fx_into_scenario_result is not None"
+    )
+    result = _cold_probe(probe)
+    if result.returncode != 0:
+        pytest.fail(f"Circular import detected (contracts_v14 ↔ fx):\n{result.stderr}")
 
 
 def test_import_monte_carlo_aep_before_analytics_wind():
@@ -234,16 +265,20 @@ def test_import_monte_carlo_aep_before_analytics_wind():
     forms a cycle; a module-level `from analytics.wind.losses_model import ...` in
     monte_carlo_aep broke when monte_carlo_aep was imported FIRST (the test suite masked
     it by importing analytics.wind earlier). The DEFAULT_WIND_LOSSES import is now lazy.
-    """
-    for key in list(sys.modules.keys()):
-        if key.startswith("analytics.wind") or key.startswith("analytics.simulation"):
-            del sys.modules[key]
-    try:
-        from analytics.simulation.monte_carlo_aep import run_monte_carlo_aep
 
-        assert run_monte_carlo_aep is not None
-    except ImportError as e:
-        pytest.fail(f"Circular import (analytics.wind ↔ monte_carlo_aep): {e}")
+    Runs in a fresh interpreter: only there is monte_carlo_aep truly imported
+    first (an in-process sys.modules purge is approximate AND leaks split
+    module generations into later tests, #937; see _cold_probe).
+    """
+    probe = (
+        "from analytics.simulation.monte_carlo_aep import run_monte_carlo_aep; "
+        "assert run_monte_carlo_aep is not None"
+    )
+    result = _cold_probe(probe)
+    if result.returncode != 0:
+        pytest.fail(
+            f"Circular import (analytics.wind ↔ monte_carlo_aep):\n{result.stderr}"
+        )
 
 
 # =============================================================================
@@ -254,26 +289,26 @@ def test_import_monte_carlo_aep_before_analytics_wind():
 def test_import_speed_baseline():
     """Verify that basic imports complete quickly.
 
-    Import times should be < 1 second for analytics package.
     Slow imports indicate:
       - Heavy computation at module level (anti-pattern)
       - Eager loading of large dependencies (use lazy imports)
       - Circular import resolution overhead
+
+    Times `import analytics` inside a fresh interpreter — an honest cold
+    timing (the old in-process purge timed a warm re-import over cached
+    third-party modules, and the purge itself was the #937 leak; see
+    _cold_probe). Cold baseline measured ~0.4s (2026-07-11); the 2.0s bound
+    still catches egregious regressions.
     """
-    import time
-
-    # Clear cache for clean test
-    for key in list(sys.modules.keys()):
-        if key.startswith("analytics"):
-            del sys.modules[key]
-
-    start = time.time()
-    import analytics
-
-    elapsed = time.time() - start
-
-    # Allow up to 2 seconds (generous, but catches egregious issues)
-    assert elapsed < 2.0, f"Import took {elapsed:.2f}s (expected <2.0s)"
+    probe = (
+        "import time; "
+        "t0 = time.perf_counter(); "
+        "import analytics; "
+        "elapsed = time.perf_counter() - t0; "
+        "assert elapsed < 2.0, f'Import took {elapsed:.2f}s (expected <2.0s)'"
+    )
+    result = _cold_probe(probe)
+    assert result.returncode == 0, f"import-speed probe failed:\n{result.stderr}"
 
 
 # =============================================================================
