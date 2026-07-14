@@ -240,12 +240,26 @@ def build_lhs_plan(
     explodes past ``max_points``.
 
     Sampler: ``scipy.stats.qmc.LatinHypercube(d=len(grid), scramble=True,
-    rng=np.random.default_rng(int(seed)))`` (formal LHS with Koksma-Hlawka
-    error bounds), replacing the previous hand-rolled stratified sampler that
-    its own docstring admitted was "NOT full LHS". ``d`` is the number of
-    parameters; ``engine.random(n_samples)`` returns an ``[n_samples, d]``
-    array with one draw per ``[i/n, (i+1)/n)`` stratum per dimension (the
-    Latin Hypercube property), independently permuted across dimensions.
+    rng=np.random.default_rng(int(seed)))`` — a genuine LHS design, replacing
+    the previous hand-rolled stratified sampler that its own docstring admitted
+    was "NOT full LHS". ``d`` is the number of parameters;
+    ``engine.random(n_samples)`` returns an ``[n_samples, d]`` array with one
+    draw per ``[i/n, (i+1)/n)`` stratum per dimension (the Latin Hypercube
+    property), independently permuted across dimensions.
+
+    What LHS actually buys (stated accurately, MRM-01): LHS is a STRATIFICATION
+    / VARIANCE-REDUCTION scheme — for additive or near-additive integrands it
+    lowers the variance of the sample mean relative to plain Monte Carlo (Stein
+    1987, Technometrics 29(2):143-151). It is NOT a low-discrepancy QMC
+    sequence: a scrambled LHS design does not generically attain the QMC star
+    discrepancy of order (log N)^d / N that Sobol'/Halton sequences achieve, so
+    the Koksma-Hlawka inequality — which bounds QMC integration error by the
+    product of the integrand's variation and the point set's star discrepancy —
+    does NOT characterise its error. An earlier revision of this docstring
+    claimed "Koksma-Hlawka error bounds"; that conflated LHS with QMC and is
+    corrected here (flagged by the #964 methodology validation, section 6).
+    Owen's scrambled-NET variance results are a SEPARATE QMC construction,
+    distinct from the within-stratum scramble described next.
 
     Scrambling / seed semantics (documented honestly, MRM-01): ``scramble=True``
     applies an Owen-style random-linear scramble that jitters each point WITHIN
