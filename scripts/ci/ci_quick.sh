@@ -7,9 +7,9 @@ cd "$ROOT"
 step() { echo ""; echo "=== $* ==="; }
 
 # 0) Ensure venv is active (no hard fail if already active elsewhere)
-if [ -d ".venv311" ] && [ -f ".venv311/bin/activate" ] && [ -z "${VIRTUAL_ENV:-}" ]; then
+if [ -d ".venv" ] && [ -f ".venv/bin/activate" ] && [ -z "${VIRTUAL_ENV:-}" ]; then
   # shellcheck disable=SC1091
-  source ".venv311/bin/activate"
+  source ".venv/bin/activate"
 fi
 
 step "API/adapters smoke"

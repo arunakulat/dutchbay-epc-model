@@ -21,7 +21,7 @@ backend (#663/#837). Both paths drive the same ``run_wind_job``.
 from __future__ import annotations
 
 import uuid
-from typing import Optional
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -143,8 +143,8 @@ def enqueue_job(
     request: WindJobRequest,
     background: BackgroundTasks,
     http_request: Request,
-    store: JobStore = Depends(get_store),
-    subject: str = Depends(get_current_subject),
+    store: Annotated[JobStore, Depends(get_store)],
+    subject: Annotated[str, Depends(get_current_subject)],
 ) -> JobAccepted:
     """Queue an async live-ERA5 finance job and schedule it to run.
 
@@ -191,8 +191,8 @@ def _owned_record_or_404(store: JobStore, job_id: str, subject: str) -> JobRecor
 @router.get("/{job_id}", response_model=JobRecord)
 def get_job(
     job_id: str,
-    store: JobStore = Depends(get_store),
-    subject: str = Depends(get_current_subject),
+    store: Annotated[JobStore, Depends(get_store)],
+    subject: Annotated[str, Depends(get_current_subject)],
 ) -> JobRecord:
     """Return the current state of a job the caller owns (404 otherwise)."""
     return _owned_record_or_404(store, job_id, subject)
@@ -202,8 +202,8 @@ def get_job(
 def job_events(
     job_id: str,
     request: Request,
-    store: JobStore = Depends(get_store),
-    subject: str = Depends(get_current_subject),
+    store: Annotated[JobStore, Depends(get_store)],
+    subject: Annotated[str, Depends(get_current_subject)],
 ) -> StreamingResponse:
     """Stream a job's progress as SSE until terminal, timeout, or disconnect.
 

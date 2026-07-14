@@ -85,7 +85,9 @@ def run_tornado(payload: SensitivityInput) -> List[SensitivityTornadoRow]:
     try:
         safe_path = confined_path(payload.config_path, must_exist=True)
     except UnsafePathError as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid config_path: {exc}")
+        raise HTTPException(
+            status_code=400, detail=f"Invalid config_path: {exc}"
+        ) from exc
 
     # Normalise raw dicts into strongly-typed ParameterRangeConfig objects.
     params: List[ParameterRangeConfig] = [

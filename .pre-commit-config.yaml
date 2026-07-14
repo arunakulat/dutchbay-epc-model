@@ -2,7 +2,7 @@
 
 repos:
   - repo: https://github.com/psf/black
-    rev: "25.11.0"
+    rev: "26.5.1"
     hooks:
       - id: black
         language_version: python3.11
@@ -10,7 +10,7 @@ repos:
         exclude: ^legacy/
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: "v0.8.3"
+    rev: "v0.14.14"
     hooks:
       - id: ruff
         # Ruff will read configuration from ruff.toml

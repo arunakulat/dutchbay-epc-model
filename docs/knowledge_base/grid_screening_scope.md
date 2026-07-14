@@ -98,3 +98,41 @@ The SCREENING-not-bankable caveat, the EMT-gap caveat, the per-SCR "EMT confirma
 and the tender-evidence note are **module constants baked structurally** into the report model and its
 Jinja2 template. **There is no config path that removes them** — a grid screen presented without them
 would be a lender-facing misrepresentation.
+
+## 7. D6b finance-wiring enablement — the missing input (#923)
+
+The ONE parked KPI-mover of epic #870 is the D6b self-curtailment finance wiring
+(`grid.qsts.finance_wiring.enabled`, shipped default-off in #885). **It stays parked because its
+required input does not exist yet**, and the code's own gate makes flipping the flag today vacuous:
+with the flag on but no real feeder, `analytics/grid/curtailment_qsts.py` emits an inert NOT-RUN
+result and `finance/self_curtailment_v14.py` refuses to fabricate a haircut — the committed canon
+stays byte-identical (verified end-to-end by
+`tests/finance/test_self_curtailment_enablement_readiness.py`).
+
+**The missing input — precisely:** the real **CEB 33 kV distribution feeder model at the DutchBay
+point of connection** (Kalpitiya / Puttalam GSS side).
+
+- **Acceptable format:** an OpenDSS master file (`.dss`, `Redirect`-able by OpenDSSDirect — a
+  `Master.dss` plus its component files is fine; the path handed over must be the master).
+- **What it must contain:** the feeder topology with conductor/cable impedances (positive- and
+  zero-sequence), transformer data, the **POC bus** where the plant injects, and the **upstream
+  source equivalent** (fault level / Thevenin impedance at the GSS busbar). Optionally, the
+  operator's feeder-limit / dispatch schedule — that becomes the committed
+  `grid.qsts.grid_instructed_profile_mw` (deemed-paid, KPI-neutral under the CEB SPPA).
+- **Where it plugs in:** `grid.qsts.feeder_model_path` on the target scenario, with
+  `grid.qsts.enabled: true`, a strict `grid.qsts.export_cap_mw` (falls back to the
+  top-level `grid.export_cap_mw`; raises only when neither is present), and a committed
+  `grid.qsts.generation_profile_mw` (or the resource-driven profile follow-up). The engine
+  requires the `[grid]` extra (`opendssdirect.py>=0.9.4`); absent, it raises the actionable
+  CASPER ImportError rather than silently returning canon.
+- **What happens next (the user-gated sequence, all in the SAME PR):** QSTS run against the real
+  feeder → `kpi_oracle` before/after diff → **explicit user sign-off** → set
+  `grid.qsts.finance_wiring.enabled: true` on the target scenario → re-pin the canon
+  (`tests/finance/test_multitech_generation.py` / `test_senior_fees.py`).
+
+Wiring readiness is already proven demo-grade: with a synthetic demo feeder + stubbed solver
+(labelled, NOT site physics), the production chain moves the KPIs exactly as designed — measured
+**projIRR −1.007 pp, eqIRR −1.636 pp, min_dscr −0.0092 at an exact 8.0 % self-curtailment**
+(matching the #885/#923 reference) while the committed canon in the same suite stays bit-for-bit
+unchanged. Only the self-curtailed fraction ever haircuts; the deemed-paid (grid-instructed)
+fraction is paid as deemed energy and is proven KPI-neutral through the same real chain.

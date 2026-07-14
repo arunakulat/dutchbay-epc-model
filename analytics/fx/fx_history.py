@@ -197,7 +197,7 @@ def _parse_csv_series(csv_path: Path) -> tuple[tuple[str, ...], tuple[float, ...
     if not rows:
         raise ValueError(f"FX vintage CSV {csv_path} contained no data rows")
     rows.sort(key=lambda t: t[0])
-    dates, rates = zip(*rows)
+    dates, rates = zip(*rows, strict=True)
     return tuple(dates), tuple(rates)
 
 
@@ -313,7 +313,7 @@ def fetch_live_history_bis(timeout_s: float = 60.0) -> FXHistorySeries:
     if not parsed:
         raise ValueError("Live BIS fetch returned no finite observations")
     parsed.sort(key=lambda t: t[0])
-    dates, rates = zip(*parsed)
+    dates, rates = zip(*parsed, strict=True)
     return FXHistorySeries(
         provider="BIS",
         frequency="daily",
@@ -351,7 +351,7 @@ def fetch_live_history_fred(timeout_s: float = 30.0) -> FXHistorySeries:
     if not pairs:
         raise ValueError("Live FRED fetch returned no finite observations")
     pairs.sort(key=lambda t: t[0])
-    dates, rates = zip(*pairs)
+    dates, rates = zip(*pairs, strict=True)
     return FXHistorySeries(
         provider="FRED",
         frequency="daily",
@@ -434,13 +434,15 @@ def filter_series_to_window(
     Dates are ISO ``YYYY-MM-DD`` (zero-padded) so lexicographic compare == chronological.
     """
     lo, hi = start.isoformat(), end.isoformat()
-    kept = [(d, r) for d, r in zip(series.dates, series.rates) if lo <= d <= hi]
+    kept = [
+        (d, r) for d, r in zip(series.dates, series.rates, strict=True) if lo <= d <= hi
+    ]
     if not kept:
         raise ValueError(
             f"No observations fall in the window [{lo}, {hi}] — refusing to write an "
             "empty vintage (check the window and the live series coverage)."
         )
-    dates, rates = zip(*kept)
+    dates, rates = zip(*kept, strict=True)
     return FXHistorySeries(
         provider=series.provider,
         frequency=series.frequency,
@@ -517,7 +519,10 @@ def write_vintage(
     csv_path.parent.mkdir(parents=True, exist_ok=True)
 
     lines = ["date,lkr_per_usd"]
-    lines.extend(f"{d},{_format_rate(r)}" for d, r in zip(series.dates, series.rates))
+    lines.extend(
+        f"{d},{_format_rate(r)}"
+        for d, r in zip(series.dates, series.rates, strict=True)
+    )
     csv_path.write_text("\n".join(lines) + "\n", newline="\n")
 
     # Re-read what actually landed on disk so the provenance describes the
@@ -682,7 +687,7 @@ def to_periodic(
         return f"{iso[0]}-W{iso[1]:02d}"
 
     last: dict[str, tuple[str, float]] = {}
-    for dt, rate in zip(series.dates, series.rates):
+    for dt, rate in zip(series.dates, series.rates, strict=True):
         k = period_key(dt)
         prev = last.get(k)
         if prev is None or dt >= prev[0]:

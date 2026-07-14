@@ -133,6 +133,7 @@ def test_run_case_maps_engine_integrity_errors_to_400(
 # --------------------------------------------------------------------------- #
 # Report routes (called directly)
 # --------------------------------------------------------------------------- #
+@pytest.mark.slow
 def test_run_case_report_html_renders() -> None:
     resp = run_case_report_html(WindFarmInputs(**_valid_kwargs(site_name="ReportSite")))
     assert resp.status_code == 200
@@ -154,6 +155,7 @@ def test_run_case_report_html_maps_validation_error_to_400(
     assert exc.value.status_code == 400
 
 
+@pytest.mark.slow
 def test_run_case_report_pdf_503_without_weasyprint() -> None:
     try:
         import weasyprint  # noqa: F401
@@ -167,6 +169,7 @@ def test_run_case_report_pdf_503_without_weasyprint() -> None:
         assert resp.media_type == "application/pdf"
 
 
+@pytest.mark.slow
 def test_run_case_report_pdf_success_path(monkeypatch: pytest.MonkeyPatch) -> None:
     # Cover the Response assembly without requiring WeasyPrint: stub the renderer.
     monkeypatch.setattr(api_main, "render_report_pdf", lambda _ctx: b"%PDF-1.7 stub")
@@ -386,7 +389,7 @@ def test_http_smoke_jobs_if_httpx_available(monkeypatch: pytest.MonkeyPatch) -> 
             "inputs": _valid_kwargs(),
             "site_lat": 8.33,
             "site_lon": 79.76,
-            "turbine_model": "IEA-10MW",
+            "turbine_model": "iea_reference_10mw",
             "num_turbines": 15,
             "hub_height_m": 119.0,
         }

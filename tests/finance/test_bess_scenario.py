@@ -28,13 +28,13 @@ _HYBRID = _REPO / "scenarios" / "dutchbay_hybrid_windsolar_2025Q4.yaml"
 _LENDER = _REPO / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 
 
-@pytest.mark.skipif(not _CEB.exists(), reason="CEB BESS scenario not present")
 def test_standalone_bess_books_fading_capacity_charge_with_augmentation():
     """The committed CEB scenario opts into MDSC fade (0.011/yr) + a year-10 cell
     augmentation (#470d): the capacity charge is full in year 1 (SoH 1.0), DECLINES with
     fade, then the year-10 top-up restores it to the full charge. Generation revenue stays
     zero (storage-only). SHAPE is pinned, not the illustrative economics (the bid rate is a
     placeholder); the KPI deltas are recorded in the PR/CHANGELOG."""
+    assert _CEB.exists(), f"committed CEB BESS scenario missing: {_CEB}"
     out = evaluate_with_overrides(
         raw_config=load_scenario_config(_CEB), overrides={}, return_full_result=True
     )
@@ -62,12 +62,12 @@ def test_standalone_bess_books_fading_capacity_charge_with_augmentation():
     assert isinstance(kpis["project_irr"], float)  # runs end-to-end (debt/IRR resolve)
 
 
-@pytest.mark.skipif(not _NIGHTPEAK.exists(), reason="night-peak scenario not present")
 def test_energy_tariff_scenario_books_fading_night_peak_revenue():
     """The committed night-peak scenario opts into MDSC fade (0.005/yr, #470d): year 1 is
     the full night-peak export (SoH 1.0) and it DECLINES monotonically over the 10-year
     contract, with no mid-life augmentation. Generation revenue stays zero
     (BESS-incremental)."""
+    assert _NIGHTPEAK.exists(), f"committed night-peak scenario missing: {_NIGHTPEAK}"
     out = evaluate_with_overrides(
         raw_config=load_scenario_config(_NIGHTPEAK),
         overrides={},
@@ -92,10 +92,10 @@ def test_energy_tariff_scenario_books_fading_night_peak_revenue():
     )  # the 45.80 LKR/kWh night-peak tariff stays lucrative
 
 
-@pytest.mark.skipif(not _LENDER.exists(), reason="lendercase scenario not present")
 def test_no_bess_block_means_zero_bess_revenue():
     """A wind-only scenario carries exactly zero BESS revenue on every row — the BESS
     path is additive and inert when absent (byte-identical economics)."""
+    assert _LENDER.exists(), f"committed lendercase scenario missing: {_LENDER}"
     out = evaluate_with_overrides(
         raw_config=load_scenario_config(_LENDER), overrides={}, return_full_result=True
     )
@@ -104,7 +104,6 @@ def test_no_bess_block_means_zero_bess_revenue():
         assert row["revenue_lkr"] == pytest.approx(row["generation_revenue_lkr"])
 
 
-@pytest.mark.skipif(not _HYBRID.exists(), reason="hybrid scenario not present")
 def test_bess_revenue_without_capex_is_rejected_on_the_hybrid():
     """BESS-3: a type:bess block booking revenue with NO capex_usd must FAIL LOUD.
 
@@ -112,6 +111,7 @@ def test_bess_revenue_without_capex_is_rejected_on_the_hybrid():
     IRR — i.e. a ~$25M asset booked as pure free revenue (the cost-side twin of the
     CF x tariff fallacy). The reconciliation guard now rejects it.
     """
+    assert _HYBRID.exists(), f"committed hybrid scenario missing: {_HYBRID}"
     cfg = load_scenario_config(_HYBRID)
     bess_no_capex = {
         "type": "bess",
@@ -132,11 +132,11 @@ def test_bess_revenue_without_capex_is_rejected_on_the_hybrid():
         )
 
 
-@pytest.mark.skipif(not _HYBRID.exists(), reason="hybrid scenario not present")
 def test_bess_with_capex_is_additive_and_financed_on_the_hybrid():
     """A BESS folded onto the hybrid books its capacity charge AND finances its capex:
     revenue is additive, and per-tech capex_usd must roll up to capex.usd_total so the
     battery's cost is actually financed (BESS-3), not free."""
+    assert _HYBRID.exists(), f"committed hybrid scenario missing: {_HYBRID}"
     cfg = load_scenario_config(_HYBRID)
     bess_capex = 25_000_000  # 200 MWh x ~$125/kWh turnkey
     out = evaluate_with_overrides(
@@ -201,13 +201,13 @@ def test_type_bess_is_not_double_counted_as_generation():
     assert [s["technology"] for s in bess_specs] == ["bess"]
 
 
-@pytest.mark.skipif(not _CEB.exists(), reason="CEB BESS scenario not present")
 def test_both_cashflow_builders_agree_on_bess_revenue():
     """The BESS revenue is mirrored into BOTH builders (calculate_single_year_cfads and
     build_annual_rows_efficient). Pin that they stay identical on a scenario with a
     NON-ZERO capacity charge — a one-sided edit to either builder's BESS branch then
     fails the suite (the canonical equivalence test runs only on a BESS-free scenario).
     """
+    assert _CEB.exists(), f"committed CEB BESS scenario missing: {_CEB}"
     cfg = load_scenario_config(_CEB)
     rows = build_annual_rows(cfg)
     eff = build_annual_rows_efficient(cfg)

@@ -37,7 +37,7 @@ def _request(**overrides: object) -> WindJobRequest:
         inputs=_inputs(),
         site_lat=8.33,
         site_lon=79.76,
-        turbine_model="IEA-10MW",
+        turbine_model="iea_reference_10mw",
         num_turbines=15,
         hub_height_m=119.0,
     )
@@ -127,8 +127,26 @@ def test_request_defaults_and_validation() -> None:
             inputs=_inputs(),
             site_lat=8.0,
             site_lon=79.0,
-            turbine_model="X",
+            turbine_model="iea_reference_10mw",
             num_turbines=1,
             hub_height_m=100.0,
             bogus=1,
         )
+
+
+def test_turbine_model_unknown_rejected_at_request_time() -> None:
+    # CESSPIT strict (#965): an unknown turbine fails validation with an actionable
+    # message listing the valid keys — a 422 on POST /jobs, not a mid-job KeyError.
+    with pytest.raises(ValidationError) as excinfo:
+        _request(turbine_model="IEA-10MW")
+    msg = str(excinfo.value)
+    assert "Unknown turbine_model" in msg
+    assert "iea_reference_10mw" in msg  # valid keys are surfaced to the caller
+
+
+def test_turbine_model_valid_accepted() -> None:
+    # Each key defined in power_curves.yaml is accepted (single source of truth).
+    from wind_resource.energy_calculator import available_turbine_models
+
+    for model in available_turbine_models():
+        assert _request(turbine_model=model).turbine_model == model
