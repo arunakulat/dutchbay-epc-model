@@ -16,8 +16,6 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
-
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIG = _REPO / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 
@@ -41,13 +39,13 @@ def test_module_imports_without_error():
         assert hasattr(cli, name)
 
 
-@pytest.mark.skipif(not _CONFIG.exists(), reason="lendercase scenario not present")
 def test_fx_sensitivity_cli_emits_expected_json(tmp_path: Path):
     """The CLI writes one JSON object with the three point series + summary sensitivities.
 
     Uses small step counts to keep the real-engine sweep cheap; asserts the exact top-
     level key contract and that the swept series are populated.
     """
+    assert _CONFIG.exists(), f"committed lendercase scenario missing: {_CONFIG}"
     cli = _load_cli()
     out = tmp_path / "fx.json"
     rc = cli.main(
@@ -91,7 +89,6 @@ def test_fx_sensitivity_cli_emits_expected_json(tmp_path: Path):
     }
 
 
-@pytest.mark.skipif(not _CONFIG.exists(), reason="lendercase scenario not present")
 def test_fx_sensitivity_cli_fx_rate_slope_is_negative(tmp_path: Path):
     """fx_rate IRR and NPV slopes are NEGATIVE on the lender case.
 
@@ -99,6 +96,7 @@ def test_fx_sensitivity_cli_fx_rate_slope_is_negative(tmp_path: Path):
     bankability risk this surface exists to quantify. This is the FX analogue of the
     tornado smoke test's impact-direction assertion.
     """
+    assert _CONFIG.exists(), f"committed lendercase scenario missing: {_CONFIG}"
     cli = _load_cli()
     out = tmp_path / "fx.json"
     rc = cli.main(
@@ -119,9 +117,9 @@ def test_fx_sensitivity_cli_fx_rate_slope_is_negative(tmp_path: Path):
     assert summary["fx_rate_npv"] < 0.0
 
 
-@pytest.mark.skipif(not _CONFIG.exists(), reason="lendercase scenario not present")
 def test_fx_sensitivity_cli_streams_json_to_stdout(capsys):
     """With no --output the CLI streams a single valid JSON object to stdout."""
+    assert _CONFIG.exists(), f"committed lendercase scenario missing: {_CONFIG}"
     cli = _load_cli()
     rc = cli.main(["--config", str(_CONFIG), "--fx-steps", "3", "--spread-steps", "3"])
     assert rc == 0
@@ -138,9 +136,9 @@ def test_fx_sensitivity_cli_rejects_degenerate_step_count(capsys):
     assert "ERROR" in capsys.readouterr().err
 
 
-@pytest.mark.skipif(not _CONFIG.exists(), reason="lendercase scenario not present")
 def test_fx_sensitivity_cli_rejects_negative_spread_band(capsys):
     """A negative --spread-variation-bps fails loud through the analyzer's named guard."""
+    assert _CONFIG.exists(), f"committed lendercase scenario missing: {_CONFIG}"
     cli = _load_cli()
     rc = cli.main(
         [
@@ -177,10 +175,6 @@ def test_fx_sensitivity_cli_missing_config_fails_loud(capsys):
     assert "ERROR" in capsys.readouterr().err
 
 
-@pytest.mark.skipif(
-    not (_REPO / "scenarios" / "kolonnawa_epc_100mw.yaml").exists(),
-    reason="invalid (missing-fx) scenario fixture not present",
-)
 def test_fx_sensitivity_cli_invalid_scenario_fails_loud(capsys):
     """An INVALID scenario (missing required `fx` section) fails loud (exit 2).
 
@@ -190,6 +184,7 @@ def test_fx_sensitivity_cli_invalid_scenario_fails_loud(capsys):
     """
     cli = _load_cli()
     invalid = _REPO / "scenarios" / "kolonnawa_epc_100mw.yaml"
+    assert invalid.exists(), f"committed invalid-fx scenario fixture missing: {invalid}"
     rc = cli.main(["--config", str(invalid), "--fx-steps", "3", "--spread-steps", "3"])
     assert rc == 2
     assert "ERROR" in capsys.readouterr().err

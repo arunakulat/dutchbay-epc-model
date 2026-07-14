@@ -716,9 +716,9 @@ def _load_global_sa_cli():
     return mod
 
 
-@pytest.mark.skipif(not Path(LENDER).exists(), reason="lendercase scenario not present")
 def test_cli_method_pawn_dispatches_and_tags_rows(capsys) -> None:
     """`--method pawn` runs run_pawn, prints a CSV whose method column is 'pawn'."""
+    assert Path(LENDER).exists(), f"committed lendercase scenario missing: {LENDER}"
     cli = _load_global_sa_cli()
     rc = cli.main(
         [
@@ -744,13 +744,13 @@ def test_cli_method_pawn_dispatches_and_tags_rows(capsys) -> None:
     assert "PAWN median-KS ranking" in out.err
 
 
-@pytest.mark.skipif(not Path(LENDER).exists(), reason="lendercase scenario not present")
 def test_cli_method_pawn_covenant_metric_is_flagged_flat(capsys) -> None:
     """The covenant-pinned min_dscr_period KPI must be disclosed FLAT in the PAWN
     headline, not presented as an influence ranking (CESSPIT fail-loud; #644 mask +
     #658 CLI). Since #790 the covenant-pinned quantity is min_dscr_period; the
     min_dscr HEADLINE (fold-corrected) genuinely moves and now yields a REAL
     ranking — asserted in the companion test below."""
+    assert Path(LENDER).exists(), f"committed lendercase scenario missing: {LENDER}"
     cli = _load_global_sa_cli()
     rc = cli.main(
         [
@@ -770,10 +770,10 @@ def test_cli_method_pawn_covenant_metric_is_flagged_flat(capsys) -> None:
     assert "FLAT" in err
 
 
-@pytest.mark.skipif(not Path(LENDER).exists(), reason="lendercase scenario not present")
 def test_cli_method_pawn_fold_headline_ranks_real_drivers(capsys) -> None:
     """#790: the min_dscr HEADLINE responds to shocks, so PAWN emits a real
     driver ranking (not the FLAT disclosure) on the lender case."""
+    assert Path(LENDER).exists(), f"committed lendercase scenario missing: {LENDER}"
     cli = _load_global_sa_cli()
     rc = cli.main(
         ["--config", LENDER, "--method", "pawn", "--metric", "min_dscr", "--n", "16"]
