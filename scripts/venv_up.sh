@@ -16,7 +16,7 @@ _SCRIPT_DIR="$(cd "$(dirname -- "$_SELF")" && pwd)"
 _REPO_ROOT="$(cd "${_SCRIPT_DIR}/.." && pwd)"
 
 # ---- config ----
-VENV_DIR="${VENV_DIR:-.venv311}"
+VENV_DIR="${VENV_DIR:-.venv}"
 PY311="${PY311:-/opt/homebrew/bin/python3.11}"
 
 # ---- ensure venv exists ----
