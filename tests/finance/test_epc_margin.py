@@ -119,10 +119,10 @@ def test_payment_month_out_of_range_raises():
 # ── scenario + CLI ─────────────────────────────────────────────────────────────
 
 
-@pytest.mark.skipif(not _SCENARIO.exists(), reason="Kolonnawa EPC scenario not present")
 def test_kolonnawa_scenario():
     import yaml
 
+    assert _SCENARIO.exists(), f"committed Kolonnawa EPC scenario missing: {_SCENARIO}"
     config = yaml.safe_load(_SCENARIO.read_text())
     r = compute_epc_margin(config)
     assert r.total_cost == pytest.approx(48_000_000)
@@ -130,8 +130,8 @@ def test_kolonnawa_scenario():
     assert r.peak_working_capital > 0  # the contractor funds working capital mid-build
 
 
-@pytest.mark.skipif(not _SCENARIO.exists(), reason="Kolonnawa EPC scenario not present")
 def test_cli_runs(capsys):
+    assert _SCENARIO.exists(), f"committed Kolonnawa EPC scenario missing: {_SCENARIO}"
     spec = importlib.util.spec_from_file_location(
         "run_epc_margin", _REPO / "scripts" / "run_epc_margin.py"
     )
