@@ -488,7 +488,7 @@ def test_http_cross_client_job_isolation(monkeypatch: pytest.MonkeyPatch) -> Non
             "inputs": _valid_case_body(),
             "site_lat": 8.33,
             "site_lon": 79.76,
-            "turbine_model": "IEA-10MW",
+            "turbine_model": "iea_reference_10mw",
             "num_turbines": 15,
             "hub_height_m": 119.0,
         }
