@@ -131,12 +131,12 @@ def test_build_tax_series_threads_vintages():
     )  # year-4 profit offset by the loss
 
 
-@pytest.mark.skipif(not _LENDER.exists(), reason="lendercase scenario not present")
 def test_both_builders_agree_with_a_tax_holiday():
     """The vintage ledger must thread identically through both builders even with a
     holiday (the path the canonical lendercase does not exercise)."""
     import yaml
 
+    assert _LENDER.exists(), f"committed lendercase scenario missing: {_LENDER}"
     cfg = yaml.safe_load(_LENDER.read_text())
     cfg["tax"]["tax_holiday_years"] = 3  # induce holiday years -> exercise preservation
     rows = build_annual_rows(cfg)
