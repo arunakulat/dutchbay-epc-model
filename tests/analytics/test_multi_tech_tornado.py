@@ -39,9 +39,10 @@ from analytics.scenario_loader import load_scenario_config
 _REPO = Path(__file__).resolve().parents[2]
 _HYBRID = _REPO / "scenarios" / "dutchbay_hybrid_windsolar_2025Q4.yaml"
 
-pytestmark = pytest.mark.skipif(
-    not _HYBRID.exists(), reason="hybrid wind+solar scenario not present"
-)
+# The hybrid wind+solar scenario is committed to the repo, so its absence is a real
+# breakage (a rename/delete), not an environment gap — fail loud at collection rather
+# than silently skipping the whole module (#956).
+assert _HYBRID.exists(), f"committed hybrid wind+solar scenario missing: {_HYBRID}"
 
 
 @pytest.fixture(scope="module")
