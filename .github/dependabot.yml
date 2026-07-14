@@ -45,10 +45,23 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "pydantic"
         update-types: ["version-update:semver-major"]
+      # pydantic-core is EXACT-pinned by pydantic (pydantic 2.13.4 requires
+      # pydantic-core==2.46.4), so it must NEVER be bumped independently — a standalone
+      # bump makes the lock internally contradictory and un-installable (#978 post-mortem:
+      # the weekly group bumped pydantic_core 2.46.4->2.47.0 while holding pydantic 2.13.4,
+      # a ResolutionImpossible at pip install). Block ALL standalone bumps; pydantic-core
+      # moves only WITH pydantic (a pydantic bump drags the matching core). Mirrors the
+      # pydantic major cap above.
       - dependency-name: "pydantic-core"
-        update-types: ["version-update:semver-major"]
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
+      # mypy diagnostics can shift on any release (even patches), and the freeze must stay
+      # in lockstep with BOTH constraints.txt AND the hardcoded workflow pin
+      # (.github/workflows/test-suite.yml). A bot patch bump desyncs them (#978: the lock
+      # went to 1.19.1 while test-suite.yml still installed 1.19.0 -> split-brain gates).
+      # Freeze ALL bot bumps; mypy moves only in a deliberate typed-surface dolphin that
+      # updates the lock, constraints.txt, and the workflow pin together.
       - dependency-name: "mypy"
-        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
       - dependency-name: "isort"
         update-types: ["version-update:semver-major"]
       - dependency-name: "ruff"
@@ -62,6 +75,14 @@ updates:
       # Lift only in lockstep with a hydra-core/omegaconf upgrade (mirrors constraints.txt).
       - dependency-name: "antlr4-python3-runtime"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # pandapower is EXACT-pinned to ==3.3.0 in the pyproject [grid] extra: pandapower
+      # 3.3.3 and 3.4.0 both declare scipy<1.17, conflicting with the canon-critical
+      # scipy==1.17.1 (a [grid] install would ResolutionImpossible or force-downgrade
+      # scipy, our core numerics). #978 bumped it to 3.5.4 blindly. Freeze ALL bot bumps
+      # (even patches cap scipy); lift only in a deliberate grid dolphin that first
+      # verifies the target pandapower's scipy requirement.
+      - dependency-name: "pandapower"
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
 
   # GitHub Actions: keeps the workflow action pins current (the repo had checkout@v3/@v4,
   # setup-python@v4/@v5, codecov@v3/@v4 drift).
