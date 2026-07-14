@@ -192,6 +192,7 @@ class WindPipeline:
         end_date: str = "2025-12-31",
         force_download: bool = False,
         analyze_trend: bool = False,
+        hub_height_series: Optional[pd.DataFrame] = None,
     ) -> Dict[str, Any]:
         """Run complete wind resource assessment pipeline.
 
@@ -215,6 +216,20 @@ class WindPipeline:
                 report/VALIDATE-only: it changes no committed AEP or KPI, and a
                 short record degrades explicitly (see
                 ``wind_resource.long_term_trend.build_resource_trend_export_block``).
+            hub_height_series: Optional pre-fetched hub-height wind series (#965).
+                DEFAULT None — every existing caller (the CLI) takes the identical
+                Step-1 (ERA5 fetch) + Step-2 (extrapolate) path, byte-identical. When
+                provided (the async web path, which fetches the CDS ARCO single-point
+                TIMESERIES product upstream because the legacy gridded fetcher's
+                full-year AREA request is rejected by CDS as "too large"), Steps 1-2
+                are SKIPPED and this series is used as ``df`` directly. The series is
+                assumed ALREADY extrapolated to this pipeline's ``hub_height`` (as
+                ``wind_resource.era5_retrieval.build_hub_height_series`` returns it) and
+                MUST carry a column named exactly ``ws_{int(hub_height)}m``; it may be
+                indexed by timestamp (index name ``timestamp``) or carry a ``timestamp``
+                column. This is a SCREENING-grade path (single-cell ERA5, no on-site
+                mast, MCP unwired — #961): its output is NOT bankable and must not
+                re-pin any frozen KPI.
 
         Returns:
             Complete assessment results dictionary with keys:
@@ -236,22 +251,46 @@ class WindPipeline:
         logger.info("WIND RESOURCE ASSESSMENT PIPELINE")
         logger.info("=" * 70)
 
-        # Step 1: Download ERA5 data
-        logger.info("\n[Step 1/5] Downloading ERA5 data...")
-        data_file = self.fetcher.download_wind_data(
-            location=self.location,
-            start_date=start_date,
-            end_date=end_date,
-            force_download=force_download,
-        )
-
-        # Step 2: Load and extrapolate to hub height
-        logger.info(f"\n[Step 2/5] Extrapolating to {self.hub_height}m hub height...")
-        df = pd.read_csv(data_file)
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
-        df = self.fetcher.extrapolate_to_hub_height(df, hub_height=self.hub_height)
-
         ws_column = f"ws_{int(self.hub_height)}m"
+
+        if hub_height_series is None:
+            # Step 1: Download ERA5 data (legacy gridded fetcher -> CSV path).
+            logger.info("\n[Step 1/5] Downloading ERA5 data...")
+            data_file = self.fetcher.download_wind_data(
+                location=self.location,
+                start_date=start_date,
+                end_date=end_date,
+                force_download=force_download,
+            )
+
+            # Step 2: Load and extrapolate to hub height.
+            logger.info(
+                f"\n[Step 2/5] Extrapolating to {self.hub_height}m hub height..."
+            )
+            df = pd.read_csv(data_file)
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
+            df = self.fetcher.extrapolate_to_hub_height(df, hub_height=self.hub_height)
+        else:
+            # Injected pre-fetched hub-height series (#965): skip Steps 1-2. The async
+            # web path fetches the CDS ARCO single-point TIMESERIES product upstream
+            # (era5_retrieval.build_hub_height_series), which already extrapolates to
+            # hub height, and passes the finished series here. Adapter: turn the
+            # timestamp-named index into a ``timestamp`` column so WindAnalyzer and
+            # EnergyCalculator (Steps 3-5) consume it unchanged. Screening-grade only.
+            logger.info(
+                "\n[Steps 1-2/5] Using injected pre-fetched hub-height series "
+                "(ERA5 fetch + extrapolation skipped)..."
+            )
+            df = hub_height_series.reset_index()
+            if "timestamp" in df.columns:
+                df["timestamp"] = pd.to_datetime(df["timestamp"])
+            if ws_column not in df.columns:
+                raise ValueError(
+                    f"Injected hub_height_series is missing the expected hub-height "
+                    f"column '{ws_column}' (pipeline hub_height={self.hub_height}). "
+                    f"Got columns: {list(df.columns)}. The series' hub height must "
+                    "match the pipeline's."
+                )
 
         # Step 3: Statistical analysis
         logger.info("\n[Step 3/5] Running statistical analysis...")

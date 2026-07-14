@@ -286,3 +286,35 @@ def test_ensure_cdsapirc_missing_raises(tmp_path, monkeypatch):
     monkeypatch.delenv("CDSAPI_KEY", raising=False)
     with pytest.raises(FileNotFoundError):
         ensure_cdsapirc(path=str(tmp_path / "nope.cdsapirc"))
+
+
+def test_ensure_cdsapirc_unwritable_home_falls_back_to_env(tmp_path, monkeypatch):
+    """An unwritable ~/.cdsapirc is NON-FATAL when CDSAPI_* env creds are set (#965).
+
+    The non-root container user (uid 10001) has no writable home, so the rc write raises
+    OSError — but cdsapi reads CDSAPI_URL/CDSAPI_KEY from the environment directly, so the
+    fetch must still proceed. Point the rc at a path that cannot be created (a file used as
+    a directory component) and assert ensure_cdsapirc swallows the write error.
+    """
+    monkeypatch.setenv("CDSAPI_URL", "https://cds.climate.copernicus.eu/api")
+    monkeypatch.setenv("CDSAPI_KEY", "env-token")
+    blocker = tmp_path / "not_a_dir"
+    blocker.write_text(
+        "x"
+    )  # a FILE where a directory is needed → write_text raises OSError
+    unwritable = blocker / ".cdsapirc"
+    # Must NOT raise: env creds present, so the failed write falls back to the environment.
+    ensure_cdsapirc(path=str(unwritable))
+    assert not unwritable.exists()
+
+
+def test_ensure_cdsapirc_unwritable_home_raises_without_env(tmp_path, monkeypatch):
+    """With NO env fallback, an unwritable rc still fails loudly (fail-closed)."""
+    monkeypatch.delenv("CDSAPI_URL", raising=False)
+    monkeypatch.delenv("CDSAPI_KEY", raising=False)
+    blocker = tmp_path / "not_a_dir"
+    blocker.write_text("x")
+    with pytest.raises(OSError):
+        ensure_cdsapirc(
+            url="https://example/api", key="tok", path=str(blocker / ".cdsapirc")
+        )

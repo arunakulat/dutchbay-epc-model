@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Tuple
 
+import pandas as pd
 import pytest
 
 import app.jobs.runner as runner_mod
@@ -36,7 +37,7 @@ def _request() -> WindJobRequest:
         ),
         site_lat=8.33,
         site_lon=79.76,
-        turbine_model="IEA-10MW",
+        turbine_model="iea_reference_10mw",
         num_turbines=15,
         hub_height_m=119.0,
     )
@@ -211,6 +212,7 @@ def test_default_assessment_gives_pipeline_a_writable_ephemeral_workspace(
     fake_mod = types.ModuleType("wind_resource.wind_pipeline")
     fake_mod.WindPipeline = _FakePipeline  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "wind_resource.wind_pipeline", fake_mod)
+    _stub_era5_retrieval(monkeypatch)
 
     steps: List[Tuple[int, str]] = []
     export = runner_mod.default_assessment(
@@ -223,3 +225,70 @@ def test_default_assessment_gives_pipeline_a_writable_ephemeral_workspace(
     assert seen["cache_dir"].parent == seen["output_dir"].parent
     assert not seen["cache_dir"].exists() and not seen["output_dir"].exists()
     assert [s for s, _ in steps] == [1, 2, 3]
+
+
+# --------------------------------------------------------------------------- #
+# #965: default_assessment fetches the CDS ARCO single-point TIMESERIES product
+# (era5_retrieval), not the legacy gridded fetcher whose full-year AREA request
+# CDS rejects as "too large", and injects the finished hub-height series into
+# WindPipeline. Proved with fakes — no [wind] toolchain, no network.
+# --------------------------------------------------------------------------- #
+def _stub_era5_retrieval(monkeypatch: pytest.MonkeyPatch) -> pd.DataFrame:
+    """Replace the three CDS-bound era5_retrieval functions with fakes; return the
+    synthetic hub-height series the fake ``build_hub_height_series`` yields."""
+    import wind_resource.era5_retrieval as era5
+
+    idx = pd.date_range("2023-01-01", periods=24, freq="h", name="timestamp")
+    series = pd.DataFrame({"ws_119m": [8.0 + (i % 3) for i in range(24)]}, index=idx)
+
+    def _fake_retrieve(cfg: Any) -> Path:
+        # Must NOT touch cdsapi/network; assert the config carries the site identity.
+        assert cfg.turbine_model == "iea_reference_10mw"
+        assert cfg.latitude == pytest.approx(8.33)
+        return Path("/tmp/does-not-exist.nc")
+
+    def _fake_build(nc_path: Path, cfg: Any) -> pd.DataFrame:
+        return series
+
+    def _fake_coverage(s: pd.DataFrame, cfg: Any) -> Dict[str, Any]:
+        return {"actual_hours": len(s), "coverage_complete": False}
+
+    monkeypatch.setattr(era5, "retrieve_era5_timeseries", _fake_retrieve)
+    monkeypatch.setattr(era5, "build_hub_height_series", _fake_build)
+    monkeypatch.setattr(era5, "validate_coverage", _fake_coverage)
+    return series
+
+
+def test_default_assessment_injects_timeseries_series(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ERA5 timeseries series is forwarded to WindPipeline as ``hub_height_series``
+    (Steps 1-2 skipped) and the cashflow export is returned (#965)."""
+    import sys
+    import types
+
+    forwarded: Dict[str, Any] = {}
+
+    class _FakePipeline:
+        def __init__(self, **kwargs: Any) -> None:
+            Path(kwargs["cache_dir"]).mkdir(parents=True, exist_ok=True)
+            Path(kwargs["output_dir"]).mkdir(parents=True, exist_ok=True)
+
+        def run_complete_assessment(self, **kwargs: Any) -> None:
+            forwarded["hub_height_series"] = kwargs.get("hub_height_series")
+            forwarded["start_date"] = kwargs.get("start_date")
+
+        def export_for_cashflow_model(self, *, scenario: str) -> Mapping[str, Any]:
+            return {"scenario": scenario, "annual_generation_mwh": 42.0}
+
+    fake_mod = types.ModuleType("wind_resource.wind_pipeline")
+    fake_mod.WindPipeline = _FakePipeline  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "wind_resource.wind_pipeline", fake_mod)
+    series = _stub_era5_retrieval(monkeypatch)
+
+    export = runner_mod.default_assessment(_request(), lambda step, msg: None)
+
+    assert export["annual_generation_mwh"] == 42.0
+    # The exact series built from the ERA5 TIMESERIES product was injected.
+    assert forwarded["hub_height_series"] is series
+    assert forwarded["start_date"] == "2014-12-01"

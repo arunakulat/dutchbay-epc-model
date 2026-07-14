@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 from app.models.inputs import WindFarmInputs
 
@@ -105,6 +105,25 @@ class WindJobRequest(BaseModel):
     start_date: str = Field(default="2014-12-01", description="ERA5 window start.")
     end_date: str = Field(default="2025-12-31", description="ERA5 window end.")
     p_level: Literal["P50", "P75", "P90"] = "P75"
+
+    @field_validator("turbine_model")
+    @classmethod
+    def _validate_turbine_model(cls, v: str) -> str:
+        """CESSPIT strict: reject an unknown turbine at request time (#965).
+
+        Validates against the live ``power_curves.yaml`` keys (single source of truth
+        via ``wind_resource.energy_calculator.available_turbine_models``) so a bad name
+        fails on POST /jobs with an actionable 422 listing the valid models — not
+        mid-job with a deep ``KeyError`` inside the energy calculator. The import is
+        lazy so importing this module stays light (the energy calculator pulls scipy
+        at import) and the API surface never drags the optional ``[wind]`` toolchain.
+        """
+        from wind_resource.energy_calculator import available_turbine_models
+
+        valid = available_turbine_models()
+        if v not in valid:
+            raise ValueError(f"Unknown turbine_model {v!r}; valid: {sorted(valid)}")
+        return v
 
     def site_location(self) -> Dict[str, Any]:
         """Build the ``{name, lat, lon}`` dict the wind pipeline requires."""
