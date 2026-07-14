@@ -54,6 +54,7 @@ from app.api.auth import get_current_subject, login_for_access_token
 from app.api.config import SYNC_ROUTE_MAX_CONCURRENCY, SYNC_ROUTE_TIMEOUT_SECONDS
 from app.api.jobs_router import router as jobs_router
 from app.api.responses import API_CONTRACT_VERSION, CaseResult
+from app.api.security import SecurityHeadersMiddleware
 from app.api.surface import CaseSurface
 from app.models.inputs import WindFarmInputs
 from app.reports.renderer import (
@@ -74,6 +75,14 @@ app = FastAPI(
     version="1.0.0",
     description="Lender-grade wind-farm project-finance, served as a web API.",
 )
+
+# Production hardening (#944): stamp security headers on every response and, in the #858
+# production posture, take the interactive docs (/docs, /redoc, /openapi.json) offline.
+# Added as the outermost middleware so its header injection covers every route — the
+# versioned /v1 API, the HTMX wizard, /static, and /health alike — and its production
+# docs gate short-circuits before routing. Pure-ASGI (see app.api.security) so it does
+# not buffer the streaming SSE job-events response.
+app.add_middleware(SecurityHeadersMiddleware)
 
 #: The canonical public URL prefix (#841 contract freeze). Every client-data route is
 #: mounted under ``/v1``, so the whole public surface is version-pinned at the URL: a
