@@ -83,6 +83,14 @@ updates:
       # verifies the target pandapower's scipy requirement.
       - dependency-name: "pandapower"
         update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
+      # pyarrow is capped <25 by streamlit (streamlit 1.60.0 requires pyarrow<25,>=7.0), so a
+      # bot bump to pyarrow 25 desyncs the lock. #983 post-mortem: the weekly group bumped
+      # pyarrow 24->25 WHILE bumping streamlit to 1.60 -> internally contradictory, un-installable
+      # (ResolutionImpossible: pyarrow==25.0.0 vs streamlit's pyarrow<25). pyarrow 24->25 is a
+      # semver-MAJOR bump; block majors so pyarrow stays within streamlit's ceiling (24.x patches
+      # stay welcome). Lift only in lockstep with a streamlit release that raises the ceiling.
+      - dependency-name: "pyarrow"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions: keeps the workflow action pins current (the repo had checkout@v3/@v4,
   # setup-python@v4/@v5, codecov@v3/@v4 drift).
