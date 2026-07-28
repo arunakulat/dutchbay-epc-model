@@ -91,6 +91,15 @@ updates:
       # stay welcome). Lift only in lockstep with a streamlit release that raises the ceiling.
       - dependency-name: "pyarrow"
         update-types: ["version-update:semver-major"]
+      # numpy-typing-compat is capped <20251207 by optype[numpy] (optype[numpy] 0.17.1 requires
+      # numpy-typing-compat<20251207,>=20250818.1.25), so a bot bump to the 2026 datestamp desyncs
+      # the lock. #986/#988 post-mortem: the weekly group bumped numpy-typing-compat
+      # 20251206->20260602 -> ResolutionImpossible (numpy-typing-compat==20260602.2.4 vs
+      # optype[numpy]'s <20251207). Its YYYYMMDD datestamp is the semver-MAJOR segment; block
+      # majors so it stays within optype's ceiling (patches within 20251206 stay welcome). Lift
+      # only in lockstep with an optype[numpy] release that raises the ceiling.
+      - dependency-name: "numpy-typing-compat"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions: keeps the workflow action pins current (the repo had checkout@v3/@v4,
   # setup-python@v4/@v5, codecov@v3/@v4 drift).
