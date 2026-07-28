@@ -59,11 +59,16 @@ risk_register:
   - category: "Resource"
     risk: >
       Energy-yield uncertainty — the realised net capacity factor may fall below the P50
-      used to size the debt.
+      used to size the debt. The headline P50/P90 is screening-grade: fitted from single-
+      cell ERA5 reanalysis with no on-site mast and the MCP long-term correction unwired
+      (#961).
     mitigation: >
-      Bankable AEP from an ERA5->Weibull->certified-power-curve chain with enforced source
-      provenance; debt sculpted with DSCR headroom; P90 sensitivity reported.
-    severity: "medium"
+      Modelled/indicative AEP from an ERA5->Weibull->certified-power-curve chain with
+      enforced source provenance; debt sculpted with DSCR headroom; P90 sensitivity
+      reported. A bankable yield requires an on-site measurement campaign (>=12 months,
+      met mast or IEC-accepted LiDAR/SoDAR) long-term-adjusted via MCP before financial
+      close.
+    severity: "high"
     # TCFD physical: wind-resource variability is a chronic climate/weather hazard to output.
     climate_risk_category: "physical"
   - category: "Curtailment"
@@ -136,3 +141,14 @@ model_limitations:
       construction interest) is draw-timing-sensitive, so figures derived under these
       placeholders are indicative until the EPC milestone payment schedule is supplied.
       The committed DutchBay lender case currently uses both placeholders.
+  - topic: "Wind resource measurement basis (screening-grade)"
+    detail: >
+      The headline wind P50/P90 AEP is fitted from a single-cell ERA5 reanalysis timeseries
+      (Weibull A=8.199 / k=2.665, 2020-2024) with NO on-site met mast or IEC-accepted
+      LiDAR/SoDAR, and the measure-correlate-predict module (wind_resource/mcp.py) is present
+      but UNWIRED (#961). Under MEASNET v3.1 and IEC 61400-15-1:2025 a bankable yield requires
+      >=12 concurrent months of on-site measurement long-term-adjusted against the reanalysis
+      reference via MCP; reanalysis reproduces wind over time but not space and can over-state
+      coastal yield. The committed P50/P90 and every AEP-driven KPI are therefore
+      PRE-MEASUREMENT / indicative until an on-site campaign is commissioned and wired through
+      MCP, at which point the AEP re-freeze is a governed, KPI-moving change.

@@ -259,6 +259,19 @@ def test_html_omits_model_limitations_when_config_has_none() -> None:
     assert "Model Limitations" not in html
 
 
+def test_html_surfaces_wind_screening_grade_caveat() -> None:
+    """#961: every default report self-declares its headline wind P50/P90 as screening-grade
+    (single-cell ERA5, no on-site mast, MCP unwired), and the risk_register 'Resource' entry
+    is reconciled to match so the report no longer asserts a 'Bankable AEP'."""
+    html = render_report_html(_context())
+    assert "screening-grade" in html.lower()
+    assert "on-site" in html.lower()
+    assert "MCP" in html
+    assert (
+        "Modelled/indicative AEP" in html
+    )  # risk_register reconciled (was 'Bankable AEP')
+
+
 def test_html_contains_pawn_block_when_supplied() -> None:
     """#645: the PAWN median-KS block renders as its own subsection with the KS columns
     and the finite-sample noise-floor caveat; it is additive to the Morris section."""
