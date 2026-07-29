@@ -39,7 +39,7 @@ import os
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -128,6 +128,13 @@ class ERA5RequestConfig:
     # reconciling the two ERA5 paths (audit D13, #580) — the old fill used alpha_min (0.05),
     # a clip floor, which understated shear on gap-filled hours.
     alpha_default: float = 0.143
+    # Optional constant shear OVERRIDE (#994). ``alpha_default`` only fills NaN hours;
+    # a caller who supplies a shear exponent (e.g. the async location-assessment
+    # request) wants it to actually move the hub-height wind. When set, this REPLACES
+    # the ERA5-derived per-hour alpha with this constant (still clipped to
+    # [alpha_min, alpha_max]) for every hour of the 100m->hub extrapolation. ``None``
+    # keeps the data-derived per-hour alpha (today's behaviour, byte-identical).
+    shear_exponent_override: Optional[float] = None
     output_dir: str = "outputs/era5_cache"
     reference_mode: str = "fixed"
     resolved_at: str = ""
@@ -337,6 +344,18 @@ def build_hub_height_series(nc_path: Path, config: ERA5RequestConfig) -> pd.Data
         config.alpha_min,
         config.alpha_max,
     )
+    # #994: a caller-supplied constant shear REPLACES the data-derived per-hour alpha
+    # for every hour (still physically clipped), so the requested shear actually moves
+    # the hub-height wind — unlike alpha_default, which only fills NaN hours.
+    if config.shear_exponent_override is not None:
+        alpha = np.full_like(
+            ws100,
+            float(
+                np.clip(
+                    config.shear_exponent_override, config.alpha_min, config.alpha_max
+                )
+            ),
+        )
     ws_hub = ws100 * (h_t / h_hi) ** alpha
 
     col = f"ws_{int(h_t)}m"

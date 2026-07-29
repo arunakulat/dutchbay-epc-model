@@ -343,3 +343,107 @@ def test_default_assessment_injects_timeseries_series(
     # The exact series built from the ERA5 TIMESERIES product was injected.
     assert forwarded["hub_height_series"] is series
     assert forwarded["start_date"] == "2014-12-01"
+
+
+# --------------------------------------------------------------------------- #
+# #993: deterministic Weibull screening path (no ERA5) + #994 shear override.
+# --------------------------------------------------------------------------- #
+def _weibull_request() -> WindJobRequest:
+    """A resource_mode='weibull' request (DutchBay ERA5-fitted A/k, at hub height)."""
+    return _request().model_copy(
+        update={"resource_mode": "weibull", "weibull_a": 8.199, "weibull_k": 2.665}
+    )
+
+
+def test_weibull_screening_series_recovers_ak() -> None:
+    """The inverse-CDF quantile lattice is a faithful, RNG-free Weibull(A,k): the SAME
+    scipy MLE the assessment path uses recovers (A, k) to well under 0.5%."""
+    from scipy.stats import weibull_min
+
+    df = runner_mod._weibull_screening_series(8.199, 2.665, 119.0)
+    assert list(df.columns) == ["ws_119m"] and df.index.name == "timestamp"
+    assert len(df) == 8760 and bool((df["ws_119m"] > 0).all())
+    k, _loc, a = weibull_min.fit(df["ws_119m"].to_numpy(), floc=0)
+    assert abs(a - 8.199) / 8.199 < 0.005
+    assert abs(k - 2.665) / 2.665 < 0.005
+
+
+def test_weibull_job_uses_synthetic_series_no_era5(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """resource_mode='weibull' builds a synthetic hub-height Weibull series and feeds the
+    SAME pipeline — with NO ERA5 fetch (#993)."""
+    import sys
+    import types
+
+    forwarded: Dict[str, Any] = {}
+
+    class _FakePipeline:
+        def __init__(self, **kwargs: Any) -> None:
+            Path(kwargs["cache_dir"]).mkdir(parents=True, exist_ok=True)
+            Path(kwargs["output_dir"]).mkdir(parents=True, exist_ok=True)
+
+        def run_complete_assessment(self, **kwargs: Any) -> None:
+            forwarded["hub_height_series"] = kwargs.get("hub_height_series")
+
+        def export_for_cashflow_model(self, *, scenario: str) -> Mapping[str, Any]:
+            return {"scenario": scenario, "annual_generation_mwh": 5.0}
+
+    fake_mod = types.ModuleType("wind_resource.wind_pipeline")
+    fake_mod.WindPipeline = _FakePipeline  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "wind_resource.wind_pipeline", fake_mod)
+
+    # Any ERA5 fetch on this path is a bug — make it explode if reached.
+    import wind_resource.era5_retrieval as era5
+
+    def _boom(*_a: Any, **_k: Any) -> Path:
+        raise AssertionError("ERA5 fetch must not run on the weibull screening path")
+
+    monkeypatch.setattr(era5, "retrieve_era5_timeseries", _boom)
+
+    export = runner_mod.default_assessment(_weibull_request(), lambda step, msg: None)
+
+    assert export["annual_generation_mwh"] == 5.0
+    series = forwarded["hub_height_series"]
+    assert list(series.columns) == ["ws_119m"]  # matches hub_height_m=119
+    assert series.index.name == "timestamp"
+    assert len(series) == 8760 and bool((series["ws_119m"] > 0).all())
+
+
+def test_era5_job_wires_shear_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#994: a request shear_exponent reaches ERA5RequestConfig.shear_exponent_override
+    (which genuinely replaces the per-hour alpha), rather than being silently dropped.
+    """
+    import sys
+    import types
+
+    captured: Dict[str, Any] = {}
+
+    class _FakePipeline:
+        def __init__(self, **kwargs: Any) -> None:
+            Path(kwargs["cache_dir"]).mkdir(parents=True, exist_ok=True)
+            Path(kwargs["output_dir"]).mkdir(parents=True, exist_ok=True)
+
+        def run_complete_assessment(self, **kwargs: Any) -> None:
+            return None
+
+        def export_for_cashflow_model(self, *, scenario: str) -> Mapping[str, Any]:
+            return {"scenario": scenario, "annual_generation_mwh": 1.0}
+
+    fake_mod = types.ModuleType("wind_resource.wind_pipeline")
+    fake_mod.WindPipeline = _FakePipeline  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "wind_resource.wind_pipeline", fake_mod)
+
+    _stub_era5_retrieval(monkeypatch)  # fakes build/validate/retrieve (no network)
+
+    import wind_resource.era5_retrieval as era5
+
+    def _cap_retrieve(cfg: Any) -> Path:
+        captured["shear_override"] = cfg.shear_exponent_override
+        return Path("/tmp/does-not-exist.nc")
+
+    monkeypatch.setattr(era5, "retrieve_era5_timeseries", _cap_retrieve)
+
+    req = _request().model_copy(update={"shear_exponent": 0.25})
+    runner_mod.default_assessment(req, lambda step, msg: None)
+    assert captured["shear_override"] == 0.25

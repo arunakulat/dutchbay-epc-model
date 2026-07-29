@@ -13,7 +13,14 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from app.models.inputs import WindFarmInputs
 
@@ -106,6 +113,35 @@ class WindJobRequest(BaseModel):
     end_date: str = Field(default="2025-12-31", description="ERA5 window end.")
     p_level: Literal["P50", "P75", "P90"] = "P75"
 
+    #: Wind-resource basis. ``era5`` fetches a live single-cell ERA5 timeseries;
+    #: ``weibull`` builds a DETERMINISTIC screening assessment from a supplied
+    #: hub-height Weibull A/k with NO network fetch (#993). Documented default (CCCDIR).
+    resource_mode: Literal["era5", "weibull"] = Field(
+        default="era5",
+        description="'era5' (live single-cell ERA5) or 'weibull' (deterministic "
+        "screening from a supplied hub-height Weibull A/k, no fetch).",
+    )
+    weibull_a: Optional[float] = Field(
+        default=None,
+        gt=0.0,
+        description="Weibull scale A (m/s) AT HUB HEIGHT; required when "
+        "resource_mode='weibull'.",
+    )
+    weibull_k: Optional[float] = Field(
+        default=None,
+        gt=0.0,
+        description="Weibull shape k; required when resource_mode='weibull'.",
+    )
+    shear_exponent: Optional[float] = Field(
+        default=None,
+        ge=0.05,
+        le=0.40,
+        description="Power-law shear exponent alpha for the ERA5 100m->hub "
+        "extrapolation (era5 mode only). None uses the ERA5-derived per-hour alpha; "
+        "a value overrides it for every hour. Bounded to the engine's "
+        "[alpha_min, alpha_max]=[0.05, 0.40] so an in-range value is used verbatim.",
+    )
+
     @field_validator("turbine_model")
     @classmethod
     def _validate_turbine_model(cls, v: str) -> str:
@@ -124,6 +160,30 @@ class WindJobRequest(BaseModel):
         if v not in valid:
             raise ValueError(f"Unknown turbine_model {v!r}; valid: {sorted(valid)}")
         return v
+
+    @model_validator(mode="after")
+    def _require_weibull_params(self) -> "WindJobRequest":
+        """CESSPIT strict: a Weibull screening job must carry BOTH A and k.
+
+        Fails at request time with an actionable 422 (not mid-job with an opaque
+        ``None`` flowing into the series builder) when ``resource_mode='weibull'``
+        omits either scale or shape.
+        """
+        if self.resource_mode == "weibull":
+            missing = [
+                name
+                for name, val in (
+                    ("weibull_a", self.weibull_a),
+                    ("weibull_k", self.weibull_k),
+                )
+                if val is None
+            ]
+            if missing:
+                raise ValueError(
+                    f"resource_mode='weibull' requires {', '.join(missing)}; "
+                    "provide weibull_a (m/s, at hub height) and weibull_k."
+                )
+        return self
 
     def site_location(self) -> Dict[str, Any]:
         """Build the ``{name, lat, lon}`` dict the wind pipeline requires."""

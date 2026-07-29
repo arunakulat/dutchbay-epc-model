@@ -150,3 +150,48 @@ def test_turbine_model_valid_accepted() -> None:
 
     for model in available_turbine_models():
         assert _request(turbine_model=model).turbine_model == model
+
+
+# --------------------------------------------------------------------------- #
+# #993: resource_mode + Weibull screening params; #994: shear exponent
+# --------------------------------------------------------------------------- #
+def test_resource_mode_defaults_to_era5() -> None:
+    req = _request()
+    assert req.resource_mode == "era5"
+    assert req.weibull_a is None and req.weibull_k is None
+    assert req.shear_exponent is None
+
+
+def test_weibull_mode_requires_a_and_k() -> None:
+    # CESSPIT strict: a Weibull screening job must carry BOTH A and k, or fail with an
+    # actionable 422 at request time — not a mid-job None flowing into the series builder.
+    with pytest.raises(ValidationError) as ex_none:
+        _request(resource_mode="weibull")
+    assert "weibull_a" in str(ex_none.value) and "weibull_k" in str(ex_none.value)
+
+    with pytest.raises(ValidationError) as ex_partial:  # k missing
+        _request(resource_mode="weibull", weibull_a=8.2)
+    assert "weibull_k" in str(ex_partial.value)
+
+    req = _request(resource_mode="weibull", weibull_a=8.2, weibull_k=2.665)
+    assert req.resource_mode == "weibull"
+    assert req.weibull_a == 8.2 and req.weibull_k == 2.665
+
+
+def test_weibull_params_must_be_positive() -> None:
+    with pytest.raises(ValidationError):
+        _request(resource_mode="weibull", weibull_a=0.0, weibull_k=2.0)
+    with pytest.raises(ValidationError):
+        _request(resource_mode="weibull", weibull_a=8.0, weibull_k=-1.0)
+
+
+def test_shear_exponent_bounds() -> None:
+    # #994: bounded to the engine's [alpha_min, alpha_max] = [0.05, 0.40] so an in-range
+    # value is used verbatim (no silent clip).
+    assert _request(shear_exponent=0.20).shear_exponent == 0.20
+    assert _request(shear_exponent=0.05).shear_exponent == 0.05  # lower bound inclusive
+    assert _request(shear_exponent=0.40).shear_exponent == 0.40  # upper bound inclusive
+    with pytest.raises(ValidationError):
+        _request(shear_exponent=0.04)  # below alpha_min
+    with pytest.raises(ValidationError):
+        _request(shear_exponent=0.45)  # above alpha_max
