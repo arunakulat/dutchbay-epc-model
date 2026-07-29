@@ -624,7 +624,11 @@ class ScenarioAnalytics:
 
             if cfads_col and len(debt_candidates) == 1:
                 debt_col = debt_candidates[0]
-                denom = timeseries_df[debt_col].replace({0: pd.NA})
+                # pd.NA is the intended replacement (0 debt-service -> NA so DSCR is
+                # NaN, not inf); widen the mapping value to Any so newer pandas-stubs
+                # accept the NAType value while the runtime stays identical (#992).
+                na_sentinel: Any = pd.NA
+                denom = timeseries_df[debt_col].replace({0: na_sentinel})
                 timeseries_df["dscr"] = timeseries_df[cfads_col] / denom
             else:
                 logger.warning(
