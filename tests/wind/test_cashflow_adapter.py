@@ -138,6 +138,41 @@ class TestAdapterContract:
         # Must not raise — overwrite is the "replace, don't validate" mode.
         wind_export_to_scenario_patch(p75_export, scen, adapter_mode="overwrite")
 
+    # -- physical_only (#996 P2): commercial slots left to the scenario ------
+
+    def test_physical_only_overwrite_keeps_scenario_commercial(self, p75_export):
+        # A live location assessment (screening) overwrites the fresh physical CF but
+        # must NEVER clobber the scenario's own tariff/FX with the (possibly stale)
+        # export values (#996 Problem #2).
+        scen = {
+            "project": {"capacity_factor": 0.30},  # differs from export 0.428
+            "tariff": {"lkr_per_kwh": 26.0},  # differs from export 20.3
+            "fx": {"start_lkr_per_usd": 333.79},  # differs from export 300.0
+        }
+        patch = wind_export_to_scenario_patch(
+            p75_export, scen, adapter_mode="overwrite", physical_only=True
+        )
+        # Physical slots are overwritten with the fresh assessment values...
+        assert patch["project"]["capacity_factor"] == 0.428
+        assert patch["project"]["capacity_mw"] == 150.0
+        # ...but the scenario's own commercial inputs are untouched.
+        assert patch["tariff"]["lkr_per_kwh"] == 26.0
+        assert patch["fx"]["start_lkr_per_usd"] == 333.79
+
+    def test_physical_only_skips_commercial_drift_check(self, p75_export):
+        # A commercial disagreement must NOT raise in physical_only mode: the wind
+        # export has no commercial authority, so only physical slots are validated.
+        scen = {
+            "project": {"capacity_factor": 0.428},  # aligned physical
+            "tariff": {"lkr_per_kwh": 26.0},  # ~28% off export 20.3 — must be ignored
+            "fx": {"start_lkr_per_usd": 333.79},  # ~11% off export 300.0 — ignored
+        }
+        patch = wind_export_to_scenario_patch(
+            p75_export, scen, adapter_mode="fill_if_absent", physical_only=True
+        )
+        assert patch["tariff"]["lkr_per_kwh"] == 26.0  # untouched, no raise
+        assert patch["fx"]["start_lkr_per_usd"] == 333.79
+
     # -- mode: fill_if_absent (default) ------------------------------------
 
     def test_fill_if_absent_preserves_aligned(self, p75_export, aligned_scenario):

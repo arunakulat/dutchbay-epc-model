@@ -88,6 +88,57 @@ def test_passes_wind_export_and_scenario_name(monkeypatch: pytest.MonkeyPatch) -
     assert isinstance(captured["scenario"], dict)
 
 
+def test_marks_scenario_screening(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#996: the async location assessment is declared SCREENING-grade, which drives
+    the service seam to adopt the fresh CF (physical-only) and skip the frozen-bankable
+    reconciliation, so a fresh P-level never collides with the committed lender P50."""
+    captured: Dict[str, Any] = {}
+
+    def _spy(scenario: Any, _wind_export: Any, **_kwargs: Any) -> Dict[str, Any]:
+        captured["scenario"] = scenario
+        return _CANNED_RESULT
+
+    monkeypatch.setattr(runner_mod, "run_integrated_case", _spy)
+    store = InMemoryJobStore()
+    _seed_queued(store)
+    run_wind_job("j1", _request(), store, assessment_fn=_good_assessment)
+    assert captured["scenario"]["run"]["mode"] == "screening"
+
+
+def test_p75_assessment_does_not_collide_with_frozen_p50() -> None:
+    """#996 (the reported failure): a fresh P75 whose capacity factor differs from the
+    lender-case base's frozen 0.332 runs clean end-to-end through the REAL service seam
+    — no WindAdapterDriftError, no AepReconciliationError — because the assessment is
+    screening-grade (overwrite the fresh CF, physical-only, skip the frozen-bankable
+    reconciliation). Before #996 this job failed at one of those two guards."""
+    fresh_p75_export = {
+        "scenario": "P75",
+        "annual_generation_mwh": 300_000.0,
+        "capacity_factor_percent": 22.8,  # far from the frozen 33.2% -> old code raised
+        "revenue_annual_usd": 20_000_000.0,
+        "revenue_cumulative_usd": 400_000_000.0,
+        "project_capacity_mw": 150.0,
+        "num_turbines": 15,
+        "rated_capacity_per_turbine_kw": 10_000.0,
+        "ppa_years": 20,
+        "tariff_lkr_per_kwh": 20.3,
+        "exchange_rate_lkr_usd": 300.0,
+    }
+
+    def _assessment(_req: WindJobRequest, progress: Any) -> Mapping[str, Any]:
+        progress(1, "assess")
+        return fresh_p75_export
+
+    store = InMemoryJobStore()
+    _seed_queued(store)
+    run_wind_job("j1", _request(), store, assessment_fn=_assessment)
+    rec = store.get("j1")
+    assert rec is not None
+    # No frozen-P50 collision: the job SUCCEEDS (it used to fail at the guard).
+    assert rec.state is JobState.SUCCEEDED, rec.error
+    assert rec.result is not None and "kpis" in rec.result
+
+
 def test_progress_is_recorded(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: List[Tuple[int, str]] = []
     base_store = InMemoryJobStore()

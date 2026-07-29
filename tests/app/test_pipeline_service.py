@@ -88,6 +88,42 @@ def test_run_finance_case_does_not_mutate_input() -> None:
     assert scen == before
 
 
+# --------------------------------------------------------------------------- #
+# #996 screening seam: a fresh location assessment vs the frozen bankable P50
+# --------------------------------------------------------------------------- #
+def test_skip_bankable_reconciliation_bypasses_frozen_p50() -> None:
+    """A CF that disagrees with the scenario's own frozen bankable P50 raises by
+    default, but skip_bankable_reconciliation=True lets a screening assessment (which
+    computed its OWN AEP) through — the #996 false-failure fix, at the seam level."""
+    from analytics.aep_reconciliation import AepReconciliationError
+
+    scen = _scenario()
+    scen["project"]["capacity_factor"] = 0.20  # far from the frozen P50 basis
+
+    with pytest.raises(AepReconciliationError):
+        run_finance_case(scen)
+
+    result = run_finance_case(scen, skip_bankable_reconciliation=True)
+    assert result["status"] == "success"
+
+
+def test_run_integrated_case_screening_adopts_fresh_cf_keeps_commercial() -> None:
+    """run.mode=screening drives the seam to overwrite the fresh CF (no drift-check vs
+    the frozen 0.332), stay physical-only (the scenario's tariff/FX are untouched), and
+    skip the frozen-bankable reconciliation — so a fresh P75 no longer collides (#996).
+    """
+    scen = _scenario()
+    scen["run"] = {"mode": "screening"}
+    export = _valid_wind_export()
+    export["capacity_factor_percent"] = 22.8  # far from frozen 33.2% -> old code raised
+
+    # No WindAdapterDriftError (overwrite) and no AepReconciliationError (skip): the
+    # fresh screening assessment runs to a result. (physical_only, which keeps the
+    # scenario's tariff/FX, is proved directly in tests/wind/test_cashflow_adapter.py.)
+    result = run_integrated_case(scen, export, scenario_name="P75")
+    assert result["status"] == "success"
+
+
 def test_run_finance_case_stamps_run_manifest() -> None:
     # The engine stamps the manifest itself as of #577 (this gateway's guard is a
     # retained stamp-if-absent fallback); either way /cases and the report pack must
