@@ -14,10 +14,20 @@ import logging
 import shutil
 import tempfile
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, Mapping
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    Mapping,
+    Optional,
+    Union,
+)
 
-from app.api.responses import CaseResult
+from app.api.responses import CaseResult, WindAssessment
 from app.jobs.models import JobProgress, JobState, WindJobRequest
 from app.jobs.store import JobStore
 from app.services.pipeline_service import run_integrated_case
@@ -54,8 +64,85 @@ def _ephemeral_workspace() -> Iterator[Path]:
 #: ``(step, message) -> None`` progress sink handed to the assessment function.
 ProgressFn = Callable[[int, str], None]
 
-#: ``(request, progress) -> wind_export_dict`` — the slow ERA5 step, injectable.
-AssessmentFn = Callable[[WindJobRequest, ProgressFn], Mapping[str, Any]]
+
+@dataclass(frozen=True)
+class AssessmentResult:
+    """What the production assessment step returns: the frozen cashflow ``export`` the
+    finance seam consumes, plus the OPTIONAL full ``wind_assessment`` (all P50/P75/P90 +
+    provenance + site + data period + wind stats) surfaced on the API result (#993). A
+    fake or legacy step may still return a bare export mapping; ``run_wind_job`` accepts
+    either shape.
+    """
+
+    export: Mapping[str, Any]
+    wind_assessment: Optional[WindAssessment] = None
+
+
+#: ``(request, progress) -> AssessmentResult | export_mapping`` — the slow resource step,
+#: injectable. The production step returns an :class:`AssessmentResult`; a bare export
+#: mapping (the pre-#993 shape) is still accepted for the export-only path.
+AssessmentFn = Callable[
+    [WindJobRequest, ProgressFn], Union[Mapping[str, Any], AssessmentResult]
+]
+
+
+def _build_wind_assessment(
+    full_results: Mapping[str, Any], selected_scenario: str
+) -> WindAssessment:
+    """Project a ``WindPipeline.run_complete_assessment`` result into a
+    :class:`~app.api.responses.WindAssessment` (#993).
+
+    Reads the documented result paths (``metadata`` / ``wind_data`` /
+    ``statistical_analysis`` / ``energy_production.net_aep``) and marks the resource
+    SCREENING-grade — a live single-cell / analytic-Weibull run is never bankable (#961).
+    Missing keys degrade to omitted/empty rather than raising, so a partial assessment
+    still yields a usable block.
+    """
+    fr: Mapping[str, Any] = full_results if isinstance(full_results, Mapping) else {}
+    meta = fr.get("metadata") or {}
+    net = (fr.get("energy_production") or {}).get("net_aep") or {}
+    stats = fr.get("statistical_analysis") or {}
+    wind_data = fr.get("wind_data") or {}
+    weibull = stats.get("weibull") or {}
+
+    def _gwh(mwh: Any) -> Optional[float]:
+        return float(mwh) / 1000.0 if isinstance(mwh, (int, float)) else None
+
+    p_levels_gwh = {
+        lvl.upper(): g
+        for lvl in ("p50", "p75", "p90")
+        if (g := _gwh(net.get(f"net_aep_{lvl}_mwh"))) is not None
+    }
+    net_cf = {
+        lvl.upper(): float(cf)
+        for lvl in ("p50", "p75", "p90")
+        if isinstance((cf := net.get(f"capacity_factor_net_{lvl}")), (int, float))
+    }
+    provenance = {
+        "engine_version": meta.get("version"),
+        # a live single-cell ERA5 / analytic-Weibull run is NOT bankable (#961)
+        "grade": "screening",
+        "pvalue_method": net.get("pvalue_method"),
+        "uncertainty_sigma_1yr_pct": net.get("uncertainty_sigma_1yr_pct"),
+        "selected_p_level": selected_scenario,
+    }
+    wind_stats = {
+        k: float(v)
+        for k, v in (
+            ("mean_ws", wind_data.get("mean_ws")),
+            ("weibull_a", weibull.get("scale_c")),
+            ("weibull_k", weibull.get("shape_k")),
+        )
+        if isinstance(v, (int, float))
+    }
+    return WindAssessment(
+        p_levels_gwh=p_levels_gwh,
+        net_capacity_factor=net_cf,
+        provenance={k: v for k, v in provenance.items() if v is not None},
+        site=dict(meta.get("location") or {}),
+        data_period=dict(meta.get("data_period") or {}),
+        wind_stats=wind_stats,
+    )
 
 
 def _weibull_screening_series(
@@ -96,7 +183,7 @@ def _weibull_screening_series(
 
 def default_assessment(
     request: WindJobRequest, progress: ProgressFn
-) -> Mapping[str, Any]:  # pragma: no cover - needs Copernicus creds + network
+) -> AssessmentResult:  # pragma: no cover - needs Copernicus creds + network
     """Run the real ERA5 wind assessment and export the cashflow contract.
 
     Fetches the CDS ARCO **single-point TIMESERIES** product
@@ -172,13 +259,16 @@ def default_assessment(
             output_dir=str(workspace / "output"),
         )
         progress(2, "Running Weibull → AEP assessment on the hub-height series")
-        pipeline.run_complete_assessment(
+        full_results = pipeline.run_complete_assessment(
             start_date=request.start_date,
             end_date=request.end_date,
             hub_height_series=series,
         )
         progress(3, "Exporting wind metrics for finance")
-        return pipeline.export_for_cashflow_model(scenario=request.p_level)
+        return AssessmentResult(
+            export=pipeline.export_for_cashflow_model(scenario=request.p_level),
+            wind_assessment=_build_wind_assessment(full_results, request.p_level),
+        )
 
 
 def run_wind_job(
@@ -209,7 +299,15 @@ def run_wind_job(
 
     try:
         store.update(job_id, state=JobState.RUNNING)
-        wind_export = assessment_fn(request, progress)
+        assessment = assessment_fn(request, progress)
+        # The production step returns an AssessmentResult (export + full wind assessment);
+        # a fake / pre-#993 step may return a bare export mapping — accept either.
+        if isinstance(assessment, AssessmentResult):
+            wind_export: Mapping[str, Any] = assessment.export
+            wind_assessment = assessment.wind_assessment
+        else:
+            wind_export = assessment
+            wind_assessment = None
         progress(TOTAL_STEPS - 1, "Running finance pipeline on the wind export")
         scenario = request.to_finance_scenario()
         # The async ERA5 location assessment is SCREENING-grade (#961/#996): a fresh
@@ -225,7 +323,9 @@ def run_wind_job(
             scenario, wind_export, scenario_name=request.p_level
         )
         case = CaseResult.from_pipeline_result(
-            result, scenario_variant=request.inputs.scenario_variant
+            result,
+            scenario_variant=request.inputs.scenario_variant,
+            wind_assessment=wind_assessment,
         )
         store.update(
             job_id,
