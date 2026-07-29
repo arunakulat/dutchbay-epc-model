@@ -18,7 +18,45 @@ from pydantic import BaseModel, Field
 
 #: Public API contract version (SemVer). Surfaced on ``GET /health`` and on every
 #: :class:`CaseResult`. Bump on any change to the client-facing response shape.
-API_CONTRACT_VERSION = "1.0"
+#: 1.1 (#993): added the optional ``CaseResult.wind_assessment`` block (additive).
+API_CONTRACT_VERSION = "1.1"
+
+
+class WindAssessment(BaseModel):
+    """Screening-grade wind-resource assessment surfaced alongside the finance KPIs.
+
+    All three exceedance levels + capacity factors, resource provenance/grade, site
+    metadata, the assessed data period, and the fitted wind statistics — so a wizard or
+    iOS client can show the full P50/P75/P90 picture and its provenance (#993), not only
+    the single P-level the finance case was billed off. Dict-typed sub-blocks (rather
+    than deeply nested models) keep the contract additive and tolerant of extra
+    provenance keys the producer may add over time.
+    """
+
+    p_levels_gwh: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Net AEP by exceedance level (P50/P75/P90), in GWh.",
+    )
+    net_capacity_factor: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Net capacity factor (decimal) by exceedance level.",
+    )
+    provenance: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Engine version, grade (screening/bankable), exceedance method, "
+        "and uncertainty sigma.",
+    )
+    site: Dict[str, Any] = Field(
+        default_factory=dict, description="Site metadata (name, lat, lon)."
+    )
+    data_period: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Assessed window (start, end, data points).",
+    )
+    wind_stats: Dict[str, float] = Field(
+        default_factory=dict,
+        description="Fitted wind statistics (mean wind speed, Weibull A and k).",
+    )
 
 
 class CaseResult(BaseModel):
@@ -44,12 +82,26 @@ class CaseResult(BaseModel):
         default=API_CONTRACT_VERSION,
         description="Public API contract version this response conforms to (#841).",
     )
+    wind_assessment: Optional[WindAssessment] = Field(
+        default=None,
+        description="Full screening-grade wind assessment (all P50/P75/P90 + provenance "
+        "+ site + data period + wind stats) — present on async wind-job results, absent "
+        "on plain finance cases (#993).",
+    )
 
     @classmethod
     def from_pipeline_result(
-        cls, result: Mapping[str, Any], *, scenario_variant: str
+        cls,
+        result: Mapping[str, Any],
+        *,
+        scenario_variant: str,
+        wind_assessment: Optional[WindAssessment] = None,
     ) -> "CaseResult":
-        """Project a canonical pipeline result dict into a ``CaseResult``."""
+        """Project a canonical pipeline result dict into a ``CaseResult``.
+
+        ``wind_assessment`` is threaded through unchanged when the caller (the async
+        wind-job runner) has one; it defaults to ``None`` for plain finance cases.
+        """
         raw_kpis = result.get("kpis") or {}
         kpis = {
             str(k): float(v)
@@ -62,4 +114,5 @@ class CaseResult(BaseModel):
             scenario_variant=scenario_variant,
             kpis=kpis,
             run_manifest=dict(manifest) if isinstance(manifest, Mapping) else None,
+            wind_assessment=wind_assessment,
         )

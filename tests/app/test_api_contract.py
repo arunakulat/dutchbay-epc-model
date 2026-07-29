@@ -39,6 +39,7 @@ def test_case_result_public_field_set_is_frozen() -> None:
         "kpis",
         "run_manifest",
         "contract_version",
+        "wind_assessment",  # #993: additive, optional (contract 1.1)
     }
 
 
@@ -50,6 +51,7 @@ def test_case_result_field_types_are_pinned() -> None:
     assert ann["scenario_variant"] == "<class 'str'>"
     assert "Dict[str, float]" in ann["kpis"] or "dict[str, float]" in ann["kpis"]
     assert ann["contract_version"] == "<class 'str'>"
+    assert "WindAssessment" in ann["wind_assessment"]  # Optional[WindAssessment] (#993)
 
 
 def test_tornado_row_public_field_set_and_types_are_frozen() -> None:

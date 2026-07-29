@@ -270,7 +270,9 @@ def test_default_assessment_gives_pipeline_a_writable_ephemeral_workspace(
         _request(), lambda step, msg: steps.append((step, msg))
     )
 
-    assert export["annual_generation_mwh"] == 1.0
+    assert (
+        export.export["annual_generation_mwh"] == 1.0
+    )  # AssessmentResult.export (#993)
     assert seen["cache_dir"].name == "cache" and seen["output_dir"].name == "output"
     # same ephemeral workspace, both cleaned up after the assessment returns
     assert seen["cache_dir"].parent == seen["output_dir"].parent
@@ -339,7 +341,9 @@ def test_default_assessment_injects_timeseries_series(
 
     export = runner_mod.default_assessment(_request(), lambda step, msg: None)
 
-    assert export["annual_generation_mwh"] == 42.0
+    assert (
+        export.export["annual_generation_mwh"] == 42.0
+    )  # AssessmentResult.export (#993)
     # The exact series built from the ERA5 TIMESERIES product was injected.
     assert forwarded["hub_height_series"] is series
     assert forwarded["start_date"] == "2014-12-01"
@@ -403,7 +407,9 @@ def test_weibull_job_uses_synthetic_series_no_era5(
 
     export = runner_mod.default_assessment(_weibull_request(), lambda step, msg: None)
 
-    assert export["annual_generation_mwh"] == 5.0
+    assert (
+        export.export["annual_generation_mwh"] == 5.0
+    )  # AssessmentResult.export (#993)
     series = forwarded["hub_height_series"]
     assert list(series.columns) == ["ws_119m"]  # matches hub_height_m=119
     assert series.index.name == "timestamp"
@@ -447,3 +453,93 @@ def test_era5_job_wires_shear_override(monkeypatch: pytest.MonkeyPatch) -> None:
     req = _request().model_copy(update={"shear_exponent": 0.25})
     runner_mod.default_assessment(req, lambda step, msg: None)
     assert captured["shear_override"] == 0.25
+
+
+# --------------------------------------------------------------------------- #
+# #993: the full wind assessment (all P50/P75/P90 + provenance) on CaseResult.
+# --------------------------------------------------------------------------- #
+def test_build_wind_assessment_projects_full_results() -> None:
+    """_build_wind_assessment reads the documented result paths and marks screening-grade,
+    degrading missing keys to empty rather than raising."""
+    fr = {
+        "metadata": {
+            "version": "v15.3.0",
+            "location": {"name": "DB", "lat": 8.3, "lon": 79.7},
+            "data_period": {
+                "start_date": "2014",
+                "end_date": "2025",
+                "data_points": 96000,
+            },
+        },
+        "wind_data": {"mean_ws": 8.1},
+        "statistical_analysis": {"weibull": {"scale_c": 8.2, "shape_k": 2.66}},
+        "energy_production": {
+            "net_aep": {
+                "net_aep_p50_mwh": 464300.0,
+                "net_aep_p75_mwh": 440000.0,
+                "net_aep_p90_mwh": 404400.0,
+                "capacity_factor_net_p50": 0.354,
+                "capacity_factor_net_p75": 0.336,
+                "capacity_factor_net_p90": 0.309,
+                "pvalue_method": "iec_61400_15_2",
+                "uncertainty_sigma_1yr_pct": 6.0,
+            }
+        },
+    }
+    wa = runner_mod._build_wind_assessment(fr, "P75")
+    assert wa.p_levels_gwh == {"P50": 464.3, "P75": 440.0, "P90": 404.4}
+    assert wa.net_capacity_factor == {"P50": 0.354, "P75": 0.336, "P90": 0.309}
+    assert wa.provenance["grade"] == "screening"  # #961: never bankable
+    assert wa.provenance["engine_version"] == "v15.3.0"
+    assert wa.provenance["selected_p_level"] == "P75"
+    assert wa.site == {"name": "DB", "lat": 8.3, "lon": 79.7}
+    assert wa.wind_stats["weibull_a"] == 8.2 and wa.wind_stats["weibull_k"] == 2.66
+    assert runner_mod._build_wind_assessment({}, "P50").p_levels_gwh == {}  # degrades
+
+
+def test_run_wind_job_surfaces_wind_assessment(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An AssessmentResult carrying a WindAssessment surfaces the full block on the stored
+    CaseResult (#993)."""
+    from app.api.responses import WindAssessment
+    from app.jobs.runner import AssessmentResult
+
+    monkeypatch.setattr(
+        runner_mod, "run_integrated_case", lambda *a, **k: _CANNED_RESULT
+    )
+    wa = WindAssessment(
+        p_levels_gwh={"P50": 464.3, "P75": 440.0, "P90": 404.4},
+        provenance={"grade": "screening"},
+    )
+
+    def _assessment_with_block(_req: WindJobRequest, progress: Any) -> AssessmentResult:
+        progress(1, "assess")
+        return AssessmentResult(export=_FAKE_EXPORT, wind_assessment=wa)
+
+    store = InMemoryJobStore()
+    _seed_queued(store)
+    run_wind_job("j1", _request(), store, assessment_fn=_assessment_with_block)
+    rec = store.get("j1")
+    assert rec is not None and rec.state is JobState.SUCCEEDED, (
+        rec.error if rec else None
+    )
+    assert rec.result is not None
+    out = rec.result["wind_assessment"]
+    assert out is not None
+    assert out["p_levels_gwh"] == {"P50": 464.3, "P75": 440.0, "P90": 404.4}
+    assert out["provenance"]["grade"] == "screening"
+
+
+def test_run_wind_job_legacy_mapping_export_has_no_assessment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Backward-compat: a fake returning a bare export mapping still works, with
+    wind_assessment=None on the result (#993)."""
+    monkeypatch.setattr(
+        runner_mod, "run_integrated_case", lambda *a, **k: _CANNED_RESULT
+    )
+    store = InMemoryJobStore()
+    _seed_queued(store)
+    run_wind_job("j1", _request(), store, assessment_fn=_good_assessment)  # -> Mapping
+    rec = store.get("j1")
+    assert rec is not None and rec.state is JobState.SUCCEEDED
+    assert rec.result is not None and rec.result["wind_assessment"] is None
