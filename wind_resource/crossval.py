@@ -342,7 +342,10 @@ def fetch_merra2_series(
 
     # NASA POWER expects YYYYMMDD bounds and the 50 m wind-speed parameter (WS50M), the
     # closest hub-relevant field the no-auth hourly product exposes.
-    params = {
+    # Precise value type (str | float) so the request params satisfy the requests
+    # stubs' SupportsItems[...] param type across stub versions — an inferred
+    # dict[str, object] is rejected by newer types-requests (#992 group bump).
+    params: dict[str, str | float] = {
         "parameters": "WS50M",
         "community": "RE",
         "longitude": float(longitude),
