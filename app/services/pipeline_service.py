@@ -34,6 +34,7 @@ from analytics.evidence_register import validate_evidence_register
 from analytics.feasibility_sections import validate_feasibility_sections
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.run_manifest import build_run_manifest
+from analytics.run_modes import RunMode, resolve_run_mode
 from analytics.scenario_loader import _assert_fx_spot_consistency
 from solar_resource.cashflow_adapter import solar_export_to_scenario_patch
 from wind_resource.cashflow_adapter import wind_export_to_scenario_patch
@@ -50,6 +51,7 @@ def run_finance_case(
     *,
     validation_mode: str = "strict",
     validation_modules: Sequence[str] | None = DEFAULT_VALIDATION_MODULES,
+    skip_bankable_reconciliation: bool = False,
 ) -> dict[str, Any]:
     """Run the lender-grade finance pipeline from an in-memory scenario dict.
 
@@ -62,6 +64,15 @@ def run_finance_case(
         validation_mode: ``"strict"`` (default) or ``"off"``.
         validation_modules: Logical modules to validate (e.g. ``("cashflow",
             "debt")``). ``None`` validates all registered modules.
+        skip_bankable_reconciliation: When ``True``, skip the frozen-bankable AEP
+            reconciliation (:func:`reconcile_capacity_factor_with_bankable_aep`).
+            Set only for a SCREENING-grade run (a live location assessment
+            computes its OWN P50/P75/P90 from scratch, so there is no frozen
+            bankable P50 to reconcile against — comparing the fresh result to an
+            unrelated committed P50 is the #996 false failure). All OTHER
+            integrity guards (provenance, evidence, FX-spot, …) still run. The
+            synchronous authored lender path never sets this — it keeps the
+            strict guard (default ``False``).
 
     Returns:
         The canonical pipeline result dict — ``status``, ``kpis``
@@ -82,7 +93,11 @@ def run_finance_case(
     # detectors: they raise or no-op, changing no number (byte-identical economics); the
     # input is not mutated.
     guarded = dict(scenario)
-    reconcile_capacity_factor_with_bankable_aep(guarded, "<inline>")
+    if not skip_bankable_reconciliation:
+        # Screening runs (live location assessments) compute their own AEP, so the
+        # frozen-bankable P50 in a base scenario is unrelated to them; comparing the
+        # two is the #996 false failure. Every other guard below still runs.
+        reconcile_capacity_factor_with_bankable_aep(guarded, "<inline>")
     register_scenario_approved_sources(guarded, "<inline>")
     enforce_aep_provenance(guarded, "<inline>")
     validate_evidence_register(guarded, "<inline>")
@@ -196,14 +211,28 @@ def run_integrated_case(
             "run_finance_case instead."
         )
 
+    # #996 screening seam (config-first, single signal): a scenario that declares
+    # run.mode=screening is a LIVE location assessment — it computes its own AEP, so
+    # the wind export is the authoritative PHYSICAL source. Overwrite the fresh
+    # capacity factor (no drift-check against the frozen lender-case CF) and stay
+    # physical-only (the scenario's own tariff/FX are kept, never clobbered by a
+    # possibly-stale export — #996 P2), and skip the frozen-bankable P50
+    # reconciliation downstream. A non-screening (authored lender / developer / no-
+    # mode) run is byte-identical to before: fill_if_absent drift-check + strict
+    # reconciliation. The wind adapter is used only by this seam, so the switch is
+    # fully contained.
+    is_screening = resolve_run_mode(scenario) == RunMode.SCREENING
+    wind_mode: AdapterMode = "overwrite" if is_screening else adapter_mode
+
     patched: Mapping[str, Any] = scenario
     if wind_export is not None:
         patched = wind_export_to_scenario_patch(
             wind_export,
             patched,
             scenario_name=scenario_name,
-            adapter_mode=adapter_mode,
+            adapter_mode=wind_mode,
             tolerance_pct=tolerance_pct,
+            physical_only=is_screening,
         )
     if solar_export is not None:
         patched = solar_export_to_scenario_patch(
@@ -218,4 +247,5 @@ def run_integrated_case(
         patched,
         validation_mode=validation_mode,
         validation_modules=validation_modules,
+        skip_bankable_reconciliation=is_screening,
     )

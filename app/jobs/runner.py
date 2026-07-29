@@ -154,6 +154,15 @@ def run_wind_job(
         wind_export = assessment_fn(request, progress)
         progress(TOTAL_STEPS - 1, "Running finance pipeline on the wind export")
         scenario = request.to_finance_scenario()
+        # The async ERA5 location assessment is SCREENING-grade (#961/#996): a fresh
+        # single-cell AEP, NOT the frozen bankable P50 of the lender-case base the
+        # scenario is seeded from. Declaring run.mode=screening drives the service
+        # seam to adopt this assessment's own capacity factor (physical-only, so the
+        # form's tariff/FX are untouched) and skip the frozen-bankable reconciliation,
+        # so a freshly computed P75 never collides with the unrelated committed P50.
+        run_block = dict(scenario.get("run") or {})
+        run_block["mode"] = "screening"
+        scenario["run"] = run_block
         result = run_integrated_case(
             scenario, wind_export, scenario_name=request.p_level
         )

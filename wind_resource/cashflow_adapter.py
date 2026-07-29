@@ -212,6 +212,17 @@ _FIELD_MAP: tuple[tuple[str, tuple[str, ...], Any, str], ...] = (
     ),
 )
 
+#: Attributes in :data:`_FIELD_MAP` that carry COMMERCIAL (not physical) values.
+#: The wind run is authoritative for PHYSICAL resource (capacity, capacity factor)
+#: but NOT for tariff/FX — those are commercial inputs owned by the scenario /
+#: wizard, and a (possibly stale) wind export must never overwrite or veto them
+#: (#996 Problem #2; the solar adapter carries no commercial fields at all). A
+#: caller on the live location-assessment path passes ``physical_only=True`` to
+#: write/validate the physical slots only.
+_COMMERCIAL_ATTRS: frozenset[str] = frozenset(
+    {"tariff_lkr_per_kwh", "exchange_rate_lkr_usd"}
+)
+
 
 def _get_nested(d: Mapping[str, Any], path: tuple[str, ...]) -> Any:
     """Return d[path[0]][path[1]]... or ``None`` if any segment is missing.
@@ -259,6 +270,7 @@ def wind_export_to_scenario_patch(
     scenario_name: str = "P75",
     adapter_mode: AdapterMode = "fill_if_absent",
     tolerance_pct: float = DEFAULT_TOLERANCE_PCT,
+    physical_only: bool = False,
 ) -> dict[str, Any]:
     """Apply a wind export to a v14 scenario dict under the chosen mode.
 
@@ -278,6 +290,15 @@ def wind_export_to_scenario_patch(
         See module docstring for semantics.
     tolerance_pct
         Acceptable symmetric relative drift in percent. Default 0.5.
+    physical_only
+        When ``True``, touch only the PHYSICAL resource slots
+        (``project.capacity_mw``, ``project.capacity_factor``) and leave the
+        COMMERCIAL slots (``tariff.lkr_per_kwh``, ``fx.start_lkr_per_usd``)
+        entirely untouched — no write, no drift check. The wind run is
+        authoritative for physical resource, never for tariff/FX (#996 Problem
+        #2); the live location-assessment path sets this so a possibly-stale
+        export cannot overwrite or veto the scenario's own commercial inputs.
+        Default ``False`` (legacy full-map behaviour, incl. commercial slots).
 
     Returns
     -------
@@ -319,6 +340,10 @@ def wind_export_to_scenario_patch(
 
     # --- 3. per-field merge under the requested mode ---------------------
     for attr, path, transform, label in _FIELD_MAP:
+        if physical_only and attr in _COMMERCIAL_ATTRS:
+            # Live location-assessment path: the wind run owns physical resource
+            # only; the scenario's own tariff/FX stay authoritative (#996 P2).
+            continue
         wind_raw = getattr(export, attr)
         wind_value = transform(wind_raw)
         scenario_value = _get_nested(patched, path)
