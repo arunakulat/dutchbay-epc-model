@@ -21,7 +21,7 @@ from api.pipeline_api import RunPipelineResponse
 from api.sensitivity_api import SensitivityTornadoRow
 from app.api.jobs_router import JobAccepted
 from app.api.main import API_V1_PREFIX, TokenResponse, app
-from app.api.responses import API_CONTRACT_VERSION, CaseResult
+from app.api.responses import API_CONTRACT_VERSION, AnalysisResult, CaseResult
 from app.jobs.models import JobRecord
 
 client = TestClient(app)
@@ -83,6 +83,32 @@ def test_job_accepted_public_field_set_is_frozen() -> None:
     }
 
 
+def test_analysis_result_public_field_set_is_frozen() -> None:
+    """The async-analysis envelope (#993 PR-B) is a client-facing shape delivered inside
+    JobRecord.result. Freeze its field set + types — a rename/retype is a contract change
+    (bump API_CONTRACT_VERSION and this assertion together)."""
+    assert set(AnalysisResult.model_fields) == {
+        "analysis_type",
+        "metric",
+        "scenario_variant",
+        "engine_result",
+        "contract_version",
+    }
+    ann = {k: str(f.annotation) for k, f in AnalysisResult.model_fields.items()}
+    assert ann["analysis_type"] == "<class 'str'>"
+    assert ann["metric"] == "<class 'str'>"
+    assert ann["scenario_variant"] == "<class 'str'>"
+    assert "Dict[str, " in ann["engine_result"] and "Any" in ann["engine_result"]
+    assert ann["contract_version"] == "<class 'str'>"
+
+
+def test_analysis_result_stamps_the_contract_version() -> None:
+    envelope = AnalysisResult(
+        analysis_type="mc", metric="project_irr", scenario_variant="lendercase"
+    )
+    assert envelope.contract_version == API_CONTRACT_VERSION
+
+
 def test_job_record_public_field_set_is_frozen() -> None:
     assert set(JobRecord.model_fields) == {
         "job_id",
@@ -134,6 +160,13 @@ def test_health_reports_contract_version() -> None:
 def test_contract_version_is_semver() -> None:
     parts = API_CONTRACT_VERSION.split(".")
     assert len(parts) >= 2 and all(p.isdigit() for p in parts)
+
+
+def test_contract_version_value_is_pinned() -> None:
+    """Pin the literal so a reverted/fat-fingered constant is caught — the stamping
+    tests above are self-referential (== API_CONTRACT_VERSION) and would stay green.
+    Bump this together with API_CONTRACT_VERSION on any deliberate contract change."""
+    assert API_CONTRACT_VERSION == "1.2"
 
 
 # --------------------------------------------------------------------------- #

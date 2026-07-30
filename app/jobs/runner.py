@@ -350,19 +350,25 @@ def run_wind_job(
         )
 
 
-def new_queued_record(job_id: str, *, now: str, owner: str) -> Dict[str, Any]:
+def new_queued_record(
+    job_id: str, *, now: str, owner: str, total_steps: int = TOTAL_STEPS
+) -> Dict[str, Any]:
     """Build the kwargs for a freshly-queued :class:`JobRecord` (CCCDIR helper).
 
     Args:
         job_id: The id for the new record.
         now: The ISO timestamp to stamp ``created_at``/``updated_at`` with.
         owner: The authenticated subject the job is bound to (per-client isolation).
+        total_steps: The step budget advertised on the queued progress marker.
+            Defaults to the wind-job budget (:data:`TOTAL_STEPS`); the analysis job
+            passes its own so the queued record reflects the right budget before the
+            runner's first ``progress()`` call overwrites it.
     """
     return {
         "job_id": job_id,
         "owner": owner,
         "state": JobState.QUEUED,
-        "progress": JobProgress(step=0, total_steps=TOTAL_STEPS, message="Queued"),
+        "progress": JobProgress(step=0, total_steps=total_steps, message="Queued"),
         "created_at": now,
         "updated_at": now,
     }

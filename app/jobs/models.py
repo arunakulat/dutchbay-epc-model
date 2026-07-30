@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Literal, Mapping, Optional
 
 from pydantic import (
     BaseModel,
@@ -85,7 +85,9 @@ class JobRecord(BaseModel):
     state: JobState
     progress: JobProgress
     result: Optional[Dict[str, Any]] = Field(
-        default=None, description="The CaseResult dict on success."
+        default=None,
+        description="On success, the job's result dict — a CaseResult for a wind "
+        "finance job, or an AnalysisResult envelope for an analysis job (#993 PR-B).",
     )
     error: Optional[str] = Field(default=None, description="Error string on failure.")
     created_at: str
@@ -196,3 +198,106 @@ class WindJobRequest(BaseModel):
     def to_finance_scenario(self) -> Dict[str, Any]:
         """Map the embedded finance inputs to a full v14 scenario dict."""
         return self.inputs.to_scenario_config()
+
+
+#: Analysis types whose engine consumes ``monte_carlo.parameters`` (a list of
+#: ``{name, low, high}`` driver mappings). For these, the resolved scenario must
+#: carry a non-empty LIST-form block or the engine raises mid-job — so we reject at
+#: the request boundary instead (CESSPIT). ``tornado`` (PR-B2) builds its own driver
+#: set and is intentionally absent; ``morris`` (PR-B3) will be added here.
+_ANALYSIS_TYPES_REQUIRING_MC_PARAMS: frozenset[str] = frozenset({"mc"})
+
+
+class AnalysisJobRequest(BaseModel):
+    """An async ANALYSIS-job submission: run a bounded MC / sensitivity / global-SA
+    engine over the freshly-assessed screening case (#993 PR-B).
+
+    Embeds a :class:`WindJobRequest` (Dolphin — reuses its strict validators and the
+    ERA5/Weibull assessment seam) and adds the analysis knobs. The analysis runs on
+    the ACTIVE assessed case (the live capacity factor, not the stale form input —
+    #993); to keep that recompute deterministic, network-free, and bounded, the
+    embedded wind request must use ``resource_mode='weibull'`` (a live ERA5 fetch is
+    minutes-long and unbounded — not an "analysis" workload). Unknown fields are
+    rejected (CESSPIT).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    analysis_type: Literal["mc"] = Field(
+        ...,
+        description="The analysis to run. PR-B1 supports 'mc' (bounded Monte Carlo); "
+        "'tornado' and 'morris' follow in PR-B2/PR-B3.",
+    )
+    metric: Literal["project_irr", "equity_irr", "project_npv"] = Field(
+        default="project_irr",
+        description="Focal metric the analysis targets. For MC this labels the result "
+        "(the engine computes all metrics); for the sensitivity families it selects the "
+        "swept metric.",
+    )
+    wind: WindJobRequest = Field(
+        ...,
+        description="The embedded wind job carrying the finance inputs, site, turbine, "
+        "and (weibull) resource basis used to recompute the assessed case.",
+    )
+    n_trials: int = Field(
+        default=2000,
+        ge=200,
+        le=20000,
+        description="Monte Carlo trial count (mc only). Bounded so the job cannot run "
+        "unboundedly long; the lender-grade floor (1000) is a report-layer policy, not "
+        "an engine limit.",
+    )
+    seed: int = Field(
+        default=123,
+        ge=0,
+        description="Deterministic RNG seed for reproducible MC draws (MRM-01).",
+    )
+
+    @model_validator(mode="after")
+    def _require_bounded_deterministic_resource(self) -> "AnalysisJobRequest":
+        """CESSPIT strict: an analysis job must use the deterministic Weibull basis.
+
+        A live ERA5 fetch is minutes-long and network-bound — fine for a one-shot
+        assessment, but pairing it with a fan-out sweep is an unbounded workload. Fail
+        loud at the boundary with an actionable 422 rather than silently flipping the
+        client's chosen mode (no silent defaults).
+        """
+        if self.wind.resource_mode != "weibull":
+            raise ValueError(
+                "analysis jobs require wind.resource_mode='weibull' (a deterministic, "
+                "network-free screening basis so the assessed-case recompute is bounded); "
+                f"got {self.wind.resource_mode!r}. Supply wind.weibull_a and "
+                "wind.weibull_k. Live-ERA5 analysis is not supported on this route."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _require_runnable_mc_parameters(self) -> "AnalysisJobRequest":
+        """CESSPIT strict: reject a variant whose resolved scenario has no MC drivers.
+
+        The MC engine consumes ``monte_carlo.parameters`` as an explicit LIST of
+        ``{name, low, high}`` mappings and raises ``MonteCarloConfigError`` on a
+        dict-form or empty block. Of the committed variants only ``lendercase`` pins
+        the list form; ``basecase``/``equitycase`` carry a legacy dict of per-parameter
+        scalars. Validate the RESOLVED scenario here (mirroring the request-time,
+        file-backed turbine-model check) so a bad variant fails on POST with an
+        actionable 422, not mid-job with an opaque engine error behind the generic
+        failure boundary.
+        """
+        if self.analysis_type in _ANALYSIS_TYPES_REQUIRING_MC_PARAMS:
+            scenario = self.wind.to_finance_scenario()
+            mc = scenario.get("monte_carlo") if isinstance(scenario, Mapping) else None
+            mc_block: Mapping[str, Any] = mc if isinstance(mc, Mapping) else {}
+            params = mc_block.get("parameters")
+            if params is None:
+                params = mc_block.get("params")
+            if not isinstance(params, list) or not params:
+                variant = self.wind.inputs.scenario_variant
+                raise ValueError(
+                    f"analysis_type={self.analysis_type!r} requires the resolved "
+                    f"scenario (variant={variant!r}) to define a non-empty LIST-form "
+                    "monte_carlo.parameters (a list of {name, low, high} driver "
+                    f"mappings). The {variant!r} base does not provide one in that "
+                    "form; use scenario_variant='lendercase'."
+                )
+        return self
