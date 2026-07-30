@@ -3,19 +3,25 @@
 Mounted under the versioned ``/v1`` prefix by ``app.api.main`` (#841), so the live
 paths are ``POST /v1/jobs`` etc. (the router itself only owns the ``/jobs`` segment):
 
-* ``POST /jobs``              — enqueue a job (returns 202 + a ``JobAccepted`` handle
-                                whose ``status_url``/``events_url`` are ``url_for``-derived,
-                                so they carry the ``/v1`` mount prefix automatically).
+* ``POST /jobs``              — enqueue a wind-assessment job (returns 202 + a
+                                ``JobAccepted`` handle whose ``status_url``/``events_url``
+                                are ``url_for``-derived, so they carry the ``/v1`` mount
+                                prefix automatically).
+* ``POST /jobs/analysis``     — enqueue a bounded analysis job (Monte Carlo in PR-B1)
+                                over the freshly-assessed screening case (#993 PR-B).
 * ``GET  /jobs/{id}``         — poll the job record (404 if unknown).
 * ``GET  /jobs/{id}/events``  — SSE stream of progress until terminal/timeout.
 
+``GET /jobs/{id}`` and its SSE stream are job-type-agnostic and serve both job types.
 The store is resolved through the :func:`get_store` dependency — the single
 injection seam. Tests override it via ``app.dependency_overrides``; the durable
 cross-process path replaces the default with a ``RedisJobStore``. The enqueue
-handler only orchestrates: it creates a queued record and dispatches
-:func:`~app.jobs.runner.run_wind_job` — via FastAPI ``BackgroundTasks`` on the
-default ``memory`` backend, or by producing onto the arq queue on the ``redis``
-backend (#663/#837). Both paths drive the same ``run_wind_job``.
+handlers only orchestrate: each creates a queued record and dispatches its runner —
+``POST /jobs`` drives :func:`~app.jobs.runner.run_wind_job` (via FastAPI
+``BackgroundTasks`` on the default ``memory`` backend, or the arq queue on ``redis``
+— #663/#837); ``POST /jobs/analysis`` drives
+:func:`~app.jobs.analysis_runner.run_analysis_job` on the in-process backend (the
+``redis`` backend returns 501 for analysis jobs until its arq task lands).
 """
 
 from __future__ import annotations
@@ -28,8 +34,15 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.api.auth import get_current_subject
+from app.jobs.analysis_runner import ANALYSIS_TOTAL_STEPS, run_analysis_job
 from app.jobs.config import JOBS_BACKEND, JOBS_QUEUE, JOBS_REDIS_URL
-from app.jobs.models import JobRecord, JobState, WindJobRequest, utc_now_iso
+from app.jobs.models import (
+    AnalysisJobRequest,
+    JobRecord,
+    JobState,
+    WindJobRequest,
+    utc_now_iso,
+)
 from app.jobs.runner import new_queued_record, run_wind_job
 from app.jobs.sse import job_event_stream
 from app.jobs.store import InMemoryJobStore, JobStore
@@ -167,6 +180,55 @@ def enqueue_job(
         asyncio.run(_enqueue_to_arq(job_id, request))
     else:
         background.add_task(run_wind_job, job_id, request, store)
+    status_url, events_url = _job_urls(http_request, job_id)
+    return JobAccepted(
+        job_id=job_id,
+        state=JobState.QUEUED,
+        status_url=status_url,
+        events_url=events_url,
+    )
+
+
+@router.post("/analysis", status_code=202, response_model=JobAccepted)
+def enqueue_analysis_job(
+    request: AnalysisJobRequest,
+    background: BackgroundTasks,
+    http_request: Request,
+    store: Annotated[JobStore, Depends(get_store)],
+    subject: Annotated[str, Depends(get_current_subject)],
+) -> JobAccepted:
+    """Queue an async analysis job (Monte Carlo in PR-B1) and schedule it to run.
+
+    Mirrors :func:`enqueue_job` exactly (per-owner isolation via ``subject``; queued
+    record then dispatch) and REUSES the shared ``GET /jobs/{id}`` status +
+    ``/jobs/{id}/events`` SSE routes — a ``JobRecord`` is job-type-agnostic. The
+    analysis engines are CPU-bound and must not block the request, so the job runs off
+    the request path via ``BackgroundTasks`` on the default in-process backend.
+
+    The ``redis`` backend is not yet wired for analysis jobs (the arq task is a separate
+    dolphin): fail loud with 501 BEFORE creating any record, rather than silently
+    queueing a job the worker would never consume.
+    """
+    if JOBS_BACKEND == "redis":
+        raise HTTPException(
+            status_code=501,
+            detail=(
+                "analysis jobs are not yet supported on the redis backend; "
+                "run with the default in-process jobs backend."
+            ),
+        )
+    job_id = _new_job_id()
+    store.create(
+        JobRecord(
+            **new_queued_record(
+                job_id,
+                now=utc_now_iso(),
+                owner=subject,
+                total_steps=ANALYSIS_TOTAL_STEPS,
+            )
+        )
+    )
+    background.add_task(run_analysis_job, job_id, request, store)
     status_url, events_url = _job_urls(http_request, job_id)
     return JobAccepted(
         job_id=job_id,

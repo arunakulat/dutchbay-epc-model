@@ -19,7 +19,10 @@ from pydantic import BaseModel, Field
 #: Public API contract version (SemVer). Surfaced on ``GET /health`` and on every
 #: :class:`CaseResult`. Bump on any change to the client-facing response shape.
 #: 1.1 (#993): added the optional ``CaseResult.wind_assessment`` block (additive).
-API_CONTRACT_VERSION = "1.1"
+#: 1.2 (#993 PR-B): added the ``AnalysisResult`` envelope for async analysis jobs
+#: (MC / sensitivity / global-SA) — additive, a new response shape (no existing model
+#: changed).
+API_CONTRACT_VERSION = "1.2"
 
 
 class WindAssessment(BaseModel):
@@ -116,3 +119,41 @@ class CaseResult(BaseModel):
             run_manifest=dict(manifest) if isinstance(manifest, Mapping) else None,
             wind_assessment=wind_assessment,
         )
+
+
+class AnalysisResult(BaseModel):
+    """Client-facing envelope for an async analysis job (#993 PR-B).
+
+    A thin, self-describing wrapper delivered inside a ``JobRecord.result`` so a
+    wizard or iOS client can tell WHICH analysis it is (``mc`` now; ``tornado`` /
+    ``morris`` to follow) and which metric it focused, without sniffing the engine's
+    keys. The engine's own serialised result — ``MonteCarloResult.model_dump()`` and,
+    later, ``SensitivitySuite.model_dump()`` / the ``run_morris`` dict — is carried
+    verbatim under ``engine_result``. A dict-typed ``engine_result`` (rather than a
+    per-engine model) keeps the contract additive and tolerant of the extra keys each
+    engine emits (percentiles, provenance metadata such as ``base_outside_bounds`` /
+    ``degenerate_sweep``, ...), which the client surfaces as-is.
+
+    The analysis runs on the freshly ASSESSED screening case (the live capacity
+    factor, not the stale form input — #993), so this is screening-grade risk
+    analytics, never a bankable re-pin.
+    """
+
+    analysis_type: str = Field(
+        ...,
+        description="Which analysis produced this result: 'mc' | 'tornado' | 'morris'.",
+    )
+    metric: str = Field(
+        ..., description="The focal metric the analysis targeted (e.g. 'project_irr')."
+    )
+    scenario_variant: str = Field(
+        ..., description="Base variant the assessed case was built on."
+    )
+    engine_result: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="The analysis engine's serialised result, carried verbatim.",
+    )
+    contract_version: str = Field(
+        default=API_CONTRACT_VERSION,
+        description="Public API contract version this response conforms to (#841).",
+    )

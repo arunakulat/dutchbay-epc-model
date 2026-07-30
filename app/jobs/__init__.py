@@ -12,7 +12,13 @@ loaded only by the arq CLI.
 
 from __future__ import annotations
 
+from app.jobs.analysis_runner import (
+    ANALYSIS_TOTAL_STEPS,
+    default_analysis,
+    run_analysis_job,
+)
 from app.jobs.models import (
+    AnalysisJobRequest,
     JobProgress,
     JobRecord,
     JobState,
@@ -25,6 +31,7 @@ from app.jobs.sse import format_sse, job_event_stream
 from app.jobs.store import InMemoryJobStore, JobStore
 
 __all__ = [
+    "AnalysisJobRequest",
     "JobProgress",
     "JobRecord",
     "JobState",
@@ -34,8 +41,11 @@ __all__ = [
     "JobStore",
     "RedisJobStore",
     "TOTAL_STEPS",
+    "ANALYSIS_TOTAL_STEPS",
     "default_assessment",
+    "default_analysis",
     "run_wind_job",
+    "run_analysis_job",
     "format_sse",
     "job_event_stream",
 ]
