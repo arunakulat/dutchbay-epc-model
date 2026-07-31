@@ -13,15 +13,16 @@ CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 echo "📍 Current branch: $CURRENT_BRANCH"
 echo ""
 
-if [[ "$CURRENT_BRANCH" == "main" ]]; then
-    echo "⚠️  WARNING: You are on 'main' branch!"
+if [[ "$CURRENT_BRANCH" == "main" || "$CURRENT_BRANCH" == "master" ]]; then
+    echo "⚠️  WARNING: You are on protected branch '$CURRENT_BRANCH'!"
     echo ""
     echo "🔴 GWTF R25 VIOLATION RISK:"
     echo "   - Direct commits to main are forbidden"
     echo "   - All work must go through feature branch + PR"
     echo ""
     echo "✅ CORRECT WORKFLOW:"
-    echo "   git checkout feature/add-finance-contracts-pydantic-v2-20251219"
+    echo "   git fetch origin"
+    echo "   git worktree add -b <type>/<descriptive-name> <worktree-path> origin/main"
     echo ""
     echo "🚨 Continue on main anyway? (y/N)"
     read -r response
@@ -38,10 +39,11 @@ fi
 
 # 2. GWTF R25 reminder
 echo "📋 GWTF R25 Requirements:"
-echo "   ✅ Work on feature/add-finance-contracts-pydantic-v2-20251219"
-echo "   ✅ Push to feature branch only"
+echo "   ✅ Start a short-lived branch from current origin/main"
+echo "   ✅ Use a dedicated worktree for each concurrent writing session"
+echo "   ✅ Push the current feature/fix/docs branch only"
 echo "   ✅ Merge to main ONLY via Pull Request"
-echo "   ✅ All changes reviewed (even if self-review)"
+echo "   ✅ Merge only after required CI is green and the branch is current"
 echo ""
 
 # 3. Show uncommitted changes

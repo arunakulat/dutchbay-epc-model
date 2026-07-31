@@ -47,8 +47,8 @@ python -m pip install --upgrade pip >/dev/null 2>&1 || true
 [ -f pyproject.toml ] && pip install -e . >/dev/null 2>&1 || true
 
 # ---- Go with the Flow ruleset bootstrap ------------------------------------
-# Canonical rules CSV in repo root. Adjust name if you change it.
-RULESET_SRC="${_REPO_ROOT}/go_with_the_flow_rules_v3_0_merged_with_v14.csv"
+# Canonical tracked rules CSV in the repository root.
+RULESET_SRC="${_REPO_ROOT}/go_with_the_flow_rules_v3_0_clean.csv"
 
 if [ -f "$RULESET_SRC" ]; then
   # Put a copy inside the venv so it's hermetic to this environment
