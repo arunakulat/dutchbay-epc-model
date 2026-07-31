@@ -86,6 +86,14 @@ The flagship project — EIA in three languages, feasibility, financials, statut
 - Envision BESS commercial proposal package — multiple editions incl. the CEB proposal documents, 10×16 / 10 MW–40 MWh internal design sheets, capacity-charge (LKR/MW/mo) calculators and math annex, technical/economic case, deployment dataset, competitive-landscape analysis, commercial positioning, energy-density comparison and tender Addendum No. 2 (private/internal).
 - Envision 100 MW/200 MWh BESS proposal — loose at root (private/internal).
 
+**NSO 250 MW / 1000 MWh standalone BESS tender (2026)** — repository corpus at
+`docs/source_materials/nso_bess_250mw_2026/`: controlling RFP Volumes I-III, paper
+advertisement, the confidential Envision 10 MW/40 MWh design calculation, the initial gap
+review and the 31 July 2026 detailed gap statement. The detailed statement provides the
+design-calculation critique, tender compliance/evidence matrix, required OEM submission dossier,
+NSO clarification questions and tender-freeze closure plan. *(source PDFs govern over derived
+analysis; Envision public-space publication authorised on 31 July 2026)*
+
 **Internal CEB BESS technical notes** (`desktop clean up`): internal merged/technical system-analysis BESS notes (10 MW–40 MWh, 10×16) — ~3 files (private/internal).
 
 ---
