@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 
-# Columns we absolutely expect in the v3.0 + v14 merged ruleset.
+# Columns required by the canonical v3.0 ruleset.
 REQUIRED_COLUMNS = (
     "version",
     "rule_id",
@@ -46,13 +46,13 @@ def _resolve_ruleset_path(env_var: str = "DUTCHBAY_FLOW_RULESET_CSV") -> Path:
         raise RuntimeError(
             f"{env_var} is not set. Expected it to point at the "
             "Go-with-the-Flow ruleset CSV "
-            "(e.g. go_with_the_flow_rules_v3_0_merged_with_v14.csv)."
+            "(e.g. go_with_the_flow_rules_v3_0_clean.csv)."
         )
 
     path = Path(raw).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(
-            f"{env_var}={raw!r} does not exist or is not a file " f"(resolved: {path})"
+            f"{env_var}={raw!r} does not exist or is not a file (resolved: {path})"
         )
     return path
 

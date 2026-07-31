@@ -29,6 +29,5 @@ Add to your shell config (~/.zshrc or ~/.bashrc):
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 alias gpf='bash $REPO_ROOT/scripts/gwtf-preflight.sh'
 alias gaud='bash $REPO_ROOT/scripts/gwtf-daily-audit.sh'
-alias gfeature='git checkout feature/add-finance-contracts-pydantic-v2-20251219'
 
 text

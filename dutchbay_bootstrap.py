@@ -76,7 +76,6 @@ VENV_SCRIPT_CANDIDATES: Sequence[Path] = (
 # Go-with-the-Flow ruleset – canonical filenames, in priority order.
 RULESET_CANDIDATE_NAMES: Sequence[str] = (
     "go_with_the_flow_rules_v3_0_clean.csv",
-    "go_with_the_flow_rules_v3_0_merged_with_v14.csv",
     "go_with_the_flow_rules_v3_0.csv",
     "go_with_the_flow_v14_ruleset.csv",
 )

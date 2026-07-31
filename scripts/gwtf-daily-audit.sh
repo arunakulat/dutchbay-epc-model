@@ -36,12 +36,10 @@ fi
 
 # Check current branch
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
-if [[ "$CURRENT_BRANCH" == "feature/add-finance-contracts-pydantic-v2-20251219" ]]; then
-    echo "✅ Currently on correct feature branch"
-elif [[ "$CURRENT_BRANCH" == "main" ]]; then
-    echo "🔴 WARNING: Currently on main branch!"
+if [[ "$CURRENT_BRANCH" == "main" || "$CURRENT_BRANCH" == "master" ]]; then
+    echo "🔴 WARNING: Protected branch is checked out; keep it read-only"
 else
-    echo "📍 Current branch: $CURRENT_BRANCH"
+    echo "✅ Currently on isolated branch: $CURRENT_BRANCH"
 fi
 echo ""
 
