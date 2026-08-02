@@ -471,3 +471,154 @@ def test_tornado_real_engine_over_assessed_lendercase(metric: str) -> None:
     assert len(engine_result["tornado_results"]) >= 7
     # A supported metric is genuinely sensitive — never a silent all-flat table.
     assert engine_result["metadata"].get("flat_metric") is False
+
+
+# --------------------------------------------------------------------------- #
+# default_analysis: morris branch — the #996-safe in-memory wiring (build_problem
+# from the assessed drivers + a raw_config evaluator, never a config_path).
+# --------------------------------------------------------------------------- #
+def test_default_analysis_morris_wires_in_memory_and_wraps_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: Dict[str, Any] = {}
+
+    def _build_problem_spy(config_path: Any, params: Any = None) -> str:
+        captured["bp_params"] = params
+        return "PROBLEM_SENTINEL"
+
+    def _run_morris_spy(
+        *,
+        metrics: Any,
+        n_trajectories: int,
+        seed: int,
+        problem: Any,
+        evaluate_fn: Any,
+        **_kw: Any,
+    ) -> Dict[str, Any]:
+        captured["metrics"] = metrics
+        captured["n_trajectories"] = n_trajectories
+        captured["seed"] = seed
+        captured["problem"] = problem
+        captured["evaluate_fn"] = evaluate_fn
+        return {"method": "morris", "n_runs": 42, "metrics": {metrics[0]: {}}}
+
+    def _eval_spy(
+        *, config_path: Any, raw_config: Any, overrides: Any
+    ) -> Dict[str, Any]:
+        captured["eval_config_path"] = config_path
+        captured["eval_raw_config"] = raw_config
+        captured["eval_overrides"] = overrides
+        return {"kpis": {}}
+
+    monkeypatch.setattr(ar, "build_problem", _build_problem_spy)
+    monkeypatch.setattr(ar, "run_morris", _run_morris_spy)
+    monkeypatch.setattr(ar, "evaluate_with_overrides", _eval_spy)
+
+    assessed = {
+        "monte_carlo": {
+            "parameters": [
+                {"name": "capex.usd_total", "low": 1.0, "high": 2.0},
+                {"name": "opex.usd_per_year", "low": 1.0, "high": 2.0},
+            ]
+        }
+    }
+    steps: List[Tuple[int, str]] = []
+    out = default_analysis(
+        _request(
+            analysis_type="morris", metric="project_npv", n_trajectories=12, seed=9
+        ),
+        assessed,
+        lambda step, message: steps.append((step, message)),
+    )
+
+    # build_problem got the assessed drivers (params -> no config-file load).
+    assert captured["bp_params"] == assessed["monte_carlo"]["parameters"]
+    # run_morris got the built problem + the requested knobs.
+    assert captured["problem"] == "PROBLEM_SENTINEL"
+    assert captured["metrics"] == ["project_npv"]
+    assert captured["n_trajectories"] == 12 and captured["seed"] == 9
+    # The evaluator is #996-safe: raw_config=assessed, config_path=None (bypasses
+    # load_scenario_config and its frozen-bankable reconciliation).
+    captured["evaluate_fn"]({"capex.usd_total": 1.5})
+    assert captured["eval_config_path"] is None
+    assert captured["eval_raw_config"] is assessed
+    assert captured["eval_overrides"] == {"capex.usd_total": 1.5}  # sweep row forwarded
+    # Envelope carries the run_morris dict verbatim.
+    assert out["analysis_type"] == "morris" and out["metric"] == "project_npv"
+    assert out["scenario_variant"] == "lendercase"
+    assert out["engine_result"]["method"] == "morris"
+    assert out["engine_result"]["n_runs"] == 42
+    assert (ANALYSIS_TOTAL_STEPS - 1) in [step for step, _ in steps]
+
+
+# --------------------------------------------------------------------------- #
+# Integration guard #4 (morris, end-to-end real engine): real assessed seam + real
+# build_problem + real run_morris (SALib) over the assessed lendercase for each
+# metric. Locks the #996-safe in-memory wiring — reaching a result at all (no
+# AepReconciliationError on the fresh CF) is the invariant the path-based sweep
+# would violate. Skips cleanly where SALib is absent (the repo's global-SA pattern).
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("metric", ["project_irr", "equity_irr", "project_npv"])
+def test_morris_real_engine_over_assessed_lendercase(metric: str) -> None:
+    pytest.importorskip("SALib")  # optional-at-call dependency (CASPER); skip if absent
+    export = {
+        "scenario": "P75",
+        "annual_generation_mwh": 300_000.0,
+        "capacity_factor_percent": 22.8,
+        "revenue_annual_usd": 20_000_000.0,
+        "revenue_cumulative_usd": 400_000_000.0,
+        "project_capacity_mw": 150.0,
+        "num_turbines": 15,
+        "rated_capacity_per_turbine_kw": 10_000.0,
+        "ppa_years": 20,
+        "tariff_lkr_per_kwh": 20.3,
+        "exchange_rate_lkr_usd": 300.0,
+    }
+    assessed = _build_assessed_scenario(_wind(), export)
+    # #993: morris sweeps the FRESH assessed CF (0.228). Reaching a result below (no
+    # AepReconciliationError) proves the in-memory path bypasses the #996 reconciliation
+    # a path-based run_morris(config_path) would trip on this screening scenario.
+    assert assessed["project"]["capacity_factor"] == pytest.approx(0.228)
+
+    out = default_analysis(
+        _request(analysis_type="morris", metric=metric, n_trajectories=6),
+        assessed,
+        lambda _step, _message: None,
+    )
+    engine_result = out["engine_result"]
+    assert out["analysis_type"] == "morris" and out["metric"] == metric
+    assert engine_result["method"] == "morris"
+    per_metric = engine_result["metrics"][metric]
+    # All 6 committed lendercase drivers are swept (>=2 required by build_problem).
+    assert len(per_metric.get("drivers") or {}) >= 2
+    assert per_metric.get("flat_metric") is False
+    assert per_metric.get("nan_poisoned") is False
+    # The verbatim run_morris dict (embeds the SALib problem + engine indices) must be
+    # JSON-safe for JobRecord.result — lock it (it carries numpy-derived floats).
+    import json
+
+    json.dumps(out)
+
+
+def test_default_analysis_morris_fails_loud_on_too_few_drivers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A scenario with <2 sweepable drivers must fail loud (build_problem) BEFORE the
+    engine runs — the morris counterpart to the tornado empty-driver guard (CESSPIT)."""
+
+    def _build_problem_raises(config_path: Any, params: Any = None) -> Any:
+        raise ValueError("Global SA needs >=2 sweepable drivers (got 1)")
+
+    def _run_morris_must_not_run(**_kw: Any) -> Any:
+        raise AssertionError(
+            "run_morris must not run when build_problem rejects drivers"
+        )
+
+    monkeypatch.setattr(ar, "build_problem", _build_problem_raises)
+    monkeypatch.setattr(ar, "run_morris", _run_morris_must_not_run)
+    with pytest.raises(ValueError, match=">=2 sweepable drivers"):
+        default_analysis(
+            _request(analysis_type="morris"),
+            {"monte_carlo": {"parameters": [{"name": "capex.usd_total"}]}},
+            lambda _step, _message: None,
+        )

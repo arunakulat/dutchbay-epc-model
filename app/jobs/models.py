@@ -203,9 +203,11 @@ class WindJobRequest(BaseModel):
 #: Analysis types whose engine consumes ``monte_carlo.parameters`` (a list of
 #: ``{name, low, high}`` driver mappings). For these, the resolved scenario must
 #: carry a non-empty LIST-form block or the engine raises mid-job — so we reject at
-#: the request boundary instead (CESSPIT). ``tornado`` (PR-B2) builds its own driver
-#: set and is intentionally absent; ``morris`` (PR-B3) will be added here.
-_ANALYSIS_TYPES_REQUIRING_MC_PARAMS: frozenset[str] = frozenset({"mc"})
+#: the request boundary instead (CESSPIT). ``mc`` reads the full list; ``morris``
+#: (global-SA) sweeps the same drivers and additionally needs >=2 sweepable ones
+#: (enforced fail-loud in ``build_problem`` at run time). ``tornado`` is intentionally
+#: absent — it builds its own default driver set.
+_ANALYSIS_TYPES_REQUIRING_MC_PARAMS: frozenset[str] = frozenset({"mc", "morris"})
 
 
 class AnalysisJobRequest(BaseModel):
@@ -223,12 +225,13 @@ class AnalysisJobRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    analysis_type: Literal["mc", "tornado"] = Field(
+    analysis_type: Literal["mc", "tornado", "morris"] = Field(
         ...,
-        description="The analysis to run: 'mc' (bounded Monte Carlo) or 'tornado' "
-        "(one-way sensitivity over the default driver library). 'morris' follows in "
-        "PR-B3. Only 'mc' consumes monte_carlo.parameters; 'tornado' builds its own "
-        "driver set, so it is not subject to the list-form MC-parameters guard.",
+        description="The analysis to run: 'mc' (bounded Monte Carlo), 'tornado' "
+        "(one-way sensitivity over the default driver library), or 'morris' "
+        "(Morris elementary-effects global sensitivity). 'mc' and 'morris' consume "
+        "monte_carlo.parameters (subject to the list-form guard); 'tornado' builds its "
+        "own driver set and is not.",
     )
     metric: Literal["project_irr", "equity_irr", "project_npv"] = Field(
         default="project_irr",
@@ -249,10 +252,17 @@ class AnalysisJobRequest(BaseModel):
         "unboundedly long; the lender-grade floor (1000) is a report-layer policy, not "
         "an engine limit.",
     )
+    n_trajectories: int = Field(
+        default=16,
+        ge=4,
+        le=64,
+        description="Morris trajectory count (morris only). Cost is n_trajectories*(D+1) "
+        "finance evaluations; bounded so the job stays short.",
+    )
     seed: int = Field(
         default=123,
         ge=0,
-        description="Deterministic RNG seed for reproducible MC draws (MRM-01).",
+        description="Deterministic RNG seed for reproducible MC / Morris draws (MRM-01).",
     )
 
     @model_validator(mode="after")

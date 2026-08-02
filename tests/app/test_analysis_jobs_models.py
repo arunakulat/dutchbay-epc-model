@@ -103,12 +103,14 @@ def test_n_trials_bounds_enforced() -> None:
 def test_analysis_type_is_required_and_rejects_unsupported_family() -> None:
     with pytest.raises(ValidationError):
         AnalysisJobRequest(wind=_wind())  # type: ignore[call-arg]
+    # mc / tornado / morris are the supported families (mc + morris accepted elsewhere).
     assert (
         AnalysisJobRequest(analysis_type="tornado", wind=_wind()).analysis_type
         == "tornado"
     )
+    # An SA family not yet wired as an analysis job (e.g. sobol/pawn) is rejected.
     with pytest.raises(ValidationError):
-        AnalysisJobRequest(analysis_type="morris", wind=_wind())  # type: ignore[arg-type]
+        AnalysisJobRequest(analysis_type="sobol", wind=_wind())  # type: ignore[arg-type]
 
 
 def test_invalid_metric_rejected() -> None:
@@ -192,3 +194,50 @@ def test_tornado_does_not_require_monte_carlo_parameters(
     )
     req = AnalysisJobRequest(analysis_type="tornado", wind=_wind())
     assert req.analysis_type == "tornado"
+
+
+# --------------------------------------------------------------------------- #
+# PR-B3: morris global-SA — accepted, n_trajectories bounded, and (unlike tornado)
+# subject to the list-form monte_carlo.parameters guard.
+# --------------------------------------------------------------------------- #
+def test_morris_analysis_type_accepted() -> None:
+    req = AnalysisJobRequest(analysis_type="morris", wind=_wind(), n_trajectories=24)
+    assert req.analysis_type == "morris"
+    assert req.n_trajectories == 24
+
+
+def test_n_trajectories_bounds_enforced() -> None:
+    with pytest.raises(ValidationError):
+        AnalysisJobRequest(analysis_type="morris", wind=_wind(), n_trajectories=2)
+    with pytest.raises(ValidationError):
+        AnalysisJobRequest(analysis_type="morris", wind=_wind(), n_trajectories=128)
+    assert (
+        AnalysisJobRequest(
+            analysis_type="morris", wind=_wind(), n_trajectories=4
+        ).n_trajectories
+        == 4
+    )
+    assert (
+        AnalysisJobRequest(
+            analysis_type="morris", wind=_wind(), n_trajectories=64
+        ).n_trajectories
+        == 64
+    )
+
+
+def test_morris_requires_list_form_mc_parameters() -> None:
+    """morris sweeps monte_carlo.parameters, so it IS subject to the guard (unlike
+    tornado): a dict-form variant is rejected at the boundary."""
+    with pytest.raises(ValidationError) as exc:
+        AnalysisJobRequest(analysis_type="morris", wind=_wind(variant="basecase"))
+    assert "monte_carlo.parameters" in str(exc.value)
+
+
+def test_morris_rejects_absent_monte_carlo_block(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        WindJobRequest, "to_finance_scenario", lambda self: {"project": {}}
+    )
+    with pytest.raises(ValidationError):
+        AnalysisJobRequest(analysis_type="morris", wind=_wind())

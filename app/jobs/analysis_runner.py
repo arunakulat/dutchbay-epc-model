@@ -9,9 +9,9 @@ under ``RunMode.SCREENING`` (the live capacity factor, never the stale form inpu
 steps are injected (``assessment_fn`` / ``analysis_fn``) so the whole lifecycle is
 testable without the ``[wind]`` toolchain, a network fetch, or the heavy engine.
 
-PR-B1 wires the Monte-Carlo engine and PR-B2 wires the one-way ``tornado`` engine;
-``morris`` follows in PR-B3 over the same spine and lifecycle. No finance or engine
-logic is duplicated here (Dolphin): the assessment reuses
+PR-B1 wires the Monte-Carlo engine, PR-B2 the one-way ``tornado`` engine, and PR-B3
+the Morris elementary-effects global-SA engine — all over the same spine and lifecycle.
+No finance or engine logic is duplicated here (Dolphin): the assessment reuses
 :func:`app.jobs.runner.default_assessment`, the screening seam reuses
 ``wind_export_to_scenario_patch``, and the analysis reuses the canonical engines.
 """
@@ -22,8 +22,10 @@ import logging
 from typing import Any, Callable, Dict, Mapping
 
 from analytics.core.sensitivity_runner import _default_parameters
+from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.mc.engine import run_monte_carlo_analysis
 from analytics.sensitivity.engine import run_sensitivity_analysis
+from analytics.sensitivity.global_sa import build_problem, run_morris
 from app.api.responses import AnalysisResult
 from app.jobs.models import AnalysisJobRequest, JobProgress, JobState, WindJobRequest
 from app.jobs.runner import (
@@ -84,11 +86,20 @@ def default_analysis(
 ) -> Dict[str, Any]:
     """Run the requested bounded analysis over the assessed scenario.
 
-    Dispatches on ``request.analysis_type`` — ``mc`` (bounded Monte Carlo) or
-    ``tornado`` (one-way sensitivity over the canonical default driver library).
-    The engine is called with the assessed scenario (fresh-CF base) and its serialised
-    result is wrapped in a typed :class:`~app.api.responses.AnalysisResult` envelope,
-    returned as a plain JSON-safe dict for :attr:`JobRecord.result`.
+    Dispatches on ``request.analysis_type`` — ``mc`` (bounded Monte Carlo),
+    ``tornado`` (one-way sensitivity over the canonical default driver library), or
+    ``morris`` (Morris elementary-effects global sensitivity over the scenario's
+    ``monte_carlo.parameters``). The engine is called with the assessed scenario
+    (fresh-CF base) and its serialised result is wrapped in a typed
+    :class:`~app.api.responses.AnalysisResult` envelope, returned as a plain JSON-safe
+    dict for :attr:`JobRecord.result`.
+
+    All three families run IN-MEMORY over the assessed dict so the sweep honours #993
+    (the fresh capacity factor) and — crucially — bypasses ``load_scenario_config``'s
+    frozen-bankable reconciliation, which a path-based Morris (``run_morris(config_path)``)
+    would otherwise trip on the screening CF (#996). Morris therefore builds its SALib
+    problem from the in-memory drivers (``build_problem(params=...)``) and supplies a
+    ``raw_config`` evaluator rather than a config path.
 
     Band semantics (screening honesty, ``mc``): the MC driver BANDS come from the committed
     ``monte_carlo.parameters`` of the base variant (absolute, lender-authored). The
@@ -130,7 +141,37 @@ def default_analysis(
             metric_keys=[request.metric],
         )
         engine_result = suite.model_dump()
-    else:  # pragma: no cover - the Literal is exhaustive (mc | tornado)
+    elif request.analysis_type == "morris":
+        progress(
+            ANALYSIS_TOTAL_STEPS - 1,
+            f"Running Morris global sensitivity ({request.n_trajectories} "
+            f"trajectories) on {request.metric}",
+        )
+        # #996-safe IN-MEMORY drive: the path-based run_morris(config_path) would call
+        # load_scenario_config on the screening scenario and trip the frozen-bankable
+        # AepReconciliationError on the fresh CF. Instead build the SALib problem from the
+        # assessed drivers (build_problem with params -> no config load) and pass a
+        # raw_config evaluator (evaluate_with_overrides bypasses load_scenario_config).
+        # build_problem fails loud on <2 sweepable drivers (CESSPIT); the request boundary
+        # already guarantees a non-empty list-form monte_carlo.parameters for 'morris'.
+        mc_block = assessed_scenario.get("monte_carlo") or {}
+        problem = build_problem("<in-memory>", params=mc_block.get("parameters"))
+
+        def _evaluate(overrides: Mapping[str, float]) -> Mapping[str, Any]:
+            return evaluate_with_overrides(
+                config_path=None,
+                raw_config=assessed_scenario,
+                overrides=dict(overrides),
+            )
+
+        engine_result = run_morris(
+            metrics=[request.metric],
+            n_trajectories=request.n_trajectories,
+            seed=request.seed,
+            problem=problem,
+            evaluate_fn=_evaluate,
+        )
+    else:  # pragma: no cover - the Literal is exhaustive (mc | tornado | morris)
         raise ValueError(f"unsupported analysis_type: {request.analysis_type!r}")
 
     return AnalysisResult(
