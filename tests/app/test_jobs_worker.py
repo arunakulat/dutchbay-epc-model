@@ -20,8 +20,9 @@ def test_worker_settings_are_well_formed() -> None:
     from app.jobs import worker
 
     ws = worker.WorkerSettings
-    # The single async task is registered for arq discovery...
+    # Both async tasks are registered for arq discovery (wind + analysis, PR-B-redis)...
     assert worker.run_wind_assessment_task in ws.functions
+    assert worker.run_analysis_task in ws.functions
     # ...and the discovery attributes the arq CLI reads are present and well-typed.
     assert callable(ws.on_startup)
     assert ws.queue_name == worker.JOBS_QUEUE
