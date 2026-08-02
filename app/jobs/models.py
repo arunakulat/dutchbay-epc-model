@@ -223,10 +223,12 @@ class AnalysisJobRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    analysis_type: Literal["mc"] = Field(
+    analysis_type: Literal["mc", "tornado"] = Field(
         ...,
-        description="The analysis to run. PR-B1 supports 'mc' (bounded Monte Carlo); "
-        "'tornado' and 'morris' follow in PR-B2/PR-B3.",
+        description="The analysis to run: 'mc' (bounded Monte Carlo) or 'tornado' "
+        "(one-way sensitivity over the default driver library). 'morris' follows in "
+        "PR-B3. Only 'mc' consumes monte_carlo.parameters; 'tornado' builds its own "
+        "driver set, so it is not subject to the list-form MC-parameters guard.",
     )
     metric: Literal["project_irr", "equity_irr", "project_npv"] = Field(
         default="project_irr",

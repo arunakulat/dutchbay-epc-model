@@ -9,9 +9,9 @@ under ``RunMode.SCREENING`` (the live capacity factor, never the stale form inpu
 steps are injected (``assessment_fn`` / ``analysis_fn``) so the whole lifecycle is
 testable without the ``[wind]`` toolchain, a network fetch, or the heavy engine.
 
-PR-B1 wires the Monte-Carlo engine; ``tornado`` (PR-B2) and ``morris`` (PR-B3) extend
-:func:`default_analysis` over the same spine and lifecycle. No finance or engine logic
-is duplicated here (Dolphin): the assessment reuses
+PR-B1 wires the Monte-Carlo engine and PR-B2 wires the one-way ``tornado`` engine;
+``morris`` follows in PR-B3 over the same spine and lifecycle. No finance or engine
+logic is duplicated here (Dolphin): the assessment reuses
 :func:`app.jobs.runner.default_assessment`, the screening seam reuses
 ``wind_export_to_scenario_patch``, and the analysis reuses the canonical engines.
 """
@@ -21,7 +21,9 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, Mapping
 
+from analytics.core.sensitivity_runner import _default_parameters
 from analytics.mc.engine import run_monte_carlo_analysis
+from analytics.sensitivity.engine import run_sensitivity_analysis
 from app.api.responses import AnalysisResult
 from app.jobs.models import AnalysisJobRequest, JobProgress, JobState, WindJobRequest
 from app.jobs.runner import (
@@ -82,12 +84,13 @@ def default_analysis(
 ) -> Dict[str, Any]:
     """Run the requested bounded analysis over the assessed scenario.
 
-    Dispatches on ``request.analysis_type`` (``mc`` in PR-B1). The engine is called
-    with the assessed scenario (fresh-CF base) and its serialised result is wrapped in
-    a typed :class:`~app.api.responses.AnalysisResult` envelope, returned as a plain
-    JSON-safe dict for :attr:`JobRecord.result`.
+    Dispatches on ``request.analysis_type`` — ``mc`` (bounded Monte Carlo) or
+    ``tornado`` (one-way sensitivity over the canonical default driver library).
+    The engine is called with the assessed scenario (fresh-CF base) and its serialised
+    result is wrapped in a typed :class:`~app.api.responses.AnalysisResult` envelope,
+    returned as a plain JSON-safe dict for :attr:`JobRecord.result`.
 
-    Band semantics (screening honesty): the MC driver BANDS come from the committed
+    Band semantics (screening honesty, ``mc``): the MC driver BANDS come from the committed
     ``monte_carlo.parameters`` of the base variant (absolute, lender-authored). The
     fresh screening assessment sets the deterministic base; where the two diverge the
     engine surfaces it in ``metadata['base_outside_bounds']`` rather than silently
@@ -105,7 +108,29 @@ def default_analysis(
             seed=request.seed,
         )
         engine_result = mc.model_dump()
-    else:  # pragma: no cover - the Literal is exhaustive for PR-B1 (mc only)
+    elif request.analysis_type == "tornado":
+        progress(
+            ANALYSIS_TOTAL_STEPS - 1,
+            f"Running one-way tornado sensitivity on {request.metric}",
+        )
+        # In-memory over the ASSESSED dict (honours #993, and — unlike a path-based
+        # sweep — bypasses load_scenario_config's frozen-bankable reconciliation, so the
+        # fresh screening CF does not trip the #996 guard). Drivers come from the canonical
+        # default library (skips keys absent from the config → no flat bars); strict=True
+        # so an unresolvable driver fails loud rather than emitting a silent flat bar.
+        parameters = _default_parameters(assessed_scenario)
+        if not parameters:
+            raise ValueError(
+                "tornado analysis found no default sensitivity drivers in the "
+                "assessed scenario; expected at least one live finance override path."
+            )
+        suite = run_sensitivity_analysis(
+            base_config=assessed_scenario,
+            parameters=parameters,
+            metric_keys=[request.metric],
+        )
+        engine_result = suite.model_dump()
+    else:  # pragma: no cover - the Literal is exhaustive (mc | tornado)
         raise ValueError(f"unsupported analysis_type: {request.analysis_type!r}")
 
     return AnalysisResult(
