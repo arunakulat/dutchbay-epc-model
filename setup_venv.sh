@@ -30,33 +30,33 @@ echo ""
 # =============================================================================
 echo "Step 1: Checking Python installation..."
 
-if command -v python3 &> /dev/null; then
-    PYTHON_CMD="python3"
-    PYTHON_VERSION=$(python3 --version)
-    echo -e "${GREEN}✓${NC} Found: $PYTHON_VERSION"
-elif command -v python &> /dev/null; then
-    PYTHON_CMD="python"
-    PYTHON_VERSION=$(python --version)
-    echo -e "${GREEN}✓${NC} Found: $PYTHON_VERSION"
-else
-    echo -e "${RED}✗ Python not found!${NC}"
+# Prefer the CI baseline explicitly. A generic `python3` can point at a newer,
+# incompatible Homebrew interpreter (or even a broken shim), especially in a fresh
+# Codex worktree. Fall back only to interpreters that can execute and meet >=3.11.
+PYTHON_CMD=""
+for candidate in python3.11 python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1 \
+        && "$candidate" -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' \
+            >/dev/null 2>&1; then
+        PYTHON_CMD="$candidate"
+        break
+    fi
+done
+
+if [ -z "$PYTHON_CMD" ]; then
+    echo -e "${RED}✗ A working Python 3.11+ interpreter was not found.${NC}"
     echo ""
-    echo "Install Python 3.11+ using Homebrew:"
-    echo "  brew install python3"
+    echo "Install the CI baseline using Homebrew:"
+    echo "  brew install python@3.11"
     echo ""
-    echo "Or download from: https://www.python.org/downloads/"
+    echo "Or download Python 3.11+ from https://www.python.org/downloads/"
     exit 1
 fi
 
-# Verify Python version (the project requires 3.11+)
-PYTHON_VER=$($PYTHON_CMD -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-MIN_VERSION="3.11"
-
-if [ "$(printf '%s\n' "$MIN_VERSION" "$PYTHON_VER" | sort -V | head -n1)" != "$MIN_VERSION" ]; then
-    echo -e "${RED}✗ Python $PYTHON_VER is too old (need 3.11+)${NC}"
-    echo "Upgrade Python: brew upgrade python3"
-    exit 1
-fi
+PYTHON_VERSION=$(
+    "$PYTHON_CMD" -c 'import platform; print(f"Python {platform.python_version()}")'
+)
+echo -e "${GREEN}✓${NC} Found: $PYTHON_VERSION ($PYTHON_CMD)"
 
 echo ""
 
