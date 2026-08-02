@@ -1,8 +1,9 @@
-"""Tests for the async ANALYSIS-job request model (#993 PR-B1).
+"""Tests for the async ANALYSIS-job request model (#993 PR-B1/PR-B2).
 
 The request boundary is fail-loud (CESSPIT): it rejects a non-deterministic resource
 basis and a scenario variant whose resolved config has no list-form MC drivers, so a bad
-submission returns 422 on POST rather than failing opaquely mid-job.
+MC submission returns 422 on POST rather than failing opaquely mid-job. Tornado builds
+its own canonical driver set and does not inherit the MC-only parameter constraint.
 """
 
 from __future__ import annotations
@@ -99,11 +100,15 @@ def test_n_trials_bounds_enforced() -> None:
     assert _mc_request(n_trials=20_000).n_trials == 20_000
 
 
-def test_analysis_type_is_required_and_literal() -> None:
+def test_analysis_type_is_required_and_rejects_unsupported_family() -> None:
     with pytest.raises(ValidationError):
         AnalysisJobRequest(wind=_wind())  # type: ignore[call-arg]
+    assert (
+        AnalysisJobRequest(analysis_type="tornado", wind=_wind()).analysis_type
+        == "tornado"
+    )
     with pytest.raises(ValidationError):
-        AnalysisJobRequest(analysis_type="tornado", wind=_wind())  # type: ignore[arg-type]
+        AnalysisJobRequest(analysis_type="morris", wind=_wind())  # type: ignore[arg-type]
 
 
 def test_invalid_metric_rejected() -> None:
@@ -176,3 +181,14 @@ def test_accepts_list_form_params_alt_key(monkeypatch: pytest.MonkeyPatch) -> No
     )
     req = _mc_request()  # must not raise
     assert req.analysis_type == "mc"
+
+
+def test_tornado_does_not_require_monte_carlo_parameters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PR-B2 builds canonical one-way drivers, so an absent MC block is irrelevant."""
+    monkeypatch.setattr(
+        WindJobRequest, "to_finance_scenario", lambda self: {"project": {}}
+    )
+    req = AnalysisJobRequest(analysis_type="tornado", wind=_wind())
+    assert req.analysis_type == "tornado"

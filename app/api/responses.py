@@ -125,10 +125,10 @@ class AnalysisResult(BaseModel):
     """Client-facing envelope for an async analysis job (#993 PR-B).
 
     A thin, self-describing wrapper delivered inside a ``JobRecord.result`` so a
-    wizard or iOS client can tell WHICH analysis it is (``mc`` now; ``tornado`` /
-    ``morris`` to follow) and which metric it focused, without sniffing the engine's
-    keys. The engine's own serialised result — ``MonteCarloResult.model_dump()`` and,
-    later, ``SensitivitySuite.model_dump()`` / the ``run_morris`` dict — is carried
+    wizard or iOS client can tell WHICH analysis it is (``mc`` or ``tornado`` now;
+    ``morris`` follows) and which metric it focused, without sniffing the engine's
+    keys. The engine's own serialised result — ``MonteCarloResult.model_dump()``,
+    ``SensitivitySuite.model_dump()`` or, later, the ``run_morris`` dict — is carried
     verbatim under ``engine_result``. A dict-typed ``engine_result`` (rather than a
     per-engine model) keeps the contract additive and tolerant of the extra keys each
     engine emits (percentiles, provenance metadata such as ``base_outside_bounds`` /

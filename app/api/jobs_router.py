@@ -7,7 +7,7 @@ paths are ``POST /v1/jobs`` etc. (the router itself only owns the ``/jobs`` segm
                                 ``JobAccepted`` handle whose ``status_url``/``events_url``
                                 are ``url_for``-derived, so they carry the ``/v1`` mount
                                 prefix automatically).
-* ``POST /jobs/analysis``     — enqueue a bounded analysis job (Monte Carlo in PR-B1)
+* ``POST /jobs/analysis``     — enqueue a bounded Monte Carlo or tornado analysis job
                                 over the freshly-assessed screening case (#993 PR-B).
 * ``GET  /jobs/{id}``         — poll the job record (404 if unknown).
 * ``GET  /jobs/{id}/events``  — SSE stream of progress until terminal/timeout.
@@ -197,7 +197,7 @@ def enqueue_analysis_job(
     store: Annotated[JobStore, Depends(get_store)],
     subject: Annotated[str, Depends(get_current_subject)],
 ) -> JobAccepted:
-    """Queue an async analysis job (Monte Carlo in PR-B1) and schedule it to run.
+    """Queue an async Monte Carlo or tornado analysis job and schedule it to run.
 
     Mirrors :func:`enqueue_job` exactly (per-owner isolation via ``subject``; queued
     record then dispatch) and REUSES the shared ``GET /jobs/{id}`` status +
