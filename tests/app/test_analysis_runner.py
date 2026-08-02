@@ -1,8 +1,8 @@
 """Tests for the async analysis runner (orchestration; engine + assessment injected).
 
-The lifecycle mirrors ``run_wind_job`` and is proved without the heavy MC engine, the
-``[wind]`` toolchain, or a network fetch — the assessment and analysis steps are both
-injected, and the screening-seam builder is exercised with a spy.
+The lifecycle mirrors ``run_wind_job`` and is proved without the heavy analysis engines,
+the ``[wind]`` toolchain, or a network fetch — the assessment and analysis steps are
+both injected, and the screening-seam builder is exercised with a spy.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Mapping, Tuple
 import pytest
 
 import app.jobs.analysis_runner as ar
+from analytics.contracts_v14 import ParameterRangeConfig
 from app.jobs.analysis_runner import (
     ANALYSIS_TOTAL_STEPS,
     _build_assessed_scenario,
@@ -141,6 +142,87 @@ def test_default_analysis_mc_runs_engine_and_wraps_envelope(
     assert out["engine_result"]["metadata"]["seed"] == 7
     assert isinstance(out["contract_version"], str)
     assert (ANALYSIS_TOTAL_STEPS - 1) in [s for s, _ in steps]
+
+
+# --------------------------------------------------------------------------- #
+# default_analysis: tornado branch uses canonical drivers over the assessed case.
+# --------------------------------------------------------------------------- #
+def test_default_analysis_tornado_runs_engine_and_wraps_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: Dict[str, Any] = {}
+    parameter = ParameterRangeConfig(
+        variable_name="project.capacity_factor",
+        base_value=0.228,
+        low_pct=-10.0,
+        high_pct=10.0,
+        label="Capacity Factor",
+    )
+
+    class _FakeSuite:
+        def model_dump(self) -> Dict[str, Any]:
+            return {
+                "metric": "project_npv",
+                "tornado_results": [{"metric_name": "Capacity Factor"}],
+                "metadata": {"flat_metric": False},
+            }
+
+    def _parameters_spy(config: Mapping[str, Any]) -> List[ParameterRangeConfig]:
+        captured["parameter_config"] = config
+        return [parameter]
+
+    def _engine_spy(
+        *,
+        base_config: Mapping[str, Any],
+        parameters: Any,
+        metric_keys: Any,
+        **_kwargs: Any,
+    ) -> _FakeSuite:
+        captured["base_config"] = base_config
+        captured["parameters"] = parameters
+        captured["metric_keys"] = metric_keys
+        return _FakeSuite()
+
+    monkeypatch.setattr(ar, "_default_parameters", _parameters_spy)
+    monkeypatch.setattr(ar, "run_sensitivity_analysis", _engine_spy)
+    assessed = {"project": {"capacity_factor": 0.228}}
+    steps: List[Tuple[int, str]] = []
+
+    out = default_analysis(
+        _request(analysis_type="tornado", metric="project_npv"),
+        assessed,
+        lambda step, message: steps.append((step, message)),
+    )
+
+    assert captured["parameter_config"] is assessed
+    assert captured["base_config"] is assessed
+    assert captured["parameters"] == [parameter]
+    assert captured["metric_keys"] == ["project_npv"]
+    assert out["analysis_type"] == "tornado"
+    assert out["metric"] == "project_npv"
+    assert out["scenario_variant"] == "lendercase"
+    assert out["engine_result"]["tornado_results"][0]["metric_name"] == (
+        "Capacity Factor"
+    )
+    assert (ANALYSIS_TOTAL_STEPS - 1) in [step for step, _ in steps]
+
+
+def test_default_analysis_tornado_rejects_empty_driver_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fail before engine evaluation rather than returning a successful empty chart."""
+    monkeypatch.setattr(ar, "_default_parameters", lambda _config: [])
+
+    def _must_not_run(**_kwargs: Any) -> None:
+        raise AssertionError("sensitivity engine must not run without drivers")
+
+    monkeypatch.setattr(ar, "run_sensitivity_analysis", _must_not_run)
+    with pytest.raises(ValueError, match="no default sensitivity drivers"):
+        default_analysis(
+            _request(analysis_type="tornado"),
+            {"project": {}},
+            lambda _step, _message: None,
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -344,3 +426,48 @@ def test_assessed_seam_feeds_fresh_cf_to_real_engine() -> None:
     assert dumped["iterations"] == 16
     assert dumped["failed_iterations"] == 0
     assert dumped["metadata"].get("toy_fallback_count", 0) == 0
+
+
+# --------------------------------------------------------------------------- #
+# Integration guard #3 (tornado, end-to-end real engine): the REAL
+# _build_assessed_scenario seam + REAL _default_parameters + REAL
+# run_sensitivity_analysis run over the assessed lendercase for each supported
+# metric — the tornado counterpart to the two MC real-engine guards above. Locks
+# the PR-B2 invariants the spy tests cannot: that the canonical driver library
+# resolves a non-empty, non-flat driver set against a real screening-mode assessed
+# scenario, that the in-memory engine consumes the fresh CF without tripping the
+# #996 reconciliation, and that a real SensitivitySuite.model_dump() is JSON-safe
+# through the AnalysisResult envelope. A regression in _DEFAULT_DRIVERS, the config
+# schema, or the strict-resolve path would fail here rather than shipping green.
+# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("metric", ["project_irr", "equity_irr", "project_npv"])
+def test_tornado_real_engine_over_assessed_lendercase(metric: str) -> None:
+    export = {
+        "scenario": "P75",
+        "annual_generation_mwh": 300_000.0,
+        "capacity_factor_percent": 22.8,  # fresh screening CF, far from the form's 0.339
+        "revenue_annual_usd": 20_000_000.0,
+        "revenue_cumulative_usd": 400_000_000.0,
+        "project_capacity_mw": 150.0,
+        "num_turbines": 15,
+        "rated_capacity_per_turbine_kw": 10_000.0,
+        "ppa_years": 20,
+        "tariff_lkr_per_kwh": 20.3,
+        "exchange_rate_lkr_usd": 300.0,
+    }
+    assessed = _build_assessed_scenario(_wind(), export)
+    # #993: tornado sweeps the FRESH assessed CF (0.228), not the stale form 0.339.
+    assert assessed["project"]["capacity_factor"] == pytest.approx(0.228)
+
+    out = default_analysis(
+        _request(analysis_type="tornado", metric=metric),
+        assessed,
+        lambda _step, _message: None,
+    )
+    engine_result = out["engine_result"]
+    assert out["analysis_type"] == "tornado" and out["metric"] == metric
+    assert engine_result["metric"] == metric
+    # The full canonical driver library resolves over lendercase (6 pct + 1 absolute).
+    assert len(engine_result["tornado_results"]) >= 7
+    # A supported metric is genuinely sensitive — never a silent all-flat table.
+    assert engine_result["metadata"].get("flat_metric") is False

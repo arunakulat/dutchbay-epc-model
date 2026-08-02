@@ -1,4 +1,4 @@
-"""Tests for the async analysis-jobs router endpoint (#993 PR-B1).
+"""Tests for the async analysis-jobs router endpoint (#993 PR-B1/PR-B2).
 
 Endpoint functions are called directly. The analysis job reuses the shared status/SSE
 routes and per-owner isolation; only the enqueue handler and the redis fail-loud guard
@@ -6,6 +6,8 @@ are new here.
 """
 
 from __future__ import annotations
+
+from typing import Literal
 
 import pytest
 from fastapi import BackgroundTasks, HTTPException
@@ -17,9 +19,11 @@ from app.jobs.store import InMemoryJobStore
 from app.models.inputs import WindFarmInputs
 
 
-def _request() -> AnalysisJobRequest:
+def _request(
+    analysis_type: Literal["mc", "tornado"] = "mc",
+) -> AnalysisJobRequest:
     return AnalysisJobRequest(
-        analysis_type="mc",
+        analysis_type=analysis_type,
         n_trials=200,
         wind=WindJobRequest(
             inputs=WindFarmInputs(
@@ -67,7 +71,11 @@ def test_enqueue_analysis_creates_queued_record_and_schedules_task() -> None:
     store = InMemoryJobStore()
     background = BackgroundTasks()
     accepted = jr.enqueue_analysis_job(
-        _request(), background, _FakeRequest(), store=store, subject="u1"  # type: ignore[arg-type]
+        _request(),
+        background,
+        _FakeRequest(),
+        store=store,
+        subject="u1",  # type: ignore[arg-type]
     )
     assert accepted.state is JobState.QUEUED
     assert accepted.status_url == f"/jobs/{accepted.job_id}"
@@ -81,11 +89,34 @@ def test_enqueue_analysis_creates_queued_record_and_schedules_task() -> None:
     assert record.progress.total_steps == ANALYSIS_TOTAL_STEPS
 
 
+def test_enqueue_tornado_preserves_analysis_type_in_scheduled_task() -> None:
+    """The shared endpoint queues the PR-B2 request without coercing it to MC."""
+    store = InMemoryJobStore()
+    background = BackgroundTasks()
+    accepted = jr.enqueue_analysis_job(
+        _request("tornado"),
+        background,
+        _FakeRequest(),
+        store=store,
+        subject="u1",  # type: ignore[arg-type]
+    )
+
+    assert accepted.state is JobState.QUEUED
+    assert len(background.tasks) == 1
+    scheduled_request = background.tasks[0].args[1]
+    assert isinstance(scheduled_request, AnalysisJobRequest)
+    assert scheduled_request.analysis_type == "tornado"
+
+
 def test_enqueued_analysis_job_readable_via_shared_status_route() -> None:
     """The shared GET /jobs/{id} serves an analysis job to its owner (type-agnostic)."""
     store = InMemoryJobStore()
     accepted = jr.enqueue_analysis_job(
-        _request(), BackgroundTasks(), _FakeRequest(), store=store, subject="u1"  # type: ignore[arg-type]
+        _request(),
+        BackgroundTasks(),
+        _FakeRequest(),
+        store=store,
+        subject="u1",  # type: ignore[arg-type]
     )
     record = jr.get_job(accepted.job_id, store=store, subject="u1")
     assert record.job_id == accepted.job_id
@@ -95,7 +126,11 @@ def test_analysis_job_other_owner_404() -> None:
     """A different subject cannot read another client's analysis job (non-leaking 404)."""
     store = InMemoryJobStore()
     accepted = jr.enqueue_analysis_job(
-        _request(), BackgroundTasks(), _FakeRequest(), store=store, subject="u1"  # type: ignore[arg-type]
+        _request(),
+        BackgroundTasks(),
+        _FakeRequest(),
+        store=store,
+        subject="u1",  # type: ignore[arg-type]
     )
     with pytest.raises(HTTPException) as exc:
         jr.get_job(accepted.job_id, store=store, subject="u2")
@@ -113,7 +148,11 @@ def test_enqueue_analysis_redis_backend_501_and_no_record(
     background = BackgroundTasks()
     with pytest.raises(HTTPException) as exc:
         jr.enqueue_analysis_job(
-            _request(), background, _FakeRequest(), store=store, subject="u1"  # type: ignore[arg-type]
+            _request(),
+            background,
+            _FakeRequest(),
+            store=store,
+            subject="u1",  # type: ignore[arg-type]
         )
     assert exc.value.status_code == 501
     assert len(background.tasks) == 0
