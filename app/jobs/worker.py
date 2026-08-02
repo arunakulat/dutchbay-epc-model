@@ -36,8 +36,9 @@ from typing import Any, Dict
 import redis as sync_redis
 from arq.connections import RedisSettings
 
+from app.jobs.analysis_runner import run_analysis_job
 from app.jobs.config import JOBS_QUEUE, JOBS_REDIS_URL
-from app.jobs.models import WindJobRequest
+from app.jobs.models import AnalysisJobRequest, WindJobRequest
 from app.jobs.redis_store import RedisJobStore
 from app.jobs.runner import run_wind_job
 
@@ -56,6 +57,21 @@ async def run_wind_assessment_task(
     return job_id
 
 
+async def run_analysis_task(
+    ctx: Dict[str, Any], job_id: str, payload: Dict[str, Any]
+) -> str:
+    """arq task: reconstruct the analysis request and run the (blocking) job in a thread.
+
+    The analysis counterpart of :func:`run_wind_assessment_task` (#993 PR-B-redis).
+    Runs the SAME ``run_analysis_job`` orchestration the in-process backend uses, so the
+    redis path is behaviour-identical — only the scheduling differs.
+    """
+    request = AnalysisJobRequest.model_validate(payload)
+    store: RedisJobStore = ctx["job_store"]
+    await asyncio.to_thread(run_analysis_job, job_id, request, store)
+    return job_id
+
+
 async def _on_startup(ctx: Dict[str, Any]) -> None:
     """Attach a shared RedisJobStore (sync client) to the worker context."""
     ctx["job_store"] = RedisJobStore(sync_redis.Redis.from_url(REDIS_URL))
@@ -64,7 +80,7 @@ async def _on_startup(ctx: Dict[str, Any]) -> None:
 class WorkerSettings:
     """arq worker settings (discovered by ``arq app.jobs.worker.WorkerSettings``)."""
 
-    functions = [run_wind_assessment_task]
+    functions = [run_wind_assessment_task, run_analysis_task]
     on_startup = _on_startup
     queue_name = JOBS_QUEUE
     redis_settings = RedisSettings.from_dsn(REDIS_URL)

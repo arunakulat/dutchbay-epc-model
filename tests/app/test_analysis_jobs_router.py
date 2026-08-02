@@ -138,22 +138,30 @@ def test_analysis_job_other_owner_404() -> None:
     assert exc.value.detail == f"unknown job: {accepted.job_id}"
 
 
-def test_enqueue_analysis_redis_backend_501_and_no_record(
+def test_enqueue_analysis_redis_backend_enqueues_to_arq(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The redis backend is not yet wired for analysis jobs: fail loud with 501 BEFORE
-    creating any record (no orphan queued job the worker would never consume)."""
+    """PR-B-redis: on the redis backend the analysis job is CREATED and produced onto the
+    arq queue (parity with the wind path) — no longer 501'd, and not run via
+    BackgroundTasks. The arq producer is faked so no live Redis is needed."""
     monkeypatch.setattr(jr, "JOBS_BACKEND", "redis")
+    calls: list[tuple[str, AnalysisJobRequest]] = []
+
+    async def _fake_enqueue(job_id: str, request: AnalysisJobRequest) -> None:
+        calls.append((job_id, request))
+
+    monkeypatch.setattr(jr, "_enqueue_analysis_to_arq", _fake_enqueue)
     store = _SpyStore()
     background = BackgroundTasks()
-    with pytest.raises(HTTPException) as exc:
-        jr.enqueue_analysis_job(
-            _request(),
-            background,
-            _FakeRequest(),
-            store=store,
-            subject="u1",  # type: ignore[arg-type]
-        )
-    assert exc.value.status_code == 501
+    req = _request()
+    accepted = jr.enqueue_analysis_job(
+        req, background, _FakeRequest(), store=store, subject="u1"  # type: ignore[arg-type]
+    )
+    assert accepted.state is JobState.QUEUED
+    # The queued record IS created (unlike the old 501 path)...
+    assert store.created == 1
+    record = store.get(accepted.job_id)
+    assert record is not None and record.owner == "u1"
+    # ...produced onto the arq queue, NOT scheduled via BackgroundTasks.
     assert len(background.tasks) == 0
-    assert store.created == 0
+    assert calls == [(accepted.job_id, req)]
