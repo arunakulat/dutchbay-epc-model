@@ -49,6 +49,12 @@ primary_region = "sin"
   DUTCHBAY_SSE_MAX_POLLS = "600"
   DUTCHBAY_SSE_POLL_INTERVAL = "0.5"
 
+  # Copernicus CDS API endpoint (#995). The PUBLIC base URL is non-secret; the matching
+  # CDSAPI_KEY is a secret (via `fly secrets set`, see step 4 in docs/deploy/DEPLOY.md).
+  # Required by the async ERA5 retrieval path (wind_resource/era5_retrieval.py, no
+  # in-code default); the worker runs it under DUTCHBAY_JOBS_BACKEND=redis.
+  CDSAPI_URL = "https://cds.climate.copernicus.eu/api"
+
 # -----------------------------------------------------------------------------
 # Process model: web (public) + worker (private).
 # -----------------------------------------------------------------------------

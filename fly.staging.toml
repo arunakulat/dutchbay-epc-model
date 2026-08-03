@@ -1,0 +1,114 @@
+# DutchBay EPC model - Fly.io STAGING deployment (issues #993, #995).
+#
+# A SEPARATE Fly application ("dutchbay-epc-model-staging") that mirrors the production
+# topology in fly.toml: two processes off ONE image (Dockerfile) - a public "web" process
+# (uvicorn / FastAPI, app.api.main:app) and a private "worker" process (arq, draining the
+# async job queue). Only "web" is attached to the public HTTP service; "worker" exposes no
+# port and reaches the outside world only through the shared managed Redis.
+#
+# primary_region = "sin" (Singapore) is the closest Fly region to Sri Lanka, matching prod.
+#
+# SECRETS ARE INTENTIONALLY ABSENT FROM THIS FILE.
+#   Non-secret configuration lives in [env] below. Secrets are provisioned out-of-band
+#   against the STAGING app with `fly secrets set -a dutchbay-epc-model-staging`, NOT
+#   committed here. FOUR secrets are required:
+#     - DUTCHBAY_JWT_SECRET   web-auth signing secret (>= 32 chars in production posture)
+#     - DUTCHBAY_API_USERS    "<user>:<pbkdf2-hash>" (see scripts/provision_web_secrets.py)
+#     - DUTCHBAY_REDIS_URL    managed Redis DSN (carries a password -> secret)
+#     - CDSAPI_KEY            Copernicus CDS API token (#995; NEVER commit the key)
+#
+#   Runbook (a human runs this once, out-of-band):
+#     fly redis create -a dutchbay-epc-model-staging          # capture the DSN
+#
+#     DUTCHBAY_PROVISION_USER=admin DUTCHBAY_PROVISION_PASSWORD='<staging-pw>' \
+#         .venv/bin/python scripts/provision_web_secrets.py   # prints JWT secret + API_USERS
+#
+#     # single-quote the values: the pbkdf2 hash in DUTCHBAY_API_USERS contains '$'
+#     # field separators an unquoted shell would expand (mangling it -> every login 401s).
+#     fly secrets set -a dutchbay-epc-model-staging \
+#         DUTCHBAY_JWT_SECRET='<value-from-script>' \
+#         DUTCHBAY_API_USERS='<value-from-script>' \
+#         DUTCHBAY_REDIS_URL='<dsn-from-fly-redis-create>' \
+#         CDSAPI_KEY='<copernicus-cds-api-token>'
+#
+#     fly deploy -c fly.staging.toml
+#
+# Production posture on staging: DUTCHBAY_ENV="production" engages the fail-closed auth
+# posture (app/api/auth.py) even though this is a pre-prod app, because a staging app on
+# *.fly.dev is a public internet surface and must not run relaxed auth. That makes
+# DUTCHBAY_JWT_ISSUER and DUTCHBAY_JWT_AUDIENCE MANDATORY (an unset issuer/audience is a
+# 500). Both are set in [env] below, deliberately DISTINCT from production so a
+# staging-minted token cannot be replayed against the production app.
+
+app = "dutchbay-epc-model-staging"
+primary_region = "sin"
+
+# -----------------------------------------------------------------------------
+# Non-secret configuration only. Secrets go through `fly secrets set` (see above).
+# -----------------------------------------------------------------------------
+[env]
+  # Auth posture: "production" makes the issuer/audience binding mandatory and the
+  # JWT-secret strength checks active (app/api/auth.py). Kept fail-closed on staging.
+  DUTCHBAY_ENV = "production"
+
+  # Async job path: durable cross-process arq + Redis (app/jobs/config.py). The
+  # Redis DSN itself is a secret (DUTCHBAY_REDIS_URL via `fly secrets set`). The queue
+  # name is namespaced so staging cannot collide with prod if a Redis instance is shared.
+  DUTCHBAY_JOBS_BACKEND = "redis"
+  DUTCHBAY_JOBS_QUEUE = "dutchbay:wind_jobs_staging"
+
+  # JWT iss/aud binding - MANDATORY in production posture (unset => 500). Non-secret.
+  # DISTINCT from prod (dutchbay-epc-model / dutchbay-web) for cross-app replay isolation.
+  DUTCHBAY_JWT_ISSUER = "dutchbay-epc-model-staging"
+  DUTCHBAY_JWT_AUDIENCE = "dutchbay-web-staging"
+
+  # Synchronous /cases* route operational limits (app/api/config.py).
+  DUTCHBAY_SYNC_ROUTE_TIMEOUT = "120"
+  DUTCHBAY_SYNC_ROUTE_MAX_CONCURRENCY = "8"
+
+  # Async job retention / TTL / SSE stream lifetime (app/jobs/config.py).
+  DUTCHBAY_JOBS_MAX_RETAINED = "1000"
+  DUTCHBAY_JOBS_TTL_SECONDS = "86400"
+  DUTCHBAY_SSE_MAX_POLLS = "600"
+  DUTCHBAY_SSE_POLL_INTERVAL = "0.5"
+
+  # Copernicus CDS API endpoint (#995). The PUBLIC base URL is non-secret and safe to
+  # commit; the matching CDSAPI_KEY is a secret (see runbook above). Read by
+  # wind_resource/era5_retrieval.py (ensure_cdsapirc) / cdsapi.Client(); there is no
+  # hardcoded default, so this must be set for ERA5 retrieval to authenticate on staging.
+  CDSAPI_URL = "https://cds.climate.copernicus.eu/api"
+
+# -----------------------------------------------------------------------------
+# Process model: web (public) + worker (private). Identical to production.
+# -----------------------------------------------------------------------------
+[processes]
+  web = "uvicorn app.api.main:app --host 0.0.0.0 --port 8080"
+  worker = "arq app.jobs.worker.WorkerSettings"
+
+# -----------------------------------------------------------------------------
+# Public HTTP service - attached to the "web" process ONLY. The worker has no
+# public port.
+# -----------------------------------------------------------------------------
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["web"]
+
+  # Liveness probe: GET /health is an UNVERSIONED, unauthenticated infra route that
+  # returns {"status": "ok", ...} (app/api/main.py).
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "10s"
+
+# -----------------------------------------------------------------------------
+# VM sizing. weasyprint (PDF) + geopandas (GIS) want headroom; give ~1gb.
+# -----------------------------------------------------------------------------
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
