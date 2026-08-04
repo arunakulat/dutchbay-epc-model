@@ -121,22 +121,28 @@ Prerequisites are listed under Assumptions. Every command below is run by the op
    command-line flags: R3/R4/CST-01 ban argparse/Typer/Click and `input()` in these
    paths).
 
-4. **Set the secrets on the Fly app.** Substitute the values from steps 2 and 3:
+4. **Set the secrets on the Fly app.** Substitute the values from steps 2 and 3. The
+   values are single-quoted because the pbkdf2 hash in `DUTCHBAY_API_USERS` contains `$`
+   field separators that an unquoted shell would expand (which mangles the credential map
+   so every login 401s); `scripts/provision_web_secrets.py` prints the line already
+   quoted. `CDSAPI_KEY` is the Copernicus CDS API token, required for the async ERA5
+   retrieval path (the worker runs it under `DUTCHBAY_JOBS_BACKEND=redis`):
 
    ```
    fly secrets set \
-     DUTCHBAY_JWT_SECRET=<value-from-step-3> \
-     DUTCHBAY_API_USERS=<value-from-step-3> \
-     DUTCHBAY_REDIS_URL=<dsn-from-step-2>
+     DUTCHBAY_JWT_SECRET='<value-from-step-3>' \
+     DUTCHBAY_API_USERS='<value-from-step-3>' \
+     DUTCHBAY_REDIS_URL='<dsn-from-step-2>' \
+     CDSAPI_KEY='<copernicus-cds-api-token>'
    ```
 
-   These three values are secrets and must never appear in `fly.toml`. Non-secret
+   These four values are secrets and must never appear in `fly.toml`. Non-secret
    configuration (for example `DUTCHBAY_ENV`, `DUTCHBAY_JWT_ISSUER`,
-   `DUTCHBAY_JWT_AUDIENCE`, `DUTCHBAY_JOBS_BACKEND`) lives in the `[env]` block of
-   `fly.toml`. In the production posture the issuer and audience are mandatory: an unset
-   `DUTCHBAY_JWT_ISSUER` or `DUTCHBAY_JWT_AUDIENCE` is rejected with a 500
-   (`app/api/auth.py`, `_jwt_issuer()` / `_jwt_audience()`), so confirm both are present
-   in `[env]` before deploying.
+   `DUTCHBAY_JWT_AUDIENCE`, `DUTCHBAY_JOBS_BACKEND`, and the public `CDSAPI_URL` base)
+   lives in the `[env]` block of `fly.toml`. In the production posture the issuer and
+   audience are mandatory: an unset `DUTCHBAY_JWT_ISSUER` or `DUTCHBAY_JWT_AUDIENCE` is
+   rejected with a 500 (`app/api/auth.py`, `_jwt_issuer()` / `_jwt_audience()`), so
+   confirm both are present in `[env]` before deploying.
 
 5. **Deploy:**
 
@@ -161,9 +167,49 @@ Prerequisites are listed under Assumptions. Every command below is run by the op
    bearer token (`app/api/main.py`, the routers are mounted with
    `Depends(get_current_subject)`).
 
+## Staging deploy to Fly.io
+
+Staging is a **separate** Fly app, `dutchbay-epc-model-staging`, described by the
+checked-in `fly.staging.toml`. It mirrors the production topology (web + worker off one
+image, `/health` check, `sin` region) and deliberately keeps the fail-closed
+`DUTCHBAY_ENV="production"` auth posture — a staging app on `*.fly.dev` is a public
+surface, so it should not run the relaxed off-production posture. Its JWT issuer/audience
+and job queue are distinct from production (`dutchbay-epc-model-staging` /
+`dutchbay-web-staging` / `dutchbay:wind_jobs_staging`) so a staging-minted token cannot be
+replayed against production.
+
+The steps mirror the production deploy, targeting the staging app with `-a` (or `-c` for
+`fly deploy`). Four secrets are required — the same three web-surface secrets plus the
+Copernicus CDS API token:
+
+```
+fly redis create -a dutchbay-epc-model-staging          # capture the staging DSN
+
+DUTCHBAY_PROVISION_USER=admin \
+DUTCHBAY_PROVISION_PASSWORD='<staging-password>' \
+    python scripts/provision_web_secrets.py             # prints JWT secret + API_USERS
+
+fly secrets set -a dutchbay-epc-model-staging \
+  DUTCHBAY_JWT_SECRET='<value-from-script>' \
+  DUTCHBAY_API_USERS='<value-from-script>' \
+  DUTCHBAY_REDIS_URL='<dsn-from-fly-redis-create>' \
+  CDSAPI_KEY='<copernicus-cds-api-token>'
+
+fly deploy -c fly.staging.toml
+```
+
+The non-secret `CDSAPI_URL` base (`https://cds.climate.copernicus.eu/api`) is committed in
+`fly.staging.toml`'s `[env]`; only the paired `CDSAPI_KEY` is a secret. No secret value
+appears in the config file — verify with:
+
+```
+grep -E '^\s*(DUTCHBAY_JWT_SECRET|DUTCHBAY_API_USERS|DUTCHBAY_REDIS_URL|CDSAPI_KEY)\s*=' \
+    fly.staging.toml   # must print nothing (these appear only in the runbook comment)
+```
+
 ## Configuration reference
 
-All fourteen environment variables the service reads. "Secret?" marks values that must
+All sixteen environment variables the service reads. "Secret?" marks values that must
 be provisioned via `fly secrets set` and never committed to `fly.toml`. Defaults are the
 in-code fallbacks; a blank default means the variable has no fallback in the relevant
 posture.
@@ -184,9 +230,12 @@ posture.
 | `DUTCHBAY_SSE_POLL_INTERVAL` | Seconds between SSE polls while a job is non-terminal. | `0.5` | No |
 | `DUTCHBAY_SYNC_ROUTE_TIMEOUT` | Wall-clock ceiling (seconds) for the synchronous `/cases*` compute routes. Bounds the client wait, not the computation. | `120` | No |
 | `DUTCHBAY_SYNC_ROUTE_MAX_CONCURRENCY` | Maximum concurrent synchronous `/cases*` computations; excess requests are shed with 503. `<= 0` disables the explicit bound. | `8` | No |
+| `CDSAPI_URL` | Copernicus CDS API base URL for ERA5 retrieval. The public base is non-secret; there is no in-code default, so it must be set for ERA5 authentication to resolve (`wind_resource/era5_retrieval.py`, `ensure_cdsapirc()`). | none (required for ERA5) | No |
+| `CDSAPI_KEY` | Copernicus CDS API token paired with `CDSAPI_URL`. Never committed; provisioned via `fly secrets set`. | none (required for ERA5) | Yes |
 
 Sources: auth variables in `app/api/auth.py`; job variables in `app/jobs/config.py`;
-synchronous-route variables in `app/api/config.py`.
+synchronous-route variables in `app/api/config.py`; CDS variables in
+`wind_resource/era5_retrieval.py`.
 
 ## Assumptions
 

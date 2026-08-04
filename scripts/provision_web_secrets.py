@@ -113,9 +113,16 @@ def main() -> int:
     print("")
     print("# Ready-to-run (sets both secrets on the Fly app):")
     print(
+        "# NOTE: values are single-quoted because the pbkdf2 hash in DUTCHBAY_API_USERS"
+    )
+    print(
+        "# contains '$' field separators that an unquoted shell would expand (mangling"
+    )
+    print("# the credential map -> every login 401s). Keep the quotes when you paste.")
+    print(
         f"fly secrets set "
-        f"DUTCHBAY_JWT_SECRET={jwt_secret} "
-        f"DUTCHBAY_API_USERS={api_users}"
+        f"DUTCHBAY_JWT_SECRET='{jwt_secret}' "
+        f"DUTCHBAY_API_USERS='{api_users}'"
     )
     return 0
 
