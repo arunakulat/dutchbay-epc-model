@@ -673,8 +673,13 @@ expected_results:
   
   # Financial metrics — the HONEST engine output (the canonical v14 pipeline,
   # build-up WACC driving the project discount) for the 15 x IEA-10MW re-model.
-  # Binding validation targets: tests/finance/test_lendercase_expected_results.py
-  # asserts the live pipeline matches them, so they cannot silently drift.
+  # The numeric regression targets themselves now live in the golden fixture
+  #   tests/fixtures/finance/lendercase_expected_kpis.json
+  # (#996 D3: a runtime-input scenario must not double as its own regression oracle).
+  # tests/finance/test_lendercase_expected_results.py asserts the live pipeline
+  # reproduces the fixture, so they still cannot silently drift; the full-precision
+  # byte-identity gate is tests/finance/test_multitech_generation.py. The derivation
+  # narrative below is retained here as scenario-economics documentation.
   # HONEST after the 2026 correction sequence: (1) FX 300 -> 333.79; (2) the ERA5-fitted
   # Weibull re-baseline (declared A=8.32/k=2.1 -> fitted 8.199/2.665, AEP 483.6 -> 473.8 GWh);
   # (3) the 2026-06 project-discounting fix (audit finding 2.0): operating year 1 had been
@@ -725,23 +730,14 @@ expected_results:
   # NPV -$79.3M, DSCR-solved gearing 0.41. The project is value-destructive, honestly so.
   # (Equity bears the fee net of the cash-sweep interaction: the sweep headroom is also
   #  fee-netted, so the un-swept residual grows — reported as a balloon covenant breach.)
-  project_irr: 0.015       # UNLEVERED (shield-free) — net of #737 fees AND #738 import levies; << WACC
-  equity_irr: -0.058       # NEGATIVE. Chain: +0.0242 (interest shield) -> -0.0046 (FX-drift) ->
-                            # -0.0100 (2% AEP haircut) -> -0.0193 (PR-A dividend WHT + IDC) ->
-                            # -0.0486 (PR-B UIP LKR debt rate 13.39%) -> -0.0499 (#737 guarantee+PRI
-                            # fees) -> -0.0584 (#738 import levies + opex VAT, net of the SSCL
-                            # exemption reversal). The flat-nominal-LKR tariff cannot clear equity.
-                            # (Set tax.interest_deductibility: false for the unlevered case.) MOIC < 1.
-  project_npv_m_usd: -79.3 # discount at build-up WACC ~9.9%. NPV -32.34M -> -53.29M (FX) -> -56.1M
-                            # (AEP) -> -54.0M (PR-A levy removal) -> -65.5M (PR-B UIP LKR rate, WACC up)
-                            # -> -70.9M (#737 credit-support fees) -> -79.3M (#738 import levies).
-  min_dscr: 1.286           # #790 HEADLINE = fold-corrected covenant minimum (bridge-corrected
-                            # per-year table, fee-netted per #737, levy-inclusive per #738): year 1
-                            # ~1.286 < the 1.30 covenant -> 1 equity-lockup year. The dual-DSCR
-                            # sculpt still pins the PER-PERIOD min at 1.30 (kpis.min_dscr_period).
-  avg_dscr: 1.39
-  llcr: 1.27                # fee-netted CFADS numerator (#737) over the fee-sized debt
-  plcr: 1.31
+  # project_irr / equity_irr / project_npv_m_usd / min_dscr / avg_dscr / llcr / plcr
+  # -> tests/fixtures/finance/lendercase_expected_kpis.json (extracted per #996 D3;
+  # exact values + tolerances there; headline figures are in the narrative above).
+  # Per-key notes retained here: project_irr is UNLEVERED (shield-free; reproduce with
+  # tax.interest_deductibility: false) and equity MOIC < 1. min_dscr is the #790
+  # fold-corrected covenant headline (~1.286 < the 1.30 covenant -> 1 equity-lockup year)
+  # while the dual-DSCR sculpt pins the PER-PERIOD floor at 1.30 (kpis.min_dscr_period).
+  # llcr uses the fee-netted CFADS numerator (#737) over the fee-sized debt.
 
 # ═════════════════════════════════════════════════════════════════════════════
 # METADATA
