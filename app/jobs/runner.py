@@ -191,6 +191,44 @@ def _build_resource_assessment(
     )
 
 
+def apply_active_resource_basis(
+    scenario: Dict[str, Any],
+    resource_assessment: Optional[ResourceAssessment],
+) -> Dict[str, Any]:
+    """Inject the freshly-ASSESSED P50/P90 net AEP into a screening scenario (#996 D5).
+
+    On the async location-assessment path the finance scenario is seeded from a lender-case
+    base whose ``expected_results.net_aep_p50/p90_gwh`` are the FROZEN bankable numbers, not
+    this run's assessment. When the scenario binds the downside case
+    (``Financing_Terms.bind_downside``), ``finance.debt_v14._resolve_downside_ratio`` sizes
+    the P90 gearing off that frozen P90/P50 ratio — so a location assessment would be sized
+    against an unrelated committed resource. This replaces just those two keys with the
+    ACTIVE assessment's values so downside debt uses the live P90/P50 ratio.
+
+    Injection, not deletion: every other ``expected_results`` key is preserved (the known
+    regression is stripping the block wholesale). Returns ``scenario`` unchanged when there
+    is no assessment. Byte-neutral for scenarios that do NOT bind downside — on the screening
+    path the ONLY runtime reader of these keys is ``_resolve_downside_ratio`` under
+    ``bind_downside`` (the bankable reconciliation is skipped for screening runs), so a
+    non-binding case (e.g. the canonical wind-only lender base) is unaffected.
+
+    Scope note: no async-runnable variant currently sets ``Financing_Terms.bind_downside``
+    (the canonical lender base is bind_downside-absent by design), so today this is
+    forward-correct wiring — it changes debt sizing ONLY for a location assessment of a
+    downside-binding case, which the API does not yet expose. The effect on the actual
+    gearing solve (not just the ratio helper) is proven by
+    ``test_injected_active_basis_changes_solved_downside_gearing``.
+    """
+    if resource_assessment is None:
+        return scenario
+    updated = dict(scenario)
+    expected = dict(updated.get("expected_results") or {})
+    expected["net_aep_p50_gwh"] = resource_assessment.net_aep_p50_gwh
+    expected["net_aep_p90_gwh"] = resource_assessment.net_aep_p90_gwh
+    updated["expected_results"] = expected
+    return updated
+
+
 def _weibull_screening_series(
     a: float, k: float, hub_height: float, n: int = 8760
 ) -> "pd.DataFrame":
@@ -351,9 +389,11 @@ def run_wind_job(
         assessment = assessment_fn(request, progress)
         # The production step returns an AssessmentResult (export + full wind assessment);
         # a fake / pre-#993 step may return a bare export mapping — accept either.
+        resource_assessment = None
         if isinstance(assessment, AssessmentResult):
             wind_export: Mapping[str, Any] = assessment.export
             wind_assessment = assessment.wind_assessment
+            resource_assessment = assessment.resource_assessment
         else:
             wind_export = assessment
             wind_assessment = None
@@ -368,6 +408,9 @@ def run_wind_job(
         run_block = dict(scenario.get("run") or {})
         run_block["mode"] = "screening"
         scenario["run"] = run_block
+        # #996 D5: downside debt sizing must use THIS assessment's P90/P50, not the frozen
+        # lender-case base — inject the active net AEP (no-op unless the case binds downside).
+        scenario = apply_active_resource_basis(scenario, resource_assessment)
         result = run_integrated_case(
             scenario, wind_export, scenario_name=request.p_level
         )

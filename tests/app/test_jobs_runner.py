@@ -588,6 +588,118 @@ def test_default_assessment_weibull_produces_valid_resource_assessment() -> None
     assert 0.5 < ra.p90_p50_ratio < 1.0  # downside ratio the debt slice will consume
 
 
+# --------------------------------------------------------------------------- #
+# #996 D5: inject the active P90/P50 so downside-debt sizing uses the assessment.
+# --------------------------------------------------------------------------- #
+def _active_ra() -> Any:
+    """A screening assessment with net AEP P50=500 / P90=400 GWh -> a downside ratio
+    (0.80) distinct from the frozen lender base (404.4/464.3 = 0.871). CFs are kept
+    identity-consistent for a 150 MW farm so the contract validates."""
+    from analytics.resource_contracts import ResourceAssessment
+
+    return ResourceAssessment(
+        capacity_mw=150.0,
+        n_turbines=15,
+        net_aep_p50_gwh=500.0,
+        net_aep_p75_gwh=450.0,
+        net_aep_p90_gwh=400.0,
+        capacity_factor_p50=0.3805,
+        capacity_factor_p75=0.3425,
+        capacity_factor_p90=0.3044,
+        selected_p_level="P75",
+        report_grade="screening",
+    )
+
+
+def test_apply_active_resource_basis_injects_and_preserves() -> None:
+    scenario = {
+        "expected_results": {
+            "net_aep_p50_gwh": 464.3,
+            "net_aep_p90_gwh": 404.4,
+            "capacity_factor": 0.332,
+        }
+    }
+    out = runner_mod.apply_active_resource_basis(scenario, _active_ra())
+    assert out["expected_results"]["net_aep_p50_gwh"] == 500.0  # injected
+    assert out["expected_results"]["net_aep_p90_gwh"] == 400.0
+    assert out["expected_results"]["capacity_factor"] == 0.332  # other keys preserved
+    # The original scenario is not mutated (injection returns a copy).
+    assert scenario["expected_results"]["net_aep_p50_gwh"] == 464.3
+
+
+def test_apply_active_resource_basis_none_is_noop() -> None:
+    scenario = {"expected_results": {"net_aep_p50_gwh": 464.3}}
+    assert runner_mod.apply_active_resource_basis(scenario, None) is scenario
+
+
+def test_injected_active_basis_drives_downside_debt_ratio() -> None:
+    """The core D5 wiring: after injection, finance's _resolve_downside_ratio reads the
+    ACTIVE P90/P50 (0.80), not the frozen lender base (0.871)."""
+    from finance.debt_v14 import _resolve_downside_ratio
+
+    config = {"expected_results": {"net_aep_p50_gwh": 464.3, "net_aep_p90_gwh": 404.4}}
+    fin = {"downside_aep_source": "p90"}  # the default
+    frozen_ratio, frozen_src = _resolve_downside_ratio(config, fin)
+    assert frozen_src == "p90_aep"
+    assert frozen_ratio == pytest.approx(404.4 / 464.3)
+
+    active_cfg = runner_mod.apply_active_resource_basis(config, _active_ra())
+    active_ratio, active_src = _resolve_downside_ratio(active_cfg, fin)
+    assert active_src == "p90_aep"
+    assert active_ratio == pytest.approx(400.0 / 500.0)  # 0.80 — the ACTIVE ratio
+    assert active_ratio != pytest.approx(frozen_ratio)  # differs from the frozen base
+
+
+def test_injected_active_basis_changes_solved_downside_gearing() -> None:
+    """End-to-end: injecting the active net AEP changes the P90-BOUND gearing SOLVE, not
+    just the ratio helper. bind_downside is forced on (no committed async variant binds
+    downside — this demonstrates the mechanism the screening path wires): a harsher active
+    P90/P50 (0.80) deleverages more than the frozen lender base (404.4/464.3 = 0.871).
+    """
+    from analytics.pipeline_v14_enhanced import run_v14_pipeline
+    from analytics.resource_contracts import ResourceAssessment
+    from analytics.scenario_loader import load_scenario_config
+
+    lender = str(
+        Path(__file__).resolve().parents[2]
+        / "scenarios"
+        / "dutchbay_lendercase_2025Q4.yaml"
+    )
+    base = dict(load_scenario_config(lender))
+    base["Financing_Terms"] = {
+        **base["Financing_Terms"],
+        "bind_downside": True,
+        "target_dscr_p90": 1.20,
+    }
+
+    def _dual(cfg: Dict[str, Any]) -> Dict[str, Any]:
+        r = run_v14_pipeline(config=cfg)
+        return (r.get("debt_result") or {}).get("dual_dscr") or {}
+
+    frozen = _dual(base)
+    assert frozen["downside_source"] == "p90_aep"
+    assert frozen["downside_ratio"] == pytest.approx(404.4 / 464.3, abs=0.001)  # 0.871
+
+    # A HARSHER active downside (P90/P50 = 0.80): net AEP P50=464.3 / P90=371.44 GWh,
+    # CFs kept identity-consistent for a 150 MW farm so the contract validates.
+    active_ra = ResourceAssessment(
+        capacity_mw=150.0,
+        n_turbines=15,
+        net_aep_p50_gwh=464.3,
+        net_aep_p75_gwh=417.0,
+        net_aep_p90_gwh=371.44,
+        capacity_factor_p50=0.3533,
+        capacity_factor_p75=0.3174,
+        capacity_factor_p90=0.2827,
+        selected_p_level="P75",
+        report_grade="screening",
+    )
+    active = _dual(runner_mod.apply_active_resource_basis(base, active_ra))
+    assert active["downside_ratio"] == pytest.approx(371.44 / 464.3, abs=0.001)  # 0.80
+    # The gearing SOLVE (not just the helper) responds: harsher downside => less debt.
+    assert active["solved_gearing_p90"] < frozen["solved_gearing_p90"]
+
+
 def test_run_wind_job_surfaces_wind_assessment(monkeypatch: pytest.MonkeyPatch) -> None:
     """An AssessmentResult carrying a WindAssessment surfaces the full block on the stored
     CaseResult (#993)."""

@@ -229,7 +229,9 @@ def test_default_analysis_tornado_rejects_empty_driver_set(
 # run_analysis_job lifecycle (assessment + analysis both injected).
 # --------------------------------------------------------------------------- #
 def test_success_lifecycle(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ar, "_build_assessed_scenario", lambda w, e: {"assessed": True})
+    monkeypatch.setattr(
+        ar, "_build_assessed_scenario", lambda w, e, ra=None: {"assessed": True}
+    )
 
     def _fake_analysis(_req: Any, assessed: Any, progress: Any) -> Dict[str, Any]:
         assert assessed == {"assessed": True}
@@ -260,7 +262,7 @@ def test_unwraps_assessment_result_export(monkeypatch: pytest.MonkeyPatch) -> No
     """An AssessmentResult's .export (not the whole object) is fed to the seam (#993)."""
     seen: Dict[str, Any] = {}
 
-    def _capture_build(_wind_req: Any, export: Any) -> Dict[str, Any]:
+    def _capture_build(_wind_req: Any, export: Any, _ra: Any = None) -> Dict[str, Any]:
         seen["export"] = export
         return {"assessed": True}
 
@@ -301,7 +303,9 @@ def test_assessment_failure_marks_failed_without_leaking(
 
 
 def test_analysis_failure_marks_failed(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ar, "_build_assessed_scenario", lambda w, e: {"assessed": True})
+    monkeypatch.setattr(
+        ar, "_build_assessed_scenario", lambda w, e, ra=None: {"assessed": True}
+    )
 
     def _explode(_req: Any, _assessed: Any, _progress: Any) -> Dict[str, Any]:
         raise ValueError("MonteCarloConfigError-ish")
@@ -326,7 +330,9 @@ def test_progress_is_recorded(monkeypatch: pytest.MonkeyPatch) -> None:
                 seen.append((p.step, p.message))
             return super().update(job_id, **changes)
 
-    monkeypatch.setattr(ar, "_build_assessed_scenario", lambda w, e: {"assessed": True})
+    monkeypatch.setattr(
+        ar, "_build_assessed_scenario", lambda w, e, ra=None: {"assessed": True}
+    )
 
     def _fake_analysis(_req: Any, _assessed: Any, progress: Any) -> Dict[str, Any]:
         progress(ANALYSIS_TOTAL_STEPS - 1, "analysing")
