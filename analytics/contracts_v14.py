@@ -14,6 +14,7 @@ from dataclasses import dataclass, field, fields, is_dataclass
 from typing import Any, cast
 
 from analytics.fx.fx_contracts import FXCurveOutput, FXRiskProfile, FXStructuredBlock
+from analytics.resource_contracts import ResourceAssessment
 
 # Canonical CASPER contract version string. Unified Sprint 18D (D.X+5) to
 # match the value already shipping in the JSON payload
@@ -1943,4 +1944,5 @@ __all__ = [
     "CapitalStructurePoint",
     "CovenantConstraint",
     "CapitalStructureOptimizationResult",
+    "ResourceAssessment",
 ]
