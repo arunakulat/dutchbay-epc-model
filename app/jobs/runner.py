@@ -27,6 +27,7 @@ from typing import (
     Union,
 )
 
+from analytics.resource_contracts import ResourceAssessment
 from app.api.responses import CaseResult, WindAssessment
 from app.jobs.models import JobProgress, JobState, WindJobRequest
 from app.jobs.store import JobStore
@@ -76,6 +77,12 @@ class AssessmentResult:
 
     export: Mapping[str, Any]
     wind_assessment: Optional[WindAssessment] = None
+    #: The frozen, VALIDATED resource basis (#996 D4-wire): P50/P75/P90 AEP + CF with the
+    #: AEP=capacity*8760*CF identity and P90<=P75<=P50 monotonicity checked on construction.
+    #: The construction (in default_assessment) IS the guard; the object is carried here as
+    #: forward-wiring for the downside-debt slice (D5), which will read its P90/P50 ratio
+    #: from it — no consumer reads it yet.
+    resource_assessment: Optional[ResourceAssessment] = None
 
 
 #: ``(request, progress) -> AssessmentResult | export_mapping`` — the slow resource step,
@@ -142,6 +149,45 @@ def _build_wind_assessment(
         site=dict(meta.get("location") or {}),
         data_period=dict(meta.get("data_period") or {}),
         wind_stats=wind_stats,
+    )
+
+
+#: Result keys a strict ResourceAssessment needs; absence => degrade to None.
+_RESOURCE_NET_KEYS = (
+    "net_aep_p50_mwh",
+    "net_aep_p75_mwh",
+    "net_aep_p90_mwh",
+    "capacity_factor_net_p50",
+    "capacity_factor_net_p75",
+    "capacity_factor_net_p90",
+)
+
+
+def _build_resource_assessment(
+    full_results: Mapping[str, Any], selected_scenario: str
+) -> Optional[ResourceAssessment]:
+    """Project + VALIDATE a ``run_complete_assessment`` result into a frozen
+    :class:`~analytics.resource_contracts.ResourceAssessment` (#996 D4-wire).
+
+    Lenient on ABSENCE, strict on INCONSISTENCY. Like :func:`_build_wind_assessment` it
+    returns ``None`` when the assessment block is missing/partial (a bare export or a
+    fake step), so it never crashes a job over a shape it cannot project. But when the
+    P50/P75/P90 net-AEP + capacity-factor block and the turbine configuration ARE present
+    — which every real ``run_complete_assessment`` produces — construction fails loud
+    (``ResourceAssessmentError``) if the ``AEP = capacity x 8760 x CF`` identity or the
+    ``P90 <= P75 <= P50`` monotonicity is violated: the #996 "AEP validated for the active
+    selected P-level" / monotonicity guard. Screening-grade (#961): a live single-cell /
+    analytic-Weibull run is never bankable.
+    """
+    fr: Mapping[str, Any] = full_results if isinstance(full_results, Mapping) else {}
+    net = (fr.get("energy_production") or {}).get("net_aep") or {}
+    config = (fr.get("metadata") or {}).get("configuration") or {}
+    if not all(k in net for k in _RESOURCE_NET_KEYS):
+        return None
+    if "total_capacity_mw" not in config or "num_turbines" not in config:
+        return None
+    return ResourceAssessment.from_assessment(
+        full_results, selected_scenario, report_grade="screening"
     )
 
 
@@ -268,6 +314,9 @@ def default_assessment(
         return AssessmentResult(
             export=pipeline.export_for_cashflow_model(scenario=request.p_level),
             wind_assessment=_build_wind_assessment(full_results, request.p_level),
+            resource_assessment=_build_resource_assessment(
+                full_results, request.p_level
+            ),
         )
 
 

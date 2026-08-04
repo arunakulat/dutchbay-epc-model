@@ -497,6 +497,97 @@ def test_build_wind_assessment_projects_full_results() -> None:
     assert runner_mod._build_wind_assessment({}, "P50").p_levels_gwh == {}  # degrades
 
 
+# --------------------------------------------------------------------------- #
+# #996 D4-wire: the STRICT, VALIDATED ResourceAssessment on the assessment path.
+# --------------------------------------------------------------------------- #
+# capacity_factor_net_pXX is a PERCENT in the pipeline result (energy_calculator);
+# each net AEP (MWh) is consistent with capacity_mw * 8760 * CF/100.
+_RA_FULL_RESULTS: Dict[str, Any] = {
+    "metadata": {
+        "version": "v15.3.0",
+        "configuration": {
+            "num_turbines": 15,
+            "total_capacity_mw": 159.6,
+            "turbine_model": "iea_reference_10mw",
+        },
+    },
+    "energy_production": {
+        "net_aep": {
+            "net_aep_p50_mwh": 506110.0,  # 0.362 * 159.6 * 8760
+            "net_aep_p75_mwh": 472556.0,  # 0.338 * 159.6 * 8760
+            "net_aep_p90_mwh": 441798.0,  # 0.316 * 159.6 * 8760
+            "capacity_factor_net_p50": 36.2,  # PERCENT
+            "capacity_factor_net_p75": 33.8,
+            "capacity_factor_net_p90": 31.6,
+        }
+    },
+}
+
+
+def test_build_resource_assessment_validates_full_results() -> None:
+    """_build_resource_assessment projects the strict contract: MWh->GWh, percent CF
+    ->decimal, and passes the AEP-identity + P90<=P75<=P50 checks on construction."""
+    ra = runner_mod._build_resource_assessment(_RA_FULL_RESULTS, "P75")
+    assert ra is not None  # complete data => a validated assessment, never None
+    assert ra.capacity_mw == 159.6 and ra.n_turbines == 15
+    assert ra.net_aep_p50_gwh == pytest.approx(506.110)  # MWh -> GWh
+    assert ra.net_aep_p90_gwh == pytest.approx(441.798)
+    assert ra.capacity_factor_p50 == pytest.approx(0.362)  # percent -> decimal
+    assert ra.selected_p_level == "P75"
+    assert ra.report_grade == "screening"  # #961: never bankable
+    assert ra.p90_p50_ratio == pytest.approx(441798.0 / 506110.0)
+
+
+@pytest.mark.parametrize("p_level", ["P50", "P75", "P90"])
+def test_build_resource_assessment_selects_p_level(p_level: str) -> None:
+    ra = runner_mod._build_resource_assessment(_RA_FULL_RESULTS, p_level)
+    assert ra is not None
+    assert ra.selected_p_level == p_level
+
+
+def test_build_resource_assessment_fails_loud_on_inconsistent() -> None:
+    """A capacity factor that contradicts the net AEP fails the identity guard."""
+    from analytics.resource_contracts import ResourceAssessmentError
+
+    bad = {
+        "metadata": _RA_FULL_RESULTS["metadata"],
+        "energy_production": {
+            "net_aep": {
+                **_RA_FULL_RESULTS["energy_production"]["net_aep"],
+                "capacity_factor_net_p50": 60.0,  # implies ~838 GWh, not 506
+            }
+        },
+    }
+    with pytest.raises(ResourceAssessmentError, match="AEP identity"):
+        runner_mod._build_resource_assessment(bad, "P50")
+
+
+def test_default_assessment_weibull_produces_valid_resource_assessment() -> None:
+    """End-to-end (no network): the deterministic Weibull assessment yields a VALID
+    ResourceAssessment on real pipeline output. Because the pipeline derives CF from AEP,
+    the AEP-identity here is definitional — this test proves the PROJECTION (MWh->GWh and
+    percent->decimal units) round-trips and the P90<=P75<=P50 monotonicity holds live.
+    (test_build_resource_assessment_fails_loud_on_inconsistent exercises the identity
+    raise itself on an independently-inconsistent triple.)"""
+    req = _request().model_copy(
+        update={
+            "resource_mode": "weibull",
+            "weibull_a": 8.199,
+            "weibull_k": 2.665,
+            "p_level": "P90",
+        }
+    )
+    result = runner_mod.default_assessment(req, lambda step, msg: None)
+    ra = result.resource_assessment
+    assert ra is not None
+    assert ra.selected_p_level == "P90"
+    assert ra.report_grade == "screening"
+    # Monotone and physically sensible for a ~160 MW farm.
+    assert ra.net_aep_p50_gwh > ra.net_aep_p75_gwh > ra.net_aep_p90_gwh > 0.0
+    assert 0.0 < ra.capacity_factor_p90 < ra.capacity_factor_p50 < 1.0
+    assert 0.5 < ra.p90_p50_ratio < 1.0  # downside ratio the debt slice will consume
+
+
 def test_run_wind_job_surfaces_wind_assessment(monkeypatch: pytest.MonkeyPatch) -> None:
     """An AssessmentResult carrying a WindAssessment surfaces the full block on the stored
     CaseResult (#993)."""
