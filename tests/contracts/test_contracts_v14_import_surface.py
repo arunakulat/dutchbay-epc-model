@@ -14,6 +14,7 @@ from analytics.contracts_v14 import (
     MonteCarloResult,
     ParameterRangeConfig,
     ProjectEquityIrrBridge,
+    ResourceAssessment,
     ScenarioResult,
     SensitivityRequest,
     SensitivitySuite,
@@ -62,6 +63,23 @@ def test_contracts_v14_pipeline_surface_is_importable() -> None:
     assert payload["wacc"]["prudential_rate"] == 0.11
     assert result.model_dump()["project_irr"] == 0.12
     assert PackageScenarioResult is ScenarioResult
+
+    # ResourceAssessment is re-exported through contracts_v14 (#996 D4) and
+    # self-validates on construction; its model_dump() matches the ContractMixin surface.
+    assessment = ResourceAssessment(
+        capacity_mw=150.0,
+        n_turbines=15,
+        net_aep_p50_gwh=464.3,
+        net_aep_p75_gwh=430.0,
+        net_aep_p90_gwh=404.4,
+        capacity_factor_p50=0.3533,
+        capacity_factor_p75=0.3272,
+        capacity_factor_p90=0.3077,
+        selected_p_level="P75",
+        report_grade="screening",
+    )
+    assert assessment.model_dump()["net_aep_p50_gwh"] == 464.3
+    assert assessment.selected_net_aep_gwh == 430.0
 
 
 def test_contracts_v14_dolphin_enrichment_fields_are_optional_and_serializable() -> (
