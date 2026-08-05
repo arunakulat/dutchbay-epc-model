@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 import app.jobs.runner as runner_mod
+from app.api.responses import WindAssessment
 from app.jobs.models import JobRecord, JobState, WindJobRequest
 from app.jobs.runner import TOTAL_STEPS, new_queued_record, run_wind_job
 from app.jobs.store import InMemoryJobStore
@@ -137,6 +138,91 @@ def test_p75_assessment_does_not_collide_with_frozen_p50() -> None:
     # No frozen-P50 collision: the job SUCCEEDS (it used to fail at the guard).
     assert rec.state is JobState.SUCCEEDED, rec.error
     assert rec.result is not None and "kpis" in rec.result
+
+
+# --------------------------------------------------------------------------- #
+# #974: the async wind path DERIVES capacity / CF from the turbine layout + p_level
+# and the screening seam OVERWRITES the client's submitted values. Two guarantees:
+# (1) the exact #974 case (a capacity AND a CF mismatch) runs clean through the REAL
+# seam; (2) the supersession is SURFACED in the assessment provenance, not silent.
+# --------------------------------------------------------------------------- #
+def test_capacity_and_cf_mismatch_runs_clean_and_surfaces_supersession() -> None:
+    """#974 exact case, end-to-end through the REAL service seam.
+
+    The client submits 150 MW / CF 0.339 (``_request``), but the screening assessment
+    derives a different physical basis — 159.57 MW nameplate (15 × the iea_reference_10mw
+    rated power) and a P75 CF of 0.228. Pre-#997 this tripped the CESSPIT-strict adapter
+    drift guard (0.5%); now the derived values overwrite the submission and the job runs
+    clean. The reconciliation note records the supersession so the overwrite is explicit,
+    not silent (#974).
+    """
+    export = {
+        "scenario": "P75",
+        "annual_generation_mwh": 300_000.0,
+        "capacity_factor_percent": 22.8,  # != client 33.9% (P50-ish) -> superseded
+        "revenue_annual_usd": 20_000_000.0,
+        "revenue_cumulative_usd": 400_000_000.0,
+        "project_capacity_mw": 159.57,  # 15 × iea_reference_10mw nameplate != client 150
+        "num_turbines": 15,
+        "rated_capacity_per_turbine_kw": 10_638.0,
+        "ppa_years": 20,
+        "tariff_lkr_per_kwh": 20.3,
+        "exchange_rate_lkr_usd": 300.0,
+    }
+    wa = WindAssessment(
+        p_levels_gwh={"P75": 300.0},
+        net_capacity_factor={"P75": 0.228},
+        provenance={"grade": "screening", "selected_p_level": "P75"},
+        site={"name": "Dutch Bay"},
+    )
+
+    def _assessment(_req: WindJobRequest, progress: Any) -> runner_mod.AssessmentResult:
+        progress(1, "assess")
+        return runner_mod.AssessmentResult(export=export, wind_assessment=wa)
+
+    store = InMemoryJobStore()
+    _seed_queued(store)
+    run_wind_job("j1", _request(), store, assessment_fn=_assessment)
+    rec = store.get("j1")
+    assert rec is not None
+    # (1) The capacity + CF mismatch runs clean through the real seam (it used to fail).
+    assert rec.state is JobState.SUCCEEDED, rec.error
+    assert rec.result is not None and "kpis" in rec.result
+    # (2) The supersession is surfaced in the assessment provenance.
+    recon = rec.result["wind_assessment"]["provenance"]["input_reconciliation"]
+    assert recon["capacity_mw"]["submitted"] == pytest.approx(150.0)
+    assert recon["capacity_mw"]["used"] == pytest.approx(159.57)
+    assert recon["capacity_mw"]["superseded"] is True
+    assert recon["capacity_factor"]["submitted"] == pytest.approx(0.339)
+    assert recon["capacity_factor"]["used"] == pytest.approx(0.228)
+    assert recon["capacity_factor"]["superseded"] is True
+
+
+def test_input_reconciliation_flags_material_supersession() -> None:
+    """The note carries submitted, used, drift, and the superseded flag per field."""
+    export = {"project_capacity_mw": 159.57, "capacity_factor_percent": 22.8}
+    recon = runner_mod._input_reconciliation(150.0, 0.339, export)
+    assert recon is not None
+    assert recon["capacity_mw"]["drift_pct"] == pytest.approx(6.38, abs=0.01)
+    assert recon["capacity_mw"]["superseded"] is True
+    assert recon["capacity_factor"]["used"] == pytest.approx(0.228)
+    assert recon["capacity_factor"]["superseded"] is True
+    assert "num_turbines" in recon["basis"]
+
+
+def test_input_reconciliation_not_superseded_within_tolerance() -> None:
+    """A submission that agrees with the derived basis (< 0.5% drift) is not superseded."""
+    export = {"project_capacity_mw": 150.3, "capacity_factor_percent": 33.9}
+    recon = runner_mod._input_reconciliation(150.0, 0.339, export)
+    assert recon is not None
+    assert recon["capacity_mw"]["drift_pct"] == pytest.approx(0.2, abs=0.01)
+    assert recon["capacity_mw"]["superseded"] is False
+    assert recon["capacity_factor"]["superseded"] is False
+
+
+def test_input_reconciliation_none_for_bare_export() -> None:
+    """A bare / legacy export with no derived physical keys yields no note (no crash)."""
+    assert runner_mod._input_reconciliation(150.0, 0.339, {"scenario": "P75"}) is None
 
 
 def test_progress_is_recorded(monkeypatch: pytest.MonkeyPatch) -> None:

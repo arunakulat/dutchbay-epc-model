@@ -93,6 +93,74 @@ AssessmentFn = Callable[
 ]
 
 
+#: Below this drift (percent) the submitted and derived physical values are effectively
+#: equal, so the reconciliation note marks the field NOT superseded. Mirrors the wind
+#: cashflow adapter's 0.5% drift tolerance — the very guard the async path used to trip
+#: (#974); a difference the adapter would have rejected is one worth surfacing.
+_RECON_TOLERANCE_PCT = 0.5
+
+
+def _input_reconciliation(
+    submitted_capacity_mw: float,
+    submitted_capacity_factor: float,
+    export: Mapping[str, Any],
+    *,
+    tolerance_pct: float = _RECON_TOLERANCE_PCT,
+) -> Optional[Dict[str, Any]]:
+    """Reconcile the client's submitted capacity / capacity factor against the values
+    the screening assessment actually used (#974).
+
+    On the async wind path the finance inputs are DERIVED — capacity from
+    ``num_turbines × turbine nameplate`` and the capacity factor from the selected
+    ``p_level`` export — and the screening seam (#997) overwrites whatever the client
+    submitted. This builds a structured note (submitted vs used, per-field drift, and a
+    ``superseded`` flag when the drift exceeds ``tolerance_pct``) so the overwrite is
+    SURFACED in the assessment provenance rather than applied silently.
+
+    Args:
+        submitted_capacity_mw: The client-supplied nameplate capacity (MW).
+        submitted_capacity_factor: The client-supplied capacity factor (decimal).
+        export: The wind cashflow export; must carry ``project_capacity_mw`` and
+            ``capacity_factor_percent`` (the derived physical basis) for a note to be
+            built.
+        tolerance_pct: Drift below which a field is considered unchanged (not
+            superseded). Defaults to the adapter's 0.5% guard.
+
+    Returns:
+        The reconciliation note, or ``None`` when the export lacks the derived physical
+        keys (a bare / legacy export) so nothing can be reconciled.
+    """
+    used_capacity = export.get("project_capacity_mw")
+    used_cf_pct = export.get("capacity_factor_percent")
+    if not isinstance(used_capacity, (int, float)) or not isinstance(
+        used_cf_pct, (int, float)
+    ):
+        return None
+    used_cf = float(used_cf_pct) / 100.0
+
+    def _field(submitted: float, used: float) -> Dict[str, Any]:
+        drift_pct = (
+            abs(used - submitted) / abs(submitted) * 100.0 if submitted else None
+        )
+        return {
+            "submitted": float(submitted),
+            "used": float(used),
+            "drift_pct": drift_pct,
+            "superseded": drift_pct is not None and drift_pct > tolerance_pct,
+        }
+
+    return {
+        "capacity_mw": _field(float(submitted_capacity_mw), float(used_capacity)),
+        "capacity_factor": _field(float(submitted_capacity_factor), used_cf),
+        "basis": (
+            "screening-grade physical assessment: capacity_mw = num_turbines × turbine "
+            "nameplate, capacity_factor from the selected p_level export. The submitted "
+            "capacity / capacity_factor are advisory on the async wind path and were "
+            "overwritten by the live assessment (#974/#997)."
+        ),
+    }
+
+
 def _build_wind_assessment(
     full_results: Mapping[str, Any], selected_scenario: str
 ) -> WindAssessment:
@@ -397,6 +465,24 @@ def run_wind_job(
         else:
             wind_export = assessment
             wind_assessment = None
+        # #974: the async path DERIVES the finance capacity / capacity factor from the
+        # turbine layout + selected p_level, and the screening seam (#997) overwrites the
+        # client's submitted values. Record that supersession in the assessment
+        # provenance so the overwrite is SURFACED to the client, never silent. (No-op for
+        # a bare/legacy export with no wind_assessment or no physical keys.)
+        if wind_assessment is not None:
+            reconciliation = _input_reconciliation(
+                request.inputs.capacity_mw, request.inputs.capacity_factor, wind_export
+            )
+            if reconciliation is not None:
+                wind_assessment = wind_assessment.model_copy(
+                    update={
+                        "provenance": {
+                            **wind_assessment.provenance,
+                            "input_reconciliation": reconciliation,
+                        }
+                    }
+                )
         progress(TOTAL_STEPS - 1, "Running finance pipeline on the wind export")
         scenario = request.to_finance_scenario()
         # The async ERA5 location assessment is SCREENING-grade (#961/#996): a fresh
