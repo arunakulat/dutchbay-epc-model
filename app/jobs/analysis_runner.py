@@ -19,11 +19,12 @@ No finance or engine logic is duplicated here (Dolphin): the assessment reuses
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, Mapping
+from typing import Any, Callable, Dict, Mapping, Optional
 
 from analytics.core.sensitivity_runner import _default_parameters
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.mc.engine import run_monte_carlo_analysis
+from analytics.resource_contracts import ResourceAssessment
 from analytics.sensitivity.engine import run_sensitivity_analysis
 from analytics.sensitivity.global_sa import build_problem, run_morris
 from app.api.responses import AnalysisResult
@@ -32,6 +33,7 @@ from app.jobs.runner import (
     AssessmentFn,
     AssessmentResult,
     ProgressFn,
+    apply_active_resource_basis,
     default_assessment,
 )
 from app.jobs.store import JobStore
@@ -52,7 +54,9 @@ AnalysisFn = Callable[
 
 
 def _build_assessed_scenario(
-    wind_request: WindJobRequest, wind_export: Mapping[str, Any]
+    wind_request: WindJobRequest,
+    wind_export: Mapping[str, Any],
+    resource_assessment: Optional[ResourceAssessment] = None,
 ) -> Dict[str, Any]:
     """Build the ACTIVE assessed scenario the engines analyse (#993 crux).
 
@@ -70,13 +74,16 @@ def _build_assessed_scenario(
     run_block = dict(scenario.get("run") or {})
     run_block["mode"] = "screening"
     scenario["run"] = run_block
-    return wind_export_to_scenario_patch(
+    assessed = wind_export_to_scenario_patch(
         wind_export,
         scenario,
         scenario_name=wind_request.p_level,
         adapter_mode="overwrite",
         physical_only=True,
     )
+    # #996 D5: downside debt sizing must use THIS assessment's P90/P50, not the frozen
+    # lender-case base — inject the active net AEP (no-op unless the case binds downside).
+    return apply_active_resource_basis(assessed, resource_assessment)
 
 
 def default_analysis(
@@ -221,12 +228,15 @@ def run_analysis_job(
         assessment = assessment_fn(request.wind, progress)
         # The production step returns an AssessmentResult (export + full assessment); a
         # fake / pre-#993 step may return a bare export mapping — accept either.
-        wind_export: Mapping[str, Any] = (
-            assessment.export
-            if isinstance(assessment, AssessmentResult)
-            else assessment
+        if isinstance(assessment, AssessmentResult):
+            wind_export: Mapping[str, Any] = assessment.export
+            resource_assessment = assessment.resource_assessment
+        else:
+            wind_export = assessment
+            resource_assessment = None
+        assessed = _build_assessed_scenario(
+            request.wind, wind_export, resource_assessment
         )
-        assessed = _build_assessed_scenario(request.wind, wind_export)
         # 2. Run the bounded analysis engine over the assessed scenario.
         result_dict = analysis_fn(request, assessed, progress)
         store.update(
