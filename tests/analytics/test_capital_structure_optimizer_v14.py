@@ -36,12 +36,12 @@ from analytics.contracts_v14 import (
     CovenantConstraint,
     DebtTrancheMix,
 )
+from tests._canon import LENDER_PROJECT_IRR
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER_CONFIG = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 
-# The committed lender case project IRR — the byte-identity anchor.
-LENDER_PROJECT_IRR = 0.014551597740253388
+# The committed lender case project IRR (tests/_canon.py, #955) — the byte-identity anchor.
 
 # The lender case base capex (usd_total minus its fixed contingency line):
 # 159_600_000 - 2_394_000.

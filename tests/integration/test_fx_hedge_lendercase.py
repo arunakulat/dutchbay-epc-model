@@ -29,22 +29,18 @@ import pytest
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
 from finance.cashflow_v14_fx import _cip_forward_rates
+from tests._canon import LENDER_EQUITY_IRR as BASE_EQUITY_IRR
+from tests._canon import LENDER_MIN_DSCR as BASE_MIN_DSCR
+from tests._canon import LENDER_MIN_DSCR_PERIOD as BASE_MIN_DSCR_PERIOD
+from tests._canon import LENDER_PROJECT_IRR as BASE_PROJECT_IRR
+from tests._canon import LENDER_PROJECT_NPV as BASE_PROJECT_NPV
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCENARIO = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 
-# Committed lender-case pins (argv-correct, kpi_oracle).
-# Re-baselined by #738 (2026-07-05): import levies + indirect taxes ON at the PRUDENT
-# posture (duties on the imported capex share capitalized, capex VAT relieved, 18%
-# opex VAT) net of the revenue-SSCL statutory-exemption reversal; gearing 0.4275 ->
-# 0.41 on the grossed capex. Prior: #737 credit-support fees (fee-inside-sculpt).
-# The per-period sculpt holds the 1.30 target while the #790 headline reports the
-# fold-corrected covenant minimum.
-BASE_PROJECT_IRR = 0.014551597740253388
-BASE_EQUITY_IRR = -0.05841298678542661
-BASE_MIN_DSCR = 1.285740985294611  # #790 fold headline (per-period floor: 1.30)
-BASE_MIN_DSCR_PERIOD = 1.2999999999999998
-BASE_PROJECT_NPV = -79273039.20645273
+# Committed lender-case pins (kpi_oracle) — the canonical vector lives in tests/_canon.py
+# (#955), imported above under the local BASE_* names. BASE_MIN_DSCR is the #790 fold
+# headline; the per-period sculpt floor BASE_MIN_DSCR_PERIOD holds the 1.30 target.
 
 
 @pytest.fixture(scope="module")

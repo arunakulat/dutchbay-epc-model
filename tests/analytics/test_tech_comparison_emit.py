@@ -34,13 +34,14 @@ from app.reports.tech_comparison_emit import (
     emit_tech_comparison_report_from_pipeline,
     resolve_tech_comparison_scenarios,
 )
+from tests._canon import LENDER_PROJECT_IRR as _WIND_PROJECT_IRR
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WIND_SCENARIO = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 HYBRID_SCENARIO = REPO_ROOT / "scenarios" / "dutchbay_hybrid_windsolar_2025Q4.yaml"
 
-#: The wind lendercase committed headline project IRR — the column must reconcile to this exactly.
-_WIND_PROJECT_IRR = 0.014551597740253388
+#: The wind lendercase committed headline project IRR (tests/_canon.py, #955) — the
+#: column must reconcile to this exactly.
 
 
 # --------------------------------------------------------------------------- #
