@@ -32,14 +32,14 @@ from finance.self_curtailment_v14 import (
     resolve_self_curtailment_decimal,
     self_curtailment_finance_wiring_enabled,
 )
+from tests._canon import LENDER_EQUITY_IRR as CANON_EQ_IRR
+from tests._canon import LENDER_MIN_DSCR as CANON_MIN_DSCR
+from tests._canon import LENDER_PROJECT_IRR as CANON_PROJ_IRR
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 
-# Committed 5th-gen canon (pinned identically in test_multitech_generation.py).
-CANON_PROJ_IRR = 0.014551597740253388
-CANON_EQ_IRR = -0.05841298678542661
-CANON_MIN_DSCR = 1.285740985294611
+# Committed 5th-gen canon (single source of truth: tests/_canon.py, #955).
 
 
 def _real_result(self_pct: float, *, deemed_pct: float = 0.0) -> CurtailmentShareResult:

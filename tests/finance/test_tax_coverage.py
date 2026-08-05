@@ -29,6 +29,7 @@ from finance.cashflow_v14_tax import (
     build_tax_series,
     calculate_tax,
 )
+from tests._canon import LENDER_TOTAL_CFADS_USD
 
 
 def _base_tax_block() -> dict:
@@ -524,7 +525,7 @@ def test_depreciation_start_year_changes_economics_end_to_end() -> None:
     # start_year=1 default is byte-identical to the canonical baseline (#738
     # re-baseline: import levies + 18% opex VAT net of the revenue-SSCL exemption
     # reversal, CFADS 191.22M -> 191.11M; prior: #737 fees 202.33M -> 191.22M)
-    assert base["total_cfads_usd"] == pytest.approx(191111047.68242383, rel=1e-9)
+    assert base["total_cfads_usd"] == pytest.approx(LENDER_TOTAL_CFADS_USD, rel=1e-9)
 
 
 def test_depreciation_start_year_overrun_warns_about_forfeited_tail(

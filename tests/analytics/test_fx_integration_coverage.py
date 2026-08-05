@@ -26,6 +26,7 @@ from analytics.fx.fx_contracts import (
     FXStructuredBlock,
 )
 from analytics.fx.fx_integration import integrate_fx_into_scenario_result
+from tests._canon import LENDER_EQUITY_IRR, LENDER_MIN_DSCR, LENDER_PROJECT_IRR
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER_SCENARIO = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
@@ -232,8 +233,8 @@ def test_live_pipeline_populates_fx_block_curve_risk() -> None:
     #  -> 1.46%, equity_irr -0.0499 -> -0.0584, gearing 0.4275 -> 0.41 on the
     #  grossed capex. Prior: PR B group-C #3 UIP LKR debt rate; #737 fees.)
     k = out["kpis"]
-    assert k["project_irr"] == pytest.approx(0.014551597740253388, abs=1e-9)
-    assert k["equity_irr"] == pytest.approx(-0.05841298678542661, abs=1e-9)
+    assert k["project_irr"] == pytest.approx(LENDER_PROJECT_IRR, abs=1e-9)
+    assert k["equity_irr"] == pytest.approx(LENDER_EQUITY_IRR, abs=1e-9)
     # #790: headline = fold-corrected covenant minimum; per-period floor 1.30.
-    assert k["min_dscr"] == pytest.approx(1.285740985294611, abs=1e-6)
+    assert k["min_dscr"] == pytest.approx(LENDER_MIN_DSCR, abs=1e-6)
     assert k["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)

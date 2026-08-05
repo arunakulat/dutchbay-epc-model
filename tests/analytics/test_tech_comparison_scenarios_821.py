@@ -32,6 +32,8 @@ import pytest
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from app.reports.report_model import TechComparisonBlock
 from app.reports.tech_comparison_emit import build_tech_comparison_for_scenarios
+from tests._canon import LENDER_MIN_DSCR as _CANON_MIN_DSCR
+from tests._canon import LENDER_PROJECT_IRR as _CANON_PROJECT_IRR
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCEN = REPO_ROOT / "scenarios"
@@ -41,9 +43,8 @@ SOLAR_SCENARIO = SCEN / "dutchbay_solar_only_2025Q4.yaml"
 HYBRID_SCENARIO = SCEN / "dutchbay_hybrid_windsolar_2025Q4.yaml"
 HYBRID_BESS_SCENARIO = SCEN / "dutchbay_hybrid_bess_2025Q4.yaml"
 
-#: The frozen committed 5th-gen wind lendercase canon (must never move — the KPI-neutrality gate).
-_CANON_PROJECT_IRR = 0.014551597740253388
-_CANON_MIN_DSCR = 1.285740985294611
+#: The frozen committed 5th-gen wind lendercase canon (tests/_canon.py, #955 — the
+#: KPI-neutrality gate). Gearing is not part of the canonical KPI vector, so it stays local.
 _CANON_GEARING = 0.41
 
 

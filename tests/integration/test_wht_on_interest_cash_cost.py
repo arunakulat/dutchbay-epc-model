@@ -18,6 +18,9 @@ from pathlib import Path
 import pytest
 
 from analytics.evaluation_v14 import evaluate_with_overrides
+from tests._canon import LENDER_EQUITY_IRR as _CANON_EQ_IRR
+from tests._canon import LENDER_MIN_DSCR as _CANON_MIN_DSCR
+from tests._canon import LENDER_TOTAL_CFADS_USD as _CANON_CFADS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
@@ -36,8 +39,8 @@ LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 # revenue-SSCL statutory-exemption reversal: eqIRR -0.049921 -> -0.058413, CFADS 191.22M ->
 # 191.11M (the SSCL removal nearly offsets the opex VAT at the CFADS line; the capex-side
 # levies bite through depreciation/tax, debt sizing and the equity base instead).
-_CANON_EQ_IRR = -0.05841298678542661
-_CANON_CFADS = 191111047.68242383
+# The canonical values (_CANON_EQ_IRR, _CANON_CFADS) are imported above from
+# tests/_canon.py (#955, single source of truth).
 
 
 def test_default_off_is_byte_identical() -> None:
@@ -47,7 +50,7 @@ def test_default_off_is_byte_identical() -> None:
     assert k["total_cfads_usd"] == pytest.approx(_CANON_CFADS, rel=1e-9)
     # #790: headline = fold-corrected covenant minimum; per-period floor 1.30.
     # (#738: the levy-inclusive year-1 fold eases 1.2884 -> 1.2857.)
-    assert k["min_dscr"] == pytest.approx(1.285740985294611, abs=1e-6)
+    assert k["min_dscr"] == pytest.approx(_CANON_MIN_DSCR, abs=1e-6)
     assert k["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
 
 

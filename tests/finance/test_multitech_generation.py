@@ -16,6 +16,16 @@ from finance.cashflow_v14_production import (
     calculate_net_production_for_year,
     resolve_tech_generation_specs,
 )
+from tests._canon import (
+    LENDER_EQUITY_IRR,
+    LENDER_MIN_DSCR,
+    LENDER_MIN_DSCR_PERIOD,
+    LENDER_PROJECT_IRR,
+    LENDER_PROJECT_NPV,
+    LENDER_PROJECT_NPV_PRUDENTIAL,
+    LENDER_PRUDENTIAL_RATE_USED,
+    LENDER_TOTAL_CFADS_USD,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -290,23 +300,27 @@ def test_canonical_lendercase_economics_unchanged() -> None:
     # CFADS 191.22M -> 191.11M, gross capex 159.6M -> 167.86M, gearing 0.4275 ->
     # 0.41 (debt 68.23M -> 68.82M on the grossed base). Prior: #737 credit-support
     # fees (2.68% -> 2.03%); PR B (group-C #3) UIP LKR debt rate re-baseline.
-    assert kpis["project_irr"] == pytest.approx(0.014551597740253388, abs=1e-9)
-    assert kpis["equity_irr"] == pytest.approx(-0.05841298678542661, abs=1e-9)
-    assert kpis["project_npv"] == pytest.approx(-79273039.20645273, rel=1e-9)
+    assert kpis["project_irr"] == pytest.approx(LENDER_PROJECT_IRR, abs=1e-9)
+    assert kpis["equity_irr"] == pytest.approx(LENDER_EQUITY_IRR, abs=1e-9)
+    assert kpis["project_npv"] == pytest.approx(LENDER_PROJECT_NPV, rel=1e-9)
     # #790 (user decision 2026-07-05): the headline min_dscr is the CONSERVATIVE
     # fold-corrected covenant minimum (bridge-corrected per-year table, fee-netted
     # per #737, levy-inclusive per #738) — the annual number covenants are tested
     # on. The per-period sculpt floor stays pinned as min_dscr_period (the sculpt
     # re-solves to hold 1.30 under the levies; the year-1 fold eases 1.2884 ->
     # 1.2857, still exactly 1 equity-lockup year).
-    assert kpis["min_dscr"] == pytest.approx(1.285740985294611, abs=1e-9)
-    assert kpis["min_dscr_period"] == pytest.approx(1.2999999999999998, abs=1e-9)
-    assert kpis["total_cfads_usd"] == pytest.approx(191111047.68242383, rel=1e-9)
+    assert kpis["min_dscr"] == pytest.approx(LENDER_MIN_DSCR, abs=1e-9)
+    assert kpis["min_dscr_period"] == pytest.approx(LENDER_MIN_DSCR_PERIOD, abs=1e-9)
+    assert kpis["total_cfads_usd"] == pytest.approx(LENDER_TOTAL_CFADS_USD, rel=1e-9)
     # Prudential (downside) NPV: CFADS discounted at the haircut WACC (prudential_rate =
     # WACC + spread), below the base NPV. -76.44M -> -84.72M (#738 levies + higher WACC:
     # the de-levered stack carries more 12% equity).
-    assert kpis["project_npv_prudential"] == pytest.approx(-84724967.65444505, rel=1e-9)
-    assert kpis["prudential_rate_used"] == pytest.approx(0.110202604022396, abs=1e-9)
+    assert kpis["project_npv_prudential"] == pytest.approx(
+        LENDER_PROJECT_NPV_PRUDENTIAL, rel=1e-9
+    )
+    assert kpis["prudential_rate_used"] == pytest.approx(
+        LENDER_PRUDENTIAL_RATE_USED, abs=1e-9
+    )
     assert (
         kpis["project_npv_prudential"] < kpis["project_npv"]
     )  # haircut rate -> lower NPV
