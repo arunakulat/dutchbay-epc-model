@@ -21,6 +21,7 @@ from analytics.schema_guard import ConfigValidationError
 from app.api.main import (
     app,
     health,
+    readiness,
     run_case,
     run_case_report_html,
     run_case_report_pdf,
@@ -58,6 +59,9 @@ def test_app_exposes_expected_routes() -> None:
     # #841 contract freeze: the whole client-data surface is version-pinned under /v1;
     # only the infra /health probe is unversioned.
     assert "/health" in spec_paths
+    assert (
+        "/health/readiness" in spec_paths
+    )  # #995 readiness diagnostic (unversioned infra)
     assert "/v1/cases" in spec_paths
     assert "/v1/run-pipeline" in spec_paths  # included from api.pipeline_api.router
     assert "/v1/cases/report.html" in spec_paths
@@ -78,6 +82,50 @@ def test_health() -> None:
     # The exact /health body (incl. contract_version, #841) is pinned in
     # test_api_contract.py; here just smoke the liveness status.
     assert health()["status"] == "ok"
+
+
+# --------------------------------------------------------------------------- #
+# readiness diagnostic (#995): reports CDS config PRESENCE, never a value
+# --------------------------------------------------------------------------- #
+def test_readiness_all_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Both CDS keys set (non-blank) -> every check True and ``ready`` is True."""
+    monkeypatch.setenv("CDSAPI_URL", "https://cds.climate.copernicus.eu/api")
+    monkeypatch.setenv("CDSAPI_KEY", "super-secret-token-value")
+    body = readiness()
+    assert body["status"] == "ok"
+    assert body["ready"] is True
+    assert body["checks"] == {"cdsapi_url": True, "cdsapi_key": True}
+
+
+def test_readiness_missing_key_is_not_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    """URL present but credential absent -> not ready, and the missing check is False."""
+    monkeypatch.setenv("CDSAPI_URL", "https://cds.climate.copernicus.eu/api")
+    monkeypatch.delenv("CDSAPI_KEY", raising=False)
+    body = readiness()
+    assert body["ready"] is False
+    assert body["checks"] == {"cdsapi_url": True, "cdsapi_key": False}
+
+
+def test_readiness_blank_value_counts_as_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A set-but-blank var must not read as configured (guards a whitespace-only secret)."""
+    monkeypatch.setenv("CDSAPI_URL", "   ")
+    monkeypatch.setenv("CDSAPI_KEY", "")
+    body = readiness()
+    assert body["ready"] is False
+    assert body["checks"] == {"cdsapi_url": False, "cdsapi_key": False}
+
+
+def test_readiness_never_echoes_a_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The probe must report booleans only — no secret (or URL) value ever appears."""
+    secret = "TOP-SECRET-CDS-TOKEN"
+    url = "https://cds.climate.copernicus.eu/api"
+    monkeypatch.setenv("CDSAPI_URL", url)
+    monkeypatch.setenv("CDSAPI_KEY", secret)
+    serialized = repr(readiness())
+    assert secret not in serialized
+    assert url not in serialized
 
 
 # --------------------------------------------------------------------------- #
@@ -366,6 +414,26 @@ def test_http_smoke_if_httpx_available() -> None:
         assert client.post("/v1/cases", json={"site_name": ""}).status_code == 422
     finally:
         app.dependency_overrides.clear()
+
+
+def test_http_smoke_readiness_is_unauthenticated_and_200() -> None:
+    """#995 AC3, over HTTP: the readiness diagnostic is reachable WITHOUT a bearer token
+    and always answers 200 with a boolean body. Deliberately sets NO auth override — if the
+    route ever picked up ``Depends(get_current_subject)`` or got swept under the /v1 gate this
+    would flip to 401/403, and if it became a gate (non-200 when unconfigured) it would fail
+    here. This is the security-relevant property that the direct-call tests can't observe.
+    """
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)  # no dependency_overrides -> real (absent) auth
+    resp = client.get("/health/readiness")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert isinstance(body["ready"], bool)
+    assert set(body["checks"]) == {"cdsapi_url", "cdsapi_key"}
+    assert all(isinstance(v, bool) for v in body["checks"].values())
 
 
 def test_http_smoke_jobs_if_httpx_available(monkeypatch: pytest.MonkeyPatch) -> None:
