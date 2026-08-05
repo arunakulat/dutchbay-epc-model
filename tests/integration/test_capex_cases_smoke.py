@@ -21,6 +21,7 @@ capex, is the binding constraint.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -30,6 +31,13 @@ from analytics.scenario_loader import load_scenario_config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCEN_DIR = REPO_ROOT / "scenarios"
+
+# #996 D3b: the financial-KPI oracle lives in a golden fixture, not the scenarios.
+_EXPECTED_KPIS = json.loads(
+    (
+        REPO_ROOT / "tests" / "fixtures" / "finance" / "capex_cases_expected_kpis.json"
+    ).read_text()
+)
 
 CASES = {
     "lean_977": {
@@ -86,17 +94,29 @@ def test_resource_invariant_to_capex(name: str) -> None:
     assert float(cfg["expected_results"]["net_aep_p50_gwh"]) == pytest.approx(
         464.3, abs=0.5
     )
+    # #996 D3b: net_aep_p90_gwh stays in the scenario (a runtime input for reconciliation
+    # + downside debt); only the financial-KPI oracle moved to the fixture.
+    assert float(cfg["expected_results"]["net_aep_p90_gwh"]) == pytest.approx(
+        404.4, abs=0.5
+    )
     assert float(cfg["expected_results"]["capacity_factor"]) == pytest.approx(
         0.332, abs=0.001
     )
+    # #996 D3b: the financial-KPI oracle keys must NOT be back in the scenario (locks the
+    # split so the case cannot re-become its own regression oracle).
+    for moved in FINANCIAL_TARGETS:
+        assert moved not in cfg["expected_results"], (
+            f"{name}: {moved} is back in the scenario expected_results — it must live only "
+            "in tests/fixtures/finance/capex_cases_expected_kpis.json"
+        )
 
 
 @pytest.mark.parametrize("name", list(CASES))
 def test_expected_results_bind_to_engine(
     name: str, kpis: dict[str, dict[str, float]]
 ) -> None:
-    """The live pipeline reproduces every financial ``expected_results`` value."""
-    expected = load_scenario_config(str(CASES[name]["file"]))["expected_results"]
+    """The live pipeline reproduces every financial target in the golden fixture."""
+    expected = _EXPECTED_KPIS[name]
     live = kpis[name]
     mismatches = []
     for er_key, (kpi_key, scale, tol) in FINANCIAL_TARGETS.items():
@@ -108,9 +128,9 @@ def test_expected_results_bind_to_engine(
                 f"(|Δ|={abs(actual - target):.5f} > {tol})"
             )
     assert not mismatches, (
-        f"{name}: expected_results no longer matches the engine — regenerate from the "
-        "canonical run (do NOT hand-edit toward a rosier number):\n  "
-        + "\n  ".join(mismatches)
+        f"{name}: the golden fixture no longer matches the engine — regenerate "
+        "tests/fixtures/finance/capex_cases_expected_kpis.json from the canonical run "
+        "(do NOT hand-edit toward a rosier number):\n  " + "\n  ".join(mismatches)
     )
 
 
