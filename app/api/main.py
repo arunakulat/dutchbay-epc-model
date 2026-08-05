@@ -19,6 +19,9 @@ are additive (a breaking change lands as ``/v2``, never a mutation of ``/v1``):
 * ``POST /v1/token``        — exchange credentials for a bearer JWT.
 * ``GET /health``           — liveness probe (deliberately UNVERSIONED infra endpoint;
                               self-reports the body-level ``API_CONTRACT_VERSION``).
+* ``GET /health/readiness`` — readiness diagnostic (#995): reports whether runtime-critical
+                              config (the Copernicus CDS endpoint + credential) is PRESENT,
+                              as booleans only — it never echoes a value.
 
 The endpoint only orchestrates: it validates inputs (Pydantic), maps the form to
 a scenario (``WindFarmInputs.to_scenario_config``), and delegates the compute to
@@ -134,6 +137,39 @@ app.mount("/static", StaticFiles(directory=str(_WEB_STATIC_DIR)), name="static")
 def health() -> dict[str, str]:
     """Liveness probe + the public API contract version (#841)."""
     return {"status": "ok", "contract_version": API_CONTRACT_VERSION}
+
+
+#: Runtime-critical config keys the readiness probe reports on. Presence only — the CDS
+#: endpoint URL is non-secret but the credential is, so the probe deliberately reports a
+#: BOOLEAN for each (never the value), which is safe to expose on an unauthenticated infra
+#: route. Live ERA5 retrieval reads these via the ``cdsapi`` client (see
+#: :mod:`wind_resource.era5_fetcher`); the values are injected as Fly ``[env]`` (URL) and
+#: ``fly secrets set`` (key) — see ``docs/deploy/DEPLOY.md``.
+_READINESS_ENV_KEYS = ("CDSAPI_URL", "CDSAPI_KEY")
+
+
+@app.get("/health/readiness", tags=["ops"])
+def readiness() -> dict[str, Any]:
+    """Readiness diagnostic (#995): confirm runtime-critical config is present without
+    exposing any value.
+
+    Reports a boolean per key in :data:`_READINESS_ENV_KEYS` — ``true`` iff the environment
+    variable is set and non-blank — so an operator (or a deploy smoke check) can confirm the
+    Copernicus CDS endpoint *and* credential are wired into the staging/production runtime
+    without the route ever echoing a secret. ``ready`` is the AND of every check; the route
+    itself always returns 200 (it is a diagnostic, not a gate — a liveness ``/health`` failure
+    is what pulls the instance).
+    """
+    checks = {
+        key.lower(): bool(os.environ.get(key, "").strip())
+        for key in _READINESS_ENV_KEYS
+    }
+    return {
+        "status": "ok",
+        "contract_version": API_CONTRACT_VERSION,
+        "ready": all(checks.values()),
+        "checks": checks,
+    }
 
 
 class TokenRequest(BaseModel):

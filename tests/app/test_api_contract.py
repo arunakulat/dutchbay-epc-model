@@ -196,8 +196,8 @@ def test_public_endpoints_are_routed_under_v1() -> None:
 
 def test_pre_freeze_unprefixed_paths_are_gone() -> None:
     """/v1 is the single public surface: the pre-freeze unprefixed client-data paths must
-    now 404 (only /health remains unversioned). Re-introducing an unversioned public path
-    would fork the surface and is a contract regression."""
+    now 404 (only the /health infra namespace remains unversioned). Re-introducing an
+    unversioned public path would fork the surface and is a contract regression."""
     for method, path in (
         ("POST", "/cases"),
         ("POST", "/jobs"),
@@ -217,13 +217,21 @@ def _schema() -> Dict[str, Any]:
     return app.openapi()
 
 
+# The unversioned infra (ops) endpoints, enumerated EXPLICITLY (not a ``/health/*`` prefix
+# wildcard): liveness (``/health``) + the #995 readiness diagnostic (``/health/readiness``).
+# An explicit allowlist means a *new* ``/health/<x>`` route must be added here deliberately —
+# it cannot silently inherit the unversioned exemption (which a ``startswith`` would grant), so
+# a client-data route mistakenly mounted under /health still trips the guard.
+_INFRA_UNVERSIONED_PATHS = frozenset({"/health", "/health/readiness"})
+
+
 def test_openapi_paths_are_all_versioned_except_health() -> None:
     paths = set(_schema()["paths"])
-    non_health = {p for p in paths if p != "/health"}
-    assert non_health, "expected client-data paths in the schema"
+    non_infra = paths - _INFRA_UNVERSIONED_PATHS
+    assert non_infra, "expected client-data paths in the schema"
     assert all(
-        p.startswith(f"{API_V1_PREFIX}/") for p in non_health
-    ), f"unversioned client-data path in schema: {sorted(non_health)}"
+        p.startswith(f"{API_V1_PREFIX}/") for p in non_infra
+    ), f"unversioned client-data path in schema: {sorted(non_infra)}"
 
 
 def test_openapi_operation_ids_are_pinned() -> None:
