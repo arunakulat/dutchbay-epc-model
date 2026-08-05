@@ -506,20 +506,11 @@ expected_results:
   annual_revenue_p50_m_eur: 29.1  # Reference: 473.8 GWh × 61.5 EUR/MWh
   revenue_20yr_undiscounted_m_lkr: 183553.8  # With 0.5%/yr degradation (M3e) + CPI
   
-  # Financial metrics — BINDING targets asserted against the live pipeline by
-  # tests/integration/test_capex_cases_smoke.py (CESSPIT pre-flight integrity), so they
-  # cannot silently drift. This case differs from the canonical lender ONLY in capex
-  # ($1,420/kW vs $1,000/kW); resource / tariff / debt are identical. Higher capex forces
-  # the dual-DSCR gearing down to 0.440 (the covenant binds harder), so equity thins and
-  # the deal is DEEPLY value-destructive — the flat-nominal-LKR tariff compounds it.
-  project_irr: -0.0059        # vs canonical 0.0268 — deeply BELOW this case's WACC (~9.1%)
-  equity_irr: -0.0809        # vs canonical -0.0486 — deeply NEGATIVE (loss); prudent capex on top
-                             # of the FX-drift/AEP/PR-A re-baselines + the PR-B UIP LKR debt rate.
-  project_npv_m_usd: -131.90 # vs canonical -65.5
-  min_dscr: 1.30             # dual-DSCR sculpt pins min at the covenant target
-  avg_dscr: 1.39
-  llcr: 1.36
-  plcr: 1.41
+  # Financial-KPI regression targets moved to tests/fixtures/finance/capex_cases_expected_kpis.json
+  # (#996 D3b: a runtime-input scenario must not double as its own regression oracle); still bound to
+  # the live pipeline by tests/integration/test_capex_cases_smoke.py. This case differs from the
+  # canonical lender ONLY in capex ($1,420/kW); higher capex forces the dual-DSCR gearing down to
+  # 0.440, so the deal is DEEPLY value-destructive — the flat-nominal-LKR tariff compounds it.
 
 # ═════════════════════════════════════════════════════════════════════════════
 # METADATA

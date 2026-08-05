@@ -11,6 +11,7 @@ config-sourced identity fields to a hand-set or Kalpitiya-inherited value.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,10 @@ from analytics.schema_guard import validate_config_for_v14
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCENARIO = REPO_ROOT / "scenarios" / "mullikulam_2x50mw_mannar.yaml"
+# #996 D3b: the financial-KPI oracle lives in a golden fixture, not the scenario.
+EXPECTED_KPIS = (
+    REPO_ROOT / "tests" / "fixtures" / "finance" / "mullikulam_expected_kpis.json"
+)
 
 
 @pytest.fixture(scope="module")
@@ -121,12 +126,14 @@ def test_expected_results_block_matches_live_engine() -> None:
     """Bind the scenario's expected_results financial pins to the live engine so they cannot
     silently drift again (round-7 stale-pin fix). The mullikulam expected_results had gone
     stale — its LLCR/PLCR predated PR #389 and no test read the block."""
-    import yaml
-
     from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
-    exp = yaml.safe_load(SCENARIO.read_text())["expected_results"]
+    exp = json.loads(EXPECTED_KPIS.read_text())
     kpis = run_v14_pipeline(config=str(SCENARIO))["kpis"]
+    # #996 D3b: financial KPIs come from the fixture; the scenario keeps net_aep (runtime).
+    scen_er = load_scenario_config(str(SCENARIO))["expected_results"]
+    assert "net_aep_p50_gwh" in scen_er and "net_aep_p90_gwh" in scen_er
+    assert "project_irr" not in scen_er and "equity_moic" not in scen_er
     assert kpis["project_irr"] == pytest.approx(exp["project_irr"], abs=2e-3)
     assert kpis["equity_irr"] == pytest.approx(exp["equity_irr"], abs=2e-3)
     assert kpis["project_npv"] / 1e6 == pytest.approx(exp["project_npv_m_usd"], abs=0.1)

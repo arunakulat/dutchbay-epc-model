@@ -15,6 +15,7 @@ equity IRR -12.23%, project NPV -$135.48M (post 2% P50 AEP haircut).
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,10 @@ from analytics.schema_guard import validate_config_for_v14
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCENARIO = REPO_ROOT / "scenarios" / "dutchbay_lendercase_5usc_fixed_lkr.yaml"
+# #996 D3b: the financial-KPI oracle lives in a golden fixture, not the scenario.
+EXPECTED_KPIS = (
+    REPO_ROOT / "tests" / "fixtures" / "finance" / "kalpitiya_5usc_expected_kpis.json"
+)
 
 
 @pytest.fixture(scope="module")
@@ -137,10 +142,12 @@ def test_pipeline_runs_config_driven_and_is_uneconomic(cfg: dict) -> None:
 
 
 def test_expected_results_match_live_engine(cfg: dict) -> None:
-    """The scenario's expected_results block is bound to the live engine (no silent drift)."""
+    """The golden fixture is bound to the live engine (no silent drift). #996 D3b: the
+    financial KPIs moved to the fixture; the scenario keeps only net_aep_p50/p90 (runtime
+    inputs), asserted here to lock the split."""
     from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
-    er = cfg["expected_results"]
+    er = json.loads(EXPECTED_KPIS.read_text())
     kpis = run_v14_pipeline(config=str(SCENARIO))["kpis"]
     assert kpis["project_irr"] == pytest.approx(float(er["project_irr"]), abs=0.005)
     assert kpis["equity_irr"] == pytest.approx(float(er["equity_irr"]), abs=0.005)
@@ -148,3 +155,7 @@ def test_expected_results_match_live_engine(cfg: dict) -> None:
         float(er["project_npv_m_usd"]), abs=0.5
     )
     assert kpis["min_dscr"] == pytest.approx(float(er["min_dscr"]), abs=0.02)
+    # The AEP runtime inputs stay in the scenario; the financial oracle does not.
+    scen_er = cfg["expected_results"]
+    assert "net_aep_p50_gwh" in scen_er and "net_aep_p90_gwh" in scen_er
+    assert "project_irr" not in scen_er and "min_dscr" not in scen_er

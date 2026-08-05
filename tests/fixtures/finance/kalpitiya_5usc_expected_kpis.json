@@ -1,0 +1,10 @@
+{
+  "_note": "Financial-KPI regression targets for scenarios/dutchbay_lendercase_5usc_fixed_lkr.yaml (5 US-cent fixed-LKR tariff, granular capex/opex), extracted per #996 D3b so a runtime-input scenario does not double as its own regression oracle. Consumed only by tests/integration/test_kalpitiya_5usc_smoke.py.",
+  "project_irr": -0.0336,
+  "equity_irr": -0.1409,
+  "project_npv_m_usd": -138.00,
+  "min_dscr": 1.30,
+  "avg_dscr": 1.39,
+  "llcr": 1.32,
+  "plcr": 1.35
+}
