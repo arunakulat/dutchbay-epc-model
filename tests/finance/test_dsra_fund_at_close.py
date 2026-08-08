@@ -17,6 +17,7 @@ import pytest
 
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
+from tests._canon import LENDER_EQUITY_IRR, LENDER_MIN_DSCR, LENDER_PROJECT_IRR
 
 warnings.filterwarnings("ignore")
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -37,9 +38,9 @@ def test_default_off_preserves_canonical() -> None:
     # Canonical after the #738 import-levy re-baseline (2026-07-05): PRUDENT duties
     # capitalized + 18% opex VAT, net of the revenue-SSCL exemption reversal —
     # projIRR ~1.46%, equity IRR ~-5.84% at the flat-LKR tariff.
-    assert kpis["project_irr"] == pytest.approx(0.014552, abs=0.003)
-    assert kpis["equity_irr"] == pytest.approx(-0.058413, abs=0.001)
-    assert kpis["min_dscr"] == pytest.approx(1.29, abs=0.02)
+    assert kpis["project_irr"] == pytest.approx(LENDER_PROJECT_IRR, abs=0.003)
+    assert kpis["equity_irr"] == pytest.approx(LENDER_EQUITY_IRR, abs=0.001)
+    assert kpis["min_dscr"] == pytest.approx(LENDER_MIN_DSCR, abs=0.02)
     assert f["fund_at_close"] is False
     assert f["initial_dsra_usd"] == 0.0
     # the S&U is always reported and always balances

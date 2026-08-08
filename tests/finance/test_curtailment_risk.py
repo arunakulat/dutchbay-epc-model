@@ -16,6 +16,12 @@ import pytest
 import yaml
 
 from analytics.scenario_loader import load_scenario_config
+from tests._canon import (
+    LENDER_MIN_DSCR,
+    LENDER_MIN_DSCR_PERIOD,
+    LENDER_PROJECT_IRR,
+    LENDER_PROJECT_NPV,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
@@ -79,12 +85,12 @@ def test_default_curtailment_is_byte_identical() -> None:
     # revenue-SSCL exemption reversal — projIRR 2.03% -> 1.46%, NPV -70.95M ->
     # -79.27M. minDSCR headline is the #790 fold (per-period floor 1.30 lives in
     # min_dscr_period).
-    assert k["project_irr"] == pytest.approx(0.014552, abs=1e-5)
+    assert k["project_irr"] == pytest.approx(LENDER_PROJECT_IRR, abs=1e-5)
     assert k["project_npv"] == pytest.approx(
-        -79273039.21, abs=1.0
+        LENDER_PROJECT_NPV, abs=1.0
     )  # PR-B UIP LKR debt rate + #737 credit-support fees + #738 import levies
-    assert k["min_dscr"] == pytest.approx(1.285740985294611, abs=1e-6)
-    assert k["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
+    assert k["min_dscr"] == pytest.approx(LENDER_MIN_DSCR, abs=1e-6)
+    assert k["min_dscr_period"] == pytest.approx(LENDER_MIN_DSCR_PERIOD, abs=1e-6)
 
 
 def test_curtailment_stress_reduces_economics() -> None:

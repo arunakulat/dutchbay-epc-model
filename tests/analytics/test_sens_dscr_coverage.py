@@ -23,7 +23,7 @@ from analytics.contracts_v14 import ParameterRangeConfig, SensitivitySuite
 from analytics.scenario_loader import load_scenario_config
 from analytics.sensitivity.dscr import DscrSensitivityConfig, run_dscr_one_way
 from analytics.sensitivity.engine import SensitivityRunConfig
-from tests._canon import LENDER_MIN_DSCR
+from tests._canon import LENDER_MIN_DSCR, LENDER_MIN_DSCR_PERIOD
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
@@ -66,7 +66,9 @@ def test_run_dscr_one_way_real_config() -> None:
     # (the per-period sculpt floor 1.30 lives in min_dscr_period). #738: the
     # levy-inclusive year-1 fold eases 1.2884 -> 1.2857.
     assert suite.base_kpis["dscr_min"] == pytest.approx(LENDER_MIN_DSCR, abs=1e-6)
-    assert suite.base_kpis["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
+    assert suite.base_kpis["min_dscr_period"] == pytest.approx(
+        LENDER_MIN_DSCR_PERIOD, abs=1e-6
+    )
 
 
 def test_run_dscr_one_way_unknown_parameter_raises() -> None:
