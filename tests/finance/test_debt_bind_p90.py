@@ -18,6 +18,7 @@ import pytest
 
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
+from tests._canon import LENDER_EQUITY_IRR, LENDER_MIN_DSCR, LENDER_PROJECT_IRR
 
 warnings.filterwarnings("ignore")
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -37,9 +38,9 @@ def test_default_off_preserves_canonical() -> None:
     # capitalized on the imported capex share + 18% opex VAT, net of the revenue-SSCL
     # exemption reversal — projIRR ~1.46%, equity IRR ~-5.84%, and the fee+levy-
     # inclusive sculpt solves ~0.41 gearing on the grossed ($167.86M) base.
-    assert kpis["project_irr"] == pytest.approx(0.0146, abs=0.003)
-    assert kpis["equity_irr"] == pytest.approx(-0.0584, abs=0.003)
-    assert kpis["min_dscr"] == pytest.approx(1.29, abs=0.02)
+    assert kpis["project_irr"] == pytest.approx(LENDER_PROJECT_IRR, abs=0.003)
+    assert kpis["equity_irr"] == pytest.approx(LENDER_EQUITY_IRR, abs=0.003)
+    assert kpis["min_dscr"] == pytest.approx(LENDER_MIN_DSCR, abs=0.02)
     # P50 is the sole driver; the detail uses the legacy flat-factor downside.
     assert d["binding_production_case"] == "P50"
     assert d["downside_source"] == "flat_factor"

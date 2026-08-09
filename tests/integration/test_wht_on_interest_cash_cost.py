@@ -20,6 +20,7 @@ import pytest
 from analytics.evaluation_v14 import evaluate_with_overrides
 from tests._canon import LENDER_EQUITY_IRR as _CANON_EQ_IRR
 from tests._canon import LENDER_MIN_DSCR as _CANON_MIN_DSCR
+from tests._canon import LENDER_MIN_DSCR_PERIOD as _CANON_MIN_DSCR_PERIOD
 from tests._canon import LENDER_TOTAL_CFADS_USD as _CANON_CFADS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -51,7 +52,7 @@ def test_default_off_is_byte_identical() -> None:
     # #790: headline = fold-corrected covenant minimum; per-period floor 1.30.
     # (#738: the levy-inclusive year-1 fold eases 1.2884 -> 1.2857.)
     assert k["min_dscr"] == pytest.approx(_CANON_MIN_DSCR, abs=1e-6)
-    assert k["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
+    assert k["min_dscr_period"] == pytest.approx(_CANON_MIN_DSCR_PERIOD, abs=1e-6)
 
 
 def test_gross_up_off_with_a_rate_is_still_a_no_op() -> None:

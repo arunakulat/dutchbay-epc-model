@@ -26,6 +26,7 @@ import yaml
 from omegaconf import OmegaConf
 
 import run_full_pipeline_v14 as rfp
+from tests._canon import LENDER_EQUITY_IRR, LENDER_MIN_DSCR, LENDER_PROJECT_IRR
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -33,9 +34,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # ever mutated the finance result, one of these would change.
 _STUB_KPIS: Dict[str, Any] = {
     "scenario_name": "grid_test",
-    "project_irr": 0.014551597740253388,
-    "equity_irr": -0.05841298678542661,
-    "min_dscr": 1.285740985294611,
+    "project_irr": LENDER_PROJECT_IRR,
+    "equity_irr": LENDER_EQUITY_IRR,
+    "min_dscr": LENDER_MIN_DSCR,
 }
 _STUB_RESULT: Dict[str, Any] = {"status": "success", "kpis": dict(_STUB_KPIS)}
 

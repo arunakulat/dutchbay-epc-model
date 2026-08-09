@@ -16,7 +16,11 @@ from pathlib import Path
 import pytest
 
 from analytics.scenario_loader import load_scenario_config
-from tests._canon import LENDER_PROJECT_IRR, LENDER_TOTAL_CFADS_USD
+from tests._canon import (
+    LENDER_PROJECT_IRR,
+    LENDER_PROJECT_NPV,
+    LENDER_TOTAL_CFADS_USD,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
@@ -79,7 +83,7 @@ def test_default_grid_outage_is_byte_identical() -> None:
     k = run_v14_pipeline(config=LENDER)["kpis"]
     # No committed scenario declares grid_outage_pct, so the lever is 0.0 → canon.
     assert k["project_irr"] == pytest.approx(LENDER_PROJECT_IRR, abs=1e-9)
-    assert k["project_npv"] == pytest.approx(-79273039.21, abs=1.0)
+    assert k["project_npv"] == pytest.approx(LENDER_PROJECT_NPV, abs=1.0)
     assert k["total_cfads_usd"] == pytest.approx(LENDER_TOTAL_CFADS_USD, rel=1e-9)
 
 
