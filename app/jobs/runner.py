@@ -101,8 +101,8 @@ _RECON_TOLERANCE_PCT = 0.5
 
 
 def _input_reconciliation(
-    submitted_capacity_mw: float,
-    submitted_capacity_factor: float,
+    submitted_capacity_mw: Optional[float],
+    submitted_capacity_factor: Optional[float],
     export: Mapping[str, Any],
     *,
     tolerance_pct: float = _RECON_TOLERANCE_PCT,
@@ -117,9 +117,17 @@ def _input_reconciliation(
     ``superseded`` flag when the drift exceeds ``tolerance_pct``) so the overwrite is
     SURFACED in the assessment provenance rather than applied silently.
 
+    A submitted value may now be ``None`` (#1023: capacity / capacity factor are optional
+    on the async derive-authoritative path). For an omitted field there is nothing to drift
+    against, so the field is recorded as ``{"submitted": None, "used": <derived>,
+    "drift_pct": None, "superseded": False, "derived_only": True}`` — the derived basis is
+    still surfaced, just never flagged as a supersession.
+
     Args:
-        submitted_capacity_mw: The client-supplied nameplate capacity (MW).
-        submitted_capacity_factor: The client-supplied capacity factor (decimal).
+        submitted_capacity_mw: The client-supplied nameplate capacity (MW), or ``None`` when
+            omitted (async derive-authoritative path).
+        submitted_capacity_factor: The client-supplied capacity factor (decimal), or
+            ``None`` when omitted.
         export: The wind cashflow export; must carry ``project_capacity_mw`` and
             ``capacity_factor_percent`` (the derived physical basis) for a note to be
             built.
@@ -138,7 +146,16 @@ def _input_reconciliation(
         return None
     used_cf = float(used_cf_pct) / 100.0
 
-    def _field(submitted: float, used: float) -> Dict[str, Any]:
+    def _field(submitted: Optional[float], used: float) -> Dict[str, Any]:
+        if submitted is None:
+            # #1023: the client omitted this field — it was derived, not superseded.
+            return {
+                "submitted": None,
+                "used": float(used),
+                "drift_pct": None,
+                "superseded": False,
+                "derived_only": True,
+            }
         drift_pct = (
             abs(used - submitted) / abs(submitted) * 100.0 if submitted else None
         )
@@ -150,8 +167,10 @@ def _input_reconciliation(
         }
 
     return {
-        "capacity_mw": _field(float(submitted_capacity_mw), float(used_capacity)),
-        "capacity_factor": _field(float(submitted_capacity_factor), used_cf),
+        # Pass the (possibly None) submissions through unchanged — ``_field`` handles the
+        # None (derived_only) and float-coercion internally (#1023).
+        "capacity_mw": _field(submitted_capacity_mw, float(used_capacity)),
+        "capacity_factor": _field(submitted_capacity_factor, used_cf),
         "basis": (
             "screening-grade physical assessment: capacity_mw = num_turbines × turbine "
             "nameplate, capacity_factor from the selected p_level export. The submitted "

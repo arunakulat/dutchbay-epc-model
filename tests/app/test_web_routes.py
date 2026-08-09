@@ -413,6 +413,36 @@ def test_run_validation_error_fragment_422(client: Any) -> None:
     assert "Traceback" not in resp.text
 
 
+def test_run_rejects_missing_capacity_sync(client: Any) -> None:
+    """#1023: capacity_mw / capacity_factor are Optional on the model only so the ASYNC path
+    can derive them; the SYNC wizard must still REQUIRE them. A submission omitting both is
+    rejected as a 422 error fragment (never silently run with a derived-away basis)."""
+    _login(client)
+    form = _full_form()
+    del form["capacity_mw"]
+    del form["capacity_factor"]
+    resp = client.post("/wizard/run", data=form, headers={"HX-Request": "true"})
+    assert resp.status_code == 422
+    assert "Could not run the case" in resp.text
+    # The per-field error names the missing sync-required fields.
+    assert "capacity_mw" in resp.text
+    assert "capacity_factor" in resp.text
+    assert "Traceback" not in resp.text
+
+
+def test_run_rejects_blank_capacity_sync(client: Any) -> None:
+    """A blank capacity field (HTML posts ``capacity_mw=``, which the form parser drops) is
+    treated as omitted and rejected on the sync wizard, same as a fully absent field."""
+    _login(client)
+    resp = client.post(
+        "/wizard/run",
+        data=_full_form(capacity_mw="", capacity_factor=""),
+        headers={"HX-Request": "true"},
+    )
+    assert resp.status_code == 422
+    assert "capacity_mw" in resp.text and "capacity_factor" in resp.text
+
+
 def test_run_engine_rejection_renders_error_fragment(
     client: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -110,6 +110,68 @@ def test_to_overrides_includes_set_optionals() -> None:
     assert ov["Financing_Terms"]["target_dscr"] == pytest.approx(1.30)
 
 
+# --------------------------------------------------------------------------- #
+# #1023: capacity_mw / capacity_factor are OPTIONAL on the model so the async
+# derive-authoritative wind path may omit them (they are derived + overwritten by
+# the screening seam). The sync wizard still requires them (enforced at the route).
+# --------------------------------------------------------------------------- #
+def _valid_kwargs_no_capacity() -> Dict[str, Any]:
+    kwargs = _valid_kwargs()
+    del kwargs["capacity_mw"]
+    del kwargs["capacity_factor"]
+    return kwargs
+
+
+def test_capacity_and_cf_optional_on_model() -> None:
+    """The async path may omit capacity / capacity factor: the model validates with None."""
+    m = WindFarmInputs(**_valid_kwargs_no_capacity())
+    assert m.capacity_mw is None
+    assert m.capacity_factor is None
+
+
+def test_to_overrides_omits_capacity_keys_when_none() -> None:
+    """With capacity / CF omitted, their keys are dropped so the base variant value survives
+    the deep-merge and (async) the screening export overwrites it."""
+    ov = WindFarmInputs(**_valid_kwargs_no_capacity(), num_turbines=15).to_overrides()
+    assert "capacity_mw" not in ov["project"]
+    assert "capacity_factor" not in ov["project"]
+    assert "total_capacity_mw" not in ov["turbine"]
+    # An unrelated turbine field still maps; project keeps name + life_years.
+    assert ov["turbine"]["n_turbines"] == 15
+    assert ov["project"]["name"] == "DutchBay"
+    assert ov["project"]["life_years"] == 20
+
+
+def test_to_overrides_byte_identical_when_both_present() -> None:
+    """When BOTH capacity / CF are present the mapping is byte-identical to the pre-#1023
+    output — same keys, same order (guards the finance/sync path from any drift)."""
+    ov = WindFarmInputs(
+        **_valid_kwargs(
+            location="Kalpitiya", cod_year=2027, num_turbines=15, hub_height_m=120.0
+        )
+    ).to_overrides()
+    expected = {
+        "project": {
+            "name": "DutchBay",
+            "capacity_mw": 150.0,
+            "capacity_factor": 0.332,
+            "life_years": 20,
+            "location": "Kalpitiya",
+            "cod_year": 2027,
+        },
+        "turbine": {
+            "total_capacity_mw": 150.0,
+            "n_turbines": 15,
+            "hub_height_m": 120.0,
+        },
+        "capex": {"usd_total": 159_600_000.0},
+        "opex": {"usd_per_year": 5_000_000.0},
+        "tariff": {"lkr_per_kwh": 20.30, "ppa_term_years": 20},
+        "fx": {"start_lkr_per_usd": 333.79},
+    }
+    assert repr(ov) == repr(expected)  # key order + values, not just == equality
+
+
 @pytest.mark.parametrize("variant", ["lendercase", "basecase", "equitycase"])
 def test_base_scenario_path_exists(variant: str) -> None:
     path = WindFarmInputs(

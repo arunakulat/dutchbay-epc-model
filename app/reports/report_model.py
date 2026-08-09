@@ -1280,12 +1280,25 @@ def _build_assumptions(
     if inputs is None:
         return []
     evidence = _evidence_lookup(scenario_config)
+    # capacity_mw / capacity_factor are Optional on the async derive-authoritative path
+    # (#1023) — there the physical basis is derived from the turbine layout + p_level and
+    # overwritten by the screening seam, so the submitted form value is None. Show a
+    # "derived (screening)" placeholder rather than formatting None. Byte-identical when
+    # the values are present (the sync wizard always supplies them).
+    capacity_display = (
+        f"{inputs.capacity_mw:g} MW"
+        if inputs.capacity_mw is not None
+        else "derived (screening)"
+    )
+    capacity_factor_display = (
+        f"{inputs.capacity_factor * 100:.1f}%"
+        if inputs.capacity_factor is not None
+        else "derived (screening)"
+    )
     rows = [
         _assumption_row("Site", inputs.site_name, evidence),
-        _assumption_row("Installed capacity", f"{inputs.capacity_mw:g} MW", evidence),
-        _assumption_row(
-            "Capacity factor", f"{inputs.capacity_factor * 100:.1f}%", evidence
-        ),
+        _assumption_row("Installed capacity", capacity_display, evidence),
+        _assumption_row("Capacity factor", capacity_factor_display, evidence),
         _assumption_row("Project life", f"{inputs.project_life_years} years", evidence),
         _assumption_row(
             "PPA tariff", f"LKR {inputs.ppa_price_lkr_per_kwh:g}/kWh", evidence

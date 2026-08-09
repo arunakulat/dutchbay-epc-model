@@ -69,8 +69,14 @@ class WindFarmInputs(BaseModel):
     # Site / project
     site_name: str = Field(..., min_length=1)
     location: Optional[str] = None
-    capacity_mw: float = Field(..., gt=0)
-    capacity_factor: float = Field(..., gt=0, le=1)
+    # Optional on the model so the ASYNC live-ERA5 wind path (#1023) may OMIT them:
+    # there capacity is DERIVED from num_turbines × turbine nameplate and the capacity
+    # factor from the selected p_level export, then overwritten by the screening seam
+    # (#997). The SYNC wizard still REQUIRES both — enforced at the route
+    # (app.web.routes._inputs_from_form), never weakened here. When supplied they keep
+    # the engine's physical constraints (capacity > 0, capacity factor in (0, 1]).
+    capacity_mw: Optional[float] = Field(default=None, gt=0)
+    capacity_factor: Optional[float] = Field(default=None, gt=0, le=1)
     project_life_years: int = Field(..., ge=1, le=60)
     cod_year: Optional[int] = Field(None, ge=2000, le=2100)
     num_turbines: Optional[int] = Field(None, gt=0)
@@ -88,19 +94,29 @@ class WindFarmInputs(BaseModel):
     target_dscr: Optional[float] = Field(None, gt=0)
 
     def to_overrides(self) -> Dict[str, Any]:
-        """Build the nested scenario-override dict from the set fields."""
-        project: Dict[str, Any] = {
-            "name": self.site_name,
-            "capacity_mw": self.capacity_mw,
-            "capacity_factor": self.capacity_factor,
-            "life_years": self.project_life_years,
-        }
+        """Build the nested scenario-override dict from the set fields.
+
+        When ``capacity_mw`` / ``capacity_factor`` are omitted (the async
+        derive-authoritative path, #1023) the corresponding keys are LEFT OUT of the
+        ``project`` dict — and ``turbine.total_capacity_mw`` is left out when
+        ``capacity_mw`` is None — so the base scenario variant's value survives the
+        deep-merge and (async) the screening export overwrites it. When BOTH are
+        present the returned mapping is byte-identical to the pre-#1023 output.
+        """
+        project: Dict[str, Any] = {"name": self.site_name}
+        if self.capacity_mw is not None:
+            project["capacity_mw"] = self.capacity_mw
+        if self.capacity_factor is not None:
+            project["capacity_factor"] = self.capacity_factor
+        project["life_years"] = self.project_life_years
         if self.location is not None:
             project["location"] = self.location
         if self.cod_year is not None:
             project["cod_year"] = self.cod_year
 
-        turbine: Dict[str, Any] = {"total_capacity_mw": self.capacity_mw}
+        turbine: Dict[str, Any] = {}
+        if self.capacity_mw is not None:
+            turbine["total_capacity_mw"] = self.capacity_mw
         if self.num_turbines is not None:
             turbine["n_turbines"] = self.num_turbines
         if self.hub_height_m is not None:
