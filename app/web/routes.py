@@ -162,12 +162,25 @@ async def _parse_form(request: Request) -> Dict[str, str]:
     return {key: value for key, value in pairs if value != ""}
 
 
+#: Fields the SYNC wizard must carry. ``capacity_mw`` / ``capacity_factor`` are Optional on
+#: :class:`WindFarmInputs` only so the ASYNC live-ERA5 path (#1023) may derive them from the
+#: turbine layout + p_level; the sync wizard re-derives nothing, so it still requires both.
+_SYNC_REQUIRED_FIELDS = ("capacity_mw", "capacity_factor")
+
+
 def _inputs_from_form(form: Dict[str, str]) -> WindFarmInputs:
     """Validate a parsed form mapping into a :class:`WindFarmInputs`.
 
     Pydantic coerces the string form values to the model's typed fields (e.g. ``"150"`` →
     ``150.0``) and enforces every physical constraint; a malformed submission raises
     :class:`pydantic.ValidationError`, which the caller turns into the error fragment.
+
+    ``capacity_mw`` / ``capacity_factor`` are Optional on the model so the async wind path
+    (#1023) can OMIT them (they are derived from ``num_turbines × turbine nameplate`` and the
+    selected ``p_level`` and then overwritten by the screening seam, #997). The SYNC wizard
+    derives nothing, so both stay **required here** — an omission is rejected with the exact
+    same ``pydantic.ValidationError`` (``type='missing'``) shape the route already normalises
+    into per-field error rows. This keeps the sync contract unweakened by the async change.
 
     Args:
         form: The ``{field: value}`` mapping from :func:`_parse_form`.
@@ -176,9 +189,17 @@ def _inputs_from_form(form: Dict[str, str]) -> WindFarmInputs:
         The validated wizard inputs.
 
     Raises:
-        ValidationError: If any field is missing, mistyped, or out of range.
+        ValidationError: If any field is missing, mistyped, or out of range — including a
+            sync-required capacity / capacity factor omitted from the form.
     """
-    return WindFarmInputs.model_validate(form)
+    inputs = WindFarmInputs.model_validate(form)
+    missing = [name for name in _SYNC_REQUIRED_FIELDS if getattr(inputs, name) is None]
+    if missing:
+        raise ValidationError.from_exception_data(
+            WindFarmInputs.__name__,
+            [{"type": "missing", "loc": (name,), "input": form} for name in missing],
+        )
+    return inputs
 
 
 def _field_error_fragment(

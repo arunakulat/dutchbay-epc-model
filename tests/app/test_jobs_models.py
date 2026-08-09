@@ -134,6 +134,28 @@ def test_request_defaults_and_validation() -> None:
         )
 
 
+def test_wind_job_request_accepts_omitted_capacity_and_cf() -> None:
+    """#1023: the async wind path may OMIT capacity_mw / capacity_factor — they are derived
+    from the turbine layout + p_level and overwritten by the screening seam. A WindJobRequest
+    whose embedded inputs omit both still validates (they default to None)."""
+    inputs = WindFarmInputs(
+        site_name="Dutch Bay",
+        project_life_years=20,
+        ppa_price_lkr_per_kwh=26.0,
+        ppa_term_years=20,
+        capex_total_usd=195_000_000,
+        opex_annual_usd=6_000_000,
+        fx_start_lkr_per_usd=333.79,
+    )
+    assert inputs.capacity_mw is None and inputs.capacity_factor is None
+    req = _request(inputs=inputs)
+    assert req.inputs.capacity_mw is None
+    assert req.inputs.capacity_factor is None
+    # The finance-scenario mapping still builds (base variant supplies the physical basis).
+    scenario = req.to_finance_scenario()
+    assert isinstance(scenario, dict) and scenario
+
+
 def test_turbine_model_unknown_rejected_at_request_time() -> None:
     # CESSPIT strict (#965): an unknown turbine fails validation with an actionable
     # message listing the valid keys — a 422 on POST /jobs, not a mid-job KeyError.

@@ -1111,6 +1111,30 @@ def test_assumptions_omit_location_when_absent() -> None:
     assert "Location" not in [a.label for a in ctx.assumptions]
 
 
+def test_assumptions_present_capacity_display_unchanged() -> None:
+    """With capacity / CF supplied, the assumptions display strings are byte-identical to
+    the pre-#1023 output (the #1023 None-guard must not perturb the populated path)."""
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT, inputs=_inputs()
+    )
+    by_label = {a.label: a for a in ctx.assumptions}
+    assert by_label["Installed capacity"].display == "150 MW"
+    assert by_label["Capacity factor"].display == "33.9%"
+
+
+def test_assumptions_derived_placeholder_when_capacity_none() -> None:
+    """#1023: when capacity / CF are omitted (async derive-authoritative path) the
+    assumptions rows render a 'derived (screening)' placeholder rather than crashing on a
+    ``None`` format."""
+    inp = _inputs().model_copy(update={"capacity_mw": None, "capacity_factor": None})
+    ctx = build_report_context(
+        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT, inputs=inp
+    )
+    by_label = {a.label: a for a in ctx.assumptions}
+    assert by_label["Installed capacity"].display == "derived (screening)"
+    assert by_label["Capacity factor"].display == "derived (screening)"
+
+
 # --------------------------------------------------------------------------- #
 # Multi-technology breakdown (ARCH-4, #476)
 # --------------------------------------------------------------------------- #

@@ -198,6 +198,75 @@ def test_capacity_and_cf_mismatch_runs_clean_and_surfaces_supersession() -> None
     assert recon["capacity_factor"]["superseded"] is True
 
 
+def _request_no_capacity() -> WindJobRequest:
+    """A #1023 async request whose embedded inputs OMIT capacity_mw / capacity_factor."""
+    return WindJobRequest(
+        inputs=WindFarmInputs(
+            site_name="Dutch Bay",
+            project_life_years=20,
+            ppa_price_lkr_per_kwh=26.0,
+            ppa_term_years=20,
+            capex_total_usd=195_000_000,
+            opex_annual_usd=6_000_000,
+            fx_start_lkr_per_usd=333.79,
+        ),
+        site_lat=8.33,
+        site_lon=79.76,
+        turbine_model="iea_reference_10mw",
+        num_turbines=15,
+        hub_height_m=119.0,
+    )
+
+
+def test_omitted_capacity_derives_and_succeeds_through_real_seam() -> None:
+    """#1023 end-to-end: a client that OMITS capacity_mw / capacity_factor runs clean through
+    the REAL service seam — the screening export fills the physical basis — and the
+    reconciliation note surfaces both fields as derived_only (never a supersession)."""
+    req = _request_no_capacity()
+    assert req.inputs.capacity_mw is None and req.inputs.capacity_factor is None
+    export = {
+        "scenario": "P75",
+        "annual_generation_mwh": 300_000.0,
+        "capacity_factor_percent": 22.8,
+        "revenue_annual_usd": 20_000_000.0,
+        "revenue_cumulative_usd": 400_000_000.0,
+        "project_capacity_mw": 159.57,  # 15 × iea_reference_10mw nameplate
+        "num_turbines": 15,
+        "rated_capacity_per_turbine_kw": 10_638.0,
+        "ppa_years": 20,
+        "tariff_lkr_per_kwh": 20.3,
+        "exchange_rate_lkr_usd": 300.0,
+    }
+    wa = WindAssessment(
+        p_levels_gwh={"P75": 300.0},
+        net_capacity_factor={"P75": 0.228},
+        provenance={"grade": "screening", "selected_p_level": "P75"},
+        site={"name": "Dutch Bay"},
+    )
+
+    def _assessment(_req: WindJobRequest, progress: Any) -> runner_mod.AssessmentResult:
+        progress(1, "assess")
+        return runner_mod.AssessmentResult(export=export, wind_assessment=wa)
+
+    store = InMemoryJobStore()
+    _seed_queued(store)
+    run_wind_job("j1", req, store, assessment_fn=_assessment)
+    rec = store.get("j1")
+    assert rec is not None
+    # The omitted capacity / CF do not block the job: derived + succeeds through the real seam.
+    assert rec.state is JobState.SUCCEEDED, rec.error
+    assert rec.result is not None and "kpis" in rec.result
+    # The supersession note records the derived-only basis for both omitted fields.
+    recon = rec.result["wind_assessment"]["provenance"]["input_reconciliation"]
+    assert recon["capacity_mw"]["submitted"] is None
+    assert recon["capacity_mw"]["used"] == pytest.approx(159.57)
+    assert recon["capacity_mw"]["derived_only"] is True
+    assert recon["capacity_mw"]["superseded"] is False
+    assert recon["capacity_factor"]["submitted"] is None
+    assert recon["capacity_factor"]["used"] == pytest.approx(0.228)
+    assert recon["capacity_factor"]["derived_only"] is True
+
+
 def test_input_reconciliation_flags_material_supersession() -> None:
     """The note carries submitted, used, drift, and the superseded flag per field."""
     export = {"project_capacity_mw": 159.57, "capacity_factor_percent": 22.8}
@@ -223,6 +292,35 @@ def test_input_reconciliation_not_superseded_within_tolerance() -> None:
 def test_input_reconciliation_none_for_bare_export() -> None:
     """A bare / legacy export with no derived physical keys yields no note (no crash)."""
     assert runner_mod._input_reconciliation(150.0, 0.339, {"scenario": "P75"}) is None
+
+
+def test_input_reconciliation_derived_only_when_submission_omitted() -> None:
+    """#1023: when the client OMITS a field it was derived, not superseded — the note records
+    it as derived_only with the used value surfaced and no drift/supersession."""
+    export = {"project_capacity_mw": 159.57, "capacity_factor_percent": 22.8}
+    recon = runner_mod._input_reconciliation(None, None, export)
+    assert recon is not None
+    for field in ("capacity_mw", "capacity_factor"):
+        assert recon[field]["submitted"] is None
+        assert recon[field]["drift_pct"] is None
+        assert recon[field]["superseded"] is False
+        assert recon[field]["derived_only"] is True
+    assert recon["capacity_mw"]["used"] == pytest.approx(159.57)
+    assert recon["capacity_factor"]["used"] == pytest.approx(0.228)
+
+
+def test_input_reconciliation_mixed_omitted_and_submitted() -> None:
+    """A submission may omit ONE field: capacity omitted (derived_only) while a submitted CF
+    is still reconciled against the derived value."""
+    export = {"project_capacity_mw": 159.57, "capacity_factor_percent": 22.8}
+    recon = runner_mod._input_reconciliation(None, 0.339, export)
+    assert recon is not None
+    assert recon["capacity_mw"]["submitted"] is None
+    assert recon["capacity_mw"]["derived_only"] is True
+    # The submitted CF is reconciled as before (drift + supersession), no derived_only flag.
+    assert recon["capacity_factor"]["submitted"] == pytest.approx(0.339)
+    assert recon["capacity_factor"]["superseded"] is True
+    assert "derived_only" not in recon["capacity_factor"]
 
 
 def test_progress_is_recorded(monkeypatch: pytest.MonkeyPatch) -> None:
