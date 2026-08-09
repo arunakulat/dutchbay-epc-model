@@ -26,7 +26,12 @@ from analytics.fx.fx_contracts import (
     FXStructuredBlock,
 )
 from analytics.fx.fx_integration import integrate_fx_into_scenario_result
-from tests._canon import LENDER_EQUITY_IRR, LENDER_MIN_DSCR, LENDER_PROJECT_IRR
+from tests._canon import (
+    LENDER_EQUITY_IRR,
+    LENDER_MIN_DSCR,
+    LENDER_MIN_DSCR_PERIOD,
+    LENDER_PROJECT_IRR,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER_SCENARIO = REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
@@ -237,4 +242,4 @@ def test_live_pipeline_populates_fx_block_curve_risk() -> None:
     assert k["equity_irr"] == pytest.approx(LENDER_EQUITY_IRR, abs=1e-9)
     # #790: headline = fold-corrected covenant minimum; per-period floor 1.30.
     assert k["min_dscr"] == pytest.approx(LENDER_MIN_DSCR, abs=1e-6)
-    assert k["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
+    assert k["min_dscr_period"] == pytest.approx(LENDER_MIN_DSCR_PERIOD, abs=1e-6)
