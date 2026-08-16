@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 
 from analytics.contracts_v14 import MonteCarloResult
+from analytics.core.covenant_breach import prob_breach
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.mc.aggregate import aggregate_trials
 from analytics.mc.convergence import convergence_diagnostic, percentile_ci_diagnostic
@@ -946,7 +947,8 @@ class MonteCarloEngine:
 
             meta["fixed_debt_stress"] = {
                 "covenant": cov,
-                "breach_probability": sum(1 for v in arr if v < cov) / len(arr),
+                # Delegate probability classification to the noise-tolerant covenant SSOT.
+                "breach_probability": prob_breach(np.asarray(arr, dtype=float), cov),
                 "n": len(arr),
                 "min_dscr_p10": _q(0.10),
                 "min_dscr_p50": _q(0.50),

@@ -13,13 +13,16 @@ import copy
 import logging
 from pathlib import Path
 
+import numpy as np
 import pytest
 import yaml
 
+import analytics.mc.engine as mc_engine
 from analytics.mc.engine import _trial_fixed_debt_min_dscr
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _SCENARIO = _REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
+_PIN_UNIT = np.array([1.2999999999999996, 1.2999999999999998, 1.3, 1.3000000000000003])
 
 
 def test_fixed_debt_min_dscr_helper_recovers_cfads() -> None:
@@ -47,10 +50,44 @@ def _cfg(fixed_debt: bool):
     cfg = copy.deepcopy(yaml.safe_load(_SCENARIO.read_text()))
     if fixed_debt:
         cfg["monte_carlo"]["fixed_debt_stress"] = True
+        cfg["monte_carlo"]["allow_toy_fallback"] = False
     return cfg
 
 
 class TestEngineFixedDebt:
+    @pytest.mark.parametrize(
+        ("controlled_dscr", "expected_probability"),
+        [
+            (np.tile(_PIN_UNIT, 2), 0.0),
+            (np.concatenate([np.tile(_PIN_UNIT, 2), [1.10]]), 1.0 / 9.0),
+        ],
+        ids=["floor-pin-noise", "genuine-breach"],
+    )
+    def test_breach_probability_uses_shared_noise_tolerant_primitive(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        controlled_dscr: np.ndarray,
+        expected_probability: float,
+    ) -> None:
+        values = iter(controlled_dscr.tolist())
+        monkeypatch.setattr(
+            mc_engine,
+            "_trial_fixed_debt_min_dscr",
+            lambda *_args, **_kwargs: next(values),
+        )
+
+        logging.disable(logging.WARNING)
+        try:
+            result = mc_engine.MonteCarloEngine(_cfg(fixed_debt=True), seed=725).run(
+                n_trials=controlled_dscr.size
+            )
+        finally:
+            logging.disable(logging.NOTSET)
+
+        fixed = result.metadata["fixed_debt_stress"]
+        assert fixed["n"] == controlled_dscr.size
+        assert fixed["breach_probability"] == pytest.approx(expected_probability)
+
     def test_off_by_default_is_byte_identical_shape(self) -> None:
         logging.disable(logging.WARNING)
         try:

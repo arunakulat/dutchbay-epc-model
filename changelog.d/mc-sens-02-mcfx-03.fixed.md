@@ -1,0 +1,1 @@
+- Route convergence and fixed-debt Monte Carlo covenant-breach probabilities through the shared noise-tolerant primitive so representation-noise values pinned at the DSCR floor are not reported as breaches.

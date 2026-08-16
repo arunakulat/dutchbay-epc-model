@@ -103,8 +103,9 @@ def aggregate_trials(
         ... )
         >>>
         >>> # Access raw trials for breach probability
+        >>> from analytics.core.covenant_breach import prob_breach
         >>> dscr_trials = result.trials["dscr_min"]  # 1000 values
-        >>> breach_prob = np.mean(dscr_trials < 1.30)
+        >>> breach_prob = prob_breach(np.asarray(dscr_trials, dtype=float), 1.30)
 
     Note:
         Canonical KPI names expected in trial_metrics:
