@@ -490,6 +490,39 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
     return params
 
 
+def _resolve_construction_periods(params: Mapping[str, Any]) -> int:
+    """Resolve the debt construction-period count without extraction side effects.
+
+    The precedence intentionally matches :func:`_extract_financing_terms` and the
+    historical ``apply_debt_layer`` coercion. Section names are case-insensitive;
+    child keys remain case-sensitive to preserve the existing configuration contract.
+
+    Args:
+        params: Complete scenario configuration or a compact debt test mapping.
+
+    Returns:
+        The configured construction-period count, coerced to an integer and clamped
+        to zero, with the historical two-period default when the selected section
+        omits the field.
+    """
+    financing_terms = _section_case_insensitive(params, "Financing_Terms")
+    if financing_terms:
+        value = financing_terms.get("construction_periods")
+        if value is None:
+            value = financing_terms.get("construction_years", 2)
+        return max(0, int(_as_float(value, 2)))
+
+    financing = _section_case_insensitive(params, "financing")
+    if financing:
+        return max(0, int(_as_float(financing.get("construction_periods"), 2)))
+
+    debt_cfg = _section_case_insensitive(params, "debt")
+    if debt_cfg:
+        return max(0, int(_as_float(debt_cfg.get("construction_periods"), 2)))
+
+    return max(0, int(_as_float(params.get("construction_periods"), 2)))
+
+
 def _build_cfads_timeline(
     annual_rows: Sequence[Dict[str, Any]],
     cfads: Sequence[float],
@@ -681,7 +714,7 @@ def apply_debt_layer(
     """
     p = _extract_financing_terms(params)
 
-    construction_periods = max(0, int(_as_float(p.get("construction_periods"), 2)))
+    construction_periods = _resolve_construction_periods(params)
     construction_schedule = p.get("construction_schedule", [40.0, 60.0])
     drawdown_pct = p.get("debt_drawdown_pct", [0.5, 0.5])
     debt_ratio = _as_float(p.get("debt_ratio"), 0.70)
