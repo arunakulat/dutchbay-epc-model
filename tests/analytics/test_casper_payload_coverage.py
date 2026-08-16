@@ -39,6 +39,7 @@ from analytics.contracts_v14 import (
     GenerationProfile,
     MonteCarloResult,
     MultiTechGenerationResult,
+    ParameterRangeConfig,
     ScenarioResult,
     SensitivitySuite,
     ShockResult,
@@ -48,6 +49,7 @@ from analytics.contracts_v14 import (
     WaccComponents,
     WaccResult,
 )
+from analytics.sensitivity.adapters import engine_to_tornado_result
 
 # ────────────────────────── builders ──────────────────────────────
 
@@ -302,6 +304,66 @@ def test_sensitivity_tornado_rows_and_fallbacks() -> None:
     assert rows[1]["variable"] == "aep"
     assert rows[1]["base_irr"] == 0.10
     json.dumps(out)
+
+
+def test_real_adapter_populates_canonical_shock_contract() -> None:
+    """The sole production adapter carries its known driver metadata to the child row."""
+    parameter = ParameterRangeConfig(
+        variable_name="capex.usd_total",
+        base_value=159_600_000.0,
+        low_pct=-0.10,
+        high_pct=0.10,
+        label="CAPEX",
+    )
+    tornado = engine_to_tornado_result(
+        parameter=parameter,
+        metric_key="project_irr",
+        base_value=0.014551597740253388,
+        cases=[
+            {"label": "capex=low", "value": 0.025129198450968886},
+            {"label": "capex=high", "value": 0.005493346017928717},
+        ],
+    )
+
+    shock = tornado.shock_results[0]
+    assert shock.variable_name == "capex.usd_total"
+    assert shock.label == "CAPEX"
+    assert shock.base_case == 0.014551597740253388
+    assert shock.low_case == 0.025129198450968886
+    assert shock.high_case == 0.005493346017928717
+    assert shock.impact == -0.01963585243304017
+    assert shock.impact_abs == 0.01963585243304017
+    assert shock.metric_name == "project_irr"
+
+
+def test_real_adapter_unlabelled_parameter_remains_identifiable() -> None:
+    """An optional display label may be absent; the canonical dotted path must survive."""
+    parameter = ParameterRangeConfig(
+        variable_name="project.capacity_factor",
+        base_value=0.332,
+        low_value=0.2988,
+        high_value=0.3652,
+    )
+    tornado = engine_to_tornado_result(
+        parameter=parameter,
+        metric_key="project_irr",
+        base_value=0.014,
+        cases=[
+            {"label": "capacity_factor=low", "value": 0.010},
+            {"label": "capacity_factor=high", "value": 0.020},
+        ],
+    )
+    suite = SensitivitySuite(
+        base_config_path="synthetic.yaml",
+        metric="project_irr",
+        tornado_results=[tornado],
+        base_kpis={"project_irr": 0.014},
+    )
+
+    serialized = _sensitivity_to_dict(suite)
+    assert serialized is not None
+    assert serialized["tornado"][0]["variable"] == "project.capacity_factor"
+    assert serialized["tornado"][0]["impact_abs"] == pytest.approx(0.010)
 
 
 # ────────────────────────── monte carlo ───────────────────────────

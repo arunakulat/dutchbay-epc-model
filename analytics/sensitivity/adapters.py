@@ -164,9 +164,14 @@ def engine_to_tornado_result(
 
     ShockResult expects:
     --------------------
+    - variable_name: str (canonical dotted config path)
+    - label: Optional[str] (human-readable driver label)
     - low_case: float
     - high_case: float
+    - base_case: float
     - impact: float (high - low)
+    - impact_abs: float (absolute high/low swing)
+    - metric_name: str (target metric key)
     """
     # Extract low/high cases
     low_case = None
@@ -187,9 +192,14 @@ def engine_to_tornado_result(
 
     impact = high_case - low_case
     shock = ShockResult(
+        variable_name=parameter.variable_name,
+        label=parameter.label,
         low_case=low_case,
         high_case=high_case,
+        base_case=base_value,
         impact=impact,
+        impact_abs=abs(impact),
+        metric_name=metric_key,
     )
 
     return TornadoResult(

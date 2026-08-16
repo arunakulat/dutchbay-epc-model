@@ -51,12 +51,18 @@ from __future__ import annotations
 from analytics.casper.casper_payload import (
     CASPER_CONTRACT_VERSION as PAYLOAD_CASPER_CONTRACT_VERSION,
 )
+from analytics.casper.casper_payload import (
+    build_casper_payload,
+)
 from analytics.contracts_v14 import (
     CASPER_CONTRACT_VERSION as CONTRACTS_CASPER_CONTRACT_VERSION,
 )
 from analytics.contracts_v14 import (
     CasperResult,
+    ParameterRangeConfig,
+    SensitivitySuite,
 )
+from analytics.sensitivity.adapters import engine_to_tornado_result
 
 
 def test_payload_casper_contract_version_is_frozen() -> None:
@@ -145,3 +151,50 @@ def test_casper_result_has_documented_canonical_fields() -> None:
         f"Added: {annotations - canonical_fields}. "
         f"Removed: {canonical_fields - annotations}."
     )
+
+
+def test_casper_v1_tornado_row_is_labelled_and_rankable() -> None:
+    """Existing v1 tornado keys carry the real adapter's non-null driver metadata."""
+    parameter = ParameterRangeConfig(
+        variable_name="capex.usd_total",
+        base_value=159_600_000.0,
+        low_pct=-0.10,
+        high_pct=0.10,
+        label="CAPEX",
+    )
+    tornado = engine_to_tornado_result(
+        parameter=parameter,
+        metric_key="project_irr",
+        base_value=0.014551597740253388,
+        cases=[
+            {"label": "capex=low", "value": 0.025129198450968886},
+            {"label": "capex=high", "value": 0.005493346017928717},
+        ],
+    )
+    suite = SensitivitySuite(
+        base_config_path="scenarios/dutchbay_lendercase_2025Q4.yaml",
+        metric="project_irr",
+        tornado_results=[tornado],
+        base_kpis={"project_irr": 0.014551597740253388},
+    )
+
+    payload = build_casper_payload(scenario="contract-freeze", sensitivity=suite)
+    row = payload["sensitivity"]["tornado"][0]
+
+    assert payload["contract_version"] == "casper_result_v1"
+    assert set(row) == {
+        "variable",
+        "base_irr",
+        "low_irr",
+        "high_irr",
+        "impact_abs",
+        "impact_pct",
+    }
+    assert row == {
+        "variable": "CAPEX",
+        "base_irr": 0.014551597740253388,
+        "low_irr": 0.025129198450968886,
+        "high_irr": 0.005493346017928717,
+        "impact_abs": 0.01963585243304017,
+        "impact_pct": -0.01963585243304017,
+    }
