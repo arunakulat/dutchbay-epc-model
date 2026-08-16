@@ -161,10 +161,27 @@ def test_forward_curve_is_geometric_cip_and_anchors_on_spot0() -> None:
     ratio = (1.0 + r_lkr) / (1.0 + r_usd)
     expected = [spot0 * ratio**t for t in range(6)]
     assert len(curve) == 6
-    for got, exp in zip(curve, expected):
+    for got, exp in zip(curve, expected, strict=True):
         assert math.isclose(got, exp, rel_tol=1e-12, abs_tol=1e-9)
     # t == 0 is exactly spot (a same-day forward is spot).
     assert curve[0] == pytest.approx(spot0)
+
+
+def test_forward_curve_two_period_offset_advances_maturity() -> None:
+    """The offset changes maturity, not the financial-close spot anchor."""
+    spot0 = 333.79
+    r_lkr, r_usd = _cip_forward_rates(BASE_CONFIG)
+    ratio = (1.0 + r_lkr) / (1.0 + r_usd)
+    curve = _forward_curve(BASE_CONFIG, 3, spot0, period_offset=2)
+    expected = [spot0 * ratio**t for t in range(2, 5)]
+    assert curve == pytest.approx(expected)
+    assert curve[0] == pytest.approx(371.36921839342347)
+
+
+def test_forward_curve_negative_offset_fails_loud() -> None:
+    """Negative hedge maturities are invalid rather than silently clamped."""
+    with pytest.raises(ValueError, match="period_offset must be non-negative"):
+        _forward_curve(BASE_CONFIG, 3, 333.79, period_offset=-1)
 
 
 def test_forward_drift_below_spot_for_canonical_rates() -> None:
@@ -228,6 +245,54 @@ def test_resolve_hedge_builds_forward_and_spread() -> None:
     assert hedge.forward_curve[0] == pytest.approx(333.79)
 
 
+def test_resolve_hedge_uses_close_anchor_and_period_offset() -> None:
+    """An active hedge compounds once from close to the first operating maturity."""
+    operating_spot = 333.79 * 1.0589**2
+    hedge = _resolve_fx_hedge(
+        _cfg(hedge_ratio=1.0),
+        [operating_spot] * 3,
+        financial_close_spot=333.79,
+        period_offset=2,
+    )
+    expected = _forward_curve(BASE_CONFIG, 3, 333.79, period_offset=2)
+    assert hedge.forward_curve == pytest.approx(expected)
+    assert hedge.forward_curve[0] == pytest.approx(371.36921839342347)
+
+
+def test_resolve_offset_hedge_requires_close_anchor() -> None:
+    """An operating curve alone cannot price a close-origin forward maturity."""
+    with pytest.raises(ValueError, match="requires financial_close_spot"):
+        _resolve_fx_hedge(
+            _cfg(hedge_ratio=0.5),
+            [374.2684496059] * 3,
+            period_offset=2,
+        )
+
+
+@pytest.mark.parametrize("bad_close", [0.0, -1.0, float("nan"), float("inf")])
+def test_resolve_hedge_rejects_invalid_close_anchor(bad_close: float) -> None:
+    """The active hedge rejects non-positive or non-finite close anchors."""
+    with pytest.raises(ValueError, match="finite and positive"):
+        _resolve_fx_hedge(
+            _cfg(hedge_ratio=0.5),
+            [374.2684496059] * 3,
+            financial_close_spot=bad_close,
+            period_offset=2,
+        )
+
+
+def test_null_hedge_does_not_require_close_anchor_for_offset() -> None:
+    """The pure-spot branch stays independent of forward configuration."""
+    assert (
+        _resolve_fx_hedge(
+            _cfg(hedge_ratio=0.0),
+            [374.2684496059] * 3,
+            period_offset=2,
+        )
+        == FxHedge()
+    )
+
+
 def test_resolve_hedge_raises_when_hedged_but_no_rates() -> None:
     cfg = _cfg(hedge_ratio=0.5)
     cfg.pop("Financing_Terms")
@@ -250,7 +315,7 @@ def test_no_hedge_byte_identical_to_pure_spot() -> None:
 def test_explicit_zero_hedge_byte_identical() -> None:
     base = build_annual_rows(_cfg())
     zero = build_annual_rows(_cfg(hedge_ratio=0.0, spread_bps=25.0))
-    for rb, rz in zip(base, zero):
+    for rb, rz in zip(base, zero, strict=True):
         assert rb["cfads_usd"] == rz["cfads_usd"]
         assert rb["revenue_usd"] == rz["revenue_usd"]
 
@@ -260,7 +325,7 @@ def test_both_builders_agree_under_hedge() -> None:
     rows_a = build_annual_rows(cfg)
     rows_b = build_annual_rows_efficient(cfg)
     assert len(rows_a) == len(rows_b) > 0
-    for ra, rb in zip(rows_a, rows_b):
+    for ra, rb in zip(rows_a, rows_b, strict=True):
         assert ra["cfads_usd"] == pytest.approx(rb["cfads_usd"], rel=1e-12)
         assert ra["revenue_usd"] == pytest.approx(rb["revenue_usd"], rel=1e-12)
 

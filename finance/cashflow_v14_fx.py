@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Any, Dict, List, Tuple
 
 from .cashflow_v14_contracts import FxHedge
@@ -10,7 +11,11 @@ logger = logging.getLogger(__name__)
 
 
 def _fx_curve(
-    config: Dict[str, Any], years: int, *, allow_flat_fx: bool = False
+    config: Dict[str, Any],
+    years: int,
+    *,
+    allow_flat_fx: bool = False,
+    period_offset: int = 0,
 ) -> List[float]:
     """
     Build an FX curve (LKR per USD) for `years`.
@@ -40,8 +45,15 @@ def _fx_curve(
       optimistic FX assumption and would silently erase the project's core
       USD-erosion risk. Pass ``allow_flat_fx=True`` to opt into the flat
       config-reference fallback (deliberately FX-agnostic unit tests only).
+    ``period_offset`` advances only parametric curves before returning the first
+    operating-period value. Explicit curves are already-resolved operating paths and
+    remain verbatim. The default offset of zero preserves historical behaviour.
     """
     years = max(1, int(years))
+    if period_offset < 0:
+        raise ValueError("period_offset must be non-negative")
+    offset = int(period_offset)
+    total_years = years + offset
     fx_cfg = config.get("fx")
 
     # ------------------------------------------------------------------
@@ -81,15 +93,15 @@ def _fx_curve(
                     if not rates:
                         raise ValueError("fx.annual_depr list must not be empty")
                     # Pad if shorter than project life
-                    if len(rates) < years:
-                        rates = rates + [rates[-1]] * (years - len(rates))
+                    if len(rates) < total_years:
+                        rates = rates + [rates[-1]] * (total_years - len(rates))
                     # Build curve with year-specific rates
                     curve_out: List[float] = []
                     level = float(start_val)
-                    for i in range(years):
+                    for i in range(total_years):
                         curve_out.append(level)
                         level *= 1.0 + float(rates[i])  # Apply year i depreciation
-                    return curve_out
+                    return curve_out[offset : offset + years]
                 # Scalar depreciation (uniform across all years)
                 depr = float(annual_depr)  # expected as decimal (0.03 = 3%)
             else:
@@ -98,10 +110,10 @@ def _fx_curve(
             # Build uniform depreciation curve
             out: List[float] = []
             cur = start_val
-            for _ in range(years):
+            for _ in range(total_years):
                 out.append(cur)
                 cur *= 1.0 + depr
-            return out
+            return out[offset : offset + years]
 
         # 1c) Malformed fx block – present but missing both curve and start
         raise ValueError(
@@ -124,14 +136,14 @@ def _fx_curve(
                 rates = [float(x) for x in annual_depr_nested]
                 if not rates:
                     raise ValueError("fx.annual_depr list must not be empty")
-                if len(rates) < years:
-                    rates = rates + [rates[-1]] * (years - len(rates))
+                if len(rates) < total_years:
+                    rates = rates + [rates[-1]] * (total_years - len(rates))
                 curve_out2: List[float] = []
                 level2 = float(start_val)
-                for i in range(years):
+                for i in range(total_years):
                     curve_out2.append(level2)
                     level2 *= 1.0 + float(rates[i])
-                return curve_out2
+                return curve_out2[offset : offset + years]
             depr = float(annual_depr_nested or 0.0)
         else:
             depr_nested = get_nested(config, ["fx", "annual_depr_pct"], None)
@@ -139,10 +151,10 @@ def _fx_curve(
 
         out2: List[float] = []
         cur2 = start_val
-        for _ in range(years):
+        for _ in range(total_years):
             out2.append(cur2)
             cur2 *= 1.0 + depr
-        return out2
+        return out2[offset : offset + years]
 
     # No resolvable FX curve (no `fx` block, or a non-dict `fx`). FIN-6 / CESSPIT:
     # refuse to fabricate a flat, non-depreciating curve — the single most optimistic
@@ -212,20 +224,29 @@ def _cip_forward_rates(config: Dict[str, Any]) -> Tuple[float, float]:
     return r_lkr, r_usd
 
 
-def _forward_curve(config: Dict[str, Any], n_years: int, spot_0: float) -> List[float]:
+def _forward_curve(
+    config: Dict[str, Any],
+    n_years: int,
+    spot_0: float,
+    *,
+    period_offset: int = 0,
+) -> List[float]:
     """Build the CIP forward FX curve (LKR per USD) anchored on ``spot_0``.
 
-    forward_t = spot_0 * ((1 + r_lkr) / (1 + r_usd)) ** t   for period index t = 0..n-1
+    forward_t = spot_0 * ((1 + r_lkr) / (1 + r_usd)) ** (period_offset + t)
 
-    where (r_lkr, r_usd) come from :func:`_cip_forward_rates`. ``t == 0`` yields exactly
-    ``spot_0`` (a same-day forward is spot). With the canonical lender-case rates the
-    forward drift is (1 + r_lkr) / (1 + r_usd) - 1; when r_lkr was itself built as an
-    additive UIP rate (r_usd + spot_drift) this multiplicative forward drift is fractionally
-    BELOW the spot drift, so the forward path is a touch less depreciated than the projected
-    spot. Raises when either rate is non-positive (a valid CIP forward needs both money-market
-    rates).
+    for returned period index t = 0..n-1.
+
+    where (r_lkr, r_usd) come from :func:`_cip_forward_rates`. With the default
+    ``period_offset == 0``, ``t == 0`` yields exactly ``spot_0``. A positive offset
+    advances the first returned maturity while retaining ``spot_0`` as the
+    financial-close anchor. Raises when the offset is negative or either rate is
+    non-positive (a valid CIP forward needs both money-market rates).
     """
     n = max(1, int(n_years))
+    if period_offset < 0:
+        raise ValueError("period_offset must be non-negative")
+    offset = int(period_offset)
     r_lkr, r_usd = _cip_forward_rates(config)
     if r_lkr <= 0.0 or r_usd <= 0.0:
         raise ValueError(
@@ -237,6 +258,8 @@ def _forward_curve(config: Dict[str, Any], n_years: int, spot_0: float) -> List[
     ratio = (1.0 + r_lkr) / (1.0 + r_usd)
     curve: List[float] = []
     level = float(spot_0)
+    for _ in range(offset):
+        level *= ratio
     for _ in range(n):
         curve.append(level)
         level *= ratio
@@ -244,15 +267,21 @@ def _forward_curve(config: Dict[str, Any], n_years: int, spot_0: float) -> List[
 
 
 def _resolve_fx_hedge(
-    config: Dict[str, Any], fx_curve_resolved: List[float]
+    config: Dict[str, Any],
+    fx_curve_resolved: List[float],
+    *,
+    financial_close_spot: float | None = None,
+    period_offset: int = 0,
 ) -> FxHedge:
     """Resolve the FX-forward hedge state for a scenario.
 
     Reads ``fx.hedge_ratio`` (decimal 0-1, default 0.0) and ``fx.spread_bps`` (>=0,
     default 0.0). When ``hedge_ratio == 0`` returns the null :class:`FxHedge` and does
     NOT build a forward curve (so scenarios that do not hedge need no Financing_Terms.rates
-    and stay byte-identical). When ``hedge_ratio > 0`` the CIP forward curve is built,
-    anchored on the SAME ``spot_0 = fx_curve_resolved[0]`` the per-year spot path uses.
+    and stay byte-identical). With the historical zero offset, an omitted close anchor
+    continues to use ``fx_curve_resolved[0]``. A positive offset requires an explicit
+    financial-close anchor so an already-resolved operating curve cannot be mistaken for
+    a close-date spot and compounded twice.
     """
     fx_cfg = config.get("fx")
     if not isinstance(fx_cfg, dict):
@@ -268,9 +297,27 @@ def _resolve_fx_hedge(
     if not fx_curve_resolved:
         raise ValueError("Cannot build an FX forward curve from an empty spot curve.")
 
+    if period_offset > 0 and financial_close_spot is None:
+        raise ValueError(
+            "An active FX hedge with period_offset > 0 requires "
+            "financial_close_spot; an operating-period spot curve cannot price a "
+            "financial-close-origin forward maturity."
+        )
+
     n_years = len(fx_curve_resolved)
-    spot_0 = float(fx_curve_resolved[0])
-    forward_curve = _forward_curve(config, n_years, spot_0)
+    spot_0 = float(
+        fx_curve_resolved[0] if financial_close_spot is None else financial_close_spot
+    )
+    if not math.isfinite(spot_0) or spot_0 <= 0.0:
+        raise ValueError(
+            "financial_close_spot must be finite and positive for an active FX hedge"
+        )
+    forward_curve = _forward_curve(
+        config,
+        n_years,
+        spot_0,
+        period_offset=period_offset,
+    )
     return FxHedge(
         hedge_ratio=float(hedge_ratio),
         spread=float(spread_bps) / 10000.0,

@@ -31,7 +31,7 @@ def _geom_curve(start: float, depr: float, years: int) -> List[float]:
 
 def _approx_eq(a: List[float], b: List[float]) -> None:
     assert len(a) == len(b)
-    for x, y in zip(a, b):
+    for x, y in zip(a, b, strict=True):
         assert math.isclose(x, y, rel_tol=1e-12, abs_tol=1e-12)
 
 
@@ -100,6 +100,42 @@ def test_parametric_start_with_no_depreciation_is_flat() -> None:
     assert result == [start] * years
 
 
+def test_zero_period_offset_preserves_parametric_curve() -> None:
+    """The opt-in seam is byte-identical when its offset remains zero."""
+    config = {"fx": {"start_lkr_per_usd": 100.0, "annual_depr": 0.10}}
+    assert _fx_curve(config, 4, period_offset=0) == _fx_curve(config, 4)
+
+
+def test_scalar_period_offset_advances_parametric_curve() -> None:
+    """Two skipped 10% periods move the first returned level from 100 to 121."""
+    result = _fx_curve(
+        {"fx": {"start_lkr_per_usd": 100.0, "annual_depr": 0.10}},
+        2,
+        period_offset=2,
+    )
+    _approx_eq(result, [121.0, 133.1])
+
+
+def test_canonical_two_period_offset_starts_at_cod() -> None:
+    """The canonical close spot and depreciation resolve to the designed COD rate."""
+    result = _fx_curve(
+        {"fx": {"start_lkr_per_usd": 333.79, "annual_depr": 0.0589}},
+        1,
+        period_offset=2,
+    )
+    assert result[0] == pytest.approx(374.2684496059)
+
+
+def test_negative_period_offset_fails_loud() -> None:
+    """A negative timeline offset is invalid rather than silently clamped."""
+    with pytest.raises(ValueError, match="period_offset must be non-negative"):
+        _fx_curve(
+            {"fx": {"start_lkr_per_usd": 100.0, "annual_depr": 0.10}},
+            2,
+            period_offset=-1,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Case 1b: parametric per-year depreciation list (lines 71-85)
 # ---------------------------------------------------------------------------
@@ -133,6 +169,43 @@ def test_parametric_peryear_depr_list_padded_with_last_rate() -> None:
     )
     # Padded rates -> uniform 0.05 compounding.
     _approx_eq(result, _geom_curve(start, 0.05, years))
+
+
+def test_peryear_period_offset_consumes_skipped_rates() -> None:
+    """A nonuniform path consumes construction rates before operating row zero."""
+    result = _fx_curve(
+        {
+            "fx": {
+                "start_lkr_per_usd": 100.0,
+                "annual_depr": [0.10, 0.20, 0.30, 0.40],
+            }
+        },
+        2,
+        period_offset=2,
+    )
+    _approx_eq(result, [132.0, 171.6])
+
+
+def test_peryear_period_offset_pads_short_rate_list() -> None:
+    """List padding occurs before the skipped and returned periods are consumed."""
+    result = _fx_curve(
+        {"fx": {"start_lkr_per_usd": 100.0, "annual_depr": [0.10]}},
+        2,
+        period_offset=2,
+    )
+    _approx_eq(result, [121.0, 133.1])
+
+
+def test_explicit_operating_curve_ignores_period_offset() -> None:
+    """Explicit values are operating rates and must never be shifted or sliced."""
+    config = {"fx": {"curve_lkr_per_usd": [300.0, 310.0, 320.0]}}
+    assert _fx_curve(config, 3, period_offset=2) == [300.0, 310.0, 320.0]
+
+
+def test_flat_fx_opt_in_remains_flat_with_period_offset() -> None:
+    """A construction offset cannot create drift in an explicitly flat fallback."""
+    result = _fx_curve({}, 3, allow_flat_fx=True, period_offset=2)
+    assert result == [default_fx_lkr_per_usd()] * 3
 
 
 def test_parametric_peryear_empty_depr_list_raises() -> None:
