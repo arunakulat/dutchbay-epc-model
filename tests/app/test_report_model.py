@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Dict
+from typing import Any, Dict
 
 import pytest
 from pydantic import ValidationError
 
+from analytics.run_manifest import config_sha256
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
 from app.reports.renderer import render_report_html
@@ -49,9 +50,17 @@ _VALUE_DESTRUCTIVE_KPIS: Dict[str, float] = {
 }
 
 
-def _case(kpis: Dict[str, float], *, variant: str = "lendercase") -> CaseResult:
+def _case(
+    kpis: Dict[str, float],
+    *,
+    variant: str = "lendercase",
+    run_manifest: Dict[str, Any] | None = None,
+) -> CaseResult:
     return CaseResult(
-        status="success", scenario_variant=variant, kpis=kpis, run_manifest=None
+        status="success",
+        scenario_variant=variant,
+        kpis=kpis,
+        run_manifest=run_manifest,
     )
 
 
@@ -709,6 +718,70 @@ def test_risk_register_projected_from_config() -> None:
         assert row.category and row.risk and row.mitigation
         assert row.severity in {"low", "medium", "high"}
     assert any(r.severity == "high" for r in ctx.risk_register)
+    fx = next(row for row in ctx.risk_register if row.category == "Revenue / FX")
+    assert "only when the resolved scenario matches the run manifest" in fx.mitigation
+    assert "IMF projections" not in fx.mitigation
+
+
+def test_fx_risk_uses_only_manifest_matched_resolved_inputs() -> None:
+    scenario = {
+        "fx": {
+            "enabled": True,
+            "mode": "deterministic",
+            "base_currency": "USD",
+            "quote_currency": "LKR",
+            "start_lkr_per_usd": 333.79,
+            "annual_depr": 0.0589,
+            "source": {
+                "mode": "fixed",
+                "pinned_as_of": "2026-06-20T00:02:31Z",
+            },
+        }
+    }
+    case = _case(
+        _VALUE_DESTRUCTIVE_KPIS,
+        run_manifest={"config_sha256": config_sha256(scenario)},
+    )
+    ctx = build_report_context(
+        case,
+        generated_at=GENERATED_AT,
+        scenario_config=scenario,
+    )
+    mitigation = next(
+        row.mitigation for row in ctx.risk_register if row.category == "Revenue / FX"
+    )
+    assert "Manifest-bound resolved inputs use a deterministic FX path" in mitigation
+    assert "333.79 LKR per USD" in mitigation
+    assert "5.89% annual LKR depreciation" in mitigation
+    assert "source mode fixed" in mitigation
+    assert "pinned as of 2026-06-20T00:02:31Z" in mitigation
+    assert "IMF projections" not in mitigation
+
+
+def test_fx_risk_withholds_values_on_manifest_hash_mismatch() -> None:
+    scenario = {
+        "fx": {
+            "mode": "deterministic",
+            "start_lkr_per_usd": 333.79,
+            "annual_depr": 0.0589,
+        }
+    }
+    case = _case(
+        _VALUE_DESTRUCTIVE_KPIS,
+        run_manifest={"config_sha256": config_sha256({"different": True})},
+    )
+    ctx = build_report_context(
+        case,
+        generated_at=GENERATED_AT,
+        scenario_config=scenario,
+    )
+    mitigation = next(
+        row.mitigation for row in ctx.risk_register if row.category == "Revenue / FX"
+    )
+    assert "FX methodology withheld" in mitigation
+    assert "does not match the run manifest config_sha256" in mitigation
+    assert "333.79" not in mitigation
+    assert "5.89" not in mitigation
 
 
 def test_risk_register_climate_category_passthrough() -> None:
