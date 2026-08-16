@@ -47,6 +47,23 @@ nonexistent ruleset filename.
 - Checkpoint long-running results and coherent work to durable storage early. Do not
   leave load-bearing results only in chat context.
 
+## Runtime logging and evidence retention
+
+- Runtime diagnostics are ephemeral by default. Do not create durable per-trial,
+  per-record, repeated `INFO`, or other high-volume runtime log files unless the user
+  explicitly requests retention or a controlling requirement makes it necessary.
+- For long-running calculations, suppress routine `INFO` output. Keep concise start,
+  completion, and essential warning/error messages as transient process output.
+- If failure triage genuinely requires a temporary log capture, give it a narrow,
+  explicit path and delete that named capture at the earliest safe opportunity after
+  extracting the minimum structured validation facts.
+- Durable validation controls should retain only the minimum useful structured facts,
+  such as status, warning category/count, timestamps, hashes, and limitations. Do not
+  retain raw or repeated runtime log text.
+- Governed results, source/raw evidence, model inputs and outputs, manifests, hashes,
+  run specifications, and concise validation records are evidence artifacts rather than
+  runtime logs; preserve them under the applicable evidence-retention controls.
+
 ## Architecture and implementation guardrails
 
 - Keep financial and scenario behavior config-first. Business values and pipeline modes
