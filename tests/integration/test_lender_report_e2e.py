@@ -84,6 +84,14 @@ def test_lender_report_renders_every_section_with_live_kpis() -> None:
         a.impact for a in ctx.assumptions
     )  # the deepened assumptions register (RPT-2)
     assert ctx.risk_register  # config-authored risk register
+    fx_mitigation = next(
+        row.mitigation for row in ctx.risk_register if row.category == "Revenue / FX"
+    )
+    assert "Manifest-bound resolved inputs use a deterministic FX path" in fx_mitigation
+    assert "333.79 LKR per USD" in fx_mitigation
+    assert "5.89% annual LKR depreciation" in fx_mitigation
+    assert "source mode fixed" in fx_mitigation
+    assert "IMF projections" not in html
 
     # The live pipeline KPIs reach the rendered report (not placeholders). Assert the minimum DSCR
     # AND a uniquely-identifying value (project NPV) so the proof cannot be satisfied by a template

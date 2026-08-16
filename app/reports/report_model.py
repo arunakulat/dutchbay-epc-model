@@ -37,6 +37,7 @@ from analytics.portfolio.generation_aggregator import build_multi_tech_from_run
 from analytics.portfolio.multi_tech_tornado import discover_generation_technologies
 from analytics.portfolio.poi_curtailment import resolve_shared_poi_curtailment
 from analytics.portfolio.tech_wbs import build_multi_tech_wbs
+from analytics.run_manifest import config_sha256
 from analytics.three_statement import (
     ThreeStatementResult,
     build_cashflow_waterfall,
@@ -1315,18 +1316,141 @@ def _build_assumptions(
     return rows
 
 
-def _build_risk_register(risks: List[RiskItem]) -> List[RiskRow]:
-    """Project the config-authored risk register into render-ready rows (pure passthrough)."""
-    return [
-        RiskRow(
-            category=r.category,
-            risk=r.risk,
-            mitigation=r.mitigation,
-            severity=r.severity,
-            climate_risk_category=r.climate_risk_category,
+def _coerce_finite_number(value: Any, *, positive: bool = False) -> Optional[float]:
+    """Return a finite non-Boolean float, optionally requiring strict positivity."""
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number) or (positive and number <= 0):
+        return None
+    return number
+
+
+def _fx_path_mitigation(
+    scenario_config: Optional[Mapping[str, Any]],
+    run_manifest: Optional[Mapping[str, Any]],
+    fallback: str,
+) -> str:
+    """Describe FX inputs only when the supplied scenario matches the run manifest.
+
+    The manifest's config hash is the control boundary: without exact identity, the
+    report withholds values instead of attaching a methodology to the wrong run.
+    """
+    if scenario_config is None or not isinstance(run_manifest, Mapping):
+        return fallback
+
+    manifest_hash = run_manifest.get("config_sha256")
+    if not isinstance(manifest_hash, str) or not manifest_hash:
+        return fallback
+    if config_sha256(scenario_config) != manifest_hash:
+        return (
+            "FX methodology withheld: the supplied scenario configuration does not match "
+            "the run manifest config_sha256. Do not rely on an FX source or numerical method "
+            "until the report is regenerated from the manifest-bound scenario."
         )
-        for r in risks
-    ]
+
+    fx = scenario_config.get("fx")
+    if not isinstance(fx, Mapping):
+        return (
+            "The manifest-bound scenario does not contain a structured FX configuration. "
+            "No FX source or numerical method is asserted in this report."
+        )
+    if fx.get("enabled") is False:
+        return (
+            "The manifest-bound scenario explicitly disables the FX path. No FX source or "
+            "numerical method is asserted in this report."
+        )
+
+    rates_raw = fx.get("rates")
+    rates: Mapping[str, Any] = rates_raw if isinstance(rates_raw, Mapping) else {}
+    source_raw = fx.get("source")
+    source: Mapping[str, Any] = source_raw if isinstance(source_raw, Mapping) else {}
+    spot = next(
+        (
+            candidate
+            for candidate in (
+                _coerce_finite_number(fx.get("start_lkr_per_usd"), positive=True),
+                _coerce_finite_number(rates.get("lkr_per_usd"), positive=True),
+                _coerce_finite_number(source.get("pinned_rate"), positive=True),
+            )
+            if candidate is not None
+        ),
+        None,
+    )
+    annual_drift = _coerce_finite_number(fx.get("annual_depr"))
+    mode = str(fx.get("mode") or "unspecified").strip().lower()
+    base_currency = str(fx.get("base_currency") or "USD").strip().upper()
+    quote_currency = str(fx.get("quote_currency") or "LKR").strip().upper()
+
+    details: List[str] = []
+    if spot is not None:
+        details.append(
+            f"a starting rate of {spot:,.2f} {quote_currency} per {base_currency}"
+        )
+    if annual_drift is not None:
+        if annual_drift > 0:
+            drift_label = (
+                f"{annual_drift * 100:.2f}% annual {quote_currency} depreciation"
+            )
+        elif annual_drift < 0:
+            drift_label = (
+                f"{abs(annual_drift) * 100:.2f}% annual {quote_currency} appreciation"
+            )
+        else:
+            drift_label = "0.00% annual FX drift"
+        details.append(drift_label)
+    if not details:
+        return (
+            "The manifest-bound scenario declares an FX block but no finite starting rate "
+            "or annual drift. No numerical FX methodology is asserted in this report."
+        )
+
+    mode_text = (
+        "a deterministic FX path" if mode == "deterministic" else f"FX mode {mode!r}"
+    )
+    qualifiers: List[str] = []
+    source_mode = source.get("mode")
+    if isinstance(source_mode, str) and source_mode.strip():
+        qualifiers.append(f"source mode {source_mode.strip()}")
+    pinned_as_of = source.get("pinned_as_of")
+    if isinstance(pinned_as_of, str) and pinned_as_of.strip():
+        qualifiers.append(f"pinned as of {pinned_as_of.strip()}")
+    qualifier_text = f" ({'; '.join(qualifiers)})" if qualifiers else ""
+
+    return (
+        f"Manifest-bound resolved inputs use {mode_text} with {' and '.join(details)}"
+        f"{qualifier_text}. See the FX evidence-register row for source provenance. Debt "
+        "sizing uses resolved FX-converted CFADS and the modeled DSCR constraints, and the "
+        "resulting equity IRR is disclosed to sponsors rather than masked."
+    )
+
+
+def _build_risk_register(
+    risks: List[RiskItem],
+    scenario_config: Optional[Mapping[str, Any]],
+    run_manifest: Optional[Mapping[str, Any]],
+) -> List[RiskRow]:
+    """Project risks, resolving only explicitly controlled dynamic methodologies."""
+    rows: List[RiskRow] = []
+    for risk in risks:
+        mitigation = risk.mitigation
+        if risk.methodology_key == "fx_path":
+            mitigation = _fx_path_mitigation(
+                scenario_config, run_manifest, risk.mitigation
+            )
+        rows.append(
+            RiskRow(
+                category=risk.category,
+                risk=risk.risk,
+                mitigation=mitigation,
+                severity=risk.severity,
+                climate_risk_category=risk.climate_risk_category,
+            )
+        )
+    return rows
 
 
 def _build_model_limitations(limits: List[LimitationItem]) -> List[LimitationRow]:
@@ -2342,8 +2466,10 @@ def build_report_context(
             omitted.
         scenario_config: The originating scenario config dict, used to surface the
             development-readiness / E&S register (#C11) and the production (P50/P90)
-            and CAPEX blocks (RPT-1). Optional — omitted by legacy callers, in which
-            case those sections are not rendered.
+            and CAPEX blocks (RPT-1). When its hash matches the run manifest, it also
+            supplies the resolved FX methodology wording. Optional — omitted by legacy
+            callers, in which case those sections are not rendered and the FX risk row
+            retains its explicit non-reliance fallback.
         debt_result: The pipeline run's ``debt_result`` mapping, used for the
             sources-and-uses and DSCR-profile sections (RPT-1). Optional; omitted by
             legacy callers.
@@ -2407,7 +2533,9 @@ def build_report_context(
             case_result.kpis, verdict, scenario_config, readiness_rows
         ),
         assumptions=_build_assumptions(inputs, scenario_config),
-        risk_register=_build_risk_register(cfg.risk_register),
+        risk_register=_build_risk_register(
+            cfg.risk_register, scenario_config, case_result.run_manifest
+        ),
         model_limitations=_build_model_limitations(cfg.model_limitations),
         readiness=readiness_rows,
         overall_readiness=overall_readiness,

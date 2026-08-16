@@ -47,6 +47,8 @@ def test_risk_register_loads_with_valid_severities() -> None:
     # The flat-LKR/FX erosion risk is the project's headline (high) risk.
     fx = next(r for r in cfg.risk_register if "FX" in r.category)
     assert fx.severity == "high"
+    assert fx.methodology_key == "fx_path"
+    assert "IMF projections" not in fx.mitigation
 
 
 def test_risk_register_climate_category_optional_and_validated(tmp_path: Path) -> None:

@@ -53,8 +53,11 @@ risk_register:
       debt and sponsor returns are measured in USD — LKR depreciation erodes the hard-
       currency value of every future rupee of revenue.
     mitigation: >
-      FX path stressed to CBSL/IMF projections; debt sized off the LKR-denominated DSCR;
-      the resulting negative equity IRR is disclosed to sponsors rather than masked.
+      FX methodology is shown only when the resolved scenario matches the run manifest;
+      otherwise this report withholds the numerical and source statement. Debt sizing uses
+      resolved FX-converted CFADS and the modeled DSCR constraints, and the resulting equity
+      IRR is disclosed to sponsors rather than masked.
+    methodology_key: "fx_path"
     severity: "high"
   - category: "Resource"
     risk: >

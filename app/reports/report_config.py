@@ -33,6 +33,10 @@ RiskSeverity = Literal["low", "medium", "high"]
 #: (absent) risk carries no climate classification, so all existing configs still load.
 ClimateRiskCategory = Literal["physical", "transition"]
 
+#: Controlled dynamic-methodology projection. ``fx_path`` replaces only the configured
+#: fallback mitigation after the resolved scenario is proven to match the run manifest.
+MethodologyKey = Literal["fx_path"]
+
 
 class ReportMeta(BaseModel):
     """Branding / front-matter for the rendered report."""
@@ -82,6 +86,9 @@ class RiskItem(BaseModel):
     # risk is not climate-classified (extra="forbid" preserved), so every existing config
     # still validates. Additive presentation only — moves no computed number.
     climate_risk_category: Optional[ClimateRiskCategory] = None
+    # Optional dynamic methodology selector. Absent means faithful config passthrough;
+    # ``fx_path`` is resolved only from a manifest-matched scenario in report_model.
+    methodology_key: Optional[MethodologyKey] = None
 
 
 class LimitationItem(BaseModel):
