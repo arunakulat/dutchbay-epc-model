@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 import yaml
 
+from analytics.core.covenant_breach import prob_breach
 from analytics.mc.convergence import (
     Z_95,
     _order_stat_ci_ranks,
@@ -26,6 +27,8 @@ _LENDER = (
     / "scenarios"
     / "dutchbay_lendercase_2025Q4.yaml"
 )
+
+PIN_UNIT = np.array([1.2999999999999996, 1.2999999999999998, 1.3, 1.3000000000000003])
 
 
 def test_ci_halfwidth_matches_formula_and_ends_at_n() -> None:
@@ -218,10 +221,34 @@ def test_breach_probability_ci_only_when_threshold_given() -> None:
         {"dscr_min": dscr}, breach_thresholds={"dscr_min": 1.30}
     )["dscr_min"]
     b = withthr["breach_probability_ci"]
+    expected = prob_breach(np.asarray(dscr, dtype=float), 1.30)
     assert b["threshold"] == 1.30
     assert b["method"] == "wilson"
-    assert b["n_breaches"] == sum(1 for v in dscr if v < 1.30)
-    assert b["point"] == pytest.approx(b["n_breaches"] / 500)
+    assert b["n_breaches"] == int(round(expected * len(dscr)))
+    assert b["point"] == pytest.approx(expected)
+    assert b["ci_lower"] <= b["point"] <= b["ci_upper"]
+
+
+def test_breach_probability_ci_excludes_floor_pin_noise() -> None:
+    dscr = np.tile(PIN_UNIT, 10)  # 40 representation-noise pins at 1.30
+    b = percentile_ci_diagnostic(
+        {"dscr_min": dscr}, breach_thresholds={"dscr_min": 1.30}
+    )["dscr_min"]["breach_probability_ci"]
+
+    assert b["n_breaches"] == 0
+    assert b["point"] == pytest.approx(0.0)
+    assert b["ci_lower"] == pytest.approx(0.0)
+    assert 0.0 < b["ci_upper"] < 1.0
+
+
+def test_breach_probability_ci_still_counts_genuine_breaches() -> None:
+    dscr = np.concatenate([np.tile(PIN_UNIT, 10), [1.10, 1.10]])
+    b = percentile_ci_diagnostic(
+        {"dscr_min": dscr}, breach_thresholds={"dscr_min": 1.30}
+    )["dscr_min"]["breach_probability_ci"]
+
+    assert b["n_breaches"] == 2
+    assert b["point"] == pytest.approx(2.0 / 42.0)
     assert b["ci_lower"] <= b["point"] <= b["ci_upper"]
 
 
@@ -242,5 +269,11 @@ def test_engine_attaches_percentile_ci_without_changing_bands() -> None:
     # dscr_min carries a covenant breach CI (threshold wired from the resolved covenant).
     assert "dscr_min" in pci
     assert "breach_probability_ci" in pci["dscr_min"]
+    breach = pci["dscr_min"]["breach_probability_ci"]
+    dscr = np.asarray(result.trials["dscr_min"], dtype=float)
+    dscr = dscr[np.isfinite(dscr)]
+    expected = prob_breach(dscr, breach["threshold"])
+    assert breach["point"] == pytest.approx(expected)
+    assert breach["n_breaches"] == int(round(expected * dscr.size))
     # Additive only: the percentile bands the aggregator reports are still present.
     assert result.percentiles is not None

@@ -37,7 +37,7 @@ scope here: it is a refinement of the *mean* SE (a normal-theory statistic) and 
 apply to the distribution-free order-statistic ranks — the ~4% t-vs-z widening noted for the
 mean trace has no order-statistic analogue.
 
-Keep import-light: numpy only.
+Keep import-light: numpy plus the numpy-only covenant-breach leaf.
 """
 
 from __future__ import annotations
@@ -45,6 +45,8 @@ from __future__ import annotations
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
+
+from analytics.core.covenant_breach import prob_breach
 
 #: Two-sided 95% normal quantile (z for a 95% confidence interval).
 Z_95 = 1.959963984540054
@@ -197,7 +199,9 @@ def percentile_ci_diagnostic(
         min_n: Minimum finite trials before a metric is diagnosed (too few → skipped).
         breach_thresholds: Optional ``{metric: threshold}``; when a metric matches, a Wilson
             CI for ``P(value < threshold)`` (a downside covenant breach) is added under
-            ``breach_probability_ci``. No threshold → no breach block (never invented).
+            ``breach_probability_ci``. Representation-noise values pinned to the covenant
+            are excluded through the shared covenant-breach primitive. No threshold → no
+            breach block (never invented).
 
     Returns:
         ``{metric: {statistic:"percentile_ci", n, z, percentiles: {p: {point, ci_lower,
@@ -246,11 +250,12 @@ def percentile_ci_diagnostic(
         thr = thresholds.get(str(metric))
         if thr is not None:
             thr = float(thr)
-            breaches = int(np.count_nonzero(srt < thr))
+            breach_probability = prob_breach(srt, thr)
+            breaches = int(round(breach_probability * n))
             b_lo, b_hi = _wilson_interval(breaches, n, z)
             entry["breach_probability_ci"] = {
                 "threshold": thr,
-                "point": breaches / n,
+                "point": breach_probability,
                 "ci_lower": b_lo,
                 "ci_upper": b_hi,
                 "n_breaches": breaches,

@@ -17,6 +17,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+import analytics.mc.convergence as mc_convergence
+import analytics.mc.engine as mc_engine
 import analytics.sensitivity.tail_risk as tail_risk
 from analytics.capital_risk_layer_v14 import compute_capital_risk_layer
 from analytics.contracts_v14 import MonteCarloResult
@@ -93,6 +95,8 @@ def test_single_source_of_truth_all_paths_share_the_primitive() -> None:
     # tail_risk (#657) re-exports the canonical primitives, not private copies.
     assert tail_risk._prob_breach is prob_breach
     assert tail_risk._is_pinned_at_floor is is_floor_pinned
+    assert mc_convergence.prob_breach is prob_breach
+    assert mc_engine.prob_breach is prob_breach
 
 
 # ---------------------------------------------------------------------------
