@@ -83,3 +83,19 @@ def test_financing_wins_over_debt_when_both_are_present() -> None:
 
     assert _resolve_construction_periods(config) == 4
     assert apply_debt_layer(config, annual_rows=[])["construction_periods"] == 4
+
+
+@pytest.mark.parametrize("debt_key", ["debt", "DEBT"])
+def test_present_empty_debt_masks_conflicting_top_level_periods(
+    debt_key: str,
+) -> None:
+    """A present empty debt mapping retains the extraction path's default of two."""
+    config = {
+        "capex": {"usd_total": 100.0},
+        "allow_toy_fallback": True,
+        debt_key: {},
+        "construction_periods": 9,
+    }
+
+    assert _resolve_construction_periods(config) == 2
+    assert apply_debt_layer(config, annual_rows=[])["construction_periods"] == 2

@@ -517,7 +517,7 @@ def _resolve_construction_periods(params: Mapping[str, Any]) -> int:
         return max(0, int(_as_float(financing.get("construction_periods"), 2)))
 
     debt_cfg = _section_case_insensitive(params, "debt")
-    if debt_cfg:
+    if debt_cfg is not None:
         return max(0, int(_as_float(debt_cfg.get("construction_periods"), 2)))
 
     return max(0, int(_as_float(params.get("construction_periods"), 2)))
