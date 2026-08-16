@@ -95,8 +95,8 @@ detailed gap statement and the 6 August ingress evaluation. The newest evaluatio
 full 15-year 11 MW/44 MWh performance curve and all checklist rows, distinguishes 48 declared
 `Yes`, 7 `No` and 1 `Partial` from verified evidence, and records the energy, RTE, temperature,
 GFM, ride-through and power-quality closure gaps. *(source files govern over derived analysis;
-the recorded 31 July public-space permission predates the new files and must be confirmed for
-them before public upload)*
+public-space publication is authorised by the 31 July record and the project owner's 16 August
+record of Envision verbal confirmation for the newly ingressed material)*
 
 **Internal CEB BESS technical notes** (`desktop clean up`): internal merged/technical system-analysis BESS notes (10 MW–40 MWh, 10×16) — ~3 files (private/internal).
 

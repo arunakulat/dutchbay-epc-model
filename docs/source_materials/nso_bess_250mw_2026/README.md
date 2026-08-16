@@ -14,9 +14,11 @@ design material for National System Operator tender `TR/REP&PM/ICB/2026/001/C`.
   imply a transfer of copyright or a broader licence beyond the permission received.
 - The 5 August 2026 11 MW / 44 MWh design calculation is also marked confidential and
   privileged. The functional-requirements workbook contains supplier compliance declarations.
-  Both were ingressed on 6 August 2026. Because they post-date the recorded 31 July permission,
-  confirm and record that the permission covers these specific files before pushing them to a
-  public remote or opening a public pull request.
+  Both were ingressed on 6 August 2026.
+- On 16 August 2026, the project owner recorded that verbal confirmation had been received from
+  Envision covering the two new source files, their extracts and the 6 August evaluation, and
+  directed public GitHub publication on the project owner's authority. The scope and limitations
+  are recorded in `PUBLICATION_AUTHORIZATION.md`.
 
 ## Package documents and roles
 
@@ -48,8 +50,8 @@ and clarification register remain required where they control or qualify the RFP
 These reviews are derived analysis, not controlling tender or OEM documents. When a review
 conflicts with a source file, the source file governs. The detailed gap statement and the 6 August
 evaluation derive from Envision material and retain the source classification for provenance.
-Public publication of the earlier material is authorised as recorded above; the two new source
-files and their derived extracts/evaluation remain subject to the confirmation stated above.
+Public publication of the earlier and newly ingressed material is authorised as recorded above
+and in `PUBLICATION_AUTHORIZATION.md`.
 
 Searchable MarkItDown extracts of the two 6 August ingress sources are under
 `oem/envision/extracted/`. They are derived discovery aids and never supersede the received
