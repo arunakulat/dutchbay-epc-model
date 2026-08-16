@@ -120,7 +120,7 @@ def test_build_for_scenarios_reconciles_wind_column_to_canonical() -> None:
     assert wind.gearing == pytest.approx(
         wind_run["debt_result"]["dual_dscr"]["solved_gearing"]
     )
-    assert wind.gearing == pytest.approx(0.41)
+    assert wind.gearing == pytest.approx(0.355)
     # The hybrid column is a distinct, non-trivial economics (a real second column).
     assert hybrid.project_irr is not None
     assert hybrid.project_irr != wind.project_irr
@@ -148,8 +148,8 @@ def test_emit_renders_comparison_section_through_canonical_runs(tmp_path) -> Non
     assert "Cross-Technology Comparison" in html
     # Both column labels render; the wind column carries the reconciled headline IRR.
     assert "Wind" in html and "Hybrid" in html
-    # The report's own Project IRR (1.46%) appears — proving the wind column reconciles to it.
-    assert "1.46%" in html
+    # The report's own Project IRR (-0.12%) appears — proving reconciliation.
+    assert "-0.12%" in html
     # No server filesystem path is leaked into the lender document.
     assert str(tmp_path) not in html
 

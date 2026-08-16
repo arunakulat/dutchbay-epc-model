@@ -81,4 +81,4 @@ def test_run_pipeline_reports_cost_block() -> None:
     assert resp.cost.capex_total_usd == pytest.approx(167_859_300, rel=0.001)
     assert resp.cost.capex_per_kw_usd == pytest.approx(1051.75, abs=1.0)
     assert resp.cost.within_band is True
-    assert resp.kpis.project_irr == pytest.approx(0.0146, abs=0.005)  # #738 canon
+    assert resp.kpis.project_irr == pytest.approx(-0.00117, abs=0.005)  # F5-01 canon

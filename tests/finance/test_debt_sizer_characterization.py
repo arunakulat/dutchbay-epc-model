@@ -51,21 +51,17 @@ def _kpis(debt_ratio: float) -> dict:
 
 
 def test_no_phantom_covenant_lockup() -> None:
-    """The sculpted lender case locks exactly the ONE honest year, no phantom ones.
+    """The sculpted lender case has no lockup after the COD-aligned correction.
 
     Guards the debt-service alignment fix: debt_service_total is period-indexed
     (offset by construction + bridge periods), and indexing it by annual-row index
     had spuriously collapsed the achieved DSCR ~3 years out of phase, locking 13
-    years of equity distributions. Correct alignment leaves exactly ONE locked
-    year: with the #737 credit-support fees, operating year 1 — which covers its
-    own service PLUS the orphaned half-year bridge service out of fee-netted
-    CFADS — reads ~1.288 on the per-year covenant table, just under the 1.30
-    lockup threshold (pre-fee it cleared at ~1.306 on slack). The per-period
-    series still holds 1.30 everywhere; the phase bug this guards would lock ~13
-    years, not 1.
+    years of equity distributions. The corrected period mapping plus F5-01's
+    COD-aligned operating FX now leave every annual covenant row at or above the
+    1.30 lockup threshold; the phase bug this guards would lock about 13 years.
     """
     kpis = evaluate_with_overrides(LENDER_CONFIG, overrides={})
-    assert kpis["equity_covenant_locked_years"] == 1
+    assert kpis["equity_covenant_locked_years"] == 0
     # The reported covenant DSCR is genuinely achieved (sculpted to target).
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
 
@@ -86,21 +82,16 @@ def test_equity_npv_monotonic_in_gearing() -> None:
         assert higher >= lower - 1.0, f"equity_npv not monotonic: {npvs}"
 
 
-def test_equity_irr_value_destructive_with_gearing_and_plateaus_at_the_dscr_cap() -> (
-    None
-):
-    """Leverage is value-destructive and equity IRR plateaus at the DSCR-solved cap.
+def test_equity_irr_stays_negative_and_plateaus_at_the_dscr_cap() -> None:
+    """Equity IRR stays negative and plateaus at the DSCR-solved cap.
 
-    The project return (~2.7%) sits well BELOW the cost of debt (the PR-B UIP LKR rate of
-    13.39% widened the gap), so leverage is value-destructive and equity IRR is NEGATIVE.
-    The dual_dscr sizer caps the ACTUAL gearing at ~0.45, so every requested gearing at or
-    above that (0.45/0.50/0.60/0.70) clamps to the same solved structure and equity IRR
-    PLATEAUS at the canonical ~-0.0486. The least-levered (sub-cap) point (0.35) carries a
-    HIGHER equity IRR than the clamped plateau — i.e. more leverage erodes the return
-    end-to-end. NOTE: below the cap the response is no longer strictly monotonic (the
-    negative project IRR + the DSCR sculpt/balloon interaction make it U-shaped); we therefore
-    assert the value-destruction (lowest gearing beats the levered plateau) and the supra-cap
-    clamp, not a strict step-by-step decline.
+    The project return remains below the cost of debt and equity IRR is negative.
+    The dual_dscr sizer caps actual gearing near 0.355, so higher requests clamp to
+    the same structure and the canonical -7.85% equity IRR. Below the cap the response
+    is not strictly monotonic: the negative project
+    IRR + DSCR sculpt/balloon interaction make it U-shaped, and F5-01 moves the 0.35
+    point below the clamped plateau. We therefore assert the negative economics, the
+    observed U-turn and the supra-cap clamp rather than an invalid monotonic claim.
     """
     import math
 
@@ -109,20 +100,21 @@ def test_equity_irr_value_destructive_with_gearing_and_plateaus_at_the_dscr_cap(
     ]  # [0.35,0.40,0.45,0.50,0.60,0.70]
     for dr, irr in zip(GEARINGS, irrs):
         assert math.isfinite(irr) and -0.5 < irr < 0.5, f"dr={dr}: irr={irr}"
-    # Above the DSCR-solved cap (~0.41 after #738 grossed the financed capex with the
-    # PRUDENT import levies; 0.4275 post-#737, ~0.45 post-PR-B, ~0.588 before) the sizer
+    # Above the F5-01 DSCR-solved cap (~0.355; ~0.41 after #738, 0.4275 post-#737,
+    # ~0.45 post-PR-B, ~0.588 before) the sizer
     # clamps to the solved gearing -> equity IRR plateaus at the canonical clamped value
-    # (-0.0584 after the #738 re-baseline; requested 0.45 also clamps now, so the
+    # (-0.0785 after the F5-01 re-baseline; requested 0.45 also clamps now, so the
     # plateau slice below is conservative).
     plateau = irrs[3:]
     assert (
         max(plateau) - min(plateau) < 1e-6
     ), f"supra-cap equity_irr not flat (clamped): {plateau}"
-    assert plateau[0] == pytest.approx(-0.0584, abs=0.002)
-    # Value-destructive leverage: the least-levered point beats the clamped high-gearing plateau,
-    # and the gap is material.
-    assert irrs[0] > plateau[0], f"leverage not value-destructive: {irrs}"
-    assert irrs[0] - plateau[0] > 0.002, f"gearing barely moves equity_irr: {irrs}"
+    assert plateau[0] == pytest.approx(-0.0785, abs=0.002)
+    assert all(irr < 0.0 for irr in irrs), f"equity unexpectedly profitable: {irrs}"
+    # The pre-cap 0.35 point is the local trough and the cap/balloon interaction then
+    # turns slightly upward before flattening.
+    assert irrs[0] < plateau[0], f"expected pre-cap U-turn missing: {irrs}"
+    assert plateau[0] - irrs[0] > 0.001, f"gearing barely moves equity_irr: {irrs}"
 
 
 def test_interest_rate_nominal_is_noop_on_schedule() -> None:

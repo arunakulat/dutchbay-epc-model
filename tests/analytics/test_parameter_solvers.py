@@ -281,16 +281,16 @@ def test_breakeven_unreachable_reports_unbracketed_not_raises() -> None:
     """When the target is not achievable over the bounds the breakeven surface does NOT raise a
     bare exception — it returns a BreakevenResult with status='unbracketed', breakeven_value
     None, and the searched bracket populated (so a batch sweep is safe). project_npv is positive
-    (~$85M..$439M) over 40..100 LKR/kWh, so NPV=0 is unreachable there."""
+    over 50..100 LKR/kWh, so NPV=0 is unreachable there."""
     result = solve_tariff_breakeven(
         LENDER_CONFIG,
         metric="project_npv",
         target_value=0.0,
-        bounds=(40.0, 100.0),
+        bounds=(50.0, 100.0),
     )
     assert result.status == "unbracketed"
     assert result.breakeven_value is None
-    assert result.bracket == (40.0, 100.0)
+    assert result.bracket == (50.0, 100.0)
     assert "not achievable within bounds" in result.metadata.get("error", "")
 
 

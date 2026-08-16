@@ -424,16 +424,11 @@ def test_canonical_mc_end_to_end_feeds_capital_risk_report(tmp_path) -> None:
         result, tmp_path, config_path=LENDER_CONFIG
     )
     assert rep.n_trials == 30 and rep.npv_distribution_png.exists()
-    # #790: per-trial min_dscr now carries the fold-corrected covenant minimum
-    # (~1.288 base on the lender case) against constraints.min_dscr_covenant 1.30,
-    # so the DSCR breach probability is REAL and HIGH — the MC restatement of the
-    # deterministic "year-1 fold sits below covenant -> 1 equity-lockup year"
-    # disclosure. This is NOT the #725 fabricated-breach noise (the fold sits
-    # ~1.2pp below the floor, far beyond the sculpt-epsilon tolerance); the
-    # no-FABRICATED-breach invariant now lives on the LLCR line, whose floor the
-    # scenario genuinely clears.
+    # F5-01 removes the former one-year fold gap in the deterministic case. The
+    # seeded MC still records genuine driver-stressed DSCR breaches: 24 of the 30
+    # canonical trials fall below the authored 1.30 covenant. LLCR remains clear.
     cb = rep.tail_report.covenant_breaches
-    assert cb.dscr_breach_probability >= 0.9
+    assert cb.dscr_breach_probability == pytest.approx(0.8)
     assert cb.llcr_breach_probability == pytest.approx(0.0)
 
 

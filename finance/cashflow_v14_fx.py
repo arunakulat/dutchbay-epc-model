@@ -10,6 +10,36 @@ from .cashflow_v14_utils import _as_float_or_none, _pct_to_decimal, get_nested
 logger = logging.getLogger(__name__)
 
 
+def _financial_close_spot(config: Dict[str, Any]) -> float | None:
+    """Return the authored financial-close LKR/USD spot, when declared.
+
+    An explicit FX curve is an operating-period path and therefore is not a
+    financial-close anchor.  The accepted scalar aliases match :func:`_fx_curve`.
+    Invalid authored values fail loud instead of being confused with absence.
+    """
+    fx_cfg = config.get("fx")
+    if not isinstance(fx_cfg, dict):
+        return None
+
+    for key in ("start_lkr_per_usd", "start", "base", "base_rate"):
+        if key not in fx_cfg or fx_cfg[key] is None:
+            continue
+        try:
+            spot = float(fx_cfg[key])
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"fx.{key} must be a finite positive financial-close spot; "
+                f"got {fx_cfg[key]!r}"
+            ) from exc
+        if not math.isfinite(spot) or spot <= 0.0:
+            raise ValueError(
+                f"fx.{key} must be a finite positive financial-close spot; "
+                f"got {fx_cfg[key]!r}"
+            )
+        return spot
+    return None
+
+
 def _fx_curve(
     config: Dict[str, Any],
     years: int,

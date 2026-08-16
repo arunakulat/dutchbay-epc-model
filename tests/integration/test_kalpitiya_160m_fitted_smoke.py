@@ -57,8 +57,8 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     # project IRR ~3.12% (unchanged by PR B — unlevered). PR B's UIP LKR debt rate (13.39%)
     # takes levered equity IRR to ~-4.12% (the costlier LKR tranche); project IRR is upstream
     # of the equity waterfall.
-    assert kpis["project_irr"] == pytest.approx(0.0312, abs=0.01)
-    assert kpis["equity_irr"] == pytest.approx(-0.0412, abs=0.01)
+    assert kpis["project_irr"] == pytest.approx(0.01524, abs=0.005)
+    assert kpis["equity_irr"] == pytest.approx(-0.06249, abs=0.005)
     assert (
         kpis["equity_irr"] < kpis["project_irr"]
     )  # levered equity below the project return

@@ -261,6 +261,38 @@ def test_curve_explicit_lkr_usd_and_optional_pairs() -> None:
     assert curve.get_rate(2025, "lkr_cny") == pytest.approx(46.0)
 
 
+def test_curve_uses_authoritative_annual_row_fx_rates() -> None:
+    """Resolved cashflow rows outrank a synthetic parametric reporting rebuild."""
+    rows = _annual_rows()
+    rows[0]["fx_rate"] = 374.2684496059
+    rows[1]["fx_rate"] = 396.31385823068697
+    curve = compute_fx_curve(
+        config={"fx": {"start_lkr_per_usd": 333.79, "annual_depr": 0.0589}},
+        annual_rows=rows,
+    )
+    assert curve.lkr_usd == [374.2684496059, 396.31385823068697]
+
+
+def test_explicit_reporting_curve_precedes_annual_row_rates() -> None:
+    rows = _annual_rows()
+    rows[0]["fx_rate"] = 374.0
+    rows[1]["fx_rate"] = 396.0
+    curve = compute_fx_curve(config=_full_fx_config(), annual_rows=rows)
+    assert curve.lkr_usd == [330.0, 335.0]
+
+
+@pytest.mark.parametrize("bad", [None, 0.0, -1.0, float("nan"), "bad"])
+def test_invalid_annual_row_fx_falls_back_to_parametric_curve(bad: Any) -> None:
+    rows = _annual_rows()
+    rows[0]["fx_rate"] = bad
+    rows[1]["fx_rate"] = 999.0
+    curve = compute_fx_curve(
+        config={"fx": {"start_lkr_per_usd": 300.0, "annual_depr": 0.10}},
+        annual_rows=rows,
+    )
+    assert curve.lkr_usd == pytest.approx([300.0, 330.0])
+
+
 def test_curve_default_flat_uses_config_reference_rate() -> None:
     """With no lkr_usd provided, a flat curve at the config reference rate is built."""
     curve = compute_fx_curve(config={}, annual_rows=_annual_rows())

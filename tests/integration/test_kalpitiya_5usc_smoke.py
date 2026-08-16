@@ -109,9 +109,9 @@ def test_pipeline_runs_config_driven_and_is_uneconomic(cfg: dict) -> None:
     """The live pipeline reproduces the pinned economics — and the deal is UNDERWATER.
 
     At 5c/kWh on the granular bottom-up costs ($1,300/kW CAPEX + $22/kW-yr escalating
-    OPEX) the project IRR is NEGATIVE (-3.59%) — lifetime CFADS fall short of capex even
-    undiscounted — far below the ~9.74% WACC; equity IRR is deeply NEGATIVE (-12.23%) and
-    project NPV is -$135.48M. The DSCR sculpt still floors min DSCR at 1.30 by deleveraging.
+    OPEX) the project IRR is NEGATIVE (-5.18%) — lifetime CFADS fall short of capex even
+    undiscounted — far below the WACC; equity IRR is deeply NEGATIVE (-15.62%) and
+    project NPV is -$148.63M. The DSCR sculpt still floors min DSCR at 1.30 by deleveraging.
     """
     from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
@@ -122,22 +122,21 @@ def test_pipeline_runs_config_driven_and_is_uneconomic(cfg: dict) -> None:
     # BIS 2005-2026 LKR depreciation), which erodes the fixed-LKR revenue harder in USD,
     # and (d) the 2% pre-construction P50 over-prediction haircut (net AEP 473.8 -> 464.3).
     # The IRR-floor fix (approx_project_irr now searches negative rates) lets it report
-    # the true -3.59% instead of a clamped 0.0%. NPV -$135.48M. The Wave-1 equity-waterfall
-    # fix releases the DSRA to the sponsor at maturity (equity IRR -12.23%; project IRR is
-    # upstream of the equity waterfall).
-    assert kpis["project_irr"] == pytest.approx(-0.0359, abs=0.005)
+    # the true negative result instead of a clamped 0.0%. F5-01 then aligns the operating
+    # FX path to COD while retaining the close-date tax basis.
+    assert kpis["project_irr"] == pytest.approx(-0.0518, abs=0.005)
     assert kpis["project_irr"] < 0.0  # NEGATIVE — below break-even even undiscounted
     assert kpis["equity_irr"] == pytest.approx(
-        -0.1409, abs=0.005
+        -0.1562, abs=0.005
     )  # PR-B UIP LKR rate deepens it further
     assert kpis["equity_irr"] < 0.0  # NEGATIVE — the headline finding
     assert kpis["project_npv"] == pytest.approx(
-        -138.0e6, rel=0.05
+        -148.63e6, rel=0.05
     )  # PR-B higher WACC deepens NPV
     assert kpis["project_npv"] < 0.0  # deeply underwater
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     assert kpis["max_debt_usd"] == pytest.approx(
-        56.03e6, rel=0.02
+        48.24375e6, rel=0.02
     )  # PR-B UIP LKR rate de-levers
 
 

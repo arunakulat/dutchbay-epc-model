@@ -43,11 +43,11 @@ FEE_RATE = 0.0075 + 0.01
 # Pre-#737 canonical lendercase economics (the committed pins before the fees were
 # switched on). The fee-OFF variant must reproduce them exactly: the #737 code path
 # is a no-op without the config keys.
-PRE_737_PROJECT_IRR = 0.02683686114665262
-PRE_737_EQUITY_IRR = -0.048585780806075674
-PRE_737_PROJECT_NPV = -65455817.14404039
-PRE_737_TOTAL_CFADS = 202332872.38974944
-PRE_737_DEBT_TOTAL = 71820000.0
+PRE_737_PROJECT_IRR = 0.010987826287926005
+PRE_737_EQUITY_IRR = -0.06921094221790935
+PRE_737_PROJECT_NPV = -78603674.58182944
+PRE_737_TOTAL_CFADS = 176293763.9319677
+PRE_737_DEBT_TOTAL = 63042000.0
 
 
 def _fee_only_off_config() -> Dict[str, Any]:
@@ -149,17 +149,11 @@ def test_a_signature_dscr_holds_with_smaller_debt(
     assert on["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
     # ...and the KPI HEADLINE now agrees with the engine's fold-corrected covenant
     # minimum (#790): the two lender-facing surfaces can no longer diverge.
-    # (~1.286 since the #738 levies reshaped year-1 CFADS slightly; was ~1.288.)
-    assert on["min_dscr"] == pytest.approx(1.286, abs=0.005)
-    # ...while the CONSERVATIVE per-year covenant table reads operating year 1 slightly
-    # below it: year 1 covers its own service PLUS the orphaned half-year bridge service
-    # out of fee-netted CFADS, and the fee consumed the pre-fee slack there (~1.306 ->
-    # ~1.288). plan_debt's headline min_dscr (round-5 #3 fail-safe) reports that fold
-    # honestly rather than hiding it behind the at-target per-period floor. (Binding the
-    # fold in the gearing solve was tried and rejected — at interest_only_years=0 the
-    # fold is quasi-insensitive to gearing and the solve degenerates; see
-    # _solve_gearing_for_dscr.)
-    assert debt_on["min_dscr"] == pytest.approx(1.286, abs=0.005)
+    # F5-01's COD-aligned operating path removes the prior fold gap: both surfaces
+    # resolve to the 1.30 target.
+    assert on["min_dscr"] == pytest.approx(1.30, abs=1e-6)
+    # The conservative per-year covenant table also remains at or above target.
+    assert debt_on["min_dscr"] == pytest.approx(1.30, abs=1e-6)
     by_year = [v for v in debt_on["dscr_by_year"].values() if v is not None]
     assert min(by_year) >= 1.28
     # ...while the structure de-levers (the fee is inside the sizing)...

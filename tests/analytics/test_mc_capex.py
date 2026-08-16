@@ -51,9 +51,8 @@ def test_capex_mc_distribution_is_monotonic_and_sound() -> None:
     for kpi in (res.project_irr, res.equity_irr, res.project_npv_usd):
         assert kpi["p10"] < kpi["p50"] < kpi["p90"]
 
-    # the median is near the deterministic base-case project IRR (~3.0% after the
-    # 5.9% FX-drift re-baseline; was ~5.7% before the data-derived BIS depreciation)
-    assert res.project_irr["p50"] == pytest.approx(0.0301, abs=0.02)
+    # The median is near the F5-01 COD-offset deterministic project IRR (~0.1%).
+    assert res.project_irr["p50"] == pytest.approx(0.0011, abs=0.02)
 
     # #790: the min_dscr KPI is now the fold-corrected covenant minimum. The
     # per-period sculpt still re-sizes debt to the 1.30 target across the cost

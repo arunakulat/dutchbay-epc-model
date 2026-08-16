@@ -12,7 +12,12 @@ from .bess_revenue import (
     resolve_bess_specs,
 )
 from .cashflow_v14_contracts import CashflowParams, FxHedge
-from .cashflow_v14_fx import _fx_curve, _hedged_usd, _resolve_fx_hedge
+from .cashflow_v14_fx import (
+    _financial_close_spot,
+    _fx_curve,
+    _hedged_usd,
+    _resolve_fx_hedge,
+)
 from .cashflow_v14_params import _build_cashflow_params, validate_parameters
 from .cashflow_v14_production import (
     _apply_risk_haircut,
@@ -168,8 +173,16 @@ def _prepare_cashflow_context(
 
     years = int(params_obj.project_life_years)
 
+    # One timeline resolver governs both debt construction and the operating FX
+    # start.  The call-time import preserves the finance module's cycle-safe lazy
+    # dependency pattern.
+    from .debt_v14 import _resolve_construction_periods
+
+    construction_periods = _resolve_construction_periods(config)
+    financial_close_spot = _financial_close_spot(config)
+
     if fx_curve is None:
-        fx_curve_resolved = _fx_curve(config, years)
+        fx_curve_resolved = _fx_curve(config, years, period_offset=construction_periods)
     else:
         fx_curve_resolved = list(fx_curve)
 
@@ -179,7 +192,17 @@ def _prepare_cashflow_context(
             years - len(fx_curve_resolved)
         )
     elif not fx_curve_resolved:
-        fx_curve_resolved = _fx_curve(config, years)
+        fx_curve_resolved = _fx_curve(config, years, period_offset=construction_periods)
+
+    # Authored scalar spot is the financial-close tax/hedge anchor. Explicit config
+    # curves and caller-provided ``fx_curve=`` values are already operating paths and
+    # are never shifted. Legacy explicit-only, unhedged configs retain curve[0] as the
+    # tax basis; an active hedge without a close anchor fails in _resolve_fx_hedge.
+    tax_basis_fx = (
+        financial_close_spot
+        if financial_close_spot is not None
+        else fx_curve_resolved[0]
+    )
 
     # Depreciable capex base in LKR – explicit tax base takes precedence.
     capex_dep_resolved = capex_depreciable_lkr
@@ -209,19 +232,19 @@ def _prepare_cashflow_context(
             if capex_lkr is not None:
                 capex_dep_resolved = capex_lkr
             else:
-                # 3) USD capex translated at year-0 FX
+                # 3) USD capex translated at financial-close FX
                 capex_usd = as_float(
                     get_nested(config, ["capex", "usd_total"], None),
                     key="capex.usd_total",
                 )
 
                 if capex_usd is not None:
-                    capex_dep_resolved = capex_usd * fx_curve_resolved[0]
+                    capex_dep_resolved = capex_usd * tax_basis_fx
 
     # #738: capitalized import levies + unrecoverable capex VAT augment the
     # depreciable base. Single uplift source: finance.import_levies — the SAME
     # pure cascade the debt engine's _extract_capex_usd wrapper grosses debt
-    # sizing / IDC / equity with — translated at the SAME year-0 FX the USD capex
+    # sizing / IDC / equity with — translated at the SAME financial-close FX the USD capex
     # rung above and the IDC augment below use, so tax base, debt and NPV carry
     # the identical uplift on a consistent basis. No double count: the ladder
     # above reads the RAW config keys (pre-levy base), never the levy-inclusive
@@ -230,17 +253,17 @@ def _prepare_cashflow_context(
     # taxes_indirect block is absent -> byte-identical.
     levies_uplift_usd = capex_uplift_from_config(config)
     if levies_uplift_usd and capex_dep_resolved is not None:
-        capex_dep_resolved += levies_uplift_usd * fx_curve_resolved[0]
+        capex_dep_resolved += levies_uplift_usd * tax_basis_fx
 
     # Optionally augment the depreciable base with extra USD capex — used by the
     # equity-facing pass to capitalize debt IDC into the tax base (#36/#75). The IDC is a
     # debt-financing artifact (interest during construction), so it belongs to the levered
     # equity view, exactly like the interest tax shield; the project/unlevered pass leaves
-    # this None and stays byte-identical. Translated at the SAME year-0 FX the USD capex
+    # this None and stays byte-identical. Translated at the SAME financial-close FX the USD capex
     # base above uses, so the two are consistent. Applied only when a base was resolved
     # (no base -> no depreciation regardless of any extra).
     if extra_depreciable_usd is not None and capex_dep_resolved is not None:
-        capex_dep_resolved += float(extra_depreciable_usd) * fx_curve_resolved[0]
+        capex_dep_resolved += float(extra_depreciable_usd) * tax_basis_fx
 
     # Interest series alignment
     if interest_expense_series is None:
@@ -347,10 +370,15 @@ def _prepare_cashflow_context(
         project_life_years=years,
     )
 
-    # Resolve the FX-forward hedge AFTER fx_curve_resolved is finalized, so the CIP
-    # forward is anchored on the SAME spot_0 the per-year spot path uses. Null (pure
-    # spot, byte-identical) unless fx.hedge_ratio > 0.
-    fx_hedge = _resolve_fx_hedge(config, fx_curve_resolved)
+    # Resolve the FX-forward hedge AFTER fx_curve_resolved is finalized. Its maturity
+    # advances with construction while its CIP anchor remains the financial-close spot.
+    # Null (pure spot) unless fx.hedge_ratio > 0.
+    fx_hedge = _resolve_fx_hedge(
+        config,
+        fx_curve_resolved,
+        financial_close_spot=financial_close_spot,
+        period_offset=construction_periods,
+    )
 
     return (
         params_dict,

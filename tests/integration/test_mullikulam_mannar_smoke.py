@@ -108,12 +108,12 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     # round-5 #5 interest-tax-shield fix then lifted equity slightly (the deal has little
     # taxable income to shield). The 5.9% FX-drift re-baseline (fx.annual_depr 0.03 -> 0.0589,
     # data-derived BIS 2005-2026 LKR depreciation) deepened it further as the flat-LKR
-    # revenue erodes faster in USD terms: current projIRR -6.68%, eqIRR -15.76%. The fixes
-    # only bite scenarios with persistent unused losses; the canonical wind lendercase is byte-identical.
-    assert kpis["project_irr"] == pytest.approx(-0.0668, abs=0.005)
+    # revenue erodes faster in USD terms. F5-01 then aligns the first operating row to
+    # COD after construction: current projIRR -8.16%, eqIRR -18.59%.
+    assert kpis["project_irr"] == pytest.approx(-0.0816, abs=0.005)
     assert kpis["project_irr"] < 0.0  # below break-even even undiscounted
     assert kpis["equity_irr"] == pytest.approx(
-        -0.1732, abs=0.01
+        -0.1859, abs=0.01
     )  # PR-B UIP LKR rate deepens it
     assert kpis["equity_irr"] < 0.0  # equity-destroying at the 3.96c bid
     assert kpis["project_npv"] < 0.0

@@ -35,6 +35,10 @@ _ROWS: List[Dict[str, Any]] = [
     {"year": 1, "fx_rate": 300.0, "revenue_lkr": 1.0e9, "cfads_usd": 1.0e6},
     {"year": 2, "fx_rate": 310.0, "revenue_lkr": 1.0e9, "cfads_usd": 1.0e6},
 ]
+_ROWS_NO_FX: List[Dict[str, Any]] = [
+    {"year": 1, "revenue_lkr": 1.0e9, "cfads_usd": 1.0e6},
+    {"year": 2, "revenue_lkr": 1.0e9, "cfads_usd": 1.0e6},
+]
 _DEBT: Dict[str, Any] = {
     "principal_by_tranche": {"lkr": 0.0, "usd": 50.0e6, "dfi": 0.0},
     "debt_outstanding": [50.0e6, 40.0e6],
@@ -48,7 +52,7 @@ def test_malformed_fx_block_discloses_on_both_builders() -> None:
     compute_fx_structured_block(
         config=cfg, debt_result=_DEBT, annual_rows=_ROWS, degraded=degraded
     )
-    compute_fx_curve(config=cfg, annual_rows=_ROWS, degraded=degraded)
+    compute_fx_curve(config=cfg, annual_rows=_ROWS_NO_FX, degraded=degraded)
     joined = " | ".join(degraded)
     assert "not a mapping" in joined
     assert "structured block" in joined or "FX structured block" in joined
@@ -62,7 +66,7 @@ def test_flat_curve_fallback_disclosed() -> None:
     # the parametric derivation cannot resolve -> flat fallback.
     cfg: Dict[str, Any] = {"fx": {"rates": {"lkr_per_usd": 300.0}}}
     degraded: List[str] = []
-    compute_fx_curve(config=cfg, annual_rows=_ROWS, degraded=degraded)
+    compute_fx_curve(config=cfg, annual_rows=_ROWS_NO_FX, degraded=degraded)
     assert any("FLAT curve" in r for r in degraded), degraded
 
 
@@ -156,9 +160,11 @@ def test_default_none_collector_is_legacy_identical() -> None:
     import dataclasses
 
     cfg: Dict[str, Any] = {"fx": {"rates": {"lkr_per_usd": 300.0}}}
-    curve_none = compute_fx_curve(config=cfg, annual_rows=_ROWS)
+    curve_none = compute_fx_curve(config=cfg, annual_rows=_ROWS_NO_FX)
     collector: List[str] = []
-    curve_list = compute_fx_curve(config=cfg, annual_rows=_ROWS, degraded=collector)
+    curve_list = compute_fx_curve(
+        config=cfg, annual_rows=_ROWS_NO_FX, degraded=collector
+    )
     assert dataclasses.asdict(curve_none) == dataclasses.asdict(curve_list)
     assert collector  # the fallback fired and was recorded
 

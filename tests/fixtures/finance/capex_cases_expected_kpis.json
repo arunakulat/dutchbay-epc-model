@@ -1,21 +1,21 @@
 {
   "_note": "Financial-KPI regression targets for the two capex-sensitivity variants of the canonical lender case, extracted from their scenario YAMLs per #996 D3b so a runtime-input scenario does not double as its own regression oracle. Consumed only by tests/integration/test_capex_cases_smoke.py at the same absolute tolerances. Keyed by the test's CASES keys.",
   "lean_977": {
-    "project_irr": 0.0292,
-    "equity_irr": -0.0440,
-    "project_npv_m_usd": -61.7,
+    "project_irr": 0.0132,
+    "equity_irr": -0.0652,
+    "project_npv_m_usd": -74.96,
     "min_dscr": 1.30,
-    "avg_dscr": 1.4,
-    "llcr": 1.29,
-    "plcr": 1.34
+    "avg_dscr": 1.388,
+    "llcr": 1.290,
+    "plcr": 1.334
   },
   "prudent_1420": {
-    "project_irr": -0.0059,
-    "equity_irr": -0.0809,
-    "project_npv_m_usd": -131.90,
+    "project_irr": -0.0199,
+    "equity_irr": -0.0944,
+    "project_npv_m_usd": -144.75,
     "min_dscr": 1.30,
-    "avg_dscr": 1.39,
-    "llcr": 1.36,
-    "plcr": 1.41
+    "avg_dscr": 1.389,
+    "llcr": 1.365,
+    "plcr": 1.410
   }
 }
