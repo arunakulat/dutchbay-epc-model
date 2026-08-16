@@ -88,11 +88,15 @@ The flagship project — EIA in three languages, feasibility, financials, statut
 
 **NSO 250 MW / 1000 MWh standalone BESS tender (2026)** — repository corpus at
 `docs/source_materials/nso_bess_250mw_2026/`: controlling RFP Volumes I-III, paper
-advertisement, the confidential Envision 10 MW/40 MWh design calculation, the initial gap
-review and the 31 July 2026 detailed gap statement. The detailed statement provides the
-design-calculation critique, tender compliance/evidence matrix, required OEM submission dossier,
-NSO clarification questions and tender-freeze closure plan. *(source PDFs govern over derived
-analysis; Envision public-space publication authorised on 31 July 2026)*
+advertisement, two confidential Envision design calculations (10 MW/40 MWh dated 29 July and
+the distinct 11 MW/44 MWh configuration dated 5 August), a 21 July supplier functional-
+requirements checklist, searchable MarkItDown extracts, the initial gap review, the 31 July
+detailed gap statement and the 6 August ingress evaluation. The newest evaluation captures the
+full 15-year 11 MW/44 MWh performance curve and all checklist rows, distinguishes 48 declared
+`Yes`, 7 `No` and 1 `Partial` from verified evidence, and records the energy, RTE, temperature,
+GFM, ride-through and power-quality closure gaps. *(source files govern over derived analysis;
+public-space publication is authorised by the 31 July record and the project owner's 16 August
+record of Envision verbal confirmation for the newly ingressed material)*
 
 **Internal CEB BESS technical notes** (`desktop clean up`): internal merged/technical system-analysis BESS notes (10 MW–40 MWh, 10×16) — ~3 files (private/internal).
 
