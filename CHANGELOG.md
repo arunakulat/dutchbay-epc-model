@@ -4,7 +4,198 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v15.3.1 - 2026-08-17
+
 ### Added
+- **Make the async wind path's capacity / capacity factor OPTIONAL (derive-authoritative) (#1023)**
+  — on the asynchronous live-ERA5 wind job a client may now OMIT `inputs.capacity_mw` /
+  `inputs.capacity_factor`. They are Optional on `WindFarmInputs` (default `None`); when omitted,
+  `to_overrides()` leaves the `project.capacity_mw` / `project.capacity_factor` and
+  `turbine.total_capacity_mw` keys out of the override dict, so the committed base scenario variant's
+  value survives the deep-merge and the async screening seam (#997) derives + overwrites the physical
+  basis from `num_turbines × turbine nameplate` and the selected `p_level`. The SYNC wizard is
+  unweakened: `app/web/routes.py::_inputs_from_form` still REQUIRES both fields and rejects an
+  omission with the same `pydantic.ValidationError` (`type='missing'`) shape the route already
+  normalises into per-field error rows. `run_wind_job`'s `input_reconciliation` provenance note now
+  tolerates a `None` submission, recording an omitted field as
+  `{"submitted": null, "used": <derived>, "drift_pct": null, "superseded": false,
+  "derived_only": true}` — the derived basis is still surfaced, never flagged as a supersession. The
+  report assumptions register shows a `derived (screening)` placeholder for an omitted capacity /
+  capacity factor instead of formatting `None`. When BOTH values are present every touched surface —
+  `to_overrides()`, the reconciliation note, the assumptions rows — is byte-identical to before, and
+  the canonical lender-case finance byte-oracle is unchanged (`finance/` and `analytics/` untouched;
+  this is async wind-job orchestration + the wizard input surface only). New tests cover the async
+  omission end-to-end (derives + succeeds through the real service seam, derived_only surfaced), the
+  sync rejection of a missing / blank capacity, the `to_overrides()` byte-identity, and the report
+  placeholder. Refs #974, #1023.
+- **Surface the async wind path's capacity / capacity-factor supersession (#974)** — the async wind
+  job already DERIVES the finance capacity (`num_turbines × turbine nameplate`) and capacity factor
+  (from the selected `p_level` export) and the screening seam (#997) overwrites whatever the client
+  submitted, so a mismatched submission no longer trips the CESSPIT-strict adapter drift guard. That
+  overwrite was silent; `run_wind_job` now records an `input_reconciliation` note in the assessment
+  provenance (submitted vs used, per-field drift percent, and a `superseded` flag past the adapter's
+  0.5% tolerance) so the client is TOLD the derived physical basis superseded their advisory
+  capacity / capacity factor, never left to wonder. Additive: a new key on the free-form
+  `WindAssessment.provenance` dict (no contract-version change), and a no-op for a bare/legacy export
+  with no derived physical keys. A new end-to-end regression test drives #974's exact case (client
+  150 MW / CF 0.339 vs a 159.57 MW / P75-CF 0.228 assessment — both a capacity AND a capacity-factor
+  mismatch) clean through the real service seam and asserts the surfaced supersession; unit tests cover
+  the tolerance boundary and the bare-export no-op. `finance/` and `analytics/` untouched; the
+  canonical lender-case byte-oracle is unchanged (this touches only the async wind-job orchestration).
+  Refs #965, #974; builds on #997.
+- **Async wind jobs: deterministic Weibull screening mode + genuine shear override
+  (#993 / #994)** — `WindJobRequest` gains `resource_mode` (`era5` | `weibull`),
+  `weibull_a` / `weibull_k`, and `shear_exponent` (CESSPIT-strict: a `weibull` job must
+  carry BOTH A and k, a 422 at request time). In `weibull` mode the async job
+  synthesises a deterministic, RNG-free hub-height wind series (an inverse-CDF Weibull
+  quantile lattice) and feeds the SAME `WindPipeline` assessment seam — no ERA5 fetch,
+  no network — so the result is identical in shape to the live path (the pipeline's MLE
+  fit recovers the input A/k to ~4 significant figures). For the ERA5 path,
+  `shear_exponent` now REPLACES the data-derived per-hour shear for every hour of the
+  100m→hub extrapolation (`ERA5RequestConfig.shear_exponent_override`). NB: #994 as
+  literally specified (`alpha_default`) only fills NaN hours and would not move AEP for a
+  covered site, so the genuine per-hour override was implemented instead. All existing
+  paths are byte-identical — the override defaults to `None` and `era5` mode is unchanged.
+- **Async analysis jobs — redis/arq backend parity (#993 PR-B-redis)** — the async analysis
+  path (`POST /v1/jobs/analysis`, MC / tornado / Morris) now runs on the durable, cross-process
+  `redis` backend as well as the default in-process one, at parity with the wind-assessment job.
+  A new `run_analysis_task` arq worker task (`app.jobs.worker`) runs the same `run_analysis_job`
+  orchestration in a thread against the shared `RedisJobStore`, and `enqueue_analysis_job`
+  produces onto the arq queue via `_enqueue_analysis_to_arq` when `DUTCHBAY_JOBS_BACKEND=redis`
+  (mirroring `_enqueue_to_arq`); the previous fail-loud 501 on the redis backend is removed. The
+  default `memory` backend is unchanged (byte-identical `BackgroundTasks` path). Gated on the
+  optional `[jobs]` extra (arq, redis) and a live Redis, so — like the wind worker — the
+  round-trip is not CI-verified; the worker import-smoke asserts the new task is registered, and
+  the enqueue-to-arq dispatch is unit-tested with a faked producer. `finance/` and `analytics/`
+  untouched; canonical KPIs byte-identical. With this the async analysis path (#993 PR-B) is
+  complete across both backends — Monte Carlo (PR-B1), one-way tornado (PR-B2), and Morris global
+  SA (PR-B3) all run either in-process (`BackgroundTasks`/`memory`) or on the durable redis/arq
+  worker. Ref #788.
+- **Async analysis jobs — Monte Carlo (#993 PR-B1)** — a new `POST /v1/jobs/analysis`
+  runs a bounded analysis engine off the request path over the freshly-ASSESSED
+  screening case, reusing the existing job lifecycle wholesale (store, `JobRecord`,
+  owner isolation, the `GET /v1/jobs/{id}` status + SSE routes; Dolphin — no duplicated
+  lifecycle). PR-B1 wires the canonical Monte-Carlo engine (`analysis_type='mc'`,
+  200–20000 trials); `tornado` and `morris` follow. The job honours #993: it recomputes
+  the active assessed case (the live capacity factor, never the stale form input) via the
+  same `RunMode.SCREENING` overwrite/physical-only seam the finance path uses, then runs
+  the engine on that scenario — so the risk analytics are screening-grade, never a
+  bankable re-pin. Fail-loud at the request boundary (CESSPIT): the job requires
+  `wind.resource_mode='weibull'` (deterministic, network-free, bounded) and a variant
+  whose resolved scenario carries a list-form `monte_carlo.parameters` block
+  (`lendercase`); the `redis` backend returns 501 until its arq task lands. The MC driver
+  bands remain the committed lender-authored envelope; divergence from the fresh base is
+  surfaced honestly in `metadata['base_outside_bounds']`, not silently re-centred.
+  Additive: the public API contract bumps 1.1 → 1.2 (a new `AnalysisResult` envelope; no
+  existing model changed). `finance/` and `analytics/` are untouched and the canonical
+  KPIs stay byte-identical. Ref #788.
+- **Async analysis jobs — tornado (#993 PR-B2)** — `POST /v1/jobs/analysis` gains
+  `analysis_type='tornado'`: a bounded one-way sensitivity sweep over the freshly-ASSESSED
+  screening case, reusing the same job lifecycle and screening seam as the Monte-Carlo path
+  (Dolphin — no duplicated lifecycle or engine logic). Drivers come from the canonical default
+  library (CAPEX, OPEX, capacity factor, tariff, corporate tax, debt tenor, plus incremental
+  grid curtailment), skipping any key absent from the config so there are no flat bars. The
+  sweep runs in-memory over the assessed dict, so it honours #993 (the live capacity factor,
+  never the stale form input) and — unlike a path-based sweep — bypasses the frozen-bankable
+  reconciliation on the fresh screening CF (#996). Fail-loud (CESSPIT): a request whose
+  resolved scenario yields no drivers is rejected before the engine runs, and `metric` is
+  restricted to the non-degenerate set (`project_irr`, `equity_irr`, `project_npv`). Additive:
+  `tornado` is a new value carried by the existing `AnalysisResult` envelope, so there is no
+  API contract bump; `finance/` and `analytics/` are untouched and the canonical KPIs stay
+  byte-identical. Ref #788.
+- **Async analysis jobs — Morris global sensitivity (#993 PR-B3)** — `POST /v1/jobs/analysis`
+  gains `analysis_type='morris'`: a bounded Morris elementary-effects global-SA screening
+  (mu_star / sigma ranking) over the freshly-ASSESSED screening case, reusing the same job
+  lifecycle and screening seam as the MC and tornado paths (Dolphin). Drivers are the
+  scenario's `monte_carlo.parameters`, so — like `mc` — the request boundary requires a
+  non-empty list-form block (CESSPIT); `n_trajectories` is bounded 4–64. The sweep runs
+  fully IN-MEMORY: the SALib problem is built from the in-memory drivers
+  (`build_problem(params=...)`) and evaluated via a `raw_config` evaluator, which is the
+  crucial correctness point — a path-based `run_morris(config_path)` writes the screening
+  scenario to a temp file and `load_scenario_config` then trips the frozen-bankable
+  `AepReconciliationError` on the fresh capacity factor (#996). The in-memory drive bypasses
+  that entirely while still honouring #993 (the live CF, not the stale form input). The
+  engine's native dict (per-driver mu_star/sigma, ranking, and the `flat_metric` /
+  `nan_poisoned` / `masked` disclosures) is carried verbatim in the `AnalysisResult`
+  envelope. SALib is a declared dependency; the real-engine test skips cleanly where it is
+  absent (`importorskip`). Additive: `morris` is a new value on the existing envelope, so no
+  API contract bump; `finance/` and `analytics/` are untouched and the canonical KPIs stay
+  byte-identical. Ref #788.
+- **Staging deployment config + Copernicus CDS endpoint (#993 PR-C, #995)** — a new
+  `fly.staging.toml` provisions a separate `dutchbay-epc-model-staging` Fly app that mirrors
+  the production topology (web + worker off one image, `/health` check, sin region). It keeps
+  the fail-closed `DUTCHBAY_ENV="production"` auth posture — a staging app on `*.fly.dev` is a
+  public surface — with JWT issuer/audience and the async job queue deliberately distinct from
+  prod (`dutchbay-epc-model-staging` / `dutchbay-web-staging` / `dutchbay:wind_jobs_staging`) so
+  a staging-minted token cannot be replayed against production. It also wires the Copernicus CDS
+  API endpoint (#995): the non-secret `CDSAPI_URL=https://cds.climate.copernicus.eu/api` base is
+  set in `[env]` of BOTH `fly.staging.toml` and the production `fly.toml` (read by
+  `wind_resource/era5_retrieval.py`, which has no in-code default and is exercised by the async
+  ERA5 path on both apps), while the matching `CDSAPI_KEY` stays a secret provisioned via
+  `fly secrets set`. No secret value appears in either config file; the required secrets are
+  documented as out-of-band runbook steps in `docs/deploy/DEPLOY.md` (now with a staging section
+  and CDS entries in the env table). The `fly secrets set` runbooks — and the line printed by
+  `scripts/provision_web_secrets.py` — now single-quote the credential values, because the
+  pbkdf2 hash in `DUTCHBAY_API_USERS` contains `$` field separators an unquoted shell would
+  expand (which would mangle the credential map so every login 401s). Deployment stays a manual
+  `fly deploy -c fly.staging.toml`; CI is unchanged. Ref #788.
+- **Async wind jobs surface the full screening assessment (#993)** — a `CaseResult` now
+  carries an optional `wind_assessment` block exposing all three exceedance levels
+  (P50/P75/P90 net AEP in GWh + net capacity factors), resource provenance and grade
+  (screening — never bankable, #961), site metadata, the assessed data period, and the
+  fitted wind statistics (mean wind speed, Weibull A/k). Previously the pipeline computed
+  the full assessment and the job discarded all but the single billed P-level. Additive:
+  the public API contract bumps 1.0 → 1.1 (a new optional field); plain finance cases
+  leave it `null` and existing consumers are unaffected.
+- **Readiness diagnostic for the CDS credential (#995)** — a new unversioned infra endpoint
+  `GET /health/readiness` reports whether the runtime-critical Copernicus config is present —
+  `CDSAPI_URL` (the non-secret endpoint) and `CDSAPI_KEY` (the secret token) — as BOOLEANS only,
+  so an operator or a deploy smoke check can confirm the staging/production runtime is wired for
+  live ERA5 retrieval without the route ever echoing a value. Each check is `true` iff the env
+  var is set and non-blank (a whitespace-only secret reads as absent); `ready` is the AND of every
+  check. The route always returns 200 — it is a diagnostic, not a gate (liveness `/health` is what
+  pulls an instance) — and, like `/health`, is registered directly on the app so it sits OUTSIDE
+  the `/v1` auth-gated client surface. This satisfies the #995 acceptance criterion that startup or
+  health diagnostics confirm the endpoint and credential are present without exposing their values.
+  Ref #788.
+- **Frozen `ResourceAssessment` contract (#996 D4)** — a new, dependency-light
+  `analytics/resource_contracts.py` adds a read-only `ResourceAssessment` dataclass: a
+  versioned projection of a wind assessment's P50/P75/P90 net AEP + capacity factors, farm
+  capacity/turbine count, report grade (`analytics.run_modes.RunMode`), and an optional
+  `RunManifest` (so an instance is a self-identifying resource snapshot). Constructing one
+  fails loud (CESSPIT) on two invariants: the `AEP = capacity_mw × 8760 × CF` identity for
+  every P-level, and `P90 ≤ P75 ≤ P50` monotonicity of AEP and CF. A `from_assessment(...)`
+  classmethod projects a `WindPipeline.run_complete_assessment` result, and the type is
+  re-exported through `analytics.contracts_v14` (no import cycle — it does not subclass
+  `ContractMixin`; it provides an equivalent `model_dump()`/`dict()` via `asdict`). This slice
+  is purely additive and consumed nowhere yet, so the canonical KPI vector is byte-identical;
+  a follow-up wires construct-and-validate into the async location-assessment path and surfaces
+  the snapshot on `CaseResult`. Ref #996.
+- **Validate the resource assessment on the live location-assessment path (#996 D4-wire)** — the
+  async wind/analysis job's shared assessment step (`app/jobs/runner.py::default_assessment`) now
+  projects its `run_complete_assessment` result into the frozen `ResourceAssessment` contract and
+  carries it on `AssessmentResult`. Construction is the guard: it fails loud
+  (`ResourceAssessmentError`) if the `AEP = capacity × 8760 × CF` identity (net AEP MWh→GWh,
+  capacity factor percent→decimal) or the `P90 ≤ P75 ≤ P50` monotonicity is violated for the live
+  assessment — the #996 "AEP validated for the active selected P-level" / monotonicity criterion,
+  enforced on real pipeline output. It is lenient on ABSENCE (a bare export or partial result
+  degrades to `None`, never crashing a job) and strict only on INCONSISTENCY. The downside-debt
+  slice will read the assessment's P90/P50 ratio from here. Screening-grade (#961). `finance/` and
+  `analytics/` untouched; canonical KPIs byte-identical. Ref #996.
+- **Downside debt sizing uses the ACTIVE assessment's P90/P50 (#996 D5)** — on the async
+  location-assessment path, the finance scenario is seeded from a lender-case base whose frozen
+  `expected_results.net_aep_p50/p90_gwh` are unrelated to this run's assessment. A new
+  `app.jobs.runner.apply_active_resource_basis` injects the freshly-assessed P50/P90 net AEP (from
+  the D4-wire `ResourceAssessment`) into the assessed scenario's `expected_results`, so when the
+  case binds the downside (`Financing_Terms.bind_downside`), `finance.debt_v14._resolve_downside_ratio`
+  sizes the P90 gearing off the LIVE P90/P50 ratio rather than the stale committed base. Wired into
+  both screening paths — `run_wind_job` and the analysis path's `_build_assessed_scenario`. Injection,
+  not deletion: all other `expected_results` keys are preserved (stripping the block wholesale is the
+  known regression). Byte-neutral for non-binding cases — on the screening path the only runtime reader
+  of these keys is `_resolve_downside_ratio` under `bind_downside` (the bankable reconciliation is
+  skipped for screening), so the canonical wind-only lender case (which does not bind downside) is
+  unchanged; `test_canonical_lendercase_economics_unchanged` passes. `finance/` and `analytics/`
+  untouched. Ref #996.
 # changelog.d/843.added.md
 - **HTMX wizard frontend (#843)** — a server-rendered multi-step wizard (`app/web/`) for the
   web service: cookie-authenticated (an httpOnly JWT reusing the existing auth), a four-step
@@ -521,6 +712,71 @@ Annual credit-support fees on outstanding senior debt (#737): `Financing_Terms.f
   per-site behavioural review rather than a blanket lint fix.
 
 ### Changed
+- **Tighten the remaining rounded/dict canonical-KPI consumers to `tests/_canon.py` (#955, Increment B)** —
+  the semantic follow-up to Increment A. The unit tests that echoed the canonical
+  `dutchbay_lendercase_2025Q4` economics as *rounded* pins (`0.014552`, `-79273039.21`, `1.30`) or as
+  canonical-shaped dict payloads now import the named `tests/_canon.py` constants instead of repeating a
+  literal, so a re-baseline updates one file: `test_curtailment_risk.py` (`project_irr`, `project_npv`,
+  `min_dscr`, `min_dscr_period`), the two `test_default_off_preserves_canonical` base-canon guards
+  `test_dsra_fund_at_close.py` and `test_debt_bind_p90.py` (`project_irr`, `equity_irr`, `min_dscr`),
+  `test_grid_outage.py` (`project_npv`), `test_fx_integration_coverage.py`,
+  `test_sens_dscr_coverage.py` and `test_wht_on_interest_cash_cost.py` (`min_dscr_period`), and
+  `test_grid_screening_report_emit.py`'s `_STUB_KPIS` byte-identity yardstick (`project_irr`,
+  `equity_irr`, `min_dscr`). Every migrated site is a faithful canon echo: the named constant equals the
+  literal it replaces within each assertion's own tolerance, so no asserted value changes and the
+  canonical oracle passes unchanged. Deliberately left as literals: coincidental `1.30`s that are *not*
+  the canon `min_dscr_period` (config `dscr_floor`, DSCR-series fixture data, the deliberately-non-canon
+  `test_surface_contract.py` and `test_tech_comparison_emit.py` mock stubs whose `min_dscr` of `1.30`
+  differs from the canon `1.2857`) — `1.30` is one ULP from the canonical `1.2999999999999998`, so
+  migrating a coincidental literal would silently corrupt a fixture — and the *structural-target*
+  `min_dscr_period == 1.30` / fee-variant `min_dscr ~= 1.286` assertions in the directional
+  `test_import_levies.py` / `test_senior_fees.py` tests, which pin "the sculpt holds the 1.30 target"
+  for a variant rather than the base-canon vector. `finance/` and `analytics/` untouched. Ref #1022.
+- **Single source of truth for the canonical lender-case KPI vector (#955, Increment A)** — the eight
+  canonical `dutchbay_lendercase_2025Q4` economics (`project_irr`, `equity_irr`, `project_npv`,
+  `min_dscr`, `min_dscr_period`, `total_cfads_usd`, `project_npv_prudential`, `prudential_rate_used`)
+  were echoed as bare literals across a dozen unit tests under five naming conventions, so a
+  re-baseline had to hand-edit every copy or the echoes silently diverged from the oracle. The
+  full-precision values now live once in `tests/_canon.py`; the oracle
+  (`test_multitech_generation.py::test_canonical_lendercase_economics_unchanged`) and the
+  full-precision consumers import the named constants (aliasing to their existing local names), so a
+  re-baseline updates one file. Byte-identical and KPI-neutral: every migrated literal is replaced by
+  a named constant equal to it — no asserted value changes, and the canonical oracle passes unchanged.
+  Only exact full-precision literals were migrated; rounded pins (`0.014552`, `-79273039.21`, `1.30`)
+  and canonical-shaped mock/stub payloads (e.g. `test_surface_contract.py`'s canned result, whose
+  `project_npv` is deliberately not the canon) are deliberately left for the optional semantic
+  Increment B. This is the unit-test byte-vector single source of truth; it is kept intentionally
+  separate from the D3/D3b scenario-oracle JSON fixtures (`tests/fixtures/finance/*_expected_kpis.json`,
+  #996), which pin whole-scenario `expected_results`. `finance/` and `analytics/` untouched. Ref #955.
+- **Lender-case financial-KPI oracle extracted to a golden fixture (#996 D3)** — the canonical
+  `scenarios/dutchbay_lendercase_2025Q4.yaml` no longer carries its own financial-KPI regression
+  targets (`project_irr`, `equity_irr`, `project_npv_m_usd`, `min_dscr`, `avg_dscr`, `llcr`,
+  `plcr`) inside `expected_results`, so a runtime-input scenario no longer doubles as its own
+  regression oracle. Those numbers move to a test-only golden fixture
+  (`tests/fixtures/finance/lendercase_expected_kpis.json`), and
+  `tests/finance/test_lendercase_expected_results.py` reads them from there at the same
+  tolerances. The scenario keeps exactly the values the engine and the reconciliation guard read
+  at runtime — `net_aep_p50_gwh` / `net_aep_p90_gwh` (AEP reconciliation + downside-debt ratio)
+  and `capacity_factor` — and a new `test_lendercase_scenario_retains_aep_inputs` locks that split
+  in (moving `net_aep` would flip the downside ratio to the flat fallback and disarm the guard).
+  The re-baseline provenance narrative stays in the scenario as documentation. `finance/` and
+  `analytics/` untouched; the canonical KPI vector is byte-identical (verified against
+  `test_multitech_generation.py::test_canonical_lendercase_economics_unchanged`). Ref #996.
+- **Extend the expected_results split to the remaining production scenarios (#996 D3b)** — applies the
+  D3 pattern to the four other production scenarios whose financial-KPI `expected_results` doubled as a
+  smoke-test oracle: `dutchbay_capex_sinohydro_lean_2025Q4`, `dutchbay_capex_eia_prudent_2025Q4`,
+  `dutchbay_lendercase_5usc_fixed_lkr`, and `mullikulam_2x50mw_mannar`. Each scenario's financial-KPI keys
+  (project/equity IRR, NPV, DSCR, LLCR, PLCR — plus equity NPV/MOIC for mullikulam) move to a test-only
+  golden fixture under `tests/fixtures/finance/`, and the corresponding smoke tests
+  (`test_capex_cases_smoke`, `test_kalpitiya_5usc_smoke`, `test_mullikulam_mannar_smoke`) read the fixture
+  at the same tolerances. Each scenario keeps only the values the engine + reconciliation guard consume at
+  runtime (`net_aep_p50/p90_gwh`, `capacity_factor`); the smoke tests now assert those runtime inputs stay
+  and the financial keys are gone, locking the split. With this, no production scenario doubles as its own
+  regression oracle (#996). `finance/` and `analytics/` untouched; the canonical byte-identity oracle is
+  unaffected (this touches only the four variant scenarios). Ref #996.
+- **CI: `actions/setup-python` v6 → v7 (#982)** — bump the setup-python action pin across the
+  five workflows (`ci_v14_fastlane`, `fx-tests`, `regression-smoke`, `release-run`,
+  `test-suite`). CI-only; no runtime, dependency, or KPI impact.
 - **DSRA watch item #2 dated check recorded (#920, still Open)** — `docs/STANDARDS_WATCH.md`
   row 2 now carries the 2026-07-11 verification: no executed/indicative lender term sheet
   exists (Downloads + repo swept; `debt_terms` evidence note unchanged at tier `assumption`),
@@ -844,6 +1100,65 @@ CI cost diet (Test Suite workflow): (1) merges to `main` now re-validate on **Py
 Retired the toy `run_driver_mc` capital-risk stack (#780, user-approved dead-code removal): `run_driver_mc` (independent-Gaussian bootstrap — no LHS/correlation), `run_capital_risk_layer`, `build_driver_mc_tail_snapshot`, `build_driver_mc_tail_report`, the `scripts/run_capital_risk_layer.py` CLI and their tests. Superseded end-to-end by the canonical MC path: `analytics.mc.engine.MonteCarloEngine` (LHS + Iman-Conover) → `build_capital_risk_report_from_mc_result` → the lender report (opt-in caller `app.reports.capital_risk_emit`, #779/#776). The MC-source-agnostic cores (`compute_capital_risk_layer`, `build_case_metadata_from_trials`, `_tail_report_from_trials`, `emit_npv_distribution_from_trials`, `build_capital_risk_report_from_trials`/`_from_mc_result`) are kept; their guards now run on synthetic per-trial arrays. KPI-neutral.
 
 ### Fixed
+- **F5-01 operating FX aligned to COD** — parametric LKR/USD cashflow curves now
+  advance by the shared debt construction-period count, while capex, import levies
+  and capitalized IDC retain the authored financial-close tax basis. Explicit
+  config curves and caller `fx_curve=` paths remain verbatim operating paths; an
+  active offset hedge requires a separate close-date spot. FX reports reuse the
+  exact validated annual-row rates, and the controlled scenario oracles are
+  re-baselined to the corrected economics.
+- **Forward-compat with newer type stubs (#992 dependency group)** — the weekly group's
+  `types-requests` and `pandas-stubs` bumps tightened two signatures and tripped the mypy
+  gate. Annotated the NASA POWER request `params` as `dict[str, str | float]` (the exact
+  `SupportsItems[...]` shape `requests` accepts) and widened the DSCR zero→NA replacement
+  value to `Any` so `pandas-stubs` accepts the `NAType`. Typing-only: runtime is
+  byte-identical, and mypy stays clean under both the current and bumped stubs.
+- **Async location assessment no longer collides with the frozen lender-case P50 (#996)** —
+  the async wind job (`app/jobs/runner.py`) seeds its finance scenario from the frozen
+  lender-case base, so a freshly computed P75 tripped BOTH frozen guards:
+  `WindAdapterDriftError` (fresh capacity factor vs the frozen `0.332`) and
+  `AepReconciliationError` (vs the frozen `464.3` P50). The assessment now declares its run
+  `screening`-grade (config-first via `resolve_run_mode`), so the service seam adopts the
+  assessment's own capacity factor (overwrite) and skips the frozen-bankable reconciliation
+  — a live screening assessment computes its own AEP and has no frozen bankable reference.
+  The wind adapter gains a `physical_only` mode so a (possibly stale) wind export can never
+  overwrite or veto the scenario's own tariff/FX (#996 Problem #2; mirrors the solar
+  adapter, which carries no commercial fields). Authored lender/developer runs are unchanged
+  and byte-identical: they keep the strict drift-check and reconciliation. This is the first
+  dolphin toward the versioned ResourceAssessment/CaseSnapshot layer; production
+  `expected_results` and the downside-debt P90/P50 wiring are untouched and follow in later
+  dolphins (D3–D5).
+- Dependabot: fully freeze `pydantic-core`, `mypy`, and `pandapower` against standalone
+  bot version bumps (#978 post-mortem). `pydantic-core` is exact-pinned by `pydantic`, so
+  an independent `pydantic_core==2.47.0` bump against `pydantic==2.13.4` made the lock
+  un-installable (`ResolutionImpossible`); a `mypy` patch bump desynced the lock from the
+  hardcoded `test-suite.yml` workflow pin; and `pandapower` minors/patches cap `scipy<1.17`,
+  which would break the canon-critical `scipy==1.17.1`. Each now moves only via a deliberate,
+  gate-verified dolphin. Mirrors the antlr4 lockstep pin (#977).
+- **Dependabot: freeze `numpy-typing-compat` against major bumps (#986/#988 post-mortem)** —
+  `optype[numpy] 0.17.1` requires `numpy-typing-compat<20251207,>=20250818.1.25`, so the weekly
+  group's `numpy-typing-compat 20251206→20260602` bump produced an un-installable lock
+  (`ResolutionImpossible`: `numpy-typing-compat==20260602.2.4` vs `optype[numpy]`'s `<20251207`)
+  — #986 and #988 closed un-installable. `numpy-typing-compat` now ignores semver-major
+  (YYYYMMDD-datestamp) bumps and lifts only in lockstep with an `optype[numpy]` release that
+  raises the ceiling. The #987 `pyarrow` guardrail held (pyarrow stayed at 24); this extends the
+  grouped-bump lockstep set (#977/#978/#980/#987).
+- **Dependabot: freeze `pyarrow` against major bumps (#983 post-mortem)** — `streamlit 1.60.0`
+  requires `pyarrow<25`, so the weekly group's `pyarrow 24→25` bump (landing alongside the
+  `streamlit 1.60` bump) produced an internally contradictory, un-installable lock
+  (`ResolutionImpossible`: `pyarrow==25.0.0` vs streamlit's `pyarrow<25`) — #983 was closed
+  un-installable, mirroring #978. `pyarrow` now ignores semver-major bumps (24.x patches stay
+  welcome) and lifts only in lockstep with a streamlit release that raises the ceiling.
+  Extends the grouped-bump lockstep guardrails from #977/#978/#980.
+- **Lender FX methodology wording** — replace the static CBSL/IMF projection claim with
+  resolved FX inputs only when the report scenario matches the run manifest config hash;
+  missing or mismatched provenance now produces an explicit non-reliance statement.
+- **F5-01 construction-period parity restored** — an explicitly present empty
+  `debt: {}` mapping again keeps the historical two-period debt default instead of
+  falling through to a conflicting top-level `construction_periods` value.
+- Populate canonical sensitivity-driver metadata on `ShockResult` so CASPER tornado rows emit
+  non-null driver labels and absolute impacts without changing sensitivity results or financial KPIs.
+- Route convergence and fixed-debt Monte Carlo covenant-breach probabilities through the shared noise-tolerant primitive so representation-noise values pinned at the DSCR floor are not reported as breaches.
 # changelog.d/922.fixed.md
 - **Corrected stale async-jobs docstrings (#922)** — `app/jobs/worker.py` no longer claims the
   arq producer path is "NOT YET WIRED". The cutover shipped in #663/#837: `POST /jobs`
@@ -1031,6 +1346,20 @@ Batch scenario-analytics surface now bears the #737 senior credit-support fee (#
   Each path has a sculpt-pinned repro (prob == 0.0) and a genuine-breach repro (prob > 0).
 
 ### Security
+- **GitPython `3.1.50` → `3.1.57` (security, #985)** — clears two High-severity advisories
+  affecting the pinned `3.1.50`: GHSA-2f96-g7mh-g2hx (CVSS 8.8, CVE-2026-42215 — OS command
+  injection via git long-option prefix abbreviation, RCE on clone/fetch/pull/push; fixed
+  3.1.51) and GHSA-94p4-4cq8-9g67 (CVSS 7.5 — environment-variable exfiltration via URL
+  expansion in `create_remote()`/`Remote.add()`; fixed 3.1.55). GitPython is transitive via
+  `streamlit` (which requires `gitpython!=3.1.19,<4,>=3.0.7` — 3.1.57 satisfies); surgical
+  single-line lock bump. Also restores the `make security` (pip-audit) CI gate to green.
+- **Bump GitPython 3.1.57 -> 3.1.58 to clear five new advisories** — pip-audit began flagging five
+  GHSAs against GitPython 3.1.57 (GHSA-9rj7-rf2p-w77r, GHSA-4gmw-gg2m-w46p, GHSA-hh9p-6wh2-4mfc,
+  GHSA-wvpp-8hx9-p66j, GHSA-jm78-9fvv-mhgr), all fixed in 3.1.58, which was failing the mandatory
+  `make security` gate (and therefore every PR). GitPython is a transitive dependency of streamlit,
+  explicitly pinned in `requirements.txt`; 3.1.58 satisfies streamlit's `gitpython!=3.1.19,<4,>=3.0.7`
+  constraint, and `pip-audit -r requirements.txt` reports no known vulnerabilities after the bump.
+  Dependency-only change; no runtime or KPI impact.
 # changelog.d/944.security.md
 - **Web prod hardening: security headers + docs posture (#944)** — a pure-ASGI
   `SecurityHeadersMiddleware` (`app/api/security.py`) now stamps `X-Content-Type-Options:

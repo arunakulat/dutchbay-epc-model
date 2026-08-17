@@ -1,9 +1,11 @@
 # DutchBay 150 MW Wind Farm — Complete Feasibility & Recommendation Study
 
 **Project:** DutchBay Wind Farm — 159.6 MW (15 × IEA-Reference-10 MW), Dutch Bay, Kalpitiya, Puttalam District, Sri Lanka
-**Prepared:** 2026-07-07 · **Basis:** live pipeline run, DutchBay EPC model `v15.3.0`, origin/main `a50b0bfce8e8`
+**Prepared:** 2026-07-07 · **Finance re-baselined:** 2026-08-17 (F5-01, #1034/#1038)
+**Basis:** live pipeline run, DutchBay EPC model `v15.3.1`, origin/main `7e64d33`
 **Canonical scenario:** `scenarios/dutchbay_lendercase_2025Q4.yaml` (5th-generation canon)
 **Status of this document:** lender/DFI-grade feasibility. Every headline number traces to a fresh run artifact (§Appendix D). Framing is honest: on its committed flat-LKR PPA the project is **value-destructive**, and this study says so plainly.
+**Re-baseline scope (2026-08-17):** the F5-01 correction aligns the operating FX path to COD (see Appendix A). It moves the **finance** layer only — every finance figure below (§0, §7.1, §7.2, §7.5, Appendices A/B/D) was regenerated live at `v15.3.1`. The wind-resource, GeoGIS, micro-siting and grid-screen results are **inputs to** the finance layer, are unaffected by an FX-timing correction, and are carried forward unchanged from the 2026-07-07 full-stack run.
 **Run basis (full-stack):** unlike a finance-only pass — which reads a committed AEP summary — this study fired **every feasibility-relevant module end-to-end**: the wind-resource chain (ERA5 → Weibull → wake → bankable AEP), GeoGIS, micro-siting, the finance engine, a 100k-trial Monte-Carlo, global (Sobol/PAWN) sensitivity, the capital-structure optimiser, and the grid screen. The long path **reproduces the committed baseline** (fresh AEP 464.36 GWh → canon KPIs), and the exhaustive run **surfaced and fixed two real bugs** (grid `boundary_clip` #929, `ride_through` #930).
 
 ---
@@ -16,12 +18,12 @@ DutchBay is a **technically sound, financially unviable-as-structured** 159.6 MW
 
 | Metric | Value | Read |
 |---|---|---|
-| Project IRR (unlevered, real) | **1.46 %** | far below the ~9.9 % build-up WACC → value-destructive |
-| Equity IRR (levered) | **−5.84 %** | negative; equity MOIC 0.52 (< 1) |
-| Project NPV @ WACC | **−$79.3 M** | negative in every scenario run |
-| Min DSCR (covenant / per-period) | **1.286 / 1.30** | 1 equity-lockup year; sculpt holds 1.30 per period |
+| Project IRR (unlevered, real) | **−0.12 %** | far below the ~10.3 % build-up WACC → value-destructive |
+| Equity IRR (levered) | **−7.85 %** | negative; equity MOIC 0.41 (< 1) |
+| Project NPV @ WACC | **−$91.81 M** | negative in every scenario run |
+| Min DSCR (covenant / per-period) | **1.30 / 1.30** | 0 equity-lockup years; sculpt holds 1.30 per period |
 | LLCR / PLCR | **1.27 / 1.31** | thin but positive coverage |
-| DSCR-solved gearing | **0.41** | debt auto-sized down to hold the 1.30 floor |
+| DSCR-solved gearing | **0.355** | debt auto-sized down to hold the 1.30 floor |
 
 **The one-line verdict:** *the turbines will spin and the debt can (just) be sculpted to a 1.30 DSCR, but at the administered flat-LKR tariff the project returns ~1.5 % against a ~9.9 % cost of capital — it destroys value on a merchant/standalone basis.* The only way it clears is the **blended-finance / concessional case** (cf. the project's own Final EIA, which reports an **18.07 % economic IRR** under a very different capital-and-benefit frame).
 
@@ -174,8 +176,8 @@ O&M contract $2.0 M · insurance $0.5 M · land lease $0.3 M · admin/SPV $0.2 M
 | Parameter | Value |
 |---|---|
 | Debt sizing | **dual-DSCR** auto-sculpt to a 1.30 target, capped at 70 % gearing |
-| Realised gearing | **0.41** (auto-solved down to hold the covenant) |
-| Max senior debt | $68.82 M |
+| Realised gearing | **0.355** (auto-solved down to hold the covenant) |
+| Max senior debt | $59.59 M |
 | Tenor / grace | 15 yr / 2-yr interest-only |
 | Tranche mix | LKR-local 45 % · USD-DFI 10 % · USD-commercial 45 % |
 | Tranche rates | LKR **13.39 %** (UIP-implied: USD 7.5 % + 5.89 % drift) · DFI 6.5 % · USD-comm 7.5 % (blended kd ~7.63 %) |
@@ -188,7 +190,7 @@ The LKR tranche at the **UIP-implied 13.39 %** (not a concessional 8 %) is the h
 
 ### 5.1 Capital-structure optimisation — financing cannot rescue the tariff
 
-A capital-structure optimiser swept **36 debt-mix / gearing candidates** to maximise equity IRR. **All 36 are negative.** The best (DFI 40 % / USD-commercial 60 % / no LKR) lifts equity IRR from the committed **−5.84 % to −3.71 %** (min-DSCR 1.30, LLCR 1.16); the worst (LKR-heavy) is −6.30 %. So the *optimal* financing structure gains only ~2 pp and **still cannot make equity positive** — a quantitative proof, from the finance side, that the binding constraint is the flat-LKR tariff, not the capital structure. It corroborates the Sobol result (§7.5): the tariff, not the debt mix, is what moves the return.
+A capital-structure optimiser swept **36 debt-mix / gearing candidates** to maximise equity IRR. **All 36 are negative.** The best (DFI 40 % / USD-commercial 60 % / no LKR) lifts equity IRR from the committed **−7.85 % to −6.21 %** (min-DSCR 1.30, LLCR 1.17); the worst (LKR-heavy) is −8.18 %. So the *optimal* financing structure gains only ~1.6 pp and **still cannot make equity positive** — a quantitative proof, from the finance side, that the binding constraint is the flat-LKR tariff, not the capital structure. It corroborates the Sobol result (§7.5): the tariff, not the debt mix, is what moves the return.
 
 ---
 
@@ -198,21 +200,21 @@ A capital-structure optimiser swept **36 debt-mix / gearing candidates** to maxi
 
 | KPI | Value |
 |---|---|
-| Project IRR (unlevered, real) | **0.014551597740253388** (1.46 %) |
-| Equity IRR (levered) | **−0.05841298678542661** (−5.84 %) |
+| Project IRR (unlevered, real) | **-0.001166233356501311** (−0.12 %) |
+| Equity IRR (levered) | **−0.07853839579881527** (−7.85 %) |
 | Project NPV @ WACC | **−$79,273,039** |
 | Equity NPV @ ke | −$81,592,659 |
-| Min DSCR (covenant fold / per-period) | **1.285740985294611** / 1.30 |
+| Min DSCR (covenant fold / per-period) | **1.3** / 1.30 |
 | Avg / max DSCR | 1.39 / 2.57 |
 | LLCR / PLCR | 1.268 / 1.307 |
-| Equity MOIC | 0.523 (< 1 — sponsors do not recover their outlay) |
+| Equity MOIC | 0.411 (< 1 — sponsors do not recover their outlay) |
 | WACC (build-up) / project discount | ~9.94 % / 10.02 % |
-| Total CFADS (20-yr) | $191.1 M |
+| Total CFADS (20-yr) | $166.08 M |
 | Total equity distributed | $51.78 M |
 
 ### 6.2 The equity bridge (why leverage makes it worse, not better)
 
-Unlevered project IRR 1.46 % → levered equity IRR −5.84 %. Because the **asset return (1.46 %) is far below the blended cost of debt (~7.6 %)**, leverage is **dilutive**, not accretive: every borrowed dollar earns less than it costs, and the FX-inflating USD/blended debt service on flat-LKR revenue amplifies the loss. Add the SL 15 % dividend WHT, the UIP LKR rate, credit-support fees and import levies, and the equity return sinks below −5 %. The re-baseline chain (documented in Appendix A) shows each step.
+Unlevered project IRR −0.12 % → levered equity IRR −7.85 %. Because the **asset return (−0.12 %) is far below the blended cost of debt (~7.6 %)**, leverage is **dilutive**, not accretive: every borrowed dollar earns less than it costs, and the FX-inflating USD/blended debt service on flat-LKR revenue amplifies the loss. Add the SL 15 % dividend WHT, the UIP LKR rate, credit-support fees, import levies and the COD-aligned operating FX, and the equity return sinks below −7 %. The re-baseline chain (documented in Appendix A) shows each step.
 
 ---
 
@@ -222,31 +224,31 @@ Unlevered project IRR 1.46 % → levered equity IRR −5.84 %. Because the **ass
 
 | Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV | LLCR |
 |---|---|---|---|---|---|
-| Optimistic | 9.25 % | **+6.98 %** | 1.30 | −$6.76 M | 1.36 |
-| Base case | 5.88 % | +3.01 % | 0.78 | −$37.79 M | 1.07 |
-| Equity case | 5.88 % | +2.88 % | 1.40 | −$37.79 M | 1.87 |
-| Pessimistic | 3.89 % | −4.95 % | 0.51 | −$57.11 M | 0.92 |
-| Capex lean (SINOHYDRO) | 2.92 % | −4.40 % | 1.30 | −$61.74 M | 1.29 |
-| **Lender (canonical)** | **1.46 %** | **−5.84 %** | **1.29** | **−$79.27 M** | **1.27** |
-| Hybrid wind+solar | 1.86 % | −2.85 % | 1.30 | −$92.67 M | 1.49 |
-| Capex prudent (EIA) | −0.59 % | −8.09 % | 1.30 | −$131.90 M | 1.36 |
-| Solar-only | −3.44 % | −7.65 % | 1.57 | −$105.54 M | 1.57 |
+| Optimistic | 7.40 % | **+4.90 %** | 1.06 | −$22.71 M | 1.20 |
+| Base case | 4.20 % | −2.04 % | 0.61 | −$51.36 M | 0.94 |
+| Equity case | 4.20 % | +0.25 % | 1.40 | −$51.36 M | 1.64 |
+| Pessimistic | 2.23 % | −5.67 % | 0.41 | −$70.04 M | 0.81 |
+| Capex lean (SINOHYDRO) | 1.32 % | −6.52 % | 1.30 | −$74.96 M | 1.29 |
+| Hybrid wind+solar | 0.31 % | −4.39 % | 1.30 | −$107.33 M | 1.49 |
+| **Lender (canonical)** | **−0.12 %** | **−7.85 %** | **1.30** | **−$91.81 M** | **1.28** |
+| Capex prudent (EIA) | −1.99 % | −9.44 % | 1.30 | −$144.75 M | 1.37 |
+| Solar-only | −4.73 % | −8.80 % | 1.30 | −$111.53 M | 1.56 |
 
-**Every scenario has a negative project NPV.** The best case (optimistic) reaches +6.98 % equity IRR but still a −$6.76 M NPV — i.e. even the upside does not clear the 12 % equity hurdle. The result is robust to the technology and cost frame; the binding constraint is the tariff, not the capex.
+**Every scenario has a negative project NPV.** The best case (optimistic) reaches +4.90 % equity IRR but still a −$22.71 M NPV — i.e. even the upside does not clear the 12 % equity hurdle. Only two of the nine frames (optimistic, equity case) clear a positive equity IRR at all. The result is robust to the technology and cost frame; the binding constraint is the tariff, not the capex.
 
 ### 7.2 Monte-Carlo distribution (live run)
 
-An LHS Monte Carlo over six correlated drivers (capacity factor, tariff, opex, capex, FX, incremental curtailment; **Iman-Conover** rank correlation — capex↔opex +0.35, CF↔curtailment +0.20, FX left uncorrelated because the flat-LKR PPA breaks the revenue-FX link). Run at **2,500 trials** (100 % success), cross-validated against a full **100,000-trial** run — the two agree to ~0.1 pp, so the distribution is converged:
+An LHS Monte Carlo over six correlated drivers (capacity factor, tariff, opex, capex, FX, incremental curtailment; **Iman-Conover** rank correlation — capex↔opex +0.35, CF↔curtailment +0.20, FX left uncorrelated because the flat-LKR PPA breaks the revenue-FX link). Run at **2,500 trials** (100 % success, 0 failed iterations, **0 toy-fallback substitutions**). The run's own convergence trace confirms the distribution is settled: the 95 % CI half-width on mean equity IRR narrows monotonically to **±0.12 pp** (±0.0007 on mean min-DSCR) by trial 2,500:
 
 | Metric | P10 | P50 | P90 | Mean |
 |---|---|---|---|---|
-| Equity IRR | −11.3 % | **−7.3 %** | −2.8 % | −7.1 % |
-| Project IRR | −2.0 % | +0.6 % | +3.4 % | +0.6 % |
-| Project NPV | −$114.3 M | **−$85.9 M** | −$56.3 M | −$85.7 M |
-| Min DSCR | 1.247 | 1.278 | 1.300 | 1.276 |
-| LLCR | 1.259 | 1.271 | 1.286 | 1.272 |
+| Equity IRR | −13.0 % | **−9.1 %** | −5.0 % | −9.1 % |
+| Project IRR | −3.6 % | −1.0 % | +1.8 % | −1.0 % |
+| Project NPV | −$124.7 M | **−$97.5 M** | −$69.4 M | −$97.4 M |
+| Min DSCR | 1.257 | 1.291 | 1.300 | 1.285 |
+| LLCR | 1.264 | 1.278 | 1.296 | 1.279 |
 
-**The negative-equity verdict is robust, not a point estimate:** equity IRR is **negative across the entire distribution through ~P90** (whole-sample max only +6.7 %), and **project NPV is negative in 100 % of trials**. Meanwhile **min-DSCR stays ≥ 1.21 throughout** — the *debt* is safe across the distribution; it is the *equity* that is underwater. (VaR/CVaR + covenant-breach detail in `artifacts/capital_risk_report.html`; NPV-distribution chart below.)
+**The negative-equity verdict is robust, not a point estimate:** under the COD-aligned FX path equity IRR is **negative across effectively the entire distribution** — the whole-sample maximum across 2,500 trials is just **+0.15 %**, and **project NPV is negative in 100 % of trials** (best trial −$38.3 M). Meanwhile **min-DSCR stays ≥ 1.217 throughout** — the *debt* is safe across the distribution; it is the *equity* that is underwater. (VaR/CVaR + covenant-breach detail in `artifacts/capital_risk_report.html`; NPV-distribution chart below.)
 
 ### 7.3 Downside production
 
@@ -350,11 +352,11 @@ Until at least the revenue or the capital stack is restructured, the honest posi
 | Discount rate | ~9.9 % build-up WACC | modelled capital structure | derived |
 | Climate risk | analyst screen | no formal EP4 CCRA yet | assumption |
 
-**Re-baseline chain to the current canon (honest audit trail):** FX 300→333.79 · ERA5-fitted Weibull (AEP 483.6→473.8) · project-discount construction-lag fix · degradation 0→0.5 %/yr · FX-drift 3 %→5.89 % · 2 % AEP over-prediction haircut (473.8→464.3) · non-statutory levy removal · SL dividend WHT + IDC capitalisation · UIP LKR debt rate 8 %→13.39 % · credit-support fees (guarantee 75 bps + PRI 100 bps) · import levies + indirect tax (SSCL-on-revenue reversed; PAL+import-SSCL paid). Net: projIRR → 1.46 %, eqIRR → −5.84 %, NPV → −$79.3 M, gearing → 0.41.
+**Re-baseline chain to the current canon (honest audit trail):** FX 300→333.79 · ERA5-fitted Weibull (AEP 483.6→473.8) · project-discount construction-lag fix · degradation 0→0.5 %/yr · FX-drift 3 %→5.89 % · 2 % AEP over-prediction haircut (473.8→464.3) · non-statutory levy removal · SL dividend WHT + IDC capitalisation · UIP LKR debt rate 8 %→13.39 % · credit-support fees (guarantee 75 bps + PRI 100 bps) · import levies + indirect tax (SSCL-on-revenue reversed; PAL+import-SSCL paid) · **F5-01 COD-aligned operating FX** (#1034/#1038: parametric operating and hedge curves advance by the two-period construction window; capex, levy and IDC tax basis stay at the 333.79 financial-close spot). Net: projIRR → −0.12 %, eqIRR → −7.85 %, NPV → −$91.81 M, gearing → 0.355.
 
 ## Appendix B — Full scenario KPI table
 
-See §7.1 (8 live scenarios). Source: `_out/feas924/suite/<scenario>/…/kpis.json`, all engine `v15.3.0` / SHA `a50b0bfce8e8`.
+See §7.1 (8 live scenarios). Source: `_out/feas924/suite/<scenario>/…/kpis.json`, all engine `v15.3.1` / SHA `7e64d33` (regenerated 2026-08-17).
 
 ## Appendix C — Monte-Carlo method
 
@@ -363,10 +365,10 @@ See §7.1 (8 live scenarios). Source: `_out/feas924/suite/<scenario>/…/kpis.js
 ## Appendix D — Reproduce recipe & provenance
 
 ```
-Repo:    ~/Downloads/dutchbay-epc-model  @ origin/main a50b0bfce8e88f4927ffee0a697cd1c9a76d32e1
-Engine:  v15.3.0   Python 3.11 (.venv)
+Repo:    ~/Downloads/dutchbay-epc-model  @ origin/main 7e64d336759292d1fa1c3f1533f6ec20ea6c0250
+Engine:  v15.3.1   Python 3.11 (.venv)   [finance re-baselined 2026-08-17, F5-01 #1034/#1038]
 Canon:   .venv/bin/python run_full_pipeline_v14.py config=scenarios/dutchbay_lendercase_2025Q4.yaml
-         → project_irr 0.014551597740253388 · equity_irr -0.05841298678542661 · min_dscr 1.285740985294611  (byte-identical to the 5th-gen canon)
+         → project_irr -0.001166233356501311 · equity_irr -0.07853839579881527 · min_dscr 1.3  (byte-identical to the F5-01 canon)
 Wind:    ERA5_REQUEST_CONFIG=artifacts/era5_request_dutchbay.yaml .venv/bin/python -m wind_resource.era5_retrieval
          → ARCO single-point 2005-2024, P50 523.0 (recent-5yr) / 551.2 (20-yr) GWh; wind_rose (prevailing 210° SW); secular-stilling MK p=0.0047
 Tornado: analytics.wind.aep_tornado.tornado_from_config(lender)         → wind-speed ±20.5% dominant driver
@@ -379,7 +381,7 @@ FreshAEP: analytics.wind.aep_summary_builder.build_aep_summary_from_config(lende
 MC:      analytics.mc.engine.run_monte_carlo_analysis(lender, n_trials=2500, seed=42)  [+ a full 100k cross-check]
          → equity_irr P10/P50/P90 -11.3/-7.3/-2.8%; project_npv negative in 100% of trials; min_dscr ≥1.21 (2500 ≈ 100k, converged)
 Sobol:   analytics/cli/cli_sensitivity_hydra.py (SALib Sobol+PAWN+Morris) → equity-IRR ST: tariff 0.47 (dominant) > capex 0.19 > fx 0.12
-Optimiz: analytics/cli/cli_capital_structure_optimize_hydra.py → 36 debt-mix candidates, ALL negative; best -3.71% (DFI40/USD60)
+Optimiz: analytics/cli/cli_capital_structure_optimize_hydra.py → 36 debt-mix candidates, ALL negative; best -6.21% (DFI40/USD60)
 Grid:    run_full_pipeline_v14.py config=<lender with grid.study_enabled:true> +emit_grid_screen=true
          → SCR@POC 0.94 (weak, pandapower IEC-60909); ride-through 3 cases (advisory); KPI byte-identical (neutral)
 ```

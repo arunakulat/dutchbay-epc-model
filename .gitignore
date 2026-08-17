@@ -10,8 +10,11 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# Anchored to the repo root: these are setuptools build outputs. Unanchored they
+# also swallowed feasibility_reproduce/lib/ (the reproduce kit's helper scripts),
+# which is why run_all.sh shipped referencing files that were never committed.
+/lib/
+/lib64/
 parts/
 sdist/
 var/
