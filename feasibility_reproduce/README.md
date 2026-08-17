@@ -32,4 +32,13 @@ artifacts under `feasibility_reproduce/_run_out/`.
   so the default run is fully offline. Online-refresh commands are in `HOWTO.md` (§2, §9).
 - **Golden numbers** (finance canon, must be byte-identical): project_irr `-0.001166233356501311` ·
   equity_irr `−0.07853839579881527` · min_dscr `1.3`.
-- Needs the `[grid]` + `[wind]` extras + `weasyprint`/`mistune` (see `HOWTO.md` §0).
+- One-line install: `pip install -r requirements.txt && pip install -e ".[dev,feasibility]"`
+  (see `HOWTO.md` §0). `[grid]` is excluded on purpose — pandapower's scipy pin conflicts
+  with the pinned lock, so step 7's advisory grid screen skips unless you build a separate
+  `.venv-grid`.
+- Helper scripts live in `lib/` (`mc_run.py`, `wind_provenance.py`, `run_global_sa.py`,
+  `build_study_pdf.py`, `build_md_pdf.py`). They were absent from the repo until #1040/#1041
+  because an unanchored `lib/` rule in `.gitignore` silently ignored them.
+- **Micro-siting (§2) is skipped**: it needs a site boundary polygon and baseline turbine
+  coordinates that are not committed anywhere. It is KPI-neutral, so the finance canon is
+  unaffected; `wind_provenance.py` says so rather than inventing geometry.
