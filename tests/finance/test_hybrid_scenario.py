@@ -43,13 +43,11 @@ def test_hybrid_scenario_runs_and_pins_economics() -> None:
     # (vs the declared 2000) + hot-hour thermal. Less solar generation (78.4 -> 73.8 GWh)
     # lowers total CFADS 237.78M -> 235.66M (-0.9%), projIRR 0.01958 -> 0.01855 (-10bps),
     # equity_irr -0.0272 -> -0.0285, and NPV -91.65M -> -92.67M; min_dscr holds 1.30.
-    assert kpis["project_irr"] == pytest.approx(0.01855071204306178, rel=1e-6)
-    assert kpis["equity_irr"] == pytest.approx(-0.028493280998005632, rel=1e-6)  # #529
-    assert kpis["project_npv"] == pytest.approx(
-        -92672410.10213006, rel=1e-6
-    )  # #529 solar TMY re-baseline
+    assert kpis["project_irr"] == pytest.approx(0.003071064562196713, rel=1e-6)
+    assert kpis["equity_irr"] == pytest.approx(-0.0438751559967443, rel=1e-6)
+    assert kpis["project_npv"] == pytest.approx(-107326563.09575932, rel=1e-6)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=1e-6)
-    assert kpis["total_cfads_usd"] == pytest.approx(235664760.1435344, rel=1e-6)
+    assert kpis["total_cfads_usd"] == pytest.approx(205298303.73391378, rel=1e-6)
 
 
 def test_hybrid_reports_per_technology_split() -> None:

@@ -24,6 +24,7 @@ from finance.cashflow_v14 import build_annual_rows, build_annual_rows_efficient
 from finance.cashflow_v14_contracts import FxHedge
 from finance.cashflow_v14_fx import (
     _cip_forward_rates,
+    _financial_close_spot,
     _forward_curve,
     _hedged_usd,
     _resolve_fx_hedge,
@@ -237,6 +238,21 @@ def test_resolve_hedge_null_when_ratio_absent_or_zero() -> None:
     assert _resolve_fx_hedge({"fx": {}}, [333.79] * 6).forward_curve == ()
 
 
+@pytest.mark.parametrize("alias", ["start_lkr_per_usd", "start", "base", "base_rate"])
+def test_financial_close_spot_accepts_scalar_aliases(alias: str) -> None:
+    assert _financial_close_spot({"fx": {alias: 333.79}}) == pytest.approx(333.79)
+
+
+def test_financial_close_spot_ignores_explicit_operating_curve() -> None:
+    assert _financial_close_spot({"fx": {"curve": [400.0, 410.0]}}) is None
+
+
+@pytest.mark.parametrize("bad", [0.0, -1.0, "bad", float("nan"), float("inf")])
+def test_financial_close_spot_rejects_invalid_authored_value(bad: Any) -> None:
+    with pytest.raises(ValueError, match="financial-close spot"):
+        _financial_close_spot({"fx": {"start_lkr_per_usd": bad}})
+
+
 def test_resolve_hedge_builds_forward_and_spread() -> None:
     hedge = _resolve_fx_hedge(_cfg(hedge_ratio=0.5, spread_bps=25.0), [333.79] * 6)
     assert hedge.hedge_ratio == pytest.approx(0.5)
@@ -293,6 +309,17 @@ def test_null_hedge_does_not_require_close_anchor_for_offset() -> None:
     )
 
 
+def test_active_explicit_only_engine_path_requires_close_anchor() -> None:
+    """An operating curve cannot be silently reused as a close-origin hedge spot."""
+    cfg = _cfg(hedge_ratio=0.5)
+    cfg["fx"] = {
+        "curve": [400.0, 410.0, 420.0, 430.0, 440.0, 450.0],
+        "hedge_ratio": 0.5,
+    }
+    with pytest.raises(ValueError, match="requires financial_close_spot"):
+        build_annual_rows(cfg)
+
+
 def test_resolve_hedge_raises_when_hedged_but_no_rates() -> None:
     cfg = _cfg(hedge_ratio=0.5)
     cfg.pop("Financing_Terms")
@@ -333,7 +360,12 @@ def test_both_builders_agree_under_hedge() -> None:
 def test_full_hedge_matches_forward_conversion_year_by_year() -> None:
     cfg = _cfg(hedge_ratio=1.0, spread_bps=0.0)
     rows = build_annual_rows(cfg)
-    hedge = _resolve_fx_hedge(cfg, [r["fx_rate"] for r in rows])
+    hedge = _resolve_fx_hedge(
+        cfg,
+        [r["fx_rate"] for r in rows],
+        financial_close_spot=333.79,
+        period_offset=2,
+    )
     for i, row in enumerate(rows):
         assert row["cfads_usd"] == pytest.approx(
             row["cfads_final_lkr"] / hedge.forward_curve[i], rel=1e-12
@@ -350,8 +382,9 @@ def test_hedged_cfads_usd_direction_tracks_forward_vs_spot() -> None:
 
     base = build_annual_rows(cfg)
     hedged = build_annual_rows(_cfg(hedge_ratio=1.0, spread_bps=0.0))
-    # Year 1 (t=0) forward == spot, so cfads_usd is unchanged there; later years diverge.
-    for i in range(1, len(base)):
+    # Both spot and forward have advanced from close to COD, so every operating row
+    # reflects their derived drift relationship, including row zero.
+    for i in range(len(base)):
         if base[i]["cfads_final_lkr"] > 0:
             if forward_below_spot:
                 assert hedged[i]["cfads_usd"] > base[i]["cfads_usd"]

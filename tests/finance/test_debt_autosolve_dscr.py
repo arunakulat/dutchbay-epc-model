@@ -46,14 +46,14 @@ def test_dual_dscr_autosolve_sizes_to_target(base_config):
     # headline min_dscr is the CONSERVATIVE per-year fold (year 1 carries the orphaned
     # bridge service out of fee-netted CFADS) at ~1.286 (levy-inclusive per #738) —
     # reported honestly.
-    assert res["min_dscr"] == pytest.approx(1.286, abs=0.01)
+    assert res["min_dscr"] == pytest.approx(1.30, abs=0.01)
     assert res["debt_total"] == pytest.approx(
-        0.41 * CAPEX_GROSS, rel=3e-3
+        0.355 * CAPEX_GROSS, rel=3e-3
     )  # DSCR-solved, below cap (PR-B UIP LKR rate + #737 fees + #738 levies de-lever)
     detail = res["dual_dscr"]
     assert detail is not None
     assert (
-        0.40 < detail["solved_gearing"] < 0.70
+        0.30 < detail["solved_gearing"] < 0.70
     )  # DSCR-bound, strictly below the 0.70 cap
     assert detail["binding_constraint"] == "P50"  # DSCR-bound, not gearing-bound
     assert (
@@ -80,7 +80,7 @@ def test_opt_out_keeps_fixed_gearing(base_config):
     assert res["debt_total"] == pytest.approx(0.70 * CAPEX_GROSS, rel=1e-3)
     assert res["dual_dscr"] is None
     assert res["min_dscr"] == pytest.approx(
-        0.256, abs=0.01
+        0.191, abs=0.01
     )  # 70% over-levers -> deep sub-covenant (#737 fees on the sticky, never-amortising
     # balance crush late-year coverage: 0.481 pre-fee -> 0.290; #738's larger grossed
     # debt + opex VAT push it further to ~0.256)
@@ -104,6 +104,6 @@ def test_lower_target_adds_leverage_when_dscr_bound(base_config):
     assert (
         res_120["debt_total"] > res_130["debt_total"] + 1_000_000
     )  # lower target -> more debt
-    # Headline min = the conservative year-1 fold, ~0.012-0.016 under each target (#737).
-    assert res_130["min_dscr"] == pytest.approx(1.288, abs=0.01)
-    assert res_120["min_dscr"] == pytest.approx(1.184, abs=0.01)  # lower DSCR floor
+    # With operating year 1 aligned to COD, the headline minimum meets each target.
+    assert res_130["min_dscr"] == pytest.approx(1.30, abs=0.01)
+    assert res_120["min_dscr"] == pytest.approx(1.20, abs=0.01)

@@ -28,6 +28,7 @@ Usage:
 """
 
 import logging
+import math
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from analytics.fx.fx_contracts import (
@@ -318,6 +319,27 @@ def compute_fx_curve(
     # Read LKR/USD curve (required)
     lkr_usd_raw = curve_config.get("lkr_usd")
     if lkr_usd_raw is None:
+        # The cashflow engine has already resolved the authoritative operating path,
+        # including the construction-period offset and caller overrides. Reuse it
+        # verbatim whenever every annual row carries a valid rate. An explicitly
+        # authored reporting curve above still wins by contract.
+        row_fx_rates: List[float] = []
+        for row in annual_rows:
+            try:
+                row_rate = float(row["fx_rate"])
+            except (KeyError, TypeError, ValueError):
+                row_fx_rates = []
+                break
+            if not math.isfinite(row_rate) or row_rate <= 0.0:
+                row_fx_rates = []
+                break
+            row_fx_rates.append(row_rate)
+
+        if len(row_fx_rates) == len(years):
+            lkr_usd = row_fx_rates
+        else:
+            lkr_usd = None
+
         # Default: flat curve at the config spot, else the single config-sourced
         # reference rate (config/defaults.yaml) — never a Python literal (CESSPIT).
         from analytics.fx.fx_fetch import default_fx_lkr_per_usd
@@ -346,8 +368,7 @@ def compute_fx_curve(
         # the depreciating curve the cashflow/IRR actually used. Falls back to a flat curve
         # at the resolved spot when there is no fx block with a usable start (e.g. a config
         # carrying only fx.rates.lkr_per_usd, or no fx block at all).
-        lkr_usd = None
-        if isinstance(fx_config, Mapping) and fx_config:
+        if lkr_usd is None and isinstance(fx_config, Mapping) and fx_config:
             try:
                 from finance.cashflow_v14_fx import _fx_curve as _cashflow_fx_curve
 

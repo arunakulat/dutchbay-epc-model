@@ -304,15 +304,16 @@ def test_three_resolvers_agree_on_the_levy_inclusive_gross(
     )
 
 
-def test_depreciable_base_grosses_the_same_uplift_at_year0_fx(
+def test_depreciable_base_grosses_the_same_uplift_at_financial_close_fx(
     levied_cfg: Dict[str, Any],
 ) -> None:
-    """Year-1 depreciation delta == uplift x fx0 x (plant/5 + civil/20 shares)."""
-    from finance.cashflow_v14_fx import _fx_curve
+    """Year-1 depreciation delta == uplift x close FX x tax depreciation rate."""
+    from finance.cashflow_v14_fx import _financial_close_spot
 
     uplift = capex_uplift_from_config(levied_cfg)
     assert uplift == pytest.approx(8_259_300.0, rel=1e-12)
-    fx0 = _fx_curve(dict(levied_cfg), 20)[0]
+    close_fx = _financial_close_spot(dict(levied_cfg))
+    assert close_fx is not None
     tax = levied_cfg["tax"]
     dep_rate = float(tax["plant_capex_share"]) / float(
         tax["plant_depreciation_years"]
@@ -322,7 +323,7 @@ def test_depreciable_base_grosses_the_same_uplift_at_year0_fx(
     delta = rows_on[0]["total_depreciation_lkr"] - rows_off[0]["total_depreciation_lkr"]
     # rows_off carries the opex-VAT-free line too, but depreciation is untouched
     # by opex VAT, so the year-1 delta isolates the capitalized uplift exactly.
-    assert delta == pytest.approx(uplift * fx0 * dep_rate, rel=1e-9)
+    assert delta == pytest.approx(uplift * close_fx * dep_rate, rel=1e-9)
 
 
 def test_sources_and_uses_disclose_the_levy_inside_gross_capex(
@@ -495,11 +496,11 @@ FULL_STACK_OVERRIDE = str(
 # the absent-block identity a fixed empirical meaning — if the mechanism ever
 # leaks into a block-less config, this breaks at 1e-12. Values = the live
 # pipeline on the committed scenario minus the block (2026-07-05 flip).
-LEVY_OFF_PROJECT_IRR = 0.02330086889477035
-LEVY_OFF_EQUITY_IRR = -0.044381188877225974
-LEVY_OFF_PROJECT_NPV = -68316613.91027918
-LEVY_OFF_TOTAL_CFADS = 196144013.5233307
-LEVY_OFF_DEBT_TOTAL = 70224000.0
+LEVY_OFF_PROJECT_IRR = 0.0076385755390873935
+LEVY_OFF_EQUITY_IRR = -0.06462847216274137
+LEVY_OFF_PROJECT_NPV = -81016248.45805511
+LEVY_OFF_TOTAL_CFADS = 171036158.76062176
+LEVY_OFF_DEBT_TOTAL = 61446000.0
 
 
 def _merged_with_override(path: str) -> Dict[str, Any]:

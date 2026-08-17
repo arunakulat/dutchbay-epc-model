@@ -134,8 +134,8 @@ def test_suite_structure_and_base_kpis(base_config):
 def test_basecase_returns_regression_pins(base_config):
     """Pin baseline returns so a tax-model regression is caught."""
     base = _one_way(base_config, "tax.corporate_tax_rate", 0.30).base_kpis
-    # Basecase project IRR ~0.059 is unchanged by the tax/debt re-baselines (unlevered).
-    # PR A (dividend WHT) then PR B (UIP LKR debt rate 13.39%) pulled the LEVERED basecase
-    # equity IRR down to ~0.030 (the costlier LKR tranche; basecase is fixed-70%-geared).
-    assert 0.01 < base["equity_irr"] < 0.05
-    assert 0.04 < base["project_irr"] < 0.07
+    # F5-01 binds the parametric operating FX path to COD (two years after close),
+    # while keeping the authored close spot for tax basis. The steeper operating
+    # conversion makes this fixed-70%-geared basecase loss-making for equity.
+    assert -0.03 < base["equity_irr"] < -0.01
+    assert 0.03 < base["project_irr"] < 0.05

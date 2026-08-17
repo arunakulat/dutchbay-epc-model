@@ -223,6 +223,101 @@ def test_fx_curve_override_empty_refetches_from_config() -> None:
     assert all(math.isclose(r["fx_rate"], 300.0, rel_tol=1e-9) for r in rows)
 
 
+def test_parametric_fx_starts_after_resolved_construction_periods() -> None:
+    """The first annual row is the COD rate, not the financial-close spot."""
+    cfg = _base_config()
+    cfg["fx"]["annual_depr"] = 0.0589
+    cfg["Financing_Terms"] = {"construction_periods": 2}
+    rows = build_annual_rows(cfg)
+    close = float(cfg["fx"]["start_lkr_per_usd"])
+    expected = [close * 1.0589**period for period in range(2, 2 + len(rows))]
+    assert [row["fx_rate"] for row in rows] == pytest.approx(expected)
+
+
+def test_canonical_first_operating_fx_is_two_period_cod_rate() -> None:
+    """The lender case pins the audited 333.79 close -> 374.2684496059 COD bridge."""
+    cfg = load_scenario_config(str(LENDER_SCENARIO))
+    rows = build_annual_rows(cfg)
+    assert cfg["Financing_Terms"]["construction_periods"] == 2
+    assert rows[0]["fx_rate"] == pytest.approx(374.2684496059, rel=1e-12)
+
+
+def test_construction_periods_move_operating_fx_not_capex_tax_basis() -> None:
+    """Timeline changes advance operating FX while depreciation stays close-anchored."""
+    cfg_one = _base_config()
+    cfg_one["fx"]["annual_depr"] = 0.10
+    cfg_one["capex"] = {"usd_total": 1_000_000.0}
+    cfg_one["Financing_Terms"] = {"construction_periods": 1}
+
+    cfg_three = {
+        **cfg_one,
+        "fx": dict(cfg_one["fx"]),
+        "capex": dict(cfg_one["capex"]),
+        "tax": dict(cfg_one["tax"]),
+        "project": dict(cfg_one["project"]),
+        "tariff": dict(cfg_one["tariff"]),
+        "opex": dict(cfg_one["opex"]),
+        "Financing_Terms": {"construction_periods": 3},
+    }
+
+    rows_one = build_annual_rows(cfg_one)
+    rows_three = build_annual_rows(cfg_three)
+    assert rows_one[0]["fx_rate"] == pytest.approx(300.0 * 1.10)
+    assert rows_three[0]["fx_rate"] == pytest.approx(300.0 * 1.10**3)
+    assert rows_one[0]["total_depreciation_lkr"] == pytest.approx(
+        rows_three[0]["total_depreciation_lkr"]
+    )
+
+
+def test_caller_fx_curve_is_operating_path_but_tax_basis_uses_authored_close() -> None:
+    cfg = _base_config()
+    cfg["capex"] = {"usd_total": 1_000_000.0}
+    operating = [410.0, 420.0, 430.0, 440.0, 450.0]
+    rows = build_annual_rows(cfg, fx_curve=operating)
+    expected_dep = (
+        1_000_000.0
+        * float(cfg["fx"]["start_lkr_per_usd"])
+        / float(cfg["tax"]["depreciation_years"])
+    )
+    assert [row["fx_rate"] for row in rows] == operating
+    assert rows[0]["total_depreciation_lkr"] == pytest.approx(expected_dep)
+
+
+def test_explicit_config_curve_is_operating_path_with_separate_close_basis() -> None:
+    cfg = _base_config()
+    cfg["fx"]["curve"] = [401.0, 402.0, 403.0, 404.0, 405.0]
+    cfg["capex"] = {"usd_total": 1_000_000.0}
+    rows = build_annual_rows(cfg)
+    assert [row["fx_rate"] for row in rows] == cfg["fx"]["curve"]
+    assert rows[0]["total_depreciation_lkr"] == pytest.approx(
+        1_000_000.0 * 300.0 / float(cfg["tax"]["depreciation_years"])
+    )
+
+
+def test_legacy_explicit_only_unhedged_curve_uses_curve_zero_as_tax_basis() -> None:
+    cfg = _base_config()
+    cfg["fx"] = {"curve": [401.0, 402.0, 403.0, 404.0, 405.0]}
+    cfg["capex"] = {"usd_total": 1_000_000.0}
+    rows = build_annual_rows(cfg)
+    assert rows[0]["fx_rate"] == 401.0
+    assert rows[0]["total_depreciation_lkr"] == pytest.approx(
+        1_000_000.0 * 401.0 / float(cfg["tax"]["depreciation_years"])
+    )
+
+
+def test_extra_depreciable_usd_uses_financial_close_basis() -> None:
+    """Capitalized IDC augments tax basis at close even when operating FX has moved."""
+    cfg = _base_config()
+    cfg["fx"]["annual_depr"] = 0.10
+    cfg["capex"] = {"usd_total": 1_000_000.0}
+    plain = build_annual_rows(cfg)
+    with_idc = build_annual_rows(cfg, extra_depreciable_usd=100_000.0)
+    expected_delta = 100_000.0 * 300.0 / float(cfg["tax"]["depreciation_years"])
+    assert (
+        with_idc[0]["total_depreciation_lkr"] - plain[0]["total_depreciation_lkr"]
+    ) == pytest.approx(expected_delta)
+
+
 # ---------------------------------------------------------------------------
 # Depreciable-capex precedence ladder in _prepare_cashflow_context.
 # ---------------------------------------------------------------------------
@@ -272,8 +367,8 @@ def test_capex_lkr_total_branch() -> None:
     assert math.isclose(_first_year_depreciation(cfg), expected, rel_tol=1e-9)
 
 
-def test_capex_usd_total_translated_at_year0_fx() -> None:
-    """USD capex is translated to LKR at the year-0 FX rate before depreciating."""
+def test_capex_usd_total_translated_at_financial_close_fx() -> None:
+    """USD capex is translated to LKR at financial-close FX before depreciating."""
     usd = 1.0e8
     cfg = _base_config()
     cfg["capex"] = {"usd_total": usd}

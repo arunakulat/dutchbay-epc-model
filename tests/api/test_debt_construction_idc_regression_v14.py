@@ -129,13 +129,13 @@ def test_lendercase_idc_totals_pinned() -> None:
     # fee+levy-inclusive sculpt re-solves at 0.41 gearing — debt 68.229M -> 68.822M on
     # the larger base — so the IDC-inclusive tranche principals scale accordingly.
     assert float(lkr.get("principal_m", 0.0)) == pytest.approx(
-        37_468_007.737777, rel=tol
+        32_441_811.577831, rel=tol
     )
     assert float(usd.get("principal_m", 0.0)) == pytest.approx(
-        34_541_273.685516, rel=tol
+        29_907_688.191117, rel=tol
     )
     assert float(dfi.get("principal_m", 0.0)) == pytest.approx(
-        7_567_787.565371, rel=tol
+        6_552_596.550504, rel=tol
     )
 
     total_principal = (
@@ -143,21 +143,20 @@ def test_lendercase_idc_totals_pinned() -> None:
         + float(usd.get("principal_m", 0.0))
         + float(dfi.get("principal_m", 0.0))
     )
-    assert total_principal == pytest.approx(79_577_068.988663, rel=tol)
+    assert total_principal == pytest.approx(68_902_096.319452, rel=tol)
 
     # IDC by tranche (scales with the fee+levy-sized principals).
-    assert float(lkr.get("idc_m", 0.0)) == pytest.approx(6_497_966.887777, rel=tol)
-    assert float(usd.get("idc_m", 0.0)) == pytest.approx(3_571_232.835516, rel=tol)
-    assert float(dfi.get("idc_m", 0.0)) == pytest.approx(685_556.265371, rel=tol)
+    assert float(lkr.get("idc_m", 0.0)) == pytest.approx(5_626_288.402831, rel=tol)
+    assert float(usd.get("idc_m", 0.0)) == pytest.approx(3_092_165.016117, rel=tol)
+    assert float(dfi.get("idc_m", 0.0)) == pytest.approx(593_591.400504, rel=tol)
 
     total_idc = float(result.get("total_idc", 0.0))
-    assert total_idc == pytest.approx(10_754_755.988663, rel=tol)
+    assert total_idc == pytest.approx(9_312_044.819452, rel=tol)
 
-    # Min DSCR: the headline is the CONSERVATIVE per-year fold (#737 — year 1 carries
-    # the orphaned bridge service out of fee-netted CFADS; ~1.2857 levy-inclusive per
-    # #738); the per-period series still floors at the 1.30 sculpt target.
+    # F5-01 aligns the first operating row to COD, removing the former orphaned
+    # bridge-service fold gap; the headline and period minima now both meet target.
     min_dscr = float(result.get("min_dscr"))
-    assert min_dscr == pytest.approx(1.2857, rel=tol)
+    assert min_dscr == pytest.approx(1.30, rel=tol)
 
     # audit_status is PASS iff the debt-engine dscr_min >= the 1.30 target. The dual-DSCR
     # sculpt lands dscr_min AT the target, so this `>=` comparison sits on the boundary and

@@ -45,7 +45,7 @@ HYBRID_BESS_SCENARIO = SCEN / "dutchbay_hybrid_bess_2025Q4.yaml"
 
 #: The frozen committed 5th-gen wind lendercase canon (tests/_canon.py, #955 — the
 #: KPI-neutrality gate). Gearing is not part of the canonical KPI vector, so it stays local.
-_CANON_GEARING = 0.41
+_CANON_GEARING = 0.355
 
 
 # --------------------------------------------------------------------------- #
@@ -62,14 +62,14 @@ def test_solar_only_runs_canonically_with_finite_distinct_kpis() -> None:
     solar = run_v14_pipeline(config=str(SOLAR_SCENARIO), validation_mode="strict")
     wind = run_v14_pipeline(config=str(WIND_SCENARIO), validation_mode="strict")
     s_irr = solar["kpis"]["project_irr"]
-    assert s_irr == pytest.approx(-0.03435761479654192)
+    assert s_irr == pytest.approx(-0.047345111849281016)
     # A real, distinct second technology — the lower-CF flat-LKR PV is materially worse than wind,
     # not a copy of it (a spurious pass would be s_irr == wind_irr).
     assert s_irr != wind["kpis"]["project_irr"]
     assert s_irr < wind["kpis"]["project_irr"]
     # The solar column carries its OWN dual-DSCR solved gearing (distinct from wind's 0.41).
     solved = solar["debt_result"]["dual_dscr"]["solved_gearing"]
-    assert solved == pytest.approx(0.2025)
+    assert solved == pytest.approx(0.1775)
     assert solved != _CANON_GEARING
 
 
@@ -107,7 +107,7 @@ def test_hybrid_bess_books_financed_additive_capacity_charge() -> None:
     # The extra tolling revenue net of the financed battery lifts project IRR above the plain hybrid
     # (a distinct, non-trivial economics — the fourth column is real), and stays finite.
     b_irr = out["kpis"]["project_irr"]
-    assert b_irr == pytest.approx(0.033725746189781663)
+    assert b_irr == pytest.approx(0.017736581873141265)
     assert b_irr > hybrid["kpis"]["project_irr"]
 
 

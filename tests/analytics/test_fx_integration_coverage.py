@@ -232,11 +232,12 @@ def test_live_pipeline_populates_fx_block_curve_risk() -> None:
     assert sr.get("fx_block") is not None
     assert sr.get("fx_curve") is not None
     assert sr.get("fx_risk_profile") is not None
-    # additive — no effect on the financed economics
-    # (canonical re-baselined by #738 2026-07-05: PRUDENT import levies capitalized
-    #  + 18% opex VAT, net of the revenue-SSCL exemption reversal — projIRR 2.03%
-    #  -> 1.46%, equity_irr -0.0499 -> -0.0584, gearing 0.4275 -> 0.41 on the
-    #  grossed capex. Prior: PR B group-C #3 UIP LKR debt rate; #737 fees.)
+    assert sr["fx_curve"]["lkr_usd"] == pytest.approx(
+        [row["fx_rate"] for row in out["annual_rows"]]
+    )
+    # Integration is additive: it reports the same already-resolved row FX path and
+    # does not apply a second timeline shift. The financed economics are pinned to
+    # the F5-01 code oracle below.
     k = out["kpis"]
     assert k["project_irr"] == pytest.approx(LENDER_PROJECT_IRR, abs=1e-9)
     assert k["equity_irr"] == pytest.approx(LENDER_EQUITY_IRR, abs=1e-9)

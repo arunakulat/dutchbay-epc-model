@@ -2,12 +2,12 @@
   "_note": "Canonical lender-case financial-KPI regression targets, extracted from scenarios/dutchbay_lendercase_2025Q4.yaml per #996 D3 so a runtime-input scenario does not double as its own regression oracle. These values are consumed ONLY by tests/finance/test_lendercase_expected_results.py (loose absolute tolerances that absorb the 4-sig-fig rounding here). They are NOT the byte-identity gate — that lives at full precision in tests/finance/test_multitech_generation.py::test_canonical_lendercase_economics_unchanged.",
   "_source_scenario": "scenarios/dutchbay_lendercase_2025Q4.yaml",
   "_oracle_test": "tests/finance/test_lendercase_expected_results.py",
-  "_provenance": "Honest v14 pipeline output for the 15 x IEA-10MW (198m) re-model after the 2026 correction sequence: FX 300->333.79; ERA5-fitted Weibull re-baseline (AEP 483.6->473.8 GWh); project-discounting fix (audit 2.0); 0.5%/yr degradation re-baseline; FX-drift re-baseline (annual_depr 3%->5.89%); 2% AEP over-prediction haircut (P50 473.8->464.3, CF 0.339->0.332); PR-A tax/levy re-baseline (dividend WHT + IDC capitalization); PR-B UIP LKR debt rate 8%->13.39%; #737 credit-support fees (guarantee 75bps + PRI 100bps, DSCR-sculpt-inclusive); #738 import levies + opex VAT (net of the SSCL-on-revenue exemption reversal). Net: project value-destructive, honestly so.",
-  "project_irr": 0.015,
-  "equity_irr": -0.058,
-  "project_npv_m_usd": -79.3,
-  "min_dscr": 1.286,
-  "avg_dscr": 1.39,
-  "llcr": 1.27,
-  "plcr": 1.31
+  "_provenance": "Honest v14 pipeline output for the 15 x IEA-10MW re-model after the 2026 correction sequence through F5-01 (2026-08-16): financial-close FX 333.79 remains the capex, levy and IDC tax basis; two construction periods advance the first operating spot to COD 374.2684496059; annual reports reuse the exact cashflow-row FX path. Prior resource, tax, debt-rate, fee and import-levy corrections remain in force. The project is value-destructive, honestly so.",
+  "project_irr": -0.0012,
+  "equity_irr": -0.0785,
+  "project_npv_m_usd": -91.81,
+  "min_dscr": 1.300,
+  "avg_dscr": 1.393,
+  "llcr": 1.281,
+  "plcr": 1.319
 }

@@ -130,7 +130,7 @@ def test_interest_deductibility_flag_is_live_on_the_equity_path() -> None:
         LENDER, overrides={"tax.interest_deductibility": False}
     )
     assert on["equity_irr"] == pytest.approx(_CANON_EQ_IRR, abs=1e-9)
-    assert off["equity_irr"] == pytest.approx(-0.08566395096828838, abs=1e-9)
+    assert off["equity_irr"] == pytest.approx(-0.10433619112815862, abs=1e-9)
     assert (
         on["equity_irr"] > off["equity_irr"] + 0.02
     )  # the shield is material (+272bps after the #738 re-baseline)

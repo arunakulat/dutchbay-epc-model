@@ -220,7 +220,7 @@ def test_lendercase_paid_in_equity_ties_to_sources_and_uses_with_levies() -> Non
     distribution and Sources & Uses use, so paid-in equity ties out natively (no
     reconciliation footnote). The lendercase's financed capex is $167,859,300
     (= $159.6M pre-levy + $8,259,300 import duties/unrecoverable VAT) and its S&U
-    equity is $99,036,987 — exactly what the three-statement paid-in equity must equal.
+    equity is $108,269,248.50 — exactly what the three-statement paid-in equity must equal.
     """
     from pathlib import Path
 
@@ -241,7 +241,7 @@ def test_lendercase_paid_in_equity_ties_to_sources_and_uses_with_levies() -> Non
     assert ts is not None
     # Paid-in equity ties EXACTLY to the Sources & Uses equity (levy-inclusive).
     assert float(ts.balance_sheet[0].paid_in_equity) == pytest.approx(
-        99_036_987.0, abs=1e-6
+        108_269_248.5, abs=1e-6
     )
     # And the balance sheet still articulates: every tie-out passes.
     assert ts.tie_outs.balance_sheet_balances
