@@ -30,6 +30,6 @@ artifacts under `feasibility_reproduce/_run_out/`.
 ## Notes
 - **Only two steps need network** (ERA5 retrieval, ERA5-grid GIS export); their outputs are cached,
   so the default run is fully offline. Online-refresh commands are in `HOWTO.md` (§2, §9).
-- **Golden numbers** (finance canon, must be byte-identical): project_irr `0.014551597740253388` ·
-  equity_irr `−0.05841298678542661` · min_dscr `1.285740985294611`.
+- **Golden numbers** (finance canon, must be byte-identical): project_irr `-0.001166233356501311` ·
+  equity_irr `−0.07853839579881527` · min_dscr `1.3`.
 - Needs the `[grid]` + `[wind]` extras + `weasyprint`/`mistune` (see `HOWTO.md` §0).

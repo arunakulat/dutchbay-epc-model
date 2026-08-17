@@ -33,7 +33,7 @@ project:
   cod_year: 2027  # Commercial Operation Date
   developer: "DutchBay Wind Power Pvt Ltd"
   grid_poi: "Puttalam 220kV Substation"
-  
+
   # Tax & regulatory (Sri Lanka BOI)
   boi_approved: false
   boi_agreement_date: '2025-01-15'
@@ -68,7 +68,7 @@ wind_resource:
   shear_exponent: 0.14
   air_density_kgm3: 1.15  # kg/m³ at ~15°C, sea level (tropical)
   air_density_ref_kgm3: 1.225  # Standard air density for power curve
-  
+
   # Data provenance
   data_source: "ECMWF ERA5 Reanalysis"
   data_years: "2020-2024"
@@ -189,7 +189,7 @@ resource:
     electrical_loss_pct: 2.0  # Cable + transformer + auxiliary consumption
     curtailment_pct: 2.0  # Grid curtailment (ERA5 stack)
     other_pct: 1.0  # Environmental / icing / blade degradation
-  
+
   # Wind resource (for backward compatibility). ERA5-FITTED (see top-level block).
   wind_resource:
     mean_wind_speed_ms: 7.29
@@ -246,7 +246,7 @@ ppa:
   tariff_type: "fixed"  # vs "indexed" (CPI-linked) or "merchant"
   indexation_start_year: 2  # Year when CPI indexation begins (if indexed)
   cpi_annual_pct: 2.0  # Annual CPI escalation (if tariff_type=indexed)
-  
+
   # Multi-currency reporting equivalents (REFERENCE ONLY - not used in calculations)
   # FX at 2026-Q2 pinned vintage: 1 USD = 333.79 LKR (was a stale 300). EUR/CNY cross
   # rates not refreshed (USD/LKR is the only fetched vintage); recompute when needed.
@@ -254,12 +254,12 @@ ppa:
     usd_per_mwh: 60.82  # 20300 ÷ 333.79 (for lender reports)
     eur_per_mwh: 61.5   # 20300 ÷ 330 (EUR/LKR not refreshed)
     cny_per_mwh: 487.0  # 20300 ÷ 41.7 (CNY/LKR not refreshed)
-  
+
   # Off-taker details
   offtaker: "Ceylon Electricity Board (CEB)"
   offtaker_credit_rating: "B+ (S&P)"
   payment_terms_days: 30
-  
+
   # Revenue guarantee (optional)
   revenue_guarantee:
     enabled: false
@@ -305,7 +305,7 @@ fx:
   start_lkr_per_usd: 333.79  # 2026-Q2 pinned (was a stale 300.0, ~11.3% understatement)
   annual_depr: 0.0589  # data-derived LKR depreciation (BIS 2005-2026 long-run, analytics.fx.fx_calibration; was hand-set 3%)
   uncertainty_pct: 0.05  # ±5% FX volatility (for Monte Carlo)
-  
+
   # FX exposure analysis
   exposure_summary:
     usd_debt_principal: 82500000  # USD DFI + Commercial
@@ -350,7 +350,7 @@ capex:
 opex:
   usd_per_year: 3000000  # Fixed O&M contract
   opex_per_kw_yr_usd: 20.0  # 3M / 150MW
-  
+
   breakdown:
     om_contract_usd: 2000000  # Full-service O&M
     insurance_usd: 500000  # Property + BI
@@ -455,6 +455,8 @@ risk_adjustment:
 # MULTI-CURRENCY DEBT STRUCTURE
 # ═════════════════════════════════════════════════════════════════════════════
 Financing_Terms:
+  # Financial close to COD. Shared by debt construction and operating FX start.
+  construction_periods: 2
   debt_ratio: 0.7                  # MAX gearing cap; actual gearing auto-solved to target_dscr
   debt_sizing: dual_dscr           # auto-size debt on the real schedule to target_dscr (capped at debt_ratio); robust to AEP (#180)
   dscr_p99_downside_factor: 0.80   # P99 CFADS = 80% of P50 (~P90 AEP) for the dual-DSCR (P50/P99) capacity detail
@@ -470,7 +472,7 @@ Financing_Terms:
   interest_only_years: 2
   amortization_style: auto
   interest_rate_nominal: 0.08
-  
+
   # ── Multi-currency debt structure (CANONICAL) ───────────────────────────
   # The engine (finance/debt_v14._solve_mix) sizes total debt via dual_dscr,
   # then splits it by these mix PROPORTIONS at the per-currency rates below.
@@ -490,19 +492,19 @@ Financing_Terms:
     dfi_min: 0.065
     usd_nominal: 0.075         # USD_Commercial rate (7.5%)
     usd_commercial_min: 0.075
-  
+
   # DSCR targets
   target_dscr: 1.3
   min_dscr: 1.2
-  
+
   # Reserves
   reserves:
     dsra_months: 6  # Debt Service Reserve Account
     receivables_guarantee_months: 9  # CEB payment risk
-  
+
   use_revenue_guarantee: false
   guarantee_revenue_pct: 0.0075
-  
+
   fees:
     upfront_pct: 0.01
     # Annual credit-support fees (#737), decimals per year on the OUTSTANDING senior
@@ -554,13 +556,13 @@ monte_carlo:
   n_scenarios: 100000
   sampler: lhs  # Latin Hypercube Sampling
   seed: 42
-  
+
   # Wind resource uncertainty (dominant risk driver)
   weibull_uncertainty_pct: 10.0  # ±10% on A and k
   wake_loss_std_pct: 2.0
   availability_std_pct: 1.0
   electrical_loss_std_pct: 0.5
-  
+
   # (Retired #doc-drift: the old "toy model - TO BE DEPRECATED" scalar block
   #  — discount_rate_pct / capex_total_usd 150e6 / revenue_mean_usd / cost_mean_usd /
   #  fx_mean_rate / project_life_years — was an obsolete pre-pipeline MC format with ZERO
@@ -670,7 +672,7 @@ expected_results:
   annual_revenue_p50_m_lkr: 9618.1  # 473.8 GWh × 20.3 LKR/kWh
   annual_revenue_p50_m_eur: 29.1  # Reference: 473.8 GWh × 61.5 EUR/MWh
   revenue_20yr_undiscounted_m_lkr: 183553.8  # With 0.5%/yr degradation (M3e); flat-nominal LKR, NO CPI/tariff escalation (tariff_type=fixed)
-  
+
   # Financial metrics — the HONEST engine output (the canonical v14 pipeline,
   # build-up WACC driving the project discount) for the 15 x IEA-10MW re-model.
   # Binding validation targets: tests/finance/test_lendercase_expected_results.py
@@ -721,27 +723,33 @@ expected_results:
   # DSCR-solved gearing 0.4275 -> 0.41 (debt $68.23M -> $68.82M on the grossed
   # base). The sculpt still holds the 1.30 PER-PERIOD floor; the #790 fold headline
   # eases 1.2884 -> 1.2857 (still exactly 1 equity-lockup year).
-  # Net current canonical: project IRR 1.46% (BELOW the ~9.9% WACC), equity IRR -5.84% (NEGATIVE),
-  # NPV -$79.3M, DSCR-solved gearing 0.41. The project is value-destructive, honestly so.
+  # F5-01 rebaseline (2026-08-17, #1034/#1038): operating FX starts at COD after the
+  # two-period construction window, while capex/levy/IDC tax basis stays at financial
+  # close. The covenant fold and the dual-DSCR per-period floor now BOTH resolve to
+  # 1.30, retiring the equity-lockup year.
+  # Net current canonical: project IRR -0.12% (BELOW the ~10.3% WACC), equity IRR -7.85% (NEGATIVE),
+  # NPV -$91.81M, DSCR-solved gearing 0.355 (debt $59.59M). The project is
+  # value-destructive, honestly so.
   # (Equity bears the fee net of the cash-sweep interaction: the sweep headroom is also
   #  fee-netted, so the un-swept residual grows — reported as a balloon covenant breach.)
-  project_irr: 0.015       # UNLEVERED (shield-free) — net of #737 fees AND #738 import levies; << WACC
-  equity_irr: -0.058       # NEGATIVE. Chain: +0.0242 (interest shield) -> -0.0046 (FX-drift) ->
+  project_irr: -0.0012     # UNLEVERED (shield-free) — net of #737 fees AND #738 import levies; << WACC
+  equity_irr: -0.0785      # NEGATIVE. Chain: +0.0242 (interest shield) -> -0.0046 (FX-drift) ->
                             # -0.0100 (2% AEP haircut) -> -0.0193 (PR-A dividend WHT + IDC) ->
                             # -0.0486 (PR-B UIP LKR debt rate 13.39%) -> -0.0499 (#737 guarantee+PRI
                             # fees) -> -0.0584 (#738 import levies + opex VAT, net of the SSCL
                             # exemption reversal). The flat-nominal-LKR tariff cannot clear equity.
                             # (Set tax.interest_deductibility: false for the unlevered case.) MOIC < 1.
-  project_npv_m_usd: -79.3 # discount at build-up WACC ~9.9%. NPV -32.34M -> -53.29M (FX) -> -56.1M
+  project_npv_m_usd: -91.81 # discount at build-up WACC ~10.3%. NPV -32.34M -> -53.29M (FX) -> -56.1M
                             # (AEP) -> -54.0M (PR-A levy removal) -> -65.5M (PR-B UIP LKR rate, WACC up)
-                            # -> -70.9M (#737 credit-support fees) -> -79.3M (#738 import levies).
-  min_dscr: 1.286           # #790 HEADLINE = fold-corrected covenant minimum (bridge-corrected
-                            # per-year table, fee-netted per #737, levy-inclusive per #738): year 1
-                            # ~1.286 < the 1.30 covenant -> 1 equity-lockup year. The dual-DSCR
-                            # sculpt still pins the PER-PERIOD min at 1.30 (kpis.min_dscr_period).
-  avg_dscr: 1.39
-  llcr: 1.27                # fee-netted CFADS numerator (#737) over the fee-sized debt
-  plcr: 1.31
+                            # -> -70.9M (#737 credit-support fees) -> -79.3M (#738 import levies)
+                            # -> -91.81M (F5-01 COD-aligned operating FX).
+  min_dscr: 1.30            # #790 HEADLINE = fold-corrected covenant minimum (bridge-corrected
+                            # per-year table, fee-netted per #737, levy-inclusive per #738). Under
+                            # the F5-01 COD-aligned path this equals the dual-DSCR PER-PERIOD floor
+                            # of 1.30 (kpis.min_dscr_period) -> 0 equity-lockup years.
+  avg_dscr: 1.393
+  llcr: 1.281               # fee-netted CFADS numerator (#737) over the fee-sized debt
+  plcr: 1.319
 
 # ═════════════════════════════════════════════════════════════════════════════
 # METADATA
@@ -754,8 +762,12 @@ metadata:
   assumptions_source: 'BOI Agreement Ref: BOI/2025/REN/001234'
   sprint: 'Sprint 17 - Multi-Currency PPA + Wind Resource Integration'
   gwtf_compliance: 'All 51 rules audited + wind energy calculator integration'
-  
+
   changes:
+    - '2026-08-17 (F5-01, #1034): operating FX aligned to COD after the explicit
+      two-period construction window; financial-close FX retained for capex, levy and
+      IDC tax basis; expected_results re-baselined (projIRR 1.46%->-0.12%, eqIRR
+      -5.84%->-7.85%, NPV -79.3->-91.81M, gearing 0.41->0.355, min_dscr 1.286->1.30)'
     - '2026-07-05 (#738): import levies + indirect taxes ON (taxes_indirect, PRUDENT
       posture: PAL 5% + import-SSCL 2.5% paid on the 0.69 imported share, capex VAT
       relieved, 18% opex VAT paid) AND SSCL-on-revenue reversed 2.5%->0 (statutory

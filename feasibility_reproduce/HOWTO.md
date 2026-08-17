@@ -4,9 +4,9 @@ Every process, script and command used to produce the **full-stack** DutchBay wi
 so it can be regenerated **offline with only the repo `.venv`**. One-shot: `bash run_all.sh`.
 This file is the step-by-step manual behind that orchestrator.
 
-- **Engine:** DutchBay EPC model, `v15.3.0`, main @ `480628e` (incl. grid fixes #929 + #930).
+- **Engine:** DutchBay EPC model, `v15.3.1`, main @ `7e64d33` (incl. F5-01 COD-aligned operating FX, #1034/#1038).
 - **Canonical scenario:** `scenarios/dutchbay_lendercase_2025Q4.yaml` (the 5th-gen canon).
-- **Golden numbers (must reproduce):** project_irr `0.014551597740253388` · equity_irr `−0.05841298678542661` · min_dscr `1.285740985294611` · project_npv `−$79.27 M`.
+- **Golden numbers (must reproduce):** project_irr `-0.001166233356501311` · equity_irr `−0.07853839579881527` · min_dscr `1.3` · project_npv `−$91.81 M`.
 - **Architecture fact that drives this kit:** `run_full_pipeline_v14.py` computes production from `project.capacity_factor` and reads the **committed** `resource.aep_summary_path`; it does **not** re-run the wind/GIS/MC/sensitivity/grid modules. Those are fired **separately** here.
 
 ---
@@ -76,7 +76,7 @@ for s in basecase equitycase optimistic pessimistic capex_sinohydro_lean \
       validation_mode=strict write_artifacts=true run_scoped=true export_dir=_run_out/suite/$s
 done
 ```
-→ equity IRR −8.09 % (EIA-prudent) … +6.98 % (optimistic); **every scenario NPV-negative**.
+→ equity IRR −9.44 % (EIA-prudent) … +4.90 % (optimistic); **every scenario NPV-negative**.
 
 ---
 
@@ -108,9 +108,14 @@ flood (~1.25 GB at 100k). **Never** `os.setsid()`/`SIG_IGN`-detach the process.
 .venv/bin/python analytics/cli/cli_capital_structure_optimize_hydra.py \
     config=scenarios/dutchbay_lendercase_2025Q4.yaml mode=debt_mix objective_key=equity_irr direction=max
 .venv/bin/python analytics/cli/cli_capital_structure_optimize_hydra.py \
-    config=scenarios/dutchbay_lendercase_2025Q4.yaml mode=capex_contingency objective_key=equity_irr direction=max
+    config=scenarios/dutchbay_lendercase_2025Q4.yaml mode=capex_contingency objective_key=equity_irr direction=max \
+    base_capex_usd=157206000
 ```
-→ 36 debt-mix candidates, **all negative**; best (DFI 40 / USD 60) −3.71 %.
+→ 36 debt-mix candidates, **all negative**; best (DFI 40 / USD 60) −6.21 %.
+
+⚠️ `mode=capex_contingency` additionally requires `base_capex_usd=157206000`
+(`capex.usd_total` 159.6M less the 2.394M contingency line) — the CLI raises
+`ValueError` without it.
 
 ---
 

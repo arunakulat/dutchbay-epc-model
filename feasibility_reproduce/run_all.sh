@@ -21,7 +21,7 @@ for m in ("weasyprint","mistune","py_wake","topfarm","SALib","pandapower","raste
     try: importlib.import_module(m); print(f"  ok   {m}")
     except Exception as e: print(f"  MISS {m} ({e})  -> pip install -e '.[grid,wind]' + weasyprint/mistune")
 PYEOF
-echo "  engine: $(git rev-parse --short HEAD) (canon expects: project_irr 0.014551597740253388)"
+echo "  engine: $(git rev-parse --short HEAD) (canon expects: project_irr -0.001166233356501311)"
 
 step "1. Canon + baseline (finance) — must reproduce the 5th-gen canon"
 "$PY" run_full_pipeline_v14.py config="$CFG" validation_mode=strict write_artifacts=true \
@@ -29,7 +29,7 @@ step "1. Canon + baseline (finance) — must reproduce the 5th-gen canon"
 "$PY" - "$OUT" <<'PYEOF'
 import json,glob,sys
 k=json.load(open(glob.glob(sys.argv[1]+"/canon/*/kpis.json")[0]))
-canon={"project_irr":0.014551597740253388,"equity_irr":-0.05841298678542661,"min_dscr":1.285740985294611}
+canon={"project_irr":-0.001166233356501311,"equity_irr":-0.07853839579881527,"min_dscr":1.3}
 ok=all(abs(k.get(x,0)-v)<1e-9 for x,v in canon.items())
 print("  canon reproduced:", "BYTE-IDENTICAL ✓" if ok else "✗ DIVERGED — investigate")
 PYEOF
@@ -52,8 +52,11 @@ step "5. Global sensitivity (Sobol n=512 + Morris + PAWN)"
 step "6. Capital-structure optimizer (both modes)"
 "$PY" analytics/cli/cli_capital_structure_optimize_hydra.py config="$CFG" mode=debt_mix \
     objective_key=equity_irr direction=max output_dir="$OUT/optimizer" >/dev/null 2>&1 && echo "  ok  debt_mix"
+# base_capex_usd is REQUIRED for this mode (capex.usd_total less the contingency line);
+# the CLI raises ValueError without it. Errors are surfaced, not swallowed.
 "$PY" analytics/cli/cli_capital_structure_optimize_hydra.py config="$CFG" mode=capex_contingency \
-    objective_key=equity_irr direction=max output_dir="$OUT/optimizer" >/dev/null 2>&1 && echo "  ok  capex_contingency"
+    objective_key=equity_irr direction=max base_capex_usd=157206000 \
+    output_dir="$OUT/optimizer" >/dev/null && echo "  ok  capex_contingency" || echo "  ERR capex_contingency"
 
 step "7. Grid screen (KPI-neutral; grid.study_enabled=true)"
 "$PY" run_full_pipeline_v14.py config="$KIT/cache/lender_gridon.yaml" +emit_grid_screen=true \

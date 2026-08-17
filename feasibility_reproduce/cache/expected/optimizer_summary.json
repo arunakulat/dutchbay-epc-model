@@ -1,15 +1,15 @@
 {
   "baseline_committed": {
-    "gearing": 0.41,
-    "project_irr": 0.014551597740253388,
-    "equity_irr": -0.05841298678542661,
-    "min_dscr": 1.285740985294611,
+    "gearing": 0.355,
+    "project_irr": -0.001166233356501311,
+    "equity_irr": -0.07853839579881527,
+    "min_dscr": 1.3,
     "mix": {
       "lkr": 0.45,
       "dfi": 0.1,
       "usd": 0.45
     },
-    "note": "DSCR-solved gearing; canon"
+    "note": "DSCR-solved gearing; canon (F5-01 COD-aligned operating FX, #1034/#1038)"
   },
   "debt_mix_optimizer": {
     "objective_key": "equity_irr",
@@ -21,29 +21,31 @@
       "lkr_share": 0.0,
       "usd_share": 0.6
     },
-    "recommended_equity_irr": -0.03711069566539771,
+    "recommended_equity_irr": -0.062130282386211655,
     "recommended_min_dscr_period": 1.2999999999999998,
-    "recommended_llcr": 1.1561957507274205,
+    "recommended_llcr": 1.1665236734218603,
     "worst_mix": {
       "dfi_share": 0.0,
       "lkr_share": 0.6,
       "usd_share": 0.4
     },
-    "worst_equity_irr": -0.06297690142625567,
+    "worst_equity_irr": -0.08182558564155973,
     "all_feasible": true,
     "all_negative_equity_irr": true,
     "eqIRR_span": [
-      -0.06297690142625567,
-      -0.03711069566539771
+      -0.08182558564155973,
+      -0.062130282386211655
     ]
   },
   "capex_contingency_optimizer": {
     "objective_key": "equity_irr",
     "direction": "max",
     "feasible": true,
+    "n_candidates": 6,
     "recommended_contingency": 0.0,
-    "recommended_equity_irr": -0.05601521601557424,
-    "all_negative_equity_irr": true
+    "recommended_equity_irr": -0.07621601498471109,
+    "all_negative_equity_irr": true,
+    "note": "Requires base_capex_usd=157206000 (capex.usd_total 159.6M less the 2.394M contingency line); the CLI raises without it."
   },
-  "verdict": "Re-optimizing capital structure does NOT change the negative-equity verdict. Best-case eqIRR (LKR0/DFI40/USD60) = -3.71%, still deeply negative vs committed -5.84%. DSCR floor (1.30 per-period) binds every candidate. Value-destructive at every point on the searched surface."
+  "verdict": "Re-optimizing capital structure does NOT change the negative-equity verdict. Best-case eqIRR (LKR0/DFI40/USD60) = -6.21%, still deeply negative vs committed -7.85%. DSCR floor (1.30 per-period) binds every candidate. Value-destructive at every point on the searched surface."
 }
