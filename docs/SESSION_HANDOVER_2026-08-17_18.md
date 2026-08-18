@@ -60,6 +60,20 @@ python3.12 -m venv .venv
 .venv/bin/pip install -e ".[dev,feasibility]"
 ```
 
+**Fully-enabled session** (grid + micro-siting + redis + BESS + solar + pareto).
+The SessionStart hook provisions this when `DUTCHBAY_EXTRAS` is set, and starts
+redis when `jobs` is among the extras:
+
+```bash
+DUTCHBAY_EXTRAS=dev,feasibility,jobs,solar,pareto
+```
+
+`[feasibility]` composes wind/micrositing/gis/report/grid; `jobs` adds redis+arq
+(the `redis-server` binary ships in the image). **BESS needs no extra** — it is
+core (`finance.bess_revenue`, `bess_lcos`, `bess_project_economics`,
+`analytics.grid.capabilities.bess_soc`). Verified: all twelve capabilities import,
+redis round-trips, and the 202 tests in the paths CI skips all pass.
+
 Traps that cost real time this session:
 
 1. **Never `pip install` into the system interpreter.** Debian's patched
@@ -76,7 +90,14 @@ Traps that cost real time this session:
    what the SessionStart hook (`.claude/hooks/session-start.sh`, merged in #1041)
    exists for; it provisions lock + `[dev]` automatically on a web session, with
    `[feasibility]` behind `DUTCHBAY_INSTALL_FEASIBILITY=1`.
-5. **A dev venv is NOT the CI environment.** `[dev,feasibility]` pulls
+5. **`[micrositing]` silently downgrades protobuf off the lock.** topfarm pulls
+   optiwindnet → ortools, which caps `protobuf<6.34`, so installing micrositing
+   takes the locked `protobuf==7.35.1` down to `6.33.6` and pip prints a resolver
+   conflict. Everything imports and the micro-siting tests pass, and CI is
+   unaffected (micrositing is not in the lock) — but a fully-extra'd session is
+   NOT running the locked protobuf. Same family as the scipy/pandapower and
+   pyproj problems: an extra quietly contradicting the lock.
+6. **A dev venv is NOT the CI environment.** `[dev,feasibility]` pulls
    `[micrositing]`/topfarm, which drags in transitive packages CI never gets — CI
    installs `requirements.txt` only. This bit once: `pyproj` reached the dev venv
    via topfarm, so the new geometry tests passed locally and failed on six CI

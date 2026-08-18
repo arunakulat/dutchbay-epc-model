@@ -61,24 +61,53 @@ fi
 # requirements.txt is the fully-pinned reproducibility lock; [dev] is the gate
 # toolchain (ruff/black/isort, mypy + stubs, pytest + xdist/cov/split, bandit,
 # pip-audit). Together these are exactly what the tests and linters need.
-if [ -f "$STAMP" ] && [ "$(cat "$STAMP")" = "$(manifest_hash)" ]; then
+# Extras are selectable so a session can be provisioned for the work it will do.
+# DUTCHBAY_EXTRAS is a comma-separated extras list; it defaults to the gate
+# toolchain alone, which is all the tests and linters need.
+#
+#   dev                             tests + linters only (default, fastest)
+#   dev,feasibility                 + the reproduce kit: wind/micrositing/gis/
+#                                     report/grid — PyWake, TopFarm, WeasyPrint,
+#                                     rasterio, pandapower/andes/OpenDSS
+#   dev,feasibility,jobs            + redis/arq (async job path)
+#   dev,feasibility,jobs,solar,pareto   everything (pvlib, pymoo)
+#
+# NOTE: several capabilities are CORE and need no extra at all — the BESS stack
+# (finance.bess_revenue / bess_lcos / bess_project_economics,
+# analytics.grid.capabilities.bess_soc) is always available.
+#
+# The full set adds roughly a gigabyte (JAX/numba/openmdao/jupyterlab via
+# TopFarm), so it is opt-in rather than paid for on every session start.
+DUTCHBAY_EXTRAS="${DUTCHBAY_EXTRAS:-${DUTCHBAY_INSTALL_FEASIBILITY:+dev,feasibility}}"
+DUTCHBAY_EXTRAS="${DUTCHBAY_EXTRAS:-dev}"
+
+if [ -f "$STAMP" ] && [ "$(cat "$STAMP")" = "$(manifest_hash)|$DUTCHBAY_EXTRAS" ]; then
   echo "session-start: dependencies already current — skipping install"
 else
-  echo "session-start: installing pinned lock + [dev] toolchain (a few minutes)"
+  echo "session-start: installing pinned lock + [$DUTCHBAY_EXTRAS] (a few minutes)"
   "$PY" -m pip install --quiet -r requirements.txt
-  "$PY" -m pip install --quiet -e ".[dev]"
-  manifest_hash > "$STAMP"
+  "$PY" -m pip install --quiet -e ".[$DUTCHBAY_EXTRAS]"
+  printf '%s|%s' "$(manifest_hash)" "$DUTCHBAY_EXTRAS" > "$STAMP"
 fi
 
-# The feasibility reproduce kit (feasibility_reproduce/run_all.sh) needs a much
-# heavier set — PyWake, TopFarm, WeasyPrint, rasterio and their JAX/numba stack,
-# roughly another gigabyte. It is not needed to run tests or linters, so it is
-# opt-in rather than paid for on every session start:
-#     DUTCHBAY_INSTALL_FEASIBILITY=1
-if [ "${DUTCHBAY_INSTALL_FEASIBILITY:-}" = "1" ]; then
-  echo "session-start: installing [feasibility] extra"
-  "$PY" -m pip install --quiet -e ".[feasibility]"
-fi
+# Redis is needed by the async job path ([jobs]). The server binary ships in the
+# image; start it only when the extra was actually requested, and never fail the
+# session if it cannot start — the job path is opt-in, not load-bearing.
+case ",$DUTCHBAY_EXTRAS," in
+  *,jobs,*)
+    if command -v redis-server >/dev/null 2>&1; then
+      if redis-cli ping >/dev/null 2>&1; then
+        echo "session-start: redis already running"
+      else
+        redis-server --daemonize yes --port 6379 --save '' --appendonly no >/dev/null 2>&1 \
+          && echo "session-start: redis started on :6379" \
+          || echo "session-start: WARNING redis-server failed to start (job path unavailable)"
+      fi
+    else
+      echo "session-start: WARNING redis-server not on PATH (job path unavailable)"
+    fi
+    ;;
+esac
 
 # --- 4. Session environment ---------------------------------------------------
 # Put the venv first on PATH so `python`, `pytest` and `ruff` resolve to it
