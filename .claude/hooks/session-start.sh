@@ -62,10 +62,17 @@ fi
 # toolchain (ruff/black/isort, mypy + stubs, pytest + xdist/cov/split, bandit,
 # pip-audit). Together these are exactly what the tests and linters need.
 # Extras are selectable so a session can be provisioned for the work it will do.
-# DUTCHBAY_EXTRAS is a comma-separated extras list; it defaults to the gate
-# toolchain alone, which is all the tests and linters need.
+# DUTCHBAY_EXTRAS is a comma-separated extras list. It is normally supplied by the
+# `env` block in .claude/settings.json, which the harness injects before this hook
+# runs, so a web session provisions FULLY without anyone having to remember a flag.
 #
-#   dev                             tests + linters only (default, fastest)
+# The fallback below is the same full set rather than a bare `dev`: relying on the
+# env alone would mean a silently under-provisioned session if the injection ever
+# failed, and an under-provisioned session fails LATE (a missing import halfway
+# through a run) instead of loudly at start. Set DUTCHBAY_EXTRAS=dev explicitly
+# for the fast tests-and-linters-only path.
+#
+#   dev                             tests + linters only (fastest)
 #   dev,feasibility                 + the reproduce kit: wind/micrositing/gis/
 #                                     report/grid — PyWake, TopFarm, WeasyPrint,
 #                                     rasterio, pandapower/andes/OpenDSS
@@ -76,10 +83,13 @@ fi
 # (finance.bess_revenue / bess_lcos / bess_project_economics,
 # analytics.grid.capabilities.bess_soc) is always available.
 #
-# The full set adds roughly a gigabyte (JAX/numba/openmdao/jupyterlab via
-# TopFarm), so it is opt-in rather than paid for on every session start.
+# The full set adds roughly a gigabyte (JAX/numba/openmdao/jupyterlab via TopFarm)
+# and a few minutes to session start. That cost is paid deliberately: the repo's
+# work needs grid, micro-siting and the job path far more often than it needs a
+# fast start, and a half-provisioned environment is the more expensive failure.
+DUTCHBAY_EXTRAS_DEFAULT="dev,feasibility,jobs,solar,pareto"
 DUTCHBAY_EXTRAS="${DUTCHBAY_EXTRAS:-${DUTCHBAY_INSTALL_FEASIBILITY:+dev,feasibility}}"
-DUTCHBAY_EXTRAS="${DUTCHBAY_EXTRAS:-dev}"
+DUTCHBAY_EXTRAS="${DUTCHBAY_EXTRAS:-$DUTCHBAY_EXTRAS_DEFAULT}"
 
 if [ -f "$STAMP" ] && [ "$(cat "$STAMP")" = "$(manifest_hash)|$DUTCHBAY_EXTRAS" ]; then
   echo "session-start: dependencies already current — skipping install"

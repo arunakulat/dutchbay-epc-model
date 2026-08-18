@@ -10,7 +10,8 @@ replaying the conversation.
 
 ## 1. What shipped
 
-Six PRs, all squash-merged to `main` except the last (open at handover).
+Seven PRs, squash-merged to `main` in order. **Released as v15.4.0** at #1045;
+#1046 carries this handover and the automatic-provisioning fix.
 
 | PR | Commit | What |
 |---|---|---|
@@ -18,9 +19,29 @@ Six PRs, all squash-merged to `main` except the last (open at handover).
 | #1040 | `32f83d2` | Re-baseline `feasibility_reproduce/` to the COD-aligned canon |
 | #1041 | `2034d16` | `feasibility` extra, SessionStart hook, missing kit scripts |
 | #1042 | `1db8ac0` | **Python 3.12 baseline** + grid in the lock — unblocks #923 |
-| #1044 | `76f5e15` | Synthetic micro-siting geometry + real-solver QSTS→finance e2e |
+| #1044 | `f0d8eed` | Synthetic micro-siting geometry + real-solver QSTS→finance e2e |
+| #1045 | `0379843` | **v15.4.0 release** — changelog cut, `[micrositing]` in the lock, dead test revived |
+| #1046 | `cc7ab52` | Web sessions provision fully and automatically (`env` block + full hook fallback) |
 
 **Issue #1034 (F5-01) closed** `completed`, all nine Dolphin steps ticked.
+
+**Test-suite trajectory across the session:** 5138 passed / 31 skipped →
+**5184 passed / 13 skipped**. The 18 closed skips were tests that had never
+executed in CI: 9 `optimize_layout()` cases (no TopFarm in the lock), the andes
+and OpenDSS grid legs, and `test_evaluation_v14_lender_stack.py`'s PRIMARY
+regression pin, whose fixture had never been committed.
+
+### Outstanding: the signed tag
+
+`RELEASING.md` §6 wants `git tag -s v15.4.0` on the merged release commit, which
+triggers `release-run.yml` to publish the GitHub Release. **Not done** — it needs
+a signing key. This is the owner's to push:
+
+```bash
+git switch main && git pull --ff-only origin main
+git tag -s v15.4.0 -m "DutchBay 15.4.0"
+git push origin v15.4.0        # the TAG, never main
+```
 
 ---
 
@@ -60,13 +81,12 @@ python3.12 -m venv .venv
 .venv/bin/pip install -e ".[dev,feasibility]"
 ```
 
-**Fully-enabled session** (grid + micro-siting + redis + BESS + solar + pareto).
-The SessionStart hook provisions this when `DUTCHBAY_EXTRAS` is set, and starts
-redis when `jobs` is among the extras:
-
-```bash
-DUTCHBAY_EXTRAS=dev,feasibility,jobs,solar,pareto
-```
+**Fully-enabled sessions are now AUTOMATIC.** `.claude/settings.json` carries an
+`env` block setting `DUTCHBAY_EXTRAS=dev,feasibility,jobs,solar,pareto`, and the
+hook's own fallback is the same full set — so a web session provisions grid,
+micro-siting, redis, solar and pareto with no flag to remember, and starts
+`redis-server` on :6379. Set `DUTCHBAY_EXTRAS=dev` explicitly for the fast
+tests-and-linters path.
 
 `[feasibility]` composes wind/micrositing/gis/report/grid; `jobs` adds redis+arq
 (the `redis-server` binary ships in the image). **BESS needs no extra** — it is
@@ -87,16 +107,24 @@ Traps that cost real time this session:
    because it bypasses `ruff.toml`'s excludes. CI runs `ruff check .` from the
    root, which passes clean. Use the CI invocation.
 4. The container is **ephemeral** — the 2.3 GB `.venv` does not survive. That is
-   what the SessionStart hook (`.claude/hooks/session-start.sh`, merged in #1041)
-   exists for; it provisions lock + `[dev]` automatically on a web session, with
-   `[feasibility]` behind `DUTCHBAY_INSTALL_FEASIBILITY=1`.
-5. **`[micrositing]` silently downgrades protobuf off the lock.** topfarm pulls
-   optiwindnet → ortools, which caps `protobuf<6.34`, so installing micrositing
-   takes the locked `protobuf==7.35.1` down to `6.33.6` and pip prints a resolver
-   conflict. Everything imports and the micro-siting tests pass, and CI is
-   unaffected (micrositing is not in the lock) — but a fully-extra'd session is
-   NOT running the locked protobuf. Same family as the scipy/pandapower and
-   pyproj problems: an extra quietly contradicting the lock.
+   what the SessionStart hook (`.claude/hooks/session-start.sh`, #1041) exists for.
+   Since #1046 it needs no flag: `.claude/settings.json` injects
+   `DUTCHBAY_EXTRAS=dev,feasibility,jobs,solar,pareto` and the hook's own fallback
+   is the *same full set*, so injection failing cannot silently under-provision.
+   The legacy `DUTCHBAY_INSTALL_FEASIBILITY=1` alias only fires when
+   `DUTCHBAY_EXTRAS` is *unset*, so in a web session it is now inert — set
+   `DUTCHBAY_EXTRAS` directly. Costs ~1 GB and a few minutes at session start —
+   paid deliberately, because a half-provisioned session fails late (a missing
+   import mid-run) rather than loudly at start.
+5. **protobuf: resolved in v15.4.0, recorded because the pattern recurs.**
+   topfarm pulls optiwindnet → ortools, which caps `protobuf<6.34`. While
+   `[micrositing]` sat outside the lock, installing it downgraded the locked
+   `protobuf==7.35.1` to `6.33.6` and pip printed a live resolver conflict. #1045
+   put `[micrositing]` *in* the lock and pinned `protobuf==6.33.6`, which satisfies
+   every consumer in the tree and is imported by no first-party module. Third
+   instance of one failure mode — an extra quietly contradicting the lock (see
+   also scipy/pandapower and pyproj). `docs/ENVIRONMENT_PROVISIONING.md` §4 is the
+   standing register; add the fourth there when it appears.
 6. **A dev venv is NOT the CI environment.** `[dev,feasibility]` pulls
    `[micrositing]`/topfarm, which drags in transitive packages CI never gets — CI
    installs `requirements.txt` only. This bit once: `pyproj` reached the dev venv
@@ -154,16 +182,21 @@ Replace it when the real geometry exists. The committed
 `cache/expected/layout_optimized.json` (550.987 → 555.433 GWh) came from geometry
 that is not in the repo and cannot currently be reproduced.
 
-### 5.4 Version signalling
-`15.3.1` was a **patch** bump for a change the changelog calls a material
-correction (headline projIRR +1.46 % → −0.12 %). Raised three times, never
-changed — it is a judgement call for the owner. `15.4.0` would signal it better.
+### 5.4 Version signalling — SETTLED
+`15.3.1` was a patch bump for a change the changelog calls a material correction
+(headline projIRR +1.46 % → −0.12 %). Raised three times; the owner took the
+minor bump and **v15.4.0** shipped in #1045. Nothing outstanding but the signed
+tag (§1).
 
-### 5.5 Kit still not fully one-shot
-`run_all.sh` is closer but `feasibility_reproduce/lib/` was never fully
-reconstructed. `mc_run.py`, `wind_provenance.py`, `run_global_sa.py`,
-`build_study_pdf.py`, `build_md_pdf.py` and `synthetic_site.py` now exist. The
-GIS/ERA5 steps still rely on shipped cache.
+### 5.5 Kit is one-shot for compute, not for acquisition
+`feasibility_reproduce/lib/` is now committed in full — `mc_run.py`,
+`wind_provenance.py`, `run_global_sa.py`, `build_study_pdf.py`, `build_md_pdf.py`,
+`synthetic_site.py` — after the `.gitignore` defect in §6.1 kept it out of every
+prior release. `run_all.sh` therefore runs end to end.
+
+What is *not* one-shot: the GIS and ERA5 steps still read shipped cache rather
+than re-acquiring from source. Re-deriving them needs CDS credentials and the raster
+inputs, neither of which is in the repo. Treat the cache as an input, not an output.
 
 ---
 
@@ -206,6 +239,20 @@ carry provenance), **PERSIST-01** (checkpoint early — this file).
 
 ## 8. Immediate next step
 
-PR **#1044** was open with CI running at handover. Verify it went green, merge it,
-then `git remote prune origin` and delete the local branch. After that the tree is
-clean and the next piece of work is whichever of §5 the owner chooses.
+Everything opened in this session is merged; `main` is at **v15.4.0** plus #1046.
+There is no in-flight branch and no failing gate.
+
+Two things the next session inherits rather than discovers:
+
+1. **The signed tag is still unpushed** (§1). It is the last step of the v15.4.0
+   release and it needs the owner's key — no agent can do it.
+2. **Provisioning is automatic now.** A web session comes up with grid,
+   micro-siting, redis, solar and pareto already installed. Do *not* re-run
+   `pip install` by reflex; check the hook's banner first. `DUTCHBAY_EXTRAS=dev`
+   is the explicit opt-out for a fast tests-and-linters session.
+
+After that, the next piece of work is whichever of §5 the owner chooses. §5.1
+(the #923 flag flip) is the only one that moves the canon, and it is deliberately
+user-gated: it wants a real feeder, a `kpi_oracle` before/after diff, and explicit
+sign-off — plus, on the evidence of §5.1's guard note, a positive provenance
+marker so a toy `.dss` cannot masquerade as a real feeder.
