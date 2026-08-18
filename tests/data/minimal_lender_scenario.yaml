@@ -1,0 +1,68 @@
+# ═════════════════════════════════════════════════════════════════════════════
+# Minimal lender-stack scenario — test fixture, NOT a project scenario
+# ═════════════════════════════════════════════════════════════════════════════
+#
+# Consumed by tests/api/test_evaluation_v14_lender_stack.py, which calls it the
+# PRIMARY regression pin: it asserts `evaluate_with_overrides()` returns the full
+# lender KPI set (project_irr, equity_irr, min_dscr, avg_dscr, llcr, plcr) rather
+# than wind-only metrics — i.e. that the gateway is wired to
+# analytics.pipeline_v14_enhanced and not the retired wind-only pipeline.
+#
+# WHY IT IS COMMITTED NOW
+# -----------------------
+# The test guarded that path with `if not scenario_path.exists(): pytest.skip(...)`,
+# and this file had never been committed (no tests/data/ directory existed at all,
+# and nothing gitignored it). So the golden test reported as "skipped" on every CI
+# run while asserting nothing. Committing the fixture makes it execute.
+#
+# The values mirror the in-memory config in the sibling test
+# `test_evaluate_scenario_from_dict_returns_lender_kpis` so both entry points —
+# path-based and dict-based — exercise the same contract. They are ROUND TEST
+# NUMBERS, deliberately unlike the canonical lender case: this fixture must never
+# be mistaken for, or used to re-baseline, the DutchBay canon. It pins the SHAPE
+# of the gateway's output, never its economics.
+# ═════════════════════════════════════════════════════════════════════════════
+
+project:
+  name: test_project
+  capacity_mw: 100.0
+  capacity_factor_pct: 35.0      # required for the energy calculation
+  project_life_years: 25         # required for the timeline
+
+wind:
+  weibull_k: 2.0
+  weibull_lambda: 8.5
+  hub_height_m: 120.0
+
+finance:
+  capex_total_usd: 200000000.0
+  discount_rate_pct: 8.0
+
+tariff:
+  lkr_per_kwh: 24.0              # 300 LKR/USD x 0.08 USD/kWh
+
+opex:
+  usd_per_year: 5000000.0
+
+tax:
+  corporate_tax_rate: 0.28       # Sri Lankan corporate rate
+  depreciation_method: straight_line
+  depreciation_start_year: 1
+  depreciation_years: 15
+  enhanced_allowance_applies: false
+  enhanced_capital_allowance_multiple: 1.0
+  loss_carryforward_years: 25
+  tax_holiday_start_year: 1
+  tax_holiday_years: 0
+  wht_on_interest_to_nonresidents: 0.0
+  wht_on_interest_enabled: false
+  wht_gross_up: false
+
+fx:
+  start_lkr_per_usd: 300.0
+  annual_depr: 0.02              # 2 %/yr LKR depreciation (decimal, scalar)
+
+debt:
+  target_dscr: 1.4
+  interest_rate_pct: 6.0
+  term_years: 18

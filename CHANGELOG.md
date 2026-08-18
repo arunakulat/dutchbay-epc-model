@@ -4,6 +4,181 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v15.4.0 - 2026-08-18
+
+### Added
+- **`feasibility` extra — the reproduce kit installs in one line** — `pip install -e
+  ".[dev,feasibility]"` now provides everything `feasibility_reproduce/run_all.sh` needs,
+  replacing the hand-typed dependency list in `HOWTO.md` §0. Composes `wind`,
+  `micrositing`, `gis` and `report`, and adds `mistune` (Markdown→HTML for the PDF
+  builders) and `SALib` (the global-sensitivity step, which otherwise only arrived via
+  `[dev]`).
+- **`[grid]` is deliberately excluded from `feasibility`, resolving a real lock conflict** —
+  pandapower's scipy pin is incompatible with the pinned lock on *every* supported
+  interpreter: `pandapower==3.3.0` requires `scipy~=1.15`, and 3.5.4 requires `scipy<1.17`
+  on Python 3.11 and `scipy~=1.18` on 3.12, while `requirements.txt` pins `scipy==1.17.1`
+  and `[dev]`'s `scipy-stubs` requires `scipy>=1.17.1`. Installing grid alongside dev
+  silently downgraded scipy off the lock **and** broke the mypy gate's stubs. The grid
+  screen is advisory and KPI-neutral, so `run_all.sh` step 7 now skips it with a pointer to
+  an isolated `.venv-grid` rather than corrupting the environment that produces the
+  committed numbers. Verified in a clean venv: `requirements.txt` + `.[dev,feasibility]`
+  holds scipy at 1.17.1 with every kit dependency present. The canonical KPIs are
+  unaffected either way — the canon reproduces byte-identically under scipy 1.16.3 and
+  1.17.1 (#1040).
+- **Kit helper scripts committed — `run_all.sh` is closer to genuinely one-shot** — steps
+  2, 4, 5 and 10 called `feasibility_reproduce/lib/*.py` files that were never committed
+  (the unanchored `.gitignore` `lib/` rule swallowed them until #1040). Added `mc_run.py`
+  (wraps the canonical MC CLI, distils the committed summary shape, and REFUSES to emit a
+  summary when `toy_fallback_count > 0` so fabricated trial KPIs can never be presented as
+  evidence), `wind_provenance.py` (fresh bankable AEP + AEP tornado, both pure functions of
+  the committed scenario) and `run_global_sa.py` (drives Morris/Sobol/PAWN through
+  `scripts/run_global_sensitivity.py`, with a `--quick` smoke mode explicitly marked
+  not-evidence-grade), alongside the two PDF builders from #1040.
+- **Micro-siting stays skipped, loudly, rather than fabricated** — `optimize_layout()` needs
+  a site boundary polygon and baseline turbine coordinates, and neither is committed
+  anywhere in the tree; the pinned `cache/expected/layout_optimized.json` came from geometry
+  that was never checked in. `wind_provenance.py` reports exactly that instead of inventing
+  a boundary, which would yield an authoritative-looking uplift that is not the project's.
+  Micro-siting is KPI-neutral, so the finance canon does not depend on it.
+- **SessionStart hook for Claude Code on the web** — `.claude/hooks/session-start.sh`
+  provisions `.venv` with the pinned lock plus the `[dev]` gate toolchain so a remote
+  session can run tests and linters immediately, and puts `.venv/bin` on `PATH` via
+  `CLAUDE_ENV_FILE`. Remote-only (local sessions keep `make setup`), idempotent via a
+  manifest-hash stamp, and it creates a real venv because a system-interpreter install hits
+  Debian's patched-setuptools `install_layout` failure on the lock's legacy sdists
+  (`antlr4-python3-runtime`, `odfpy`). The heavy `[feasibility]` extra is opt-in behind
+  `DUTCHBAY_INSTALL_FEASIBILITY=1` so it is not paid for on every session start.
+- **D6a→D6b end-to-end through the REAL grid solvers (#923)** — the self-curtailment wiring
+  was covered from both ends but never joined through the real solvers:
+  `test_self_curtailment_enablement_readiness.py` drives the production chain into finance
+  but substitutes a `_RecordingStubDss` for `_require_opendss`, while
+  `test_curtailment_qsts_dynamics.py` runs the real solver and stops at the
+  `CurtailmentShareResult` without reaching the cashflow. Nothing asserted that the real
+  solve moves the finance KPIs the way the stubbed chain claims — if the stub drifted from
+  `opendssdirect`'s actual behaviour, every existing test would still have passed.
+  `tests/grid/test_qsts_finance_real_solver_e2e.py` closes that gap with no monkeypatch on
+  the solver seam.
+- **The real solver agrees with the stub, and that agreement is now pinned** — driven on the
+  same demo physics the stubbed suite uses (4 h at 120 MW against a 100 MW cap = 80 MWh shed
+  on 1,000 MWh gross), the real OpenDSS solve returns **exactly the 8.0 %** self-curtailment
+  the stubbed suite pins as `DEMO_SELF_CURTAILMENT_DECIMAL`. Divergence between the two now
+  fails a test instead of passing silently.
+- **Covered end-to-end**: the composed `curtailment_pct` equals the demo self share; every
+  headline KPI (projIRR, eqIRR, CFADS, NPV, max debt) moves down and correctly signed; the
+  committed canon is untouched when only `finance_wiring.enabled` is off (proving the QSTS
+  block alone is inert, which is why the flag can sit unflipped); and deemed-paid
+  (grid-instructed) curtailment is revenue-neutral through the real chain, as the CEB SPPA
+  requires.
+- **andes is exercised and proven NOT to reach finance** — it ships in the lock alongside
+  opendssdirect since the 3.12 migration, so the ride-through study is run here. Unlike the
+  QSTS path it has no finance seam (grep-confirmed: no `ride_through` import under
+  `finance/`), and the test states that intentionally so a future wiring of ride-through
+  into finance has to break this test first.
+- DEMO evidence only: the feeder is a synthetic 3-bus radial with no site physics. The
+  deltas quantify the WIRING, never DutchBay curtailment — #923 stays user-gated on a real
+  feeder model, a `kpi_oracle` before/after diff and explicit sign-off.
+- **Micro-siting runs again — on an explicitly SYNTHETIC derived geometry** —
+  `feasibility_reproduce/run_all.sh` step 2 could only skip, because
+  `optimize_layout()` needs a site boundary polygon and baseline turbine coordinates and
+  neither was ever committed (the pinned `cache/expected/layout_optimized.json` came from
+  geometry that never entered the repo). `cache/micrositing_synthetic_site.yaml` now
+  declares a geometry DERIVED from committed scenario parameters — array centroid
+  (`era5.latitude/longitude`), turbine count, `layout.turbine_spacing_avg_m` and
+  `layout_orientation` — projected into the declared UTM zone (44N → EPSG:32644) by
+  `lib/synthetic_site.py`. The turbine itself is built from the **committed** OEM power
+  curve (`wind_resource/config/power_curves.yaml`), so real turbine physics drives a
+  fabricated layout rather than invented numbers on both sides.
+- **The boundary radius is a reasoned choice, not a default** — 15 turbines at 650 m span
+  9,100 m, so a 2 km radius (4 km chord) fits only ~7 of them and 5 km leaves just 900 m of
+  headroom. 6 km is committed; the builder REFUSES any radius that cannot contain the array
+  and names the shortfall.
+- **Provenance is enforced, not merely documented** — `build_synthetic_site()` rejects any
+  config whose `provenance` is not `synthetic_derived`, so a real site block can never be
+  laundered through the synthetic builder. The emitted artefact is
+  `layout_optimized_synthetic.json` carrying `provenance`, `not_site_representative`, the
+  site-config and scenario paths and the EPSG (MRM-02) — and it deliberately does NOT
+  overwrite the committed `cache/expected/layout_optimized.json`. The uplift quantifies the
+  OPTIMISER WIRING, never DutchBay's siting headroom.
+- **Non-convergence is surfaced, not swallowed (FIN-01)** — SLSQP reports its exit status
+  only on stdout and `LayoutOptimizationResult` carries no status field, so the runner
+  captures it: at the committed 200-iteration cap the run hits the limit, and both the
+  console line (`WARN` + an explicit note) and the artefact (`"converged": false`) say so.
+  The reported uplift is the best point reached, never presented as an optimum.
+- Derivation is covered by `tests/wind/test_synthetic_site_geometry.py` (22 tests): UTM
+  projection, spacing/turbine-count fidelity, the 3.0 D → 594 m cross-check against the
+  committed layout, boundary containment, determinism (MRM-01), and every CESSPIT guard
+  including the too-small-boundary and malformed-UTM-zone cases.
+
+### Changed
+- **Python 3.12 is now the baseline — this unblocks #923** — `requires-python` moves to
+  `>=3.12` and the lock is regenerated on 3.12 with `scipy==1.18.0` / `scipy-stubs==1.18.0.1`.
+  The driver is the D6b self-curtailment finance wiring: the moment
+  `grid.qsts.finance_wiring.enabled` is flipped, `cashflow_v14_params` stops short-circuiting
+  and pandapower becomes a **runtime dependency of the canonical path**. On 3.11 that was
+  impossible to satisfy — `pandapower==3.3.0` requires `scipy~=1.15` and 3.5.4 requires
+  `scipy<1.17` there, while the lock pinned `scipy==1.17.1` and `[dev]`'s `scipy-stubs`
+  required `>=1.17.1`, so installing grid alongside the gate toolchain silently downgraded
+  scipy off the lock **and** broke mypy's stubs. On 3.12 pandapower 3.5.x wants `scipy~=1.18`
+  and all three resolve together cleanly.
+- **`[grid]` is now IN the lock and composed into `[feasibility]`** — `pandapower` moves off
+  the exact `==3.3.0` pin to an abstract `>=3.5,<4` floor (pyproject is the abstract source;
+  the lock carries the exact pin), and `andes` / `opendssdirect` join it. `tests/grid/` goes
+  from **576 passed / 19 skipped to 595 passed / 0 skipped** — every grid test now runs,
+  including the andes dynamics and OpenDSS legs that had never executed in CI. The reproduce
+  kit's `run_all.sh` step 7 (grid screen) no longer skips, and `[feasibility]` is once again a
+  single install covering the whole kit.
+- **KPI-neutral, verified** — the canon reproduces within the oracle gate under 3.12 /
+  scipy 1.18. Observed drift is 1–2 ULP (`equity_irr` ~6e-16 relative, `total_cfads_usd`
+  ~2e-16), roughly seven orders of magnitude inside the `pytest.approx(abs=1e-9 / rel=1e-9)`
+  tolerances the canon test asserts, so **no oracle re-baseline is required**. The full suite
+  passes on the regenerated lock.
+- **Toolchain and CI follow the baseline** — `black`/`ruff` `target-version` to `py312`,
+  `mypy` `python_version` to 3.12 (both `mypy.ini` and `[tool.mypy]`), the Dockerfile to
+  `python:3.12-slim-bookworm`, `.pre-commit-config.yaml` `language_version` to `python3.12`,
+  and `setup_venv.sh` + the SessionStart hook now prefer `python3.12`. The test-suite matrix
+  collapses from the per-event 3.11/3.12 split (#959) to a single 3.12 leg, since 3.11 is no
+  longer a supported target; the stale matrix commentary is rewritten to match, with a note on
+  how to restore a second leg if a future floor/ceiling pair needs gating.
+- **Still user-gated: this unblocks the #923 flag, it does not flip it.** Enabling
+  `grid.qsts.finance_wiring.enabled` remains a separate, KPI-moving decision requiring a real
+  feeder QSTS run, a `kpi_oracle` before/after diff and explicit sign-off (measured impact at
+  8% self-curtailment: projIRR −1.01pp, eqIRR −1.64pp, min_dscr −0.0092).
+
+### Fixed
+- **F5-01 follow-through: `feasibility_reproduce/` re-baselined to the COD-aligned canon
+  (#1034)** — the code correction landed in #1038, but the reproduce kit still pinned the
+  superseded canon at full precision (`0.014551597740253388` / `−0.05841298678542661` /
+  `1.285740985294611`, NPV −$79.27M), so any lender-facing document pulled from the kit
+  reported the project ~1.6pp better on equity IRR and ~$12.5M better on NPV than the truth.
+  Regenerated live at `v15.3.1`: the canon run, the 8-scenario suite (equity IRR
+  −9.44%…+4.90%, every scenario NPV-negative), the 2,500-trial Monte-Carlo (equity IRR
+  P10/P50/P90 −13.0/−9.1/−5.0%, NPV negative in 100% of trials, 0 toy-fallback
+  substitutions), both optimizer modes (36 debt-mix candidates all negative; best −6.21%
+  vs the committed −7.85%), and the study Markdown + rendered PDF. The two cache scenario
+  YAMLs gain the explicit `Financing_Terms.construction_periods: 2` and the re-baselined
+  `expected_results`. Wind/GIS/AEP/grid results are inputs to the finance layer, unaffected
+  by an FX-timing correction, and are carried forward unchanged with that scope recorded in
+  `MANIFEST.md`.
+- **`.gitignore`: anchor the setuptools build-output ignores to the repo root** — the stock
+  `lib/` and `lib64/` rules were unanchored, so they matched at ANY depth and silently
+  swallowed `feasibility_reproduce/lib/`. That is why `run_all.sh` shipped calling helper
+  scripts (`build_study_pdf.py`, `build_md_pdf.py`, `mc_run.py`, …) that were never
+  committed — the "offline reproduce" kit could not actually run from a clean clone. Now
+  `/lib/` and `/lib64/`, and the two PDF builders the study deliverable needs are committed.
+- **`run_all.sh` / `HOWTO.md`: `mode=capex_contingency` requires `base_capex_usd`** — the
+  documented command raises `ValueError` without it (`capex.usd_total` less the contingency
+  line = `157206000`). `run_all.sh` also swallowed the failure via `>/dev/null 2>&1 &&`, so a
+  broken step reported as a silent no-op; it now surfaces `ERR`.
+- **`layout.turbine_spacing_avg_D` corrected across all 10 scenarios — stale rotor** — every
+  scenario declared `3.8` "In rotor diameters (650m / 171m)", but the committed machine has
+  `rotor_diameter_m: 198`, so 650 m is **3.28 D**, not 3.8. The comment carried a 171 m rotor
+  from an earlier turbine model. Mullikulam (150 m rotor) was wrong in the other direction —
+  650 m there is **4.33 D**. Each file is now derived from its own `rotor_diameter_m`, and the
+  comment records that the field is doc-only. KPI-neutral and verified so: no code reads
+  `turbine_spacing_avg_D` or `turbine_spacing_avg_m` (grep-confirmed across the tree), and the
+  canon oracles are untouched. The value matters because anyone sizing a layout from the
+  declared figure would space turbines ~16 % too far apart.
+
 ## v15.3.1 - 2026-08-17
 
 ### Added
