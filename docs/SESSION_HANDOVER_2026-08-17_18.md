@@ -31,17 +31,16 @@ executed in CI: 9 `optimize_layout()` cases (no TopFarm in the lock), the andes
 and OpenDSS grid legs, and `test_evaluation_v14_lender_stack.py`'s PRIMARY
 regression pin, whose fixture had never been committed.
 
-### Outstanding: the signed tag
+### The release tag — CLOSED OUT 2026-08-18 (see §9)
 
 `RELEASING.md` §6 wants `git tag -s v15.4.0` on the merged release commit, which
-triggers `release-run.yml` to publish the GitHub Release. **Not done** — it needs
-a signing key. This is the owner's to push:
+triggers `release-run.yml` to publish the GitHub Release. At the time this section
+was written it was **not done** and needed the owner's signing key.
 
-```bash
-git switch main && git pull --ff-only origin main
-git tag -s v15.4.0 -m "DutchBay 15.4.0"
-git push origin v15.4.0        # the TAG, never main
-```
+**It is done now.** The owner pushed the tag on 2026-08-18 and the GitHub Release
+is published. One deviation to know about: the tag is *annotated* (`-a`), not
+*signed* (`-s`). Full detail — including why v15.4.0 cannot be re-tagged in
+place — is in **§9**.
 
 ---
 
@@ -244,8 +243,9 @@ There is no in-flight branch and no failing gate.
 
 Two things the next session inherits rather than discovers:
 
-1. **The signed tag is still unpushed** (§1). It is the last step of the v15.4.0
-   release and it needs the owner's key — no agent can do it.
+1. ~~**The signed tag is still unpushed** (§1).~~ **Done 2026-08-18** — tag
+   pushed, Release published, run green. It went up *annotated* rather than
+   *signed*, and v15.4.0 can no longer be re-tagged in place. See **§9**.
 2. **Provisioning is automatic now.** A web session comes up with grid,
    micro-siting, redis, solar and pareto already installed. Do *not* re-run
    `pip install` by reflex; check the hook's banner first. `DUTCHBAY_EXTRAS=dev`
@@ -256,3 +256,121 @@ After that, the next piece of work is whichever of §5 the owner chooses. §5.1
 user-gated: it wants a real feeder, a `kpi_oracle` before/after diff, and explicit
 sign-off — plus, on the evidence of §5.1's guard note, a positive provenance
 marker so a toy `.dss` cannot masquerade as a real feeder.
+
+---
+
+## 9. Addendum — 2026-08-18 session (release close-out)
+
+Appended rather than folded into §1–§8, so the record above stays a faithful
+account of what was known on 2026-08-17/18. Everything here happened *after* it.
+
+### 9.1 Environment — the automatic provisioning of #1046 works
+
+First cold start under the `env` block. Verified rather than assumed:
+
+- Hook banner: `creating .venv` → `installing pinned lock +
+  [dev,feasibility,jobs,solar,pareto]` → `redis started on :6379` →
+  `ready — Python 3.12.3`. No flag set by hand.
+- `import pandapower, andes, opendssdirect, topfarm, pvlib, pymoo, redis` → `ok`;
+  `weasyprint, reportlab, arq` likewise. `redis-cli ping` → `PONG`.
+- Pins land where §3 says they should: pandapower 3.5.4, scipy 1.18.0 +
+  scipy-stubs 1.18.0.1, **protobuf 6.33.6** (the trap-5 pin), topfarm 2.6.2,
+  numpy 2.4.6, Python 3.12.3.
+- Full suite: **5247 passed, 5 skipped, 0 failed** in 20m15s.
+
+**On the skip count.** CI's headline is 5184 passed / 13 skipped, measured against
+a venv built from `requirements.txt` alone. A fully-provisioned session should skip
+*fewer*, and does: 13 → 5. Three of the five survivors are *inverse* guards that
+skip precisely **because** the optional dependency is present —
+`test_jobs_backend_gate.py:44` (`[jobs]` installed, fail-loud path unreachable),
+`test_report_renderer.py:375` (WeasyPrint installed), and
+`test_self_curtailment_enablement_readiness.py:147` (`[grid]` installed, CASPER
+absent-dependency guard unreachable). The other two are environmental, not
+dependency-related: `test_fx_sensitivity_real.py:409` (needs a real scenario file)
+and `test_mc_exports.py:293` (requires pandas to be *missing*).
+
+A skip count *higher* than CI's is the signal that something failed to install.
+Lower, with the inverse guards accounting for the delta, is the healthy shape.
+
+The §2 canon oracle is inside that run and passed — KPIs unchanged.
+
+### 9.2 #1048 merged
+
+`docs(module-reference): make file-provenance paths repo-relative` — `384e990`.
+Docs-only: strips a `/Users/…/Downloads/dutchbay-epc-model/` prefix off the two
+"Files referenced/read" provenance lines in `docs/MODULE_REFERENCE.md` and
+relabels the parenthetical `(all absolute)` → `(repo-relative)`. 8 insertions,
+2 deletions, plus a changelog fragment. `grep -c '/Users/' docs/MODULE_REFERENCE.md`
+→ 0.
+
+Two process notes for anyone repeating this:
+
+- It was opened as a **draft**. GitHub will not merge a draft; it has to be marked
+  ready for review first. That is a step, not a formality.
+- CI was read via `get_check_runs`, **not** `get_status`. §3 trap 2 still holds —
+  `get_status` returns legacy commit statuses this repo does not use. 16 checks:
+  15 success, 1 skipped (Grid Study, opt-in and non-blocking). The six test shards
+  each finished in ~5s, which is `test-suite.yml`'s docs-only fast path firing
+  correctly (`docs/*` and `changelog.d/*` are both allowlisted).
+
+### 9.3 v15.4.0 tagged and released
+
+The owner pushed the tag from a scratch clone, targeting the release commit
+explicitly rather than the tip of `main`:
+
+```bash
+git tag -a v15.4.0 0379843 -m "DutchBay 15.4.0"
+git push origin v15.4.0
+```
+
+Targeting `0379843` (#1045) is correct — that is the squashed release commit
+§6 means, and `VERSION` there reads `15.4.0`. Tagging the tip of `main` would have
+been the mistake.
+
+`release-run.yml` fired on the tag: run **32114800889**, `success` on the first
+attempt, 17m08s. All 13 steps green — full suite (15m11s), lender-pipeline smoke,
+lendercase artifacts, upload, package, publish.
+
+**GitHub Release v15.4.0 is published** — `draft: false`, `prerelease: false`,
+asset `DutchBay_Model_V15.4.0.zip`, 43,241 bytes,
+`sha256:f37d7954a2487e0c180f3999d48347752fbe07e4c8fd4d1ea12f470bb05c17d0`.
+
+Two things about it that are worth not re-deriving:
+
+1. **The tag is annotated, not signed.** `-a` was used where `RELEASING.md` §6
+   says `-s`, so `git tag -v v15.4.0` reports `error: no signature found`. Nothing
+   is blocked: `release-run.yml` triggers on a bare `on: push: tags: ["v*"]` and
+   verifies no signature anywhere (grepped). The cost is provenance only — the
+   release carries no cryptographic attribution.
+2. **v15.4.0 cannot be re-tagged in place.** The published Release is
+   `immutable: true`, so §7's "the release step is idempotent — re-tagging
+   re-uploads the asset rather than failing" **no longer applies to this
+   version**. Replacing the tag now means deleting the Release and republishing.
+   Not done, and not proportionate for a provenance nicety on an already-published
+   version. Use `git tag -s` on the next cut.
+
+The Release's `target_commitish` field reads `main`. That is cosmetic — GitHub's
+default on a release created from an existing ref. The tag resolves to `0379843`,
+which is what was built, tested, and zipped.
+
+### 9.4 What is open now
+
+`main` is at `384e990`. No in-flight branch, no failing gate, no unpushed tag.
+
+`changelog.d/` holds two unreleased fragments — `auto-provision-full-extras.changed.md`
+(#1046) and `module-reference-absolute-paths.fixed.md` (#1048). Both are
+post-15.4.0 and belong to the next cut. Flush with
+`python scripts/compile_changelog.py` before that cut, not before.
+
+**§5 is unchanged and still the menu.** §5.1 (the #923 flag flip) remains
+user-gated — it moves the canon and wants a real feeder, a `kpi_oracle`
+before/after diff, explicit sign-off, and a positive provenance marker so a toy
+`.dss` cannot masquerade as a real feeder. §5.2 and §5.3 are untouched.
+
+One item queued by #1048 and deliberately left undone there:
+`docs/MODULE_REFERENCE.md`'s Scope line (line 9) still reads *"Describes the code
+at version 15.3.0 (repository `main` at commit `3012641`)"*. `main` is now v15.4.0
+at `384e990`. #1048's reasoning for not touching it holds and should be respected:
+bumping the number without re-reviewing all 766 lines against v15.4.0 converts an
+honest stale marker into a false currency claim, which is worse than the
+staleness. It needs a real review, not an edit.
