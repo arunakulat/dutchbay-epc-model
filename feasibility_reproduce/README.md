@@ -38,6 +38,11 @@ artifacts under `feasibility_reproduce/_run_out/`.
 - Helper scripts live in `lib/` (`mc_run.py`, `wind_provenance.py`, `run_global_sa.py`,
   `build_study_pdf.py`, `build_md_pdf.py`). They were absent from the repo until #1040/#1041
   because an unanchored `lib/` rule in `.gitignore` silently ignored them.
-- **Micro-siting (§2) is skipped**: it needs a site boundary polygon and baseline turbine
-  coordinates that are not committed anywhere. It is KPI-neutral, so the finance canon is
-  unaffected; `wind_provenance.py` says so rather than inventing geometry.
+- **Micro-siting (§2) runs against a SYNTHETIC geometry**: the real site boundary and
+  baseline layout were never committed, so `cache/micrositing_synthetic_site.yaml` derives
+  both from committed scenario parameters (array centroid, turbine count, spacing,
+  orientation) projected into UTM 44N. Its uplift quantifies the OPTIMISER WIRING, not
+  DutchBay's siting headroom — the emitted `layout_optimized_synthetic.json` carries
+  `provenance: synthetic_derived` and never overwrites the committed
+  `cache/expected/layout_optimized.json`. Micro-siting is KPI-neutral, so the finance canon
+  is unaffected either way.
