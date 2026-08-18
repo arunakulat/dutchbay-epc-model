@@ -31,13 +31,11 @@ DutchBay EPC – developer bootstrap helper (Go-with-the-Flow v3.0 aware).
 
 Run this from the repo root:
 
-    python3 dutchbay_bootstrap.py
-or:
     ./.venv/bin/python dutchbay_bootstrap.py
 
 What it does (read-only, no mutations):
 - Infers the repo root from this file.
-- Detects the shared virtualenv (.venv, or legacy .venv311) in sensible locations.
+- Detects the governed Python 3.12 virtualenv (.venv) in sensible locations.
 - Checks for venv helper scripts (setup_venv.sh, scripts/venv_up.sh).
 - Verifies critical project files and v14 entrypoints.
 - Locates the Go-with-the-Flow ruleset CSV and does a basic structural check.
@@ -58,12 +56,12 @@ THIS_FILE = Path(__file__).resolve()
 REPO_ROOT = THIS_FILE.parent
 PARENT_DIR = REPO_ROOT.parent
 
-# We prefer the repo's .venv; legacy .venv311 layouts (repo or parent) still count.
+# The supported environment is .venv only. Creation/version enforcement lives in
+# setup_venv.sh and scripts/venv_up.sh; retired legacy trees must not satisfy this
+# bootstrap check.
 VENV_DIR_CANDIDATES: Sequence[Path] = (
     REPO_ROOT / ".venv",
     PARENT_DIR / ".venv",
-    REPO_ROOT / ".venv311",
-    PARENT_DIR / ".venv311",
 )
 
 # Known venv bootstrap helpers
@@ -186,8 +184,8 @@ def validate_repo_structure() -> List[CheckResult]:
                 name="venv:virtualenv",
                 ok=False,
                 details=(
-                    "No .venv (or legacy .venv311) found in repo or parent. "
-                    "Run setup_venv.sh or scripts/venv_up.sh to create it."
+                    "No governed Python 3.12 .venv found in repo or parent. "
+                    "Run ./setup_venv.sh or source scripts/venv_up.sh to create it."
                 ),
             )
         )

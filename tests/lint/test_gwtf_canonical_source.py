@@ -48,6 +48,33 @@ def test_r25_uses_current_pr_and_worktree_flow() -> None:
     assert RETIRED_INTEGRATION_BRANCH not in policy
 
 
+def test_r21_uses_the_governed_python312_environment() -> None:
+    """Keep the active developer workflow off the retired Python 3.11 venv."""
+
+    r21 = _rules_by_id()["R21"]
+    policy = " ".join((r21["title"], r21["description"], r21["enforcement"]))
+
+    assert r21["status"] == "active"
+    assert "Python 3.12" in policy
+    assert "./setup_venv.sh" in policy
+    assert "source .venv/bin/activate" in policy
+    assert "source .venv311/bin/activate" not in policy
+    assert "do not use .venv311" in policy
+
+
+def test_r26_uses_the_governed_ingestion_toolchain() -> None:
+    """Pin PDF ingestion to the reconstructable Python 3.12 dependency lock."""
+
+    r26 = _rules_by_id()["R26"]
+    policy = " ".join((r26["title"], r26["description"], r26["enforcement"]))
+
+    assert r26["status"] == "active"
+    assert "Python 3.12" in policy
+    assert "[ingestion]" in policy
+    assert ".venv/bin/python -m markitdown" in policy
+    assert "pdfplumber/PyMuPDF" in policy
+
+
 def test_active_r25_scripts_do_not_hardcode_a_retired_branch() -> None:
     """Keep operational R25 scripts branch-agnostic."""
     for relative_path in (

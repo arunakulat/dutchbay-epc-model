@@ -247,7 +247,7 @@ synchronous-route variables in `app/api/config.py`; CDS variables in
 - The primary region is `sin` (Singapore), the closest Fly region to Sri Lanka, and the
   VM is sized with approximately 1 GB of memory headroom to accommodate WeasyPrint and
   geopandas.
-- The container image is built from `python:3.11-slim-bookworm` and runs as a non-root
+- The container image is built from `python:3.12-slim-bookworm` and runs as a non-root
   user; the WeasyPrint runtime libraries listed in the image build are present in the
   final image.
 - `DUTCHBAY_JOBS_BACKEND=redis` is set in the `fly.toml` `[env]` block so the async ERA5

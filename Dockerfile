@@ -36,7 +36,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # Build toolchain + WeasyPrint's build-time dev headers. Prefer wheels for everything;
 # these are the fallback for any sdist that still has to compile (e.g. a C extension
-# with no bookworm/cp311 wheel). Kept out of the runtime stage entirely.
+# with no bookworm/cp312 wheel). Kept out of the runtime stage entirely.
 RUN apt-get update \
     && apt-get install --no-install-recommends -y \
         build-essential \
@@ -58,17 +58,17 @@ WORKDIR /app
 COPY requirements.txt constraints.txt pyproject.toml ./
 
 # Two-step install strategy (authoritative — do not reorder):
-#   1) The FULL pinned lock (locked core + [api]: this lock contains fastapi/uvicorn
-#      but NOT arq/redis/weasyprint/reportlab/geopandas/contextily).
+#   1) The FULL pinned lock. It includes the governed [api], [jobs], and [report]
+#      dependency closures, including arq/redis and WeasyPrint/reportlab/geopandas.
 RUN pip install --no-cache-dir -r requirements.txt -c constraints.txt
 
 # The editable install in step 2 needs the packages it references to exist under /app
 # at build time, so copy the source tree before it runs.
 COPY . .
 
-#   2) The editable project with the deploy extras — adds arq/redis (jobs),
-#      weasyprint/reportlab/geopandas/contextily (report), all bounded by the same
-#      constraints so nothing in the lock is silently upgraded. [grid] is excluded.
+#   2) The editable project with the deploy extras. Their dependencies are already
+#      present from the lock; constraints make this step fail rather than silently
+#      moving a cleared version. [grid] is excluded.
 RUN pip install --no-cache-dir -c constraints.txt -e '.[api,jobs,report]'
 
 # ─────────────────────────────────────────────────────────────────────────────
