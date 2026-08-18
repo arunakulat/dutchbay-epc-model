@@ -356,46 +356,58 @@ which is what was built, tested, and zipped.
 
 ### 9.4 What is open now
 
-**Superseded once already — read the dates.** As first written this said `main` was
-at `384e990` with nothing in flight. Both halves went stale within hours. Current
-as of the merge of #1052:
+**This section states volatile facts. Check them, do not trust them.** It has now
+been overtaken twice within hours of being written — first by #1052, then by #1051.
+Two commands settle the current position faster than reading further:
 
-`main` is at **`372edaed`** — #1052, `fix(grid): type feeder provenance and refuse
-synthetic finance`, merged on 2026-08-18. Two of my own PRs are in flight against
-it: **#1049** (this document) and **#1050** (a `MODULE_REFERENCE.md` path fix).
-Both are docs-only, green, and were rebuilt on `372edaed` after landing behind it.
+```bash
+git log --oneline -6 origin/main     # where main actually is, and what landed
+ls changelog.d/                      # unreleased fragments awaiting the next cut
+```
 
-**#1052 partly satisfies §5.1's preconditions.** Its own description calls it the
-"controlled #923-A contract/validation dolphin": synthetic and test feeder inputs
-are now typed, and are held diagnostic-only, non-site, non-bankable, and
-**ineligible for canonical finance**. That is precisely the positive provenance
-marker §5.1's guard note asked for — the defence against a toy `.dss` being
-treated as a real feeder is now in code rather than in a warning. It touched
-`analytics/contracts_v14.py`, `analytics/grid/curtailment_qsts.py`,
+The durable points follow. The counts and commit ids are as of #1051 and will rot.
+
+**Position as of writing:** `main` at `d81f0e37`. Landed since v15.4.0's release
+commit: #1046 (auto-provisioning), #1048 (`MODULE_REFERENCE.md` paths), #1052
+(feeder provenance), #1051 (Python 3.12 prerequisite). Two of my own docs-only PRs
+were in flight against it — **#1049** (this document) and **#1050** (a
+`MODULE_REFERENCE.md` path fix) — each rebuilt twice as `main` moved under them.
+
+**#1052 partly satisfies §5.1's preconditions — this is the durable part.** Its own
+description calls it the "controlled #923-A contract/validation dolphin": synthetic
+and test feeder inputs are now typed, and are held diagnostic-only, non-site,
+non-bankable, and **ineligible for canonical finance**. That is precisely the
+positive provenance marker §5.1's guard note asked for — the defence against a toy
+`.dss` being treated as a real feeder is now in code rather than in a warning. It
+touched `analytics/contracts_v14.py`, `analytics/grid/curtailment_qsts.py`,
 `analytics/grid/grid_interface_schema.py`, `finance/self_curtailment_v14.py` and
-`finance/cashflow_v14_params.py`, +1450/−301 across 14 files.
+`finance/cashflow_v14_params.py`.
 
 What that does **not** do is unblock the flag flip. #1052's description is explicit
 that "real-feeder evidence and #923-B/C/D/E/R remain open". §5.1 still wants a real
 feeder, a `kpi_oracle` before/after diff, and explicit sign-off, and it still moves
-the canon, so it stays user-gated. What changed is that one of its four
-preconditions is now met, and the guard note in §5.1 that proposed it can be read
-as closed.
+the canon, so it stays user-gated. One of its four preconditions is now met, and the
+guard note in §5.1 that proposed it can be read as closed.
 
 §5.2 and §5.3 are untouched.
 
-`changelog.d/` now holds **three** unreleased fragments —
-`auto-provision-full-extras.changed.md` (#1046),
-`module-reference-absolute-paths.fixed.md` (#1048), and
-`923-feeder-provenance.fixed.md` (#1052). #1050 adds a fourth when it lands. All
-are post-15.4.0 and belong to the next cut. Flush with
-`python scripts/compile_changelog.py` before that cut, not before.
+**Fragments are not enumerated here on purpose.** Every merge adds one and every
+enumeration in this file has gone stale within the hour. `ls changelog.d/` is the
+answer. Flush with `python scripts/compile_changelog.py` before the next release
+cut, not before.
 
 One item queued by #1048 and deliberately left undone there:
 `docs/MODULE_REFERENCE.md`'s Scope line (line 9) still reads *"Describes the code
 at version 15.3.0 (repository `main` at commit `3012641`)"*. #1048's reasoning for
 not touching it holds and should be respected: bumping the number without
 re-reviewing all 766 lines against v15.4.0 converts an honest stale marker into a
-false currency claim, which is worse than the staleness. It needs a real review,
-not an edit — and #1052 has just moved 43-plus non-test modules further away from
-`3012641`, so that review got bigger, not smaller.
+false currency claim, which is worse than the staleness. It needs a real review, not
+an edit — and the gap grows with every merge. Measure it before quoting it:
+
+```bash
+git rev-list --count 3012641..origin/main
+git diff --name-only 3012641 origin/main -- '*.py' | grep -v '^tests/' | wc -l
+```
+
+It read 71 commits / 43 modules at `384e990` and 72 / 48 at `372edaed`. The review
+gets more expensive the longer it waits.
