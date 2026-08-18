@@ -1234,18 +1234,36 @@ _HARMONIC_SCREEN_DISCLAIMER = (
 
 _CURTAILMENT_SHARE_PROVENANCE = (
     "In-house Python design-stage OpenDSSDirect QSTS (quasi-static time-series) "
-    "curtailment split: per-tech generation profiles injected against a REAL feeder "
-    "model (load-flow feasibility solved), curtailed energy integrated over the year and "
+    "curtailment split: per-tech generation profiles injected against an EXPLICITLY "
+    "CLASSIFIED feeder input (load-flow feasibility solved), curtailed energy integrated "
+    "over the year and "
     "split into DEEMED-PAID (grid-instructed — an EXPLICIT committed operator/feeder-limit "
     "schedule, NOT a monitor heuristic — paid as deemed energy under the CEB SPPA, so "
     "KPI-neutral) vs SELF-CURTAILED (physical export-cap shed of the injected generation — "
     "a real energy loss), with export-cap surplus optionally recovered into the shared BESS "
-    "SoC (energy-conserved). ADVISORY / config-level ONLY — a synthetic/demo feeder is a "
-    "smoke test that NEVER overwrites the real loss placeholder, and this result NEVER "
-    "feeds the finance engine here (D6b wires the self-curtailment loss). NOT the "
+    "SoC (energy-conserved). ADVISORY / config-level ONLY — synthetic/test inputs are "
+    "machine-labelled, non-site-representative, nonbankable, and refused by canonical "
+    "finance; D6b may consume only a separately eligible site/utility result. NOT the "
     "utility-accepted bankable hosting-capacity study (that is a QSTS against the TSO base "
     "feeder with the OEM inverter models)."
 )
+
+# Issue #923 feeder-evidence vocabulary.  A filesystem path is not evidence of what a
+# model represents, so every enabled QSTS path must carry one of these explicit kinds.
+# Keep the vocabulary beside the shared result contract (CCCDIR) so grid, finance, API,
+# and report consumers cannot invent subtly different tokens.
+FEEDER_INPUT_KINDS = frozenset(
+    {
+        "utility_observed_model",
+        "engineer_prepared_site_model",
+        "synthetic_placeholder",
+        "test_fixture",
+    }
+)
+CANONICAL_FEEDER_INPUT_KINDS = frozenset(
+    {"utility_observed_model", "engineer_prepared_site_model"}
+)
+SYNTHETIC_FEEDER_INPUT_KINDS = frozenset({"synthetic_placeholder", "test_fixture"})
 
 
 @dataclass(frozen=True)
@@ -1687,19 +1705,26 @@ class CurtailmentShareResult(ContractMixin):
     (export-cap breaches of the injected generation → self-shed; the committed grid-instruction
     schedule → deemed; SoC headroom → recovery).
 
-    **NOT-RUN honesty (``ran`` + ``None``).** A run is only meaningful against a REAL
-    feeder. When the QSTS did not run — default-off (``grid.qsts.enabled`` False), no
-    ``feeder_model_path``, or a SYNTHETIC/demo feeder (which is a smoke test only) — the
-    energy fields are ``None`` and ``ran`` is False, with ``reason`` explaining why. A
-    synthetic feeder NEVER masquerades as a real curtailment figure and NEVER overwrites the
-    real loss placeholder (NO SPURIOUS PASS: a fabricated zero-loss "pass" is refused).
+    **Execution is not evidence grade.** ``ran=True`` means OpenDSS/accounting executed; it
+    does not mean that the input was observed, site-representative, utility-accepted, or
+    bankable. A path-backed synthetic/test fixture may execute for software diagnostics,
+    while its typed provenance keeps ``canonical_finance_eligible=False``. Default-off,
+    absent files, and the pathless built-in demo remain ``ran=False`` with ``None`` energy
+    fields. This distinction prevents both fabricated zero-loss passes and path laundering.
 
     Fields
-        ran: True only when the QSTS solved against a REAL feeder and produced integrated
-            energy. False for every inert / NOT-RUN / synthetic-feeder path (energy fields
-            then ``None``).
-        feeder_source: the resolved feeder provenance — the real ``feeder_model_path``, or
-            ``"synthetic_demo"`` / ``"none"`` for the non-bankable paths.
+        ran: True when the QSTS/accounting executed and produced integrated energy; evidence
+            grade is expressed by the dedicated provenance fields, never inferred from ran.
+        feeder_source: the resolved path, or ``"synthetic_demo"`` / ``"none"`` for inert
+            pathless states.
+        feeder_input_kind: explicit utility/site/synthetic/test evidence classification.
+        generated_input / observed_network_data / site_representative: independent evidence
+            flags retained in serialized results.
+        canonical_finance_eligible: explicit gate; always false for generated/test inputs.
+        solver_converged_all_steps / n_nonconverged_steps: convergence evidence populated by
+            the separate #923-C dolphin.
+        source_manifest_sha256: manifest identity populated by the #923-B artefact dolphin.
+        limitations: durable machine-readable evidence limitations.
         export_cap_mw: the POC export limit the self-curtailment is measured against.
         gross_energy_mwh: total generation injected over the horizon BEFORE any curtailment.
         curtailed_total_mwh: total curtailed energy = deemed_paid + self_curtailed_pre_bess.
@@ -1734,6 +1759,106 @@ class CurtailmentShareResult(ContractMixin):
     provenance: str = _CURTAILMENT_SHARE_PROVENANCE
     reason: str = ""
     notes: str = ""
+    # Append-only compatibility rule: new provenance fields deliberately follow every
+    # pre-existing field so legacy positional construction retains its historical binding.
+    # New code should still use keywords, but the public dataclass contract cannot assume
+    # that all downstream callers already do so.
+    feeder_input_kind: str | None = None
+    generated_input: bool = False
+    observed_network_data: bool = False
+    site_representative: bool = False
+    canonical_finance_eligible: bool = False
+    solver_converged_all_steps: bool | None = None
+    n_nonconverged_steps: int | None = None
+    source_manifest_sha256: str | None = None
+    limitations: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        """Enforce machine-readable feeder provenance before it can be serialized.
+
+        ``feeder_input_kind=None`` remains valid for append-only compatibility with legacy
+        callers. Once a kind is declared, however, contradictory generated/observed/site/
+        finance flags are a contract error rather than a misleading payload.
+        """
+        for field_name in (
+            "ran",
+            "generated_input",
+            "observed_network_data",
+            "site_representative",
+            "canonical_finance_eligible",
+            "bankable",
+        ):
+            value = getattr(self, field_name)
+            if type(value) is not bool:  # noqa: E721 - exact bool is the contract
+                raise ValueError(
+                    f"CurtailmentShareResult.{field_name} must be a literal boolean, "
+                    f"got {value!r}."
+                )
+        if (
+            self.solver_converged_all_steps is not None
+            and type(self.solver_converged_all_steps) is not bool
+        ):
+            raise ValueError(
+                "CurtailmentShareResult.solver_converged_all_steps must be bool or None, "
+                f"got {self.solver_converged_all_steps!r}."
+            )
+
+        kind = self.feeder_input_kind
+        if kind is not None and (
+            not isinstance(kind, str) or kind not in FEEDER_INPUT_KINDS
+        ):
+            raise ValueError(
+                "CurtailmentShareResult.feeder_input_kind must be None or one of "
+                f"{sorted(FEEDER_INPUT_KINDS)}, got {kind!r}."
+            )
+
+        if kind in SYNTHETIC_FEEDER_INPUT_KINDS:
+            if (
+                self.generated_input is not True
+                or self.observed_network_data is not False
+                or self.site_representative is not False
+                or self.canonical_finance_eligible is not False
+                or self.bankable is not False
+            ):
+                raise ValueError(
+                    "Synthetic/test CurtailmentShareResult provenance is contradictory: "
+                    "generated_input must be true; observed_network_data, "
+                    "site_representative, canonical_finance_eligible, and bankable must "
+                    "all be false."
+                )
+        elif self.generated_input is True:
+            raise ValueError(
+                "CurtailmentShareResult.generated_input=true requires feeder_input_kind "
+                "synthetic_placeholder or test_fixture."
+            )
+
+        if self.canonical_finance_eligible is True and (
+            kind not in CANONICAL_FEEDER_INPUT_KINDS
+            or self.generated_input is not False
+            or self.site_representative is not True
+        ):
+            raise ValueError(
+                "CurtailmentShareResult.canonical_finance_eligible=true requires a "
+                "non-generated utility/site input with site_representative=true."
+            )
+
+        if self.ran is True and kind in CANONICAL_FEEDER_INPUT_KINDS:
+            if (
+                self.generated_input is not False
+                or self.site_representative is not True
+            ):
+                raise ValueError(
+                    "A ran=true utility/site CurtailmentShareResult must be non-generated "
+                    "and site_representative=true."
+                )
+            if (
+                kind == "utility_observed_model"
+                and self.observed_network_data is not True
+            ):
+                raise ValueError(
+                    "A ran=true utility_observed_model result requires "
+                    "observed_network_data=true."
+                )
 
 
 @dataclass(frozen=True)
@@ -1930,6 +2055,9 @@ __all__ = [
     "ResourceReactiveContribution",
     "PocCapabilityEnvelope",
     "HarmonicComplianceResult",
+    "FEEDER_INPUT_KINDS",
+    "CANONICAL_FEEDER_INPUT_KINDS",
+    "SYNTHETIC_FEEDER_INPUT_KINDS",
     "CurtailmentShareResult",
     "GroupDroopContribution",
     "FreqResponseResult",

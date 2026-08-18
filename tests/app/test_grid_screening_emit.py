@@ -28,6 +28,7 @@ from typing import Any, Dict, Mapping
 import pytest
 import yaml
 
+from analytics.contracts_v14 import CurtailmentShareResult
 from app.reports import grid_screening_emit as gse
 from app.reports.grid_screening_emit import (
     EMT_CONFIRMATION_STAMP,
@@ -219,6 +220,44 @@ def test_degraded_screens_surfaced_in_html() -> None:
     html = render_grid_screening_html(model)
     if model.degraded_screens:
         assert "did not run" in html
+
+
+def test_executed_synthetic_curtailment_is_withheld_until_presentation_dolphin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ran synthetic result is not publishable before #923-E's watermark surface."""
+    import analytics.grid.curtailment_qsts as cq
+
+    synthetic = CurtailmentShareResult(
+        ran=True,
+        feeder_source="/generated/issue923_placeholder.dss",
+        feeder_input_kind="synthetic_placeholder",
+        generated_input=True,
+        observed_network_data=False,
+        site_representative=False,
+        canonical_finance_eligible=False,
+        export_cap_mw=100.0,
+        gross_energy_mwh=1_000.0,
+        self_curtailed_energy_mwh=80.0,
+        limitations=(
+            "Generated for software testing; replace with CEB/engineer data.",
+        ),
+    )
+    monkeypatch.setattr(cq, "run_qsts_curtailment", lambda _cfg: synthetic)
+
+    model = build_grid_screening_model(
+        _scenario(),
+        scenario_variant="synthetic-test",
+        generated_at="2020-01-01T00:00:00",
+    )
+    html = render_grid_screening_html(model)
+
+    assert model.curtailment is None
+    assert "curtailment" in model.degraded_screens
+    assert "SYNTHETIC PLACEHOLDER / TEST INPUT" in model.degraded_screens["curtailment"]
+    assert "not lender evidence" in model.degraded_screens["curtailment"]
+    assert "#923-E" in model.degraded_screens["curtailment"]
+    assert "/generated/issue923_placeholder.dss" not in html
 
 
 # ── provenance surfaced (dependency reproducibility + verification) ──────────

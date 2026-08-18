@@ -60,6 +60,11 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from analytics.config_schema import RequiredFieldSpec, register_required_fields
+from analytics.contracts_v14 import (
+    CANONICAL_FEEDER_INPUT_KINDS,
+    FEEDER_INPUT_KINDS,
+    SYNTHETIC_FEEDER_INPUT_KINDS,
+)
 from finance.grid.grid_types import (
     allow_unvalidated_grid,
     is_estimated_assumption_basis,
@@ -323,11 +328,10 @@ def _validate_qsts_conditionals(grid: Mapping[str, Any], errors: list[str]) -> N
 
       * ``qsts.enabled`` must be a real bool (the master gate; default-off is expressed by
         omitting the block or setting it False, never by a truthy string / int).
-      * ``qsts.feeder_model_path`` is CONDITIONALLY required — ONLY when ``enabled`` is true.
-        The QSTS is meaningless without a REAL feeder model to solve against; a demo/
-        synthetic feeder can never overwrite the real curtailment placeholder, so an enabled
-        study with no feeder path is REJECTED here rather than silently running a synthetic
-        smoke test as if it were bankable.
+      * ``qsts.input_kind`` and ``qsts.feeder_model_path`` are conditionally required when
+        enabled (except the intentionally inert pathless demo). Path existence is not
+        provenance: synthetic/test kinds can execute diagnostics but cannot become canonical
+        finance, while utility/site kinds require an additional explicit eligibility gate.
 
     This gate cannot be a flat required-field spec: a flat spec would fire on every
     grid-scenario that omits ``qsts`` (breaking committed grid configs), and it cannot make
@@ -352,12 +356,114 @@ def _validate_qsts_conditionals(grid: Mapping[str, Any], errors: list[str]) -> N
         )
         return
 
-    if enabled and not _is_nonempty_str(qsts.get("feeder_model_path")):
+    raw_input_kind = qsts.get("input_kind")
+    input_kind = raw_input_kind if isinstance(raw_input_kind, str) else None
+    if raw_input_kind is not None and input_kind not in FEEDER_INPUT_KINDS:
+        errors.append(
+            "grid.qsts.input_kind must be one of "
+            f"{sorted(FEEDER_INPUT_KINDS)}, got {raw_input_kind!r}. A feeder path is not "
+            "provenance."
+        )
+    if enabled and input_kind is None:
+        errors.append(
+            "grid.qsts.enabled is true but grid.qsts.input_kind is missing. Declare "
+            "utility_observed_model, engineer_prepared_site_model, synthetic_placeholder, "
+            "or test_fixture; a filesystem path is not evidence of feeder provenance."
+        )
+
+    use_synthetic_demo = qsts.get("use_synthetic_demo")
+    if use_synthetic_demo is not None and not _is_bool(use_synthetic_demo):
+        errors.append(
+            "grid.qsts.use_synthetic_demo must be a real boolean when declared, got "
+            f"{use_synthetic_demo!r}."
+        )
+    if use_synthetic_demo is True and input_kind not in SYNTHETIC_FEEDER_INPUT_KINDS:
+        errors.append(
+            "grid.qsts.use_synthetic_demo=true requires input_kind "
+            "synthetic_placeholder or test_fixture; it cannot be labelled as a real/site "
+            "feeder."
+        )
+    if use_synthetic_demo is True and _is_nonempty_str(qsts.get("feeder_model_path")):
+        errors.append(
+            "grid.qsts.use_synthetic_demo=true is ambiguous with feeder_model_path. "
+            "Choose the inert built-in demo or one explicitly classified path-backed "
+            "input, never both."
+        )
+
+    if (
+        enabled
+        and use_synthetic_demo is not True
+        and not _is_nonempty_str(qsts.get("feeder_model_path"))
+    ):
         errors.append(
             "grid.qsts.enabled is true but grid.qsts.feeder_model_path is missing/empty. "
-            "The QSTS curtailment study REQUIRES a real feeder model file — a synthetic/demo "
-            "feeder is a smoke test only and cannot produce a bankable curtailment figure. "
-            "Supply a feeder_model_path (an OpenDSS .dss master file) or disable the study."
+            "Supply a feeder_model_path (with an explicit input_kind), opt into the inert "
+            "built-in synthetic demo, or disable the study."
+        )
+
+    wiring = qsts.get("finance_wiring")
+    if wiring is None:
+        return
+    if not isinstance(wiring, Mapping):
+        errors.append(
+            "grid.qsts.finance_wiring must be a mapping when declared, got "
+            f"{type(wiring).__name__}."
+        )
+        return
+
+    wiring_enabled = wiring.get("enabled")
+    if wiring_enabled is not None and not _is_bool(wiring_enabled):
+        errors.append(
+            "grid.qsts.finance_wiring.enabled must be a real boolean when declared, got "
+            f"{wiring_enabled!r}."
+        )
+
+    raw_mode = wiring.get("mode")
+    mode = raw_mode if isinstance(raw_mode, str) else None
+    if raw_mode is not None and mode not in {"canonical", "synthetic_counterfactual"}:
+        errors.append(
+            "grid.qsts.finance_wiring.mode must be 'canonical' or "
+            f"'synthetic_counterfactual', got {raw_mode!r}."
+        )
+
+    canonical_eligible = wiring.get("canonical_eligible")
+    if canonical_eligible is not None and not _is_bool(canonical_eligible):
+        errors.append(
+            "grid.qsts.finance_wiring.canonical_eligible must be a real boolean when "
+            f"declared, got {canonical_eligible!r}."
+        )
+    if canonical_eligible is True and input_kind not in CANONICAL_FEEDER_INPUT_KINDS:
+        errors.append(
+            "grid.qsts.finance_wiring.canonical_eligible=true is permitted only for "
+            "utility_observed_model or engineer_prepared_site_model; synthetic/test inputs "
+            "are never canonical."
+        )
+    if mode == "canonical" and input_kind in SYNTHETIC_FEEDER_INPUT_KINDS:
+        errors.append(
+            "grid.qsts.finance_wiring.mode='canonical' refuses synthetic_placeholder and "
+            "test_fixture inputs. Use a segregated synthetic_counterfactual scenario; it "
+            "must remain noncanonical."
+        )
+    if (
+        mode == "synthetic_counterfactual"
+        and input_kind not in SYNTHETIC_FEEDER_INPUT_KINDS
+    ):
+        errors.append(
+            "grid.qsts.finance_wiring.mode='synthetic_counterfactual' requires input_kind "
+            "synthetic_placeholder or test_fixture."
+        )
+    if wiring_enabled is True and input_kind in CANONICAL_FEEDER_INPUT_KINDS:
+        if mode != "canonical" or canonical_eligible is not True:
+            errors.append(
+                "Real/site feeder finance wiring requires mode='canonical' and the explicit "
+                "canonical_eligible=true gate."
+            )
+    if wiring_enabled is True and input_kind in SYNTHETIC_FEEDER_INPUT_KINDS:
+        errors.append(
+            "Synthetic/test feeder finance wiring cannot be enabled in the canonical "
+            "cashflow pipeline. Keep finance_wiring.enabled=false (or omit it) and use the "
+            "separately governed synthetic-counterfactual report pathway once #923-D is "
+            "implemented."
         )
 
 
