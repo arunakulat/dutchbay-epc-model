@@ -32,11 +32,16 @@ The default-off gate (CESSPIT — no silent default that moves a KPI)
   1. ``grid.qsts.finance_wiring.enabled`` is exactly ``True`` — the EXPLICIT finance
      opt-in. Its absence (the committed canon) short-circuits to ``0.0`` before any QSTS
      is even consulted.
-  2. The D6a study actually ``ran`` against a REAL feeder (``result.ran`` True). An inert
-     / NOT-RUN / synthetic result (``ran`` False, energy fields ``None``) can NEVER move a
-     KPI — a fabricated zero-loss "pass" is refused upstream, and a ``None`` share is
-     refused here (NO SPURIOUS PASS).
-  3. ``result.self_curtailed_pct`` is a real, finite, ``>= 0`` percentage.
+  2. The surrounding QSTS configuration is complete and canonical: the study gate is
+     exactly true, ``input_kind`` is utility/site, ``feeder_model_path`` is non-empty,
+     and finance mode/eligibility are exactly ``canonical``/``True``. This is rechecked
+     at the KPI-moving seam because direct callers need the same protection as schema-
+     validated pipelines.
+  3. The D6a study actually ``ran`` and the typed result is a non-generated,
+     site-representative utility/engineer model with
+     ``canonical_finance_eligible=True``. A synthetic/test path may run diagnostically,
+     but it fails loudly here rather than moving a KPI.
+  4. ``result.self_curtailed_pct`` is a real, finite, ``>= 0`` percentage.
 
 Enabling this on a committed scenario is a SEPARATE, user-gated decision; it is not done
 by shipping this module.
@@ -48,12 +53,16 @@ import math
 from collections.abc import Mapping
 from typing import Any
 
-from analytics.contracts_v14 import CurtailmentShareResult
+from analytics.contracts_v14 import (
+    CANONICAL_FEEDER_INPUT_KINDS,
+    CurtailmentShareResult,
+)
 
 __all__ = [
     "FINANCE_WIRING_ENABLED_PATH",
     "compose_curtailment",
     "self_curtailment_finance_wiring_enabled",
+    "require_canonical_self_curtailment_finance_config",
     "resolve_self_curtailment_decimal",
 ]
 
@@ -83,28 +92,124 @@ def self_curtailment_finance_wiring_enabled(config: Mapping[str, Any] | None) ->
     return wiring.get("enabled") is True
 
 
+def require_canonical_self_curtailment_finance_config(
+    config: Mapping[str, Any] | None,
+) -> tuple[str, str]:
+    """Validate and return the canonical feeder kind/path for an enabled finance run.
+
+    This is intentionally pure: callers can enforce the CESSPIT configuration contract
+    before importing or executing an optional grid solver. It is defence in depth for
+    direct callers that do not pass through the scenario schema.
+    """
+    grid = config.get("grid") if isinstance(config, Mapping) else None
+    qsts = grid.get("qsts") if isinstance(grid, Mapping) else None
+    wiring = qsts.get("finance_wiring") if isinstance(qsts, Mapping) else None
+    config_kind = qsts.get("input_kind") if isinstance(qsts, Mapping) else None
+    feeder_path = qsts.get("feeder_model_path") if isinstance(qsts, Mapping) else None
+    mode = wiring.get("mode") if isinstance(wiring, Mapping) else None
+    canonical_eligible = (
+        wiring.get("canonical_eligible") if isinstance(wiring, Mapping) else None
+    )
+    use_synthetic_demo = (
+        qsts.get("use_synthetic_demo") if isinstance(qsts, Mapping) else None
+    )
+    if (
+        not isinstance(qsts, Mapping)
+        or qsts.get("enabled") is not True
+        or not (use_synthetic_demo is None or use_synthetic_demo is False)
+        or not isinstance(config_kind, str)
+        or config_kind not in CANONICAL_FEEDER_INPUT_KINDS
+        or not isinstance(feeder_path, str)
+        or not feeder_path.strip()
+        or not isinstance(wiring, Mapping)
+        or wiring.get("enabled") is not True
+        or mode != "canonical"
+        or canonical_eligible is not True
+    ):
+        raise ValueError(
+            "QSTS canonical finance configuration refused: finance_wiring.enabled=true "
+            "requires grid.qsts.enabled=true, input_kind utility_observed_model or "
+            "engineer_prepared_site_model, a non-empty feeder_model_path, "
+            "finance_wiring.mode='canonical', and canonical_eligible=true. Synthetic "
+            "placeholders and test fixtures belong only in the separately governed "
+            "counterfactual pathway; they cannot enter canonical cashflow."
+        )
+    return str(config_kind), feeder_path.strip()
+
+
 def resolve_self_curtailment_decimal(
     config: Mapping[str, Any] | None,
     result: CurtailmentShareResult | None,
 ) -> float:
     """The incremental self-curtailment decimal (``0.0`` when off) — the ONLY KPI-mover.
 
-    Returns a haircut in ``[0, 1)`` to compose into ``curtailment_pct`` when — and ONLY
-    when — the finance-wiring opt-in is set AND the D6a study produced a real
-    ``self_curtailed_pct``. Every other path returns ``0.0`` (byte-identical canon).
+    Returns a haircut in ``[0, 1)`` only when the opt-in is set and D6a produced an
+    explicitly canonical-finance-eligible site/utility ``self_curtailed_pct``. Default-off
+    and NOT-RUN paths return ``0.0``; a ran-but-noncanonical result raises.
 
     ONLY ``result.self_curtailed_pct`` is read; ``deemed_paid_*`` is deliberately never
     consulted, so grid-instructed (deemed-paid) curtailment can never haircut revenue.
     """
     if not self_curtailment_finance_wiring_enabled(config):
         return 0.0
-    if result is None or not result.ran:
-        # Opt-in set but the study did not run against a real feeder → refuse to
-        # fabricate a loss. NO SPURIOUS PASS: an inert result never moves a KPI.
+
+    config_kind, configured_feeder_path = (
+        require_canonical_self_curtailment_finance_config(config)
+    )
+
+    if result is None or result.ran is False:
+        # Opt-in set but the study did not run → refuse to fabricate a loss. NO SPURIOUS
+        # PASS: an inert result never moves a KPI.
         return 0.0
+    if result.ran is not True:
+        raise ValueError(
+            "QSTS finance wiring requires CurtailmentShareResult.ran to be the literal "
+            f"boolean True or False, got {result.ran!r}."
+        )
+    if (
+        not isinstance(result.feeder_input_kind, str)
+        or result.feeder_input_kind not in CANONICAL_FEEDER_INPUT_KINDS
+        or result.feeder_input_kind != config_kind
+        or not isinstance(result.feeder_source, str)
+        or result.feeder_source.strip() != configured_feeder_path
+        or result.generated_input is not False
+        or result.site_representative is not True
+        or result.canonical_finance_eligible is not True
+        or (
+            config_kind == "utility_observed_model"
+            and result.observed_network_data is not True
+        )
+    ):
+        raise ValueError(
+            "QSTS finance wiring refused a noncanonical feeder result: "
+            f"input_kind={result.feeder_input_kind!r}, "
+            f"feeder_source={result.feeder_source!r}, "
+            f"generated_input={result.generated_input!r}, "
+            f"observed_network_data={result.observed_network_data!r}, "
+            f"site_representative={result.site_representative!r}, "
+            "canonical_finance_eligible="
+            f"{result.canonical_finance_eligible!r}. Synthetic placeholders and test "
+            "fixtures may exercise advisory QSTS code, but they cannot enter canonical "
+            "finance. Use the separately governed synthetic-counterfactual pathway once "
+            "implemented; never reclassify a generated file as real."
+        )
     pct = result.self_curtailed_pct
-    if pct is None or not math.isfinite(pct):
-        return 0.0
+    if pct is None:
+        raise ValueError(
+            "QSTS finance wiring received ran=true but "
+            "CurtailmentShareResult.self_curtailed_pct is missing. Refusing to convert a "
+            "failed/incomplete enabled calculation into a silent zero-loss pass."
+        )
+    if isinstance(pct, bool) or not isinstance(pct, (int, float)):
+        raise ValueError(
+            "CurtailmentShareResult.self_curtailed_pct must be a real finite number, "
+            f"not bool or another type; got {pct!r}."
+        )
+    if not math.isfinite(pct):
+        raise ValueError(
+            "CurtailmentShareResult.self_curtailed_pct must be finite for ran=true, got "
+            f"{pct!r}. Refusing a silent zero-loss pass."
+        )
     if pct < 0.0:
         raise ValueError(
             "CurtailmentShareResult.self_curtailed_pct is negative "

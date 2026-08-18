@@ -1,16 +1,17 @@
 """OpenDSSDirect QSTS curtailment engine + deemed-vs-self split (D6a, #882).
 
 This is the D6a plug-in of the grid-capability epic. It runs a quasi-static time-series
-(QSTS) power-flow over a **real** feeder model, injects the per-technology generation
-profiles of a hybrid plant behind ONE point-of-connection (POC) export cap, and SPLITS the
-curtailed energy the way the CEB SPPA does:
+(QSTS) power-flow over an **explicitly classified** feeder input, injects the
+per-technology generation profiles of a hybrid plant behind ONE point-of-connection (POC)
+export cap, and SPLITS the calculated curtailment:
 
   (a) **deemed-paid / grid-instructed** curtailment — the network operator instructs a
       reduction (an upstream feeder-limit / dispatch instruction). Under the CEB
       standardised PPA this is PAID as *deemed energy*, so it must NOT haircut revenue →
       KPI-NEUTRAL. It is an EXPLICIT INPUT — the committed
       ``grid.qsts.grid_instructed_profile_mw`` (the real utility feeder-limit / dispatch
-      schedule), or all-zeros when the operator supplied none. It is deliberately NOT
+      schedule), or an all-zero calculation vector when no schedule was supplied. That
+      zero vector does not assert that no historical/future operator instruction exists. It is NOT
       inferred from the QSTS monitors: a bare power-flow cannot honestly derive operator
       DISPATCH instructions, and the export cap is the plant's own self-curtailment
       boundary, not an upstream limit — so deriving deemed from a `(export − cap)` heuristic
@@ -23,9 +24,11 @@ curtailed energy the way the CEB SPPA does:
 
 What the QSTS honestly does, and the follow-up
 ----------------------------------------------
-The QSTS solves the load-flow feasibility / voltage state on the real feeder and establishes
-the plant's self-curtailment against the export cap; the deemed-paid schedule is passed
-through as an explicit input. A proper upstream-feeder-limit → operator-INSTRUCTION model
+The QSTS solves the load-flow feasibility / voltage state on the declared feeder input and
+calculates the plant's export-cap self-curtailment; the deemed-paid schedule is passed
+through as an explicit input. A synthetic/test input proves only that the software path
+executes—it says nothing about DutchBay site physics. A proper upstream-feeder-limit →
+operator-INSTRUCTION model
 (mapping a monitored thermal / voltage breach to a dispatch instruction WITHOUT conflating
 it with the plant's own export-cap self-shed) is a follow-up study — noted here rather than
 faked, exactly like the D4a NOT-RUN stubs.
@@ -44,27 +47,27 @@ BESS absorbed, and energy is conserved:
     self_curtailed    = self_curtailed_pre_bess - bess_absorbed     (>= 0)
     bess_absorbed    <= SoC chargeable headroom                     (D5a invariant)
 
-Every one of these quantities is an INTEGRAL of PHYSICAL evidence (export-cap breaches of
-the injected generation, the committed grid-instruction schedule, and the SoC headroom),
-NEVER a solver-convergence flag. The energy-conservation identity is a real assertion at
-emit (NO SPURIOUS PASS).
+Every one of these quantities is integrated from the supplied generation, export-cap,
+grid-instruction, and SoC inputs, NEVER from a solver-convergence flag. Their evidentiary
+grade remains the evidentiary grade of those inputs. The energy-conservation identity is a
+real calculation assertion at emit (NO SPURIOUS PASS).
 
-Real feeder vs synthetic/demo — no fabricated curtailment
----------------------------------------------------------
-The QSTS is only meaningful against a REAL feeder model. A synthetic/demo feeder (the
-tiny self-built radial used for a smoke test) is a demo ONLY: it MUST NOT masquerade as a
-real curtailment figure and MUST refuse to overwrite the real loss placeholder. So the
-engine returns an inert / NOT-RUN :class:`analytics.contracts_v14.CurtailmentShareResult`
-(``ran=False``, energy fields ``None``, ``reason`` set) for every non-real path:
+Feeder evidence classification — no path laundering
+----------------------------------------------------
+File existence is not provenance. Every path-backed run declares ``grid.qsts.input_kind``.
+A synthetic/test file may execute for advisory software diagnostics, but the result is
+typed ``generated_input=True``, ``site_representative=False`` and
+``canonical_finance_eligible=False``. Canonical finance refuses it. The engine returns an
+inert / NOT-RUN :class:`analytics.contracts_v14.CurtailmentShareResult` only when no
+path-backed solve is available:
 
   * ``grid.qsts.enabled`` is not True (default-off gate) → inert;
   * no ``grid.qsts.feeder_model_path`` (or the file is absent) → inert;
-  * ``feeder_source`` resolves to ``"synthetic_demo"`` → inert (a demo never overwrites the
-    real placeholder), even though the demo path CAN be exercised for a live smoke test.
+  * the pathless built-in ``"synthetic_demo"`` is selected → inert.
 
-The pure-Python split math (:func:`split_curtailment`) is separately callable and IS the
-sole producer of a real energy figure; it is fed either by the OpenDSS QSTS monitors (the
-real path) or, in tests, by explicit per-timestep arrays.
+The pure-Python split math (:func:`split_curtailment`) is separately callable and is the
+sole producer of the calculated energy split. Execution status never upgrades evidence
+status.
 
 CASPER
 ------
@@ -82,27 +85,56 @@ rejected at every boundary, exactly like :mod:`analytics.grid.capabilities.bess_
 
 KPI-neutral
 -----------
-Every result is ADVISORY (``bankable=False``); nothing here feeds the finance engine, so
-committed scenarios stay byte-identical. The self-curtailment loss is wired to finance by
-the follow-up dolphin D6b — not here.
+Every result is ADVISORY (``bankable=False``). The separate D6b seam may consume only an
+explicitly canonical-finance-eligible site/utility result; generated/test results are
+refused. The committed scenario remains default-off and byte-identical.
 """
 
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence, TypeGuard
 
-from analytics.contracts_v14 import CurtailmentShareResult
+from analytics.contracts_v14 import (
+    CANONICAL_FEEDER_INPUT_KINDS,
+    FEEDER_INPUT_KINDS,
+    SYNTHETIC_FEEDER_INPUT_KINDS,
+    CurtailmentShareResult,
+)
 from analytics.grid.capabilities.bess_soc import bess_soc_state, split_reserves
 
 #: The feeder-source token stamped when the caller asked for the built-in synthetic/demo
-#: feeder rather than a real model file. It is a smoke-test marker ONLY — the engine refuses
-#: to emit a real curtailment figure for it (no fabricated number overwrites the placeholder).
+#: feeder rather than a path-backed model file. It is an inert smoke-test marker only.
 SYNTHETIC_FEEDER_SOURCE = "synthetic_demo"
 
 #: The feeder-source token stamped when no feeder was resolved at all (default-off / absent).
 NO_FEEDER_SOURCE = "none"
+
+
+@dataclass(frozen=True)
+class FeederInput:
+    """Resolved QSTS feeder input with evidence kind kept separate from its path.
+
+    A file existing on disk says nothing about whether it is utility-provided, an
+    engineer-prepared site model, a generated placeholder, or a unit-test fixture.  This
+    typed boundary prevents the former ``Path.is_file() == real`` inference from laundering
+    synthetic evidence into finance.
+    """
+
+    source: str | None
+    input_kind: str | None
+    model_exists: bool
+    generated_input: bool
+    observed_network_data: bool
+    site_representative: bool
+    canonical_finance_eligible: bool
+
+    @property
+    def can_solve(self) -> bool:
+        return self.source is not None and self.model_exists
+
 
 #: A hair of numerical tolerance so an export-cap comparison / energy identity that holds to
 #: within floating-point round-off is NOT spuriously flagged. It is one-sided slack on the
@@ -281,12 +313,18 @@ def split_curtailment(
     bess_grid: Mapping[str, Any] | None = None,
     reference_year: int | None = None,
     feeder_source: str,
+    feeder_input_kind: str | None = None,
+    generated_input: bool = False,
+    observed_network_data: bool = False,
+    site_representative: bool = False,
+    canonical_finance_eligible: bool = False,
+    limitations: tuple[str, ...] = (),
 ) -> CurtailmentShareResult:
     """Split integrated curtailment into deemed-paid vs (BESS-recovered) self-curtailed.
 
-    This is the PURE-PYTHON accounting core (no OpenDSS) that both the real QSTS path and
-    the grid-free tests feed. It integrates the per-timestep curtailment from PHYSICAL
-    quantities and enforces energy conservation:
+    This is the PURE-PYTHON accounting core (no OpenDSS) that every explicitly classified
+    QSTS path and the grid-free tests feed. It integrates the per-timestep configured
+    quantities and enforces energy conservation; it does not assign their evidence grade:
 
       * At each timestep the plant's export ceiling is ``export_cap_mw * timestep_hours``
         MWh. Any generation ABOVE that ceiling is SELF-curtailed surplus (the plant sheds
@@ -306,16 +344,15 @@ def split_curtailment(
             ``export_cap_mw * timestep_hours``.
         grid_instructed_mwh: per-timestep grid-instructed (deemed-paid) curtailment (MWh,
             >= 0), same length as ``generation_mwh``. From the QSTS upstream-feeder-limit
-            monitors on the real path; explicit in tests. Zeros = no instruction.
+            schedule supplied to the run; explicit in tests. Zeros mean no instruction
+            was supplied to this calculation, not proof that none occurred.
         timestep_hours: hours per timestep (default 1.0 = hourly).
         bess_grid: the co-located BESS ``grid`` block (D5a-shaped) whose CHARGE headroom can
             absorb self-shed surplus; ``None`` = no battery (0 recovery).
         reference_year: the BESS SoH evaluation year (``None`` = end-of-life, the binding
             smallest-headroom case).
-        feeder_source: provenance string stamped on the result (the real feeder path, or a
-            demo marker). A real figure is produced regardless of this string — the CALLER
-            decides (via :func:`run_qsts_curtailment`) whether a synthetic source is allowed
-            to surface as a real result.
+        feeder_source: path/source string stamped on the result. It is not provenance by
+            itself; the explicit evidence fields carry that classification.
 
     Returns:
         A :class:`CurtailmentShareResult` with ``ran=True`` and the full deemed-vs-self
@@ -378,6 +415,12 @@ def split_curtailment(
     return CurtailmentShareResult(
         ran=True,
         feeder_source=feeder_source,
+        feeder_input_kind=feeder_input_kind,
+        generated_input=generated_input,
+        observed_network_data=observed_network_data,
+        site_representative=site_representative,
+        canonical_finance_eligible=canonical_finance_eligible,
+        limitations=limitations,
         export_cap_mw=cap_mw,
         gross_energy_mwh=gross_energy,
         curtailed_total_mwh=curtailed_total,
@@ -407,45 +450,182 @@ def split_curtailment(
     )
 
 
-def _inert_result(feeder_source: str, reason: str) -> CurtailmentShareResult:
+def _inert_result(
+    feeder_source: str,
+    reason: str,
+    *,
+    feeder_input_kind: str | None = None,
+    generated_input: bool = False,
+    limitations: tuple[str, ...] = (),
+) -> CurtailmentShareResult:
     """Build the NOT-RUN / inert result (energy fields ``None``, ``ran=False``).
 
-    Used for every non-real path: default-off gate, no/absent feeder, or a synthetic/demo
-    feeder (which must NEVER surface as a real curtailment figure). A fabricated zero-loss
-    "pass" is exactly what this refuses to emit — the energy fields stay ``None`` so no
-    downstream consumer can mistake the inert result for a real, zero-curtailment run.
+    Used for default-off, no/absent path, and the pathless built-in demo. A path-backed
+    synthetic/test input may execute but remains typed noncanonical. A fabricated zero-loss
+    "pass" is refused here: energy fields stay ``None`` when no calculation ran.
     """
     return CurtailmentShareResult(
         ran=False,
         feeder_source=feeder_source,
+        feeder_input_kind=feeder_input_kind,
+        generated_input=generated_input,
+        observed_network_data=False,
+        site_representative=False,
+        canonical_finance_eligible=False,
+        limitations=limitations,
         reason=reason,
         notes=(
-            "QSTS curtailment study NOT-RUN (inert): no real feeder curtailment figure was "
-            "produced. This does NOT overwrite the real loss placeholder — a fabricated "
+            "QSTS curtailment study NOT-RUN (inert): no path-backed calculation was "
+            "produced. This does NOT overwrite the real-data placeholder — a fabricated "
             "zero-loss pass is refused (NO SPURIOUS PASS)."
         ),
     )
 
 
-def _resolve_feeder(grid: Mapping[str, Any]) -> tuple[str | None, bool]:
-    """Resolve the QSTS feeder source from the grid.qsts block → (source, is_real).
+def _resolve_feeder(grid: Mapping[str, Any]) -> FeederInput:
+    """Resolve a feeder without inferring evidence quality from file existence.
 
-    Returns ``(feeder_path, True)`` when a real, existing ``grid.qsts.feeder_model_path``
-    file is declared; ``(SYNTHETIC_FEEDER_SOURCE, False)`` when the block explicitly opts
-    into the built-in demo feeder (``grid.qsts.use_synthetic_demo: true``); and
-    ``(None, False)`` when no feeder is resolvable (absent path / missing file). A synthetic
-    feeder is NEVER treated as real (``is_real`` False), so it cannot overwrite the real
-    placeholder.
+    ``grid.qsts.input_kind`` is the controlling provenance token.  An existing path may be
+    solved for any declared kind, including a synthetic placeholder or test fixture, but
+    only a site/utility kind can ever be marked canonical-finance eligible.  Manifest and
+    embedded-header verification arrive in the separate #923-B artefact dolphin; until
+    then this contract removes the unsafe path-exists-equals-real inference.
     """
     qsts = grid.get("qsts")
     if not isinstance(qsts, Mapping):
-        return None, False
-    if qsts.get("use_synthetic_demo") is True:
-        return SYNTHETIC_FEEDER_SOURCE, False
+        return FeederInput(None, None, False, False, False, False, False)
+
+    raw_kind = qsts.get("input_kind")
+    input_kind = raw_kind if isinstance(raw_kind, str) else None
+    if raw_kind is not None and input_kind not in FEEDER_INPUT_KINDS:
+        allowed = ", ".join(sorted(FEEDER_INPUT_KINDS))
+        raise ValueError(
+            "grid.qsts.input_kind must be one of "
+            f"[{allowed}], got {raw_kind!r}. A feeder path is not provenance."
+        )
+
+    generated = input_kind in SYNTHETIC_FEEDER_INPUT_KINDS
+    observed = input_kind == "utility_observed_model"
+    site_representative = input_kind in CANONICAL_FEEDER_INPUT_KINDS
+    wiring = qsts.get("finance_wiring")
+    if wiring is not None and not isinstance(wiring, Mapping):
+        raise ValueError(
+            "grid.qsts.finance_wiring must be a mapping when declared, got "
+            f"{type(wiring).__name__}."
+        )
+    wiring_enabled = wiring.get("enabled") if isinstance(wiring, Mapping) else None
+    mode = wiring.get("mode") if isinstance(wiring, Mapping) else None
+    requested_canonical = (
+        wiring.get("canonical_eligible") if isinstance(wiring, Mapping) else None
+    )
+    if wiring_enabled is not None and type(wiring_enabled) is not bool:
+        raise ValueError(
+            "grid.qsts.finance_wiring.enabled must be a literal boolean when declared, "
+            f"got {wiring_enabled!r}."
+        )
+    if mode is not None and (
+        not isinstance(mode, str)
+        or mode not in {"canonical", "synthetic_counterfactual"}
+    ):
+        raise ValueError(
+            "grid.qsts.finance_wiring.mode must be 'canonical' or "
+            f"'synthetic_counterfactual', got {mode!r}."
+        )
+    if requested_canonical is not None and type(requested_canonical) is not bool:
+        raise ValueError(
+            "grid.qsts.finance_wiring.canonical_eligible must be a literal boolean when "
+            f"declared, got {requested_canonical!r}."
+        )
+    if requested_canonical and input_kind not in CANONICAL_FEEDER_INPUT_KINDS:
+        raise ValueError(
+            "grid.qsts.finance_wiring.canonical_eligible=true is permitted only for "
+            "input_kind 'utility_observed_model' or 'engineer_prepared_site_model'. "
+            f"Got input_kind={input_kind!r}; synthetic/test inputs are never canonical."
+        )
+    if mode == "canonical" and input_kind in SYNTHETIC_FEEDER_INPUT_KINDS:
+        raise ValueError(
+            "grid.qsts.finance_wiring.mode='canonical' refuses synthetic_placeholder and "
+            "test_fixture inputs."
+        )
+    if (
+        mode == "synthetic_counterfactual"
+        and input_kind not in SYNTHETIC_FEEDER_INPUT_KINDS
+    ):
+        raise ValueError(
+            "grid.qsts.finance_wiring.mode='synthetic_counterfactual' requires "
+            "synthetic_placeholder or test_fixture input."
+        )
+    if wiring_enabled is True and input_kind in CANONICAL_FEEDER_INPUT_KINDS:
+        if mode != "canonical" or requested_canonical is not True:
+            raise ValueError(
+                "Enabled utility/site feeder finance wiring requires mode='canonical' "
+                "and canonical_eligible=true."
+            )
+    if wiring_enabled is True and input_kind in SYNTHETIC_FEEDER_INPUT_KINDS:
+        raise ValueError(
+            "Synthetic/test feeder finance wiring cannot be enabled in the canonical "
+            "cashflow pipeline; keep it disabled and use the separately governed "
+            "counterfactual pathway once #923-D is implemented."
+        )
+    canonical_eligible = bool(
+        requested_canonical is True
+        and mode == "canonical"
+        and input_kind in CANONICAL_FEEDER_INPUT_KINDS
+    )
+
+    use_synthetic_demo = qsts.get("use_synthetic_demo")
+    if use_synthetic_demo is not None and type(use_synthetic_demo) is not bool:
+        raise ValueError(
+            "grid.qsts.use_synthetic_demo must be a literal boolean when declared, got "
+            f"{use_synthetic_demo!r}."
+        )
+    if use_synthetic_demo is True:
+        if input_kind not in SYNTHETIC_FEEDER_INPUT_KINDS:
+            raise ValueError(
+                "grid.qsts.use_synthetic_demo=true requires grid.qsts.input_kind to be "
+                "'synthetic_placeholder' or 'test_fixture'; it cannot be classified as "
+                "a real/site feeder."
+            )
+        demo_feeder_path = qsts.get("feeder_model_path")
+        if isinstance(demo_feeder_path, str) and demo_feeder_path.strip():
+            raise ValueError(
+                "grid.qsts.use_synthetic_demo=true is ambiguous with feeder_model_path. "
+                "Choose the inert built-in demo or one explicitly classified path-backed "
+                "input, never both."
+            )
+        return FeederInput(
+            SYNTHETIC_FEEDER_SOURCE,
+            input_kind,
+            False,
+            True,
+            False,
+            False,
+            False,
+        )
+
     path = qsts.get("feeder_model_path")
-    if isinstance(path, str) and path.strip() and Path(path).is_file():
-        return path, True
-    return None, False
+    if not isinstance(path, str) or not path.strip():
+        return FeederInput(
+            None,
+            input_kind,
+            False,
+            generated,
+            observed,
+            site_representative,
+            False,
+        )
+
+    normalized_path = path.strip()
+    model_exists = Path(normalized_path).is_file()
+    return FeederInput(
+        normalized_path if model_exists else None,
+        input_kind,
+        model_exists,
+        generated,
+        observed,
+        site_representative,
+        canonical_eligible,
+    )
 
 
 def run_qsts_curtailment(
@@ -457,18 +637,19 @@ def run_qsts_curtailment(
     timestep_hours: float = 1.0,
     reference_year: int | None = None,
 ) -> CurtailmentShareResult:
-    """Run the QSTS curtailment study for a scenario config, gated + real-feeder-guarded.
+    """Run QSTS with explicit feeder evidence classification and finance eligibility.
 
     The single entry seam. It applies the gating BEFORE any solve, so the OpenDSS path is
-    reached ONLY for a real, enabled study:
+    reached only for an enabled study with an existing path and explicit input kind:
 
       * ``grid.qsts.enabled`` not True (default-off) → inert NOT-RUN result;
-      * no real ``grid.qsts.feeder_model_path`` (absent / missing file) → inert;
-      * a synthetic/demo feeder (``grid.qsts.use_synthetic_demo: true``) → inert (a demo
-        NEVER surfaces as a real curtailment figure, so it cannot overwrite the placeholder).
+      * no ``grid.qsts.feeder_model_path`` (absent / missing file) → inert;
+      * the pathless built-in demo (``grid.qsts.use_synthetic_demo: true``) → inert;
+      * a path-backed synthetic/test input may run diagnostically, but its result remains
+        generated, non-site-representative, nonbankable, and canonical-finance-ineligible.
 
-    Only when a REAL feeder is resolved and the study is enabled does it reach the OpenDSS
-    QSTS solve (behind :func:`_require_opendss`), which produces the per-timestep gross
+    Only when a classified path is resolved and the study is enabled does it reach the
+    OpenDSS QSTS solve (behind :func:`_require_opendss`), which produces the per-timestep gross
     generation + upstream grid-instruction profiles the pure :func:`split_curtailment`
     consumes. Tests may inject those profiles directly via ``generation_mwh`` /
     ``grid_instructed_mwh`` (skipping the solve) to exercise the accounting grid-free.
@@ -477,15 +658,16 @@ def run_qsts_curtailment(
         config: the full scenario config (or its top-level ``grid`` block).
         generation_mwh / grid_instructed_mwh / export_cap_mw: optional pre-computed QSTS
             profiles + export cap (tests inject these to drive the pure accounting without
-            an OpenDSS solve). When omitted on a real+enabled study, the OpenDSS QSTS solve
+            an OpenDSS solve). When omitted on a path-backed enabled study, the OpenDSS solve
             supplies them.
         timestep_hours: hours per QSTS timestep (default 1.0).
         reference_year: the BESS SoH evaluation year forwarded to the split (``None`` =
             end-of-life).
 
     Returns:
-        A :class:`CurtailmentShareResult`: ``ran=True`` with the deemed-vs-self split only
-        for a real, enabled, solved study; otherwise an inert NOT-RUN result with a reason.
+        A :class:`CurtailmentShareResult`: ``ran=True`` when the classified path was
+        calculated, with evidence eligibility carried separately; otherwise an inert
+        NOT-RUN result with a reason.
     """
     grid = config.get("grid") if isinstance(config, Mapping) else None
     if not isinstance(grid, Mapping):
@@ -501,27 +683,43 @@ def run_qsts_curtailment(
             "grid.qsts.enabled is not True (default-off gate) — QSTS curtailment NOT-RUN.",
         )
 
-    feeder_source, is_real = _resolve_feeder(grid)
-    if not is_real:
-        if feeder_source == SYNTHETIC_FEEDER_SOURCE:
+    feeder = _resolve_feeder(grid)
+    if not feeder.can_solve:
+        if feeder.source == SYNTHETIC_FEEDER_SOURCE:
             return _inert_result(
                 SYNTHETIC_FEEDER_SOURCE,
                 "grid.qsts uses the synthetic/demo feeder — a smoke test only. A synthetic "
-                "feeder MUST NOT overwrite the real curtailment placeholder, so no real "
-                "figure is produced (run the OpenDSS demo path directly for a live smoke "
-                "test; it never surfaces as bankable).",
+                "feeder MUST NOT overwrite the real-data curtailment placeholder, so the "
+                "pathless built-in demo is NOT-RUN (a path-backed, explicitly typed fixture "
+                "may be solved diagnostically but never becomes bankable/canonical).",
+                feeder_input_kind=feeder.input_kind,
+                generated_input=True,
+                limitations=(
+                    "Built-in synthetic demo only; no feeder model was solved.",
+                    "Not site-representative, utility-accepted, bankable, or canonical.",
+                ),
             )
         return _inert_result(
             NO_FEEDER_SOURCE,
-            "grid.qsts.enabled is True but no real grid.qsts.feeder_model_path resolved "
-            "(absent path or missing file) — the QSTS requires a real feeder model.",
+            "grid.qsts.enabled is True but no existing grid.qsts.feeder_model_path resolved "
+            "(absent path or missing file) — QSTS cannot run without a path-backed model.",
+            feeder_input_kind=feeder.input_kind,
+            generated_input=feeder.generated_input,
+        )
+
+    if feeder.input_kind is None:
+        raise ValueError(
+            "grid.qsts.enabled resolved an existing feeder_model_path but "
+            "grid.qsts.input_kind is missing. A filesystem path is not provenance; "
+            "declare utility_observed_model, engineer_prepared_site_model, "
+            "synthetic_placeholder, or test_fixture."
         )
 
     cap = export_cap_mw if export_cap_mw is not None else _export_cap_from_grid(grid)
 
-    # A real, enabled study. When the caller injected the QSTS profiles (tests / a
-    # pre-solved horizon), account them directly. Otherwise run the OpenDSS QSTS solve to
-    # produce them. The solve is the ONLY [grid]-extra path here.
+    # A classified, path-backed, enabled study. When the caller injected the QSTS profiles
+    # (tests / a pre-solved horizon), account them directly. Otherwise run the OpenDSS QSTS
+    # solve to produce them. The solve is the ONLY [grid]-extra path here.
     if generation_mwh is not None:
         gen = generation_mwh
         instructed = (
@@ -532,8 +730,16 @@ def run_qsts_curtailment(
     else:  # pragma: no cover - requires [grid] extra
         gen, instructed = _solve_qsts(
             grid,
-            feeder_path=str(feeder_source),
+            feeder_path=str(feeder.source),
             timestep_hours=timestep_hours,
+        )
+
+    limitations: tuple[str, ...] = ()
+    if feeder.generated_input:
+        limitations = (
+            "Synthetic/test feeder input; result exercises software only.",
+            "Not the CEB Kalpitiya/Puttalam feeder and not site-representative.",
+            "Not engineering-validated, utility-accepted, bankable, or canonical.",
         )
 
     return split_curtailment(
@@ -543,7 +749,13 @@ def run_qsts_curtailment(
         timestep_hours=timestep_hours,
         bess_grid=_bess_block(grid),
         reference_year=reference_year,
-        feeder_source=str(feeder_source),
+        feeder_source=str(feeder.source),
+        feeder_input_kind=feeder.input_kind,
+        generated_input=feeder.generated_input,
+        observed_network_data=feeder.observed_network_data,
+        site_representative=feeder.site_representative,
+        canonical_finance_eligible=feeder.canonical_finance_eligible,
+        limitations=limitations,
     )
 
 
@@ -578,7 +790,7 @@ def _solve_qsts(  # pragma: no cover - requires [grid] extra
     feeder_path: str,
     timestep_hours: float,
 ) -> tuple[list[float], list[float]]:
-    """Run the OpenDSSDirect QSTS solve over the REAL feeder and return the QSTS profiles.
+    """Run OpenDSSDirect over the declared path; evidence grade stays in ``FeederInput``.
 
     What the QSTS honestly measures — and what it does NOT
     -----------------------------------------------------
@@ -595,7 +807,8 @@ def _solve_qsts(  # pragma: no cover - requires [grid] extra
 
       * ``generation_mwh`` — the per-timestep GROSS generation injected (before the export
         cap); the QSTS solves each step (the load-flow feasibility / voltage state is the
-        real-feeder value-add); the pure split derives self-curtailment from it vs the cap.
+        load-flow-feasibility value-add); the pure split derives self-curtailment from it
+        vs the cap.
       * ``grid_instructed_mwh`` — the committed deemed-paid schedule (or zeros), passed
         straight through — NOT derived from a monitor heuristic.
 
@@ -603,9 +816,10 @@ def _solve_qsts(  # pragma: no cover - requires [grid] extra
     / voltage breach to a dispatch instruction WITHOUT conflating it with the plant's own
     export-cap self-shed) is a follow-up study, not this dolphin.
 
-    This is the ONLY function that touches ``opendssdirect``; it is reached solely for a
-    real, enabled study (the caller gated everything else). A synthetic/demo feeder never
-    reaches here.
+    This is the ONLY function that touches ``opendssdirect``. It is reached for an enabled,
+    explicitly classified, path-backed input; this can include a synthetic/test diagnostic
+    path. Evidence grade remains in the typed result and generated/test output is refused by
+    canonical finance. The pathless built-in demo never reaches here.
     """
     dss = _require_opendss()
     dss.Command(f'Redirect "{feeder_path}"')
@@ -684,6 +898,7 @@ def _inject_poc_power(  # pragma: no cover - requires [grid] extra
 
 
 __all__ = [
+    "FeederInput",
     "SYNTHETIC_FEEDER_SOURCE",
     "NO_FEEDER_SOURCE",
     "split_curtailment",

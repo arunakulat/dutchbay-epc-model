@@ -418,6 +418,10 @@ def _curtailment_result(self_pct: float, deemed_pct: float) -> CurtailmentShareR
     return CurtailmentShareResult(
         ran=True,
         feeder_source="/real/feeder.dss",
+        feeder_input_kind="engineer_prepared_site_model",
+        generated_input=False,
+        site_representative=True,
+        canonical_finance_eligible=True,
         self_curtailed_pct=self_pct,
         deemed_paid_pct=deemed_pct,
         bankable=True,
@@ -442,7 +446,20 @@ def test_only_self_curtailment_is_wired_deemed_paid_is_excluded() -> None:
     Two results with identical self-curtailment but very different deemed-paid shares must
     resolve to the SAME haircut — proof the deemed-energy (paid) leg never haircuts revenue.
     """
-    enabled = {"grid": {"qsts": {"finance_wiring": {"enabled": True}}}}
+    enabled = {
+        "grid": {
+            "qsts": {
+                "enabled": True,
+                "input_kind": "engineer_prepared_site_model",
+                "feeder_model_path": "/real/feeder.dss",
+                "finance_wiring": {
+                    "enabled": True,
+                    "mode": "canonical",
+                    "canonical_eligible": True,
+                },
+            }
+        }
+    }
     low_deemed = _curtailment_result(self_pct=5.0, deemed_pct=0.0)
     high_deemed = _curtailment_result(self_pct=5.0, deemed_pct=60.0)
 

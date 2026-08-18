@@ -42,12 +42,18 @@ def _resolve_self_curtailment_composed(
     # dependency surface (and the [grid] OpenDSS extra) on the default-off path.
     from .self_curtailment_v14 import (
         compose_curtailment,
+        require_canonical_self_curtailment_finance_config,
         resolve_self_curtailment_decimal,
         self_curtailment_finance_wiring_enabled,
     )
 
     if not self_curtailment_finance_wiring_enabled(raw):
         return config_curtailment_pct
+
+    # CESSPIT before CASPER: reject an incomplete/synthetic KPI-moving configuration before
+    # importing or invoking the optional OpenDSS layer. Direct _build_cashflow_params calls
+    # therefore get the same deterministic pre-flight error precedence as full pipelines.
+    require_canonical_self_curtailment_finance_config(raw)
 
     from analytics.grid.curtailment_qsts import run_qsts_curtailment
 
