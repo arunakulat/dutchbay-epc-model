@@ -76,6 +76,12 @@ Traps that cost real time this session:
    what the SessionStart hook (`.claude/hooks/session-start.sh`, merged in #1041)
    exists for; it provisions lock + `[dev]` automatically on a web session, with
    `[feasibility]` behind `DUTCHBAY_INSTALL_FEASIBILITY=1`.
+5. **A dev venv is NOT the CI environment.** `[dev,feasibility]` pulls
+   `[micrositing]`/topfarm, which drags in transitive packages CI never gets — CI
+   installs `requirements.txt` only. This bit once: `pyproj` reached the dev venv
+   via topfarm, so the new geometry tests passed locally and failed on six CI
+   shards. Validate anything dependency-sensitive in a venv built from the **lock
+   alone** (`pip install -r requirements.txt && pip install -e .`) before pushing.
 
 ---
 
