@@ -100,7 +100,7 @@ No other module in this domain (`run_scenario_analytics_v14.py`, `constants.py`,
 - **Honesty boundaries:** `run_scenario_analytics_v14.py` stamps `basis="comparison_snapshot"` and uses an informational (non-build-up) discount rate — it is explicitly NOT the authoritative economics path; use `run_full_pipeline_v14.py` for a single scenario's lender-grade numbers. The Monte-Carlo CLI degrades its status to `degraded`/`degenerate` rather than reporting fabricated toy-fallback metrics as clean success.
 - **Limitations:** Hydra INFO job logging may precede the JSON on stdout for the sensitivity and optimizer CLIs — consumers must parse from the first `{` line. The bootstrap modules are read-only diagnostics (no mutations); a missing/mis-pathed `DUTCHBAY_FLOW_RULESET_CSV` produces a clear error but is treated as a soft, non-fatal failure.
 
-Files referenced (all absolute): `/Users/aruna/Downloads/dutchbay-epc-model/run_full_pipeline_v14.py`, `/Users/aruna/Downloads/dutchbay-epc-model/run_scenario_analytics_v14.py`, `/Users/aruna/Downloads/dutchbay-epc-model/constants.py`, `/Users/aruna/Downloads/dutchbay-epc-model/dutchbay_bootstrap.py`, `/Users/aruna/Downloads/dutchbay-epc-model/dutchbay_bootstrap_rules.py`, `/Users/aruna/Downloads/dutchbay-epc-model/analytics/cli/cli_monte_carlo_hydra.py`, `/Users/aruna/Downloads/dutchbay-epc-model/analytics/cli/cli_sensitivity_hydra.py`, `/Users/aruna/Downloads/dutchbay-epc-model/analytics/cli/cli_capital_structure_optimize_hydra.py`.
+Files referenced (repo-relative): `run_full_pipeline_v14.py`, `run_scenario_analytics_v14.py`, `constants.py`, `dutchbay_bootstrap.py`, `dutchbay_bootstrap_rules.py`, `analytics/cli/cli_monte_carlo_hydra.py`, `analytics/cli/cli_sensitivity_hydra.py`, `analytics/cli/cli_capital_structure_optimize_hydra.py`.
 
 ---
 
@@ -221,7 +221,7 @@ Files referenced (all absolute): `/Users/aruna/Downloads/dutchbay-epc-model/run_
 - **Honesty boundaries the code itself states:** Sobol buys little on DutchBay's non-smooth binding KPIs (min_dscr clamped at the covenant floor, equity_irr kinked at debt sizing) and is never the silent default; combining Sobol with correlation destroys the joint low-discrepancy structure (marginals survive) and emits a one-time warning. The convergence mean CI bounds only the mean and does not certify the tails a lender reads; the order-statistic tail CI is distribution-free but still approximate on an LHS/Iman-Conover design (a prefix of an LHS design is not itself LHS), and reports a bound as `None` (loud omission) when n is too small to place the rank rather than clamping to an extreme order statistic.
 - **Toy fallback caveat:** on a real run, a per-trial toy-metric substitute means full v14 evaluation failed for that trial; the KPIs are fabricated (though tagged and counted in `toy_fallback_count`). `monte_carlo.allow_toy_fallback: false` makes a production run raise on the first failed trial instead of reporting fabricated numbers.
 
-Files read (all absolute): `/Users/aruna/Downloads/dutchbay-epc-model/analytics/mc/{__init__,samplers,correlation,convergence,engine,aggregate,covenant,degradation,exports}.py`, `/Users/aruna/Downloads/dutchbay-epc-model/analytics/monte_carlo_v14.py`, `/Users/aruna/Downloads/dutchbay-epc-model/analytics/simulation/monte_carlo_aep.py`.
+Files read (repo-relative): `analytics/mc/{__init__,samplers,correlation,convergence,engine,aggregate,covenant,degradation,exports}.py`, `analytics/monte_carlo_v14.py`, `analytics/simulation/monte_carlo_aep.py`.
 
 ---
 
