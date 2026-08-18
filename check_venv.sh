@@ -140,7 +140,7 @@ else
   echo "     cd ${REPO_ROOT}"
   echo "     ./setup_venv.sh"
   echo "   or:"
-  echo "     python3 -m venv .venv"
+  echo "     python3.12 -m venv .venv"
   echo "     source .venv/bin/activate"
   echo "     pip install --upgrade pip"
   echo "     pip install -r requirements.txt && pip install -e \".[dev]\""
@@ -150,11 +150,17 @@ else
 fi
 
 if [[ ! -x "${VENV_PY}" ]]; then
-  warn "Python executable not found at ${VENV_PY}."
-  warn "Virtualenv may be incomplete; consider re-running setup_venv.sh."
-else
-  ok "Virtualenv Python detected at ${VENV_PY}."
+  fatal "Python executable not found at ${VENV_PY}; re-run setup_venv.sh."
 fi
+
+if ! "${VENV_PY}" \
+  -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))' \
+  >/dev/null 2>&1; then
+  VENV_VERSION=$("${VENV_PY}" --version 2>&1 || echo "unknown")
+  fatal ".venv uses ${VENV_VERSION}; Python 3.12 is required. Recreate it with setup_venv.sh."
+fi
+
+ok "Python 3.12 virtualenv detected at ${VENV_PY}."
 
 # ---------------------------------------------------------------------------
 # Optional bootstrap run

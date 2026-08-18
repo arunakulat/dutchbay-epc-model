@@ -15,7 +15,7 @@ This file is the step-by-step manual behind that orchestrator.
 
 ```bash
 cd ~/Downloads/dutchbay-epc-model
-python3.11 -m venv .venv                       # if not present
+python3.12 -m venv .venv                       # if not present
 .venv/bin/pip install -r requirements.txt      # the pinned lock
 .venv/bin/pip install -e '.[dev,feasibility]'  # everything run_all.sh needs, in one line
 ```
@@ -35,7 +35,8 @@ pandapower 3.5.x wants `scipy~=1.18`, the lock pins `scipy==1.18.0`, and the thr
 resolve together cleanly. Effect: `tests/grid/` went from 576 passed / 19 skipped
 to **595 passed / 0 skipped**.
 
-**Python >=3.12 is now required** (`requires-python = ">=3.12"`).
+**Python 3.12 is the qualified baseline** (`requires-python = ">=3.12"`; later minor
+versions require their own compatibility gate before adoption).
 Everything below uses `.venv/bin/python`. **No network is required** — the two online steps
 (ERA5 retrieval, ERA5-grid GIS export) ship their results in `cache/` (§2, §9).
 

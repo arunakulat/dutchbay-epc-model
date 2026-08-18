@@ -17,18 +17,40 @@ _REPO_ROOT="$(cd "${_SCRIPT_DIR}/.." && pwd)"
 
 # ---- config ----
 VENV_DIR="${VENV_DIR:-.venv}"
-PY311="${PY311:-/opt/homebrew/bin/python3.11}"
+PY312="${PY312:-/opt/homebrew/bin/python3.12}"
 
 # ---- ensure venv exists ----
 cd "$_REPO_ROOT" || { echo "ERR: cannot cd to repo root"; return 1 2>/dev/null || exit 1; }
 if [ ! -d "$VENV_DIR" ]; then
-  if command -v "$PY311" >/dev/null 2>&1; then
-    "$PY311" -m venv "$VENV_DIR"
-  elif command -v python3.11 >/dev/null 2>&1; then
-    python3.11 -m venv "$VENV_DIR"
-  else
-    python3 -m venv "$VENV_DIR"
+  _PYTHON312=""
+  for _candidate in "$PY312" python3.12 python3 python; do
+    if command -v "$_candidate" >/dev/null 2>&1 \
+      && "$_candidate" \
+        -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))' \
+        >/dev/null 2>&1; then
+      _PYTHON312="$_candidate"
+      break
+    fi
+  done
+  if [ -z "$_PYTHON312" ]; then
+    echo "ERR: Python 3.12 is required; install it before creating $VENV_DIR"
+    return 1 2>/dev/null || exit 1
   fi
+  "$_PYTHON312" -m venv "$VENV_DIR"
+fi
+
+_VENV_PYTHON="$VENV_DIR/bin/python"
+if [ ! -x "$_VENV_PYTHON" ]; then
+  echo "ERR: Python executable not found: $_VENV_PYTHON"
+  return 1 2>/dev/null || exit 1
+fi
+if ! "$_VENV_PYTHON" \
+  -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))' \
+  >/dev/null 2>&1; then
+  _VENV_VERSION=$("$_VENV_PYTHON" --version 2>&1 || echo "unknown")
+  echo "ERR: $VENV_DIR uses $_VENV_VERSION; Python 3.12 is required"
+  echo "Move or remove $VENV_DIR, then source scripts/venv_up.sh again"
+  return 1 2>/dev/null || exit 1
 fi
 
 # ---- must be sourced to affect current shell ----
