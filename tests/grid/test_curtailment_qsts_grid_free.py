@@ -8,8 +8,8 @@ carry the real coverage for the PURE logic of :mod:`analytics.grid.curtailment_q
     the BESS charge-from-surplus energy balance (recovery bounded by the D5a chargeable
     headroom), the energy-conservation invariant, and every STRICT ValueError branch;
   * ``run_qsts_curtailment`` — the gating: default-off / no-grid / no-feeder → inert
-    NOT-RUN, the synthetic-feeder REFUSAL (a demo never surfaces as a real figure), and the
-    real+enabled path fed by injected profiles (skips the OpenDSS solve);
+    NOT-RUN, the pathless synthetic-demo refusal, explicit feeder evidence kinds, and a
+    path-backed test fixture fed by injected profiles (skips the OpenDSS solve);
   * ``_require_opendss`` — the CASPER guard raises an actionable ImportError when the
     ``[grid]`` extra is absent;
   * the schema conditional validator ``_validate_qsts_conditionals`` — present-only, and
@@ -81,6 +81,23 @@ def test_split_deemed_vs_self_from_physical_integrals() -> None:
     assert res.curtailed_total_mwh == pytest.approx(
         res.deemed_paid_energy_mwh + res.self_curtailed_pre_bess_mwh
     )
+
+
+def test_split_refuses_contradictory_synthetic_provenance_before_serialization() -> (
+    None
+):
+    with pytest.raises(ValueError, match="Synthetic/test.*contradictory"):
+        split_curtailment(
+            generation_mwh=[20.0],
+            export_cap_mw=15.0,
+            grid_instructed_mwh=[0.0],
+            feeder_source="/generated/issue923.dss",
+            feeder_input_kind="synthetic_placeholder",
+            generated_input=False,
+            observed_network_data=True,
+            site_representative=True,
+            canonical_finance_eligible=True,
+        )
 
 
 def test_deemed_paid_capped_at_exported_below_cap() -> None:
@@ -346,11 +363,11 @@ def test_missing_qsts_block_is_inert() -> None:
 
 
 def test_enabled_but_no_feeder_is_inert() -> None:
-    """Enabled with no resolvable feeder path → inert (the QSTS needs a real feeder)."""
+    """Enabled with no resolvable path → inert; no zero-loss result is fabricated."""
     res = run_qsts_curtailment({"grid": {"qsts": {"enabled": True}}})
     assert res.ran is False
     assert res.feeder_source == NO_FEEDER_SOURCE
-    assert "real" in res.reason.lower()
+    assert "path-backed" in res.reason.lower()
 
 
 def test_enabled_with_missing_feeder_file_is_inert() -> None:
@@ -374,7 +391,15 @@ def test_synthetic_feeder_is_refused_not_fabricated() -> None:
     is inert with the synthetic-feeder source and every energy field None.
     """
     res = run_qsts_curtailment(
-        {"grid": {"qsts": {"enabled": True, "use_synthetic_demo": True}}}
+        {
+            "grid": {
+                "qsts": {
+                    "enabled": True,
+                    "input_kind": "test_fixture",
+                    "use_synthetic_demo": True,
+                }
+            }
+        }
     )
     assert res.ran is False
     assert res.feeder_source == SYNTHETIC_FEEDER_SOURCE
@@ -384,18 +409,17 @@ def test_synthetic_feeder_is_refused_not_fabricated() -> None:
     assert "placeholder" in res.notes.lower()
 
 
-def test_real_feeder_with_injected_profiles_produces_split(tmp_path: Path) -> None:
-    """A real feeder + enabled + injected profiles → a real split (skips the OpenDSS solve).
-
-    Writing a real file makes ``_resolve_feeder`` treat it as real; injecting the QSTS
-    profiles lets the pure accounting run without ``opendssdirect``.
-    """
+def test_typed_fixture_with_injected_profiles_produces_advisory_split(
+    tmp_path: Path,
+) -> None:
+    """An explicitly typed fixture can exercise accounting without becoming site evidence."""
     feeder = tmp_path / "feeder.dss"
     feeder.write_text("! demo master\n")
     config = {
         "grid": {
             "qsts": {
                 "enabled": True,
+                "input_kind": "test_fixture",
                 "feeder_model_path": str(feeder),
                 "export_cap_mw": 15.0,
                 "bess": _BESS,
@@ -409,6 +433,15 @@ def test_real_feeder_with_injected_profiles_produces_split(tmp_path: Path) -> No
     )
     assert res.ran is True
     assert res.feeder_source == str(feeder)
+    assert res.feeder_input_kind == "test_fixture"
+    assert res.generated_input is True
+    assert res.canonical_finance_eligible is False
+    payload = res.model_dump()
+    assert payload["feeder_input_kind"] == "test_fixture"
+    assert payload["generated_input"] is True
+    assert payload["site_representative"] is False
+    assert payload["canonical_finance_eligible"] is False
+    assert payload["limitations"]
     assert res.self_curtailed_pre_bess_mwh == pytest.approx(10.0)
     assert res.bess_absorbed_energy_mwh == pytest.approx(1.53)
     assert res.self_curtailed_energy_mwh == pytest.approx(10.0 - 1.53)
@@ -422,6 +455,7 @@ def test_real_feeder_export_cap_from_config(tmp_path: Path) -> None:
         "grid": {
             "qsts": {
                 "enabled": True,
+                "input_kind": "test_fixture",
                 "feeder_model_path": str(feeder),
                 "export_cap_mw": 12.0,
             }
@@ -436,7 +470,15 @@ def test_real_feeder_missing_export_cap_raises(tmp_path: Path) -> None:
     """Enabled real study with injected profiles but NO export cap → strict raise (CESSPIT)."""
     feeder = tmp_path / "feeder.dss"
     feeder.write_text("! demo\n")
-    config = {"grid": {"qsts": {"enabled": True, "feeder_model_path": str(feeder)}}}
+    config = {
+        "grid": {
+            "qsts": {
+                "enabled": True,
+                "input_kind": "test_fixture",
+                "feeder_model_path": str(feeder),
+            }
+        }
+    }
     with pytest.raises(ValueError, match="export_cap_mw"):
         run_qsts_curtailment(config, generation_mwh=[20.0], grid_instructed_mwh=[0.0])
 
@@ -451,6 +493,7 @@ def test_instruction_defaults_to_zero_when_only_generation_injected(
         "grid": {
             "qsts": {
                 "enabled": True,
+                "input_kind": "test_fixture",
                 "feeder_model_path": str(feeder),
                 "export_cap_mw": 15.0,
             }
@@ -464,28 +507,136 @@ def test_instruction_defaults_to_zero_when_only_generation_injected(
 # ─────────────────────────────────── energy-conservation invariant guard (NO SPURIOUS PASS)
 
 
-def test_resolve_feeder_real_existing_file(tmp_path: Path) -> None:
+def test_resolve_feeder_honours_explicit_site_declaration_contract(
+    tmp_path: Path,
+) -> None:
+    """Classification is declaration-only in #923-A; manifest/header checks arrive in B."""
     feeder = tmp_path / "f.dss"
-    feeder.write_text("! x\n")
-    src, is_real = cq._resolve_feeder({"qsts": {"feeder_model_path": str(feeder)}})
-    assert (src, is_real) == (str(feeder), True)
+    feeder.write_text("! contract-shape test only; not site evidence\n")
+    resolved = cq._resolve_feeder(
+        {
+            "qsts": {
+                "input_kind": "engineer_prepared_site_model",
+                "feeder_model_path": str(feeder),
+                "finance_wiring": {
+                    "enabled": False,
+                    "mode": "canonical",
+                    "canonical_eligible": True,
+                },
+            }
+        }
+    )
+    assert resolved.source == str(feeder)
+    assert resolved.can_solve is True
+    assert resolved.input_kind == "engineer_prepared_site_model"
+    assert resolved.generated_input is False
+    assert resolved.canonical_finance_eligible is True
 
 
 def test_resolve_feeder_synthetic_demo_is_not_real() -> None:
-    src, is_real = cq._resolve_feeder({"qsts": {"use_synthetic_demo": True}})
-    assert src == SYNTHETIC_FEEDER_SOURCE
-    assert is_real is False
+    resolved = cq._resolve_feeder(
+        {
+            "qsts": {
+                "input_kind": "test_fixture",
+                "use_synthetic_demo": True,
+            }
+        }
+    )
+    assert resolved.source == SYNTHETIC_FEEDER_SOURCE
+    assert resolved.can_solve is False
+    assert resolved.generated_input is True
+
+
+def test_runtime_refuses_builtin_demo_and_path_ambiguity(tmp_path: Path) -> None:
+    feeder = tmp_path / "also-present.dss"
+    feeder.write_text("! explicit path must not be ignored\n")
+    with pytest.raises(ValueError, match="ambiguous with feeder_model_path"):
+        cq._resolve_feeder(
+            {
+                "qsts": {
+                    "input_kind": "test_fixture",
+                    "use_synthetic_demo": True,
+                    "feeder_model_path": str(feeder),
+                }
+            }
+        )
+
+
+@pytest.mark.parametrize("invalid_demo", ["true", 1, [True]])
+def test_runtime_refuses_nonboolean_synthetic_demo_flag(invalid_demo: object) -> None:
+    with pytest.raises(
+        ValueError, match="use_synthetic_demo must be a literal boolean"
+    ):
+        cq._resolve_feeder(
+            {
+                "qsts": {
+                    "input_kind": "engineer_prepared_site_model",
+                    "use_synthetic_demo": invalid_demo,
+                    "feeder_model_path": "/missing/site.dss",
+                    "finance_wiring": {
+                        "enabled": False,
+                        "mode": "canonical",
+                        "canonical_eligible": True,
+                    },
+                }
+            }
+        )
+
+
+def test_runtime_refuses_padded_input_kind_instead_of_normalizing_it() -> None:
+    with pytest.raises(ValueError, match="input_kind must be one of"):
+        cq._resolve_feeder(
+            {
+                "qsts": {
+                    "input_kind": " engineer_prepared_site_model ",
+                    "feeder_model_path": "/missing/site.dss",
+                    "finance_wiring": {
+                        "enabled": False,
+                        "mode": "canonical",
+                        "canonical_eligible": True,
+                    },
+                }
+            }
+        )
+
+
+@pytest.mark.parametrize("invalid_mode", [["canonical"], {"mode": "canonical"}])
+def test_runtime_refuses_nonstring_finance_mode(invalid_mode: object) -> None:
+    with pytest.raises(ValueError, match="finance_wiring.mode must be"):
+        cq._resolve_feeder(
+            {
+                "qsts": {
+                    "input_kind": "engineer_prepared_site_model",
+                    "feeder_model_path": "/missing/site.dss",
+                    "finance_wiring": {
+                        "enabled": False,
+                        "mode": invalid_mode,
+                        "canonical_eligible": False,
+                    },
+                }
+            }
+        )
 
 
 def test_resolve_feeder_missing_file_is_none() -> None:
-    src, is_real = cq._resolve_feeder({"qsts": {"feeder_model_path": "/no/such.dss"}})
-    assert (src, is_real) == (None, False)
+    resolved = cq._resolve_feeder(
+        {
+            "qsts": {
+                "input_kind": "synthetic_placeholder",
+                "feeder_model_path": "/no/such.dss",
+            }
+        }
+    )
+    assert resolved.source is None
+    assert resolved.can_solve is False
+    assert resolved.generated_input is True
 
 
 def test_resolve_feeder_non_mapping_qsts_is_none() -> None:
     """A grid whose qsts is not a mapping resolves to no feeder (defensive guard)."""
-    src, is_real = cq._resolve_feeder({"qsts": ["oops"]})
-    assert (src, is_real) == (None, False)
+    resolved = cq._resolve_feeder({"qsts": ["oops"]})
+    assert resolved.source is None
+    assert resolved.can_solve is False
 
 
 def test_grid_instructed_profile_absent_is_zeros() -> None:
@@ -586,15 +737,193 @@ def test_schema_enabled_requires_feeder_path() -> None:
     errors: list[str] = []
     validate_grid_block({"grid": {"qsts": {"enabled": True}}}, errors)
     assert any("feeder_model_path" in e for e in errors)
+    assert any("input_kind" in e for e in errors)
 
 
 def test_schema_enabled_with_feeder_path_passes() -> None:
     errors: list[str] = []
     validate_grid_block(
-        {"grid": {"qsts": {"enabled": True, "feeder_model_path": "/x/feeder.dss"}}},
+        {
+            "grid": {
+                "qsts": {
+                    "enabled": True,
+                    "input_kind": "engineer_prepared_site_model",
+                    "feeder_model_path": "/x/feeder.dss",
+                }
+            }
+        },
         errors,
     )
     assert errors == []
+
+
+def test_schema_refuses_synthetic_input_as_canonical_finance() -> None:
+    errors: list[str] = []
+    validate_grid_block(
+        {
+            "grid": {
+                "qsts": {
+                    "enabled": True,
+                    "input_kind": "synthetic_placeholder",
+                    "feeder_model_path": "/x/synthetic.dss",
+                    "finance_wiring": {
+                        "enabled": True,
+                        "mode": "canonical",
+                        "canonical_eligible": True,
+                    },
+                }
+            }
+        },
+        errors,
+    )
+    assert any("synthetic/test inputs are never canonical" in e for e in errors)
+    assert any("mode='canonical' refuses" in e for e in errors)
+
+
+def test_schema_accepts_parked_synthetic_counterfactual_contract() -> None:
+    errors: list[str] = []
+    validate_grid_block(
+        {
+            "grid": {
+                "qsts": {
+                    "enabled": True,
+                    "input_kind": "synthetic_placeholder",
+                    "feeder_model_path": "/x/synthetic.dss",
+                    "finance_wiring": {
+                        "enabled": False,
+                        "mode": "synthetic_counterfactual",
+                        "canonical_eligible": False,
+                    },
+                }
+            }
+        },
+        errors,
+    )
+    assert errors == []
+
+
+def test_schema_refuses_enabled_synthetic_counterfactual_until_segregated_path_exists() -> (
+    None
+):
+    errors: list[str] = []
+    validate_grid_block(
+        {
+            "grid": {
+                "qsts": {
+                    "enabled": True,
+                    "input_kind": "synthetic_placeholder",
+                    "feeder_model_path": "/x/synthetic.dss",
+                    "finance_wiring": {
+                        "enabled": True,
+                        "mode": "synthetic_counterfactual",
+                        "canonical_eligible": False,
+                    },
+                }
+            }
+        },
+        errors,
+    )
+    assert any(
+        "cannot be enabled in the canonical cashflow pipeline" in e for e in errors
+    )
+
+
+def test_schema_accepts_explicit_site_model_canonical_contract() -> None:
+    errors: list[str] = []
+    validate_grid_block(
+        {
+            "grid": {
+                "qsts": {
+                    "enabled": True,
+                    "input_kind": "engineer_prepared_site_model",
+                    "feeder_model_path": "/x/site.dss",
+                    "finance_wiring": {
+                        "enabled": True,
+                        "mode": "canonical",
+                        "canonical_eligible": True,
+                    },
+                }
+            }
+        },
+        errors,
+    )
+    assert errors == []
+
+
+def test_schema_rejects_nonstring_input_kind_without_crashing() -> None:
+    errors: list[str] = []
+    validate_grid_block(
+        {
+            "grid": {
+                "qsts": {
+                    "enabled": True,
+                    "input_kind": ["test_fixture"],
+                    "feeder_model_path": "/x/fixture.dss",
+                }
+            }
+        },
+        errors,
+    )
+    assert any("input_kind must be one of" in e for e in errors)
+
+
+@pytest.mark.parametrize("invalid_mode", [["canonical"], {"mode": "canonical"}])
+def test_schema_rejects_nonstring_finance_mode_without_crashing(
+    invalid_mode: object,
+) -> None:
+    errors: list[str] = []
+    validate_grid_block(
+        {
+            "grid": {
+                "qsts": {
+                    "enabled": True,
+                    "input_kind": "engineer_prepared_site_model",
+                    "feeder_model_path": "/x/site.dss",
+                    "finance_wiring": {
+                        "enabled": True,
+                        "mode": invalid_mode,
+                        "canonical_eligible": True,
+                    },
+                }
+            }
+        },
+        errors,
+    )
+    assert any("finance_wiring.mode must be" in e for e in errors)
+
+
+def test_schema_rejects_path_and_builtin_demo_ambiguity() -> None:
+    errors: list[str] = []
+    validate_grid_block(
+        {
+            "grid": {
+                "qsts": {
+                    "enabled": True,
+                    "input_kind": "test_fixture",
+                    "use_synthetic_demo": True,
+                    "feeder_model_path": "/x/fixture.dss",
+                }
+            }
+        },
+        errors,
+    )
+    assert any("ambiguous with feeder_model_path" in e for e in errors)
+
+
+def test_runtime_refuses_path_without_explicit_input_kind(tmp_path: Path) -> None:
+    feeder = tmp_path / "unclassified.dss"
+    feeder.write_text("! path existence is not provenance\n")
+    config = {
+        "grid": {
+            "qsts": {
+                "enabled": True,
+                "feeder_model_path": str(feeder),
+                "export_cap_mw": 10.0,
+            }
+        }
+    }
+    with pytest.raises(ValueError, match="filesystem path is not provenance"):
+        run_qsts_curtailment(config, generation_mwh=[5.0])
 
 
 def test_schema_disabled_needs_no_feeder_path() -> None:
