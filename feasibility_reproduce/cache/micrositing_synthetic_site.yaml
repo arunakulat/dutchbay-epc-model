@@ -67,6 +67,13 @@ micrositing_synthetic:
   # and use_smart_start=False keeps the run anchored on the baseline (a
   # smart-start reseed can land BELOW baseline, reporting a misleading negative
   # uplift — see HOWTO.md section 2).
+  # TODO (open): 200 iterations does NOT converge — SLSQP hits the limit and
+  # wind_provenance.py reports `converged: false` with a WARN rather than passing
+  # the truncated result off as an optimum (FIN-01). Raising it to 600/1200 was
+  # tried and exceeded a 10-minute budget without settling, so the cap stays
+  # bounded and honest for now. Revisit if the synthetic uplift ever needs to be a
+  # converged figure — but note it would still be an optimum over FABRICATED
+  # geometry, so the extra runtime buys precision, not relevance.
   optimizer:
     random_seed: 42
     use_smart_start: false
