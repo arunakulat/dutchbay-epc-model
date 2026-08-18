@@ -11,6 +11,8 @@ SETUP_SCRIPT = ROOT / "setup_venv.sh"
 SESSION_HOOK = ROOT / ".claude" / "hooks" / "session-start.sh"
 SOURCED_SETUP_SCRIPT = ROOT / "scripts" / "venv_up.sh"
 VENV_CHECK_SCRIPT = ROOT / "check_venv.sh"
+BOOTSTRAP_HELPER = ROOT / "dutchbay_bootstrap.py"
+DOCKERFILE = ROOT / "Dockerfile"
 
 
 def _environment() -> dict[str, object]:
@@ -58,6 +60,25 @@ def test_bootstrap_prefers_the_supported_ci_python() -> None:
         in script
     )
     assert "Python 3.12 interpreter was not found" in script
+
+
+def test_bootstrap_rejects_the_retired_python311_venv_name() -> None:
+    """Do not let a retired .venv311 tree satisfy the active bootstrap."""
+
+    script = BOOTSTRAP_HELPER.read_text(encoding="utf-8")
+
+    assert 'REPO_ROOT / ".venv"' in script
+    assert ".venv311" not in script
+
+
+def test_container_uses_the_supported_python312_image() -> None:
+    """Keep both Docker stages aligned with the repository Python floor."""
+
+    dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+
+    assert dockerfile.count("FROM python:3.12-slim-bookworm") == 2
+    assert "python:3.11" not in dockerfile
+    assert "cp311" not in dockerfile
 
 
 def test_codex_environment_exposes_safe_project_actions() -> None:

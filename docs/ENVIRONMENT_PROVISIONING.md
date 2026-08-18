@@ -33,13 +33,15 @@ python3.12 -m venv .venv
 
 ## 2. What the lock contains
 
-`requirements.txt` is a fully-pinned reproducibility lock, regenerated from
-pyproject under the policy constraints (never hand-edited):
+`requirements.txt` is a fully-pinned reproducibility lock. `make lock` installs
+the cleared lock first, then resolves the complete abstract capability set from
+pyproject under the policy constraints. This prevents an additive dependency
+dolphin from silently refreshing unrelated packages inside broad version ranges:
 
 ```bash
-PIP_CONSTRAINT=constraints.txt \
-  pip install -e '.[dev,test,api,dashboard,wind,gis,grid,micrositing]'
-pip freeze --exclude-editable | grep -v dutchbay > requirements.txt   # + the header
+python3.12 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+make lock PIP=.venv/bin/pip
 ```
 
 **CI installs the lock and nothing else.** That is the single most important fact
@@ -53,9 +55,10 @@ about this file — see §4.
 | `gis` | ✅ | rasterio, shapely, **pyproj** |
 | `grid` | ✅ | pandapower, andes, opendssdirect |
 | `micrositing` | ✅ (v15.4.0) | TopFarm |
-| `report` | ❌ | WeasyPrint, reportlab, geopandas, contextily |
+| `ingestion` | ✅ | MarkItDown with PDF support, pdfplumber, PyMuPDF |
+| `report` | ✅ | WeasyPrint, reportlab, geopandas, contextily |
 | `solar` | ❌ | pvlib |
-| `jobs` | ❌ | arq, redis |
+| `jobs` | ✅ | arq, redis with hiredis |
 | `pareto` | ❌ | pymoo |
 | `feasibility` | ❌ (composite) | `wind,micrositing,gis,report,grid` + mistune + SALib |
 
@@ -155,29 +158,36 @@ top of the lock produced a live resolver conflict.
 
 ## 5. What CI still skips
 
-With the v15.4.0 lock, **13** tests skip on a CI run (down from 23), verified against
-a venv built from the lock alone: 5184 passed, 13 skipped, 0 failed.
+With the governed Python 3.12 lock, **12** tests skip on a full local gate (down
+from 23), verified against a venv built from the lock alone: 5226 passed,
+12 skipped, 0 failed, with 96.04% coverage.
 
-Ten are honest guards that declare a missing optional dependency:
+Seven are honest guards that declare a missing optional dependency:
 
 | Missing | Extra | Skips |
 |---|---|---|
-| `pvlib` | `solar` | 5 |
-| `weasyprint` | `report` | 2 |
-| `reportlab` | `report` | 1 |
-| `arq` | `jobs` | 1 |
+| `pvlib` | `solar` | 6 |
 | `pymoo` | `pareto` | 1 |
 
-Plus three that are correct by construction:
+Plus five that are correct by construction:
 
-- `test_self_curtailment_enablement_readiness.py:147` — skips *because* `[grid]` is
+- `test_self_curtailment_enablement_readiness.py:151` — skips *because* `[grid]` is
   installed; it tests the absent-dependency guard, now unreachable. This skip is
   evidence the migration worked.
 - `test_mc_exports.py:293` — "requires pandas to be missing" (inverse guard).
 - `test_fx_sensitivity_real.py:409` — requires a real scenario file and pipeline.
+- `test_report_renderer.py:375` — skips the fail-loud error-path probe because
+  governed WeasyPrint is installed; positive PDF rendering runs instead.
+- `test_jobs_backend_gate.py:44` — skips the absent-`[jobs]` probe because the
+  governed worker dependencies are installed; the positive worker tests run instead.
 
 **Closed in v15.4.0:** the 9 `test_layout_optimizer.py` cases (TopFarm now in the
 lock — that is the suite for `optimize_layout()`, which the synthetic micro-siting
 work drives) and `test_evaluation_v14_lender_stack.py:58`, whose fixture
 `tests/data/minimal_lender_scenario.yaml` had never been committed, leaving the
 file's self-described PRIMARY regression pin silently skipping on every run.
+
+**Closed by the Python 3.12 tooling dolphins:** the positive WeasyPrint,
+reportlab, arq and Redis worker paths now run in the governed suite. Their
+absent-dependency tests remain as intentional inverse guards, while a live Redis
+broker remains a deployment/runtime concern rather than a lock-generation input.
