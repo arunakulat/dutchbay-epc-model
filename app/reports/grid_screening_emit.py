@@ -362,9 +362,22 @@ def _try_curtailment(
     from analytics.grid.curtailment_qsts import run_qsts_curtailment
 
     try:
-        # The QSTS entry is itself fully gated + real-feeder-guarded: default-off (or a
-        # synthetic feeder) returns an inert ran=False result, never a fabricated loss.
-        return run_qsts_curtailment(config)
+        # The QSTS entry is gated and provenance-typed. A path-backed synthetic/test input
+        # may execute for diagnostics, but the dedicated presentation/watermark work is
+        # deliberately a separate #923-E dolphin. Until E lands, withhold such output from
+        # this lender-facing report rather than equating ran=True with real evidence.
+        result = run_qsts_curtailment(config)
+        if result.ran is True and (
+            result.generated_input is True or result.site_representative is not True
+        ):
+            degraded["curtailment"] = (
+                "QSTS curtailment output withheld: SYNTHETIC PLACEHOLDER / TEST INPUT — "
+                "not observed network data, not site-representative, not lender evidence, "
+                "and not eligible for canonical finance. Dedicated presentation remains "
+                "gated on #923-E."
+            )
+            return None
+        return result
     except Exception as exc:  # noqa: BLE001 - CASPER: degrade, don't crash the report
         degraded["curtailment"] = (
             f"QSTS curtailment split not run: {type(exc).__name__}: {exc}"
