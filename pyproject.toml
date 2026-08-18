@@ -152,8 +152,8 @@ pareto = [
 # joins here because the constraint/exclusion mask (analytics.gis.exclusion_mask) buffers
 # setback features and rasterises exclusion polygons with it — the vector half of the same
 # GIS siting toolchain; it is guarded via _require_shapely (CASPER) exactly like rasterio,
-# so the base finance install still needs neither. (shapely otherwise only rode in
-# transitively via geopandas in [report], which the test job does not install.)
+# so the base finance install still needs neither. (Shapely also rides transitively
+# via geopandas in the governed lock, but remains a direct GIS capability dependency.)
 gis = [
   "rasterio>=1.3",
   "shapely>=2.0",
@@ -174,14 +174,15 @@ ingestion = [
   "pymupdf>=1.28,<1.29",
 ]
 # PDF report rendering (Sprint 2). Jinja2 (in core deps) drives the HTML report;
-# WeasyPrint is opt-in because it needs the pango/cairo system libraries that a
-# bare CI runner lacks. The renderer guards the import (app.reports.renderer ->
-# ReportDependencyError) so the base install always serves the HTML report, and
-# the PDF tests are gated behind ``pytest.importorskip('weasyprint')`` (CASPER).
+# WeasyPrint remains optional at application call time because minimal deployments
+# may omit its pango/cairo system libraries. The governed Python 3.12 lock includes
+# the complete report dependency closure and CI exercises positive PDF rendering.
+# The guarded import (app.reports.renderer -> ReportDependencyError) preserves a
+# fail-loud boundary for deliberately minimal installs (CASPER).
 report = [
-  "weasyprint>=60",
+  "weasyprint>=69,<70",
   # reportlab powers the standalone assessment-report generator
-  # (scripts/generate_solar_assessment_report.py); gated behind importorskip in its test.
+  # (scripts/generate_solar_assessment_report.py) and is exercised when pvlib is present.
   "reportlab>=4.0",
   # geopandas clips the national GHI choropleth to the country land polygon and
   # contextily composites the Esri World Imagery satellite tile for the site
@@ -193,11 +194,14 @@ report = [
 # Async live-ERA5 job path (Sprint 2). The default in-process path
 # (app.api.jobs_router + BackgroundTasks) needs none of these; arq + Redis is the
 # durable, cross-process upgrade driven by app.jobs.worker (loaded only by the arq
-# CLI). CI does not install this extra, so the Redis/arq code is never imported in
-# tests; RedisJobStore is unit-tested against a fake client instead.
+# CLI). The governed lock includes this dependency closure and CI imports/tests the
+# worker plus RedisJobStore against a fake client; a live Redis broker remains an
+# explicit deployment requirement rather than a test-lock input.
 jobs = [
-  "arq>=0.25",
-  "redis>=5.0",
+  "arq>=0.28,<0.29",
+  # arq 0.28 requires redis[hiredis]<6. Declare the accelerated parser explicitly
+  # so the worker capability and its performance dependency reconstruct together.
+  "redis[hiredis]>=5,<6",
 ]
 # Grid interconnection / hosting-capacity study (issue #871). Opt-in like [gis]/[pareto];
 # the finance engine + CLI never import it, so the default install and CI lanes stay

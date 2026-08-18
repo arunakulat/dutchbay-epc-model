@@ -5,7 +5,7 @@ PIP ?= pip
 
 # Exact abstract capability set used to regenerate the CI lock. Keep this aligned
 # with the recipe in requirements.txt and docs/ENVIRONMENT_PROVISIONING.md.
-LOCK_EXTRAS := dev,test,api,dashboard,wind,gis,grid,micrositing,ingestion
+LOCK_EXTRAS := dev,test,api,dashboard,wind,gis,grid,micrositing,ingestion,report,jobs
 
 # Engine/application surface scanned by the type + security gates (mirrors CI).
 SURFACE := finance analytics api app wind_resource solar_resource analysis_tools
