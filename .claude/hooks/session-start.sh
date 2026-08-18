@@ -33,16 +33,18 @@ manifest_hash() {
 }
 
 # --- 1. Interpreter -----------------------------------------------------------
-# 3.12 is the CI baseline. Pick it explicitly rather than trusting `python3`.
+# 3.12 is the CI baseline. Pick it explicitly rather than trusting `python3`, and
+# do not silently promote a fresh session to an unqualified later minor release.
 PYTHON_CMD=""
 for c in python3.12 python3 python; do
   if command -v "$c" >/dev/null 2>&1 \
-     && "$c" -c 'import sys; raise SystemExit(sys.version_info < (3, 12))' >/dev/null 2>&1; then
+     && "$c" -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))' \
+       >/dev/null 2>&1; then
     PYTHON_CMD="$c"; break
   fi
 done
 if [ -z "$PYTHON_CMD" ]; then
-  echo "session-start: no Python >=3.12 found; cannot provision" >&2
+  echo "session-start: Python 3.12 not found; cannot provision" >&2
   exit 1
 fi
 
@@ -51,6 +53,13 @@ fi
 # Debian's patched setuptools raises `AttributeError: install_layout` when pip
 # builds the legacy sdists in the lock (antlr4-python3-runtime, odfpy), which
 # fails the whole install. A fresh venv ships clean build tooling and avoids it.
+if [ -x "$PY" ] \
+   && ! "$PY" -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))' \
+     >/dev/null 2>&1; then
+  echo "session-start: existing .venv is not Python 3.12; recreate it before continuing" >&2
+  exit 1
+fi
+
 if [ ! -x "$PY" ]; then
   echo "session-start: creating $VENV"
   "$PYTHON_CMD" -m venv "$VENV"

@@ -9,7 +9,7 @@
 git clone https://github.com/arunakulat/dutchbay-epc-model.git
 cd dutchbay-epc-model
 
-python3.11 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 
 pip install -r requirements.txt   # pinned reproducibility lock

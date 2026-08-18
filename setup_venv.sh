@@ -20,7 +20,7 @@ VENV_DIR="$PROJECT_ROOT/.venv"
 REQUIREMENTS="$PROJECT_ROOT/requirements.txt"
 
 echo "================================================================================"
-echo "DutchBay V13 - Virtual Environment Setup"
+echo "DutchBay EPC Model - Virtual Environment Setup"
 echo "================================================================================"
 echo "Project Root: $PROJECT_ROOT"
 echo ""
@@ -30,13 +30,13 @@ echo ""
 # =============================================================================
 echo "Step 1: Checking Python installation..."
 
-# Prefer the CI baseline explicitly. A generic `python3` can point at a newer,
-# incompatible Homebrew interpreter (or even a broken shim), especially in a fresh
-# Codex worktree. Fall back only to interpreters that can execute and meet >=3.12.
+# Require the CI baseline explicitly. A generic `python3` can point at a newer,
+# unqualified Homebrew interpreter (or even a broken shim), especially in a fresh
+# worktree. Generic command names are accepted only when they resolve to Python 3.12.
 PYTHON_CMD=""
-for candidate in python3.12 python3 python; do
+for candidate in python3.12 /opt/homebrew/bin/python3.12 python3 python; do
     if command -v "$candidate" >/dev/null 2>&1 \
-        && "$candidate" -c 'import sys; raise SystemExit(sys.version_info < (3, 12))' \
+        && "$candidate" -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))' \
             >/dev/null 2>&1; then
         PYTHON_CMD="$candidate"
         break
@@ -44,12 +44,12 @@ for candidate in python3.12 python3 python; do
 done
 
 if [ -z "$PYTHON_CMD" ]; then
-    echo -e "${RED}✗ A working Python 3.12+ interpreter was not found.${NC}"
+    echo -e "${RED}✗ A working Python 3.12 interpreter was not found.${NC}"
     echo ""
     echo "Install the CI baseline using Homebrew:"
     echo "  brew install python@3.12"
     echo ""
-    echo "Or download Python 3.12+ from https://www.python.org/downloads/"
+    echo "Or download Python 3.12 from https://www.python.org/downloads/"
     exit 1
 fi
 
@@ -66,10 +66,24 @@ echo ""
 echo "Step 2: Checking virtual environment..."
 
 if [ -d "$VENV_DIR" ]; then
-    echo -e "${GREEN}✓${NC} Virtual environment exists: $VENV_DIR"
+    VENV_PYTHON="$VENV_DIR/bin/python"
+    if [ ! -x "$VENV_PYTHON" ]; then
+        echo -e "${RED}✗ Existing virtual environment is incomplete: $VENV_DIR${NC}"
+        echo "Remove or move it, then run ./setup_venv.sh again."
+        exit 1
+    fi
+    if ! "$VENV_PYTHON" \
+        -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))' \
+        >/dev/null 2>&1; then
+        EXISTING_VERSION=$("$VENV_PYTHON" --version 2>&1 || echo "unknown")
+        echo -e "${RED}✗ Existing .venv uses $EXISTING_VERSION; Python 3.12 is required.${NC}"
+        echo "Move or remove $VENV_DIR, then run ./setup_venv.sh again."
+        exit 1
+    fi
+    echo -e "${GREEN}✓${NC} Python 3.12 virtual environment exists: $VENV_DIR"
 else
     echo -e "${YELLOW}⚠${NC}  Virtual environment not found. Creating..."
-    $PYTHON_CMD -m venv "$VENV_DIR"
+    "$PYTHON_CMD" -m venv "$VENV_DIR"
 
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓${NC} Virtual environment created successfully"

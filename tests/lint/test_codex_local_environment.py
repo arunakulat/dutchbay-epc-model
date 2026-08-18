@@ -8,6 +8,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 ENVIRONMENT_FILE = ROOT / ".codex" / "environments" / "environment.toml"
 SETUP_SCRIPT = ROOT / "setup_venv.sh"
+SESSION_HOOK = ROOT / ".claude" / "hooks" / "session-start.sh"
+SOURCED_SETUP_SCRIPT = ROOT / "scripts" / "venv_up.sh"
+VENV_CHECK_SCRIPT = ROOT / "check_venv.sh"
 
 
 def _environment() -> dict[str, object]:
@@ -37,12 +40,24 @@ def test_codex_environment_bootstraps_the_canonical_venv() -> None:
 
 
 def test_bootstrap_prefers_the_supported_ci_python() -> None:
-    """Avoid selecting a broken or unsupported generic Python ahead of 3.12."""
+    """Require the tested 3.12 minor instead of silently selecting a newer Python."""
+
+    for path in (
+        SETUP_SCRIPT,
+        SESSION_HOOK,
+        SOURCED_SETUP_SCRIPT,
+        VENV_CHECK_SCRIPT,
+    ):
+        script = path.read_text(encoding="utf-8")
+
+        assert "sys.version_info[:2] != (3, 12)" in script
 
     script = SETUP_SCRIPT.read_text(encoding="utf-8")
-
-    assert "for candidate in python3.12 python3 python" in script
-    assert "sys.version_info < (3, 12)" in script
+    assert (
+        "for candidate in python3.12 /opt/homebrew/bin/python3.12 python3 python"
+        in script
+    )
+    assert "Python 3.12 interpreter was not found" in script
 
 
 def test_codex_environment_exposes_safe_project_actions() -> None:
