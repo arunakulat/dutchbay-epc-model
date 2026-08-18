@@ -1,4 +1,7 @@
 {
+  "env": {
+    "DUTCHBAY_EXTRAS": "dev,feasibility,jobs,solar,pareto"
+  },
   "hooks": {
     "SessionStart": [
       {

@@ -10,7 +10,7 @@ replaying the conversation.
 
 ## 1. What shipped
 
-Six PRs, all squash-merged to `main` except the last (open at handover).
+Seven PRs, all squash-merged to `main`. **Released as v15.4.0.**
 
 | PR | Commit | What |
 |---|---|---|
@@ -18,9 +18,28 @@ Six PRs, all squash-merged to `main` except the last (open at handover).
 | #1040 | `32f83d2` | Re-baseline `feasibility_reproduce/` to the COD-aligned canon |
 | #1041 | `2034d16` | `feasibility` extra, SessionStart hook, missing kit scripts |
 | #1042 | `1db8ac0` | **Python 3.12 baseline** + grid in the lock — unblocks #923 |
-| #1044 | `76f5e15` | Synthetic micro-siting geometry + real-solver QSTS→finance e2e |
+| #1044 | `f0d8eed` | Synthetic micro-siting geometry + real-solver QSTS→finance e2e |
+| #1045 | `0379843` | **v15.4.0 release** — changelog cut, `[micrositing]` in the lock, dead test revived |
 
 **Issue #1034 (F5-01) closed** `completed`, all nine Dolphin steps ticked.
+
+**Test-suite trajectory across the session:** 5138 passed / 31 skipped →
+**5184 passed / 13 skipped**. The 18 closed skips were tests that had never
+executed in CI: 9 `optimize_layout()` cases (no TopFarm in the lock), the andes
+and OpenDSS grid legs, and `test_evaluation_v14_lender_stack.py`'s PRIMARY
+regression pin, whose fixture had never been committed.
+
+### Outstanding: the signed tag
+
+`RELEASING.md` §6 wants `git tag -s v15.4.0` on the merged release commit, which
+triggers `release-run.yml` to publish the GitHub Release. **Not done** — it needs
+a signing key. This is the owner's to push:
+
+```bash
+git switch main && git pull --ff-only origin main
+git tag -s v15.4.0 -m "DutchBay 15.4.0"
+git push origin v15.4.0        # the TAG, never main
+```
 
 ---
 
@@ -60,13 +79,12 @@ python3.12 -m venv .venv
 .venv/bin/pip install -e ".[dev,feasibility]"
 ```
 
-**Fully-enabled session** (grid + micro-siting + redis + BESS + solar + pareto).
-The SessionStart hook provisions this when `DUTCHBAY_EXTRAS` is set, and starts
-redis when `jobs` is among the extras:
-
-```bash
-DUTCHBAY_EXTRAS=dev,feasibility,jobs,solar,pareto
-```
+**Fully-enabled sessions are now AUTOMATIC.** `.claude/settings.json` carries an
+`env` block setting `DUTCHBAY_EXTRAS=dev,feasibility,jobs,solar,pareto`, and the
+hook's own fallback is the same full set — so a web session provisions grid,
+micro-siting, redis, solar and pareto with no flag to remember, and starts
+`redis-server` on :6379. Set `DUTCHBAY_EXTRAS=dev` explicitly for the fast
+tests-and-linters path.
 
 `[feasibility]` composes wind/micrositing/gis/report/grid; `jobs` adds redis+arq
 (the `redis-server` binary ships in the image). **BESS needs no extra** — it is
