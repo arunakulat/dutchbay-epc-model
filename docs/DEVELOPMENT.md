@@ -8,7 +8,8 @@ working on the DutchBay EPC model. For a five-minute orientation see
 
 ## Prerequisites
 
-- Python 3.11 (the project requires `>=3.11`; the pinned toolchain and CI run 3.11 and 3.12).
+- Python 3.12. The package metadata has a `>=3.12` floor, while the pinned toolchain,
+  bootstrap scripts, containers, and CI are qualified on the 3.12 minor release.
 - Git.
 - A POSIX shell. macOS, Linux, or Windows with WSL are supported.
 - Optional system libraries only for specific extras (for example pango/cairo for the
@@ -23,7 +24,7 @@ the development and CI toolchain:
 git clone https://github.com/arunakulat/dutchbay-epc-model.git
 cd dutchbay-epc-model
 
-python3.11 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 
 make setup                           # pip install -r requirements.txt + pip install -e ".[dev]"
@@ -205,11 +206,11 @@ The CI gate topology is:
 - **Docker build** — builds the runtime image and boots it to check `/health` (it does not
   push the image; deployment is manual, see [docs/deploy/DEPLOY.md](deploy/DEPLOY.md)).
 
-Pull-request runs currently exercise Python 3.12 and pushes to `main` exercise 3.11.
+Pull-request, `main`, nightly, release, and container gates currently exercise Python 3.12.
 
 ## Governance
 
-Development is governed by the "Go With The Flow" ruleset (GWTF v3.0, 64 rules) in
+Development is governed by the "Go With The Flow" ruleset (GWTF v3.0, 66 rules) in
 [go_with_the_flow_rules_v3_0_clean.csv](../go_with_the_flow_rules_v3_0_clean.csv). The rules
 most relevant day to day:
 
@@ -227,7 +228,7 @@ most relevant day to day:
 ## Troubleshooting
 
 - Confirm the interpreter is the project venv (`which python` should resolve inside `.venv`)
-  and that it is Python 3.11+.
+  and that it is Python 3.12.x.
 - If an optional capability raises an import error at call time, install its extra (the error
   message names the exact `pip install` command).
 - If a commit is rejected on `main`, you are on the wrong branch; create a feature branch and

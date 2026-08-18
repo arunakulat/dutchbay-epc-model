@@ -1,7 +1,7 @@
 # DutchBay EPC Model
 
 [![Test Suite](https://github.com/arunakulat/dutchbay-epc-model/actions/workflows/test-suite.yml/badge.svg)](https://github.com/arunakulat/dutchbay-epc-model/actions/workflows/test-suite.yml)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 A lender and DFI-grade project-finance model for a 150 MW onshore wind farm (with optional
@@ -16,7 +16,7 @@ emits CSV, Excel, and JSON artifacts and an HTML or PDF lender report.
 git clone https://github.com/arunakulat/dutchbay-epc-model.git
 cd dutchbay-epc-model
 
-python3.11 -m venv .venv
+python3.12 -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
 
 make setup                           # pip install -r requirements.txt + pip install -e ".[dev]"
