@@ -120,7 +120,7 @@ wind_resource:
 
 layout:
   turbine_spacing_avg_m: 650
-  turbine_spacing_avg_D: 3.8  # In rotor diameters (650m / 171m)
+  turbine_spacing_avg_D: 3.28  # In rotor diameters (650m / 198m); doc-only, no code reads it
   iec_compliant_pairs: 6
   iec_marginal_pairs: 3
   iec_violation_pairs: 6
