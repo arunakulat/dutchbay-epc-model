@@ -25,7 +25,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 1 — builder: build the virtualenv at /opt/venv.
 # ─────────────────────────────────────────────────────────────────────────────
-FROM python:3.11-slim-bookworm AS builder
+FROM python:3.12-slim-bookworm AS builder
 
 # Deterministic, quiet, no stale .pyc; fail pip fast on network hiccups.
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -74,7 +74,7 @@ RUN pip install --no-cache-dir -c constraints.txt -e '.[api,jobs,report]'
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 2 — runtime: slim image with only the venv, WeasyPrint runtime libs, source.
 # ─────────────────────────────────────────────────────────────────────────────
-FROM python:3.11-slim-bookworm AS runtime
+FROM python:3.12-slim-bookworm AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -135,7 +135,7 @@ CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "8080"]
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Assumptions
-#   * python:3.11-slim-bookworm (Debian 12). The WeasyPrint runtime library names
+#   * python:3.12-slim-bookworm (Debian 12). The WeasyPrint runtime library names
 #     above are the bookworm package names; a different base (e.g. trixie/alpine)
 #     would need a different set.
 #   * requirements.txt is the full pinned lock frozen with .[dev,test,api,dashboard,

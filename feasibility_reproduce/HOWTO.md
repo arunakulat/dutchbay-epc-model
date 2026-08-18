@@ -23,21 +23,19 @@ python3.11 -m venv .venv                       # if not present
 The `feasibility` extra composes wind (ERA5 → Weibull → PyWake), micrositing
 (TopFarm), gis (rasterio/shapely), report (WeasyPrint) and adds mistune + SALib.
 
-⚠️ It deliberately **excludes `[grid]`**. pandapower's scipy pin is incompatible
-with the pinned lock on every interpreter we support — `pandapower==3.3.0` wants
-`scipy~=1.15`, `3.5.4` wants `<1.17` on Python 3.11 and `~=1.18` on 3.12, while
-the lock pins `scipy==1.17.1` and `[dev]`'s `scipy-stubs` requires `>=1.17.1`.
-Installing it alongside `dev` silently downgrades scipy off the lock **and**
-breaks the mypy gate's stubs. The grid screen (§7) is advisory and KPI-neutral,
-so `run_all.sh` skips it rather than corrupting the environment that produces the
-committed numbers. To run it, use a separate venv:
+The `feasibility` extra now includes **`[grid]`** too (pandapower / andes /
+opendssdirect), so every `run_all.sh` step — including the §7 grid screen — runs
+from one environment.
 
-```bash
-python3.11 -m venv .venv-grid && .venv-grid/bin/pip install -e '.[grid]'
-```
+That was not possible before the **Python 3.12 baseline migration**: pandapower's
+scipy pin was irreconcilable with the lock on 3.11 (`pandapower==3.3.0` wanted
+`scipy~=1.15`; 3.5.4 wants `<1.17` there), so installing it alongside `[dev]`
+silently downgraded scipy off the lock and broke the mypy gate's stubs. On 3.12
+pandapower 3.5.x wants `scipy~=1.18`, the lock pins `scipy==1.18.0`, and the three
+resolve together cleanly. Effect: `tests/grid/` went from 576 passed / 19 skipped
+to **595 passed / 0 skipped**.
 
-The canonical KPIs are unaffected either way — the canon reproduces
-byte-identically under both scipy 1.16.3 and 1.17.1 (verified, #1040).
+**Python >=3.12 is now required** (`requires-python = ">=3.12"`).
 Everything below uses `.venv/bin/python`. **No network is required** — the two online steps
 (ERA5 retrieval, ERA5-grid GIS export) ship their results in `cache/` (§2, §9).
 

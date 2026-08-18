@@ -37,12 +37,12 @@ def test_codex_environment_bootstraps_the_canonical_venv() -> None:
 
 
 def test_bootstrap_prefers_the_supported_ci_python() -> None:
-    """Avoid selecting a broken or unsupported generic Python ahead of 3.11."""
+    """Avoid selecting a broken or unsupported generic Python ahead of 3.12."""
 
     script = SETUP_SCRIPT.read_text(encoding="utf-8")
 
-    assert "for candidate in python3.11 python3 python" in script
-    assert "sys.version_info < (3, 11)" in script
+    assert "for candidate in python3.12 python3 python" in script
+    assert "sys.version_info < (3, 12)" in script
 
 
 def test_codex_environment_exposes_safe_project_actions() -> None:

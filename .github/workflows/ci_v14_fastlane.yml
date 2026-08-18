@@ -1,10 +1,10 @@
 # CI - v14 fastlane
 #
 # Genuinely FAST early-fail lane: a focused ruff + mypy pass over the v14 entrypoint
-# surface on Python 3.11, so an obvious break fails in ~a couple of minutes without
+# surface on Python 3.12, so an obvious break fails in ~a couple of minutes without
 # waiting on the sharded suite. It deliberately does NOT run the test tree anymore
 # (#760): the full ~3,500-test suite is the `test` job in test-suite.yml — sharded +
-# `-n auto` across the FULL 3.11+3.12 matrix on every PR (#959), plus the nightly
+# `-n auto` across the 3.12 baseline on every PR, plus the nightly
 # full-matrix schedule against main. Running the whole suite here too (single-process,
 # ~9m) made this the merge-critical long pole AND executed the tree twice per PR;
 # removing it lets the gate's wall-clock be the slowest shard. `fastlane` remains a
@@ -32,10 +32,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v7
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Cache pip
         uses: actions/cache@v6

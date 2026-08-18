@@ -32,11 +32,11 @@ echo "Step 1: Checking Python installation..."
 
 # Prefer the CI baseline explicitly. A generic `python3` can point at a newer,
 # incompatible Homebrew interpreter (or even a broken shim), especially in a fresh
-# Codex worktree. Fall back only to interpreters that can execute and meet >=3.11.
+# Codex worktree. Fall back only to interpreters that can execute and meet >=3.12.
 PYTHON_CMD=""
-for candidate in python3.11 python3 python; do
+for candidate in python3.12 python3 python; do
     if command -v "$candidate" >/dev/null 2>&1 \
-        && "$candidate" -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' \
+        && "$candidate" -c 'import sys; raise SystemExit(sys.version_info < (3, 12))' \
             >/dev/null 2>&1; then
         PYTHON_CMD="$candidate"
         break
@@ -44,12 +44,12 @@ for candidate in python3.11 python3 python; do
 done
 
 if [ -z "$PYTHON_CMD" ]; then
-    echo -e "${RED}✗ A working Python 3.11+ interpreter was not found.${NC}"
+    echo -e "${RED}✗ A working Python 3.12+ interpreter was not found.${NC}"
     echo ""
     echo "Install the CI baseline using Homebrew:"
-    echo "  brew install python@3.11"
+    echo "  brew install python@3.12"
     echo ""
-    echo "Or download Python 3.11+ from https://www.python.org/downloads/"
+    echo "Or download Python 3.12+ from https://www.python.org/downloads/"
     exit 1
 fi
 
