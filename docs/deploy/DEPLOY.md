@@ -247,7 +247,7 @@ synchronous-route variables in `app/api/config.py`; CDS variables in
 - The primary region is `sin` (Singapore), the closest Fly region to Sri Lanka, and the
   VM is sized with approximately 1 GB of memory headroom to accommodate WeasyPrint and
   geopandas.
-- The container image is built from `python:3.11-slim-bookworm` and runs as a non-root
+- The container image is built from `python:3.12-slim-bookworm` and runs as a non-root
   user; the WeasyPrint runtime libraries listed in the image build are present in the
   final image.
 - `DUTCHBAY_JOBS_BACKEND=redis` is set in the `fly.toml` `[env]` block so the async ERA5
@@ -255,15 +255,13 @@ synchronous-route variables in `app/api/config.py`; CDS variables in
 
 ## Limitations
 
-- **CVE gate coverage of the extra dependencies.** The image installs the locked core
-  first (`pip install -r requirements.txt -c constraints.txt`) and then layers the
-  `[jobs]`, `[report]`, and `[api]` extras on top under `constraints.txt`
-  (`pip install -c constraints.txt -e '.[api,jobs,report]'`). `requirements.txt` was
-  frozen with the `[dev,test,api,dashboard,wind,gis]` extras and therefore contains
-  `fastapi` and `uvicorn` but not `arq`, `redis`, `weasyprint`, `reportlab`, `geopandas`,
-  or `contextily`. The `pip-audit -r requirements.txt` CVE gate consequently does not
-  cover those extra packages; they are constrained by `constraints.txt` but are outside
-  the audited lock. Auditing the extras is tracked as follow-up work, not resolved here.
+- **CVE gate coverage of the extra dependencies.** The image installs the complete
+  audited lock first (`pip install -r requirements.txt -c constraints.txt`) and then
+  installs the project with `[api,jobs,report]`. Those retained extras—including arq,
+  Redis/hiredis, WeasyPrint, reportlab, geopandas and contextily—are now members of the
+  Python 3.12 lock, so the second install must not introduce an unpinned package or move
+  a cleared version. The mandatory `pip-audit -r requirements.txt` gate covers their
+  full locked closure.
 - **The `[grid]` extra is excluded.** `pandapower` and the rest of the `[grid]` extra are
   intentionally not installed (they are heavy). Grid-screening report sections degrade
   gracefully rather than failing: the guarded imports raise no error at import time and

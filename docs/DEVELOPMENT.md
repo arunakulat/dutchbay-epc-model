@@ -58,6 +58,7 @@ fails at call time with an actionable message, never at import time (the CASPER 
 | `[solar]` | The pvlib solar producer for hybrid multi-tech |
 | `[pareto]` | NSGA-II multi-objective search (pymoo) |
 | `[gis]` | The GIS-for-wind raster/vector siting toolchain |
+| `[ingestion]` | Governed PDF-to-Markdown, extraction, inspection, and rendering tools |
 | `[report]` | The PDF lender report (WeasyPrint) and location/context maps |
 | `[jobs]` | The durable cross-process async job worker (arq, Redis) |
 | `[grid]` | The grid interconnection screening study (pandapower, ANDES, OpenDSS) |
