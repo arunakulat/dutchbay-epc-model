@@ -33,13 +33,15 @@ python3.12 -m venv .venv
 
 ## 2. What the lock contains
 
-`requirements.txt` is a fully-pinned reproducibility lock, regenerated from
-pyproject under the policy constraints (never hand-edited):
+`requirements.txt` is a fully-pinned reproducibility lock. `make lock` installs
+the cleared lock first, then resolves the complete abstract capability set from
+pyproject under the policy constraints. This prevents an additive dependency
+dolphin from silently refreshing unrelated packages inside broad version ranges:
 
 ```bash
-PIP_CONSTRAINT=constraints.txt \
-  pip install -e '.[dev,test,api,dashboard,wind,gis,grid,micrositing]'
-pip freeze --exclude-editable | grep -v dutchbay > requirements.txt   # + the header
+python3.12 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+make lock PIP=.venv/bin/pip
 ```
 
 **CI installs the lock and nothing else.** That is the single most important fact
@@ -53,6 +55,7 @@ about this file — see §4.
 | `gis` | ✅ | rasterio, shapely, **pyproj** |
 | `grid` | ✅ | pandapower, andes, opendssdirect |
 | `micrositing` | ✅ (v15.4.0) | TopFarm |
+| `ingestion` | ✅ | MarkItDown with PDF support, pdfplumber, PyMuPDF |
 | `report` | ❌ | WeasyPrint, reportlab, geopandas, contextily |
 | `solar` | ❌ | pvlib |
 | `jobs` | ❌ | arq, redis |

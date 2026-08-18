@@ -58,6 +58,7 @@ dev = [
   "ruff>=0.5",
   "black>=24.0",
   "isort>=5.13",
+  "pre-commit>=4.6,<5",
   "mypy>=1.18",
   "mypy-extensions>=1.1",
   "pandas-stubs",        # the mypy gate is only faithful WITH these stubs (else falsely clean)
@@ -161,6 +162,16 @@ gis = [
   # which is every CI install — had no pyproj and any projection call failed at
   # runtime. Declared explicitly: rasterio/shapely work is projection work.
   "pyproj>=3.6",
+]
+# Governed document-ingestion toolchain (GWTF R26 / DATA-01). MarkItDown is the
+# canonical PDF-to-Markdown entry point, pdfplumber makes its PDF backend explicit,
+# and PyMuPDF supplies independent PDF inspection and raster rendering. These are
+# tooling dependencies rather than finance-engine runtime dependencies, so they stay
+# in a dedicated extra while requirements.txt pins the cleared versions.
+ingestion = [
+  "markitdown[pdf]>=0.1.6,<0.2",
+  "pdfplumber>=0.11.10,<0.12",
+  "pymupdf>=1.28,<1.29",
 ]
 # PDF report rendering (Sprint 2). Jinja2 (in core deps) drives the HTML report;
 # WeasyPrint is opt-in because it needs the pango/cairo system libraries that a
