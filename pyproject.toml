@@ -207,6 +207,36 @@ grid = [
   "opendssdirect.py>=0.9.4",
 ]
 
+# Everything `feasibility_reproduce/run_all.sh` needs, in ONE install, so the
+# offline reproduce kit stops depending on a hand-typed list in HOWTO.md §0:
+#
+#   pip install -r requirements.txt && pip install -e ".[dev,feasibility]"
+#
+# Composes wind (ERA5 -> Weibull -> PyWake AEP), micrositing (TopFarm layout),
+# gis (rasterio/shapely for the GeoTIFF steps), report (WeasyPrint PDF) and adds
+# the two the kit needs directly: mistune for the Markdown -> HTML step of the PDF
+# builders, and SALib for the global-sensitivity step (SALib otherwise only
+# arrives via [dev], which a report-only install would not have).
+#
+# `grid` is deliberately NOT composed in. pandapower's scipy pin is incompatible
+# with the pinned lock on EVERY interpreter we support:
+#   pandapower==3.3.0 -> scipy~=1.15   (1.15.x only)
+#   pandapower 3.5.4  -> scipy<1.17    on python_version < "3.12"
+#                     -> scipy~=1.18   on python_version >= "3.12"
+# while requirements.txt pins scipy==1.17.1 and [dev]'s scipy-stubs 1.17.1.x
+# requires scipy>=1.17.1 — so installing grid alongside dev silently downgrades
+# scipy off the lock AND breaks the mypy gate's stubs. The grid screen is
+# advisory and KPI-neutral (run_all.sh step 7), so the kit skips it rather than
+# corrupting the environment that produces the committed numbers. To run it,
+# use a SEPARATE venv: pip install -e ".[grid]" (without dev/feasibility).
+# The canonical KPIs are unaffected either way — the canon reproduces
+# byte-identically under both scipy 1.16.3 and 1.17.1 (verified, #1040).
+feasibility = [
+  "dutchbay-epc-model[wind,micrositing,gis,report]",
+  "mistune>=3.0",
+  "SALib>=1.5",
+]
+
 [tool.ruff]
 src = ["analytics", "finance", "dutchbay_v14chat", "scripts", "tests", "run_full_pipeline_v14.py"]
 exclude = [".venv*", "venv*", "env*", ".tox", ".git", ".mypy_cache", ".pytest_cache"]

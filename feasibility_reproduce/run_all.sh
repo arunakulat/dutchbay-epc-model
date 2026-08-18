@@ -16,10 +16,20 @@ step(){ printf "\n\033[1;34m== %s ==\033[0m\n" "$1"; }
 
 step "0. Preflight — engine + optional deps"
 "$PY" - <<'PYEOF'
-import importlib, sys
-for m in ("weasyprint","mistune","py_wake","topfarm","SALib","pandapower","rasterio"):
-    try: importlib.import_module(m); print(f"  ok   {m}")
-    except Exception as e: print(f"  MISS {m} ({e})  -> pip install -e '.[grid,wind]' + weasyprint/mistune")
+import importlib
+# One install covers all of these:  pip install -e ".[dev,feasibility]"
+for m in ("weasyprint", "mistune", "py_wake", "topfarm", "SALib", "rasterio"):
+    try:
+        importlib.import_module(m); print(f"  ok   {m}")
+    except Exception as e:
+        print(f'  MISS {m} ({e})  -> pip install -e ".[dev,feasibility]"')
+# pandapower is EXPECTED to be absent: its scipy pin is incompatible with the
+# pinned lock on every interpreter (see the `feasibility` extra in pyproject),
+# so it is excluded by design and step 7 skips rather than corrupting the env.
+try:
+    importlib.import_module("pandapower"); print("  ok   pandapower (grid screen will run)")
+except Exception:
+    print("  --   pandapower absent by design -> step 7 (advisory grid screen) will skip")
 PYEOF
 echo "  engine: $(git rev-parse --short HEAD) (canon expects: project_irr -0.001166233356501311)"
 
@@ -59,8 +69,15 @@ step "6. Capital-structure optimizer (both modes)"
     output_dir="$OUT/optimizer" >/dev/null && echo "  ok  capex_contingency" || echo "  ERR capex_contingency"
 
 step "7. Grid screen (KPI-neutral; grid.study_enabled=true)"
-"$PY" run_full_pipeline_v14.py config="$KIT/cache/lender_gridon.yaml" +emit_grid_screen=true \
-    write_artifacts=true run_scoped=true export_dir="$OUT/grid" >/dev/null 2>&1 && echo "  ok  grid screen (advisory)"
+if "$PY" -c "import pandapower" >/dev/null 2>&1; then
+  "$PY" run_full_pipeline_v14.py config="$KIT/cache/lender_gridon.yaml" +emit_grid_screen=true \
+      write_artifacts=true run_scoped=true export_dir="$OUT/grid" >/dev/null \
+      && echo "  ok  grid screen (advisory)" || echo "  ERR grid screen"
+else
+  echo "  skip grid screen — pandapower excluded from [feasibility] (scipy pin conflicts with the"
+  echo "       lock). It is advisory and KPI-neutral. To run it, use a SEPARATE venv:"
+  echo "       python3.11 -m venv .venv-grid && .venv-grid/bin/pip install -e '.[grid]'"
+fi
 
 step "8. Report emitters (capital-risk, exec-workbook, tech-comparison, interaction-grid)"
 "$PY" run_full_pipeline_v14.py config="$CFG" emit_capital_risk_report=true capital_risk_report.n_trials=2000 \

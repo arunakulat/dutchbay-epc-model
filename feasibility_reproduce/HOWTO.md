@@ -15,10 +15,29 @@ This file is the step-by-step manual behind that orchestrator.
 
 ```bash
 cd ~/Downloads/dutchbay-epc-model
-python3.11 -m venv .venv           # if not present
-.venv/bin/pip install -e '.[grid,wind]'        # pandapower/andes/opendssdirect + pywake/topfarm/SALib/rasterio/geopandas
-.venv/bin/pip install weasyprint mistune       # PDF build
+python3.11 -m venv .venv                       # if not present
+.venv/bin/pip install -r requirements.txt      # the pinned lock
+.venv/bin/pip install -e '.[dev,feasibility]'  # everything run_all.sh needs, in one line
 ```
+
+The `feasibility` extra composes wind (ERA5 → Weibull → PyWake), micrositing
+(TopFarm), gis (rasterio/shapely), report (WeasyPrint) and adds mistune + SALib.
+
+⚠️ It deliberately **excludes `[grid]`**. pandapower's scipy pin is incompatible
+with the pinned lock on every interpreter we support — `pandapower==3.3.0` wants
+`scipy~=1.15`, `3.5.4` wants `<1.17` on Python 3.11 and `~=1.18` on 3.12, while
+the lock pins `scipy==1.17.1` and `[dev]`'s `scipy-stubs` requires `>=1.17.1`.
+Installing it alongside `dev` silently downgrades scipy off the lock **and**
+breaks the mypy gate's stubs. The grid screen (§7) is advisory and KPI-neutral,
+so `run_all.sh` skips it rather than corrupting the environment that produces the
+committed numbers. To run it, use a separate venv:
+
+```bash
+python3.11 -m venv .venv-grid && .venv-grid/bin/pip install -e '.[grid]'
+```
+
+The canonical KPIs are unaffected either way — the canon reproduces
+byte-identically under both scipy 1.16.3 and 1.17.1 (verified, #1040).
 Everything below uses `.venv/bin/python`. **No network is required** — the two online steps
 (ERA5 retrieval, ERA5-grid GIS export) ship their results in `cache/` (§2, §9).
 
