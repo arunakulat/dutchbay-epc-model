@@ -68,19 +68,36 @@ core and always available.
 ## 3. Provisioning a session
 
 The SessionStart hook (`.claude/hooks/session-start.sh`) provisions remote
-sessions. It is remote-only, idempotent via a manifest+extras hash stamp, and
-selects extras through `DUTCHBAY_EXTRAS`:
+sessions. It is remote-only and idempotent via a manifest+extras hash stamp.
+
+**A web session provisions FULLY and automatically — no flag to remember.**
+`DUTCHBAY_EXTRAS` is supplied by the `env` block in `.claude/settings.json`, which
+the harness injects before the hook runs:
+
+```json
+{ "env": { "DUTCHBAY_EXTRAS": "dev,feasibility,jobs,solar,pareto" } }
+```
+
+The hook's own fallback is the **same full set**, not a bare `dev`. Relying on the
+env alone would mean a silently under-provisioned session if injection ever failed
+— and that fails LATE (a missing import halfway through a run) rather than loudly
+at start. Both paths are verified.
 
 | `DUTCHBAY_EXTRAS` | Result |
 |---|---|
-| unset → `dev` | tests + linters (fastest) |
-| `dev,feasibility` | + the reproduce kit (wind/micrositing/gis/report/grid) |
-| `dev,feasibility,jobs` | + redis/arq; the hook also **starts `redis-server` on :6379** |
-| `dev,feasibility,jobs,solar,pareto` | everything |
+| unset → full set (fallback) | everything; redis started |
+| `dev,feasibility,jobs,solar,pareto` | everything; redis started |
+| `dev,feasibility` | the reproduce kit, no job path |
+| `dev` | tests + linters only (explicit fast path) |
 
-Redis is started only when `jobs` is requested, and never fatally — the async job
-path is opt-in and must not break session start. The `redis-server` binary ships
-in the image.
+Redis is started only when `jobs` is among the extras, and never fatally — the
+async job path is opt-in and must not break session start. The `redis-server`
+binary ships in the image.
+
+Cost of the full default: roughly a gigabyte (JAX/numba/openmdao/jupyterlab via
+TopFarm) and a few minutes at session start. Paid deliberately — this repo's work
+needs grid, micro-siting and the job path far more often than it needs a fast
+start, and a half-provisioned environment is the more expensive failure.
 
 The container is **ephemeral**: the venv does not survive it. The hook is the
 recipe that makes the environment reproducible rather than persistent — do not try

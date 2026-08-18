@@ -3,17 +3,17 @@
 Marked ``grid`` and gated behind ``pytest.importorskip("opendssdirect")`` so they are
 DESELECTED in the default (grid-free) suite and run only in the opt-in CI lane / a dev
 machine with ``pip install -e '.[grid]'``. They exercise the heavy path the grid-free tests
-cannot: the OpenDSSDirect QSTS solve over a real feeder master, injecting the per-timestep
-generation profile and establishing the plant's SELF-curtailment against the export cap.
+cannot: the OpenDSSDirect QSTS solve over a solver-loadable synthetic test fixture,
+injecting the per-timestep generation profile and calculating the configured export-cap
+self-curtailment split.
 
 The DISCIPLINE these tests protect (the whole point of the epic): SELF-curtailment comes
 from the injected generation vs the export cap (the QSTS's real competency); DEEMED-PAID is
 the committed operator schedule (``grid_instructed_profile_mw``), NOT inferred from a
 monitor heuristic — the over-cap MWh must NOT be double-counted as both self and deemed. The
-energy balance comes from PHYSICAL integrals (export-cap breaches + the committed
-instruction schedule + SoC headroom), NEVER from solver convergence. A synthetic/demo feeder
-must NOT overwrite the real loss placeholder — a fabricated curtailment number is exactly the
-bug this dolphin refuses.
+energy balance comes from configured-input integrals (export-cap breaches + the supplied
+instruction schedule + SoC headroom), NEVER from solver convergence. Typed ``test_fixture``
+provenance keeps these diagnostics non-site-representative and canonical-finance-ineligible.
 
 Run: ``pytest tests/ -m grid``  (or ``-m 'not grid'`` to skip).
 """
@@ -31,7 +31,7 @@ from analytics.contracts_v14 import CurtailmentShareResult  # noqa: E402
 from analytics.grid import curtailment_qsts as cq  # noqa: E402
 from analytics.grid.curtailment_qsts import run_qsts_curtailment  # noqa: E402
 
-# A tiny but REAL (loadable) OpenDSS feeder master: a source, a POC bus, a line, and a POC
+# A tiny but solver-loadable SYNTHETIC TEST FIXTURE: a source, a POC bus, a line, and a POC
 # generator whose kW the QSTS driver overwrites per timestep. This is a self-contained
 # feeder for the LIVE solve smoke test; the accounting split it produces is still derived
 # from physical quantities, not from the solver exit flag.
@@ -47,26 +47,29 @@ _FEEDER_DSS = textwrap.dedent("""\
 
 
 @pytest.fixture()
-def real_feeder(tmp_path: Path) -> Path:
+def solver_fixture(tmp_path: Path) -> Path:
     feeder = tmp_path / "dutchbay_feeder.dss"
     feeder.write_text(_FEEDER_DSS)
     return feeder
 
 
-def test_qsts_solve_over_real_feeder_produces_physical_split(real_feeder: Path) -> None:
-    """The OpenDSS QSTS solve runs over a real feeder and yields a deemed-vs-self split.
+def test_qsts_solve_over_typed_fixture_produces_advisory_split(
+    solver_fixture: Path,
+) -> None:
+    """OpenDSS runs over a typed test fixture and yields an advisory energy split.
 
     Injects a generation profile with a clear over-cap excursion and asserts the split is a
     real integral: gross > 0, a positive self-curtailment for the over-cap hour, and the
-    energy-conservation identity (total == deemed + self_pre_bess) holds. ``ran`` is True
-    because a REAL feeder solved — not because the solver merely converged.
+    energy-conservation identity (total == deemed + self_pre_bess) holds. ``ran`` records
+    execution only; the evidence fields keep this synthetic fixture noncanonical.
     """
     pytest.importorskip("opendssdirect")
     config = {
         "grid": {
             "qsts": {
                 "enabled": True,
-                "feeder_model_path": str(real_feeder),
+                "input_kind": "test_fixture",
+                "feeder_model_path": str(solver_fixture),
                 "export_cap_mw": 15.0,
                 # A committed per-timestep MW profile drives the injection; hour 3 exceeds
                 # the 15 MW cap → a real self-curtailment.
@@ -77,7 +80,11 @@ def test_qsts_solve_over_real_feeder_produces_physical_split(real_feeder: Path) 
     res = run_qsts_curtailment(config)
     assert isinstance(res, CurtailmentShareResult)
     assert res.ran is True, res.reason
-    assert res.feeder_source == str(real_feeder)
+    assert res.feeder_source == str(solver_fixture)
+    assert res.feeder_input_kind == "test_fixture"
+    assert res.generated_input is True
+    assert res.site_representative is False
+    assert res.canonical_finance_eligible is False
     assert res.bankable is False
     assert res.gross_energy_mwh is not None and res.gross_energy_mwh > 0.0
     # The over-cap hour (20 MWh over a 15 cap) is a real 5 MWh self-shed.
@@ -96,7 +103,7 @@ def test_qsts_solve_over_real_feeder_produces_physical_split(real_feeder: Path) 
 
 
 def test_qsts_solve_with_explicit_grid_instruction_no_overlap(
-    real_feeder: Path,
+    solver_fixture: Path,
 ) -> None:
     """A committed deemed schedule is honoured and does NOT overlap the self-shed.
 
@@ -110,7 +117,8 @@ def test_qsts_solve_with_explicit_grid_instruction_no_overlap(
         "grid": {
             "qsts": {
                 "enabled": True,
-                "feeder_model_path": str(real_feeder),
+                "input_kind": "test_fixture",
+                "feeder_model_path": str(solver_fixture),
                 "export_cap_mw": 15.0,
                 "generation_profile_mw": [10.0, 12.0, 20.0, 8.0],
                 # The committed utility feeder-limit / dispatch schedule (deemed-paid).
@@ -126,7 +134,7 @@ def test_qsts_solve_with_explicit_grid_instruction_no_overlap(
     assert res.curtailed_total_mwh == pytest.approx(9.0)
 
 
-def test_qsts_solve_with_bess_recovers_surplus(real_feeder: Path) -> None:
+def test_qsts_solve_with_bess_recovers_surplus(solver_fixture: Path) -> None:
     """The live QSTS + co-located BESS recovers surplus bounded by the D5a headroom."""
     pytest.importorskip("opendssdirect")
     bess = {
@@ -141,7 +149,8 @@ def test_qsts_solve_with_bess_recovers_surplus(real_feeder: Path) -> None:
         "grid": {
             "qsts": {
                 "enabled": True,
-                "feeder_model_path": str(real_feeder),
+                "input_kind": "test_fixture",
+                "feeder_model_path": str(solver_fixture),
                 "export_cap_mw": 15.0,
                 "generation_profile_mw": [20.0, 20.0],
                 "bess": bess,

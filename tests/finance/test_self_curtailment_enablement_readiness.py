@@ -6,22 +6,18 @@ pins the two halves of enablement readiness WITHOUT enabling anything:
 
   1. **The refusal gate, through the REAL chain (no ``run_qsts_curtailment`` monkeypatch).**
      The #915 suite (``test_self_curtailment_finance.py``) covers the resolver units and
-     monkeypatches the QSTS seam on every enabled path. Here the enabled flag is exercised
-     against the PRODUCTION chain end-to-end: flag on but no real feeder → the QSTS returns
-     an inert NOT-RUN result and the cashflow/KPIs stay byte-identical canon (flipping the
-     flag TODAY is vacuous — the honest reason #923 stays open). A synthetic/demo feeder is
-     likewise refused, and a real-looking feeder file WITHOUT the ``[grid]`` extra raises the
-     actionable CASPER ImportError instead of silently returning canon.
+     monkeypatches the QSTS seam on every canonical path. Here the enabled flag is exercised
+     against the PRODUCTION chain end-to-end: a lone or synthetic finance flag fails the
+     canonical configuration gate, while a fully declared site path that is unavailable
+     remains an inert NOT-RUN result and leaves canon byte-identical. A path-backed fixture
+     WITHOUT the ``[grid]`` extra still raises the actionable CASPER ImportError rather than
+     silently returning canon.
 
-  2. **DEMO-GRADE oracle evidence** that the wiring MOVES KPIs exactly as designed once a
-     real feeder exists. ``DEMO`` means: the tmp feeder is a synthetic 3-bus radial written
-     by the test — it satisfies the file-exists gate but is **NOT the Kalpitiya/CEB feeder
-     and carries NO site physics**; and the OpenDSS solver binary is replaced by a recording
-     stub because the base venv has no ``[grid]`` extra. Everything else — the file-exists
-     gate, the explicit ``grid.qsts.generation_profile_mw`` resolution, the strict
-     validation, :func:`split_curtailment`'s energy accounting, the resolver, the
-     multiplicative compose, and the full finance pipeline — is the REAL production chain.
-     The demo pair (canon unmoved + demo moved, in the same suite) IS the readiness proof.
+  2. **DEMO-GRADE diagnostic and refusal evidence.** The temporary feeder is explicitly
+     ``test_fixture`` and carries no site physics. A recording solver proves the production
+     QSTS path executes and calculates the expected 8% diagnostic split; the finance seam
+     then fails loudly at the configuration and result boundaries. File existence can no
+     longer launder the fixture into a project KPI.
 
 None of these numbers is presentable as site physics. The real enablement sequence stays
 user-gated: real feeder → QSTS run → kpi_oracle before/after diff → user sign-off → flag +
@@ -36,6 +32,7 @@ from typing import Any, Dict, List, Tuple
 
 import pytest
 
+from analytics.grid.curtailment_qsts import run_qsts_curtailment
 from analytics.scenario_loader import load_scenario_config
 from finance.cashflow_v14_params import _build_cashflow_params
 from tests._canon import LENDER_EQUITY_IRR as CANON_EQ_IRR
@@ -107,15 +104,12 @@ def _assert_canon(kpis: Dict[str, float]) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_flag_alone_without_qsts_study_is_vacuous() -> None:
-    """finance_wiring.enabled=true but grid.qsts.enabled absent ⇒ inert ⇒ canon params.
-
-    This is the closest single knob to "just flip #923's flag today": the QSTS default-off
-    gate refuses before any feeder is even looked for, and curtailment_pct is untouched.
-    """
+def test_flag_alone_without_qsts_study_fails_strictly() -> None:
+    """A lone KPI-moving flag cannot bypass the QSTS pre-flight contract."""
     cfg = _lender_config()
     _qsts_block(cfg)["finance_wiring"] = {"enabled": True}
-    assert _build_cashflow_params(cfg).curtailment_pct == 0.0
+    with pytest.raises(ValueError, match="canonical finance configuration refused"):
+        _build_cashflow_params(cfg)
 
 
 def test_flag_with_missing_feeder_file_full_pipeline_stays_canon() -> None:
@@ -127,21 +121,31 @@ def test_flag_with_missing_feeder_file_full_pipeline_stays_canon() -> None:
     cfg = _lender_config()
     qsts = _qsts_block(cfg)
     qsts["enabled"] = True
+    qsts["input_kind"] = "engineer_prepared_site_model"
     qsts["feeder_model_path"] = "/nonexistent/ceb_kalpitiya_33kv_feeder.dss"
-    qsts["finance_wiring"] = {"enabled": True}
+    qsts["finance_wiring"] = {
+        "enabled": True,
+        "mode": "canonical",
+        "canonical_eligible": True,
+    }
     assert _build_cashflow_params(cfg).curtailment_pct == 0.0
     _assert_canon(_run_kpis(cfg))
 
 
-def test_flag_with_synthetic_demo_feeder_stays_canon() -> None:
-    """use_synthetic_demo=true is a smoke-test marker: it must NEVER drive finance, so the
-    composed curtailment stays untouched even with the finance wiring enabled."""
+def test_flag_with_synthetic_demo_feeder_fails_strictly() -> None:
+    """A pathless demo cannot be enabled at the KPI-moving canonical seam."""
     cfg = _lender_config()
     qsts = _qsts_block(cfg)
     qsts["enabled"] = True
+    qsts["input_kind"] = "test_fixture"
     qsts["use_synthetic_demo"] = True
-    qsts["finance_wiring"] = {"enabled": True}
-    assert _build_cashflow_params(cfg).curtailment_pct == 0.0
+    qsts["finance_wiring"] = {
+        "enabled": True,
+        "mode": "synthetic_counterfactual",
+        "canonical_eligible": False,
+    }
+    with pytest.raises(ValueError, match="canonical finance configuration refused"):
+        _build_cashflow_params(cfg)
 
 
 @pytest.mark.skipif(
@@ -151,20 +155,25 @@ def test_flag_with_synthetic_demo_feeder_stays_canon() -> None:
 def test_flag_with_real_file_but_no_grid_extra_raises_actionable(
     tmp_path: Path,
 ) -> None:
-    """A real-looking feeder file + the flag, WITHOUT opendssdirect ⇒ the CASPER call-time
-    guard raises the actionable ``[grid]`` ImportError. It must NOT silently fall back to
-    canon: the user explicitly requested a KPI-moving study, so a silent unchanged result
-    would be a fabricated "no self-curtailment" pass (NO SPURIOUS PASS).
+    """A canonical-shaped test config, WITHOUT opendssdirect, reaches the CASPER guard.
+
+    The tiny file is still only test data, not project evidence; its canonical declaration
+    exists solely to isolate optional-dependency error behaviour after CESSPIT pre-flight.
     """
-    feeder = tmp_path / "demo923_feeder.dss"
+    feeder = tmp_path / "canonical_contract_shape_only.dss"
     feeder.write_text(_DEMO_FEEDER_DSS, encoding="utf-8")
     cfg = _lender_config()
     qsts = _qsts_block(cfg)
     qsts["enabled"] = True
+    qsts["input_kind"] = "engineer_prepared_site_model"
     qsts["feeder_model_path"] = str(feeder)
     qsts["export_cap_mw"] = DEMO_EXPORT_CAP_MW
     qsts["generation_profile_mw"] = list(DEMO_PROFILE_MW)
-    qsts["finance_wiring"] = {"enabled": True}
+    qsts["finance_wiring"] = {
+        "enabled": True,
+        "mode": "canonical",
+        "canonical_eligible": True,
+    }
     with pytest.raises(ImportError, match=r"\[grid\] extra"):
         _build_cashflow_params(cfg)
 
@@ -220,16 +229,21 @@ class _RecordingStubDss:
 def _demo_config(
     feeder: Path, *, instructed: List[float] | None = None
 ) -> Dict[str, Any]:
-    """The DEMO scenario: committed lendercase + the demo QSTS block + the flag ON."""
+    """The DEMO scenario: path-backed fixture with canonical finance explicitly parked."""
     cfg = _lender_config()
     qsts = _qsts_block(cfg)
     qsts["enabled"] = True
+    qsts["input_kind"] = "test_fixture"
     qsts["feeder_model_path"] = str(feeder)
     qsts["export_cap_mw"] = DEMO_EXPORT_CAP_MW
     qsts["generation_profile_mw"] = list(DEMO_PROFILE_MW)
     if instructed is not None:
         qsts["grid_instructed_profile_mw"] = list(instructed)
-    qsts["finance_wiring"] = {"enabled": True}
+    qsts["finance_wiring"] = {
+        "enabled": False,
+        "mode": "synthetic_counterfactual",
+        "canonical_eligible": False,
+    }
     return cfg
 
 
@@ -241,16 +255,10 @@ def _stub_opendss(monkeypatch: pytest.MonkeyPatch) -> _RecordingStubDss:
     return stub
 
 
-def test_demo_oracle_pair_canon_unmoved_and_demo_moves_kpis(
+def test_demo_oracle_pair_canon_unmoved_and_fixture_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """THE #923 READINESS PAIR: the committed canon does NOT move, and the identically-built
-    pipeline DOES move — correctly signed on every headline KPI — once a (demo) feeder file
-    exists and the flag is on. Composed curtailment_pct is exactly the demo's 8% self share.
-
-    DEMO evidence only: the tmp feeder is synthetic (no site physics) and the OpenDSS solver
-    is a recording stub. The measured deltas quantify the WIRING, not Kalpitiya curtailment.
-    """
+    """The fixture can exercise QSTS, but its typed provenance blocks canonical finance."""
     before = _run_kpis(_lender_config())  # untouched committed scenario, no flag
     _assert_canon(before)
 
@@ -259,19 +267,20 @@ def test_demo_oracle_pair_canon_unmoved_and_demo_moves_kpis(
     feeder.write_text(_DEMO_FEEDER_DSS, encoding="utf-8")
     cfg = _demo_config(feeder)
 
-    # The composed loss key is exactly the demo self-curtailment (config curtailment 0.0).
-    assert _build_cashflow_params(cfg).curtailment_pct == pytest.approx(
-        DEMO_SELF_CURTAILMENT_DECIMAL
+    result = run_qsts_curtailment(cfg)
+    assert result.self_curtailed_pct == pytest.approx(
+        DEMO_SELF_CURTAILMENT_DECIMAL * 100.0
     )
-
-    after = _run_kpis(cfg)
-
-    # Correctly-signed, real moves on every headline KPI (the D6b design intent).
-    assert after["project_irr"] < before["project_irr"] - 1e-6
-    assert after["equity_irr"] < before["equity_irr"] - 1e-6
-    assert after["min_dscr"] < before["min_dscr"] - 1e-6
-    assert after["total_cfads_usd"] < before["total_cfads_usd"]
-    assert after["project_npv"] < before["project_npv"]
+    assert result.feeder_input_kind == "test_fixture"
+    assert result.generated_input is True
+    assert result.canonical_finance_eligible is False
+    assert _build_cashflow_params(cfg).curtailment_pct == pytest.approx(
+        _build_cashflow_params(_lender_config()).curtailment_pct
+    )
+    cfg["grid"]["qsts"]["finance_wiring"]["enabled"] = True
+    with pytest.raises(ValueError, match="canonical finance configuration refused"):
+        _build_cashflow_params(cfg)
+    _assert_canon(_run_kpis(_lender_config()))
 
     # Prove the PRODUCTION _solve_qsts ran against the demo feeder (not a bypass): the stub
     # saw the Redirect of OUR tmp file, and every QSTS batch solved one step per timestep
@@ -298,20 +307,17 @@ def test_demo_deemed_paid_schedule_neutral_through_real_chain(
     feeder = tmp_path / "demo923_feeder.dss"
     feeder.write_text(_DEMO_FEEDER_DSS, encoding="utf-8")
 
-    kpis_self_only = _run_kpis(_demo_config(feeder))
-    kpis_with_deemed = _run_kpis(
+    self_only = run_qsts_curtailment(_demo_config(feeder))
+    with_deemed = run_qsts_curtailment(
         _demo_config(feeder, instructed=DEMO_INSTRUCTED_PROFILE_MW)
     )
 
-    assert kpis_with_deemed["project_irr"] == pytest.approx(
-        kpis_self_only["project_irr"], abs=1e-12
+    assert with_deemed.self_curtailed_pct == pytest.approx(self_only.self_curtailed_pct)
+    assert with_deemed.deemed_paid_pct == pytest.approx(8.0)
+    cfg = _demo_config(feeder)
+    assert _build_cashflow_params(cfg).curtailment_pct == pytest.approx(
+        _build_cashflow_params(_lender_config()).curtailment_pct
     )
-    assert kpis_with_deemed["equity_irr"] == pytest.approx(
-        kpis_self_only["equity_irr"], abs=1e-12
-    )
-    assert kpis_with_deemed["min_dscr"] == pytest.approx(
-        kpis_self_only["min_dscr"], abs=1e-12
-    )
-    assert kpis_with_deemed["total_cfads_usd"] == pytest.approx(
-        kpis_self_only["total_cfads_usd"], abs=1e-6
-    )
+    cfg["grid"]["qsts"]["finance_wiring"]["enabled"] = True
+    with pytest.raises(ValueError, match="canonical finance configuration refused"):
+        _build_cashflow_params(cfg)

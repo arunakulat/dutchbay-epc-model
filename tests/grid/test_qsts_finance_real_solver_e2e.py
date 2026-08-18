@@ -11,18 +11,15 @@ solvers:
 * ``tests/grid/test_curtailment_qsts_dynamics.py`` runs the real solver, but
   stops at the ``CurtailmentShareResult`` and never reaches the cashflow.
 
-Nothing asserted that the REAL solver, driven end-to-end, moves the finance KPIs
-the way the stubbed chain says it does. If the stub ever drifted from
-``opendssdirect``'s actual behaviour, every existing test would still pass. This
-file closes that gap and pins the stub's fidelity: the real solve must produce
-the SAME 8 % self-curtailment the stubbed suite pins as
-``DEMO_SELF_CURTAILMENT_DECIMAL``.
+The real solver still exercises the synthetic fixture, but #923-A makes its evidence kind
+load-bearing: an existing temporary ``.dss`` path must no longer be enough to enter
+canonical finance. This file pins both the OpenDSS diagnostic result and that refusal.
 
 DEMO EVIDENCE ONLY
 ------------------
 The feeder is a synthetic 3-bus radial with NO site physics — not the
-Kalpitiya/Puttalam CEB feeder. The deltas below quantify the WIRING, never
-DutchBay curtailment. #923 stays user-gated on a real feeder model, a
+Kalpitiya/Puttalam CEB feeder. The results below prove solver execution and provenance
+refusal, never DutchBay curtailment. #923 stays user-gated on a real feeder model, a
 ``kpi_oracle`` before/after diff and explicit sign-off.
 
 The ``[grid]`` extra ships in the lock as of the 3.12 baseline migration, so
@@ -85,16 +82,21 @@ def _lender_config() -> Dict[str, Any]:
 def _demo_config(
     feeder: Path, *, instructed: List[float] | None = None
 ) -> Dict[str, Any]:
-    """Committed lendercase + the demo QSTS block + the finance-wiring flag ON."""
+    """Committed lendercase + a diagnostic fixture; canonical finance remains parked."""
     cfg = _lender_config()
     qsts = cfg.setdefault("grid", {}).setdefault("qsts", {})
     qsts["enabled"] = True
+    qsts["input_kind"] = "test_fixture"
     qsts["feeder_model_path"] = str(feeder)
     qsts["export_cap_mw"] = DEMO_EXPORT_CAP_MW
     qsts["generation_profile_mw"] = list(DEMO_PROFILE_MW)
     if instructed is not None:
         qsts["grid_instructed_profile_mw"] = list(instructed)
-    qsts["finance_wiring"] = {"enabled": True}
+    qsts["finance_wiring"] = {
+        "enabled": False,
+        "mode": "synthetic_counterfactual",
+        "canonical_eligible": False,
+    }
     return cfg
 
 
@@ -123,16 +125,23 @@ def test_real_opendss_solve_matches_the_stubbed_demo_fraction(tmp_path: Path) ->
     assert result.ran is True
     assert result.self_curtailed_pct == pytest.approx(DEMO_SELF_CURTAILMENT_PCT)
     assert result.deemed_paid_pct == pytest.approx(0.0)
+    assert result.feeder_input_kind == "test_fixture"
+    assert result.generated_input is True
+    assert result.site_representative is False
+    assert result.canonical_finance_eligible is False
     # Advisory by contract — the D6a study never self-certifies as bankable.
     assert result.bankable is False
 
 
-def test_real_solver_composes_into_curtailment_pct(tmp_path: Path) -> None:
-    """The composed loss key is exactly the demo self share (config curtailment 0.0)."""
+def test_real_solver_fixture_is_refused_by_canonical_finance(tmp_path: Path) -> None:
+    """A solved synthetic fixture cannot enter canonical finance by path laundering."""
     cfg = _demo_config(_feeder(tmp_path))
-    assert self_curtailment_finance_wiring_enabled(cfg) is True
-    params = _build_cashflow_params(cfg)
-    assert params.curtailment_pct == pytest.approx(DEMO_SELF_CURTAILMENT_PCT / 100.0)
+    result = run_qsts_curtailment(cfg)
+    assert result.ran is True
+    assert self_curtailment_finance_wiring_enabled(cfg) is False
+    cfg["grid"]["qsts"]["finance_wiring"]["enabled"] = True
+    with pytest.raises(ValueError, match="canonical finance configuration refused"):
+        _build_cashflow_params(cfg)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -140,47 +149,38 @@ def test_real_solver_composes_into_curtailment_pct(tmp_path: Path) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_real_solver_moves_every_headline_kpi_down(tmp_path: Path) -> None:
-    """The D6b design intent, through the real solver: shed energy => worse economics."""
+def test_synthetic_solver_cannot_move_headline_kpis(tmp_path: Path) -> None:
+    """A diagnostic synthetic fixture remains finance-off and leaves headline KPIs exact."""
     before = _run_kpis(_lender_config())
     after = _run_kpis(_demo_config(_feeder(tmp_path)))
-
-    assert after["project_irr"] < before["project_irr"] - 1e-6
-    assert after["equity_irr"] < before["equity_irr"] - 1e-6
-    assert after["total_cfads_usd"] < before["total_cfads_usd"]
-    assert after["project_npv"] < before["project_npv"]
-    # Debt is sculpted to the covenant, so less CFADS means less debt, not a breach.
-    assert after["max_debt_usd"] < before["max_debt_usd"]
+    assert after == before
 
 
 def test_committed_canon_is_untouched_without_the_flag(tmp_path: Path) -> None:
-    """The QSTS block alone — enabled, real feeder, real solver — moves NOTHING.
+    """An enabled test fixture still moves nothing when finance wiring is disabled.
 
     Only `grid.qsts.finance_wiring.enabled` is KPI-moving. This is why the flag can
     sit in the tree unflipped without threatening the canon.
     """
     cfg = _demo_config(_feeder(tmp_path))
-    cfg["grid"]["qsts"]["finance_wiring"] = {"enabled": False}
     assert self_curtailment_finance_wiring_enabled(cfg) is False
     assert _build_cashflow_params(cfg).curtailment_pct == pytest.approx(
         _build_cashflow_params(_lender_config()).curtailment_pct
     )
 
 
-def test_deemed_paid_is_revenue_neutral_through_the_real_solver(tmp_path: Path) -> None:
+def test_deemed_paid_is_separate_through_the_real_solver(tmp_path: Path) -> None:
     """Grid-instructed curtailment is PAID as deemed energy under the CEB SPPA.
 
     It must never haircut revenue, however large: only the self-shed share is a loss.
     """
-    plain = _run_kpis(_demo_config(_feeder(tmp_path)))
-    instructed = _run_kpis(
-        _demo_config(_feeder(tmp_path), instructed=DEMO_INSTRUCTED_PROFILE_MW)
+    feeder = _feeder(tmp_path)
+    plain = run_qsts_curtailment(_demo_config(feeder))
+    instructed = run_qsts_curtailment(
+        _demo_config(feeder, instructed=DEMO_INSTRUCTED_PROFILE_MW)
     )
-    assert instructed["project_irr"] == pytest.approx(plain["project_irr"], abs=1e-9)
-    assert instructed["equity_irr"] == pytest.approx(plain["equity_irr"], abs=1e-9)
-    assert instructed["total_cfads_usd"] == pytest.approx(
-        plain["total_cfads_usd"], rel=1e-9
-    )
+    assert instructed.self_curtailed_pct == pytest.approx(plain.self_curtailed_pct)
+    assert instructed.deemed_paid_pct == pytest.approx(8.0)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
