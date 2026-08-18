@@ -5,7 +5,7 @@
 # pinned environment lock CI installs for deterministic runs. Regenerate from a
 # CLEAN venv under the policy constraints (never by hand-appending packages):
 #
-#   PIP_CONSTRAINT=constraints.txt pip install -e '.[dev,test,api,dashboard,wind,gis,grid]'
+#   PIP_CONSTRAINT=constraints.txt pip install -e '.[dev,test,api,dashboard,wind,gis,grid,micrositing]'
 #   pip freeze --exclude-editable | grep -v dutchbay > requirements.txt   (+ this header)
 #
 # PYTHON 3.12 BASELINE (2026-08-18). Regenerated on 3.12 to unblock #923: the
@@ -19,24 +19,39 @@
 # KPI-neutral: the canon reproduces inside the 1e-9 oracle tolerance (observed
 # drift is 1-2 ULP, ~6e-16 relative on equity_irr).
 #
-# The wind/gis extras are PINNED here too (the CI install line still works; it
-# just resolves to these pins). [micrositing]/[report] stay OUT — they belong to
-# the opt-in `feasibility` extra the reproduce kit installs on demand.
+# The wind/gis/grid extras are PINNED here, and as of v15.4.0 so is [micrositing]:
+# without topfarm in the lock all 9 tests/wind/test_layout_optimizer.py cases —
+# the suite for optimize_layout(), which the synthetic micro-siting work drives —
+# SKIPPED on every CI run. Cost: +75 packages (jax/numba/openmdao) and protobuf
+# 7.35.1 -> 6.33.6, because topfarm -> optiwindnet -> ortools caps protobuf<6.34.
+# That pin satisfies every consumer (streamlit <8,>=5.26.1; esy-osm-pbf >=3.20) and
+# the model never imports protobuf directly. [report] stays OUT — it belongs to the
+# opt-in `feasibility` extra the reproduce kit installs on demand.
 #
 # A mandatory `pip-audit -r requirements.txt` CI gate scans this lock for CVEs;
 # the accepted-advisory allowlist is currently EMPTY (no known vulnerabilities).
-# ─────────────────────────────────────────────────────────────────────────────affine==3.0.0
+# ─────────────────────────────────────────────────────────────────────────────affine==3.0.0absl-py==2.5.0
+affine==3.0.0
 altair==6.2.2
 andes==2.0.0
 annotated-doc==0.0.5
 annotated-types==0.8.0
 antlr4-python3-runtime==4.9.3
 anyio==4.14.2
+argon2-cffi==25.1.0
+argon2-cffi-bindings==25.1.0
+arrow==1.4.0
 asttokens==3.0.2
+async-lru==2.3.0
 attrs==26.1.0
 autograd==1.9.1
+babel==2.18.0
 bandit==1.9.4
+beautifulsoup4==4.15.0
+bidict==0.23.1
+bitarray==3.10.1
 black==26.5.1
+bleach==6.4.0
 blinker==1.9.0
 blosc2==4.11.0
 boolean.py==5.0
@@ -52,22 +67,29 @@ charset-normalizer==3.5.1
 click==8.4.2
 colorama==0.4.6
 comm==0.2.3
+condeltri==0.0.5
 contourpy==1.3.3
+costmodels==0.2.3
 coverage==7.15.4
 cycler==0.12.1
 cyclonedx-python-lib==11.12.0
+darkdetect==0.8.0
+debugpy==1.8.21
 deepdiff==9.1.0
 defusedxml==0.7.1
 dill==0.4.1
 dss-python==0.15.7
 dss_python_backend==0.14.5
 ecmwf-datastores-client==0.5.3
+esy-osm-pbf==0.1.1
 et_xmlfile==2.0.0
 execnet==2.1.2
 executing==2.2.1
 fastapi==0.141.1
+fastjsonschema==2.22.2
 filelock==3.32.3
 fonttools==4.63.0
+fqdn==1.5.1
 fsspec==2026.7.0
 geojson==3.3.0
 git-lfs==1.6
@@ -78,32 +100,55 @@ hpack==4.2.0
 httpcore==1.0.9
 httptools==0.8.0
 httpx==0.28.1
+hybgensea==0.1.1
 hydra-core==1.3.5
 hyperframe==6.1.0
 hypothesis==6.165.10
-idna==3.18
+idna==3.19
+immutabledict==4.3.1
 iniconfig==2.3.0
+ipykernel==7.3.0
 ipython==9.16.1
 ipython_pygments_lexers==1.1.1
 ipywidgets==8.1.8
+isoduration==20.11.0
 isort==7.0.0
 itsdangerous==2.2.0
+jax==0.11.1
+jaxlib==0.11.1
 jedi==0.20.0
 Jinja2==3.1.6
 joblib==1.5.3
+json5==0.15.0
+jsonpointer==3.1.1
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
+jupyter-events==0.12.1
+jupyter-lsp==2.3.1
+jupyter_builder==1.2.2
+jupyter_client==8.9.1
+jupyter_core==5.9.1
+jupyter_server==2.20.0
+jupyter_server_terminals==0.5.4
+jupyterlab==4.6.3
+jupyterlab_pygments==0.3.0
+jupyterlab_server==2.28.0
 jupyterlab_widgets==3.0.16
 kiwisolver==1.5.0
 kvxopt==1.3.3.1
+lark==1.3.1
 libcst==1.9.0
 librt==0.15.0
 license-expression==30.4.4
+llvmlite==0.49.0
+makefun==1.16.0
 markdown-it-py==4.2.0
 MarkupSafe==3.0.3
 matplotlib==3.11.1
 matplotlib-inline==0.2.2
 mdurl==0.1.2
+mistune==3.3.4
+ml_dtypes==0.6.0
 mpmath==1.3.0
 msgpack==1.2.1
 multiprocess==0.70.19
@@ -111,9 +156,15 @@ multiurl==0.3.9
 mypy==1.19.0
 mypy_extensions==1.1.0
 narwhals==2.24.0
+nbclient==0.11.0
+nbconvert==7.17.1
+nbformat==5.11.1
 ndindex==1.10.1
+nest-asyncio2==1.7.2
 netCDF4==1.7.4
 networkx==3.6.1
+notebook_shim==0.2.4
+numba==0.67.0
 numexpr==2.14.2
 numpy==2.4.6
 numpy-financial==1.0.0
@@ -121,18 +172,24 @@ numpy-typing-compat==20260602.2.4
 odfpy==1.4.1
 omegaconf==2.3.1
 opendssdirect.py==0.9.4
+openmdao==3.39.0
 openpyxl==3.1.5
+opt_einsum==3.4.0
+optiwindnet==0.3.0
 optype==0.18.0
 orderly-set==5.5.0
+ortools==9.15.6755
 packageurl-python==0.17.6
 packaging==26.3
 pandapower==3.5.4
 pandas==2.3.3
 pandas-stubs==2.3.3.251201
 pandera==0.32.1
+pandocfilters==1.5.1
 parso==0.8.7
 pathos==0.3.5
 pathspec==1.1.1
+peewee==4.3.0
 pexpect==4.9.0
 pillow==12.3.0
 pip-api==0.0.34
@@ -143,8 +200,9 @@ pluggy==1.6.0
 pooch==1.9.0
 pox==0.3.7
 ppft==1.7.8
+prometheus_client==0.26.0
 prompt_toolkit==3.0.53
-protobuf==7.35.1
+protobuf==6.33.6
 psutil==7.2.2
 ptyprocess==0.7.0
 pure_eval==0.2.3
@@ -156,7 +214,10 @@ pycparser==3.0
 pydantic==2.13.4
 pydantic_core==2.46.4
 pydeck==0.9.3
+pyDOE2==1.3.0
+pyDOE3==1.6.2
 Pygments==2.21.0
+pyomo==6.10.1
 pyparsing==3.3.2
 pyproj==3.7.2
 pyproject_hooks==1.2.0
@@ -169,38 +230,51 @@ pytest-timeout==2.4.0
 pytest-xdist==3.8.0
 python-calamine==0.8.2
 python-dateutil==2.9.0.post0
+python-json-logger==4.2.0
 python-multipart==0.0.32
 pytokens==0.4.1
 pytz==2026.3.post1
 pyxlsb==1.0.10
 PyYAML==6.0.3
 pyyaml-include==2.2
+pyzmq==27.1.0
 rasterio==1.5.1
 referencing==0.37.0
 requests==2.33.0
+rfc3339-validator==0.1.4
+rfc3986-validator==0.1.1
+rfc3987-syntax==1.1.0
 rich==15.0.0
 rpds-py==2026.6.3
 ruff==0.14.14
 SALib==1.5.2
+scikit-learn==1.9.0
 scipy==1.18.0
 scipy-stubs==1.18.0.1
+Send2Trash==2.1.0
 setuptools==84.0.0
 shapely==2.1.2
 shellingham==1.5.4
 six==1.17.0
 sortedcontainers==2.4.0
+soupsieve==2.9.2
 stack-data==0.6.3
 starlette==1.3.1
 stevedore==5.9.0
 streamlit==1.61.1
+svg.py==1.10.0
 sympy==1.14.0
 tables==3.11.1
 tenacity==9.1.4
+terminado==0.18.1
 texttable==1.7.0
 threadpoolctl==3.6.0
+tinycss2==1.5.1
 toml==0.10.2
 tomli==2.4.1
 tomli_w==1.2.0
+topfarm==2.6.2
+tornado==6.5.8
 tqdm==4.70.0
 traitlets==5.16.1
 turbine-models==0.2.2
@@ -213,10 +287,15 @@ typing-inspect==0.9.0
 typing-inspection==0.4.4
 typing_extensions==4.16.0
 tzdata==2026.3
+uri-template==1.3.0
 urllib3==2.7.0
+utm==0.9.0
 uvicorn==0.52.3
 watchdog==6.0.0
 wcwidth==0.8.2
+webcolors==25.10.0
+webencodings==0.6.1
+websocket-client==1.9.0
 websockets==16.1.1
 wheel==0.48.0
 widgetsnbextension==4.0.15
