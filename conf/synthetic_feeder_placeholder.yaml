@@ -1,0 +1,102 @@
+# Controlled generator configuration for Dolphin #923-B1.
+#
+# This produces a SYNTHETIC, wiring-only, non-site, non-bankable package. The
+# hourly chronology is seeded and calibrated to a hashed ERA5-derived summary;
+# it is NOT raw or observed 2021 ERA5 data. No finance/canon path exists here.
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+artifact:
+  output_dir: outputs/synthetic_placeholders/issue_923
+  allow_existing_identical: true
+  validate_opendss_compile: true
+
+generator:
+  version: issue923-synthetic-feeder-v1
+  random_seed: 92320260818
+  algorithm: pcg64_ar1_weibull_era5_summary_calibrated_v1
+
+source:
+  # Hash of the frozen external #923 specification. No machine-local path is
+  # persisted in the generated package.
+  frozen_spec_sha256: 7b8ff2cc52661ddd98efcdd4c56a4ad563f38317441ecddfa1dfa5d30af3ce0a
+  # Controlled successor decision authorising the explicitly synthetic
+  # summary-calibrated chronology while raw hourly ERA5 remains unavailable.
+  synthetic_chronology_decision_sha256: 0b09e9bb8bbb6c07bbf3ad87ed9212c507f1a04b9393342a5ba275c4a8cd6787
+
+  scenario:
+    path: scenarios/dutchbay_lendercase_2025Q4.yaml
+    sha256: 02852b595ec86a4f35e8c00fdaeb247cbe3ea95fde9f4566d61f25a8e10ca082
+  era5_summary:
+    # This is a clean, hashed summary only. It is not the absent hourly NetCDF.
+    path: feasibility_reproduce/cache/expected/era5_result.json
+    sha256: b2d6fd4a4373d3634383d5aec215e4c2dadd2e0b6a3db6d4139a4c850b4578d0
+  era5_request:
+    path: wind_resource/config/era5_request_kalpitiya.yaml
+    sha256: 6916e13b6f8b11bb062a81c6508edf4438a7a23d17c1372c6170888adeb0fe72
+  power_curves:
+    path: wind_resource/config/power_curves.yaml
+    sha256: c17528e544df0586331497fe5ffc4659e49bdbcf5280fcd2f23113965fb5b1dc
+  era5_calculator_config:
+    path: wind_resource/config/era5_config.yaml
+    sha256: fb9298b4d4e319b84da5a2725277d6f70567dd124f289f9e5eedfcc22cd1718b
+  version_file:
+    path: VERSION
+    sha256: 959e72b86645360fe0e50d549fbd14d1ad9eca6d9cc6ec321fdd1d3967a8a2c3
+
+profile:
+  # 2021 supplies a non-leap 8,760-hour UTC timestamp shape only. The values are
+  # a synthetic PCG64/AR(1)/Weibull chronology, not actual 2021 observations.
+  reference_year: 2021
+  export_cap_mw: 150.0
+  ar1_phi: 0.92
+  seasonal_amplitude: 0.18
+  seasonal_peak_day: 200
+  diurnal_amplitude: 0.03
+  diurnal_peak_hour_utc: 10.0
+  maximum_wind_speed_ms: 40.0
+
+electrical:
+  # These are deliberately synthetic assumptions not present as authenticated
+  # project data. Copied screening estimates are read from the pinned scenario.
+  source_voltage_kv: 220.0
+  transformer_mva: 200.0
+  transformer_xhl_pct: 12.0
+  transformer_r_pct_per_winding: 0.5
+  source_zero_sequence_r_multiplier: 3.0
+  source_zero_sequence_x_multiplier: 3.0
+  connection_zero_sequence_r_multiplier: 3.0
+  connection_zero_sequence_x_multiplier: 3.0
+  connection_norm_amps: 3000.0
+  connection_emerg_amps: 3300.0
+  frequency_hz: 50.0
+
+classification:
+  input_kind: synthetic_placeholder
+  purpose: wiring_only
+  generated_input: true
+  observed_network_data: false
+  utility_provided: false
+  site_representative: false
+  engineering_validated: false
+  utility_accepted: false
+  bankable: false
+  canonical: false
+  canonical_finance_eligible: false
+  publishable: false
+  lender_eligible: false
+  board_eligible: false
+  finance_executed: false
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null
