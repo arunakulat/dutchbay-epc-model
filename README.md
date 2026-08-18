@@ -197,6 +197,7 @@ message when the extra is absent.
 | `[solar]` | pvlib | The solar producer for hybrid multi-tech |
 | `[pareto]` | pymoo | NSGA-II multi-objective search |
 | `[gis]` | rasterio, shapely | The GIS-for-wind siting toolchain |
+| `[ingestion]` | markitdown[pdf], pdfplumber, pymupdf | Governed PDF conversion, extraction, inspection, and rendering |
 | `[report]` | weasyprint, reportlab, geopandas, contextily | The PDF lender report and location/context maps |
 | `[jobs]` | arq, redis | The durable cross-process async job worker |
 | `[grid]` | pandapower==3.3.0, andes, opendssdirect.py | The grid interconnection screening study (advisory) |

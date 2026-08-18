@@ -3,6 +3,10 @@
 PY ?= python
 PIP ?= pip
 
+# Exact abstract capability set used to regenerate the CI lock. Keep this aligned
+# with the recipe in requirements.txt and docs/ENVIRONMENT_PROVISIONING.md.
+LOCK_EXTRAS := dev,test,api,dashboard,wind,gis,grid,micrositing,ingestion
+
 # Engine/application surface scanned by the type + security gates (mirrors CI).
 SURFACE := finance analytics api app wind_resource solar_resource analysis_tools
 ENTRYPOINTS := run_full_pipeline_v14.py run_scenario_analytics_v14.py \
@@ -61,14 +65,17 @@ html:
 package:
 	$(PY) -m build
 
-# Regenerate the pinned reproducibility lock from a CLEAN install of pyproject (the
-# abstract source of truth). requirements.txt is THE lock CI installs; constraints.txt
-# holds the freeze-policy version caps (the versions the mandatory gates were cleared
-# against) and is applied via PIP_CONSTRAINT so the regenerated lock respects them (see
-# the constraints.txt header). Run in a fresh venv.
+# Regenerate the pinned reproducibility lock in a CLEAN venv. Install the existing
+# cleared lock first so an additive dependency dolphin cannot silently refresh unrelated
+# packages inside broad abstract ranges; then resolve the complete abstract capability
+# set under constraints.txt. A deliberate whole-lock refresh is a separate migration.
 lock:
-	PIP_CONSTRAINT=constraints.txt $(PIP) install -e ".[dev,api,dashboard,wind,gis,report]"
-	$(PIP) freeze --exclude-editable | sort > requirements.txt
+	$(PIP) install -r requirements.txt
+	PIP_CONSTRAINT=constraints.txt $(PIP) install -e ".[$(LOCK_EXTRAS)]"
+	@lock_tmp=$$(mktemp); \
+		awk 'BEGIN { separators = 0 } { print } /^# ─/ { separators++; if (separators == 2) exit }' requirements.txt > "$$lock_tmp"; \
+		$(PIP) freeze --exclude-editable | sort -f >> "$$lock_tmp"; \
+		mv "$$lock_tmp" requirements.txt
 	@echo "Regenerated requirements.txt. Review the diff and re-run 'make audit'."
 
 clean:
