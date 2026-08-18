@@ -1,0 +1,80 @@
+# ═════════════════════════════════════════════════════════════════════════════
+# SYNTHETIC micro-siting geometry — NOT the DutchBay site boundary
+# ═════════════════════════════════════════════════════════════════════════════
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# `wind_resource.layout_optimizer.optimize_layout()` requires a site boundary
+# polygon and baseline turbine coordinates. NEITHER is committed anywhere in the
+# repository: the canonical scenario carries the Weibull pair, rotor diameter,
+# hub height, turbine count, spacing and orientation, but no geometry. The
+# committed `cache/expected/layout_optimized.json` (baseline 550.987 ->
+# 555.433 GWh, +0.807 %, 15 turbines, min spacing 594 m) was produced from
+# geometry that was never checked in, so `run_all.sh` step 2 could only skip.
+#
+# This file supplies a geometry DERIVED from committed scenario parameters so
+# the micro-siting step runs and the wiring is exercised end-to-end.
+#
+# ⚠️ WHAT THIS IS NOT
+# -------------------
+# It is NOT the Kalpitiya/Puttalam site boundary and carries NO site physics —
+# no coastline, no exclusion zones, no land-tenure or setback constraints, no
+# bathymetry. The uplift it produces quantifies the OPTIMISER WIRING, not the
+# project's siting headroom, and MUST NOT be reported as a DutchBay result or
+# used to re-baseline `cache/expected/layout_optimized.json`.
+#
+# Micro-siting is KPI-neutral — an upside candidate, never a committed input —
+# so the finance canon does not depend on any of this.
+#
+# Replace with the real polygon + baseline layout when they are available; the
+# derivation below then becomes unnecessary rather than merely wrong.
+# ═════════════════════════════════════════════════════════════════════════════
+
+micrositing_synthetic:
+  provenance: synthetic_derived      # never 'real' — the loader refuses to pretend
+  not_site_representative: true      # explicit, so no consumer can mistake this
+
+  # Every value below traces to scenarios/dutchbay_lendercase_2025Q4.yaml.
+  derived_from:
+    scenario: scenarios/dutchbay_lendercase_2025Q4.yaml
+    centroid_lat_deg: 8.27           # era5.latitude — "turbine-array centroid (T1-T15)"
+    centroid_lon_deg: 79.75          # era5.longitude
+    utm_zone: "44N"                  # layout.utm_zone
+    crs_reference: "WGS84_EPSG4326"  # layout.coordinates_reference
+
+  # A circular boundary centred on the array centroid. 6 km radius is a DELIBERATE
+  # choice, not a default: 15 turbines at 650 m spacing span 9,100 m, so the 2 km
+  # radius first considered gives a 4 km chord and fits only ~7 of them. At 5 km
+  # the boundary binds almost immediately (900 m headroom) and the run measures
+  # the constraint rather than the siting; 6 km leaves 2,900 m of slack.
+  boundary:
+    shape: circle
+    radius_m: 6000
+    n_vertices: 64                   # polygon approximation of the circle
+
+  # Linear north-south array, matching layout.layout_orientation
+  # ("linear_north_south_coastal") at layout.turbine_spacing_avg_m (650 m).
+  baseline_layout:
+    orientation: linear_north_south
+    n_turbines: 15                   # project.n_turbines / 15 x IEA-10MW
+    spacing_m: 650                   # layout.turbine_spacing_avg_m
+
+  # 3.0 D reproduces the committed layout_optimized.json min_spacing_m of 594 m
+  # against the 198 m rotor (594 / 198 = 3.00).
+  min_spacing_diameters: 3.0
+
+  # Deterministic per MRM-01: the optimiser is stochastic without a fixed seed,
+  # and use_smart_start=False keeps the run anchored on the baseline (a
+  # smart-start reseed can land BELOW baseline, reporting a misleading negative
+  # uplift — see HOWTO.md section 2).
+  # TODO (open): 200 iterations does NOT converge — SLSQP hits the limit and
+  # wind_provenance.py reports `converged: false` with a WARN rather than passing
+  # the truncated result off as an optimum (FIN-01). Raising it to 600/1200 was
+  # tried and exceeded a 10-minute budget without settling, so the cap stays
+  # bounded and honest for now. Revisit if the synthetic uplift ever needs to be a
+  # converged figure — but note it would still be an optimum over FABRICATED
+  # geometry, so the extra runtime buys precision, not relevance.
+  optimizer:
+    random_seed: 42
+    use_smart_start: false
+    max_iterations: 200

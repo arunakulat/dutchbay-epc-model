@@ -156,6 +156,11 @@ pareto = [
 gis = [
   "rasterio>=1.3",
   "shapely>=2.0",
+  # Coordinate projection (lat/lon -> UTM). Previously arrived only as a transitive
+  # dependency of topfarm via [micrositing], so a lock built without micrositing —
+  # which is every CI install — had no pyproj and any projection call failed at
+  # runtime. Declared explicitly: rasterio/shapely work is projection work.
+  "pyproj>=3.6",
 ]
 # PDF report rendering (Sprint 2). Jinja2 (in core deps) drives the HTML report;
 # WeasyPrint is opt-in because it needs the pango/cairo system libraries that a

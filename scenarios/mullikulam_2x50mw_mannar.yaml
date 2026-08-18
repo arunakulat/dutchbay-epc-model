@@ -44,7 +44,7 @@ wind_resource:
   data_confidence: Medium (5-year ERA5 validated against 1-year met mast)
 layout:
   turbine_spacing_avg_m: 650
-  turbine_spacing_avg_D: 3.8
+  turbine_spacing_avg_D: 4.33  # In rotor diameters (650m / 150m); doc-only, no code reads it
   iec_compliant_pairs: 6
   iec_marginal_pairs: 3
   iec_violation_pairs: 6

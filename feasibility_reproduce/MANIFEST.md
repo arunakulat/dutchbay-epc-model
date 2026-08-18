@@ -21,7 +21,7 @@
 | Fresh AEP (long-way baseline) | net P50 464.36 GWh / CF 0.3322 (= committed 464.3 / 0.332) |
 | ERA5 ARCO (cached) | mean 7.46 m/s (20-yr); prevailing 210° SW; Mann-Kendall p=0.0047 (secular stilling) |
 | AEP tornado | wind-speed bias ±20.5 % dominant; power-curve −16 %; shear ±6.6 %; losses ±6.4 % |
-| Micro-siting | **not reproducible** — site boundary + baseline layout were never committed; step skips loudly (KPI-neutral, so the canon is unaffected) |
+| Micro-siting | runs on a **SYNTHETIC** derived geometry (real boundary + baseline layout were never committed). Emits `layout_optimized_synthetic.json` with `provenance: synthetic_derived`; quantifies the optimiser wiring, NOT DutchBay siting. KPI-neutral |
 | Scenario suite (8) | equity IRR −9.44 % … +4.90 %; every scenario NPV-negative |
 | Monte-Carlo (2,500) | equity IRR P10/P50/P90 −13.0/−9.1/−5.0 %; NPV negative in 100 %; min-DSCR ≥1.217; 0 toy-fallbacks |
 | Sobol total-order (equity IRR) | tariff 0.47 (dominant) > capex 0.19 > fx 0.12 > cf 0.12 |
