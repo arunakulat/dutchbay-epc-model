@@ -8,7 +8,7 @@ The SOLE KPI-mover of grid-epic #870, built DEFAULT-OFF. This suite pins, at Fab
   2. **Only self-curtailment reaches finance.** The deemed-paid / grid-instructed fraction
      NEVER haircuts revenue (CEB SPPA): a result with a large ``deemed_paid_pct`` but zero
      ``self_curtailed_pct`` moves NOTHING.
-  3. **The oracle diff.** With the opt-in ON and a REAL self-curtailment fraction, the
+  3. **The oracle diff.** With the opt-in ON and a canonical-contract test-double fraction,
      KPIs MOVE in the correct direction (projIRR / eqIRR / min_dscr all DOWN), with a
      magnitude tied to the self-curtailment fraction — a real, correctly-signed delta, not
      a trivially-true assertion.
@@ -19,6 +19,7 @@ multiplicative composition) is covered directly; the KPI oracle drives the FULL 
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Dict
 
@@ -42,11 +43,21 @@ LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 # Committed 5th-gen canon (single source of truth: tests/_canon.py, #955).
 
 
-def _real_result(self_pct: float, *, deemed_pct: float = 0.0) -> CurtailmentShareResult:
-    """A ``ran=True`` QSTS result carrying a real self-curtailment share (percent)."""
+_DECLARED_SITE_MODEL_PATH = "/test-double/declared-site-model.dss"
+
+
+def _canonical_result_test_double(
+    self_pct: float, *, deemed_pct: float = 0.0
+) -> CurtailmentShareResult:
+    """In-memory canonical-contract double; it is not project or lender evidence."""
     return CurtailmentShareResult(
         ran=True,
-        feeder_source="/feeders/puttalam_real.dss",
+        feeder_source=_DECLARED_SITE_MODEL_PATH,
+        feeder_input_kind="engineer_prepared_site_model",
+        generated_input=False,
+        observed_network_data=False,
+        site_representative=True,
+        canonical_finance_eligible=True,
         export_cap_mw=150.0,
         gross_energy_mwh=100_000.0,
         curtailed_total_mwh=(self_pct + deemed_pct) / 100.0 * 100_000.0,
@@ -58,8 +69,8 @@ def _real_result(self_pct: float, *, deemed_pct: float = 0.0) -> CurtailmentShar
         self_curtailed_pct=self_pct,
         hours_self_curtailed=100,
         hours_total=8760,
-        bankable=True,
-        reason="real feeder solved",
+        bankable=False,
+        reason="canonical contract test double only; no site or lender evidence",
     )
 
 
@@ -68,8 +79,13 @@ def _enable_wiring(cfg: Dict[str, Any]) -> Dict[str, Any]:
     grid = cfg.setdefault("grid", {})
     qsts = grid.setdefault("qsts", {})
     qsts["enabled"] = True
-    qsts["feeder_model_path"] = "/feeders/puttalam_real.dss"
-    qsts.setdefault("finance_wiring", {})["enabled"] = True
+    qsts["input_kind"] = "engineer_prepared_site_model"
+    qsts["feeder_model_path"] = _DECLARED_SITE_MODEL_PATH
+    qsts["finance_wiring"] = {
+        "enabled": True,
+        "mode": "canonical",
+        "canonical_eligible": True,
+    }
     return cfg
 
 
@@ -119,9 +135,9 @@ def test_wiring_tolerates_malformed_blocks(cfg: Dict[str, Any]) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_resolver_zero_when_wiring_off_even_with_real_result() -> None:
+def test_resolver_zero_when_wiring_off_even_with_canonical_test_double() -> None:
     """Opt-in OFF ⇒ 0.0 no matter how large the self-curtailment (default-off dominates)."""
-    result = _real_result(self_pct=12.0)
+    result = _canonical_result_test_double(self_pct=12.0)
     assert resolve_self_curtailment_decimal({}, result) == 0.0
     assert resolve_self_curtailment_decimal({"grid": {"qsts": {}}}, result) == 0.0
 
@@ -129,15 +145,15 @@ def test_resolver_zero_when_wiring_off_even_with_real_result() -> None:
 def test_resolver_reads_only_self_curtailment_not_deemed_paid() -> None:
     """A huge deemed-paid share with ZERO self-curtailment moves NOTHING (CEB SPPA)."""
     cfg = _enable_wiring({})
-    deemed_heavy = _real_result(self_pct=0.0, deemed_pct=40.0)
+    deemed_heavy = _canonical_result_test_double(self_pct=0.0, deemed_pct=40.0)
     assert resolve_self_curtailment_decimal(cfg, deemed_heavy) == 0.0
 
 
 def test_resolver_returns_self_fraction_when_enabled() -> None:
     cfg = _enable_wiring({})
-    assert resolve_self_curtailment_decimal(cfg, _real_result(7.5)) == pytest.approx(
-        0.075
-    )
+    assert resolve_self_curtailment_decimal(
+        cfg, _canonical_result_test_double(7.5)
+    ) == pytest.approx(0.075)
 
 
 def test_resolver_refuses_inert_notrun_result() -> None:
@@ -150,18 +166,171 @@ def test_resolver_refuses_inert_notrun_result() -> None:
 
 def test_resolver_refuses_none_self_pct_when_ran_but_field_missing() -> None:
     cfg = _enable_wiring({})
-    ran_but_none = CurtailmentShareResult(
-        ran=True, feeder_source="/f.dss", self_curtailed_pct=None
+    ran_but_none = replace(_canonical_result_test_double(8.0), self_curtailed_pct=None)
+    with pytest.raises(ValueError, match="silent zero-loss pass"):
+        resolve_self_curtailment_decimal(cfg, ran_but_none)
+
+
+@pytest.mark.parametrize("nonfinite", [float("nan"), float("inf"), float("-inf")])
+def test_resolver_refuses_nonfinite_self_pct_when_ran(nonfinite: float) -> None:
+    cfg = _enable_wiring({})
+    malformed = replace(
+        _canonical_result_test_double(8.0), self_curtailed_pct=nonfinite
     )
-    assert resolve_self_curtailment_decimal(cfg, ran_but_none) == 0.0
+    with pytest.raises(ValueError, match="must be finite"):
+        resolve_self_curtailment_decimal(cfg, malformed)
+
+
+def test_result_contract_preserves_legacy_positional_field_order() -> None:
+    legacy = CurtailmentShareResult(True, "/legacy/feeder.dss", 150.0, 1_000.0)
+    assert legacy.ran is True
+    assert legacy.feeder_source == "/legacy/feeder.dss"
+    assert legacy.export_cap_mw == 150.0
+    assert legacy.gross_energy_mwh == 1_000.0
+    assert legacy.feeder_input_kind is None
+
+
+def test_resolver_refuses_synthetic_result_even_when_finance_flag_is_on() -> None:
+    # Use a valid canonical configuration so this exercises the independent RESULT gate,
+    # not merely the surrounding configuration gate.
+    cfg = _enable_wiring({})
+    synthetic = CurtailmentShareResult(
+        ran=True,
+        feeder_source="/fixtures/issue923.dss",
+        feeder_input_kind="synthetic_placeholder",
+        generated_input=True,
+        site_representative=False,
+        canonical_finance_eligible=False,
+        self_curtailed_pct=8.0,
+    )
+    with pytest.raises(ValueError, match="noncanonical feeder result"):
+        resolve_self_curtailment_decimal(cfg, synthetic)
+
+
+@pytest.mark.parametrize(
+    "qsts_patch",
+    [
+        {},
+        {
+            "enabled": True,
+            "input_kind": "synthetic_placeholder",
+            "feeder_model_path": "/fixtures/issue923.dss",
+            "finance_wiring": {
+                "enabled": True,
+                "mode": "synthetic_counterfactual",
+                "canonical_eligible": False,
+            },
+        },
+        {
+            "enabled": True,
+            "input_kind": "engineer_prepared_site_model",
+            "feeder_model_path": "/feeders/site.dss",
+            "finance_wiring": {"enabled": True},
+        },
+        {
+            "enabled": True,
+            "input_kind": ["engineer_prepared_site_model"],
+            "feeder_model_path": "/feeders/site.dss",
+            "finance_wiring": {
+                "enabled": True,
+                "mode": "canonical",
+                "canonical_eligible": True,
+            },
+        },
+        {
+            "enabled": True,
+            "input_kind": "engineer_prepared_site_model",
+            "use_synthetic_demo": True,
+            "feeder_model_path": "/feeders/site.dss",
+            "finance_wiring": {
+                "enabled": True,
+                "mode": "canonical",
+                "canonical_eligible": True,
+            },
+        },
+        {
+            "enabled": True,
+            "input_kind": "engineer_prepared_site_model",
+            "use_synthetic_demo": "true",
+            "feeder_model_path": "/feeders/site.dss",
+            "finance_wiring": {
+                "enabled": True,
+                "mode": "canonical",
+                "canonical_eligible": True,
+            },
+        },
+    ],
+)
+def test_resolver_rechecks_canonical_config_for_direct_callers(
+    qsts_patch: Dict[str, Any],
+) -> None:
+    cfg = {"grid": {"qsts": qsts_patch or {"finance_wiring": {"enabled": True}}}}
+    with pytest.raises(ValueError, match="canonical finance configuration refused"):
+        resolve_self_curtailment_decimal(cfg, _canonical_result_test_double(8.0))
+
+
+def test_resolver_refuses_result_source_mismatch() -> None:
+    cfg = _enable_wiring({})
+    mismatched = replace(
+        _canonical_result_test_double(8.0), feeder_source="/other/model.dss"
+    )
+    with pytest.raises(ValueError, match="noncanonical feeder result"):
+        resolve_self_curtailment_decimal(cfg, mismatched)
+
+
+def test_contract_requires_observed_flag_for_utility_observed_kind() -> None:
+    with pytest.raises(ValueError, match="requires observed_network_data=true"):
+        replace(
+            _canonical_result_test_double(8.0),
+            feeder_input_kind="utility_observed_model",
+            observed_network_data=False,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "bad_value"),
+    [
+        ("ran", 1),
+        ("generated_input", 0),
+        ("site_representative", 1),
+        ("canonical_finance_eligible", 1),
+    ],
+)
+def test_contract_refuses_nonboolean_result_flags(
+    field: str, bad_value: object
+) -> None:
+    with pytest.raises(ValueError, match="literal boolean"):
+        replace(_canonical_result_test_double(8.0), **{field: bad_value})
+
+
+def test_contract_refuses_contradictory_synthetic_provenance_serialization() -> None:
+    with pytest.raises(ValueError, match="Synthetic/test.*contradictory"):
+        CurtailmentShareResult(
+            ran=True,
+            feeder_source="/generated/issue923.dss",
+            feeder_input_kind="synthetic_placeholder",
+            generated_input=False,
+            observed_network_data=True,
+            site_representative=True,
+            canonical_finance_eligible=True,
+            bankable=True,
+            self_curtailed_pct=8.0,
+        )
+
+
+def test_resolver_refuses_boolean_self_curtailment_percentage() -> None:
+    cfg = _enable_wiring({})
+    malformed = replace(_canonical_result_test_double(8.0), self_curtailed_pct=True)
+    with pytest.raises(ValueError, match="must be a real finite number"):
+        resolve_self_curtailment_decimal(cfg, malformed)
 
 
 def test_resolver_rejects_negative_or_full_shed() -> None:
     cfg = _enable_wiring({})
     with pytest.raises(ValueError, match="negative"):
-        resolve_self_curtailment_decimal(cfg, _real_result(-1.0))
+        resolve_self_curtailment_decimal(cfg, _canonical_result_test_double(-1.0))
     with pytest.raises(ValueError, match="entire plant"):
-        resolve_self_curtailment_decimal(cfg, _real_result(100.0))
+        resolve_self_curtailment_decimal(cfg, _canonical_result_test_double(100.0))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -208,7 +377,7 @@ def test_build_params_composes_self_curtailment_when_enabled(
 
     monkeypatch.setattr(
         "analytics.grid.curtailment_qsts.run_qsts_curtailment",
-        lambda _cfg: _real_result(10.0, deemed_pct=25.0),
+        lambda _cfg: _canonical_result_test_double(10.0, deemed_pct=25.0),
     )
     cfg = _enable_wiring(load_scenario_config(LENDER))
     built = params_mod._build_cashflow_params(cfg)
@@ -241,14 +410,14 @@ def test_oracle_default_off_matches_committed_canon() -> None:
 def test_oracle_self_curtailment_moves_kpis_down_when_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The KPI oracle diff: enabling the wiring with a REAL 8% self-curtailment fraction
+    """The KPI oracle diff: a canonical-contract 8% test double
     reduces net energy → CFADS, so projIRR / eqIRR / min_dscr all move DOWN, and the
     committed default stays byte-identical. This is the sole authorized KPI move.
     """
     monkeypatch.setattr(
         "analytics.grid.curtailment_qsts.run_qsts_curtailment",
-        # 8% real self-curtailment + a LARGE 30% deemed-paid share that must NOT bite.
-        lambda _cfg: _real_result(8.0, deemed_pct=30.0),
+        # 8% contract-oracle self-curtailment + a LARGE 30% deemed-paid share that must not bite.
+        lambda _cfg: _canonical_result_test_double(8.0, deemed_pct=30.0),
     )
 
     before = _run_kpis(load_scenario_config(LENDER))  # default-off canon
@@ -259,7 +428,7 @@ def test_oracle_self_curtailment_moves_kpis_down_when_enabled(
     assert before["equity_irr"] == pytest.approx(CANON_EQ_IRR, abs=1e-9)
     assert before["min_dscr"] == pytest.approx(CANON_MIN_DSCR, abs=1e-9)
 
-    # After: a REAL, strictly-worse, correctly-signed move on every headline KPI.
+    # After: a strictly-worse, correctly-signed contract-oracle move on every headline KPI.
     assert after["project_irr"] < before["project_irr"] - 1e-6
     assert after["equity_irr"] < before["equity_irr"] - 1e-6
     assert after["min_dscr"] < before["min_dscr"] - 1e-6
@@ -276,7 +445,7 @@ def test_oracle_deemed_paid_alone_does_not_move_kpis(
     """
     monkeypatch.setattr(
         "analytics.grid.curtailment_qsts.run_qsts_curtailment",
-        lambda _cfg: _real_result(0.0, deemed_pct=35.0),
+        lambda _cfg: _canonical_result_test_double(0.0, deemed_pct=35.0),
     )
     kpis = _run_kpis(_enable_wiring(load_scenario_config(LENDER)))
     assert kpis["project_irr"] == pytest.approx(CANON_PROJ_IRR, abs=1e-9)
@@ -294,7 +463,7 @@ def test_oracle_magnitude_scales_with_self_curtailment(
     def _kpis_for(self_pct: float) -> Dict[str, float]:
         monkeypatch.setattr(
             "analytics.grid.curtailment_qsts.run_qsts_curtailment",
-            lambda _cfg: _real_result(self_pct),
+            lambda _cfg: _canonical_result_test_double(self_pct),
         )
         return _run_kpis(_enable_wiring(load_scenario_config(LENDER)))
 
