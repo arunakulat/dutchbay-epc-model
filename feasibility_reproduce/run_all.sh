@@ -23,13 +23,12 @@ for m in ("weasyprint", "mistune", "py_wake", "topfarm", "SALib", "rasterio"):
         importlib.import_module(m); print(f"  ok   {m}")
     except Exception as e:
         print(f'  MISS {m} ({e})  -> pip install -e ".[dev,feasibility]"')
-# pandapower is EXPECTED to be absent: its scipy pin is incompatible with the
-# pinned lock on every interpreter (see the `feasibility` extra in pyproject),
-# so it is excluded by design and step 7 skips rather than corrupting the env.
+# pandapower is now IN the lock and in [feasibility] (3.12 baseline migration);
+# it should be present. If it is missing you are on a stale 3.11 environment.
 try:
-    importlib.import_module("pandapower"); print("  ok   pandapower (grid screen will run)")
+    importlib.import_module("pandapower"); print("  ok   pandapower")
 except Exception:
-    print("  --   pandapower absent by design -> step 7 (advisory grid screen) will skip")
+    print('  MISS pandapower -> pip install -e ".[dev,feasibility]" (needs Python >=3.12)')
 PYEOF
 echo "  engine: $(git rev-parse --short HEAD) (canon expects: project_irr -0.001166233356501311)"
 
@@ -74,9 +73,9 @@ if "$PY" -c "import pandapower" >/dev/null 2>&1; then
       write_artifacts=true run_scoped=true export_dir="$OUT/grid" >/dev/null \
       && echo "  ok  grid screen (advisory)" || echo "  ERR grid screen"
 else
-  echo "  skip grid screen — pandapower excluded from [feasibility] (scipy pin conflicts with the"
-  echo "       lock). It is advisory and KPI-neutral. To run it, use a SEPARATE venv:"
-  echo "       python3.11 -m venv .venv-grid && .venv-grid/bin/pip install -e '.[grid]'"
+  echo "  skip grid screen — pandapower not importable. It ships in the lock and in"
+  echo "       [feasibility] since the 3.12 baseline migration, so this means a stale"
+  echo "       environment: pip install -e \".[dev,feasibility]\" on Python >=3.12."
 fi
 
 step "8. Report emitters (capital-risk, exec-workbook, tech-comparison, interaction-grid)"

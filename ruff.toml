@@ -1,5 +1,5 @@
 line-length = 88
-target-version = "py311"
+target-version = "py312"
 
 # Excluded from the lint gate: frozen legacy trees, one-time utility scripts, and the
 # test suite (guarded by pytest itself). Exclusion-drift cleanup (2026-07-07): the

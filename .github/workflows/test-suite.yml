@@ -10,10 +10,8 @@ on:
   pull_request:
     branches: [ main, develop ]
   schedule:
-    # Nightly FULL-matrix run (03:17 UTC): exercises both 3.11 AND 3.12 against main
-    # end-to-end every day. PRs now gate on BOTH versions (#959) and merges to main
-    # re-validate 3.11 against the merged tree — this schedule is the daily backstop
-    # that runs the full cross-version matrix against main regardless of PR activity.
+    # Nightly run (03:17 UTC): exercises the 3.12 baseline against main end-to-end
+    # every day — the daily backstop that runs regardless of PR activity.
     - cron: '17 3 * * *'
   workflow_dispatch:
 
@@ -93,21 +91,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Version matrix by event:
-        # - pull_request: FULL 3.11+3.12 matrix — both supported Python versions gate
-        #   the merge, so a 3.11-only regression (the supported floor) blocks the PR
-        #   rather than slipping through to post-merge/nightly (#959). The extra
-        #   runner-minutes are spent deliberately: cross-version breakage is caught
-        #   before merge, not after.
-        # - push to main: 3.11 only — a lightweight post-merge re-validation of the
-        #   floor version against the actual merged main tree (which only exists once
-        #   the merge lands); 3.12 was just fully validated on the PR, so re-running it
-        #   here would duplicate ~32 runner-minutes per merge for near-zero signal.
-        # - nightly schedule + manual dispatch: FULL 3.11+3.12 matrix — the daily
-        #   backstop that exercises both versions against main end-to-end.
+        # SINGLE-VERSION matrix since the 3.12 baseline migration (#923 unblock):
+        # requires-python is now >=3.12, so 3.11 is no longer a supported target and
+        # the old per-event 3.11/3.12 split (#959) has nothing left to discriminate.
+        # The migration was forced by pandapower — the self-curtailment finance wiring
+        # makes it a runtime dependency of the canonical path once
+        # grid.qsts.finance_wiring.enabled is flipped, and its scipy pin is
+        # irreconcilable with the lock on 3.11.
+        # Restore a second leg here (and in the coverage job below) if a future
+        # floor/ceiling pair needs gating again — e.g. adding 3.13 forward-compat.
         # The required 'Test Summary' check aggregates whatever legs ran (needs.test),
-        # so 'success' requires every leg that ran (both versions on a PR) to pass.
-        python-version: ${{ (github.event_name == 'pull_request') && fromJSON('["3.11", "3.12"]') || (github.event_name == 'push') && fromJSON('["3.11"]') || fromJSON('["3.11", "3.12"]') }}
+        # so 'success' requires every leg that ran to pass.
+        python-version: ${{ fromJSON('["3.12"]') }}
         shard: [1, 2, 3, 4, 5, 6]
 
     steps:
@@ -205,9 +200,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Mirrors the test job's per-event version selection (PR: 3.11+3.12; push-to-main:
-        # 3.11; nightly/dispatch: both) so the gate combines exactly the shards that ran.
-        python-version: ${{ (github.event_name == 'pull_request') && fromJSON('["3.11", "3.12"]') || (github.event_name == 'push') && fromJSON('["3.11"]') || fromJSON('["3.11", "3.12"]') }}
+        # Mirrors the test job's version selection (3.12 only since the baseline
+        # migration) so the gate combines exactly the shards that ran.
+        python-version: ${{ fromJSON('["3.12"]') }}
 
     steps:
     - name: Checkout repository
@@ -289,7 +284,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: "3.11"
+        python-version: "3.12"
         cache: 'pip'
 
     - name: Install linting tools
@@ -356,7 +351,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v7
       with:
-        python-version: "3.11"
+        python-version: "3.12"
         cache: 'pip'
 
     - name: Install security tooling
@@ -390,7 +385,7 @@ jobs:
         # Gate the required 'Test Summary' check on the ACTUAL pytest-matrix
         # result. Without this the job only echoes and passes even when 'test'
         # is RED — i.e. the required check was a rubber-stamp. 'needs.test.result'
-        # aggregates the matrix: 'success' only if every leg (3.11 + 3.12) passed;
+        # aggregates the matrix: 'success' only if every leg that ran passed;
         # any failure/cancel/skip is non-success and blocks the merge.
         # The 'lint' job is a ruff + black + isort + mypy gate, ALL MANDATORY (no '|| true'):
         # ruff (whole repo), black --check + isort --check (whole repo, after the repo-wide
@@ -434,10 +429,10 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
     - uses: actions/checkout@v7
-    - name: Set up Python 3.11
+    - name: Set up Python 3.12
       uses: actions/setup-python@v7
       with:
-        python-version: "3.11"
+        python-version: "3.12"
         cache: pip
     - name: Install with [grid] extra (core pins constrained)
       # requirements.txt (installed first) holds the frozen core lock (numpy==2.4.6/

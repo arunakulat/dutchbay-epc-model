@@ -7,7 +7,7 @@ name = "dutchbay-epc-model"
 version = "15.3.1"
 description = "Lender/DFI-grade project-finance model for utility-scale wind: CFADS, multi-tranche debt with DSCR covenants, tax with TLCF, Monte Carlo, and an ERA5 to Weibull to AEP to finance pipeline."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
   "numpy>=1.24",
   # Cap <3.0: pandas 3.0 (Jan 2026) makes Copy-on-Write mandatory and infers a default
@@ -201,8 +201,12 @@ jobs = [
 # dist name is ``opendssdirect.py`` (imports as ``opendssdirect``); the bare name
 # ``opendssdirect`` does NOT exist on PyPI. PyWake / windpowerlib are not needed here —
 # they already ride in via [wind]; add them as a follow-up only if a grid path requires them.
+# pandapower 3.3.0 required scipy~=1.15 — irreconcilable with the pinned lock on
+# ANY interpreter, which is why [grid] could not be composed into [feasibility].
+# 3.5.x resolves it on Python 3.12 (it requires scipy~=1.18 there, and the lock now
+# pins 1.18.0). This is an ABSTRACT floor; requirements.txt carries the exact pin.
 grid = [
-  "pandapower==3.3.0",
+  "pandapower>=3.5,<4",
   "andes>=2.0",
   "opendssdirect.py>=0.9.4",
 ]
@@ -218,21 +222,18 @@ grid = [
 # builders, and SALib for the global-sensitivity step (SALib otherwise only
 # arrives via [dev], which a report-only install would not have).
 #
-# `grid` is deliberately NOT composed in. pandapower's scipy pin is incompatible
-# with the pinned lock on EVERY interpreter we support:
-#   pandapower==3.3.0 -> scipy~=1.15   (1.15.x only)
-#   pandapower 3.5.4  -> scipy<1.17    on python_version < "3.12"
-#                     -> scipy~=1.18   on python_version >= "3.12"
-# while requirements.txt pins scipy==1.17.1 and [dev]'s scipy-stubs 1.17.1.x
-# requires scipy>=1.17.1 — so installing grid alongside dev silently downgrades
-# scipy off the lock AND breaks the mypy gate's stubs. The grid screen is
-# advisory and KPI-neutral (run_all.sh step 7), so the kit skips it rather than
-# corrupting the environment that produces the committed numbers. To run it,
-# use a SEPARATE venv: pip install -e ".[grid]" (without dev/feasibility).
-# The canonical KPIs are unaffected either way — the canon reproduces
-# byte-identically under both scipy 1.16.3 and 1.17.1 (verified, #1040).
+# `grid` IS composed in as of the 3.12 baseline migration. It previously could not
+# be: pandapower's scipy pin was irreconcilable with the lock on 3.11
+# (pandapower==3.3.0 -> scipy~=1.15; 3.5.4 -> scipy<1.17 on 3.11), so installing it
+# alongside [dev] silently downgraded scipy off the lock and broke the mypy gate's
+# scipy-stubs. On 3.12 pandapower 3.5.x wants scipy~=1.18, the lock now pins
+# scipy==1.18.0 + scipy-stubs==1.18.0.1, and the three resolve together cleanly.
+# This is what unblocks #923: once `grid.qsts.finance_wiring.enabled` is flipped,
+# pandapower becomes a RUNTIME dependency of the canonical path, so it has to be
+# installable alongside the gate toolchain rather than quarantined in its own venv.
+# Effect on the suite: tests/grid/ goes 576 passed/19 skipped -> 595 passed/0 skipped.
 feasibility = [
-  "dutchbay-epc-model[wind,micrositing,gis,report]",
+  "dutchbay-epc-model[wind,micrositing,gis,report,grid]",
   "mistune>=3.0",
   "SALib>=1.5",
 ]
@@ -249,7 +250,7 @@ include = ["analytics*", "finance*", "dutchbay_v14chat*", "api*", "config*", "wi
 
 [tool.black]
 line-length = 88
-target-version = ['py311']
+target-version = ['py312']
 exclude = '''
 /(
     \.git
@@ -273,7 +274,7 @@ extend_skip = ["legacy", ".venv311"]
 extend_skip_glob = ["legacy/*", "*/legacy/*"]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 # Run mypy primarily over the typed application surface
 files = ["analytics", "finance"]
 config_file = "mypy.ini"

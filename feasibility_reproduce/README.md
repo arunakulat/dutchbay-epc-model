@@ -33,9 +33,8 @@ artifacts under `feasibility_reproduce/_run_out/`.
 - **Golden numbers** (finance canon, must be byte-identical): project_irr `-0.001166233356501311` ·
   equity_irr `−0.07853839579881527` · min_dscr `1.3`.
 - One-line install: `pip install -r requirements.txt && pip install -e ".[dev,feasibility]"`
-  (see `HOWTO.md` §0). `[grid]` is excluded on purpose — pandapower's scipy pin conflicts
-  with the pinned lock, so step 7's advisory grid screen skips unless you build a separate
-  `.venv-grid`.
+  (see `HOWTO.md` §0) on **Python >=3.12**. `[grid]` is included since the 3.12 baseline
+  migration, so step 7's grid screen runs from the same environment as everything else.
 - Helper scripts live in `lib/` (`mc_run.py`, `wind_provenance.py`, `run_global_sa.py`,
   `build_study_pdf.py`, `build_md_pdf.py`). They were absent from the repo until #1040/#1041
   because an unanchored `lib/` rule in `.gitignore` silently ignored them.
