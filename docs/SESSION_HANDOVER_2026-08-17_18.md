@@ -356,22 +356,31 @@ which is what was built, tested, and zipped.
 
 ### 9.4 What is open now
 
-**This section states volatile facts. Check them, do not trust them.** It has now
-been overtaken twice within hours of being written — first by #1052, then by #1051.
-Two commands settle the current position faster than reading further:
+**This section states volatile facts. Check them, do not trust them.** It was
+overtaken by #1052 and #1051 while being written, then by #1053–#1055 during the
+Python 3.12 prerequisite close-out. Two commands settle the current position
+faster than reading further:
 
 ```bash
 git log --oneline -6 origin/main     # where main actually is, and what landed
 ls changelog.d/                      # unreleased fragments awaiting the next cut
 ```
 
-The durable points follow. The counts and commit ids are as of #1051 and will rot.
+The durable points follow. The counts and commit ids are as of #1055 and will rot.
 
-**Position as of writing:** `main` at `d81f0e37`. Landed since v15.4.0's release
-commit: #1046 (auto-provisioning), #1048 (`MODULE_REFERENCE.md` paths), #1052
-(feeder provenance), #1051 (Python 3.12 prerequisite). Two of my own docs-only PRs
-were in flight against it — **#1049** (this document) and **#1050** (a
-`MODULE_REFERENCE.md` path fix) — each rebuilt twice as `main` moved under them.
+**Position at the #1049 refresh:** `main` at `3db2a4a`. Landed since v15.4.0's
+release commit: #1046 (auto-provisioning), #1048 (`MODULE_REFERENCE.md` paths),
+#1052 (feeder provenance), #1051 (Python 3.12 prerequisite), #1053 (governed
+ingestion tooling), #1054 (governed report/jobs tooling), and #1055 (Python 3.12
+rules and durable defaults). This document is #1049; #1050 is the remaining
+docs-only successor and must be refreshed against the post-#1049 `main` before
+merge.
+
+The cold-start run in §9.1 remains evidence that #1046's provisioning mechanism
+worked; it is not the current dependency inventory. #1053–#1055 subsequently made
+the ingestion, report, and jobs environments reconstructable from committed
+Python 3.12 declarations and removed the former Python 3.11/default-environment
+instructions from the governed rules and developer guidance.
 
 **#1052 partly satisfies §5.1's preconditions — this is the durable part.** Its own
 description calls it the "controlled #923-A contract/validation dolphin": synthetic
