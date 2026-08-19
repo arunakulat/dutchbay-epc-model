@@ -136,3 +136,13 @@ Wiring readiness is already proven demo-grade: with a synthetic demo feeder + st
 (matching the #885/#923 reference) while the committed canon in the same suite stays bit-for-bit
 unchanged. Only the self-curtailed fraction ever haircuts; the deemed-paid (grid-instructed)
 fraction is paid as deemed energy and is proven KPI-neutral through the same real chain.
+
+**Interim synthetic-counterfactual mode (#923-E):** a governed path-backed synthetic/test
+feeder may be solved and its QSTS values presented for software-path testing and scenario
+learning. The report structurally stamps an un-suppressible **SYNTHETIC COUNTERFACTUAL — NOT
+SITE-REPRESENTATIVE EVIDENCE** warning and surfaces the input kind, generated/observed/site,
+canonical-finance eligibility, bankability, verified manifest digest, and every result
+limitation. These outputs remain excluded from canonical finance and headline KPIs. Replacing
+the package with a real feeder is a controlled evidence replacement, not a relabelling action:
+the real package must pass its provenance, compile, convergence, KPI-oracle, and explicit
+sign-off gates before the D6b finance switch may be enabled.
