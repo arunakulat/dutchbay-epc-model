@@ -10,7 +10,7 @@ here — not the finance-only shortcut.
 cd ~/Downloads/dutchbay-epc-model          # repo root (for the .venv + model)
 bash feasibility_reproduce/run_all.sh      # ~15–25 min; offline; no network
 ```
-Outputs: `feasibility_reproduce/report/*.pdf` (study 13 pp + coverage + catalog) and per-step
+Outputs: `feasibility_reproduce/report/*.pdf` (study 11 pp + coverage + catalog) and per-step
 artifacts under `feasibility_reproduce/_run_out/`.
 
 ## Contents

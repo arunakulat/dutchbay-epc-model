@@ -25,7 +25,7 @@ DutchBay is a **technically sound, financially unviable-as-structured** 159.6 MW
 | LLCR / PLCR | **1.27 / 1.31** | thin but positive coverage |
 | DSCR-solved gearing | **0.355** | debt auto-sized down to hold the 1.30 floor |
 
-**The one-line verdict:** *the turbines will spin and the debt can (just) be sculpted to a 1.30 DSCR, but at the administered flat-LKR tariff the project returns ~1.5 % against a ~9.9 % cost of capital — it destroys value on a merchant/standalone basis.* The only way it clears is the **blended-finance / concessional case** (cf. the project's own Final EIA, which reports an **18.07 % economic IRR** under a very different capital-and-benefit frame).
+**The one-line verdict:** *the turbines will spin and the debt can (just) be sculpted to a 1.30 DSCR, but at the administered flat-LKR tariff the project returns -0.12 % against a ~10.3 % cost of capital — it destroys value on a merchant/standalone basis.* The only way it clears is the **blended-finance / concessional case** (cf. the project's own Final EIA, which reports an **18.07 % economic IRR** under a very different capital-and-benefit frame).
 
 **Recommendation:** **Conditional NO-GO on the current commercial terms; conditional GO only under a restructured revenue or capital stack.** Do not reach financial close at a flat-nominal-LKR 20.3 LKR/kWh tariff. Pursue, as conditions precedent, at least one of: (i) tariff FX-indexation or escalation; (ii) a materially concessional / grant-blended senior tranche; (iii) a shorter-tenor or availability-backed PPA that lifts the achievable DSCR. §11 lists the full conditions-precedent set. Development readiness rolls up to **RED** (financing uncommitted) despite a **GREEN** environmental status.
 
@@ -379,7 +379,7 @@ Suite:   run_full_pipeline_v14.py config=scenarios/dutchbay_{basecase,equitycase
 Emitters: +emit_capital_risk_report / +emit_tech_comparison / +emit_interaction_grid / emit_executive_workbook  (all four fired)
 FreshAEP: analytics.wind.aep_summary_builder.build_aep_summary_from_config(lender) → net P50 464.36 GWh / CF 0.3322  (= committed 464.3 → BASELINE reproduced the long way)
 MC:      analytics.mc.engine.run_monte_carlo_analysis(lender, n_trials=2500, seed=42)  [+ a full 100k cross-check]
-         → equity_irr P10/P50/P90 -11.3/-7.3/-2.8%; project_npv negative in 100% of trials; min_dscr ≥1.21 (2500 ≈ 100k, converged)
+         → equity_irr P10/P50/P90 -13.0/-9.1/-5.0%; project_npv negative in 100% of trials; min_dscr ≥1.217 (2500 ≈ 100k, converged)
 Sobol:   analytics/cli/cli_sensitivity_hydra.py (SALib Sobol+PAWN+Morris) → equity-IRR ST: tariff 0.47 (dominant) > capex 0.19 > fx 0.12
 Optimiz: analytics/cli/cli_capital_structure_optimize_hydra.py → 36 debt-mix candidates, ALL negative; best -6.21% (DFI40/USD60)
 Grid:    run_full_pipeline_v14.py config=<lender with grid.study_enabled:true> +emit_grid_screen=true
