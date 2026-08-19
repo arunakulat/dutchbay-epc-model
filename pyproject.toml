@@ -201,7 +201,7 @@ jobs = [
   "arq>=0.28,<0.29",
   # arq 0.28 requires redis[hiredis]<6. Declare the accelerated parser explicitly
   # so the worker capability and its performance dependency reconstruct together.
-  "redis[hiredis]>=5,<6",
+  "redis[hiredis]>=5,<9",
 ]
 # Grid interconnection / hosting-capacity study (issue #871). Opt-in like [gis]/[pareto];
 # the finance engine + CLI never import it, so the default install and CI lanes stay
