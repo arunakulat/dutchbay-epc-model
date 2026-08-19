@@ -4,10 +4,10 @@
 # NB: Dependabot SECURITY alerts/updates are settings-driven and were unaffected by the
 # broken file — this only restores PROACTIVE version + action-pin updates.
 #
-# Grouping: one PR per ecosystem (patterns "*") so updates land as a single reviewable,
-# resolution-checked bump rather than a flood — and so a leaf bump arrives WITH the pinned
-# consumers it constrains (the repo's hard-won grouped-bump lesson; see #262 and
-# [[engineering-workflow-lessons]] — always `pip install --dry-run` a Dependabot PR before merge).
+# Grouping follows the repository's Dolphin boundaries. Related packages may move together,
+# but ingestion, jobs, numerics, API, and optimizer changes must not be combined into one
+# unreviewable migration. Unmatched dependencies use Dependabot's default one-PR-per-package
+# behaviour. Always `pip install --dry-run` a Dependabot PR before merge.
 version: 2
 updates:
   # Python deps: pyproject.toml (abstract) + the requirements.txt lock.
@@ -17,9 +17,29 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
     groups:
-      python-deps:
+      ingestion:
         patterns:
-          - "*"
+          - "markitdown"
+          - "pdfplumber"
+          - "pymupdf"
+          - "magika"
+      jobs:
+        patterns:
+          - "arq"
+          - "redis"
+          - "hiredis"
+      numerics:
+        patterns:
+          - "numpy"
+          - "numpy-typing-compat"
+          - "mpmath"
+      micrositing:
+        patterns:
+          - "openmdao"
+      api-runtime:
+        patterns:
+          - "starlette"
+          - "websockets"
     # MAJOR-version updates on the load-bearing set are POLICY DECISIONS, not bot
     # chores (#756 post-mortem: the weekly group bumped pandas 2->3 and rewrote our
     # own pyproject `<3.0` cap to make it fit, desynced mypy/isort/ruff from the
@@ -44,6 +64,19 @@ updates:
       - dependency-name: "scipy-stubs"
         update-types: ["version-update:semver-major"]
       - dependency-name: "pydantic"
+        update-types: ["version-update:semver-major"]
+      # #1047/#1060/#1062: cachebox 6 is unresolvable while deepdiff 9.1.0 requires
+      # cachebox>=5.2,<6. Lift only with a compatible DeepDiff migration.
+      - dependency-name: "cachebox"
+        update-types: ["version-update:semver-major"]
+      # #1060/#1062: arq 0.28.0 requires redis>=4.2,<6. Dependabot rewrote our own
+      # redis[hiredis]<6 ceiling to <9 and produced an impossible redis 8 lock. Redis
+      # majors move only with an ARQ/backend migration; security updates remain unaffected.
+      - dependency-name: "redis"
+        update-types: ["version-update:semver-major"]
+      # The governed micrositing stack pulls OR-Tools, which caps protobuf below the 7.x
+      # candidate. Lift only in a resolver-clean micrositing/OR-Tools migration.
+      - dependency-name: "protobuf"
         update-types: ["version-update:semver-major"]
       # pydantic-core is EXACT-pinned by pydantic (pydantic 2.13.4 requires
       # pydantic-core==2.46.4), so it must NEVER be bumped independently — a standalone
