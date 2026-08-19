@@ -201,6 +201,7 @@ def test_resolver_refuses_synthetic_result_even_when_finance_flag_is_on() -> Non
         generated_input=True,
         site_representative=False,
         canonical_finance_eligible=False,
+        source_manifest_sha256="a" * 64,
         self_curtailed_pct=8.0,
     )
     with pytest.raises(ValueError, match="noncanonical feeder result"):

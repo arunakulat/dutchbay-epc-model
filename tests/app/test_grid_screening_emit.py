@@ -236,6 +236,7 @@ def test_executed_synthetic_curtailment_is_withheld_until_presentation_dolphin(
         observed_network_data=False,
         site_representative=False,
         canonical_finance_eligible=False,
+        source_manifest_sha256="a" * 64,
         export_cap_mw=100.0,
         gross_energy_mwh=1_000.0,
         self_curtailed_energy_mwh=80.0,

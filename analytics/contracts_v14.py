@@ -1723,7 +1723,8 @@ class CurtailmentShareResult(ContractMixin):
         canonical_finance_eligible: explicit gate; always false for generated/test inputs.
         solver_converged_all_steps / n_nonconverged_steps: convergence evidence populated by
             the separate #923-C dolphin.
-        source_manifest_sha256: manifest identity populated by the #923-B artefact dolphin.
+        source_manifest_sha256: exact external package identity propagated only after the
+            #923-B2 runtime verifier accepts the governed synthetic placeholder.
         limitations: durable machine-readable evidence limitations.
         export_cap_mw: the POC export limit the self-curtailment is measured against.
         gross_energy_mwh: total generation injected over the horizon BEFORE any curtailment.
@@ -1803,6 +1804,18 @@ class CurtailmentShareResult(ContractMixin):
                 f"got {self.solver_converged_all_steps!r}."
             )
 
+        manifest_sha256 = self.source_manifest_sha256
+        if manifest_sha256 is not None and (
+            not isinstance(manifest_sha256, str)
+            or len(manifest_sha256) != 64
+            or any(character not in "0123456789abcdef" for character in manifest_sha256)
+        ):
+            raise ValueError(
+                "CurtailmentShareResult.source_manifest_sha256 must be None or exactly "
+                "64 lowercase hexadecimal characters, "
+                f"got {manifest_sha256!r}."
+            )
+
         kind = self.feeder_input_kind
         if kind is not None and (
             not isinstance(kind, str) or kind not in FEEDER_INPUT_KINDS
@@ -1810,6 +1823,13 @@ class CurtailmentShareResult(ContractMixin):
             raise ValueError(
                 "CurtailmentShareResult.feeder_input_kind must be None or one of "
                 f"{sorted(FEEDER_INPUT_KINDS)}, got {kind!r}."
+            )
+
+        if manifest_sha256 is not None and kind != "synthetic_placeholder":
+            raise ValueError(
+                "CurtailmentShareResult.source_manifest_sha256 is reserved for the "
+                "governed synthetic_placeholder package; "
+                f"got feeder_input_kind={kind!r}."
             )
 
         if kind in SYNTHETIC_FEEDER_INPUT_KINDS:

@@ -98,6 +98,16 @@ def _is_nonempty_str(value: Any) -> bool:
     return isinstance(value, str) and value.strip() != ""
 
 
+def _is_sha256(value: Any) -> bool:
+    """Return whether ``value`` is an exact lowercase SHA-256 digest."""
+
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
 def _is_assumption_basis(value: Any) -> bool:
     return is_known_assumption_basis(value)
 
@@ -332,6 +342,9 @@ def _validate_qsts_conditionals(grid: Mapping[str, Any], errors: list[str]) -> N
         enabled (except the intentionally inert pathless demo). Path existence is not
         provenance: synthetic/test kinds can execute diagnostics but cannot become canonical
         finance, while utility/site kinds require an additional explicit eligibility gate.
+      * an enabled path-backed ``synthetic_placeholder`` additionally requires an exact
+        externally pinned ``qsts.source_manifest_sha256``; the field is prohibited on the
+        pathless demo and every utility/site/test/unclassified input.
 
     This gate cannot be a flat required-field spec: a flat spec would fire on every
     grid-scenario that omits ``qsts`` (breaking committed grid configs), and it cannot make
@@ -399,6 +412,36 @@ def _validate_qsts_conditionals(grid: Mapping[str, Any], errors: list[str]) -> N
             "grid.qsts.enabled is true but grid.qsts.feeder_model_path is missing/empty. "
             "Supply a feeder_model_path (with an explicit input_kind), opt into the inert "
             "built-in synthetic demo, or disable the study."
+        )
+
+    source_manifest_sha256 = qsts.get("source_manifest_sha256")
+    if source_manifest_sha256 is not None and not _is_sha256(source_manifest_sha256):
+        errors.append(
+            "grid.qsts.source_manifest_sha256 must be exactly 64 lowercase hexadecimal "
+            f"characters when declared, got {source_manifest_sha256!r}."
+        )
+    if (
+        enabled
+        and use_synthetic_demo is not True
+        and _is_nonempty_str(qsts.get("feeder_model_path"))
+        and input_kind == "synthetic_placeholder"
+        and source_manifest_sha256 is None
+    ):
+        errors.append(
+            "An enabled path-backed grid.qsts.input_kind='synthetic_placeholder' requires "
+            "grid.qsts.source_manifest_sha256. The digest must be pinned outside the "
+            "package; an embedded checksum cannot authenticate a resealed package."
+        )
+    if source_manifest_sha256 is not None and input_kind != "synthetic_placeholder":
+        errors.append(
+            "grid.qsts.source_manifest_sha256 is reserved for the governed "
+            "synthetic_placeholder package. Do not attach it to utility, site, test, or "
+            "unclassified feeder inputs."
+        )
+    if use_synthetic_demo is True and source_manifest_sha256 is not None:
+        errors.append(
+            "The pathless grid.qsts.use_synthetic_demo has no package manifest; remove "
+            "grid.qsts.source_manifest_sha256."
         )
 
     wiring = qsts.get("finance_wiring")
