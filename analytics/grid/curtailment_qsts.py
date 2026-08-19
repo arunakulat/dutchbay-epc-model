@@ -122,6 +122,14 @@ SYNTHETIC_PACKAGE_MANIFEST_NAME = "manifest.json"
 
 
 @dataclass(frozen=True)
+class VerifiedSyntheticRuntimeInputs:
+    """Manifest-bound synthetic profile and export cap accepted by the verifier."""
+
+    generation_profile_mw: tuple[float, ...]
+    export_cap_mw: float
+
+
+@dataclass(frozen=True)
 class FeederInput:
     """Resolved QSTS feeder input with evidence kind kept separate from its path.
 
@@ -139,10 +147,19 @@ class FeederInput:
     site_representative: bool
     canonical_finance_eligible: bool
     source_manifest_sha256: str | None = None
+    verified_synthetic_runtime: VerifiedSyntheticRuntimeInputs | None = None
 
     def __post_init__(self) -> None:
         """Prevent a verified-manifest identity from being attached to another kind."""
 
+        if (
+            self.verified_synthetic_runtime is not None
+            and self.source_manifest_sha256 is None
+        ):
+            raise ValueError(
+                "FeederInput.verified_synthetic_runtime requires a verified synthetic "
+                "package manifest identity."
+            )
         if self.source_manifest_sha256 is None:
             return
         _require_sha256(
@@ -224,7 +241,7 @@ def _require_sha256(value: Any, field: str) -> str:
 
 def _verify_synthetic_feeder_runtime_package(
     *, master_path: Path, expected_manifest_sha256: str
-) -> tuple[str, str]:
+) -> tuple[str, str, VerifiedSyntheticRuntimeInputs]:
     """Verify the governed B1 package before B2 exposes it to QSTS accounting.
 
     The expected digest is supplied outside the package. The manifest path is derived from
@@ -256,13 +273,20 @@ def _verify_synthetic_feeder_runtime_package(
             "OpenDSS compile check passed. Test-only compile-disabled packages are not "
             "runtime inputs."
         )
-    return str(package.master_path), package.manifest_sha256
+    return (
+        str(package.master_path),
+        package.manifest_sha256,
+        VerifiedSyntheticRuntimeInputs(
+            generation_profile_mw=package.generation_profile_mw,
+            export_cap_mw=package.export_cap_mw,
+        ),
+    )
 
 
 def _require_profile(
-    values: Any, field: str, *, length: int | None = None
+    values: Any, field: str, *, length: int | None = None, unit: str = "MWh"
 ) -> list[float]:
-    """Validate a per-timestep MWh profile: a non-empty sequence of finite floats >= 0.
+    """Validate a per-timestep profile: a non-empty sequence of finite floats >= 0.
 
     Strict (CESSPIT): a missing / non-sequence / empty profile, a non-finite / negative /
     bool sample, or a length mismatch against ``length`` (when given) RAISES with an
@@ -276,7 +300,7 @@ def _require_profile(
     ):
         raise ValueError(
             f"QSTS curtailment engine requires {field} to be a non-empty sequence of "
-            f"per-timestep MWh values (>= 0), got {values!r}."
+            f"per-timestep {unit} values (>= 0), got {values!r}."
         )
     if length is not None and len(values) != length:
         raise ValueError(
@@ -288,10 +312,60 @@ def _require_profile(
         if not _is_number(v) or float(v) < 0.0:
             raise ValueError(
                 f"QSTS curtailment engine requires every {field}[{i}] to be a finite "
-                f"number >= 0 (MWh), got {v!r}."
+                f"number >= 0 ({unit}), got {v!r}."
             )
         out.append(float(v))
     return out
+
+
+def _require_verified_profile_match(
+    values: Any,
+    expected_mw: tuple[float, ...],
+    field: str,
+    *,
+    unit: str,
+    mw_to_value: float = 1.0,
+) -> list[float]:
+    """Return verifier-derived values after rejecting a substituted runtime profile.
+
+    Args:
+        values: Caller/config profile to compare with the verified package profile.
+        expected_mw: Immutable MW profile returned by the package verifier.
+        field: Fully qualified input field for actionable errors.
+        unit: Unit of ``values`` and the returned profile.
+        mw_to_value: Multiplier from the verified MW values to ``unit``.
+
+    Returns:
+        A fresh list derived from ``expected_mw`` rather than the caller's sequence.
+
+    Raises:
+        ValueError: If length, numeric validity, or any value differs from the verified
+            package profile.
+    """
+
+    expected = [float(value) * mw_to_value for value in expected_mw]
+    supplied = _require_profile(values, field, length=len(expected), unit=unit)
+    for index, (actual, verified) in enumerate(zip(supplied, expected, strict=True)):
+        if abs(actual - verified) > _MWH_TOL:
+            raise ValueError(
+                f"{field} must match the manifest-verified synthetic package; first "
+                f"mismatch at index {index}: got {actual}, expected {verified} {unit}."
+            )
+    return expected
+
+
+def _require_verified_export_cap_match(
+    value: Any, expected_mw: float, field: str
+) -> float:
+    """Return the verified export cap after rejecting a substituted MW value."""
+
+    supplied = _require_positive(value, field)
+    if abs(supplied - expected_mw) > _MWH_TOL:
+        raise ValueError(
+            f"{field} must match the manifest-verified synthetic package export cap: "
+            f"got {supplied}, expected {expected_mw} MW."
+        )
+    return expected_mw
 
 
 def _bess_chargeable_headroom_mwh(
@@ -726,9 +800,10 @@ def _resolve_feeder(grid: Mapping[str, Any]) -> FeederInput:
     model_exists = model_path.is_file()
     resolved_source = normalized_path if model_exists else None
     verified_manifest_sha256: str | None = None
+    verified_synthetic_runtime: VerifiedSyntheticRuntimeInputs | None = None
     if model_exists and input_kind == "synthetic_placeholder":
         assert source_manifest_sha256 is not None
-        resolved_source, verified_manifest_sha256 = (
+        resolved_source, verified_manifest_sha256, verified_synthetic_runtime = (
             _verify_synthetic_feeder_runtime_package(
                 master_path=model_path,
                 expected_manifest_sha256=source_manifest_sha256,
@@ -743,6 +818,7 @@ def _resolve_feeder(grid: Mapping[str, Any]) -> FeederInput:
         site_representative,
         canonical_eligible,
         verified_manifest_sha256,
+        verified_synthetic_runtime,
     )
 
 
@@ -770,14 +846,17 @@ def run_qsts_curtailment(
     OpenDSS QSTS solve (behind :func:`_require_opendss`), which produces the per-timestep gross
     generation + upstream grid-instruction profiles the pure :func:`split_curtailment`
     consumes. Tests may inject those profiles directly via ``generation_mwh`` /
-    ``grid_instructed_mwh`` (skipping the solve) to exercise the accounting grid-free.
+    ``grid_instructed_mwh`` (skipping the solve) to exercise the accounting grid-free. For
+    a manifest-verified synthetic package, generation and export-cap inputs are instead
+    bound to that package: supplied config or caller overrides must match exactly.
 
     Args:
         config: the full scenario config (or its top-level ``grid`` block).
         generation_mwh / grid_instructed_mwh / export_cap_mw: optional pre-computed QSTS
             profiles + export cap (tests inject these to drive the pure accounting without
             an OpenDSS solve). When omitted on a path-backed enabled study, the OpenDSS solve
-            supplies them.
+            supplies them. For a manifest-verified synthetic package, generation and
+            export-cap values must match the verified package.
         timestep_hours: hours per QSTS timestep (default 1.0).
         reference_year: the BESS SoH evaluation year forwarded to the split (``None`` =
             end-of-life).
@@ -833,13 +912,53 @@ def run_qsts_curtailment(
             "synthetic_placeholder, or test_fixture."
         )
 
-    cap = export_cap_mw if export_cap_mw is not None else _export_cap_from_grid(grid)
+    verified_runtime = feeder.verified_synthetic_runtime
+    if verified_runtime is not None:
+        qsts_profile = qsts.get("generation_profile_mw")
+        if qsts_profile is not None:
+            _require_verified_profile_match(
+                qsts_profile,
+                verified_runtime.generation_profile_mw,
+                "grid.qsts.generation_profile_mw",
+                unit="MW",
+            )
+
+        qsts_cap = qsts.get("export_cap_mw")
+        configured_cap = qsts_cap if qsts_cap is not None else grid.get("export_cap_mw")
+        if configured_cap is not None:
+            _require_verified_export_cap_match(
+                configured_cap,
+                verified_runtime.export_cap_mw,
+                "grid.qsts.export_cap_mw (or grid.export_cap_mw)",
+            )
+        if export_cap_mw is not None:
+            _require_verified_export_cap_match(
+                export_cap_mw,
+                verified_runtime.export_cap_mw,
+                "export_cap_mw override",
+            )
+        cap = verified_runtime.export_cap_mw
+    else:
+        cap = (
+            export_cap_mw if export_cap_mw is not None else _export_cap_from_grid(grid)
+        )
 
     # A classified, path-backed, enabled study. When the caller injected the QSTS profiles
     # (tests / a pre-solved horizon), account them directly. Otherwise run the OpenDSS QSTS
     # solve to produce them. The solve is the ONLY [grid]-extra path here.
+    gen: Sequence[float]
     if generation_mwh is not None:
-        gen = generation_mwh
+        if verified_runtime is not None:
+            step_hours = _require_positive(timestep_hours, "timestep_hours")
+            gen = _require_verified_profile_match(
+                generation_mwh,
+                verified_runtime.generation_profile_mw,
+                "generation_mwh override",
+                unit="MWh",
+                mw_to_value=step_hours,
+            )
+        else:
+            gen = generation_mwh
         instructed = (
             grid_instructed_mwh
             if grid_instructed_mwh is not None
@@ -850,6 +969,11 @@ def run_qsts_curtailment(
             grid,
             feeder_path=str(feeder.source),
             timestep_hours=timestep_hours,
+            generation_profile_mw=(
+                verified_runtime.generation_profile_mw
+                if verified_runtime is not None
+                else None
+            ),
         )
 
     limitations: tuple[str, ...] = ()
@@ -914,6 +1038,7 @@ def _solve_qsts(  # pragma: no cover - requires [grid] extra
     *,
     feeder_path: str,
     timestep_hours: float,
+    generation_profile_mw: Sequence[float] | None = None,
 ) -> tuple[list[float], list[float]]:
     """Run OpenDSSDirect over the declared path; evidence grade stays in ``FeederInput``.
 
@@ -951,7 +1076,15 @@ def _solve_qsts(  # pragma: no cover - requires [grid] extra
     dss.Solution.Mode(1)  # daily/QSTS time-series mode
     dss.Solution.StepSize(timestep_hours * 3600.0)
 
-    profiles = _resolve_generation_profiles(grid)
+    profiles = (
+        _require_profile(
+            generation_profile_mw,
+            "manifest-verified generation_profile_mw",
+            unit="MW",
+        )
+        if generation_profile_mw is not None
+        else _resolve_generation_profiles(grid)
+    )
     instructed_profile = _resolve_grid_instructed_profile_mw(
         grid, n_steps=len(profiles)
     )
@@ -987,7 +1120,7 @@ def _resolve_generation_profiles(  # pragma: no cover - requires [grid] extra
     """
     qsts = grid.get("qsts")
     profile = qsts.get("generation_profile_mw") if isinstance(qsts, Mapping) else None
-    return _require_profile(profile, "grid.qsts.generation_profile_mw")
+    return _require_profile(profile, "grid.qsts.generation_profile_mw", unit="MW")
 
 
 def _resolve_grid_instructed_profile_mw(
@@ -1011,7 +1144,10 @@ def _resolve_grid_instructed_profile_mw(
     if profile is None:
         return [0.0] * n_steps
     return _require_profile(
-        profile, "grid.qsts.grid_instructed_profile_mw", length=n_steps
+        profile,
+        "grid.qsts.grid_instructed_profile_mw",
+        length=n_steps,
+        unit="MW",
     )
 
 
