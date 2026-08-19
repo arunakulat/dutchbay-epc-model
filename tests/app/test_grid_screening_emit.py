@@ -34,6 +34,7 @@ from app.reports.grid_screening_emit import (
     EMT_CONFIRMATION_STAMP,
     GRID_EXTRA_PINS,
     MANDATORY_SCREENING_CAVEAT,
+    SYNTHETIC_CURTAILMENT_WARNING,
     build_grid_screening_model,
     emit_grid_screening_report_from_pipeline,
     render_grid_screening_html,
@@ -222,10 +223,10 @@ def test_degraded_screens_surfaced_in_html() -> None:
         assert "did not run" in html
 
 
-def test_executed_synthetic_curtailment_is_withheld_until_presentation_dolphin(
+def test_executed_synthetic_curtailment_is_presented_with_structural_warning(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A ran synthetic result is not publishable before #923-E's watermark surface."""
+    """#923-E presents a counterfactual without promoting its evidence grade."""
     import analytics.grid.curtailment_qsts as cq
 
     synthetic = CurtailmentShareResult(
@@ -253,12 +254,55 @@ def test_executed_synthetic_curtailment_is_withheld_until_presentation_dolphin(
     )
     html = render_grid_screening_html(model)
 
-    assert model.curtailment is None
-    assert "curtailment" in model.degraded_screens
-    assert "SYNTHETIC PLACEHOLDER / TEST INPUT" in model.degraded_screens["curtailment"]
-    assert "not lender evidence" in model.degraded_screens["curtailment"]
-    assert "#923-E" in model.degraded_screens["curtailment"]
-    assert "/generated/issue923_placeholder.dss" not in html
+    assert model.curtailment is synthetic
+    assert "curtailment" not in model.degraded_screens
+    assert SYNTHETIC_CURTAILMENT_WARNING in html
+    assert "SYNTHETIC COUNTERFACTUAL" in html
+    assert "not the CEB Kalpitiya/Puttalam feeder" in html
+    assert "Canonical-finance eligible?</td><td>NO" in html
+    assert "Site-representative?</td><td>NO" in html
+    assert "Bankable?</td><td>NO" in html
+    assert "a" * 64 in html
+    assert "Generated for software testing; replace with CEB/engineer data." in html
+    assert "/generated/issue923_placeholder.dss" in html
+    assert "Self-curtailed net (MWh, modelled counterfactual)" in html
+    assert "Self-curtailed net (MWh, site-modelled loss)" not in html
+    assert "Counterfactual only" in html
+
+
+def test_synthetic_warning_cannot_be_suppressed_by_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Hostile report config cannot remove the generated-input warning."""
+    import analytics.grid.curtailment_qsts as cq
+
+    synthetic = CurtailmentShareResult(
+        ran=True,
+        feeder_source="/generated/issue923_placeholder.dss",
+        feeder_input_kind="test_fixture",
+        generated_input=True,
+        observed_network_data=False,
+        site_representative=False,
+        canonical_finance_eligible=False,
+        export_cap_mw=100.0,
+        gross_energy_mwh=1_000.0,
+        self_curtailed_energy_mwh=80.0,
+    )
+    monkeypatch.setattr(cq, "run_qsts_curtailment", lambda _cfg: synthetic)
+    cfg = _scenario()
+    cfg["grid"]["suppress_synthetic_warning"] = True
+    cfg["grid"]["qsts_output_is_bankable"] = True
+
+    html = render_grid_screening_html(
+        build_grid_screening_model(
+            cfg,
+            scenario_variant="hostile-synthetic-test",
+            generated_at="2020-01-01T00:00:00",
+        )
+    )
+
+    assert SYNTHETIC_CURTAILMENT_WARNING in html
+    assert "Canonical-finance eligible?</td><td>NO" in html
 
 
 # ── provenance surfaced (dependency reproducibility + verification) ──────────

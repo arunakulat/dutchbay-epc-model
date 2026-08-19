@@ -164,16 +164,44 @@
 {# ── D6 QSTS curtailment split ───────────────────────────────────────────── #}
 <h2>7 · Curtailment split (QSTS — deemed-paid vs self-curtailed)</h2>
 {% if m.curtailment and m.curtailment.ran %}
+{% if m.curtailment.generated_input or not m.curtailment.site_representative %}
+<div class="caveat" id="synthetic-curtailment-warning">
+  <span class="label">⚠ {{ m.synthetic_curtailment_warning }}</span>
+</div>
+{% endif %}
 <table>
   <tr><th>Metric</th><th>Value</th></tr>
   <tr><td>Feeder source</td><td>{{ m.curtailment.feeder_source }}</td></tr>
+  <tr><td>Feeder input kind</td><td>{{ m.curtailment.feeder_input_kind }}</td></tr>
+  <tr><td>Generated input?</td><td>{{ 'YES' if m.curtailment.generated_input else 'no' }}</td></tr>
+  <tr><td>Observed network data?</td><td>{{ 'YES' if m.curtailment.observed_network_data else 'NO' }}</td></tr>
+  <tr><td>Site-representative?</td><td>{{ 'YES' if m.curtailment.site_representative else 'NO' }}</td></tr>
+  <tr><td>Canonical-finance eligible?</td><td>{{ 'YES' if m.curtailment.canonical_finance_eligible else 'NO' }}</td></tr>
+  <tr><td>Bankable?</td><td>{{ 'YES' if m.curtailment.bankable else 'NO' }}</td></tr>
+  {% if m.curtailment.source_manifest_sha256 %}
+  <tr><td>Verified source-manifest SHA-256</td><td><code>{{ m.curtailment.source_manifest_sha256 }}</code></td></tr>
+  {% endif %}
   <tr><td>Export cap (MW)</td><td>{{ fmt(m.curtailment.export_cap_mw) }}</td></tr>
   <tr><td>Gross energy (MWh)</td><td>{{ fmt(m.curtailment.gross_energy_mwh) }}</td></tr>
   <tr><td>Deemed-paid (MWh, KPI-neutral)</td><td>{{ fmt(m.curtailment.deemed_paid_energy_mwh) }}</td></tr>
-  <tr><td>Self-curtailed net (MWh, real loss)</td><td>{{ fmt(m.curtailment.self_curtailed_energy_mwh) }}</td></tr>
+  <tr><td>Self-curtailed net (MWh, {{ 'modelled counterfactual' if m.curtailment.generated_input or not m.curtailment.site_representative else 'site-modelled loss' }})</td><td>{{ fmt(m.curtailment.self_curtailed_energy_mwh) }}</td></tr>
   <tr><td>BESS-absorbed (MWh, recovered)</td><td>{{ fmt(m.curtailment.bess_absorbed_energy_mwh) }}</td></tr>
 </table>
-<p class="meta">Note: self-curtailment is the only future KPI-mover and is NOT wired to finance here (D6b).</p>
+{% if m.curtailment.limitations %}
+<div class="evidence">
+  <strong>Evidence limitations</strong>
+  <ul>
+  {% for limitation in m.curtailment.limitations %}
+    <li>{{ limitation }}</li>
+  {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% if m.curtailment.generated_input or not m.curtailment.site_representative %}
+<p class="meta"><strong>Counterfactual only:</strong> these values are structurally excluded from canonical finance and headline KPIs.</p>
+{% else %}
+<p class="meta">Note: self-curtailment is the only future KPI-mover and enters finance only through the separate explicit D6b gate.</p>
+{% endif %}
 {% elif m.curtailment %}
 <p class="notrun">QSTS curtailment not run: {{ m.curtailment.reason }}</p>
 {% else %}

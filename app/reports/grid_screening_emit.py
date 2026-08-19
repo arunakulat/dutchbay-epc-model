@@ -82,6 +82,7 @@ __all__ = [
     "EMT_GAP_CAVEAT",
     "EMT_CONFIRMATION_STAMP",
     "TENDER_EVIDENCE_CAVEAT",
+    "SYNTHETIC_CURTAILMENT_WARNING",
     "GridScreeningModel",
     "build_grid_screening_model",
     "emit_grid_screening_report_from_pipeline",
@@ -135,6 +136,17 @@ TENDER_EVIDENCE_CAVEAT = (
     "RMS-only (PSS/E + DIgSILENT) → a documented EMT/PSCAD gap. The July-2024 national Grid "
     "Code Annex B is SILENT on grid-forming — the control-mode decision lives in each round's "
     "Annex A / Vol I. This is exactly the RMS→EMT boundary this screen stamps."
+)
+
+#: The un-suppressible warning applied whenever a generated/non-site-representative QSTS
+#: result is presented. Integrity verification proves package identity, not site truth.
+SYNTHETIC_CURTAILMENT_WARNING = (
+    "SYNTHETIC COUNTERFACTUAL — NOT SITE-REPRESENTATIVE EVIDENCE. These QSTS values "
+    "come from generated/test feeder inputs, not the CEB Kalpitiya/Puttalam feeder. "
+    "Use them only for software-path testing and scenario learning. They are not lender "
+    "evidence, not utility-accepted, not bankable, and cannot influence canonical finance "
+    "or headline KPIs. A verified manifest authenticates package identity only; it does "
+    "not promote synthetic inputs to real evidence."
 )
 
 #: The resolved ``[grid]`` optional-extra pin set (pyproject ``[project.optional-dependencies]
@@ -222,6 +234,7 @@ class GridScreeningModel:
     emt_gap_caveat: str = EMT_GAP_CAVEAT
     tender_evidence: str = TENDER_EVIDENCE_CAVEAT
     verification_discipline: str = VERIFICATION_DISCIPLINE
+    synthetic_curtailment_warning: str = SYNTHETIC_CURTAILMENT_WARNING
 
     # Dependency-reproducibility provenance (CASPER available-vs-degraded state).
     engine_status: tuple[ScreenStatus, ...] = ()
@@ -362,22 +375,11 @@ def _try_curtailment(
     from analytics.grid.curtailment_qsts import run_qsts_curtailment
 
     try:
-        # The QSTS entry is gated and provenance-typed. A path-backed synthetic/test input
-        # may execute for diagnostics, but the dedicated presentation/watermark work is
-        # deliberately a separate #923-E dolphin. Until E lands, withhold such output from
-        # this lender-facing report rather than equating ran=True with real evidence.
-        result = run_qsts_curtailment(config)
-        if result.ran is True and (
-            result.generated_input is True or result.site_representative is not True
-        ):
-            degraded["curtailment"] = (
-                "QSTS curtailment output withheld: SYNTHETIC PLACEHOLDER / TEST INPUT — "
-                "not observed network data, not site-representative, not lender evidence, "
-                "and not eligible for canonical finance. Dedicated presentation remains "
-                "gated on #923-E."
-            )
-            return None
-        return result
+        # The QSTS entry is gated and provenance-typed. #923-E permits a path-backed
+        # synthetic/test result to be PRESENTED for counterfactual learning, while the
+        # template applies an un-suppressible warning and exposes the machine evidence
+        # flags/limitations. Finance still refuses the result at its separate D6b seam.
+        return run_qsts_curtailment(config)
     except Exception as exc:  # noqa: BLE001 - CASPER: degrade, don't crash the report
         degraded["curtailment"] = (
             f"QSTS curtailment split not run: {type(exc).__name__}: {exc}"

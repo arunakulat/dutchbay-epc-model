@@ -1,0 +1,1 @@
+Present governed synthetic QSTS counterfactuals with an un-suppressible non-site-evidence warning, complete eligibility flags, manifest identity, and limitations while canonical finance remains blocked.
