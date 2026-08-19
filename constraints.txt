@@ -23,8 +23,8 @@ black<27
 # Typed-surface toolchain held at the gate-cleared releases (newer stub/typing
 # releases change mypy diagnostics; bump them in a dedicated typed-surface dolphin
 # together with the accompanying type fixes):
-pandas-stubs==2.3.3.251201
-requests==2.33.0
+pandas-stubs==2.3.3.260113
+requests==2.34.2
 # Document-ingestion output and hook behaviour are reproducibility surfaces. Hold
 # the versions migrated from the retired 3.11 environment until a dedicated upgrade
 # dolphin revalidates conversion, extraction, rendering, hooks, audit, and the suite.

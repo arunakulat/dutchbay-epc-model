@@ -205,7 +205,7 @@ ortools==9.15.6755
 packageurl-python==0.17.6
 packaging==26.3
 pandapower==3.5.4
-pandas-stubs==2.3.3.251201
+pandas-stubs==2.3.3.260113
 pandas==2.3.3
 pandera==0.32.1
 pandocfilters==1.5.1
@@ -276,7 +276,7 @@ rasterio==1.5.1
 redis==5.3.1
 referencing==0.37.0
 reportlab==5.0.0
-requests==2.33.0
+requests==2.34.2
 rfc3339-validator==0.1.4
 rfc3986-validator==0.1.1
 rfc3987-syntax==1.1.0
