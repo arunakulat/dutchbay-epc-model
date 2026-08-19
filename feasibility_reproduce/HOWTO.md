@@ -103,8 +103,8 @@ done
 ```bash
 .venv/bin/python feasibility_reproduce/lib/mc_run.py 2500 _run_out/mc
 ```
-→ equity IRR P10/P50/P90 = −11.3 / −7.3 / −2.8 %; project NPV negative in 100 % of trials;
-min-DSCR ≥ 1.21. 2,500 converges to within ~0.1 pp of a full 100k run.
+→ equity IRR P10/P50/P90 = −13.0 / −9.1 / −5.0 %; project NPV negative in 100 % of trials;
+min-DSCR ≥ 1.217. 2,500 converges to within ~0.1 pp of a full 100k run.
 **Gotcha:** the driver does `logging.disable(WARNING)` to stop the per-trial debt-INFO stdout
 flood (~1.25 GB at 100k). **Never** `os.setsid()`/`SIG_IGN`-detach the process.
 
@@ -190,7 +190,7 @@ blocked** offline — documented, not fabricated.
 ## 10. Build the deliverable PDFs (Acrobat-safe)
 
 ```bash
-.venv/bin/python feasibility_reproduce/lib/build_study_pdf.py                 # 13-pp study
+.venv/bin/python feasibility_reproduce/lib/build_study_pdf.py                 # 11-pp study
 .venv/bin/python feasibility_reproduce/lib/build_md_pdf.py report/FEASIBILITY_COVERAGE.md report/DutchBay_Feasibility_Module_Coverage.pdf portrait  "Coverage"
 .venv/bin/python feasibility_reproduce/lib/build_md_pdf.py report/MODULE_CATALOG.md        report/DutchBay_Module_Catalog.pdf                landscape "Catalog"
 ```
