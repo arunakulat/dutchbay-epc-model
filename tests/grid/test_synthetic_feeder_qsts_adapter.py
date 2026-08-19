@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+import analytics.grid.curtailment_qsts as qsts_module
 from analytics.grid.curtailment_qsts import run_qsts_curtailment
 from analytics.grid.grid_interface_schema import validate_grid_block
 from analytics.grid.synthetic_feeder_placeholder import (
@@ -123,10 +124,14 @@ def test_adapter_output_passes_schema_and_runtime_verification(
 
     result = run_qsts_curtailment(
         config,
-        generation_mwh=[151.0, 149.0],
-        grid_instructed_mwh=[0.0, 0.0],
+        generation_mwh=overlay["generation_profile_mw"],
+        grid_instructed_mwh=[0.0] * len(overlay["generation_profile_mw"]),
     )
     assert result.ran is True
+    assert result.hours_total == 8760
+    assert result.gross_energy_mwh == pytest.approx(
+        sum(compiled_package.generation_profile_mw)
+    )
     assert result.source_manifest_sha256 == compiled_package.manifest_sha256
     assert result.generated_input is True
     assert result.site_representative is False
@@ -147,6 +152,84 @@ def test_adapter_returns_profile_copy_not_mutable_verified_state(
     overlay["generation_profile_mw"][0] = verified_first + 1.0
 
     assert compiled_package.generation_profile_mw[0] == verified_first
+
+
+@pytest.mark.grid
+@pytest.mark.parametrize("substitution", ["profile", "export-cap"])
+def test_runtime_refuses_substituted_adapter_values(
+    compiled_package: SyntheticFeederPackage,
+    substitution: str,
+) -> None:
+    overlay = build_verified_synthetic_qsts_overlay(
+        manifest_path=compiled_package.manifest_path,
+        expected_manifest_sha256=compiled_package.manifest_sha256,
+    )
+    if substitution == "profile":
+        overlay["generation_profile_mw"] = [151.0, 149.0]
+        message = "generation_profile_mw.*8760 timesteps"
+    else:
+        overlay["export_cap_mw"] = 149.0
+        message = "must match the manifest-verified synthetic package export cap"
+
+    with pytest.raises(ValueError, match=message):
+        run_qsts_curtailment({"grid": {"qsts": overlay}})
+
+
+@pytest.mark.grid
+@pytest.mark.parametrize("substitution", ["profile", "export-cap"])
+def test_runtime_refuses_substituted_explicit_overrides(
+    compiled_package: SyntheticFeederPackage,
+    substitution: str,
+) -> None:
+    overlay = build_verified_synthetic_qsts_overlay(
+        manifest_path=compiled_package.manifest_path,
+        expected_manifest_sha256=compiled_package.manifest_sha256,
+    )
+    kwargs: dict[str, object] = {
+        "generation_mwh": overlay["generation_profile_mw"],
+        "grid_instructed_mwh": [0.0] * len(overlay["generation_profile_mw"]),
+    }
+    if substitution == "profile":
+        kwargs["generation_mwh"] = [151.0, 149.0]
+        message = "generation_mwh override.*8760 timesteps"
+    else:
+        kwargs["export_cap_mw"] = 149.0
+        message = "must match the manifest-verified synthetic package export cap"
+
+    with pytest.raises(ValueError, match=message):
+        run_qsts_curtailment({"grid": {"qsts": overlay}}, **kwargs)
+
+
+@pytest.mark.grid
+def test_runtime_solver_receives_verifier_derived_profile(
+    compiled_package: SyntheticFeederPackage,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    overlay = build_verified_synthetic_qsts_overlay(
+        manifest_path=compiled_package.manifest_path,
+        expected_manifest_sha256=compiled_package.manifest_sha256,
+    )
+    captured_profile: tuple[float, ...] | None = None
+
+    def _capture_solver_profile(
+        grid: object,
+        *,
+        feeder_path: str,
+        timestep_hours: float,
+        generation_profile_mw: object = None,
+    ) -> tuple[list[float], list[float]]:
+        del grid, feeder_path, timestep_hours
+        nonlocal captured_profile
+        assert isinstance(generation_profile_mw, tuple)
+        captured_profile = generation_profile_mw
+        return [0.0], [0.0]
+
+    monkeypatch.setattr(qsts_module, "_solve_qsts", _capture_solver_profile)
+
+    result = run_qsts_curtailment({"grid": {"qsts": overlay}})
+
+    assert result.ran is True
+    assert captured_profile == compiled_package.generation_profile_mw
 
 
 def test_adapter_refuses_wrong_external_manifest_digest(

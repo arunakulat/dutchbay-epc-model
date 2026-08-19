@@ -44,7 +44,8 @@ def _runtime_config(
         "source_manifest_sha256": (
             package.manifest_sha256 if manifest_sha256 is None else manifest_sha256
         ),
-        "export_cap_mw": 150.0,
+        "export_cap_mw": package.export_cap_mw,
+        "generation_profile_mw": list(package.generation_profile_mw),
         "finance_wiring": {
             "enabled": False,
             "mode": "synthetic_counterfactual",
@@ -85,10 +86,11 @@ def compile_disabled_package(
 def test_verified_manifest_identity_is_propagated_without_evidence_upgrade(
     compiled_package: SyntheticFeederPackage,
 ) -> None:
+    generation_mwh = list(compiled_package.generation_profile_mw)
     result = run_qsts_curtailment(
         _runtime_config(compiled_package),
-        generation_mwh=[151.0, 149.0],
-        grid_instructed_mwh=[0.0, 0.0],
+        generation_mwh=generation_mwh,
+        grid_instructed_mwh=[0.0] * len(generation_mwh),
     )
 
     assert result.ran is True
@@ -100,7 +102,12 @@ def test_verified_manifest_identity_is_propagated_without_evidence_upgrade(
     assert result.site_representative is False
     assert result.canonical_finance_eligible is False
     assert result.bankable is False
-    assert result.self_curtailed_energy_mwh == pytest.approx(1.0)
+    assert result.self_curtailed_energy_mwh == pytest.approx(
+        sum(
+            max(generation - compiled_package.export_cap_mw, 0.0)
+            for generation in generation_mwh
+        )
+    )
     assert any("externally pinned SHA-256" in item for item in result.limitations)
 
     payload = result.model_dump()
