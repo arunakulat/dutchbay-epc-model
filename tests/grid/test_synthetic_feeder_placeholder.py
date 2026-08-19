@@ -50,7 +50,7 @@ EXPECTED_PAYLOAD_SHA256 = {
     "profile/generation_profile.csv": "cefa4b9e37f85e5f7774a14727bf35a43c9c3bd8b3219bd730a35aff4f36ab76",
 }
 EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
-    "7b303ab3e4be1f4aff8a0ca9d733921b53b15adb87d0f309d0ac73e821562685"
+    "b8e40d21e85667acf0e64e90d53ddd6087eaf72d0cb8dd84001e8d98baf16b78"
 )
 
 MASTER_REDIRECT_MUTATIONS = [
@@ -305,6 +305,9 @@ def test_generated_package_has_only_eight_governed_files(
     assert package.profile_rows == 8760
     assert package.profile_start_utc == "2021-01-01T00:00:00Z"
     assert package.profile_end_utc == "2021-12-31T23:00:00Z"
+    assert len(package.generation_profile_mw) == 8760
+    assert sum(package.generation_profile_mw) == pytest.approx(554674.358039)
+    assert package.export_cap_mw == pytest.approx(150.0)
     assert package.maximum_gross_generation_mw == pytest.approx(159.5745)
     assert package.convergence_status == CONVERGENCE_STATUS
     assert package.opendss_compile_status == "not_examined_explicit_test_configuration"
