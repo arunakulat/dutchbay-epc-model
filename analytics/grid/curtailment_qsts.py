@@ -65,6 +65,11 @@ path-backed solve is available:
   * no ``grid.qsts.feeder_model_path`` (or the file is absent) → inert;
   * the pathless built-in ``"synthetic_demo"`` is selected → inert.
 
+The governed ``synthetic_placeholder`` has an additional B2 boundary: its external
+configuration supplies ``grid.qsts.source_manifest_sha256``; runtime derives the colocated
+manifest from the exact ``feeder/Master.dss`` path, invokes the detached B1 verifier, and
+propagates the verified digest. A manifest or path does not upgrade evidence grade.
+
 The pure-Python split math (:func:`split_curtailment`) is separately callable and is the
 sole producer of the calculated energy split. Execution status never upgrades evidence
 status.
@@ -112,6 +117,9 @@ SYNTHETIC_FEEDER_SOURCE = "synthetic_demo"
 #: The feeder-source token stamped when no feeder was resolved at all (default-off / absent).
 NO_FEEDER_SOURCE = "none"
 
+#: Fixed package-manifest location relative to the governed synthetic ``feeder/Master.dss``.
+SYNTHETIC_PACKAGE_MANIFEST_NAME = "manifest.json"
+
 
 @dataclass(frozen=True)
 class FeederInput:
@@ -130,6 +138,24 @@ class FeederInput:
     observed_network_data: bool
     site_representative: bool
     canonical_finance_eligible: bool
+    source_manifest_sha256: str | None = None
+
+    def __post_init__(self) -> None:
+        """Prevent a verified-manifest identity from being attached to another kind."""
+
+        if self.source_manifest_sha256 is None:
+            return
+        _require_sha256(
+            self.source_manifest_sha256, "FeederInput.source_manifest_sha256"
+        )
+        if (
+            self.input_kind != "synthetic_placeholder"
+            or self.generated_input is not True
+        ):
+            raise ValueError(
+                "FeederInput.source_manifest_sha256 is reserved for a generated "
+                "synthetic_placeholder."
+            )
 
     @property
     def can_solve(self) -> bool:
@@ -179,6 +205,58 @@ def _require_positive(value: Any, field: str) -> float:
             f"QSTS curtailment engine requires {field} to be a number > 0, got {value!r}."
         )
     return float(value)
+
+
+def _require_sha256(value: Any, field: str) -> str:
+    """Return an exact lowercase SHA-256 digest or raise a CESSPIT error."""
+
+    if (
+        not isinstance(value, str)
+        or len(value) != 64
+        or any(character not in "0123456789abcdef" for character in value)
+    ):
+        raise ValueError(
+            f"{field} must be exactly 64 lowercase hexadecimal characters, got "
+            f"{value!r}."
+        )
+    return value
+
+
+def _verify_synthetic_feeder_runtime_package(
+    *, master_path: Path, expected_manifest_sha256: str
+) -> tuple[str, str]:
+    """Verify the governed B1 package before B2 exposes it to QSTS accounting.
+
+    The expected digest is supplied outside the package. The manifest path is derived from
+    the governed ``<package>/feeder/Master.dss`` layout, so a caller cannot pair one feeder
+    with an unrelated manifest. Import stays behind the explicitly synthetic enabled path;
+    default-off, real/site, and test-fixture callers retain the light CASPER import surface.
+    """
+
+    try:
+        from analytics.grid.synthetic_feeder_placeholder import (
+            verify_synthetic_feeder_package,
+        )
+    except ImportError as exc:  # pragma: no cover - environment-specific dependency gap
+        raise ImportError(
+            "Runtime verification of the #923 synthetic feeder package requires the "
+            "repository's locked synthetic-feeder dependencies. Rebuild the governed "
+            "Python 3.12 environment before enabling this path."
+        ) from exc
+
+    manifest_path = master_path.parent.parent / SYNTHETIC_PACKAGE_MANIFEST_NAME
+    package = verify_synthetic_feeder_package(
+        manifest_path=manifest_path,
+        master_path=master_path,
+        expected_manifest_sha256=expected_manifest_sha256,
+    )
+    if package.opendss_compile_status != "passed_compile_only_no_convergence_claim":
+        raise ValueError(
+            "Runtime use of a synthetic_placeholder requires a package whose detached "
+            "OpenDSS compile check passed. Test-only compile-disabled packages are not "
+            "runtime inputs."
+        )
+    return str(package.master_path), package.manifest_sha256
 
 
 def _require_profile(
@@ -318,6 +396,7 @@ def split_curtailment(
     observed_network_data: bool = False,
     site_representative: bool = False,
     canonical_finance_eligible: bool = False,
+    source_manifest_sha256: str | None = None,
     limitations: tuple[str, ...] = (),
 ) -> CurtailmentShareResult:
     """Split integrated curtailment into deemed-paid vs (BESS-recovered) self-curtailed.
@@ -353,6 +432,8 @@ def split_curtailment(
             smallest-headroom case).
         feeder_source: path/source string stamped on the result. It is not provenance by
             itself; the explicit evidence fields carry that classification.
+        source_manifest_sha256: externally pinned and runtime-verified package-manifest
+            identity, when the feeder came from the governed #923 synthetic package.
 
     Returns:
         A :class:`CurtailmentShareResult` with ``ran=True`` and the full deemed-vs-self
@@ -420,6 +501,7 @@ def split_curtailment(
         observed_network_data=observed_network_data,
         site_representative=site_representative,
         canonical_finance_eligible=canonical_finance_eligible,
+        source_manifest_sha256=source_manifest_sha256,
         limitations=limitations,
         export_cap_mw=cap_mw,
         gross_energy_mwh=gross_energy,
@@ -487,9 +569,9 @@ def _resolve_feeder(grid: Mapping[str, Any]) -> FeederInput:
 
     ``grid.qsts.input_kind`` is the controlling provenance token.  An existing path may be
     solved for any declared kind, including a synthetic placeholder or test fixture, but
-    only a site/utility kind can ever be marked canonical-finance eligible.  Manifest and
-    embedded-header verification arrive in the separate #923-B artefact dolphin; until
-    then this contract removes the unsafe path-exists-equals-real inference.
+    only a site/utility kind can ever be marked canonical-finance eligible. A path-backed
+    ``synthetic_placeholder`` must additionally bind an externally pinned manifest digest;
+    B2 invokes the detached B1 verifier before exposing the feeder to accounting.
     """
     qsts = grid.get("qsts")
     if not isinstance(qsts, Mapping):
@@ -503,6 +585,19 @@ def _resolve_feeder(grid: Mapping[str, Any]) -> FeederInput:
             "grid.qsts.input_kind must be one of "
             f"[{allowed}], got {raw_kind!r}. A feeder path is not provenance."
         )
+
+    raw_manifest_sha256 = qsts.get("source_manifest_sha256")
+    source_manifest_sha256: str | None = None
+    if raw_manifest_sha256 is not None:
+        source_manifest_sha256 = _require_sha256(
+            raw_manifest_sha256, "grid.qsts.source_manifest_sha256"
+        )
+        if input_kind != "synthetic_placeholder":
+            raise ValueError(
+                "grid.qsts.source_manifest_sha256 is reserved for the governed "
+                "synthetic_placeholder package; do not attach it to utility, site, test, "
+                "or unclassified feeder inputs."
+            )
 
     generated = input_kind in SYNTHETIC_FEEDER_INPUT_KINDS
     observed = input_kind == "utility_observed_model"
@@ -586,6 +681,11 @@ def _resolve_feeder(grid: Mapping[str, Any]) -> FeederInput:
                 "'synthetic_placeholder' or 'test_fixture'; it cannot be classified as "
                 "a real/site feeder."
             )
+        if source_manifest_sha256 is not None:
+            raise ValueError(
+                "The pathless grid.qsts.use_synthetic_demo has no package manifest; "
+                "remove grid.qsts.source_manifest_sha256."
+            )
         demo_feeder_path = qsts.get("feeder_model_path")
         if isinstance(demo_feeder_path, str) and demo_feeder_path.strip():
             raise ValueError(
@@ -616,15 +716,33 @@ def _resolve_feeder(grid: Mapping[str, Any]) -> FeederInput:
         )
 
     normalized_path = path.strip()
-    model_exists = Path(normalized_path).is_file()
+    if input_kind == "synthetic_placeholder" and source_manifest_sha256 is None:
+        raise ValueError(
+            "An enabled path-backed grid.qsts.input_kind='synthetic_placeholder' requires "
+            "grid.qsts.source_manifest_sha256 pinned outside the package."
+        )
+
+    model_path = Path(normalized_path)
+    model_exists = model_path.is_file()
+    resolved_source = normalized_path if model_exists else None
+    verified_manifest_sha256: str | None = None
+    if model_exists and input_kind == "synthetic_placeholder":
+        assert source_manifest_sha256 is not None
+        resolved_source, verified_manifest_sha256 = (
+            _verify_synthetic_feeder_runtime_package(
+                master_path=model_path,
+                expected_manifest_sha256=source_manifest_sha256,
+            )
+        )
     return FeederInput(
-        normalized_path if model_exists else None,
+        resolved_source,
         input_kind,
         model_exists,
         generated,
         observed,
         site_representative,
         canonical_eligible,
+        verified_manifest_sha256,
     )
 
 
@@ -741,6 +859,12 @@ def run_qsts_curtailment(
             "Not the CEB Kalpitiya/Puttalam feeder and not site-representative.",
             "Not engineering-validated, utility-accepted, bankable, or canonical.",
         )
+        if feeder.source_manifest_sha256 is not None:
+            limitations += (
+                "Package manifest verified against an externally pinned SHA-256; this "
+                "authenticates the synthetic package identity but does not upgrade its "
+                "evidence grade.",
+            )
 
     return split_curtailment(
         generation_mwh=gen,
@@ -755,6 +879,7 @@ def run_qsts_curtailment(
         observed_network_data=feeder.observed_network_data,
         site_representative=feeder.site_representative,
         canonical_finance_eligible=feeder.canonical_finance_eligible,
+        source_manifest_sha256=feeder.source_manifest_sha256,
         limitations=limitations,
     )
 

@@ -47,6 +47,7 @@ _BESS = {
     "soc_fraction": 0.90,
 }
 _REAL_FEEDER = "/real/dutchbay_feeder.dss"
+_SYNTHETIC_MANIFEST_SHA256 = "a" * 64
 
 
 # ─────────────────────────────────────────────────────── split_curtailment (deemed vs self)
@@ -624,12 +625,130 @@ def test_resolve_feeder_missing_file_is_none() -> None:
             "qsts": {
                 "input_kind": "synthetic_placeholder",
                 "feeder_model_path": "/no/such.dss",
+                "source_manifest_sha256": _SYNTHETIC_MANIFEST_SHA256,
             }
         }
     )
     assert resolved.source is None
     assert resolved.can_solve is False
     assert resolved.generated_input is True
+
+
+def test_path_backed_synthetic_requires_external_manifest_digest(
+    tmp_path: Path,
+) -> None:
+    feeder = tmp_path / "Master.dss"
+    feeder.write_text("! synthetic placeholder\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="source_manifest_sha256 pinned outside"):
+        cq._resolve_feeder(
+            {
+                "qsts": {
+                    "input_kind": "synthetic_placeholder",
+                    "feeder_model_path": str(feeder),
+                }
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    "invalid_digest",
+    [True, 1, "A" * 64, "a" * 63, "g" * 64, ["a" * 64]],
+)
+def test_runtime_manifest_digest_is_exact_lowercase_sha256(
+    invalid_digest: object,
+) -> None:
+    with pytest.raises(ValueError, match="64 lowercase hexadecimal"):
+        cq._resolve_feeder(
+            {
+                "qsts": {
+                    "input_kind": "synthetic_placeholder",
+                    "feeder_model_path": "/no/such.dss",
+                    "source_manifest_sha256": invalid_digest,
+                }
+            }
+        )
+
+
+def test_runtime_manifest_digest_cannot_be_attached_to_test_fixture() -> None:
+    with pytest.raises(ValueError, match="reserved.*synthetic_placeholder"):
+        cq._resolve_feeder(
+            {
+                "qsts": {
+                    "input_kind": "test_fixture",
+                    "feeder_model_path": "/no/such.dss",
+                    "source_manifest_sha256": _SYNTHETIC_MANIFEST_SHA256,
+                }
+            }
+        )
+
+
+def test_contract_refuses_malformed_source_manifest_digest() -> None:
+    with pytest.raises(ValueError, match="source_manifest_sha256.*64 lowercase"):
+        CurtailmentShareResult(
+            ran=False,
+            feeder_source=NO_FEEDER_SOURCE,
+            source_manifest_sha256="not-a-sha256",
+        )
+
+
+def test_contract_manifest_digest_is_reserved_for_governed_synthetic_package() -> None:
+    with pytest.raises(ValueError, match="reserved.*synthetic_placeholder"):
+        CurtailmentShareResult(
+            ran=False,
+            feeder_source="/fixtures/Master.dss",
+            feeder_input_kind="test_fixture",
+            generated_input=True,
+            source_manifest_sha256=_SYNTHETIC_MANIFEST_SHA256,
+        )
+
+
+def test_default_off_does_not_import_synthetic_package_verifier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(
+        sys.modules, "analytics.grid.synthetic_feeder_placeholder", None
+    )
+    result = run_qsts_curtailment(
+        {
+            "grid": {
+                "qsts": {
+                    "enabled": False,
+                    "input_kind": "synthetic_placeholder",
+                    "feeder_model_path": "/not/present/Master.dss",
+                }
+            }
+        }
+    )
+    assert result.ran is False
+    assert result.source_manifest_sha256 is None
+
+
+def test_enabled_synthetic_verifier_dependency_gap_is_actionable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    master_path = tmp_path / "feeder" / "Master.dss"
+    master_path.parent.mkdir()
+    master_path.write_text("! synthetic placeholder\n", encoding="utf-8")
+    monkeypatch.setitem(
+        sys.modules, "analytics.grid.synthetic_feeder_placeholder", None
+    )
+    with pytest.raises(ImportError, match="locked synthetic-feeder dependencies"):
+        run_qsts_curtailment(
+            {
+                "grid": {
+                    "qsts": {
+                        "enabled": True,
+                        "input_kind": "synthetic_placeholder",
+                        "feeder_model_path": str(master_path),
+                        "source_manifest_sha256": _SYNTHETIC_MANIFEST_SHA256,
+                    }
+                }
+            },
+            generation_mwh=[151.0],
+            grid_instructed_mwh=[0.0],
+            export_cap_mw=150.0,
+        )
 
 
 def test_resolve_feeder_non_mapping_qsts_is_none() -> None:
@@ -757,6 +876,87 @@ def test_schema_enabled_with_feeder_path_passes() -> None:
     assert errors == []
 
 
+def test_schema_path_backed_synthetic_requires_external_manifest_digest() -> None:
+    errors: list[str] = []
+    validate_grid_block(
+        {
+            "grid": {
+                "qsts": {
+                    "enabled": True,
+                    "input_kind": "synthetic_placeholder",
+                    "feeder_model_path": "/x/synthetic.dss",
+                }
+            }
+        },
+        errors,
+    )
+    assert any(
+        "source_manifest_sha256" in error and "requires" in error for error in errors
+    )
+
+
+@pytest.mark.parametrize(
+    "invalid_digest",
+    [True, 1, "A" * 64, "a" * 63, "g" * 64, {"sha256": "a" * 64}],
+)
+def test_schema_manifest_digest_is_exact_lowercase_sha256(
+    invalid_digest: object,
+) -> None:
+    errors: list[str] = []
+    validate_grid_block(
+        {
+            "grid": {
+                "qsts": {
+                    "enabled": True,
+                    "input_kind": "synthetic_placeholder",
+                    "feeder_model_path": "/x/synthetic.dss",
+                    "source_manifest_sha256": invalid_digest,
+                }
+            }
+        },
+        errors,
+    )
+    assert any("64 lowercase hexadecimal" in error for error in errors)
+
+
+def test_schema_manifest_digest_is_reserved_for_governed_synthetic_package() -> None:
+    errors: list[str] = []
+    validate_grid_block(
+        {
+            "grid": {
+                "qsts": {
+                    "enabled": True,
+                    "input_kind": "test_fixture",
+                    "feeder_model_path": "/x/fixture.dss",
+                    "source_manifest_sha256": _SYNTHETIC_MANIFEST_SHA256,
+                }
+            }
+        },
+        errors,
+    )
+    assert any("reserved for the governed" in error for error in errors)
+
+
+def test_schema_pathless_demo_refuses_package_manifest_digest() -> None:
+    errors: list[str] = []
+    validate_grid_block(
+        {
+            "grid": {
+                "qsts": {
+                    "enabled": True,
+                    "input_kind": "synthetic_placeholder",
+                    "use_synthetic_demo": True,
+                    "source_manifest_sha256": _SYNTHETIC_MANIFEST_SHA256,
+                }
+            }
+        },
+        errors,
+    )
+    assert any(
+        "pathless" in error and "has no package manifest" in error for error in errors
+    )
+
+
 def test_schema_refuses_synthetic_input_as_canonical_finance() -> None:
     errors: list[str] = []
     validate_grid_block(
@@ -766,6 +966,7 @@ def test_schema_refuses_synthetic_input_as_canonical_finance() -> None:
                     "enabled": True,
                     "input_kind": "synthetic_placeholder",
                     "feeder_model_path": "/x/synthetic.dss",
+                    "source_manifest_sha256": _SYNTHETIC_MANIFEST_SHA256,
                     "finance_wiring": {
                         "enabled": True,
                         "mode": "canonical",
@@ -789,6 +990,7 @@ def test_schema_accepts_parked_synthetic_counterfactual_contract() -> None:
                     "enabled": True,
                     "input_kind": "synthetic_placeholder",
                     "feeder_model_path": "/x/synthetic.dss",
+                    "source_manifest_sha256": _SYNTHETIC_MANIFEST_SHA256,
                     "finance_wiring": {
                         "enabled": False,
                         "mode": "synthetic_counterfactual",
@@ -813,6 +1015,7 @@ def test_schema_refuses_enabled_synthetic_counterfactual_until_segregated_path_e
                     "enabled": True,
                     "input_kind": "synthetic_placeholder",
                     "feeder_model_path": "/x/synthetic.dss",
+                    "source_manifest_sha256": _SYNTHETIC_MANIFEST_SHA256,
                     "finance_wiring": {
                         "enabled": True,
                         "mode": "synthetic_counterfactual",
