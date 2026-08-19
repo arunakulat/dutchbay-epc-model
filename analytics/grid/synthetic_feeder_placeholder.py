@@ -758,6 +758,8 @@ class VerifiedSyntheticFeederPackage:
     profile_rows: int
     profile_start_utc: str
     profile_end_utc: str
+    generation_profile_mw: tuple[float, ...]
+    export_cap_mw: float
     maximum_gross_generation_mw: float
     opendss_compile_status: str
     convergence_status: str
@@ -2403,6 +2405,10 @@ def verify_synthetic_feeder_package(
     fixed_profile_numbers = _require_frozen_numbers(
         profile_mapping, PROFILE_V1_FIXED_NUMBERS, "manifest.profile"
     )
+    export_cap_mw = _require_positive(
+        profile_mapping.get("export_cap_mw_for_future_counterfactual"),
+        "manifest.profile.export_cap_mw_for_future_counterfactual",
+    )
     for key, expected_integer in PROFILE_V1_FIXED_INTS.items():
         if (
             _require_int(profile_mapping.get(key), f"manifest.profile.{key}")
@@ -2499,6 +2505,7 @@ def verify_synthetic_feeder_package(
     hours_above_150_mw = 0
     hours_above_159_6_mw = 0
     row_count = 0
+    generation_profile_mw: list[float] = []
     previous: datetime | None = None
     first_timestamp: str | None = None
     last_timestamp: str | None = None
@@ -2533,6 +2540,7 @@ def verify_synthetic_feeder_package(
                 raise ValueError(
                     "Generation profile contains an out-of-range MW value."
                 )
+            generation_profile_mw.append(generation)
             minimum_seen = min(minimum_seen, generation)
             maximum_seen = max(maximum_seen, generation)
             total_generation_mwh += generation
@@ -2697,6 +2705,8 @@ def verify_synthetic_feeder_package(
         profile_rows=row_count,
         profile_start_utc=start_expected,
         profile_end_utc=end_expected,
+        generation_profile_mw=tuple(generation_profile_mw),
+        export_cap_mw=export_cap_mw,
         maximum_gross_generation_mw=maximum_seen,
         opendss_compile_status=compile_status,
         convergence_status=convergence_status,
