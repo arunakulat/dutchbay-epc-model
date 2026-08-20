@@ -8,10 +8,10 @@ pins the two halves of enablement readiness WITHOUT enabling anything:
      The #915 suite (``test_self_curtailment_finance.py``) covers the resolver units and
      monkeypatches the QSTS seam on every canonical path. Here the enabled flag is exercised
      against the PRODUCTION chain end-to-end: a lone or synthetic finance flag fails the
-     canonical configuration gate, while a fully declared site path that is unavailable
-     remains an inert NOT-RUN result and leaves canon byte-identical. A path-backed fixture
-     WITHOUT the ``[grid]`` extra still raises the actionable CASPER ImportError rather than
-     silently returning canon.
+     canonical configuration gate, and a site-labelled path without an externally pinned
+     #1072 evidence package now fails before solver import. The untouched default-off case
+     remains canon-identical; an enabled missing identity can no longer masquerade as an
+     innocent inert result.
 
   2. **DEMO-GRADE diagnostic and refusal evidence.** The temporary feeder is explicitly
      ``test_fixture`` and carries no site physics. A recording solver proves the production
@@ -26,7 +26,6 @@ canon re-pin in the SAME PR (see docs/knowledge_base/grid_screening_scope.md §7
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -43,8 +42,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 
 # Committed 5th-gen canon (single source of truth: tests/_canon.py, #955).
-
-_HAS_GRID_EXTRA = importlib.util.find_spec("opendssdirect") is not None
 
 # ── The DEMO generation design (labelled, NOT site physics) ─────────────────────────────
 # 12 hourly steps against a 100 MW POC export cap: four hours at 120 MW (20 MW over-cap
@@ -112,12 +109,8 @@ def test_flag_alone_without_qsts_study_fails_strictly() -> None:
         _build_cashflow_params(cfg)
 
 
-def test_flag_with_missing_feeder_file_full_pipeline_stays_canon() -> None:
-    """The exact present-day #923 state, end-to-end: flag + qsts enabled, but the feeder
-    path does not exist on disk ⇒ the QSTS emits an inert NOT-RUN result (never a
-    fabricated zero-loss pass), the resolver refuses, and the FULL pipeline reproduces the
-    pinned canon bit-for-bit. Flipping the flag without the real feeder is vacuous.
-    """
+def test_flag_with_unpinned_site_label_fails_before_finance() -> None:
+    """A site label/path without externally pinned evidence is no longer an inert pass."""
     cfg = _lender_config()
     qsts = _qsts_block(cfg)
     qsts["enabled"] = True
@@ -128,8 +121,10 @@ def test_flag_with_missing_feeder_file_full_pipeline_stays_canon() -> None:
         "mode": "canonical",
         "canonical_eligible": True,
     }
-    assert _build_cashflow_params(cfg).curtailment_pct == 0.0
-    _assert_canon(_run_kpis(cfg))
+    with pytest.raises(ValueError, match="evidence_manifest"):
+        _build_cashflow_params(cfg)
+    # The untouched, default-off scenario remains byte-identical to canon.
+    _assert_canon(_run_kpis(_lender_config()))
 
 
 def test_flag_with_synthetic_demo_feeder_fails_strictly() -> None:
@@ -148,18 +143,10 @@ def test_flag_with_synthetic_demo_feeder_fails_strictly() -> None:
         _build_cashflow_params(cfg)
 
 
-@pytest.mark.skipif(
-    _HAS_GRID_EXTRA,
-    reason="[grid] extra installed — the CASPER absent-dependency guard is unreachable",
-)
-def test_flag_with_real_file_but_no_grid_extra_raises_actionable(
+def test_flag_with_real_file_but_no_evidence_manifest_fails_before_solver(
     tmp_path: Path,
 ) -> None:
-    """A canonical-shaped test config, WITHOUT opendssdirect, reaches the CASPER guard.
-
-    The tiny file is still only test data, not project evidence; its canonical declaration
-    exists solely to isolate optional-dependency error behaviour after CESSPIT pre-flight.
-    """
+    """An existing DSS file cannot outrank the #1072 evidence pre-flight boundary."""
     feeder = tmp_path / "canonical_contract_shape_only.dss"
     feeder.write_text(_DEMO_FEEDER_DSS, encoding="utf-8")
     cfg = _lender_config()
@@ -174,7 +161,7 @@ def test_flag_with_real_file_but_no_grid_extra_raises_actionable(
         "mode": "canonical",
         "canonical_eligible": True,
     }
-    with pytest.raises(ImportError, match=r"\[grid\] extra"):
+    with pytest.raises(ValueError, match="evidence_manifest"):
         _build_cashflow_params(cfg)
 
 

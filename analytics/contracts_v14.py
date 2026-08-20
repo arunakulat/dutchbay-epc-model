@@ -1265,6 +1265,200 @@ CANONICAL_FEEDER_INPUT_KINDS = frozenset(
 )
 SYNTHETIC_FEEDER_INPUT_KINDS = frozenset({"synthetic_placeholder", "test_fixture"})
 
+# Issue #1072 output/evidence vocabulary. Keep the exact user-mandated warning beside the
+# shared contracts (CCCDIR): grid, finance, API, and report consumers must not invent a
+# softer synonym or accidentally strip it from a synthetic process-provenance artifact.
+SYNTHETIC_PROCESS_PROVENANCE_WARNING = (
+    "based on synthetic data - non-bankable - only for process provenance purposes"
+)
+QSTS_RUN_MANIFEST_SCHEMA = "dutchbay_qsts_run_manifest_v1"
+QSTS_SYNTHETIC_OUTPUT_CLASS = "synthetic_process_provenance"
+QSTS_CONTROLLED_OUTPUT_CLASS = "controlled_input_nonbankable"
+
+
+def _is_exact_sha256(value: object) -> bool:
+    """Return whether ``value`` is an exact lowercase SHA-256 digest."""
+
+    return bool(
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+@dataclass(frozen=True)
+class QSTSRunManifest(ContractMixin):
+    """Concise, typed receipt binding a QSTS result to its accepted runtime evidence.
+
+    This is deliberately a *run receipt*, not a bankability certificate. It records the
+    externally verified package identity and immutable payload digests that actually fed
+    QSTS accounting, while structurally refusing lender, board, approval, release, and
+    bankability claims. Synthetic/test receipts also carry the exact mandatory warning and
+    a segregated output class.
+    """
+
+    schema: str
+    package_id: str
+    input_kind: str
+    output_class: str
+    payload_sha256: tuple[tuple[str, str], ...]
+    source_manifest_sha256: str | None = None
+    evidence_manifest_sha256: str | None = None
+    finance_wiring_mode: str | None = None
+    finance_wiring_enabled: bool = False
+    canonical_finance_eligible: bool = False
+    required_warning: str | None = None
+    bankable: bool = False
+    lender_eligible: bool = False
+    board_approval_eligible: bool = False
+    release_eligible: bool = False
+
+    def __post_init__(self) -> None:
+        """Refuse cross-mode identities and any manufactured approval claim."""
+
+        if self.schema != QSTS_RUN_MANIFEST_SCHEMA:
+            raise ValueError(
+                "QSTSRunManifest.schema must be "
+                f"{QSTS_RUN_MANIFEST_SCHEMA!r}, got {self.schema!r}."
+            )
+        if not isinstance(self.package_id, str) or not self.package_id.strip():
+            raise ValueError("QSTSRunManifest.package_id must be a non-empty string.")
+        if self.input_kind not in FEEDER_INPUT_KINDS:
+            raise ValueError(
+                "QSTSRunManifest.input_kind must be one of "
+                f"{sorted(FEEDER_INPUT_KINDS)}, got {self.input_kind!r}."
+            )
+        if self.finance_wiring_mode is not None and (
+            not isinstance(self.finance_wiring_mode, str)
+            or self.finance_wiring_mode not in {"canonical", "synthetic_counterfactual"}
+        ):
+            raise ValueError(
+                "QSTSRunManifest.finance_wiring_mode must be None, 'canonical', or "
+                f"'synthetic_counterfactual', got {self.finance_wiring_mode!r}."
+            )
+        for field_name in (
+            "finance_wiring_enabled",
+            "canonical_finance_eligible",
+            "bankable",
+            "lender_eligible",
+            "board_approval_eligible",
+            "release_eligible",
+        ):
+            if type(getattr(self, field_name)) is not bool:  # noqa: E721
+                raise ValueError(
+                    f"QSTSRunManifest.{field_name} must be a literal boolean."
+                )
+        if any(
+            (
+                self.bankable,
+                self.lender_eligible,
+                self.board_approval_eligible,
+                self.release_eligible,
+            )
+        ):
+            raise ValueError(
+                "A #1072 QSTS run receipt cannot claim bankable, lender, board, approval, "
+                "or release eligibility. Those gates require separate real-data evidence "
+                "and sign-off."
+            )
+
+        seen_paths: set[str] = set()
+        if not isinstance(self.payload_sha256, tuple) or not self.payload_sha256:
+            raise ValueError(
+                "QSTSRunManifest.payload_sha256 must contain at least one accepted payload."
+            )
+        for item in self.payload_sha256:
+            if (
+                not isinstance(item, tuple)
+                or len(item) != 2
+                or not isinstance(item[0], str)
+                or not item[0]
+                or item[0].startswith(("/", "~"))
+                or "\\" in item[0]
+                or any(part in {"", ".", ".."} for part in item[0].split("/"))
+                or not _is_exact_sha256(item[1])
+            ):
+                raise ValueError(
+                    "QSTSRunManifest.payload_sha256 entries must be "
+                    "(non-empty relative path, lowercase SHA-256) tuples."
+                )
+            if item[0] in seen_paths:
+                raise ValueError(
+                    f"QSTSRunManifest.payload_sha256 repeats path {item[0]!r}."
+                )
+            seen_paths.add(item[0])
+
+        if self.source_manifest_sha256 is not None and not _is_exact_sha256(
+            self.source_manifest_sha256
+        ):
+            raise ValueError(
+                "QSTSRunManifest.source_manifest_sha256 must be None or an exact "
+                "lowercase SHA-256 digest."
+            )
+        if self.evidence_manifest_sha256 is not None and not _is_exact_sha256(
+            self.evidence_manifest_sha256
+        ):
+            raise ValueError(
+                "QSTSRunManifest.evidence_manifest_sha256 must be None or an exact "
+                "lowercase SHA-256 digest."
+            )
+
+        if self.input_kind in SYNTHETIC_FEEDER_INPUT_KINDS:
+            if (
+                self.output_class != QSTS_SYNTHETIC_OUTPUT_CLASS
+                or self.required_warning != SYNTHETIC_PROCESS_PROVENANCE_WARNING
+                or self.canonical_finance_eligible is not False
+                or self.finance_wiring_enabled is not False
+                or self.finance_wiring_mode == "canonical"
+            ):
+                raise ValueError(
+                    "Synthetic/test QSTS receipts require the segregated "
+                    "synthetic_process_provenance output class, the exact mandatory "
+                    "warning, finance_wiring_enabled=false, and "
+                    "canonical_finance_eligible=false."
+                )
+            if self.evidence_manifest_sha256 is not None:
+                raise ValueError(
+                    "Synthetic/test QSTS receipts cannot carry a real/site evidence "
+                    "manifest identity."
+                )
+            if (
+                self.input_kind == "synthetic_placeholder"
+                and self.source_manifest_sha256 is None
+            ):
+                raise ValueError(
+                    "A synthetic_placeholder QSTS receipt requires its externally pinned "
+                    "source manifest identity."
+                )
+        else:
+            if (
+                self.output_class != QSTS_CONTROLLED_OUTPUT_CLASS
+                or self.required_warning is not None
+                or self.evidence_manifest_sha256 is None
+                or self.source_manifest_sha256 is not None
+                or self.finance_wiring_mode == "synthetic_counterfactual"
+            ):
+                raise ValueError(
+                    "Utility/site QSTS receipts require the controlled_input_nonbankable "
+                    "output class and a real/site evidence manifest identity, with no "
+                    "synthetic source identity or warning."
+                )
+            if self.finance_wiring_enabled is True and (
+                self.finance_wiring_mode != "canonical"
+                or self.canonical_finance_eligible is not True
+            ):
+                raise ValueError(
+                    "An enabled utility/site QSTS receipt requires canonical mode and "
+                    "canonical_finance_eligible=true."
+                )
+            if self.canonical_finance_eligible is True and (
+                self.finance_wiring_mode != "canonical"
+            ):
+                raise ValueError(
+                    "QSTSRunManifest.canonical_finance_eligible=true requires canonical "
+                    "finance mode."
+                )
+
 
 @dataclass(frozen=True)
 class BessSocState(ContractMixin):
@@ -1725,6 +1919,10 @@ class CurtailmentShareResult(ContractMixin):
             the separate #923-C dolphin.
         source_manifest_sha256: exact external package identity propagated only after the
             #923-B2 runtime verifier accepts the governed synthetic placeholder.
+        evidence_manifest_sha256: exact external real/site evidence-package identity,
+            propagated only after the #1072 verifier binds every runtime payload.
+        qsts_run_manifest: concise typed receipt for the exact payloads and output class
+            accepted by the run. It never grants bankability or approval status.
         limitations: durable machine-readable evidence limitations.
         export_cap_mw: the POC export limit the self-curtailment is measured against.
         gross_energy_mwh: total generation injected over the horizon BEFORE any curtailment.
@@ -1773,6 +1971,8 @@ class CurtailmentShareResult(ContractMixin):
     n_nonconverged_steps: int | None = None
     source_manifest_sha256: str | None = None
     limitations: tuple[str, ...] = ()
+    evidence_manifest_sha256: str | None = None
+    qsts_run_manifest: QSTSRunManifest | None = None
 
     def __post_init__(self) -> None:
         """Enforce machine-readable feeder provenance before it can be serialized.
@@ -1816,6 +2016,16 @@ class CurtailmentShareResult(ContractMixin):
                 f"got {manifest_sha256!r}."
             )
 
+        evidence_manifest_sha256 = self.evidence_manifest_sha256
+        if evidence_manifest_sha256 is not None and not _is_exact_sha256(
+            evidence_manifest_sha256
+        ):
+            raise ValueError(
+                "CurtailmentShareResult.evidence_manifest_sha256 must be None or exactly "
+                "64 lowercase hexadecimal characters, "
+                f"got {evidence_manifest_sha256!r}."
+            )
+
         kind = self.feeder_input_kind
         if kind is not None and (
             not isinstance(kind, str) or kind not in FEEDER_INPUT_KINDS
@@ -1831,6 +2041,48 @@ class CurtailmentShareResult(ContractMixin):
                 "governed synthetic_placeholder package; "
                 f"got feeder_input_kind={kind!r}."
             )
+        if (
+            evidence_manifest_sha256 is not None
+            and kind not in CANONICAL_FEEDER_INPUT_KINDS
+        ):
+            raise ValueError(
+                "CurtailmentShareResult.evidence_manifest_sha256 is reserved for a "
+                "verified utility/site evidence package; "
+                f"got feeder_input_kind={kind!r}."
+            )
+        if manifest_sha256 is not None and evidence_manifest_sha256 is not None:
+            raise ValueError(
+                "CurtailmentShareResult cannot carry synthetic and real/site manifest "
+                "identities at the same time."
+            )
+
+        receipt = self.qsts_run_manifest
+        if receipt is not None:
+            if not isinstance(receipt, QSTSRunManifest):
+                raise ValueError(
+                    "CurtailmentShareResult.qsts_run_manifest must be a QSTSRunManifest "
+                    "or None."
+                )
+            if receipt.input_kind != kind:
+                raise ValueError(
+                    "CurtailmentShareResult feeder kind does not match its QSTS run "
+                    f"receipt: {kind!r} != {receipt.input_kind!r}."
+                )
+            if receipt.source_manifest_sha256 != manifest_sha256:
+                raise ValueError(
+                    "CurtailmentShareResult synthetic manifest identity does not match "
+                    "its QSTS run receipt."
+                )
+            if receipt.evidence_manifest_sha256 != evidence_manifest_sha256:
+                raise ValueError(
+                    "CurtailmentShareResult real/site evidence identity does not match "
+                    "its QSTS run receipt."
+                )
+            if receipt.canonical_finance_eligible != self.canonical_finance_eligible:
+                raise ValueError(
+                    "CurtailmentShareResult canonical eligibility does not match its "
+                    "QSTS run receipt."
+                )
 
         if kind in SYNTHETIC_FEEDER_INPUT_KINDS:
             if (
@@ -2078,6 +2330,11 @@ __all__ = [
     "FEEDER_INPUT_KINDS",
     "CANONICAL_FEEDER_INPUT_KINDS",
     "SYNTHETIC_FEEDER_INPUT_KINDS",
+    "SYNTHETIC_PROCESS_PROVENANCE_WARNING",
+    "QSTS_RUN_MANIFEST_SCHEMA",
+    "QSTS_SYNTHETIC_OUTPUT_CLASS",
+    "QSTS_CONTROLLED_OUTPUT_CLASS",
+    "QSTSRunManifest",
     "CurtailmentShareResult",
     "GroupDroopContribution",
     "FreqResponseResult",

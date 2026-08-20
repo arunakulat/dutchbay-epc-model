@@ -58,7 +58,12 @@ import pytest
 from scipy.optimize import minimize_scalar
 from scipy.stats import binom, binomtest, norm
 
-from analytics.contracts_v14 import CurtailmentShareResult
+from analytics.contracts_v14 import (
+    QSTS_CONTROLLED_OUTPUT_CLASS,
+    QSTS_RUN_MANIFEST_SCHEMA,
+    CurtailmentShareResult,
+    QSTSRunManifest,
+)
 from analytics.core.exceedance import EXCEEDANCE_Z
 from analytics.core.risk_metrics import RiskConfig, TailRiskAnalyzer
 from analytics.fx.fx_builder import compute_fx_risk_profile
@@ -414,17 +419,42 @@ def test_fx_var_is_residual_hard_currency_exposure_times_shock() -> None:
     assert profile.debt_usd_pct == pytest.approx(50.0)
 
 
+_METHODOLOGY_FEEDER_PATH = "/real/feeder.dss"
+_METHODOLOGY_EVIDENCE_PATH = "/real/qsts-evidence.json"
+_METHODOLOGY_EVIDENCE_SHA256 = "d" * 64
+
+
+def _methodology_qsts_receipt() -> QSTSRunManifest:
+    """Return a canonical-contract receipt for this arithmetic-only test double."""
+
+    return QSTSRunManifest(
+        schema=QSTS_RUN_MANIFEST_SCHEMA,
+        package_id="methodology-curtailment-contract-double",
+        input_kind="engineer_prepared_site_model",
+        output_class=QSTS_CONTROLLED_OUTPUT_CLASS,
+        payload_sha256=(("feeder/Master.dss", "e" * 64),),
+        evidence_manifest_sha256=_METHODOLOGY_EVIDENCE_SHA256,
+        finance_wiring_mode="canonical",
+        finance_wiring_enabled=True,
+        canonical_finance_eligible=True,
+    )
+
+
 def _curtailment_result(self_pct: float, deemed_pct: float) -> CurtailmentShareResult:
     return CurtailmentShareResult(
         ran=True,
-        feeder_source="/real/feeder.dss",
+        feeder_source=_METHODOLOGY_FEEDER_PATH,
         feeder_input_kind="engineer_prepared_site_model",
         generated_input=False,
+        observed_network_data=False,
         site_representative=True,
         canonical_finance_eligible=True,
+        evidence_manifest_sha256=_METHODOLOGY_EVIDENCE_SHA256,
+        qsts_run_manifest=_methodology_qsts_receipt(),
         self_curtailed_pct=self_pct,
         deemed_paid_pct=deemed_pct,
-        bankable=True,
+        bankable=False,
+        reason="methodology arithmetic contract double; not site or lender evidence",
     )
 
 
@@ -451,7 +481,9 @@ def test_only_self_curtailment_is_wired_deemed_paid_is_excluded() -> None:
             "qsts": {
                 "enabled": True,
                 "input_kind": "engineer_prepared_site_model",
-                "feeder_model_path": "/real/feeder.dss",
+                "feeder_model_path": _METHODOLOGY_FEEDER_PATH,
+                "evidence_manifest_path": _METHODOLOGY_EVIDENCE_PATH,
+                "evidence_manifest_sha256": _METHODOLOGY_EVIDENCE_SHA256,
                 "finance_wiring": {
                     "enabled": True,
                     "mode": "canonical",

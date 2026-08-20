@@ -28,7 +28,11 @@ from typing import Any, Dict, Mapping
 import pytest
 import yaml
 
-from analytics.contracts_v14 import CurtailmentShareResult
+from analytics.contracts_v14 import (
+    QSTS_SYNTHETIC_OUTPUT_CLASS,
+    CurtailmentShareResult,
+)
+from analytics.grid.qsts_evidence import QSTSEvidenceError
 from app.reports import grid_screening_emit as gse
 from app.reports.grid_screening_emit import (
     EMT_CONFIRMATION_STAMP,
@@ -257,6 +261,10 @@ def test_executed_synthetic_curtailment_is_presented_with_structural_warning(
     assert model.curtailment is synthetic
     assert "curtailment" not in model.degraded_screens
     assert SYNTHETIC_CURTAILMENT_WARNING in html
+    assert (
+        SYNTHETIC_CURTAILMENT_WARNING
+        == "based on synthetic data - non-bankable - only for process provenance purposes"
+    )
     assert "SYNTHETIC COUNTERFACTUAL" in html
     assert "not the CEB Kalpitiya/Puttalam feeder" in html
     assert "Canonical-finance eligible?</td><td>NO" in html
@@ -374,6 +382,75 @@ def test_emit_generated_at_defaults_to_now(tmp_path: Path) -> None:
     out_html = tmp_path / "r.html"
     emit_grid_screening_report_from_pipeline({}, scenario, out_html)
     assert out_html.exists()
+
+
+def test_emit_routes_synthetic_qsts_to_segregated_output_namespace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A generated result cannot occupy the caller's ordinary report directory."""
+    import analytics.grid.curtailment_qsts as cq
+
+    synthetic = CurtailmentShareResult(
+        ran=True,
+        feeder_source="/fixtures/process-only.dss",
+        feeder_input_kind="test_fixture",
+        generated_input=True,
+        observed_network_data=False,
+        site_representative=False,
+        canonical_finance_eligible=False,
+        export_cap_mw=100.0,
+        gross_energy_mwh=100.0,
+        self_curtailed_energy_mwh=5.0,
+    )
+    monkeypatch.setattr(cq, "run_qsts_curtailment", lambda _cfg: synthetic)
+    scenario = _write_scenario(tmp_path, _scenario())
+    requested = tmp_path / "grid_screening_report.html"
+
+    written = emit_grid_screening_report_from_pipeline({}, scenario, requested)
+
+    assert written == tmp_path / QSTS_SYNTHETIC_OUTPUT_CLASS / requested.name
+    assert written.exists()
+    assert not requested.exists()
+    assert SYNTHETIC_CURTAILMENT_WARNING in written.read_text(encoding="utf-8")
+
+
+def test_emit_refuses_synthetic_output_with_lender_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import analytics.grid.curtailment_qsts as cq
+
+    synthetic = CurtailmentShareResult(
+        ran=True,
+        feeder_source="/fixtures/process-only.dss",
+        feeder_input_kind="test_fixture",
+        generated_input=True,
+        observed_network_data=False,
+        site_representative=False,
+        canonical_finance_eligible=False,
+    )
+    monkeypatch.setattr(cq, "run_qsts_curtailment", lambda _cfg: synthetic)
+    scenario = _write_scenario(tmp_path, _scenario())
+
+    with pytest.raises(ValueError, match="prohibited.*lender"):
+        emit_grid_screening_report_from_pipeline(
+            {}, scenario, tmp_path / "lender_report.html"
+        )
+
+
+def test_evidence_control_failure_is_not_casper_degraded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Identity substitution is a hard refusal, unlike an optional-engine outage."""
+    import analytics.grid.curtailment_qsts as cq
+
+    def _identity_failure(_cfg: Mapping[str, Any]) -> CurtailmentShareResult:
+        raise QSTSEvidenceError("substituted evidence")
+
+    monkeypatch.setattr(cq, "run_qsts_curtailment", _identity_failure)
+    with pytest.raises(QSTSEvidenceError, match="substituted evidence"):
+        build_grid_screening_model(
+            _scenario(), scenario_variant="test", generated_at="2020-01-01T00:00:00"
+        )
 
 
 # ── latency guard (#645) ─────────────────────────────────────────────────────

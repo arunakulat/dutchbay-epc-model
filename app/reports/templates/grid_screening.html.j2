@@ -167,6 +167,7 @@
 {% if m.curtailment.generated_input or not m.curtailment.site_representative %}
 <div class="caveat" id="synthetic-curtailment-warning">
   <span class="label">⚠ {{ m.synthetic_curtailment_warning }}</span>
+  <p>{{ m.synthetic_curtailment_detail }}</p>
 </div>
 {% endif %}
 <table>
@@ -179,7 +180,17 @@
   <tr><td>Canonical-finance eligible?</td><td>{{ 'YES' if m.curtailment.canonical_finance_eligible else 'NO' }}</td></tr>
   <tr><td>Bankable?</td><td>{{ 'YES' if m.curtailment.bankable else 'NO' }}</td></tr>
   {% if m.curtailment.source_manifest_sha256 %}
-  <tr><td>Verified source-manifest SHA-256</td><td><code>{{ m.curtailment.source_manifest_sha256 }}</code></td></tr>
+  <tr><td>Verified synthetic source-manifest SHA-256</td><td><code>{{ m.curtailment.source_manifest_sha256 }}</code></td></tr>
+  {% endif %}
+  {% if m.curtailment.evidence_manifest_sha256 %}
+  <tr><td>Verified real/site evidence-manifest SHA-256</td><td><code>{{ m.curtailment.evidence_manifest_sha256 }}</code></td></tr>
+  {% endif %}
+  {% if m.curtailment.qsts_run_manifest %}
+  <tr><td>QSTS run-receipt schema</td><td><code>{{ m.curtailment.qsts_run_manifest.schema }}</code></td></tr>
+  <tr><td>Evidence package ID</td><td><code>{{ m.curtailment.qsts_run_manifest.package_id }}</code></td></tr>
+  <tr><td>Controlled output class</td><td><code>{{ m.curtailment.qsts_run_manifest.output_class }}</code></td></tr>
+  <tr><td>Accepted payload count</td><td>{{ m.curtailment.qsts_run_manifest.payload_sha256 | length }}</td></tr>
+  <tr><td>Lender / board / release eligible?</td><td>NO / NO / NO</td></tr>
   {% endif %}
   <tr><td>Export cap (MW)</td><td>{{ fmt(m.curtailment.export_cap_mw) }}</td></tr>
   <tr><td>Gross energy (MWh)</td><td>{{ fmt(m.curtailment.gross_energy_mwh) }}</td></tr>
