@@ -13,6 +13,8 @@ Run: ``pytest tests/ -m grid``  (or ``-m 'not grid'`` to skip).
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 pytestmark = pytest.mark.grid
@@ -64,3 +66,11 @@ def test_andes_lvrt_case_runs() -> None:
     assert res.ran is True, res.detail
     assert res.lvrt_enter_pu == pytest.approx(0.89)  # seeded from the D0 fixture
     assert res.n_devices > 0
+
+
+def test_issue_1107_independent_ci_failure_probe() -> None:
+    """Temporary PR probe: fail only inside the independent Grid Study job."""
+
+    if os.environ.get("DUTCHBAY_GRID_CI_EXECUTION") != "independent":
+        pytest.skip("controlled #1107 probe runs only in independent Grid Study CI")
+    pytest.fail("controlled #1107 independent Grid Study failure probe")
