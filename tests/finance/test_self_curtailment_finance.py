@@ -25,7 +25,12 @@ from typing import Any, Dict
 
 import pytest
 
-from analytics.contracts_v14 import CurtailmentShareResult
+from analytics.contracts_v14 import (
+    QSTS_CONTROLLED_OUTPUT_CLASS,
+    QSTS_RUN_MANIFEST_SCHEMA,
+    CurtailmentShareResult,
+    QSTSRunManifest,
+)
 from analytics.scenario_loader import load_scenario_config
 from finance.self_curtailment_v14 import (
     FINANCE_WIRING_ENABLED_PATH,
@@ -44,6 +49,24 @@ LENDER = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
 
 
 _DECLARED_SITE_MODEL_PATH = "/test-double/declared-site-model.dss"
+_DECLARED_EVIDENCE_MANIFEST_PATH = "/test-double/qsts-evidence.json"
+_DECLARED_EVIDENCE_MANIFEST_SHA256 = "b" * 64
+
+
+def _canonical_run_receipt() -> QSTSRunManifest:
+    """Typed control receipt for the finance-only canonical contract double."""
+
+    return QSTSRunManifest(
+        schema=QSTS_RUN_MANIFEST_SCHEMA,
+        package_id="finance-contract-double",
+        input_kind="engineer_prepared_site_model",
+        output_class=QSTS_CONTROLLED_OUTPUT_CLASS,
+        payload_sha256=(("feeder/Master.dss", "c" * 64),),
+        evidence_manifest_sha256=_DECLARED_EVIDENCE_MANIFEST_SHA256,
+        finance_wiring_mode="canonical",
+        finance_wiring_enabled=True,
+        canonical_finance_eligible=True,
+    )
 
 
 def _canonical_result_test_double(
@@ -58,6 +81,8 @@ def _canonical_result_test_double(
         observed_network_data=False,
         site_representative=True,
         canonical_finance_eligible=True,
+        evidence_manifest_sha256=_DECLARED_EVIDENCE_MANIFEST_SHA256,
+        qsts_run_manifest=_canonical_run_receipt(),
         export_cap_mw=150.0,
         gross_energy_mwh=100_000.0,
         curtailed_total_mwh=(self_pct + deemed_pct) / 100.0 * 100_000.0,
@@ -81,6 +106,8 @@ def _enable_wiring(cfg: Dict[str, Any]) -> Dict[str, Any]:
     qsts["enabled"] = True
     qsts["input_kind"] = "engineer_prepared_site_model"
     qsts["feeder_model_path"] = _DECLARED_SITE_MODEL_PATH
+    qsts["evidence_manifest_path"] = _DECLARED_EVIDENCE_MANIFEST_PATH
+    qsts["evidence_manifest_sha256"] = _DECLARED_EVIDENCE_MANIFEST_SHA256
     qsts["finance_wiring"] = {
         "enabled": True,
         "mode": "canonical",
@@ -285,6 +312,7 @@ def test_contract_requires_observed_flag_for_utility_observed_kind() -> None:
             _canonical_result_test_double(8.0),
             feeder_input_kind="utility_observed_model",
             observed_network_data=False,
+            qsts_run_manifest=None,
         )
 
 

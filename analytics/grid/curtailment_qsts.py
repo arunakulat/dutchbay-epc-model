@@ -58,12 +58,18 @@ File existence is not provenance. Every path-backed run declares ``grid.qsts.inp
 A synthetic/test file may execute for advisory software diagnostics, but the result is
 typed ``generated_input=True``, ``site_representative=False`` and
 ``canonical_finance_eligible=False``. Canonical finance refuses it. The engine returns an
-inert / NOT-RUN :class:`analytics.contracts_v14.CurtailmentShareResult` only when no
-path-backed solve is available:
+inert / NOT-RUN :class:`analytics.contracts_v14.CurtailmentShareResult` only for an
+explicitly non-running state:
 
   * ``grid.qsts.enabled`` is not True (default-off gate) → inert;
-  * no ``grid.qsts.feeder_model_path`` (or the file is absent) → inert;
-  * the pathless built-in ``"synthetic_demo"`` is selected → inert.
+  * the pathless built-in ``"synthetic_demo"`` is selected → inert;
+  * a diagnostic ``test_fixture`` path is absent → inert.
+
+An enabled controlled package with a missing path or identity fails closed. Utility/site
+inputs additionally require an externally pinned evidence manifest that binds the feeder,
+generation profile, operator-instruction schedule, export cap, timestep, and every payload.
+Accepted real/site and governed synthetic payloads are executed from private immutable
+snapshots so a source mutation after verification cannot change the solve.
 
 The governed ``synthetic_placeholder`` has an additional B2 boundary: its external
 configuration supplies ``grid.qsts.source_manifest_sha256``; runtime derives the colocated
@@ -97,18 +103,31 @@ refused. The committed scenario remains default-off and byte-identical.
 
 from __future__ import annotations
 
+import hashlib
 import math
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Sequence, TypeGuard
+from tempfile import TemporaryDirectory
+from typing import Any, Iterator, Mapping, Sequence, TypeGuard
 
 from analytics.contracts_v14 import (
     CANONICAL_FEEDER_INPUT_KINDS,
     FEEDER_INPUT_KINDS,
+    QSTS_CONTROLLED_OUTPUT_CLASS,
+    QSTS_RUN_MANIFEST_SCHEMA,
+    QSTS_SYNTHETIC_OUTPUT_CLASS,
     SYNTHETIC_FEEDER_INPUT_KINDS,
+    SYNTHETIC_PROCESS_PROVENANCE_WARNING,
     CurtailmentShareResult,
+    QSTSRunManifest,
 )
 from analytics.grid.capabilities.bess_soc import bess_soc_state, split_reserves
+from analytics.grid.qsts_evidence import (
+    QSTSEvidenceError,
+    VerifiedQSTSPayload,
+    verify_qsts_evidence_package,
+)
 
 #: The feeder-source token stamped when the caller asked for the built-in synthetic/demo
 #: feeder rather than a path-backed model file. It is an inert smoke-test marker only.
@@ -122,11 +141,16 @@ SYNTHETIC_PACKAGE_MANIFEST_NAME = "manifest.json"
 
 
 @dataclass(frozen=True)
-class VerifiedSyntheticRuntimeInputs:
-    """Manifest-bound synthetic profile and export cap accepted by the verifier."""
+class VerifiedRuntimeInputs:
+    """Manifest-bound values and bytes accepted for one immutable QSTS runtime."""
 
+    package_id: str
+    master_relative_path: str
+    payloads: tuple[VerifiedQSTSPayload, ...]
     generation_profile_mw: tuple[float, ...]
     export_cap_mw: float
+    grid_instructed_profile_mw: tuple[float, ...] | None = None
+    timestep_hours: float | None = None
 
 
 @dataclass(frozen=True)
@@ -147,32 +171,44 @@ class FeederInput:
     site_representative: bool
     canonical_finance_eligible: bool
     source_manifest_sha256: str | None = None
-    verified_synthetic_runtime: VerifiedSyntheticRuntimeInputs | None = None
+    evidence_manifest_sha256: str | None = None
+    qsts_run_manifest: QSTSRunManifest | None = None
+    verified_runtime: VerifiedRuntimeInputs | None = None
 
     def __post_init__(self) -> None:
         """Prevent a verified-manifest identity from being attached to another kind."""
 
-        if (
-            self.verified_synthetic_runtime is not None
-            and self.source_manifest_sha256 is None
-        ):
+        if self.verified_runtime is not None and self.qsts_run_manifest is None:
             raise ValueError(
-                "FeederInput.verified_synthetic_runtime requires a verified synthetic "
-                "package manifest identity."
+                "FeederInput.verified_runtime requires a typed QSTS run manifest."
             )
-        if self.source_manifest_sha256 is None:
-            return
-        _require_sha256(
-            self.source_manifest_sha256, "FeederInput.source_manifest_sha256"
-        )
-        if (
-            self.input_kind != "synthetic_placeholder"
-            or self.generated_input is not True
-        ):
-            raise ValueError(
-                "FeederInput.source_manifest_sha256 is reserved for a generated "
-                "synthetic_placeholder."
+        if self.source_manifest_sha256 is not None:
+            _require_sha256(
+                self.source_manifest_sha256, "FeederInput.source_manifest_sha256"
             )
+            if (
+                self.input_kind != "synthetic_placeholder"
+                or self.generated_input is not True
+                or self.evidence_manifest_sha256 is not None
+            ):
+                raise ValueError(
+                    "FeederInput.source_manifest_sha256 is reserved for a generated "
+                    "synthetic_placeholder and cannot coexist with real/site evidence."
+                )
+        if self.evidence_manifest_sha256 is not None:
+            _require_sha256(
+                self.evidence_manifest_sha256,
+                "FeederInput.evidence_manifest_sha256",
+            )
+            if (
+                self.input_kind not in CANONICAL_FEEDER_INPUT_KINDS
+                or self.generated_input is not False
+                or self.source_manifest_sha256 is not None
+            ):
+                raise ValueError(
+                    "FeederInput.evidence_manifest_sha256 is reserved for a non-generated "
+                    "utility/site package and cannot coexist with synthetic evidence."
+                )
 
     @property
     def can_solve(self) -> bool:
@@ -241,7 +277,7 @@ def _require_sha256(value: Any, field: str) -> str:
 
 def _verify_synthetic_feeder_runtime_package(
     *, master_path: Path, expected_manifest_sha256: str
-) -> tuple[str, str, VerifiedSyntheticRuntimeInputs]:
+) -> tuple[str, str, VerifiedRuntimeInputs]:
     """Verify the governed B1 package before B2 exposes it to QSTS accounting.
 
     The expected digest is supplied outside the package. The manifest path is derived from
@@ -268,19 +304,134 @@ def _verify_synthetic_feeder_runtime_package(
         expected_manifest_sha256=expected_manifest_sha256,
     )
     if package.opendss_compile_status != "passed_compile_only_no_convergence_claim":
-        raise ValueError(
+        raise QSTSEvidenceError(
             "Runtime use of a synthetic_placeholder requires a package whose detached "
             "OpenDSS compile check passed. Test-only compile-disabled packages are not "
             "runtime inputs."
         )
+    payloads: list[VerifiedQSTSPayload] = []
+    for relative_path in sorted(package.file_sha256):
+        payload_path = package.output_root.joinpath(*relative_path.split("/"))
+        content = payload_path.read_bytes()
+        actual_sha256 = hashlib.sha256(content).hexdigest()
+        expected_sha256 = package.file_sha256[relative_path]
+        if actual_sha256 != expected_sha256:
+            raise QSTSEvidenceError(
+                "Synthetic QSTS payload changed after package verification: "
+                f"{relative_path!r} expected {expected_sha256}, got {actual_sha256}."
+            )
+        payloads.append(VerifiedQSTSPayload(relative_path, actual_sha256, content))
+    try:
+        master_relative_path = package.master_path.relative_to(
+            package.output_root
+        ).as_posix()
+    except ValueError as exc:  # defence in depth; B1 already proves package containment
+        raise QSTSEvidenceError(
+            "Verified synthetic feeder master escaped its accepted package root."
+        ) from exc
     return (
         str(package.master_path),
         package.manifest_sha256,
-        VerifiedSyntheticRuntimeInputs(
+        VerifiedRuntimeInputs(
+            package_id=f"synthetic-placeholder-{package.manifest_sha256[:16]}",
+            master_relative_path=master_relative_path,
+            payloads=tuple(payloads),
             generation_profile_mw=package.generation_profile_mw,
             export_cap_mw=package.export_cap_mw,
         ),
     )
+
+
+def _qsts_wiring_state(qsts: Mapping[str, Any]) -> tuple[str | None, bool, bool]:
+    """Return the strictly typed finance mode/enabled/eligibility declarations."""
+
+    wiring = qsts.get("finance_wiring")
+    if wiring is None:
+        return None, False, False
+    if not isinstance(wiring, Mapping):
+        raise QSTSEvidenceError(
+            "grid.qsts.finance_wiring must be a mapping when declared."
+        )
+    mode = wiring.get("mode")
+    if mode is not None and (
+        not isinstance(mode, str)
+        or mode not in {"canonical", "synthetic_counterfactual"}
+    ):
+        raise QSTSEvidenceError(
+            "grid.qsts.finance_wiring.mode must be 'canonical' or "
+            f"'synthetic_counterfactual', got {mode!r}."
+        )
+    enabled = wiring.get("enabled", False)
+    eligible = wiring.get("canonical_eligible", False)
+    if type(enabled) is not bool or type(eligible) is not bool:  # noqa: E721
+        raise QSTSEvidenceError(
+            "grid.qsts.finance_wiring.enabled and canonical_eligible must be literal "
+            "booleans when declared."
+        )
+    return mode, enabled, eligible
+
+
+def _build_qsts_run_manifest(
+    *,
+    qsts: Mapping[str, Any],
+    input_kind: str,
+    runtime: VerifiedRuntimeInputs,
+    source_manifest_sha256: str | None,
+    evidence_manifest_sha256: str | None,
+) -> QSTSRunManifest:
+    """Build the concise CCCDIR receipt from identities accepted at runtime."""
+
+    mode, wiring_enabled, canonical_eligible = _qsts_wiring_state(qsts)
+    generated = input_kind in SYNTHETIC_FEEDER_INPUT_KINDS
+    if generated and wiring_enabled:
+        raise QSTSEvidenceError(
+            "Synthetic/test QSTS inputs cannot enable canonical finance wiring."
+        )
+    return QSTSRunManifest(
+        schema=QSTS_RUN_MANIFEST_SCHEMA,
+        package_id=runtime.package_id,
+        input_kind=input_kind,
+        output_class=(
+            QSTS_SYNTHETIC_OUTPUT_CLASS if generated else QSTS_CONTROLLED_OUTPUT_CLASS
+        ),
+        payload_sha256=tuple(
+            (payload.relative_path, payload.sha256) for payload in runtime.payloads
+        ),
+        source_manifest_sha256=source_manifest_sha256,
+        evidence_manifest_sha256=evidence_manifest_sha256,
+        finance_wiring_mode=mode,
+        finance_wiring_enabled=wiring_enabled,
+        canonical_finance_eligible=(
+            False if generated else canonical_eligible and mode == "canonical"
+        ),
+        required_warning=(SYNTHETIC_PROCESS_PROVENANCE_WARNING if generated else None),
+    )
+
+
+@contextmanager
+def _materialized_verified_feeder(
+    runtime: VerifiedRuntimeInputs,
+) -> Iterator[str]:
+    """Yield a private feeder snapshot assembled only from digest-accepted bytes."""
+
+    with TemporaryDirectory(prefix="dutchbay-qsts-verified-") as directory:
+        root = Path(directory)
+        for payload in runtime.payloads:
+            target = root.joinpath(*payload.relative_path.split("/"))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(payload.content)
+            if hashlib.sha256(target.read_bytes()).hexdigest() != payload.sha256:
+                raise QSTSEvidenceError(
+                    f"Private QSTS snapshot write failed integrity for "
+                    f"{payload.relative_path!r}."
+                )
+        master = root.joinpath(*runtime.master_relative_path.split("/"))
+        if not master.is_file():
+            raise QSTSEvidenceError(
+                "Verified QSTS runtime does not contain its declared feeder master "
+                f"{runtime.master_relative_path!r}."
+            )
+        yield str(master)
 
 
 def _require_profile(
@@ -348,7 +499,7 @@ def _require_verified_profile_match(
     for index, (actual, verified) in enumerate(zip(supplied, expected, strict=True)):
         if abs(actual - verified) > _MWH_TOL:
             raise ValueError(
-                f"{field} must match the manifest-verified synthetic package; first "
+                f"{field} must match the manifest-verified QSTS package; first "
                 f"mismatch at index {index}: got {actual}, expected {verified} {unit}."
             )
     return expected
@@ -362,7 +513,7 @@ def _require_verified_export_cap_match(
     supplied = _require_positive(value, field)
     if abs(supplied - expected_mw) > _MWH_TOL:
         raise ValueError(
-            f"{field} must match the manifest-verified synthetic package export cap: "
+            f"{field} must match the manifest-verified QSTS package export cap: "
             f"got {supplied}, expected {expected_mw} MW."
         )
     return expected_mw
@@ -471,6 +622,8 @@ def split_curtailment(
     site_representative: bool = False,
     canonical_finance_eligible: bool = False,
     source_manifest_sha256: str | None = None,
+    evidence_manifest_sha256: str | None = None,
+    qsts_run_manifest: QSTSRunManifest | None = None,
     limitations: tuple[str, ...] = (),
 ) -> CurtailmentShareResult:
     """Split integrated curtailment into deemed-paid vs (BESS-recovered) self-curtailed.
@@ -508,6 +661,8 @@ def split_curtailment(
             itself; the explicit evidence fields carry that classification.
         source_manifest_sha256: externally pinned and runtime-verified package-manifest
             identity, when the feeder came from the governed #923 synthetic package.
+        evidence_manifest_sha256: externally pinned real/site evidence-manifest identity.
+        qsts_run_manifest: typed receipt binding the accepted payloads and output class.
 
     Returns:
         A :class:`CurtailmentShareResult` with ``ran=True`` and the full deemed-vs-self
@@ -576,6 +731,8 @@ def split_curtailment(
         site_representative=site_representative,
         canonical_finance_eligible=canonical_finance_eligible,
         source_manifest_sha256=source_manifest_sha256,
+        evidence_manifest_sha256=evidence_manifest_sha256,
+        qsts_run_manifest=qsts_run_manifest,
         limitations=limitations,
         export_cap_mw=cap_mw,
         gross_energy_mwh=gross_energy,
@@ -616,7 +773,8 @@ def _inert_result(
 ) -> CurtailmentShareResult:
     """Build the NOT-RUN / inert result (energy fields ``None``, ``ran=False``).
 
-    Used for default-off, no/absent path, and the pathless built-in demo. A path-backed
+    Used for default-off, an absent diagnostic test fixture, and the pathless built-in demo.
+    Missing governed synthetic or real/site evidence fails closed instead. A path-backed
     synthetic/test input may execute but remains typed noncanonical. A fabricated zero-loss
     "pass" is refused here: energy fields stay ``None`` when no calculation ran.
     """
@@ -643,182 +801,244 @@ def _resolve_feeder(grid: Mapping[str, Any]) -> FeederInput:
 
     ``grid.qsts.input_kind`` is the controlling provenance token.  An existing path may be
     solved for any declared kind, including a synthetic placeholder or test fixture, but
-    only a site/utility kind can ever be marked canonical-finance eligible. A path-backed
-    ``synthetic_placeholder`` must additionally bind an externally pinned manifest digest;
-    B2 invokes the detached B1 verifier before exposing the feeder to accounting.
+    only a manifest-verified site/utility kind can ever be marked canonical-finance eligible.
+    A path-backed ``synthetic_placeholder`` binds the external B1 manifest digest; a
+    utility/site package binds its external #1072 evidence digest. Both retain accepted
+    payload bytes for immutable execution before reaching accounting.
     """
     qsts = grid.get("qsts")
     if not isinstance(qsts, Mapping):
-        return FeederInput(None, None, False, False, False, False, False)
+        return FeederInput(
+            source=None,
+            input_kind=None,
+            model_exists=False,
+            generated_input=False,
+            observed_network_data=False,
+            site_representative=False,
+            canonical_finance_eligible=False,
+        )
 
     raw_kind = qsts.get("input_kind")
     input_kind = raw_kind if isinstance(raw_kind, str) else None
-    if raw_kind is not None and input_kind not in FEEDER_INPUT_KINDS:
+    if input_kind not in FEEDER_INPUT_KINDS:
         allowed = ", ".join(sorted(FEEDER_INPUT_KINDS))
-        raise ValueError(
+        raise QSTSEvidenceError(
             "grid.qsts.input_kind must be one of "
-            f"[{allowed}], got {raw_kind!r}. A feeder path is not provenance."
+            f"[{allowed}], got {raw_kind!r}. A filesystem path is not provenance."
         )
 
-    raw_manifest_sha256 = qsts.get("source_manifest_sha256")
-    source_manifest_sha256: str | None = None
-    if raw_manifest_sha256 is not None:
-        source_manifest_sha256 = _require_sha256(
-            raw_manifest_sha256, "grid.qsts.source_manifest_sha256"
-        )
-        if input_kind != "synthetic_placeholder":
-            raise ValueError(
-                "grid.qsts.source_manifest_sha256 is reserved for the governed "
-                "synthetic_placeholder package; do not attach it to utility, site, test, "
-                "or unclassified feeder inputs."
-            )
+    raw_source_sha256 = qsts.get("source_manifest_sha256")
+    source_manifest_sha256 = (
+        _require_sha256(raw_source_sha256, "grid.qsts.source_manifest_sha256")
+        if raw_source_sha256 is not None
+        else None
+    )
+    raw_evidence_path = qsts.get("evidence_manifest_path")
+    evidence_manifest_path = (
+        raw_evidence_path.strip()
+        if isinstance(raw_evidence_path, str) and raw_evidence_path.strip()
+        else None
+    )
+    raw_evidence_sha256 = qsts.get("evidence_manifest_sha256")
+    evidence_manifest_sha256 = (
+        _require_sha256(raw_evidence_sha256, "grid.qsts.evidence_manifest_sha256")
+        if raw_evidence_sha256 is not None
+        else None
+    )
 
+    mode, wiring_enabled, requested_canonical = _qsts_wiring_state(qsts)
     generated = input_kind in SYNTHETIC_FEEDER_INPUT_KINDS
-    observed = input_kind == "utility_observed_model"
-    site_representative = input_kind in CANONICAL_FEEDER_INPUT_KINDS
-    wiring = qsts.get("finance_wiring")
-    if wiring is not None and not isinstance(wiring, Mapping):
-        raise ValueError(
-            "grid.qsts.finance_wiring must be a mapping when declared, got "
-            f"{type(wiring).__name__}."
-        )
-    wiring_enabled = wiring.get("enabled") if isinstance(wiring, Mapping) else None
-    mode = wiring.get("mode") if isinstance(wiring, Mapping) else None
-    requested_canonical = (
-        wiring.get("canonical_eligible") if isinstance(wiring, Mapping) else None
-    )
-    if wiring_enabled is not None and type(wiring_enabled) is not bool:
-        raise ValueError(
-            "grid.qsts.finance_wiring.enabled must be a literal boolean when declared, "
-            f"got {wiring_enabled!r}."
-        )
-    if mode is not None and (
-        not isinstance(mode, str)
-        or mode not in {"canonical", "synthetic_counterfactual"}
-    ):
-        raise ValueError(
-            "grid.qsts.finance_wiring.mode must be 'canonical' or "
-            f"'synthetic_counterfactual', got {mode!r}."
-        )
-    if requested_canonical is not None and type(requested_canonical) is not bool:
-        raise ValueError(
-            "grid.qsts.finance_wiring.canonical_eligible must be a literal boolean when "
-            f"declared, got {requested_canonical!r}."
-        )
     if requested_canonical and input_kind not in CANONICAL_FEEDER_INPUT_KINDS:
-        raise ValueError(
+        raise QSTSEvidenceError(
             "grid.qsts.finance_wiring.canonical_eligible=true is permitted only for "
-            "input_kind 'utility_observed_model' or 'engineer_prepared_site_model'. "
-            f"Got input_kind={input_kind!r}; synthetic/test inputs are never canonical."
+            "verified utility/site inputs."
         )
-    if mode == "canonical" and input_kind in SYNTHETIC_FEEDER_INPUT_KINDS:
-        raise ValueError(
-            "grid.qsts.finance_wiring.mode='canonical' refuses synthetic_placeholder and "
-            "test_fixture inputs."
+    if mode == "canonical" and generated:
+        raise QSTSEvidenceError(
+            "grid.qsts.finance_wiring.mode='canonical' refuses synthetic/test inputs."
         )
-    if (
-        mode == "synthetic_counterfactual"
-        and input_kind not in SYNTHETIC_FEEDER_INPUT_KINDS
-    ):
-        raise ValueError(
-            "grid.qsts.finance_wiring.mode='synthetic_counterfactual' requires "
-            "synthetic_placeholder or test_fixture input."
+    if mode == "synthetic_counterfactual" and not generated:
+        raise QSTSEvidenceError(
+            "grid.qsts.finance_wiring.mode='synthetic_counterfactual' requires a "
+            "synthetic/test input."
         )
-    if wiring_enabled is True and input_kind in CANONICAL_FEEDER_INPUT_KINDS:
-        if mode != "canonical" or requested_canonical is not True:
-            raise ValueError(
-                "Enabled utility/site feeder finance wiring requires mode='canonical' "
-                "and canonical_eligible=true."
-            )
-    if wiring_enabled is True and input_kind in SYNTHETIC_FEEDER_INPUT_KINDS:
-        raise ValueError(
-            "Synthetic/test feeder finance wiring cannot be enabled in the canonical "
-            "cashflow pipeline; keep it disabled and use the separately governed "
-            "counterfactual pathway once #923-D is implemented."
+    if wiring_enabled and generated:
+        raise QSTSEvidenceError(
+            "Synthetic/test QSTS inputs cannot enable canonical cashflow wiring."
         )
-    canonical_eligible = bool(
-        requested_canonical is True
-        and mode == "canonical"
-        and input_kind in CANONICAL_FEEDER_INPUT_KINDS
-    )
+    if wiring_enabled and (mode != "canonical" or requested_canonical is not True):
+        raise QSTSEvidenceError(
+            "Enabled utility/site QSTS finance wiring requires mode='canonical' and "
+            "canonical_eligible=true."
+        )
 
     use_synthetic_demo = qsts.get("use_synthetic_demo")
     if use_synthetic_demo is not None and type(use_synthetic_demo) is not bool:
-        raise ValueError(
-            "grid.qsts.use_synthetic_demo must be a literal boolean when declared, got "
-            f"{use_synthetic_demo!r}."
+        raise QSTSEvidenceError(
+            "grid.qsts.use_synthetic_demo must be a literal boolean when declared."
         )
     if use_synthetic_demo is True:
         if input_kind not in SYNTHETIC_FEEDER_INPUT_KINDS:
-            raise ValueError(
-                "grid.qsts.use_synthetic_demo=true requires grid.qsts.input_kind to be "
-                "'synthetic_placeholder' or 'test_fixture'; it cannot be classified as "
-                "a real/site feeder."
+            raise QSTSEvidenceError(
+                "grid.qsts.use_synthetic_demo=true requires synthetic/test input_kind."
             )
-        if source_manifest_sha256 is not None:
-            raise ValueError(
-                "The pathless grid.qsts.use_synthetic_demo has no package manifest; "
-                "remove grid.qsts.source_manifest_sha256."
+        if any(
+            identity is not None
+            for identity in (
+                source_manifest_sha256,
+                evidence_manifest_path,
+                evidence_manifest_sha256,
             )
-        demo_feeder_path = qsts.get("feeder_model_path")
-        if isinstance(demo_feeder_path, str) and demo_feeder_path.strip():
-            raise ValueError(
-                "grid.qsts.use_synthetic_demo=true is ambiguous with feeder_model_path. "
-                "Choose the inert built-in demo or one explicitly classified path-backed "
-                "input, never both."
+        ):
+            raise QSTSEvidenceError(
+                "The pathless synthetic demo has no package identity; remove source and "
+                "evidence manifest fields."
+            )
+        demo_path = qsts.get("feeder_model_path")
+        if demo_path is not None and demo_path != "":
+            raise QSTSEvidenceError(
+                "grid.qsts.use_synthetic_demo=true is ambiguous with feeder_model_path."
             )
         return FeederInput(
-            SYNTHETIC_FEEDER_SOURCE,
-            input_kind,
-            False,
-            True,
-            False,
-            False,
-            False,
+            source=SYNTHETIC_FEEDER_SOURCE,
+            input_kind=input_kind,
+            model_exists=False,
+            generated_input=True,
+            observed_network_data=False,
+            site_representative=False,
+            canonical_finance_eligible=False,
+        )
+
+    if input_kind == "synthetic_placeholder":
+        if source_manifest_sha256 is None:
+            raise QSTSEvidenceError(
+                "An enabled path-backed synthetic_placeholder requires an externally "
+                "pinned grid.qsts.source_manifest_sha256."
+            )
+        if evidence_manifest_path is not None or evidence_manifest_sha256 is not None:
+            raise QSTSEvidenceError(
+                "Synthetic QSTS inputs cannot carry or borrow a real/site evidence "
+                "manifest identity."
+            )
+    elif input_kind in CANONICAL_FEEDER_INPUT_KINDS:
+        if source_manifest_sha256 is not None:
+            raise QSTSEvidenceError(
+                "Utility/site QSTS inputs cannot carry a synthetic source manifest "
+                "identity."
+            )
+        if evidence_manifest_path is None or evidence_manifest_sha256 is None:
+            raise QSTSEvidenceError(
+                "An enabled utility/site QSTS input requires both "
+                "grid.qsts.evidence_manifest_path and an externally pinned "
+                "grid.qsts.evidence_manifest_sha256. A YAML label and feeder path are "
+                "not authenticated evidence."
+            )
+    elif (
+        source_manifest_sha256 is not None
+        or evidence_manifest_path is not None
+        or evidence_manifest_sha256 is not None
+    ):
+        raise QSTSEvidenceError(
+            "test_fixture inputs cannot carry synthetic production or real/site evidence "
+            "manifest identities."
         )
 
     path = qsts.get("feeder_model_path")
     if not isinstance(path, str) or not path.strip():
-        return FeederInput(
-            None,
-            input_kind,
-            False,
-            generated,
-            observed,
-            site_representative,
-            False,
+        raise QSTSEvidenceError(
+            "grid.qsts.enabled=true requires a non-empty feeder_model_path."
         )
-
     normalized_path = path.strip()
-    if input_kind == "synthetic_placeholder" and source_manifest_sha256 is None:
-        raise ValueError(
-            "An enabled path-backed grid.qsts.input_kind='synthetic_placeholder' requires "
-            "grid.qsts.source_manifest_sha256 pinned outside the package."
-        )
-
     model_path = Path(normalized_path)
-    model_exists = model_path.is_file()
-    resolved_source = normalized_path if model_exists else None
-    verified_manifest_sha256: str | None = None
-    verified_synthetic_runtime: VerifiedSyntheticRuntimeInputs | None = None
-    if model_exists and input_kind == "synthetic_placeholder":
+
+    if input_kind == "synthetic_placeholder":
+        if not model_path.is_file():
+            raise QSTSEvidenceError(
+                f"Synthetic QSTS feeder model is missing or not a file: {model_path}."
+            )
         assert source_manifest_sha256 is not None
-        resolved_source, verified_manifest_sha256, verified_synthetic_runtime = (
+        resolved_source, verified_source_sha256, runtime = (
             _verify_synthetic_feeder_runtime_package(
                 master_path=model_path,
                 expected_manifest_sha256=source_manifest_sha256,
             )
         )
+        receipt = _build_qsts_run_manifest(
+            qsts=qsts,
+            input_kind=input_kind,
+            runtime=runtime,
+            source_manifest_sha256=verified_source_sha256,
+            evidence_manifest_sha256=None,
+        )
+        return FeederInput(
+            source=resolved_source,
+            input_kind=input_kind,
+            model_exists=True,
+            generated_input=True,
+            observed_network_data=False,
+            site_representative=False,
+            canonical_finance_eligible=False,
+            source_manifest_sha256=verified_source_sha256,
+            qsts_run_manifest=receipt,
+            verified_runtime=runtime,
+        )
+
+    if input_kind in CANONICAL_FEEDER_INPUT_KINDS:
+        assert evidence_manifest_path is not None
+        assert evidence_manifest_sha256 is not None
+        package = verify_qsts_evidence_package(
+            manifest_path=evidence_manifest_path,
+            expected_manifest_sha256=evidence_manifest_sha256,
+            expected_input_kind=input_kind,
+            configured_master_path=model_path,
+        )
+        runtime = VerifiedRuntimeInputs(
+            package_id=package.package_id,
+            master_relative_path=package.master_relative_path,
+            payloads=package.payloads,
+            generation_profile_mw=package.generation_profile_mw,
+            export_cap_mw=package.export_cap_mw,
+            grid_instructed_profile_mw=package.grid_instructed_profile_mw,
+            timestep_hours=package.timestep_hours,
+        )
+        receipt = _build_qsts_run_manifest(
+            qsts=qsts,
+            input_kind=input_kind,
+            runtime=runtime,
+            source_manifest_sha256=None,
+            evidence_manifest_sha256=package.manifest_sha256,
+        )
+        return FeederInput(
+            source=normalized_path,
+            input_kind=input_kind,
+            model_exists=True,
+            generated_input=False,
+            observed_network_data=package.observed_network_data,
+            site_representative=package.site_representative,
+            canonical_finance_eligible=receipt.canonical_finance_eligible,
+            evidence_manifest_sha256=package.manifest_sha256,
+            qsts_run_manifest=receipt,
+            verified_runtime=runtime,
+        )
+
+    if not model_path.is_file():
+        return FeederInput(
+            source=None,
+            input_kind=input_kind,
+            model_exists=False,
+            generated_input=True,
+            observed_network_data=False,
+            site_representative=False,
+            canonical_finance_eligible=False,
+        )
     return FeederInput(
-        resolved_source,
-        input_kind,
-        model_exists,
-        generated,
-        observed,
-        site_representative,
-        canonical_eligible,
-        verified_manifest_sha256,
-        verified_synthetic_runtime,
+        source=normalized_path,
+        input_kind=input_kind,
+        model_exists=True,
+        generated_input=True,
+        observed_network_data=False,
+        site_representative=False,
+        canonical_finance_eligible=False,
     )
 
 
@@ -828,7 +1048,7 @@ def run_qsts_curtailment(
     generation_mwh: Sequence[float] | None = None,
     grid_instructed_mwh: Sequence[float] | None = None,
     export_cap_mw: float | None = None,
-    timestep_hours: float = 1.0,
+    timestep_hours: float | None = None,
     reference_year: int | None = None,
 ) -> CurtailmentShareResult:
     """Run QSTS with explicit feeder evidence classification and finance eligibility.
@@ -837,7 +1057,8 @@ def run_qsts_curtailment(
     reached only for an enabled study with an existing path and explicit input kind:
 
       * ``grid.qsts.enabled`` not True (default-off) → inert NOT-RUN result;
-      * no ``grid.qsts.feeder_model_path`` (absent / missing file) → inert;
+      * a missing controlled feeder path/identity → fail-closed evidence error;
+      * an absent diagnostic ``test_fixture`` path → inert;
       * the pathless built-in demo (``grid.qsts.use_synthetic_demo: true``) → inert;
       * a path-backed synthetic/test input may run diagnostically, but its result remains
         generated, non-site-representative, nonbankable, and canonical-finance-ineligible.
@@ -847,17 +1068,19 @@ def run_qsts_curtailment(
     generation + upstream grid-instruction profiles the pure :func:`split_curtailment`
     consumes. Tests may inject those profiles directly via ``generation_mwh`` /
     ``grid_instructed_mwh`` (skipping the solve) to exercise the accounting grid-free. For
-    a manifest-verified synthetic package, generation and export-cap inputs are instead
-    bound to that package: supplied config or caller overrides must match exactly.
+    a manifest-verified package, runtime values are instead bound to that package: supplied
+    config or caller overrides must match exactly. Real/site packages additionally bind the
+    operator schedule and timestep.
 
     Args:
         config: the full scenario config (or its top-level ``grid`` block).
         generation_mwh / grid_instructed_mwh / export_cap_mw: optional pre-computed QSTS
             profiles + export cap (tests inject these to drive the pure accounting without
             an OpenDSS solve). When omitted on a path-backed enabled study, the OpenDSS solve
-            supplies them. For a manifest-verified synthetic package, generation and
-            export-cap values must match the verified package.
-        timestep_hours: hours per QSTS timestep (default 1.0).
+            supplies them. For a manifest-verified package, generation and export-cap
+            values must match; real/site packages also own schedule and timestep.
+        timestep_hours: hours per QSTS timestep. A verified real/site manifest owns this
+            value; an override must match it. Unverified test fixtures default to 1.0.
         reference_year: the BESS SoH evaluation year forwarded to the split (``None`` =
             end-of-life).
 
@@ -912,7 +1135,30 @@ def run_qsts_curtailment(
             "synthetic_placeholder, or test_fixture."
         )
 
-    verified_runtime = feeder.verified_synthetic_runtime
+    verified_runtime = feeder.verified_runtime
+    if verified_runtime is not None and verified_runtime.timestep_hours is not None:
+        qsts_timestep = qsts.get("timestep_hours")
+        for supplied, field in (
+            (qsts_timestep, "grid.qsts.timestep_hours"),
+            (timestep_hours, "timestep_hours override"),
+        ):
+            if (
+                supplied is not None
+                and abs(
+                    _require_positive(supplied, field) - verified_runtime.timestep_hours
+                )
+                > _MWH_TOL
+            ):
+                raise QSTSEvidenceError(
+                    f"{field} must match the manifest-verified QSTS timestep: got "
+                    f"{supplied}, expected {verified_runtime.timestep_hours} hours."
+                )
+        step_hours = verified_runtime.timestep_hours
+    else:
+        step_hours = _require_positive(
+            1.0 if timestep_hours is None else timestep_hours, "timestep_hours"
+        )
+
     if verified_runtime is not None:
         qsts_profile = qsts.get("generation_profile_mw")
         if qsts_profile is not None:
@@ -920,6 +1166,15 @@ def run_qsts_curtailment(
                 qsts_profile,
                 verified_runtime.generation_profile_mw,
                 "grid.qsts.generation_profile_mw",
+                unit="MW",
+            )
+        verified_instructed = verified_runtime.grid_instructed_profile_mw
+        qsts_instructed = qsts.get("grid_instructed_profile_mw")
+        if verified_instructed is not None and qsts_instructed is not None:
+            _require_verified_profile_match(
+                qsts_instructed,
+                verified_instructed,
+                "grid.qsts.grid_instructed_profile_mw",
                 unit="MW",
             )
 
@@ -947,9 +1202,9 @@ def run_qsts_curtailment(
     # (tests / a pre-solved horizon), account them directly. Otherwise run the OpenDSS QSTS
     # solve to produce them. The solve is the ONLY [grid]-extra path here.
     gen: Sequence[float]
+    instructed: Sequence[float]
     if generation_mwh is not None:
         if verified_runtime is not None:
-            step_hours = _require_positive(timestep_hours, "timestep_hours")
             gen = _require_verified_profile_match(
                 generation_mwh,
                 verified_runtime.generation_profile_mw,
@@ -959,22 +1214,47 @@ def run_qsts_curtailment(
             )
         else:
             gen = generation_mwh
-        instructed = (
-            grid_instructed_mwh
-            if grid_instructed_mwh is not None
-            else [0.0] * len(generation_mwh)
-        )
+        if (
+            verified_runtime is not None
+            and verified_runtime.grid_instructed_profile_mw is not None
+        ):
+            if grid_instructed_mwh is None:
+                instructed = [
+                    value * step_hours
+                    for value in verified_runtime.grid_instructed_profile_mw
+                ]
+            else:
+                instructed = _require_verified_profile_match(
+                    grid_instructed_mwh,
+                    verified_runtime.grid_instructed_profile_mw,
+                    "grid_instructed_mwh override",
+                    unit="MWh",
+                    mw_to_value=step_hours,
+                )
+        else:
+            instructed = (
+                grid_instructed_mwh
+                if grid_instructed_mwh is not None
+                else [0.0] * len(generation_mwh)
+            )
     else:  # pragma: no cover - requires [grid] extra
-        gen, instructed = _solve_qsts(
-            grid,
-            feeder_path=str(feeder.source),
-            timestep_hours=timestep_hours,
-            generation_profile_mw=(
-                verified_runtime.generation_profile_mw
-                if verified_runtime is not None
-                else None
-            ),
-        )
+        if verified_runtime is not None:
+            with _materialized_verified_feeder(verified_runtime) as snapshot_feeder:
+                gen, instructed = _solve_qsts(
+                    grid,
+                    feeder_path=snapshot_feeder,
+                    timestep_hours=step_hours,
+                    generation_profile_mw=verified_runtime.generation_profile_mw,
+                    grid_instructed_profile_mw=(
+                        verified_runtime.grid_instructed_profile_mw
+                    ),
+                )
+        else:
+            gen, instructed = _solve_qsts(
+                grid,
+                feeder_path=str(feeder.source),
+                timestep_hours=step_hours,
+            )
 
     limitations: tuple[str, ...] = ()
     if feeder.generated_input:
@@ -988,13 +1268,22 @@ def run_qsts_curtailment(
                 "Package manifest verified against an externally pinned SHA-256; this "
                 "authenticates the synthetic package identity but does not upgrade its "
                 "evidence grade.",
+                SYNTHETIC_PROCESS_PROVENANCE_WARNING,
             )
+    elif feeder.evidence_manifest_sha256 is not None:
+        limitations = (
+            "Feeder, generation profile, operator-instruction schedule, export cap, "
+            "timestep, and referenced payloads were bound to an externally pinned "
+            "evidence manifest and executed from an immutable private snapshot.",
+            "Controlled runtime identity does not make the result utility-accepted, "
+            "bankable, lender-ready, board-approved, or release-approved.",
+        )
 
     return split_curtailment(
         generation_mwh=gen,
         export_cap_mw=float(cap),
         grid_instructed_mwh=instructed,
-        timestep_hours=timestep_hours,
+        timestep_hours=step_hours,
         bess_grid=_bess_block(grid),
         reference_year=reference_year,
         feeder_source=str(feeder.source),
@@ -1004,6 +1293,8 @@ def run_qsts_curtailment(
         site_representative=feeder.site_representative,
         canonical_finance_eligible=feeder.canonical_finance_eligible,
         source_manifest_sha256=feeder.source_manifest_sha256,
+        evidence_manifest_sha256=feeder.evidence_manifest_sha256,
+        qsts_run_manifest=feeder.qsts_run_manifest,
         limitations=limitations,
     )
 
@@ -1039,6 +1330,7 @@ def _solve_qsts(  # pragma: no cover - requires [grid] extra
     feeder_path: str,
     timestep_hours: float,
     generation_profile_mw: Sequence[float] | None = None,
+    grid_instructed_profile_mw: Sequence[float] | None = None,
 ) -> tuple[list[float], list[float]]:
     """Run OpenDSSDirect over the declared path; evidence grade stays in ``FeederInput``.
 
@@ -1085,8 +1377,15 @@ def _solve_qsts(  # pragma: no cover - requires [grid] extra
         if generation_profile_mw is not None
         else _resolve_generation_profiles(grid)
     )
-    instructed_profile = _resolve_grid_instructed_profile_mw(
-        grid, n_steps=len(profiles)
+    instructed_profile = (
+        _require_profile(
+            grid_instructed_profile_mw,
+            "manifest-verified grid_instructed_profile_mw",
+            length=len(profiles),
+            unit="MW",
+        )
+        if grid_instructed_profile_mw is not None
+        else _resolve_grid_instructed_profile_mw(grid, n_steps=len(profiles))
     )
     generation: list[float] = []
     instructed: list[float] = []

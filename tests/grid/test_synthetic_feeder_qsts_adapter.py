@@ -169,7 +169,7 @@ def test_runtime_refuses_substituted_adapter_values(
         message = "generation_profile_mw.*8760 timesteps"
     else:
         overlay["export_cap_mw"] = 149.0
-        message = "must match the manifest-verified synthetic package export cap"
+        message = "must match the manifest-verified QSTS package export cap"
 
     with pytest.raises(ValueError, match=message):
         run_qsts_curtailment({"grid": {"qsts": overlay}})
@@ -194,7 +194,7 @@ def test_runtime_refuses_substituted_explicit_overrides(
         message = "generation_mwh override.*8760 timesteps"
     else:
         kwargs["export_cap_mw"] = 149.0
-        message = "must match the manifest-verified synthetic package export cap"
+        message = "must match the manifest-verified QSTS package export cap"
 
     with pytest.raises(ValueError, match=message):
         run_qsts_curtailment({"grid": {"qsts": overlay}}, **kwargs)
@@ -217,8 +217,9 @@ def test_runtime_solver_receives_verifier_derived_profile(
         feeder_path: str,
         timestep_hours: float,
         generation_profile_mw: object = None,
+        grid_instructed_profile_mw: object = None,
     ) -> tuple[list[float], list[float]]:
-        del grid, feeder_path, timestep_hours
+        del grid, feeder_path, timestep_hours, grid_instructed_profile_mw
         nonlocal captured_profile
         assert isinstance(generation_profile_mw, tuple)
         captured_profile = generation_profile_mw

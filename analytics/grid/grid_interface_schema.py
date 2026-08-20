@@ -345,6 +345,10 @@ def _validate_qsts_conditionals(grid: Mapping[str, Any], errors: list[str]) -> N
       * an enabled path-backed ``synthetic_placeholder`` additionally requires an exact
         externally pinned ``qsts.source_manifest_sha256``; the field is prohibited on the
         pathless demo and every utility/site/test/unclassified input.
+      * an enabled utility/site input requires both ``qsts.evidence_manifest_path`` and an
+        externally pinned ``qsts.evidence_manifest_sha256``. Merely labelling an existing
+        DSS path "real" is refused; the detached evidence manifest binds the feeder,
+        profiles, instruction schedule, export cap, timestep, and referenced payloads.
 
     This gate cannot be a flat required-field spec: a flat spec would fire on every
     grid-scenario that omits ``qsts`` (breaking committed grid configs), and it cannot make
@@ -442,6 +446,53 @@ def _validate_qsts_conditionals(grid: Mapping[str, Any], errors: list[str]) -> N
         errors.append(
             "The pathless grid.qsts.use_synthetic_demo has no package manifest; remove "
             "grid.qsts.source_manifest_sha256."
+        )
+
+    evidence_manifest_path = qsts.get("evidence_manifest_path")
+    evidence_manifest_sha256 = qsts.get("evidence_manifest_sha256")
+    if evidence_manifest_path is not None and not _is_nonempty_str(
+        evidence_manifest_path
+    ):
+        errors.append(
+            "grid.qsts.evidence_manifest_path must be a non-empty string when declared, "
+            f"got {evidence_manifest_path!r}."
+        )
+    if evidence_manifest_sha256 is not None and not _is_sha256(
+        evidence_manifest_sha256
+    ):
+        errors.append(
+            "grid.qsts.evidence_manifest_sha256 must be exactly 64 lowercase hexadecimal "
+            f"characters when declared, got {evidence_manifest_sha256!r}."
+        )
+    if (
+        enabled
+        and use_synthetic_demo is not True
+        and input_kind in CANONICAL_FEEDER_INPUT_KINDS
+        and (
+            not _is_nonempty_str(evidence_manifest_path)
+            or evidence_manifest_sha256 is None
+        )
+    ):
+        errors.append(
+            "An enabled utility/site grid.qsts input requires both "
+            "grid.qsts.evidence_manifest_path and an externally pinned "
+            "grid.qsts.evidence_manifest_sha256. A feeder path or YAML classification is "
+            "not authenticated evidence."
+        )
+    if (
+        evidence_manifest_path is not None or evidence_manifest_sha256 is not None
+    ) and input_kind not in CANONICAL_FEEDER_INPUT_KINDS:
+        errors.append(
+            "grid.qsts.evidence_manifest_path/evidence_manifest_sha256 are reserved for "
+            "utility_observed_model or engineer_prepared_site_model inputs; synthetic and "
+            "test inputs cannot carry or borrow a real/site evidence identity."
+        )
+    if use_synthetic_demo is True and (
+        evidence_manifest_path is not None or evidence_manifest_sha256 is not None
+    ):
+        errors.append(
+            "The pathless grid.qsts.use_synthetic_demo cannot carry a real/site evidence "
+            "manifest identity."
         )
 
     wiring = qsts.get("finance_wiring")
