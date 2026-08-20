@@ -18,6 +18,7 @@ import analytics.grid.curtailment_qsts as qsts_module
 from analytics.contracts_v14 import (
     QSTS_SYNTHETIC_OUTPUT_CLASS,
     SYNTHETIC_PROCESS_PROVENANCE_WARNING,
+    QSTSSolveTelemetry,
 )
 from analytics.grid.curtailment_qsts import run_qsts_curtailment
 from analytics.grid.grid_interface_schema import validate_grid_block
@@ -236,12 +237,23 @@ def test_runtime_solver_receives_verifier_derived_profile(
         timestep_hours: float,
         generation_profile_mw: object = None,
         grid_instructed_profile_mw: object = None,
-    ) -> tuple[list[float], list[float]]:
+    ) -> tuple[list[float], list[float], QSTSSolveTelemetry]:
         del grid, feeder_path, timestep_hours, grid_instructed_profile_mw
         nonlocal captured_profile
         assert isinstance(generation_profile_mw, tuple)
         captured_profile = generation_profile_mw
-        return [0.0], [0.0]
+        return (
+            [0.0],
+            [0.0],
+            QSTSSolveTelemetry(
+                attempted_steps=1,
+                converged_steps=1,
+                nonconverged_steps=0,
+                first_nonconverged_step=None,
+                last_nonconverged_step=None,
+                monitoring_configured=False,
+            ),
+        )
 
     monkeypatch.setattr(qsts_module, "_solve_qsts", _capture_solver_profile)
 

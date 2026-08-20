@@ -182,7 +182,22 @@ class _RecordingStubDss:
 
     def __init__(self) -> None:
         self.log: List[Tuple[str, Any]] = []
+        self._kw = 0.0
         stub = self
+
+        class _Basic:
+            @staticmethod
+            def ClearAll() -> None:
+                stub.log.append(("clear_all", None))
+
+        class _Error:
+            @staticmethod
+            def Number() -> int:
+                return 0
+
+            @staticmethod
+            def Description() -> str:
+                return ""
 
         class _Solution:
             @staticmethod
@@ -201,11 +216,20 @@ class _RecordingStubDss:
             def Solve() -> None:
                 stub.log.append(("solve", None))
 
+            @staticmethod
+            def Converged() -> bool:
+                return True
+
         class _Generators:
             @staticmethod
-            def kW(kw: float) -> None:
-                stub.log.append(("kw", kw))
+            def kW(kw: float | None = None) -> float:
+                if kw is not None:
+                    stub._kw = kw
+                    stub.log.append(("kw", kw))
+                return stub._kw
 
+        self.Basic = _Basic
+        self.Error = _Error
         self.Solution = _Solution
         self.Generators = _Generators
 

@@ -4,7 +4,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Historical audit preserved with current A/B addendum and governed #1077 input-handoff entrypoint |
+| Status | Historical audit preserved with current A/B addendum and governed #1077/#1073 entrypoints |
 | Audit date | 2026-08-19 |
 | Audited commit | `4eda5ab09baae940848b01ebfa59ffd8764d587f` |
 | Audited branch tip | `origin/main` at the historical cutoff |
@@ -104,6 +104,41 @@ execution, publication, lender/board eligibility, bankability, site representati
 canonical-finance eligibility to false. It contains no QSTS, AEP, curtailment, KPI, or
 financial outcome; those remain the sequential responsibilities of #1073 and #1074.
 
+### Governed #1073 synthetic AEP/QSTS output record
+
+Issue #1073 consumes only the authenticated #1077 JSON/SHA pair and the same package
+manifest identity retained by that handoff. The caller must provide the detached handoff
+SHA-256 as an external Hydra override; neither the JSON nor its sibling checksum is allowed
+to authenticate itself:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" \
+  /Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python \
+  scripts/run_synthetic_qsts_output_records_v14.py \
+  input.expected_handoff_sha256=<64-lowercase-hex>
+```
+
+Configuration is in `conf/synthetic_aep_qsts.yaml`. The orchestrator re-verifies all eight
+package payloads, uses the production package adapter without caller-supplied profile, cap,
+or timestep overrides, clears the OpenDSS engine, explicitly activates and reads back the
+controlled generator, and attempts every one of the 8,760 ordered UTC hours. It refuses to
+publish if any timestep is non-converged or any generator setpoint is not accepted.
+
+The retained JSON/SHA pair under
+`outputs/synthetic_process_provenance/issue_1073/` records AEP in MWh/GWh, explicit energy
+accounting, exact code/config/package/profile identities, Python and OpenDSS versions,
+start/end times, convergence counts and first/last failure indexes, voltage/thermal
+threshold counts and extrema, and the absent observed operator-schedule status. It carries
+the mandatory warning and structurally fixes finance execution/wiring, canonical
+eligibility, bankability, lender/board eligibility, and publication eligibility to false.
+It is an input only to the segregated #1074 report gate.
+
+The voltage/thermal observations are on the disclosed gross pre-export-cap and
+pre-operator-instruction injection basis. A converged solve does not mean that those
+thresholds passed, that the feeder is site-representative, or that a utility accepted it.
+The OpenDSS result also does not convert the absent synthetic operator schedule into a claim
+that CEB issued no instructions.
+
 ### #923-B outcome
 
 The real-data path remains the only route to a bankability or canonical-finance decision. It
@@ -121,7 +156,7 @@ decision under #1078. No synthetic result may satisfy or substitute for those ga
 | G-04: synthetic KPI counterfactual absent | Explicitly authorized only as the segregated, noncanonical #923-A outcome |
 | G-05: report dependency provenance stale | Still a separate KPI-neutral correction; this record does not change it |
 | G-06: report existence does not prove QSTS success | Still applicable to both modes; receipts must bind calculation state and evidence identity |
-| G-07: environment and path dependencies | Still applicable; use the active worktree's governed Python 3.12 `.venv` |
+| G-07: environment and path dependencies | Still applicable; PERSIST-01 requires the persistent central `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` with `PYTHONPATH="$PWD"` in every worktree |
 
 ### Framework acceptance
 

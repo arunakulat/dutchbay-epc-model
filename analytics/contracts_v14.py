@@ -1276,6 +1276,7 @@ SYNTHETIC_PROCESS_PROVENANCE_WARNING = (
 QSTS_RUN_MANIFEST_SCHEMA = "dutchbay_qsts_run_manifest_v1"
 QSTS_SYNTHETIC_OUTPUT_CLASS = "synthetic_process_provenance"
 QSTS_CONTROLLED_OUTPUT_CLASS = "controlled_input_nonbankable"
+SYNTHETIC_QSTS_OUTPUT_SCHEMA = "dutchbay.synthetic_qsts_output_records.v1"
 SYNTHETIC_INPUT_HANDOFF_SCHEMA = "dutchbay_synthetic_qsts_input_handoff_v1"
 
 
@@ -1461,6 +1462,147 @@ class QSTSRunManifest(ContractMixin):
                     "QSTSRunManifest.canonical_finance_eligible=true requires canonical "
                     "finance mode."
                 )
+
+
+@dataclass(frozen=True)
+class QSTSSolveTelemetry(ContractMixin):
+    """Concise whole-horizon OpenDSS execution telemetry."""
+
+    attempted_steps: int
+    converged_steps: int
+    nonconverged_steps: int
+    first_nonconverged_step: int | None
+    last_nonconverged_step: int | None
+    monitoring_configured: bool
+    voltage_min_limit_pu: float | None = None
+    voltage_max_limit_pu: float | None = None
+    thermal_limit_pct_norm: float | None = None
+    voltage_violation_steps: int | None = None
+    thermal_violation_steps: int | None = None
+    generator_activation_steps: int = 0
+    generator_setpoint_mismatch_steps: int = 0
+    observed_voltage_min_pu: float | None = None
+    observed_voltage_max_pu: float | None = None
+    observed_max_pct_norm: float | None = None
+
+    def __post_init__(self) -> None:
+        """Reject contradictory counts, indexes, or partially declared monitoring."""
+
+        for field_name in ("attempted_steps", "converged_steps", "nonconverged_steps"):
+            value = getattr(self, field_name)
+            if type(value) is not int or value < 0:  # noqa: E721
+                raise ValueError(
+                    f"QSTSSolveTelemetry.{field_name} must be a non-negative int."
+                )
+        for field_name in (
+            "generator_activation_steps",
+            "generator_setpoint_mismatch_steps",
+        ):
+            value = getattr(self, field_name)
+            if (
+                not isinstance(value, int)
+                or isinstance(value, bool)
+                or not 0 <= value <= self.attempted_steps
+            ):
+                raise ValueError(f"QSTSSolveTelemetry.{field_name} is invalid.")
+        if self.generator_setpoint_mismatch_steps > self.generator_activation_steps:
+            raise ValueError(
+                "QSTS setpoint mismatches cannot exceed generator activations."
+            )
+        if self.attempted_steps != self.converged_steps + self.nonconverged_steps:
+            raise ValueError(
+                "QSTS attempted steps must equal converged plus non-converged steps."
+            )
+        if type(self.monitoring_configured) is not bool:  # noqa: E721
+            raise ValueError("QSTSSolveTelemetry.monitoring_configured must be bool.")
+        if self.nonconverged_steps == 0:
+            if (
+                self.first_nonconverged_step is not None
+                or self.last_nonconverged_step is not None
+            ):
+                raise ValueError("Converged QSTS telemetry cannot name failing steps.")
+        else:
+            first = self.first_nonconverged_step
+            last = self.last_nonconverged_step
+            if (
+                type(first) is not int
+                or type(last) is not int
+                or first < 0
+                or last < first
+                or last >= self.attempted_steps
+            ):
+                raise ValueError("QSTS failing-step indexes are invalid.")
+        configured_monitor_fields = (
+            "voltage_min_limit_pu",
+            "voltage_max_limit_pu",
+            "thermal_limit_pct_norm",
+            "voltage_violation_steps",
+            "thermal_violation_steps",
+        )
+        observed_monitor_fields = (
+            "observed_voltage_min_pu",
+            "observed_voltage_max_pu",
+            "observed_max_pct_norm",
+        )
+        configured_values = tuple(
+            getattr(self, name) for name in configured_monitor_fields
+        )
+        observed_values = tuple(getattr(self, name) for name in observed_monitor_fields)
+        if self.monitoring_configured:
+            if any(value is None for value in configured_values) or (
+                self.converged_steps > 0
+                and any(value is None for value in observed_values)
+            ):
+                raise ValueError(
+                    "Configured QSTS monitoring requires its limits/counts and observed "
+                    "values for every horizon containing a converged step."
+                )
+            if self.converged_steps == 0 and any(
+                value is not None for value in observed_values
+            ):
+                raise ValueError(
+                    "QSTS monitoring cannot report observed values when no step converged."
+                )
+            assert self.voltage_min_limit_pu is not None
+            assert self.voltage_max_limit_pu is not None
+            assert self.thermal_limit_pct_norm is not None
+            low = float(self.voltage_min_limit_pu)
+            high = float(self.voltage_max_limit_pu)
+            thermal = float(self.thermal_limit_pct_norm)
+            if (
+                any(not math.isfinite(value) for value in (low, high, thermal))
+                or not 0.0 < low < high
+                or thermal <= 0.0
+            ):
+                raise ValueError("QSTS voltage/thermal monitoring limits are invalid.")
+            if self.converged_steps > 0:
+                assert self.observed_voltage_min_pu is not None
+                assert self.observed_voltage_max_pu is not None
+                assert self.observed_max_pct_norm is not None
+                observed_low = float(self.observed_voltage_min_pu)
+                observed_high = float(self.observed_voltage_max_pu)
+                observed_thermal = float(self.observed_max_pct_norm)
+                if (
+                    any(
+                        not math.isfinite(value)
+                        for value in (observed_low, observed_high, observed_thermal)
+                    )
+                    or not 0.0 <= observed_low <= observed_high
+                    or observed_thermal < 0.0
+                ):
+                    raise ValueError("QSTS observed monitoring values are invalid.")
+            for field_name in ("voltage_violation_steps", "thermal_violation_steps"):
+                value = getattr(self, field_name)
+                if (
+                    not isinstance(value, int)
+                    or isinstance(value, bool)
+                    or not 0 <= value <= self.attempted_steps
+                ):
+                    raise ValueError(f"QSTSSolveTelemetry.{field_name} is invalid.")
+        elif any(value is not None for value in (*configured_values, *observed_values)):
+            raise ValueError(
+                "Unconfigured QSTS monitoring must leave monitor fields null."
+            )
 
 
 @dataclass(frozen=True)
@@ -1849,6 +1991,331 @@ class SyntheticInputRecordHandoff(ContractMixin):
             raise ValueError(
                 "SyntheticInputRecordHandoff must retain limitations and assumption locations."
             )
+
+
+@dataclass(frozen=True)
+class SyntheticQSTSOutputRecord(ContractMixin):
+    """Governed #1073 synthetic AEP/QSTS result for the #1074 report gate only."""
+
+    schema: str
+    issue: int
+    downstream_issue: int
+    run_started_at_utc: str
+    run_completed_at_utc: str
+    repository_commit: str
+    qsts_code_sha256: str
+    orchestrator_code_sha256: str
+    resolved_run_config_sha256: str
+    python_version: str
+    opendssdirect_version: str
+    opendss_engine_version: str
+    input_handoff_schema: str
+    input_handoff_sha256: str
+    input_package_manifest_sha256: str
+    input_profile_sha256: str
+    input_profile_values_sha256: str
+    payload_records: tuple[SyntheticInputArtifactRecord, ...]
+    profile_row_count: int
+    profile_start_utc: str
+    profile_end_utc: str
+    profile_timezone: str
+    profile_timestep_hours: float
+    profile_unit: str
+    synthetic_aep_mwh: float
+    synthetic_aep_gwh: float
+    aep_calculation_basis: str
+    aep_integration_residual_mwh: float
+    gross_energy_mwh: float
+    delivered_energy_mwh: float
+    deemed_paid_energy_mwh: float
+    self_curtailed_pre_bess_mwh: float
+    bess_recovered_energy_mwh: float
+    self_curtailed_energy_mwh: float
+    curtailed_total_mwh: float
+    export_cap_breach_timesteps: int
+    energy_balance_residual_mwh: float
+    energy_balance_tolerance_mwh: float
+    warning_category_counts: tuple[tuple[str, int], ...]
+    error_category_counts: tuple[tuple[str, int], ...]
+    operator_schedule_status: str
+    solver_telemetry: QSTSSolveTelemetry
+    qsts_run_manifest: QSTSRunManifest
+    input_kind: str
+    output_class: str
+    required_warning: str
+    generated_input: bool
+    observed_network_data: bool
+    site_representative: bool
+    canonical_finance_eligible: bool
+    bankable: bool
+    publishable: bool
+    lender_eligible: bool
+    board_eligible: bool
+    finance_wiring_enabled: bool
+    finance_executed: bool
+    qsts_executed: bool
+
+    def model_dump(self) -> dict[str, Any]:
+        """Serialize nested immutable records into JSON-compatible collections."""
+
+        payload = super().model_dump()
+        payload["payload_records"] = [
+            record.model_dump() for record in self.payload_records
+        ]
+        payload["warning_category_counts"] = [
+            [name, count] for name, count in self.warning_category_counts
+        ]
+        payload["error_category_counts"] = [
+            [name, count] for name, count in self.error_category_counts
+        ]
+        return payload
+
+    def __post_init__(self) -> None:
+        """Reject incomplete execution, accounting drift, or evidence upgrades."""
+
+        if self.schema != SYNTHETIC_QSTS_OUTPUT_SCHEMA:
+            raise ValueError(
+                f"SyntheticQSTSOutputRecord.schema must be {SYNTHETIC_QSTS_OUTPUT_SCHEMA!r}."
+            )
+        if self.issue != 1073 or self.downstream_issue != 1074:
+            raise ValueError(
+                "Synthetic QSTS output must remain the #1073 to #1074 handoff."
+            )
+        parsed_times: dict[str, datetime] = {}
+        for field_name in ("run_started_at_utc", "run_completed_at_utc"):
+            value = getattr(self, field_name)
+            try:
+                parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except (AttributeError, ValueError) as exc:
+                raise ValueError(f"{field_name} must be ISO-8601 UTC.") from exc
+            if parsed.tzinfo is None or parsed.utcoffset() != timezone.utc.utcoffset(
+                parsed
+            ):
+                raise ValueError(f"{field_name} must be explicit UTC.")
+            parsed_times[field_name] = parsed
+        if parsed_times["run_completed_at_utc"] < parsed_times["run_started_at_utc"]:
+            raise ValueError("Synthetic QSTS run completion precedes its start.")
+        if (
+            not isinstance(self.repository_commit, str)
+            or len(self.repository_commit) != 40
+            or any(
+                character not in "0123456789abcdef"
+                for character in self.repository_commit
+            )
+        ):
+            raise ValueError("repository_commit must be an exact lowercase Git SHA.")
+        for field_name in (
+            "qsts_code_sha256",
+            "orchestrator_code_sha256",
+            "resolved_run_config_sha256",
+            "input_handoff_sha256",
+            "input_package_manifest_sha256",
+            "input_profile_sha256",
+            "input_profile_values_sha256",
+        ):
+            if not _is_exact_sha256(getattr(self, field_name)):
+                raise ValueError(f"{field_name} must be an exact lowercase SHA-256.")
+        for field_name in (
+            "python_version",
+            "opendssdirect_version",
+            "opendss_engine_version",
+            "aep_calculation_basis",
+        ):
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{field_name} must be non-empty.")
+        if (
+            self.input_handoff_schema != SYNTHETIC_INPUT_HANDOFF_SCHEMA
+            or self.profile_row_count != 8760
+            or self.profile_start_utc != "2021-01-01T00:00:00Z"
+            or self.profile_end_utc != "2021-12-31T23:00:00Z"
+            or self.profile_timezone != "UTC"
+            or self.profile_timestep_hours != 1.0
+            or self.profile_unit != "MW"
+        ):
+            raise ValueError(
+                "Synthetic QSTS output requires the complete governed UTC/MW horizon."
+            )
+        if (
+            not isinstance(self.payload_records, tuple)
+            or len(self.payload_records) != 8
+            or any(
+                not isinstance(value, SyntheticInputArtifactRecord)
+                for value in self.payload_records
+            )
+        ):
+            raise ValueError(
+                "Synthetic QSTS output must retain all eight authenticated payload records."
+            )
+        numeric_fields = (
+            "synthetic_aep_mwh",
+            "synthetic_aep_gwh",
+            "aep_integration_residual_mwh",
+            "gross_energy_mwh",
+            "delivered_energy_mwh",
+            "deemed_paid_energy_mwh",
+            "self_curtailed_pre_bess_mwh",
+            "bess_recovered_energy_mwh",
+            "self_curtailed_energy_mwh",
+            "curtailed_total_mwh",
+            "energy_balance_residual_mwh",
+            "energy_balance_tolerance_mwh",
+        )
+        if any(
+            type(getattr(self, name)) not in {int, float}
+            or not math.isfinite(float(getattr(self, name)))
+            for name in numeric_fields
+        ):
+            raise ValueError("Synthetic QSTS energy fields must be finite numbers.")
+        tolerance = self.energy_balance_tolerance_mwh
+        if tolerance <= 0.0:
+            raise ValueError("energy_balance_tolerance_mwh must be positive.")
+        for field_name in (
+            "synthetic_aep_mwh",
+            "synthetic_aep_gwh",
+            "gross_energy_mwh",
+            "delivered_energy_mwh",
+            "deemed_paid_energy_mwh",
+            "self_curtailed_pre_bess_mwh",
+            "bess_recovered_energy_mwh",
+            "self_curtailed_energy_mwh",
+            "curtailed_total_mwh",
+        ):
+            if getattr(self, field_name) < 0.0:
+                raise ValueError(f"{field_name} must be non-negative.")
+        if not math.isclose(
+            self.synthetic_aep_gwh,
+            self.synthetic_aep_mwh / 1000.0,
+            rel_tol=0.0,
+            abs_tol=tolerance / 1000.0,
+        ) or not math.isclose(
+            self.synthetic_aep_mwh,
+            self.gross_energy_mwh,
+            rel_tol=0.0,
+            abs_tol=tolerance,
+        ):
+            raise ValueError(
+                "Synthetic AEP MWh/GWh/gross-energy identities do not reconcile."
+            )
+        expected_delivered = (
+            self.gross_energy_mwh
+            - self.deemed_paid_energy_mwh
+            - self.self_curtailed_pre_bess_mwh
+        )
+        balance = self.gross_energy_mwh - (
+            self.delivered_energy_mwh
+            + self.deemed_paid_energy_mwh
+            + self.self_curtailed_energy_mwh
+            + self.bess_recovered_energy_mwh
+        )
+        if (
+            abs(self.aep_integration_residual_mwh) > tolerance
+            or abs(self.energy_balance_residual_mwh) > tolerance
+            or not math.isclose(
+                self.delivered_energy_mwh,
+                expected_delivered,
+                rel_tol=0.0,
+                abs_tol=tolerance,
+            )
+            or not math.isclose(
+                balance,
+                self.energy_balance_residual_mwh,
+                rel_tol=0.0,
+                abs_tol=tolerance,
+            )
+            or not math.isclose(
+                self.self_curtailed_pre_bess_mwh,
+                self.self_curtailed_energy_mwh + self.bess_recovered_energy_mwh,
+                rel_tol=0.0,
+                abs_tol=tolerance,
+            )
+            or not math.isclose(
+                self.curtailed_total_mwh,
+                self.deemed_paid_energy_mwh + self.self_curtailed_pre_bess_mwh,
+                rel_tol=0.0,
+                abs_tol=tolerance,
+            )
+        ):
+            raise ValueError("Synthetic QSTS energy accounting does not reconcile.")
+        if (
+            type(self.export_cap_breach_timesteps) is not int
+            or not 0 <= self.export_cap_breach_timesteps <= 8760
+        ):  # noqa: E721
+            raise ValueError("export_cap_breach_timesteps is invalid.")
+        for field_name in ("warning_category_counts", "error_category_counts"):
+            values = getattr(self, field_name)
+            if (
+                not isinstance(values, tuple)
+                or values != tuple(sorted(values))
+                or len({name for name, _ in values}) != len(values)
+                or any(
+                    not isinstance(name, str)
+                    or not name
+                    or type(count) is not int
+                    or count < 0
+                    for name, count in values
+                )  # noqa: E721
+            ):
+                raise ValueError(
+                    f"{field_name} must be sorted unique non-negative counts."
+                )
+        telemetry = self.solver_telemetry
+        if (
+            not isinstance(telemetry, QSTSSolveTelemetry)
+            or telemetry.attempted_steps != 8760
+            or telemetry.converged_steps != 8760
+            or telemetry.nonconverged_steps != 0
+            or telemetry.generator_activation_steps != 8760
+            or telemetry.generator_setpoint_mismatch_steps != 0
+            or not telemetry.monitoring_configured
+        ):
+            raise ValueError(
+                "Synthetic QSTS output requires 8,760 verified converged OpenDSS solves."
+            )
+        if not isinstance(self.qsts_run_manifest, QSTSRunManifest):
+            raise ValueError("qsts_run_manifest must be the typed runtime receipt.")
+        if (
+            self.qsts_run_manifest.input_kind != "synthetic_placeholder"
+            or self.qsts_run_manifest.source_manifest_sha256
+            != self.input_package_manifest_sha256
+            or self.qsts_run_manifest.finance_wiring_enabled
+        ):
+            raise ValueError(
+                "Synthetic QSTS run manifest contradicts its authenticated input boundary."
+            )
+        if self.operator_schedule_status != "absent_no_observed_operator_instructions":
+            raise ValueError(
+                "Synthetic output must retain the absent observed operator schedule status."
+            )
+        if (
+            self.input_kind != "synthetic_placeholder"
+            or self.output_class != QSTS_SYNTHETIC_OUTPUT_CLASS
+            or self.required_warning != SYNTHETIC_PROCESS_PROVENANCE_WARNING
+        ):
+            raise ValueError(
+                "Synthetic output classification or required warning changed."
+            )
+        expected_flags = {
+            "generated_input": True,
+            "observed_network_data": False,
+            "site_representative": False,
+            "canonical_finance_eligible": False,
+            "bankable": False,
+            "publishable": False,
+            "lender_eligible": False,
+            "board_eligible": False,
+            "finance_wiring_enabled": False,
+            "finance_executed": False,
+            "qsts_executed": True,
+        }
+        for field_name, expected in expected_flags.items():
+            if (
+                type(getattr(self, field_name)) is not bool
+                or getattr(self, field_name) is not expected
+            ):  # noqa: E721
+                raise ValueError(
+                    f"SyntheticQSTSOutputRecord.{field_name} must be {expected}."
+                )
 
 
 @dataclass(frozen=True)
@@ -2364,6 +2831,7 @@ class CurtailmentShareResult(ContractMixin):
     limitations: tuple[str, ...] = ()
     evidence_manifest_sha256: str | None = None
     qsts_run_manifest: QSTSRunManifest | None = None
+    qsts_solve_telemetry: QSTSSolveTelemetry | None = None
 
     def __post_init__(self) -> None:
         """Enforce machine-readable feeder provenance before it can be serialized.
@@ -2474,6 +2942,13 @@ class CurtailmentShareResult(ContractMixin):
                     "CurtailmentShareResult canonical eligibility does not match its "
                     "QSTS run receipt."
                 )
+
+        if self.qsts_solve_telemetry is not None and not isinstance(
+            self.qsts_solve_telemetry, QSTSSolveTelemetry
+        ):
+            raise ValueError(
+                "CurtailmentShareResult.qsts_solve_telemetry must be QSTSSolveTelemetry or None."
+            )
 
         if kind in SYNTHETIC_FEEDER_INPUT_KINDS:
             if (
@@ -2726,10 +3201,13 @@ __all__ = [
     "QSTS_SYNTHETIC_OUTPUT_CLASS",
     "QSTS_CONTROLLED_OUTPUT_CLASS",
     "QSTSRunManifest",
+    "QSTSSolveTelemetry",
+    "SYNTHETIC_QSTS_OUTPUT_SCHEMA",
     "SYNTHETIC_INPUT_HANDOFF_SCHEMA",
     "SyntheticInputSourceRecord",
     "SyntheticInputArtifactRecord",
     "SyntheticInputRecordHandoff",
+    "SyntheticQSTSOutputRecord",
     "CurtailmentShareResult",
     "GroupDroopContribution",
     "FreqResponseResult",
