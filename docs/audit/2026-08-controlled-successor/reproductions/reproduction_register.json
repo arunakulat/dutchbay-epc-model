@@ -1,0 +1,835 @@
+{
+  "schema_version": "dutchbay.audit.reproduction_register.v1",
+  "as_of": "2026-08-16T14:24:23+05:30",
+  "status": "working",
+  "controlled_vocabularies": {
+    "status": [
+      "completed",
+      "not_applicable",
+      "required_not_run",
+      "superseded",
+      "unavailable"
+    ],
+    "verification_level": [
+      "none",
+      "finder_refuter",
+      "governed_validation_same_agent",
+      "independent_reproduction",
+      "secondary_code_path_same_agent",
+      "source_and_code_refuter"
+    ]
+  },
+  "record_count": 34,
+  "records": [
+    {
+      "reproduction_id": "REPRO-COV-CANON-001",
+      "status": "completed",
+      "title": "Canonical debt, covenant and cash-sweep reproduction",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "controlled JSON reproduction",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/canonical_covenant_reproduction.json",
+      "output_sha256": "ef01d7accab7968adace44f2de9468159e79c2b429041939d264e34152a5a477",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P3-COV-02",
+        "P3-COV-03",
+        "P3-COV-04",
+        "P3-COV-05"
+      ],
+      "pointer_ids": [],
+      "result": "Machine-readable controlled output completed; inspect the artifact for commands and full-precision results.",
+      "limitations": "Valid only for the audited commit, recorded inputs and environment.",
+      "verification_level": "independent_reproduction"
+    },
+    {
+      "reproduction_id": "REPRO-COV-FEE-DSRA-001",
+      "status": "completed",
+      "title": "Canonical guarantee-fee and DSRA reproduction",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "controlled JSON reproduction",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/canonical_covenant_fee_and_reserve_reproduction.json",
+      "output_sha256": "f2240333433bc4ae800742e3e204e02599de522ce1ed34a177aecb1c18a1c262",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P3-COV-03",
+        "P3-COV-05",
+        "P3-COV-07"
+      ],
+      "pointer_ids": [],
+      "result": "Machine-readable controlled output completed; inspect the artifact for commands and full-precision results.",
+      "limitations": "Valid only for the audited commit, recorded inputs and environment.",
+      "verification_level": "independent_reproduction"
+    },
+    {
+      "reproduction_id": "REPRO-COV-CONSUMERS-001",
+      "status": "completed",
+      "title": "Covenant and guarantee configuration consumer trace",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "controlled JSON reproduction",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/covenant_config_consumer_trace.json",
+      "output_sha256": "f179bc59a6008e23305bded5a54603678b319bd0ff80caf50ae01316ce973bfb",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P3-COV-05",
+        "P3-COV-07"
+      ],
+      "pointer_ids": [],
+      "result": "Machine-readable controlled output completed; inspect the artifact for commands and full-precision results.",
+      "limitations": "Valid only for the audited commit, recorded inputs and environment.",
+      "verification_level": "independent_reproduction"
+    },
+    {
+      "reproduction_id": "REPRO-P2-POP-001",
+      "status": "completed",
+      "title": "P2 finder/refuter population reconciliation",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "controlled JSON reproduction",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p2_population_reconciliation.v2.json",
+      "output_sha256": "e357fca869e3b14f97d66bb0a011f220fa161c8c39341d38e76017931aed7455",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "EVAL-09"
+      ],
+      "pointer_ids": [],
+      "result": "Machine-readable controlled output completed; inspect the artifact for commands and full-precision results.",
+      "limitations": "Valid only for the audited commit, recorded inputs and environment.",
+      "verification_level": "independent_reproduction"
+    },
+    {
+      "reproduction_id": "P3-REPRO-MC-ROUTING-001",
+      "status": "completed",
+      "title": "Finance-MC trial routing and executed-pack evidence",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_mc_trial_routing_reproduction.json",
+      "output_sha256": "b4bb7068ce56d43c6e11d41a0a3382c65411dd2166f9c3e278695e60db263452",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P3-MCFX-07"
+      ],
+      "pointer_ids": [],
+      "result": "Machine-readable controlled output completed; inspect the artifact for commands and full-precision results.",
+      "limitations": "Valid only for the audited commit, recorded inputs and environment.",
+      "verification_level": "independent_reproduction"
+    },
+    {
+      "reproduction_id": "P3-REPRO-FX-001",
+      "status": "completed",
+      "title": "Seed-42 256-trial uniform versus calibrated FX comparison",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "command": "",
+      "seed": 42,
+      "input_refs": [],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_fx_calibration_seed42_n256_reproduction.json",
+      "output_sha256": "4e11d33b9e3980b990eefc669304e49de9a0443d390ccb8ede698b177800bfe0",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P3-MCFX-01"
+      ],
+      "pointer_ids": [],
+      "result": "Machine-readable controlled output completed; inspect the artifact for commands and full-precision results.",
+      "limitations": "Valid only for the audited commit, recorded inputs and environment.",
+      "verification_level": "independent_reproduction"
+    },
+    {
+      "reproduction_id": "P3-GOV-MC-PR1030-001",
+      "status": "completed",
+      "title": "PR #1030 governed post-merge 10,000-trial finance-MC run",
+      "repository_commit": "8a6b48f6573e4ac9074da8fbbcb1e48f4353ce9a",
+      "worktree": "/Users/aruna/Downloads/dutchbay-epc-model",
+      "interpreter_or_tool": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. .venv/bin/python /Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/run_governed_mc_pr1030_validation.py",
+      "seed": 42,
+      "input_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/governed_mc_pr1030_spec.json",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/governed_mc_pr1030_8a6b48f_seed42_n10000/effective_config.json",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/governed_mc_pr1030_8a6b48f_seed42_n10000/monte_carlo_result_lossless.json",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/governed_mc_pr1030_8a6b48f_seed42_n10000/RUN_MANIFEST.sha256"
+      ],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/governed_mc_pr1030_8a6b48f_seed42_n10000/governed_mc_control.json",
+      "output_sha256": "a99e73287ba1c80e987192ce84c3902c590f610a4fd49134e0fb8d5551b9f9b6",
+      "source_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/run_governed_mc_pr1030_validation.py",
+      "source_sha256": "e090552d670d38c996be0aa0e46fd0da71fd6329a8fe131604cd13b6c6f8e032",
+      "finding_ids": [
+        "P2-MC-SENS-02",
+        "P3-MCFX-03"
+      ],
+      "pointer_ids": [],
+      "result": "PASS: 10,000/10,000 real aligned trials; zero failures, toy fallbacks, partial trials, dead parameters or degenerate sweep. The corrected noise-tolerant DSCR breach probability is 0.8244 versus 0.9868 under the former strict comparator.",
+      "limitations": "Governed same-agent validation, not independent successor review or lender approval. Scenario calibration and placeholder construction draw/phasing remain separate release gates.",
+      "verification_level": "governed_validation_same_agent"
+    },
+    {
+      "reproduction_id": "P3-GOV-MC-PR1030-VERIFY-001",
+      "status": "completed",
+      "title": "PR #1030 stdlib-only secondary raw-artifact verification",
+      "repository_commit": "8a6b48f6573e4ac9074da8fbbcb1e48f4353ce9a",
+      "worktree": "/Users/aruna/Downloads/dutchbay-epc-model",
+      "interpreter_or_tool": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "command": "PYTHONDONTWRITEBYTECODE=1 /Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python /Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/verify_governed_mc_pr1030_artifacts.py",
+      "seed": 42,
+      "input_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/governed_mc_pr1030_8a6b48f_seed42_n10000/RUN_MANIFEST.sha256",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/governed_mc_pr1030_8a6b48f_seed42_n10000/effective_config.json",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/governed_mc_pr1030_8a6b48f_seed42_n10000/governed_mc_control.json",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/governed_mc_pr1030_8a6b48f_seed42_n10000/monte_carlo_result_lossless.json"
+      ],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/governed_mc_pr1030_secondary_verification.json",
+      "output_sha256": "29ea11da068b6a2bb80dd09a1cf526a9ab590d2a465b4005e543423d48089391",
+      "source_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/verify_governed_mc_pr1030_artifacts.py",
+      "source_sha256": "bc9f02ad96d829622cf91af7d29120472b570087a3738f00c1c1d7de1750d91c",
+      "finding_ids": [
+        "P2-MC-SENS-02",
+        "P3-MCFX-03"
+      ],
+      "pointer_ids": [],
+      "result": "PASS: a standard-library-only code path revalidated all hashes, raw array controls, 8,244 noise-tolerant breaches and the emitted Wilson interval.",
+      "limitations": "Separate code path but the same Codex remediation agent; this is not an independent reviewer opinion and does not close the successor-QA gate.",
+      "verification_level": "secondary_code_path_same_agent"
+    },
+    {
+      "reproduction_id": "P5-REPRO-A15-001",
+      "status": "completed",
+      "title": "Governed A15 project-IRR scale and convergence reproduction",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "command": "PYTHONDONTWRITEBYTECODE=1 /Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python /Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/run_p5_a15_irr_scale_reproduction.py\nPYTHONDONTWRITEBYTECODE=1 /Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python /Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/issue_p5_a15_irr_scale_reproduction_v1_0_1.py",
+      "seed": null,
+      "input_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p5_a15_irr_scale_reproduction.json",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/issue_p5_a15_irr_scale_reproduction_v1_0_1.py",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P2_f1_irr.json",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P2_r1_irr_verdicts.json",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/refuters/03_P5_METHODOLOGY_SOTA_REFUTER.md",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/sources/original/p5/SciPy_v1.17.1_scipy_optimize_zeros_py.py"
+      ],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p5_a15_irr_scale_reproduction_v1_0_1.json",
+      "output_sha256": "b1a0f8cbd9f001a04338e815fd0678e51a4add45f6187f7501d77e20f2c3e008",
+      "source_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/run_p5_a15_irr_scale_reproduction.py",
+      "source_sha256": "41a88610d064e2660fa5756c6f90194383251c95c366d25c54bdf77010a3e970",
+      "finding_ids": [
+        "P5-HDL-003",
+        "P5-FIN-002"
+      ],
+      "pointer_ids": [
+        "RS-A15"
+      ],
+      "result": "PASS: the exact canonical deterministic vector converges at project IRR 0.014551597740253388, while a pure 10x monetary rescaling returns None from approx_project_irr and both comparator paths recover the unchanged root. In the authored 18,000-case deterministic grid, 7,897 cases return None from approx_project_irr and zero of those fail either comparator.",
+      "limitations": "Governed same-agent evidence, not independent successor review. The current deterministic canon is unchanged; the grid is authored coverage, not a probability estimate. The reproduction applies to approx_project_irr and does not assert a defect in the separate date-aware xirr implementation. Seven other P5 impact programmes remain open.",
+      "verification_level": "governed_validation_same_agent"
+    },
+    {
+      "reproduction_id": "P3-REPRO-MC-PARAMS-001",
+      "status": "completed",
+      "title": "Finance-MC parameter and scenario inventory",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_mc_parameter_inventory.json",
+      "output_sha256": "a24bbf23dd2c9cd353712cd7db6454627e6b14013c1b13f98ecfc8943cb2b8c7",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P3-MCFX-02"
+      ],
+      "pointer_ids": [],
+      "result": "Machine-readable controlled output completed; inspect the artifact for commands and full-precision results.",
+      "limitations": "Valid only for the audited commit, recorded inputs and environment.",
+      "verification_level": "independent_reproduction"
+    },
+    {
+      "reproduction_id": "P3-REPRO-BREACH-001",
+      "status": "completed",
+      "title": "DSCR breach-probability and Wilson-CI comparison",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "command": "",
+      "seed": 42,
+      "input_refs": [],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_dscr_breach_ci_seed42_reproduction.json",
+      "output_sha256": "28271aa33e66c09a5c7abed23aa49ca3c405f662be481a48792ff9e40d6fceae",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P3-MCFX-03"
+      ],
+      "pointer_ids": [],
+      "result": "Machine-readable controlled output completed; inspect the artifact for commands and full-precision results.",
+      "limitations": "Valid only for the audited commit, recorded inputs and environment.",
+      "verification_level": "independent_reproduction"
+    },
+    {
+      "reproduction_id": "P3-REPRO-CVAR-001",
+      "status": "completed",
+      "title": "Deterministic VaR/CVaR definition vectors",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_var_cvar_definition_vectors.json",
+      "output_sha256": "4711996224a21bd465d4e3456485477f01baf1287e4c763e09d45a917d1cf622",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P3-MCFX-04"
+      ],
+      "pointer_ids": [],
+      "result": "Machine-readable controlled output completed; inspect the artifact for commands and full-precision results.",
+      "limitations": "Valid only for the audited commit, recorded inputs and environment.",
+      "verification_level": "independent_reproduction"
+    },
+    {
+      "reproduction_id": "P3-REPRO-WIND-AEP-001",
+      "status": "completed",
+      "title": "Canonical wind-AEP Monte-Carlo schema probe",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_wind_mc_schema_probe.json",
+      "output_sha256": "f3380b4cca431fba4142322a6a073a402619adb3f1e46740b0989e2173b0af8f",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P3-MCFX-08"
+      ],
+      "pointer_ids": [],
+      "result": "Machine-readable controlled output completed; inspect the artifact for commands and full-precision results.",
+      "limitations": "Valid only for the audited commit, recorded inputs and environment.",
+      "verification_level": "independent_reproduction"
+    },
+    {
+      "reproduction_id": "P3-REPRO-CONV-001",
+      "status": "completed",
+      "title": "Finance-MC convergence-metadata population boundary",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_convergence_metadata_probe.json",
+      "output_sha256": "e02bd5161b91adae27335b1aa875c2725745858d5431a50932931817109bfed7",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P3-MCFX-06"
+      ],
+      "pointer_ids": [],
+      "result": "Machine-readable controlled output completed; inspect the artifact for commands and full-precision results.",
+      "limitations": "Valid only for the audited commit, recorded inputs and environment.",
+      "verification_level": "independent_reproduction"
+    },
+    {
+      "reproduction_id": "P3-REPRO-REPORT-001",
+      "status": "completed",
+      "title": "Canonical equity report and verdict reproduction",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_equity_report_and_verdict_reproduction.json",
+      "output_sha256": "40be7feef668fe5f83f59ec33b76d631fcacb049a0073da0cda49045cc24c4da",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P3-EQ-01",
+        "P3-EQ-04"
+      ],
+      "pointer_ids": [],
+      "result": "Machine-readable controlled output completed; inspect the artifact for commands and full-precision results.",
+      "limitations": "Valid only for the audited commit, recorded inputs and environment.",
+      "verification_level": "independent_reproduction"
+    },
+    {
+      "reproduction_id": "P3-REPRO-VERDICT-001",
+      "status": "completed",
+      "title": "Contradictory equity NPV/IRR verdict probe",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_equity_report_and_verdict_reproduction.json",
+      "output_sha256": "40be7feef668fe5f83f59ec33b76d631fcacb049a0073da0cda49045cc24c4da",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P3-EQ-05"
+      ],
+      "pointer_ids": [],
+      "result": "Machine-readable controlled output completed; inspect the artifact for commands and full-precision results.",
+      "limitations": "Valid only for the audited commit, recorded inputs and environment.",
+      "verification_level": "independent_reproduction"
+    },
+    {
+      "reproduction_id": "P3-REPRO-LOGS-001",
+      "status": "completed",
+      "title": "Equity operational-log inventory",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_equity_operational_log_inventory.json",
+      "output_sha256": "6499fdb529038d99f01ff4aee09018c1e5515afb3b2080e3438c134c8312db32",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P3-EQ-02"
+      ],
+      "pointer_ids": [],
+      "result": "Machine-readable controlled output completed; inspect the artifact for commands and full-precision results.",
+      "limitations": "Valid only for the audited commit, recorded inputs and environment.",
+      "verification_level": "independent_reproduction"
+    },
+    {
+      "reproduction_id": "P3-REPRO-BRIDGE-001",
+      "status": "completed",
+      "title": "Canonical project-to-equity IRR bridge reproduction",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_equity_irr_bridge_reproduction.json",
+      "output_sha256": "ec707fcf25f96486f4f38df90942c8f05d160066bd8819af038f6e327f695521",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P3-EQ-03"
+      ],
+      "pointer_ids": [],
+      "result": "Machine-readable controlled output completed; inspect the artifact for commands and full-precision results.",
+      "limitations": "Valid only for the audited commit, recorded inputs and environment.",
+      "verification_level": "independent_reproduction"
+    },
+    {
+      "reproduction_id": "P2-SCRATCH-R1_F1_CHECK",
+      "status": "unavailable",
+      "title": "Unretained P2 scratch output for r1_f1_check.py",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "",
+      "output_sha256": "",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P2-F1-01"
+      ],
+      "pointer_ids": [],
+      "result": "No controlled standalone output is available.",
+      "limitations": "The immutable finder/refuter JSON remains evidence; this scratch label must not be cited as a completed reproduction.",
+      "verification_level": "none"
+    },
+    {
+      "reproduction_id": "P2-SCRATCH-R1_F1_CHECK2",
+      "status": "unavailable",
+      "title": "Unretained P2 scratch output for r1_f1_check2.py",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "",
+      "output_sha256": "",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P2-F1-05"
+      ],
+      "pointer_ids": [],
+      "result": "No controlled standalone output is available.",
+      "limitations": "The immutable finder/refuter JSON remains evidence; this scratch label must not be cited as a completed reproduction.",
+      "verification_level": "none"
+    },
+    {
+      "reproduction_id": "P2-SCRATCH-R1_F1_CHECK3",
+      "status": "unavailable",
+      "title": "Unretained P2 scratch output for r1_f1_check3.py",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "",
+      "output_sha256": "",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P2-F1-01",
+        "P2-F1-03",
+        "P2-F1-05"
+      ],
+      "pointer_ids": [],
+      "result": "No controlled standalone output is available.",
+      "limitations": "The immutable finder/refuter JSON remains evidence; this scratch label must not be cited as a completed reproduction.",
+      "verification_level": "none"
+    },
+    {
+      "reproduction_id": "P2-SCRATCH-R2_CHECK",
+      "status": "unavailable",
+      "title": "Unretained P2 scratch output for r2_check.py",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "",
+      "output_sha256": "",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P2-F2-02",
+        "P2-F2-03",
+        "P2-F2-05",
+        "P2-F2-06",
+        "P2-F2-07"
+      ],
+      "pointer_ids": [],
+      "result": "No controlled standalone output is available.",
+      "limitations": "The immutable finder/refuter JSON remains evidence; this scratch label must not be cited as a completed reproduction.",
+      "verification_level": "none"
+    },
+    {
+      "reproduction_id": "P2-SCRATCH-R2_FEE",
+      "status": "unavailable",
+      "title": "Unretained P2 scratch output for r2_fee.py",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "",
+      "output_sha256": "",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P2-F2-01"
+      ],
+      "pointer_ids": [],
+      "result": "No controlled standalone output is available.",
+      "limitations": "The immutable finder/refuter JSON remains evidence; this scratch label must not be cited as a completed reproduction.",
+      "verification_level": "none"
+    },
+    {
+      "reproduction_id": "P4-CFG-1-SCHEMA-GUARD",
+      "status": "required_not_run",
+      "title": "Outstanding controlled reproduction P4-CFG-1-SCHEMA-GUARD",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "",
+      "output_sha256": "",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P4-CFG-1"
+      ],
+      "pointer_ids": [
+        "RS-F9"
+      ],
+      "result": "Not completed as a controlled standalone reproduction.",
+      "limitations": "No numerical or no-impact assertion may rely on this identifier until status becomes completed and its output hash resolves.",
+      "verification_level": "none"
+    },
+    {
+      "reproduction_id": "P4-CFG-2-YAML-SAFE-LOAD",
+      "status": "required_not_run",
+      "title": "Outstanding controlled reproduction P4-CFG-2-YAML-SAFE-LOAD",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "",
+      "output_sha256": "",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P4-CFG-2"
+      ],
+      "pointer_ids": [
+        "RS-F9"
+      ],
+      "result": "Not completed as a controlled standalone reproduction.",
+      "limitations": "No numerical or no-impact assertion may rely on this identifier until status becomes completed and its output hash resolves.",
+      "verification_level": "none"
+    },
+    {
+      "reproduction_id": "P4-F1-CI-GATE-RUNS",
+      "status": "required_not_run",
+      "title": "Outstanding controlled reproduction P4-F1-CI-GATE-RUNS",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "",
+      "output_sha256": "",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [],
+      "pointer_ids": [
+        "RS-F4"
+      ],
+      "result": "Not completed as a controlled standalone reproduction.",
+      "limitations": "No numerical or no-impact assertion may rely on this identifier until status becomes completed and its output hash resolves.",
+      "verification_level": "none"
+    },
+    {
+      "reproduction_id": "P5-REPRO-A14-001",
+      "status": "required_not_run",
+      "title": "Outstanding controlled reproduction P5-REPRO-A14-001",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "",
+      "output_sha256": "",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P5-FIN-001"
+      ],
+      "pointer_ids": [
+        "RS-A14"
+      ],
+      "result": "Not completed as a controlled standalone reproduction.",
+      "limitations": "No numerical or no-impact assertion may rely on this identifier until status becomes completed and its output hash resolves.",
+      "verification_level": "none"
+    },
+    {
+      "reproduction_id": "P5-REPRO-C1-001",
+      "status": "required_not_run",
+      "title": "Outstanding controlled reproduction P5-REPRO-C1-001",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "",
+      "output_sha256": "",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P5-HDL-003",
+        "P5-MC-002"
+      ],
+      "pointer_ids": [
+        "RS-C1"
+      ],
+      "result": "Not completed as a controlled standalone reproduction.",
+      "limitations": "No numerical or no-impact assertion may rely on this identifier until status becomes completed and its output hash resolves.",
+      "verification_level": "none"
+    },
+    {
+      "reproduction_id": "P5-REPRO-C2-001",
+      "status": "required_not_run",
+      "title": "Outstanding controlled reproduction P5-REPRO-C2-001",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "",
+      "output_sha256": "",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P5-HDL-003",
+        "P5-MC-001",
+        "P5-MC-003"
+      ],
+      "pointer_ids": [
+        "RS-C2"
+      ],
+      "result": "Not completed as a controlled standalone reproduction.",
+      "limitations": "No numerical or no-impact assertion may rely on this identifier until status becomes completed and its output hash resolves.",
+      "verification_level": "none"
+    },
+    {
+      "reproduction_id": "P5-REPRO-C8-001",
+      "status": "required_not_run",
+      "title": "Outstanding controlled reproduction P5-REPRO-C8-001",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "",
+      "output_sha256": "",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P5-HDL-003",
+        "P5-SA-001",
+        "P5-SA-002"
+      ],
+      "pointer_ids": [
+        "RS-C8"
+      ],
+      "result": "Not completed as a controlled standalone reproduction.",
+      "limitations": "No numerical or no-impact assertion may rely on this identifier until status becomes completed and its output hash resolves.",
+      "verification_level": "none"
+    },
+    {
+      "reproduction_id": "P5-REPRO-D4-001",
+      "status": "required_not_run",
+      "title": "Outstanding controlled reproduction P5-REPRO-D4-001",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "",
+      "output_sha256": "",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P5-HDL-003",
+        "P5-WIND-003"
+      ],
+      "pointer_ids": [
+        "RS-D4"
+      ],
+      "result": "Not completed as a controlled standalone reproduction.",
+      "limitations": "No numerical or no-impact assertion may rely on this identifier until status becomes completed and its output hash resolves.",
+      "verification_level": "none"
+    },
+    {
+      "reproduction_id": "P5-REPRO-LLCR-001",
+      "status": "required_not_run",
+      "title": "Outstanding controlled reproduction P5-REPRO-LLCR-001",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "",
+      "output_sha256": "",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P5-HDL-003",
+        "P5-FIN-004"
+      ],
+      "pointer_ids": [
+        "RS-A4"
+      ],
+      "result": "Not completed as a controlled standalone reproduction.",
+      "limitations": "No numerical or no-impact assertion may rely on this identifier until status becomes completed and its output hash resolves.",
+      "verification_level": "none"
+    },
+    {
+      "reproduction_id": "P5-REPRO-RISK-001",
+      "status": "required_not_run",
+      "title": "Outstanding controlled reproduction P5-REPRO-RISK-001",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "",
+      "output_sha256": "",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P5-HDL-003",
+        "P5-RISK-001"
+      ],
+      "pointer_ids": [],
+      "result": "Not completed as a controlled standalone reproduction.",
+      "limitations": "No numerical or no-impact assertion may rely on this identifier until status becomes completed and its output hash resolves.",
+      "verification_level": "none"
+    },
+    {
+      "reproduction_id": "P5-REPRO-WIND-001",
+      "status": "required_not_run",
+      "title": "Outstanding controlled reproduction P5-REPRO-WIND-001",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "interpreter_or_tool": "",
+      "command": "",
+      "seed": null,
+      "input_refs": [],
+      "output_path": "",
+      "output_sha256": "",
+      "source_path": "",
+      "source_sha256": "",
+      "finding_ids": [
+        "P5-HDL-003",
+        "P5-WIND-001",
+        "P5-WIND-002"
+      ],
+      "pointer_ids": [],
+      "result": "Not completed as a controlled standalone reproduction.",
+      "limitations": "No numerical or no-impact assertion may rely on this identifier until status becomes completed and its output hash resolves.",
+      "verification_level": "none"
+    }
+  ],
+  "limitations": "Only status=completed with a resolvable, hash-matching output may appear in a finding or architecture reproduction_refs list. Other statuses belong in typed dependencies or limitations."
+}

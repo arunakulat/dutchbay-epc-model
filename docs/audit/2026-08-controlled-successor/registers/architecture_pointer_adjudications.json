@@ -1,0 +1,626 @@
+{
+  "schema_version": "1.0.0",
+  "as_of": "2026-08-16T14:24:23+05:30",
+  "status": "working",
+  "authority_status": "active",
+  "supersedes": {
+    "path": "registers/history/architecture_pointer_adjudications.pre-normalization.20260812.a6c3d56d.json",
+    "sha256": "a6c3d56dd6c891b2061f13f3dec2038996c15ef49beda5b451e46cc9ef7514b7",
+    "status": "superseded"
+  },
+  "coverage": {
+    "registered_count": 72,
+    "explicit_overlay_count": 25,
+    "substantive_disposition_count": 21,
+    "not_examined_count": 51,
+    "not_examined_pct": 70.83333333333333
+  },
+  "items": {
+    "RS-A1": {
+      "disposition": "not_a_defect",
+      "confidence": "high",
+      "verification_level": "finder_plus_refuter",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:474",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:88-97",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P2_f3_waterfall.json:75-82",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/cashflow_v14.py:373-600",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/cashflow_v14.py:768-983",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/diff_builders.py"
+      ],
+      "reproduction_refs": [],
+      "finding_ids": [],
+      "notes": "Five differential runs, including loss vintages, a tax holiday, an active FX hedge and a senior-fee series, produced exact row/key equality between the two builders. This closes a present functional-divergence allegation, not the residual maintenance risk created by duplicate implementations.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-A2": {
+      "disposition": "partially_confirmed",
+      "confidence": "medium",
+      "verification_level": "finder_only",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:475",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P2_f2_debt.json:104-114",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P2_f2_debt.json:127-134",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/debt_v14.py:620-671",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/debt_v14.py:822",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/f2_feebase.py"
+      ],
+      "reproduction_refs": [],
+      "finding_ids": [],
+      "notes": "The interest-only-zero fee-base divergence exists in code, but no committed scenario combines interest_only_years equal to zero with a non-zero senior fee. Within the live canonical debt engine, sculpt and reported DSCR use the same fee rate, opening balance and period mask. Latent scope is confirmed; current committed-scenario impact is not.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-A3": {
+      "disposition": "partially_confirmed",
+      "confidence": "high",
+      "verification_level": "finder_plus_refuter",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:476",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:43-45",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:84-86",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/debt_v14.py:1004-1066",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/debt_v14.py:1092-1189",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/f2_mono.py",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/f2_resize.py"
+      ],
+      "reproduction_refs": [],
+      "finding_ids": [
+      "P2-F2-07"
+      ],
+      "notes": "A 279-point canonical scan found no monotonicity violation, so the hypothesised live non-monotonicity did not reproduce. The linear 0.0025 scan is nevertheless confirmed to stop below the bisected plateau edge: 0.4100 versus approximately 0.41062, about USD 104,000 of unsized debt capacity. The pointer is therefore only partly sustained.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-A4": {
+      "disposition": "partially_confirmed",
+      "confidence": "high",
+      "verification_level": "finder_plus_refuter",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:477",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:38",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:84-86",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P2_f2_debt.json:116-120",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/debt_v14.py:897-956",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/f2_resize.py"
+      ],
+      "reproduction_refs": [],
+      "validation_dependencies": [
+        {
+          "dependency_id": "DEP-RS-A4-01",
+          "kind": "validation",
+          "target": "P5-REPRO-LLCR-001",
+          "owner_role": "project_finance_model_owner",
+          "status": "required_not_started",
+          "blocking": true,
+          "requirement": "Complete and independently review the transaction-bounded LLCR reproduction before upgrading this pointer."
+        }
+      ],
+      "finding_ids": [
+      "P2-F2-04",
+        "P5-FIN-004"
+      ],
+      "notes": "The close-date denominator, weighted average debt-rate discount basis and t=1 discount offset were verified as coherent. The LLCR numerator window is one operating year longer than the service-bearing loan life because of the bridge convention, increasing reported LLCR by about 1.11 percent. Transaction-specific loan-life, DSRA and discount-curve conventions remain deferred.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-A5": {
+      "disposition": "partially_confirmed",
+      "confidence": "high",
+      "verification_level": "finder_plus_refuter",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:478",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:41",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:88-101",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P2_f3_waterfall.json:54-60",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/cashflow_v14_tax.py:495-594",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P2_r3_waterfall_verdicts.json"
+      ],
+      "reproduction_refs": [],
+      "finding_ids": [
+      "P2-F3-05"
+      ],
+      "notes": "The loss-vintage path has a confirmed semantic contradiction: loss_carryforward_years equal to zero is documented as unlimited carry in one layer but disables carry-forward in the live config-resolution path. Canon declares six years and is unaffected. The broader fallback-ladder, mutated-params and depreciation-base concerns were not fully adjudicated, so the row remains partial.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-A6": {
+      "disposition": "partially_confirmed",
+      "confidence": "high",
+      "verification_level": "finder_plus_refuter",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:479",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:23-24",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:103-105",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P2_r5_fx_verdicts.json",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/cashflow_v14_fx.py:12-171",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/cashflow_v14_fx.py:215-308",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/fx_probe4.py",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/fx_probe5.py"
+      ],
+      "reproduction_refs": [],
+      "finding_ids": [
+      "P2-F5-01"
+      ],
+      "notes": "CIP-forward construction and hedge-blend arithmetic were independently checked and found clean. The spot curve is nevertheless indexed to operating rows without construction-lag alignment, so first operating cash is translated two to three periods earlier than it is discounted and sculpted. The timing defect is confirmed; the rest of this composite pointer is not defective on the evidence reviewed.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-A7": {
+      "disposition": "partially_confirmed",
+      "confidence": "high",
+      "verification_level": "finder_plus_refuter",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:480",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:29",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:75-82",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P2_r1_irr_verdicts.json:20-30",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/irr.py:375-542",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/core/metrics.py:376-390",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/f1_check1.py",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/f1_check3.py"
+      ],
+      "reproduction_refs": [],
+      "finding_ids": [
+      "P2-F1-03"
+      ],
+      "notes": "The signed vector itself was reproduced to exact float equality: capex at t=0, the declared lag count, then first CFADS at lag plus one. The configuration resolution is wrong: timeline.construction_years is never read, and a hardcoded two-period debt default silently overrides two committed CEB scenarios that declare one year. Canon happens to declare two and is neutral.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-A8": {
+      "disposition": "confirmed",
+      "confidence": "high",
+      "verification_level": "finder_plus_refuter",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:481",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:25-26",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:84-86",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:99-101",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P2_r4_tax_verdicts.json:1-12",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/pipeline_v14_enhanced.py:704-880",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/f2_feebase.py",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/f2_resize.py",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/f4_levered_tax.py"
+      ],
+      "reproduction_refs": [],
+      "finding_ids": [
+      "P2-F2-01",
+      "P2-F4-01"
+      ],
+      "notes": "Confirmed at both seams. Debt is sized from pre-fee, unlevered-tax rows, while reported coverage is measured after fee rebuilding and the equity pass alone receives levered tax. Published CFADS and debt service cannot reproduce reported coverage; the fee basis differs by USD 6.03 million and levered-tax CFADS by USD 17.32 million on the canonical case.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-A9": {
+      "disposition": "partially_confirmed",
+      "confidence": "high",
+      "verification_level": "finder_plus_refuter",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:482",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:31",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:39-40",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:49-56",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:88-97",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/equity_distribution_v14_hydra.py:509-655",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/r3_wf_run.py",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/r3_wf_run2.py",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/r3_wf_run3.py"
+      ],
+      "reproduction_refs": [],
+      "finding_ids": [
+      "P2-F3-01",
+      "P2-F3-02",
+      "P2-F3-03"
+      ],
+      "notes": "The post-debt cash clamp is a confirmed sponsor-support omission and is live on edge_extreme_stress, absorbing USD 19.17 million across eight years and flattering equity IRR by 4.56 percentage points. The lockup's alternate DSCR is real but canon-neutral. The claimed dividend-WHT return-of-capital defect was refuted, and the canonical terminal release is zero. Only part of the composite ordering risk survives.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-A10": {
+      "disposition": "partially_confirmed",
+      "confidence": "high",
+      "verification_level": "finder_plus_refuter",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:483",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:35",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:84-86",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/debt_v14.py:1148-1176",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/debt_v14.py:1610-1721",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/f2_dual.py"
+      ],
+      "reproduction_refs": [],
+      "finding_ids": [
+      "P2-F2-05"
+      ],
+      "notes": "The dual-DSCR closed-form block is tautological by construction and its P99 leg cannot bind under committed parameterisations. It is KPI-neutral, but debt_sized is reported 33.6 percent above the actual solved facility beside solved_gearing, making it materially misquotable. This confirms the reporting risk without establishing a current canonical calculation error.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-A14": {
+      "disposition": "deferred",
+      "confidence": "high",
+      "verification_level": "single_reader",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:487",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/debt_v14.py:620-671",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/debt_v14.py:655-669"
+      ],
+      "reproduction_refs": [],
+      "validation_dependencies": [
+        {
+          "dependency_id": "DEP-RS-A14-01",
+          "kind": "validation",
+          "target": "P5-REPRO-A14-001",
+          "owner_role": "project_finance_model_owner",
+          "status": "required_not_started",
+          "blocking": true,
+          "requirement": "Complete and independently review the facility-allocation reproduction after transaction documents are available."
+        }
+      ],
+      "finding_ids": [
+        "P5-FIN-001",
+        "P5-COV-001"
+      ],
+      "notes": "Pro-rata allocation by opening balance is confirmed as the implemented assumption. Whether it matches the facility and intercreditor terms, or is preferable to cost-aware allocation, cannot be adjudicated without transaction documents and comparative schedules.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-A15": {
+      "disposition": "confirmed",
+      "confidence": "high",
+      "verification_level": "finder_plus_refuter",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:488",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:34",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md:75-82",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P2_f1_irr.json:6-13",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P2_f1_irr.json:73-83",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/irr.py:175-244",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/irr.py:419-542",
+        "https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.bisect.html",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/f1_check2.py",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/f1_check4.py",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/f1_check5.py",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p5_a15_irr_scale_reproduction_v1_0_1.json"
+      ],
+      "reproduction_refs": [
+        "P5-REPRO-A15-001"
+      ],
+      "validation_dependencies": [
+        {
+          "dependency_id": "DEP-RS-A15-01",
+          "kind": "validation",
+          "target": "P5-REPRO-A15-001",
+          "owner_role": "project_finance_model_owner",
+          "status": "completed",
+          "blocking": false,
+          "requirement": "The governed same-agent A15 scale and convergence reproduction is complete and hash-controlled; independent successor review remains a separate finding-level release gate."
+        }
+      ],
+      "finding_ids": [
+      "P2-F1-01",
+        "P5-FIN-002",
+        "P5-HDL-001",
+        "P5-HDL-003"
+      ],
+      "notes": "The governed A15 reproduction confirms the scale-sensitive convergence gap in approx_project_irr, not bisection itself and not the separate date-aware xirr implementation. The exact current deterministic vector converges at 0.014551597740253388, while a pure 10x monetary rescaling returns None and both comparator solvers preserve the root. The authored 18,000-case grid records 7,897 such failures with zero comparator failures; this is grid coverage, not a probability estimate. Independent successor review remains open at finding level.",
+      "adjudicated_at": "2026-08-16T14:24:23+05:30"
+    },
+    "RS-B9": {
+      "disposition": "not_examined",
+      "confidence": "high",
+      "verification_level": "none",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:497",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/contracts_v14.py:1888"
+      ],
+      "reproduction_refs": [],
+      "finding_ids": [
+        "P5-COV-001"
+      ],
+      "notes": "The P5 coverage refuter confirmed that the assigned pack performed no dedicated contract-surface, invariant or overlapping-shape review. This row is included to preserve the full ten-pointer P5 crosswalk and remains not examined.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-C1": {
+      "disposition": "deferred",
+      "confidence": "high",
+      "verification_level": "single_reader",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:498",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/05_sota_benchmarking.md:22-24",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/mc/samplers.py:19-164",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/mc/engine.py:791-834",
+        "https://docs.scipy.org/doc/scipy-1.15.0/reference/generated/scipy.stats.qmc.Sobol.html",
+        "https://doi.org/10.1137/S0036142994277468"
+      ],
+      "reproduction_refs": [],
+      "validation_dependencies": [
+        {
+          "dependency_id": "DEP-RS-C1-01",
+          "kind": "validation",
+          "target": "P5-REPRO-C1-001",
+          "owner_role": "quantitative_risk_lead",
+          "status": "required_not_started",
+          "blocking": true,
+          "requirement": "Complete replicated LHS-versus-RQMC convergence and error-estimation work before upgrading this pointer."
+        }
+      ],
+      "finding_ids": [
+        "P5-MC-002",
+        "P5-HDL-001"
+      ],
+      "notes": "LHS mechanics and the locked-version scrambled-Sobol random_base2 call are confirmed. Estimator efficiency, post-correlation net quality and error estimation remain unresolved because the implementation uses one scramble and the audit contains no replicated LHS-versus-RQMC convergence study.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-C2": {
+      "disposition": "deferred",
+      "confidence": "high",
+      "verification_level": "single_reader",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:499",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/05_sota_benchmarking.md:21",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/mc/correlation.py:67-225",
+        "https://doi.org/10.1080/03610918208812265"
+      ],
+      "reproduction_refs": [],
+      "validation_dependencies": [
+        {
+          "dependency_id": "DEP-RS-C2-01",
+          "kind": "validation",
+          "target": "P5-REPRO-C2-001",
+          "owner_role": "quantitative_risk_lead",
+          "status": "required_not_started",
+          "blocking": true,
+          "requirement": "Complete correlation-method conformance and calibrated tail-dependence validation before upgrading this pointer."
+        }
+      ],
+      "finding_ids": [
+        "P5-MC-001",
+        "P5-MC-003",
+        "P5-HDL-001"
+      ],
+      "notes": "The default method-label mismatch is confirmed, and the Gaussian-copula path's latent-scale and zero-tail-dependence limitations are disclosed in code. Whether a t-copula or vine is warranted for DutchBay joint downside risk requires calibration data or an approved stress design.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-C8": {
+      "disposition": "deferred",
+      "confidence": "high",
+      "verification_level": "single_reader",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:505",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/05_sota_benchmarking.md:34-44",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/sensitivity/global_sa.py:501-900",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/tests/analytics/test_global_sa.py:293-321",
+        "https://github.com/SALib/SALib/blob/v1.5.2/src/SALib/analyze/sobol.py",
+        "https://github.com/SALib/SALib/blob/v1.5.2/src/SALib/analyze/pawn.py",
+        "https://doi.org/10.1016/j.envsoft.2015.01.004"
+      ],
+      "reproduction_refs": [],
+      "validation_dependencies": [
+        {
+          "dependency_id": "DEP-RS-C8-01",
+          "kind": "validation",
+          "target": "P5-REPRO-C8-001",
+          "owner_role": "quantitative_risk_lead",
+          "status": "required_not_started",
+          "blocking": true,
+          "requirement": "Complete sample-adequacy, convergence, and heuristic-sensitivity reproductions before upgrading this pointer."
+        }
+      ],
+      "finding_ids": [
+        "P5-SA-001",
+        "P5-SA-002",
+        "P5-HDL-001"
+      ],
+      "notes": "Core SALib wrapper conformance is confirmed, but the n=256, Morris-16 and PAWN-s=10 defaults, the 0.05 interaction heuristic, finite-only masking and the claimed PAWN 0.15 noise floor lack a documented acceptance or convergence reproduction.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-D1": {
+      "disposition": "partially_confirmed",
+      "confidence": "high",
+      "verification_level": "primary_source_plus_refuter",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:510",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/03_bankability_methodology.md:69-84",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P3_a_wind_aep.json",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/wind_resource/era5_retrieval.py:303-359",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/wind_resource/era5_retrieval.py:523-540",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/wind_resource/mcp.py:1-26",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/registers/primary_source_register.v2.json#PSR-0001",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/registers/primary_source_register.v2.json#PSR-0005",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/refuters/01_WIND_STANDARDS_REFUTER.md#L26-L50",
+        "https://measnet.com/wp-content/uploads/2026/06/ce599b8a-639f-4b48-992e-a099e1b14956.pdf"
+      ],
+      "reproduction_refs": [],
+      "finding_ids": [
+      "P3-G1"
+      ],
+      "notes": "No on-site dataset and no wired MCP path were found; the production retrieval uses a single nearest 0.25-degree ERA5 output point. The architecture map's approximately 31 km cell wording is technically corrected, and MEASNET treats an incomplete campaign as a disclosed deviation with quantified uncertainty rather than proving a universal hard lender refusal. The core pre-measurement limitation survives; the absolute standard and credit-policy wording does not.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-D3": {
+      "disposition": "partially_confirmed",
+      "confidence": "high",
+      "verification_level": "primary_source_plus_refuter",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:512",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/03_bankability_methodology.md:75-84",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P3_a_wind_aep.json",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/wind_resource/bankable_aep.py:393-523",
+      "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/wind/aep_summary_builder.py:115-147",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/registers/primary_source_register.v2.json#PSR-0001",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/registers/primary_source_register.v2.json#PSR-0003",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/refuters/01_WIND_STANDARDS_REFUTER.md#L20",
+        "https://measnet.com/wp-content/uploads/2026/06/ce599b8a-639f-4b48-992e-a099e1b14956.pdf"
+      ],
+      "reproduction_refs": [],
+      "finding_ids": [
+      "P3-G3"
+      ],
+      "notes": "The 4.5 percent wind_measurement uncertainty is confirmed as an assumed class default on a project with no measurement campaign. Attribution of that value as an IEC default is not supported by the primary source. Whether 4.5 percent materially understates the correct project uncertainty, and the resulting P90/debt impact, remains deferred pending an independent resource assessment.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-D4": {
+      "disposition": "deferred",
+      "confidence": "high",
+      "verification_level": "single_reader",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:513",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/05_sota_benchmarking.md:54-60",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/core/exceedance.py:14-49",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/wind_resource/bankable_aep.py:585-614",
+        "https://wes.copernicus.org/articles/6/311/2021/",
+        "https://www.bipm.org/en/committees/jc/jcgm/publications"
+      ],
+      "reproduction_refs": [],
+      "validation_dependencies": [
+        {
+          "dependency_id": "DEP-RS-D4-01",
+          "kind": "validation",
+          "target": "P5-REPRO-D4-001",
+          "owner_role": "wind_resource_methodology_owner",
+          "status": "required_not_started",
+          "blocking": true,
+          "requirement": "Complete distribution-choice and P90/P95/P99 impact reproduction before upgrading this pointer."
+        }
+      ],
+      "finding_ids": [
+        "P5-WIND-003",
+        "P5-HDL-003"
+      ],
+      "notes": "The z-values and linear Pxx arithmetic are confirmed conditional on a Gaussian relative-error model. The normal-versus-lognormal or other positive/skew distribution decision and its P90, P95, P99 and covenant effects remain unresolved.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-D9": {
+      "disposition": "partially_confirmed",
+      "confidence": "medium",
+      "verification_level": "primary_source_plus_refuter",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:518",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/03_bankability_methodology.md:80-84",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P3_a_wind_aep.json",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_lendercase_2025Q4.yaml:96-106",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_lendercase_2025Q4.yaml:190",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/wind_resource/config/era5_config.yaml",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/registers/primary_source_register.v2.json#PSR-0001",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/refuters/01_WIND_STANDARDS_REFUTER.md#L24",
+        "https://measnet.com/wp-content/uploads/2026/06/ce599b8a-639f-4b48-992e-a099e1b14956.pdf"
+      ],
+      "reproduction_refs": [],
+      "finding_ids": [
+      "P3-G7"
+      ],
+      "notes": "A flat 2 percent curtailment placeholder and generic loss provenance are confirmed, and no enabled grid study supports the canonical curtailment value. The broader claim about every loss factor, unknown-key behavior, wake modelling and the SPPA availability-LD comparison was not fully reproduced, so the composite pointer remains only partially confirmed.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-D12": {
+      "disposition": "not_examined",
+      "confidence": "high",
+      "verification_level": "none",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:521",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/wind_resource/weibull_fit.py:101-180"
+      ],
+      "reproduction_refs": [],
+      "finding_ids": [
+        "P5-COV-001"
+      ],
+      "notes": "The P5 coverage refuter found no dedicated pooled-versus-monsoon-stratified fit comparison, energy-tail gate assessment or AEP-impact reproduction. This row is included to preserve the full ten-pointer P5 crosswalk and remains not examined.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-E13": {
+      "disposition": "not_examined",
+      "confidence": "high",
+      "verification_level": "none",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:534",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/app/jobs/config.py:56-63",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/app/jobs/worker.py:10-13",
+      "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/app/api/jobs_router.py:52-62"
+      ],
+      "reproduction_refs": [],
+      "finding_ids": [
+        "P5-COV-001"
+      ],
+      "notes": "The P5 coverage refuter found no Redis/ARQ integration execution or source-level adjudication of queue, task-name, serialization and shared-store coupling. This row is included to preserve the full ten-pointer P5 crosswalk and remains not examined.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-F4": {
+      "disposition": "partially_confirmed",
+      "confidence": "medium",
+      "verification_level": "single_reader",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:538",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/04_code_health_techdebt.md:7-18",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P4_c_lint_type_security.json",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/.pre-commit-config.yaml:49-52",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/.github/workflows/test-suite.yml:294-412"
+      ],
+      "reproduction_refs": [],
+      "validation_dependencies": [
+        {
+          "dependency_id": "DEP-RS-F4-01",
+          "kind": "validation",
+          "target": "P4-F1-CI-GATE-RUNS",
+          "owner_role": "software_quality_owner",
+          "status": "required_not_started",
+          "blocking": true,
+          "requirement": "Archive and independently review the exact local-hook and CI-gate runs before upgrading this pointer."
+        }
+      ],
+      "finding_ids": [
+
+      ],
+      "notes": "P4 independently verified that mypy is a mandatory CI merge gate but is commented out of pre-commit, so any rule text claiming both local-hook and CI enforcement is overstated. The R17 docstring-ratchet underclaim and the remaining listed rule rows were not independently re-adjudicated in P4, leaving this composite pointer partial.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-F9": {
+      "disposition": "partially_confirmed",
+      "confidence": "medium",
+      "verification_level": "single_reader",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:543",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/04_code_health_techdebt.md:28-41",
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P4_a_deadcode_config.json",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/_scrtch/zz_bad.yaml:1",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/example_fx_structured_blocks.yaml:114",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/tests/lint/test_no_magic_fx.py:90",
+      "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/tests/finance/test_currency_lkr_primary.py:42"
+      ],
+      "reproduction_refs": [],
+      "validation_dependencies": [
+        {
+          "dependency_id": "DEP-RS-F9-01",
+          "kind": "validation",
+          "target": "P4-CFG-1-SCHEMA-GUARD",
+          "owner_role": "software_quality_owner",
+          "status": "required_not_started",
+          "blocking": true,
+          "requirement": "Archive and independently review the schema-guard run before upgrading this pointer."
+        },
+        {
+          "dependency_id": "DEP-RS-F9-02",
+          "kind": "validation",
+          "target": "P4-CFG-2-YAML-SAFE-LOAD",
+          "owner_role": "software_quality_owner",
+          "status": "required_not_started",
+          "blocking": true,
+          "requirement": "Archive and independently review the YAML-safe-load run before upgrading this pointer."
+        }
+      ],
+      "finding_ids": [
+        "P4-CFG-1",
+        "P4-CFG-2"
+      ],
+      "notes": "P4 reproduced one deliberately invalid committed scratch scenario and a broken multi-document example YAML that two lint tests silently skip. This confirms the need for an explicit expected-valid and expected-invalid manifest. It does not, by itself, prove every aspect of the pointer's ScenarioAnalytics failure-path claim, so the disposition is partial.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    },
+    "RS-F10": {
+      "disposition": "not_examined",
+      "confidence": "high",
+      "verification_level": "none",
+      "evidence_refs": [
+        "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/01_architecture_map.md:544",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/conf/run_full_pipeline_v14.yaml:4-5",
+        "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/run_full_pipeline_v14.py:988-1027"
+      ],
+      "reproduction_refs": [],
+      "finding_ids": [
+        "P5-COV-001"
+      ],
+      "notes": "The P5 coverage refuter found no dedicated adjudication of the flat conf directory, hand-written merge path or whether Hydra composition is overstated. This row is included to preserve the full ten-pointer P5 crosswalk and remains not examined.",
+      "adjudicated_at": "2026-08-12T10:00:54+05:30"
+    }
+  }
+}

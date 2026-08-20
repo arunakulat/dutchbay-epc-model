@@ -1,0 +1,257 @@
+{
+  "schema_version": "dutchbay.audit.p2_f5_01_d1_empty_debt_parity_merged.v1",
+  "as_of": "2026-08-16T14:54:20+05:30",
+  "status": "merged_protected_ci_and_post_merge_pass",
+  "finding_id": "P2-F5-01",
+  "excluded_finding_id": "P2-F5-02",
+  "predecessor_evidence": {
+    "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p2_f5_01_d1_empty_debt_parity_candidate_0c9db23.json",
+    "sha256": "17ea754d865d2c9795fe3e9f9e78146325412711b675b4575e5fb55a754595d7",
+    "preserved": true
+  },
+  "pull_request": {
+    "number": 1037,
+    "url": "https://github.com/arunakulat/dutchbay-epc-model/pull/1037",
+    "state": "MERGED",
+    "ready_for_review_before_merge": true,
+    "base_oid": "e458a78c3377595e49b8c69ceb1afc5c5ff9869e",
+    "base_tree": "cd556f3e7c0981b741f0769229c087ed70a4fe88",
+    "reviewed_head_oid": "0c9db232681c4cbce74e7f723a2e0833199fea43",
+    "reviewed_head_tree": "8343bc8065f2684904c738d9ea730818ef49ed3f",
+    "merge_method": "squash",
+    "merge_oid": "dac8c7a36c63f1dbb8dcf855b263e645b57ed676",
+    "merge_tree": "8343bc8065f2684904c738d9ea730818ef49ed3f",
+    "merge_parent": "e458a78c3377595e49b8c69ceb1afc5c5ff9869e",
+    "merge_tree_matches_reviewed_head_tree": true,
+    "merged_at": "2026-08-16T09:22:52Z",
+    "merged_by": "arunakulat",
+    "changed_files": 3,
+    "additions": 20,
+    "deletions": 1,
+    "remote_topic_branch_present_after_merge": false
+  },
+  "protected_ci": {
+    "captured_as_complete": true,
+    "total_checks": 25,
+    "success": 24,
+    "skipped": 1,
+    "pending": 0,
+    "failed": 0,
+    "intentional_skip": "Grid Study (opt-in, non-blocking)",
+    "checks": [
+      {
+        "name": "fastlane",
+        "workflow": "CI - v14 fastlane",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393497/job/95143830735"
+      },
+      {
+        "name": "Analyze (actions)",
+        "workflow": "CodeQL",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938392348/job/95143829789"
+      },
+      {
+        "name": "smoke",
+        "workflow": "Regression Smoke",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393495/job/95143830813"
+      },
+      {
+        "name": "Classify changed paths",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95143830770"
+      },
+      {
+        "name": "Code Quality Checks",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95143830781"
+      },
+      {
+        "name": "Security Scan",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95143830801"
+      },
+      {
+        "name": "Run Tests (Python 3.11, shard 1)",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95143853267"
+      },
+      {
+        "name": "Run Tests (Python 3.11, shard 2)",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95143853213"
+      },
+      {
+        "name": "Run Tests (Python 3.11, shard 3)",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95143853253"
+      },
+      {
+        "name": "Run Tests (Python 3.11, shard 4)",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95143853254"
+      },
+      {
+        "name": "Run Tests (Python 3.11, shard 5)",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95143853257"
+      },
+      {
+        "name": "Run Tests (Python 3.11, shard 6)",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95143853324"
+      },
+      {
+        "name": "Run Tests (Python 3.12, shard 1)",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95143853258"
+      },
+      {
+        "name": "Run Tests (Python 3.12, shard 2)",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95143853208"
+      },
+      {
+        "name": "Run Tests (Python 3.12, shard 3)",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95143853262"
+      },
+      {
+        "name": "Run Tests (Python 3.12, shard 4)",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95143853225"
+      },
+      {
+        "name": "Run Tests (Python 3.12, shard 5)",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95143853298"
+      },
+      {
+        "name": "Run Tests (Python 3.12, shard 6)",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95143853291"
+      },
+      {
+        "name": "Grid Study (opt-in, non-blocking)",
+        "workflow": "Test Suite",
+        "conclusion": "SKIPPED",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95143853668"
+      },
+      {
+        "name": "Coverage Gate (Python 3.11)",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95144809460"
+      },
+      {
+        "name": "Coverage Gate (Python 3.12)",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95144809479"
+      },
+      {
+        "name": "Test Summary",
+        "workflow": "Test Suite",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/actions/runs/31938393500/job/95144975913"
+      },
+      {
+        "name": "CodeQL",
+        "workflow": "",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/runs/95143894096"
+      },
+      {
+        "name": "Test Results (Python 3.11)",
+        "workflow": "CodeQL",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/runs/95144942096"
+      },
+      {
+        "name": "Test Results (Python 3.12)",
+        "workflow": "CodeQL",
+        "conclusion": "SUCCESS",
+        "url": "https://github.com/arunakulat/dutchbay-epc-model/runs/95144959499"
+      }
+    ]
+  },
+  "post_merge_verification": {
+    "repository_path": "/Users/aruna/Downloads/dutchbay-epc-model",
+    "main_oid": "dac8c7a36c63f1dbb8dcf855b263e645b57ed676",
+    "origin_main_oid": "dac8c7a36c63f1dbb8dcf855b263e645b57ed676",
+    "working_tree_clean": true,
+    "python_version": "3.11.14",
+    "test_command": ".venv/bin/pytest -q tests/finance/test_construction_period_resolver.py tests/finance/test_lendercase_expected_results.py tests/finance/test_multitech_generation.py::test_canonical_lendercase_economics_unchanged",
+    "tests_passed": 19,
+    "tests_failed": 0,
+    "warnings": 1,
+    "controlled_probe": {
+      "input_shape": {
+        "capex": {
+          "usd_total": 100.0
+        },
+        "allow_toy_fallback": true,
+        "debt_or_DEBT": {},
+        "construction_periods": 9
+      },
+      "lowercase_debt": {
+        "pure_resolver": 2,
+        "live_debt_layer": 2
+      },
+      "uppercase_debt": {
+        "pure_resolver": 2,
+        "live_debt_layer": 2
+      },
+      "historical_expected_value": 2
+    }
+  },
+  "merged_files": [
+    {
+      "path": "finance/debt_v14.py",
+      "sha256": "71af0b375bc336cc52bba712b6b16a2c61c6c42d647e8fa1414f9e44fda6eed6"
+    },
+    {
+      "path": "tests/finance/test_construction_period_resolver.py",
+      "sha256": "59a5e5d7b718299f01e942fe02706fce6200c88c64c59f28131092e441520b3a"
+    },
+    {
+      "path": "changelog.d/f5-01-empty-debt-parity.fixed.md",
+      "sha256": "571f98d6971b2459c464a2a1d863129dce8bc7bff1dcb517964e69f7a2c5ec7a"
+    }
+  ],
+  "scope_controls": {
+    "restores_pr_1035_historical_empty_mapping_parity": true,
+    "completes_f5_01": false,
+    "f5_01_dolphin_3_canon_moving_binding_still_required": true,
+    "version_changed": false,
+    "scenario_changed": false,
+    "expected_result_changed": false,
+    "canonical_fixture_changed": false,
+    "finance_formula_changed": false,
+    "f5_02_touched": false,
+    "canon_rebaseline_authorized": false,
+    "board_lender_release_authorized": false
+  },
+  "limitations": [
+    "This evidence closes only the post-PR-1035 explicit-empty-debt parity regression introduced by the shared resolver seam.",
+    "The underlying P2-F5-01 operating-FX timing correction is not complete; its canon-moving caller binding, impact reconciliation and controlled re-baseline remain open.",
+    "F5-02 remains a separate finding, change, test, reconciliation, commit and pull request.",
+    "Protected CI and post-merge testing do not close the wider audit programme or release the Board/lender synthesis."
+  ]
+}

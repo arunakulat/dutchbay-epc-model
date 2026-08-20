@@ -1,0 +1,105 @@
+{
+  "schema_version": "dutchbay.audit.remediation_merge_evidence.v1",
+  "status": "merged_remote_green_governed_run_pending",
+  "as_of": "2026-08-16T11:46:11+05:30",
+  "title": "P3-MCFX-03 and P2-MC-SENS-02 protected-merge evidence",
+  "finding_ids": [
+    "P3-MCFX-03",
+    "P2-MC-SENS-02"
+  ],
+  "verification_level": "merged_protected_ci_verified",
+  "release_status": "HOLD",
+  "release_hold_reason": "The code remediation is merged and verified, but the eventual governed production Monte Carlo metadata has not been generated and the wider audit programme still has open evidence, reproduction and implementation gates.",
+  "predecessor": {
+    "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_mcfx_03_remediation_candidate_c2d537f.json",
+    "sha256": "fa7e01a1bbdd0d7816331d9a611c02215b872a90f9d8e3a7286c97d4f25399ff",
+    "status": "local_candidate_green_remote_pending"
+  },
+  "repository": {
+    "canonical_repository": "/Users/aruna/Downloads/dutchbay-epc-model",
+    "base_commit": "4d8f6d0d90e3674617fffe9a0ea2a5acfc9a9342",
+    "pull_request_head_commit": "c2d537f8f504793a722346f9eb667e0455a271cd",
+    "merge_commit": "9faa6a23d1e655533e5231b6959c6ce3f66be5ad",
+    "candidate_and_merge_tree": "a5a450affd11da6f90683a225d8936f06e058193",
+    "tree_identity_verified": true,
+    "canonical_main_after_merge": "9faa6a23d1e655533e5231b6959c6ce3f66be5ad",
+    "origin_main_after_merge": "9faa6a23d1e655533e5231b6959c6ce3f66be5ad",
+    "canonical_main_worktree_clean": true,
+    "remote_topic_branch_deleted": true
+  },
+  "github": {
+    "repository": "arunakulat/dutchbay-epc-model",
+    "pull_request_number": 1030,
+    "pull_request_url": "https://github.com/arunakulat/dutchbay-epc-model/pull/1030",
+    "pull_request_title": "fix(mc): unify covenant breach classification",
+    "base_branch": "main",
+    "head_branch": "codex/mc-sens-02-breach-probability",
+    "opened_as_draft": true,
+    "made_ready_after_green_checks": true,
+    "merge_method": "squash",
+    "merged_at_utc": "2026-08-16T06:14:34Z",
+    "merged_by": "arunakulat",
+    "pr_body_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/code_dolphins/MC-SENS-02_MCFX-03_PR_BODY.md",
+    "pr_body_sha256": "84d826c171be43db07f06e369dbc02b9edb5f2d4611da942fbbd5d50b3ffc5de"
+  },
+  "remote_ci": {
+    "head_sha": "c2d537f8f504793a722346f9eb667e0455a271cd",
+    "test_suite_run_id": 31930452965,
+    "codeql_run_id": 31930452242,
+    "fastlane_run_id": 31930452970,
+    "smoke_run_id": 31930452971,
+    "successful_checks": 24,
+    "skipped_checks": 1,
+    "other_checks": 0,
+    "non_blocking_skip": "Grid Study (opt-in, non-blocking)",
+    "passed": [
+      "Analyze (actions)",
+      "Classify changed paths",
+      "Code Quality Checks",
+      "CodeQL",
+      "Security Scan",
+      "fastlane",
+      "smoke",
+      "Run Tests (Python 3.11, shards 1-6)",
+      "Run Tests (Python 3.12, shards 1-6)",
+      "Coverage Gate (Python 3.11)",
+      "Coverage Gate (Python 3.12)",
+      "Test Results (Python 3.11)",
+      "Test Results (Python 3.12)",
+      "Test Summary"
+    ],
+    "coverage_floor_percent": 95.0,
+    "status": "PASS"
+  },
+  "local_post_merge": {
+    "worktree": "/Users/aruna/Downloads/dutchbay-epc-model",
+    "command": "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -q -p no:cacheprovider tests/analytics/test_covenant_breach_shared.py tests/analytics/test_mc_convergence.py tests/analytics/test_mc_fixed_debt_stress.py tests/research/test_methodology_validation_5areas.py tests/finance/test_multitech_generation.py::test_canonical_lendercase_economics_unchanged --override-ini=addopts=",
+    "result": "58 passed, 1 collection warning",
+    "elapsed_seconds": 18.27,
+    "status": "PASS"
+  },
+  "reproduced_correction": {
+    "canonical_seed": 42,
+    "canonical_trials": 64,
+    "bare_count_before": 63,
+    "shared_and_emitted_count_after": 55,
+    "emitted_probability_after": 0.859375,
+    "overstatement_removed_percentage_points": 12.5,
+    "emitted_wilson_ci_after": [
+      0.7538371825842297,
+      0.9242142744396914
+    ],
+    "fixed_debt_seed": 123,
+    "fixed_debt_trials": 48,
+    "fixed_debt_probability_unchanged": 0.9166666666666666,
+    "deterministic_canonical_economics_unchanged": true
+  },
+  "disposition": {
+    "implementation": "complete_merged",
+    "protected_ci": "complete_green",
+    "governed_post_merge_mc_metadata": "required_not_run",
+    "finding_closure": "remain_open_until_governed_run_and_register_ingress",
+    "programme_release": "HOLD"
+  },
+  "limitations": "The merged code removes the reproduced comparator error and preserves the fixed-debt/deterministic controls. The numerical effect remains sample-specific, and no claim is made about an as-yet unexecuted governed production run or unrelated audit findings."
+}

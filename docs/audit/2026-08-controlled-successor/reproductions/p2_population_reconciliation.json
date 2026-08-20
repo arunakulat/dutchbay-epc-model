@@ -1,0 +1,129 @@
+{
+  "schema_version": "dutchbay.audit.p2_population_reconciliation.v1",
+  "as_of": "2026-08-12T10:03:24+05:30",
+  "immutable_audit_root": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08",
+  "source_report": {
+    "path": "02_finance_correctness_findings.md",
+    "sha256": "1c0e11501a41b283edb41a9a8e97ec397422694d62e2188b198469d23b74edbc",
+    "stated_population": 25,
+    "stated_breakdown": {
+      "CONFIRMED": 12,
+      "PARTIALLY_CONFIRMED": 10,
+      "REFUTED": 1,
+      "NOT_A_DEFECT_BY_DESIGN": 2
+    }
+  },
+  "verdict_files": [
+    {
+      "path": "raw/P2_r1_irr_verdicts.json",
+      "sha256": "3592e82a5cc02811139c0a821cc9ed94e87213600fb93f5d547128e3855de6ef",
+      "candidate_count": 5,
+      "counts": {
+        "CONFIRMED": 1,
+        "PARTIALLY_CONFIRMED": 2,
+        "REFUTED": 0,
+        "NOT_A_DEFECT_BY_DESIGN": 2
+      }
+    },
+    {
+      "path": "raw/P2_r2_debt_verdicts.json",
+      "sha256": "c9837e201830cd11c6a7d393cda3125dae75fb2a551db4e4d8f2828fda75a19d",
+      "candidate_count": 7,
+      "counts": {
+        "CONFIRMED": 2,
+        "PARTIALLY_CONFIRMED": 5,
+        "REFUTED": 0,
+        "NOT_A_DEFECT_BY_DESIGN": 0
+      }
+    },
+    {
+      "path": "raw/P2_r3_waterfall_verdicts.json",
+      "sha256": "ce22552f1fa696c486f12d2501fec0d0635cb5131f76f8dc854c42f4b6c97ee0",
+      "candidate_count": 6,
+      "counts": {
+        "CONFIRMED": 2,
+        "PARTIALLY_CONFIRMED": 3,
+        "REFUTED": 1,
+        "NOT_A_DEFECT_BY_DESIGN": 0
+      }
+    },
+    {
+      "path": "raw/P2_r4_tax_verdicts.json",
+      "sha256": "79ee5e0083d74cddc04ece01c2f44235c025f0d000eebe4c1bcfab809cb26951",
+      "candidate_count": 5,
+      "counts": {
+        "CONFIRMED": 3,
+        "PARTIALLY_CONFIRMED": 1,
+        "REFUTED": 0,
+        "NOT_A_DEFECT_BY_DESIGN": 1
+      }
+    },
+    {
+      "path": "raw/P2_r5_fx_verdicts.json",
+      "sha256": "e1d61e7c637df93a7a64cd1f7f47280578d99e3c46ad2b5da24799b3dd02fafe",
+      "candidate_count": 4,
+      "counts": {
+        "CONFIRMED": 4,
+        "PARTIALLY_CONFIRMED": 0,
+        "REFUTED": 0,
+        "NOT_A_DEFECT_BY_DESIGN": 0
+      }
+    },
+    {
+      "path": "raw/P2_r6_mc_verdicts.json",
+      "sha256": "fb457fbbd8a89f874fd318dbdde5ad65897786529a1c66ee497f5a00f6f12835",
+      "candidate_count": 2,
+      "counts": {
+        "CONFIRMED": 2,
+        "PARTIALLY_CONFIRMED": 0,
+        "REFUTED": 0,
+        "NOT_A_DEFECT_BY_DESIGN": 0
+      }
+    }
+  ],
+  "reconciled_population": {
+    "total_adjudicated_candidates": 29,
+    "live_findings": 25,
+    "closed_dispositions": 4,
+    "counts": {
+      "CONFIRMED": 14,
+      "PARTIALLY_CONFIRMED": 11,
+      "REFUTED": 1,
+      "NOT_A_DEFECT_BY_DESIGN": 3
+    },
+    "live_ids": [
+      "F1-01",
+      "F1-02",
+      "F1-03",
+      "F2-01",
+      "F2-02",
+      "F2-03",
+      "F2-04",
+      "F2-05",
+      "F2-06",
+      "F2-07",
+      "F3-01",
+      "F3-02",
+      "F3-04",
+      "F3-05",
+      "F3-06",
+      "F4-01",
+      "F4-02",
+      "F4-04",
+      "F4-05",
+      "F5-01",
+      "F5-02",
+      "F5-03",
+      "F5-04",
+      "MC-SENS-01",
+      "MC-SENS-02"
+    ],
+    "closed_ids": [
+      "F1-04",
+      "F1-05",
+      "F3-03",
+      "F4-03"
+    ]
+  },
+  "conclusion": "The immutable audit contains 29 adjudicated P2 candidates. Its ranked live-findings table contains 25 rows; four additional candidates are separately closed as one refuted and three not-a-defect-by-design. The published statement that 25 is the total candidate population, with a 12/10/1/2 breakdown, is arithmetically false."
+}

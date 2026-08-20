@@ -1,0 +1,48 @@
+{
+  "schema_version": "dutchbay.audit.protected_pr_checkpoint.v1",
+  "status": "draft_pr_open_ci_pending",
+  "as_of": "2026-08-16T13:03:52+05:30",
+  "finding_ids": [
+    "P3-EQ-04"
+  ],
+  "repository": "arunakulat/dutchbay-epc-model",
+  "pull_request": {
+    "number": 1032,
+    "url": "https://github.com/arunakulat/dutchbay-epc-model/pull/1032",
+    "title": "fix(report): bind FX methodology to run manifest",
+    "state": "OPEN",
+    "draft": true,
+    "author": "arunakulat",
+    "created_at": "2026-08-16T07:33:52Z",
+    "head_ref": "codex/eq-04-fx-methodology",
+    "head_oid": "ff5de686ad5ef3071630abfca2a95444f67601b9",
+    "base_ref": "main",
+    "base_oid": "50adfe7ee59f91660678c0ca32c2cd6513e1c611",
+    "merge_state_at_capture": "BLOCKED"
+  },
+  "candidate": {
+    "commit": "ff5de686ad5ef3071630abfca2a95444f67601b9",
+    "tree": "869eac8a1cfe409bf8e6e693bb03acf72bedc56d",
+    "evidence_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_eq_04_fx_report_candidate_ff5de68.json",
+    "evidence_sha256": "5bd2c822dfef6c7e0f8285cb1cc7ef2498f579945b750d33592d412e5d758a34"
+  },
+  "pr_body": {
+    "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/code_dolphins/EQ-04_FX_METHODOLOGY_PR_BODY.md",
+    "sha256": "07bb54c054fd76ff8b3c510406c08867d603034aa5324ef44a7cd9e057b95e91"
+  },
+  "initial_checks": {
+    "observed_count": 8,
+    "queued": 6,
+    "in_progress": 2,
+    "terminal": 0,
+    "conclusion": "pending"
+  },
+  "controls": {
+    "branch_only_pushed": true,
+    "normal_protected_pr_workflow": true,
+    "ready_for_review_not_yet_requested": true,
+    "merge_not_attempted": true,
+    "wider_audit_release_status": "HOLD",
+    "board_lender_synthesis_authorized": false
+  }
+}

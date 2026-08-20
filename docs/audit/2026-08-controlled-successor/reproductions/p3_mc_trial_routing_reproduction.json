@@ -1,0 +1,589 @@
+{
+  "schema_version": "dutchbay.audit.p3_reproduction.v1",
+  "status": "completed",
+  "as_of": "2026-08-16T10:30:00+05:30",
+  "title": "Finance-MC trial routing and executed-pack evidence",
+  "finding_ids": [
+    "P3-MCFX-07"
+  ],
+  "verification_level": "independent_reproduction",
+  "repository": {
+    "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+    "commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+    "branch": "codex/audit-corrigendum-2026-08",
+    "status_before": "## codex/audit-corrigendum-2026-08...origin/main",
+    "status_after": "## codex/audit-corrigendum-2026-08...origin/main",
+    "tracked_tree_sha256": "316b37a8f385e1a8e099fdbb1b2aa611ac9e462a"
+  },
+  "execution": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 /Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python /Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/build_p3_reproductions.py --output-dir /Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions --as-of 2026-08-16T10:30:00+05:30",
+    "working_directory": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+    "generator_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/build_p3_reproductions.py",
+    "generator_sha256": "f3034ca8d53ad6c6884cd7ba2f8d89192fa526bfae69cdb7789701de5a2baa73",
+    "environment": {
+      "python_executable": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "python_version": "3.11.14 (main, Oct  9 2025, 16:16:55) [Clang 17.0.0 (clang-1700.3.19.1)]",
+      "platform": "macOS-26.6.1-arm64-arm-64bit",
+      "packages": {
+        "numpy": "2.4.6",
+        "scipy": "1.17.1",
+        "pydantic": "2.13.4",
+        "PyYAML": "6.0.3",
+        "pytest": "9.1.1"
+      },
+      "python_dont_write_bytecode": true
+    }
+  },
+  "inputs": {
+    "scenario_path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_lendercase_2025Q4.yaml",
+    "scenario_sha256": "b152b378f0dd41bbfec703e5603d00897b7843200a8f2619b0c1644dedc599fd"
+  },
+  "method": "Parse the canonical scenario, retain exact caller source excerpts, inventory output directories, scan repository/audit text for the 100,000 literal, and parse every JSON for an n_trials=100000 manifest.",
+  "result": {
+    "canonical_n_scenarios": 100000,
+    "canonical_parameter_shape": "list",
+    "finance_engine_requires_explicit_n_trials": true,
+    "observed_caller_defaults_or_limits": {
+      "standalone_cli_default": 10000,
+      "casper_evaluator_default": 1000,
+      "capital_risk_report_default": 2000,
+      "async_request_default": 2000,
+      "async_request_maximum": 20000
+    },
+    "source_anchors": [
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+        "sha256": "b152b378f0dd41bbfec703e5603d00897b7843200a8f2619b0c1644dedc599fd",
+        "start_line": 552,
+        "end_line": 555,
+        "excerpt": "monte_carlo:\n  enabled: true\n  n_scenarios: 100000\n  sampler: lhs  # Latin Hypercube Sampling"
+      },
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "analytics/wind/pipeline_aep_v14.py",
+        "sha256": "0730896a1f488c6f49ee6d7971350620291ce729ac8a273ddfe7eea1b05f93f7",
+        "start_line": 172,
+        "end_line": 219,
+        "excerpt": "    # Step 4: Monte Carlo simulation (optional, config-driven)\n    mc_config = config.get(\"monte_carlo\", {})\n    mc_enabled = (\n        run_monte_carlo\n        if run_monte_carlo is not None\n        else mc_config.get(\"enabled\", False)\n    )\n\n    if mc_enabled:\n        logger.info(\"Running Monte Carlo AEP simulation (config-driven)...\")\n\n        n_scenarios = mc_config.get(\"n_scenarios\", 100000)\n        seed = mc_config.get(\"seed\", None)\n        output_path = mc_config.get(\"output_path\", None)\n\n        # Extract loss parameters from config; fall back to the centralised, documented\n        # industry-typical defaults (overridable via resource.losses) rather than scattered\n        # magic numbers (ARCH-01 / DRY — see losses_model.DEFAULT_WIND_LOSSES).\n        losses_config = config.get(\"resource\", {}).get(\"losses\", {})\n        wake_loss_pct = losses_config.get(\n            \"wake_loss_pct\", DEFAULT_WIND_LOSSES[\"wake_loss_pct\"]\n        )\n        availability_pct = losses_config.get(\n            \"availability_pct\", DEFAULT_WIND_LOSSES[\"availability_pct\"]\n        )\n        electrical_loss_pct = losses_config.get(\n            \"electrical_loss_pct\", DEFAULT_WIND_LOSSES[\"electrical_loss_pct\"]\n        )\n\n        # MC uncertainty parameters from config\n        mc_params = mc_config.get(\"parameters\", {})\n        wake_loss_std = mc_params.get(\"wake_loss_std_pct\", 2.0)\n        avail_std = mc_params.get(\"availability_std_pct\", 1.0)\n        elec_loss_std = mc_params.get(\"electrical_loss_std_pct\", 0.5)\n\n        mc_results = run_monte_carlo_aep(\n            aep_summary_path=aep_summary_path,\n            n_scenarios=n_scenarios,\n            wake_loss_mean_pct=wake_loss_pct,\n            availability_mean_pct=availability_pct,\n            electrical_loss_mean_pct=electrical_loss_pct,\n            wake_loss_std_pct=wake_loss_std,\n            availability_std_pct=avail_std,\n            electrical_loss_std_pct=elec_loss_std,\n            export_scenarios=(output_path is not None),\n            output_path=output_path,\n            seed=seed,\n        )"
+      },
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "analytics/mc/engine.py",
+        "sha256": "c44d7cfb1a297230af54d53a4a4583069552d19c22c7be677ea83d530edbe26e",
+        "start_line": 786,
+        "end_line": 805,
+        "excerpt": "    def run(self, *, n_trials: int) -> MonteCarloResult:\n        n_requested = int(n_trials)\n        if n_requested <= 0:\n            raise ValueError(\"n_trials must be > 0\")\n\n        if self._sampler == \"sobol\":\n            # Sobol rounds n up to the next power of two (balance is only kept at 2**m); ALL\n            # 2**m points are used, so the effective trial count may exceed the request. n is\n            # re-derived from the returned sample count below so the loop, aggregator and\n            # metadata all agree on the number of trials actually evaluated.\n            samples = generate_sobol_samples(\n                n_trials=n_requested,\n                bounds=self._param_bounds,\n                seed=self._seed,\n            )\n        else:\n            samples = generate_lhs_samples(\n                n_trials=n_requested,\n                bounds=self._param_bounds,\n                seed=self._seed,"
+      },
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "analytics/cli/cli_monte_carlo_hydra.py",
+        "sha256": "bb700bd495057fc810c2757d619fe65c3372313766afff153aec8a94ce024434",
+        "start_line": 167,
+        "end_line": 209,
+        "excerpt": "    # Extract parameters from config. #735 slice-2: route output_dir through the single-source\n    # resolver so this CLI's artifacts co-scope with the rest of a run. At the default\n    # (run_scoped=False) the resolver returns the configured root unchanged (DEFAULT_MC_OUTPUT_ROOT\n    # == \"_out/monte_carlo\"), so existing runs write to the same path — byte-identical; opt-in\n    # run_scoped/run_id cfg knobs (default off/none) group the run under a per-run subdirectory.\n    output_dir = resolve_output_dir(\n        cfg.get(\"output_dir\", DEFAULT_MC_OUTPUT_ROOT),\n        run_scoped=bool(cfg.get(\"run_scoped\", False)),\n        run_id=cfg.get(\"run_id\", None),\n    )\n    write_artifacts = bool(cfg.get(\"write_artifacts\", True))\n    n_trials = int(cfg.get(\"n_trials\", 10000))\n    seed = int(cfg.get(\"seed\", 42))\n\n    logger.info(\n        \"Monte Carlo analysis: config=%s, n_trials=%d, seed=%d, output_dir=%s\",\n        config_path,\n        n_trials,\n        seed,\n        output_dir,\n    )\n\n    try:\n        # =====================================================================\n        # WIRED TO ENGINE: analytics.mc.engine.run_monte_carlo_analysis\n        # =====================================================================\n\n        # Load scenario as a DictConfig. MonteCarloEngine deep-converts this to\n        # a plain dict internally, so the OmegaConf object can be passed as-is.\n        cfg_obj = OmegaConf.load(str(config_path))\n        if not isinstance(cfg_obj, DictConfig):\n            raise TypeError(\n                f\"Config root must be a mapping (DictConfig), got {type(cfg_obj).__name__}\"\n            )\n\n        # Run simulation via the canonical functional entrypoint. n_trials and\n        # seed are passed through to MonteCarloEngine(seed=...).run(n_trials=...).\n        start = time.perf_counter()\n        result: MonteCarloResult = run_monte_carlo_analysis(\n            base_config=cast(\"Mapping[str, Any]\", cfg_obj),\n            n_trials=n_trials,\n            seed=seed,\n        )"
+      },
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "analytics/evaluation_v14.py",
+        "sha256": "291cbfc37aaedd5fe59340049f2f536733195807301a575e6f5601bc1e738aa5",
+        "start_line": 461,
+        "end_line": 521,
+        "excerpt": "    logger.info(\"Step 2/4: Running Monte Carlo analysis...\")\n    monte_carlo = None\n    tail_risk_block: list[dict[str, Any]] | None = None\n    tail_risk_snapshots: dict[str, Any] = {}\n\n    if monte_carlo_config_path:\n        from omegaconf import OmegaConf\n\n        mc_config = OmegaConf.load(monte_carlo_config_path)\n        scenario_name_for_mc = base_config.get(\"project\", {}).get(\"name\", cfg_path.stem)\n\n        # HARDENING: MC config key standardization\n        mc_iterations = 1000  # default\n        try:\n            if hasattr(mc_config, \"monte_carlo\"):\n                if hasattr(mc_config.monte_carlo, \"iterations\"):\n                    mc_iterations = int(mc_config.monte_carlo.iterations)\n                    logger.info(\n                        \"MC iterations from config: %d (using 'iterations' key)\",\n                        mc_iterations,\n                    )\n                elif hasattr(mc_config.monte_carlo, \"n_iterations\"):\n                    mc_iterations = int(mc_config.monte_carlo.n_iterations)\n                    logger.info(\n                        \"MC iterations from config: %d (using 'n_iterations' key)\",\n                        mc_iterations,\n                    )\n                else:\n                    logger.warning(\n                        \"No 'iterations' or 'n_iterations' in config; using default %d\",\n                        mc_iterations,\n                    )\n        except (AttributeError, TypeError, ValueError) as e:\n            logger.warning(\n                \"Could not extract iterations from MC config (%s); using default %d\",\n                str(e),\n                mc_iterations,\n            )\n\n        # Seed: prefer the MC config's value, else the scenario's monte_carlo block.\n        mc_seed = 42\n        try:\n            mc_block = getattr(mc_config, \"monte_carlo\", None)\n            if mc_block is not None and hasattr(mc_block, \"seed\"):\n                mc_seed = int(mc_block.seed)\n            elif (base_config.get(\"monte_carlo\") or {}).get(\"seed\") is not None:\n                mc_seed = int(base_config[\"monte_carlo\"][\"seed\"])\n        except (AttributeError, TypeError, ValueError):\n            pass\n\n        # The canonical engine consumes the scenario's monte_carlo.parameters\n        # block (base_config) and returns a contracts_v14.MonteCarloResult\n        # directly — no dict munging, no rebuild. (Previously this called the\n        # engine with non-existent kwargs config=/n_iterations= and then treated\n        # the frozen dataclass result as a dict via .get(...), so the entire\n        # CASPER tail-risk MC path was dead.)\n        monte_carlo = run_monte_carlo_analysis(\n            base_config=base_config,\n            n_trials=mc_iterations,\n            seed=mc_seed,\n        )"
+      },
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "app/reports/capital_risk_emit.py",
+        "sha256": "3dcea7b6fcf450dd18821275eb552e57fd9c37367723a1d70b96b545f6165659",
+        "start_line": 62,
+        "end_line": 84,
+        "excerpt": "#: Lender-grade minimum trial count (CESSPIT floor). A capital-risk report shown to a lender must\n#: not be built on a statistically inadequate sample — below this the ~5% VaR/CVaR tail is too thin\n#: for a defensible number (the engine's own :data:`analytics.capital_risk_layer_v14._MIN_TRIALS`\n#: = 20 only guards against an index crash, not statistical adequacy).\n#: :func:`build_capital_risk_report_for_scenario` fails loud when ``n_trials`` is below ``min_trials``\n#: (this floor by default). A caller may lower ``min_trials`` ONLY for a deliberately\n#: sub-lender-grade wiring smoke (e.g. the fast integration test) — never on the production CLI path,\n#: which always applies this floor.\nLENDER_GRADE_MIN_TRIALS = 1000\n\n#: Bounded, report-appropriate default trial count (config-first override:\n#: ``capital_risk_report.n_trials``). Deliberately far below the scenario's research-grade\n#: ``monte_carlo.n_scenarios`` (100k) — a lender report needs a stable ~5% VaR/CVaR tail, not a\n#: converged research sample, and every trial is a full v14 evaluation. Sits comfortably above\n#: :data:`LENDER_GRADE_MIN_TRIALS`.\nDEFAULT_CAPITAL_RISK_N_TRIALS = 2000\n\n\ndef build_capital_risk_report_for_scenario(\n    scenario_config_path: str | Path,\n    output_dir: str | Path,\n    *,\n    n_trials: int = DEFAULT_CAPITAL_RISK_N_TRIALS,"
+      },
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "app/jobs/models.py",
+        "sha256": "025c547ba0074f031e8c7d79225d9666758e04129d47e4693eb16b00cd1a0587",
+        "start_line": 247,
+        "end_line": 253,
+        "excerpt": "    n_trials: int = Field(\n        default=2000,\n        ge=200,\n        le=20000,\n        description=\"Monte Carlo trial count (mc only). Bounded so the job cannot run \"\n        \"unboundedly long; the lender-grade floor (1000) is a report-layer policy, not \"\n        \"an engine limit.\","
+      },
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "run_full_pipeline_v14.py",
+        "sha256": "65963fbdd9edcac963398d14aa3dbeace2cffde43b970f77cb2f8fe6ca16b161",
+        "start_line": 763,
+        "end_line": 778,
+        "excerpt": "            Optional fields (#779 — capital-risk Monte-Carlo report emission; OFF\n            by default — leaving emit_capital_risk_report false preserves behaviour\n            and keeps committed-scenario output byte-identical):\n                - emit_capital_risk_report: If true, after a successful run run the\n                  CANONICAL MC (analytics.mc.engine — LHS + Iman-Conover, with\n                  monte_carlo.allow_toy_fallback forced false so a failed trial\n                  raises rather than fabricating a toy metric) over a bounded trial\n                  count and render a lender HTML report carrying the capital-risk\n                  section, via app.reports.capital_risk_emit. Heavy (each trial is a\n                  full evaluation), so batch-path only. Default false.\n                - capital_risk_report.n_trials: Bounded MC trial count for the\n                  report tail (NOT the scenario's monte_carlo.n_scenarios). Default\n                  2000 (app.reports.capital_risk_emit.DEFAULT_CAPITAL_RISK_N_TRIALS).\n                  A lender-grade floor (LENDER_GRADE_MIN_TRIALS = 1000) is enforced:\n                  a smaller n_trials fails loud rather than emitting a VaR/CVaR\n                  number off a statistically inadequate tail."
+      }
+    ],
+    "literal_100000_hits": [
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/cli/cli_monte_carlo_hydra.py",
+        "line": 42,
+        "text": "          \"std\": 6100000.0,"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/cli/cli_monte_carlo_hydra.py",
+        "line": 43,
+        "text": "          \"min\": 31000000.0,"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/dscr_sensitivity.py",
+        "line": 135,
+        "text": "        ...     aep=100000,"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/dscr_sensitivity.py",
+        "line": 142,
+        "text": "        >>> assert abs(cfads[0] - (100000 * 50 - 500000)) < 1.0"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/dscr_sensitivity.py",
+        "line": 144,
+        "text": "        >>> expected_aep_y20 = 100000 * (1 - 0.006) ** 19"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/dscr_sensitivity.py",
+        "line": 281,
+        "text": "        ...     base_aep_p50=100000, base_aep_p99=85000,"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/fx/README_STRUCTURED_BLOCKS.md",
+        "line": 228,
+        "text": "  num_simulations: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/fx/README_STRUCTURED_BLOCKS.md",
+        "line": 353,
+        "text": "5. **100k simulations**: For lender-grade Monte Carlo, use 100,000+ paths."
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/simulation/monte_carlo_aep.py",
+        "line": 12,
+        "text": "        n_scenarios=100000,"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/simulation/monte_carlo_aep.py",
+        "line": 58,
+        "text": "    \"n_scenarios\": 100000,"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/simulation/monte_carlo_aep.py",
+        "line": 76,
+        "text": "    n_scenarios: int = 100000,"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/simulation/monte_carlo_aep.py",
+        "line": 123,
+        "text": "        ...     n_scenarios=100000,"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/wind/__init__.py",
+        "line": 46,
+        "text": "        n_scenarios=100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/wind/pipeline_aep_v14.py",
+        "line": 183,
+        "text": "        n_scenarios = mc_config.get(\"n_scenarios\", 100000)"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/wind/wind_integration.py",
+        "line": 29,
+        "text": "        n_scenarios=100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/wind/wind_integration.py",
+        "line": 130,
+        "text": "    n_scenarios: int = 100000,"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/wind/wind_integration.py",
+        "line": 160,
+        "text": "        ...     n_scenarios=100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/wind/wind_integration.py",
+        "line": 342,
+        "text": "        ...     monte_carlo_config={'n_scenarios': 100000, 'use_p_value': 90}"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/wind/wind_integration.py",
+        "line": 392,
+        "text": "        n_scenarios = monte_carlo_config.get(\"n_scenarios\", 100000)"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/config/monte_carlo_regression_toy.yaml",
+        "line": 103,
+        "text": "      bounds: [1000000.0, 500000000.0]  # Debt search range (USD)"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/config/wind_dutchbay_150mw.yaml",
+        "line": 67,
+        "text": "  n_scenarios: 100000  # Use 1000 for testing, 100000 for production"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/docs/FX_INTEGRATION_v14R6.md",
+        "line": 240,
+        "text": "      Principal: 100000000  # CNY (optional)"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/feasibility_reproduce/cache/expected/global_sa_combined.json",
+        "line": 12,
+        "text": "      2100000.0,"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/feasibility_reproduce/cache/expected/global_sa_combined.json",
+        "line": 174,
+        "text": "          2100000.0,"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/feasibility_reproduce/cache/expected/global_sa_combined.json",
+        "line": 359,
+        "text": "          2100000.0,"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/feasibility_reproduce/cache/expected/global_sa_combined.json",
+        "line": 553,
+        "text": "          2100000.0,"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/feasibility_reproduce/cache/lender_gridon.yaml",
+        "line": 554,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/feasibility_reproduce/cache/lender_gridon.yaml",
+        "line": 586,
+        "text": "      low: 2100000.0"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/feasibility_reproduce/cache/scenario_with_interaction_grid.yaml",
+        "line": 554,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/feasibility_reproduce/cache/scenario_with_interaction_grid.yaml",
+        "line": 586,
+        "text": "      low: 2100000.0"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/feasibility_reproduce/report/DutchBay_Complete_Feasibility_Study.md",
+        "line": 239,
+        "text": "An LHS Monte Carlo over six correlated drivers (capacity factor, tariff, opex, capex, FX, incremental curtailment; **Iman-Conover** rank correlation — capex↔opex +0.35, CF↔curtailment +0.20, FX left uncorrelated because the flat-LKR PPA breaks the revenue-FX link). Run at **2,500 trials** (100 % success), cross-validated against a full **100,000-trial** run — the two agree to ~0.1 pp, so the distribution is converged:"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/epc_helper_v14.py",
+        "line": 192,
+        "text": "        >>> config = {\"capex\": {\"usd_total\": 10000000.0}}"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/epc_helper_v14.py",
+        "line": 194,
+        "text": "        10000000.0"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/epc_helper_v14.py",
+        "line": 196,
+        "text": "        >>> config = {\"finance\": {\"capex_usd\": 10000000.0}}"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/epc_helper_v14.py",
+        "line": 198,
+        "text": "        10000000.0"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/finance/epc_helper_v14.py",
+        "line": 236,
+        "text": "        usd_total: 100000000      # base EPC in USD (canonical)"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/legacy_scenarios/archive/edge_extreme_stress.yaml",
+        "line": 13,
+        "text": "  usd_per_year: 10000000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/bad_missing_tax.yaml",
+        "line": 109,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/ceb_bess_10mw_capacity_charge.yaml",
+        "line": 96,
+        "text": "  usd_per_year: 100000        # ~2% of capex (~$2.5/kWh/yr, Ember; excl. augmentation)"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/ceb_solar_bess_nightpeak_10mw.yaml",
+        "line": 81,
+        "text": "  usd_per_year: 100000        # ~2% of capex (~$2.5/kWh/yr, Ember; excl. augmentation)"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_basecase_2025Q4.yaml",
+        "line": 140,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_capex_eia_prudent_2025Q4.yaml",
+        "line": 418,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_capex_eia_prudent_2025Q4.yaml",
+        "line": 450,
+        "text": "      low: 2100000.0"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_capex_sinohydro_lean_2025Q4.yaml",
+        "line": 418,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_capex_sinohydro_lean_2025Q4.yaml",
+        "line": 450,
+        "text": "      low: 2100000.0"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_equitycase_2025Q4.yaml",
+        "line": 140,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_hybrid_bess_2025Q4.yaml",
+        "line": 504,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_hybrid_bess_2025Q4.yaml",
+        "line": 536,
+        "text": "      low: 2100000.0"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml",
+        "line": 481,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml",
+        "line": 513,
+        "text": "      low: 2100000.0"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_lendercase_2025Q4.yaml",
+        "line": 554,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_lendercase_2025Q4.yaml",
+        "line": 586,
+        "text": "      low: 2100000.0"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_lendercase_5usc_fixed_lkr.yaml",
+        "line": 278,
+        "text": "    financing_fees_usd: 4100000      # commitment + legal + advisory + DSRA funding (~2%)"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_lendercase_5usc_fixed_lkr.yaml",
+        "line": 279,
+        "text": "    contingency_usd: 3100000         # ~1.5%"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_lendercase_5usc_fixed_lkr.yaml",
+        "line": 428,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_master_config_v14.yaml",
+        "line": 92,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_master_config_v14.yaml",
+        "line": 280,
+        "text": "      value: 2100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_optimistic_2025Q4.yaml",
+        "line": 85,
+        "text": "    epc_usd: 131000000                     # Lower EPC costs"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_optimistic_2025Q4.yaml",
+        "line": 244,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_pessimistic_2025Q4.yaml",
+        "line": 248,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_solar_only_2025Q4.yaml",
+        "line": 161,
+        "text": "    admin_usd: 100000         # SPV overhead"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_solar_only_2025Q4.yaml",
+        "line": 268,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/edge_extreme_stress.yaml",
+        "line": 240,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/example_a.yaml",
+        "line": 13,
+        "text": "  usd_per_year: 10000000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/kalpitiya_lendercase_160m_fitted.yaml",
+        "line": 277,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/kalpitiya_lendercase_160m_fitted.yaml",
+        "line": 303,
+        "text": "    low: 2100000.0"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/mullikulam_2x50mw_mannar.yaml",
+        "line": 164,
+        "text": "  usd_total: 63100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/mullikulam_2x50mw_mannar.yaml",
+        "line": 280,
+        "text": "  n_scenarios: 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/mullikulam_2x50mw_mannar.yaml",
+        "line": 288,
+        "text": "  capex_total_usd: 63100000   # Mullikulam 56 MW lot (was a stale lender 150M)"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/tests/analytics/test_pipeline_aep_v14_coverage.py",
+        "line": 69,
+        "text": "        \"n_scenarios\": 100000,"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/tests/analytics/test_pipeline_aep_v14_coverage.py",
+        "line": 213,
+        "text": "    assert captured[\"n_scenarios\"] == 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/tests/analytics/test_wind_integration_coverage.py",
+        "line": 63,
+        "text": "        \"n_scenarios\": 100000,"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/tests/analytics/test_wind_integration_coverage.py",
+        "line": 274,
+        "text": "    assert mc_block[\"n_scenarios\"] == 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/tests/conftest.py",
+        "line": 101,
+        "text": "            n_iter = 20 if fast_test_mode else 100000"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/tests/conftest.py",
+        "line": 145,
+        "text": "            \"monte_carlo_iterations\": 100000,  # Full production runs"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/tests/legacy/test_stress_tests_v14.py",
+        "line": 115,
+        "text": "    assert engine.apply_interest_rate_shock(-100000) == pytest.approx(0.001)"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/tests/wind/test_power_curve_sourcing.py",
+        "line": 151,
+        "text": "        '<DataPoint WindSpeed=\"5.0\" PowerOutput=\"1000000\"/>'"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/tests/wind/test_power_curve_sourcing.py",
+        "line": 153,
+        "text": "        '<DataPoint WindSpeed=\"11.0\" PowerOutput=\"11000000\"/>'"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/tests/wind/test_power_curve_sourcing.py",
+        "line": 160,
+        "text": "        '<DataPoint WindSpeed=\"12.0\" PowerOutput=\"11000000\"/>'"
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/tests/wind/test_power_curve_sourcing.py",
+        "line": 185,
+        "text": "        \"Wind speed (m/s)\\tRotor electrical power (W)\\n3.0\\t0\\n5.0\\t1000000\\n12.0\\t12000000\\n25.0\\t0\\n\""
+      },
+      {
+        "path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/tests/wind/test_power_curve_sourcing_coverage.py",
+        "line": 223,
+        "text": "        '<DataPoint WindSpeed=\"12.0\" PowerOutput=\"10000000\"/>'"
+      },
+      {
+        "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/03_bankability_methodology.md",
+        "line": 72,
+        "text": "**Strengths:** LHS with a documented, narrow, defensible Iman-Conover correlation structure (capex↔opex +0.35, CF↔curtailment +0.20, FX deliberately left uncorrelated with sound in-code justification); 100,000 trials is statistically more than sufficient for the parameter space actually used; unconditional convergence and percentile-CI diagnostics attached to every run — genuinely above what most bankable-study MC packs disclose; Sobol/Morris global-SA tooling exists for driver-ranking."
+      },
+      {
+        "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/03_bankability_methodology.md",
+        "line": 76,
+        "text": "- **[High]** The 6-parameter MC design omits interest-rate/refinancing risk, offtaker/CEB credit risk, construction-delay risk, and tax-law-change risk entirely — a 100,000-trial run over too narrow a space reads as more comprehensive than it is."
+      },
+      {
+        "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/99_SYNTHESIS_final_audit.md",
+        "line": 76,
+        "text": "| Six-parameter Monte Carlo omits interest-rate/refinancing, offtaker-credit, construction-delay, and tax-law-change risk entirely | P3 (MCFX-02) | 100,000 trials over a too-narrow parameter space reads as more comprehensive than it is. |"
+      },
+      {
+        "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P2_f6_mc_sensitivity_casper.json",
+        "line": 40,
+        "text": "  \"notes\": \"Budget used: ~30 tool calls. Not independently checked within budget: analytics/sensitivity/tail_risk.py's enrich_suite_with_tail_risk internals, analytics/sensitivity/optimizer.py (653 lines, pymoo-based multi-objective sweep, unread), analytics/core/risk_metrics.py's TailRiskAnalyzer.calculate_var_cvar (separate from the engine.py-local _tail_risk checked), analytics/mc/exports.py's floor_pinned disclosure wiring into casper_payload's covenant_block (spot-checked the dict-building call site, not the numeric path against a live pinned scenario), and the fx_calibration-driven MC sampling path beyond what F5-03 already covers. MC-SENS-02's numeric reproduction used n_trials=64 (not the scenario's authored n_scenarios=100000) for tool-call economy; the discrepancy is a systematic counting-method difference (not a small-sample artifact) and persists proportionally at any n on this dual_dscr scenario. Both candidates are genuinely new, not a restatement of the sibling F5-03 FX-drift finding.\""
+      },
+      {
+        "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P3_c_mc_fx_rigor.json",
+        "line": 3,
+        "text": "{\"id\":\"MCFX-02\",\"title\":\"Six-parameter MC omits several risk categories a DFI credit paper expects — interest-rate/refinancing, offtaker credit, completion/construction-delay, tax-law-change all held deterministic\",\"severity\":\"High\",\"location\":\"scenarios/dutchbay_lendercase_2025Q4.yaml:568-598 (monte_carlo.parameters: capacity_factor, tariff, opex, capex, fx level, curtailment — 6 entries only)\",\"evidence\":\"No debt margin/refinancing-spread, offtaker/credit-event, construction-delay/COD-slip, or tax-rate-change parameter exists in any committed scenario. Sobol/Morris global-SA tooling exists (analytics/sensitivity/global_sa.py) but isn't exercised against these categories for canon.\",\"materiality\":\"100,000 trials over a too-narrow 6-D parameter space is precision without comprehensiveness relative to the risk universe a lender needs priced.\",\"lender_concern\":\"Where are interest-rate, offtaker-credit, and completion risk in the joint distribution? If intentionally excluded, say so explicitly rather than let the trial count imply completeness.\"},"
+      },
+      {
+        "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P3_c_mc_fx_rigor.json",
+        "line": 4,
+        "text": "{\"id\":\"MCFX-03\",\"title\":\"The DSCR-breach probability CI meant to certify MC convergence on the tail a lender reads is itself computed with the already-confirmed-defective breach-counting method (P2 MC-SENS-02)\",\"severity\":\"High\",\"location\":\"analytics/mc/engine.py:987-990; analytics/mc/convergence.py:246-258 (bare srt<thr count, same pattern as P2's MC-SENS-02)\",\"evidence\":\"engine.py wires percentile_ci_diagnostic's breach-probability block onto dscr_min using the same bare-comparison bug P2 confirmed overstates breach probability by 12.5pp on canon's dual-DSCR sculpt. Second call site of the identical bug class; no shared single source of truth with the correct prob_breach()-based path in exports.py.\",\"materiality\":\"Not a new numeric error beyond P2, but a methodology-adequacy point: a convergence disclosure that is itself miscalibrated is worse than no disclosure.\",\"lender_concern\":\"Your convergence diagnostic certifies stability at n=100,000 — but for a different (already-flagged) breach-counting rule than the one your lender risk table reports. Fix the diagnostic first.\"},"
+      },
+      {
+        "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P3_c_mc_fx_rigor.json",
+        "line": 8,
+        "text": "],\"notes\":\"Positive findings weighed against the score: (1) LHS + Iman-Conover copula with a documented, narrow, well-justified correlation matrix (capex<->opex +0.35, CF<->curtailment +0.20; FX deliberately uncorrelated with sound in-code justification) — verified sound, not a defect. (2) n=100,000 trials via LHS is more than statistically necessary for 6 dimensions, giving an adequate raw tail sample (~5,000 trials) at 95% VaR/CVaR confidence — the 'small-sample tail' caveat in the docstrings is conservative boilerplate, not a live problem at canon's trial count. (3) Sobol/Morris global-SA tooling exists for driver-ranking beyond simple tornado. Headline: the codebase has built most of the pieces for a genuinely DFI-grade risk pack, but the canonical scenario does not invoke the most consequential one (FX crisis-tail calibration) and narrows the joint risk surface to 6 factors — what a credit committee would actually be handed today materially understates FX tail risk and omits several risk categories, independent of and in addition to P2's confirmed mechanical bugs.\"}"
+      },
+      {
+        "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P5_a_mc_copula_sota.json",
+        "line": 2,
+        "text": "{\"id\":\"SAMP-01-iman-conover-correction-step\",\"method\":\"Iman-Conover (1982) rank-correlation induction — repo default correlation.method\",\"sota_reference\":\"Iman & Conover (1982), 'A Distribution-Free Approach to Inducing Rank Correlation Among Input Variables,' Communications in Statistics 11(3):311-334. Algorithm confirmed via two independent secondary expositions: build score matrix R of van der Waerden scores, each column independently permuted; compute R's own sample correlation and Cholesky factor F; compute target correlation's Cholesky C; form T = R*F^-1*C (exact target correlation); reorder original columns by T's rank order.\",\"repo_approach\":\"analytics/mc/correlation.py:196-204: draws raw iid standard-normal variates (not the deterministic van der Waerden set); for method='iman_conover' applies only a single target-Cholesky map with NO whiten-by-own-sample-covariance correction, then rank-gathers. The opt-in, non-default gaussian_copula method (_exact_normal_scores(), lines 67-104) DOES implement the whiten-then-recorrelate correction — the 1982 paper's defining feature — but is framed only as 'Gaussian copula,' not identified as reproducing Iman-Conover.\",\"gap\":\"The method named/defaulted 'iman_conover' omits the paper's central correction step; the textbook-exact procedure sits, unlabeled as such, behind the 'gaussian_copula' opt-in flag. Not a hidden bug — repo's own docstrings/tests already disclose and quantify it (default carries ~0.030 induced-Spearman std at n=500 vs ~0.011 for the opt-in method around a 0.6 target, CHANGELOG #601).\",\"materiality_for_lender_pack\":\"LOW at the canonical 100,000-trial run (~0.3% noise). MEDIUM for lower-trial-count reuse (e.g. a 2,500-trial cross-check). Documentation-precision issue, not a correctness defect.\",\"corrected_overstated_claim\":\"\"},"
+      },
+      {
+        "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/f2_fallback.py",
+        "line": 10,
+        "text": "     \"capex_usd_total\":100000000.0}"
+      },
+      {
+        "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/f4_rows.json",
+        "line": 93,
+        "text": "   \"fx_rate\": 353.45023100000003,"
+      }
+    ],
+    "executed_100000_n_trials_manifest_candidates": [],
+    "output_directory_inventory": {
+      "outputs": [],
+      "out": [],
+      "artifacts": []
+    },
+    "assertions": {
+      "100000_is_wind_n_scenarios": true,
+      "no_executed_100000_finance_manifest_found": true,
+      "finance_policy_range_is_1000_to_20000": true
+    }
+  },
+  "limitations": "Absence is bounded to the audited tracked repository, its physical output directories, and the immutable audit pack at this cutoff; external or deleted run packs were not available."
+}

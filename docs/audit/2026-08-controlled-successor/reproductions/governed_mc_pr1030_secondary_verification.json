@@ -1,0 +1,95 @@
+{
+  "disposition": {
+    "board_lender_synthesis": "HOLD",
+    "formal_finding_closure": "HOLD",
+    "governed_run_generation": "completed",
+    "independent_successor_review": "required_not_started",
+    "secondary_code_path_verification": "completed_pass"
+  },
+  "finding_ids": [
+    "P2-MC-SENS-02",
+    "P3-MCFX-03"
+  ],
+  "limitations": [
+    "The verifier is a separate stdlib-only implementation but was authored and run by the same Codex remediation agent; it is not an independent reviewer opinion.",
+    "This verifies artifact integrity and arithmetic, not the economic reasonableness, calibration, or lender approval of the stochastic assumptions.",
+    "The effective scenario still uses placeholder debt drawdown and construction phasing, as disclosed by the governed run warnings."
+  ],
+  "numpy_used": false,
+  "production_code_imports": [],
+  "raw_result_controls": {
+    "all_trial_values_finite": true,
+    "base_outside_bounds": [],
+    "dead_param_names": [],
+    "degenerate_sweep": false,
+    "failed_iterations": 0,
+    "iterations": 10000,
+    "partial_trial_count": 0,
+    "toy_fallback_count": 0,
+    "trial_array_lengths": {
+      "dscr_min": 10000,
+      "equity_irr": 10000,
+      "equity_npv": 10000,
+      "llcr": 10000,
+      "plcr": 10000,
+      "project_irr": 10000,
+      "project_npv": 10000
+    }
+  },
+  "recalculation": {
+    "dscr_max": 1.3,
+    "dscr_min": 1.2141125349213997,
+    "metric": "dscr_min",
+    "n": 10000,
+    "naive_strict_less_count": 9868,
+    "naive_strict_less_probability": 0.9868,
+    "noise_only_strict_less_count": 1624,
+    "noise_tolerant_breach_count": 8244,
+    "noise_tolerant_breach_probability": 0.8244,
+    "overstatement_removed_percentage_points": 16.24,
+    "relative_noise_tolerance": 1e-09,
+    "threshold": 1.3,
+    "wilson_95": [
+      0.8168185613879781,
+      0.8317323004691268
+    ]
+  },
+  "reconciliation": {
+    "raw_recalculation_matches_casper_block": true,
+    "raw_recalculation_matches_emitted_percentile_ci": true,
+    "raw_recalculation_matches_generator_control": true,
+    "spec_and_generator_hashes_match": true
+  },
+  "release_status": "HOLD",
+  "repository": {
+    "clean": true,
+    "head": "8a6b48f6573e4ac9074da8fbbcb1e48f4353ce9a",
+    "origin_main": "8a6b48f6573e4ac9074da8fbbcb1e48f4353ce9a",
+    "path": "/Users/aruna/Downloads/dutchbay-epc-model"
+  },
+  "reviewer_independence": false,
+  "run_manifest": {
+    "all_entries_match": true,
+    "entries": [
+      {
+        "filename": "effective_config.json",
+        "sha256": "a3a9f4dcb51e8a6102e8b539db274a94e2234ae374f2378de1f1598c1643a742"
+      },
+      {
+        "filename": "governed_mc_control.json",
+        "sha256": "a99e73287ba1c80e987192ce84c3902c590f610a4fd49134e0fb8d5551b9f9b6"
+      },
+      {
+        "filename": "monte_carlo_result_lossless.json",
+        "sha256": "d502ec384d028d887cac56ab26a483dd24767f2b61f7bbd9ebc5de93fb0209d7"
+      }
+    ],
+    "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/governed_mc_pr1030_8a6b48f_seed42_n10000/RUN_MANIFEST.sha256",
+    "sha256": "d28df9d975fd9e2f25c2beb063fd408b42792a8a114e745bcd0369ba19071b30"
+  },
+  "schema_version": "dutchbay.audit.governed_mc_secondary_verification.v1",
+  "status": "PASS",
+  "title": "PR #1030 governed finance-MC secondary artifact verification",
+  "verification_type": "standard_library_only_separate_code_path_same_agent",
+  "verified_at": "2026-08-16T13:49:02+05:30"
+}

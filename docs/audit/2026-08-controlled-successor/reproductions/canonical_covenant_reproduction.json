@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0.0",
+  "run_at": "2026-08-12T09:43:23+05:30",
+  "repository": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+  "git_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+  "scenario": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+  "validation_mode": "strict",
+  "python_runtime": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+  "invocation": "PYTHONDONTWRITEBYTECODE=1 /Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python - [inline read-only run_v14_pipeline reproduction]",
+  "validation_result": "Schema validation passed: cashflow, debt",
+  "kpis": {
+    "project_irr": 0.014551597740253388,
+    "equity_irr": -0.05841298678542661,
+    "project_npv": -79273039.20645273,
+    "min_dscr": 1.285740985294611,
+    "total_cfads_usd": 191111047.68242383,
+    "llcr": 1.2677278108569288,
+    "plcr": 1.3068856980285766
+  },
+  "debt": {
+    "debt_total_usd": 68822313.0,
+    "balloon_remaining_at_scheduled_maturity_usd": 38907533.97407585,
+    "balloon_pct_of_principal_after_idc": 0.488928964946153,
+    "balloon_treatment": "cash_sweep",
+    "cash_sweep_recovery_over_project_life_usd": 22021308.20884404,
+    "cash_sweep_periods_with_recovery": 6,
+    "balloon_residual_at_project_end_usd": 16886225.76523181,
+    "max_balloon_pct_internal_constraint": 0.1,
+    "balloon_covenant_breach": true
+  },
+  "funding": {
+    "dsra_target_months": 6.0,
+    "dsra_fund_at_close": false,
+    "initial_dsra_usd": 0.0,
+    "sources_and_uses_balanced": true
+  },
+  "warnings_material_to_bankability": [
+    "Financing_Terms.debt_drawdown_pct or drawdown_pct absent; placeholder even draw [0.5, 0.5] used.",
+    "Financing_Terms.construction_schedule absent; placeholder [40, 60] capex phasing used."
+  ],
+  "interpretation": [
+    "The 48.892896% value is a structural balance at scheduled maturity; it is not itself a modeled refinance or bullet payment.",
+    "The configured cash sweep recovers only part of that balance during the modeled project life and leaves a material residual.",
+    "The 10% comparison is the model's own scenario constraint, not evidence of a universal lender policy.",
+    "A six-month DSRA target is declared, but the canonical funding structure contributes no DSRA at financial close."
+  ]
+}

@@ -1,0 +1,103 @@
+{
+  "schema_version": "dutchbay.audit.p2_f5_01_d1_empty_debt_parity_candidate.v1",
+  "as_of": "2026-08-16T14:41:36+05:30",
+  "status": "candidate_local_full_gate_pass_remote_ci_pending",
+  "finding_id": "P2-F5-01",
+  "excluded_finding_id": "P2-F5-02",
+  "pull_request": {
+    "number": 1037,
+    "url": "https://github.com/arunakulat/dutchbay-epc-model/pull/1037",
+    "state_at_capture": "OPEN_DRAFT",
+    "base_oid": "e458a78c3377595e49b8c69ceb1afc5c5ff9869e",
+    "base_tree": "cd556f3e7c0981b741f0769229c087ed70a4fe88",
+    "head_oid": "0c9db232681c4cbce74e7f723a2e0833199fea43",
+    "head_tree": "8343bc8065f2684904c738d9ea730818ef49ed3f",
+    "changed_files": 3,
+    "additions": 20,
+    "deletions": 1
+  },
+  "trigger": {
+    "merged_pr": 1035,
+    "merge_oid": "72f1bf1e9601c815c53333f09c8f73a546b2c109",
+    "reviewed_head_oid": "58226b22a7b64beb4ecd21d7b0afcf93c2f10c11",
+    "semantic_issue": "The shared construction-period resolver used debt-mapping truthiness while the historical extraction path uses mapping presence. An explicitly present empty debt mapping therefore fell through to a conflicting top-level construction_periods value."
+  },
+  "controlled_probe": {
+    "input": {
+      "capex": {
+        "usd_total": 100.0
+      },
+      "allow_toy_fallback": true,
+      "debt": {},
+      "construction_periods": 9
+    },
+    "pre_fix_on_current_main": {
+      "pure_resolver": 9,
+      "live_debt_layer": 9
+    },
+    "post_fix_candidate": {
+      "pure_resolver": 2,
+      "live_debt_layer": 2
+    },
+    "historical_expected_value": 2
+  },
+  "change": {
+    "implementation": "Change the compact-debt guard from truthiness to presence: if debt_cfg is not None.",
+    "regressions": "Pin lowercase and uppercase explicitly empty debt mappings against a conflicting top-level construction_periods value in both the pure resolver and live debt layer.",
+    "files": [
+      {
+        "path": "finance/debt_v14.py",
+        "sha256": "71af0b375bc336cc52bba712b6b16a2c61c6c42d647e8fa1414f9e44fda6eed6"
+      },
+      {
+        "path": "tests/finance/test_construction_period_resolver.py",
+        "sha256": "59a5e5d7b718299f01e942fe02706fce6200c88c64c59f28131092e441520b3a"
+      },
+      {
+        "path": "changelog.d/f5-01-empty-debt-parity.fixed.md",
+        "sha256": "571f98d6971b2459c464a2a1d863129dce8bc7bff1dcb517964e69f7a2c5ec7a"
+      }
+    ]
+  },
+  "validation": {
+    "python_version": "3.11.14",
+    "formatting": "PASS",
+    "ruff": "PASS",
+    "isort": "PASS",
+    "targeted_mypy": "PASS",
+    "focused_tests": {
+      "passed": 90,
+      "failed": 0
+    },
+    "full_gate": {
+      "command": "PATH=/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin:$PATH make lint type security test",
+      "status": "PASS",
+      "mypy_source_files": 238,
+      "mypy_issues": 0,
+      "bandit_medium_high": 0,
+      "known_dependency_vulnerabilities": 0,
+      "tests_passed": 5078,
+      "tests_skipped": 52,
+      "warnings": 14,
+      "coverage_pct": 95.83
+    },
+    "remote_ci": {
+      "status": "pending",
+      "captured_as_complete": false
+    }
+  },
+  "scope_controls": {
+    "version_changed": false,
+    "scenario_changed": false,
+    "expected_result_changed": false,
+    "finance_formula_changed": false,
+    "f5_02_touched": false,
+    "canon_rebaseline_authorized": false
+  },
+  "limitations": [
+    "This is locally validated candidate evidence, not protected-CI or merge evidence.",
+    "The correction restores the declared PR #1035 parity contract but does not complete F5-01.",
+    "F5-02 remains a separate finding, change, test, reconciliation and pull request.",
+    "Board/lender release remains HOLD."
+  ]
+}

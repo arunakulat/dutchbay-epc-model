@@ -1,0 +1,140 @@
+{
+  "schema_version": "dutchbay.audit.remediation_candidate.v1",
+  "status": "local_candidate_green_remote_pending",
+  "as_of": "2026-08-16T11:30:14+05:30",
+  "title": "P3-MCFX-03 and P2-MC-SENS-02 covenant-breach classification remediation candidate",
+  "finding_ids": [
+    "P3-MCFX-03",
+    "P2-MC-SENS-02"
+  ],
+  "verification_level": "implemented_and_locally_verified",
+  "release_status": "HOLD",
+  "release_hold_reason": "The local candidate is green but is not yet published, protected-CI verified, merged, or represented in a governed post-merge run.",
+  "repository": {
+    "canonical_repository": "/Users/aruna/Downloads/dutchbay-epc-model",
+    "worktree": "/Users/aruna/Downloads/dutchbay-wt-mc-sens-02",
+    "branch": "codex/mc-sens-02-breach-probability",
+    "audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+    "base_origin_main": "4d8f6d0d90e3674617fffe9a0ea2a5acfc9a9342",
+    "candidate_commit": "c2d537f8f504793a722346f9eb667e0455a271cd",
+    "candidate_tree": "a5a450affd11da6f90683a225d8936f06e058193",
+    "candidate_subject": "fix(mc): unify covenant breach classification",
+    "candidate_authored_at": "2026-08-16T11:29:38+05:30",
+    "worktree_status_after_commit": "clean; branch ahead of origin/main by one commit"
+  },
+  "environment": {
+    "python_executable": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+    "python_version": "3.11.14",
+    "ruff_version": "0.14.14",
+    "black_version": "26.5.1",
+    "pytest_version": "9.1.1",
+    "test_mode": "FAST (20 iterations, 3 params)"
+  },
+  "inputs": {
+    "scenario_path": "/Users/aruna/Downloads/dutchbay-wt-mc-sens-02/scenarios/dutchbay_lendercase_2025Q4.yaml",
+    "scenario_sha256": "b152b378f0dd41bbfec703e5603d00897b7843200a8f2619b0c1644dedc599fd",
+    "design_addendum": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/code_dolphins/MC-SENS-02_MCFX-03_DESIGN_ADDENDUM.md",
+    "baseline_reproduction": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_dscr_breach_ci_seed42_reproduction.json"
+  },
+  "candidate_file_sha256": {
+    "analytics/mc/aggregate.py": "f9cec4e5f8a6781c441abdd70ff1d6df68c62b28d521645de7adbb9594937f2c",
+    "analytics/mc/convergence.py": "e4794b8d5c01915452b48b7a695e05651ed167abb5e247eeac15fddde5c05f48",
+    "analytics/mc/engine.py": "6417388ad8efd8ff3dc402e7b2967015d84c33bdb3d0385a55d8c015eb1c14f3",
+    "changelog.d/mc-sens-02-mcfx-03.fixed.md": "870a02da634422fdd26493632a7d69837d9594c3e821fa91b29fa7f50ecdfc83",
+    "docs/MODULE_REFERENCE.md": "d8249219c3f193f519e9bd491da44a9b0c93f20075ad307e2f030aabca1b1f54",
+    "tests/analytics/test_covenant_breach_shared.py": "d7681ea878fb5e0b1ec553ab04d66971ae542f8e93e1c0505eed05470f43f4c2",
+    "tests/analytics/test_mc_convergence.py": "3aed1b1dc65ad7f4c8c5dff98060623300269c6df04fac27ea47cef4a63a39c3",
+    "tests/analytics/test_mc_fixed_debt_stress.py": "6aa4b8f4a7253993ee8d5d5cc7461f6ab15e3bab597066438e8a56e51a8b17df"
+  },
+  "implementation_scope": {
+    "files_changed": 8,
+    "insertions": 93,
+    "deletions": 10,
+    "production_change": "Route convergence/Wilson and fixed-debt breach probabilities through analytics.core.covenant_breach.prob_breach; correct the aggregate example.",
+    "tests": "Add shared-primitive identity checks and two-sided representation-noise versus genuine-breach boundaries.",
+    "documentation": "Update the Monte Carlo module reference and add one changelog fragment.",
+    "excluded": [
+      "F5-01",
+      "F5-02",
+      "FX calibration",
+      "CVaR definitions",
+      "sampling or scenario changes",
+      "VERSION or contract changes",
+      "canonical KPI rebaseline"
+    ]
+  },
+  "reproduction": {
+    "command": "Run MonteCarloEngine on scenarios/dutchbay_lendercase_2025Q4.yaml at seed 42 / n=64, then run fixed_debt_stress at seed 123 / n=48 with allow_toy_fallback=false.",
+    "canonical_seed_42_n64": {
+      "finite_observations": 64,
+      "minimum_dscr": 1.2201973005672986,
+      "maximum_dscr": 1.3,
+      "distinct_values": 57,
+      "bare_breach_count": 63,
+      "bare_probability": 0.984375,
+      "shared_and_emitted_breach_count": 55,
+      "shared_and_emitted_probability": 0.859375,
+      "overstatement_removed_probability_points": 0.125,
+      "overstatement_removed_percentage_points": 12.5,
+      "emitted_wilson_ci": [
+        0.7538371825842297,
+        0.9242142744396914
+      ]
+    },
+    "fixed_debt_seed_123_n48": {
+      "finite_observations": 48,
+      "breach_count": 44,
+      "breach_probability": 0.9166666666666666,
+      "minimum_dscr": 0.6558266411372957,
+      "maximum_dscr": 1.4369998136385465,
+      "p10": 0.8770482538244677,
+      "p50": 1.1036392895620022,
+      "p90": 1.2915205628044215,
+      "disposition": "Numerically unchanged; this sibling is invariant hardening, not a separately reproduced material error."
+    }
+  },
+  "local_gates": {
+    "pre_change_targeted_baseline": {
+      "result": "53 passed",
+      "elapsed_seconds": 17.48
+    },
+    "post_change_targeted": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider tests/analytics/test_covenant_breach_shared.py tests/analytics/test_mc_convergence.py tests/analytics/test_mc_fixed_debt_stress.py tests/research/test_methodology_validation_5areas.py --override-ini=addopts=",
+      "result": "57 passed",
+      "elapsed_seconds": 18.16
+    },
+    "canonical_kpi_oracle": {
+      "command": "python -m pytest -q -p no:cacheprovider tests/finance/test_multitech_generation.py::test_canonical_lendercase_economics_unchanged --override-ini=addopts=",
+      "result": "1 passed; deterministic canonical economics unchanged",
+      "elapsed_seconds": 0.71
+    },
+    "changed_file_static": {
+      "ruff": "PASS",
+      "black": "PASS",
+      "isort": "PASS",
+      "mypy": "PASS; no issues in analytics/mc/convergence.py and analytics/mc/engine.py",
+      "git_diff_check": "PASS"
+    },
+    "full_repository": {
+      "command": "source /Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/activate; PYTHONDONTWRITEBYTECODE=1 make lint type security test",
+      "lint": "PASS; Ruff, Black and isort over the repository",
+      "type": "PASS; strict mypy, 238 source files",
+      "bandit": "PASS; zero medium/high findings",
+      "pip_audit": "PASS; no known vulnerabilities",
+      "pytest": "PASS; 5041 passed, 52 skipped, 15 warnings",
+      "coverage_percent": 95.85,
+      "coverage_required_percent": 95.0,
+      "elapsed_seconds": 348.76,
+      "note": "The first make invocation stopped before tests because the ambient shell could not resolve Black. The unchanged gate was rerun with the repository venv activated and passed in full."
+    }
+  },
+  "acceptance": {
+    "local_candidate": "PASS",
+    "protected_pull_request": "pending",
+    "remote_required_checks": "pending",
+    "merge_to_main": "pending",
+    "governed_post_merge_metadata": "pending",
+    "finding_closure": "not yet authorized by candidate evidence alone"
+  },
+  "limitations": "The exact correction is reproduced for the named deterministic seeds and candidate commit. The production effect remains sample-specific. This artifact does not claim remote CI, merge, release, or governed-run completion."
+}

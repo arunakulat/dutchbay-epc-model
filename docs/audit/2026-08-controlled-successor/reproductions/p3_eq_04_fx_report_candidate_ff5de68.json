@@ -1,0 +1,106 @@
+{
+  "schema_version": "dutchbay.audit.code_remediation_candidate_evidence.v1",
+  "status": "candidate_locally_validated_not_yet_merged",
+  "as_of": "2026-08-16T13:02:17+05:30",
+  "finding_ids": [
+    "P3-EQ-04"
+  ],
+  "title": "P3-EQ-04 manifest-bound FX methodology candidate evidence",
+  "repository": {
+    "name": "arunakulat/dutchbay-epc-model",
+    "worktree": "/Users/aruna/Downloads/dutchbay-wt-eq-04-fx-methodology",
+    "branch": "codex/eq-04-fx-methodology",
+    "base_commit": "50adfe7ee59f91660678c0ca32c2cd6513e1c611",
+    "candidate_commit": "ff5de686ad5ef3071630abfca2a95444f67601b9",
+    "candidate_tree": "869eac8a1cfe409bf8e6e693bb03acf72bedc56d",
+    "candidate_parent": "50adfe7ee59f91660678c0ca32c2cd6513e1c611",
+    "candidate_worktree_clean": true,
+    "publication_state": "local_only"
+  },
+  "predecessor_evidence": {
+    "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_eq_04_fx_report_before_50adfe7.json",
+    "sha256": "a9bd0338309687a93ac565f42de6a9dc9e6dee800c0add760de7b42c1f38789f"
+  },
+  "design_control": {
+    "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/code_dolphins/EQ-04_FX_METHODOLOGY_REPORT_DESIGN_ADDENDUM.md",
+    "sha256": "e5b60a9d8a7151f74366648eaab2c059827fc20125c39dc08e10df17370464fc"
+  },
+  "changed_files": [
+    "app/reports/report_config.py",
+    "app/reports/report_model.py",
+    "changelog.d/eq-04-fx-methodology.fixed.md",
+    "config/report_defaults.yaml",
+    "tests/app/test_report_config.py",
+    "tests/app/test_report_model.py",
+    "tests/integration/test_lender_report_e2e.py"
+  ],
+  "scope": {
+    "files_changed": 7,
+    "insertions": 243,
+    "deletions": 19,
+    "manifest_schema_changed": false,
+    "public_api_changed": false,
+    "api_contract_version_changed": false,
+    "package_version_changed": false,
+    "scenario_changed": false,
+    "finance_engine_changed": false,
+    "monte_carlo_changed": false,
+    "kpis_changed": false,
+    "expected_results_changed": false,
+    "f5_01_or_f5_02_changed": false
+  },
+  "candidate_reproduction": {
+    "scenario": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+    "entrypoint": "analytics.scenario_loader.load_scenario_config followed by app.services.pipeline_service.run_finance_case, app.reports.report_model.build_report_context and app.reports.renderer.render_report_html",
+    "generated_at_injected": "2026-08-16T07:15:00+00:00",
+    "manifest_config_sha256": "dec7e1d7fecfb5efd009707e361b5558f514dc6ea624010d06af8a745c5821e6",
+    "scenario_config_sha256": "dec7e1d7fecfb5efd009707e361b5558f514dc6ea624010d06af8a745c5821e6",
+    "manifest_and_scenario_hash_match": true,
+    "revenue_fx_mitigation": "Manifest-bound resolved inputs use a deterministic FX path with a starting rate of 333.79 LKR per USD and 5.89% annual LKR depreciation (source mode fixed; pinned as of 2026-06-20T00:02:31Z). See the FX evidence-register row for source provenance. Debt sizing uses resolved FX-converted CFADS and the modeled DSCR constraints, and the resulting equity IRR is disclosed to sponsors rather than masked.",
+    "false_phrase_count_in_html": 0,
+    "imf_projections_casefold_count_in_html": 0,
+    "html_sha256": "f3ea48feeddb535e369fd3a9fe8f5274dcdea9edef011938d7db71ca5ccd1e02",
+    "project_irr": 0.014551597740253388,
+    "equity_irr": -0.05841298678542661
+  },
+  "before_after_assertions": {
+    "false_phrase_count_before": 1,
+    "false_phrase_count_after": 0,
+    "project_irr_unchanged": true,
+    "equity_irr_unchanged": true,
+    "manifest_hash_gate_satisfied": true,
+    "resolved_values_are_disclosed_only_after_hash_match": true,
+    "mismatched_or_missing_config_withholds_resolved_values": true
+  },
+  "local_validation": {
+    "focused_report_suite": {
+      "command": "pytest -q tests/app/test_report_config.py tests/app/test_report_model.py tests/integration/test_lender_report_e2e.py",
+      "outcome": "143 passed, 1 environment-conditional WeasyPrint skip, 1 warning",
+      "status": "passed"
+    },
+    "target_new_tests": {
+      "outcome": "5 passed",
+      "status": "passed"
+    },
+    "canonical_lender_expected_results": {
+      "outcome": "3 passed",
+      "status": "passed"
+    },
+    "targeted_mypy": {
+      "outcome": "production report files passed",
+      "status": "passed"
+    },
+    "exact_repository_gate": {
+      "command": "PATH=/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin:$PATH make lint type security test",
+      "outcome": "Ruff pass; Black 637 unchanged; isort pass; strict mypy 238 source files pass; Bandit 0 Medium and 0 High; pip-audit no known vulnerabilities; pytest 5,046 passed, 52 skipped, 14 warnings; total coverage 95.82 percent against 95 percent floor",
+      "status": "passed"
+    },
+    "environment_note": "The first exact-gate invocation in the fresh worktree could not locate Black because that worktree has no local .venv. Re-running the identical gate with the canonical repository virtual environment prepended to PATH passed completely; this was an environment bootstrap condition, not a test failure."
+  },
+  "limitations": [
+    "This artifact proves the local candidate and its deterministic report reproduction; it is not protected-CI or merge evidence.",
+    "The config-hash match proves that the disclosed FX values came from the resolved configuration that produced the run manifest. It does not independently validate the external provenance or economic reasonableness of those assumptions.",
+    "The wider audit programme remains on HOLD, and P3-EQ-04 requires successor semantic QA after protected merge.",
+    "F5-01 and F5-02 remain separate and untouched."
+  ]
+}

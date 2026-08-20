@@ -1,0 +1,188 @@
+{
+  "schema_version": "dutchbay.audit.code_remediation_evidence.v1",
+  "as_of": "2026-08-16T12:10:28+05:30",
+  "status": "candidate_locally_validated_unpublished",
+  "finding_ids": [
+    "P2-MC-SENS-01"
+  ],
+  "repository": {
+    "name": "arunakulat/dutchbay-epc-model",
+    "worktree": "/Users/aruna/Downloads/dutchbay-wt-mc-sens-01",
+    "branch": "codex/mc-sens-01-casper-tornado",
+    "audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+    "implementation_base": "9faa6a23d1e655533e5231b6959c6ce3f66be5ad",
+    "candidate_commit": "0445ea60ebe7c1e70b701849a1d227f8f8c3a4c8",
+    "candidate_tree": "0317bcf11dd7980c96e90740887dd88730a52cf6",
+    "worktree_clean_after_validation": true,
+    "publication_state": {
+      "pushed": false,
+      "pull_request_opened": false,
+      "protected_ci_complete": false,
+      "merged": false
+    }
+  },
+  "immutable_evidence": [
+    {
+      "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P2_f6_mc_sensitivity_casper.json",
+      "sha256": "7af1dcf26d395b9fe4e30da7f0f2dad7d42892971e214d4d29898d00579c8fb6",
+      "role": "finder"
+    },
+    {
+      "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/raw/P2_r6_mc_verdicts.json",
+      "sha256": "fb457fbbd8a89f874fd318dbdde5ad65897786529a1c66ee497f5a00f6f12835",
+      "role": "independent_refuter"
+    },
+    {
+      "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08/02_finance_correctness_findings.md",
+      "sha256": "1c0e11501a41b283edb41a9a8e97ec397422694d62e2188b198469d23b74edbc",
+      "role": "phase_report"
+    }
+  ],
+  "design_control": {
+    "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/code_dolphins/MC-SENS-01_CASPER_TORNADO_DESIGN_ADDENDUM.md",
+    "sha256": "8c46b896f407f689ef9d2574d1fd3c8bd26c58de326f508940f174a82d394dfa"
+  },
+  "scope": {
+    "changed_files": [
+      "analytics/sensitivity/adapters.py",
+      "changelog.d/mc-sens-01-casper-tornado.fixed.md",
+      "tests/analytics/test_casper_payload_coverage.py",
+      "tests/api/test_casper_contract_freeze.py"
+    ],
+    "production_change": "Populate the existing ShockResult variable_name, label, base_case, impact_abs, and metric_name fields at the sole production adapter construction site.",
+    "contract_change": "None. The casper_result_v1 field set and contract version are unchanged; two erroneous null values now carry their already-computed values.",
+    "financial_change": "None. Sensitivity evaluation, scenario inputs, finance formulas, deterministic KPIs, and canonical expected-result fixtures are unchanged.",
+    "explicit_exclusions": [
+      "F5-01",
+      "F5-02",
+      "wind AEP",
+      "finance Monte Carlo",
+      "sensitivity ranges and driver order",
+      "VERSION",
+      "canonical KPI rebaseline",
+      "Board or lender synthesis"
+    ]
+  },
+  "before_state": {
+    "base_commit_probe": "9faa6a23d1e655533e5231b6959c6ce3f66be5ad",
+    "synthetic_adapter_to_casper_row": {
+      "variable": null,
+      "base_irr": 0.014551597740253388,
+      "low_irr": 0.025129198450968886,
+      "high_irr": 0.005493346017928717,
+      "impact_abs": null,
+      "impact_pct": -0.01963585243304017
+    },
+    "immutable_canonical_reproduction": {
+      "row_count": 7,
+      "all_variables_null": true,
+      "all_impacts_abs_null": true,
+      "first_row_matches_synthetic_probe": true
+    }
+  },
+  "after_state": {
+    "candidate_commit": "0445ea60ebe7c1e70b701849a1d227f8f8c3a4c8",
+    "canonical_scenario": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+    "metric": "project_irr",
+    "base_metric": 0.014551597740253388,
+    "row_count": 7,
+    "all_variables_non_null": true,
+    "all_impacts_abs_non_null": true,
+    "rows": [
+      {
+        "variable": "CAPEX",
+        "base_irr": 0.014551597740253388,
+        "low_irr": 0.025129198450968886,
+        "high_irr": 0.005493346017928717,
+        "impact_abs": 0.01963585243304017,
+        "impact_pct": -0.01963585243304017
+      },
+      {
+        "variable": "OPEX",
+        "base_irr": 0.014551597740253388,
+        "low_irr": 0.018138766518455918,
+        "high_irr": 0.0108211322816775,
+        "impact_abs": 0.007317634236778418,
+        "impact_pct": -0.007317634236778418
+      },
+      {
+        "variable": "Capacity Factor",
+        "base_irr": 0.014551597740253388,
+        "low_irr": 0.0017561517494973106,
+        "high_irr": 0.02644454005692541,
+        "impact_abs": 0.024688388307428102,
+        "impact_pct": 0.024688388307428102
+      },
+      {
+        "variable": "Tariff",
+        "base_irr": 0.014551597740253388,
+        "low_irr": 0.0017561517494973106,
+        "high_irr": 0.02644454005692541,
+        "impact_abs": 0.024688388307428102,
+        "impact_pct": 0.024688388307428102
+      },
+      {
+        "variable": "Corporate Tax Rate",
+        "base_irr": 0.014551597740253388,
+        "low_irr": 0.017423839186721635,
+        "high_irr": 0.011641509628844377,
+        "impact_abs": 0.0057823295578772575,
+        "impact_pct": -0.0057823295578772575
+      },
+      {
+        "variable": "Debt Tenor",
+        "base_irr": 0.014551597740253388,
+        "low_irr": 0.01353365414502335,
+        "high_irr": 0.015209207051950207,
+        "impact_abs": 0.0016755529069268568,
+        "impact_pct": 0.0016755529069268568
+      },
+      {
+        "variable": "Grid Curtailment (incremental)",
+        "base_irr": 0.014551597740253388,
+        "low_irr": 0.014551597740253388,
+        "high_irr": -0.002155643570788485,
+        "impact_abs": 0.016707241311041874,
+        "impact_pct": -0.016707241311041874
+      }
+    ]
+  },
+  "validation": {
+    "focused_tests": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python -m pytest -p no:cacheprovider tests/analytics/test_sensitivity_runner.py tests/analytics/test_sensitivity_param_validation.py tests/analytics/test_sens_dscr_coverage.py tests/analytics/test_casper_payload_coverage.py tests/analytics/test_casper_payload_equity_contract.py tests/analytics_layer/test_evaluation_casper_tail_risk.py tests/api/test_casper_contract_freeze.py tests/app/test_report_tornado.py -q",
+      "result": "70 passed"
+    },
+    "canonical_lender_pins": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python -m pytest -p no:cacheprovider tests/finance/test_lendercase_expected_results.py -q",
+      "result": "3 passed"
+    },
+    "targeted_mypy": "Success: no issues found in analytics/sensitivity/adapters.py and analytics/casper/casper_payload.py",
+    "full_repository_gate": {
+      "command": "make lint type security test",
+      "commit": "0445ea60ebe7c1e70b701849a1d227f8f8c3a4c8",
+      "ruff": "PASS",
+      "black": "PASS; 637 files unchanged",
+      "isort": "PASS",
+      "mypy": "PASS; 238 source files",
+      "bandit": "PASS; 0 Medium and 0 High issues",
+      "pip_audit": "PASS; no known vulnerabilities",
+      "pytest": "PASS; 5044 passed, 52 skipped, 15 warnings",
+      "coverage": "PASS; 95.85% against a 95% gate"
+    }
+  },
+  "assertions": {
+    "defect_reproduced_before_change": true,
+    "all_canonical_rows_labelled_after_change": true,
+    "all_canonical_rows_rankable_after_change": true,
+    "base_project_irr_unchanged": true,
+    "public_payload_key_set_unchanged": true,
+    "casper_contract_version_unchanged": true,
+    "full_local_gate_passed": true,
+    "remote_protected_ci_pending": true
+  },
+  "limitations": [
+    "This is candidate evidence, not merge evidence. The branch has not yet been pushed, reviewed by protected CI, or merged.",
+    "The repair corrects CASPER tornado metadata only; it does not validate the economic reasonableness of the sensitivity ranges or the underlying project assumptions.",
+    "The wider audit programme remains on HOLD and this artifact must not be used to regenerate the Board or lender synthesis by itself."
+  ]
+}

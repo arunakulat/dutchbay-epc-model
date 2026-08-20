@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0.0",
+  "traced_at": "2026-08-12T09:45:00+05:30",
+  "repository": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+  "git_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+  "scope": "All tracked Python source paths under the working tree except tests and virtual environments; YAML declarations were examined separately.",
+  "search_method": "Exact identifier search of every *.py file, retaining path, line, and source text.",
+  "source_hashes": {
+    "scenarios/dutchbay_lendercase_2025Q4.yaml": "b152b378f0dd41bbfec703e5603d00897b7843200a8f2619b0c1644dedc599fd",
+    "analytics/pipeline_v14_enhanced.py": "fed9d65c3f3acb977f3c3b84d14ea459e85df2764066abe1f2212a0b2db851f1",
+    "finance/debt_v14.py": "31a9ade86274560e888981c5dc270224930493665416c982894bdafbf08fe4a4",
+    "scripts/ci/validate.py": "a013d4ac2d97567ccc8c4c448c8835ad7d5cdccd67740bbe7d3b642ab8b40518"
+  },
+  "identifiers": {
+    "receivables_guarantee_months": {
+      "canonical_declaration": "scenarios/dutchbay_lendercase_2025Q4.yaml:501",
+      "production_runtime_consumers": 0,
+      "non_test_python_matches": [
+        "scripts/ci/validate.py:148 - allowed-reserve schema key only"
+      ],
+      "disposition": "decorative_or_unwired"
+    },
+    "fail_on_covenant_breach": {
+      "canonical_declaration": "scenarios/dutchbay_lendercase_2025Q4.yaml:546",
+      "production_runtime_consumers": 0,
+      "non_test_python_matches": [],
+      "disposition": "unwired"
+    },
+    "fail_on_large_balloon": {
+      "canonical_declaration": "scenarios/dutchbay_lendercase_2025Q4.yaml:547",
+      "production_runtime_consumers": 0,
+      "non_test_python_matches": [],
+      "disposition": "unwired"
+    },
+    "enforce_hard_covenants": {
+      "canonical_declaration": "scenarios/dutchbay_lendercase_2025Q4.yaml:516",
+      "production_runtime_consumers": 0,
+      "non_test_python_matches": [],
+      "disposition": "unwired"
+    },
+    "use_revenue_guarantee": {
+      "canonical_declaration": "scenarios/dutchbay_lendercase_2025Q4.yaml:503",
+      "production_runtime_consumers": 1,
+      "consumer": "analytics/pipeline_v14_enhanced.py:345-352",
+      "runtime_effect": "Gates guarantee_revenue_pct into an annualised debt-fee load used in WACC/discount resolution; it does not create a revenue-support cash flow, reserve, payment guarantee, or offtaker-credit recovery.",
+      "disposition": "name_overstates_runtime_semantics"
+    }
+  },
+  "related_engine_anchors": {
+    "cash_sweep_selection": "finance/debt_v14.py:1469-1499",
+    "balloon_constraint_comparison": "finance/debt_v14.py:1500-1513",
+    "balloon_output_fields": "finance/debt_v14.py:1590-1596",
+    "dsra_funding_resolution": "finance/debt_v14.py:1339-1389"
+  },
+  "conclusion": "Turning any of fail_on_covenant_breach, fail_on_large_balloon, or enforce_hard_covenants from false to true would currently be a no-op. Activating those flags must not be represented as remediation until production consumers, failure semantics, tests, and reporting behavior exist."
+}

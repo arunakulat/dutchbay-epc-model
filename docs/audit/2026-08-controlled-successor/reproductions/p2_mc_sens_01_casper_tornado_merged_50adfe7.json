@@ -1,0 +1,120 @@
+{
+  "schema_version": "dutchbay.audit.remediation_merge_evidence.v1",
+  "status": "merged_remote_green_successor_qa_pending",
+  "as_of": "2026-08-16T12:27:50+05:30",
+  "title": "P2-MC-SENS-01 protected-merge evidence",
+  "finding_ids": [
+    "P2-MC-SENS-01"
+  ],
+  "verification_level": "merged_protected_ci_verified",
+  "release_status": "HOLD",
+  "release_hold_reason": "The code remediation is merged and verified, but independent successor semantic QA and the wider audit programme's open evidence, reproduction and implementation gates remain outstanding.",
+  "predecessor": {
+    "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p2_mc_sens_01_casper_tornado_candidate_0445ea6.json",
+    "sha256": "3a213fbf132af7e2cad0ba2784633fe1e2aa1c3a2d59789b9ff01d3596dd21ff",
+    "status": "candidate_locally_validated_unpublished"
+  },
+  "repository": {
+    "canonical_repository": "/Users/aruna/Downloads/dutchbay-epc-model",
+    "audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+    "implementation_base": "9faa6a23d1e655533e5231b6959c6ce3f66be5ad",
+    "pull_request_head_commit": "0445ea60ebe7c1e70b701849a1d227f8f8c3a4c8",
+    "merge_commit": "50adfe7ee59f91660678c0ca32c2cd6513e1c611",
+    "candidate_and_merge_tree": "0317bcf11dd7980c96e90740887dd88730a52cf6",
+    "tree_identity_verified": true,
+    "canonical_main_after_merge": "50adfe7ee59f91660678c0ca32c2cd6513e1c611",
+    "origin_main_after_merge": "50adfe7ee59f91660678c0ca32c2cd6513e1c611",
+    "canonical_main_worktree_clean": true,
+    "remote_topic_branch_deleted": true
+  },
+  "github": {
+    "repository": "arunakulat/dutchbay-epc-model",
+    "pull_request_number": 1031,
+    "pull_request_url": "https://github.com/arunakulat/dutchbay-epc-model/pull/1031",
+    "pull_request_title": "fix(casper): populate tornado shock metadata",
+    "base_branch": "main",
+    "head_branch": "codex/mc-sens-01-casper-tornado",
+    "opened_as_draft": true,
+    "made_ready_after_green_checks": true,
+    "merge_method": "squash",
+    "merged_at_utc": "2026-08-16T06:56:32Z",
+    "merged_by": "arunakulat",
+    "pr_body_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/code_dolphins/MC-SENS-01_CASPER_TORNADO_PR_BODY.md",
+    "pr_body_sha256": "6588ffdb56e4b5300ee9e9502c0357ea3a29630b2216486867a587206b417257"
+  },
+  "remote_ci": {
+    "head_sha": "0445ea60ebe7c1e70b701849a1d227f8f8c3a4c8",
+    "test_suite_run_id": 31932064925,
+    "codeql_run_id": 31932064168,
+    "fastlane_run_id": 31932064955,
+    "smoke_run_id": 31932064930,
+    "successful_checks": 24,
+    "skipped_checks": 1,
+    "other_checks": 0,
+    "non_blocking_skip": "Grid Study (opt-in, non-blocking)",
+    "passed": [
+      "Analyze (actions)",
+      "Classify changed paths",
+      "Code Quality Checks",
+      "CodeQL",
+      "Security Scan",
+      "fastlane",
+      "smoke",
+      "Run Tests (Python 3.11, shards 1-6)",
+      "Run Tests (Python 3.12, shards 1-6)",
+      "Coverage Gate (Python 3.11)",
+      "Coverage Gate (Python 3.12)",
+      "Test Results (Python 3.11)",
+      "Test Results (Python 3.12)",
+      "Test Summary"
+    ],
+    "coverage_floor_percent": 95.0,
+    "status": "PASS"
+  },
+  "local_post_merge": {
+    "worktree": "/Users/aruna/Downloads/dutchbay-epc-model",
+    "command": "PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest -p no:cacheprovider tests/analytics/test_casper_payload_coverage.py tests/api/test_casper_contract_freeze.py tests/app/test_report_tornado.py -q",
+    "result": "41 passed, 1 collection warning",
+    "elapsed_seconds": 1.03,
+    "status": "PASS"
+  },
+  "reproduced_correction": {
+    "canonical_scenario": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+    "metric": "project_irr",
+    "row_count": 7,
+    "base_metric": 0.014551597740253388,
+    "all_variables_non_null_after": true,
+    "all_impacts_abs_non_null_after": true,
+    "public_payload_key_set_unchanged": true,
+    "casper_contract_version_unchanged": true,
+    "deterministic_canonical_economics_unchanged": true,
+    "full_precision_rows": "See the hashed predecessor candidate evidence."
+  },
+  "scope_control": {
+    "production_files_changed": [
+      "analytics/sensitivity/adapters.py"
+    ],
+    "test_files_changed": [
+      "tests/analytics/test_casper_payload_coverage.py",
+      "tests/api/test_casper_contract_freeze.py"
+    ],
+    "changelog_files_changed": [
+      "changelog.d/mc-sens-01-casper-tornado.fixed.md"
+    ],
+    "version_changed": false,
+    "casper_schema_changed": false,
+    "scenario_changed": false,
+    "expected_results_changed": false,
+    "monte_carlo_changed": false,
+    "f5_01_or_f5_02_changed": false
+  },
+  "disposition": {
+    "implementation": "complete_merged",
+    "protected_ci": "complete_green",
+    "register_ingress": "required_not_started",
+    "independent_successor_semantic_qa": "required_not_started",
+    "finding_closure": "remain_open_until_register_ingress_and_successor_qa",
+    "programme_release": "HOLD"
+  },
+  "limitations": "The merged code repairs the reproduced CASPER tornado serialization defect and preserves public schema and deterministic economic controls. It does not validate the reasonableness of the underlying sensitivity ranges, close unrelated audit findings, or authorize Board/lender synthesis regeneration."
+}

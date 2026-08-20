@@ -1,0 +1,54 @@
+{
+  "schema_version": "dutchbay.audit.code_remediation_before_evidence.v1",
+  "status": "defect_reproduced_on_implementation_base",
+  "as_of": "2026-08-16T12:45:38+05:30",
+  "finding_ids": [
+    "P3-EQ-04"
+  ],
+  "title": "P3-EQ-04 static FX-source misattribution before remediation",
+  "repository": {
+    "name": "arunakulat/dutchbay-epc-model",
+    "worktree": "/Users/aruna/Downloads/dutchbay-epc-model",
+    "branch": "main",
+    "commit": "50adfe7ee59f91660678c0ca32c2cd6513e1c611",
+    "worktree_clean": true
+  },
+  "design_control": {
+    "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/code_dolphins/EQ-04_FX_METHODOLOGY_REPORT_DESIGN_ADDENDUM.md",
+    "sha256": "e5b60a9d8a7151f74366648eaab2c059827fc20125c39dc08e10df17370464fc"
+  },
+  "immutable_evidence": [
+    {
+      "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_equity_report_and_verdict_reproduction.json",
+      "sha256": "40be7feef668fe5f83f59ec33b76d631fcacb049a0073da0cda49045cc24c4da"
+    },
+    {
+      "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/refuters/04_P3_MC_REPORTING_REFUTER_CHECKPOINT.md",
+      "sha256": "2e150dc6b1f949418236256057b3e291f80d7c466873d436a15db37523631685"
+    }
+  ],
+  "reproduction": {
+    "scenario": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+    "entrypoint": "app.services.pipeline_service.run_finance_case followed by app.reports.report_model.build_report_context and app.reports.renderer.render_report_html",
+    "generated_at_injected": "2026-08-16T07:15:00+00:00",
+    "manifest_config_sha256": "dec7e1d7fecfb5efd009707e361b5558f514dc6ea624010d06af8a745c5821e6",
+    "scenario_config_sha256": "dec7e1d7fecfb5efd009707e361b5558f514dc6ea624010d06af8a745c5821e6",
+    "manifest_and_scenario_hash_match": true,
+    "revenue_fx_mitigation": "FX path stressed to CBSL/IMF projections; debt sized off the LKR-denominated DSCR; the resulting negative equity IRR is disclosed to sponsors rather than masked.\n",
+    "false_phrase_count_in_html": 1,
+    "html_sha256": "208a33f4c2584ec59bd1b1689be65c3c75e75574eccf9abcd2977de8bf9c329c",
+    "project_irr": 0.014551597740253388,
+    "equity_irr": -0.05841298678542661
+  },
+  "assertions": {
+    "false_attribution_present": true,
+    "report_scenario_is_manifest_bound": true,
+    "defect_is_presentation_only": true,
+    "no_implementation_performed_by_this_reproduction": true
+  },
+  "limitations": [
+    "This artifact reproduces the lender-facing wording defect on the implementation base; it is not post-fix or merge evidence.",
+    "The config hash proves that the supplied report scenario matches the manifest-bound resolved configuration. It does not independently validate the economic assumptions or external-source quality.",
+    "The wider audit programme remains on HOLD."
+  ]
+}

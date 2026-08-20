@@ -1,0 +1,105 @@
+{
+  "schema_version": "dutchbay.audit.p3_reproduction.v1",
+  "status": "completed",
+  "as_of": "2026-08-16T10:30:00+05:30",
+  "title": "Equity operational-log inventory",
+  "finding_ids": [
+    "P3-EQ-02"
+  ],
+  "verification_level": "independent_reproduction",
+  "repository": {
+    "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+    "commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+    "branch": "codex/audit-corrigendum-2026-08",
+    "status_before": "## codex/audit-corrigendum-2026-08...origin/main",
+    "status_after": "## codex/audit-corrigendum-2026-08...origin/main",
+    "tracked_tree_sha256": "316b37a8f385e1a8e099fdbb1b2aa611ac9e462a"
+  },
+  "execution": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 /Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python /Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/build_p3_reproductions.py --output-dir /Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions --as-of 2026-08-16T10:30:00+05:30",
+    "working_directory": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+    "generator_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/build_p3_reproductions.py",
+    "generator_sha256": "f3034ca8d53ad6c6884cd7ba2f8d89192fa526bfae69cdb7789701de5a2baa73",
+    "environment": {
+      "python_executable": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "python_version": "3.11.14 (main, Oct  9 2025, 16:16:55) [Clang 17.0.0 (clang-1700.3.19.1)]",
+      "platform": "macOS-26.6.1-arm64-arm-64bit",
+      "packages": {
+        "numpy": "2.4.6",
+        "scipy": "1.17.1",
+        "pydantic": "2.13.4",
+        "PyYAML": "6.0.3",
+        "pytest": "9.1.1"
+      },
+      "python_dont_write_bytecode": true
+    }
+  },
+  "inputs": {
+    "scenario_path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_lendercase_2025Q4.yaml",
+    "scenario_sha256": "b152b378f0dd41bbfec703e5603d00897b7843200a8f2619b0c1644dedc599fd"
+  },
+  "method": "Retain exact source excerpts and file hashes for three incomplete production log sites plus one positive control that prints both return metrics.",
+  "result": {
+    "inventory": [
+      {
+        "site": {
+          "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+          "path": "analytics/evaluate_scenario.py",
+          "sha256": "919a4b7f8da056663877f734989917b07f4271452842f26a966bd9538a0c574b",
+          "start_line": 120,
+          "end_line": 128,
+          "excerpt": "    # 5. Logging: lender-friendly one-liner.\n    scenario_name = kpi_dict.get(\"scenario_name\", base_path.stem)\n    logger.info(\n        \"Scenario evaluated: %s | IRR=%s | NPV=%s | DSCR_min=%s\",\n        scenario_name,\n        kpi_dict.get(\"project_irr\"),\n        kpi_dict.get(\"project_npv\"),\n        kpi_dict.get(\"dscr_min\"),\n    )"
+        },
+        "contains_project_irr_literal": true,
+        "contains_equity_irr_literal": false,
+        "classification": "incomplete_project_only_log"
+      },
+      {
+        "site": {
+          "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+          "path": "analytics/pipeline_v14_enhanced.py",
+          "sha256": "fed9d65c3f3acb977f3c3b84d14ea459e85df2764066abe1f2212a0b2db851f1",
+          "start_line": 976,
+          "end_line": 981,
+          "excerpt": "        logger.info(\n            \"ScenarioResult assembled: project_irr=%.2f%%, min_dscr=%.2f, project_npv=%.0f\",\n            project_irr * 100,\n            min_dscr,\n            project_npv,\n        )"
+        },
+        "contains_project_irr_literal": true,
+        "contains_equity_irr_literal": false,
+        "classification": "incomplete_project_only_log"
+      },
+      {
+        "site": {
+          "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+          "path": "analytics/pipeline_v14_enhanced.py",
+          "sha256": "fed9d65c3f3acb977f3c3b84d14ea459e85df2764066abe1f2212a0b2db851f1",
+          "start_line": 1011,
+          "end_line": 1016,
+          "excerpt": "        logger.info(\n            \"Pipeline complete in %.3f sec: project_irr=%.2f%%, min_dscr=%.2f\",\n            metrics.total_runtime_sec,\n            project_irr * 100,\n            min_dscr,\n        )"
+        },
+        "contains_project_irr_literal": true,
+        "contains_equity_irr_literal": false,
+        "classification": "incomplete_project_only_log"
+      },
+      {
+        "site": {
+          "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+          "path": "analytics/pipeline_analytics_v14.py",
+          "sha256": "150dc3460e366e18850fd845c26f128d56da5e3f114b76f781e262cdabe4fb18",
+          "start_line": 173,
+          "end_line": 176,
+          "excerpt": "        logger.info(\n            \"Returns analysis complete: Project IRR=%.2f%%, Equity IRR=%.2f%%\",\n            (all_returns.project_returns.project_irr or 0.0) * 100,\n            (all_returns.equity_returns.equity_irr or 0.0) * 100,"
+        },
+        "contains_project_irr_literal": true,
+        "contains_equity_irr_literal": true,
+        "classification": "positive_control_prints_both"
+      }
+    ],
+    "incomplete_production_log_count": 3,
+    "positive_control_count": 1,
+    "assertions": {
+      "at_least_three_logs_omit_equity_irr": true,
+      "returned_objects_were_not_modified": true
+    }
+  },
+  "limitations": "The repository search does not inspect deployed log processors or externally copied log excerpts; returned API/report objects were not changed."
+}
