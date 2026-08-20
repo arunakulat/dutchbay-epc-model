@@ -10,9 +10,11 @@ ENVIRONMENT_FILE = ROOT / ".codex" / "environments" / "environment.toml"
 SETUP_SCRIPT = ROOT / "setup_venv.sh"
 SESSION_HOOK = ROOT / ".claude" / "hooks" / "session-start.sh"
 SOURCED_SETUP_SCRIPT = ROOT / "scripts" / "venv_up.sh"
+SHELL_ENVIRONMENT_HELPER = ROOT / "scripts" / "development_environment.sh"
 VENV_CHECK_SCRIPT = ROOT / "check_venv.sh"
 BOOTSTRAP_HELPER = ROOT / "dutchbay_bootstrap.py"
 DOCKERFILE = ROOT / "Dockerfile"
+MAKEFILE = ROOT / "Makefile"
 
 
 def _environment() -> dict[str, object]:
@@ -50,19 +52,47 @@ def test_bootstrap_prefers_the_supported_ci_python() -> None:
     for path in (
         SETUP_SCRIPT,
         SESSION_HOOK,
-        SOURCED_SETUP_SCRIPT,
-        VENV_CHECK_SCRIPT,
+        SHELL_ENVIRONMENT_HELPER,
     ):
         script = path.read_text(encoding="utf-8")
 
         assert "sys.version_info[:2] != (3, 12)" in script
 
-    script = SETUP_SCRIPT.read_text(encoding="utf-8")
+    script = SHELL_ENVIRONMENT_HELPER.read_text(encoding="utf-8")
     assert (
         "for candidate in python3.12 /opt/homebrew/bin/python3.12 python3 python"
         in script
     )
-    assert "Python 3.12 interpreter was not found" in script
+    assert "Python 3.12 interpreter was not found" in SETUP_SCRIPT.read_text(
+        encoding="utf-8"
+    )
+
+    for path in (SETUP_SCRIPT, SOURCED_SETUP_SCRIPT, VENV_CHECK_SCRIPT):
+        script = path.read_text(encoding="utf-8")
+        assert "development_environment.sh" in script
+        assert "dutchbay_resolve_venv" in script
+        assert "dutchbay_validate_venv" in script
+
+
+def test_local_setup_reuses_the_shared_contract_without_path_laundering() -> None:
+    """Provision dependencies without binding a shared venv to one checkout."""
+
+    setup = SETUP_SCRIPT.read_text(encoding="utf-8")
+    activation = SOURCED_SETUP_SCRIPT.read_text(encoding="utf-8")
+    helper = SHELL_ENVIRONMENT_HELPER.read_text(encoding="utf-8")
+    makefile = MAKEFILE.read_text(encoding="utf-8")
+
+    assert '"$VENV_PYTHON" -m pip install --quiet -r "$REQUIREMENTS"' in setup
+    assert "pip install -e" not in setup
+    assert 'VENV_DIR=$(dutchbay_resolve_venv "$PROJECT_ROOT" "$PYTHON_CMD")' in setup
+    assert 'mkdir -p "$(dirname "$VENV_DIR")"' in setup
+    assert '"$PYTHON_CMD" -m venv "$VENV_DIR"' in setup
+    assert 'VENV_DIR="$PROJECT_ROOT/.venv"' not in setup
+    assert "pip install" not in activation
+    assert "cp " not in activation
+    assert 'export PYTHONPATH="$repo_root${PYTHONPATH:+:$PYTHONPATH}"' in helper
+    assert "go_with_the_flow_rules_v3_0_clean.csv" in helper
+    assert "setup:\n\t./setup_venv.sh" in makefile
 
 
 def test_bootstrap_rejects_the_retired_python311_venv_name() -> None:

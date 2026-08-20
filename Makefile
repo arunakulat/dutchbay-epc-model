@@ -26,11 +26,10 @@ PIP_AUDIT_IGNORES :=
 # `test` and CI — NOT in pyproject addopts — so a partial dev run does not spuriously trip it.
 COV := --cov=finance --cov=analytics --cov=wind_resource --cov=api --cov=app --cov=solar_resource
 
-# Install the pinned reproducibility lock + the dev/CI toolchain (pyproject [dev]).
+# Resolve, create if absent, and validate the governed environment. The setup
+# script installs the pinned reproducibility lock without an editable checkout.
 setup:
-	$(PY) -m pip install --upgrade pip
-	$(PIP) install -r requirements.txt
-	$(PIP) install -e ".[dev]"
+	./setup_venv.sh
 
 # Mandatory gates: ruff. Advisory (matches CI): black --check (the committed tree is
 # style-drifted vs the current formatter, so black is non-blocking by design).

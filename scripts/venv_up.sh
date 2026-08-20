@@ -1,96 +1,48 @@
 #!/usr/bin/env bash
-# Usage (must be sourced):  source scripts/venv_up.sh
-# zsh:                      . scripts/venv_up.sh
-# Safe in bash/zsh; creates venv if missing, then activates current shell.
+# Usage (must be sourced): source scripts/venv_up.sh
+# Safe in bash and zsh. Resolves the configured shared environment or the
+# checkout-local portable fallback, validates it, then binds imports to this
+# checkout.
 
-# ---- detect script dir in bash OR zsh, even when sourced ----
 if [ -n "${BASH_VERSION-}" ]; then
-  _SELF="${BASH_SOURCE[0]}"
+  _DUTCHBAY_SELF="${BASH_SOURCE[0]}"
 elif [ -n "${ZSH_VERSION-}" ]; then
-  # zsh gives the current script path via this expansion
-  _SELF="${(%):-%N}"
+  _DUTCHBAY_SELF="${(%):-%N}"
 else
-  _SELF="$0"
+  _DUTCHBAY_SELF="$0"
 fi
-_SCRIPT_DIR="$(cd "$(dirname -- "$_SELF")" && pwd)"
-_REPO_ROOT="$(cd "${_SCRIPT_DIR}/.." && pwd)"
+_DUTCHBAY_SCRIPT_DIR="$(cd "$(dirname -- "$_DUTCHBAY_SELF")" && pwd)"
+_DUTCHBAY_REPO_ROOT="$(cd "$_DUTCHBAY_SCRIPT_DIR/.." && pwd)"
 
-# ---- config ----
-VENV_DIR="${VENV_DIR:-.venv}"
-PY312="${PY312:-/opt/homebrew/bin/python3.12}"
+# shellcheck disable=SC1091
+. "$_DUTCHBAY_SCRIPT_DIR/development_environment.sh"
 
-# ---- ensure venv exists ----
-cd "$_REPO_ROOT" || { echo "ERR: cannot cd to repo root"; return 1 2>/dev/null || exit 1; }
-if [ ! -d "$VENV_DIR" ]; then
-  _PYTHON312=""
-  for _candidate in "$PY312" python3.12 python3 python; do
-    if command -v "$_candidate" >/dev/null 2>&1 \
-      && "$_candidate" \
-        -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))' \
-        >/dev/null 2>&1; then
-      _PYTHON312="$_candidate"
-      break
-    fi
-  done
-  if [ -z "$_PYTHON312" ]; then
-    echo "ERR: Python 3.12 is required; install it before creating $VENV_DIR"
+if ! _DUTCHBAY_BOOTSTRAP_PYTHON=$(dutchbay_find_python312); then
+  echo "ERR: Python 3.12 is required; install it before activation" >&2
+  return 1 2>/dev/null || exit 1
+fi
+if ! _DUTCHBAY_VENV=$(
+    dutchbay_resolve_venv \
+      "$_DUTCHBAY_REPO_ROOT" "$_DUTCHBAY_BOOTSTRAP_PYTHON"
+  ); then
+  echo "ERR: unable to resolve DUTCHBAY_VENV" >&2
+  return 1 2>/dev/null || exit 1
+fi
+
+if [ ! -x "$_DUTCHBAY_VENV/bin/python" ]; then
+  if ! "$_DUTCHBAY_REPO_ROOT/setup_venv.sh"; then
     return 1 2>/dev/null || exit 1
   fi
-  "$_PYTHON312" -m venv "$VENV_DIR"
 fi
 
-_VENV_PYTHON="$VENV_DIR/bin/python"
-if [ ! -x "$_VENV_PYTHON" ]; then
-  echo "ERR: Python executable not found: $_VENV_PYTHON"
+if ! dutchbay_validate_venv "$_DUTCHBAY_REPO_ROOT" "$_DUTCHBAY_VENV"; then
   return 1 2>/dev/null || exit 1
 fi
-if ! "$_VENV_PYTHON" \
-  -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))' \
-  >/dev/null 2>&1; then
-  _VENV_VERSION=$("$_VENV_PYTHON" --version 2>&1 || echo "unknown")
-  echo "ERR: $VENV_DIR uses $_VENV_VERSION; Python 3.12 is required"
-  echo "Move or remove $VENV_DIR, then source scripts/venv_up.sh again"
+if ! dutchbay_activate_checkout \
+  "$_DUTCHBAY_REPO_ROOT" "$_DUTCHBAY_VENV"; then
   return 1 2>/dev/null || exit 1
 fi
 
-# ---- must be sourced to affect current shell ----
-_activator="$VENV_DIR/bin/activate"
-if [ ! -f "$_activator" ]; then
-  echo "ERR: activator not found: $_activator"
-  return 1 2>/dev/null || exit 1
-fi
-
-# shellcheck disable=SC1090
-. "$_activator"
-
-# ---- optional hygiene: keep it, but don't explode on failure ----
-python -m pip install --upgrade pip >/dev/null 2>&1 || true
-[ -f requirements.txt ] && pip install -r requirements.txt >/dev/null 2>&1 || true
-[ -f pyproject.toml ] && pip install -e . >/dev/null 2>&1 || true
-
-# ---- Go with the Flow ruleset bootstrap ------------------------------------
-# Canonical tracked rules CSV in the repository root.
-RULESET_SRC="${_REPO_ROOT}/go_with_the_flow_rules_v3_0_clean.csv"
-
-if [ -f "$RULESET_SRC" ]; then
-  # Put a copy inside the venv so it's hermetic to this environment
-  RULESET_DIR="${VIRTUAL_ENV}/share/dutchbay"
-  mkdir -p "$RULESET_DIR"
-
-  RULESET_DST="${RULESET_DIR}/go_with_the_flow_rules.csv"
-
-  # Cheap idempotent copy – if content is the same, this is effectively a no-op
-  cp "$RULESET_SRC" "$RULESET_DST"
-
-  # Export an env var so Python / scripts can find it trivially
-  export DUTCHBAY_FLOW_RULESET_CSV="$RULESET_DST"
-
-  echo "✓ venv active: $VIRTUAL_ENV"
-  echo "✓ Go-with-the-Flow ruleset loaded: $DUTCHBAY_FLOW_RULESET_CSV"
-else
-  echo "✓ venv active: $VIRTUAL_ENV"
-  echo "⚠ Go-with-the-Flow ruleset not found at: $RULESET_SRC"
-  echo "  (env var DUTCHBAY_FLOW_RULESET_CSV not set)"
-fi
-
-# EOF
+echo "Environment active: $VIRTUAL_ENV"
+echo "Active checkout imports: $_DUTCHBAY_REPO_ROOT"
+echo "GWTF ruleset: $DUTCHBAY_FLOW_RULESET_CSV"

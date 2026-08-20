@@ -21,16 +21,21 @@ def _rules_by_id() -> dict[str, dict[str, str]]:
 def test_bootstrap_uses_the_canonical_ruleset() -> None:
     """Keep executable bootstrap paths pinned to the tracked canonical CSV."""
     venv_script = (REPO_ROOT / "scripts" / "venv_up.sh").read_text(encoding="utf-8")
+    environment_helper = (
+        REPO_ROOT / "scripts" / "development_environment.sh"
+    ).read_text(encoding="utf-8")
     bootstrap = (REPO_ROOT / "dutchbay_bootstrap.py").read_text(encoding="utf-8")
     bootstrap_helper = (REPO_ROOT / "dutchbay_bootstrap_rules.py").read_text(
         encoding="utf-8"
     )
 
     assert CANONICAL_RULESET.is_file()
-    assert CANONICAL_RULESET.name in venv_script
+    assert "development_environment.sh" in venv_script
+    assert CANONICAL_RULESET.name in environment_helper
     assert CANONICAL_RULESET.name in bootstrap
     assert CANONICAL_RULESET.name in bootstrap_helper
     assert RETIRED_RULESET_NAME not in venv_script
+    assert RETIRED_RULESET_NAME not in environment_helper
     assert RETIRED_RULESET_NAME not in bootstrap
     assert RETIRED_RULESET_NAME not in bootstrap_helper
 
