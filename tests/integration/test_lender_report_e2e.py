@@ -18,8 +18,16 @@ import pytest
 import app.api.main as api_main
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
-from app.reports.renderer import render_report_html
+from app.reports.renderer import render_report_html, render_report_pdf
 from app.reports.report_model import ReportContext, build_report_context
+from app.reports.report_orchestration import (
+    ORDINARY_REPORT_SENSITIVITY_PROFILE,
+    PRODUCTION_REPORT_SENSITIVITY_PROFILE,
+    ReportSensitivityBundle,
+    build_report_context_from_case,
+    compute_report_sensitivity,
+    run_report_case,
+)
 from app.services.pipeline_service import run_finance_case
 
 GENERATED_AT = "2026-07-01T00:00:00+00:00"
@@ -45,6 +53,19 @@ _VALID_KW: Dict[str, Any] = {
 
 def _inputs() -> WindFarmInputs:
     return WindFarmInputs(**_VALID_KW)
+
+
+def _empty_bounded_sensitivity(
+    scenario: Dict[str, Any],
+) -> ReportSensitivityBundle:
+    """Build metadata-complete bounded sensitivity with no live sweeps."""
+    return compute_report_sensitivity(
+        scenario,
+        profile=ORDINARY_REPORT_SENSITIVITY_PROFILE,
+        tornado_computer=lambda _scenario: None,
+        morris_computer=lambda _scenario, **_kwargs: None,
+        pawn_computer=lambda _scenario, **_kwargs: None,
+    )
 
 
 def _render_deterministic() -> Tuple[CaseResult, Dict[str, Any], ReportContext, str]:
@@ -99,9 +120,10 @@ def test_lender_report_renders_every_section_with_live_kpis() -> None:
     # live run's alone.
     for key in ("min_dscr", "project_npv"):
         row = next(r for r in ctx.kpi_rows if r.key == key)
-        assert (
-            row.display in html
-        ), f"live KPI {key} ({row.display}) not in rendered report"
+        if row.display not in html:
+            raise AssertionError(
+                f"live KPI {key} ({row.display}) not in rendered report"
+            )
 
     # Every major section header renders.
     for section in (
@@ -183,37 +205,72 @@ def test_rendered_waterfall_ties_to_the_headline_cfads() -> None:
 
 
 @pytest.mark.slow
-def test_production_path_renders_sensitivity_sections() -> None:
-    """The full production builder (``_build_report_context``) additionally computes + renders the
-    one-at-a-time tornado and the Morris global-SA sections — covered here so the e2e spans the
-    sensitivity wiring, not just the deterministic sections above."""
-    ctx = api_main._build_report_context(_inputs())
+@pytest.mark.report_qualification
+def test_complete_production_report_matrix_renders_html_and_pdf() -> None:
+    """Qualify one complete production context through both real renderers.
+
+    Finance, tornado, Morris, and PAWN are computed once. Both HTML and PDF then
+    consume that same complete context, so the second renderer cannot hide a
+    duplicate production computation.
+    """
+    report_case = run_report_case(
+        _inputs(), generated_at=GENERATED_AT, finance_runner=run_finance_case
+    )
+    bundle = compute_report_sensitivity(
+        report_case.scenario_config,
+        profile=PRODUCTION_REPORT_SENSITIVITY_PROFILE,
+    )
+    ctx = build_report_context_from_case(report_case, bundle)
     html = render_report_html(ctx)
-    assert ctx.tornado is not None and ctx.global_sa is not None
-    assert "Sensitivity Tornado" in html and "Global Sensitivity" in html
+    pdf = render_report_pdf(ctx)
+
+    metadata = {row.method: row for row in bundle.methods}
+    assert bundle.profile == "production_full"
+    assert bundle.tornado is not None
+    assert bundle.morris is not None
+    assert bundle.pawn is not None
+    assert metadata["tornado"].requested_evaluations == 15
+    assert metadata["tornado"].effective_evaluations == 15
+    assert metadata["tornado"].outcome == "completed"
+    assert metadata["morris"].requested_evaluations == 112
+    assert metadata["morris"].effective_evaluations == 112
+    assert metadata["morris"].outcome == "completed"
+    assert metadata["pawn"].requested_evaluations == 256
+    assert metadata["pawn"].effective_evaluations == 256
+    assert metadata["pawn"].outcome == "completed"
+    assert bundle.requested_evaluations == 383
+    assert bundle.effective_evaluations == 383
+    assert ctx.tornado is bundle.tornado
+    assert ctx.global_sa is bundle.morris
+    assert ctx.global_sa_pawn is bundle.pawn
+    assert ctx.manifest
+    assert ctx.manifest.get("config_sha256")
+    for section in (
+        "Sensitivity Tornado",
+        "Morris Screening",
+        "PAWN (Distribution-Based)",
+    ):
+        assert section in html
+    assert pdf[:5] == b"%PDF-"
 
 
 @pytest.mark.slow
 def test_lender_report_renders_through_the_auth_gated_http_route(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Full-stack e2e: the auth-gated ``POST /v1/cases/report.html`` route renders the report over
-    HTTP — covering the auth + endpoint + timeout shell the other tests call the core beneath.
+    """Representative e2e: the authenticated HTML route runs finance and renders over HTTP.
 
-    The route's wall-clock ceiling (``DUTCHBAY_SYNC_ROUTE_TIMEOUT``, default 120s) exists to
-    bound CLIENT waits in production; on slow shared CI runners the report compute (Morris +
-    PAWN sensitivity under the hood) intermittently exceeded it and the test 504-flaked. The
-    ceiling is not what THIS test verifies (the timeout shell's 504 behaviour has its own
-    coverage), so run the route with a generous test-only ceiling: patch the module-level
-    ``_run_with_timeout`` (the env default is bound at import time, so an env var cannot
-    change it here) to force a 600s limit. Route handlers resolve the global at call time.
+    Supplemental tornado/Morris/PAWN services are replaced at their orchestration
+    seams because this test verifies auth, timeout, live finance, report-context and
+    HTTP assembly. Their real integrated path is retained above as
+    ``report_qualification``. The timeout shell's 504 behaviour has separate tests.
     """
     pytest.importorskip("httpx")
     import functools
 
     from fastapi.testclient import TestClient
 
-    from app.api.auth import get_current_subject
+    from app.api.auth import hash_password
 
     generous = float(os.environ.get("DUTCHBAY_SYNC_ROUTE_TIMEOUT_E2E", "600"))
     monkeypatch.setattr(
@@ -221,28 +278,34 @@ def test_lender_report_renders_through_the_auth_gated_http_route(
         "_run_with_timeout",
         functools.partial(api_main._run_with_timeout, timeout=generous),
     )
+    monkeypatch.setattr(
+        api_main, "compute_report_sensitivity", _empty_bounded_sensitivity
+    )
 
-    # Auth is exercised end-to-end in test_auth.py; override it so this stays focused on rendering.
-    api_main.app.dependency_overrides[get_current_subject] = lambda: "e2e-user"
-    try:
-        client = TestClient(api_main.app)
-        resp = client.post("/v1/cases/report.html", json=_VALID_KW)
-        assert resp.status_code == 200
-        assert resp.headers["content-type"].startswith("text/html")
-        body = resp.text
-        assert "Cash-Flow Waterfall by Payment Priority" in body
-        assert "Assumptions Register" in body
-    finally:
-        api_main.app.dependency_overrides.clear()
+    secret = "test04-real-auth-token-secret"
+    monkeypatch.delenv("DUTCHBAY_ENV", raising=False)
+    monkeypatch.delenv("DUTCHBAY_JWT_ISSUER", raising=False)
+    monkeypatch.delenv("DUTCHBAY_JWT_AUDIENCE", raising=False)
+    monkeypatch.setenv("DUTCHBAY_JWT_SECRET", secret)
+    monkeypatch.setenv(
+        "DUTCHBAY_API_USERS", f"e2e-user:{hash_password('test04-password')}"
+    )
 
+    client = TestClient(api_main.app)
+    login = client.post(
+        "/v1/token",
+        json={"username": "e2e-user", "password": "test04-password"},
+    )
+    assert login.status_code == 200
+    token = login.json()["access_token"]
 
-def test_lender_report_pdf_renders_when_weasyprint_present() -> None:
-    """Gated PDF render: when the optional [report] backend is installed, the same context
-    produces a real PDF document. Skipped (like the rest of the [report] suite) otherwise.
-    """
-    pytest.importorskip("weasyprint")
-    from app.reports.renderer import render_report_pdf
-
-    _case, _result, ctx, _html = _render_deterministic()
-    pdf = render_report_pdf(ctx)
-    assert pdf[:5] == b"%PDF-"
+    resp = client.post(
+        "/v1/cases/report.html",
+        json=_VALID_KW,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/html")
+    body = resp.text
+    assert "Cash-Flow Waterfall by Payment Priority" in body
+    assert "Assumptions Register" in body

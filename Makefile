@@ -1,4 +1,4 @@
-.PHONY: setup lint type security audit test test-stochastic-qualification cov html package lock clean
+.PHONY: setup lint type security audit test test-stochastic-qualification test-report-qualification cov html package lock clean
 
 PY ?= python
 PIP ?= pip
@@ -63,6 +63,11 @@ test:
 # bankability, convergence, or release receipt (see docs/development/stochastic_test_policy.md).
 test-stochastic-qualification:
 	DUTCHBAY_TEST_MODE=qualification $(PYTEST) -n auto -m stochastic_qualification --tb=short
+
+# TEST-04 live report paths: the complete supplemental-sensitivity builder and
+# real PDF backend. Transport/renderer contracts stay in the bounded ordinary suite.
+test-report-qualification:
+	DUTCHBAY_TEST_MODE=qualification $(PYTEST) -n 2 tests/integration/test_lender_report_e2e.py -m report_qualification --tb=short
 
 cov:
 	DUTCHBAY_TEST_MODE=full $(PYTEST) -n auto $(COV) --cov-report=term-missing
