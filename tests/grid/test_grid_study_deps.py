@@ -64,3 +64,10 @@ def test_andes_lvrt_case_runs() -> None:
     assert res.ran is True, res.detail
     assert res.lvrt_enter_pu == pytest.approx(0.89)  # seeded from the D0 fixture
     assert res.n_devices > 0
+
+
+def test_issue_1107_controlled_failure_probe() -> None:
+    """Temporary PR probe: prove an independent Grid Study failure blocks merge."""
+
+    pytest.importorskip("opendssdirect")
+    pytest.fail("controlled #1107 Grid Study failure probe")
