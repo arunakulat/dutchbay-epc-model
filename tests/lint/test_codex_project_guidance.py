@@ -27,7 +27,15 @@ def test_codex_guidance_uses_current_gwtf_authority() -> None:
     guidance = _guidance()
 
     assert CANONICAL_RULESET in guidance
-    for rule_id in ("WORKTREE-01", "GOV-02", "R23", "R25", "DELIVERY-01", "PERSIST-01"):
+    for rule_id in (
+        "WORKTREE-01",
+        "GOV-02",
+        "R23",
+        "R25",
+        "DELIVERY-01",
+        "PERSIST-01",
+        "THREAD-01",
+    ):
         assert rule_id in guidance
     assert RETIRED_RULESET not in guidance
     assert RETIRED_BRANCH not in guidance
@@ -47,6 +55,8 @@ def test_codex_guidance_preserves_required_safety_and_quality_gates() -> None:
         "DATA-01",
         "PYTHONDONTWRITEBYTECODE=1",
         "git diff --check",
+        "DutchBay_EPC_Model",
+        "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python",
     )
     for phrase in required_phrases:
         assert phrase in guidance

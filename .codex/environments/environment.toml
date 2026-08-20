@@ -4,7 +4,9 @@ name = "DutchBay EPC"
 
 [setup]
 script = '''
-./setup_venv.sh
+DUTCHBAY_PROJECT_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"
+test -x "$DUTCHBAY_PROJECT_VENV/bin/python"
+"$DUTCHBAY_PROJECT_VENV/bin/python" -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))'
 '''
 
 [[actions]]
@@ -12,7 +14,9 @@ name = "Fast validation"
 icon = "test"
 command = '''
 set -e
-export PATH="$PWD/.venv/bin:$PATH"
+export DUTCHBAY_PROJECT_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"
+export PATH="$DUTCHBAY_PROJECT_VENV/bin:$PATH"
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 ruff check .
 python -m pytest -q tests/lint/test_codex_project_guidance.py tests/lint/test_gwtf_canonical_source.py tests/lint/test_docstring_coverage.py
 mypy analytics finance run_full_pipeline_v14.py
@@ -22,14 +26,18 @@ mypy analytics finance run_full_pipeline_v14.py
 name = "Full tests"
 icon = "test"
 command = '''
-export PATH="$PWD/.venv/bin:$PATH"
-make test PY="$PWD/.venv/bin/python" PIP="$PWD/.venv/bin/pip"
+export DUTCHBAY_PROJECT_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"
+export PATH="$DUTCHBAY_PROJECT_VENV/bin:$PATH"
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+make test PY="$DUTCHBAY_PROJECT_VENV/bin/python" PIP="$DUTCHBAY_PROJECT_VENV/bin/pip"
 '''
 
 [[actions]]
 name = "Run API"
 icon = "run"
 command = '''
-export PATH="$PWD/.venv/bin:$PATH"
+export DUTCHBAY_PROJECT_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"
+export PATH="$DUTCHBAY_PROJECT_VENV/bin:$PATH"
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
 python -m uvicorn app.api.main:app --host 127.0.0.1 --port 8000 --reload
 '''

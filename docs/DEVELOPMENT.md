@@ -42,6 +42,16 @@ pip install -e ".[dev]"              # the dev/CI toolchain from pyproject (the 
 truth for the core dependencies and the optional extras. There is no `requirements_dev.txt`
 (retired in favour of the `[dev]` extra).
 
+### Codex project and persistent environment
+
+The setup above remains the portable developer workflow. Codex tasks have an additional
+continuity requirement under GWTF `THREAD-01`: create every new task from the
+`DutchBay_EPC_Model` Codex project and use its persistent Python 3.12 environment at
+`/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`. Run Git and repository commands from the
+active checkout or dedicated worktree, but invoke Python and tools through the project venv's
+absolute `.venv/bin` path. Do not replace it with a per-task, temporary, retired `.venv311`,
+bare/system, or unrelated-project environment.
+
 ### Optional install extras
 
 The base install runs the finance engine and the Hydra CLI with no heavy scientific stack.
@@ -211,7 +221,7 @@ Pull-request, `main`, nightly, release, and container gates currently exercise P
 
 ## Governance
 
-Development is governed by the "Go With The Flow" ruleset (GWTF v3.0, 66 rules) in
+Development is governed by the "Go With The Flow" ruleset (GWTF v3.0, 69 rules) in
 [go_with_the_flow_rules_v3_0_clean.csv](../go_with_the_flow_rules_v3_0_clean.csv). The rules
 most relevant day to day:
 
