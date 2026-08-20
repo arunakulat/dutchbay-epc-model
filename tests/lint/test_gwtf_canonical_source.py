@@ -75,6 +75,24 @@ def test_r26_uses_the_governed_ingestion_toolchain() -> None:
     assert "pdfplumber/PyMuPDF" in policy
 
 
+def test_thread_01_requires_the_project_and_persistent_venv() -> None:
+    """Keep every new thread bound to the durable Codex project runtime."""
+
+    thread_01 = _rules_by_id()["THREAD-01"]
+    policy = " ".join(
+        (thread_01["title"], thread_01["description"], thread_01["enforcement"])
+    )
+
+    assert thread_01["status"] == "active"
+    assert "regardless of subject" in policy
+    assert "DutchBay_EPC_Model" in policy
+    assert "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python" in policy
+    assert "Python 3.12" in policy
+    assert "/Users/aruna/Downloads/dutchbay-epc-model" in policy
+    for prohibited in ("temporary venv", ".venv311", "bare/system Python"):
+        assert prohibited in policy
+
+
 def test_active_r25_scripts_do_not_hardcode_a_retired_branch() -> None:
     """Keep operational R25 scripts branch-agnostic."""
     for relative_path in (

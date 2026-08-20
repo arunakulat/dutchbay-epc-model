@@ -31,14 +31,17 @@ def test_codex_environment_uses_supported_location_and_version() -> None:
     assert environment["name"] == "DutchBay EPC"
 
 
-def test_codex_environment_bootstraps_the_canonical_venv() -> None:
-    """Fresh worktrees must use the maintained repository bootstrap."""
+def test_codex_environment_uses_the_persistent_project_venv() -> None:
+    """Fresh Codex tasks must verify and use the durable project environment."""
 
     environment = _environment()
     setup = environment["setup"]
 
     assert isinstance(setup, dict)
-    assert setup["script"].strip() == "./setup_venv.sh"
+    script = setup["script"]
+    assert "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv" in script
+    assert "sys.version_info[:2] != (3, 12)" in script
+    assert "./setup_venv.sh" not in script
 
 
 def test_bootstrap_prefers_the_supported_ci_python() -> None:
@@ -82,7 +85,7 @@ def test_container_uses_the_supported_python312_image() -> None:
 
 
 def test_codex_environment_exposes_safe_project_actions() -> None:
-    """Actions should use the worktree venv and current application entrypoint."""
+    """Actions should use the persistent project venv and current checkout imports."""
 
     environment = _environment()
     actions = environment["actions"]
@@ -90,7 +93,11 @@ def test_codex_environment_exposes_safe_project_actions() -> None:
     assert isinstance(actions, list)
     by_name = {action["name"]: action for action in actions}
     assert set(by_name) == {"Fast validation", "Full tests", "Run API"}
-    assert all(".venv/bin" in action["command"] for action in actions)
+    assert all(
+        "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv" in action["command"]
+        for action in actions
+    )
+    assert all("PYTHONPATH" in action["command"] for action in actions)
     assert by_name["Fast validation"]["command"].lstrip().startswith("set -e")
     assert "--reload" in by_name["Run API"]["command"]
     assert "app.api.main:app" in by_name["Run API"]["command"]

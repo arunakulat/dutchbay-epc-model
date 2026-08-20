@@ -28,6 +28,16 @@ python run_full_pipeline_v14.py config=scenarios/dutchbay_lendercase_2025Q4.yaml
 See [QUICK_START.md](QUICK_START.md) for the four routines and
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for the full development guide.
 
+### Codex task context
+
+Every new Codex task, regardless of subject, must be created from the `DutchBay_EPC_Model`
+project. Its
+durable project folder is `/Users/aruna/Downloads/Dutchbay_EPC_Model`, and Codex must use the
+persistent Python 3.12 environment at
+`/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`. Repository commands still run from this
+checkout or the task's dedicated worktree; invoke the project environment by absolute path so
+it persists independently of worktree cleanup. See GWTF rule `THREAD-01` and [AGENTS.md](AGENTS.md).
+
 ## Architecture overview
 
 The canonical, hardened execution path is v14. It provides:
@@ -168,7 +178,7 @@ All parameters live in YAML with strict validation; IRR/NPV/WACC are isolated to
 `finance/`; analytics evaluate only through the contract gateway; and every change flows
 through branch to pull request to green CI to self-merge (never a direct commit to `main`).
 See [go_with_the_flow_rules_v3_0_clean.csv](go_with_the_flow_rules_v3_0_clean.csv) (GWTF v3.0,
-64 rules) for the complete standards.
+69 rules) for the complete standards.
 
 ## Deployment
 

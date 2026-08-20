@@ -12,13 +12,33 @@ CSV when governance or workflow is in scope:
 
 ```bash
 DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
-  .venv/bin/python dutchbay_bootstrap_rules.py
+  /Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python \
+  dutchbay_bootstrap_rules.py
 ```
 
 When historical sprint instructions conflict with current governance, follow the newer
 current workflow, especially `WORKTREE-01`, `GOV-02`, `R23`, `R25`, `DELIVERY-01`,
-`DATA-01`, and `PERSIST-01`. Never restore a retired sprint integration branch or a
+`DATA-01`, `PERSIST-01`, and `THREAD-01`. Never restore a retired sprint integration branch or a
 nonexistent ruleset filename.
+
+## Required Codex task origin and Python runtime
+
+- Create every new task, regardless of subject, from the Codex project named
+  `DutchBay_EPC_Model`. Do not start any work as an unscoped task or from another Codex
+  project.
+- The durable project folder is `/Users/aruna/Downloads/Dutchbay_EPC_Model`; its persistent
+  governed Python 3.12 environment is
+  `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`.
+- At task start, verify that project association and run
+  `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python -VV`. Invoke Python and other
+  environment tools from that absolute `.venv/bin` path, or prepend it to `PATH`.
+- Continue to run repository and Git operations from the active
+  `/Users/aruna/Downloads/dutchbay-epc-model` checkout or its dedicated worktree. The Codex
+  project association does not replace the repository-root requirement in `ENV-01`.
+- Do not create or select a per-task or temporary environment, a checkout-local replacement
+  `.venv`, `.venv311`, bare/system Python, or another project's environment. If the project
+  association or persistent venv is unavailable or not Python 3.12, stop before substantive
+  work and repair the context or request user direction.
 
 ## Start every task safely
 
@@ -111,10 +131,11 @@ Run the narrowest meaningful checks while iterating, then broaden in proportion 
 Preferred focused commands are:
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 .venv/bin/python -m pytest \
+PYTHONDONTWRITEBYTECODE=1 \
+  /Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python -m pytest \
   -p no:cacheprovider <test-paths> -q
-.venv/bin/ruff check <changed-python-paths>
-.venv/bin/ruff format --check <changed-python-paths>
+/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/ruff check <changed-python-paths>
+/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/ruff format --check <changed-python-paths>
 git diff --check
 ```
 
