@@ -66,7 +66,7 @@ test-stochastic-qualification:
 # TEST-04 live report paths: the complete supplemental-sensitivity builder and
 # real PDF backend. Transport/renderer contracts stay in the bounded ordinary suite.
 test-report-qualification:
-	DUTCHBAY_TEST_MODE=qualification $(PYTEST) -n 2 tests/integration/test_lender_report_e2e.py -m report_qualification --tb=short
+	DUTCHBAY_TEST_MODE=qualification $(PYTEST) -n 2 tests/integration/test_lender_report_e2e.py tests/integration/test_synthetic_qsts_finance_report.py -m report_qualification --tb=short
 
 cov:
 	DUTCHBAY_TEST_MODE=full $(PYTEST) -n auto $(COV) --cov-report=term-missing

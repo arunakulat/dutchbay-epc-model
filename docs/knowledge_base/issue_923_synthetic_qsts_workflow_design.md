@@ -4,15 +4,15 @@
 
 | Field | Value |
 |---|---|
-| Status | Historical audit preserved with current A/B addendum and governed #1077/#1073 entrypoints |
+| Status | Historical audit preserved with current A/B addendum, governed #1077/#1073 entrypoints, and candidate #1074 terminal report |
 | Audit date | 2026-08-19 |
 | Audited commit | `4eda5ab09baae940848b01ebfa59ffd8764d587f` |
 | Audited branch tip | `origin/main` at the historical cutoff |
 | Preserved source SHA-256 | `779aaf3d272f04f0054431482e11e522e05c1c1c17708948b635b320cf77ae78` |
-| Current addendum base | `6f8d279166912a7589f206f3e0bbeebc8272966a` |
+| Current addendum base | `ada320965c58b1a3b6d0e16fbe424c42e91ec2cc` |
 | GitHub issue | [#923](https://github.com/arunakulat/dutchbay-epc-model/issues/923) |
 | Issue state at cutoff | Open; state reason `reopened` |
-| Current issue topology | #923 closed as split index; #1072-#1078 remain the open delivery outcomes |
+| Current issue topology | #923 closed as split index; #1072, #1077, and #1073 delivered; #1074 candidate; #1075, #1076, and #1078 open |
 | Evidence grade | Software-path evidence only; not site-representative or bankable |
 | Canonical-finance effect | None; `grid.qsts.finance_wiring.enabled` remains false |
 
@@ -33,10 +33,13 @@ silently rewritten as if they had been produced after the later merges.
 |---|---:|---|---|---|
 | Verified package-to-QSTS adapter | #1069 | `c42d5c0b9f4fc17803228d6898fbd21ef18757bb` | `d06c7a6a303c378814836ea5ba00240a040fc4d9` | Delivered; candidate and squash trees are identical |
 | Runtime profile/export-cap binding | #1071 | `e481eae871c7049b4432f5f340c86ef18b009776` | `6f8d279166912a7589f206f3e0bbeebc8272966a` | Delivered; candidate and squash trees are identical |
+| Governed synthetic input-record handoff | #1106 | `9a971f7747df309a8be2782902dd24a7d2ad02ea` | `637aad34c0f0db63224897ef8a186c885392c83e` | Delivered; #1077 closed |
+| Governed synthetic AEP/QSTS output record | #1112 | `1387fef67ede45fbd453dccc8d26a53cd25da282` | `ada320965c58b1a3b6d0e16fbe424c42e91ec2cc` | Delivered; #1073 closed |
 
-These merges close the audit's G-01 package-to-runtime translation gap. They do not deliver
-the governed workflow runner, authenticated real feeder, governed convergence/telemetry,
-or either financial outcome.
+These merges close the audit's G-01 package-to-runtime translation gap and deliver the
+authenticated synthetic ingress and calculation records. They do not deliver an
+authenticated real feeder, real-feeder engineering validation, or either canonical
+financial outcome.
 
 ### Live issue topology
 
@@ -48,6 +51,10 @@ or either financial outcome.
 
 Issue #923 is closed only as the split index. The #923-B outcome remains open and blocked
 until #1075-B and #1076-B deliver real, authenticated evidence.
+
+At this addendum, #1072, #1077, and #1073 are closed as delivered. Issue #1074 remains open
+until its candidate report implementation passes protected PR checks plus independently
+executed exact-head Grid Study and Report Qualification jobs and is merged.
 
 ### Authorized #923-A outcome
 
@@ -139,6 +146,54 @@ thresholds passed, that the feeder is site-representative, or that a utility acc
 The OpenDSS result also does not convert the absent synthetic operator schedule into a claim
 that CEB issued no instructions.
 
+### Candidate #1074 segregated synthetic finance report
+
+Issue #1074 is the terminal synthetic-only process-provenance surface. It authenticates the
+detached #1077 and #1073 JSON/SHA pairs against two caller-supplied trust anchors, reconstructs
+both strict contracts, and refuses any cross-record mismatch in package, profile, horizon,
+classification, or release status. It then evaluates two in-memory finance cases through
+`analytics.evaluation_v14.evaluate_with_overrides()`:
+
+1. the unchanged governed scenario baseline; and
+2. a segregated counterfactual whose only override is
+   `project.curtailment_pct`, composed from the baseline project curtailment and #1073 net
+   self-curtailment.
+
+Deemed-paid energy contributes a zero finance haircut. The synthetic gross AEP is displayed
+as process-provenance evidence but is not substituted for the scenario's canonical net AEP.
+The implementation checks the governed scenario bytes before and after evaluation and fixes
+`finance_wiring_enabled`, `canonical_finance_executed`, canonical scenario mutation, and
+canonical expected-results mutation to false. The segregated counterfactual is recorded as
+executed, while the canonical finance-release gate always refuses it.
+
+With #1077 and #1073 artifacts already present at their governed output paths, the candidate
+Hydra entrypoint is:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" \
+  /Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python \
+  scripts/run_synthetic_qsts_finance_report_v14.py \
+  input.expected_handoff_sha256=<64-lowercase-hex> \
+  input.expected_qsts_output_sha256=<64-lowercase-hex>
+```
+
+Configuration is in `conf/synthetic_qsts_finance_report.yaml`. A successful run writes a
+six-file authenticated report set under
+`outputs/synthetic_process_provenance/issue_1074/`: warning-bearing HTML and PDF, detached
+checksums for both rendered artifacts, a JSON receipt that binds their SHA-256 identities
+and every upstream evidence identity, and a detached SHA-256 for that receipt. The PDF
+renderer verifies that every rendered page contains the exact mandatory warning;
+publication refuses incomplete warnings, symlinked targets, and non-identical overwrite
+attempts.
+
+The report includes the synthetic AEP and energy-accounting figures, full 8,760-step QSTS
+status, voltage and thermal counts, baseline and counterfactual project IRR, equity IRR,
+project NPV, minimum DSCR, generation and revenue, and exact after-minus-before movements.
+Those values are not canonical KPI pins and are ineligible for lender, board, approval, or
+release use. In particular, 8,760 converged solves are not an engineering pass: the current
+synthetic run records voltage-threshold violations at every timestep from disclosed
+placeholder voltage observations, and it contains no observed operator schedule.
+
 ### #923-B outcome
 
 The real-data path remains the only route to a bankability or canonical-finance decision. It
@@ -151,11 +206,11 @@ decision under #1078. No synthetic result may satisfy or substitute for those ga
 | Audit gap | Current disposition |
 |---|---|
 | G-01: no verified package-to-QSTS adapter | Delivered by #1069 and hardened by #1071 |
-| G-02: no governed workflow runner | Still open; decomposed across #1072 and the #923-A record/report chain |
-| G-03: convergence and telemetry absent | Still open for governed real-feeder engineering evidence under #1076-B |
-| G-04: synthetic KPI counterfactual absent | Explicitly authorized only as the segregated, noncanonical #923-A outcome |
+| G-02: no governed workflow runner | Delivered for the synthetic process-provenance chain by #1072, #1077, #1073, and the candidate #1074 entrypoint; the real path remains separate |
+| G-03: convergence and telemetry absent | Delivered as governed synthetic execution evidence by #1073, but still open for real-feeder engineering evidence under #1076-B |
+| G-04: synthetic KPI counterfactual absent | Implemented by candidate #1074 only as a segregated, noncanonical #923-A outcome |
 | G-05: report dependency provenance stale | Still a separate KPI-neutral correction; this record does not change it |
-| G-06: report existence does not prove QSTS success | Still applicable to both modes; receipts must bind calculation state and evidence identity |
+| G-06: report existence does not prove QSTS success | Candidate #1074 authenticates and reconstructs #1073 before reporting; still applicable independently to the real mode |
 | G-07: environment and path dependencies | Still applicable; PERSIST-01 requires the persistent central `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` with `PYTHONPATH="$PWD"` in every worktree |
 
 ### Framework acceptance

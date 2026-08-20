@@ -11,6 +11,11 @@ from analytics.contracts_v14 import SensitivitySuite
 # Canonical lender-grade pipeline (analytics.pipeline_v14_enhanced).
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
+from finance.cashflow_v14_utils import pct_to_decimal
+from finance.self_curtailment_v14 import (
+    compose_curtailment,
+    self_curtailment_finance_wiring_enabled,
+)
 
 # CRITICAL P1 FIX: NO imports from analytics.sensitivity at module level
 # All sensitivity/tail-risk imports are LAZY (inside functions only)
@@ -48,6 +53,46 @@ Revision History:
   - Fixed return type flexibility (full result vs KPIs)
   - Enhanced null safety for MC raw_results
 """
+
+
+def compose_noncanonical_project_curtailment(
+    raw_config: Mapping[str, Any], incremental_curtailment_decimal: float
+) -> tuple[float, float]:
+    """Normalize and compose a temporary finance-off curtailment override.
+
+    This is the evaluation gateway's narrow cross-layer seam for segregated
+    counterfactuals. It preserves the finance engine's percentage normalization and
+    multiplicative composition without allowing analytics consumers to import finance
+    internals directly. Canonical QSTS finance wiring must remain disabled.
+
+    Args:
+        raw_config: Strict scenario mapping used for the unchanged baseline.
+        incremental_curtailment_decimal: Additional loss fraction in ``[0, 1)``.
+
+    Returns:
+        The normalized baseline and composed counterfactual decimal fractions.
+
+    Raises:
+        ValueError: If canonical wiring is enabled or the project curtailment is invalid.
+    """
+
+    if self_curtailment_finance_wiring_enabled(raw_config):
+        raise ValueError(
+            "Noncanonical curtailment composition requires canonical "
+            "grid.qsts.finance_wiring.enabled to remain false."
+        )
+    project = raw_config.get("project")
+    if not isinstance(project, Mapping):
+        raise ValueError("Counterfactual scenario requires a project mapping.")
+    raw_baseline = project.get("curtailment_pct", 0.0)
+    if isinstance(raw_baseline, bool) or not isinstance(raw_baseline, (int, float)):
+        raise ValueError("project.curtailment_pct must be numeric.")
+    baseline_decimal = pct_to_decimal(float(raw_baseline))
+    if baseline_decimal is None or not 0.0 <= baseline_decimal < 1.0:
+        raise ValueError("Baseline project curtailment must be in [0, 1).")
+    return baseline_decimal, compose_curtailment(
+        baseline_decimal, incremental_curtailment_decimal
+    )
 
 
 def run_monte_carlo_analysis(*args: Any, **kwargs: Any) -> Any:
@@ -589,6 +634,7 @@ def evaluate_with_casper_tail_risk(
 evaluate_scenario = evaluate_with_overrides
 
 __all__ = [
+    "compose_noncanonical_project_curtailment",
     "evaluate_with_overrides",
     "evaluate_scenario",
     "evaluate_scenario_from_dict",

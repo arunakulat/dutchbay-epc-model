@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="description" content="{{ ctx.warning }}" />
+  <title>{{ ctx.title }} - {{ ctx.warning }}</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 19mm 16mm 16mm 16mm;
+      @top-center {
+        content: "{{ ctx.warning }}";
+        color: #a12a24;
+        font-size: 6.3pt;
+        font-weight: 700;
+      }
+      @bottom-left {
+        content: "DutchBay #1074 - synthetic process provenance";
+        color: #68737d;
+        font-size: 7pt;
+      }
+      @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        color: #68737d;
+        font-size: 7pt;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #172431;
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      font-size: 9.2pt;
+      line-height: 1.36;
+    }
+    .page { page-break-after: always; min-height: 250mm; }
+    .page:last-child { page-break-after: auto; }
+    .warning {
+      border: 2px solid #a12a24;
+      background: #fff0ed;
+      color: #861f1a;
+      font-weight: 800;
+      padding: 8pt 10pt;
+      text-align: center;
+      margin-bottom: 12pt;
+    }
+    .eyebrow {
+      color: #22617b;
+      font-size: 9pt;
+      font-weight: 700;
+      letter-spacing: 0.8pt;
+      text-transform: uppercase;
+    }
+    h1 { color: #123f59; font-size: 25pt; line-height: 1.12; margin: 9pt 0; }
+    h2 {
+      color: #123f59;
+      font-size: 15pt;
+      border-bottom: 2px solid #2c7895;
+      padding-bottom: 4pt;
+      margin: 4pt 0 9pt;
+    }
+    h3 { color: #22617b; font-size: 10.5pt; margin: 12pt 0 4pt; }
+    p { margin: 4pt 0 8pt; }
+    .cover-space { height: 28mm; }
+    .subtitle { color: #3d5868; font-size: 13pt; margin-bottom: 24mm; }
+    .classification {
+      background: #102f42;
+      color: white;
+      padding: 12pt 14pt;
+      border-radius: 4pt;
+      margin: 12pt 0;
+    }
+    .classification strong { color: #ffd1c8; }
+    .identity {
+      background: #eef5f7;
+      border-left: 4px solid #2c7895;
+      padding: 9pt 11pt;
+      font-family: Menlo, Consolas, monospace;
+      font-size: 7.3pt;
+      overflow-wrap: anywhere;
+    }
+    .callout {
+      background: #f0f6f8;
+      border-left: 4px solid #2c7895;
+      padding: 9pt 11pt;
+      margin: 8pt 0;
+    }
+    .danger {
+      background: #fff0ed;
+      border-left: 4px solid #a12a24;
+      padding: 9pt 11pt;
+      margin: 8pt 0;
+    }
+    .amber {
+      background: #fff7df;
+      border-left: 4px solid #b77a00;
+      padding: 9pt 11pt;
+      margin: 8pt 0;
+    }
+    table { width: 100%; border-collapse: collapse; margin: 6pt 0 10pt; }
+    th, td { border-bottom: 1px solid #d7e1e6; padding: 4.5pt 6pt; vertical-align: top; }
+    th { background: #eaf2f5; color: #123f59; font-size: 8.3pt; text-align: left; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    td.hash { font-family: Menlo, Consolas, monospace; font-size: 6.8pt; overflow-wrap: anywhere; }
+    .negative { color: #a12a24; font-weight: 700; }
+    .neutral { color: #5b6973; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 9pt; }
+    .metric { border: 1px solid #d7e1e6; padding: 8pt; border-radius: 3pt; }
+    .metric .label { color: #5b6973; font-size: 7.5pt; text-transform: uppercase; }
+    .metric .value { color: #123f59; font-size: 14pt; font-weight: 800; }
+    ul { padding-left: 17pt; margin: 5pt 0; }
+    li { margin-bottom: 4pt; }
+    .small { color: #5b6973; font-size: 7.8pt; }
+    .limitations-title {
+      display: block;
+      clear: both;
+      width: 100%;
+      color: #22617b;
+      font-size: 10.5pt;
+      font-weight: 700;
+      margin: 12pt 0 6pt;
+    }
+    .limitations ul { display: block; margin-top: 0; }
+  </style>
+</head>
+<body>
+  <section class="page">
+    <div class="warning">{{ ctx.warning }}</div>
+    <div class="cover-space"></div>
+    <div class="eyebrow">Issue #1074 - governed synthetic workflow</div>
+    <h1>{{ ctx.title }}</h1>
+    <div class="subtitle">A segregated finance counterfactual demonstrating process provenance only</div>
+    <div class="classification">
+      <strong>Classification:</strong> synthetic placeholder input, non-observed,
+      non-site-representative, noncanonical, non-bankable, not publishable, and not
+      eligible for lender, board, approval, or release use.
+    </div>
+    <p><strong>Generated:</strong> {{ ctx.generated_at_utc }}</p>
+    <p><strong>Repository commit:</strong> {{ ctx.repository_commit }}</p>
+    <p><strong>Finance mode:</strong> segregated_synthetic_counterfactual</p>
+    <p><strong>Canonical finance wiring:</strong> disabled</p>
+    <div class="identity">
+      #1077 handoff SHA-256: {{ ctx.handoff_sha256 }}<br />
+      #1073 QSTS output SHA-256: {{ ctx.qsts_sha256 }}<br />
+      package manifest SHA-256: {{ ctx.manifest_sha256 }}<br />
+      generation profile SHA-256: {{ ctx.profile_sha256 }}
+    </div>
+  </section>
+
+  <section class="page">
+    <div class="warning">{{ ctx.warning }}</div>
+    <h2>Executive Summary and QSTS Evidence</h2>
+    <div class="danger">
+      <strong>{{ ctx.warning }}</strong><br />
+      Synthetic results cannot influence canonical headline KPIs. The KPIs displayed in
+      this report are segregated synthetic-counterfactual outputs only.
+    </div>
+    <div class="two-col">
+      <div class="metric">
+        <div class="label">Synthetic gross AEP</div>
+        <div class="value">{{ "%.3f"|format(ctx.qsts.synthetic_aep_gwh) }} GWh</div>
+        <div class="small">{{ "%.3f"|format(ctx.qsts.synthetic_aep_mwh) }} MWh</div>
+      </div>
+      <div class="metric">
+        <div class="label">Net self-curtailment treatment</div>
+        <div class="value">{{ fmt_pct(ctx.evaluation.synthetic_self_curtailment_decimal) }}</div>
+        <div class="small">Deemed-paid energy excluded from finance override</div>
+      </div>
+    </div>
+    <h3>Horizon and solver execution</h3>
+    <table>
+      <tr><th>Control</th><th class="num">Recorded value</th></tr>
+      <tr><td>Profile horizon</td><td class="num">{{ ctx.qsts.profile_start_utc }} to {{ ctx.qsts.profile_end_utc }}</td></tr>
+      <tr><td>Rows / timestep / timezone / unit</td><td class="num">{{ ctx.qsts.profile_row_count }} / {{ ctx.qsts.profile_timestep_hours }} h / {{ ctx.qsts.profile_timezone }} / {{ ctx.qsts.profile_unit }}</td></tr>
+      <tr><td>QSTS attempted / converged / nonconverged</td><td class="num">{{ ctx.qsts.solver_telemetry.attempted_steps }} / {{ ctx.qsts.solver_telemetry.converged_steps }} / {{ ctx.qsts.solver_telemetry.nonconverged_steps }}</td></tr>
+      <tr><td>Generator activations / setpoint mismatches</td><td class="num">{{ ctx.qsts.solver_telemetry.generator_activation_steps }} / {{ ctx.qsts.solver_telemetry.generator_setpoint_mismatch_steps }}</td></tr>
+      <tr><td>Export-cap breach timesteps</td><td class="num">{{ ctx.qsts.export_cap_breach_timesteps }}</td></tr>
+      <tr><td>Voltage / thermal violation timesteps</td><td class="num">{{ ctx.qsts.solver_telemetry.voltage_violation_steps }} / {{ ctx.qsts.solver_telemetry.thermal_violation_steps }}</td></tr>
+    </table>
+    <div class="amber">
+      <strong>Critical engineering limitation:</strong> the placeholder feeder reported
+      voltage violations in all {{ ctx.qsts.solver_telemetry.voltage_violation_steps }}
+      timesteps, with a 0.0 pu placeholder observation. Solver convergence therefore proves
+      workflow execution only; it is not a voltage, thermal, interconnection, or bankability pass.
+    </div>
+    <h3>Energy accounting</h3>
+    <table>
+      <tr><th>Energy component</th><th class="num">MWh</th></tr>
+      <tr><td>Gross synthetic generation</td><td class="num">{{ "%.3f"|format(ctx.qsts.gross_energy_mwh) }}</td></tr>
+      <tr><td>Delivered after synthetic export-cap treatment</td><td class="num">{{ "%.3f"|format(ctx.qsts.delivered_energy_mwh) }}</td></tr>
+      <tr><td>Deemed-paid / grid-instructed</td><td class="num">{{ "%.3f"|format(ctx.qsts.deemed_paid_energy_mwh) }}</td></tr>
+      <tr><td>Self-curtailed before BESS / BESS recovered / net</td><td class="num">{{ "%.3f"|format(ctx.qsts.self_curtailed_pre_bess_mwh) }} / {{ "%.3f"|format(ctx.qsts.bess_recovered_energy_mwh) }} / {{ "%.3f"|format(ctx.qsts.self_curtailed_energy_mwh) }}</td></tr>
+      <tr><td>Energy-balance residual</td><td class="num">{{ "%.9f"|format(ctx.qsts.energy_balance_residual_mwh) }}</td></tr>
+    </table>
+  </section>
+
+  <section class="page">
+    <div class="warning">{{ ctx.warning }}</div>
+    <h2>Segregated Finance Counterfactual</h2>
+    <div class="callout">
+      The committed scenario was evaluated unchanged, then evaluated again with exactly
+      one temporary override: <strong>project.curtailment_pct =
+      {{ fmt_pct(ctx.evaluation.counterfactual_project_curtailment_decimal) }}</strong>.
+      The synthetic gross AEP was displayed as evidence and was not substituted for the
+      canonical scenario's net AEP. Canonical QSTS finance wiring remained disabled.
+    </div>
+    <table>
+      <thead>
+        <tr><th>KPI</th><th class="num">Baseline</th><th class="num">Synthetic counterfactual</th><th class="num">Movement</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Project IRR</td><td class="num">{{ fmt_pct(ctx.baseline.project_irr) }}</td><td class="num">{{ fmt_pct(ctx.counterfactual.project_irr) }}</td><td class="num negative">{{ fmt_pp(ctx.movement.project_irr) }}</td></tr>
+        <tr><td>Equity IRR</td><td class="num">{{ fmt_pct(ctx.baseline.equity_irr) }}</td><td class="num">{{ fmt_pct(ctx.counterfactual.equity_irr) }}</td><td class="num negative">{{ fmt_pp(ctx.movement.equity_irr) }}</td></tr>
+        <tr><td>Project NPV</td><td class="num">{{ fmt_money(ctx.baseline.project_npv_usd) }}</td><td class="num">{{ fmt_money(ctx.counterfactual.project_npv_usd) }}</td><td class="num negative">{{ fmt_money_delta(ctx.movement.project_npv_usd) }}</td></tr>
+        <tr><td>Minimum DSCR</td><td class="num">{{ "%.4f"|format(ctx.baseline.minimum_dscr) }}x</td><td class="num">{{ "%.4f"|format(ctx.counterfactual.minimum_dscr) }}x</td><td class="num">{{ "%+.4f"|format(ctx.movement.minimum_dscr) }}x</td></tr>
+        <tr><td>Year-1 net generation</td><td class="num">{{ fmt_mwh(ctx.baseline.year1_net_generation_mwh) }}</td><td class="num">{{ fmt_mwh(ctx.counterfactual.year1_net_generation_mwh) }}</td><td class="num negative">{{ fmt_mwh_delta(ctx.movement.year1_net_generation_mwh) }}</td></tr>
+        <tr><td>Lifetime net generation</td><td class="num">{{ fmt_mwh(ctx.baseline.lifetime_net_generation_mwh) }}</td><td class="num">{{ fmt_mwh(ctx.counterfactual.lifetime_net_generation_mwh) }}</td><td class="num negative">{{ fmt_mwh_delta(ctx.movement.lifetime_net_generation_mwh) }}</td></tr>
+        <tr><td>Year-1 revenue</td><td class="num">{{ fmt_money(ctx.baseline.year1_revenue_usd) }}</td><td class="num">{{ fmt_money(ctx.counterfactual.year1_revenue_usd) }}</td><td class="num negative">{{ fmt_money_delta(ctx.movement.year1_revenue_usd) }}</td></tr>
+        <tr><td>Lifetime revenue</td><td class="num">{{ fmt_money(ctx.baseline.lifetime_revenue_usd) }}</td><td class="num">{{ fmt_money(ctx.counterfactual.lifetime_revenue_usd) }}</td><td class="num negative">{{ fmt_money_delta(ctx.movement.lifetime_revenue_usd) }}</td></tr>
+      </tbody>
+    </table>
+    <h3>Treatment boundary</h3>
+    <ul>
+      <li>Baseline incremental financed curtailment: {{ fmt_pct(ctx.evaluation.baseline_project_curtailment_decimal) }}.</li>
+      <li>Synthetic net self-curtailment fraction: {{ fmt_pct(ctx.evaluation.synthetic_self_curtailment_decimal) }}.</li>
+      <li>Composed synthetic counterfactual: {{ fmt_pct(ctx.evaluation.counterfactual_project_curtailment_decimal) }}.</li>
+      <li>Deemed-paid finance haircut: 0.0000% - KPI-neutral by construction.</li>
+    </ul>
+  </section>
+
+  <section class="page">
+    <div class="warning">{{ ctx.warning }}</div>
+    <h2>Evidence Firewall and Release Refusal</h2>
+    <div class="danger">
+      <strong>Canonical finance release: REFUSED.</strong> This report cannot be selected
+      as a canonical lender, board, approval, public, or release report. It does not change
+      the committed scenario, VERSION, expected-result fixtures, lender pins, or any real-data
+      sign-off record.
+    </div>
+    <h3>Structural classifications</h3>
+    <table>
+      <tr><th>Field</th><th>Governed value</th></tr>
+      <tr><td>input_kind</td><td>synthetic_placeholder</td></tr>
+      <tr><td>generated_input / observed_network_data</td><td>true / false</td></tr>
+      <tr><td>site_representative / canonical_finance_eligible</td><td>false / false</td></tr>
+      <tr><td>bankable / publishable</td><td>false / false</td></tr>
+      <tr><td>lender / board / approval / release eligible</td><td>false / false / false / false</td></tr>
+      <tr><td>counterfactual finance executed</td><td>true - segregated synthetic context only</td></tr>
+      <tr><td>canonical finance executed / wiring enabled</td><td>false / false</td></tr>
+    </table>
+    <h3>Identity register</h3>
+    <table>
+      <tr><th>Evidence</th><th>SHA-256</th></tr>
+      <tr><td>#1077 authenticated handoff</td><td class="hash">{{ ctx.handoff_sha256 }}</td></tr>
+      <tr><td>#1073 authenticated QSTS output</td><td class="hash">{{ ctx.qsts_sha256 }}</td></tr>
+      <tr><td>Synthetic package manifest</td><td class="hash">{{ ctx.manifest_sha256 }}</td></tr>
+      <tr><td>Generation profile file</td><td class="hash">{{ ctx.profile_sha256 }}</td></tr>
+      <tr><td>Ordered profile values</td><td class="hash">{{ ctx.profile_values_sha256 }}</td></tr>
+    </table>
+    <div class="limitations">
+      <div class="limitations-title">Limitations and manual gates</div>
+      <ul>
+        <li>The feeder and generation profile are deterministic synthetic placeholders, not CEB or site observations.</li>
+        <li>No observed operator instruction schedule exists. Zero deemed-paid energy is not evidence that real CEB instructions will be zero.</li>
+        <li>BESS recovery is zero here; the upstream accounting is not a chronological dispatch simulation.</li>
+        <li>All 8,760 placeholder voltage observations were flagged. Engineering conclusions require authenticated real feeder evidence and an independently governed study.</li>
+        <li>The real-data #923-B path remains independent, open, and unblocked by this output.</li>
+      </ul>
+    </div>
+    <div class="warning">{{ ctx.warning }}</div>
+  </section>
+</body>
+</html>

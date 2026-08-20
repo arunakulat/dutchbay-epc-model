@@ -1,0 +1,51 @@
+# Governed #1074 synthetic AEP/QSTS financial report.
+#
+# Both detached upstream SHA-256 values are external trust anchors and must be supplied
+# by the caller. This workflow runs a segregated counterfactual and never enables the
+# canonical QSTS finance switch.
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+input:
+  handoff_path: outputs/synthetic_process_provenance/issue_1077/synthetic_input_records.json
+  expected_handoff_sha256: REQUIRED_EXTERNAL_SHA256
+  qsts_output_path: outputs/synthetic_process_provenance/issue_1073/synthetic_aep_qsts_output_records.json
+  expected_qsts_output_sha256: REQUIRED_EXTERNAL_SHA256
+
+scenario:
+  path: scenarios/dutchbay_lendercase_2025Q4.yaml
+
+report:
+  title: DutchBay Synthetic AEP/QSTS Finance Counterfactual
+  warning: based on synthetic data - non-bankable - only for process provenance purposes
+  render_backend: weasyprint
+  expected_pdf_pages: 4
+
+finance:
+  override_key: project.curtailment_pct
+  deemed_paid_treatment: kpi_neutral_excluded_from_finance_override
+  finance_wiring_enabled: false
+  canonical_eligible: false
+
+output:
+  output_dir: outputs/synthetic_process_provenance/issue_1074
+  html_filename: synthetic_qsts_finance_report.html
+  pdf_filename: synthetic_qsts_finance_report.pdf
+  record_filename: synthetic_qsts_finance_report_manifest.json
+  record_checksum_filename: synthetic_qsts_finance_report_manifest.sha256
+  html_checksum_filename: synthetic_qsts_finance_report.html.sha256
+  pdf_checksum_filename: synthetic_qsts_finance_report.pdf.sha256
+  allow_existing_identical: true
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null
