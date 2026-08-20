@@ -1,0 +1,18 @@
+{
+  "environment_variable": "DUTCHBAY_VENV",
+  "import_probe": "analytics",
+  "portable_fallback": ".venv",
+  "project_distribution": "dutchbay-epc-model",
+  "python_major": 3,
+  "python_minor": 12,
+  "required_distributions": [
+    "hydra-core",
+    "numpy",
+    "opendssdirect.py",
+    "pandas",
+    "pytest",
+    "ruff",
+    "scipy"
+  ],
+  "schema": "dutchbay.development_environment.v1"
+}
