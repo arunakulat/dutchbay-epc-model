@@ -1,0 +1,20 @@
+schema_version: dutchbay_stochastic_test_policy_v1
+
+ordinary_suite:
+  fast_model_evaluations: 20
+  full_model_evaluations: 200
+  hard_max_model_evaluations: 200
+  claim_classification: regression_and_coverage_only
+
+qualification_suite:
+  test_mode: qualification
+  marker: stochastic_qualification
+  requires_explicit_seed: true
+  required_receipt_fields:
+    - requested_evaluations
+    - effective_evaluations
+    - seed
+    - config_sha256
+    - git_sha
+    - result_sha256
+    - limitations

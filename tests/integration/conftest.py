@@ -85,7 +85,7 @@ def dutchbay_base_config() -> Dict[str, Any]:
         },
         "monte_carlo": {
             "enabled": True,
-            "n_iterations": 1000,  # Fast for testing
+            "n_iterations": 200,  # TEST-03 ordinary-suite hard maximum
             "discount_rate_pct": 8.0,
             "sampler": "lhs",
             "seed": 42,  # Reproducible

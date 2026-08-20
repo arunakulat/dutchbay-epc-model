@@ -1,7 +1,9 @@
-.PHONY: setup lint type security audit test cov html package lock clean
+.PHONY: setup lint type security audit test test-stochastic-qualification cov html package lock clean
 
 PY ?= python
 PIP ?= pip
+VENV_PY := $(wildcard .venv/bin/python)
+PYTEST ?= $(if $(VENV_PY),$(VENV_PY),$(PY)) -m pytest
 
 # Exact abstract capability set used to regenerate the CI lock. Keep this aligned
 # with the recipe in requirements.txt and docs/ENVIRONMENT_PROVISIONING.md.
@@ -54,13 +56,19 @@ audit:
 # The real test gate: pytest (xdist-parallel) with the coverage floor (#439). The floor
 # is enforced HERE and in the CI test step, not in pyproject addopts.
 test:
-	pytest -n auto $(COV) --cov-report=term-missing --cov-fail-under=95
+	DUTCHBAY_TEST_MODE=full $(PYTEST) -n auto $(COV) --cov-report=term-missing --cov-fail-under=95
+
+# Explicit scale/qualification path for TEST-03 tests above the ordinary suite's
+# 200-effective-model-evaluation cap. A green run is not by itself a lender,
+# bankability, convergence, or release receipt (see docs/development/stochastic_test_policy.md).
+test-stochastic-qualification:
+	DUTCHBAY_TEST_MODE=qualification $(PYTEST) -n auto -m stochastic_qualification --tb=short
 
 cov:
-	pytest -n auto $(COV) --cov-report=term-missing
+	DUTCHBAY_TEST_MODE=full $(PYTEST) -n auto $(COV) --cov-report=term-missing
 
 html:
-	pytest $(COV) --cov-report=html && echo "Open htmlcov/index.html"
+	DUTCHBAY_TEST_MODE=full $(PYTEST) $(COV) --cov-report=html && echo "Open htmlcov/index.html"
 
 package:
 	$(PY) -m build

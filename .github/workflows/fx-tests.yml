@@ -31,6 +31,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  DUTCHBAY_TEST_MODE: full
+
 jobs:
   fx-tests:
     name: FX Integration Tests (Python ${{ matrix.python-version }})
