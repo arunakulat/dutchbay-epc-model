@@ -234,6 +234,35 @@ def test_configured_master_must_match_manifest_master(tmp_path: Path) -> None:
         )
 
 
+def test_manifest_symlink_is_refused(tmp_path: Path) -> None:
+    config, manifest, _master, _digest, _payloads = _write_evidence_package(tmp_path)
+    target = manifest.with_name("real-evidence-manifest.json")
+    manifest.rename(target)
+    manifest.symlink_to(target.name)
+
+    with pytest.raises(QSTSEvidenceError, match="manifest.*symlink"):
+        cq.run_qsts_curtailment(
+            config,
+            generation_mwh=[10.0, 5.0],
+            grid_instructed_mwh=[0.5, 0.0],
+        )
+
+
+def test_payload_symlink_is_refused_even_with_matching_bytes(tmp_path: Path) -> None:
+    config, _manifest, master, _digest, _payloads = _write_evidence_package(tmp_path)
+    target = master.with_name("Master-target.dss")
+    target.write_bytes(master.read_bytes())
+    master.unlink()
+    master.symlink_to(target.name)
+
+    with pytest.raises(QSTSEvidenceError, match="resolves through symlink"):
+        cq.run_qsts_curtailment(
+            config,
+            generation_mwh=[10.0, 5.0],
+            grid_instructed_mwh=[0.5, 0.0],
+        )
+
+
 @pytest.mark.parametrize(
     ("field", "value", "match"),
     [

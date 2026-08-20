@@ -15,6 +15,10 @@ import pytest
 import yaml
 
 import analytics.grid.curtailment_qsts as qsts_module
+from analytics.contracts_v14 import (
+    QSTS_SYNTHETIC_OUTPUT_CLASS,
+    SYNTHETIC_PROCESS_PROVENANCE_WARNING,
+)
 from analytics.grid.curtailment_qsts import run_qsts_curtailment
 from analytics.grid.grid_interface_schema import validate_grid_block
 from analytics.grid.synthetic_feeder_placeholder import (
@@ -137,6 +141,20 @@ def test_adapter_output_passes_schema_and_runtime_verification(
     assert result.site_representative is False
     assert result.canonical_finance_eligible is False
     assert result.bankable is False
+    receipt = result.qsts_run_manifest
+    assert receipt is not None
+    assert receipt.output_class == QSTS_SYNTHETIC_OUTPUT_CLASS
+    assert receipt.required_warning == SYNTHETIC_PROCESS_PROVENANCE_WARNING
+    assert receipt.finance_wiring_mode == "synthetic_counterfactual"
+    assert receipt.finance_wiring_enabled is False
+    assert receipt.canonical_finance_eligible is False
+    assert receipt.lender_eligible is False
+    assert receipt.board_approval_eligible is False
+    assert receipt.release_eligible is False
+    serialized = result.model_dump()
+    assert serialized["qsts_run_manifest"]["required_warning"] == (
+        SYNTHETIC_PROCESS_PROVENANCE_WARNING
+    )
 
 
 @pytest.mark.grid
