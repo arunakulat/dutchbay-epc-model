@@ -96,6 +96,7 @@ def test_workflow_binds_pr_head_and_blocks_summary_on_grid_failure() -> None:
     assert "EXPECTED_HEAD_SHA: ${{" in grid_job
     assert 'actual_head_sha="$(git rev-parse HEAD)"' in grid_job
     assert 'if [ "$actual_head_sha" != "$EXPECTED_HEAD_SHA" ]; then' in grid_job
+    assert "DUTCHBAY_GRID_CI_EXECUTION: independent" in grid_job
     assert 'python -c "import opendssdirect"' in grid_job
     assert "python -m pytest tests/ -m grid -n auto --tb=short" in grid_job
     assert "--junit-xml=grid-study-results.xml" in grid_job
