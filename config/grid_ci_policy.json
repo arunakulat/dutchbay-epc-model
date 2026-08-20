@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "rule_id": "TEST-05",
+  "empty_diff_requires_grid": true,
+  "exact_paths": [
+    ".github/workflows/test-suite.yml",
+    "analytics/contracts_v14.py",
+    "config/grid_ci_policy.json",
+    "constraints.txt",
+    "pyproject.toml",
+    "requirements.txt",
+    "scripts/ci/classify_grid_study_paths.py",
+    "tests/conftest.py",
+    "tests/lint/test_grid_ci_policy.py"
+  ],
+  "path_prefixes": [
+    "analytics/grid/",
+    "finance/grid/",
+    "tests/grid/"
+  ],
+  "glob_patterns": [
+    "conf/*qsts*.yaml",
+    "config/*qsts*.yaml",
+    "scripts/run_*grid*.py",
+    "scripts/run_*qsts*.py"
+  ]
+}
