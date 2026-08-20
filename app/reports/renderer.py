@@ -10,7 +10,7 @@ silent stub), so a caller can map it to an HTTP 503 cleanly.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from jinja2 import Environment, FileSystemLoader
 
@@ -31,6 +31,28 @@ _TEMPLATE_NAME = "report.html.j2"
 
 class ReportDependencyError(RuntimeError):
     """Raised when the optional PDF backend (WeasyPrint) is not installed."""
+
+
+def _load_pdf_renderer() -> Any:
+    """Load and return WeasyPrint's HTML renderer, or fail predictably."""
+    try:
+        from weasyprint import HTML
+    except (ImportError, OSError) as exc:  # CESSPIT: fail loud, never a silent stub
+        raise ReportDependencyError(
+            "PDF rendering requires WeasyPrint. Install the optional extra: "
+            "pip install -e '.[report]' (also needs the pango/cairo system "
+            "libraries). The HTML report is available without it."
+        ) from exc
+    return HTML
+
+
+def require_pdf_backend() -> None:
+    """Verify that the optional PDF renderer can be imported.
+
+    API callers use this guard before finance or sensitivity work so a missing
+    optional backend returns immediately and deterministically.
+    """
+    _load_pdf_renderer()
 
 
 def _environment() -> Environment:
@@ -78,14 +100,9 @@ def render_report_pdf(context: ReportContext) -> bytes:
         ReportDependencyError: WeasyPrint (the optional ``[report]`` extra) is
             not installed.
     """
+    html_renderer = _load_pdf_renderer()
     html = render_report_html(context)
-    try:
-        from weasyprint import HTML
-    except ImportError as exc:  # CESSPIT: fail loud, never a silent stub
-        raise ReportDependencyError(
-            "PDF rendering requires WeasyPrint. Install the optional extra: "
-            "pip install -e '.[report]' (also needs the pango/cairo system "
-            "libraries). The HTML report is available without it."
-        ) from exc
     # write_pdf() returns Any (WeasyPrint is untyped); narrow to bytes.
-    return cast(bytes, HTML(string=html).write_pdf())  # pragma: no cover (optional dep)
+    return cast(
+        bytes, html_renderer(string=html).write_pdf()
+    )  # pragma: no cover (optional dep)

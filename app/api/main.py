@@ -64,14 +64,15 @@ from app.reports.renderer import (
     ReportDependencyError,
     render_report_html,
     render_report_pdf,
+    require_pdf_backend,
 )
-from app.reports.report_model import ReportContext, build_report_context
+from app.reports.report_model import ReportContext
+from app.reports.report_orchestration import (
+    build_report_context_from_case,
+    compute_report_sensitivity,
+    run_report_case,
+)
 from app.services.pipeline_service import run_finance_case
-from app.services.report_global_sa import (
-    compute_report_global_sa,
-    compute_report_global_sa_pawn,
-)
-from app.services.report_tornado import compute_report_tornado
 
 app = FastAPI(
     title="DutchBay EPC Model API",
@@ -320,43 +321,28 @@ def run_case(inputs: WindFarmInputs) -> CaseResult:
 
 
 def _build_report_context(inputs: WindFarmInputs) -> ReportContext:
-    """Run the case and assemble the report context (shared by both report routes).
+    """Compose the typed case, sensitivity, and context seams for production.
 
     Maps an engine-rejected scenario to a 400 (fail-loud, graceful), mirroring
     ``run_case``. The ``generated_at`` timestamp is stamped here (production edge)
-    so the pure builder stays deterministic.
+    so the report-case and context builders stay deterministic.  Production uses
+    the full historical sensitivity profile; ordinary tests can exercise each
+    seam independently without changing these production defaults.
     """
     try:
-        scenario = inputs.to_scenario_config()
-        result = run_finance_case(scenario)
+        report_case = run_report_case(
+            inputs,
+            generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            finance_runner=run_finance_case,
+        )
     except (
         ConfigValidationError,
         AepReconciliationError,
         AepProvenanceError,
     ) as exc:
         raise HTTPException(status_code=400, detail=f"Invalid scenario: {exc}") from exc
-    case_result = CaseResult.from_pipeline_result(
-        result, scenario_variant=inputs.scenario_variant
-    )
-    # Pass the resolved scenario + the run's debt_result so the report can render the
-    # quantitative lender sections (production P50/P90, sources-and-uses, DSCR profile,
-    # readiness/E&S) — not just the KPI summary (RPT-1). The sensitivity tornado (local,
-    # RPT-1), the Morris global-SA screening (MC-1) and the PAWN median-KS block (#645,
-    # the distribution-based complement) are computed here (each runs a multi-evaluation
-    # sweep) and passed in pre-built; all are best-effort (None on failure) so none sinks
-    # the core report.
-    return build_report_context(
-        case_result,
-        generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        inputs=inputs,
-        scenario_config=scenario,
-        debt_result=result.get("debt_result"),
-        annual_rows=result.get("annual_rows"),
-        tornado=compute_report_tornado(scenario),
-        global_sa=compute_report_global_sa(scenario),
-        global_sa_pawn=compute_report_global_sa_pawn(scenario),
-        run_result=result,
-    )
+    sensitivity = compute_report_sensitivity(report_case.scenario_config)
+    return build_report_context_from_case(report_case, sensitivity)
 
 
 def build_case_surface(inputs: WindFarmInputs) -> CaseSurface:
@@ -431,10 +417,20 @@ def run_case_report_pdf(inputs: WindFarmInputs) -> Response:
     interpolated into the ``Content-Disposition`` header. Kept as a plain
     synchronous core; the HTTP endpoint wraps it with auth + a wall-clock timeout.
     """
+    # Availability is checked before scenario loading, finance, or supplemental
+    # sensitivity so a missing optional backend cannot spend ~380 model evaluations
+    # before returning the deterministic dependency response.
+    try:
+        require_pdf_backend()
+    except ReportDependencyError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
     context = _build_report_context(inputs)
     try:
         pdf_bytes = render_report_pdf(context)
     except ReportDependencyError as exc:
+        # Retain the established fail-loud map if the backend becomes unavailable
+        # between the preflight and rendering calls.
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     safe_variant = _sanitise_filename_component(context.scenario_variant)
     filename = f"dutchbay_{safe_variant}_report.pdf"

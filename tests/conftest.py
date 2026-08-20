@@ -64,6 +64,31 @@ class StochasticTestPolicy:
 
 
 @dataclass(frozen=True)
+class ReportSensitivityProfilePolicy:
+    """One config-declared report sensitivity execution profile."""
+
+    name: str
+    tornado_evaluations: int
+    morris_trajectories: int
+    pawn_evaluations: int
+    pawn_slices: int
+
+
+@dataclass(frozen=True)
+class ReportQualificationDurationEvidence:
+    """Observed qualification timing, separate from pytest-split weights."""
+
+    nodeid: str
+    command: str
+    python_version: str
+    profile: str
+    outcome: str
+    measured_at: str
+    observed_scope: str
+    observed_seconds: float
+
+
+@dataclass(frozen=True)
 class ReportTestPolicy:
     """Strict report-test architecture loaded from the canonical YAML control."""
 
@@ -71,15 +96,21 @@ class ReportTestPolicy:
     renderer_context: str
     representative_live_e2e_required: bool
     claim_classification: str
+    ordinary_sensitivity_profile: ReportSensitivityProfilePolicy
     qualification_test_mode: str
     qualification_marker: str
     required_live_paths: tuple[str, ...]
+    production_sensitivity_profile: ReportSensitivityProfilePolicy
+    duration_history_path: str
+    duration_review_threshold_seconds: float
+    ordinary_duration_exceptions: tuple[tuple[str, str], ...]
+    qualification_duration_evidence: ReportQualificationDurationEvidence
 
 
 STOCHASTIC_TEST_POLICY_PATH = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 REPORT_TEST_POLICY_PATH = REPO_ROOT / "config" / "report_test_policy.yaml"
 _STOCHASTIC_POLICY_SCHEMA = "dutchbay_stochastic_test_policy_v1"
-_REPORT_POLICY_SCHEMA = "dutchbay_report_test_policy_v1"
+_REPORT_POLICY_SCHEMA = "dutchbay_report_test_policy_v2"
 _TEST_MODES = {"fast", "full", "qualification"}
 
 
@@ -109,6 +140,16 @@ def _positive_int(value: object, *, context: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise ValueError(f"{context} must be a positive integer")
     return value
+
+
+def _positive_number(value: object, *, context: str) -> float:
+    """Parse a finite positive real number without admitting bool."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{context} must be a positive number")
+    parsed = float(value)
+    if not (parsed > 0.0 and parsed < float("inf")):
+        raise ValueError(f"{context} must be a positive finite number")
+    return parsed
 
 
 def _load_stochastic_test_policy(
@@ -229,7 +270,12 @@ def _load_report_test_policy(
 
     root = _require_exact_keys(
         raw,
-        {"schema_version", "ordinary_suite", "qualification_suite"},
+        {
+            "schema_version",
+            "ordinary_suite",
+            "qualification_suite",
+            "duration_history",
+        },
         context="report test policy",
     )
     if root["schema_version"] != _REPORT_POLICY_SCHEMA:
@@ -244,13 +290,24 @@ def _load_report_test_policy(
             "renderer_context",
             "representative_live_e2e",
             "claim_classification",
+            "sensitivity_profile",
         },
         context="report ordinary_suite",
     )
     qualification = _require_exact_keys(
         root["qualification_suite"],
-        {"test_mode", "marker", "required_live_paths"},
+        {"test_mode", "marker", "required_live_paths", "sensitivity_profile"},
         context="report qualification_suite",
+    )
+    duration = _require_exact_keys(
+        root["duration_history"],
+        {
+            "path",
+            "review_threshold_seconds",
+            "ordinary_exceptions",
+            "qualification_evidence",
+        },
+        context="report duration_history",
     )
 
     expected_ordinary = {
@@ -262,6 +319,58 @@ def _load_report_test_policy(
     for key, expected in expected_ordinary.items():
         if ordinary[key] != expected:
             raise ValueError(f"report ordinary_suite.{key} must be {expected!r}")
+
+    def _profile(value: object, *, context: str) -> ReportSensitivityProfilePolicy:
+        profile = _require_exact_keys(
+            value,
+            {
+                "name",
+                "tornado_evaluations",
+                "morris_trajectories",
+                "pawn_evaluations",
+                "pawn_slices",
+            },
+            context=context,
+        )
+        name = profile["name"]
+        if not isinstance(name, str) or not name:
+            raise ValueError(f"{context}.name must be a non-empty string")
+        return ReportSensitivityProfilePolicy(
+            name=name,
+            tornado_evaluations=_positive_int(
+                profile["tornado_evaluations"],
+                context=f"{context}.tornado_evaluations",
+            ),
+            morris_trajectories=_positive_int(
+                profile["morris_trajectories"],
+                context=f"{context}.morris_trajectories",
+            ),
+            pawn_evaluations=_positive_int(
+                profile["pawn_evaluations"],
+                context=f"{context}.pawn_evaluations",
+            ),
+            pawn_slices=_positive_int(
+                profile["pawn_slices"], context=f"{context}.pawn_slices"
+            ),
+        )
+
+    ordinary_profile = _profile(
+        ordinary["sensitivity_profile"],
+        context="report ordinary_suite.sensitivity_profile",
+    )
+    production_profile = _profile(
+        qualification["sensitivity_profile"],
+        context="report qualification_suite.sensitivity_profile",
+    )
+    if ordinary_profile.name != "ordinary_bounded":
+        raise ValueError(
+            "report ordinary_suite.sensitivity_profile.name must be 'ordinary_bounded'"
+        )
+    if production_profile.name != "production_full":
+        raise ValueError(
+            "report qualification_suite.sensitivity_profile.name must be "
+            "'production_full'"
+        )
 
     test_mode = qualification["test_mode"]
     marker = qualification["marker"]
@@ -283,14 +392,112 @@ def _load_report_test_policy(
             "supplemental_sensitivity and pdf_backend"
         )
 
+    duration_path = duration["path"]
+    if duration_path != ".test_durations":
+        raise ValueError("report duration_history.path must be '.test_durations'")
+    threshold = _positive_number(
+        duration["review_threshold_seconds"],
+        context="report duration_history.review_threshold_seconds",
+    )
+    if threshold != 5.0:
+        raise ValueError(
+            "report duration_history.review_threshold_seconds must be exactly 5.0"
+        )
+    exceptions = duration["ordinary_exceptions"]
+    if not isinstance(exceptions, Mapping) or not all(
+        isinstance(nodeid, str)
+        and nodeid
+        and isinstance(reason, str)
+        and reason.strip()
+        for nodeid, reason in exceptions.items()
+    ):
+        raise ValueError(
+            "report duration_history.ordinary_exceptions must map nodeids to "
+            "non-empty written reasons"
+        )
+    evidence = _require_exact_keys(
+        duration["qualification_evidence"],
+        {
+            "nodeid",
+            "command",
+            "python_version",
+            "profile",
+            "outcome",
+            "measured_at",
+            "observed_scope",
+            "observed_seconds",
+        },
+        context="report duration_history.qualification_evidence",
+    )
+    for key in (
+        "nodeid",
+        "command",
+        "python_version",
+        "profile",
+        "outcome",
+        "measured_at",
+        "observed_scope",
+    ):
+        if not isinstance(evidence[key], str) or not str(evidence[key]).strip():
+            raise ValueError(
+                f"report duration_history.qualification_evidence.{key} "
+                "must be a non-empty string"
+            )
+    if evidence["profile"] != production_profile.name:
+        raise ValueError(
+            "report duration_history.qualification_evidence.profile must match "
+            "the production sensitivity profile"
+        )
+    if evidence["outcome"] not in {"passed", "failed"}:
+        raise ValueError(
+            "report duration_history.qualification_evidence.outcome must be "
+            "'passed' or 'failed'"
+        )
+    if evidence["observed_scope"] != "pytest_session":
+        raise ValueError(
+            "report duration_history.qualification_evidence.observed_scope must be "
+            "'pytest_session'"
+        )
+    if not str(evidence["python_version"]).startswith("3.12."):
+        raise ValueError(
+            "report duration_history.qualification_evidence.python_version "
+            "must identify Python 3.12"
+        )
+    if evidence["command"] != "make test-report-qualification":
+        raise ValueError(
+            "report duration_history.qualification_evidence.command must be "
+            "'make test-report-qualification'"
+        )
+    observed = _positive_number(
+        evidence["observed_seconds"],
+        context="report duration_history.qualification_evidence.observed_seconds",
+    )
+
     return ReportTestPolicy(
         api_transport_context=str(ordinary["api_transport_context"]),
         renderer_context=str(ordinary["renderer_context"]),
         representative_live_e2e_required=True,
         claim_classification=str(ordinary["claim_classification"]),
+        ordinary_sensitivity_profile=ordinary_profile,
         qualification_test_mode=str(test_mode),
         qualification_marker=str(marker),
         required_live_paths=tuple(required_live_paths),
+        production_sensitivity_profile=production_profile,
+        duration_history_path=str(duration_path),
+        duration_review_threshold_seconds=threshold,
+        ordinary_duration_exceptions=tuple(
+            sorted((str(nodeid), str(reason)) for nodeid, reason in exceptions.items())
+        ),
+        qualification_duration_evidence=ReportQualificationDurationEvidence(
+            nodeid=str(evidence["nodeid"]),
+            command=str(evidence["command"]),
+            python_version=str(evidence["python_version"]),
+            profile=str(evidence["profile"]),
+            outcome=str(evidence["outcome"]),
+            measured_at=str(evidence["measured_at"]),
+            observed_scope=str(evidence["observed_scope"]),
+            observed_seconds=observed,
+        ),
     )
 
 
@@ -883,6 +1090,8 @@ __all__ = [
     "fast_test_mode",
     "test_iteration_config",
     "ReportTestPolicy",
+    "ReportSensitivityProfilePolicy",
+    "ReportQualificationDurationEvidence",
     "StochasticTestBudgetError",
     "StochasticTestPolicy",
     "_effective_stochastic_model_evaluations",

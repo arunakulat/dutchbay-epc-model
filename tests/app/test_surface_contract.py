@@ -7,10 +7,10 @@ download routes. These tests PIN the response SHAPE (the frozen public field set
 concrete projected values), not a bare ``200`` — a breaking change to the surface fails here,
 so ``API_CONTRACT_VERSION`` must be bumped deliberately alongside it.
 
-A real run is projected once (``build_case_surface``) to assert the KPI cards and charts carry
-genuine values that degrade exactly as the report does; the capital-risk projector (heavy MC,
-out-of-band and absent from the synchronous path) is exercised with a hand-built block so its
-mapping is covered on real data, not by construction.
+A real finance run is projected once (``build_case_surface``) to assert the KPI cards carry
+genuine values while typed, deterministic sensitivity blocks exercise the chart projection. The
+capital-risk projector (heavy MC, out-of-band and absent from the synchronous path) is exercised
+with a hand-built block so its mapping is covered on real data, not by construction.
 """
 
 from __future__ import annotations
@@ -269,28 +269,39 @@ def test_build_case_surface_projects_a_real_run(
     import app.api.main as api_main
     from app.api.main import build_case_surface
     from app.models.inputs import WindFarmInputs
-    from app.services.report_global_sa import (
-        compute_report_global_sa,
-        compute_report_global_sa_pawn,
+    from app.reports.report_orchestration import (
+        ORDINARY_REPORT_SENSITIVITY_PROFILE,
+        compute_report_sensitivity,
     )
 
-    # This is the ONE real-projection coverage: a genuine engine run projected through the
-    # real ``build_case_surface`` (real KPI cards + real Morris/PAWN drivers + real
-    # ``from_report_context``). The two global-SA sweeps at their report resolution are ~26s
-    # (the file's whole runtime), so run the SAME real screening at a reduced sample size —
-    # every assertion below (``method == "morris"/"pawn"``, non-empty bars, real KPI displays)
-    # holds truthfully on real math; only the sweep resolution is dialed down for the shard.
-    monkeypatch.setattr(
-        api_main,
-        "compute_report_global_sa",
-        lambda scenario, **kw: compute_report_global_sa(
-            scenario, n_trajectories=2, **kw
+    # This response-projection test keeps the canonical finance run live and patches only the
+    # typed report-sensitivity orchestration boundary. The production sensitivity matrix is
+    # qualified once in the dedicated TEST-04 lane; rerunning it here would duplicate the same
+    # model evaluations without adding surface-contract assurance.
+    sensitivity = compute_report_sensitivity(
+        WindFarmInputs(**_valid_kwargs()).to_scenario_config(),
+        profile=ORDINARY_REPORT_SENSITIVITY_PROFILE,
+        tornado_computer=lambda _scenario: TornadoBlock(
+            metric="project_irr",
+            rows=[TornadoRow(label="Tariff", impact_abs=0.05)],
+        ),
+        morris_computer=lambda _scenario, **_kwargs: GlobalSABlock(
+            method="morris",
+            metric="project_irr",
+            n_runs=28,
+            drivers=[GlobalSADriver(name="tariff", mu_star=0.3, sigma=0.1)],
+        ),
+        pawn_computer=lambda _scenario, **_kwargs: GlobalSABlock(
+            method="pawn",
+            metric="project_irr",
+            n_runs=128,
+            drivers=[GlobalSADriver(name="tariff", median_ks=0.42, ks_cv=0.2)],
         ),
     )
     monkeypatch.setattr(
         api_main,
-        "compute_report_global_sa_pawn",
-        lambda scenario, **kw: compute_report_global_sa_pawn(scenario, n=16, s=3, **kw),
+        "compute_report_sensitivity",
+        lambda _scenario: sensitivity,
     )
 
     surface = build_case_surface(WindFarmInputs(**_valid_kwargs()))

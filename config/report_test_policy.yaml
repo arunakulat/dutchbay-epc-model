@@ -1,10 +1,16 @@
-schema_version: dutchbay_report_test_policy_v1
+schema_version: dutchbay_report_test_policy_v2
 
 ordinary_suite:
   api_transport_context: deterministic_known_context
   renderer_context: deterministic_known_context
   representative_live_e2e: required
   claim_classification: regression_and_coverage_only
+  sensitivity_profile:
+    name: ordinary_bounded
+    tornado_evaluations: 15
+    morris_trajectories: 4
+    pawn_evaluations: 128
+    pawn_slices: 10
 
 qualification_suite:
   test_mode: qualification
@@ -12,3 +18,23 @@ qualification_suite:
   required_live_paths:
     - supplemental_sensitivity
     - pdf_backend
+  sensitivity_profile:
+    name: production_full
+    tornado_evaluations: 15
+    morris_trajectories: 16
+    pawn_evaluations: 256
+    pawn_slices: 10
+
+duration_history:
+  path: .test_durations
+  review_threshold_seconds: 5.0
+  ordinary_exceptions: {}
+  qualification_evidence:
+    nodeid: tests/integration/test_lender_report_e2e.py::test_complete_production_report_matrix_renders_html_and_pdf
+    command: make test-report-qualification
+    python_version: 3.12.13
+    profile: production_full
+    outcome: passed
+    measured_at: "2026-08-20T04:11:44Z"
+    observed_scope: pytest_session
+    observed_seconds: 33.49
