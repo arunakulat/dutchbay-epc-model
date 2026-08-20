@@ -35,6 +35,7 @@ from analytics.synthetic_qsts_finance_counterfactual import (
 )
 from app.reports.synthetic_qsts_finance_report import (
     SyntheticFinanceReportConfig,
+    cli_summary,
     generate_synthetic_qsts_finance_report,
 )
 
@@ -285,6 +286,33 @@ def test_report_config_is_strict_and_freezes_warning_finance_and_output() -> Non
         )
 
 
+@pytest.mark.parametrize(
+    ("section", "field", "value", "message"),
+    (
+        ("input", "handoff_path", "../escape.json", "safe repository-relative"),
+        ("input", "expected_handoff_sha256", "A" * 64, "lowercase SHA-256"),
+        ("report", "title", " ", "non-empty string"),
+        ("report", "expected_pdf_pages", True, "positive integer"),
+        ("finance", "finance_wiring_enabled", 0, "literal boolean"),
+        ("output", "html_filename", "nested/report.html", "must be a filename"),
+    ),
+)
+def test_report_config_rejects_malformed_control_types_and_paths(
+    section: str, field: str, value: object, message: str
+) -> None:
+    raw = _report_raw()
+    raw["input"]["expected_handoff_sha256"] = "a" * 64
+    raw["input"]["expected_qsts_output_sha256"] = "b" * 64
+    raw[section][field] = value
+    with pytest.raises(ValueError, match=message):
+        SyntheticFinanceReportConfig.from_mapping(raw)
+
+    with pytest.raises(ValueError, match="config keys must be exactly"):
+        SyntheticFinanceReportConfig.from_mapping(
+            {key: item for key, item in raw.items() if key != "output"}
+        )
+
+
 def test_authenticated_inputs_refuse_wrong_digest_and_cross_record_substitution(
     authenticated_paths: tuple[Path, str, Path, str], tmp_path: Path
 ) -> None:
@@ -312,6 +340,110 @@ def test_authenticated_inputs_refuse_wrong_digest_and_cross_record_substitution(
             expected_handoff_sha256=handoff_sha,
             qsts_output_path=substituted,
             expected_qsts_output_sha256=digest,
+        )
+
+
+def test_authenticated_inputs_require_regular_canonical_json_and_checksum(
+    authenticated_paths: tuple[Path, str, Path, str], tmp_path: Path
+) -> None:
+    handoff_path, handoff_sha, qsts_path, qsts_sha = authenticated_paths
+
+    with pytest.raises(ValueError, match="exact lowercase SHA-256"):
+        load_authenticated_synthetic_report_inputs(
+            handoff_path=handoff_path,
+            expected_handoff_sha256="A" * 64,
+            qsts_output_path=qsts_path,
+            expected_qsts_output_sha256=qsts_sha,
+        )
+
+    missing = tmp_path / "missing.json"
+    with pytest.raises(FileNotFoundError, match="JSON is absent or a symlink"):
+        load_authenticated_synthetic_report_inputs(
+            handoff_path=missing,
+            expected_handoff_sha256="a" * 64,
+            qsts_output_path=qsts_path,
+            expected_qsts_output_sha256=qsts_sha,
+        )
+
+    linked = tmp_path / "linked.json"
+    linked.symlink_to(handoff_path)
+    with pytest.raises(ValueError, match="symlinked ancestor"):
+        load_authenticated_synthetic_report_inputs(
+            handoff_path=linked,
+            expected_handoff_sha256=handoff_sha,
+            qsts_output_path=qsts_path,
+            expected_qsts_output_sha256=qsts_sha,
+        )
+
+    payload = handoff_path.read_bytes()
+    no_checksum = tmp_path / "no-checksum.json"
+    no_checksum.write_bytes(payload)
+    with pytest.raises(FileNotFoundError, match="detached checksum is absent"):
+        load_authenticated_synthetic_report_inputs(
+            handoff_path=no_checksum,
+            expected_handoff_sha256=handoff_sha,
+            qsts_output_path=qsts_path,
+            expected_qsts_output_sha256=qsts_sha,
+        )
+
+    bad_checksum = tmp_path / "bad-checksum.json"
+    bad_checksum.write_bytes(payload)
+    bad_checksum.with_suffix(".sha256").write_text("not authentic\n", encoding="ascii")
+    with pytest.raises(ValueError, match="detached checksum does not authenticate"):
+        load_authenticated_synthetic_report_inputs(
+            handoff_path=bad_checksum,
+            expected_handoff_sha256=handoff_sha,
+            qsts_output_path=qsts_path,
+            expected_qsts_output_sha256=qsts_sha,
+        )
+
+    noncanonical_payload = json.dumps(json.loads(payload)).encode("utf-8")
+    noncanonical = tmp_path / "noncanonical.json"
+    noncanonical_sha = sha256_bytes(noncanonical_payload)
+    noncanonical.write_bytes(noncanonical_payload)
+    noncanonical.with_suffix(".sha256").write_text(
+        f"{noncanonical_sha}  {noncanonical.name}\n", encoding="ascii"
+    )
+    with pytest.raises(ValueError, match="must be canonical"):
+        load_authenticated_synthetic_report_inputs(
+            handoff_path=noncanonical,
+            expected_handoff_sha256=noncanonical_sha,
+            qsts_output_path=qsts_path,
+            expected_qsts_output_sha256=qsts_sha,
+        )
+
+    incomplete_handoff_raw = json.loads(payload)
+    incomplete_handoff_raw.pop("issue")
+    incomplete_handoff_payload = canonical_json(incomplete_handoff_raw)
+    incomplete_handoff = tmp_path / "incomplete-handoff.json"
+    incomplete_handoff_sha = sha256_bytes(incomplete_handoff_payload)
+    incomplete_handoff.write_bytes(incomplete_handoff_payload)
+    incomplete_handoff.with_suffix(".sha256").write_text(
+        f"{incomplete_handoff_sha}  {incomplete_handoff.name}\n", encoding="ascii"
+    )
+    with pytest.raises(ValueError, match="#1077 handoff fields"):
+        load_authenticated_synthetic_report_inputs(
+            handoff_path=incomplete_handoff,
+            expected_handoff_sha256=incomplete_handoff_sha,
+            qsts_output_path=qsts_path,
+            expected_qsts_output_sha256=qsts_sha,
+        )
+
+    incomplete_qsts_raw = json.loads(qsts_path.read_bytes())
+    incomplete_qsts_raw.pop("issue")
+    incomplete_qsts_payload = canonical_json(incomplete_qsts_raw)
+    incomplete_qsts = tmp_path / "incomplete-qsts.json"
+    incomplete_qsts_sha = sha256_bytes(incomplete_qsts_payload)
+    incomplete_qsts.write_bytes(incomplete_qsts_payload)
+    incomplete_qsts.with_suffix(".sha256").write_text(
+        f"{incomplete_qsts_sha}  {incomplete_qsts.name}\n", encoding="ascii"
+    )
+    with pytest.raises(ValueError, match="#1073 output fields"):
+        load_authenticated_synthetic_report_inputs(
+            handoff_path=handoff_path,
+            expected_handoff_sha256=handoff_sha,
+            qsts_output_path=incomplete_qsts,
+            expected_qsts_output_sha256=incomplete_qsts_sha,
         )
 
 
@@ -363,9 +495,9 @@ def test_counterfactual_uses_exact_one_key_and_excludes_deemed_paid(
         evaluator=_fake_evaluator(calls),
     )
     assert calls == [{}, {"project.curtailment_pct": pytest.approx(0.1)}]
-    assert evaluation.override_items == (
-        ("project.curtailment_pct", pytest.approx(0.1)),
-    )
+    assert len(evaluation.override_items) == 1
+    assert evaluation.override_items[0][0] == "project.curtailment_pct"
+    assert evaluation.override_items[0][1] == pytest.approx(0.1)
     assert evaluation.deemed_paid_finance_haircut_decimal == 0.0
     assert evaluation.kpis.counterfactual.year1_net_generation_mwh < (
         evaluation.kpis.baseline.year1_net_generation_mwh
@@ -373,6 +505,112 @@ def test_counterfactual_uses_exact_one_key_and_excludes_deemed_paid(
     assert evaluation.kpis.counterfactual.year1_revenue_usd < (
         evaluation.kpis.baseline.year1_revenue_usd
     )
+
+
+@pytest.mark.parametrize(
+    ("result", "error", "message"),
+    (
+        ([], TypeError, "must return full result mappings"),
+        ({"kpis": {}, "annual_rows": []}, ValueError, "omitted KPI"),
+        (
+            {
+                "kpis": {
+                    "project_irr": 0.1,
+                    "equity_irr": 0.1,
+                    "project_npv": 1.0,
+                    "min_dscr": 1.0,
+                },
+                "annual_rows": [None],
+            },
+            ValueError,
+            "annual row 0 is not a mapping",
+        ),
+        (
+            {
+                "kpis": {
+                    "project_irr": True,
+                    "equity_irr": 0.1,
+                    "project_npv": 1.0,
+                    "min_dscr": 1.0,
+                },
+                "annual_rows": [{"net_kwh": 1.0, "revenue_usd": 1.0}],
+            },
+            ValueError,
+            "omitted finite project_irr",
+        ),
+        (
+            {
+                "kpis": {
+                    "project_irr": float("nan"),
+                    "equity_irr": 0.1,
+                    "project_npv": 1.0,
+                    "min_dscr": 1.0,
+                },
+                "annual_rows": [{"net_kwh": 1.0, "revenue_usd": 1.0}],
+            },
+            ValueError,
+            "omitted finite project_irr",
+        ),
+    ),
+)
+def test_counterfactual_refuses_incomplete_or_nonfinite_finance_evidence(
+    authenticated_inputs: AuthenticatedSyntheticReportInputs,
+    result: object,
+    error: type[Exception],
+    message: str,
+) -> None:
+    def evaluator(**_kwargs: Any) -> Any:
+        return result
+
+    with pytest.raises(error, match=message):
+        evaluate_synthetic_qsts_finance_counterfactual(
+            inputs=authenticated_inputs,
+            scenario_path=SCENARIO,
+            evaluator=evaluator,
+        )
+
+
+def test_counterfactual_refuses_absent_scenario(
+    authenticated_inputs: AuthenticatedSyntheticReportInputs, tmp_path: Path
+) -> None:
+    with pytest.raises(FileNotFoundError, match="scenario is absent"):
+        evaluate_synthetic_qsts_finance_counterfactual(
+            inputs=authenticated_inputs,
+            scenario_path=tmp_path / "absent.yaml",
+            evaluator=_fake_evaluator([]),
+        )
+
+
+def test_counterfactual_refuses_improved_kpi_or_scenario_mutation(
+    authenticated_inputs: AuthenticatedSyntheticReportInputs, tmp_path: Path
+) -> None:
+    def improving_evaluator(**kwargs: Any) -> dict[str, Any]:
+        result: dict[str, Any] = _fake_evaluator([])(**kwargs)
+        if kwargs["overrides"]:
+            result["kpis"]["project_irr"] = 0.2
+        return result
+
+    with pytest.raises(ValueError, match="unexpectedly improved project_irr"):
+        evaluate_synthetic_qsts_finance_counterfactual(
+            inputs=authenticated_inputs,
+            scenario_path=SCENARIO,
+            evaluator=improving_evaluator,
+        )
+
+    scenario = tmp_path / SCENARIO.name
+    scenario.write_bytes(SCENARIO.read_bytes())
+
+    def mutating_evaluator(**kwargs: Any) -> dict[str, Any]:
+        scenario.write_bytes(scenario.read_bytes() + b"\n")
+        result: dict[str, Any] = _fake_evaluator([])(**kwargs)
+        return result
+
+    with pytest.raises(ValueError, match="scenario bytes changed"):
+        evaluate_synthetic_qsts_finance_counterfactual(
+            inputs=authenticated_inputs,
+            scenario_path=scenario,
+            evaluator=mutating_evaluator,
+        )
 
 
 def test_real_evaluation_gateway_produces_expected_downside_movements(
@@ -430,6 +668,19 @@ def test_report_publishes_hashed_warning_complete_artifacts_and_refuses_release(
     ).read_text(encoding="utf-8")
     with pytest.raises(ValueError, match="Canonical finance release refused"):
         require_canonical_finance_release(record)
+    assert cli_summary(record, digest, config)["canonical_finance_release"] == "REFUSED"
+
+    identical_record, identical_digest = generate_synthetic_qsts_finance_report(
+        config=config,
+        repo_root=repo_root,
+        generated_at_utc=GENERATED_AT,
+        pdf_renderer=_stub_pdf,
+        pdf_warning_verifier=_stub_warning,
+        finance_evaluator=_fake_evaluator([]),
+        output_dir_override=output,
+    )
+    assert identical_record == record
+    assert identical_digest == digest
 
 
 def test_report_refuses_warning_incomplete_pdf_and_differing_overwrite(
