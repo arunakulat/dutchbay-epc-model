@@ -79,8 +79,8 @@ class TestPipelineDataFlow:
 
         # Verify AEP values are in same ballpark
         assert abs(wind_aep_p50 - config_aep_p50) / config_aep_p50 < 0.1, (
-            f"Wind AEP should be consistent: wind={wind_aep_p50/1e3:.0f}GWh, "
-            f"config={config_aep_p50/1e3:.0f}GWh"
+            f"Wind AEP should be consistent: wind={wind_aep_p50 / 1e3:.0f}GWh, "
+            f"config={config_aep_p50 / 1e3:.0f}GWh"
         )
 
     @_REQUIRES_SENSITIVITY
@@ -130,7 +130,7 @@ class TestPipelineDegradationPropagation:
 
         # Verify degradation is configured
         assert degradation > 0, "Degradation should be configured"
-        assert degradation == 0.006, f"Expected 0.6%, got {degradation*100}%"
+        assert degradation == 0.006, f"Expected 0.6%, got {degradation * 100}%"
 
     def test_degradation_in_monte_carlo_layer(self, dutchbay_omegaconf_config):
         """Degradation should be sampled in Monte Carlo."""
@@ -193,6 +193,7 @@ class TestPipelinePerformance:
 
     @pytest.mark.slow
     @pytest.mark.performance
+    @pytest.mark.stochastic_qualification
     def test_monte_carlo_performance(self, mc_sampling_config, performance_benchmarks):
         """Monte Carlo should meet performance target."""
         cfg = mc_sampling_config
@@ -211,6 +212,7 @@ class TestPipelinePerformance:
 
     @pytest.mark.slow
     @pytest.mark.performance
+    @pytest.mark.stochastic_qualification
     @_REQUIRES_SENSITIVITY
     def test_full_pipeline_performance(
         self, dutchbay_omegaconf_config, mc_sampling_config, performance_benchmarks
@@ -333,8 +335,8 @@ class TestPipelineRegressionPins:
         cfg = mc_sampling_config
         seed = int(cfg.monte_carlo.seed)
 
-        first = run_monte_carlo_analysis(base_config=cfg, n_trials=500, seed=seed)
-        second = run_monte_carlo_analysis(base_config=cfg, n_trials=500, seed=seed)
+        first = run_monte_carlo_analysis(base_config=cfg, n_trials=200, seed=seed)
+        second = run_monte_carlo_analysis(base_config=cfg, n_trials=200, seed=seed)
 
         assert first.trials["project_npv"] == second.trials["project_npv"]
         npv = first.summary["project_npv"]
@@ -349,8 +351,8 @@ class TestPipelineRegressionPins:
         cfg = mc_sampling_config
         seed = int(cfg.monte_carlo.seed)
 
-        first = run_monte_carlo_analysis(base_config=cfg, n_trials=500, seed=seed)
-        second = run_monte_carlo_analysis(base_config=cfg, n_trials=500, seed=seed)
+        first = run_monte_carlo_analysis(base_config=cfg, n_trials=200, seed=seed)
+        second = run_monte_carlo_analysis(base_config=cfg, n_trials=200, seed=seed)
 
         assert first.trials["project_irr"] == second.trials["project_irr"]
         irr = first.summary["project_irr"]

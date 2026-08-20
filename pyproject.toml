@@ -326,6 +326,7 @@ markers = [
     "critical_error: critical error-handling and recovery tests",
     "regression: regression tests with frozen/expected output",
     "monte_carlo: Monte Carlo simulation tests",
+    "stochastic_qualification: explicit stochastic scale/qualification tests isolated from the ordinary 200-evaluation full suite",
     "sensitivity: sensitivity-analysis tests",
     "lint: static-analysis and linting tests",
     "grid: grid-study tests requiring the [grid] optional deps (deselect with -m 'not grid')",

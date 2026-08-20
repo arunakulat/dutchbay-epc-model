@@ -175,7 +175,7 @@ class TestMonteCarloStatistics:
         """P10 <= P50 <= P90 ordering should hold for every KPI."""
         cfg = mc_sampling_config
         result = run_monte_carlo_analysis(
-            base_config=cfg, n_trials=500, seed=int(cfg.monte_carlo.seed)
+            base_config=cfg, n_trials=200, seed=int(cfg.monte_carlo.seed)
         )
 
         for metric in ("project_npv", "project_irr", "dscr_min"):
@@ -201,8 +201,8 @@ class TestMonteCarloStatistics:
         cfg = mc_sampling_config
         seed = int(cfg.monte_carlo.seed)
 
-        first = run_monte_carlo_analysis(base_config=cfg, n_trials=300, seed=seed)
-        second = run_monte_carlo_analysis(base_config=cfg, n_trials=300, seed=seed)
+        first = run_monte_carlo_analysis(base_config=cfg, n_trials=200, seed=seed)
+        second = run_monte_carlo_analysis(base_config=cfg, n_trials=200, seed=seed)
 
         assert (
             first.trials == second.trials
@@ -212,7 +212,7 @@ class TestMonteCarloStatistics:
         ), "summary must be identical for a fixed seed"
 
         # A different seed must change the draws
-        other = run_monte_carlo_analysis(base_config=cfg, n_trials=300, seed=seed + 1)
+        other = run_monte_carlo_analysis(base_config=cfg, n_trials=200, seed=seed + 1)
         assert first.trials != other.trials, "different seed should change the draws"
 
 
@@ -220,6 +220,7 @@ class TestMonteCarloPerformance:
     """Test Monte Carlo performance benchmarks."""
 
     @pytest.mark.slow
+    @pytest.mark.stochastic_qualification
     def test_1k_trials_performance(
         self, mc_sampling_config, performance_benchmarks
     ) -> None:
@@ -240,6 +241,7 @@ class TestMonteCarloPerformance:
 
     @pytest.mark.slow
     @pytest.mark.performance
+    @pytest.mark.stochastic_qualification
     def test_10k_trials_performance(
         self, mc_sampling_config, performance_benchmarks
     ) -> None:
@@ -259,6 +261,7 @@ class TestMonteCarloPerformance:
         assert len(result.trials["project_npv"]) == 10000
 
     @pytest.mark.slow
+    @pytest.mark.stochastic_qualification
     def test_trials_per_second_rate(self, mc_sampling_config) -> None:
         """Should achieve a minimum trials-per-second rate."""
         cfg = mc_sampling_config
@@ -337,10 +340,10 @@ class TestMonteCarloRegressionPins:
         """Run metadata should faithfully record the seed/trials/sampler/params."""
         cfg = mc_sampling_config
         seed = int(cfg.monte_carlo.seed)
-        result = run_monte_carlo_analysis(base_config=cfg, n_trials=250, seed=seed)
+        result = run_monte_carlo_analysis(base_config=cfg, n_trials=200, seed=seed)
 
         meta = result.metadata
-        assert meta["n_trials"] == 250
+        assert meta["n_trials"] == 200
         assert meta["seed"] == seed
         assert meta["sampler"] == "lhs"
         assert meta["param_names"] == [
