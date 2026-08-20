@@ -1,0 +1,120 @@
+{
+  "schema_version": "dutchbay.audit.code_remediation_merge_evidence.v1",
+  "status": "merged_remote_green_successor_qa_pending",
+  "as_of": "2026-08-16T13:17:32+05:30",
+  "finding_ids": [
+    "P3-EQ-04"
+  ],
+  "title": "P3-EQ-04 manifest-bound FX methodology protected merge evidence",
+  "repository": {
+    "name": "arunakulat/dutchbay-epc-model",
+    "canonical_worktree": "/Users/aruna/Downloads/dutchbay-epc-model",
+    "base_commit": "50adfe7ee59f91660678c0ca32c2cd6513e1c611",
+    "candidate_commit": "ff5de686ad5ef3071630abfca2a95444f67601b9",
+    "candidate_tree": "869eac8a1cfe409bf8e6e693bb03acf72bedc56d",
+    "merge_commit": "8a6b48f6573e4ac9074da8fbbcb1e48f4353ce9a",
+    "merge_tree": "869eac8a1cfe409bf8e6e693bb03acf72bedc56d",
+    "candidate_and_merge_tree": "869eac8a1cfe409bf8e6e693bb03acf72bedc56d",
+    "tree_identity_verified": true,
+    "base_is_merge_parent": true,
+    "canonical_main_fast_forwarded": true,
+    "canonical_main_clean_and_synced": true,
+    "remote_topic_branch_deleted": true
+  },
+  "pull_request": {
+    "number": 1032,
+    "url": "https://github.com/arunakulat/dutchbay-epc-model/pull/1032",
+    "title": "fix(report): bind FX methodology to run manifest",
+    "merge_method": "squash",
+    "state": "MERGED",
+    "merged_at": "2026-08-16T07:46:03Z",
+    "merged_by": "arunakulat",
+    "head_oid": "ff5de686ad5ef3071630abfca2a95444f67601b9",
+    "base_oid_at_ci": "50adfe7ee59f91660678c0ca32c2cd6513e1c611",
+    "merge_oid": "8a6b48f6573e4ac9074da8fbbcb1e48f4353ce9a",
+    "ready_only_after_terminal_ci": true,
+    "merge_state_before_merge": "CLEAN",
+    "merge_bypass_used": false,
+    "local_cli_note": "The remote squash merge completed successfully. The GitHub CLI then could not switch the topic worktree to main because main is correctly owned by the canonical worktree; remote state was verified before any further action, the remote branch was deleted, and canonical main was fast-forwarded in its own worktree."
+  },
+  "remote_ci": {
+    "status": "PASS",
+    "observed_checks": 27,
+    "successful_checks": 26,
+    "skipped_checks": 1,
+    "pending_checks": 0,
+    "failed_or_other_checks": 0,
+    "intentional_skip": "Grid Study (opt-in, non-blocking)",
+    "successful_families": {
+      "fastlane_and_smoke": 2,
+      "codeql_checks": 2,
+      "classification_quality_security": 3,
+      "docker_build_and_health": 2,
+      "python_test_shards": 12,
+      "coverage_gates": 2,
+      "test_summary": 1,
+      "published_test_results": 2
+    },
+    "terminal_at": "2026-08-16T07:45:31Z"
+  },
+  "predecessors": [
+    {
+      "role": "candidate_evidence",
+      "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_eq_04_fx_report_candidate_ff5de68.json",
+      "sha256": "5bd2c822dfef6c7e0f8285cb1cc7ef2498f579945b750d33592d412e5d758a34"
+    },
+    {
+      "role": "draft_pr_checkpoint",
+      "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p3_eq_04_fx_report_pr1032_opened.json",
+      "sha256": "0c88a8067c31ca9847717c294939b47aee28fcfa6dc5d93eb2e5ea87d4ae8ef5"
+    },
+    {
+      "role": "pr_body",
+      "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/code_dolphins/EQ-04_FX_METHODOLOGY_PR_BODY.md",
+      "sha256": "07bb54c054fd76ff8b3c510406c08867d603034aa5324ef44a7cd9e057b95e91"
+    }
+  ],
+  "local_post_merge": {
+    "status": "PASS",
+    "command": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python -m pytest -q five changed report regressions plus tests/finance/test_lendercase_expected_results.py",
+    "result": "8 passed, 1 warning in 1.67 seconds",
+    "repository_head": "8a6b48f6573e4ac9074da8fbbcb1e48f4353ce9a"
+  },
+  "reproduced_correction": {
+    "scenario": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+    "manifest_config_sha256": "dec7e1d7fecfb5efd009707e361b5558f514dc6ea624010d06af8a745c5821e6",
+    "scenario_config_sha256": "dec7e1d7fecfb5efd009707e361b5558f514dc6ea624010d06af8a745c5821e6",
+    "manifest_and_scenario_hash_match": true,
+    "revenue_fx_mitigation": "Manifest-bound resolved inputs use a deterministic FX path with a starting rate of 333.79 LKR per USD and 5.89% annual LKR depreciation (source mode fixed; pinned as of 2026-06-20T00:02:31Z). See the FX evidence-register row for source provenance. Debt sizing uses resolved FX-converted CFADS and the modeled DSCR constraints, and the resulting equity IRR is disclosed to sponsors rather than masked.",
+    "false_phrase_count_before": 1,
+    "false_phrase_count_after": 0,
+    "imf_projections_casefold_count_after": 0,
+    "merged_html_sha256": "099c968c3cd1eededc71cbfce8dc19012f26e55ff5e78207a3d09e6b6ac4347f",
+    "candidate_html_sha256": "f3ea48feeddb535e369fd3a9fe8f5274dcdea9edef011938d7db71ca5ccd1e02",
+    "html_hash_difference_explained": "The report embeds run-manifest repository provenance, so the squash merge commit changes the rendered artifact hash even though candidate and merge trees are identical. The controlled methodology wording, configuration hash, and finance KPIs are unchanged.",
+    "project_irr_before": 0.014551597740253388,
+    "project_irr_after": 0.014551597740253388,
+    "equity_irr_before": -0.05841298678542661,
+    "equity_irr_after": -0.05841298678542661,
+    "numeric_kpis_unchanged": true
+  },
+  "scope_control": {
+    "manifest_schema_changed": false,
+    "public_api_changed": false,
+    "api_contract_version_changed": false,
+    "package_version_changed": false,
+    "scenario_changed": false,
+    "finance_engine_changed": false,
+    "monte_carlo_changed": false,
+    "kpis_changed": false,
+    "expected_results_changed": false,
+    "f5_01_or_f5_02_changed": false
+  },
+  "remaining_gate": "Independently review the merged FX-methodology disclosure evidence and controlled-register ingress before formal finding closure or lender-pack regeneration.",
+  "limitations": [
+    "The implementation, protected CI and focused post-merge reproduction are complete; independent successor semantic QA remains open.",
+    "The manifest hash binds disclosure to the resolved configuration. It does not independently validate the external provenance or economic reasonableness of the configured assumptions.",
+    "Previously distributed or externally copied reports were not recalled or inspected.",
+    "The wider audit programme remains on HOLD, and Board/lender synthesis regeneration remains unauthorized."
+  ]
+}

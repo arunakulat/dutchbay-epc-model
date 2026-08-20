@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0.0",
+  "retrieved_at": "2026-08-12T09:55:13+05:30",
+  "human_search_url": "https://webstore.iec.ch/en/iec-search/result?q=61400-15-2",
+  "api_endpoint": "https://webstore-search-api.iec.ch/api/search",
+  "requests": [
+    {
+      "label": "61400-15-2 valid publications",
+      "method": "POST",
+      "body": {
+        "mode": "FULL",
+        "query": "61400-15-2",
+        "from": 0,
+        "size": 10,
+        "validOnly": true,
+        "sortBy": [
+          {
+            "reference": "asc"
+          }
+        ],
+        "language": "en",
+        "dateRanges": {},
+        "terms": {},
+        "publicationIds": null,
+        "showTrf": false,
+        "collapsed": true
+      },
+      "response_file": "original/IEC_catalogue_61400-15-2_valid.json",
+      "response_sha256": "9e324b99e9607a87569551356e1825ca631d5200337a12cad7bd882e93f92058",
+      "primary_total": 0,
+      "secondary_total": 0,
+      "tertiary_total": 0
+    },
+    {
+      "label": "61400-15-2 all catalogue states",
+      "method": "POST",
+      "body": {
+        "mode": "FULL",
+        "query": "61400-15-2",
+        "from": 0,
+        "size": 10,
+        "validOnly": false,
+        "sortBy": [
+          {
+            "reference": "asc"
+          }
+        ],
+        "language": "en",
+        "dateRanges": {},
+        "terms": {},
+        "publicationIds": null,
+        "showTrf": false,
+        "collapsed": true
+      },
+      "response_file": "original/IEC_catalogue_61400-15-2_all.json",
+      "response_sha256": "9e324b99e9607a87569551356e1825ca631d5200337a12cad7bd882e93f92058",
+      "primary_total": 0,
+      "secondary_total": 0,
+      "tertiary_total": 0
+    },
+    {
+      "label": "61400-15-1 positive control",
+      "method": "POST",
+      "body": {
+        "mode": "FULL",
+        "query": "61400-15-1",
+        "from": 0,
+        "size": 10,
+        "validOnly": true,
+        "sortBy": [
+          {
+            "reference": "asc"
+          }
+        ],
+        "language": "en",
+        "dateRanges": {},
+        "terms": {},
+        "publicationIds": null,
+        "showTrf": false,
+        "collapsed": true
+      },
+      "response_file": "original/IEC_catalogue_61400-15-1_positive_control.json",
+      "response_sha256": "16312898bb0ed8027bcb8835790922387530d9ff98e6321cf92525a1fcd6a728",
+      "primary_total": 1,
+      "primary_reference": "IEC 61400-15-1:2025"
+    }
+  ],
+  "conclusion": "The official public IEC catalogue returned no 61400-15-2 result at this cutoff, while the positive-control query returned IEC 61400-15-1:2025. This establishes public-catalogue publication status only; it does not prove that no unpublished committee draft exists."
+}

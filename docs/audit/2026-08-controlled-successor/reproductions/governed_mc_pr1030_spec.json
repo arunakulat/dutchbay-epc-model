@@ -1,0 +1,78 @@
+{
+  "schema_version": "dutchbay.audit.governed_mc_run_spec.v1",
+  "created_at": "2026-08-16T13:33:54+05:30",
+  "title": "PR #1030 governed post-merge finance-Monte-Carlo validation run",
+  "purpose": "Generate lossless post-merge finance-MC metadata and raw trials, then cross-check the corrected DSCR breach point estimate and Wilson interval against a separately implemented arithmetic path.",
+  "classification": "governed_validation_run_not_lender_release",
+  "finding_ids": [
+    "P2-MC-SENS-02",
+    "P3-MCFX-03"
+  ],
+  "repository": {
+    "path": "/Users/aruna/Downloads/dutchbay-epc-model",
+    "expected_branch": "main",
+    "expected_head": "8a6b48f6573e4ac9074da8fbbcb1e48f4353ce9a",
+    "expected_origin_main": "8a6b48f6573e4ac9074da8fbbcb1e48f4353ce9a",
+    "expected_tree": "869eac8a1cfe409bf8e6e693bb03acf72bedc56d",
+    "required_ancestor": "9faa6a23d1e655533e5231b6959c6ce3f66be5ad",
+    "required_ancestor_reason": "PR #1030 merged correction to the covenant-breach comparator"
+  },
+  "inputs": {
+    "scenario": {
+      "path": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+      "sha256": "b152b378f0dd41bbfec703e5603d00897b7843200a8f2619b0c1644dedc599fd"
+    },
+    "canonical_cli_config": {
+      "path": "conf/cli_monte_carlo.yaml",
+      "sha256": "9ec2147f83a679e0c0c2d8291c95f348072e39edfe255fc92a6b45f64e11055e"
+    },
+    "version_file": {
+      "path": "VERSION",
+      "sha256": "c36f9423b857f7132f85de72265467c012b8f151b2a0e53c6f345efe37c1c20b"
+    }
+  },
+  "run": {
+    "n_trials": 10000,
+    "seed": 42,
+    "common_random_numbers": true,
+    "expected_sampler": "lhs",
+    "expected_correlation_enabled": true,
+    "expected_fixed_debt_stress": false,
+    "output_directory": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/governed_mc_pr1030_8a6b48f_seed42_n10000"
+  },
+  "evidence_logging": {
+    "minimum_level": "WARNING",
+    "duplicate_policy": "emit_first_and_count_all_by_logger_level_template",
+    "reason": "The financial pipeline emits high-volume per-trial INFO records and repeated structural warnings. The governed harness suppresses INFO, emits the first instance of each warning/error template, and records every duplicate count in the control artifact."
+  },
+  "controlled_override": {
+    "path": "monte_carlo.allow_toy_fallback",
+    "authored_value": null,
+    "effective_value": false,
+    "reason": "Fail loudly on any full-v14 trial error; fabricated toy KPIs are prohibited in governed validation evidence."
+  },
+  "covenant": {
+    "expected_resolution_path": "constraints.min_dscr_covenant",
+    "expected_floor": 1.3,
+    "lower_precedence_monte_carlo_value": 1.2
+  },
+  "acceptance_criteria": {
+    "iterations": 10000,
+    "failed_iterations": 0,
+    "toy_fallback_count": 0,
+    "partial_trial_count": 0,
+    "dead_param_names": [],
+    "base_outside_bounds": [],
+    "degenerate_sweep": false,
+    "raw_trial_arrays_required": true,
+    "emitted_breach_statistics_must_match_secondary_arithmetic": true,
+    "casper_breach_statistics_must_match_secondary_arithmetic": true
+  },
+  "governance": {
+    "release_status": "HOLD",
+    "generation_owner": "Codex primary remediation agent",
+    "reviewer_independence": false,
+    "independent_successor_review": "required_not_started",
+    "limitation": "This run validates the merged implementation on the pinned scenario and environment. It neither approves the scenario's economic assumptions nor satisfies the separate independent-successor review gate."
+  }
+}

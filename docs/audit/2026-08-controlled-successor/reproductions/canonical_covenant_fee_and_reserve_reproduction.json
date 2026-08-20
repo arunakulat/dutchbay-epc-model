@@ -1,0 +1,62 @@
+{
+  "balloon": {
+    "breaches_internal_cap": true,
+    "cash_sweep_total_usd": 22021308.20884404,
+    "internal_cap_pct": 0.1,
+    "pct_of_idc_inclusive_principal": 0.488928964946153,
+    "residual_at_project_end_usd": 16886225.76523181,
+    "structural_usd": 38907533.97407585,
+    "treatment": "cash_sweep"
+  },
+  "coverage": {
+    "llcr": 1.2677278108569288,
+    "min_dscr": 1.285740985294611,
+    "plcr": 1.3068856980285766
+  },
+  "debt_covenant_snapshot": {
+    "audit_status": "FAIL",
+    "balloon_flag": true,
+    "balloon_remaining": 38907533.97407585,
+    "dscr_min": 1.285740985294611,
+    "dscr_threshold": 1.3,
+    "first_breach_year": 3,
+    "fx_avg": null,
+    "fx_max": null,
+    "fx_min": null,
+    "last_breach_year": 12,
+    "llcr": null,
+    "llcr_threshold": null,
+    "notes": "Significant breach in 3 year(s); Balloon: $38,907,534 (48.9%, cash_sweep) - BREACHES max_balloon_pct 10%",
+    "plcr": null,
+    "plcr_threshold": null,
+    "years_below_threshold": 3
+  },
+  "dsra_at_close": {
+    "fund_at_close": false,
+    "initial_usd": 0.0,
+    "target_months": 6.0
+  },
+  "git_sha": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+  "interpretation": [
+    "The 0.75% guarantee fee and 1.00% PRI premium are charged on opening senior debt regardless of use_revenue_guarantee.",
+    "No guarantee claim proceeds, receivables support, or PRI recovery cash flow is represented by these fee fields.",
+    "The canonical DSRA is built from operating cash because fund_at_close is false."
+  ],
+  "operating_reserve_year_1": {
+    "reserve_balance_usd": 4767959.777949829,
+    "reserve_funded_usd": 4767959.777949829,
+    "reserve_required_usd": 8099467.95425109
+  },
+  "operating_reserve_year_2": {
+    "reserve_balance_usd": 7420953.957752483,
+    "reserve_funded_usd": 2652994.1798026543,
+    "reserve_required_usd": 7420953.957752483
+  },
+  "repository": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+  "run_at": "2026-08-12T09:57:00+05:30",
+  "scenario": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+  "schema_version": "1.0.0",
+  "senior_fee_rate": 0.0175,
+  "senior_fee_total_usd": 17296565.054643158,
+  "validation_mode": "strict"
+}

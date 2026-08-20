@@ -1,0 +1,1398 @@
+{
+  "schema_version": "dutchbay.audit.p3_reproduction.v1",
+  "status": "completed",
+  "as_of": "2026-08-16T10:30:00+05:30",
+  "title": "Finance-MC parameter and scenario inventory",
+  "finding_ids": [
+    "P3-MCFX-02"
+  ],
+  "verification_level": "independent_reproduction",
+  "repository": {
+    "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+    "commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+    "branch": "codex/audit-corrigendum-2026-08",
+    "status_before": "## codex/audit-corrigendum-2026-08...origin/main",
+    "status_after": "## codex/audit-corrigendum-2026-08...origin/main",
+    "tracked_tree_sha256": "316b37a8f385e1a8e099fdbb1b2aa611ac9e462a"
+  },
+  "execution": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 /Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python /Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/build_p3_reproductions.py --output-dir /Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions --as-of 2026-08-16T10:30:00+05:30",
+    "working_directory": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+    "generator_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/build_p3_reproductions.py",
+    "generator_sha256": "f3034ca8d53ad6c6884cd7ba2f8d89192fa526bfae69cdb7789701de5a2baa73",
+    "environment": {
+      "python_executable": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "python_version": "3.11.14 (main, Oct  9 2025, 16:16:55) [Clang 17.0.0 (clang-1700.3.19.1)]",
+      "platform": "macOS-26.6.1-arm64-arm-64bit",
+      "packages": {
+        "numpy": "2.4.6",
+        "scipy": "1.17.1",
+        "pydantic": "2.13.4",
+        "PyYAML": "6.0.3",
+        "pytest": "9.1.1"
+      },
+      "python_dont_write_bytecode": true
+    }
+  },
+  "inputs": {
+    "scenario_path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_lendercase_2025Q4.yaml",
+    "scenario_sha256": "b152b378f0dd41bbfec703e5603d00897b7843200a8f2619b0c1644dedc599fd"
+  },
+  "method": "Parse every tracked YAML/YML/JSON file under scenarios/, preserve each full monte_carlo block, classify parameter shape, and derive unique live list-form parameter names without inventing a transaction risk policy.",
+  "result": {
+    "tracked_scenario_count": 39,
+    "parsed_count": 39,
+    "parse_errors": [],
+    "parameter_shape_counts": {
+      "list": 9,
+      "mapping": 7,
+      "missing": 23
+    },
+    "unique_list_parameter_names": [
+      "capex.usd_total",
+      "fx.start_lkr_per_usd",
+      "opex.usd_per_year",
+      "project.capacity_factor",
+      "project.curtailment_pct",
+      "tariff.lkr_per_kwh"
+    ],
+    "records": [
+      {
+        "path": "scenarios/_scrtch/zz_bad.yaml",
+        "sha256": "ae1646769c7e406a5bed3545bf7398c89eee3fa1783c0675b7fb8877ab81c7a3",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/aep_summary_dutchbay_10mw.json",
+        "sha256": "18bb61b4b1e4490a2416cdc27d5268101cd643cf77ab37b983d77f8b8c364f2b",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/aep_summary_dutchbay_hybrid.json",
+        "sha256": "ed5a282be9944bf3892164814cd865ecc20155cd41344d8358b2ffb6843b99a8",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/aep_summary_kalpitiya_160m_fitted.json",
+        "sha256": "d513c8c5c94dc8b9fd7eaaacc9ff220e58f2bfd4eedb3a9e8300cd69b185ae25",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/aep_summary_mullikulam.json",
+        "sha256": "2c39bcae484022a5f9f5a4c7a85f2803fa1b06ba9c1c082e2a5cf943161594f2",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/bad_missing_tax.yaml",
+        "sha256": "dcf63149b73808608ad4b24bdf9fd4747c48538f9e87a78b13349e88541565df",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "mapping",
+        "parameter_names": [
+          "capacity_factor_std",
+          "tariff_lkr_std",
+          "opex_usd_std",
+          "capex_usd_std"
+        ],
+        "n_scenarios": 100000,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "n_scenarios": 100000,
+          "seed": 42,
+          "parameters": {
+            "capacity_factor_std": 0.05,
+            "tariff_lkr_std": 0.1,
+            "opex_usd_std": 0.15,
+            "capex_usd_std": 0.08
+          },
+          "var_confidence": 0.95,
+          "cvar_confidence": 0.95,
+          "percentiles": [
+            10,
+            25,
+            50,
+            75,
+            90
+          ],
+          "min_dscr_covenant": 1.2,
+          "min_llcr_covenant": 1.25
+        }
+      },
+      {
+        "path": "scenarios/ceb_bess_10mw_capacity_charge.yaml",
+        "sha256": "b0cdc74fc2d3f70f428db331bab2cee9d5cf54be34ea6492ced68095cb31215a",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/ceb_solar_bess_nightpeak_10mw.yaml",
+        "sha256": "76d2a87a25a735840255134e0b5f52c1f37b7c98fe0aa3fd3874ab659d937ed7",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/contracts_edgecase_base_v14.yaml",
+        "sha256": "946783011036ebab7f120c2f4bc394ec93c6c06ea8106d258bdc877af10abbfe",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/dscr_sensitivity_example.yaml",
+        "sha256": "0433702cfec6ab3237dcbfd092fe6d130ef3d4ae753a8814916f045e83f8df97",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/dutchbay_basecase_2025Q4.yaml",
+        "sha256": "bde22faf4f803a8309a6f40db68718f554c00ca5f69cad02d395daeb2f6c500e",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "mapping",
+        "parameter_names": [
+          "capacity_factor_std",
+          "tariff_lkr_std",
+          "opex_usd_std",
+          "capex_usd_std"
+        ],
+        "n_scenarios": 100000,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "n_scenarios": 100000,
+          "seed": 42,
+          "parameters": {
+            "capacity_factor_std": 0.05,
+            "tariff_lkr_std": 0.1,
+            "opex_usd_std": 0.15,
+            "capex_usd_std": 0.08
+          },
+          "var_confidence": 0.95,
+          "cvar_confidence": 0.95,
+          "percentiles": [
+            10,
+            25,
+            50,
+            75,
+            90
+          ],
+          "min_dscr_covenant": 1.2,
+          "min_llcr_covenant": 1.25
+        }
+      },
+      {
+        "path": "scenarios/dutchbay_capex_eia_prudent_2025Q4.yaml",
+        "sha256": "c8ede9acea1c99aedd39af2f1ff5aea9a755cb576528964c180b273ea0ee0cbf",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "list",
+        "parameter_names": [
+          "project.capacity_factor",
+          "tariff.lkr_per_kwh",
+          "opex.usd_per_year",
+          "capex.usd_total",
+          "fx.start_lkr_per_usd",
+          "project.curtailment_pct"
+        ],
+        "n_scenarios": 100000,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "enabled": true,
+          "n_scenarios": 100000,
+          "sampler": "lhs",
+          "seed": 42,
+          "weibull_uncertainty_pct": 10.0,
+          "wake_loss_std_pct": 2.0,
+          "availability_std_pct": 1.0,
+          "electrical_loss_std_pct": 0.5,
+          "parameters": [
+            {
+              "name": "project.capacity_factor",
+              "low": 0.2988,
+              "high": 0.3652,
+              "distribution": "uniform"
+            },
+            {
+              "name": "tariff.lkr_per_kwh",
+              "low": 16.24,
+              "high": 24.36,
+              "distribution": "uniform"
+            },
+            {
+              "name": "opex.usd_per_year",
+              "low": 2100000.0,
+              "high": 3900000.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "capex.usd_total",
+              "low": 190370880.0,
+              "high": 262893120.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "fx.start_lkr_per_usd",
+              "low": 300.0,
+              "high": 367.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "project.curtailment_pct",
+              "low": 0.0,
+              "high": 0.13,
+              "distribution": "uniform"
+            }
+          ],
+          "var_confidence": 0.95,
+          "cvar_confidence": 0.95,
+          "percentiles": [
+            10,
+            25,
+            50,
+            75,
+            90
+          ],
+          "min_dscr_covenant": 1.2,
+          "min_llcr_covenant": 1.25,
+          "output_path": "outputs/mc_aep_dutchbay_100k.parquet"
+        }
+      },
+      {
+        "path": "scenarios/dutchbay_capex_sinohydro_lean_2025Q4.yaml",
+        "sha256": "b1bf794def8033c4f65710e1e732b58ab276442227ec373b1af8f23f391b7901",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "list",
+        "parameter_names": [
+          "project.capacity_factor",
+          "tariff.lkr_per_kwh",
+          "opex.usd_per_year",
+          "capex.usd_total",
+          "fx.start_lkr_per_usd",
+          "project.curtailment_pct"
+        ],
+        "n_scenarios": 100000,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "enabled": true,
+          "n_scenarios": 100000,
+          "sampler": "lhs",
+          "seed": 42,
+          "weibull_uncertainty_pct": 10.0,
+          "wake_loss_std_pct": 2.0,
+          "availability_std_pct": 1.0,
+          "electrical_loss_std_pct": 0.5,
+          "parameters": [
+            {
+              "name": "project.capacity_factor",
+              "low": 0.2988,
+              "high": 0.3652,
+              "distribution": "uniform"
+            },
+            {
+              "name": "tariff.lkr_per_kwh",
+              "low": 16.24,
+              "high": 24.36,
+              "distribution": "uniform"
+            },
+            {
+              "name": "opex.usd_per_year",
+              "low": 2100000.0,
+              "high": 3900000.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "capex.usd_total",
+              "low": 130980528.0,
+              "high": 180877872.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "fx.start_lkr_per_usd",
+              "low": 300.0,
+              "high": 367.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "project.curtailment_pct",
+              "low": 0.0,
+              "high": 0.13,
+              "distribution": "uniform"
+            }
+          ],
+          "var_confidence": 0.95,
+          "cvar_confidence": 0.95,
+          "percentiles": [
+            10,
+            25,
+            50,
+            75,
+            90
+          ],
+          "min_dscr_covenant": 1.2,
+          "min_llcr_covenant": 1.25,
+          "output_path": "outputs/mc_aep_dutchbay_100k.parquet"
+        }
+      },
+      {
+        "path": "scenarios/dutchbay_equitycase_2025Q4.yaml",
+        "sha256": "93593fe551b299765eba2372bfc89e31dd711ad79541ca00ed1ee2b661e18a37",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "mapping",
+        "parameter_names": [
+          "capacity_factor_std",
+          "tariff_lkr_std",
+          "opex_usd_std",
+          "capex_usd_std"
+        ],
+        "n_scenarios": 100000,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "n_scenarios": 100000,
+          "seed": 42,
+          "parameters": {
+            "capacity_factor_std": 0.05,
+            "tariff_lkr_std": 0.1,
+            "opex_usd_std": 0.15,
+            "capex_usd_std": 0.08
+          },
+          "var_confidence": 0.95,
+          "cvar_confidence": 0.95,
+          "percentiles": [
+            10,
+            25,
+            50,
+            75,
+            90
+          ],
+          "min_dscr_covenant": 1.2,
+          "min_llcr_covenant": 1.25
+        }
+      },
+      {
+        "path": "scenarios/dutchbay_hybrid_bess_2025Q4.yaml",
+        "sha256": "500507dee69ee87a6d1372e84ca0470fcc3c07a46b4da2c26dfd0442841f9efd",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "list",
+        "parameter_names": [
+          "project.capacity_factor",
+          "tariff.lkr_per_kwh",
+          "opex.usd_per_year",
+          "capex.usd_total",
+          "fx.start_lkr_per_usd",
+          "project.curtailment_pct"
+        ],
+        "n_scenarios": 100000,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "enabled": true,
+          "n_scenarios": 100000,
+          "sampler": "lhs",
+          "seed": 42,
+          "weibull_uncertainty_pct": 10.0,
+          "wake_loss_std_pct": 2.0,
+          "availability_std_pct": 1.0,
+          "electrical_loss_std_pct": 0.5,
+          "parameters": [
+            {
+              "name": "project.capacity_factor",
+              "low": 0.2637,
+              "high": 0.3223,
+              "distribution": "uniform"
+            },
+            {
+              "name": "tariff.lkr_per_kwh",
+              "low": 16.24,
+              "high": 24.36,
+              "distribution": "uniform"
+            },
+            {
+              "name": "opex.usd_per_year",
+              "low": 2100000.0,
+              "high": 3900000.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "capex.usd_total",
+              "low": 188664000.0,
+              "high": 260536000.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "fx.start_lkr_per_usd",
+              "low": 300.0,
+              "high": 367.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "project.curtailment_pct",
+              "low": 0.0,
+              "high": 0.13,
+              "distribution": "uniform"
+            }
+          ],
+          "var_confidence": 0.95,
+          "cvar_confidence": 0.95,
+          "percentiles": [
+            10,
+            25,
+            50,
+            75,
+            90
+          ],
+          "min_dscr_covenant": 1.2,
+          "min_llcr_covenant": 1.25,
+          "output_path": "outputs/mc_hybrid_bess_dutchbay_100k.parquet"
+        }
+      },
+      {
+        "path": "scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml",
+        "sha256": "446df1191550b1126e32df5822350ea92fc37e858145694098bf2f76eb8a5e91",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "list",
+        "parameter_names": [
+          "project.capacity_factor",
+          "tariff.lkr_per_kwh",
+          "opex.usd_per_year",
+          "capex.usd_total",
+          "fx.start_lkr_per_usd",
+          "project.curtailment_pct"
+        ],
+        "n_scenarios": 100000,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "enabled": true,
+          "n_scenarios": 100000,
+          "sampler": "lhs",
+          "seed": 42,
+          "weibull_uncertainty_pct": 10.0,
+          "wake_loss_std_pct": 2.0,
+          "availability_std_pct": 1.0,
+          "electrical_loss_std_pct": 0.5,
+          "parameters": [
+            {
+              "name": "project.capacity_factor",
+              "low": 0.2637,
+              "high": 0.3223,
+              "distribution": "uniform"
+            },
+            {
+              "name": "tariff.lkr_per_kwh",
+              "low": 16.24,
+              "high": 24.36,
+              "distribution": "uniform"
+            },
+            {
+              "name": "opex.usd_per_year",
+              "low": 2100000.0,
+              "high": 3900000.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "capex.usd_total",
+              "low": 167664000.0,
+              "high": 231536000.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "fx.start_lkr_per_usd",
+              "low": 300.0,
+              "high": 367.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "project.curtailment_pct",
+              "low": 0.0,
+              "high": 0.13,
+              "distribution": "uniform"
+            }
+          ],
+          "var_confidence": 0.95,
+          "cvar_confidence": 0.95,
+          "percentiles": [
+            10,
+            25,
+            50,
+            75,
+            90
+          ],
+          "min_dscr_covenant": 1.2,
+          "min_llcr_covenant": 1.25,
+          "output_path": "outputs/mc_aep_dutchbay_100k.parquet"
+        }
+      },
+      {
+        "path": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+        "sha256": "b152b378f0dd41bbfec703e5603d00897b7843200a8f2619b0c1644dedc599fd",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "list",
+        "parameter_names": [
+          "project.capacity_factor",
+          "tariff.lkr_per_kwh",
+          "opex.usd_per_year",
+          "capex.usd_total",
+          "fx.start_lkr_per_usd",
+          "project.curtailment_pct"
+        ],
+        "n_scenarios": 100000,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "enabled": true,
+          "n_scenarios": 100000,
+          "sampler": "lhs",
+          "seed": 42,
+          "weibull_uncertainty_pct": 10.0,
+          "wake_loss_std_pct": 2.0,
+          "availability_std_pct": 1.0,
+          "electrical_loss_std_pct": 0.5,
+          "parameters": [
+            {
+              "name": "project.capacity_factor",
+              "low": 0.2988,
+              "high": 0.3652,
+              "distribution": "uniform"
+            },
+            {
+              "name": "tariff.lkr_per_kwh",
+              "low": 16.24,
+              "high": 24.36,
+              "distribution": "uniform"
+            },
+            {
+              "name": "opex.usd_per_year",
+              "low": 2100000.0,
+              "high": 3900000.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "capex.usd_total",
+              "low": 134064000.0,
+              "high": 185136000.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "fx.start_lkr_per_usd",
+              "low": 300.0,
+              "high": 367.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "project.curtailment_pct",
+              "low": 0.0,
+              "high": 0.13,
+              "distribution": "uniform"
+            }
+          ],
+          "correlation": {
+            "enabled": true,
+            "method": "iman_conover",
+            "param_names": [
+              "project.capacity_factor",
+              "tariff.lkr_per_kwh",
+              "opex.usd_per_year",
+              "capex.usd_total",
+              "fx.start_lkr_per_usd",
+              "project.curtailment_pct"
+            ],
+            "matrix": [
+              [
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.2
+              ],
+              [
+                0.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                1.0,
+                0.35,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.35,
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0
+              ],
+              [
+                0.2,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0
+              ]
+            ]
+          },
+          "var_confidence": 0.95,
+          "cvar_confidence": 0.95,
+          "percentiles": [
+            10,
+            25,
+            50,
+            75,
+            90
+          ],
+          "min_dscr_covenant": 1.2,
+          "min_llcr_covenant": 1.25,
+          "output_path": "outputs/mc_aep_dutchbay_100k.parquet"
+        }
+      },
+      {
+        "path": "scenarios/dutchbay_lendercase_5usc_fixed_lkr.yaml",
+        "sha256": "13f53e835e22862baa664f2db8eaf802633f193395351e558d54d0411801ea8d",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "list",
+        "parameter_names": [
+          "project.capacity_factor",
+          "tariff.lkr_per_kwh",
+          "opex.usd_per_year",
+          "capex.usd_total",
+          "fx.start_lkr_per_usd"
+        ],
+        "n_scenarios": 100000,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "enabled": true,
+          "n_scenarios": 100000,
+          "sampler": "lhs",
+          "seed": 42,
+          "weibull_uncertainty_pct": 10.0,
+          "wake_loss_std_pct": 2.0,
+          "availability_std_pct": 1.0,
+          "electrical_loss_std_pct": 0.5,
+          "parameters": [
+            {
+              "name": "project.capacity_factor",
+              "low": 0.2988,
+              "high": 0.3652,
+              "distribution": "uniform"
+            },
+            {
+              "name": "tariff.lkr_per_kwh",
+              "low": 16.24,
+              "high": 24.36,
+              "distribution": "uniform"
+            },
+            {
+              "name": "opex.usd_per_year",
+              "low": 2457000.0,
+              "high": 4563000.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "capex.usd_total",
+              "low": 174300000.0,
+              "high": 240700000.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "fx.start_lkr_per_usd",
+              "low": 300.0,
+              "high": 367.0,
+              "distribution": "uniform"
+            }
+          ],
+          "var_confidence": 0.95,
+          "cvar_confidence": 0.95,
+          "percentiles": [
+            10,
+            25,
+            50,
+            75,
+            90
+          ],
+          "min_dscr_covenant": 1.2,
+          "min_llcr_covenant": 1.25,
+          "output_path": "outputs/mc_aep_dutchbay_100k.parquet"
+        }
+      },
+      {
+        "path": "scenarios/dutchbay_master_config_v14.yaml",
+        "sha256": "135607b867dc75068ffa9e49887a9e90b11e086d55a81fd9d7978ec4dcd5f60b",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "mapping",
+        "parameter_names": [
+          "capacity_factor_std",
+          "capex_usd_std",
+          "opex_usd_std",
+          "tariff_lkr_std"
+        ],
+        "n_scenarios": 100000,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "cvar_confidence": 0.95,
+          "min_dscr_covenant": 1.2,
+          "min_llcr_covenant": 1.25,
+          "n_scenarios": 100000,
+          "parameters": {
+            "capacity_factor_std": 0.05,
+            "capex_usd_std": 0.08,
+            "opex_usd_std": 0.15,
+            "tariff_lkr_std": 0.1
+          },
+          "percentiles": [
+            10,
+            25,
+            50,
+            75,
+            90
+          ],
+          "seed": 42,
+          "var_confidence": 0.95
+        }
+      },
+      {
+        "path": "scenarios/dutchbay_mc_enhanced_2025Q4.yaml",
+        "sha256": "5a600e50a726f891563a36718c71491db2a0fed0c467a33a2271a6679de89b41",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/dutchbay_optimistic_2025Q4.yaml",
+        "sha256": "c6648a095d7d972bb3982ebb8a0c9e1a8780d9f79857280342b771dc2122d036",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "mapping",
+        "parameter_names": [
+          "capacity_factor_std",
+          "tariff_lkr_std",
+          "opex_usd_std",
+          "capex_usd_std"
+        ],
+        "n_scenarios": 100000,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "n_scenarios": 100000,
+          "seed": 42,
+          "parameters": {
+            "capacity_factor_std": 0.035,
+            "tariff_lkr_std": 0.08,
+            "opex_usd_std": 0.12,
+            "capex_usd_std": 0.06
+          },
+          "var_confidence": 0.95,
+          "cvar_confidence": 0.95,
+          "percentiles": [
+            10,
+            25,
+            50,
+            75,
+            90
+          ],
+          "min_dscr_covenant": 1.2,
+          "min_llcr_covenant": 1.25
+        }
+      },
+      {
+        "path": "scenarios/dutchbay_pessimistic_2025Q4.yaml",
+        "sha256": "c7ad41602e77803df2b4e2df33b37bd2f2949d491037a90f827d1135e07f6753",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "mapping",
+        "parameter_names": [
+          "capacity_factor_std",
+          "tariff_lkr_std",
+          "opex_usd_std",
+          "capex_usd_std"
+        ],
+        "n_scenarios": 100000,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "n_scenarios": 100000,
+          "seed": 42,
+          "parameters": {
+            "capacity_factor_std": 0.07,
+            "tariff_lkr_std": 0.12,
+            "opex_usd_std": 0.18,
+            "capex_usd_std": 0.1
+          },
+          "var_confidence": 0.95,
+          "cvar_confidence": 0.95,
+          "percentiles": [
+            10,
+            25,
+            50,
+            75,
+            90
+          ],
+          "min_dscr_covenant": 1.2,
+          "min_llcr_covenant": 1.25
+        }
+      },
+      {
+        "path": "scenarios/dutchbay_solar_only_2025Q4.yaml",
+        "sha256": "60f27d99f80e4ee8221fff6147eed6af787bb0a950a6f20e336028dc30c4ab63",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "list",
+        "parameter_names": [
+          "project.capacity_factor",
+          "tariff.lkr_per_kwh",
+          "opex.usd_per_year",
+          "capex.usd_total",
+          "fx.start_lkr_per_usd"
+        ],
+        "n_scenarios": 100000,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "enabled": true,
+          "n_scenarios": 100000,
+          "sampler": "lhs",
+          "seed": 42,
+          "parameters": [
+            {
+              "name": "project.capacity_factor",
+              "low": 0.15165,
+              "high": 0.18535,
+              "distribution": "uniform"
+            },
+            {
+              "name": "tariff.lkr_per_kwh",
+              "low": 16.24,
+              "high": 24.36,
+              "distribution": "uniform"
+            },
+            {
+              "name": "opex.usd_per_year",
+              "low": 1050000.0,
+              "high": 1950000.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "capex.usd_total",
+              "low": 126000000.0,
+              "high": 174000000.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "fx.start_lkr_per_usd",
+              "low": 300.0,
+              "high": 367.0,
+              "distribution": "uniform"
+            }
+          ],
+          "var_confidence": 0.95,
+          "cvar_confidence": 0.95,
+          "percentiles": [
+            10,
+            25,
+            50,
+            75,
+            90
+          ],
+          "min_dscr_covenant": 1.2,
+          "min_llcr_covenant": 1.25,
+          "output_path": "outputs/mc_solar_dutchbay_100k.parquet"
+        }
+      },
+      {
+        "path": "scenarios/dutchbay_sprint17_enhanced.yaml",
+        "sha256": "51bfa2bcf23c41c4ebba2b72f491102774b3814061b91f414ac79c1eca676f5d",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "scenario_name": "DutchBay Sprint17 Enhanced",
+          "n_iterations": 10000,
+          "sampler": "lhs",
+          "seed": 42,
+          "discount_rate_pct": 8.0,
+          "capex_total_usd": 252000000,
+          "project_life_years": 25,
+          "revenue_mean_usd": 19500000,
+          "revenue_std_pct": 10.0,
+          "cost_mean_usd": 7200000,
+          "cost_std_pct": 5.0,
+          "fx_mean_rate": 333.79,
+          "fx_std_pct": 15.0,
+          "degradation_mean_pct": 0.6,
+          "degradation_std_pct": 0.1,
+          "correlation": {
+            "enabled": true,
+            "matrix": [
+              [
+                1.0,
+                0.4,
+                -0.3,
+                -0.2
+              ],
+              [
+                0.4,
+                1.0,
+                -0.2,
+                0.1
+              ],
+              [
+                -0.3,
+                -0.2,
+                1.0,
+                0.0
+              ],
+              [
+                -0.2,
+                0.1,
+                0.0,
+                1.0
+              ]
+            ]
+          }
+        }
+      },
+      {
+        "path": "scenarios/edge_extreme_stress.yaml",
+        "sha256": "7055da776602a25f7e1ad7aa68a416b0272bc11a72bb147a8dd3cfea9741b358",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "mapping",
+        "parameter_names": [
+          "capacity_factor_std",
+          "tariff_lkr_std",
+          "opex_usd_std",
+          "capex_usd_std"
+        ],
+        "n_scenarios": 100000,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "n_scenarios": 100000,
+          "seed": 42,
+          "parameters": {
+            "capacity_factor_std": 0.1,
+            "tariff_lkr_std": 0.15,
+            "opex_usd_std": 0.22,
+            "capex_usd_std": 0.12
+          },
+          "var_confidence": 0.95,
+          "cvar_confidence": 0.95,
+          "percentiles": [
+            10,
+            25,
+            50,
+            75,
+            90
+          ],
+          "min_dscr_covenant": 1.15,
+          "min_llcr_covenant": 1.2
+        }
+      },
+      {
+        "path": "scenarios/example_a.yaml",
+        "sha256": "d9fd96a93387a84830d99e3147035b6c85f907d056486cabd35d238d28ed4683",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/example_b.json",
+        "sha256": "3130f73ffc058eaaa373c21e3079b7c6aae8af4a9777113e302e87e7325574fa",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/example_b.yaml",
+        "sha256": "acfc701dee9b1f91503f8116466ef1ef2decfd3242d621502081faad7c627e98",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/example_fx_structured_blocks.yaml",
+        "sha256": "e34fade6a9fa919b826b180ae3b448ddfe797217e8894489f3ddfe1a3ed2f805",
+        "yaml_document_count": 4,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/good_unit_test.yaml",
+        "sha256": "850ac7495ef6e9abb0ec5c0b826876fb1b140de5ccda8fedb000e98a780fce18",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/kalpitiya_lendercase_160m_fitted.yaml",
+        "sha256": "39b1a471341f0fd7be4a60336ee6228f630fee8c9dc59747bd5b18be9375545f",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "list",
+        "parameter_names": [
+          "project.capacity_factor",
+          "tariff.lkr_per_kwh",
+          "opex.usd_per_year",
+          "capex.usd_total",
+          "fx.start_lkr_per_usd"
+        ],
+        "n_scenarios": 100000,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "enabled": true,
+          "n_scenarios": 100000,
+          "sampler": "lhs",
+          "seed": 42,
+          "weibull_uncertainty_pct": 10.0,
+          "wake_loss_std_pct": 2.0,
+          "availability_std_pct": 1.0,
+          "electrical_loss_std_pct": 0.5,
+          "discount_rate_pct": 8.0,
+          "capex_total_usd": 150000000,
+          "revenue_mean_usd": 50000000,
+          "revenue_std_pct": 10,
+          "cost_mean_usd": 3000000,
+          "cost_std_pct": 8,
+          "fx_mean_rate": 333.79,
+          "fx_std_pct": 3,
+          "project_life_years": 20,
+          "parameters": [
+            {
+              "name": "project.capacity_factor",
+              "low": 0.3096,
+              "high": 0.3784,
+              "distribution": "uniform"
+            },
+            {
+              "name": "tariff.lkr_per_kwh",
+              "low": 16.24,
+              "high": 24.36,
+              "distribution": "uniform"
+            },
+            {
+              "name": "opex.usd_per_year",
+              "low": 2100000.0,
+              "high": 3900000.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "capex.usd_total",
+              "low": 126000000.0,
+              "high": 174000000.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "fx.start_lkr_per_usd",
+              "low": 300.0,
+              "high": 367.0,
+              "distribution": "uniform"
+            }
+          ],
+          "var_confidence": 0.95,
+          "cvar_confidence": 0.95,
+          "percentiles": [
+            10,
+            25,
+            50,
+            75,
+            90
+          ],
+          "min_dscr_covenant": 1.2,
+          "min_llcr_covenant": 1.25,
+          "output_path": "outputs/mc_aep_dutchbay_100k.parquet"
+        }
+      },
+      {
+        "path": "scenarios/kolonnawa_epc_100mw.yaml",
+        "sha256": "48875223027750f67b5538354c8b11423dc60e36457effaadd87251e3803e4a6",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/mullikulam_2x50mw_mannar.yaml",
+        "sha256": "c2642e4e0d4e623f32fe084d56ee22a72d716626241ef493f4f8444a2d2c75ce",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": true,
+        "parameter_shape": "list",
+        "parameter_names": [
+          "project.capacity_factor",
+          "tariff.lkr_per_kwh",
+          "opex.usd_per_year",
+          "capex.usd_total",
+          "fx.start_lkr_per_usd"
+        ],
+        "n_scenarios": 100000,
+        "n_trials": null,
+        "monte_carlo_block": {
+          "enabled": true,
+          "n_scenarios": 100000,
+          "sampler": "lhs",
+          "seed": 42,
+          "weibull_uncertainty_pct": 10.0,
+          "wake_loss_std_pct": 2.0,
+          "availability_std_pct": 1.0,
+          "electrical_loss_std_pct": 0.5,
+          "discount_rate_pct": 8.0,
+          "capex_total_usd": 63100000,
+          "revenue_mean_usd": 5271578,
+          "revenue_std_pct": 10,
+          "cost_mean_usd": 1120000,
+          "cost_std_pct": 8,
+          "fx_mean_rate": 333.79,
+          "fx_std_pct": 3,
+          "project_life_years": 20,
+          "parameters": [
+            {
+              "name": "project.capacity_factor",
+              "low": 0.2442,
+              "high": 0.2984,
+              "distribution": "uniform"
+            },
+            {
+              "name": "tariff.lkr_per_kwh",
+              "low": 10.58,
+              "high": 15.86,
+              "distribution": "uniform"
+            },
+            {
+              "name": "opex.usd_per_year",
+              "low": 784000.0,
+              "high": 1456000.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "capex.usd_total",
+              "low": 56790000.0,
+              "high": 69410000.0,
+              "distribution": "uniform"
+            },
+            {
+              "name": "fx.start_lkr_per_usd",
+              "low": 300.0,
+              "high": 367.0,
+              "distribution": "uniform"
+            }
+          ],
+          "var_confidence": 0.95,
+          "cvar_confidence": 0.95,
+          "percentiles": [
+            10,
+            25,
+            50,
+            75,
+            90
+          ],
+          "min_dscr_covenant": 1.2,
+          "min_llcr_covenant": 1.25,
+          "output_path": "outputs/mc_aep_dutchbay_100k.parquet"
+        }
+      },
+      {
+        "path": "scenarios/overrides/import_levies_full_relief.yaml",
+        "sha256": "0d6ddd002ee62d9a4fd4438a5ef578b5f233fb9b29943bf036a25faad91b14d7",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/overrides/import_levies_full_stack_paid.yaml",
+        "sha256": "6bf683360d827d0ecfe34b1aa2bac45fd071f5f47185905ba6b8877f0e92e0df",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/overrides/sdp_pathway.yaml",
+        "sha256": "43085c10e9eb92d902c2df2af775e2acdee5f6695ac2d1d486bc1fcf48ce1bc4",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/sensitivity_parameters_examples.yaml",
+        "sha256": "39d7bff3849f4f8685640331bb0c62411bd73bbbdead4baca378eddf6523ee35",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/test/base_scenario.yaml",
+        "sha256": "056814031256315c7ee5854062801c53d278636047f0189ef9bf1da74e8cef7e",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      },
+      {
+        "path": "scenarios/test_base_scenario.yaml",
+        "sha256": "e1a4b02e6d70c5e42aec0c09e2eb124ea44273ad4cc74ec11e6e4ee72cff2c3e",
+        "yaml_document_count": 1,
+        "nonempty_document_count": 1,
+        "monte_carlo_present": false,
+        "parameter_shape": "missing",
+        "parameter_names": [],
+        "n_scenarios": null,
+        "n_trials": null,
+        "monte_carlo_block": null
+      }
+    ],
+    "assertions": {
+      "all_39_parsed": true,
+      "list_form_count_is_9": true,
+      "mapping_form_count_is_7": true
+    }
+  },
+  "limitations": "The inventory proves authored scenario coverage only. It does not determine whether an omitted risk belongs in MC, deterministic stress, event logic, contractual mitigation, or qualitative analysis."
+}

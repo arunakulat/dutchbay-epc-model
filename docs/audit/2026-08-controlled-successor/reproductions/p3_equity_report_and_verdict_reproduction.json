@@ -1,0 +1,250 @@
+{
+  "schema_version": "dutchbay.audit.p3_reproduction.v1",
+  "status": "completed",
+  "as_of": "2026-08-16T10:30:00+05:30",
+  "title": "Canonical equity report, source wording, and contradictory-verdict probe",
+  "finding_ids": [
+    "P3-EQ-01",
+    "P3-EQ-04",
+    "P3-EQ-05"
+  ],
+  "verification_level": "independent_reproduction",
+  "repository": {
+    "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+    "commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+    "branch": "codex/audit-corrigendum-2026-08",
+    "status_before": "## codex/audit-corrigendum-2026-08...origin/main",
+    "status_after": "## codex/audit-corrigendum-2026-08...origin/main",
+    "tracked_tree_sha256": "316b37a8f385e1a8e099fdbb1b2aa611ac9e462a"
+  },
+  "execution": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 /Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python /Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/build_p3_reproductions.py --output-dir /Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions --as-of 2026-08-16T10:30:00+05:30",
+    "working_directory": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+    "generator_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/build_p3_reproductions.py",
+    "generator_sha256": "f3034ca8d53ad6c6884cd7ba2f8d89192fa526bfae69cdb7789701de5a2baa73",
+    "environment": {
+      "python_executable": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "python_version": "3.11.14 (main, Oct  9 2025, 16:16:55) [Clang 17.0.0 (clang-1700.3.19.1)]",
+      "platform": "macOS-26.6.1-arm64-arm-64bit",
+      "packages": {
+        "numpy": "2.4.6",
+        "scipy": "1.17.1",
+        "pydantic": "2.13.4",
+        "PyYAML": "6.0.3",
+        "pytest": "9.1.1"
+      },
+      "python_dont_write_bytecode": true
+    }
+  },
+  "inputs": {
+    "scenario_path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_lendercase_2025Q4.yaml",
+    "scenario_sha256": "b152b378f0dd41bbfec703e5603d00897b7843200a8f2619b0c1644dedc599fd"
+  },
+  "method": "Run the full canonical pipeline, build and render the report context, retain all KPIs/verdict/risk-register rows and HTML match counts, execute the existing value-destructive test, and probe a type-valid positive-NPV/negative-IRR payload.",
+  "result": {
+    "canonical_kpis_full": {
+      "scenario_name": "DutchBay Wind Farm",
+      "total_cfads_usd": 191111047.68242383,
+      "final_cfads_usd": 2944080.226529944,
+      "mean_operational_cfads_usd": 9555552.38412119,
+      "dscr_series": [
+        1.3717095152750702,
+        2.571481970589222,
+        1.2999999999999998,
+        1.3,
+        1.3000000000000003,
+        1.3,
+        1.2999999999999998,
+        1.3000000000000003,
+        1.3,
+        1.3,
+        1.3,
+        1.2999999999999998,
+        1.3,
+        1.3,
+        1.3
+      ],
+      "min_dscr": 1.285740985294611,
+      "dscr_min": 1.285740985294611,
+      "min_dscr_period": 1.2999999999999998,
+      "dscr_max": 2.571481970589222,
+      "dscr_mean": 1.3895460990576196,
+      "dscr_median": 1.3,
+      "dscr_p10": 1.2999999999999998,
+      "dscr_p90": 1.3430257091650422,
+      "dscr_std": 0.3163891167816282,
+      "max_debt_usd": 68822313.0,
+      "total_idc_usd": 10754755.988663489,
+      "project_npv_prudential": -84724967.65444505,
+      "prudential_rate_used": 0.110202604022396,
+      "project_npv": -79273039.20645273,
+      "npv": -79273039.20645273,
+      "project_irr": 0.014551597740253388,
+      "irr": 0.014551597740253388,
+      "discount_rate_used": 0.100202604022396,
+      "wacc_label": "build_up",
+      "wacc_is_real": true,
+      "avg_dscr": 1.3895460990576196,
+      "equity_irr": -0.05841298678542661,
+      "llcr": 1.2677278108569288,
+      "plcr": 1.3068856980285766,
+      "balloon_pct": 0.488928964946153,
+      "balloon_residual": 16886225.76523181,
+      "balloon_covenant_breach": 1.0,
+      "equity_distribution_status": "computed",
+      "equity_npv": -81592659.21758533,
+      "equity_multiple": 0.5228269952100691,
+      "equity_moic": 0.5228269952100691,
+      "total_equity_distributed_usd": 51779210.327868685,
+      "average_equity_cash_on_cash": 0.026141349760503457,
+      "equity_covenant_locked_years": 1
+    },
+    "canonical_selected_kpis": {
+      "project_irr": 0.014551597740253388,
+      "equity_irr": -0.05841298678542661,
+      "project_npv": -79273039.20645273,
+      "equity_npv": -81592659.21758533,
+      "min_dscr": 1.285740985294611,
+      "discount_rate_used": 0.100202604022396,
+      "balloon_pct": 0.488928964946153,
+      "balloon_covenant_breach": 1.0
+    },
+    "canonical_verdict": {
+      "headline": "Value-destructive at the modeled assumptions.",
+      "project_viable": false,
+      "equity_positive": false,
+      "dscr_covenant_met": true,
+      "balloon_within_limit": false,
+      "notes": [
+        "Project IRR 1.46% is below the 10.02% cost of capital.",
+        "Equity IRR -5.84% — negative to sponsors.",
+        "Minimum DSCR 1.29x meets the 1.20x lender floor (target 1.30x).",
+        "Balloon/bullet share 48.89% BREACHES the modeled refinance-risk covenant."
+      ]
+    },
+    "canonical_risk_register": [
+      {
+        "category": "Revenue / FX",
+        "risk": "The PPA tariff is fixed in nominal LKR with no escalation or FX indexation, while debt and sponsor returns are measured in USD — LKR depreciation erodes the hard- currency value of every future rupee of revenue.\n",
+        "mitigation": "FX path stressed to CBSL/IMF projections; debt sized off the LKR-denominated DSCR; the resulting negative equity IRR is disclosed to sponsors rather than masked.\n",
+        "severity": "high",
+        "climate_risk_category": null
+      },
+      {
+        "category": "Resource",
+        "risk": "Energy-yield uncertainty — the realised net capacity factor may fall below the P50 used to size the debt. The headline P50/P90 is screening-grade: fitted from single- cell ERA5 reanalysis with no on-site mast and the MCP long-term correction unwired (#961).\n",
+        "mitigation": "Modelled/indicative AEP from an ERA5->Weibull->certified-power-curve chain with enforced source provenance; debt sculpted with DSCR headroom; P90 sensitivity reported. A bankable yield requires an on-site measurement campaign (>=12 months, met mast or IEC-accepted LiDAR/SoDAR) long-term-adjusted via MCP before financial close.\n",
+        "severity": "high",
+        "climate_risk_category": "physical"
+      },
+      {
+        "category": "Curtailment",
+        "risk": "Grid constraints may curtail dispatch below the modeled net availability.\n",
+        "mitigation": "The CEB standardized PPA pays curtailed output as deemed energy, so economic curtailment is not haircut from revenue.\n",
+        "severity": "medium",
+        "climate_risk_category": "physical"
+      },
+      {
+        "category": "Refinancing",
+        "risk": "A balloon / bullet repayment at debt maturity exposes the project to refinancing risk if credit conditions tighten.\n",
+        "mitigation": "Balloon share is covenant-capped and tested against the refinance-risk ceiling in the covenant table.\n",
+        "severity": "medium",
+        "climate_risk_category": null
+      },
+      {
+        "category": "Construction / EPC",
+        "risk": "Cost or schedule overrun during construction raises capex and interest-during- construction.\n",
+        "mitigation": "Fixed-price EPC on a SINOHYDRO bottom-up basis; an AACE estimate-class accuracy band is carried and contingency is held in the cost stack.\n",
+        "severity": "medium",
+        "climate_risk_category": null
+      },
+      {
+        "category": "Regulatory / Tariff",
+        "risk": "Changes to the renewable tax regime or the PPA framework could alter after-tax returns over the 20-year term.\n",
+        "mitigation": "The tax block is reconciled to the current IMF-reformed Sri Lankan regime with no reliance on the removed renewable-energy tax holiday.\n",
+        "severity": "medium",
+        "climate_risk_category": "transition"
+      }
+    ],
+    "rendered_html": {
+      "sha256": "69a8fb1bdaccf077f152188721db9e7bbeab1f6b149e58bc58100fff400d155b",
+      "utf8_bytes": 56036,
+      "value_destructive_occurrences": 1,
+      "project_irr_occurrences": 6,
+      "equity_irr_occurrences": 5,
+      "negative_equity_irr_occurrences": 5,
+      "cbsl_imf_phrase": "FX path stressed to CBSL/IMF projections",
+      "cbsl_imf_phrase_occurrences": 1
+    },
+    "contradictory_payload": {
+      "project_irr": 0.12,
+      "discount_rate_used": 0.08,
+      "equity_npv": 1.0,
+      "equity_irr": -0.01,
+      "min_dscr": 1.5,
+      "balloon_pct": 0.1
+    },
+    "contradictory_verdict": {
+      "headline": "Bankable at the modeled assumptions.",
+      "project_viable": true,
+      "equity_positive": true,
+      "dscr_covenant_met": true,
+      "balloon_within_limit": true,
+      "notes": [
+        "Project IRR 12.00% is at or above the 8.00% cost of capital.",
+        "Equity IRR -1.00% — negative to sponsors.",
+        "Minimum DSCR 1.50x meets the 1.20x lender floor (target 1.30x).",
+        "Balloon/bullet share 10.00% within the 40% refinance-risk ceiling."
+      ]
+    },
+    "targeted_pytest": {
+      "command": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python -m pytest -q --no-cov tests/app/test_report_model.py::test_verdict_value_destructive",
+      "returncode": 0,
+      "stdout": "\n==============================================================================\nTEST MODE: FAST (20 iterations, 3 params)\nExpected runtime: ~30 seconds for full suite\nUse DUTCHBAY_TEST_MODE=full for production validation\n==============================================================================\n\n.                                                                        [100%]\n1 passed in 0.94s\n",
+      "stderr": ""
+    },
+    "assertions": {
+      "canonical_headline_is_value_destructive": true,
+      "canonical_html_contains_both_irrs": true,
+      "canonical_html_contains_false_cbsl_imf_phrase": true,
+      "contradictory_payload_yields_bankable_headline": true,
+      "contradictory_payload_note_reports_negative_equity_irr": true,
+      "targeted_value_destructive_test_passed": true
+    },
+    "source_anchors": [
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "app/reports/report_model.py",
+        "sha256": "83d450278e5b168e5e471b63cc20d6ba2cd1b794eb24a0aa3b0e78694646d3fa",
+        "start_line": 944,
+        "end_line": 1049,
+        "excerpt": "def _build_verdict(kpis: Dict[str, float], covenants: Covenants) -> Verdict:\n    \"\"\"Derive covenant/return flags and a headline from the run and config.\n\n    Reads the hurdle from the run (``discount_rate_used``); compares the minimum\n    DSCR and balloon share to the configured covenants. This is threshold\n    comparison on engine outputs — not a recomputation of any finance metric.\n    \"\"\"\n    project_irr = kpis.get(\"project_irr\")\n    hurdle = kpis.get(\"discount_rate_used\")\n    equity_npv = kpis.get(\"equity_npv\")\n    equity_irr = kpis.get(\"equity_irr\")\n    min_dscr = kpis.get(\"min_dscr\")\n    balloon_pct = kpis.get(\"balloon_pct\")\n\n    project_viable = (\n        project_irr is not None and hurdle is not None and project_irr >= hurdle\n    )\n    if equity_npv is not None:\n        equity_positive = equity_npv > 0\n    elif equity_irr is not None:\n        equity_positive = equity_irr > 0\n    else:\n        equity_positive = False\n    dscr_covenant_met = min_dscr is not None and min_dscr >= covenants.min_dscr_floor\n    # Honor the engine's authoritative covenant judgment when it published one: the engine\n    # evaluates balloon_pct against the SCENARIO's own max_balloon_pct (e.g. 10%), so the\n    # report must NOT re-derive \"within limit\" against its more lenient presentation default\n    # (report_defaults 40%) and silently contradict the engine's breach flag (CCCDIR — the\n    # report and engine must not be two sources of truth for the same covenant). Fall back to\n    # the report-config ceiling only when the engine did not publish a balloon breach flag.\n    balloon_breach = kpis.get(\"balloon_covenant_breach\")\n    if balloon_breach is not None:\n        balloon_within_limit = not bool(balloon_breach)\n    else:\n        balloon_within_limit = (\n            balloon_pct is None or balloon_pct <= covenants.max_balloon_pct\n        )\n\n    notes: List[str] = []\n    if project_irr is not None and hurdle is not None:\n        rel = \"at or above\" if project_viable else \"below\"\n        notes.append(\n            f\"Project IRR {project_irr * 100:.2f}% is {rel} the \"\n            f\"{hurdle * 100:.2f}% cost of capital.\"\n        )\n    if equity_irr is not None:\n        # The sign word must reflect the IRR's OWN sign, not the equity-NPV value flag\n        # (equity_positive). A positive IRR that is still below the equity hurdle has a\n        # negative NPV; labelling it \"negative to sponsors\" off the NPV flag printed a\n        # literally false statement (round-11 fix). A break-even 0.00% is likewise not\n        # \"negative\": gate the negative wording on a strict < 0 and give exactly-0.0 its\n        # own honest word (#769 — mirrors the #706 _build_ic_summary <= 0 -> < 0 fix;\n        # finance.irr / metrics can emit an exact 0.0). Distinguish all four cases.\n        if equity_irr < 0:\n            desc = \"negative to sponsors\"\n        elif equity_irr == 0:\n            desc = \"break-even to sponsors\"\n        elif not equity_positive:\n            desc = \"positive but below the equity hurdle\"\n        else:\n            desc = \"positive to sponsors\"\n        notes.append(f\"Equity IRR {equity_irr * 100:.2f}% — {desc}.\")\n    if min_dscr is not None:\n        rel = \"meets\" if dscr_covenant_met else \"breaches\"\n        notes.append(\n            f\"Minimum DSCR {min_dscr:.2f}x {rel} the \"\n            f\"{covenants.min_dscr_floor:.2f}x lender floor \"\n            f\"(target {covenants.min_dscr_target:.2f}x).\"\n        )\n    if balloon_pct is not None:\n        if balloon_breach is not None:\n            # The engine judged it against the scenario's own covenant.\n            rel = \"is within\" if balloon_within_limit else \"BREACHES\"\n            notes.append(\n                f\"Balloon/bullet share {balloon_pct * 100:.2f}% {rel} the modeled \"\n                f\"refinance-risk covenant.\"\n            )\n        else:\n            rel = \"within\" if balloon_within_limit else \"exceeds\"\n            notes.append(\n                f\"Balloon/bullet share {balloon_pct * 100:.2f}% {rel} the \"\n                f\"{covenants.max_balloon_pct * 100:.0f}% refinance-risk ceiling.\"\n            )\n\n    # The headline must never contradict the covenant table: a \"Bankable\" claim\n    # requires BOTH hard covenants (DSCR floor and balloon ceiling) to hold, not\n    # just the DSCR one. A breach with otherwise-acceptable returns is called out\n    # explicitly rather than softened to \"Marginal\".\n    covenants_met = dscr_covenant_met and balloon_within_limit\n    returns_ok = project_viable and equity_positive\n    if returns_ok and covenants_met:\n        headline = \"Bankable at the modeled assumptions.\"\n    elif not project_viable and not equity_positive:\n        headline = \"Value-destructive at the modeled assumptions.\"\n    elif not covenants_met:\n        headline = \"Not bankable — covenant breach at the modeled assumptions.\"\n    else:\n        headline = \"Marginal — covenant-sensitive at the modeled assumptions.\"\n\n    return Verdict(\n        headline=headline,\n        project_viable=project_viable,\n        equity_positive=equity_positive,\n        dscr_covenant_met=dscr_covenant_met,\n        balloon_within_limit=balloon_within_limit,\n        notes=notes,"
+      },
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "app/reports/report_model.py",
+        "sha256": "83d450278e5b168e5e471b63cc20d6ba2cd1b794eb24a0aa3b0e78694646d3fa",
+        "start_line": 1117,
+        "end_line": 1150,
+        "excerpt": "    equity_irr = kpis.get(\"equity_irr\")\n    equity_npv = kpis.get(\"equity_npv\")\n    negative_parts: List[str] = []\n    # Strict < 0 (matching the NPV part below): a break-even equity IRR of exactly\n    # 0.0 — reachable from a genuine break-even waterfall (finance/irr.py returns\n    # 0.0) or the metrics 0.0 no-waterfall sentinel — is NOT negative, so the flag\n    # must not print \"equity IRR 0.00% is negative\" (a literal falsehood that could\n    # co-render with a Bankable headline).\n    if equity_irr is not None and equity_irr < 0:\n        negative_parts.append(f\"equity IRR {equity_irr * 100:.2f}% is negative\")\n    if equity_npv is not None and equity_npv < 0:\n        negative_parts.append(f\"equity NPV {fmt_usd(equity_npv)} is negative\")\n    if negative_parts:\n        flags.append(\n            RedFlag(\n                kind=\"negative_equity\",\n                severity=\"high\",\n                detail=\"Sponsor returns: \" + \" and \".join(negative_parts) + \".\",\n                source=\"engine KPIs equity_irr / equity_npv\",\n            )\n        )\n\n    project_irr = kpis.get(\"project_irr\")\n    hurdle = kpis.get(\"discount_rate_used\")\n    if project_irr is not None and hurdle is not None and not verdict.project_viable:\n        flags.append(\n            RedFlag(\n                kind=\"below_hurdle\",\n                severity=\"high\",\n                detail=(\n                    f\"Project IRR {project_irr * 100:.2f}% is below the \"\n                    f\"{hurdle * 100:.2f}% cost of capital.\"\n                ),\n                source=\"engine KPIs project_irr vs discount_rate_used\","
+      },
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "config/report_defaults.yaml",
+        "sha256": "7b821f8d3bfba8ec2ffe78eb1ae63bce6834a131d7251c6a57812f8412adaada",
+        "start_line": 31,
+        "end_line": 58,
+        "excerpt": "kpi_table:\n  - {key: project_irr,        label: \"Project IRR (nominal)\",   kind: pct}\n  - {key: equity_irr,         label: \"Equity IRR\",              kind: pct}\n  - {key: project_npv,        label: \"Project NPV\",             kind: usd}\n  - {key: equity_npv,         label: \"Equity NPV\",              kind: usd}\n  - {key: min_dscr,           label: \"Minimum DSCR\",            kind: multiple}\n  - {key: avg_dscr,           label: \"Average DSCR\",            kind: multiple}\n  - {key: llcr,               label: \"LLCR\",                    kind: multiple}\n  - {key: plcr,               label: \"PLCR\",                    kind: multiple}\n  - {key: equity_moic,        label: \"Equity MOIC\",             kind: multiple}\n  - {key: discount_rate_used, label: \"WACC (project hurdle)\",   kind: pct}\n  - {key: balloon_pct,        label: \"Balloon / bullet share\",  kind: pct}\n\n# Risk register — the lender IM's qualitative project-risk matrix (#C8). CCCDIR: the risks\n# are config-authored (per-project analyst content), not hardcoded in Python; the report\n# layer only renders them. `severity` is the RESIDUAL rating after mitigation\n# (low | medium | high) and drives the badge colour. Seeded with the real DutchBay risk\n# profile of a flat-nominal-LKR tariff financed with hard-currency debt.\nrisk_register:\n  - category: \"Revenue / FX\"\n    risk: >\n      The PPA tariff is fixed in nominal LKR with no escalation or FX indexation, while\n      debt and sponsor returns are measured in USD — LKR depreciation erodes the hard-\n      currency value of every future rupee of revenue.\n    mitigation: >\n      FX path stressed to CBSL/IMF projections; debt sized off the LKR-denominated DSCR;\n      the resulting negative equity IRR is disclosed to sponsors rather than masked.\n    severity: \"high\""
+      },
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "tests/app/test_report_model.py",
+        "sha256": "957583279aac53e4bd0725a01be801bc811da08af460d610a82cb0cff366e02e",
+        "start_line": 865,
+        "end_line": 874,
+        "excerpt": "def test_verdict_value_destructive() -> None:\n    ctx = build_report_context(\n        _case(_VALUE_DESTRUCTIVE_KPIS), generated_at=GENERATED_AT\n    )\n    v: Verdict = ctx.verdict\n    assert v.project_viable is False\n    assert v.equity_positive is False\n    assert v.dscr_covenant_met is True  # 1.30 >= 1.20 floor\n    assert v.balloon_within_limit is True  # 34.67% <= 40%\n    assert v.headline == \"Value-destructive at the modeled assumptions.\""
+      }
+    ]
+  },
+  "limitations": "The contradictory payload is synthetic. Deployed front ends, cached reports and external report copies were not inspected."
+}

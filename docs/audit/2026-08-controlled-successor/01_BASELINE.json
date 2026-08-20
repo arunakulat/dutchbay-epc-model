@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0.0",
+  "captured_at": "2026-08-12T09:28:49+05:30",
+  "timezone": "Asia/Colombo",
+  "original_audit": {
+    "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08",
+    "received_source_artefacts": 73,
+    "current_files_including_ingress_controls": 75,
+    "ingress_manifest_sha256": "793385bc576cde2981995cf263f20d9712b69837ed10aa79e3096c91230e7a07",
+    "ingress_evaluation_sha256": "f835856a7c9eac693ca39220fb5ea925f6eaf0134b56fddbd9debcdbc5d79dec",
+    "manifest_validation": "pass_73_of_73",
+    "original_files_mutable": false
+  },
+  "reports": {
+    "00_INDEX.md": "b1d079a197220f5079acc71a40bc12a5dd595d91c7c1e3e83effe0899effe0f6",
+    "01_architecture_map.md": "5b77d92715ab6cf107d71235b79d3ceaa92a932a4087b2b0ea98483337f1ff6d",
+    "02_finance_correctness_findings.md": "1c0e11501a41b283edb41a9a8e97ec397422694d62e2188b198469d23b74edbc",
+    "03_bankability_methodology.md": "2a63013427f02762d1ec8fefa47f170eb4d1560d3b9ed0b864651bab1dcd9812",
+    "04_code_health_techdebt.md": "36b2b0aee866cf6704f4f6d8340291078aafae64952e0b7d6318b86c48425228",
+    "05_sota_benchmarking.md": "0f7508720d3f134b63ae590a48d3f133eef19701b98cc59f22e6b66fd15358d8",
+    "99_SYNTHESIS_final_audit.md": "6df8d9e62546463fd871f7ad52d637b0f42015f0dedfbc4a9fdf730f7d4bb5fb"
+  },
+  "repository": {
+    "path": "/Users/aruna/Downloads/dutchbay-epc-model",
+    "remote": "git@github.com:arunakulat/dutchbay-epc-model.git",
+    "branch": "main",
+    "head": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+    "origin_main": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+    "worktree_state": "clean",
+    "version": "15.3.0",
+    "gwtf_rules": 66,
+    "gwtf_active_rules": 66,
+    "github_viewer_permission": "ADMIN",
+    "main_protected": true
+  },
+  "scenario_artefact_counting": {
+    "top_level_yaml": 29,
+    "top_level_json": 5,
+    "top_level_yaml_and_json": 34,
+    "all_tracked_yaml_and_json_including_nested": 39,
+    "audit_original_phrase": "29 committed scenarios",
+    "corrected_description": "29 top-level YAML scenario/config artefacts; 5 additional top-level JSON artefacts; 39 tracked YAML/JSON artefacts across the full scenarios tree"
+  },
+  "architecture_risk_pointers": {
+    "RS_A": 15,
+    "RS_B": 9,
+    "RS_C": 12,
+    "RS_D": 12,
+    "RS_E": 13,
+    "RS_F": 11,
+    "total": 72
+  },
+  "p2_candidate_population": {
+    "adjudicated_candidates": 29,
+    "live_findings": 25,
+    "closed_dispositions": 4,
+    "verdict_counts": {
+      "confirmed": 14,
+      "partially_confirmed": 11,
+      "refuted": 1,
+      "not_a_defect_by_design": 3
+    },
+    "audit_original_phrase": "25 candidates: 12 confirmed, 10 partially confirmed, 1 refuted, 2 not defects",
+    "correction_evidence": "reproductions/p2_population_reconciliation.json"
+  },
+  "canonical_kpis": {
+    "project_irr": 0.014551597740253388,
+    "equity_irr": -0.05841298678542661,
+    "project_npv_usd": -79273039.20645273,
+    "min_dscr": 1.285740985294611,
+    "total_cfads_usd": 191111047.68242383
+  },
+  "toolchain": {
+    "git": "2.50.1_Apple_Git_155",
+    "github_cli": "2.97.0",
+    "python": "3.11.14"
+  }
+}

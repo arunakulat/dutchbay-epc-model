@@ -1,0 +1,87 @@
+{
+  "schema_version": "dutchbay.audit.controlled_register_validation.v2",
+  "as_of": "2026-08-16T14:58:00+05:30",
+  "status": "PASS",
+  "structural_status": "structural_pass",
+  "release_status": "HOLD",
+  "release_hold_reason": "Structural and deterministic controls pass; corrigendum v1.0.1 is issued as a controlled draft, and MC breach PR #1030 plus CASPER tornado PR #1031 are merged/green, as is FX methodology PR #1032; PR #1030's governed 10,000-trial post-merge output and same-agent secondary verification also pass. Governed A15 same-agent evidence confirms noncanonical project-IRR scale sensitivity without changing the exact current deterministic canon. F5-01 empty-debt parity correction PR #1037 is merged with protected CI and post-merge pins, but it does not complete the canon-moving F5-01 caller binding and F5-02 remains separate. The programme remains on HOLD for independent successor QA including A15, eleven required-not-run and five unavailable reproductions, transaction evidence, remaining implementation dolphins, and final synthesis regeneration.",
+  "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+  "checks": {
+    "paths_and_repository": {
+      "immutable_audit_root": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_2026-08",
+      "audited_worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+      "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "worktree_clean": true,
+      "status": "PASS"
+    },
+    "primary_source_register_v2": {
+      "records": 42,
+      "artifact_links": 92,
+      "manifest_files": 74,
+      "artifact_exceptions": [
+        "PSR-0009"
+      ],
+      "status": "PASS"
+    },
+    "reproduction_register": {
+      "records": 34,
+      "status_counts": {
+        "completed": 18,
+        "required_not_run": 11,
+        "unavailable": 5
+      },
+      "status": "PASS"
+    },
+    "findings_register_v2": {
+      "records": 111,
+      "anchors": 299,
+      "evidence_refs": 367,
+      "dependencies": 187,
+      "source_refs": 52,
+      "reproduction_refs": 28,
+      "status": "PASS"
+    },
+    "p2_population_reconciliation_v2": {
+      "candidates": 29,
+      "live": 25,
+      "closed": 4,
+      "counts": {
+        "CONFIRMED": 14,
+        "PARTIALLY_CONFIRMED": 11,
+        "REFUTED": 1,
+        "NOT_A_DEFECT_BY_DESIGN": 3
+      },
+      "status": "PASS"
+    },
+    "architecture_pointer_register": {
+      "records": 72,
+      "explicit_overlay_records": 25,
+      "validation_dependencies": 10,
+      "disposition_counts": {
+        "confirmed": 2,
+        "deferred": 5,
+        "not_a_defect": 1,
+        "not_examined": 51,
+        "partially_confirmed": 13
+      },
+      "p5_crosswalk": {
+        "confirmed": 1,
+        "deferred": 5,
+        "not_examined": 4
+      },
+      "status": "PASS"
+    },
+    "claim_level_pins": {
+      "p2_pins": "PASS",
+      "p3_refuter_pins": "PASS",
+      "mc_breach_remediation": "PASS",
+      "casper_tornado_remediation": "PASS",
+      "fx_methodology_remediation": "PASS",
+      "audit_corrigendum_v1_0_1": "PASS",
+      "p5_source_pins": "PASS",
+      "f5_01_empty_debt_parity": "PASS",
+      "f5_separation": "PASS",
+      "status": "PASS"
+    }
+  }
+}

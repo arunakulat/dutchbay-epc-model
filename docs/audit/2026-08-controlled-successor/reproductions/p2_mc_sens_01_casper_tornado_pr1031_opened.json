@@ -1,0 +1,74 @@
+{
+  "schema_version": "dutchbay.audit.code_publication_checkpoint.v1",
+  "as_of": "2026-08-16T12:12:00+05:30",
+  "status": "draft_pr_open_protected_ci_running",
+  "finding_ids": [
+    "P2-MC-SENS-01"
+  ],
+  "candidate_evidence": {
+    "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions/p2_mc_sens_01_casper_tornado_candidate_0445ea6.json",
+    "sha256": "3a213fbf132af7e2cad0ba2784633fe1e2aa1c3a2d59789b9ff01d3596dd21ff"
+  },
+  "pull_request": {
+    "number": 1031,
+    "url": "https://github.com/arunakulat/dutchbay-epc-model/pull/1031",
+    "title": "fix(casper): populate tornado shock metadata",
+    "repository": "arunakulat/dutchbay-epc-model",
+    "base_branch": "main",
+    "head_branch": "codex/mc-sens-01-casper-tornado",
+    "head_commit": "0445ea60ebe7c1e70b701849a1d227f8f8c3a4c8",
+    "candidate_tree": "0317bcf11dd7980c96e90740887dd88730a52cf6",
+    "state": "OPEN",
+    "is_draft": true,
+    "merge_state_status": "BLOCKED",
+    "remote_head_matches_local_candidate": true
+  },
+  "pr_body": {
+    "path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/code_dolphins/MC-SENS-01_CASPER_TORNADO_PR_BODY.md",
+    "sha256": "6588ffdb56e4b5300ee9e9502c0357ea3a29630b2216486867a587206b417257"
+  },
+  "initial_checks": [
+    {
+      "name": "fastlane",
+      "workflow": "CI - v14 fastlane",
+      "status": "IN_PROGRESS"
+    },
+    {
+      "name": "Analyze (actions)",
+      "workflow": "CodeQL",
+      "status": "IN_PROGRESS"
+    },
+    {
+      "name": "smoke",
+      "workflow": "Regression Smoke",
+      "status": "IN_PROGRESS"
+    },
+    {
+      "name": "Classify changed paths",
+      "workflow": "Test Suite",
+      "status": "IN_PROGRESS"
+    },
+    {
+      "name": "Code Quality Checks",
+      "workflow": "Test Suite",
+      "status": "IN_PROGRESS"
+    },
+    {
+      "name": "Security Scan",
+      "workflow": "Test Suite",
+      "status": "IN_PROGRESS"
+    }
+  ],
+  "controls": {
+    "branch_only_push": true,
+    "main_not_pushed": true,
+    "draft_before_ci": true,
+    "ready_for_review": false,
+    "merge_attempted": false,
+    "programme_release_status": "HOLD"
+  },
+  "limitations": [
+    "This checkpoint records the initial remote state only. Check completion, review state, merge commit, and merged-tree identity require successor evidence.",
+    "An open draft PR is not implementation closure and does not change the audit programme release status."
+  ]
+}

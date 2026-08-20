@@ -1,0 +1,84 @@
+{
+  "schema_version": "dutchbay.audit.p3_reproduction.v1",
+  "status": "completed",
+  "as_of": "2026-08-16T10:30:00+05:30",
+  "title": "Canonical wind-AEP Monte-Carlo schema probe",
+  "finding_ids": [
+    "P3-MCFX-08"
+  ],
+  "verification_level": "independent_reproduction",
+  "repository": {
+    "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+    "commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+    "branch": "codex/audit-corrigendum-2026-08",
+    "status_before": "## codex/audit-corrigendum-2026-08...origin/main",
+    "status_after": "## codex/audit-corrigendum-2026-08...origin/main",
+    "tracked_tree_sha256": "316b37a8f385e1a8e099fdbb1b2aa611ac9e462a"
+  },
+  "execution": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 /Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python /Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/build_p3_reproductions.py --output-dir /Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions --as-of 2026-08-16T10:30:00+05:30",
+    "working_directory": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+    "generator_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/build_p3_reproductions.py",
+    "generator_sha256": "f3034ca8d53ad6c6884cd7ba2f8d89192fa526bfae69cdb7789701de5a2baa73",
+    "environment": {
+      "python_executable": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "python_version": "3.11.14 (main, Oct  9 2025, 16:16:55) [Clang 17.0.0 (clang-1700.3.19.1)]",
+      "platform": "macOS-26.6.1-arm64-arm-64bit",
+      "packages": {
+        "numpy": "2.4.6",
+        "scipy": "1.17.1",
+        "pydantic": "2.13.4",
+        "PyYAML": "6.0.3",
+        "pytest": "9.1.1"
+      },
+      "python_dont_write_bytecode": true
+    }
+  },
+  "inputs": {
+    "scenario_path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_lendercase_2025Q4.yaml",
+    "scenario_sha256": "b152b378f0dd41bbfec703e5603d00897b7843200a8f2619b0c1644dedc599fd"
+  },
+  "method": "Load the canonical list-form finance-MC configuration and directly exercise integrate_aep_pipeline(run_monte_carlo=True), retaining the full exception traceback and both schema source excerpts.",
+  "result": {
+    "canonical_parameters_type": "list",
+    "canonical_parameter_count": 6,
+    "run_monte_carlo": true,
+    "source_anchors": [
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+        "sha256": "b152b378f0dd41bbfec703e5603d00897b7843200a8f2619b0c1644dedc599fd",
+        "start_line": 552,
+        "end_line": 629,
+        "excerpt": "monte_carlo:\n  enabled: true\n  n_scenarios: 100000\n  sampler: lhs  # Latin Hypercube Sampling\n  seed: 42\n  \n  # Wind resource uncertainty (dominant risk driver)\n  weibull_uncertainty_pct: 10.0  # ±10% on A and k\n  wake_loss_std_pct: 2.0\n  availability_std_pct: 1.0\n  electrical_loss_std_pct: 0.5\n  \n  # (Retired #doc-drift: the old \"toy model - TO BE DEPRECATED\" scalar block\n  #  — discount_rate_pct / capex_total_usd 150e6 / revenue_mean_usd / cost_mean_usd /\n  #  fx_mean_rate / project_life_years — was an obsolete pre-pipeline MC format with ZERO\n  #  Python readers. The live MC engine consumes only the `parameters:` LIST below.)\n\n  # Distribution parameters (for pipeline-backed MC).\n  # Canonical engine contract (analytics.mc.engine): an explicit LIST of\n  # {name, low, high, distribution} where `name` is a dotted config path the\n  # pipeline understands. Bounds are the uniform LHS support, derived as\n  # base * (1 +/- 2 * relative_std) from the per-driver spreads documented inline\n  # (so the wider the declared std, the wider the band). CCCDIR: paths explicit,\n  # no implicit name->path mapping. ARCH-01: all values from config.\n  parameters:\n    - name: project.capacity_factor   # base 0.332 (post-2% haircut), rel_std 0.05 -> +/-10%\n      low: 0.2988\n      high: 0.3652\n      distribution: uniform\n    - name: tariff.lkr_per_kwh        # base 20.3, rel_std 0.10 -> +/-20%\n      low: 16.24\n      high: 24.36\n      distribution: uniform\n    - name: opex.usd_per_year         # base 3.0e6, rel_std 0.15 -> +/-30%\n      low: 2100000.0\n      high: 3900000.0\n      distribution: uniform\n    - name: capex.usd_total           # base 159.6e6, rel_std 0.08 -> +/-16%\n      low: 134064000.0                 # (#738: this perturbs the PRE-LEVY base; the\n      high: 185136000.0                #  import levies re-apply on top per trial, so\n      distribution: uniform            #  duties scale with capex overruns — correct)\n    - name: fx.start_lkr_per_usd      # base 333.79, rel_std 0.05 -> +/-10%\n      low: 300.0\n      high: 367.0\n      distribution: uniform\n    - name: project.curtailment_pct   # INCREMENTAL grid curtailment over the ~2% embedded\n      low: 0.0                         # in CF; 0-13% incremental = 2-15% total grid curtailment.\n      high: 0.13                       # Deliberately downside-weighted: the flat 2% is an\n      distribution: uniform            # unvalidated optimistic placeholder for a constrained grid.\n\n  # ── Inter-driver correlation (MC-7, #487) ──────────────────────────────────\n  # Default ON. The Iman-Conover rank-correlation machinery (analytics.mc.correlation)\n  # was present but DORMANT (no scenario declared a matrix), so the six drivers sampled\n  # independently — which understates joint tail risk. The matrix is 6x6 in the EXACT order\n  # of `parameters` above: [capacity_factor, tariff, opex, capex, fx, curtailment].\n  # Only well-justified pairs are non-zero; inventing spurious correlations is worse than\n  # none. KPI impact is MC-band stats only (the deterministic lender case is unaffected).\n  correlation:\n    enabled: true\n    method: iman_conover\n    param_names: [project.capacity_factor, tariff.lkr_per_kwh, opex.usd_per_year, capex.usd_total, fx.start_lkr_per_usd, project.curtailment_pct]\n    #          cf     tariff opex   capex  fx     curt\n    matrix:\n      - [1.00,  0.00,  0.00,  0.00,  0.00,  0.20]   # capacity_factor\n      - [0.00,  1.00,  0.00,  0.00,  0.00,  0.00]   # tariff (flat LKR, administered — independent)\n      - [0.00,  0.00,  1.00,  0.35,  0.00,  0.00]   # opex\n      - [0.00,  0.00,  0.35,  1.00,  0.00,  0.00]   # capex\n      - [0.00,  0.00,  0.00,  0.00,  1.00,  0.00]   # fx (see note: flat-LKR PPA breaks revenue-FX link)\n      - [0.20,  0.00,  0.00,  0.00,  0.00,  1.00]   # curtailment\n    # Rationale (deliberately conservative; each pair is structurally grounded):\n    #   capex<->opex (+0.35): capital and operating costs co-move (shared cost inflation,\n    #     and a larger/more-complex build costs more to run) -> fattens the cost-overrun tail.\n    #   capacity_factor<->curtailment (+0.20): on a constrained grid, high-output (windy)\n    #     periods are exactly when congestion forces curtailment, so the two rise together.\n    #   fx LEFT UNCORRELATED on purpose: unlike a USD-indexed PPA (cf. the sprint17 template's\n    #     revenue<->FX -0.3), the DutchBay CEB PPA is FLAT LKR with no FX indexation, so a\n    #     weaker LKR does NOT lift revenue — the usual revenue/FX link does not exist here.\n    #   tariff independent: it is a fixed administered LKR rate, uncorrelated with volume/cost."
+      },
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "analytics/wind/pipeline_aep_v14.py",
+        "sha256": "0730896a1f488c6f49ee6d7971350620291ce729ac8a273ddfe7eea1b05f93f7",
+        "start_line": 172,
+        "end_line": 219,
+        "excerpt": "    # Step 4: Monte Carlo simulation (optional, config-driven)\n    mc_config = config.get(\"monte_carlo\", {})\n    mc_enabled = (\n        run_monte_carlo\n        if run_monte_carlo is not None\n        else mc_config.get(\"enabled\", False)\n    )\n\n    if mc_enabled:\n        logger.info(\"Running Monte Carlo AEP simulation (config-driven)...\")\n\n        n_scenarios = mc_config.get(\"n_scenarios\", 100000)\n        seed = mc_config.get(\"seed\", None)\n        output_path = mc_config.get(\"output_path\", None)\n\n        # Extract loss parameters from config; fall back to the centralised, documented\n        # industry-typical defaults (overridable via resource.losses) rather than scattered\n        # magic numbers (ARCH-01 / DRY — see losses_model.DEFAULT_WIND_LOSSES).\n        losses_config = config.get(\"resource\", {}).get(\"losses\", {})\n        wake_loss_pct = losses_config.get(\n            \"wake_loss_pct\", DEFAULT_WIND_LOSSES[\"wake_loss_pct\"]\n        )\n        availability_pct = losses_config.get(\n            \"availability_pct\", DEFAULT_WIND_LOSSES[\"availability_pct\"]\n        )\n        electrical_loss_pct = losses_config.get(\n            \"electrical_loss_pct\", DEFAULT_WIND_LOSSES[\"electrical_loss_pct\"]\n        )\n\n        # MC uncertainty parameters from config\n        mc_params = mc_config.get(\"parameters\", {})\n        wake_loss_std = mc_params.get(\"wake_loss_std_pct\", 2.0)\n        avail_std = mc_params.get(\"availability_std_pct\", 1.0)\n        elec_loss_std = mc_params.get(\"electrical_loss_std_pct\", 0.5)\n\n        mc_results = run_monte_carlo_aep(\n            aep_summary_path=aep_summary_path,\n            n_scenarios=n_scenarios,\n            wake_loss_mean_pct=wake_loss_pct,\n            availability_mean_pct=availability_pct,\n            electrical_loss_mean_pct=electrical_loss_pct,\n            wake_loss_std_pct=wake_loss_std,\n            availability_std_pct=avail_std,\n            electrical_loss_std_pct=elec_loss_std,\n            export_scenarios=(output_path is not None),\n            output_path=output_path,\n            seed=seed,\n        )"
+      },
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "analytics/mc/engine.py",
+        "sha256": "c44d7cfb1a297230af54d53a4a4583069552d19c22c7be677ea83d530edbe26e",
+        "start_line": 603,
+        "end_line": 618,
+        "excerpt": "        # CESSPIT (schema strict): the engine contract is an explicit *list* of\n        # ``{name, low, high[, distribution]}`` mappings. A bare mapping (e.g.\n        # ``{capacity_factor_std: 0.05, ...}``) is a different, incompatible\n        # schema; iterating it would yield string keys and ``p[\"name\"]`` would\n        # raise an opaque ``TypeError``. Reject it up-front with a clear message\n        # naming the exact field and the expected shape.\n        if isinstance(params, Mapping):\n            raise MonteCarloConfigError(\n                \"monte_carlo.parameters must be a LIST of \"\n                \"{name, low, high[, distribution]} mappings, but a mapping \"\n                f\"(dict) was provided with keys {sorted(params)!r}. A dict of \"\n                \"per-parameter scalars is not the engine contract — convert it \"\n                \"to an explicit list of parameter definitions with dotted \"\n                \"config paths as `name` (e.g. \"\n                \"[{name: project.capacity_factor, low: 0.276, high: 0.338}]).\"\n            )"
+      }
+    ],
+    "returned": null,
+    "exception": {
+      "type": "AttributeError",
+      "message": "'list' object has no attribute 'get'",
+      "traceback": "Traceback (most recent call last):\n  File \"/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/build_p3_reproductions.py\", line 652, in main\n    value = integrate_aep_pipeline(copy.deepcopy(cfg), run_monte_carlo=True)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/analytics/wind/pipeline_aep_v14.py\", line 203, in integrate_aep_pipeline\n    wake_loss_std = mc_params.get(\"wake_loss_std_pct\", 2.0)\n                    ^^^^^^^^^^^^^\nAttributeError: 'list' object has no attribute 'get'\n"
+    },
+    "assertions": {
+      "failed_before_simulation": true,
+      "exception_is_list_get_attribute_error": true
+    }
+  },
+  "limitations": "The probe establishes the adapter failure before simulation. It does not validate a future wind uncertainty budget or a lender resource study."
+}

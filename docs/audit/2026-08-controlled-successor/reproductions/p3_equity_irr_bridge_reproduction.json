@@ -1,0 +1,727 @@
+{
+  "schema_version": "dutchbay.audit.p3_reproduction.v1",
+  "status": "completed",
+  "as_of": "2026-08-16T10:30:00+05:30",
+  "title": "Canonical project-to-equity IRR bridge reproduction",
+  "finding_ids": [
+    "P3-EQ-03"
+  ],
+  "verification_level": "independent_reproduction",
+  "repository": {
+    "worktree": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+    "commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+    "branch": "codex/audit-corrigendum-2026-08",
+    "status_before": "## codex/audit-corrigendum-2026-08...origin/main",
+    "status_after": "## codex/audit-corrigendum-2026-08...origin/main",
+    "tracked_tree_sha256": "316b37a8f385e1a8e099fdbb1b2aa611ac9e462a"
+  },
+  "execution": {
+    "command": "PYTHONDONTWRITEBYTECODE=1 /Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python /Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/build_p3_reproductions.py --output-dir /Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/reproductions --as-of 2026-08-16T10:30:00+05:30",
+    "working_directory": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum",
+    "generator_path": "/Users/aruna/Downloads/DutchBay_Comprehensive_Audit_Remediation_2026-08/scripts/build_p3_reproductions.py",
+    "generator_sha256": "f3034ca8d53ad6c6884cd7ba2f8d89192fa526bfae69cdb7789701de5a2baa73",
+    "environment": {
+      "python_executable": "/Users/aruna/Downloads/dutchbay-epc-model/.venv/bin/python",
+      "python_version": "3.11.14 (main, Oct  9 2025, 16:16:55) [Clang 17.0.0 (clang-1700.3.19.1)]",
+      "platform": "macOS-26.6.1-arm64-arm-64bit",
+      "packages": {
+        "numpy": "2.4.6",
+        "scipy": "1.17.1",
+        "pydantic": "2.13.4",
+        "PyYAML": "6.0.3",
+        "pytest": "9.1.1"
+      },
+      "python_dont_write_bytecode": true
+    }
+  },
+  "inputs": {
+    "scenario_path": "/Users/aruna/Downloads/dutchbay-wt-audit-corrigendum/scenarios/dutchbay_lendercase_2025Q4.yaml",
+    "scenario_sha256": "b152b378f0dd41bbfec703e5603d00897b7843200a8f2619b0c1644dedc599fd"
+  },
+  "method": "Run the full canonical pipeline, retain every input field consumed by build_project_equity_irr_bridge_from_run, and serialize the complete bridge.",
+  "result": {
+    "input": {
+      "kpis": {
+        "project_irr": 0.014551597740253388,
+        "equity_irr": -0.05841298678542661
+      },
+      "equity_distribution": {
+        "success": true,
+        "status": "computed",
+        "scenario_name": "DutchBay Wind Farm",
+        "equity_cashflows_usd": [
+          -99036987.0,
+          0.0,
+          0.0,
+          0.0,
+          1648012.3557421428,
+          4065989.111653339,
+          3786399.9973987318,
+          3523797.198652693,
+          3277168.8411491136,
+          6616938.001245489,
+          5248118.576252116,
+          4755081.574661092,
+          4391075.615461548,
+          4048795.561360794,
+          2588916.073564364,
+          2450690.3482215633,
+          2328481.1241113236,
+          1932259.8149344078,
+          224597.9986644063,
+          224016.1374982284,
+          223466.6416382065,
+          222947.71080430195,
+          222457.6448548208
+        ],
+        "annual_distributions": [
+          {
+            "year": 1,
+            "cf_pre_debt_usd": 20966895.68645201,
+            "debt_service_usd": 16198935.90850218,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 0.0,
+            "cf_after_debt_usd": 4767959.777949829,
+            "balloon_resolution_usd": 0.0,
+            "dscr": 1.294337838292657,
+            "covenant_locked": true,
+            "reserve_required_usd": 8099467.95425109,
+            "reserve_funded_usd": 4767959.777949829,
+            "reserve_balance_usd": 4767959.777949829,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 0.0,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 79577068.98866348
+          },
+          {
+            "year": 2,
+            "cf_pre_debt_usd": 19433740.16088661,
+            "debt_service_usd": 14841907.915504966,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 290825.7098368487,
+            "cf_after_debt_usd": 4591832.245381646,
+            "balloon_resolution_usd": 0.0,
+            "dscr": 1.3093828820070144,
+            "covenant_locked": false,
+            "reserve_required_usd": 7420953.957752483,
+            "reserve_funded_usd": 2652994.1798026543,
+            "reserve_balance_usd": 7420953.957752483,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 1648012.3557421428,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 79577068.98866348
+          },
+          {
+            "year": 3,
+            "cf_pre_debt_usd": 18099297.318732712,
+            "debt_service_usd": 13824489.783026727,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 717527.4902917658,
+            "cf_after_debt_usd": 4274807.5357059855,
+            "balloon_resolution_usd": 0.0,
+            "dscr": 1.3092199135590856,
+            "covenant_locked": false,
+            "reserve_required_usd": 6912244.891513363,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 6912244.891513363,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 4065989.111653339,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 79577068.98866348
+          },
+          {
+            "year": 4,
+            "cf_pre_debt_usd": 16846574.780463293,
+            "debt_service_usd": 12869487.626495237,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 668188.2348350702,
+            "cf_after_debt_usd": 3977087.1539680567,
+            "balloon_resolution_usd": 0.0,
+            "dscr": 1.309032283910058,
+            "covenant_locked": false,
+            "reserve_required_usd": 6434743.813247618,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 6434743.813247618,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 3786399.9973987318,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 79577068.98866348
+          },
+          {
+            "year": 5,
+            "cf_pre_debt_usd": 15670778.508479532,
+            "debt_service_usd": 11973252.372404223,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 621846.5644681222,
+            "cf_after_debt_usd": 3697526.1360753085,
+            "balloon_resolution_usd": 0.0,
+            "dscr": 1.3088155182126882,
+            "covenant_locked": false,
+            "reserve_required_usd": 5986626.186202112,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 5986626.186202112,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 3523797.198652693,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 79577068.98866348
+          },
+          {
+            "year": 6,
+            "cf_pre_debt_usd": 14567419.60190494,
+            "debt_service_usd": 11132368.689209318,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 578323.9131439612,
+            "cf_after_debt_usd": 3435050.912695622,
+            "balloon_resolution_usd": 0.0,
+            "dscr": 1.3085642425789616,
+            "covenant_locked": false,
+            "reserve_required_usd": 5566184.344604659,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 5566184.344604659,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 3277168.8411491136,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 72834629.02740961
+          },
+          {
+            "year": 7,
+            "cf_pre_debt_usd": 13532297.708068483,
+            "debt_service_usd": 7542566.073354259,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 1167694.941396263,
+            "cf_after_debt_usd": 5989731.634714223,
+            "balloon_resolution_usd": 0.0,
+            "dscr": 1.7941238534023907,
+            "covenant_locked": false,
+            "reserve_required_usd": 3771283.0366771296,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 3771283.0366771296,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 6616938.001245489,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 66423352.01113244
+          },
+          {
+            "year": 8,
+            "cf_pre_debt_usd": 12517368.692562714,
+            "debt_service_usd": 6742929.720471962,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 926138.5722797851,
+            "cf_after_debt_usd": 5774438.972090752,
+            "balloon_resolution_usd": 0.0,
+            "dscr": 1.8563694434719065,
+            "covenant_locked": false,
+            "reserve_required_usd": 3371464.860235981,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 3371464.860235981,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 5248118.576252116,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 60314528.20230997
+          },
+          {
+            "year": 9,
+            "cf_pre_debt_usd": 11557644.689289916,
+            "debt_service_usd": 6223263.954851703,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 839132.0425872515,
+            "cf_after_debt_usd": 5334380.7344382135,
+            "balloon_resolution_usd": 0.0,
+            "dscr": 1.8571676813225142,
+            "covenant_locked": false,
+            "reserve_required_usd": 3111631.9774258514,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 3111631.9774258514,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 4755081.574661092,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 54480174.818758644
+          },
+          {
+            "year": 10,
+            "cf_pre_debt_usd": 10652828.928033048,
+            "debt_service_usd": 5732326.395434131,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 774895.6968461554,
+            "cf_after_debt_usd": 4920502.532598917,
+            "balloon_resolution_usd": 0.0,
+            "dscr": 1.8583779417233044,
+            "covenant_locked": false,
+            "reserve_required_usd": 2866163.1977170655,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 2866163.1977170655,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 4391075.615461548,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 48892876.28222603
+          },
+          {
+            "year": 11,
+            "cf_pre_debt_usd": 9799260.44330566,
+            "debt_service_usd": 5268089.830202763,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 714493.3343577872,
+            "cf_after_debt_usd": 4531170.613102897,
+            "balloon_resolution_usd": 0.0,
+            "dscr": 1.8601164291324352,
+            "covenant_locked": false,
+            "reserve_required_usd": 2634044.9151013815,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 2634044.9151013815,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 4048795.561360794,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 46326697.121230505
+          },
+          {
+            "year": 12,
+            "cf_pre_debt_usd": 7654661.214797626,
+            "debt_service_usd": 4828615.009293955,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 456867.54239371134,
+            "cf_after_debt_usd": 2826046.2055036714,
+            "balloon_resolution_usd": 0.0,
+            "dscr": 1.5852705589623926,
+            "covenant_locked": false,
+            "reserve_required_usd": 2414307.5046469774,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 2414307.5046469774,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 2588916.073564364,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 44298964.92597974
+          },
+          {
+            "year": 13,
+            "cf_pre_debt_usd": 7086919.719446994,
+            "debt_service_usd": 4412041.405692794,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 432474.767333217,
+            "cf_after_debt_usd": 2674878.3137542,
+            "balloon_resolution_usd": 0.0,
+            "dscr": 1.6062677268401975,
+            "covenant_locked": false,
+            "reserve_required_usd": 2206020.702846397,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 2206020.702846397,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 2450690.3482215633,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 42584513.01188792
+          },
+          {
+            "year": 14,
+            "cf_pre_debt_usd": 6558235.9731003465,
+            "debt_service_usd": 4016578.0787791437,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 410908.43366670416,
+            "cf_after_debt_usd": 2541657.8943212028,
+            "balloon_resolution_usd": 0.0,
+            "dscr": 1.63279185527342,
+            "covenant_locked": false,
+            "reserve_required_usd": 2008289.0393895719,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 2008289.0393895719,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 2328481.1241113236,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 41186499.28806414
+          },
+          {
+            "year": 15,
+            "cf_pre_debt_usd": 4997600.758580828,
+            "debt_service_usd": 0.0,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 340987.02616489545,
+            "cf_after_debt_usd": 4997600.758580828,
+            "balloon_resolution_usd": 4732642.956871097,
+            "dscr": null,
+            "covenant_locked": false,
+            "reserve_required_usd": 0.0,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 0.0,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 1932259.8149344078,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 40110430.29214196
+          },
+          {
+            "year": 16,
+            "cf_pre_debt_usd": 4536570.824521081,
+            "debt_service_usd": 0.0,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 39634.94094077758,
+            "cf_after_debt_usd": 4536570.824521081,
+            "balloon_resolution_usd": 4272337.884915897,
+            "dscr": null,
+            "covenant_locked": false,
+            "reserve_required_usd": 0.0,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 0.0,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 224597.9986644063,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 39364312.274898656
+          },
+          {
+            "year": 17,
+            "cf_pre_debt_usd": 4103305.1935599796,
+            "debt_service_usd": 0.0,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 39532.259558510894,
+            "cf_after_debt_usd": 4103305.1935599796,
+            "balloon_resolution_usd": 3839756.7965032402,
+            "dscr": null,
+            "covenant_locked": false,
+            "reserve_required_usd": 0.0,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 0.0,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 224016.1374982284,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 38958826.90178724
+          },
+          {
+            "year": 18,
+            "cf_pre_debt_usd": 3696131.5728941243,
+            "debt_service_usd": 0.0,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 39435.28970085997,
+            "cf_after_debt_usd": 3696131.5728941243,
+            "balloon_resolution_usd": 3433229.641555058,
+            "dscr": null,
+            "covenant_locked": false,
+            "reserve_required_usd": 0.0,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 0.0,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 223466.6416382065,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 38907533.97407585
+          },
+          {
+            "year": 19,
+            "cf_pre_debt_usd": 3313478.409426592,
+            "debt_service_usd": 0.0,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 39343.7136713474,
+            "cf_after_debt_usd": 3313478.409426592,
+            "balloon_resolution_usd": 3051186.9849509425,
+            "dscr": null,
+            "covenant_locked": false,
+            "reserve_required_usd": 0.0,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 0.0,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 222947.71080430195,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 38907533.97407585
+          },
+          {
+            "year": 20,
+            "cf_pre_debt_usd": 2953868.8203475927,
+            "debt_service_usd": 0.0,
+            "wht_on_interest_usd": 0.0,
+            "wht_on_dividends_usd": 39257.231444968376,
+            "cf_after_debt_usd": 2953868.8203475927,
+            "balloon_resolution_usd": 2692153.9440478035,
+            "dscr": null,
+            "covenant_locked": false,
+            "reserve_required_usd": 0.0,
+            "reserve_funded_usd": 0.0,
+            "reserve_balance_usd": 0.0,
+            "retained_cash_usd": 0.0,
+            "equity_distribution_usd": 222457.6448548208,
+            "terminal_release_usd": 0.0,
+            "debt_outstanding_usd": 38907533.97407585
+          }
+        ],
+        "equity_summary": {
+          "equity_investment_usd": 99036987.0,
+          "equity_investment_source": "capex_less_debt",
+          "total_equity_distributed_usd": 51779210.327868685,
+          "equity_irr": -0.05841298678542661,
+          "equity_irr_pct": -5.841298678542661,
+          "equity_npv": -81592659.21758533,
+          "equity_multiple": 0.5228269952100691,
+          "moic": 0.5228269952100691,
+          "payback_period_years": null,
+          "annual_cash_on_cash": [
+            0.0,
+            0.016640372507921133,
+            0.041055258593977004,
+            0.038232180845715065,
+            0.03558061796299087,
+            0.03309035281080505,
+            0.06681279592285547,
+            0.052991500804160326,
+            0.048013188998379884,
+            0.044337734299828284,
+            0.0408816512295633,
+            0.026140901010693753,
+            0.024745203004020742,
+            0.02351122741760433,
+            0.019510486672362194,
+            0.002267819382110305,
+            0.002261944191600138,
+            0.002256395801279844,
+            0.0022511560332939243,
+            0.0022462077209075516
+          ],
+          "average_cash_on_cash": 0.026141349760503457,
+          "covenant_locked_years": 1,
+          "min_dscr_threshold": 1.3,
+          "min_reserve_months": 6
+        },
+        "metadata": {
+          "computed_from": "canonical_v14_pipeline",
+          "kpi_status": "computed",
+          "distribution_sweep_pct": 100.0,
+          "holdback_pct": 0.0,
+          "discount_rate": 0.12
+        }
+      },
+      "annual_rows_consumed_fields": [
+        {
+          "cfads_usd": 20966895.68645201,
+          "interest_usd": 16198935.90850218,
+          "effective_tax_rate": 0.0
+        },
+        {
+          "cfads_usd": 19433740.16088661,
+          "interest_usd": 8099467.95425109,
+          "effective_tax_rate": 0.0
+        },
+        {
+          "cfads_usd": 18099297.318732712,
+          "interest_usd": 7413212.766749558,
+          "effective_tax_rate": 0.0
+        },
+        {
+          "cfads_usd": 16846574.780463293,
+          "interest_usd": 6760663.81767277,
+          "effective_tax_rate": 0.0
+        },
+        {
+          "cfads_usd": 15670778.508479532,
+          "interest_usd": 6138898.988852895,
+          "effective_tax_rate": 0.0
+        },
+        {
+          "cfads_usd": 14567419.60190494,
+          "interest_usd": 5545070.152676704,
+          "effective_tax_rate": 0.0
+        },
+        {
+          "cfads_usd": 11706402.179914948,
+          "interest_usd": 4976386.912358733,
+          "effective_tax_rate": 0.3
+        },
+        {
+          "cfads_usd": 9065774.00047352,
+          "interest_usd": 4715197.5252212,
+          "effective_tax_rate": 0.3
+        },
+        {
+          "cfads_usd": 8377078.939202933,
+          "interest_usd": 4508812.040759885,
+          "effective_tax_rate": 0.3
+        },
+        {
+          "cfads_usd": 7727759.035816344,
+          "interest_usd": 4334312.671610346,
+          "effective_tax_rate": 0.3
+        },
+        {
+          "cfads_usd": 7115199.362153807,
+          "interest_usd": 4192020.834280586,
+          "effective_tax_rate": 0.3
+        },
+        {
+          "cfads_usd": 6536914.548223762,
+          "interest_usd": 4082496.992050654,
+          "effective_tax_rate": 0.3
+        },
+        {
+          "cfads_usd": 5990537.749380603,
+          "interest_usd": 4006556.032581382,
+          "effective_tax_rate": 0.3
+        },
+        {
+          "cfads_usd": 5473809.906601961,
+          "interest_usd": 3965285.1510677477,
+          "effective_tax_rate": 0.3
+        },
+        {
+          "cfads_usd": 4984569.239353238,
+          "interest_usd": 0.0,
+          "effective_tax_rate": 0.3
+        },
+        {
+          "cfads_usd": 4524264.167398038,
+          "interest_usd": 0.0,
+          "effective_tax_rate": 0.3
+        },
+        {
+          "cfads_usd": 4091683.078985381,
+          "interest_usd": 0.0,
+          "effective_tax_rate": 0.3
+        },
+        {
+          "cfads_usd": 3685155.924037198,
+          "interest_usd": 0.0,
+          "effective_tax_rate": 0.3
+        },
+        {
+          "cfads_usd": 3303113.2674330836,
+          "interest_usd": 0.0,
+          "effective_tax_rate": 0.3
+        },
+        {
+          "cfads_usd": 2944080.226529944,
+          "interest_usd": 0.0,
+          "effective_tax_rate": 0.3
+        }
+      ],
+      "debt_construction_years": 2,
+      "capex_resolution_inputs": {
+        "scenario_finance": null,
+        "scenario_financing_terms": {
+          "debt_ratio": 0.7,
+          "debt_sizing": "dual_dscr",
+          "dscr_p99_downside_factor": 0.8,
+          "balloon_treatment": "cash_sweep",
+          "tenor_years": 15,
+          "interest_only_years": 2,
+          "amortization_style": "auto",
+          "interest_rate_nominal": 0.08,
+          "mix": {
+            "lkr_max": 0.45,
+            "dfi_max": 0.1,
+            "usd_commercial_min": 0.45
+          },
+          "rates": {
+            "lkr_nominal": 0.1339,
+            "lkr_min": 0.1339,
+            "dfi_nominal": 0.065,
+            "dfi_min": 0.065,
+            "usd_nominal": 0.075,
+            "usd_commercial_min": 0.075
+          },
+          "target_dscr": 1.3,
+          "min_dscr": 1.2,
+          "reserves": {
+            "dsra_months": 6,
+            "receivables_guarantee_months": 9
+          },
+          "use_revenue_guarantee": false,
+          "guarantee_revenue_pct": 0.0075,
+          "fees": {
+            "upfront_pct": 0.01,
+            "guarantee_fee_pct_per_year": 0.0075,
+            "pri_premium_pct_per_year": 0.01
+          },
+          "enforce_hard_covenants": false
+        },
+        "debt_funding": {
+          "fund_at_close": false,
+          "dsra_target_months": 6.0,
+          "initial_dsra_usd": 0.0,
+          "financing_fees_in_capex_usd": 3192000.0,
+          "sources_and_uses": {
+            "uses": {
+              "capex_usd": 167859300.0,
+              "import_levies_usd": 8259300.0,
+              "idc_usd": 10754755.99,
+              "initial_dsra_usd": 0.0
+            },
+            "sources": {
+              "senior_debt_usd": 79577068.99,
+              "equity_usd": 99036987.0
+            },
+            "uses_total_usd": 178614055.99,
+            "sources_total_usd": 178614055.99,
+            "balanced": true
+          }
+        }
+      }
+    },
+    "bridge": {
+      "project_irr": 0.014551597740253388,
+      "equity_irr": -0.05841298678542661,
+      "total_uplift": -0.07296458452568,
+      "components": [
+        {
+          "name": "leverage",
+          "contribution": 0.06880785127454969,
+          "irr_after": 0.08335944901480308,
+          "detail": "Smaller equity outlay vs total project cost, same pre-debt CFADS."
+        },
+        {
+          "name": "cost_of_debt",
+          "contribution": -0.07640509502427006,
+          "irr_after": 0.006954353990533013,
+          "detail": "Per-year debt interest removed from operating cash (drag)."
+        },
+        {
+          "name": "tax_shield",
+          "contribution": 0.009339066045489508,
+          "irr_after": 0.01629342003602252,
+          "detail": "Interest tax shield restored (interest x effective tax rate)."
+        }
+      ],
+      "residual": -0.07470640682144913,
+      "reconciled": true,
+      "reconcile_tolerance": 1e-09,
+      "currency": "USD",
+      "metadata": {
+        "residual_label": "cashflow_timing_and_interaction",
+        "equity_investment_usd": 99036987.0,
+        "capex_usd": 167859300.0,
+        "construction_years": 2,
+        "reproduced_project_irr": 0.014551597740253388,
+        "equity_vector_len": 23
+      }
+    },
+    "assertions": {
+      "bridge_reconciled": true,
+      "bridge_lands_on_equity_irr": true,
+      "bridge_starts_at_project_irr": true
+    },
+    "source_anchors": [
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "analytics/irr_bridge.py",
+        "sha256": "79fb5bed574cf56e93febed3797ffc6dfcf0820b1cd0c47a689698f0d435f39f",
+        "start_line": 305,
+        "end_line": 380,
+        "excerpt": "def build_project_equity_irr_bridge_from_run(\n    run_result: Mapping[str, Any],\n) -> Optional[ProjectEquityIrrBridge]:\n    \"\"\"Build the IRR bridge from a full pipeline run result (the gateway's ``return_full_result``).\n\n    Consumes the engine's published surface — ``kpis`` (``project_irr`` / ``equity_irr``),\n    ``annual_rows`` (``cfads_usd`` / ``interest_usd`` / ``effective_tax_rate``), ``debt_result``\n    (``construction_years``) and ``equity_distribution`` (the authoritative equity vector +\n    equity investment). Returns ``None`` (the bridge is not built — additive, default-off) when\n    the run lacks a computed equity distribution or the project cost cannot be resolved, so a\n    legacy / KPI-only run is unaffected.\n\n    Args:\n        run_result: The dict returned by\n            :func:`analytics.evaluation_v14.evaluate_with_overrides` with\n            ``return_full_result=True``.\n\n    Returns:\n        A :class:`~analytics.contracts_v14.ProjectEquityIrrBridge`, or ``None``.\n    \"\"\"\n    kpis = run_result.get(\"kpis\")\n    if not isinstance(kpis, Mapping):\n        return None\n\n    equity_distribution = run_result.get(\"equity_distribution\")\n    if not isinstance(equity_distribution, Mapping):\n        return None\n    if str(equity_distribution.get(\"status\")) not in {\"computed\", \"defaulted\"}:\n        return None\n    equity_summary = equity_distribution.get(\"equity_summary\")\n    if not isinstance(equity_summary, Mapping):\n        return None\n    equity_investment = equity_summary.get(\"equity_investment_usd\")\n    if equity_investment is None:\n        return None\n\n    capex_usd = _resolve_capex_usd(run_result)\n    if capex_usd is None:\n        return None\n\n    annual_rows = run_result.get(\"annual_rows\")\n    if not isinstance(annual_rows, list) or not annual_rows:\n        return None\n    cfads_usd = [_f(row, \"cfads_usd\", _f(row, \"cf_pre_debt\")) for row in annual_rows]\n    interest_usd = [_f(row, \"interest_usd\") for row in annual_rows]\n    effective_tax_rate = [_f(row, \"effective_tax_rate\") for row in annual_rows]\n\n    debt_result = run_result.get(\"debt_result\")\n    construction_years = 0\n    if isinstance(debt_result, Mapping):\n        try:\n            construction_years = int(debt_result.get(\"construction_years\") or 0)\n        except (TypeError, ValueError):\n            construction_years = 0\n\n    equity_cashflows = equity_distribution.get(\"equity_cashflows_usd\") or []\n\n    project_irr = kpis.get(\"project_irr\")\n    equity_irr = kpis.get(\"equity_irr\")\n\n    return build_project_equity_irr_bridge(\n        project_irr=float(project_irr) if project_irr is not None else None,\n        equity_irr=float(equity_irr) if equity_irr is not None else None,\n        equity_investment_usd=float(equity_investment),\n        capex_usd=float(capex_usd),\n        cfads_usd=cfads_usd,\n        interest_usd=interest_usd,\n        effective_tax_rate=effective_tax_rate,\n        equity_cashflows_usd=[float(x) for x in equity_cashflows],\n        construction_years=construction_years,\n    )\n\n\n__all__ = [\n    \"LEG_LEVERAGE\",\n    \"LEG_COST_OF_DEBT\","
+      },
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "app/reports/report_model.py",
+        "sha256": "83d450278e5b168e5e471b63cc20d6ba2cd1b794eb24a0aa3b0e78694646d3fa",
+        "start_line": 2253,
+        "end_line": 2291,
+        "excerpt": "def _irr_bridge_block(\n    run_result: Optional[Mapping[str, Any]],\n) -> Optional[IrrBridgeBlock]:\n    \"\"\"Project the project→equity IRR bridge into a report block (#621, IC disclosure).\n\n    Built from the engine's published surface via\n    ``analytics.irr_bridge.build_project_equity_irr_bridge_from_run`` (project/equity IRR are the\n    headline KPIs; the legs only explain the gap — CCCDIR one source of truth). ``None`` when the\n    caller supplies no full run result, or the run lacks a computed equity distribution / resolvable\n    project cost — the section is then omitted (additive, default-off).\n    \"\"\"\n    if not run_result:\n        return None\n    bridge: Optional[ProjectEquityIrrBridge] = build_project_equity_irr_bridge_from_run(\n        run_result\n    )\n    if bridge is None:\n        return None\n    residual_label = str(\n        bridge.metadata.get(\"residual_label\", \"cashflow_timing_and_interaction\")\n    )\n    return IrrBridgeBlock(\n        currency=bridge.currency,\n        project_irr=bridge.project_irr,\n        equity_irr=bridge.equity_irr,\n        total_uplift=bridge.total_uplift,\n        legs=[\n            IrrBridgeLeg(\n                name=leg.name,\n                contribution=leg.contribution,\n                irr_after=leg.irr_after,\n                detail=leg.detail,\n            )\n            for leg in bridge.components\n        ],\n        residual=bridge.residual,\n        residual_label=residual_label,\n        reconciled=bridge.reconciled,\n    )"
+      },
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "app/reports/templates/report.html.j2",
+        "sha256": "e81e5c21f907c1ad87a1712b21fef99ddad125dc0a061d9aae9e35098990436d",
+        "start_line": 1092,
+        "end_line": 1145,
+        "excerpt": "  {# 8a2. Project → equity IRR bridge — #621 #}\n  {% if ctx.irr_bridge %}\n  <section class=\"page\">\n    <h2>Project &rarr; Equity IRR Bridge</h2>\n    <p>How leverage converts the unlevered <strong>project IRR</strong> into the levered\n      <strong>equity IRR</strong>. The two endpoints are the report's headline returns — this\n      bridge only explains the gap between them, it does not recompute them. Each leg is a single\n      substitution step: leverage (the same operating cash on a smaller equity base) lifts the\n      return; the cost of debt (interest paid to lenders) drags it down; the interest tax shield\n      (interest is tax-deductible) restores part of that drag. The <strong>residual</strong> is\n      shown as its own line — IRR is not additive, and the residual carries that interaction term\n      together with principal-repayment timing, covenant lockup, the debt-service reserve and\n      withholding tax, which the three named legs do not capture in isolation. Legs plus residual\n      reconcile exactly to the total uplift.</p>\n    <table>\n      <thead>\n        <tr>\n          <th>Step</th>\n          <th style=\"text-align:right;\">Contribution</th>\n          <th style=\"text-align:right;\">Cumulative IRR</th>\n          <th>Note</th>\n        </tr>\n      </thead>\n      <tbody>\n        <tr>\n          <td><strong>Project IRR (unlevered)</strong></td>\n          <td class=\"num\">&mdash;</td>\n          <td class=\"num\"><strong>{{ fmt_ratio_pct(ctx.irr_bridge.project_irr) }}</strong></td>\n          <td>Base: return on total project cost.</td>\n        </tr>\n        {% for leg in ctx.irr_bridge.legs %}\n        <tr>\n          <td>{{ leg.name|replace(\"_\", \" \")|capitalize }}</td>\n          <td class=\"num\">{{ fmt_pp(leg.contribution) }}</td>\n          <td class=\"num\">{{ fmt_ratio_pct(leg.irr_after) }}</td>\n          <td>{{ leg.detail }}</td>\n        </tr>\n        {% endfor %}\n        <tr>\n          <td>{{ ctx.irr_bridge.residual_label|replace(\"_\", \" \")|capitalize }} (residual)</td>\n          <td class=\"num\">{{ fmt_pp(ctx.irr_bridge.residual) }}</td>\n          <td class=\"num\">&mdash;</td>\n          <td>Principal-repayment timing, covenant lockup, DSRA, WHT and the IRR interaction term.</td>\n        </tr>\n        <tr>\n          <td><strong>Equity IRR (levered)</strong></td>\n          <td class=\"num\"><strong>{{ fmt_pp(ctx.irr_bridge.total_uplift) }}</strong></td>\n          <td class=\"num\"><strong>{{ fmt_ratio_pct(ctx.irr_bridge.equity_irr) }}</strong></td>\n          <td>Total uplift over the project IRR.</td>\n        </tr>\n      </tbody>\n    </table>\n  </section>\n  {% endif %}"
+      },
+      {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "path": "scenarios/dutchbay_lendercase_2025Q4.yaml",
+        "sha256": "b152b378f0dd41bbfec703e5603d00897b7843200a8f2619b0c1644dedc599fd",
+        "start_line": 683,
+        "end_line": 732,
+        "excerpt": "  # HONEST after the 2026 correction sequence: (1) FX 300 -> 333.79; (2) the ERA5-fitted\n  # Weibull re-baseline (declared A=8.32/k=2.1 -> fitted 8.199/2.665, AEP 483.6 -> 473.8 GWh);\n  # (3) the 2026-06 project-discounting fix (audit finding 2.0): operating year 1 had been\n  # discounted at t=0, ignoring the 2-year construction lag, pulling the operating stream\n  # forward one period (fixed -> project IRR 5.43%); (4) the 2026-06 DEGRADATION re-baseline\n  # (`project.degradation` 0.005 was read as 0.005%/yr ~ zero; corrected to honest 0.5%/yr\n  # aging -> project IRR 5.43% -> 5.05%), and the interest-tax-shield re-baseline that lifted\n  # equity IRR to +2.42%; (5) the 2026-06-28 FX-DRIFT re-baseline (fx.annual_depr 3% -> 5.89%,\n  # data-derived BIS 2005-2026 long-run LKR depreciation): project IRR 5.05% -> 2.75%, equity\n  # IRR +2.42% -> -0.46%, NPV -$32.3M -> -$53.3M; (6) the 2026-06-28 AEP OVER-PREDICTION\n  # HAIRCUT (2.0%, resource.uncertainty.p50_haircut_pct): modelled net P50 473.8 -> bankable\n  # 464.3 GWh (CF 0.339 -> 0.332), corroborated by the Envision EN220 EIA P50 464.5 (the OEM's\n  # own pre-construction EYA — bounds model-vs-EYA drift, not EYA-vs-operations bias; #654);\n  # and (7) the 2026-06-28 PR-A group-C #36 tax/levy re-baseline: remove the non-statutory\n  # success-fee/env-surcharge levies (#43, +CFADS ~1.5% -> project IRR 2.50% -> 2.68%, NPV\n  # -$56.1M -> -$54.0M), add the SL 15% dividend WHT (#81) and capitalize debt IDC into the\n  # depreciable base (#36/#75) — both equity-path only, netting equity IRR -1.00% -> -1.93%\n  # (the dividend WHT dominates the IDC shield gain); and (8) the 2026-06-28 PR-B group-C #3\n  # UIP LKR DEBT RATE: Financing_Terms.rates.lkr 8% -> UIP-implied 13.39% (USD 7.5% + the same\n  # 5.89% data-derived LKR drift) — the 8% implied a concessional facility; this is the\n  # market-rate assumption (pending a real LKR term-sheet). projIRR UNCHANGED (unlevered); the\n  # costlier LKR tranche lifts WACC 8.11% -> 9.83%, deepens NPV -$54.0M -> -$65.5M, takes equity\n  # IRR -1.93% -> -4.86%, and de-levers the DSCR-solved gearing 0.588 -> ~0.45; and (9) the\n  # 2026-07-04 #737 CREDIT-SUPPORT FEES: guarantee 75 bps + PRI 100 bps per year on the\n  # OUTSTANDING senior debt (Financing_Terms.fees), charged senior to debt service\n  # (reduces CFADS), ops-period only, tax-deductible, and sized INSIDE the DSCR sculpt —\n  # the gearing solve holds the 1.30 per-period target fee-inclusively, de-levering\n  # 0.45 -> 0.4275 (debt $71.8M -> $68.2M). CFADS $202.3M -> $191.2M (-5.5%), project IRR\n  # 2.68% -> 2.03%, equity IRR -4.86% -> -4.99%, NPV -$65.5M -> -$70.9M (WACC 9.83% ->\n  # 9.94%, more equity in the stack). NOTE the conservative per-year covenant table reads\n  # year 1 at ~1.288 (it folds the orphaned half-year bridge service into year 1, and the\n  # fee consumed the pre-fee slack there); the per-period series holds 1.30 everywhere.\n  # A real blended-finance deal pays these fees; the fee-free case was overstating\n  # coverage and returns. And (10) the 2026-07-05 #738 IMPORT LEVIES + INDIRECT-TAX\n  # re-baseline — TWO OPPOSING moves in one atomic flip: (a) SSCL-on-revenue REVERSED\n  # 2.5% -> 0 (the levy WAS being charged at the EBITDA line; the SSCL Act First\n  # Schedule exempts non-CEB electricity supply — see the statutory: block note) — on\n  # its own +CFADS/+IRR (projIRR 2.03% -> 2.33%, NPV -70.9 -> -68.3M); and (b) import\n  # levies ON at the PRUDENT posture (taxes_indirect: PAL 5% + import-SSCL 2.5% PAID\n  # on the 0.69 imported share = $8.2593M duties capitalized; capex VAT relieved via\n  # BOI §17/bonded; 18% unrecoverable VAT on O&M) — which DOMINATES: net projIRR\n  # 2.03% -> 1.46%, equity IRR -4.99% -> -5.84%, NPV -$70.9M -> -$79.3M, CFADS\n  # $191.22M -> $191.11M, gross financed capex $159.6M -> $167.86M ($1,051.75/kW),\n  # DSCR-solved gearing 0.4275 -> 0.41 (debt $68.23M -> $68.82M on the grossed\n  # base). The sculpt still holds the 1.30 PER-PERIOD floor; the #790 fold headline\n  # eases 1.2884 -> 1.2857 (still exactly 1 equity-lockup year).\n  # Net current canonical: project IRR 1.46% (BELOW the ~9.9% WACC), equity IRR -5.84% (NEGATIVE),\n  # NPV -$79.3M, DSCR-solved gearing 0.41. The project is value-destructive, honestly so.\n  # (Equity bears the fee net of the cash-sweep interaction: the sweep headroom is also\n  #  fee-netted, so the un-swept residual grows — reported as a balloon covenant breach.)"
+      }
+    ]
+  },
+  "limitations": "The live bridge is a current-state cashflow substitution bridge, not a causal one-factor decomposition of the dated comment-only rebaseline sequence."
+}
