@@ -94,8 +94,8 @@ def self_curtailment_finance_wiring_enabled(config: Mapping[str, Any] | None) ->
 
 def require_canonical_self_curtailment_finance_config(
     config: Mapping[str, Any] | None,
-) -> tuple[str, str]:
-    """Validate and return the canonical feeder kind/path for an enabled finance run.
+) -> tuple[str, str, str]:
+    """Return the canonical feeder kind/path/evidence digest for enabled finance.
 
     This is intentionally pure: callers can enforce the CESSPIT configuration contract
     before importing or executing an optional grid solver. It is defence in depth for
@@ -106,6 +106,12 @@ def require_canonical_self_curtailment_finance_config(
     wiring = qsts.get("finance_wiring") if isinstance(qsts, Mapping) else None
     config_kind = qsts.get("input_kind") if isinstance(qsts, Mapping) else None
     feeder_path = qsts.get("feeder_model_path") if isinstance(qsts, Mapping) else None
+    evidence_manifest_path = (
+        qsts.get("evidence_manifest_path") if isinstance(qsts, Mapping) else None
+    )
+    evidence_manifest_sha256 = (
+        qsts.get("evidence_manifest_sha256") if isinstance(qsts, Mapping) else None
+    )
     mode = wiring.get("mode") if isinstance(wiring, Mapping) else None
     canonical_eligible = (
         wiring.get("canonical_eligible") if isinstance(wiring, Mapping) else None
@@ -121,6 +127,14 @@ def require_canonical_self_curtailment_finance_config(
         or config_kind not in CANONICAL_FEEDER_INPUT_KINDS
         or not isinstance(feeder_path, str)
         or not feeder_path.strip()
+        or not isinstance(evidence_manifest_path, str)
+        or not evidence_manifest_path.strip()
+        or not isinstance(evidence_manifest_sha256, str)
+        or len(evidence_manifest_sha256) != 64
+        or any(
+            character not in "0123456789abcdef"
+            for character in evidence_manifest_sha256
+        )
         or not isinstance(wiring, Mapping)
         or wiring.get("enabled") is not True
         or mode != "canonical"
@@ -130,11 +144,13 @@ def require_canonical_self_curtailment_finance_config(
             "QSTS canonical finance configuration refused: finance_wiring.enabled=true "
             "requires grid.qsts.enabled=true, input_kind utility_observed_model or "
             "engineer_prepared_site_model, a non-empty feeder_model_path, "
+            "a non-empty evidence_manifest_path, an exact externally pinned "
+            "evidence_manifest_sha256, "
             "finance_wiring.mode='canonical', and canonical_eligible=true. Synthetic "
             "placeholders and test fixtures belong only in the separately governed "
             "counterfactual pathway; they cannot enter canonical cashflow."
         )
-    return str(config_kind), feeder_path.strip()
+    return str(config_kind), feeder_path.strip(), evidence_manifest_sha256
 
 
 def resolve_self_curtailment_decimal(
@@ -153,7 +169,7 @@ def resolve_self_curtailment_decimal(
     if not self_curtailment_finance_wiring_enabled(config):
         return 0.0
 
-    config_kind, configured_feeder_path = (
+    config_kind, configured_feeder_path, configured_evidence_sha256 = (
         require_canonical_self_curtailment_finance_config(config)
     )
 
@@ -175,6 +191,20 @@ def resolve_self_curtailment_decimal(
         or result.generated_input is not False
         or result.site_representative is not True
         or result.canonical_finance_eligible is not True
+        or result.bankable is not False
+        or result.evidence_manifest_sha256 != configured_evidence_sha256
+        or result.source_manifest_sha256 is not None
+        or result.qsts_run_manifest is None
+        or result.qsts_run_manifest.input_kind != config_kind
+        or result.qsts_run_manifest.evidence_manifest_sha256
+        != configured_evidence_sha256
+        or result.qsts_run_manifest.finance_wiring_mode != "canonical"
+        or result.qsts_run_manifest.finance_wiring_enabled is not True
+        or result.qsts_run_manifest.canonical_finance_eligible is not True
+        or result.qsts_run_manifest.bankable is not False
+        or result.qsts_run_manifest.lender_eligible is not False
+        or result.qsts_run_manifest.board_approval_eligible is not False
+        or result.qsts_run_manifest.release_eligible is not False
         or (
             config_kind == "utility_observed_model"
             and result.observed_network_data is not True
@@ -187,6 +217,7 @@ def resolve_self_curtailment_decimal(
             f"generated_input={result.generated_input!r}, "
             f"observed_network_data={result.observed_network_data!r}, "
             f"site_representative={result.site_representative!r}, "
+            f"evidence_manifest_sha256={result.evidence_manifest_sha256!r}, "
             "canonical_finance_eligible="
             f"{result.canonical_finance_eligible!r}. Synthetic placeholders and test "
             "fixtures may exercise advisory QSTS code, but they cannot enter canonical "

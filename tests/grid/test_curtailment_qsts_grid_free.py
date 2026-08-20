@@ -363,25 +363,25 @@ def test_missing_qsts_block_is_inert() -> None:
     assert res.feeder_source == NO_FEEDER_SOURCE
 
 
-def test_enabled_but_no_feeder_is_inert() -> None:
-    """Enabled with no resolvable path → inert; no zero-loss result is fabricated."""
-    res = run_qsts_curtailment({"grid": {"qsts": {"enabled": True}}})
-    assert res.ran is False
-    assert res.feeder_source == NO_FEEDER_SOURCE
-    assert "path-backed" in res.reason.lower()
+def test_enabled_but_unclassified_feeder_fails_closed() -> None:
+    """An enabled study cannot turn missing identity into an innocent inert result."""
+    with pytest.raises(ValueError, match="input_kind must be one of"):
+        run_qsts_curtailment({"grid": {"qsts": {"enabled": True}}})
 
 
-def test_enabled_with_missing_feeder_file_is_inert() -> None:
-    """A feeder path pointing at a non-existent file → inert (no fabricated figure)."""
-    res = run_qsts_curtailment(
-        {
-            "grid": {
-                "qsts": {"enabled": True, "feeder_model_path": "/no/such/feeder.dss"}
+def test_enabled_with_missing_classification_fails_closed() -> None:
+    """A filesystem path alone is never QSTS provenance."""
+    with pytest.raises(ValueError, match="input_kind must be one of"):
+        run_qsts_curtailment(
+            {
+                "grid": {
+                    "qsts": {
+                        "enabled": True,
+                        "feeder_model_path": "/no/such/feeder.dss",
+                    }
+                }
             }
-        }
-    )
-    assert res.ran is False
-    assert res.feeder_source == NO_FEEDER_SOURCE
+        )
 
 
 def test_synthetic_feeder_is_refused_not_fabricated() -> None:
@@ -508,30 +508,26 @@ def test_instruction_defaults_to_zero_when_only_generation_injected(
 # ─────────────────────────────────── energy-conservation invariant guard (NO SPURIOUS PASS)
 
 
-def test_resolve_feeder_honours_explicit_site_declaration_contract(
+def test_resolve_feeder_refuses_unpinned_site_declaration(
     tmp_path: Path,
 ) -> None:
-    """Classification is declaration-only in #923-A; manifest/header checks arrive in B."""
+    """#1072 removes declaration-only site classification and requires evidence binding."""
     feeder = tmp_path / "f.dss"
     feeder.write_text("! contract-shape test only; not site evidence\n")
-    resolved = cq._resolve_feeder(
-        {
-            "qsts": {
-                "input_kind": "engineer_prepared_site_model",
-                "feeder_model_path": str(feeder),
-                "finance_wiring": {
-                    "enabled": False,
-                    "mode": "canonical",
-                    "canonical_eligible": True,
-                },
+    with pytest.raises(ValueError, match="evidence_manifest"):
+        cq._resolve_feeder(
+            {
+                "qsts": {
+                    "input_kind": "engineer_prepared_site_model",
+                    "feeder_model_path": str(feeder),
+                    "finance_wiring": {
+                        "enabled": False,
+                        "mode": "canonical",
+                        "canonical_eligible": True,
+                    },
+                }
             }
-        }
-    )
-    assert resolved.source == str(feeder)
-    assert resolved.can_solve is True
-    assert resolved.input_kind == "engineer_prepared_site_model"
-    assert resolved.generated_input is False
-    assert resolved.canonical_finance_eligible is True
+        )
 
 
 def test_resolve_feeder_synthetic_demo_is_not_real() -> None:
@@ -619,19 +615,17 @@ def test_runtime_refuses_nonstring_finance_mode(invalid_mode: object) -> None:
         )
 
 
-def test_resolve_feeder_missing_file_is_none() -> None:
-    resolved = cq._resolve_feeder(
-        {
-            "qsts": {
-                "input_kind": "synthetic_placeholder",
-                "feeder_model_path": "/no/such.dss",
-                "source_manifest_sha256": _SYNTHETIC_MANIFEST_SHA256,
+def test_resolve_feeder_missing_governed_file_fails_closed() -> None:
+    with pytest.raises(ValueError, match="missing or not a file"):
+        cq._resolve_feeder(
+            {
+                "qsts": {
+                    "input_kind": "synthetic_placeholder",
+                    "feeder_model_path": "/no/such.dss",
+                    "source_manifest_sha256": _SYNTHETIC_MANIFEST_SHA256,
+                }
             }
-        }
-    )
-    assert resolved.source is None
-    assert resolved.can_solve is False
-    assert resolved.generated_input is True
+        )
 
 
 def test_path_backed_synthetic_requires_external_manifest_digest(
@@ -639,7 +633,7 @@ def test_path_backed_synthetic_requires_external_manifest_digest(
 ) -> None:
     feeder = tmp_path / "Master.dss"
     feeder.write_text("! synthetic placeholder\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="source_manifest_sha256 pinned outside"):
+    with pytest.raises(ValueError, match="source_manifest_sha256"):
         cq._resolve_feeder(
             {
                 "qsts": {
@@ -670,7 +664,7 @@ def test_runtime_manifest_digest_is_exact_lowercase_sha256(
 
 
 def test_runtime_manifest_digest_cannot_be_attached_to_test_fixture() -> None:
-    with pytest.raises(ValueError, match="reserved.*synthetic_placeholder"):
+    with pytest.raises(ValueError, match="test_fixture inputs cannot carry"):
         cq._resolve_feeder(
             {
                 "qsts": {
@@ -859,7 +853,7 @@ def test_schema_enabled_requires_feeder_path() -> None:
     assert any("input_kind" in e for e in errors)
 
 
-def test_schema_enabled_with_feeder_path_passes() -> None:
+def test_schema_enabled_with_pinned_site_evidence_passes() -> None:
     errors: list[str] = []
     validate_grid_block(
         {
@@ -868,6 +862,8 @@ def test_schema_enabled_with_feeder_path_passes() -> None:
                     "enabled": True,
                     "input_kind": "engineer_prepared_site_model",
                     "feeder_model_path": "/x/feeder.dss",
+                    "evidence_manifest_path": "/x/evidence.json",
+                    "evidence_manifest_sha256": "b" * 64,
                 }
             }
         },
@@ -1040,6 +1036,8 @@ def test_schema_accepts_explicit_site_model_canonical_contract() -> None:
                     "enabled": True,
                     "input_kind": "engineer_prepared_site_model",
                     "feeder_model_path": "/x/site.dss",
+                    "evidence_manifest_path": "/x/evidence.json",
+                    "evidence_manifest_sha256": "b" * 64,
                     "finance_wiring": {
                         "enabled": True,
                         "mode": "canonical",

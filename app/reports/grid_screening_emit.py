@@ -66,6 +66,8 @@ from jinja2 import Environment, FileSystemLoader
 
 from analytics.contracts_v14 import (
     GRID_EMT_CONFIRMATION_SCR,
+    QSTS_SYNTHETIC_OUTPUT_CLASS,
+    SYNTHETIC_PROCESS_PROVENANCE_WARNING,
     CurtailmentShareResult,
     FreqResponseResult,
     GridStudyResult,
@@ -140,7 +142,8 @@ TENDER_EVIDENCE_CAVEAT = (
 
 #: The un-suppressible warning applied whenever a generated/non-site-representative QSTS
 #: result is presented. Integrity verification proves package identity, not site truth.
-SYNTHETIC_CURTAILMENT_WARNING = (
+SYNTHETIC_CURTAILMENT_WARNING = SYNTHETIC_PROCESS_PROVENANCE_WARNING
+SYNTHETIC_CURTAILMENT_DETAIL = (
     "SYNTHETIC COUNTERFACTUAL — NOT SITE-REPRESENTATIVE EVIDENCE. These QSTS values "
     "come from generated/test feeder inputs, not the CEB Kalpitiya/Puttalam feeder. "
     "Use them only for software-path testing and scenario learning. They are not lender "
@@ -235,6 +238,7 @@ class GridScreeningModel:
     tender_evidence: str = TENDER_EVIDENCE_CAVEAT
     verification_discipline: str = VERIFICATION_DISCIPLINE
     synthetic_curtailment_warning: str = SYNTHETIC_CURTAILMENT_WARNING
+    synthetic_curtailment_detail: str = SYNTHETIC_CURTAILMENT_DETAIL
 
     # Dependency-reproducibility provenance (CASPER available-vs-degraded state).
     engine_status: tuple[ScreenStatus, ...] = ()
@@ -373,6 +377,7 @@ def _try_curtailment(
     config: Mapping[str, Any], *, degraded: dict[str, str]
 ) -> Optional[CurtailmentShareResult]:
     from analytics.grid.curtailment_qsts import run_qsts_curtailment
+    from analytics.grid.qsts_evidence import QSTSEvidenceError
 
     try:
         # The QSTS entry is gated and provenance-typed. #923-E permits a path-backed
@@ -380,6 +385,11 @@ def _try_curtailment(
         # template applies an un-suppressible warning and exposes the machine evidence
         # flags/limitations. Finance still refuses the result at its separate D6b seam.
         return run_qsts_curtailment(config)
+    except QSTSEvidenceError:
+        # Identity/classification failures are control-plane failures, not an optional
+        # engine outage. Degrading here would let a substituted or cross-mode package reach
+        # a report as an innocent "not run" note, so #1072 requires a fail-closed refusal.
+        raise
     except Exception as exc:  # noqa: BLE001 - CASPER: degrade, don't crash the report
         degraded["curtailment"] = (
             f"QSTS curtailment split not run: {type(exc).__name__}: {exc}"
@@ -539,6 +549,40 @@ def render_grid_screening_html(model: GridScreeningModel) -> str:
     return template.render(m=model)
 
 
+_FORBIDDEN_SYNTHETIC_OUTPUT_TOKENS = frozenset(
+    {"real", "canonical", "lender", "board", "approval", "release", "bankable"}
+)
+
+
+def _segregated_qsts_output_path(
+    requested_path: Path, model: GridScreeningModel
+) -> Path:
+    """Route generated QSTS artifacts into the sole synthetic provenance namespace."""
+
+    curtailment = model.curtailment
+    if (
+        curtailment is None
+        or curtailment.ran is not True
+        or curtailment.generated_input is not True
+    ):
+        return requested_path
+
+    lowered_tokens = {
+        token
+        for part in requested_path.parts
+        for token in part.lower().replace("-", "_").split("_")
+    }
+    forbidden = sorted(lowered_tokens & _FORBIDDEN_SYNTHETIC_OUTPUT_TOKENS)
+    if forbidden:
+        raise ValueError(
+            "Synthetic QSTS output path contains a prohibited real/canonical/lender/board/"
+            f"approval/release/bankable token {forbidden}: {requested_path}."
+        )
+    if QSTS_SYNTHETIC_OUTPUT_CLASS in requested_path.parts:
+        return requested_path
+    return requested_path.parent / QSTS_SYNTHETIC_OUTPUT_CLASS / requested_path.name
+
+
 def emit_grid_screening_report_from_pipeline(
     result: Mapping[str, Any],
     scenario_config_path: str | Path,
@@ -589,7 +633,7 @@ def emit_grid_screening_report_from_pipeline(
     )
     html = render_grid_screening_html(model)
 
-    out_path = Path(output_html_path)
+    out_path = _segregated_qsts_output_path(Path(output_html_path), model)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html, encoding="utf-8")
     return out_path
