@@ -57,6 +57,10 @@ def test_codex_guidance_preserves_required_safety_and_quality_gates() -> None:
         "git diff --check",
         "DutchBay_EPC_Model",
         "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python",
+        "DUTCHBAY_VENV",
+        "PYTHONPATH",
+        "portable `.venv` fallback",
+        "verify_shared_venv_worktrees.py",
     )
     for phrase in required_phrases:
         assert phrase in guidance

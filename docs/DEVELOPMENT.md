@@ -24,19 +24,20 @@ the development and CI toolchain:
 git clone https://github.com/arunakulat/dutchbay-epc-model.git
 cd dutchbay-epc-model
 
-python3.12 -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
-
-make setup                           # pip install -r requirements.txt + pip install -e ".[dev]"
+export DUTCHBAY_VENV=/absolute/path/to/persistent/.venv
+make setup                           # create or validate the selected Python 3.12 environment
+source scripts/venv_up.sh            # activate it and bind imports to this checkout
 ```
 
-`make setup` is the canonical bootstrap. The equivalent manual steps are:
+`make setup` is the canonical bootstrap. It resolves the config-first `DUTCHBAY_VENV`
+contract, installs the pinned lock only when creating the selected environment, and refuses
+an incomplete, wrong-version, editable, or path-contaminated shared environment. It does not
+install DutchBay editably from the provisioning checkout. `source scripts/venv_up.sh`
+validates again and puts the active checkout first on `PYTHONPATH`.
 
-```bash
-python -m pip install --upgrade pip
-pip install -r requirements.txt      # the pinned reproducibility lock CI installs
-pip install -e ".[dev]"              # the dev/CI toolchain from pyproject (the abstract source of truth)
-```
+When `DUTCHBAY_VENV` is unset, the same commands use an isolated checkout-local `.venv` as a
+portable fallback for unconfigured developer hosts and ephemeral CI/container hosts. The
+fallback is not the persistent local Codex environment and must not be created per task.
 
 `requirements.txt` is the single pinned lock; `pyproject.toml` is the abstract source of
 truth for the core dependencies and the optional extras. There is no `requirements_dev.txt`
@@ -47,10 +48,26 @@ truth for the core dependencies and the optional extras. There is no `requiremen
 The setup above remains the portable developer workflow. Codex tasks have an additional
 continuity requirement under GWTF `THREAD-01`: create every new task from the
 `DutchBay_EPC_Model` Codex project and use its persistent Python 3.12 environment at
-`/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`. Run Git and repository commands from the
-active checkout or dedicated worktree, but invoke Python and tools through the project venv's
-absolute `.venv/bin` path. Do not replace it with a per-task, temporary, retired `.venv311`,
-bare/system, or unrelated-project environment.
+`/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` by setting `DUTCHBAY_VENV` to that exact
+path. Run Git and repository commands from the active checkout or dedicated worktree and put
+that checkout first on `PYTHONPATH`. Do not replace the persistent environment with a
+per-task, temporary, retired `.venv311`, bare/system, unrelated-project, or checkout-local
+environment.
+
+For a shared-environment change, prove worktree independence with two clean, named-branch
+worktrees from this repository:
+
+```bash
+export DUTCHBAY_VENV=/absolute/path/to/persistent/.venv
+export DUTCHBAY_WORKTREE_A=/absolute/path/to/first-worktree
+export DUTCHBAY_WORKTREE_B=/absolute/path/to/second-worktree
+"$DUTCHBAY_VENV/bin/python" scripts/verify_shared_venv_worktrees.py
+```
+
+The verifier refuses duplicate or substituted paths, dirty trees, checkout-local `.venv`
+directories, different Git common directories, foreign imports, and editable/path
+contamination. It emits one concise JSON receipt after both worktrees pass the rules
+bootstrap and focused tests; do not retain the captured raw subprocess output.
 
 ### Optional install extras
 

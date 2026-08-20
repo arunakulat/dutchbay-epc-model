@@ -42,7 +42,9 @@ def test_codex_environment_uses_the_persistent_project_venv() -> None:
     assert isinstance(setup, dict)
     script = setup["script"]
     assert "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv" in script
-    assert "sys.version_info[:2] != (3, 12)" in script
+    assert 'export DUTCHBAY_VENV="' in script
+    assert "dutchbay_environment.py" in script
+    assert 'export PYTHONPATH="$PWD' in script
     assert "./setup_venv.sh" not in script
 
 
@@ -128,6 +130,8 @@ def test_codex_environment_exposes_safe_project_actions() -> None:
         for action in actions
     )
     assert all("PYTHONPATH" in action["command"] for action in actions)
-    assert by_name["Fast validation"]["command"].lstrip().startswith("set -e")
+    assert all("DUTCHBAY_VENV" in action["command"] for action in actions)
+    assert all("dutchbay_environment.py" in action["command"] for action in actions)
+    assert all(action["command"].lstrip().startswith("set -e") for action in actions)
     assert "--reload" in by_name["Run API"]["command"]
     assert "app.api.main:app" in by_name["Run API"]["command"]

@@ -92,10 +92,35 @@ def test_thread_01_requires_the_project_and_persistent_venv() -> None:
     assert "regardless of subject" in policy
     assert "DutchBay_EPC_Model" in policy
     assert "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python" in policy
+    assert "DUTCHBAY_VENV" in policy
+    assert "PYTHONPATH" in policy
     assert "Python 3.12" in policy
     assert "/Users/aruna/Downloads/dutchbay-epc-model" in policy
+    assert "portable fallback" in policy
+    assert "unconfigured developer host" in policy
+    assert "ephemeral CI/container host" in policy
     for prohibited in ("temporary venv", ".venv311", "bare/system Python"):
         assert prohibited in policy
+
+
+def test_env_01_binds_one_shared_environment_to_each_active_worktree() -> None:
+    """Keep repository identity separate from persistent environment identity."""
+
+    env_01 = _rules_by_id()["ENV-01"]
+    policy = " ".join((env_01["title"], env_01["description"], env_01["enforcement"]))
+
+    assert env_01["status"] == "active"
+    for required in (
+        "DUTCHBAY_VENV",
+        "PYTHONPATH",
+        "git rev-parse --show-toplevel",
+        "git worktree list",
+        "verify_shared_venv_worktrees.py",
+        "two distinct clean worktrees",
+        "no worktree-local .venv",
+        "PERSIST-01",
+    ):
+        assert required in policy
 
 
 def test_active_r25_scripts_do_not_hardcode_a_retired_branch() -> None:

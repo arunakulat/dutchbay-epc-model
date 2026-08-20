@@ -11,8 +11,9 @@ Before substantial work, load the rules relevant to the task and validate the ca
 CSV when governance or workflow is in scope:
 
 ```bash
+export DUTCHBAY_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"
 DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
-  /Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python \
+  PYTHONPATH="$PWD" "$DUTCHBAY_VENV/bin/python" \
   dutchbay_bootstrap_rules.py
 ```
 
@@ -31,14 +32,26 @@ nonexistent ruleset filename.
   `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`.
 - At task start, verify that project association and run
   `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python -VV`. Invoke Python and other
-  environment tools from that absolute `.venv/bin` path, or prepend it to `PATH`.
+  environment tools from that absolute `.venv/bin` path, or set `DUTCHBAY_VENV` to the
+  persistent path and prepend its `bin` directory to `PATH`.
 - Continue to run repository and Git operations from the active
   `/Users/aruna/Downloads/dutchbay-epc-model` checkout or its dedicated worktree. The Codex
-  project association does not replace the repository-root requirement in `ENV-01`.
-- Do not create or select a per-task or temporary environment, a checkout-local replacement
-  `.venv`, `.venv311`, bare/system Python, or another project's environment. If the project
-  association or persistent venv is unavailable or not Python 3.12, stop before substantive
-  work and repair the context or request user direction.
+  project association does not replace the repository-root requirement in `ENV-01`. Put the
+  active checkout first on `PYTHONPATH`; a shared environment must never decide which
+  worktree supplies DutchBay imports.
+- Local Codex tasks must not create or select a per-task or temporary environment, a
+  checkout-local replacement `.venv`, `.venv311`, bare/system Python, or another project's
+  environment. The config-first portable `.venv` fallback is permitted only when
+  `DUTCHBAY_VENV` is unset on an unconfigured developer host or an ephemeral CI/container
+  host; it is not a substitute for the persistent local Codex environment.
+- At startup run:
+
+  ```bash
+  DUTCHBAY_VENV=/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv ./check_venv.sh
+  ```
+
+  If project association or the persistent environment cannot be verified, stop before
+  substantive work and repair the context or request user direction.
 
 ## Start every task safely
 
@@ -142,6 +155,10 @@ git diff --check
 For shell changes, run `bash -n` and, when the script supports zsh, `zsh -n`. For broad or
 financially material changes, run the relevant integration/regression suite and the full
 repository gates when practical. GitHub required checks remain the merge authority.
+
+Changes to shared-environment governance must also run
+`scripts/verify_shared_venv_worktrees.py` with two distinct, clean worktrees and the one
+configured `DUTCHBAY_VENV`; retain its concise receipt, not raw test or runtime logs.
 
 A pull request whose acceptance criteria depend on QSTS execution must independently run
 and pass the GitHub-hosted `Grid Study` job against the exact pull-request head SHA before

@@ -18,11 +18,15 @@ The move was forced, not preferred: flipping `grid.qsts.finance_wiring.enabled`
 assignment satisfied both pandapower and the pinned scipy. See §5.1.
 
 ```bash
-python3.12 -m venv .venv
-.venv/bin/pip install --upgrade pip setuptools wheel
-.venv/bin/pip install -r requirements.txt      # the pinned lock
-.venv/bin/pip install -e ".[dev]"              # gate toolchain
+export DUTCHBAY_VENV=/absolute/path/to/persistent/.venv
+make setup
+source scripts/venv_up.sh
 ```
+
+`make setup` creates or validates the exact configured path and installs the fully pinned
+`requirements.txt` lock without an editable DutchBay checkout. Activation exports the active
+checkout first on `PYTHONPATH`. If `DUTCHBAY_VENV` is unset, the same commands select the
+checkout-local `.venv` portable fallback for an unconfigured or ephemeral host.
 
 > **Always build a real venv.** A `pip install` into the system interpreter hits
 > Debian's patched setuptools (`AttributeError: install_layout`) building the
@@ -105,6 +109,10 @@ start, and a half-provisioned environment is the more expensive failure.
 The container is **ephemeral**: the venv does not survive it. The hook is the
 recipe that makes the environment reproducible rather than persistent — do not try
 to persist a venv, and never commit one (`.venv` is correctly gitignored).
+
+The remote hook's checkout-local editable install is isolated to that disposable checkout.
+It is not permitted in the persistent shared environment, where it would bind every worktree
+to whichever checkout happened to provision the environment.
 
 ---
 
