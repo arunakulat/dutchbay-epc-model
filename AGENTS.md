@@ -22,6 +22,22 @@ current workflow, especially `WORKTREE-01`, `GOV-02`, `R23`, `R25`, `DELIVERY-01
 `DATA-01`, `PERSIST-01`, and `THREAD-01`. Never restore a retired sprint integration branch or a
 nonexistent ruleset filename.
 
+## Session continuity
+
+Before starting work, read the newest record in `docs/SESSION_HANDOVER_*.md` — currently
+`docs/SESSION_HANDOVER_2026-08-20.md`. Each record names its predecessor and states which
+parts of it still stand, so read the newest first and follow the chain back only as far as
+it tells you to. These are the PERSIST-01 durable records: they carry the canonical KPI
+set, the traps that have already cost a session real time, and the open-item list.
+
+They do **not** restate the bootstrap. This file is the startup contract; a handover that
+duplicated it would drift from it. Where a handover and this file disagree about
+environment or governance, this file and the canonical CSV win, and the handover is stale.
+
+Write a successor record before a session ends, and correct a live one as soon as it
+states something false — a durable record that is confidently wrong is worse than a thin
+one, because the next session acts on it.
+
 ## Required Codex task origin and Python runtime
 
 - Create every new task, regardless of subject, from the Codex project named
