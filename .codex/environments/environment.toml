@@ -4,9 +4,10 @@ name = "DutchBay EPC"
 
 [setup]
 script = '''
-DUTCHBAY_PROJECT_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"
-test -x "$DUTCHBAY_PROJECT_VENV/bin/python"
-"$DUTCHBAY_PROJECT_VENV/bin/python" -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))'
+export DUTCHBAY_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"
+export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+test -x "$DUTCHBAY_VENV/bin/python"
+DUTCHBAY_REPO_ROOT="$PWD" "$DUTCHBAY_VENV/bin/python" dutchbay_environment.py
 '''
 
 [[actions]]
@@ -14,9 +15,10 @@ name = "Fast validation"
 icon = "test"
 command = '''
 set -e
-export DUTCHBAY_PROJECT_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"
-export PATH="$DUTCHBAY_PROJECT_VENV/bin:$PATH"
+export DUTCHBAY_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"
+export PATH="$DUTCHBAY_VENV/bin:$PATH"
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+DUTCHBAY_REPO_ROOT="$PWD" python dutchbay_environment.py
 ruff check .
 python -m pytest -q tests/lint/test_codex_project_guidance.py tests/lint/test_gwtf_canonical_source.py tests/lint/test_docstring_coverage.py
 mypy analytics finance run_full_pipeline_v14.py
@@ -26,18 +28,22 @@ mypy analytics finance run_full_pipeline_v14.py
 name = "Full tests"
 icon = "test"
 command = '''
-export DUTCHBAY_PROJECT_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"
-export PATH="$DUTCHBAY_PROJECT_VENV/bin:$PATH"
+set -e
+export DUTCHBAY_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"
+export PATH="$DUTCHBAY_VENV/bin:$PATH"
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
-make test PY="$DUTCHBAY_PROJECT_VENV/bin/python" PIP="$DUTCHBAY_PROJECT_VENV/bin/pip"
+DUTCHBAY_REPO_ROOT="$PWD" python dutchbay_environment.py
+make test PY="$DUTCHBAY_VENV/bin/python" PIP="$DUTCHBAY_VENV/bin/pip"
 '''
 
 [[actions]]
 name = "Run API"
 icon = "run"
 command = '''
-export DUTCHBAY_PROJECT_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"
-export PATH="$DUTCHBAY_PROJECT_VENV/bin:$PATH"
+set -e
+export DUTCHBAY_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"
+export PATH="$DUTCHBAY_VENV/bin:$PATH"
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+DUTCHBAY_REPO_ROOT="$PWD" python dutchbay_environment.py
 python -m uvicorn app.api.main:app --host 127.0.0.1 --port 8000 --reload
 '''

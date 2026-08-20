@@ -16,10 +16,13 @@ emits CSV, Excel, and JSON artifacts and an HTML or PDF lender report.
 git clone https://github.com/arunakulat/dutchbay-epc-model.git
 cd dutchbay-epc-model
 
-python3.12 -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
+# Persistent local environment (recommended): choose one absolute host path.
+export DUTCHBAY_VENV=/absolute/path/to/Dutchbay_EPC_Model/.venv
+make setup                           # creates or validates the selected Python 3.12 venv
+source scripts/venv_up.sh            # activates it and binds imports to this checkout
 
-make setup                           # pip install -r requirements.txt + pip install -e ".[dev]"
+# On an unconfigured/ephemeral host, leave DUTCHBAY_VENV unset; the same
+# commands use this checkout's isolated .venv fallback.
 
 # Run the canonical lender-case pipeline (Hydra CLI: key=value, not --flags)
 python run_full_pipeline_v14.py config=scenarios/dutchbay_lendercase_2025Q4.yaml
@@ -31,12 +34,14 @@ See [QUICK_START.md](QUICK_START.md) for the four routines and
 ### Codex task context
 
 Every new Codex task, regardless of subject, must be created from the `DutchBay_EPC_Model`
-project. Its
-durable project folder is `/Users/aruna/Downloads/Dutchbay_EPC_Model`, and Codex must use the
-persistent Python 3.12 environment at
-`/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`. Repository commands still run from this
-checkout or the task's dedicated worktree; invoke the project environment by absolute path so
-it persists independently of worktree cleanup. See GWTF rule `THREAD-01` and [AGENTS.md](AGENTS.md).
+project. Its durable project folder is `/Users/aruna/Downloads/Dutchbay_EPC_Model`, and Codex
+must use the persistent Python 3.12 environment at
+`/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`. Set `DUTCHBAY_VENV` to that exact path.
+Repository commands still run from this checkout or the task's dedicated worktree, with that
+checkout first on `PYTHONPATH`, so one environment persists independently of worktree cleanup
+without pinning imports to the worktree that provisioned it. The checkout-local `.venv`
+fallback is only for unconfigured or ephemeral hosts. See GWTF rules `THREAD-01` and `ENV-01`
+and [AGENTS.md](AGENTS.md).
 
 ## Architecture overview
 
