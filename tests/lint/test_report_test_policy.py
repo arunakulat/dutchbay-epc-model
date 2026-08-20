@@ -804,13 +804,16 @@ def test_local_and_python312_ci_qualification_targets_are_explicit() -> None:
     assert "test-report-qualification:" in makefile
     assert "DUTCHBAY_TEST_MODE=qualification $(PYTEST)" in makefile
     assert "-n 2 tests/integration/test_lender_report_e2e.py" in makefile
+    assert "tests/integration/test_synthetic_qsts_finance_report.py" in makefile
     assert "-m report_qualification" in makefile
     assert "report-qualification:" in workflow
     assert "Report Qualification (Python 3.12, scheduled/manual)" in workflow
     assert 'python-version: "3.12"' in workflow
     assert "-n 2 tests/integration/test_lender_report_e2e.py" in workflow
+    assert "tests/integration/test_synthetic_qsts_finance_report.py" in workflow
     assert "-m report_qualification" in workflow
     assert "Run report qualification tests" in release
     assert "DUTCHBAY_TEST_MODE: qualification" in release
     assert "-n 2 tests/integration/test_lender_report_e2e.py" in release
+    assert "tests/integration/test_synthetic_qsts_finance_report.py" in release
     assert "-m report_qualification" in release

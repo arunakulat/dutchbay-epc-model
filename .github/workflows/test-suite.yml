@@ -497,6 +497,7 @@ jobs:
     - name: Run explicitly marked report qualification tests
       run: >-
         python -m pytest -n 2 tests/integration/test_lender_report_e2e.py
+        tests/integration/test_synthetic_qsts_finance_report.py
         -m report_qualification --tb=short
         --junit-xml=report-qualification-results.xml
     - name: Upload qualification test result

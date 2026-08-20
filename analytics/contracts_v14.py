@@ -1278,6 +1278,9 @@ QSTS_SYNTHETIC_OUTPUT_CLASS = "synthetic_process_provenance"
 QSTS_CONTROLLED_OUTPUT_CLASS = "controlled_input_nonbankable"
 SYNTHETIC_QSTS_OUTPUT_SCHEMA = "dutchbay.synthetic_qsts_output_records.v1"
 SYNTHETIC_INPUT_HANDOFF_SCHEMA = "dutchbay_synthetic_qsts_input_handoff_v1"
+SYNTHETIC_PROCESS_PROVENANCE_REPORT_SCHEMA = (
+    "dutchbay.synthetic_process_provenance_financial_report.v1"
+)
 
 
 def _is_exact_sha256(value: object) -> bool:
@@ -2319,6 +2322,334 @@ class SyntheticQSTSOutputRecord(ContractMixin):
 
 
 @dataclass(frozen=True)
+class SyntheticFinanceKpis(ContractMixin):
+    """One strict KPI snapshot for the segregated #1074 counterfactual."""
+
+    project_irr: float
+    equity_irr: float
+    project_npv_usd: float
+    minimum_dscr: float
+    year1_net_generation_mwh: float
+    lifetime_net_generation_mwh: float
+    year1_revenue_usd: float
+    lifetime_revenue_usd: float
+
+    def __post_init__(self) -> None:
+        """Reject non-finite or physically impossible report values."""
+
+        for item in fields(self):
+            value = getattr(self, item.name)
+            if type(value) not in {int, float} or not math.isfinite(float(value)):
+                raise ValueError(
+                    f"SyntheticFinanceKpis.{item.name} must be a finite number."
+                )
+
+
+@dataclass(frozen=True)
+class SyntheticFinanceKpiMovement(ContractMixin):
+    """Baseline, synthetic counterfactual, and exact after-minus-before movement."""
+
+    baseline: SyntheticFinanceKpis
+    counterfactual: SyntheticFinanceKpis
+    movement: SyntheticFinanceKpis
+
+    def __post_init__(self) -> None:
+        """Bind every displayed movement to its two evaluated endpoints."""
+
+        if not all(
+            isinstance(value, SyntheticFinanceKpis)
+            for value in (self.baseline, self.counterfactual, self.movement)
+        ):
+            raise ValueError("Synthetic finance KPI movement requires typed snapshots.")
+        for snapshot_name in ("baseline", "counterfactual"):
+            snapshot = getattr(self, snapshot_name)
+            for field_name in (
+                "minimum_dscr",
+                "year1_net_generation_mwh",
+                "lifetime_net_generation_mwh",
+                "year1_revenue_usd",
+                "lifetime_revenue_usd",
+            ):
+                if getattr(snapshot, field_name) < 0.0:
+                    raise ValueError(
+                        f"Synthetic finance {snapshot_name} {field_name} must be "
+                        "non-negative."
+                    )
+        for item in fields(SyntheticFinanceKpis):
+            expected = getattr(self.counterfactual, item.name) - getattr(
+                self.baseline, item.name
+            )
+            if not math.isclose(
+                getattr(self.movement, item.name),
+                expected,
+                rel_tol=0.0,
+                abs_tol=1.0e-9,
+            ):
+                raise ValueError(
+                    f"Synthetic finance KPI movement does not reconcile for {item.name}."
+                )
+
+
+@dataclass(frozen=True)
+class SyntheticProcessProvenanceReportRecord(ContractMixin):
+    """Terminal #1074 report receipt with a structural canonical-finance refusal."""
+
+    schema: str
+    issue: int
+    source_input_issue: int
+    source_qsts_issue: int
+    generated_at_utc: str
+    repository_commit: str
+    report_code_sha256: str
+    report_template_sha256: str
+    resolved_report_config_sha256: str
+    scenario_path: str
+    scenario_sha256: str
+    input_handoff_schema: str
+    input_handoff_sha256: str
+    qsts_output_schema: str
+    qsts_output_sha256: str
+    package_manifest_sha256: str
+    profile_sha256: str
+    profile_values_sha256: str
+    profile_row_count: int
+    profile_start_utc: str
+    profile_end_utc: str
+    profile_timezone: str
+    profile_timestep_hours: float
+    profile_unit: str
+    synthetic_aep_mwh: float
+    synthetic_aep_gwh: float
+    gross_energy_mwh: float
+    delivered_energy_mwh: float
+    deemed_paid_energy_mwh: float
+    self_curtailed_pre_bess_mwh: float
+    bess_recovered_energy_mwh: float
+    self_curtailed_energy_mwh: float
+    curtailed_total_mwh: float
+    export_cap_breach_timesteps: int
+    energy_balance_residual_mwh: float
+    qsts_attempted_steps: int
+    qsts_converged_steps: int
+    qsts_nonconverged_steps: int
+    voltage_violation_steps: int
+    thermal_violation_steps: int
+    operator_schedule_status: str
+    baseline_project_curtailment_decimal: float
+    synthetic_self_curtailment_decimal: float
+    counterfactual_project_curtailment_decimal: float
+    deemed_paid_finance_haircut_decimal: float
+    kpis: SyntheticFinanceKpiMovement
+    report_html_filename: str
+    report_html_sha256: str
+    report_pdf_filename: str
+    report_pdf_sha256: str
+    pdf_page_count: int
+    pdf_warning_page_count: int
+    html_warning_occurrences: int
+    input_kind: str
+    output_class: str
+    finance_mode: str
+    required_warning: str
+    generated_input: bool
+    observed_network_data: bool
+    site_representative: bool
+    canonical_finance_eligible: bool
+    bankable: bool
+    publishable: bool
+    lender_eligible: bool
+    board_eligible: bool
+    approval_eligible: bool
+    release_eligible: bool
+    finance_wiring_enabled: bool
+    canonical_finance_executed: bool
+    segregated_counterfactual_finance_executed: bool
+    canonical_scenario_mutated: bool
+    canonical_expected_results_mutated: bool
+    canonical_finance_release_refused: bool
+
+    def __post_init__(self) -> None:
+        """Reject evidence drift, bad accounting, or a synthetic release upgrade."""
+
+        if self.schema != SYNTHETIC_PROCESS_PROVENANCE_REPORT_SCHEMA:
+            raise ValueError(
+                "Synthetic process-provenance report schema is not the governed version."
+            )
+        if (
+            self.issue != 1074
+            or self.source_input_issue != 1077
+            or self.source_qsts_issue != 1073
+        ):
+            raise ValueError(
+                "Synthetic report must remain the #1077/#1073 to #1074 path."
+            )
+        try:
+            generated = datetime.fromisoformat(
+                self.generated_at_utc.replace("Z", "+00:00")
+            )
+        except (AttributeError, ValueError) as exc:
+            raise ValueError("generated_at_utc must be ISO-8601 UTC.") from exc
+        if generated.tzinfo is None or generated.utcoffset() != timezone.utc.utcoffset(
+            generated
+        ):
+            raise ValueError("generated_at_utc must be explicit UTC.")
+        if (
+            not isinstance(self.repository_commit, str)
+            or len(self.repository_commit) != 40
+            or any(
+                character not in "0123456789abcdef"
+                for character in self.repository_commit
+            )
+        ):
+            raise ValueError("repository_commit must be an exact lowercase Git SHA.")
+        for field_name in (
+            "report_code_sha256",
+            "report_template_sha256",
+            "resolved_report_config_sha256",
+            "scenario_sha256",
+            "input_handoff_sha256",
+            "qsts_output_sha256",
+            "package_manifest_sha256",
+            "profile_sha256",
+            "profile_values_sha256",
+            "report_html_sha256",
+            "report_pdf_sha256",
+        ):
+            if not _is_exact_sha256(getattr(self, field_name)):
+                raise ValueError(f"{field_name} must be an exact lowercase SHA-256.")
+        if (
+            self.input_handoff_schema != SYNTHETIC_INPUT_HANDOFF_SCHEMA
+            or self.qsts_output_schema != SYNTHETIC_QSTS_OUTPUT_SCHEMA
+            or self.profile_row_count != 8760
+            or self.profile_start_utc != "2021-01-01T00:00:00Z"
+            or self.profile_end_utc != "2021-12-31T23:00:00Z"
+            or self.profile_timezone != "UTC"
+            or self.profile_timestep_hours != 1.0
+            or self.profile_unit != "MW"
+        ):
+            raise ValueError("Synthetic report lost the governed UTC/MW input horizon.")
+        energy_fields = (
+            "synthetic_aep_mwh",
+            "synthetic_aep_gwh",
+            "gross_energy_mwh",
+            "delivered_energy_mwh",
+            "deemed_paid_energy_mwh",
+            "self_curtailed_pre_bess_mwh",
+            "bess_recovered_energy_mwh",
+            "self_curtailed_energy_mwh",
+            "curtailed_total_mwh",
+            "energy_balance_residual_mwh",
+            "baseline_project_curtailment_decimal",
+            "synthetic_self_curtailment_decimal",
+            "counterfactual_project_curtailment_decimal",
+            "deemed_paid_finance_haircut_decimal",
+        )
+        if any(
+            type(getattr(self, name)) not in {int, float}
+            or not math.isfinite(float(getattr(self, name)))
+            for name in energy_fields
+        ):
+            raise ValueError(
+                "Synthetic report energy and treatment fields must be finite."
+            )
+        if not math.isclose(
+            self.synthetic_aep_gwh,
+            self.synthetic_aep_mwh / 1000.0,
+            rel_tol=0.0,
+            abs_tol=1.0e-9,
+        ) or not math.isclose(
+            self.synthetic_aep_mwh,
+            self.gross_energy_mwh,
+            rel_tol=0.0,
+            abs_tol=1.0e-6,
+        ):
+            raise ValueError("Synthetic report AEP units do not reconcile.")
+        expected_self_fraction = self.self_curtailed_energy_mwh / self.gross_energy_mwh
+        expected_composed = 1.0 - (
+            (1.0 - self.baseline_project_curtailment_decimal)
+            * (1.0 - self.synthetic_self_curtailment_decimal)
+        )
+        if (
+            self.gross_energy_mwh <= 0.0
+            or not 0.0 <= self.baseline_project_curtailment_decimal < 1.0
+            or not 0.0 <= self.synthetic_self_curtailment_decimal < 1.0
+            or not math.isclose(
+                self.synthetic_self_curtailment_decimal,
+                expected_self_fraction,
+                rel_tol=0.0,
+                abs_tol=1.0e-12,
+            )
+            or not math.isclose(
+                self.counterfactual_project_curtailment_decimal,
+                expected_composed,
+                rel_tol=0.0,
+                abs_tol=1.0e-12,
+            )
+            or self.deemed_paid_finance_haircut_decimal != 0.0
+        ):
+            raise ValueError(
+                "Synthetic report finance treatment must use only net self-curtailment."
+            )
+        if (
+            self.qsts_attempted_steps != 8760
+            or self.qsts_converged_steps != 8760
+            or self.qsts_nonconverged_steps != 0
+            or not 0 <= self.voltage_violation_steps <= 8760
+            or not 0 <= self.thermal_violation_steps <= 8760
+            or self.operator_schedule_status
+            != "absent_no_observed_operator_instructions"
+        ):
+            raise ValueError(
+                "Synthetic report requires complete converged QSTS evidence."
+            )
+        if (
+            not isinstance(self.kpis, SyntheticFinanceKpiMovement)
+            or self.pdf_page_count < 1
+            or self.pdf_warning_page_count != self.pdf_page_count
+            or self.html_warning_occurrences < self.pdf_page_count
+            or not self.report_html_filename.endswith(".html")
+            or not self.report_pdf_filename.endswith(".pdf")
+        ):
+            raise ValueError(
+                "Synthetic report artifacts are incomplete or warning-incomplete."
+            )
+        if (
+            self.input_kind != "synthetic_placeholder"
+            or self.output_class != "synthetic_process_provenance_financial_report"
+            or self.finance_mode != "segregated_synthetic_counterfactual"
+            or self.required_warning != SYNTHETIC_PROCESS_PROVENANCE_WARNING
+        ):
+            raise ValueError("Synthetic report classification or warning changed.")
+        expected_flags = {
+            "generated_input": True,
+            "observed_network_data": False,
+            "site_representative": False,
+            "canonical_finance_eligible": False,
+            "bankable": False,
+            "publishable": False,
+            "lender_eligible": False,
+            "board_eligible": False,
+            "approval_eligible": False,
+            "release_eligible": False,
+            "finance_wiring_enabled": False,
+            "canonical_finance_executed": False,
+            "segregated_counterfactual_finance_executed": True,
+            "canonical_scenario_mutated": False,
+            "canonical_expected_results_mutated": False,
+            "canonical_finance_release_refused": True,
+        }
+        for field_name, expected in expected_flags.items():
+            if (
+                type(getattr(self, field_name)) is not bool
+                or getattr(self, field_name) is not expected
+            ):  # noqa: E721
+                raise ValueError(
+                    f"SyntheticProcessProvenanceReportRecord.{field_name} must be "
+                    f"{expected}."
+                )
+
+
+@dataclass(frozen=True)
 class BessSocState(ContractMixin):
     """The usable-energy picture of a BESS at one state-of-charge (issue #879).
 
@@ -3204,10 +3535,14 @@ __all__ = [
     "QSTSSolveTelemetry",
     "SYNTHETIC_QSTS_OUTPUT_SCHEMA",
     "SYNTHETIC_INPUT_HANDOFF_SCHEMA",
+    "SYNTHETIC_PROCESS_PROVENANCE_REPORT_SCHEMA",
     "SyntheticInputSourceRecord",
     "SyntheticInputArtifactRecord",
     "SyntheticInputRecordHandoff",
     "SyntheticQSTSOutputRecord",
+    "SyntheticFinanceKpis",
+    "SyntheticFinanceKpiMovement",
+    "SyntheticProcessProvenanceReportRecord",
     "CurtailmentShareResult",
     "GroupDroopContribution",
     "FreqResponseResult",
