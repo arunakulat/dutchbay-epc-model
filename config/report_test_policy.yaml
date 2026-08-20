@@ -1,0 +1,14 @@
+schema_version: dutchbay_report_test_policy_v1
+
+ordinary_suite:
+  api_transport_context: deterministic_known_context
+  renderer_context: deterministic_known_context
+  representative_live_e2e: required
+  claim_classification: regression_and_coverage_only
+
+qualification_suite:
+  test_mode: qualification
+  marker: report_qualification
+  required_live_paths:
+    - supplemental_sensitivity
+    - pdf_backend

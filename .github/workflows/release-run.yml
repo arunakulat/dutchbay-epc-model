@@ -46,6 +46,15 @@ jobs:
           # scale gate, not by itself a convergence/bankability evidence receipt.
           python -m pytest -n auto -m stochastic_qualification --tb=short
 
+      - name: Run report qualification tests
+        env:
+          DUTCHBAY_TEST_MODE: qualification
+        run: |
+          # Preserve live supplemental-sensitivity + real PDF coverage outside
+          # the bounded transport/renderer regression suite.
+          python -m pytest -n 2 tests/integration/test_lender_report_e2e.py \
+            -m report_qualification --tb=short
+
       - name: Run v14 lender pipeline smoke
         run: |
           # Targeted smoke over the canonical lender pipeline (MC) + sensitivity CLI.

@@ -183,10 +183,13 @@ def test_rendered_waterfall_ties_to_the_headline_cfads() -> None:
 
 
 @pytest.mark.slow
+@pytest.mark.report_qualification
 def test_production_path_renders_sensitivity_sections() -> None:
-    """The full production builder (``_build_report_context``) additionally computes + renders the
-    one-at-a-time tornado and the Morris global-SA sections — covered here so the e2e spans the
-    sensitivity wiring, not just the deterministic sections above."""
+    """Qualify the live tornado, Morris, and PAWN production report wiring.
+
+    This remains the complete supplemental-sensitivity path; TEST-04 isolates it
+    from the ordinary transport/renderer regression suite rather than deleting it.
+    """
     ctx = api_main._build_report_context(_inputs())
     html = render_report_html(ctx)
     assert ctx.tornado is not None and ctx.global_sa is not None
@@ -197,16 +200,12 @@ def test_production_path_renders_sensitivity_sections() -> None:
 def test_lender_report_renders_through_the_auth_gated_http_route(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Full-stack e2e: the auth-gated ``POST /v1/cases/report.html`` route renders the report over
-    HTTP — covering the auth + endpoint + timeout shell the other tests call the core beneath.
+    """Representative e2e: the authenticated HTML route runs finance and renders over HTTP.
 
-    The route's wall-clock ceiling (``DUTCHBAY_SYNC_ROUTE_TIMEOUT``, default 120s) exists to
-    bound CLIENT waits in production; on slow shared CI runners the report compute (Morris +
-    PAWN sensitivity under the hood) intermittently exceeded it and the test 504-flaked. The
-    ceiling is not what THIS test verifies (the timeout shell's 504 behaviour has its own
-    coverage), so run the route with a generous test-only ceiling: patch the module-level
-    ``_run_with_timeout`` (the env default is bound at import time, so an env var cannot
-    change it here) to force a 600s limit. Route handlers resolve the global at call time.
+    Supplemental tornado/Morris/PAWN services are replaced at their orchestration
+    seams because this test verifies auth, timeout, live finance, report-context and
+    HTTP assembly. Their real integrated path is retained above as
+    ``report_qualification``. The timeout shell's 504 behaviour has separate tests.
     """
     pytest.importorskip("httpx")
     import functools
@@ -220,6 +219,11 @@ def test_lender_report_renders_through_the_auth_gated_http_route(
         api_main,
         "_run_with_timeout",
         functools.partial(api_main._run_with_timeout, timeout=generous),
+    )
+    monkeypatch.setattr(api_main, "compute_report_tornado", lambda _scenario: None)
+    monkeypatch.setattr(api_main, "compute_report_global_sa", lambda _scenario: None)
+    monkeypatch.setattr(
+        api_main, "compute_report_global_sa_pawn", lambda _scenario: None
     )
 
     # Auth is exercised end-to-end in test_auth.py; override it so this stays focused on rendering.
@@ -236,11 +240,15 @@ def test_lender_report_renders_through_the_auth_gated_http_route(
         api_main.app.dependency_overrides.clear()
 
 
-def test_lender_report_pdf_renders_when_weasyprint_present() -> None:
-    """Gated PDF render: when the optional [report] backend is installed, the same context
-    produces a real PDF document. Skipped (like the rest of the [report] suite) otherwise.
+@pytest.mark.slow
+@pytest.mark.report_qualification
+def test_lender_report_pdf_renders_with_required_backend() -> None:
+    """Qualify the required real PDF backend against a live deterministic context.
+
+    The qualification environment installs the ``[report]`` extra explicitly. A
+    missing backend therefore fails this gate rather than turning it silently green
+    through an environment-dependent skip.
     """
-    pytest.importorskip("weasyprint")
     from app.reports.renderer import render_report_pdf
 
     _case, _result, ctx, _html = _render_deterministic()

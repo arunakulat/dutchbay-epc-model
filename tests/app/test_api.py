@@ -28,6 +28,8 @@ from app.api.main import (
 )
 from app.api.responses import CaseResult
 from app.models.inputs import WindFarmInputs
+from app.reports.renderer import ReportDependencyError
+from app.reports.report_model import ReportContext, build_report_context
 
 
 def _valid_kwargs(**overrides: Any) -> Dict[str, Any]:
@@ -48,6 +50,29 @@ def _valid_kwargs(**overrides: Any) -> Dict[str, Any]:
     }
     base.update(overrides)
     return base
+
+
+def _known_report_context(*, site_name: str = "ReportSite") -> ReportContext:
+    """Build a deterministic renderer/transport context without running finance."""
+    inputs = WindFarmInputs(**_valid_kwargs(site_name=site_name))
+    case = CaseResult(
+        status="success",
+        scenario_variant=inputs.scenario_variant,
+        kpis={
+            "project_irr": 0.0422,
+            "equity_irr": -0.0246,
+            "project_npv": -57_994_285.93,
+            "min_dscr": 1.30,
+            "discount_rate_used": 0.0854,
+            "balloon_pct": 0.3467,
+        },
+        run_manifest=None,
+    )
+    return build_report_context(
+        case,
+        generated_at="2026-08-20T00:00:00+00:00",
+        inputs=inputs,
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -181,8 +206,9 @@ def test_run_case_maps_engine_integrity_errors_to_400(
 # --------------------------------------------------------------------------- #
 # Report routes (called directly)
 # --------------------------------------------------------------------------- #
-@pytest.mark.slow
-def test_run_case_report_html_renders() -> None:
+def test_run_case_report_html_renders(monkeypatch: pytest.MonkeyPatch) -> None:
+    context = _known_report_context()
+    monkeypatch.setattr(api_main, "_build_report_context", lambda _inputs: context)
     resp = run_case_report_html(WindFarmInputs(**_valid_kwargs(site_name="ReportSite")))
     assert resp.status_code == 200
     assert resp.media_type == "text/html"
@@ -203,23 +229,28 @@ def test_run_case_report_html_maps_validation_error_to_400(
     assert exc.value.status_code == 400
 
 
-@pytest.mark.slow
-def test_run_case_report_pdf_503_without_weasyprint() -> None:
-    try:
-        import weasyprint  # noqa: F401
-    except ImportError:
-        with pytest.raises(HTTPException) as exc:
-            run_case_report_pdf(WindFarmInputs(**_valid_kwargs()))
-        assert exc.value.status_code == 503
-        assert "WeasyPrint" in str(exc.value.detail)
-    else:  # pragma: no cover - only when the optional extra is installed
-        resp = run_case_report_pdf(WindFarmInputs(**_valid_kwargs()))
-        assert resp.media_type == "application/pdf"
+def test_run_case_report_pdf_503_without_weasyprint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = _known_report_context()
+    monkeypatch.setattr(api_main, "_build_report_context", lambda _inputs: context)
+
+    def _missing_backend(_context: ReportContext) -> bytes:
+        raise ReportDependencyError(
+            "PDF rendering requires WeasyPrint; install the report extra"
+        )
+
+    monkeypatch.setattr(api_main, "render_report_pdf", _missing_backend)
+    with pytest.raises(HTTPException) as exc:
+        run_case_report_pdf(WindFarmInputs(**_valid_kwargs()))
+    assert exc.value.status_code == 503
+    assert "WeasyPrint" in str(exc.value.detail)
 
 
-@pytest.mark.slow
 def test_run_case_report_pdf_success_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Cover the Response assembly without requiring WeasyPrint: stub the renderer.
+    # Cover response assembly without rerunning finance/sensitivity or the PDF backend.
+    context = _known_report_context()
+    monkeypatch.setattr(api_main, "_build_report_context", lambda _inputs: context)
     monkeypatch.setattr(api_main, "render_report_pdf", lambda _ctx: b"%PDF-1.7 stub")
     resp = run_case_report_pdf(WindFarmInputs(**_valid_kwargs()))
     assert resp.media_type == "application/pdf"
