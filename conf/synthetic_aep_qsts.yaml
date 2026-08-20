@@ -1,0 +1,39 @@
+# Governed #1073 full-horizon synthetic AEP/QSTS output-record execution.
+#
+# The detached #1077 SHA is an external trust anchor and MUST be supplied by the caller:
+#   input.expected_handoff_sha256=<64-lowercase-hex>
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+input:
+  handoff_path: outputs/synthetic_process_provenance/issue_1077/synthetic_input_records.json
+  expected_handoff_sha256: REQUIRED_EXTERNAL_SHA256
+  package_manifest_path: outputs/synthetic_placeholders/issue_923/manifest.json
+
+qsts:
+  voltage_min_pu: 0.90
+  voltage_max_pu: 1.10
+  thermal_limit_pct_norm: 100.0
+  network_injection_basis: gross_generation_pre_export_cap_and_operator_instruction
+  generator_name: synthetic923_poc_generator
+  energy_balance_tolerance_mwh: 1.0e-6
+  require_all_timesteps_converged: true
+
+output:
+  output_dir: outputs/synthetic_process_provenance/issue_1073
+  record_filename: synthetic_aep_qsts_output_records.json
+  checksum_filename: synthetic_aep_qsts_output_records.sha256
+  allow_existing_identical: true
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null

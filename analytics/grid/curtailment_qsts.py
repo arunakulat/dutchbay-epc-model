@@ -121,6 +121,7 @@ from analytics.contracts_v14 import (
     SYNTHETIC_PROCESS_PROVENANCE_WARNING,
     CurtailmentShareResult,
     QSTSRunManifest,
+    QSTSSolveTelemetry,
 )
 from analytics.grid.capabilities.bess_soc import bess_soc_state, split_reserves
 from analytics.grid.qsts_evidence import (
@@ -213,6 +214,19 @@ class FeederInput:
     @property
     def can_solve(self) -> bool:
         return self.source is not None and self.model_exists
+
+
+class QSTSConvergenceError(RuntimeError):
+    """Raised after a live QSTS horizon contains any non-converged solve."""
+
+    def __init__(self, telemetry: QSTSSolveTelemetry) -> None:
+        self.telemetry = telemetry
+        super().__init__(
+            "QSTS refused non-converged horizon: "
+            f"{telemetry.nonconverged_steps}/{telemetry.attempted_steps} steps failed; "
+            f"first={telemetry.first_nonconverged_step}, "
+            f"last={telemetry.last_nonconverged_step}."
+        )
 
 
 #: A hair of numerical tolerance so an export-cap comparison / energy identity that holds to
@@ -624,6 +638,7 @@ def split_curtailment(
     source_manifest_sha256: str | None = None,
     evidence_manifest_sha256: str | None = None,
     qsts_run_manifest: QSTSRunManifest | None = None,
+    qsts_solve_telemetry: QSTSSolveTelemetry | None = None,
     limitations: tuple[str, ...] = (),
 ) -> CurtailmentShareResult:
     """Split integrated curtailment into deemed-paid vs (BESS-recovered) self-curtailed.
@@ -733,6 +748,17 @@ def split_curtailment(
         source_manifest_sha256=source_manifest_sha256,
         evidence_manifest_sha256=evidence_manifest_sha256,
         qsts_run_manifest=qsts_run_manifest,
+        qsts_solve_telemetry=qsts_solve_telemetry,
+        solver_converged_all_steps=(
+            qsts_solve_telemetry.nonconverged_steps == 0
+            if qsts_solve_telemetry is not None
+            else None
+        ),
+        n_nonconverged_steps=(
+            qsts_solve_telemetry.nonconverged_steps
+            if qsts_solve_telemetry is not None
+            else None
+        ),
         limitations=limitations,
         export_cap_mw=cap_mw,
         gross_energy_mwh=gross_energy,
@@ -1203,6 +1229,7 @@ def run_qsts_curtailment(
     # solve to produce them. The solve is the ONLY [grid]-extra path here.
     gen: Sequence[float]
     instructed: Sequence[float]
+    solve_telemetry: QSTSSolveTelemetry | None = None
     if generation_mwh is not None:
         if verified_runtime is not None:
             gen = _require_verified_profile_match(
@@ -1240,7 +1267,7 @@ def run_qsts_curtailment(
     else:  # pragma: no cover - requires [grid] extra
         if verified_runtime is not None:
             with _materialized_verified_feeder(verified_runtime) as snapshot_feeder:
-                gen, instructed = _solve_qsts(
+                gen, instructed, solve_telemetry = _solve_qsts(
                     grid,
                     feeder_path=snapshot_feeder,
                     timestep_hours=step_hours,
@@ -1250,7 +1277,7 @@ def run_qsts_curtailment(
                     ),
                 )
         else:
-            gen, instructed = _solve_qsts(
+            gen, instructed, solve_telemetry = _solve_qsts(
                 grid,
                 feeder_path=str(feeder.source),
                 timestep_hours=step_hours,
@@ -1295,6 +1322,7 @@ def run_qsts_curtailment(
         source_manifest_sha256=feeder.source_manifest_sha256,
         evidence_manifest_sha256=feeder.evidence_manifest_sha256,
         qsts_run_manifest=feeder.qsts_run_manifest,
+        qsts_solve_telemetry=solve_telemetry,
         limitations=limitations,
     )
 
@@ -1331,7 +1359,7 @@ def _solve_qsts(  # pragma: no cover - requires [grid] extra
     timestep_hours: float,
     generation_profile_mw: Sequence[float] | None = None,
     grid_instructed_profile_mw: Sequence[float] | None = None,
-) -> tuple[list[float], list[float]]:
+) -> tuple[list[float], list[float], QSTSSolveTelemetry]:
     """Run OpenDSSDirect over the declared path; evidence grade stays in ``FeederInput``.
 
     What the QSTS honestly measures — and what it does NOT
@@ -1364,7 +1392,9 @@ def _solve_qsts(  # pragma: no cover - requires [grid] extra
     canonical finance. The pathless built-in demo never reaches here.
     """
     dss = _require_opendss()
+    dss.Basic.ClearAll()
     dss.Command(f'Redirect "{feeder_path}"')
+    _raise_on_dss_error(dss, "feeder Redirect")
     dss.Solution.Mode(1)  # daily/QSTS time-series mode
     dss.Solution.StepSize(timestep_hours * 3600.0)
 
@@ -1389,15 +1419,158 @@ def _solve_qsts(  # pragma: no cover - requires [grid] extra
     )
     generation: list[float] = []
     instructed: list[float] = []
+    monitoring = _resolve_execution_monitoring(grid)
+    converged_steps = 0
+    failing_steps: list[int] = []
+    voltage_violation_steps = 0
+    thermal_violation_steps = 0
+    observed_voltage_min = math.inf
+    observed_voltage_max = -math.inf
+    observed_max_pct_norm = 0.0
+    generator_activation_steps = 0
+    generator_setpoint_mismatch_steps = 0
+    generator_name = _resolve_generator_name(grid)
     for t, p_mw in enumerate(profiles):
-        _inject_poc_power(dss, p_mw)
+        activated, setpoint_matches = _inject_poc_power(
+            dss, p_mw, generator_name=generator_name
+        )
+        generator_activation_steps += int(activated)
+        generator_setpoint_mismatch_steps += int(not setpoint_matches)
         dss.Solution.Number(1)
         dss.Solution.Solve()
+        _raise_on_dss_error(dss, f"QSTS timestep {t}")
+        step_converged = bool(dss.Solution.Converged())
+        if step_converged:
+            converged_steps += 1
+        else:
+            failing_steps.append(t)
+        if monitoring is not None and step_converged:
+            voltage_values = [float(value) for value in dss.Circuit.AllBusMagPu()]
+            thermal_values = [float(value) for value in dss.PDElements.AllPctNorm()]
+            if (
+                not voltage_values
+                or any(
+                    not math.isfinite(value) or value < 0.0 for value in voltage_values
+                )
+                or any(
+                    not math.isfinite(value) or value < 0.0 for value in thermal_values
+                )
+            ):
+                raise RuntimeError(
+                    f"OpenDSS monitoring returned invalid values at step {t}."
+                )
+            voltage_min = min(voltage_values)
+            voltage_max = max(voltage_values)
+            max_pct_norm = max(thermal_values, default=0.0)
+            observed_voltage_min = min(observed_voltage_min, voltage_min)
+            observed_voltage_max = max(observed_voltage_max, voltage_max)
+            observed_max_pct_norm = max(observed_max_pct_norm, max_pct_norm)
+            if voltage_min < monitoring[0] or voltage_max > monitoring[1]:
+                voltage_violation_steps += 1
+            if max_pct_norm > monitoring[2]:
+                thermal_violation_steps += 1
         generation.append(p_mw * timestep_hours)
         # Deemed-paid is the COMMITTED operator schedule, NOT a monitor heuristic — deriving
         # it from generation-vs-cap here would double-count the plant's own self-curtailment.
         instructed.append(instructed_profile[t] * timestep_hours)
-    return generation, instructed
+    telemetry = QSTSSolveTelemetry(
+        attempted_steps=len(profiles),
+        converged_steps=converged_steps,
+        nonconverged_steps=len(failing_steps),
+        first_nonconverged_step=failing_steps[0] if failing_steps else None,
+        last_nonconverged_step=failing_steps[-1] if failing_steps else None,
+        monitoring_configured=monitoring is not None,
+        voltage_min_limit_pu=monitoring[0] if monitoring is not None else None,
+        voltage_max_limit_pu=monitoring[1] if monitoring is not None else None,
+        thermal_limit_pct_norm=monitoring[2] if monitoring is not None else None,
+        voltage_violation_steps=(
+            voltage_violation_steps if monitoring is not None else None
+        ),
+        thermal_violation_steps=(
+            thermal_violation_steps if monitoring is not None else None
+        ),
+        generator_activation_steps=generator_activation_steps,
+        generator_setpoint_mismatch_steps=generator_setpoint_mismatch_steps,
+        observed_voltage_min_pu=(
+            observed_voltage_min
+            if monitoring is not None and converged_steps > 0
+            else None
+        ),
+        observed_voltage_max_pu=(
+            observed_voltage_max
+            if monitoring is not None and converged_steps > 0
+            else None
+        ),
+        observed_max_pct_norm=(
+            observed_max_pct_norm
+            if monitoring is not None and converged_steps > 0
+            else None
+        ),
+    )
+    if failing_steps:
+        raise QSTSConvergenceError(telemetry)
+    return generation, instructed, telemetry
+
+
+def _resolve_execution_monitoring(
+    grid: Mapping[str, Any],
+) -> tuple[float, float, float] | None:
+    """Return strict voltage/thermal limits when whole-horizon monitoring is enabled."""
+
+    qsts = grid.get("qsts")
+    raw = qsts.get("execution_monitoring") if isinstance(qsts, Mapping) else None
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping) or set(raw) != {
+        "voltage_min_pu",
+        "voltage_max_pu",
+        "thermal_limit_pct_norm",
+    }:
+        raise ValueError(
+            "grid.qsts.execution_monitoring requires exactly voltage_min_pu, "
+            "voltage_max_pu, and thermal_limit_pct_norm."
+        )
+    low = _require_positive(
+        raw["voltage_min_pu"], "execution_monitoring.voltage_min_pu"
+    )
+    high = _require_positive(
+        raw["voltage_max_pu"], "execution_monitoring.voltage_max_pu"
+    )
+    thermal = _require_positive(
+        raw["thermal_limit_pct_norm"], "execution_monitoring.thermal_limit_pct_norm"
+    )
+    if low >= high:
+        raise ValueError(
+            "execution_monitoring.voltage_min_pu must be below voltage_max_pu."
+        )
+    return low, high, thermal
+
+
+def _resolve_generator_name(grid: Mapping[str, Any]) -> str | None:
+    """Return an optional controlled generator name for explicit activation."""
+
+    qsts = grid.get("qsts")
+    raw = qsts.get("generator_name") if isinstance(qsts, Mapping) else None
+    if raw is None:
+        return None
+    if (
+        not isinstance(raw, str)
+        or not raw.strip()
+        or any(character.isspace() for character in raw)
+    ):
+        raise ValueError("grid.qsts.generator_name must be a non-empty token.")
+    return raw
+
+
+def _raise_on_dss_error(dss: Any, operation: str) -> None:
+    """Fail loudly when the OpenDSS C-API reports an execution error."""
+
+    error_number = int(dss.Error.Number())
+    if error_number:
+        description = str(dss.Error.Description()).strip()
+        raise RuntimeError(
+            f"OpenDSS error {error_number} after {operation}: {description or 'unknown error'}"
+        )
 
 
 def _resolve_generation_profiles(  # pragma: no cover - requires [grid] extra
@@ -1451,10 +1624,28 @@ def _resolve_grid_instructed_profile_mw(
 
 
 def _inject_poc_power(  # pragma: no cover - requires [grid] extra
-    dss: Any, p_mw: float
-) -> None:
-    """Set the POC generator active-power injection (MW) for the current QSTS step."""
-    dss.Generators.kW(p_mw * 1000.0)
+    dss: Any, p_mw: float, *, generator_name: str | None = None
+) -> tuple[bool, bool]:
+    """Activate and set the POC generator, returning activation/read-back status."""
+
+    activated = False
+    if generator_name is not None:
+        dss.Generators.Name(generator_name)
+        activated = str(dss.Generators.Name()).casefold() == generator_name.casefold()
+        if not activated:
+            raise RuntimeError(
+                f"OpenDSS did not activate controlled generator {generator_name!r}."
+            )
+    requested_kw = p_mw * 1000.0
+    dss.Generators.kW(requested_kw)
+    actual_kw = float(dss.Generators.kW())
+    matches = math.isclose(actual_kw, requested_kw, rel_tol=0.0, abs_tol=1.0e-6)
+    if not matches:
+        raise RuntimeError(
+            "OpenDSS generator setpoint read-back mismatch: "
+            f"requested {requested_kw} kW, got {actual_kw} kW."
+        )
+    return activated, matches
 
 
 __all__ = [
@@ -1463,4 +1654,5 @@ __all__ = [
     "NO_FEEDER_SOURCE",
     "split_curtailment",
     "run_qsts_curtailment",
+    "QSTSConvergenceError",
 ]

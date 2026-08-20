@@ -12,6 +12,7 @@ import pytest
 from analytics.contracts_v14 import (
     QSTS_CONTROLLED_OUTPUT_CLASS,
     QSTS_RUN_MANIFEST_SCHEMA,
+    QSTSSolveTelemetry,
 )
 from analytics.grid import curtailment_qsts as cq
 from analytics.grid.qsts_evidence import (
@@ -321,7 +322,7 @@ def test_solver_uses_private_snapshot_after_source_mutation(
         timestep_hours: float,
         generation_profile_mw: Any,
         grid_instructed_profile_mw: Any,
-    ) -> tuple[list[float], list[float]]:
+    ) -> tuple[list[float], list[float], QSTSSolveTelemetry]:
         master.write_text("Clear\n! malicious TOCTOU replacement\n", encoding="utf-8")
         snapshot = Path(feeder_path)
         seen_snapshot.append(snapshot)
@@ -330,7 +331,18 @@ def test_solver_uses_private_snapshot_after_source_mutation(
         assert timestep_hours == pytest.approx(0.5)
         assert tuple(generation_profile_mw) == (20.0, 10.0)
         assert tuple(grid_instructed_profile_mw) == (1.0, 0.0)
-        return [10.0, 5.0], [0.5, 0.0]
+        return (
+            [10.0, 5.0],
+            [0.5, 0.0],
+            QSTSSolveTelemetry(
+                attempted_steps=2,
+                converged_steps=2,
+                nonconverged_steps=0,
+                first_nonconverged_step=None,
+                last_nonconverged_step=None,
+                monitoring_configured=False,
+            ),
+        )
 
     monkeypatch.setattr(cq, "_solve_qsts", _recording_solver)
     result = cq.run_qsts_curtailment(config)
