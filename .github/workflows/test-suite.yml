@@ -440,8 +440,9 @@ jobs:
            [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
           grid_required=true
         fi
-        if [ "$grid_required" = "true" ]; then
-          gate "Grid Study" "${{ needs.grid-study.result }}" "the required QSTS verification did not pass"
+        if [ "$grid_required" = "true" ] && [ "${{ needs.grid-study.result }}" != "success" ]; then
+          echo "::error::Grid Study is required but did not succeed (result=${{ needs.grid-study.result }}) — blocking Test Summary"
+          exit 1
         fi
 
   # TEST-03 scale lane: intentionally separate from the required PR gate and from
