@@ -1,179 +1,60 @@
-#!/bin/bash
-# =============================================================================
-# DutchBay EPC Model - Virtual Environment Setup & Validation Script
-# Purpose: Ensures the project .venv exists, is active, and dependencies installed
-# Note: `make setup` is the canonical bootstrap; this script is an equivalent
-#       standalone helper.
-# =============================================================================
+#!/usr/bin/env bash
+# Create or validate the governed DutchBay Python 3.12 environment.
 
-set -e  # Exit on error
+set -euo pipefail
 
-# Color codes for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
-
-# Project root (where this script lives)
-PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
-VENV_DIR="$PROJECT_ROOT/.venv"
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REQUIREMENTS="$PROJECT_ROOT/requirements.txt"
 
-echo "================================================================================"
-echo "DutchBay EPC Model - Virtual Environment Setup"
-echo "================================================================================"
-echo "Project Root: $PROJECT_ROOT"
-echo ""
+# shellcheck disable=SC1091
+. "$PROJECT_ROOT/scripts/development_environment.sh"
 
-# =============================================================================
-# Step 1: Check Python 3 Installation
-# =============================================================================
-echo "Step 1: Checking Python installation..."
+fail() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
 
-# Require the CI baseline explicitly. A generic `python3` can point at a newer,
-# unqualified Homebrew interpreter (or even a broken shim), especially in a fresh
-# worktree. Generic command names are accepted only when they resolve to Python 3.12.
-PYTHON_CMD=""
-for candidate in python3.12 /opt/homebrew/bin/python3.12 python3 python; do
-    if command -v "$candidate" >/dev/null 2>&1 \
-        && "$candidate" -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))' \
-            >/dev/null 2>&1; then
-        PYTHON_CMD="$candidate"
-        break
-    fi
-done
+echo "DutchBay EPC Model - governed environment setup"
+echo "Active checkout: $PROJECT_ROOT"
 
-if [ -z "$PYTHON_CMD" ]; then
-    echo -e "${RED}✗ A working Python 3.12 interpreter was not found.${NC}"
-    echo ""
-    echo "Install the CI baseline using Homebrew:"
-    echo "  brew install python@3.12"
-    echo ""
-    echo "Or download Python 3.12 from https://www.python.org/downloads/"
-    exit 1
-fi
-
-PYTHON_VERSION=$(
-    "$PYTHON_CMD" -c 'import platform; print(f"Python {platform.python_version()}")'
-)
-echo -e "${GREEN}✓${NC} Found: $PYTHON_VERSION ($PYTHON_CMD)"
-
-echo ""
-
-# =============================================================================
-# Step 2: Check if Virtual Environment Exists
-# =============================================================================
-echo "Step 2: Checking virtual environment..."
-
-if [ -d "$VENV_DIR" ]; then
-    VENV_PYTHON="$VENV_DIR/bin/python"
-    if [ ! -x "$VENV_PYTHON" ]; then
-        echo -e "${RED}✗ Existing virtual environment is incomplete: $VENV_DIR${NC}"
-        echo "Remove or move it, then run ./setup_venv.sh again."
-        exit 1
-    fi
-    if ! "$VENV_PYTHON" \
-        -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))' \
-        >/dev/null 2>&1; then
-        EXISTING_VERSION=$("$VENV_PYTHON" --version 2>&1 || echo "unknown")
-        echo -e "${RED}✗ Existing .venv uses $EXISTING_VERSION; Python 3.12 is required.${NC}"
-        echo "Move or remove $VENV_DIR, then run ./setup_venv.sh again."
-        exit 1
-    fi
-    echo -e "${GREEN}✓${NC} Python 3.12 virtual environment exists: $VENV_DIR"
-else
-    echo -e "${YELLOW}⚠${NC}  Virtual environment not found. Creating..."
-    "$PYTHON_CMD" -m venv "$VENV_DIR"
-
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✓${NC} Virtual environment created successfully"
-    else
-        echo -e "${RED}✗ Failed to create virtual environment${NC}"
-        exit 1
-    fi
-fi
-
-echo ""
-
-# =============================================================================
-# Step 3: Activate Virtual Environment
-# =============================================================================
-echo "Step 3: Activating virtual environment..."
-
-# Source the activation script
-source "$VENV_DIR/bin/activate"
-
-if [ "$VIRTUAL_ENV" = "$VENV_DIR" ]; then
-    echo -e "${GREEN}✓${NC} Virtual environment activated"
-    echo "   VIRTUAL_ENV: $VIRTUAL_ENV"
-else
-    echo -e "${RED}✗ Failed to activate virtual environment${NC}"
-    exit 1
-fi
-
-echo ""
-
-# =============================================================================
-# Step 4: Install/Update Dependencies
-# =============================================================================
-echo "Step 4: Installing dependencies..."
-
-if [ -f "$REQUIREMENTS" ]; then
-    echo "Installing from requirements.txt (pinned lock) + the [dev] toolchain..."
-    pip install --upgrade pip --quiet
-    pip install -r "$REQUIREMENTS" --quiet
-    pip install -e ".[dev]" --quiet
-    echo -e "${GREEN}✓${NC} Dependencies installed"
-else
-    echo -e "${YELLOW}⚠${NC}  requirements.txt not found. Installing essential packages..."
-    pip install --upgrade pip --quiet
-    pip install numpy pandas scipy pyyaml pydantic pytest pytest-cov --quiet
-    echo -e "${GREEN}✓${NC} Essential packages installed"
-fi
-
-echo ""
-
-# =============================================================================
-# Step 5: Verification
-# =============================================================================
-echo "Step 5: Verifying installation..."
-
-# Check Python in venv
+PYTHON_CMD=$(dutchbay_find_python312) || fail \
+  "A working Python 3.12 interpreter was not found. Install python@3.12 first."
+VENV_DIR=$(dutchbay_resolve_venv "$PROJECT_ROOT" "$PYTHON_CMD") || fail \
+  "Unable to resolve DUTCHBAY_VENV from config/development_environment.json."
 VENV_PYTHON="$VENV_DIR/bin/python"
-if [ -x "$VENV_PYTHON" ]; then
-    VENV_PY_VER=$("$VENV_PYTHON" --version)
-    echo -e "${GREEN}✓${NC} Python in venv: $VENV_PY_VER"
+
+echo "Selected environment: $VENV_DIR"
+
+if [ -e "$VENV_DIR" ]; then
+  if [ -L "$VENV_DIR" ] || [ ! -d "$VENV_DIR" ]; then
+    fail "Selected environment must be a real directory, not a symlink: $VENV_DIR"
+  fi
+  if [ ! -x "$VENV_PYTHON" ]; then
+    fail "Existing environment is incomplete; executable missing: $VENV_PYTHON. Move or remove $VENV_DIR, then rerun ./setup_venv.sh."
+  fi
+  if ! "$VENV_PYTHON" \
+    -c 'import sys; raise SystemExit(sys.version_info[:2] != (3, 12))' \
+    >/dev/null 2>&1; then
+    VENV_VERSION=$("$VENV_PYTHON" --version 2>&1 || echo unknown)
+    fail "Existing environment uses $VENV_VERSION; Python 3.12 is required. Move or remove $VENV_DIR, then rerun ./setup_venv.sh."
+  fi
+
+  echo "Validating existing environment without modifying it..."
+  dutchbay_validate_venv "$PROJECT_ROOT" "$VENV_DIR" || fail \
+    "Existing environment failed the governed health contract. Move or repair only $VENV_DIR, then rerun ./setup_venv.sh."
 else
-    echo -e "${RED}✗ Python not found in venv${NC}"
-    exit 1
+  [ -f "$REQUIREMENTS" ] || fail "Pinned dependency lock not found: $REQUIREMENTS"
+  echo "Creating Python 3.12 environment at the exact selected path..."
+  mkdir -p "$(dirname "$VENV_DIR")"
+  "$PYTHON_CMD" -m venv "$VENV_DIR"
+  "$VENV_PYTHON" -m pip install --quiet --upgrade pip setuptools wheel
+  "$VENV_PYTHON" -m pip install --quiet -r "$REQUIREMENTS"
+  echo "Validating newly created environment..."
+  dutchbay_validate_venv "$PROJECT_ROOT" "$VENV_DIR" || fail \
+    "New environment failed validation; inspect and remove only $VENV_DIR before retrying."
 fi
 
-# Check key packages
-echo "Checking key packages..."
-"$VENV_PYTHON" -c "import numpy; print(f'  numpy: {numpy.__version__}')" 2>/dev/null && echo -e "${GREEN}✓${NC} numpy installed" || echo -e "${YELLOW}⚠${NC}  numpy not installed"
-"$VENV_PYTHON" -c "import pandas; print(f'  pandas: {pandas.__version__}')" 2>/dev/null && echo -e "${GREEN}✓${NC} pandas installed" || echo -e "${YELLOW}⚠${NC}  pandas not installed"
-"$VENV_PYTHON" -c "import scipy; print(f'  scipy: {scipy.__version__}')" 2>/dev/null && echo -e "${GREEN}✓${NC} scipy installed" || echo -e "${YELLOW}⚠${NC}  scipy not installed"
-
-echo ""
-
-# =============================================================================
-# Summary
-# =============================================================================
-echo "================================================================================"
-echo -e "${GREEN}✓ Setup Complete!${NC}"
-echo "================================================================================"
-echo ""
-echo "Virtual environment is ready at:"
-echo "  $VENV_DIR"
-echo ""
-echo "To activate manually in future sessions:"
-echo "  cd $PROJECT_ROOT"
-echo "  source .venv/bin/activate"
-echo ""
-echo "To run Python scripts:"
-echo "  .venv/bin/python your_script.py"
-echo ""
-echo "To deactivate:"
-echo "  deactivate"
-echo ""
-echo "================================================================================"
+echo "Environment ready: $VENV_DIR"
+echo "Activate it for this checkout with:"
+echo "  cd '$PROJECT_ROOT'"
+echo "  source scripts/venv_up.sh"
