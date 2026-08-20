@@ -143,6 +143,13 @@ For shell changes, run `bash -n` and, when the script supports zsh, `zsh -n`. Fo
 financially material changes, run the relevant integration/regression suite and the full
 repository gates when practical. GitHub required checks remain the merge authority.
 
+A pull request whose acceptance criteria depend on QSTS execution must independently run
+and pass the GitHub-hosted `Grid Study` job against the exact pull-request head SHA before
+merge. The governed persistent local environment remains the iteration surface, but its
+local evidence is supplementary and cannot replace this independent check. A skipped Grid
+Study is acceptable only when the fail-closed changed-path policy classifies the pull
+request as unrelated to the governed QSTS/grid execution surface.
+
 ## Repository map
 
 - `analytics/`: canonical evaluation, contracts, sensitivity, Monte Carlo, wind, and FX
