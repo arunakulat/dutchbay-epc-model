@@ -20,6 +20,7 @@ from analytics.contracts_v14 import (
     SyntheticInputRecordHandoff,
     SyntheticQSTSOutputRecord,
 )
+from analytics.evaluation_v14 import compose_noncanonical_project_curtailment
 from analytics.grid.synthetic_input_records import (
     SyntheticInputRecordsConfig,
     generate_and_ingress_synthetic_input_records,
@@ -332,6 +333,23 @@ def test_duplicate_key_is_refused_even_when_resealed(
             expected_handoff_sha256=digest,
             qsts_output_path=qsts_path,
             expected_qsts_output_sha256=qsts_sha,
+        )
+
+
+def test_gateway_composes_noncanonical_curtailment_and_refuses_enabled_wiring() -> None:
+    baseline, counterfactual = compose_noncanonical_project_curtailment(
+        {"project": {"curtailment_pct": 5.0}}, 0.10
+    )
+    assert baseline == pytest.approx(0.05)
+    assert counterfactual == pytest.approx(0.145)
+
+    with pytest.raises(ValueError, match="canonical.*finance_wiring.enabled"):
+        compose_noncanonical_project_curtailment(
+            {
+                "project": {"curtailment_pct": 5.0},
+                "grid": {"qsts": {"finance_wiring": {"enabled": True}}},
+            },
+            0.10,
         )
 
 

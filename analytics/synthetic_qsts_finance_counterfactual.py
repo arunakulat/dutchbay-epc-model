@@ -28,13 +28,11 @@ from analytics.contracts_v14 import (
     SyntheticInputSourceRecord,
     SyntheticQSTSOutputRecord,
 )
-from analytics.evaluation_v14 import evaluate_with_overrides
-from analytics.scenario_loader import load_scenario_config
-from finance.cashflow_v14_utils import pct_to_decimal
-from finance.self_curtailment_v14 import (
-    compose_curtailment,
-    self_curtailment_finance_wiring_enabled,
+from analytics.evaluation_v14 import (
+    compose_noncanonical_project_curtailment,
+    evaluate_with_overrides,
 )
+from analytics.scenario_loader import load_scenario_config
 
 FinanceEvaluator = Callable[..., dict[str, Any]]
 _DEFAULT_EVALUATOR = cast(FinanceEvaluator, evaluate_with_overrides)
@@ -304,26 +302,15 @@ def evaluate_synthetic_qsts_finance_counterfactual(
         raise FileNotFoundError("Counterfactual scenario is absent or a symlink.")
     scenario_before = scenario_path.read_bytes()
     raw_scenario = load_scenario_config(scenario_path)
-    if self_curtailment_finance_wiring_enabled(raw_scenario):
-        raise ValueError(
-            "#1074 requires canonical grid.qsts.finance_wiring.enabled to remain false."
-        )
-    project = raw_scenario.get("project")
-    if not isinstance(project, Mapping):
-        raise ValueError("Counterfactual scenario requires a project mapping.")
-    raw_baseline = project.get("curtailment_pct", 0.0)
-    if isinstance(raw_baseline, bool) or not isinstance(raw_baseline, (int, float)):
-        raise ValueError("project.curtailment_pct must be numeric.")
-    baseline_decimal = pct_to_decimal(float(raw_baseline))
-    if baseline_decimal is None or not 0.0 <= baseline_decimal < 1.0:
-        raise ValueError("Baseline project curtailment must be in [0, 1).")
     qsts = inputs.qsts
     if qsts.gross_energy_mwh <= 0.0:
         raise ValueError("#1073 gross energy must be positive for finance treatment.")
     self_decimal = qsts.self_curtailed_energy_mwh / qsts.gross_energy_mwh
     if not 0.0 <= self_decimal < 1.0:
         raise ValueError("Synthetic self-curtailment fraction must be in [0, 1).")
-    composed = compose_curtailment(baseline_decimal, self_decimal)
+    baseline_decimal, composed = compose_noncanonical_project_curtailment(
+        raw_scenario, self_decimal
+    )
     overrides = {"project.curtailment_pct": composed}
     baseline_result = evaluator(
         config_path=str(scenario_path), overrides={}, return_full_result=True
