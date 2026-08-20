@@ -1,0 +1,26 @@
+# Governed #1077 synthetic input-record handoff for #1073.
+#
+# The nested package is the existing deterministic B1 source. This file adds only
+# an authenticated, warning-bearing input handoff; it does not run QSTS or finance.
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+handoff:
+  output_dir: outputs/synthetic_process_provenance/issue_1077
+  record_filename: synthetic_input_records.json
+  checksum_filename: synthetic_input_records.sha256
+  allow_existing_identical: true
+  generator_config_source: conf/synthetic_feeder_placeholder.yaml
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null
