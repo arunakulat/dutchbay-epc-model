@@ -10,7 +10,9 @@ supports both dataclasses and Pydantic objects.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, fields, is_dataclass
+from datetime import datetime, timezone
 from typing import Any, cast
 
 from analytics.fx.fx_contracts import FXCurveOutput, FXRiskProfile, FXStructuredBlock
@@ -1274,6 +1276,7 @@ SYNTHETIC_PROCESS_PROVENANCE_WARNING = (
 QSTS_RUN_MANIFEST_SCHEMA = "dutchbay_qsts_run_manifest_v1"
 QSTS_SYNTHETIC_OUTPUT_CLASS = "synthetic_process_provenance"
 QSTS_CONTROLLED_OUTPUT_CLASS = "controlled_input_nonbankable"
+SYNTHETIC_INPUT_HANDOFF_SCHEMA = "dutchbay_synthetic_qsts_input_handoff_v1"
 
 
 def _is_exact_sha256(value: object) -> bool:
@@ -1458,6 +1461,394 @@ class QSTSRunManifest(ContractMixin):
                     "QSTSRunManifest.canonical_finance_eligible=true requires canonical "
                     "finance mode."
                 )
+
+
+@dataclass(frozen=True)
+class SyntheticInputSourceRecord(ContractMixin):
+    """One source identity retained by a governed synthetic input handoff."""
+
+    logical_id: str
+    sha256: str
+    source_path: str | None
+    note: str | None = None
+
+    def __post_init__(self) -> None:
+        """Reject empty identities, unsafe paths, and malformed digests."""
+
+        if not isinstance(self.logical_id, str) or not self.logical_id.strip():
+            raise ValueError("SyntheticInputSourceRecord.logical_id must be non-empty.")
+        if not _is_exact_sha256(self.sha256):
+            raise ValueError(
+                "SyntheticInputSourceRecord.sha256 must be an exact lowercase SHA-256."
+            )
+        if self.source_path is not None and (
+            not isinstance(self.source_path, str)
+            or not self.source_path
+            or self.source_path.startswith(("/", "~"))
+            or "\\" in self.source_path
+            or any(part in {"", ".", ".."} for part in self.source_path.split("/"))
+        ):
+            raise ValueError(
+                "SyntheticInputSourceRecord.source_path must be None or a safe "
+                "repository-relative path."
+            )
+        if self.note is not None and (
+            not isinstance(self.note, str) or not self.note.strip()
+        ):
+            raise ValueError(
+                "SyntheticInputSourceRecord.note must be None or non-empty."
+            )
+
+
+@dataclass(frozen=True)
+class SyntheticInputArtifactRecord(ContractMixin):
+    """One authenticated package payload exposed by the synthetic handoff."""
+
+    relative_path: str
+    sha256: str
+    byte_length: int
+    media_type: str
+
+    def __post_init__(self) -> None:
+        """Reject unsafe paths, malformed digests, and incomplete metadata."""
+
+        if (
+            not isinstance(self.relative_path, str)
+            or not self.relative_path
+            or self.relative_path.startswith(("/", "~"))
+            or "\\" in self.relative_path
+            or any(part in {"", ".", ".."} for part in self.relative_path.split("/"))
+        ):
+            raise ValueError(
+                "SyntheticInputArtifactRecord.relative_path must be a safe relative path."
+            )
+        if not _is_exact_sha256(self.sha256):
+            raise ValueError(
+                "SyntheticInputArtifactRecord.sha256 must be an exact lowercase SHA-256."
+            )
+        if type(self.byte_length) is not int or self.byte_length <= 0:  # noqa: E721
+            raise ValueError(
+                "SyntheticInputArtifactRecord.byte_length must be a positive integer."
+            )
+        if not isinstance(self.media_type, str) or not self.media_type.strip():
+            raise ValueError(
+                "SyntheticInputArtifactRecord.media_type must be a non-empty string."
+            )
+
+
+@dataclass(frozen=True)
+class SyntheticInputRecordHandoff(ContractMixin):
+    """Authenticated #1077 input-only handoff to the synthetic QSTS execution gate.
+
+    This contract deliberately has no AEP, curtailment, convergence, KPI, or finance
+    outcome fields. It binds the exact generated package and runtime-exposed input values
+    while structurally fixing every evidence, publication, and finance eligibility flag to
+    false. The detached handoff digest is external and therefore is not a field here.
+    """
+
+    schema: str
+    issue: int
+    handoff_target_issue: int
+    generated_at_utc: str
+    repository_commit: str
+    engine_version: str
+    package_schema: str
+    package_manifest_path: str
+    package_manifest_sha256: str
+    resolved_generator_config_sha256: str
+    generator_code_sha256: str
+    verifier_code_sha256: str
+    adapter_code_sha256: str
+    generator_version: str
+    random_seed: int
+    algorithm: str
+    profile_path: str
+    profile_sha256: str
+    profile_values_sha256: str
+    profile_row_count: int
+    profile_start_utc: str
+    profile_end_utc: str
+    profile_timezone: str
+    profile_timestep_hours: float
+    profile_unit: str
+    export_cap_mw: float
+    feeder_master_path: str
+    source_records: tuple[SyntheticInputSourceRecord, ...]
+    artifact_records: tuple[SyntheticInputArtifactRecord, ...]
+    limitation_records: tuple[str, ...]
+    assumption_locations: tuple[str, ...]
+    opendss_compile_status: str
+    convergence_status: str
+    operator_schedule_present: bool
+    operator_schedule_status: str
+    input_kind: str
+    output_class: str
+    required_warning: str
+    generated_input: bool
+    observed_network_data: bool
+    site_representative: bool
+    canonical_finance_eligible: bool
+    bankable: bool
+    publishable: bool
+    lender_eligible: bool
+    board_eligible: bool
+    qsts_executed: bool
+    finance_executed: bool
+
+    def model_dump(self) -> dict[str, Any]:
+        """Serialize nested immutable records into JSON-compatible collections."""
+
+        payload = super().model_dump()
+        payload["source_records"] = [
+            record.model_dump() for record in self.source_records
+        ]
+        payload["artifact_records"] = [
+            record.model_dump() for record in self.artifact_records
+        ]
+        payload["limitation_records"] = list(self.limitation_records)
+        payload["assumption_locations"] = list(self.assumption_locations)
+        return payload
+
+    def __post_init__(self) -> None:
+        """Fail closed on identity drift, evidence upgrades, or result leakage."""
+
+        if self.schema != SYNTHETIC_INPUT_HANDOFF_SCHEMA:
+            raise ValueError(
+                "SyntheticInputRecordHandoff.schema must be "
+                f"{SYNTHETIC_INPUT_HANDOFF_SCHEMA!r}."
+            )
+        if self.issue != 1077 or self.handoff_target_issue != 1073:
+            raise ValueError(
+                "SyntheticInputRecordHandoff must remain the #1077 input handoff to #1073."
+            )
+        try:
+            generated_at = datetime.fromisoformat(
+                self.generated_at_utc.replace("Z", "+00:00")
+            )
+        except (AttributeError, ValueError) as exc:
+            raise ValueError(
+                "SyntheticInputRecordHandoff.generated_at_utc must be ISO-8601."
+            ) from exc
+        if (
+            generated_at.tzinfo is None
+            or generated_at.utcoffset() != timezone.utc.utcoffset(generated_at)
+        ):
+            raise ValueError(
+                "SyntheticInputRecordHandoff.generated_at_utc must be explicit UTC."
+            )
+        if (
+            not isinstance(self.repository_commit, str)
+            or len(self.repository_commit) != 40
+            or any(
+                character not in "0123456789abcdef"
+                for character in self.repository_commit
+            )
+        ):
+            raise ValueError(
+                "SyntheticInputRecordHandoff.repository_commit must be an exact "
+                "lowercase 40-character Git SHA."
+            )
+        if self.package_schema != "dutchbay.issue923.synthetic_feeder_manifest.v1":
+            raise ValueError(
+                "SyntheticInputRecordHandoff.package_schema must name the governed "
+                "synthetic feeder manifest schema."
+            )
+        for field_name in ("engine_version", "generator_version", "algorithm"):
+            value = getattr(self, field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(
+                    f"SyntheticInputRecordHandoff.{field_name} must be non-empty."
+                )
+        if type(self.random_seed) is not int or self.random_seed < 0:  # noqa: E721
+            raise ValueError(
+                "SyntheticInputRecordHandoff.random_seed must be a non-negative integer."
+            )
+        for field_name in (
+            "package_manifest_sha256",
+            "resolved_generator_config_sha256",
+            "generator_code_sha256",
+            "verifier_code_sha256",
+            "adapter_code_sha256",
+            "profile_sha256",
+            "profile_values_sha256",
+        ):
+            if not _is_exact_sha256(getattr(self, field_name)):
+                raise ValueError(
+                    f"SyntheticInputRecordHandoff.{field_name} must be an exact "
+                    "lowercase SHA-256."
+                )
+        for field_name in (
+            "package_manifest_path",
+            "profile_path",
+            "feeder_master_path",
+        ):
+            value = getattr(self, field_name)
+            if (
+                not isinstance(value, str)
+                or not value
+                or value.startswith(("/", "~"))
+                or "\\" in value
+                or any(part in {"", ".", ".."} for part in value.split("/"))
+            ):
+                raise ValueError(
+                    f"SyntheticInputRecordHandoff.{field_name} must be a safe relative path."
+                )
+        if self.profile_row_count != 8760:
+            raise ValueError(
+                "SyntheticInputRecordHandoff.profile_row_count must be exactly 8760."
+            )
+        if self.profile_timezone != "UTC" or self.profile_unit != "MW":
+            raise ValueError(
+                "SyntheticInputRecordHandoff profile timezone/unit must be UTC/MW."
+            )
+        if self.profile_timestep_hours != 1.0:
+            raise ValueError(
+                "SyntheticInputRecordHandoff.profile_timestep_hours must be 1.0."
+            )
+        if (
+            self.profile_start_utc != "2021-01-01T00:00:00Z"
+            or self.profile_end_utc != "2021-12-31T23:00:00Z"
+        ):
+            raise ValueError(
+                "SyntheticInputRecordHandoff must retain the complete governed 2021 "
+                "UTC timestamp horizon."
+            )
+        if (
+            type(self.export_cap_mw) not in {int, float}
+            or not math.isfinite(self.export_cap_mw)
+            or self.export_cap_mw <= 0
+        ):
+            raise ValueError(
+                "SyntheticInputRecordHandoff.export_cap_mw must be positive."
+            )
+        if self.generator_code_sha256 != self.verifier_code_sha256:
+            raise ValueError(
+                "The #1077 generator and verifier identities must name their shared "
+                "governed source module."
+            )
+        if self.opendss_compile_status != "passed_compile_only_no_convergence_claim":
+            raise ValueError(
+                "The #1077 handoff requires the detached OpenDSS compile-only gate."
+            )
+        if self.convergence_status != "not_examined_deferred_issue_923_C":
+            raise ValueError(
+                "The #1077 handoff must defer timestep convergence to #1073."
+            )
+        if (
+            self.operator_schedule_present is not False
+            or self.operator_schedule_status
+            != ("absent_no_observed_operator_instructions")
+        ):
+            raise ValueError(
+                "The #1077 handoff must explicitly retain the absence of an operator "
+                "instruction schedule."
+            )
+        if (
+            self.input_kind != "synthetic_placeholder"
+            or self.output_class != QSTS_SYNTHETIC_OUTPUT_CLASS
+            or self.required_warning != SYNTHETIC_PROCESS_PROVENANCE_WARNING
+        ):
+            raise ValueError(
+                "The #1077 handoff requires the synthetic_placeholder classification, "
+                "segregated output class, and exact mandatory warning."
+            )
+        expected_flags = {
+            "generated_input": True,
+            "observed_network_data": False,
+            "site_representative": False,
+            "canonical_finance_eligible": False,
+            "bankable": False,
+            "publishable": False,
+            "lender_eligible": False,
+            "board_eligible": False,
+            "qsts_executed": False,
+            "finance_executed": False,
+        }
+        for field_name, expected in expected_flags.items():
+            value = getattr(self, field_name)
+            if type(value) is not bool or value is not expected:  # noqa: E721
+                raise ValueError(
+                    f"SyntheticInputRecordHandoff.{field_name} must be {expected}."
+                )
+        required_source_ids = {
+            "scenario",
+            "era5_summary",
+            "era5_request",
+            "power_curves",
+            "era5_calculator_config",
+            "version_file",
+            "frozen_issue_923_spec",
+            "synthetic_chronology_decision",
+            "generator_source",
+        }
+        if (
+            not isinstance(self.source_records, tuple)
+            or any(
+                not isinstance(record, SyntheticInputSourceRecord)
+                for record in self.source_records
+            )
+            or {record.logical_id for record in self.source_records}
+            != required_source_ids
+        ):
+            raise ValueError(
+                "SyntheticInputRecordHandoff.source_records must contain the exact "
+                "governed source set."
+            )
+        required_artifact_paths = {
+            "feeder/Master.dss",
+            "feeder/Source.dss",
+            "feeder/Transformer.dss",
+            "feeder/Connection.dss",
+            "feeder/Plant.dss",
+            "profile/generation_profile.csv",
+            "manifest.json",
+            "MANIFEST.sha256",
+        }
+        if (
+            not isinstance(self.artifact_records, tuple)
+            or any(
+                not isinstance(record, SyntheticInputArtifactRecord)
+                for record in self.artifact_records
+            )
+            or {record.relative_path for record in self.artifact_records}
+            != required_artifact_paths
+        ):
+            raise ValueError(
+                "SyntheticInputRecordHandoff.artifact_records must contain the exact "
+                "eight-file governed package."
+            )
+        artifact_sha256 = {
+            record.relative_path: record.sha256 for record in self.artifact_records
+        }
+        source_sha256 = {
+            record.logical_id: record.sha256 for record in self.source_records
+        }
+        if (
+            artifact_sha256["manifest.json"] != self.package_manifest_sha256
+            or artifact_sha256["profile/generation_profile.csv"] != self.profile_sha256
+            or source_sha256["generator_source"] != self.generator_code_sha256
+        ):
+            raise ValueError(
+                "SyntheticInputRecordHandoff duplicated identities do not match their "
+                "authenticated manifest, profile, or generator records."
+            )
+        if (
+            not isinstance(self.limitation_records, tuple)
+            or not self.limitation_records
+            or any(
+                not isinstance(value, str) or not value.strip()
+                for value in self.limitation_records
+            )
+            or not isinstance(self.assumption_locations, tuple)
+            or not self.assumption_locations
+            or any(
+                not isinstance(value, str) or not value.strip()
+                for value in self.assumption_locations
+            )
+        ):
+            raise ValueError(
+                "SyntheticInputRecordHandoff must retain limitations and assumption locations."
+            )
 
 
 @dataclass(frozen=True)
@@ -2335,6 +2726,10 @@ __all__ = [
     "QSTS_SYNTHETIC_OUTPUT_CLASS",
     "QSTS_CONTROLLED_OUTPUT_CLASS",
     "QSTSRunManifest",
+    "SYNTHETIC_INPUT_HANDOFF_SCHEMA",
+    "SyntheticInputSourceRecord",
+    "SyntheticInputArtifactRecord",
+    "SyntheticInputRecordHandoff",
     "CurtailmentShareResult",
     "GroupDroopContribution",
     "FreqResponseResult",

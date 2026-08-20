@@ -4,7 +4,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Historical audit preserved with current A/B addendum; no runtime or finance behaviour changed |
+| Status | Historical audit preserved with current A/B addendum and governed #1077 input-handoff entrypoint |
 | Audit date | 2026-08-19 |
 | Audited commit | `4eda5ab09baae940848b01ebfa59ffd8764d587f` |
 | Audited branch tip | `origin/main` at the historical cutoff |
@@ -75,6 +75,34 @@ decision. It does not change the canonical-finance evidence firewall. The #923-A
 Canonical `grid.qsts.finance_wiring.enabled` therefore remains false for synthetic inputs.
 The authorized report is a noncanonical process-provenance product, not permission to route
 synthetic data through the canonical finance enablement boundary.
+
+### Governed #1077 synthetic input-record handoff
+
+Issue #1077 composes the existing deterministic package generator, detached verifier, and
+production package-to-QSTS adapter through one input-only Hydra entrypoint:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" \
+  "${DUTCHBAY_VENV:-.venv}/bin/python" scripts/run_synthetic_input_records_v14.py
+```
+
+Configuration is in `conf/synthetic_input_records.yaml`; it references rather than copies
+the existing controlled `conf/synthetic_feeder_placeholder.yaml` generator configuration.
+The command generates and compiles the package, verifies every payload against its external
+manifest identity, ingresses it through `build_verified_synthetic_qsts_overlay()`, and then
+re-verifies the package to close the post-ingress mutation window. It publishes only:
+
+- `outputs/synthetic_process_provenance/issue_1077/synthetic_input_records.json`; and
+- its detached `synthetic_input_records.sha256` trust anchor.
+
+The handoff records the resolved generator-config SHA, generator/verifier/adapter source
+hashes, repository commit and engine version, generation time, package schema and manifest
+identity, every package payload hash, full profile horizon/timezone/unit/seed/algorithm,
+source locations, limitations, the export cap, and the explicit absence of observed operator
+instructions. Its centralized `SyntheticInputRecordHandoff` contract fixes QSTS and finance
+execution, publication, lender/board eligibility, bankability, site representativeness, and
+canonical-finance eligibility to false. It contains no QSTS, AEP, curtailment, KPI, or
+financial outcome; those remain the sequential responsibilities of #1073 and #1074.
 
 ### #923-B outcome
 
