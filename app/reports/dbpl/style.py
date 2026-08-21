@@ -39,6 +39,11 @@ __all__ = [
     "DBPL_TYPE_SCALE",
     "DBPL_PAGE",
     "DBPL_RULES",
+    "DBPL_SHADING",
+    "DBPL_MEASURE",
+    "DBPL_NOTE_ORDER",
+    "DBPL_KEY_SYMBOLS",
+    "DBPL_PAGE_LANDSCAPE",
     "DBPL_STRUCTURAL_FURNITURE",
     "DBPL_REFERENCE_DOCUMENT",
     "as_css_variables",
@@ -90,8 +95,9 @@ DBPL_FONT_STACKS: Mapping[str, str] = {
 #: happily with a substituted face, so a successful render proves nothing about which font was
 #: used; :func:`app.reports.dbpl.print_core.probe_fonts` resolves them explicitly.
 DBPL_REQUIRED_FONT_FAMILIES: tuple[str, ...] = (
-    "Liberation Serif",
-    "Liberation Sans",
+    "Source Serif 4",
+    "Source Sans 3",
+    "Source Code Pro",
 )
 
 #: Type scale in points, measured from the reference document.
@@ -115,14 +121,101 @@ DBPL_PAGE: Mapping[str, str] = {
     "margin_right": "18mm",
 }
 
-#: Rule weights in points, converted from the measured pixel runs at 110 dpi (1px = 0.6545pt).
+#: Rule weights. Two systems reconciled.
+#:
+#: The document furniture weights were measured from the reference PDF at 110 dpi
+#: (1 px = 0.6545 pt). The TABLE weights follow **Vignelli over Tufte** — a deliberate choice.
+#: Tufte would erase rules as non-data-ink; Vignelli treats them as load-bearing structure and
+#: deploys them as a graded hierarchy. For a covenant or cash-flow table read by a credit officer
+#: who must find one row among forty, structure beats minimalism.
+#:
+#: Vignelli, verbatim: *"bolder rulers (2 pt) will separate major parts of the text, light rulers
+#: (1/2 pt or 1 pt) will separate items within each part of the form. In that situation the type
+#: between the rulers will be 8 pt, always set closer to the ruler above. Type should always hang
+#: from the ruler, regardless of the size."*
 DBPL_RULES: Mapping[str, str] = {
-    "banner": "0.7pt",  # 1px under the running header
-    "title": "2.6pt",  # 4px under the document title
-    "section": "0.7pt",  # 1px under a section heading
-    "body": "0.7pt",  # the grey separator between blocks
+    # Document furniture (measured from the reference document).
+    "banner": "0.7pt",
+    "title": "2.6pt",
+    "section": "0.7pt",
+    "body": "0.7pt",
     "footer": "0.7pt",
-    "table_band": "10.5pt",  # height of the solid header band
+    # Vignelli's three-step table hierarchy.
+    "table_major": "2pt",  # separates major parts — header band, table foot
+    "table_item": "1pt",  # separates items within a part — Urban's under-header/last-row rule
+    "table_minor": "0.5pt",  # finest division — optional interior row rules
+}
+
+#: Row shading. **Urban Institute over Tufte**, where the two conflict.
+#:
+#: Zebra shading is strictly anti-Tufte — it is ink that encodes nothing. It is adopted anyway
+#: because the reading task here is row-tracking across a wide table, not pattern-perception, and
+#: a mis-tracked row in a covenant schedule is a costlier error than a slightly lower data-ink
+#: ratio. The tint is deliberately near-threshold: enough to guide the eye, not enough to compete
+#: with the numbers.
+#:
+#: Urban's concrete rule set is adopted with it: a rule beneath the column headers and beneath the
+#: last row; interior verticals omitted entirely.
+DBPL_SHADING: Mapping[str, str] = {
+    "zebra": "#F4F6F8",  # alternate body rows
+    "group": "#E8EDF1",  # in-table group-header rows
+    "emphasis": "#FFF8E6",  # a row needing attention without alarm
+    "table_ground": "#FFFFFF",
+}
+
+#: Measure and vertical rhythm.
+#:
+#: Bringhurst caps single-column measure at 75 characters; Butterick allows 90; USWDS targets 66.
+#: 66 is adopted as the anchor — the safer end of a genuine 15-character disagreement, and the
+#: value that survives at the 10 pt body size the reference document uses.
+#:
+#: Leading is expressed as a RATIO, because leading and measure must be chosen together: Vignelli's
+#: 8-on-9 (1.125) works only because he pairs it with a 70 mm column, and USWDS's 1.62 exceeds
+#: Butterick's 145 % ceiling. Every vertical interval is a multiple of the body leading, which is
+#: Bringhurst's "add and delete vertical space in measured intervals".
+DBPL_MEASURE: Mapping[str, str] = {
+    "target_characters": "66ch",
+    "max_characters": "78ch",
+    "body_leading": "1.42",  # within Butterick's 120-145%
+    "table_leading": "1.30",  # tighter: table cells are short, not continuous prose
+    "heading_leading": "1.18",
+    "rhythm_unit": "14.2pt",  # 10pt x 1.42 — the interval every vertical space is a multiple of
+}
+
+#: ADB conventions, adopted verbatim as the fallback authority.
+#:
+#: ADB HSU 2024: *"Place all explanatory material immediately below the table, not at the bottom of
+#: the page, in this order (listed vertically): abbreviation(s), general explanatory note(s),
+#: footnote(s), and source(s). Use font size 9 points."* Footnote indicators are superscript
+#: lowercase letters, NOT bold. A source is required for every table, and should be documentary
+#: rather than an organisation name.
+DBPL_NOTE_ORDER: tuple[str, ...] = ("abbreviations", "notes", "footnotes", "sources")
+
+#: ADB Key Symbols (Key Indicators 2025, p.28), adopted verbatim.
+#:
+#: This is a DATA-INTEGRITY control, not a typographic nicety. A lender table that renders "not
+#: available" and "zero" identically has misstated the data, and no amount of good typography
+#: repairs that.
+DBPL_KEY_SYMBOLS: Mapping[str, str] = {
+    "...": "data not available",
+    "\u2013": "magnitude equals zero",
+    "0 or 0.0": "magnitude is less than half of unit employed",
+    "*": "provisional/preliminary/estimate/budget figure",
+    "|": "marks break in series",
+    "n.a.": "not applicable",
+}
+
+#: Page geometry for the LANDSCAPE variant (Lazard).
+#:
+#: Used only where a table's width cannot be carried by a portrait A4 column. The landscape page
+#: obeys every other rule here — same palette, same rule hierarchy, same note order, same
+#: furniture. It is a different page size, not a different design.
+DBPL_PAGE_LANDSCAPE: Mapping[str, str] = {
+    "size": "A4 landscape",
+    "margin_top": "15mm",
+    "margin_bottom": "15mm",
+    "margin_left": "18mm",
+    "margin_right": "18mm",
 }
 
 #: The furniture that must appear on every page of a DBPL document. Recorded as data so a
@@ -159,5 +252,11 @@ def as_css_variables() -> str:
         lines.append(f"  --dbpl-rule-{name.replace('_', '-')}: {weight};")
     for name, value in DBPL_PAGE.items():
         lines.append(f"  --dbpl-page-{name.replace('_', '-')}: {value};")
+    for name, value in DBPL_PAGE_LANDSCAPE.items():
+        lines.append(f"  --dbpl-land-{name.replace('_', '-')}: {value};")
+    for name, value in DBPL_SHADING.items():
+        lines.append(f"  --dbpl-shade-{name.replace('_', '-')}: {value};")
+    for name, value in DBPL_MEASURE.items():
+        lines.append(f"  --dbpl-measure-{name.replace('_', '-')}: {value};")
     lines.append("}")
     return "\n".join(lines)

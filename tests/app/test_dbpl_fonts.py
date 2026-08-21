@@ -152,10 +152,18 @@ def test_fontconfig_failure_degrades_quietly(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_bundled_tier_emits_font_face_rules_including_italics() -> None:
+    """Three families x normal/bold, plus two italic families x normal/bold = 10.
+
+    A variable-font weight RANGE (`font-weight: 100 900`) is invalid in WeasyPrint and is dropped
+    with a warning, so discrete weights are registered against the same variable file instead.
+    """
     css = font_face_css(provision_fonts())
-    assert css.count("@font-face") == 5, "3 upright + 2 italic companions"
+    assert css.count("@font-face") == 10
     assert "font-style: italic" in css
     assert "file://" in css, "bundled fonts embed by absolute path"
+    assert "100 900" not in css, "a weight range is invalid in WeasyPrint"
+    assert css.count("font-weight: normal") == 5
+    assert css.count("font-weight: bold") == 5
 
 
 def test_web_tier_emits_an_import(

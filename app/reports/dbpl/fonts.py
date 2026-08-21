@@ -237,24 +237,29 @@ def font_face_css(provisions: Sequence[FontProvision]) -> str:
     for prov in provisions:
         if prov.tier == "bundled":
             path = FONT_DIR / prov.spec.filename
-            blocks.append(
-                "@font-face {\n"
-                f"  font-family: '{prov.spec.family}';\n"
-                f"  src: url('file://{path}') format('truetype');\n"
-                "  font-weight: 100 900;\n"
-                "  font-style: normal;\n"
-                "}"
-            )
-            italic = prov.spec.italic_filename
-            if italic and (FONT_DIR / italic).is_file():
+            # A variable-font weight RANGE (`font-weight: 100 900`) is invalid in WeasyPrint and
+            # is dropped with a warning. Register the discrete weights the house style actually
+            # uses instead, both pointing at the same variable file — WeasyPrint instances it.
+            for weight in ("normal", "bold"):
                 blocks.append(
                     "@font-face {\n"
                     f"  font-family: '{prov.spec.family}';\n"
-                    f"  src: url('file://{FONT_DIR / italic}') format('truetype');\n"
-                    "  font-weight: 100 900;\n"
-                    "  font-style: italic;\n"
+                    f"  src: url('file://{path}') format('truetype');\n"
+                    f"  font-weight: {weight};\n"
+                    "  font-style: normal;\n"
                     "}"
                 )
+            italic = prov.spec.italic_filename
+            if italic and (FONT_DIR / italic).is_file():
+                for weight in ("normal", "bold"):
+                    blocks.append(
+                        "@font-face {\n"
+                        f"  font-family: '{prov.spec.family}';\n"
+                        f"  src: url('file://{FONT_DIR / italic}') format('truetype');\n"
+                        f"  font-weight: {weight};\n"
+                        "  font-style: italic;\n"
+                        "}"
+                    )
         elif prov.tier == "web":
             blocks.append(f"@import url('{prov.spec.web_css}');")
     return "\n".join(blocks)

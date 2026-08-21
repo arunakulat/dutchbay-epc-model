@@ -127,22 +127,27 @@ def test_reference_document_is_recorded_so_tokens_are_traceable() -> None:
     assert "DBAY-SLTS-2026-08-18" in DBPL_REFERENCE_DOCUMENT
 
 
-def test_stylesheet_is_tokens_followed_by_house_rules() -> None:
+def test_stylesheet_is_font_faces_then_tokens_then_house_rules() -> None:
+    """Order is load-bearing: @font-face must precede any rule using the families, and the
+    token block must precede the house rules that reference its custom properties."""
     sheet = dbpl_stylesheet()
-    assert sheet.startswith(":root {")
-    assert "@page" in sheet and ".dbpl-caveat" in sheet
+    face_at = sheet.index("@font-face")
+    root_at = sheet.index(":root {")
+    rules_at = sheet.index(".dbpl-caveat")
+    assert face_at < root_at < rules_at
+    assert "@page" in sheet
 
 
-def test_stylesheet_references_tokens_rather_than_hard_coded_colours() -> None:
-    """A literal hex in the house rules means a token was bypassed."""
-    _, _, rules = dbpl_stylesheet().partition("}")
-    literals = set(re.findall(r"#[0-9A-Fa-f]{6}", rules)) - {
-        "#FFFFFF",
-        "#E2E6E9",
-        "#F4F8FA",
-        "#2C3E4C",
-    }
-    assert not literals, f"hard-coded colours bypassing the tokens: {literals}"
+def test_house_rules_contain_no_hard_coded_colours_at_all() -> None:
+    """Every colour must come from a token. v2 tightened this to ZERO literals.
+
+    The house rules are everything after the generated :root block; a literal hex there means a
+    surface bypassed style.py, which is how a house style forks.
+    """
+    sheet = dbpl_stylesheet()
+    rules = sheet[sheet.index(":root {") :].split("}", 1)[1]
+    literals = set(re.findall(r"#[0-9A-Fa-f]{3,8}\b", rules))
+    assert not literals, f"hard-coded colours bypassing the tokens: {sorted(literals)}"
 
 
 # ── Structural furniture ─────────────────────────────────────────────────────
@@ -269,8 +274,27 @@ def test_uninstalled_project_raises_rather_than_rendering_unverified(
 
 
 def test_probe_fonts_reports_a_resolution_per_family() -> None:
+    from app.reports.dbpl.style import DBPL_REQUIRED_FONT_FAMILIES
+
     fonts = probe_fonts()
-    assert {f.family for f in fonts} == {"Liberation Serif", "Liberation Sans"}
+    assert {f.family for f in fonts} == set(DBPL_REQUIRED_FONT_FAMILIES)
+
+
+def test_render_reports_the_provisioning_tier_not_fontconfig() -> None:
+    """Regression guard for directly contradictory provenance.
+
+    fontconfig is blind to an @font-face-embedded file, so it reported "SUBSTITUTED" for the very
+    families the provisioner had just supplied from the bundled tier. The provisioning tier is
+    authoritative; fc-match is consulted only for families it did not supply.
+    """
+    result = render_dbpl_pdf(_render_html(_doc()))
+    assert set(result.font_tiers) == {"serif", "sans", "mono"}
+    assert all("bundled" in note for note in result.font_tiers.values())
+    assert (
+        result.fonts == ()
+    ), "no fc-match verdict for a family the provisioner supplied"
+    joined = " ".join(result.provenance_lines())
+    assert "SUBSTITUTED" not in joined
 
 
 def test_substitution_is_surfaced_not_hidden() -> None:
@@ -344,3 +368,107 @@ def test_provenance_lines_survive_a_second_render() -> None:
     html = _render_html(doc)
     assert "dbpl-provenance" in html
     assert render_dbpl_pdf(html).pdf[:5] == b"%PDF-"
+
+
+# ── v2: the symbiotic decisions, asserted as rules ───────────────────────────
+
+
+def test_vignelli_rule_hierarchy_is_three_graded_weights() -> None:
+    """Vignelli over Tufte: rules are load-bearing structure, in a graded hierarchy."""
+    from app.reports.dbpl.style import DBPL_RULES
+
+    assert DBPL_RULES["table_major"] == "2pt"
+    assert DBPL_RULES["table_item"] == "1pt"
+    assert DBPL_RULES["table_minor"] == "0.5pt"
+
+
+def test_header_band_is_closed_by_the_major_rule() -> None:
+    sheet = dbpl_stylesheet()
+    assert "border-bottom: var(--dbpl-rule-table-major)" in sheet
+
+
+def test_type_hangs_from_the_rule_above() -> None:
+    """Vignelli, verbatim: 'Type should always hang from the ruler.'
+
+    Implemented as asymmetric cell padding — tighter above than below.
+    """
+    sheet = dbpl_stylesheet()
+    assert (
+        "padding: 4pt 8pt 6pt 8pt" in sheet
+    ), "cells must sit closer to the rule above them"
+
+
+def test_no_interior_vertical_rules_anywhere() -> None:
+    """Urban, ADB and Lazard all agree: no verticals inside a table."""
+    sheet = dbpl_stylesheet()
+    for banned in (
+        "border-left: 1pt",
+        "border-right: 1pt",
+        "border-collapse: separate",
+    ):
+        assert banned not in sheet
+
+
+def test_urban_zebra_shading_is_applied() -> None:
+    """Adopted over Tufte deliberately: row-tracking beats data-ink ratio here."""
+    sheet = dbpl_stylesheet()
+    assert "nth-child(even)" in sheet
+    assert "var(--dbpl-shade-zebra)" in sheet
+
+
+def test_last_row_is_closed_by_the_item_rule() -> None:
+    sheet = dbpl_stylesheet()
+    assert "tbody tr:last-child" in sheet
+    assert "var(--dbpl-rule-table-item)" in sheet
+
+
+def test_adb_note_order_is_declared_verbatim() -> None:
+    from app.reports.dbpl.style import DBPL_NOTE_ORDER
+
+    assert DBPL_NOTE_ORDER == ("abbreviations", "notes", "footnotes", "sources")
+
+
+def test_adb_footnote_indicators_are_superscript_and_not_bold() -> None:
+    sheet = dbpl_stylesheet()
+    block = sheet[sheet.index(".dbpl-fn {") :][:220]
+    assert "vertical-align: super" in block
+    assert "font-weight: 400" in block, "ADB: superscript lowercase letters, NOT bold"
+
+
+def test_key_symbols_distinguish_unavailable_from_zero() -> None:
+    """A data-integrity control. Rendering these identically misstates the data."""
+    from app.reports.dbpl.style import DBPL_KEY_SYMBOLS
+
+    assert DBPL_KEY_SYMBOLS["..."] == "data not available"
+    assert DBPL_KEY_SYMBOLS["–"] == "magnitude equals zero"
+    assert DBPL_KEY_SYMBOLS["..."] != DBPL_KEY_SYMBOLS["–"]
+
+
+def test_tabular_figures_are_asserted_regardless_of_font_tier() -> None:
+    sheet = dbpl_stylesheet()
+    assert sheet.count("font-variant-numeric: tabular-nums") >= 3
+
+
+def test_measure_is_capped_for_prose_but_not_for_tables() -> None:
+    """66-character measure governs prose; a table would be crippled by it."""
+    sheet = dbpl_stylesheet()
+    assert "max-width: var(--dbpl-measure-max-characters)" in sheet
+    table_block = sheet[sheet.index("table.dbpl {") :][:600]
+    assert "max-width: none" in table_block
+
+
+def test_landscape_is_a_page_size_not_a_different_design() -> None:
+    """Lazard landscape inherits every other rule; only the page box changes."""
+    sheet = dbpl_stylesheet()
+    assert "@page dbpl-landscape" in sheet
+    assert "size: A4 landscape" in sheet
+    assert ".dbpl-landscape" in sheet and "page: dbpl-landscape" in sheet
+    # no duplicated table/typography rules scoped to landscape
+    assert ".dbpl-landscape table.dbpl" not in sheet
+
+
+def test_running_furniture_is_present_on_every_page() -> None:
+    sheet = dbpl_stylesheet()
+    assert "string(dbpl-banner)" in sheet
+    assert "string(dbpl-docline)" in sheet
+    assert 'counter(page) " of " counter(pages)' in sheet
