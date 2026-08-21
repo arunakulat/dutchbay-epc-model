@@ -77,6 +77,7 @@ __all__ = [
     "build_dossier",
     "render_dossier_html",
     "render_dossier_markdown",
+    "as_dbpl_document",
 ]
 
 #: Neutral role label. The dossier never names the bidding entity, so one pack serves any bidder.
@@ -522,3 +523,182 @@ def render_dossier_markdown(model: TenderGapDossier) -> str:
     add(f"_{model.verification_discipline}_")
     add("")
     return "\n".join(out)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# DBPL adapter (GWTF DBPL-01)
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def as_dbpl_document(
+    model: TenderGapDossier,
+    *,
+    provenance_lines: Sequence[str] = (),
+) -> dict[str, Any]:
+    """Project the dossier into the DutchBay Presentation Layer document model.
+
+    The house style is field/value tables under a numbered heading with a caveat band, which is
+    exactly the shape of a gap: a controlling clause, what was supplied, why that does not close
+    it, and the question that would. Each gap therefore becomes one DBPL section rather than being
+    flattened into prose.
+
+    The un-suppressible furniture is filled from the dossier's own caveats, so the running banner
+    carries the derived-register warning on every page — the property that matters most for a
+    document that will be forwarded to a counterparty.
+
+    Args:
+        model: the assembled dossier.
+        provenance_lines: print-core provenance from a first pass, stamped into the second.
+
+    Returns:
+        A mapping consumable by ``dbpl_base.html.j2``. Note the section list uses ``points``,
+        never ``items`` — on a dict Jinja resolves ``.items`` to the built-in method.
+    """
+    counts = ", ".join(f"{n} {s.lower()}" for s, n in model.severity_counts)
+    sections: list[dict[str, Any]] = [
+        {
+            "heading": "Document control",
+            "table": {
+                "columns": ["Control field", "Controlled value"],
+                "rows": [
+                    ["Tender", model.tender_ref],
+                    ["Tender title", model.tender_title],
+                    ["Addressed to", model.oem_label],
+                    ["Raised by", model.bidder_label],
+                    ["Submission deadline", model.submission_deadline or "not stated"],
+                    [
+                        "Working days remaining",
+                        (
+                            str(model.working_days_remaining)
+                            if model.working_days_remaining is not None
+                            else "not stated"
+                        ),
+                    ],
+                    ["Open items", f"{len(model.gaps)} ({counts})"],
+                    ["Register digest", model.register_digest[:16]],
+                    ["Generated", model.generated_at],
+                    ["Status", "Derived gap register - not a compliance determination"],
+                ],
+            },
+        }
+    ]
+
+    if model.critical_path:
+        sections.append(
+            {
+                "heading": "Critical path - raise these first",
+                "intro": (
+                    "These gate other work: nothing downstream can start until they are answered."
+                ),
+                "points": [f"{g.gap_id} - {g.title}" for g in model.critical_path],
+            }
+        )
+
+    for gap in model.gaps_by_severity:
+        rows: list[list[str]] = [
+            ["Severity", gap.severity],
+            ["Controlling clause", gap.clause],
+            ["Delivery tier", gap.tier],
+            ["What the tender requires", gap.requirement],
+            ["What the pack contains", gap.supplied],
+            ["Why that does not close it", gap.why_insufficient],
+        ]
+        if gap.consequence:
+            rows.append(["Stated tender consequence", gap.consequence])
+        if not gap.verified:
+            rows.append(
+                ["Verification", "UNVERIFIED - treat as a question, not a finding"]
+            )
+        rows.append([f"Question to {model.oem_label}", gap.question])
+        rows.append(["Closes when", gap.closure_test])
+        sections.append(
+            {
+                "heading": f"{gap.gap_id} - {gap.title}",
+                "table": {"columns": ["Field", "Content"], "rows": rows},
+            }
+        )
+
+    if model.evidence:
+        sections.append(
+            {
+                "heading": "Evidence inventory - declared against received",
+                "intro": (
+                    "The two columns are deliberately separate. Where they diverge, the divergence "
+                    "is the finding: a row marked received against a document that does not answer "
+                    "the requirement is a gap, not closure."
+                ),
+                "table": {
+                    "columns": [
+                        "Item",
+                        "Supplier declares",
+                        "Audit found",
+                        "Adequate?",
+                        "Note",
+                    ],
+                    "rows": [
+                        [e.item, e.declared, e.received, e.status_label, e.note or "-"]
+                        for e in model.evidence
+                    ],
+                },
+            }
+        )
+
+    for heading, body in model.sections.items():
+        sections.append({"heading": heading, "body": body})
+
+    if model.sources:
+        sections.append(
+            {
+                "heading": "Source provenance",
+                "intro": (
+                    "Every document read to build this register, with the route by which its text "
+                    "was recovered. A clause quoted from an OCR-recovered scan is not the same "
+                    "evidence as one quoted from a digital original."
+                ),
+                "table": {
+                    "columns": [
+                        "Document",
+                        "Role",
+                        "Dated",
+                        "SHA-256",
+                        "Extraction",
+                        "Note",
+                    ],
+                    "rows": [
+                        [
+                            s.label,
+                            s.role,
+                            s.document_date or "not stated",
+                            s.short_hash,
+                            s.extraction,
+                            s.note or "-",
+                        ]
+                        for s in model.sources
+                    ],
+                },
+            }
+        )
+
+    sections.append(
+        {
+            "heading": "Verification discipline",
+            "body": model.verification_discipline,
+        }
+    )
+
+    return {
+        "title": f"Tender evidence gap dossier - {model.tender_ref}",
+        "banner": f"DERIVED GAP REGISTER | NOT A COMPLIANCE DETERMINATION | {model.tender_ref}",
+        "document_id": f"DBAY-TGD-{model.register_digest[:8].upper()}",
+        "version": "v1.0",
+        "issue_date": model.generated_at.split(" ")[0],
+        "headline_caveat": model.mandatory_caveat,
+        "disclaimer": model.source_governs,
+        "section_caveat": (
+            "CONTROL NOTICE - DERIVED GAP REGISTER / NOT A COMPLIANCE DETERMINATION / "
+            "SOURCE DOCUMENTS GOVERN"
+        ),
+        "first_section_number": 0,
+        "sections": sections,
+        "provenance_lines": tuple(provenance_lines),
+    }

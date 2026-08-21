@@ -20,6 +20,7 @@ from app.reports.tender_gap_dossier_emit import (
     EvidenceLine,
     GapItem,
     SourceDocument,
+    as_dbpl_document,
     build_dossier,
     render_dossier_html,
     render_dossier_markdown,
@@ -317,3 +318,61 @@ def test_html_renders_the_same_optional_blocks() -> None:
         "Evidence inventory",
     ):
         assert probe in out
+
+
+# ── DBPL adapter (GWTF DBPL-01) ──────────────────────────────────────────────
+
+
+def test_dbpl_document_carries_the_un_suppressible_furniture() -> None:
+    doc = as_dbpl_document(_rich_dossier())
+    assert doc["banner"], "the running banner is what puts the warning on every page"
+    assert "NOT A COMPLIANCE DETERMINATION" in doc["banner"]
+    assert doc["headline_caveat"] == MANDATORY_DOSSIER_CAVEAT
+    assert doc["section_caveat"]
+    assert doc["document_id"].startswith("DBAY-TGD-")
+    assert doc["version"] and doc["issue_date"]
+
+
+def test_dbpl_document_renders_one_section_per_gap_plus_front_and_back_matter() -> None:
+    model = _rich_dossier()
+    doc = as_dbpl_document(model)
+    headings = [s["heading"] for s in doc["sections"]]
+    for gap in model.gaps:
+        assert any(h.startswith(f"{gap.gap_id} - ") for h in headings)
+    assert "Document control" in headings
+    assert "Critical path - raise these first" in headings
+    assert "Evidence inventory - declared against received" in headings
+    assert "Source provenance" in headings
+    assert "Verification discipline" in headings
+
+
+def test_dbpl_gap_section_carries_clause_question_and_closure_test() -> None:
+    model = _rich_dossier()
+    doc = as_dbpl_document(model)
+    section = next(s for s in doc["sections"] if s["heading"].startswith("A1 - "))
+    fields = {row[0]: row[1] for row in section["table"]["rows"]}
+    assert fields["Severity"] == "CRITICAL"
+    assert fields["Controlling clause"]
+    assert fields[f"Question to {model.oem_label}"]
+    assert fields["Closes when"]
+
+
+def test_dbpl_marks_an_unverified_gap_rather_than_dropping_it() -> None:
+    doc = as_dbpl_document(_rich_dossier())
+    section = next(s for s in doc["sections"] if s["heading"].startswith("A2 - "))
+    fields = {row[0]: row[1] for row in section["table"]["rows"]}
+    assert "UNVERIFIED" in fields["Verification"]
+
+
+def test_dbpl_sections_use_points_not_items() -> None:
+    """`.items` on a dict resolves to the built-in method in Jinja — the key must be `points`."""
+    doc = as_dbpl_document(_rich_dossier())
+    for section in doc["sections"]:
+        assert (
+            "items" not in section
+        ), "an `items` key would silently break the template"
+
+
+def test_dbpl_document_accepts_print_core_provenance() -> None:
+    doc = as_dbpl_document(_rich_dossier(), provenance_lines=("line one", "line two"))
+    assert doc["provenance_lines"] == ("line one", "line two")
