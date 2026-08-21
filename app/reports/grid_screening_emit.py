@@ -56,6 +56,7 @@ GWTF:
 from __future__ import annotations
 
 import platform
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from importlib import metadata as importlib_metadata
@@ -152,14 +153,57 @@ SYNTHETIC_CURTAILMENT_DETAIL = (
     "not promote synthetic inputs to real evidence."
 )
 
-#: The resolved ``[grid]`` optional-extra pin set (pyproject ``[project.optional-dependencies]
-#: .grid``). Surfaced verbatim as the dependency-reproducibility provenance so a lender/auditor
-#: sees the exact resolved engines the screen was built against. Kept in sync with pyproject.
-GRID_EXTRA_PINS: tuple[tuple[str, str], ...] = (
-    ("pandapower", "==3.3.0"),
+#: FALLBACK ``[grid]`` pin set, used only when the project is not installed as package metadata
+#: (a bare source checkout). The AUTHORITATIVE pins are read from the installed distribution's
+#: own metadata by :func:`_grid_extra_pins` — a hard-coded copy of pyproject silently drifts, and
+#: this one did: it read ``pandapower ==3.3.0`` while the project declared ``>=3.5,<4`` and the
+#: environment ran 3.5.4, so the report surfaced a false pin as dependency provenance. The
+#: fallback is held to the declared value by ``test_grid_extra_pins_match_declared_metadata``,
+#: so a future drift fails a test instead of reaching a reader.
+GRID_EXTRA_PINS_FALLBACK: tuple[tuple[str, str], ...] = (
+    ("pandapower", ">=3.5,<4"),
     ("andes", ">=2.0"),
     ("opendssdirect.py", ">=0.9.4"),
 )
+
+
+def _grid_extra_pins() -> tuple[tuple[str, str], ...]:
+    """The ``[grid]`` pins, preferring the installed distribution's own recorded metadata.
+
+    CASPER: an uninstalled source tree has no metadata to read, which is a legitimate state, so
+    it degrades to :data:`GRID_EXTRA_PINS_FALLBACK` rather than failing the report.
+    """
+    try:
+        from app.ops.extras import declared_extras
+
+        declared = declared_extras().get("grid", ())
+        pins: list[tuple[str, str]] = []
+        for requirement in declared:
+            name, spec = _split_requirement(requirement)
+            if name:
+                pins.append((name, spec))
+        if pins:
+            return tuple(pins)
+    except Exception:  # noqa: BLE001 - CASPER: provenance degrades, it never crashes the report
+        pass
+    return GRID_EXTRA_PINS_FALLBACK
+
+
+def _split_requirement(requirement: str) -> tuple[Optional[str], str]:
+    """Split a PEP 508 requirement into (distribution, specifier)."""
+    match = re.match(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)", requirement)
+    if match is None:
+        return None, ""
+    name = match.group(1)
+    remainder = requirement.split(";", 1)[0].strip()[len(name) :].strip()
+    if remainder.startswith("["):
+        _, _, remainder = remainder.partition("]")
+    return name, remainder.strip()
+
+
+#: The pin set surfaced in the report. Resolved once at import from metadata (authoritative)
+#: with the static fallback behind it.
+GRID_EXTRA_PINS: tuple[tuple[str, str], ...] = _grid_extra_pins()
 
 #: The verification-discipline statement — surfaced so the report carries the engineering
 #: provenance behind the results, not just the numbers (the surface-provenance directive).
@@ -391,9 +435,7 @@ def _try_curtailment(
         # a report as an innocent "not run" note, so #1072 requires a fail-closed refusal.
         raise
     except Exception as exc:  # noqa: BLE001 - CASPER: degrade, don't crash the report
-        degraded["curtailment"] = (
-            f"QSTS curtailment split not run: {type(exc).__name__}: {exc}"
-        )
+        degraded["curtailment"] = f"QSTS curtailment split not run: {type(exc).__name__}: {exc}"
         return None
 
 
@@ -449,9 +491,7 @@ def build_grid_screening_model(
         )
 
     # Core screens (mandatory) via the gateway — closed-form fallback if pandapower absent.
-    study = evaluate_grid(
-        scenario_config, use_pandapower=use_pandapower, run_reactive=True
-    )
+    study = evaluate_grid(scenario_config, use_pandapower=use_pandapower, run_reactive=True)
 
     degraded: dict[str, str] = {}
     scr = float(study.strength.scr)
@@ -459,8 +499,7 @@ def build_grid_screening_model(
     poc_voltage_kv = grid.get("poc_voltage_kv")
     poc_voltage_kv_f = (
         float(poc_voltage_kv)
-        if isinstance(poc_voltage_kv, (int, float))
-        and not isinstance(poc_voltage_kv, bool)
+        if isinstance(poc_voltage_kv, (int, float)) and not isinstance(poc_voltage_kv, bool)
         else None
     )
 
@@ -514,9 +553,7 @@ def _fmt(value: Any, *, digits: int = 2, dash: str = "—") -> str:
     return str(value)
 
 
-def _verdict(
-    value: Optional[bool], *, ok: str = "within limits", bad: str = "BREACH"
-) -> str:
+def _verdict(value: Optional[bool], *, ok: str = "within limits", bad: str = "BREACH") -> str:
     """Render a tri-state screening verdict: True→ok, False→bad, None→not run (honest)."""
     if value is None:
         return "not run"
@@ -554,9 +591,7 @@ _FORBIDDEN_SYNTHETIC_OUTPUT_TOKENS = frozenset(
 )
 
 
-def _segregated_qsts_output_path(
-    requested_path: Path, model: GridScreeningModel
-) -> Path:
+def _segregated_qsts_output_path(requested_path: Path, model: GridScreeningModel) -> Path:
     """Route generated QSTS artifacts into the sole synthetic provenance namespace."""
 
     curtailment = model.curtailment
