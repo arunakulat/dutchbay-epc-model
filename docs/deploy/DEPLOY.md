@@ -207,6 +207,52 @@ grep -E '^\s*(DUTCHBAY_JWT_SECRET|DUTCHBAY_API_USERS|DUTCHBAY_REDIS_URL|CDSAPI_K
     fly.staging.toml   # must print nothing (these appear only in the runbook comment)
 ```
 
+## Post-deploy verification (no deploy access required)
+
+Confirming what a running instance actually has installed used to require `flyctl` access to the
+machine. It no longer does. The instance reports its own state on `/health/readiness`, and
+`scripts/verify_deployment.py` checks it from outside:
+
+```
+python scripts/verify_deployment.py https://dutchbay-epc-model.fly.dev
+```
+
+The script takes a URL and nothing else — no Fly token, no SSH, no console — so CI, a reviewer
+checking a claim, or a colleague mid-incident can all run it. It verifies liveness and that the
+served contract version matches the checkout, that runtime-critical config is present (as
+booleans; the routes never echo a secret), and that every optional extra the image installs is
+present and satisfies its declared pin.
+
+Add `--deep` to also import-check each package:
+
+```
+python scripts/verify_deployment.py https://dutchbay-epc-model.fly.dev --deep
+```
+
+**Use `--deep` after any change to the image or its system libraries.** A metadata check proves
+WeasyPrint is installed; it does not prove it *works*. WeasyPrint needs the pango/cairo shared
+libraries (`Dockerfile` installs `libpango-1.0-0`, `libpangocairo-1.0-0`, `libpangoft2-1.0-0`,
+`libcairo2`, plus `fonts-dejavu-core` — without a font the PDF renders as empty boxes). Drop one
+of those from the runtime stage and the package still imports as metadata but fails at the first
+PDF request. `--deep` is what catches that before a user does.
+
+Exit codes make it usable as a CI gate: `0` all checks passed, `1` a check failed, `2` the
+instance was unreachable or is not this application. `--json` emits the same result machine-readably.
+
+```
+python scripts/verify_deployment.py "$STAGING_URL" --deep --json    # non-zero fails the job
+```
+
+Checking a specific extra is reported at all:
+
+```
+python scripts/verify_deployment.py "$URL" --expect-extra=report
+```
+
+The probe behind it (`app/ops/extras.py`) reads declared pins from the installed distribution's
+own metadata rather than a hand-kept table, so what the endpoint reports cannot drift from
+`pyproject.toml`.
+
 ## Configuration reference
 
 All sixteen environment variables the service reads. "Secret?" marks values that must
@@ -270,7 +316,15 @@ synchronous-route variables in `app/api/config.py`; CDS variables in
 - **Local Docker build not run in the authoring environment.** The image could not be
   built or booted where this scaffolding was authored. The `docker-build` CI workflow is
   the build-and-boot verification for the image; a green run of that workflow is the
-  gate that the image builds and the web process starts and answers `/health`.
+  gate that the image builds and the web process starts and answers `/health`. What a
+  *running* instance actually contains is now verifiable without deploy access — see
+  **Post-deploy verification** above; run it with `--deep` after any image change.
+- **Verification reports what the instance says about itself.** `verify_deployment.py`
+  reads the deployment's own health surface. That is sufficient for presence, pins and
+  importability, and it is strictly better than an unverified assumption — but it is not
+  a substitute for the `docker-build` workflow, and it cannot detect a fault the runtime
+  does not surface. It also cannot check an instance that is down; an unreachable host
+  exits `2`, distinctly from a failed check.
 - **User-held operational concerns.** Token revocation and a `jti` denylist, the choice
   of secret store, and TLS termination are operator responsibilities and are not
   implemented in code (`app/api/auth.py` module docstring; tracked on #858). A leaked

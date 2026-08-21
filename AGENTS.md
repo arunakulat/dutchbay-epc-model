@@ -154,6 +154,26 @@ one, because the next session acts on it.
 - Do not publish confidential or third-party materials without explicit authorization.
   Retain original provenance and confidentiality markings when publication is authorized.
 
+## Presentation layer and PDF generation
+
+- Follow `DBPL-01`. **DBPL / dbpl / DutchBay Presentation Layer names a print contract, not a
+  look.** Any PDF described as a DBPL document MUST be generated through
+  `app.reports.dbpl.print_core.render_dbpl_pdf`, which requires the **complete** `[report]`
+  optional extra — `weasyprint`, `reportlab`, `geopandas` **and** `contextily` — plus the DBPL
+  font stack. Never call WeasyPrint directly for a DBPL document.
+- The print core **fails loud** rather than degrading: an incomplete, mis-pinned or
+  installed-but-unimportable stack raises `DbplDependencyError`. This is a deliberate exception to
+  the CASPER degradation default, because for a DBPL PDF the PDF *is* the deliverable. Use
+  `app.reports.renderer` for a best-effort render, and do not call that result DBPL.
+- Design tokens live only in `app/reports/dbpl/style.py` and are emitted into the stylesheet.
+  A surface that hard-codes its own colours, sizes or margins has forked the house style.
+- The structural furniture — running header banner, running footer with document ID/version/date
+  and `Page n of m`, and a caveat band under every section heading — is **un-suppressible**.
+- Surface font provenance. WeasyPrint renders successfully with a substituted face, so a
+  successful render proves nothing about which font was used; record substitutions, never hide
+  them.
+- Full guide: `docs/dbpl_styleguide.md`.
+
 ## Verification
 
 Run the narrowest meaningful checks while iterating, then broaden in proportion to risk.

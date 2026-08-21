@@ -21,7 +21,11 @@ are additive (a breaking change lands as ``/v2``, never a mutation of ``/v1``):
                               self-reports the body-level ``API_CONTRACT_VERSION``).
 * ``GET /health/readiness`` — readiness diagnostic (#995): reports whether runtime-critical
                               config (the Copernicus CDS endpoint + credential) is PRESENT,
-                              as booleans only — it never echoes a value.
+                              as booleans only — it never echoes a value. Also reports the
+                              CASPER availability of the deployed optional extras and the
+                              runtime identity, so a deployment can be verified without shell
+                              or deploy access; ``?deep=true`` additionally import-checks each
+                              package, catching installed-but-unimportable native deps.
 
 The endpoint only orchestrates: it validates inputs (Pydantic), maps the form to
 a scenario (``WindFarmInputs.to_scenario_config``), and delegates the compute to
@@ -35,6 +39,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import platform
 import re
 import tempfile
 from datetime import datetime, timezone
@@ -60,6 +65,7 @@ from app.api.responses import API_CONTRACT_VERSION, CaseResult
 from app.api.security import SecurityHeadersMiddleware
 from app.api.surface import CaseSurface
 from app.models.inputs import WindFarmInputs
+from app.ops.extras import DEFAULT_DISTRIBUTION, probe_extras
 from app.reports.renderer import (
     ReportDependencyError,
     render_report_html,
@@ -146,11 +152,25 @@ def health() -> dict[str, str]:
 #: route. Live ERA5 retrieval reads these via the ``cdsapi`` client (see
 #: :mod:`wind_resource.era5_fetcher`); the values are injected as Fly ``[env]`` (URL) and
 #: ``fly secrets set`` (key) — see ``docs/deploy/DEPLOY.md``.
+def _distribution_version() -> str | None:
+    """Installed version of this project, or ``None`` in a bare source checkout.
+
+    CASPER: a source tree with no recorded metadata is a legitimate state (local dev), so the
+    absence degrades to ``None`` rather than failing an infra route.
+    """
+    try:
+        import importlib.metadata as _md
+
+        return _md.version(DEFAULT_DISTRIBUTION)
+    except Exception:  # noqa: BLE001 - never crash a health route over provenance
+        return None
+
+
 _READINESS_ENV_KEYS = ("CDSAPI_URL", "CDSAPI_KEY")
 
 
 @app.get("/health/readiness", tags=["ops"])
-def readiness() -> dict[str, Any]:
+def readiness(deep: bool = False) -> dict[str, Any]:
     """Readiness diagnostic (#995): confirm runtime-critical config is present without
     exposing any value.
 
@@ -160,16 +180,55 @@ def readiness() -> dict[str, Any]:
     without the route ever echoing a secret. ``ready`` is the AND of every check; the route
     itself always returns 200 (it is a diagnostic, not a gate — a liveness ``/health`` failure
     is what pulls the instance).
+
+    Also reports the CASPER availability of the optional extras the deployed image installs
+    (``Dockerfile``: ``.[api,jobs,report]``), so the running instance can be verified WITHOUT
+    shell or deploy access to the machine. ``runtime`` carries the interpreter/platform identity
+    for the same reason.
+
+    ``deep=true`` additionally imports each installed package, catching the
+    installed-but-unimportable case — WeasyPrint present while the pango/cairo system libraries
+    are missing from the image is the failure this exists to detect. It costs real import time,
+    so it is opt-in and never runs on the default probe.
+
+    ``ready`` deliberately keeps its original meaning — the AND of the environment checks only.
+    Extras are reported as diagnosis, not folded into the gate, so this addition cannot change
+    the behaviour of any existing caller.
     """
     checks = {
         key.lower(): bool(os.environ.get(key, "").strip())
         for key in _READINESS_ENV_KEYS
     }
+    # CASPER at the CALL SITE too, not only inside the probe. The probe guards each package
+    # individually, but a catastrophic failure (an unreadable metadata store, or a defect here)
+    # must still not take down an infra route whose whole job is to be reachable when things are
+    # wrong. A probe failure degrades to an explicit error record, never a 5xx.
+    try:
+        extras: dict[str, Any] = {
+            st.extra: st.as_dict() for st in probe_extras(deep=deep)
+        }
+        extras_error: Optional[str] = None
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 - a diagnostic must never be the thing that breaks
+        extras, extras_error = {}, f"{type(exc).__name__}: {exc}"[:200]
     return {
         "status": "ok",
         "contract_version": API_CONTRACT_VERSION,
         "ready": all(checks.values()),
         "checks": checks,
+        "extras": extras,
+        # Unknown is not the same as healthy: a failed probe reports False, not a vacuous True
+        # from an empty mapping.
+        "extras_available": bool(extras)
+        and all(st["available"] for st in extras.values()),
+        "extras_error": extras_error,
+        "runtime": {
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+            "distribution": DEFAULT_DISTRIBUTION,
+            "version": _distribution_version(),
+        },
     }
 
 

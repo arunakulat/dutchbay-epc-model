@@ -1,0 +1,183 @@
+{# Standalone TENDER GAP DOSSIER — a bidder's evidence-query pack to an OEM.
+
+   The derived-register caveat, the source-governs precedence caveat, the verification
+   discipline and the source provenance are rendered STRUCTURALLY here — there is no config
+   toggle that removes them (the un-suppressible-caveat requirement, mirroring the #884 grid
+   screening report). Autoescape is forced on in the Python environment, so an OEM / bidder /
+   document label is HTML-escaped. #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tender evidence gap dossier — {{ m.tender_ref }}</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; color: #1a1a1a;
+         line-height: 1.5; max-width: 62rem; }
+  h1 { font-size: 1.5rem; margin-bottom: .2rem; }
+  h2 { font-size: 1.15rem; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: .2rem; }
+  h3 { font-size: 1rem; margin-top: 1.6rem; margin-bottom: .3rem; }
+  .caveat { border: 2px solid #b00020; background: #fff3f3; padding: 1rem; margin: 1rem 0; border-radius: 4px; }
+  .caveat .label { color: #b00020; font-weight: 700; letter-spacing: .04em; }
+  .precedence { border: 2px solid #a05a00; background: #fff8ec; padding: 1rem; margin: 1rem 0; border-radius: 4px; }
+  .precedence .label { color: #a05a00; font-weight: 700; }
+  .provenance { border-left: 4px solid #2a7; background: #f2fbf6; padding: .8rem 1rem; margin: 1rem 0; font-size: .9rem; }
+  .criticalpath { border-left: 4px solid #b00020; background: #fdf4f5; padding: .8rem 1rem; margin: 1rem 0; }
+  table { border-collapse: collapse; width: 100%; margin: .6rem 0; font-size: .9rem; }
+  th, td { border: 1px solid #ddd; padding: .4rem .6rem; text-align: left; vertical-align: top; }
+  th { background: #f0f0f0; }
+  .meta { color: #555; font-size: .85rem; }
+  code { background: #eee; padding: 0 .2rem; border-radius: 2px; font-size: .9em; }
+  .gap { border: 1px solid #e0e0e0; border-radius: 4px; padding: .2rem 1rem 1rem; margin: 1.2rem 0; }
+  .gap.CRITICAL { border-left: 6px solid #b00020; }
+  .gap.HIGH { border-left: 6px solid #d97706; }
+  .gap.MEDIUM { border-left: 6px solid #b8a300; }
+  .gap.LOW { border-left: 6px solid #4a90d9; }
+  .gap.INFORMATIONAL { border-left: 6px solid #999; }
+  .sev { font-weight: 700; letter-spacing: .03em; font-size: .78rem; padding: .1rem .45rem;
+         border-radius: 3px; background: #eee; color: #333; }
+  .sev.CRITICAL { background: #b00020; color: #fff; }
+  .sev.HIGH { background: #d97706; color: #fff; }
+  .sev.MEDIUM { background: #b8a300; color: #fff; }
+  .unverified { color: #a05a00; font-weight: 700; }
+  .q { background: #f5f6fa; border-left: 4px solid #446; padding: .7rem 1rem; margin: .7rem 0; }
+  .q .label { font-weight: 700; color: #446; display: block; margin-bottom: .2rem; }
+  .close { font-size: .92rem; color: #245; }
+  dt { font-weight: 600; margin-top: .6rem; }
+  dd { margin: .1rem 0 0 0; }
+  .notadequate { color: #b00020; font-weight: 600; }
+  .adequate { color: #2a7; font-weight: 600; }
+  .notassessed { color: #888; font-style: italic; }
+</style>
+</head>
+<body>
+
+<h1>Tender evidence gap dossier</h1>
+<p class="meta">
+  Tender <strong>{{ m.tender_ref }}</strong><br>
+  {{ m.tender_title }}<br>
+  Addressed to <strong>{{ m.oem_label }}</strong> · Raised by <strong>{{ m.bidder_label }}</strong>
+  {% if m.submission_deadline %}
+  · Submission deadline <strong>{{ m.submission_deadline }}</strong>
+    {% if m.working_days_remaining is not none %}({{ m.working_days_remaining }} working days remaining){% endif %}
+  {% endif %}
+  <br>Generated {{ m.generated_at }} · Python {{ m.python_version }} ·
+  register digest <code>{{ m.register_digest[:16] }}</code>
+</p>
+
+{# ── UN-SUPPRESSIBLE caveats ─────────────────────────────────────────────── #}
+<div class="caveat">
+  <span class="label">⚠ {{ m.mandatory_caveat }}</span>
+</div>
+<div class="precedence">
+  <span class="label">{{ m.source_governs }}</span>
+</div>
+
+<h2>Summary</h2>
+<p><strong>{{ m.gaps | length }} open items.</strong></p>
+<table>
+  <tr><th>Severity</th><th>Count</th></tr>
+  {% for sev, n in m.severity_counts %}
+  <tr><td><span class="sev {{ sev }}">{{ sev }}</span></td><td>{{ n }}</td></tr>
+  {% endfor %}
+</table>
+
+{% if m.critical_path %}
+<div class="criticalpath">
+  <strong>Critical path — raise these first.</strong> These gate other work: nothing downstream
+  can start until they are answered.
+  <ul>
+    {% for g in m.critical_path %}
+    <li><strong>{{ g.gap_id }}</strong> — {{ g.title }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<h2>Gap register</h2>
+{% for g in m.gaps_by_severity %}
+<div class="gap {{ g.severity }}">
+  <h3>{{ g.gap_id }} · {{ g.title }}</h3>
+  <p class="meta">
+    <span class="sev {{ g.severity }}">{{ g.severity }}</span>
+    · Clause <strong>{{ g.clause }}</strong>
+    · Tier: {{ g.tier }}
+    {% if not g.verified %}· <span class="unverified">⚠ UNVERIFIED</span>{% endif %}
+  </p>
+  <dl>
+    <dt>What the tender requires</dt><dd>{{ g.requirement }}</dd>
+    <dt>What the pack contains</dt><dd>{{ g.supplied }}</dd>
+    <dt>Why that does not close it</dt><dd>{{ g.why_insufficient }}</dd>
+    {% if g.consequence %}
+    <dt>Stated tender consequence</dt><dd>{{ g.consequence }}</dd>
+    {% endif %}
+  </dl>
+  <div class="q">
+    <span class="label">Question to {{ m.oem_label }}</span>
+    {{ g.question }}
+  </div>
+  <p class="close"><strong>Closes when:</strong> {{ g.closure_test }}</p>
+</div>
+{% endfor %}
+
+{% if m.evidence %}
+<h2>Evidence inventory — declared against received</h2>
+<p class="meta">The two columns are deliberately separate. Where they diverge, the divergence is
+the finding: a row marked received against a document that does not answer the requirement is a
+gap, not closure.</p>
+<table>
+  <tr><th>Item</th><th>Supplier declares</th><th>Audit found</th><th>Adequate?</th><th>Note</th></tr>
+  {% for e in m.evidence %}
+  <tr>
+    <td>{{ e.item }}</td>
+    <td>{{ e.declared }}</td>
+    <td>{{ e.received }}</td>
+    <td>
+      {% if e.adequate is none %}<span class="notassessed">not assessed</span>
+      {% elif e.adequate %}<span class="adequate">adequate</span>
+      {% else %}<span class="notadequate">NOT adequate</span>{% endif %}
+    </td>
+    <td>{{ e.note or "—" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{% for heading, body in m.sections.items() %}
+<h2>{{ heading }}</h2>
+<p>{{ body }}</p>
+{% endfor %}
+
+{% if m.unverified %}
+<h2>Unverified findings</h2>
+<p>Surfaced rather than dropped. Each could not be confirmed from the supplied material and should
+be treated as a question, not a finding of fact.</p>
+<ul>
+  {% for g in m.unverified %}
+  <li><strong>{{ g.gap_id }}</strong> — {{ g.title }}</li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{# ── Source provenance + verification discipline (surfaced, not internal) ── #}
+<h2>Source provenance</h2>
+<p class="meta">Every document read to build this register, with the route by which its text was
+recovered. A clause quoted from an OCR-recovered scan is not the same evidence as one quoted from
+a digital original, so the route is stated per document.</p>
+<table>
+  <tr><th>Document</th><th>Role</th><th>Dated</th><th>SHA-256</th><th>Extraction</th><th>Note</th></tr>
+  {% for s in m.sources %}
+  <tr>
+    <td>{{ s.label }}</td>
+    <td>{{ s.role }}</td>
+    <td>{{ s.document_date or "not stated" }}</td>
+    <td><code>{{ s.short_hash }}</code></td>
+    <td>{{ s.extraction }}</td>
+    <td>{{ s.note or "—" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<div class="provenance">{{ m.verification_discipline }}</div>
+
+</body>
+</html>

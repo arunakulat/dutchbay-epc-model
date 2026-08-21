@@ -1,0 +1,67 @@
+{# DBPL base document — the house skeleton, mirroring DBAY-SLTS-2026-08-18.
+
+   The banner, the doc-line and the per-section caveat band are STRUCTURAL: they are emitted by
+   this template, not supplied as optional blocks, because a DBPL document without its provenance
+   furniture is an unlabelled document, and for analyst-generated material that is the failure
+   mode that matters. Autoescape is expected to be on in the caller's environment. #}
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>{{ doc.title }}</title></head>
+<body>
+
+{# Carried into the running header/footer on every page via CSS string-set. #}
+<div class="dbpl-banner">{{ doc.banner }}</div>
+<div class="dbpl-docline">{{ doc.document_id }} | {{ doc.version }} | {{ doc.issue_date }}</div>
+
+<h1 class="dbpl-title">{{ doc.title }}</h1>
+
+<div class="dbpl-caveat">{{ doc.headline_caveat }}</div>
+
+{% if doc.disclaimer %}
+<p class="dbpl-disclaimer">{{ doc.disclaimer }}</p>
+{% endif %}
+
+<hr class="dbpl-sep">
+
+{% for section in doc.sections %}
+<h2 class="dbpl-section">{{ loop.index0 + doc.first_section_number }}. {{ section.heading }}</h2>
+
+{% if section.caveat or doc.section_caveat %}
+<div class="dbpl-caveat">{{ section.caveat or doc.section_caveat }}</div>
+{% endif %}
+
+{% if section.intro %}
+<p>{{ section.intro }}</p>
+{% endif %}
+
+{% if section.table %}
+<table class="dbpl">
+  <thead><tr>{% for col in section.table.columns %}<th>{{ col }}</th>{% endfor %}</tr></thead>
+  <tbody>
+    {% for row in section.table.rows %}
+    <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{# Key is `points`, not `items`: on a dict, Jinja resolves `.items` to the built-in dict
+   method rather than the key, so an ordered list silently became a TypeError. Same trap
+   applies to `keys` and `values` — avoid those names in a section mapping. #}
+{% if section.points %}
+<ol class="dbpl">{% for point in section.points %}<li>{{ point }}</li>{% endfor %}</ol>
+{% endif %}
+
+{% if section.body %}
+<p>{{ section.body }}</p>
+{% endif %}
+{% endfor %}
+
+{% if doc.provenance_lines %}
+<div class="dbpl-provenance">
+  {% for line in doc.provenance_lines %}{{ line }}<br>{% endfor %}
+</div>
+{% endif %}
+
+</body>
+</html>
