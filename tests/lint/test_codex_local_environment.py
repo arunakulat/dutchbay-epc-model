@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ENVIRONMENT_FILE = ROOT / ".codex" / "environments" / "environment.toml"
+ENVRC = ROOT / ".envrc"
 SETUP_SCRIPT = ROOT / "setup_venv.sh"
 SESSION_HOOK = ROOT / ".claude" / "hooks" / "session-start.sh"
 SOURCED_SETUP_SCRIPT = ROOT / "scripts" / "venv_up.sh"
@@ -95,6 +96,23 @@ def test_local_setup_reuses_the_shared_contract_without_path_laundering() -> Non
     assert 'export PYTHONPATH="$repo_root${PYTHONPATH:+:$PYTHONPATH}"' in helper
     assert "go_with_the_flow_rules_v3_0_clean.csv" in helper
     assert "setup:\n\t./setup_venv.sh" in makefile
+
+
+def test_envrc_activation_reuses_the_shared_contract_without_provisioning() -> None:
+    """Entering the checkout must not select or build an ungoverned environment."""
+
+    envrc = ENVRC.read_text(encoding="utf-8")
+
+    assert "development_environment.sh" in envrc
+    for helper in (
+        "dutchbay_find_python312",
+        "dutchbay_resolve_venv",
+        "dutchbay_validate_venv",
+        "dutchbay_activate_checkout",
+    ):
+        assert helper in envrc
+    for prohibited in (".venv311", "~/.venvs", "./setup_venv.sh", "pip install"):
+        assert prohibited not in envrc
 
 
 def test_bootstrap_rejects_the_retired_python311_venv_name() -> None:
