@@ -18,15 +18,9 @@ on:
       - constraints.txt
       - app/**
       - .github/workflows/docker-build.yml
-  push:
-    paths:
-      - Dockerfile
-      - .dockerignore
-      - pyproject.toml
-      - requirements.txt
-      - constraints.txt
-      - app/**
-      - .github/workflows/docker-build.yml
+  # `push` removed: the same paths-scoped build already ran on the PR against an
+  # up-to-date branch, so the post-merge rebuild duplicated it. Use workflow_dispatch
+  # to rebuild main on demand.
   workflow_dispatch:
 
 jobs:

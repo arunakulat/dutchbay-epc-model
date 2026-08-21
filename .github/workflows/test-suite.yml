@@ -1,18 +1,23 @@
 name: Test Suite
 
 on:
-  # Post-merge validation on main only; feature/PR branches validate via pull_request. This
-  # removes the push+pull_request double-run that doubled CI cost per PR commit (a feature/*
-  # push AND its PR both fired the full suite). Work reaches main only through PRs (GWTF), so
-  # every change is still gated exactly once before merge, then re-validated on the main push.
-  push:
-    branches: [ main ]
+  # Work reaches main only through PRs (GWTF GOV-01) and the ruleset requires branches to be
+  # up to date before merge, so the tree a PR validates is byte-identical to the tree that
+  # lands. The post-merge `push: main` run therefore re-tested an identical tree — pure
+  # duplication, and this is the most expensive workflow in the repo (~89% of billed
+  # minutes, ~63 per run across a 6-shard matrix). It is dropped here.
+  #
+  # Post-merge health on main is still covered, cheaply: "CI - v14 fastlane" (~2 min) and
+  # "Regression Smoke" (~3 min) both still run on push to main, so a bad merge or a direct
+  # push still raises a signal — at ~5 minutes instead of ~63.
   pull_request:
     branches: [ main, develop ]
   schedule:
-    # Nightly run (03:17 UTC): exercises the 3.12 baseline against main end-to-end
-    # every day — the daily backstop that runs regardless of PR activity.
-    - cron: '17 3 * * *'
+    # Weekly run (Mondays 03:17 UTC): the backstop that runs regardless of PR activity,
+    # catching dependency drift and flakes on an otherwise unchanged tree. Reduced from
+    # nightly — seven full-suite runs a week on an unchanged tree cost ~1,900 billed
+    # minutes a month, which is itself most of a private-repo monthly allowance.
+    - cron: '17 3 * * 1'
   workflow_dispatch:
 
 # Cancel superseded runs for the same PR (a new push aborts the in-flight run instead of
