@@ -633,3 +633,35 @@ def test_grid_pins_degrade_to_the_fallback_without_metadata(
 
     monkeypatch.setattr(ops_extras, "declared_extras", lambda *a, **k: {})
     assert gse._grid_extra_pins() == gse.GRID_EXTRA_PINS_FALLBACK
+
+
+def test_split_requirement_handles_extras_and_garbage() -> None:
+    """The metadata parser's edge cases: an extras group, and an unparseable string."""
+    assert gse._split_requirement("redis[hiredis]<6,>=5") == ("redis", "<6,>=5")
+    assert gse._split_requirement("pandapower<4,>=3.5") == ("pandapower", "<4,>=3.5")
+    assert gse._split_requirement("bare") == ("bare", "")
+    assert gse._split_requirement("!!!") == (None, "")
+
+
+def test_grid_pins_degrade_to_the_fallback_when_metadata_raises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CASPER: provenance lookup must never crash the report."""
+    import app.ops.extras as ops_extras
+
+    def boom(*_a: object, **_k: object) -> dict:
+        raise RuntimeError("metadata store unreadable")
+
+    monkeypatch.setattr(ops_extras, "declared_extras", boom)
+    assert gse._grid_extra_pins() == gse.GRID_EXTRA_PINS_FALLBACK
+
+
+def test_grid_pins_skip_unparseable_requirements(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.ops.extras as ops_extras
+
+    monkeypatch.setattr(
+        ops_extras, "declared_extras", lambda *a, **k: {"grid": ("!!!", "andes>=2.0")}
+    )
+    assert gse._grid_extra_pins() == (("andes", ">=2.0"),)

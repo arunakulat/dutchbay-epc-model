@@ -228,3 +228,92 @@ def test_consequence_renders_only_when_present() -> None:
     assert "Stated tender consequence" not in without
     with_it = render_dossier_markdown(_dossier(gaps=[_gap(consequence="Rejection.")]))
     assert "Stated tender consequence" in with_it
+
+
+# ── Markdown renderer: the optional blocks ───────────────────────────────────
+
+
+def _rich_dossier():
+    """A dossier exercising every optional Markdown block."""
+    return _dossier(
+        gaps=[
+            _gap("A1", "CRITICAL", tier="critical path"),
+            _gap("A2", "HIGH", verified=False, title="Unconfirmed finding"),
+            _gap("A3", "LOW", consequence="Technical rejection."),
+        ],
+        evidence=[
+            EvidenceLine(
+                "Model", "Received", "Wrong variant", adequate=False, note="see A2"
+            ),
+            EvidenceLine("Letter", "Received", "Signed", adequate=True),
+            EvidenceLine("Plan", "not listed", "Absent", adequate=None),
+        ],
+        sources=[
+            SourceDocument(
+                "Vol I", "Controlling", "a" * 64, "markitdown", "3 Jul 2026"
+            ),
+            SourceDocument("Scan", "OEM evidence", None, "ocr", None, "handwritten"),
+        ],
+        sections={
+            "How to use": "Send it as it stands.",
+            "Obtain from NSO": "Annex A and D.",
+        },
+        submission_deadline="2 September 2026",
+        working_days_remaining=9,
+    )
+
+
+def test_markdown_renders_the_critical_path_block() -> None:
+    out = render_dossier_markdown(_rich_dossier())
+    assert "## Critical path — raise these first" in out
+    assert "nothing downstream can start" in out
+    assert "**A1**" in out
+
+
+def test_markdown_renders_free_text_sections_in_order() -> None:
+    out = render_dossier_markdown(_rich_dossier())
+    assert "## How to use" in out and "Send it as it stands." in out
+    assert out.index("## How to use") < out.index("## Obtain from NSO")
+
+
+def test_markdown_renders_the_unverified_block() -> None:
+    out = render_dossier_markdown(_rich_dossier())
+    assert "## Unverified findings" in out
+    assert "treated as a question, not a finding of fact" in out
+    assert "**A2**" in out
+
+
+def test_markdown_flags_unverified_gaps_inline_too() -> None:
+    assert "UNVERIFIED" in render_dossier_markdown(_rich_dossier())
+
+
+def test_markdown_renders_the_evidence_inventory_with_all_three_states() -> None:
+    out = render_dossier_markdown(_rich_dossier())
+    assert "## Evidence inventory — declared against received" in out
+    for state in ("NOT adequate", "adequate", "not assessed"):
+        assert state in out
+
+
+def test_markdown_renders_source_provenance_including_an_unhashed_source() -> None:
+    out = render_dossier_markdown(_rich_dossier())
+    assert "## Source provenance" in out
+    assert "markitdown" in out and "ocr" in out
+    assert "not hashed" in out, "a source with no hash must say so"
+    assert "not stated" in out, "a source with no date must say so"
+
+
+def test_markdown_renders_the_deadline_and_consequence() -> None:
+    out = render_dossier_markdown(_rich_dossier())
+    assert "2 September 2026" in out and "9 working days remaining" in out
+    assert "Technical rejection." in out
+
+
+def test_html_renders_the_same_optional_blocks() -> None:
+    out = render_dossier_html(_rich_dossier())
+    for probe in (
+        "Critical path",
+        "How to use",
+        "Unverified findings",
+        "Evidence inventory",
+    ):
+        assert probe in out

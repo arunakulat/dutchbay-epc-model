@@ -208,3 +208,31 @@ def test_requirement_parsing(requirement: str, name: str, spec: str) -> None:
 
 def test_requirement_name_of_garbage_is_none() -> None:
     assert ops_extras._requirement_name("!!!") is None
+
+
+def test_genuinely_absent_package_is_reported_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ordinary 'extra not installed' path — PackageNotFoundError, not an error state.
+
+    Every package the project declares happens to be installed in the development venv, so this
+    path is only reachable by declaring one that is not.
+    """
+    monkeypatch.setattr(
+        ops_extras,
+        "declared_extras",
+        lambda *a, **k: {"e": ("definitely-not-installed-xyz>=1.0", "pytest>=7.0")},
+    )
+    status = probe_extra("e")
+    by_name = {p.distribution: p for p in status.packages}
+
+    absent = by_name["definitely-not-installed-xyz"]
+    assert absent.installed is False
+    assert absent.installed_version is None
+    assert absent.satisfies_spec is None, "an absent package has no version to check"
+    assert absent.healthy is False
+
+    assert by_name["pytest"].installed is True
+    assert status.available is False
+    assert status.missing == ("definitely-not-installed-xyz",)
+    assert status.broken == (), "absent is missing, not broken"
