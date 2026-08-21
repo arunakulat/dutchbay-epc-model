@@ -1,0 +1,175 @@
+/* DutchBay Presentation Layer — house stylesheet.
+ *
+ * The :root token block is PREPENDED at render time from app.reports.dbpl.style, so the values
+ * below reference variables rather than literals. Editing a colour here instead of in style.py
+ * forks the house style; edit the tokens.
+ *
+ * Measured from DBAY-SLTS-2026-08-18 (A4, 29pp). Structure mirrors that document exactly:
+ * a running header banner, a heavy-ruled title, caveat bands, banded tables, and a running
+ * footer carrying document ID, version, date and "Page n of m".
+ */
+
+@page {
+  size: var(--dbpl-page-size);
+  margin: var(--dbpl-page-margin-top) var(--dbpl-page-margin-right)
+          var(--dbpl-page-margin-bottom) var(--dbpl-page-margin-left);
+
+  /* Running header banner — provenance on EVERY page, not just the cover. */
+  @top-left {
+    content: string(dbpl-banner);
+    font-family: var(--dbpl-font-sans);
+    font-size: var(--dbpl-size-banner);
+    letter-spacing: 0.04em;
+    color: var(--dbpl-warn-text);
+    border-bottom: var(--dbpl-rule-banner) solid var(--dbpl-warn-rule);
+    width: 100%;
+    padding-bottom: 3pt;
+    margin-bottom: 6pt;
+  }
+
+  /* Running footer — document identity left, page position right. */
+  @bottom-left {
+    content: string(dbpl-docline);
+    font-family: var(--dbpl-font-sans);
+    font-size: var(--dbpl-size-footer);
+    color: var(--dbpl-meta);
+    border-top: var(--dbpl-rule-footer) solid var(--dbpl-rulecolour-footer);
+    width: 100%;
+    padding-top: 4pt;
+  }
+  @bottom-right {
+    /* nowrap + explicit width: the default margin box is narrow enough that
+       "Page 1 of 29" wraps onto three lines. */
+    content: "Page " counter(page) " of " counter(pages);
+    font-family: var(--dbpl-font-sans);
+    font-size: var(--dbpl-size-footer);
+    color: var(--dbpl-meta);
+    padding-top: 4pt;
+    white-space: nowrap;
+    width: 30mm;
+    text-align: right;
+  }
+}
+
+body {
+  font-family: var(--dbpl-font-serif);
+  font-size: var(--dbpl-size-body);
+  color: var(--dbpl-body);
+  background: var(--dbpl-paper);
+  line-height: 1.45;
+}
+
+/* The banner and doc-line are carried into the running header/footer as page strings. */
+.dbpl-banner { string-set: dbpl-banner content(); }
+.dbpl-docline { string-set: dbpl-docline content(); }
+.dbpl-banner, .dbpl-docline { position: absolute; left: -9999pt; height: 0; }
+
+h1.dbpl-title {
+  font-family: var(--dbpl-font-serif);
+  font-size: var(--dbpl-size-title);
+  font-weight: 700;
+  color: var(--dbpl-ink);
+  margin: 0 0 6pt 0;
+  line-height: 1.18;
+  border-bottom: var(--dbpl-rule-title) solid var(--dbpl-rulecolour-title);
+  padding-bottom: 10pt;
+}
+
+h2.dbpl-section {
+  font-family: var(--dbpl-font-serif);
+  font-size: var(--dbpl-size-section);
+  font-weight: 700;
+  color: var(--dbpl-ink);
+  margin: 22pt 0 6pt 0;
+  padding-bottom: 4pt;
+  border-bottom: var(--dbpl-rule-section) solid var(--dbpl-rulecolour-section);
+  break-after: avoid;
+}
+
+h3.dbpl-subsection {
+  font-family: var(--dbpl-font-serif);
+  font-size: var(--dbpl-size-subsection);
+  font-weight: 700;
+  color: var(--dbpl-ink);
+  margin: 14pt 0 4pt 0;
+  break-after: avoid;
+}
+
+/* Caveat band — pale ground, heavy left bar, bold ink text. The single most important
+ * component in the house style: it is what stops analyst-generated material being mistaken
+ * for evidence, so it is styled to be impossible to skim past. */
+.dbpl-caveat {
+  background: var(--dbpl-warn-bg);
+  border-left: 4pt solid var(--dbpl-warn-bar);
+  color: var(--dbpl-ink);
+  font-family: var(--dbpl-font-serif);
+  font-size: var(--dbpl-size-caveat);
+  font-weight: 700;
+  padding: 7pt 10pt;
+  margin: 10pt 0 12pt 0;
+  break-inside: avoid;
+}
+
+.dbpl-disclaimer {
+  margin: 10pt 0 14pt 0;
+  text-align: justify;
+}
+
+hr.dbpl-sep {
+  border: 0;
+  border-top: var(--dbpl-rule-body) solid var(--dbpl-rulecolour-body);
+  margin: 16pt 0;
+}
+
+/* Tables — solid header band, no vertical rules, generous row padding. */
+table.dbpl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--dbpl-size-table);
+  margin: 8pt 0 14pt 0;
+}
+table.dbpl thead th {
+  background: var(--dbpl-band);
+  color: #FFFFFF;
+  font-family: var(--dbpl-font-sans);
+  font-weight: 700;
+  text-align: left;
+  padding: 5pt 8pt;
+  vertical-align: bottom;
+}
+table.dbpl tbody td {
+  padding: 7pt 8pt;
+  vertical-align: top;
+  border-bottom: 0.4pt solid #E2E6E9;
+}
+table.dbpl tbody tr:last-child td { border-bottom: 0; }
+table.dbpl thead { display: table-header-group; }  /* repeat the band across page breaks */
+table.dbpl tr { break-inside: avoid; }
+
+/* Controlled values — identifiers, paths and digests must be visibly not-prose. */
+.dbpl-id, .dbpl-path, .dbpl-hash {
+  color: var(--dbpl-accent-id);
+}
+.dbpl-path, .dbpl-hash {
+  font-family: var(--dbpl-font-mono);
+  font-size: 8.5pt;
+  word-break: break-all;
+}
+
+.dbpl-meta { color: var(--dbpl-meta); font-size: var(--dbpl-size-footer); }
+
+ol.dbpl, ul.dbpl { margin: 6pt 0 10pt 0; padding-left: 16pt; }
+ol.dbpl li, ul.dbpl li { margin-bottom: 3pt; }
+
+/* Provenance block — the print core's own record, rendered in the same register as the
+ * grid-screening report's provenance box so the two surfaces read as one system. */
+.dbpl-provenance {
+  border-left: 3pt solid var(--dbpl-band);
+  background: #F4F8FA;
+  font-family: var(--dbpl-font-sans);
+  font-size: 8pt;
+  color: #2C3E4C;
+  padding: 7pt 10pt;
+  margin: 14pt 0 0 0;
+  break-inside: avoid;
+}

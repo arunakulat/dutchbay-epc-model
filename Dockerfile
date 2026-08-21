@@ -86,6 +86,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH="/app"
 
 # WeasyPrint ([report] extra) runtime shared libraries only — the exact bookworm set,
+# plus the DBPL house fonts. fonts-liberation carries the families the DutchBay
+# Presentation Layer asks for (GWTF DBPL-01); without it WeasyPrint still renders but
+# silently substitutes, and fonts-dejavu-core alone leaves the house style unmatched.
 # no -dev headers, no build toolchain. curl is added solely for the container
 # HEALTHCHECK below. --no-install-recommends keeps the layer minimal.
 RUN apt-get update \
@@ -99,6 +102,7 @@ RUN apt-get update \
         libffi8 \
         shared-mime-info \
         fonts-dejavu-core \
+        fonts-liberation \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
