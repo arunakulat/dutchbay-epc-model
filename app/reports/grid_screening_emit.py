@@ -184,7 +184,9 @@ def _grid_extra_pins() -> tuple[tuple[str, str], ...]:
                 pins.append((name, spec))
         if pins:
             return tuple(pins)
-    except Exception:  # noqa: BLE001 - CASPER: provenance degrades, it never crashes the report
+    except (
+        Exception
+    ):  # noqa: BLE001 - CASPER: provenance degrades, it never crashes the report
         pass
     return GRID_EXTRA_PINS_FALLBACK
 
@@ -435,7 +437,9 @@ def _try_curtailment(
         # a report as an innocent "not run" note, so #1072 requires a fail-closed refusal.
         raise
     except Exception as exc:  # noqa: BLE001 - CASPER: degrade, don't crash the report
-        degraded["curtailment"] = f"QSTS curtailment split not run: {type(exc).__name__}: {exc}"
+        degraded["curtailment"] = (
+            f"QSTS curtailment split not run: {type(exc).__name__}: {exc}"
+        )
         return None
 
 
@@ -491,7 +495,9 @@ def build_grid_screening_model(
         )
 
     # Core screens (mandatory) via the gateway — closed-form fallback if pandapower absent.
-    study = evaluate_grid(scenario_config, use_pandapower=use_pandapower, run_reactive=True)
+    study = evaluate_grid(
+        scenario_config, use_pandapower=use_pandapower, run_reactive=True
+    )
 
     degraded: dict[str, str] = {}
     scr = float(study.strength.scr)
@@ -499,7 +505,8 @@ def build_grid_screening_model(
     poc_voltage_kv = grid.get("poc_voltage_kv")
     poc_voltage_kv_f = (
         float(poc_voltage_kv)
-        if isinstance(poc_voltage_kv, (int, float)) and not isinstance(poc_voltage_kv, bool)
+        if isinstance(poc_voltage_kv, (int, float))
+        and not isinstance(poc_voltage_kv, bool)
         else None
     )
 
@@ -553,7 +560,9 @@ def _fmt(value: Any, *, digits: int = 2, dash: str = "—") -> str:
     return str(value)
 
 
-def _verdict(value: Optional[bool], *, ok: str = "within limits", bad: str = "BREACH") -> str:
+def _verdict(
+    value: Optional[bool], *, ok: str = "within limits", bad: str = "BREACH"
+) -> str:
     """Render a tri-state screening verdict: True→ok, False→bad, None→not run (honest)."""
     if value is None:
         return "not run"
@@ -591,7 +600,9 @@ _FORBIDDEN_SYNTHETIC_OUTPUT_TOKENS = frozenset(
 )
 
 
-def _segregated_qsts_output_path(requested_path: Path, model: GridScreeningModel) -> Path:
+def _segregated_qsts_output_path(
+    requested_path: Path, model: GridScreeningModel
+) -> Path:
     """Route generated QSTS artifacts into the sole synthetic provenance namespace."""
 
     curtailment = model.curtailment

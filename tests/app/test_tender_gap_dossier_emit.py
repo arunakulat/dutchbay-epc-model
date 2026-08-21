@@ -71,7 +71,10 @@ def test_empty_register_raises_rather_than_emitting_a_clean_bill() -> None:
 def test_duplicate_gap_id_raises() -> None:
     with pytest.raises(DossierRegisterError, match="duplicate"):
         build_dossier(
-            tender_ref="T", tender_title="T", oem_label="O", gaps=[_gap("A1"), _gap("A1")]
+            tender_ref="T",
+            tender_title="T",
+            oem_label="O",
+            gaps=[_gap("A1"), _gap("A1")],
         )
 
 
@@ -107,7 +110,9 @@ def test_gaps_sort_most_severe_first_then_by_id() -> None:
 
 
 def test_severity_counts_omit_empty_severities_and_keep_order() -> None:
-    model = _dossier(gaps=[_gap("A1", "CRITICAL"), _gap("A2", "LOW"), _gap("A3", "CRITICAL")])
+    model = _dossier(
+        gaps=[_gap("A1", "CRITICAL"), _gap("A2", "LOW"), _gap("A3", "CRITICAL")]
+    )
     assert model.severity_counts == (("CRITICAL", 2), ("LOW", 1))
 
 
@@ -192,7 +197,9 @@ def test_markdown_escapes_pipes_in_table_cells() -> None:
 
 
 def test_source_provenance_surfaces_extraction_route_and_hash() -> None:
-    model = _dossier(sources=[SourceDocument("Doc", "Controlling", "a" * 64, "ocr", "1 Jan 2026")])
+    model = _dossier(
+        sources=[SourceDocument("Doc", "Controlling", "a" * 64, "ocr", "1 Jan 2026")]
+    )
     out = render_dossier_markdown(model)
     assert "ocr" in out
     assert "aaaaaaaaaaaa" in out, "short hash must be surfaced"

@@ -245,7 +245,9 @@ def test_executed_synthetic_curtailment_is_presented_with_structural_warning(
         export_cap_mw=100.0,
         gross_energy_mwh=1_000.0,
         self_curtailed_energy_mwh=80.0,
-        limitations=("Generated for software testing; replace with CEB/engineer data.",),
+        limitations=(
+            "Generated for software testing; replace with CEB/engineer data.",
+        ),
     )
     monkeypatch.setattr(cq, "run_qsts_curtailment", lambda _cfg: synthetic)
 
@@ -367,7 +369,9 @@ def test_degraded_engine_state_when_grid_extra_absent(
 
 def test_emit_writes_standalone_report(tmp_path: Path) -> None:
     scenario = _write_scenario(tmp_path, _scenario())
-    result = {"kpis": {"project_irr": 0.0145}}  # accepted for parity, NOT consumed for grid data
+    result = {
+        "kpis": {"project_irr": 0.0145}
+    }  # accepted for parity, NOT consumed for grid data
     out_html = tmp_path / "grid_screening_report.html"
     written = emit_grid_screening_report_from_pipeline(
         result, scenario, out_html, generated_at="2020-01-01T00:00:00"
@@ -434,7 +438,9 @@ def test_emit_refuses_synthetic_output_with_lender_token(
     scenario = _write_scenario(tmp_path, _scenario())
 
     with pytest.raises(ValueError, match="prohibited.*lender"):
-        emit_grid_screening_report_from_pipeline({}, scenario, tmp_path / "lender_report.html")
+        emit_grid_screening_report_from_pipeline(
+            {}, scenario, tmp_path / "lender_report.html"
+        )
 
 
 def test_evidence_control_failure_is_not_casper_degraded(
@@ -520,7 +526,9 @@ def test_ride_through_success_path_sorts_cases(
         return {
             "lvrt": RideThroughResult.from_case(case="lvrt", ran=True, converged=True),
             "hvrt": RideThroughResult.from_case(case="hvrt", ran=True, converged=True),
-            "frequency": RideThroughResult.from_case(case="frequency", ran=True, converged=True),
+            "frequency": RideThroughResult.from_case(
+                case="frequency", ran=True, converged=True
+            ),
         }
 
     import analytics.grid.ride_through as rt_mod
@@ -580,7 +588,9 @@ def test_grid_extra_pins_are_read_from_distribution_metadata() -> None:
     from app.ops.extras import declared_extras
 
     declared = declared_extras().get("grid")
-    if not declared:  # bare source checkout — the fallback path is exercised below instead
+    if (
+        not declared
+    ):  # bare source checkout — the fallback path is exercised below instead
         pytest.skip("project not installed as distribution metadata")
     surfaced = {dist for dist, _ in gse.GRID_EXTRA_PINS}
     assert surfaced == {gse._split_requirement(r)[0] for r in declared}
@@ -603,7 +613,9 @@ def test_grid_extra_pins_fallback_matches_declared_metadata() -> None:
         return {c.strip() for c in spec.split(",") if c.strip()}
 
     from_metadata = {
-        name: clauses(spec) for name, spec in (gse._split_requirement(r) for r in declared) if name
+        name: clauses(spec)
+        for name, spec in (gse._split_requirement(r) for r in declared)
+        if name
     }
     for name, spec in gse.GRID_EXTRA_PINS_FALLBACK:
         assert name in from_metadata, f"fallback lists {name}, pyproject does not"

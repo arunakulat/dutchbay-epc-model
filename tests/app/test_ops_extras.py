@@ -40,7 +40,9 @@ def test_declared_extras_degrades_to_empty_for_an_unknown_distribution() -> None
 def test_deployed_extras_are_all_declared_by_the_project() -> None:
     declared = declared_extras()
     for extra in DEPLOYED_EXTRAS:
-        assert extra in declared, f"Dockerfile installs [{extra}] but pyproject does not declare it"
+        assert (
+            extra in declared
+        ), f"Dockerfile installs [{extra}] but pyproject does not declare it"
 
 
 # ── Probing ──────────────────────────────────────────────────────────────────
@@ -70,7 +72,9 @@ def test_probe_extras_degrades_unknown_names_instead_of_raising() -> None:
 def test_deep_probe_records_importability_separately_from_installation() -> None:
     shallow = probe_extra("report", deep=False)
     deep = probe_extra("report", deep=True)
-    assert all(p.importable is None for p in shallow.packages), "shallow must not import"
+    assert all(
+        p.importable is None for p in shallow.packages
+    ), "shallow must not import"
     assert deep.deep is True
     assert all(p.importable is not None for p in deep.packages if p.installed)
 
@@ -108,7 +112,10 @@ def test_absent_package_is_missing_not_broken() -> None:
 
 def test_unevaluated_spec_does_not_make_a_package_unhealthy() -> None:
     # satisfies_spec is None when `packaging` is unavailable; that is unknown, not a failure.
-    assert _pkg(installed=True, installed_version="1.0", satisfies_spec=None).healthy is True
+    assert (
+        _pkg(installed=True, installed_version="1.0", satisfies_spec=None).healthy
+        is True
+    )
 
 
 def test_empty_extra_is_not_available() -> None:
@@ -130,12 +137,18 @@ def test_as_dict_is_json_safe_and_keeps_the_two_states_distinct() -> None:
 # ── CASPER: runtime state never raises ───────────────────────────────────────
 
 
-def test_malformed_requirement_is_skipped_not_raised(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ops_extras, "declared_extras", lambda *a, **k: {"e": ("!!!bad!!!",)})
+def test_malformed_requirement_is_skipped_not_raised(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        ops_extras, "declared_extras", lambda *a, **k: {"e": ("!!!bad!!!",)}
+    )
     assert probe_extra("e").packages == ()
 
 
-def test_metadata_lookup_failure_degrades_to_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_metadata_lookup_failure_degrades_to_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def boom(_name: str) -> str:
         raise RuntimeError("corrupt dist-info")
 
@@ -157,7 +170,9 @@ def test_import_failure_is_captured_not_raised(monkeypatch: pytest.MonkeyPatch) 
     assert status.available is False
 
 
-def test_missing_packaging_degrades_spec_check_to_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_missing_packaging_degrades_spec_check_to_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     real_import = ops_extras.importlib.import_module
 
     def no_packaging(name: str, *a: object, **k: object) -> object:

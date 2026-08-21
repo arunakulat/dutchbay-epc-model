@@ -92,7 +92,9 @@ def _run(*argv: str) -> int:
 # ── Exit codes ───────────────────────────────────────────────────────────────
 
 
-def test_healthy_deployment_exits_zero(stub, capsys: pytest.CaptureFixture[str]) -> None:
+def test_healthy_deployment_exits_zero(
+    stub, capsys: pytest.CaptureFixture[str]
+) -> None:
     stub()
     assert _run("https://example.test") == verify.OK
     assert "All checks passed" in capsys.readouterr().out
@@ -130,13 +132,16 @@ def test_help_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
 # ── The failures this exists to catch ────────────────────────────────────────
 
 
-def test_broken_native_dependency_fails_the_gate(stub, capsys: pytest.CaptureFixture[str]) -> None:
+def test_broken_native_dependency_fails_the_gate(
+    stub, capsys: pytest.CaptureFixture[str]
+) -> None:
     """WeasyPrint installed but pango/cairo missing — must not pass."""
     body = _readiness()
     report = body["extras"]["report"]
     report.update(available=False, deep_probed=True, broken=["weasyprint"])
     report["packages"][0].update(
-        importable=False, import_error="OSError: cannot load library 'libpango-1.0.so.0'"
+        importable=False,
+        import_error="OSError: cannot load library 'libpango-1.0.so.0'",
     )
     stub(readiness=body)
     assert _run("https://example.test", "--deep") == verify.FAILED
@@ -144,7 +149,9 @@ def test_broken_native_dependency_fails_the_gate(stub, capsys: pytest.CaptureFix
     assert "libpango" in out
 
 
-def test_missing_package_fails_the_gate(stub, capsys: pytest.CaptureFixture[str]) -> None:
+def test_missing_package_fails_the_gate(
+    stub, capsys: pytest.CaptureFixture[str]
+) -> None:
     body = _readiness()
     body["extras"]["report"].update(available=False, missing=["contextily"])
     stub(readiness=body)
@@ -178,7 +185,9 @@ def test_instance_predating_the_diagnostic_fails_loudly(
     assert "predates" in capsys.readouterr().out
 
 
-def test_deep_requested_but_not_performed_fails(stub, capsys: pytest.CaptureFixture[str]) -> None:
+def test_deep_requested_but_not_performed_fails(
+    stub, capsys: pytest.CaptureFixture[str]
+) -> None:
     stub()  # deep_probed is False in the canned body
     assert _run("https://example.test", "--deep") == verify.FAILED
     assert "did not perform" in capsys.readouterr().out
@@ -193,7 +202,9 @@ def test_expected_extra_absent_fails(stub, capsys: pytest.CaptureFixture[str]) -
 # ── Output modes ─────────────────────────────────────────────────────────────
 
 
-def test_json_mode_emits_parseable_output(stub, capsys: pytest.CaptureFixture[str]) -> None:
+def test_json_mode_emits_parseable_output(
+    stub, capsys: pytest.CaptureFixture[str]
+) -> None:
     stub()
     assert _run("https://example.test", "--json") == verify.OK
     payload = json.loads(capsys.readouterr().out)
@@ -201,7 +212,9 @@ def test_json_mode_emits_parseable_output(stub, capsys: pytest.CaptureFixture[st
     assert any(row["check"] == "liveness" for row in payload["checks"])
 
 
-def test_json_mode_reports_unreachable_as_json(stub, capsys: pytest.CaptureFixture[str]) -> None:
+def test_json_mode_reports_unreachable_as_json(
+    stub, capsys: pytest.CaptureFixture[str]
+) -> None:
     stub(health=RuntimeError("refused"))
     assert _run("https://example.test", "--json") == verify.UNREACHABLE
     assert json.loads(capsys.readouterr().out)["ok"] is False
@@ -220,7 +233,9 @@ def test_bare_hostname_gets_https(stub, monkeypatch: pytest.MonkeyPatch) -> None
     assert all(u.startswith("https://") for u in seen)
 
 
-def test_all_checks_run_even_after_one_fails(stub, capsys: pytest.CaptureFixture[str]) -> None:
+def test_all_checks_run_even_after_one_fails(
+    stub, capsys: pytest.CaptureFixture[str]
+) -> None:
     """The exit code must reflect everything, so a later check is not skipped by an earlier one."""
     stub(readiness=_readiness(checks={"cdsapi_url": False, "cdsapi_key": False}))
     assert _run("https://example.test") == verify.FAILED

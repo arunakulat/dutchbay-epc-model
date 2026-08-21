@@ -62,7 +62,9 @@ class Reporter:
         self.rows: list[dict[str, Any]] = []
         self.failed = False
 
-    def record(self, check: str, ok: bool, detail: str, *, warn_only: bool = False) -> None:
+    def record(
+        self, check: str, ok: bool, detail: str, *, warn_only: bool = False
+    ) -> None:
         status = _TICK if ok else (_WARN if warn_only else _CROSS)
         if not ok and not warn_only:
             self.failed = True
@@ -95,7 +97,9 @@ def fetch(url: str, timeout: float) -> Any:
     try:
         return json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise RuntimeError(f"{url} did not return JSON (first 120 chars: {raw[:120]!r})") from exc
+        raise RuntimeError(
+            f"{url} did not return JSON (first 120 chars: {raw[:120]!r})"
+        ) from exc
 
 
 def expected_contract_version() -> Optional[str]:
@@ -113,13 +117,17 @@ def expected_contract_version() -> Optional[str]:
         from app.api.responses import API_CONTRACT_VERSION
 
         return str(API_CONTRACT_VERSION)
-    except Exception:  # noqa: BLE001 - running detached from the source tree is legitimate
+    except (
+        Exception
+    ):  # noqa: BLE001 - running detached from the source tree is legitimate
         return None
 
 
 def check_liveness(base: str, rep: Reporter, timeout: float) -> None:
     body = fetch(f"{base}/health", timeout)
-    rep.record("liveness", body.get("status") == "ok", f"/health -> {body.get('status')!r}")
+    rep.record(
+        "liveness", body.get("status") == "ok", f"/health -> {body.get('status')!r}"
+    )
     served = body.get("contract_version")
     expected = expected_contract_version()
     if expected is None:

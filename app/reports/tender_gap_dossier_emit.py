@@ -294,9 +294,9 @@ def _register_digest(gaps: Sequence[GapItem]) -> str:
     hasher = hashlib.sha256()
     for gap in sorted(gaps, key=lambda g: g.gap_id):
         hasher.update(
-            "\x1f".join((gap.gap_id, gap.severity, gap.clause, gap.title, gap.closure_test)).encode(
-                "utf-8"
-            )
+            "\x1f".join(
+                (gap.gap_id, gap.severity, gap.clause, gap.title, gap.closure_test)
+            ).encode("utf-8")
         )
         hasher.update(b"\x1e")
     return hasher.hexdigest()
@@ -431,7 +431,9 @@ def render_dossier_markdown(model: TenderGapDossier) -> str:
     if model.critical_path:
         add("## Critical path — raise these first")
         add("")
-        add("These gate other work: nothing downstream can start until they are answered.")
+        add(
+            "These gate other work: nothing downstream can start until they are answered."
+        )
         add("")
         for gap in model.critical_path:
             add(f"- **{gap.gap_id}** — {gap.title}")

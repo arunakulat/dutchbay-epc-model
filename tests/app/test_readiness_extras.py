@@ -18,7 +18,9 @@ client = TestClient(app)
 def _body(deep: bool = False) -> dict:
     url = "/health/readiness" + ("?deep=true" if deep else "")
     resp = client.get(url)
-    assert resp.status_code == 200, "the diagnostic always returns 200, it is not a gate"
+    assert (
+        resp.status_code == 200
+    ), "the diagnostic always returns 200, it is not a gate"
     return resp.json()
 
 
@@ -61,12 +63,16 @@ def test_report_extra_is_reported_with_its_declared_packages() -> None:
 def test_declared_spec_is_surfaced_so_a_pin_can_be_audited() -> None:
     report = _body()["extras"]["report"]
     weasy = next(p for p in report["packages"] if p["distribution"] == "weasyprint")
-    assert weasy["declared_spec"], "the pin must be visible, not just the installed version"
+    assert weasy[
+        "declared_spec"
+    ], "the pin must be visible, not just the installed version"
 
 
 def test_extras_available_is_the_and_of_every_extra() -> None:
     body = _body()
-    assert body["extras_available"] == all(e["available"] for e in body["extras"].values())
+    assert body["extras_available"] == all(
+        e["available"] for e in body["extras"].values()
+    )
 
 
 def test_runtime_identity_is_reported() -> None:
@@ -91,7 +97,9 @@ def test_deep_probe_reports_importability() -> None:
             assert pkg["importable"] is not None
 
 
-def test_deep_probe_catches_a_broken_native_dependency(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_deep_probe_catches_a_broken_native_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The case this exists for: WeasyPrint installed, pango/cairo missing from the image."""
     from app.ops import extras as ops_extras
 
@@ -112,7 +120,9 @@ def test_deep_probe_catches_a_broken_native_dependency(monkeypatch: pytest.Monke
 # ── CASPER: the route survives a probe failure ───────────────────────────────
 
 
-def test_route_stays_up_when_the_probe_itself_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_route_stays_up_when_the_probe_itself_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import app.api.main as main
 
     def boom(**_kw: object) -> tuple:
@@ -120,7 +130,9 @@ def test_route_stays_up_when_the_probe_itself_fails(monkeypatch: pytest.MonkeyPa
 
     monkeypatch.setattr(main, "probe_extras", boom)
     resp = client.get("/health/readiness")
-    assert resp.status_code == 200, "readiness must not 500 when only the extras probe fails"
+    assert (
+        resp.status_code == 200
+    ), "readiness must not 500 when only the extras probe fails"
     body = resp.json()
     # The pre-existing contract still answers.
     assert body["ready"] == all(body["checks"].values())

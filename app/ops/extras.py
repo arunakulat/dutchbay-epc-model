@@ -215,7 +215,9 @@ def declared_extras(
         marker = _EXTRA_MARKER_RE.search(requirement)
         if marker is None:
             continue
-        grouped.setdefault(marker.group(1), []).append(requirement.split(";", 1)[0].strip())
+        grouped.setdefault(marker.group(1), []).append(
+            requirement.split(";", 1)[0].strip()
+        )
     return {extra: tuple(reqs) for extra, reqs in grouped.items()}
 
 
@@ -248,7 +250,9 @@ def _probe_package(requirement: str, *, deep: bool) -> Optional[PackageStatus]:
         version = importlib_metadata.version(name)
     except importlib_metadata.PackageNotFoundError:
         version = None
-    except Exception:  # noqa: BLE001 - CASPER: a malformed dist must not crash the probe
+    except (
+        Exception
+    ):  # noqa: BLE001 - CASPER: a malformed dist must not crash the probe
         version = None
 
     installed = version is not None
@@ -259,7 +263,9 @@ def _probe_package(requirement: str, *, deep: bool) -> Optional[PackageStatus]:
         try:
             importlib.import_module(module)
             importable = True
-        except Exception as exc:  # noqa: BLE001 - the whole point is to catch native-lib failures
+        except (
+            Exception
+        ) as exc:  # noqa: BLE001 - the whole point is to catch native-lib failures
             importable = False
             import_error = f"{type(exc).__name__}: {exc}"[:200]
 

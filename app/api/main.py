@@ -121,7 +121,9 @@ app.include_router(
     tags=["pipeline"],
     dependencies=[Depends(get_current_subject)],
 )
-app.include_router(jobs_router, prefix=API_V1_PREFIX)  # async live-ERA5 job path (Sprint 2 PR E)
+app.include_router(
+    jobs_router, prefix=API_V1_PREFIX
+)  # async live-ERA5 job path (Sprint 2 PR E)
 app.include_router(
     pipeline_router,
     prefix=f"{API_V1_PREFIX}/sensitivity",
@@ -193,15 +195,22 @@ def readiness(deep: bool = False) -> dict[str, Any]:
     Extras are reported as diagnosis, not folded into the gate, so this addition cannot change
     the behaviour of any existing caller.
     """
-    checks = {key.lower(): bool(os.environ.get(key, "").strip()) for key in _READINESS_ENV_KEYS}
+    checks = {
+        key.lower(): bool(os.environ.get(key, "").strip())
+        for key in _READINESS_ENV_KEYS
+    }
     # CASPER at the CALL SITE too, not only inside the probe. The probe guards each package
     # individually, but a catastrophic failure (an unreadable metadata store, or a defect here)
     # must still not take down an infra route whose whole job is to be reachable when things are
     # wrong. A probe failure degrades to an explicit error record, never a 5xx.
     try:
-        extras: dict[str, Any] = {st.extra: st.as_dict() for st in probe_extras(deep=deep)}
+        extras: dict[str, Any] = {
+            st.extra: st.as_dict() for st in probe_extras(deep=deep)
+        }
         extras_error: Optional[str] = None
-    except Exception as exc:  # noqa: BLE001 - a diagnostic must never be the thing that breaks
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 - a diagnostic must never be the thing that breaks
         extras, extras_error = {}, f"{type(exc).__name__}: {exc}"[:200]
     return {
         "status": "ok",
@@ -211,7 +220,8 @@ def readiness(deep: bool = False) -> dict[str, Any]:
         "extras": extras,
         # Unknown is not the same as healthy: a failed probe reports False, not a vacuous True
         # from an empty mapping.
-        "extras_available": bool(extras) and all(st["available"] for st in extras.values()),
+        "extras_available": bool(extras)
+        and all(st["available"] for st in extras.values()),
         "extras_error": extras_error,
         "runtime": {
             "python": platform.python_version(),
@@ -364,7 +374,9 @@ def run_case(inputs: WindFarmInputs) -> CaseResult:
         # but NOT ConfigValidationError): a wizard capacity/CF edit beyond the AEP
         # reconciliation tolerance must surface as a graceful 400, not an uncaught 500.
         raise HTTPException(status_code=400, detail=f"Invalid scenario: {exc}") from exc
-    return CaseResult.from_pipeline_result(result, scenario_variant=inputs.scenario_variant)
+    return CaseResult.from_pipeline_result(
+        result, scenario_variant=inputs.scenario_variant
+    )
 
 
 def _build_report_context(inputs: WindFarmInputs) -> ReportContext:
@@ -438,7 +450,9 @@ def run_case_workbook(inputs: WindFarmInputs) -> Response:
     filename = f"dutchbay_{safe_variant}_workbook.xlsx"
     return Response(
         content=xlsx_bytes,
-        media_type=("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
