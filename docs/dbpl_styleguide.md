@@ -1,5 +1,11 @@
 # DutchBay Presentation Layer (DBPL) — style guide and print contract
 
+> **v2.** The stylesheet is [`app/reports/dbpl/templates/dbpl.css`](../app/reports/dbpl/templates/dbpl.css);
+> its design tokens are generated from [`app/reports/dbpl/style.py`](../app/reports/dbpl/style.py)
+> and prepended at render time. **The `.css` must never contain a literal colour, size or margin** —
+> a surface that hard-codes its own values has forked the house style, and a test enforces zero
+> literals in the house rules.
+
 **DBPL / dbpl** names a **print contract**, not a look. When work is described as a *DutchBay
 Presentation Layer PDF*, three things are required, and they are enforced in code rather than left
 to discipline:
@@ -149,3 +155,129 @@ those lines in the model.
    surface that renders its own colours has forked the house style, and two documents that
    disagree about what a caveat looks like teach a reader to stop noticing caveats.
 4. Stamp `provenance_lines()` into the document.
+
+
+---
+
+# v2 — the symbiotic decisions
+
+Where the authorities disagree, the DBPL takes a position and records why. These are the contested
+ones; the consensus is uncontroversial and simply implemented.
+
+## Table rules — **Vignelli over Tufte**
+
+Tufte would erase rules as non-data-ink. Vignelli treats them as load-bearing structure in a graded
+hierarchy, and that is what the DBPL adopts:
+
+| Weight | Role |
+|---|---|
+| **2 pt** | separates major parts — closes the header band |
+| **1 pt** | separates items within a part — under the last row (Urban's rule too) |
+| **0.5 pt** | finest division — group-header rows |
+
+Verbatim: *"Type should always hang from the ruler, regardless of the size."* Implemented as
+asymmetric cell padding (`4pt 8pt 6pt 8pt`) — tighter above than below.
+
+Rationale: for a covenant table where a credit officer must find one row among forty, structure
+beats minimalism.
+
+## Row shading — **Urban over Tufte**
+
+Zebra shading is ink that encodes nothing, and Tufte would strike it. **Adopted anyway.** The
+reading task is row-tracking across a wide table, and a mis-tracked row in a covenant schedule
+costs more than a slightly lower data-ink ratio. The tint is near-threshold by design.
+
+Urban's rule set comes with it: a rule under the column headers and under the last row, and **no
+interior vertical rules** — the one point where Urban, ADB and Lazard all agree.
+
+## When in doubt — **the ADB Handbook**
+
+Note blocks render in the ADB order, verbatim, at 9 pt, immediately below the table and never at
+the foot of the page:
+
+```
+abbreviations → notes → footnotes → sources
+```
+
+Footnote indicators are **superscript lowercase letters, not bold**. Every table carries a source,
+and it should be documentary rather than an organisation name.
+
+**Key Symbols** are carried as tokens because this is a data-integrity control, not a typographic
+nicety — a table that renders "not available" and "zero" identically has misstated the data:
+
+| Symbol | Meaning |
+|---|---|
+| `...` | data not available |
+| `–` | magnitude equals zero |
+| `(-/+) 0` | less than half of unit employed |
+| `*` | provisional / preliminary / estimate |
+| `\|` | marks break in series |
+| `n.a.` | not applicable |
+
+## Wide tables — **Lazard landscape**
+
+`.dbpl-landscape` on a section switches that section to an A4 landscape page. It is **a page size,
+not a second design** — it inherits every rule above. Use it only where a table's width cannot be
+carried by a portrait column.
+
+```python
+{"heading": "Sensitivity register", "landscape": True, "table": {...}}
+```
+
+## Document control — **mandatory**
+
+Following Outer Dowsing / Arup. Supply `control` and/or `revisions` and the block renders:
+
+```python
+doc["control"]   = [("Document ID", "DBAY-..."), ("Version", "v1.0")]
+doc["revisions"] = [{"rev": "1.0", "date": "21 Aug 2026",
+                     "status": "Responding to client comments",
+                     "prepared": "...", "checked": "...",
+                     "reviewed": "...", "approved": "..."}]
+doc["status"]    = "Final Report"      # rides the running footer
+```
+
+A **four-eyes** chain (Prepared / Checked / Reviewed / Approved), not three. And note the
+convention: **draft versus final is the `Status / Reason for issue` field, never a watermark.**
+No professional deliverable examined used one.
+
+## Measure and rhythm
+
+66-character target (Bringhurst's anchor — the safer end of a genuine 15-character disagreement
+with Butterick), applied to **prose only**; tables and exhibits are exempt because a 66-character
+cap would cripple them. Body leading 1.42, inside Butterick's 120–145 % band. Vertical intervals
+are multiples of a 14.2 pt rhythm unit.
+
+## Fonts
+
+Bundled OFL superfamily, all **tabular by default** — verified against the font binaries, not
+assumed from a feature tag:
+
+| Role | Family | Use |
+|---|---|---|
+| serif | **Source Serif 4** | body prose (also carries an optical-size axis) |
+| sans | **Source Sans 3** | tables, headings, furniture |
+| mono | **Source Code Pro** | identifiers, paths, digests |
+
+Resolution is **bundled → system → web (opt-in) → metric-compatible fallback**, and the tier that
+answered is surfaced. Two traps worth knowing:
+
+- A variable-font weight **range** (`font-weight: 100 900`) is **invalid in WeasyPrint** and is
+  dropped with a warning. Discrete weights are registered against the same variable file instead.
+- `fc-match` is **blind to an `@font-face`-embedded file**, so it will report a bundled family as
+  "SUBSTITUTED". The provisioning tier is authoritative; fc-match is consulted only for families
+  the provisioner did not supply.
+
+## Conformance — PDF/UA-1
+
+Output is produced at `pdf/ua-1` (ISO 14289-1) and reports `Tagged: yes`. This was the DBPL's own
+former defect, shared with most of the sector — of fifteen multilateral-bank PDFs sampled, only
+four were tagged.
+
+Stated by the standard's own custodian: **conformance does not by itself ensure accessibility.**
+Colour, contrast and cognitive load are out of scope, so WCAG 2.2 contrast (4.5:1 normal, 3:1
+large) is applied separately. PDF/UA-1 may additionally conform to PDF/A-2 or PDF/A-3, but **not**
+PDF/A-1, which predates features it requires.
+
+One consequence worth stating: **row labels are repeated, not merged.** Schwabish's "label only the
+first row" collides with WCAG PDF6, and accessibility wins over visual tidiness.

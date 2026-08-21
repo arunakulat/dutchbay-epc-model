@@ -472,3 +472,149 @@ def test_running_furniture_is_present_on_every_page() -> None:
     assert "string(dbpl-banner)" in sheet
     assert "string(dbpl-docline)" in sheet
     assert 'counter(page) " of " counter(pages)' in sheet
+
+
+# ── v2: document control, landscape sections, PDF/UA ─────────────────────────
+
+
+def _controlled_doc(**over: object) -> dict:
+    doc = _doc(
+        control=[("Document ID", "DBAY-TEST-01"), ("Version", "v1.0")],
+        revisions=[
+            {
+                "rev": "1.0",
+                "date": "21 Aug 2026",
+                "status": "Responding to client comments",
+                "prepared": "A. Analyst",
+                "checked": "B. Checker",
+                "reviewed": "C. Reviewer",
+                "approved": "D. Approver",
+            }
+        ],
+        status="Final Report",
+    )
+    doc.update(over)
+    return doc
+
+
+def test_document_control_block_renders_with_four_eyes_signoff() -> None:
+    html = _render_html(_controlled_doc())
+    assert "Document control" in html
+    assert "Revision history" in html
+    for column in ("Prepared", "Checked", "Reviewed", "Approved"):
+        assert (
+            f">{column}<" in html
+        ), f"{column} column missing from the four-eyes chain"
+
+
+def test_draft_versus_final_is_a_status_field_not_a_watermark() -> None:
+    """The sector convention: `Status / Reason for issue`, never a watermark overlay."""
+    html = _render_html(_controlled_doc())
+    assert "Status / Reason for issue" in html
+    assert "Responding to client comments" in html
+    # The word appears once, in the caption that EXPLAINS the convention. What must not exist is
+    # a watermark overlay — a rotated/absolutely-positioned draft stamp over the page.
+    assert "dbpl-watermark" not in html
+    from app.reports.dbpl.print_core import dbpl_stylesheet
+
+    assert "watermark" not in dbpl_stylesheet().lower()
+
+
+def test_status_token_rides_the_running_footer() -> None:
+    """Outer Dowsing's rule: a loose page must identify itself."""
+    html = _render_html(_controlled_doc())
+    docline = html.split('class="dbpl-docline">')[1].split("</div>")[0]
+    assert "DBAY-TEST" in docline and "Final Report" in docline
+
+
+def test_document_control_is_omitted_when_no_fields_supplied() -> None:
+    assert "Revision history" not in _render_html(_doc())
+
+
+def test_a_section_can_be_marked_landscape() -> None:
+    html = _render_html(
+        _doc(sections=[{"heading": "Wide", "landscape": True, "body": "x"}])
+    )
+    assert 'class="dbpl-landscape"' in html
+
+
+def test_table_notes_render_in_the_adb_order() -> None:
+    html = _render_html(
+        _doc(
+            sections=[
+                {
+                    "heading": "T",
+                    "table": {
+                        "columns": ["A", "B"],
+                        "rows": [{"cells": ["1", "2"]}],
+                        "abbreviations": "ABC = a b c.",
+                        "notes": ["rounding"],
+                        "footnotes": [{"mark": "a", "text": "a note"}],
+                        "source": "DutchBay model.",
+                    },
+                }
+            ]
+        )
+    )
+    order = [
+        html.index("dbpl-abbrev"),
+        html.index("dbpl-note"),
+        html.index("dbpl-footnote"),
+        html.index("dbpl-source"),
+    ]
+    assert order == sorted(
+        order
+    ), "ADB order is abbreviations, notes, footnotes, sources"
+
+
+def test_table_headers_carry_scope_for_pdf_ua() -> None:
+    """WCAG PDF6 / PDF-UA: a table must be real structure, not positioned text."""
+    html = _render_html(
+        _doc(
+            sections=[
+                {
+                    "heading": "T",
+                    "table": {"columns": ["A"], "rows": [{"cells": ["1"]}]},
+                }
+            ]
+        )
+    )
+    assert 'scope="col"' in html
+
+
+def test_lang_is_on_the_html_element_not_the_body() -> None:
+    """PDF/UA requires /Lang at the root; WeasyPrint rejects it on <body> alone."""
+    html = _render_html(_doc())
+    assert re.search(r"^\s*<html lang=", html.split(">", 1)[1], re.M)
+    assert "<body lang=" not in html, "lang on <body> alone does not satisfy PDF/UA"
+
+
+def test_group_and_emphasis_rows_render_with_their_classes() -> None:
+    html = _render_html(
+        _doc(
+            sections=[
+                {
+                    "heading": "T",
+                    "table": {
+                        "columns": ["A", "B"],
+                        "rows": [
+                            {"group": "Debt service"},
+                            {"cells": ["DSCR", "1.286"], "emphasis": True},
+                        ],
+                    },
+                }
+            ]
+        )
+    )
+    assert 'class="dbpl-group"' in html and 'class="dbpl-emphasis"' in html
+
+
+def test_output_is_tagged_pdf_ua() -> None:
+    """The DBPL's own former defect: untagged output, shared with most of the sector."""
+    from app.reports.dbpl.print_core import DBPL_PDF_VARIANT
+
+    assert DBPL_PDF_VARIANT == "pdf/ua-1"
+    result = render_dbpl_pdf(_render_html(_doc()))
+    assert result.pdf[:5] == b"%PDF-"
+    assert result.pdf_variant == "pdf/ua-1"
+    assert any("pdf/ua-1" in line for line in result.provenance_lines())

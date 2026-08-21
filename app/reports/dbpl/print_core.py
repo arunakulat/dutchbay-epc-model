@@ -57,10 +57,25 @@ __all__ = [
     "probe_fonts",
     "render_dbpl_pdf",
     "dbpl_stylesheet",
+    "DBPL_PDF_VARIANT",
 ]
 
 #: The optional extra a DBPL PDF requires, in full.
 DBPL_EXTRA = "report"
+
+#: The PDF conformance level a DBPL document is produced at.
+#:
+#: PDF/UA-1 (ISO 14289-1) is the accessibility standard for tagged PDF. Producing untagged output
+#: was the DBPL's own defect, shared with most of the sector — of fifteen multilateral-bank PDFs
+#: sampled during the benchmark study, only four were tagged.
+#:
+#: Stated by the standard's own custodian: conformance does NOT by itself ensure accessibility.
+#: Colour, contrast and cognitive load are outside its scope, so WCAG 2.2 contrast (4.5:1 normal,
+#: 3:1 large) is applied separately in the stylesheet.
+#:
+#: PDF/UA-1 may additionally conform to PDF/A-2 or PDF/A-3, but NOT PDF/A-1, which is based on
+#: PDF 1.4 and predates features PDF/UA-1 requires.
+DBPL_PDF_VARIANT = "pdf/ua-1"
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 _STYLESHEET = _TEMPLATE_DIR / "dbpl.css"
@@ -99,6 +114,7 @@ class DbplRenderResult:
     extra_status: ExtraStatus
     fonts: tuple[FontResolution, ...]
     stylesheet_applied: bool = True
+    pdf_variant: str = DBPL_PDF_VARIANT
     font_tiers: Mapping[str, str] = field(default_factory=dict)
 
     @property
@@ -115,6 +131,7 @@ class DbplRenderResult:
         lines = [
             f"DBPL print core · [{DBPL_EXTRA}] extra: {versions}",
             f"House style measured from {DBPL_REFERENCE_DOCUMENT}",
+            f"Conformance: {self.pdf_variant} (tagged PDF; WCAG contrast applied separately)",
         ]
         lines.extend(
             f"font {role}: {note}" for role, note in sorted(self.font_tiers.items())
@@ -276,7 +293,9 @@ def render_dbpl_pdf(
         sheets.append(CSS(string=extra_css, font_config=font_config))
 
     pdf = HTML(string=html, base_url=base_url).write_pdf(
-        stylesheets=sheets, font_config=font_config
+        stylesheets=sheets,
+        font_config=font_config,
+        pdf_variant=DBPL_PDF_VARIANT,
     )
     return DbplRenderResult(
         pdf=pdf,
