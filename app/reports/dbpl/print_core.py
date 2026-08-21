@@ -34,14 +34,21 @@ GWTF:
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping, Optional, Sequence
 
 from app.ops.extras import ExtraStatus, probe_extra
-from app.reports.dbpl.fonts import font_face_css, provision_fonts, resolution_summary
+from app.reports.dbpl.fonts import (
+    DBPL_FONTS,
+    font_face_css,
+    provision_fonts,
+    resolution_summary,
+)
 from app.reports.dbpl.style import (
     DBPL_REFERENCE_DOCUMENT,
     DBPL_REQUIRED_FONT_FAMILIES,
@@ -114,12 +121,35 @@ class DbplRenderResult:
     extra_status: ExtraStatus
     fonts: tuple[FontResolution, ...]
     stylesheet_applied: bool = True
+    embedded_families: tuple[str, ...] = ()
     pdf_variant: str = DBPL_PDF_VARIANT
     font_tiers: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def substituted_fonts(self) -> tuple[str, ...]:
         return tuple(f.family for f in self.fonts if f.substituted)
+
+    @property
+    def house_fonts_embedded(self) -> Optional[bool]:
+        """Whether every family embedded in the output belongs to the house stack.
+
+        Tri-state on purpose. ``None`` means UNVERIFIED (poppler unavailable), which is not the
+        same claim as ``False``. Collapsing the two would repeat the mistake this check exists to
+        catch: the earlier provenance reported "substituted: none" while every document embedded
+        Times New Roman, because it was reporting what had been PROVISIONED rather than what had
+        been USED.
+
+        The test is "did anything OUTSIDE the house stack get embedded", not "are all three
+        present". A document with no monospace content legitimately embeds no mono face, and
+        demanding all three would report a false negative on a perfectly correct render.
+        """
+        if not self.embedded_families:
+            return None
+        house = {re.sub(r"[^a-z0-9]", "", s.family.lower()) for s in DBPL_FONTS}
+        return all(
+            any(h in re.sub(r"[^a-z0-9]", "", name.lower()) for h in house)
+            for name in self.embedded_families
+        )
 
     def provenance_lines(self) -> tuple[str, ...]:
         """Human-readable provenance, for logging or for stamping into a caller's report."""
@@ -237,6 +267,48 @@ def probe_fonts(
     return tuple(resolutions)
 
 
+def _embedded_font_families(pdf: bytes) -> tuple[str, ...]:
+    """Font family names actually embedded in the produced PDF.
+
+    Read back from the finished file, so this reports what a READER will see rather than what the
+    pipeline intended. That distinction is not academic: it is the only check that catches the
+    stylesheet asking for one family while the @font-face rules supply another.
+
+    Uses poppler's ``pdffonts`` because WeasyPrint compresses object streams, so the font
+    descriptors are not findable by scanning raw bytes. When poppler is unavailable this returns
+    an empty tuple meaning UNVERIFIED — see :attr:`DbplRenderResult.house_fonts_embedded`, which
+    is tri-state for exactly that reason. Provenance degrades; it never breaks a render.
+    """
+    binary = shutil.which("pdffonts")
+    if binary is None:
+        return ()
+    tmp = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as fh:
+            fh.write(pdf)
+            tmp = fh.name
+        out = (
+            subprocess.run(  # noqa: S603 - fixed binary, argument is our own temp file
+                [binary, tmp], capture_output=True, text=True, timeout=20, check=False
+            ).stdout
+        )
+        names = set()
+        for line in out.splitlines()[2:]:
+            if not line.strip():
+                continue
+            raw = line.split()[0]
+            names.add(re.sub(r"^[A-Z]{6}\+", "", raw))
+        return tuple(sorted(n for n in names if n))
+    except (OSError, subprocess.SubprocessError):
+        return ()
+    finally:
+        if tmp:
+            try:
+                Path(tmp).unlink()
+            except OSError:
+                pass
+
+
 def dbpl_stylesheet(*, allow_web_fonts: bool = False) -> str:
     """The DBPL stylesheet: @font-face rules, then design tokens, then the house rules.
 
@@ -299,6 +371,7 @@ def render_dbpl_pdf(
     )
     return DbplRenderResult(
         pdf=pdf,
+        embedded_families=_embedded_font_families(pdf),
         extra_status=status,
         fonts=probe_fonts(unprovisioned) if unprovisioned else (),
         font_tiers=dict(resolution_summary(provisions)),

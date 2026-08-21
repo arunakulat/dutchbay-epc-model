@@ -80,15 +80,27 @@ DBPL_PALETTE: Mapping[str, str] = {
     "paper": "#FFFFFF",
 }
 
-#: Font stacks by role. Liberation is the reference document's own family and is metric-compatible
-#: with Times New Roman / Arial, so those are the correct first fallbacks — a substitution changes
-#: glyph shapes but not line breaks or pagination. DejaVu backs them because it is what the
-#: deployed image ships (``Dockerfile``: ``fonts-dejavu-core``).
-DBPL_FONT_STACKS: Mapping[str, str] = {
-    "serif": "'Liberation Serif', 'Times New Roman', 'DejaVu Serif', Times, serif",
-    "sans": "'Liberation Sans', Arial, 'DejaVu Sans', Helvetica, sans-serif",
-    "mono": "'Liberation Mono', 'DejaVu Sans Mono', 'Courier New', monospace",
-}
+
+def _house_font_stacks() -> Mapping[str, str]:
+    """Font stacks by role, derived from the single font declaration in :mod:`.fonts`.
+
+    These MUST come from the same place the ``@font-face`` rules come from. They previously did
+    not: the ``@font-face`` rules loaded the bundled Source superfamily while these stacks still
+    named Liberation, so every document embedded Times New Roman and Arial instead — and the
+    provenance reported "substituted: none", because it checked that the fonts had been
+    *provisioned*, not that the stylesheet actually *asked* for them.
+
+    Imported lazily to keep this module free of a circular import at load time.
+    """
+    from app.reports.dbpl.fonts import DBPL_FONTS
+
+    return {spec.role: spec.css_stack for spec in DBPL_FONTS}
+
+
+#: Font stacks by role. House family first, then metric-compatible fallbacks — a substitution
+#: changes glyph shapes but not line breaks or pagination. Generated, never hand-written, so the
+#: stack and the @font-face rules cannot diverge.
+DBPL_FONT_STACKS: Mapping[str, str] = _house_font_stacks()
 
 #: Families a DBPL render should resolve natively. Absence is NOT fatal — the fallbacks are
 #: metric-compatible — but it must be SURFACED, never silently substituted. WeasyPrint renders

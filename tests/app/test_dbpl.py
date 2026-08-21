@@ -127,10 +127,20 @@ def test_type_scale_is_ordered_from_title_down_to_footer() -> None:
     assert DBPL_TYPE_SCALE["body"] > DBPL_TYPE_SCALE["footer"]
 
 
-def test_font_stacks_lead_with_liberation_and_fall_back_metric_compatibly() -> None:
-    """Liberation is metric-compatible with Times/Arial, so those must be the FIRST fallbacks."""
-    assert DBPL_FONT_STACKS["serif"].startswith("'Liberation Serif', 'Times New Roman'")
-    assert DBPL_FONT_STACKS["sans"].startswith("'Liberation Sans', Arial")
+def test_font_stacks_lead_with_the_house_family_then_fall_back_metric_compatibly() -> (
+    None
+):
+    """House family FIRST, then metric-compatible fallbacks.
+
+    This test previously asserted the stacks led with Liberation — encoding the very wiring gap
+    it should have caught, since the @font-face rules were supplying the Source superfamily.
+    """
+    assert DBPL_FONT_STACKS["serif"].startswith("'Source Serif 4'")
+    assert DBPL_FONT_STACKS["sans"].startswith("'Source Sans 3'")
+    for fallback in ("Liberation Serif", "Times New Roman"):
+        assert fallback in DBPL_FONT_STACKS["serif"]
+    for fallback in ("Liberation Sans", "Arial"):
+        assert fallback in DBPL_FONT_STACKS["sans"]
 
 
 def test_reference_document_is_recorded_so_tokens_are_traceable() -> None:
@@ -638,3 +648,62 @@ def test_tables_never_hyphenate() -> None:
     sheet = dbpl_stylesheet()
     assert "hyphens: none" in _rule_block(sheet, "table.dbpl")
     assert "hyphens: auto" in _rule_block(sheet, "body")
+
+
+# ── the font stacks must ASK for what the @font-face rules SUPPLY ────────────
+
+
+def test_css_font_stacks_name_the_house_families() -> None:
+    """Regression guard for a silent wiring gap.
+
+    The @font-face rules loaded the bundled Source superfamily while these stacks still named
+    Liberation, so every document embedded Times New Roman and Arial — and the provenance
+    reported "substituted: none", because it checked that fonts had been PROVISIONED rather than
+    that the stylesheet had ASKED for them.
+    """
+    from app.reports.dbpl.fonts import DBPL_FONTS
+    from app.reports.dbpl.style import DBPL_FONT_STACKS
+
+    for spec in DBPL_FONTS:
+        assert DBPL_FONT_STACKS[spec.role].startswith(f"'{spec.family}'")
+
+
+def test_emitted_css_variables_request_the_house_families() -> None:
+    from app.reports.dbpl.style import as_css_variables
+
+    css = as_css_variables()
+    assert "--dbpl-font-serif: 'Source Serif 4'" in css
+    assert "--dbpl-font-sans: 'Source Sans 3'" in css
+    assert "--dbpl-font-mono: 'Source Code Pro'" in css
+
+
+def test_stacks_still_fall_back_metric_compatibly() -> None:
+    from app.reports.dbpl.style import DBPL_FONT_STACKS
+
+    assert "Liberation Serif" in DBPL_FONT_STACKS["serif"]
+    assert "Times New Roman" in DBPL_FONT_STACKS["serif"]
+    assert "Liberation Sans" in DBPL_FONT_STACKS["sans"]
+    assert "Arial" in DBPL_FONT_STACKS["sans"]
+
+
+def test_render_verifies_the_house_fonts_are_actually_embedded() -> None:
+    """Inspects the OUTPUT, not the intent — the only check that catches the wiring gap."""
+    result = render_dbpl_pdf(_render_html(_doc()))
+    if result.embedded_families == ():
+        pytest.skip("poppler pdffonts unavailable — embedding cannot be verified here")
+    assert result.house_fonts_embedded is True
+    for name in result.embedded_families:
+        assert "times" not in name.lower() and "arial" not in name.lower()
+
+
+def test_unverifiable_embedding_is_none_not_false() -> None:
+    """`None` (could not check) is a different claim from `False` (fallback happened)."""
+    from app.ops.extras import ExtraStatus
+    from app.reports.dbpl.print_core import DbplRenderResult
+
+    empty = DbplRenderResult(b"", ExtraStatus("report", ()), (), embedded_families=())
+    assert empty.house_fonts_embedded is None
+    bad = DbplRenderResult(
+        b"", ExtraStatus("report", ()), (), embedded_families=("Times-New-Roman",)
+    )
+    assert bad.house_fonts_embedded is False
