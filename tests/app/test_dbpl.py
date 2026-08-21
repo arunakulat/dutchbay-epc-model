@@ -39,6 +39,16 @@ from app.reports.dbpl.style import (
 _TEMPLATES = "app/reports/dbpl/templates"
 
 
+def _rule_block(sheet: str, selector: str) -> str:
+    """The declarations of one CSS rule, parsed rather than sliced.
+
+    A fixed character window breaks the moment a comment is added above a declaration, which is a
+    brittle test, not a real signal.
+    """
+    start = sheet.index(selector + " {") + len(selector) + 2
+    return sheet[start : sheet.index("}", start)]
+
+
 def _doc(**over: object) -> dict:
     doc: dict = {
         "title": "Proof",
@@ -430,7 +440,7 @@ def test_adb_note_order_is_declared_verbatim() -> None:
 
 def test_adb_footnote_indicators_are_superscript_and_not_bold() -> None:
     sheet = dbpl_stylesheet()
-    block = sheet[sheet.index(".dbpl-fn {") :][:220]
+    block = _rule_block(sheet, ".dbpl-fn")
     assert "vertical-align: super" in block
     assert "font-weight: 400" in block, "ADB: superscript lowercase letters, NOT bold"
 
@@ -453,8 +463,7 @@ def test_measure_is_capped_for_prose_but_not_for_tables() -> None:
     """66-character measure governs prose; a table would be crippled by it."""
     sheet = dbpl_stylesheet()
     assert "max-width: var(--dbpl-measure-max-characters)" in sheet
-    table_block = sheet[sheet.index("table.dbpl {") :][:600]
-    assert "max-width: none" in table_block
+    assert "max-width: none" in _rule_block(sheet, "table.dbpl")
 
 
 def test_landscape_is_a_page_size_not_a_different_design() -> None:
@@ -618,3 +627,14 @@ def test_output_is_tagged_pdf_ua() -> None:
     assert result.pdf[:5] == b"%PDF-"
     assert result.pdf_variant == "pdf/ua-1"
     assert any("pdf/ua-1" in line for line in result.provenance_lines())
+
+
+def test_tables_never_hyphenate() -> None:
+    """Cells carry names, labels and codes — not prose.
+
+    Proof-rendering the revision table produced "A. Ana-lyst" and "D. Ap-prover": a hyphenated
+    signatory is a defect. Body prose keeps `hyphens: auto`.
+    """
+    sheet = dbpl_stylesheet()
+    assert "hyphens: none" in _rule_block(sheet, "table.dbpl")
+    assert "hyphens: auto" in _rule_block(sheet, "body")

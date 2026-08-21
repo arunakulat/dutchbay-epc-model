@@ -182,6 +182,10 @@ hr.dbpl-sep {
 table.dbpl {
   width: 100%;
   border-collapse: collapse;
+  /* Never hyphenate inside a table. Cells carry names, labels and codes, not continuous prose,
+     and a hyphenated signatory ("A. Ana-lyst") or broken document reference is a defect, not a
+     typographic nicety. Body prose keeps `hyphens: auto`. */
+  hyphens: none;
   font-family: var(--dbpl-font-sans);
   font-size: var(--dbpl-size-table);
   line-height: var(--dbpl-measure-table-leading);
@@ -273,6 +277,7 @@ table.dbpl tr { break-inside: avoid; }
  * points." Immediately below the table, never at the foot of the page. */
 
 .dbpl-tablenotes {
+  hyphens: none;
   font-family: var(--dbpl-font-sans);
   font-size: 9pt;
   line-height: 1.28;
