@@ -407,26 +407,33 @@ jobs:
         # the typed surface + a relaxed real-error pass over scripts/. Any regression fails
         # 'lint' and — via the second check below — blocks the merge. (PR4: fix-first mypy gate;
         # scripts/ added to the mypy gate once both reached zero errors.)
-        if [ "${{ needs.test.result }}" != "success" ]; then
-          echo "::error::Test job did not succeed (result=${{ needs.test.result }}) — blocking Test Summary"
+        # Attribute a CAUSE only when the job actually FAILED. A non-success result
+        # is just as often 'cancelled' (a newer push supersedes the run and cancels
+        # in-flight jobs) or 'skipped' (an upstream dependency did not run). Naming
+        # the gate's failure mode unconditionally sends the reader hunting a
+        # regression that does not exist — a cancelled lint job reported itself as
+        # "mypy gate failed". Blocking behaviour is unchanged: any non-success on a
+        # required job still exits 1.
+        gate() {
+          # $1 human-readable job name, $2 needs.<job>.result, $3 what a real failure means
+          if [ "$2" = "success" ]; then
+            return 0
+          fi
+          if [ "$2" = "failure" ]; then
+            echo "::error::$1 job failed (result=$2) — $3; blocking Test Summary"
+          else
+            echo "::error::$1 job did not complete (result=$2) — this is not a $1 regression; a run superseded by a newer push reports 'cancelled', an unrun dependency reports 'skipped'. Blocking Test Summary because the gate could not be confirmed; re-run on the current head."
+          fi
           exit 1
-        fi
-        if [ "${{ needs.lint.result }}" != "success" ]; then
-          echo "::error::Lint job did not succeed (result=${{ needs.lint.result }}) — mypy gate failed; blocking Test Summary"
-          exit 1
-        fi
-        if [ "${{ needs.security.result }}" != "success" ]; then
-          echo "::error::Security job did not succeed (result=${{ needs.security.result }}) — bandit/pip-audit gate failed; blocking Test Summary"
-          exit 1
-        fi
+        }
+        gate "Test" "${{ needs.test.result }}" "the pytest matrix did not pass"
+        gate "Lint" "${{ needs.lint.result }}" "the ruff/black/isort/mypy gate failed"
+        gate "Security" "${{ needs.security.result }}" "the bandit/pip-audit gate failed"
         # The 'coverage' job runs `coverage combine` over every shard's data and enforces
         # the R8/TEST-02 95% floor over the UNION (the gate the old single-job
         # --cov-fail-under provided, now downstream of sharding). A coverage regression
         # below 95% fails that job and — here — blocks the merge.
-        if [ "${{ needs.coverage.result }}" != "success" ]; then
-          echo "::error::Coverage gate did not succeed (result=${{ needs.coverage.result }}) — combined coverage below 95%; blocking Test Summary"
-          exit 1
-        fi
+        gate "Coverage" "${{ needs.coverage.result }}" "combined coverage fell below the 95% R8/TEST-02 floor"
         grid_required=false
         if [ "${{ needs.changes.outputs.qsts_execution_changed }}" = "true" ] || \
            [ "${{ github.event_name }}" = "schedule" ] || \
