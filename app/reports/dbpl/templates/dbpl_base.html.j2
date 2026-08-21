@@ -1,17 +1,28 @@
-{# DBPL base document — the house skeleton, mirroring DBAY-SLTS-2026-08-18.
+{# DBPL base document — the house skeleton.
 
-   The banner, the doc-line and the per-section caveat band are STRUCTURAL: they are emitted by
-   this template, not supplied as optional blocks, because a DBPL document without its provenance
-   furniture is an unlabelled document, and for analyst-generated material that is the failure
-   mode that matters. Autoescape is expected to be on in the caller's environment. #}
+   Three things are STRUCTURAL rather than optional, because a DBPL document without them is not
+   a styled document but an unlabelled one:
+
+     1. the running banner and doc-line (classification and identity on EVERY page),
+     2. a caveat band under every section heading,
+     3. the DOCUMENT CONTROL block — control table plus revision history with four-eyes sign-off.
+
+   Document control follows the Outer Dowsing / Arup convention: a loose page must identify
+   itself, and draft-versus-final is a `Status / Reason for Issue` FIELD, never a watermark.
+
+   Section keys use `points`, not `items`: on a dict Jinja resolves `.items` to the built-in
+   method rather than the key, which silently breaks the loop. Same trap for `keys` and `values`.
+
+   Autoescape is expected to be on in the caller's environment. `lang` is on <html>, which
+   PDF/UA requires — it is not sufficient on <body>. #}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ doc.language | default('en') }}">
 <head><meta charset="utf-8"><title>{{ doc.title }}</title></head>
 <body>
 
 {# Carried into the running header/footer on every page via CSS string-set. #}
 <div class="dbpl-banner">{{ doc.banner }}</div>
-<div class="dbpl-docline">{{ doc.document_id }} | {{ doc.version }} | {{ doc.issue_date }}</div>
+<div class="dbpl-docline">{{ doc.document_id }} | {{ doc.version }} | {{ doc.issue_date }}{% if doc.status %} | {{ doc.status }}{% endif %}</div>
 
 <h1 class="dbpl-title">{{ doc.title }}</h1>
 
@@ -23,7 +34,60 @@
 
 <hr class="dbpl-sep">
 
+{# ═══ DOCUMENT CONTROL ═══════════════════════════════════════════════════
+   Emitted whenever any control field is supplied. The revision table carries a Status/Reason for
+   Issue column and a four-eyes chain (Prepared / Checked / Reviewed / Approved) — stricter than
+   a three-column sign-off, and the convention in regulated engineering deliverables. #}
+{% if doc.control or doc.revisions %}
+<h2 class="dbpl-section">{{ doc.control_section_number | default(0) }}. Document control</h2>
+{% if doc.section_caveat %}
+<div class="dbpl-caveat">{{ doc.section_caveat }}</div>
+{% endif %}
+
+{% if doc.control %}
+<table class="dbpl dbpl-control">
+  <caption>Document control</caption>
+  <thead><tr><th scope="col">Control field</th><th scope="col">Controlled value</th></tr></thead>
+  <tbody>
+    {% for field, value in doc.control %}
+    <tr><td>{{ field }}</td><td>{{ value }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if doc.revisions %}
+<table class="dbpl dbpl-revision">
+  <caption>Revision history<span class="dbpl-unit">Status records the reason for issue; draft and final are not distinguished by watermark</span></caption>
+  <thead><tr>
+    <th scope="col">Rev</th><th scope="col">Date</th><th scope="col">Status / Reason for issue</th>
+    <th scope="col">Prepared</th><th scope="col">Checked</th><th scope="col">Reviewed</th><th scope="col">Approved</th>
+  </tr></thead>
+  <tbody>
+    {% for r in doc.revisions %}
+    <tr>
+      <td>{{ r.rev }}</td>
+      <td>{{ r.date }}</td>
+      <td class="dbpl-status">{{ r.status }}</td>
+      <td>{{ r.prepared | default('—') }}</td>
+      <td>{{ r.checked | default('—') }}</td>
+      <td>{{ r.reviewed | default('—') }}</td>
+      <td>{{ r.approved | default('—') }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<div class="dbpl-tablenotes">
+  <div class="dbpl-source"><span class="dbpl-label">Source:</span> {{ doc.revision_source | default('Project document control register.') }}</div>
+</div>
+{% endif %}
+{% endif %}
+
+{# ═══ BODY SECTIONS ══════════════════════════════════════════════════════ #}
 {% for section in doc.sections %}
+{% set wide = section.landscape %}
+{% if wide %}<div class="dbpl-landscape">{% endif %}
+
 <h2 class="dbpl-section">{{ loop.index0 + doc.first_section_number }}. {{ section.heading }}</h2>
 
 {% if section.caveat or doc.section_caveat %}
@@ -34,20 +98,71 @@
 <p>{{ section.intro }}</p>
 {% endif %}
 
+{# Lazard exhibit: title, then the FINDING, then the figure. #}
+{% if section.exhibit %}
+<div class="dbpl-exhibit">
+  <div class="dbpl-exhibit-title">{{ section.exhibit.title }}</div>
+  {% if section.exhibit.finding %}
+  <div class="dbpl-finding">{{ section.exhibit.finding }}</div>
+  {% endif %}
+  <div class="dbpl-figure">{{ section.exhibit.figure }}</div>
+</div>
+{% endif %}
+
 {% if section.table %}
 <table class="dbpl">
-  <thead><tr>{% for col in section.table.columns %}<th>{{ col }}</th>{% endfor %}</tr></thead>
+  {% if section.table.caption %}
+  <caption>{{ section.table.caption }}{% if section.table.unit %}<span class="dbpl-unit">{{ section.table.unit }}</span>{% endif %}</caption>
+  {% endif %}
+  <thead><tr>
+    {% for col in section.table.columns %}
+    <th{% if loop.index0 in (section.table.numeric_indices | default([])) %} class="dbpl-num"{% endif %} scope="col">{{ col }}</th>
+    {% endfor %}
+  </tr></thead>
   <tbody>
     {% for row in section.table.rows %}
-    <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+    {% if row.group %}
+    <tr class="dbpl-group"><td colspan="{{ section.table.columns | length }}">{{ row.group }}</td></tr>
+    {% else %}
+    <tr{% if row.emphasis %} class="dbpl-emphasis"{% endif %}>
+      {% for cell in row.cells %}
+      <td{% if loop.index0 in (section.table.numeric_indices | default([])) %} class="dbpl-num"{% endif %}>{{ cell }}</td>
+      {% endfor %}
+    </tr>
+    {% endif %}
     {% endfor %}
   </tbody>
 </table>
+
+{# ADB note order, verbatim: abbreviations -> notes -> footnotes -> sources. #}
+{% if section.table.abbreviations or section.table.notes or section.table.footnotes or section.table.source %}
+<div class="dbpl-tablenotes">
+  {% if section.table.abbreviations %}
+  <div class="dbpl-abbrev">{{ section.table.abbreviations }}</div>
+  {% endif %}
+  {% if section.table.notes %}
+  <div class="dbpl-note"><span class="dbpl-label">Notes:</span>
+    {% for n in section.table.notes %}{{ loop.index }}. {{ n }} {% endfor %}
+  </div>
+  {% endif %}
+  {% for fn in section.table.footnotes | default([]) %}
+  <div class="dbpl-footnote"><span class="dbpl-fn">{{ fn.mark }}</span> {{ fn.text }}</div>
+  {% endfor %}
+  {% if section.table.source %}
+  <div class="dbpl-source"><span class="dbpl-label">Source:</span> {{ section.table.source }}</div>
+  {% endif %}
+</div>
+{% endif %}
 {% endif %}
 
-{# Key is `points`, not `items`: on a dict, Jinja resolves `.items` to the built-in dict
-   method rather than the key, so an ordered list silently became a TypeError. Same trap
-   applies to `keys` and `values` — avoid those names in a section mapping. #}
+{% if section.key_symbols %}
+<dl class="dbpl-keysymbols">
+  {% for symbol, meaning in section.key_symbols %}
+  <dt>{{ symbol }}</dt><dd>{{ meaning }}</dd>
+  {% endfor %}
+</dl>
+{% endif %}
+
 {% if section.points %}
 <ol class="dbpl">{% for point in section.points %}<li>{{ point }}</li>{% endfor %}</ol>
 {% endif %}
@@ -55,6 +170,8 @@
 {% if section.body %}
 <p>{{ section.body }}</p>
 {% endif %}
+
+{% if wide %}</div>{% endif %}
 {% endfor %}
 
 {% if doc.provenance_lines %}

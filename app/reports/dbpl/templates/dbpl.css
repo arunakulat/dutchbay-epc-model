@@ -1,25 +1,53 @@
-/* DutchBay Presentation Layer — house stylesheet.
+/* ═══════════════════════════════════════════════════════════════════════════
+ * DutchBay Presentation Layer — house stylesheet v2
  *
- * The :root token block is PREPENDED at render time from app.reports.dbpl.style, so the values
- * below reference variables rather than literals. Editing a colour here instead of in style.py
- * forks the house style; edit the tokens.
+ * Governed by GWTF DBPL-01. Design tokens live ONLY in app/reports/dbpl/style.py and are
+ * prepended here at render time as a :root block, so this file must never contain a literal
+ * colour, size or margin. Editing a value here instead of in style.py forks the house style.
  *
- * Measured from DBAY-SLTS-2026-08-18 (A4, 29pp). Structure mirrors that document exactly:
- * a running header banner, a heavy-ruled title, caveat bands, banded tables, and a running
- * footer carrying document ID, version, date and "Page n of m".
- */
+ * ─── The decisions this sheet encodes, and why ─────────────────────────────
+ *
+ * TABLE RULES — Vignelli over Tufte.
+ *   Tufte would erase rules as non-data-ink. Vignelli treats them as load-bearing structure in a
+ *   graded hierarchy: 2 pt separates major parts, 1 pt separates items within a part, 1/2 pt is
+ *   the finest division. For a covenant table where a credit officer must find one row among
+ *   forty, structure beats minimalism. Vignelli also requires that type HANGS FROM THE RULE
+ *   ABOVE — implemented as asymmetric cell padding, tighter above than below.
+ *
+ * ROW SHADING — Urban over Tufte.
+ *   Zebra shading is ink that encodes nothing, and Tufte would strike it. Adopted anyway: the
+ *   reading task is row-tracking across a wide table, and a mis-tracked row in a covenant
+ *   schedule costs more than a slightly lower data-ink ratio. The tint is near-threshold by
+ *   design. Urban's rule set comes with it — a rule under the column headers and under the last
+ *   row, and NO interior verticals.
+ *
+ * WHEN IN DOUBT — the ADB Handbook of Style and Usage.
+ *   Note order below every table is abbreviations → notes → footnotes → sources, at 9 pt,
+ *   immediately below the table and never at the foot of the page. Footnote indicators are
+ *   superscript lowercase letters, not bold.
+ *
+ * LANDSCAPE — Lazard, for width only.
+ *   `.dbpl-landscape` is a page size, not a different design. It inherits every rule here.
+ *
+ * ACCESSIBILITY — PDF/UA-1.
+ *   Decorative rules are drawn with borders rather than glyphs so they tag as Artifact.
+ *   Row labels are REPEATED rather than merged: Schwabish's "label only the first row" collides
+ *   with WCAG PDF6, and accessibility wins.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Page: portrait default ─────────────────────────────────────────────── */
 
 @page {
   size: var(--dbpl-page-size);
   margin: var(--dbpl-page-margin-top) var(--dbpl-page-margin-right)
           var(--dbpl-page-margin-bottom) var(--dbpl-page-margin-left);
 
-  /* Running header banner — provenance on EVERY page, not just the cover. */
+  /* Running banner — classification on EVERY page, not just the cover. */
   @top-left {
     content: string(dbpl-banner);
     font-family: var(--dbpl-font-sans);
     font-size: var(--dbpl-size-banner);
-    letter-spacing: 0.04em;
+    letter-spacing: 0.06em;
     color: var(--dbpl-warn-text);
     border-bottom: var(--dbpl-rule-banner) solid var(--dbpl-warn-rule);
     width: 100%;
@@ -27,7 +55,8 @@
     margin-bottom: 6pt;
   }
 
-  /* Running footer — document identity left, page position right. */
+  /* Running footer. Left carries document identity; right carries position.
+     Outer Dowsing's rule: a loose page must identify itself. */
   @bottom-left {
     content: string(dbpl-docline);
     font-family: var(--dbpl-font-sans);
@@ -39,38 +68,65 @@
   }
   @bottom-right {
     /* nowrap + explicit width: the default margin box is narrow enough that
-       "Page 1 of 29" wraps onto three lines. */
+       "Page 1 of 35" wraps onto three lines. */
     content: "Page " counter(page) " of " counter(pages);
     font-family: var(--dbpl-font-sans);
     font-size: var(--dbpl-size-footer);
     color: var(--dbpl-meta);
     padding-top: 4pt;
     white-space: nowrap;
-    width: 30mm;
+    width: 34mm;
     text-align: right;
   }
 }
 
+/* ─── Page: Lazard landscape, for tables portrait cannot carry ───────────── */
+
+@page dbpl-landscape {
+  size: A4 landscape;
+  margin: var(--dbpl-land-margin-top) var(--dbpl-land-margin-right)
+          var(--dbpl-land-margin-bottom) var(--dbpl-land-margin-left);
+}
+.dbpl-landscape {
+  page: dbpl-landscape;
+  break-before: page;
+  break-after: page;
+}
+
+/* ─── Body ───────────────────────────────────────────────────────────────── */
+
 body {
   font-family: var(--dbpl-font-serif);
   font-size: var(--dbpl-size-body);
+  line-height: var(--dbpl-measure-body-leading);
   color: var(--dbpl-body);
   background: var(--dbpl-paper);
-  line-height: 1.45;
+  /* Tabular figures everywhere. The bundled superfamily is tabular by default; this asserts it
+     regardless of which resolution tier answered. */
+  font-variant-numeric: tabular-nums lining-nums;
+  hyphens: auto;
 }
 
-/* The banner and doc-line are carried into the running header/footer as page strings. */
+/* Bringhurst's measure, applied to CONTINUOUS PROSE ONLY. Tables and exhibits are exempt —
+   they are not read as prose and a 66-character cap would cripple them. */
+p, li, .dbpl-disclaimer, .dbpl-lede {
+  max-width: var(--dbpl-measure-max-characters);
+}
+
+/* Page strings, carried into the running header/footer. */
 .dbpl-banner { string-set: dbpl-banner content(); }
 .dbpl-docline { string-set: dbpl-docline content(); }
 .dbpl-banner, .dbpl-docline { position: absolute; left: -9999pt; height: 0; }
+
+/* ─── Headings. Vignelli: differentiate by weight and space before size ──── */
 
 h1.dbpl-title {
   font-family: var(--dbpl-font-serif);
   font-size: var(--dbpl-size-title);
   font-weight: 700;
+  line-height: var(--dbpl-measure-heading-leading);
   color: var(--dbpl-ink);
   margin: 0 0 6pt 0;
-  line-height: 1.18;
   border-bottom: var(--dbpl-rule-title) solid var(--dbpl-rulecolour-title);
   padding-bottom: 10pt;
 }
@@ -78,98 +134,237 @@ h1.dbpl-title {
 h2.dbpl-section {
   font-family: var(--dbpl-font-serif);
   font-size: var(--dbpl-size-section);
-  font-weight: 700;
+  font-weight: 600;
+  line-height: var(--dbpl-measure-heading-leading);
   color: var(--dbpl-ink);
-  margin: 22pt 0 6pt 0;
+  /* Vertical intervals are multiples of the rhythm unit (Bringhurst). */
+  margin: 28.4pt 0 7.1pt 0;
   padding-bottom: 4pt;
   border-bottom: var(--dbpl-rule-section) solid var(--dbpl-rulecolour-section);
   break-after: avoid;
 }
 
 h3.dbpl-subsection {
-  font-family: var(--dbpl-font-serif);
+  font-family: var(--dbpl-font-sans);
   font-size: var(--dbpl-size-subsection);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--dbpl-ink);
-  margin: 14pt 0 4pt 0;
+  margin: 14.2pt 0 4pt 0;
   break-after: avoid;
 }
 
-/* Caveat band — pale ground, heavy left bar, bold ink text. The single most important
- * component in the house style: it is what stops analyst-generated material being mistaken
- * for evidence, so it is styled to be impossible to skim past. */
+/* ─── Caveat band ────────────────────────────────────────────────────────── */
+
 .dbpl-caveat {
   background: var(--dbpl-warn-bg);
   border-left: 4pt solid var(--dbpl-warn-bar);
   color: var(--dbpl-ink);
-  font-family: var(--dbpl-font-serif);
+  font-family: var(--dbpl-font-sans);
   font-size: var(--dbpl-size-caveat);
-  font-weight: 700;
+  font-weight: 600;
+  line-height: 1.35;
   padding: 7pt 10pt;
-  margin: 10pt 0 12pt 0;
+  margin: 7.1pt 0 14.2pt 0;
   break-inside: avoid;
+  max-width: none;
 }
 
-.dbpl-disclaimer {
-  margin: 10pt 0 14pt 0;
-  text-align: justify;
-}
+.dbpl-disclaimer { margin: 7.1pt 0 14.2pt 0; text-align: justify; }
 
 hr.dbpl-sep {
   border: 0;
   border-top: var(--dbpl-rule-body) solid var(--dbpl-rulecolour-body);
-  margin: 16pt 0;
+  margin: 14.2pt 0;
 }
 
-/* Tables — solid header band, no vertical rules, generous row padding. */
+/* ═══ TABLES — Vignelli hierarchy + Urban shading ════════════════════════ */
+
 table.dbpl {
   width: 100%;
   border-collapse: collapse;
+  /* Never hyphenate inside a table. Cells carry names, labels and codes, not continuous prose,
+     and a hyphenated signatory ("A. Ana-lyst") or broken document reference is a defect, not a
+     typographic nicety. Body prose keeps `hyphens: auto`. */
+  hyphens: none;
+  font-family: var(--dbpl-font-sans);
   font-size: var(--dbpl-size-table);
-  margin: 8pt 0 14pt 0;
+  line-height: var(--dbpl-measure-table-leading);
+  font-variant-numeric: tabular-nums lining-nums;
+  background: var(--dbpl-shade-table-ground);
+  margin: 7.1pt 0 4pt 0;   /* tight to its note block — the notes belong to the table */
+  max-width: none;
 }
+
+/* Caption above, per ADB. Unit belongs on its own line beneath the title. */
+table.dbpl > caption {
+  caption-side: top;
+  font-family: var(--dbpl-font-sans);
+  font-weight: 600;
+  font-size: var(--dbpl-size-table);
+  color: var(--dbpl-ink);
+  text-align: left;
+  padding-bottom: 4pt;
+}
+table.dbpl > caption .dbpl-unit {
+  display: block;
+  font-weight: 400;
+  color: var(--dbpl-meta);
+}
+
+/* Header band. Vignelli's MAJOR rule (2 pt) closes it — a major part boundary. */
 table.dbpl thead th {
   background: var(--dbpl-band);
-  color: #FFFFFF;
-  font-family: var(--dbpl-font-sans);
-  font-weight: 700;
+  color: var(--dbpl-paper);
+  font-weight: 600;
   text-align: left;
-  padding: 5pt 8pt;
+  /* Type hangs from the rule above: more padding below than above. */
+  padding: 4pt 8pt 6pt 8pt;
   vertical-align: bottom;
+  border-bottom: var(--dbpl-rule-table-major) solid var(--dbpl-band);
 }
-table.dbpl tbody td {
-  padding: 7pt 8pt;
+table.dbpl thead { display: table-header-group; }  /* band repeats across page breaks */
+
+/* Body cells. NO interior vertical rules — Urban, ADB and Lazard all agree here. */
+table.dbpl tbody td,
+table.dbpl tbody th {
+  padding: 4pt 8pt 6pt 8pt;
   vertical-align: top;
-  border-bottom: 0.4pt solid #E2E6E9;
+  border: 0;
 }
-table.dbpl tbody tr:last-child td { border-bottom: 0; }
-table.dbpl thead { display: table-header-group; }  /* repeat the band across page breaks */
+
+/* Urban zebra. Near-threshold tint; guides the eye without competing with the numbers. */
+table.dbpl tbody tr:nth-child(even) td,
+table.dbpl tbody tr:nth-child(even) th { background: var(--dbpl-shade-zebra); }
+
+/* Urban's item rule (1 pt) beneath the last row closes the table as a part. */
+table.dbpl tbody tr:last-child td,
+table.dbpl tbody tr:last-child th {
+  border-bottom: var(--dbpl-rule-table-item) solid var(--dbpl-band);
+}
+
+/* In-table group headers — ADB's worked example uses bold group rows, not indentation. */
+table.dbpl tr.dbpl-group td,
+table.dbpl tr.dbpl-group th {
+  background: var(--dbpl-shade-group);
+  font-weight: 600;
+  color: var(--dbpl-ink);
+  border-top: var(--dbpl-rule-table-minor) solid var(--dbpl-band);
+}
+table.dbpl tr.dbpl-emphasis td { background: var(--dbpl-shade-emphasis); }
+
+/* Numerics. Tabular figures make right-alignment equivalent to decimal alignment, which is the
+   reconciliation neither GOV.UK (right-align) nor Urban (decimal-align) states on its own. */
+table.dbpl td.dbpl-num,
+table.dbpl th.dbpl-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
+}
+table.dbpl td.dbpl-unit-col { color: var(--dbpl-meta); white-space: nowrap; }
+
 table.dbpl tr { break-inside: avoid; }
 
-/* Controlled values — identifiers, paths and digests must be visibly not-prose. */
-.dbpl-id, .dbpl-path, .dbpl-hash {
-  color: var(--dbpl-accent-id);
+/* ADB footnote indicators: superscript lowercase letters, NOT bold. */
+.dbpl-fn {
+  vertical-align: super;
+  font-size: 0.72em;
+  font-weight: 400;
+  font-style: normal;
 }
+
+/* ═══ TABLE NOTE BLOCK — ADB order, verbatim ════════════════════════════
+ * "abbreviation(s), general explanatory note(s), footnote(s), and source(s). Use font size 9
+ * points." Immediately below the table, never at the foot of the page. */
+
+.dbpl-tablenotes {
+  hyphens: none;
+  font-family: var(--dbpl-font-sans);
+  font-size: 9pt;
+  line-height: 1.28;
+  color: var(--dbpl-body);
+  margin: 0 0 14.2pt 0;
+  break-before: avoid;   /* the notes belong to the table above them */
+  max-width: none;
+}
+.dbpl-tablenotes > div { margin-bottom: 2pt; }
+.dbpl-tablenotes .dbpl-label { font-weight: 600; }
+
+/* Key Symbols legend — ADB Key Indicators. A data-integrity control: "not available" and
+   "zero" must never render identically. */
+.dbpl-keysymbols {
+  font-family: var(--dbpl-font-sans);
+  font-size: 9pt;
+  line-height: 1.35;
+  color: var(--dbpl-body);
+  border-left: var(--dbpl-rule-table-item) solid var(--dbpl-band);
+  background: var(--dbpl-shade-zebra);
+  padding: 6pt 10pt;
+  margin: 7.1pt 0 14.2pt 0;
+  break-inside: avoid;
+  max-width: none;
+}
+.dbpl-keysymbols dt {
+  font-family: var(--dbpl-font-mono);
+  font-weight: 600;
+  float: left;
+  width: 68pt;
+  clear: left;
+}
+.dbpl-keysymbols dd { margin: 0 0 1pt 72pt; }
+
+/* ═══ DOCUMENT CONTROL — Outer Dowsing / Arup ═══════════════════════════ */
+
+table.dbpl-revision td.dbpl-status { font-weight: 600; color: var(--dbpl-ink); }
+.dbpl-signoff { font-family: var(--dbpl-font-sans); font-size: 9pt; color: var(--dbpl-meta); }
+
+/* ─── Controlled values: identifiers must not read as prose ──────────────── */
+
+.dbpl-id, .dbpl-path, .dbpl-hash { color: var(--dbpl-accent-id); }
 .dbpl-path, .dbpl-hash {
   font-family: var(--dbpl-font-mono);
   font-size: 8.5pt;
   word-break: break-all;
 }
-
 .dbpl-meta { color: var(--dbpl-meta); font-size: var(--dbpl-size-footer); }
 
-ol.dbpl, ul.dbpl { margin: 6pt 0 10pt 0; padding-left: 16pt; }
+ol.dbpl, ul.dbpl { margin: 4pt 0 14.2pt 0; padding-left: 16pt; }
 ol.dbpl li, ul.dbpl li { margin-bottom: 3pt; }
 
-/* Provenance block — the print core's own record, rendered in the same register as the
- * grid-screening report's provenance box so the two surfaces read as one system. */
+/* ─── Exhibit block (Lazard): title, finding, figure, notes ──────────────── */
+
+.dbpl-exhibit { break-inside: avoid; margin: 7.1pt 0 14.2pt 0; }
+.dbpl-exhibit .dbpl-exhibit-title {
+  font-family: var(--dbpl-font-sans);
+  font-weight: 600;
+  font-size: var(--dbpl-size-subsection);
+  color: var(--dbpl-ink);
+}
+/* The "so what" line. Lazard and IEA both put the FINDING here, not a label. */
+.dbpl-exhibit .dbpl-finding {
+  font-family: var(--dbpl-font-serif);
+  font-style: italic;
+  font-size: var(--dbpl-size-table);
+  color: var(--dbpl-band);
+  margin: 2pt 0 6pt 0;
+  max-width: none;
+}
+.dbpl-exhibit .dbpl-figure {
+  border-top: var(--dbpl-rule-table-minor) solid var(--dbpl-rulecolour-section);
+  border-bottom: var(--dbpl-rule-table-minor) solid var(--dbpl-rulecolour-section);
+  padding: 6pt 0;
+}
+
+/* ─── Provenance block ───────────────────────────────────────────────────── */
+
 .dbpl-provenance {
   border-left: 3pt solid var(--dbpl-band);
-  background: #F4F8FA;
+  background: var(--dbpl-shade-zebra);
   font-family: var(--dbpl-font-sans);
   font-size: 8pt;
-  color: #2C3E4C;
+  line-height: 1.35;
+  color: var(--dbpl-ink);
   padding: 7pt 10pt;
-  margin: 14pt 0 0 0;
+  margin: 14.2pt 0 0 0;
   break-inside: avoid;
+  max-width: none;
 }

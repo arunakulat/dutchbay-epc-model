@@ -36,11 +36,12 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Mapping, Optional, Sequence
 
 from app.ops.extras import ExtraStatus, probe_extra
+from app.reports.dbpl.fonts import font_face_css, provision_fonts, resolution_summary
 from app.reports.dbpl.style import (
     DBPL_REFERENCE_DOCUMENT,
     DBPL_REQUIRED_FONT_FAMILIES,
@@ -56,10 +57,25 @@ __all__ = [
     "probe_fonts",
     "render_dbpl_pdf",
     "dbpl_stylesheet",
+    "DBPL_PDF_VARIANT",
 ]
 
 #: The optional extra a DBPL PDF requires, in full.
 DBPL_EXTRA = "report"
+
+#: The PDF conformance level a DBPL document is produced at.
+#:
+#: PDF/UA-1 (ISO 14289-1) is the accessibility standard for tagged PDF. Producing untagged output
+#: was the DBPL's own defect, shared with most of the sector — of fifteen multilateral-bank PDFs
+#: sampled during the benchmark study, only four were tagged.
+#:
+#: Stated by the standard's own custodian: conformance does NOT by itself ensure accessibility.
+#: Colour, contrast and cognitive load are outside its scope, so WCAG 2.2 contrast (4.5:1 normal,
+#: 3:1 large) is applied separately in the stylesheet.
+#:
+#: PDF/UA-1 may additionally conform to PDF/A-2 or PDF/A-3, but NOT PDF/A-1, which is based on
+#: PDF 1.4 and predates features PDF/UA-1 requires.
+DBPL_PDF_VARIANT = "pdf/ua-1"
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 _STYLESHEET = _TEMPLATE_DIR / "dbpl.css"
@@ -98,6 +114,8 @@ class DbplRenderResult:
     extra_status: ExtraStatus
     fonts: tuple[FontResolution, ...]
     stylesheet_applied: bool = True
+    pdf_variant: str = DBPL_PDF_VARIANT
+    font_tiers: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def substituted_fonts(self) -> tuple[str, ...]:
@@ -113,7 +131,11 @@ class DbplRenderResult:
         lines = [
             f"DBPL print core · [{DBPL_EXTRA}] extra: {versions}",
             f"House style measured from {DBPL_REFERENCE_DOCUMENT}",
+            f"Conformance: {self.pdf_variant} (tagged PDF; WCAG contrast applied separately)",
         ]
+        lines.extend(
+            f"font {role}: {note}" for role, note in sorted(self.font_tiers.items())
+        )
         lines.extend(f.note for f in self.fonts)
         return tuple(lines)
 
@@ -175,12 +197,20 @@ def require_dbpl_stack(*, deep: bool = True) -> ExtraStatus:
 def probe_fonts(
     families: Sequence[str] = DBPL_REQUIRED_FONT_FAMILIES,
 ) -> tuple[FontResolution, ...]:
-    """Resolve each house-style family through fontconfig and report substitutions.
+    """Resolve each house family through fontconfig and report substitutions.
 
     Uses ``fc-match`` rather than attempting a render, because WeasyPrint renders successfully
     with a substituted face — a render proves the pipeline works, not that the requested font was
     used. When ``fc-match`` is unavailable the resolution is reported as unknown rather than
     guessed.
+
+    **Scope limit, and it matters.** This answers only "is the family installed on this system".
+    It is blind to a font embedded via ``@font-face``, which is how the bundled tier supplies the
+    house superfamily — fontconfig has never heard of a file the stylesheet points at. Reporting
+    its verdict alongside the provisioning tier therefore produced directly contradictory
+    provenance ("bundled" and "SUBSTITUTED" for the same family in one block).
+    :func:`render_dbpl_pdf` consequently reports the PROVISIONING tier, which is authoritative,
+    and consults this only for families the provisioner did not supply.
     """
     binary = shutil.which("fc-match")
     if binary is None:
@@ -207,10 +237,15 @@ def probe_fonts(
     return tuple(resolutions)
 
 
-def dbpl_stylesheet() -> str:
-    """The DBPL stylesheet: generated design tokens followed by the house rules."""
+def dbpl_stylesheet(*, allow_web_fonts: bool = False) -> str:
+    """The DBPL stylesheet: @font-face rules, then design tokens, then the house rules.
+
+    Order matters. ``@font-face`` and ``@import`` must precede any rule that uses the families,
+    and the token block must precede the house rules that reference its custom properties.
+    """
     base = _STYLESHEET.read_text(encoding="utf-8") if _STYLESHEET.exists() else ""
-    return f"{as_css_variables()}\n\n{base}"
+    faces = font_face_css(provision_fonts(allow_web=allow_web_fonts))
+    return f"{faces}\n\n{as_css_variables()}\n\n{base}"
 
 
 def render_dbpl_pdf(
@@ -219,6 +254,7 @@ def render_dbpl_pdf(
     extra_css: Optional[str] = None,
     base_url: Optional[str] = None,
     deep_check: bool = True,
+    allow_web_fonts: bool = False,
 ) -> DbplRenderResult:
     """Render DBPL HTML to PDF through the enforced ``[report]`` stack.
 
@@ -235,7 +271,6 @@ def render_dbpl_pdf(
         DbplDependencyError: the ``[report]`` stack is incomplete.
     """
     status = require_dbpl_stack(deep=deep_check)
-    fonts = probe_fonts()
 
     from weasyprint import (  # imported after the guard, so the error is ours not a stack
         CSS,
@@ -243,12 +278,28 @@ def render_dbpl_pdf(
     )
     from weasyprint.text.fonts import FontConfiguration
 
+    provisions = provision_fonts(allow_web=allow_web_fonts)
+    # Only fc-match families the provisioner did NOT supply; for a bundled or web family the
+    # provisioning tier is the authoritative answer and fontconfig's is simply out of scope.
+    unprovisioned = tuple(p.spec.family for p in provisions if not p.is_house_font)
     font_config = FontConfiguration()
-    sheets = [CSS(string=dbpl_stylesheet(), font_config=font_config)]
+    sheets = [
+        CSS(
+            string=dbpl_stylesheet(allow_web_fonts=allow_web_fonts),
+            font_config=font_config,
+        )
+    ]
     if extra_css:
         sheets.append(CSS(string=extra_css, font_config=font_config))
 
     pdf = HTML(string=html, base_url=base_url).write_pdf(
-        stylesheets=sheets, font_config=font_config
+        stylesheets=sheets,
+        font_config=font_config,
+        pdf_variant=DBPL_PDF_VARIANT,
     )
-    return DbplRenderResult(pdf=pdf, extra_status=status, fonts=fonts)
+    return DbplRenderResult(
+        pdf=pdf,
+        extra_status=status,
+        fonts=probe_fonts(unprovisioned) if unprovisioned else (),
+        font_tiers=dict(resolution_summary(provisions)),
+    )

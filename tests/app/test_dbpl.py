@@ -39,6 +39,16 @@ from app.reports.dbpl.style import (
 _TEMPLATES = "app/reports/dbpl/templates"
 
 
+def _rule_block(sheet: str, selector: str) -> str:
+    """The declarations of one CSS rule, parsed rather than sliced.
+
+    A fixed character window breaks the moment a comment is added above a declaration, which is a
+    brittle test, not a real signal.
+    """
+    start = sheet.index(selector + " {") + len(selector) + 2
+    return sheet[start : sheet.index("}", start)]
+
+
 def _doc(**over: object) -> dict:
     doc: dict = {
         "title": "Proof",
@@ -127,22 +137,27 @@ def test_reference_document_is_recorded_so_tokens_are_traceable() -> None:
     assert "DBAY-SLTS-2026-08-18" in DBPL_REFERENCE_DOCUMENT
 
 
-def test_stylesheet_is_tokens_followed_by_house_rules() -> None:
+def test_stylesheet_is_font_faces_then_tokens_then_house_rules() -> None:
+    """Order is load-bearing: @font-face must precede any rule using the families, and the
+    token block must precede the house rules that reference its custom properties."""
     sheet = dbpl_stylesheet()
-    assert sheet.startswith(":root {")
-    assert "@page" in sheet and ".dbpl-caveat" in sheet
+    face_at = sheet.index("@font-face")
+    root_at = sheet.index(":root {")
+    rules_at = sheet.index(".dbpl-caveat")
+    assert face_at < root_at < rules_at
+    assert "@page" in sheet
 
 
-def test_stylesheet_references_tokens_rather_than_hard_coded_colours() -> None:
-    """A literal hex in the house rules means a token was bypassed."""
-    _, _, rules = dbpl_stylesheet().partition("}")
-    literals = set(re.findall(r"#[0-9A-Fa-f]{6}", rules)) - {
-        "#FFFFFF",
-        "#E2E6E9",
-        "#F4F8FA",
-        "#2C3E4C",
-    }
-    assert not literals, f"hard-coded colours bypassing the tokens: {literals}"
+def test_house_rules_contain_no_hard_coded_colours_at_all() -> None:
+    """Every colour must come from a token. v2 tightened this to ZERO literals.
+
+    The house rules are everything after the generated :root block; a literal hex there means a
+    surface bypassed style.py, which is how a house style forks.
+    """
+    sheet = dbpl_stylesheet()
+    rules = sheet[sheet.index(":root {") :].split("}", 1)[1]
+    literals = set(re.findall(r"#[0-9A-Fa-f]{3,8}\b", rules))
+    assert not literals, f"hard-coded colours bypassing the tokens: {sorted(literals)}"
 
 
 # ── Structural furniture ─────────────────────────────────────────────────────
@@ -269,8 +284,27 @@ def test_uninstalled_project_raises_rather_than_rendering_unverified(
 
 
 def test_probe_fonts_reports_a_resolution_per_family() -> None:
+    from app.reports.dbpl.style import DBPL_REQUIRED_FONT_FAMILIES
+
     fonts = probe_fonts()
-    assert {f.family for f in fonts} == {"Liberation Serif", "Liberation Sans"}
+    assert {f.family for f in fonts} == set(DBPL_REQUIRED_FONT_FAMILIES)
+
+
+def test_render_reports_the_provisioning_tier_not_fontconfig() -> None:
+    """Regression guard for directly contradictory provenance.
+
+    fontconfig is blind to an @font-face-embedded file, so it reported "SUBSTITUTED" for the very
+    families the provisioner had just supplied from the bundled tier. The provisioning tier is
+    authoritative; fc-match is consulted only for families it did not supply.
+    """
+    result = render_dbpl_pdf(_render_html(_doc()))
+    assert set(result.font_tiers) == {"serif", "sans", "mono"}
+    assert all("bundled" in note for note in result.font_tiers.values())
+    assert (
+        result.fonts == ()
+    ), "no fc-match verdict for a family the provisioner supplied"
+    joined = " ".join(result.provenance_lines())
+    assert "SUBSTITUTED" not in joined
 
 
 def test_substitution_is_surfaced_not_hidden() -> None:
@@ -344,3 +378,263 @@ def test_provenance_lines_survive_a_second_render() -> None:
     html = _render_html(doc)
     assert "dbpl-provenance" in html
     assert render_dbpl_pdf(html).pdf[:5] == b"%PDF-"
+
+
+# ── v2: the symbiotic decisions, asserted as rules ───────────────────────────
+
+
+def test_vignelli_rule_hierarchy_is_three_graded_weights() -> None:
+    """Vignelli over Tufte: rules are load-bearing structure, in a graded hierarchy."""
+    from app.reports.dbpl.style import DBPL_RULES
+
+    assert DBPL_RULES["table_major"] == "2pt"
+    assert DBPL_RULES["table_item"] == "1pt"
+    assert DBPL_RULES["table_minor"] == "0.5pt"
+
+
+def test_header_band_is_closed_by_the_major_rule() -> None:
+    sheet = dbpl_stylesheet()
+    assert "border-bottom: var(--dbpl-rule-table-major)" in sheet
+
+
+def test_type_hangs_from_the_rule_above() -> None:
+    """Vignelli, verbatim: 'Type should always hang from the ruler.'
+
+    Implemented as asymmetric cell padding — tighter above than below.
+    """
+    sheet = dbpl_stylesheet()
+    assert (
+        "padding: 4pt 8pt 6pt 8pt" in sheet
+    ), "cells must sit closer to the rule above them"
+
+
+def test_no_interior_vertical_rules_anywhere() -> None:
+    """Urban, ADB and Lazard all agree: no verticals inside a table."""
+    sheet = dbpl_stylesheet()
+    for banned in (
+        "border-left: 1pt",
+        "border-right: 1pt",
+        "border-collapse: separate",
+    ):
+        assert banned not in sheet
+
+
+def test_urban_zebra_shading_is_applied() -> None:
+    """Adopted over Tufte deliberately: row-tracking beats data-ink ratio here."""
+    sheet = dbpl_stylesheet()
+    assert "nth-child(even)" in sheet
+    assert "var(--dbpl-shade-zebra)" in sheet
+
+
+def test_last_row_is_closed_by_the_item_rule() -> None:
+    sheet = dbpl_stylesheet()
+    assert "tbody tr:last-child" in sheet
+    assert "var(--dbpl-rule-table-item)" in sheet
+
+
+def test_adb_note_order_is_declared_verbatim() -> None:
+    from app.reports.dbpl.style import DBPL_NOTE_ORDER
+
+    assert DBPL_NOTE_ORDER == ("abbreviations", "notes", "footnotes", "sources")
+
+
+def test_adb_footnote_indicators_are_superscript_and_not_bold() -> None:
+    sheet = dbpl_stylesheet()
+    block = _rule_block(sheet, ".dbpl-fn")
+    assert "vertical-align: super" in block
+    assert "font-weight: 400" in block, "ADB: superscript lowercase letters, NOT bold"
+
+
+def test_key_symbols_distinguish_unavailable_from_zero() -> None:
+    """A data-integrity control. Rendering these identically misstates the data."""
+    from app.reports.dbpl.style import DBPL_KEY_SYMBOLS
+
+    assert DBPL_KEY_SYMBOLS["..."] == "data not available"
+    assert DBPL_KEY_SYMBOLS["–"] == "magnitude equals zero"
+    assert DBPL_KEY_SYMBOLS["..."] != DBPL_KEY_SYMBOLS["–"]
+
+
+def test_tabular_figures_are_asserted_regardless_of_font_tier() -> None:
+    sheet = dbpl_stylesheet()
+    assert sheet.count("font-variant-numeric: tabular-nums") >= 3
+
+
+def test_measure_is_capped_for_prose_but_not_for_tables() -> None:
+    """66-character measure governs prose; a table would be crippled by it."""
+    sheet = dbpl_stylesheet()
+    assert "max-width: var(--dbpl-measure-max-characters)" in sheet
+    assert "max-width: none" in _rule_block(sheet, "table.dbpl")
+
+
+def test_landscape_is_a_page_size_not_a_different_design() -> None:
+    """Lazard landscape inherits every other rule; only the page box changes."""
+    sheet = dbpl_stylesheet()
+    assert "@page dbpl-landscape" in sheet
+    assert "size: A4 landscape" in sheet
+    assert ".dbpl-landscape" in sheet and "page: dbpl-landscape" in sheet
+    # no duplicated table/typography rules scoped to landscape
+    assert ".dbpl-landscape table.dbpl" not in sheet
+
+
+def test_running_furniture_is_present_on_every_page() -> None:
+    sheet = dbpl_stylesheet()
+    assert "string(dbpl-banner)" in sheet
+    assert "string(dbpl-docline)" in sheet
+    assert 'counter(page) " of " counter(pages)' in sheet
+
+
+# ── v2: document control, landscape sections, PDF/UA ─────────────────────────
+
+
+def _controlled_doc(**over: object) -> dict:
+    doc = _doc(
+        control=[("Document ID", "DBAY-TEST-01"), ("Version", "v1.0")],
+        revisions=[
+            {
+                "rev": "1.0",
+                "date": "21 Aug 2026",
+                "status": "Responding to client comments",
+                "prepared": "A. Analyst",
+                "checked": "B. Checker",
+                "reviewed": "C. Reviewer",
+                "approved": "D. Approver",
+            }
+        ],
+        status="Final Report",
+    )
+    doc.update(over)
+    return doc
+
+
+def test_document_control_block_renders_with_four_eyes_signoff() -> None:
+    html = _render_html(_controlled_doc())
+    assert "Document control" in html
+    assert "Revision history" in html
+    for column in ("Prepared", "Checked", "Reviewed", "Approved"):
+        assert (
+            f">{column}<" in html
+        ), f"{column} column missing from the four-eyes chain"
+
+
+def test_draft_versus_final_is_a_status_field_not_a_watermark() -> None:
+    """The sector convention: `Status / Reason for issue`, never a watermark overlay."""
+    html = _render_html(_controlled_doc())
+    assert "Status / Reason for issue" in html
+    assert "Responding to client comments" in html
+    # The word appears once, in the caption that EXPLAINS the convention. What must not exist is
+    # a watermark overlay — a rotated/absolutely-positioned draft stamp over the page.
+    assert "dbpl-watermark" not in html
+    from app.reports.dbpl.print_core import dbpl_stylesheet
+
+    assert "watermark" not in dbpl_stylesheet().lower()
+
+
+def test_status_token_rides_the_running_footer() -> None:
+    """Outer Dowsing's rule: a loose page must identify itself."""
+    html = _render_html(_controlled_doc())
+    docline = html.split('class="dbpl-docline">')[1].split("</div>")[0]
+    assert "DBAY-TEST" in docline and "Final Report" in docline
+
+
+def test_document_control_is_omitted_when_no_fields_supplied() -> None:
+    assert "Revision history" not in _render_html(_doc())
+
+
+def test_a_section_can_be_marked_landscape() -> None:
+    html = _render_html(
+        _doc(sections=[{"heading": "Wide", "landscape": True, "body": "x"}])
+    )
+    assert 'class="dbpl-landscape"' in html
+
+
+def test_table_notes_render_in_the_adb_order() -> None:
+    html = _render_html(
+        _doc(
+            sections=[
+                {
+                    "heading": "T",
+                    "table": {
+                        "columns": ["A", "B"],
+                        "rows": [{"cells": ["1", "2"]}],
+                        "abbreviations": "ABC = a b c.",
+                        "notes": ["rounding"],
+                        "footnotes": [{"mark": "a", "text": "a note"}],
+                        "source": "DutchBay model.",
+                    },
+                }
+            ]
+        )
+    )
+    order = [
+        html.index("dbpl-abbrev"),
+        html.index("dbpl-note"),
+        html.index("dbpl-footnote"),
+        html.index("dbpl-source"),
+    ]
+    assert order == sorted(
+        order
+    ), "ADB order is abbreviations, notes, footnotes, sources"
+
+
+def test_table_headers_carry_scope_for_pdf_ua() -> None:
+    """WCAG PDF6 / PDF-UA: a table must be real structure, not positioned text."""
+    html = _render_html(
+        _doc(
+            sections=[
+                {
+                    "heading": "T",
+                    "table": {"columns": ["A"], "rows": [{"cells": ["1"]}]},
+                }
+            ]
+        )
+    )
+    assert 'scope="col"' in html
+
+
+def test_lang_is_on_the_html_element_not_the_body() -> None:
+    """PDF/UA requires /Lang at the root; WeasyPrint rejects it on <body> alone."""
+    html = _render_html(_doc())
+    assert re.search(r"^\s*<html lang=", html.split(">", 1)[1], re.M)
+    assert "<body lang=" not in html, "lang on <body> alone does not satisfy PDF/UA"
+
+
+def test_group_and_emphasis_rows_render_with_their_classes() -> None:
+    html = _render_html(
+        _doc(
+            sections=[
+                {
+                    "heading": "T",
+                    "table": {
+                        "columns": ["A", "B"],
+                        "rows": [
+                            {"group": "Debt service"},
+                            {"cells": ["DSCR", "1.286"], "emphasis": True},
+                        ],
+                    },
+                }
+            ]
+        )
+    )
+    assert 'class="dbpl-group"' in html and 'class="dbpl-emphasis"' in html
+
+
+def test_output_is_tagged_pdf_ua() -> None:
+    """The DBPL's own former defect: untagged output, shared with most of the sector."""
+    from app.reports.dbpl.print_core import DBPL_PDF_VARIANT
+
+    assert DBPL_PDF_VARIANT == "pdf/ua-1"
+    result = render_dbpl_pdf(_render_html(_doc()))
+    assert result.pdf[:5] == b"%PDF-"
+    assert result.pdf_variant == "pdf/ua-1"
+    assert any("pdf/ua-1" in line for line in result.provenance_lines())
+
+
+def test_tables_never_hyphenate() -> None:
+    """Cells carry names, labels and codes — not prose.
+
+    Proof-rendering the revision table produced "A. Ana-lyst" and "D. Ap-prover": a hyphenated
+    signatory is a defect. Body prose keeps `hyphens: auto`.
+    """
+    sheet = dbpl_stylesheet()
+    assert "hyphens: none" in _rule_block(sheet, "table.dbpl")
+    assert "hyphens: auto" in _rule_block(sheet, "body")
