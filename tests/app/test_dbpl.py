@@ -63,7 +63,10 @@ def _doc(**over: object) -> dict:
         "sections": [
             {
                 "heading": "Document control",
-                "table": {"columns": ["Field", "Value"], "rows": [["ID", "DBAY-TEST"]]},
+                "table": {
+                    "columns": ["Field", "Value"],
+                    "rows": [{"cells": ["ID", "DBAY-TEST"]}],
+                },
             },
             {"heading": "Points", "points": ["one", "two"], "intro": "intro text"},
             {
@@ -707,3 +710,23 @@ def test_unverifiable_embedding_is_none_not_false() -> None:
         b"", ExtraStatus("report", ()), (), embedded_families=("Times-New-Roman",)
     )
     assert bad.house_fonts_embedded is False
+
+
+def test_a_malformed_table_row_fails_loud_rather_than_rendering_nothing() -> None:
+    """CESSPIT. A bare list used to render silently, costing a document its body text.
+
+    The headings still appeared, so the output looked complete — which is exactly why this must
+    raise rather than degrade.
+    """
+    with pytest.raises(Exception) as excinfo:
+        _render_html(
+            _doc(
+                sections=[
+                    {
+                        "heading": "S",
+                        "table": {"columns": ["a", "b"], "rows": [["1", "2"]]},
+                    }
+                ]
+            )
+        )
+    assert "cells" in str(excinfo.value) or "group" in str(excinfo.value)

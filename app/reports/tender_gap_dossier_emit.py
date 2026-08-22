@@ -561,23 +561,32 @@ def as_dbpl_document(
             "table": {
                 "columns": ["Control field", "Controlled value"],
                 "rows": [
-                    ["Tender", model.tender_ref],
-                    ["Tender title", model.tender_title],
-                    ["Addressed to", model.oem_label],
-                    ["Raised by", model.bidder_label],
-                    ["Submission deadline", model.submission_deadline or "not stated"],
-                    [
-                        "Working days remaining",
-                        (
-                            str(model.working_days_remaining)
-                            if model.working_days_remaining is not None
-                            else "not stated"
-                        ),
-                    ],
-                    ["Open items", f"{len(model.gaps)} ({counts})"],
-                    ["Register digest", model.register_digest[:16]],
-                    ["Generated", model.generated_at],
-                    ["Status", "Derived gap register - not a compliance determination"],
+                    {"cells": c}
+                    for c in (
+                        ["Tender", model.tender_ref],
+                        ["Tender title", model.tender_title],
+                        ["Addressed to", model.oem_label],
+                        ["Raised by", model.bidder_label],
+                        [
+                            "Submission deadline",
+                            model.submission_deadline or "not stated",
+                        ],
+                        [
+                            "Working days remaining",
+                            (
+                                str(model.working_days_remaining)
+                                if model.working_days_remaining is not None
+                                else "not stated"
+                            ),
+                        ],
+                        ["Open items", f"{len(model.gaps)} ({counts})"],
+                        ["Register digest", model.register_digest[:16]],
+                        ["Generated", model.generated_at],
+                        [
+                            "Status",
+                            "Derived gap register - not a compliance determination",
+                        ],
+                    )
                 ],
             },
         }
@@ -614,7 +623,10 @@ def as_dbpl_document(
         sections.append(
             {
                 "heading": f"{gap.gap_id} - {gap.title}",
-                "table": {"columns": ["Field", "Content"], "rows": rows},
+                "table": {
+                    "columns": ["Field", "Content"],
+                    "rows": [{"cells": r} for r in rows],
+                },
             }
         )
 
@@ -636,7 +648,15 @@ def as_dbpl_document(
                         "Note",
                     ],
                     "rows": [
-                        [e.item, e.declared, e.received, e.status_label, e.note or "-"]
+                        {
+                            "cells": [
+                                e.item,
+                                e.declared,
+                                e.received,
+                                e.status_label,
+                                e.note or "-",
+                            ]
+                        }
                         for e in model.evidence
                     ],
                 },
@@ -665,14 +685,16 @@ def as_dbpl_document(
                         "Note",
                     ],
                     "rows": [
-                        [
-                            s.label,
-                            s.role,
-                            s.document_date or "not stated",
-                            s.short_hash,
-                            s.extraction,
-                            s.note or "-",
-                        ]
+                        {
+                            "cells": [
+                                s.label,
+                                s.role,
+                                s.document_date or "not stated",
+                                s.short_hash,
+                                s.extraction,
+                                s.note or "-",
+                            ]
+                        }
                         for s in model.sources
                     ],
                 },
