@@ -50,7 +50,14 @@ EXPECTED_PAYLOAD_SHA256 = {
     "profile/generation_profile.csv": "cefa4b9e37f85e5f7774a14727bf35a43c9c3bd8b3219bd730a35aff4f36ab76",
 }
 EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
-    "b8e40d21e85667acf0e64e90d53ddd6087eaf72d0cb8dd84001e8d98baf16b78"
+    # Re-pinned under #961. The manifest digest rolls up the pinned source
+    # digests, and retracting the fabricated met-mast provenance from
+    # scenarios/dutchbay_lendercase_2025Q4.yaml changed that scenario's bytes.
+    # The per-file artefact digests above are UNCHANGED - the generated feeder
+    # and profile are byte-identical - so this moved only because the manifest
+    # records which sources produced them, which is the guard working, not
+    # drifting. Verified deterministic across repeated runs (MRM-01).
+    "24a723f33e13035def1f3fa68140bf6dc22f1b380d230b44331caadde5b25b2f"
 )
 
 MASTER_REDIRECT_MUTATIONS = [
