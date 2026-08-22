@@ -1,0 +1,80 @@
+# SHA-256 manifest — Sri Lanka 250 MW/1000 MWh NSO checklist package
+# Source: supplier checklist package (168,832,294 bytes)
+# Received via project owner, 21 August 2026. 72 files, 58 unique by content.
+#
+# Filenames for the third-party customer reference letters and the cell bankability
+# study are REDACTED for public publication; the SHA-256 digests are unmodified, so a
+# re-supplied copy still verifies byte-for-byte against this manifest.
+
+79d9821b10bf04f78ff7efa4c5043077719755e3057604892dfae61bbf3a0aed  A. Manufacturer Experience & Qualification/1. Envision BESS Sales Track Record_2026.7.23.pdf
+4308c0ec84ca24c757081d4c6052ee36dc36491651d9ed211f28171d75fe482a  A. Manufacturer Experience & Qualification/10. PPC Supplier Experience（part).xlsx
+34a5d89f6271ed88bd33ce847f9ca24aead650c16fdafcabcd35f27de46cc534  A. Manufacturer Experience & Qualification/11. Envision's Letter Confirming Total Installed BESS - 副本.pdf
+82a37d41bd470013c77e7efdef68087c46cb0fcd1c2bc5e84edab10c8d271d26  A. Manufacturer Experience & Qualification/12. EnOS™ PPC Product Manual.pdf
+4308c0ec84ca24c757081d4c6052ee36dc36491651d9ed211f28171d75fe482a  A. Manufacturer Experience & Qualification/2. BESS Supplier Experience（part).xlsx   [duplicate of: A. Manufacturer Experience & Qualification/10. PPC Supplier Experience（part).xlsx]
+34a5d89f6271ed88bd33ce847f9ca24aead650c16fdafcabcd35f27de46cc534  A. Manufacturer Experience & Qualification/3. Envision's Letter Confirming Total Installed BESS.pdf   [duplicate of: A. Manufacturer Experience & Qualification/11. Envision's Letter Confirming Total Installed BESS - 副本.pdf]
+06c69f7f3c7ca51b55622a17912c28331f131d22a4166ea018184c48e7332585  A. Manufacturer Experience & Qualification/4. Envision Brochure-Regular ver 2603.pdf
+79d9821b10bf04f78ff7efa4c5043077719755e3057604892dfae61bbf3a0aed  A. Manufacturer Experience & Qualification/5. Envision BESS Sales Track Record_2026.7.23 .pdf   [duplicate of: A. Manufacturer Experience & Qualification/1. Envision BESS Sales Track Record_2026.7.23.pdf]
+4308c0ec84ca24c757081d4c6052ee36dc36491651d9ed211f28171d75fe482a  A. Manufacturer Experience & Qualification/6. PCS Supplier Experience（part).xlsx   [duplicate of: A. Manufacturer Experience & Qualification/10. PPC Supplier Experience（part).xlsx]
+34a5d89f6271ed88bd33ce847f9ca24aead650c16fdafcabcd35f27de46cc534  A. Manufacturer Experience & Qualification/7. Envision's Letter Confirming Total Installed BESS.pdf   [duplicate of: A. Manufacturer Experience & Qualification/11. Envision's Letter Confirming Total Installed BESS - 副本.pdf]
+06c69f7f3c7ca51b55622a17912c28331f131d22a4166ea018184c48e7332585  A. Manufacturer Experience & Qualification/8. Envision Brochure-Regular ver 2603.pdf   [duplicate of: A. Manufacturer Experience & Qualification/4. Envision Brochure-Regular ver 2603.pdf]
+79d9821b10bf04f78ff7efa4c5043077719755e3057604892dfae61bbf3a0aed  A. Manufacturer Experience & Qualification/9. Envision BESS Sales Track Record_2026.7.23.pdf   [duplicate of: A. Manufacturer Experience & Qualification/1. Envision BESS Sales Track Record_2026.7.23.pdf]
+647dd6566e0f7f43b17e920113ec4f77ad53dd693edc9eb41518f0f6e3819c33  B. Customer Reference Letters (Technology Track Record)/[operator 1] 60MW 120MWh operation statement.pdf
+f58ab8ef5dcbbcf476be82ff2b1aca9eed75893d808e681a7d482e8b04258b41  B. Customer Reference Letters (Technology Track Record)/[operator 2] 120MW 240MWh operation report.pdf
+c20b500fee4dd8df5e5d201f2a8863b12ce8903702c0f0643941dfddbecf3532  B. Customer Reference Letters (Technology Track Record)/[overseas system operator] 100MW 100MWh proof of operation.pdf
+19e1773ccd3c7692e61181bae9983401ffa438aca09759734f00db41902e1744  B. Customer Reference Letters (Technology Track Record)/[operator 3] 200MW wind project operation report.pdf
+234e9313e91826d431d1601c32ac3ad8e04e8a5308abd86ce777aa054480fdfb  C. Standards Compliance Certifications-DC/17. (IEC 62619-2022)-CELL-CERT.pdf
+0262d472c8e4086fe5ed291ff98f6a9cb4e8150dd1223579b39748dd6a7c460f  C. Standards Compliance Certifications-DC/21. IEC 63056-2020&EN 62477-1-2022)-RACK-(J&H)-CERT-(R 50736298 0001).pdf
+fee792a50cb38cf6c2b546d96b81027f0f70803d86a5e6f7773fafa69551f571  C. Standards Compliance Certifications-DC/26. (UL 9540A-2019)-CELL-(HC-L755A)-(J&H)-REP-(4792030035).pdf
+1de664d3c8f0eb8a69a6a03a26f680dee57c43c285f59b30a63adc1d00e1c512  C. Standards Compliance Certifications-DC/27. (UL 1973-2022)-CELL-CERT.pdf
+05dc77529eb38424bb6c899d6ab68624e93d4b06f64916a9ded3a198fcc710d5  C. Standards Compliance Certifications-DC/28. UN38.3.pdf
+7585c0adbc197791fe813e538f18e89145b69ab68375a9450a2b96a3b0f85b69  C. Standards Compliance Certifications-DC/Standards Compliance List.xlsx
+f42e72f0c27c71dd346057a74820996b2b5fbb0264d01a88d805ca4619a0a94c  D. Standards Compliance Certifications-AC/32. ENPCS 2520 IEC 62477 Certificate.pdf
+55742a1d30c539380d83f01fe2ca882fd361ce4764dafa9ab93cda88645ea282  D. Standards Compliance Certifications-AC/33.34. ENPCS-2520_IEC 62109-1&-2_CER.pdf
+5fe38f8f1dbc5424b921b4412e980bb6e8a5af233b79c198f208c50180fd5121  D. Standards Compliance Certifications-AC/ENPCS 2520 IEC 60068-2-(30&78)- COVER PAGE.pdf
+487dc75a07ef808d5cb54c1e70f76f0d34cedabdedace0202d61a9ffa62f0254  D. Standards Compliance Certifications-AC/ENPCS 2520 IEC 61000 Certificate.pdf
+53a6a71b1a756282254938fd54865dda7b57dd7f4b8e21b769c964f51201b7f7  D. Standards Compliance Certifications-AC/ENPCS 2520 IEEE 519_Coverpage.pdf
+2d5757d19bee786404c800cfd0a16cad2eb1f424597dfde4026ab43af3ec6e40  D. Standards Compliance Certifications-AC/ENPCS 2520_EN 50530_report_coverpage.pdf
+9ffb6128e7d37b0684bf9076055583914ac2e79f274ccddfcf4839a34910bf95  D. Standards Compliance Certifications-AC/ENPCS-2520_IEC 60529_Test Report.pdf
+0760b4ee98c4a1edbebb4de882bfda679d803fad805dd47af40f5881d6428d6d  D. Standards Compliance Certifications-AC/ENPCS-2520_IEC 61683_CERTIFICATE.pdf
+aa25d39577daab9799bf2967b85b2abaae3658fcb8b141a2fb78c2b7a4b6f5a7  D. Standards Compliance Certifications-AC/ENPCS-2520_IEC 62909-1 _CER.pdf
+7585c0adbc197791fe813e538f18e89145b69ab68375a9450a2b96a3b0f85b69  D. Standards Compliance Certifications-AC/Standards Compliance List.xlsx   [duplicate of: C. Standards Compliance Certifications-DC/Standards Compliance List.xlsx]
+8bc0b3f225fc9c8d54fc860c44ca2ae61f29288a107fd5db166b8c847925bea3  E. Grid-Forming Capability/37. Envision's Letter Confirming Grid-Forming Capability of ENPCS2520.pdf
+d9f66fd0ac2e4f7f7dee0a3cbedb77737d5db3f8d650e4c15559e150d601839d  E. Grid-Forming Capability/38. BESS Plant Grid Forming Technical Solution(for reference).pdf
+418e9719c1a4da4d5d7962ffc8eb74a155fcca1a548962453fd84541eb6ae7b5  E. Grid-Forming Capability/39. Envision's Letter Confirming Parallel Operation Capability.pdf
+836cc82f5b7df0e76196cd34d22234d8850f3723216e49ee04aef4e0eb54d320  F. Technical & Design Data/40 Envision Energy_Technical Specifications of Envision 10100kVA Transformer_V1.1.pdf
+d1139c0bbb6a532fc3abdefdeb312fe344f954f10a30817427f9463499e0036d  F. Technical & Design Data/41 Envision Energy_Technical Specifications of 36kV RMU_V1.0.pdf
+5ae0e05a75fe5994ffc9920a86ffcb124bf3603d7cbb760410342fa51e75d6bc  F. Technical & Design Data/42.1 Envision Energy_Recommended layout of ENS-D6 Series BESS_V1.1.pdf
+ffb70c10528d4649915f747279aded73c4fff67340456eb8a64efaab5b7491cd  F. Technical & Design Data/42.2 Envision Energy_Recommended layout of ENS-D10 Series BESS_V1.1.pdf
+868006ff98e4af7ef47609dadf6855d5990663c3170a9a560b0476d458b9892d  F. Technical & Design Data/45. FIRE SAFETY/1. Envision Energy_Fire Protection System Specification of ENS-D_V2.0.pdf
+fee792a50cb38cf6c2b546d96b81027f0f70803d86a5e6f7773fafa69551f571  F. Technical & Design Data/45. FIRE SAFETY/2.1 (UL 9540A-2019)-CELL-(HC-L755A)-(J&H)-REP-(4792030035).pdf   [duplicate of: C. Standards Compliance Certifications-DC/26. (UL 9540A-2019)-CELL-(HC-L755A)-(J&H)-REP-(4792030035).pdf]
+bea859864be922a65f526811984c8ffeb13715f3f1d9d5440d747879b75e5cf9  F. Technical & Design Data/45. FIRE SAFETY/2.2 (UL 9540A-2026)-PACK-(ENS-1P416S-L-10)-REP-(260202010SHF-001).pdf
+868006ff98e4af7ef47609dadf6855d5990663c3170a9a560b0476d458b9892d  F. Technical & Design Data/45. FIRE SAFETY/G. FIRE SAFETY/1. Envision Energy_Fire Protection System Specification of ENS-D_V2.0.pdf   [duplicate of: F. Technical & Design Data/45. FIRE SAFETY/1. Envision Energy_Fire Protection System Specification of ENS-D_V2.0.pdf]
+fee792a50cb38cf6c2b546d96b81027f0f70803d86a5e6f7773fafa69551f571  F. Technical & Design Data/45. FIRE SAFETY/G. FIRE SAFETY/2.1 (UL 9540A-2019)-CELL-(HC-L755A)-(J&H)-REP-(4792030035).pdf   [duplicate of: C. Standards Compliance Certifications-DC/26. (UL 9540A-2019)-CELL-(HC-L755A)-(J&H)-REP-(4792030035).pdf]
+bea859864be922a65f526811984c8ffeb13715f3f1d9d5440d747879b75e5cf9  F. Technical & Design Data/45. FIRE SAFETY/G. FIRE SAFETY/2.2 (UL 9540A-2026)-PACK-(ENS-1P416S-L-10)-REP-(260202010SHF-001).pdf   [duplicate of: F. Technical & Design Data/45. FIRE SAFETY/2.2 (UL 9540A-2026)-PACK-(ENS-1P416S-L-10)-REP-(260202010SHF-001).pdf]
+d74f8d5efde94e7ec81eef5cd29fae3cd6e38bc507e057e9329d2faa25054f38  F. Technical & Design Data/46. Envision's Letter Confirming BESS 20 years lifetime.pdf
+d7939cf759e2bcc27a09ea7730069ef967d12c4918240319f367182068dcbd77  F. Technical & Design Data/47. Cell bankability study (independent test house).pdf
+a5b368b2117461b97a0fd2fee8fb7aa1adfb5ca1bef76eba7f742eae71d0b4de  G. Performance & Simulation Data/48. PSSE_UDM_GFMPCS260327&PPC260415_2520/DLL PSSE V35/ENPPC_260415_PSSE_V35.dll
+e4a87ab114829f3a95c007868da6c81bd8ac756e588e331ef355796433cfecff  G. Performance & Simulation Data/48. PSSE_UDM_GFMPCS260327&PPC260415_2520/DLL PSSE V35/ENVSG01_20260327_PSSE_V35.dll
+cb528e42b8cd42f57631bcff957561c057c2ce53a0359905856af42556be6774  G. Performance & Simulation Data/48. PSSE_UDM_GFMPCS260327&PPC260415_2520/ENVSG_PPC_2520_260416_LKA.dyr
+65d841c8861303df8e08fc7808d58e88379af0e80b797a2d7b7ef7140369e59f  G. Performance & Simulation Data/48. PSSE_UDM_GFMPCS260327&PPC260415_2520/Envision Energy GFM PCS and PPC PSSE UDM User Manual_V1.4a.pdf
+86a9716a724649106143feff235bc655c6af154a7863f621e11641310e9b8c41  G. Performance & Simulation Data/49. PSCAD_PCS2520x4_690V_50Hz_UPPC_x64_260605aBB/Envision Energy GFL PCS PSCAD Model User Manual V4.1b1.pdf
+0c3e6085f7ffff169b5c5df6fec9f49cf21ae2fff3b4b203573a3317cfdd0397  G. Performance & Simulation Data/49. PSCAD_PCS2520x4_690V_50Hz_UPPC_x64_260605aBB/Envision Univers PPC PSCAD Model User Manual V1.1.5b.pdf
+c93333f3755632629523250be5178da46d0e9d63b3f90f1f0db694b0a90b4dbe  G. Performance & Simulation Data/49. PSCAD_PCS2520x4_690V_50Hz_UPPC_x64_260605aBB/Interface/Blackbox_PQVCmdInput_F1.obj
+15fd1031c59520482cdb509c64e4bdd28df0283b5c4c044deaf8f754fdae517b  G. Performance & Simulation Data/49. PSCAD_PCS2520x4_690V_50Hz_UPPC_x64_260605aBB/Interface/Blackbox_UniversPPC_F1.obj
+abe4a84e78d376377028b7f6db963495d38bd5483c49d118b1ea6a33dd96b59b  G. Performance & Simulation Data/49. PSCAD_PCS2520x4_690V_50Hz_UPPC_x64_260605aBB/Interface/Blackbox_UniversPPC_if15.lib
+b442967a5ed6d919b7f637e67aec3206810c6f66c79a699eb5efd6db56dee06f  G. Performance & Simulation Data/49. PSCAD_PCS2520x4_690V_50Hz_UPPC_x64_260605aBB/Interface/Blackbox_VoltageSourseSet_F1.obj
+e81b971ddb5c1d990bf673b86cf9cce989bb32fe1348f6e835689429aaa9cddd  G. Performance & Simulation Data/49. PSCAD_PCS2520x4_690V_50Hz_UPPC_x64_260605aBB/Interface/FortranInterface_F1.obj
+b46c757368619f3f8e112b27c9486944a2e9f9f31fa2052bae741884754579b4  G. Performance & Simulation Data/49. PSCAD_PCS2520x4_690V_50Hz_UPPC_x64_260605aBB/Interface/MY_VST_PCS_F2.obj
+4117e2972bdfa19117e21b4b52e6267fd897d0109c495acb60343756389d0b44  G. Performance & Simulation Data/49. PSCAD_PCS2520x4_690V_50Hz_UPPC_x64_260605aBB/PCS2520x4_UPPC_x64_260605aBB.pscx
+96701f6d49e124f560d553ab118ff6c3411f62d894ff8c7413d2d4e0610498e6  G. Performance & Simulation Data/49. PSCAD_PCS2520x4_690V_50Hz_UPPC_x64_260605aBB/dll/PCSControllerInterface.dll
+5c619a2ce73733f0eed0332cd68d02e91de23cbce9a0b5c92201e2728276c97c  H. Capacity Maintenance  Augmentation Plan/54.1 Sri Lanka 10MW_40MWh.pdf
+0cf77ec5d7615c611e0a5cbbf7ab8c3f8a6a722e5b31e42a25fad27f88841e86  H. Capacity Maintenance  Augmentation Plan/54.2 Sri Lanka 11MW_44MWh.pdf
+91d62a381e91334825dd6c8484d33ef9e66be035cef15fc1bf699d35e53d06ad  H. Capacity Maintenance  Augmentation Plan/57. Envision Energy_BESS Dismantling Technical Description 10MWh_V2.0.pdf
+bd545015d2d79f4b20aaaf110ca2e21ce60468faf5d0ae0b0b26eff879095ff4  I. Commercial  Formal Documents/58. Supplier_EOI_Aug 5.pdf
+06c69f7f3c7ca51b55622a17912c28331f131d22a4166ea018184c48e7332585  I. Commercial  Formal Documents/59.1 Envision Brochure-Regular ver 2603.pdf   [duplicate of: A. Manufacturer Experience & Qualification/4. Envision Brochure-Regular ver 2603.pdf]
+80baaf3b7253d115847d0cece68ac9f115f103d05385d0fc2dcede7d0695070f  I. Commercial  Formal Documents/59.2 Customer Letter for BESS Business Optimization.pdf
+0cf77ec5d7615c611e0a5cbbf7ab8c3f8a6a722e5b31e42a25fad27f88841e86  I. Commercial  Formal Documents/60. Sri Lanka 11MW_44MWh.pdf   [duplicate of: H. Capacity Maintenance  Augmentation Plan/54.2 Sri Lanka 11MW_44MWh.pdf]
+14294983b1e96383bacaa2f13a5ff9c320d68448195cda2f6e878a5a33621b3c  I. Commercial  Formal Documents/61. Sri_Lanka_Grid-Forming_BESS_Grid_Compliance_ver01pdf.pdf
+790b65d0ebbb6af6dd0f5f314e6623b5401fa8fa914337bb5591fd067568944c  J. Volume 2 Filled Documents/Technical Specifications.docx
+858345f058f66191b94a8807820d9239920e6b90c9f52e13a58f721ff889266e  J. Volume 2 Filled Documents/Technical Specifications.pdf
+965710efc550f51ac3712cd8bdef12d322484e9cdba98f9ac9c414ded6df5fd1  NSO_BESS_Supplier_Document_Checklist.xlsx
