@@ -70,7 +70,7 @@ wind_resource:
   # Data provenance
   data_source: "ECMWF ERA5 Reanalysis"
   data_years: "2020-2024"
-  data_confidence: "Medium (5-year ERA5 validated against 1-year met mast)"
+  data_confidence: "Screening-grade / PRE-MEASUREMENT — reanalysis-only basis (see data_source and data_years above); NO on-site met mast or IEC-accepted LiDAR/SoDAR, and the MCP long-term correction (wind_resource/mcp.py) is present but unwired. Limitation of record: config/report_defaults.yaml 'Wind resource measurement basis (screening-grade)' (#961)."
 
 layout:
   turbine_spacing_avg_m: 650
