@@ -42,7 +42,7 @@ wind_resource:
   air_density_ref_kgm3: 1.225
   data_source: ECMWF ERA5 Reanalysis
   data_years: 2020-2024
-  data_confidence: Medium (5-year ERA5 validated against 1-year met mast)
+  data_confidence: Screening-grade / PRE-MEASUREMENT - reanalysis-only basis (see data_source and data_years above); no on-site met mast or IEC-accepted LiDAR/SoDAR, and the MCP long-term correction (wind_resource/mcp.py) is present but unwired (#961)
 layout:
   turbine_spacing_avg_m: 650
   turbine_spacing_avg_D: 3.28  # In rotor diameters (650m / 198m); doc-only, no code reads it
