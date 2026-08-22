@@ -48,16 +48,36 @@ MCP_METHODS: Tuple[str, ...] = ("variance_ratio", "linear_regression")
 #: being fit on too few points; bankability is the SEPARATE, higher tier below.
 DEFAULT_MIN_CONCURRENT: int = 24
 
-#: Bankability threshold on concurrent samples: ~4 months of hourly data (4 x 30 x 24).
+#: Lender-disclosure floor on concurrent samples: ~4 months of hourly data (4 x 30 x 24).
 #: Sheridan et al. (Wind Energy Science, 2025) report long-term capacity-factor errors of
 #: ~47%/26%/16% for 1/3/6-month campaigns, so a transfer fit on less than ~4 months is
-#: statistically fittable but NOT bankable. :func:`run_mcp` fails loud in the band
-#: ``min_concurrent <= n < BANKABLE_MIN_CONCURRENT`` unless the caller explicitly opts out
-#: (``allow_below_bankable=True``), which downgrades the failure to a logged bankability
-#: disclosure (CESSPIT: no silent sub-bankable fits). A *fully* bankable campaign still
-#: wants >= ~12 months (IEC 61400-15-2) to cover seasonality; this threshold is the floor
-#: below which the estimate should not be shown to a lender at all.
-BANKABLE_MIN_CONCURRENT: int = 2880
+#: statistically fittable but must not be put in front of a lender at all. :func:`run_mcp`
+#: fails loud in the band ``min_concurrent <= n < LENDER_DISCLOSURE_MIN_CONCURRENT`` unless
+#: the caller explicitly opts out (``allow_below_bankable=True``), which downgrades the
+#: failure to a recorded disclosure (CESSPIT: no silent sub-threshold fits).
+#:
+#: THIS IS NOT A BANKABILITY THRESHOLD. Clearing it means the estimate is showable, not
+#: bankable — the standards require roughly three times as much data
+#: (:data:`IEC_BANKABLE_MIN_CONCURRENT`). It was previously named
+#: ``BANKABLE_MIN_CONCURRENT``, which asserted bankability at ~4 months and so overclaimed
+#: against MEASNET v3.1 / IEC 61400-15-1:2025 by a factor of three (#961).
+LENDER_DISCLOSURE_MIN_CONCURRENT: int = 2880
+
+#: Deprecated alias for :data:`LENDER_DISCLOSURE_MIN_CONCURRENT`, retained so existing
+#: importers keep working. Prefer the new name: this value never meant "bankable".
+BANKABLE_MIN_CONCURRENT: int = LENDER_DISCLOSURE_MIN_CONCURRENT
+
+#: The concurrent-sample count a bankable campaign actually requires: >= 12 months of
+#: hourly data (365 x 24). MEASNET v3.1 and IEC 61400-15-1:2025 mandate >= 12 concurrent
+#: months of on-site measurement long-term-adjusted against a reanalysis reference, and
+#: IEC 61400-15-2 wants the same span to cover seasonality. Named so the standard is
+#: representable in code and in emitted artefacts rather than living only in a comment.
+IEC_BANKABLE_MIN_CONCURRENT: int = 8760
+
+#: Campaign-adequacy states recorded on :class:`MCPResult`. Ordered worst to best.
+CAMPAIGN_BELOW_DISCLOSURE_FLOOR = "below_lender_disclosure_floor"
+CAMPAIGN_BELOW_IEC_BANKABLE = "below_iec_bankable"
+CAMPAIGN_IEC_BANKABLE = "iec_bankable"
 
 
 @dataclass(frozen=True)
@@ -78,6 +98,14 @@ class MCPResult:
     #: clipped to 0. A non-trivial value means the clip lifts the predicted mean and shrinks
     #: its variance, so the variance-preservation property degrades — disclosed, not silent.
     fraction_clipped: float = 0.0
+    #: Campaign adequacy against the standards, one of :data:`CAMPAIGN_IEC_BANKABLE`,
+    #: :data:`CAMPAIGN_BELOW_IEC_BANKABLE`, :data:`CAMPAIGN_BELOW_DISCLOSURE_FLOOR`.
+    #: Recorded on the result, not only logged, so the shortfall travels with the estimate
+    #: into artefacts and reports instead of dying in a log nobody reads (FIN-01).
+    campaign_adequacy: str = CAMPAIGN_IEC_BANKABLE
+    #: Concurrent samples still required to reach :data:`IEC_BANKABLE_MIN_CONCURRENT`;
+    #: 0 when the campaign already clears it.
+    concurrent_shortfall_to_iec_bankable: int = 0
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -92,6 +120,10 @@ class MCPResult:
             "weibull_k": round(self.weibull_k, 4),
             "uplift_pct": round(self.uplift_pct, 3),
             "fraction_clipped": round(self.fraction_clipped, 5),
+            "campaign_adequacy": self.campaign_adequacy,
+            "concurrent_shortfall_to_iec_bankable": (
+                self.concurrent_shortfall_to_iec_bankable
+            ),
         }
 
 
@@ -212,26 +244,52 @@ def run_mcp(
         )
     # Bankability tier: gated LAST so it only fires on otherwise fit-worthy data — the
     # data-integrity errors above are the actionable ones when both conditions hold.
-    if mast.size < BANKABLE_MIN_CONCURRENT:
+    if mast.size < LENDER_DISCLOSURE_MIN_CONCURRENT:
         if not allow_below_bankable:
             raise ValueError(
-                f"MCP campaign has {mast.size} concurrent samples, below the bankable "
-                f"minimum of {BANKABLE_MIN_CONCURRENT} (~4 months of hourly data); short "
-                "campaigns carry large long-term capacity-factor errors (Sheridan et al., "
-                "Wind Energy Science 2025: ~47%/26%/16% at 1/3/6 months). Pass "
-                "allow_below_bankable=True (scenario knob: "
-                "resource.wind.mcp.allow_below_bankable) to proceed with a logged "
-                "bankability disclosure."
+                f"MCP campaign has {mast.size} concurrent samples, below the "
+                f"lender-disclosure floor of {LENDER_DISCLOSURE_MIN_CONCURRENT} "
+                "(~4 months of hourly data); short campaigns carry large long-term "
+                "capacity-factor errors (Sheridan et al., Wind Energy Science 2025: "
+                "~47%/26%/16% at 1/3/6 months). Note that clearing this floor still would "
+                f"not make the estimate bankable: that needs "
+                f">= {IEC_BANKABLE_MIN_CONCURRENT} samples (12 months, MEASNET v3.1 / "
+                "IEC 61400-15-1:2025). Pass allow_below_bankable=True (scenario knob: "
+                "resource.wind.mcp.allow_below_bankable) to proceed with a recorded "
+                "disclosure."
             )
         logger.warning(
-            "MCP transfer fit on %d concurrent samples, below the bankable minimum of %d "
-            "(~4 months of hourly data; Sheridan et al., Wind Energy Science 2025: "
-            "capacity-factor errors ~47%%/26%%/16%% at 1/3/6 months). Proceeding under "
-            "allow_below_bankable — the long-term estimate is NOT bankable without a "
-            "longer measurement campaign.",
+            "MCP transfer fit on %d concurrent samples, below the lender-disclosure floor "
+            "of %d (~4 months of hourly data; Sheridan et al., Wind Energy Science 2025: "
+            "capacity-factor errors ~47%%/26%%/16%% at 1/3/6 months) and far below the "
+            "%d samples (12 months) MEASNET v3.1 / IEC 61400-15-1:2025 require for a "
+            "bankable campaign. Proceeding under allow_below_bankable — the long-term "
+            "estimate is NOT bankable.",
             mast.size,
-            BANKABLE_MIN_CONCURRENT,
+            LENDER_DISCLOSURE_MIN_CONCURRENT,
+            IEC_BANKABLE_MIN_CONCURRENT,
         )
+    elif mast.size < IEC_BANKABLE_MIN_CONCURRENT:
+        # Clearing the disclosure floor is NOT bankability. This band was previously
+        # silent, so a ~4-month campaign emitted an estimate carrying no record that it
+        # was a third of the required span (#961).
+        logger.warning(
+            "MCP transfer fit on %d concurrent samples: above the lender-disclosure floor "
+            "of %d but below the %d samples (12 concurrent months) MEASNET v3.1 / "
+            "IEC 61400-15-1:2025 require for a bankable long-term estimate. The result is "
+            "showable with disclosure, NOT bankable; campaign_adequacy records this.",
+            mast.size,
+            LENDER_DISCLOSURE_MIN_CONCURRENT,
+            IEC_BANKABLE_MIN_CONCURRENT,
+        )
+
+    if mast.size >= IEC_BANKABLE_MIN_CONCURRENT:
+        campaign_adequacy = CAMPAIGN_IEC_BANKABLE
+    elif mast.size >= LENDER_DISCLOSURE_MIN_CONCURRENT:
+        campaign_adequacy = CAMPAIGN_BELOW_IEC_BANKABLE
+    else:
+        campaign_adequacy = CAMPAIGN_BELOW_DISCLOSURE_FLOOR
+    concurrent_shortfall = max(0, IEC_BANKABLE_MIN_CONCURRENT - int(mast.size))
 
     if method == "variance_ratio":
         slope, intercept = variance_ratio_transfer(mast, ref_c)
@@ -265,6 +323,8 @@ def run_mcp(
         weibull_k=weibull.weibull_k,
         uplift_pct=uplift,
         fraction_clipped=fraction_clipped,
+        campaign_adequacy=campaign_adequacy,
+        concurrent_shortfall_to_iec_bankable=concurrent_shortfall,
     )
 
 
