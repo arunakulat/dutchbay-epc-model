@@ -98,6 +98,26 @@ GFM, ride-through and power-quality closure gaps. *(source files govern over der
 public-space publication is authorised by the 31 July record and the project owner's 16 August
 record of Envision verbal confirmation for the newly ingressed material)*
 
+**NSO 250 MW checklist dossier (21 August 2026)** — the supplier evidence package
+assembled against the same tender by the bidder, 72 files / 58 unique
+across checklist sections A-J: manufacturer track record, four customer reference letters, 16 DC-
+and AC-side standards certificates, grid-forming and parallel-operation letters, transformer / RMU
+/ container layout datasheets, the fire-safety package (UL 9540A cell and module reports), an independent
+test-house cell bankability study, executable PSS(R)E and PSCAD models with a Sri-Lanka dynamic
+record, capacity-maintenance and dismantling documents, three EOI letters, a 31-page CEB Grid
+Connection Code compliance list and the filled Volume 2 GTP. This package establishes that the
+250 MW / 1000 MWh programme is procured **from 10 MW / 40 MWh AC-capacity projects** on a BOO
+basis over 15 years. Evaluated in
+`docs/source_materials/nso_bess_250mw_2026/reviews/NSO250MW_Checklist_Package_Ingress_Evaluation_2026-08-21.md`
+— 15 findings, the material three being a three-way grid-forming contradiction (always-GFM letter
+vs dual-mode compliance list vs grid-following EMT model), a silently superseding 10 MW design
+calculation that moves year-15 RTE from 84.9 % to exactly the 85 % floor while adding a meter-
+tolerance clause, and the supplier's own independent bankability study showing cell cycle life falling from ~10,000 at
+25 degrees C to ~4,000 at 45 degrees C against a ~6,022-EFC duty. *(binaries held outside the
+repository by manifest only — the package carries independent test-house and certification-body copyright,
+third-party operator letterheads, compiled model binaries and personal data, and is not covered by
+the existing publication authorization; see `source_packages/README.md`)*
+
 **Internal CEB BESS technical notes** (`desktop clean up`): internal merged/technical system-analysis BESS notes (10 MW–40 MWh, 10×16) — ~3 files (private/internal).
 
 ---
@@ -168,7 +188,7 @@ record of Envision verbal confirmation for the newly ingressed material)*
 
 | Asset | Type | Use |
 |---|---|---|
-| WTG LCOE / sensitivity workbooks (Hayleys) — private/internal | xlsx | WTG LCOE sensitivity models |
+| WTG LCOE / sensitivity workbooks (the bidder) — private/internal | xlsx | WTG LCOE sensitivity models |
 | BESS capacity-charge calculator — private/internal | xlsx | BESS capacity-charge (LKR/MW/mo) calculator |
 | Turbine coordinate schedule (+pdf) — private/internal | xlsx | Turbine coordinate schedule |
 | Wind-park layout / land / turbine GIS layers — private/internal | KML/KMZ | Wind-park layout / land / turbine layers |
