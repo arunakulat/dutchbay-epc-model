@@ -29,7 +29,7 @@ source:
 
   scenario:
     path: scenarios/dutchbay_lendercase_2025Q4.yaml
-    sha256: 02852b595ec86a4f35e8c00fdaeb247cbe3ea95fde9f4566d61f25a8e10ca082
+    sha256: bb83a662c754ef1376201818c2e294c660d4e9cc4cae0947ba091cdb62f53c39
   era5_summary:
     # This is a clean, hashed summary only. It is not the absent hourly NetCDF.
     path: feasibility_reproduce/cache/expected/era5_result.json
