@@ -25,7 +25,7 @@ nonexistent ruleset filename.
 ## Session continuity
 
 Before starting work, read the newest record in `docs/SESSION_HANDOVER_*.md` — currently
-`docs/SESSION_HANDOVER_2026-08-20.md`. Each record names its predecessor and states which
+`docs/SESSION_HANDOVER_2026-08-24.md`. Each record names its predecessor and states which
 parts of it still stand, so read the newest first and follow the chain back only as far as
 it tells you to. These are the PERSIST-01 durable records: they carry the canonical KPI
 set, the traps that have already cost a session real time, and the open-item list.
@@ -141,6 +141,12 @@ one, because the next session acts on it.
   frozen reference that is no longer the applicable basis. Reconciliation guards must
   compare like-for-like cases and expose provenance.
 - Stochastic analysis must accept or record an explicit seed so results are reproducible.
+- Follow `TEST-01`'s independent-oracle clause. A pinned value proves only that a number
+  has not changed, never that it is still being derived, so a pinned-constant oracle is
+  paired with a responsiveness guard. Finance-material code must answer to an oracle that
+  did not originate in the same change — a pre-existing test, an external benchmark, a
+  closed-form check, an independent implementation, or a property/invariant. A change whose
+  only evidence is tests written alongside it is unverified, however green.
 
 ## Source ingestion and documentation
 

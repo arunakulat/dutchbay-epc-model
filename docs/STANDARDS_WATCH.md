@@ -1,9 +1,14 @@
-# Standards watch: external-standard re-checks and business confirmations (#620)
+# Standards watch: external re-checks, business confirmations, and gated canon-movers
 
-Status: **Tracking** (opened 2026-07). This is a **living watch list**, not a decision. It
-records external-standard revisions and lender term-sheet business confirmations that the model
-must periodically re-check, with their review dates and current status, so a deferred item is a
-**tracked deferral** and not a silent omission. Nothing here changes any computed KPI.
+Status: **Tracking** (opened 2026-07, extended 2026-08-23). This is a **living watch list**, not
+a decision. It records items the model must periodically re-check, with their review dates and
+current status, so a deferred item is a **tracked deferral** and not a silent omission. Nothing
+here changes any computed KPI.
+
+It carries two families, which share that discipline but arise differently:
+**(1)** external-standard revisions and lender term-sheet business confirmations, opened under
+#620 and held in the first table; and **(2)** the **gated canon-movers** register added
+2026-08-23, which gives every gated KPI-moving change an owner and a calendar review date.
 
 ## Why this file exists
 
@@ -14,7 +19,7 @@ one waits on an external standard-setter's output (~Q4 2026), the other is a one
 confirmation the analyst must obtain from the lender side. Left in the issue tracker alone they
 risk being lost; recorded here they are owned and dated.
 
-## Watch items
+## Watch items — external standards and business confirmations (#620)
 
 | # | Item | Type | Review / trigger date | Current status |
 |---|---|---|---|---|
@@ -34,6 +39,55 @@ risk being lost; recorded here they are owned and dated.
   benchmark vintages in the evidence register (#620)"), touching
   `docs/knowledge_base/05_project_finance_methodology.md` and
   `scenarios/dutchbay_lendercase_2025Q4.yaml` only.
+
+---
+
+## Gated canon-movers (hard-items register)
+
+Opened 2026-08-23 (decision D1b/D1-ii/D1-x, see
+[`AGENTIC_DELIVERY_PRACTICE.md`](AGENTIC_DELIVERY_PRACTICE.md) §5.3). **Nothing in this
+section changes any computed KPI**; it records ownership and review dates for changes that
+*would*.
+
+### Why this register exists
+
+`DELIVERY-01` governs how **big** an increment is; nothing governed how **hard** it is.
+External practitioner evidence (`AGP-SRC-001`) reports that unattended agentic delivery
+drifts reliably toward easier work — documentation, lint, smoke tests, provenance — and that
+pattern is visible here: merged work skews strongly KPI-neutral while the changes that would
+move the canon stay gated.
+
+**The gating is correct.** A KPI-moving change is the analyst's call, and several of these
+are properly blocked on evidence that does not exist yet. The failure this register guards
+against is narrower: a gate that quietly becomes a lapse. From outside, "deferred pending
+lender evidence" and "forgotten" look identical unless a date is attached.
+
+Hence the register's one rule: **a calendar review date is mandatory even where a trigger
+exists.** Trigger-only tracking is precisely what lets a deferral go quiet — if the trigger
+never fires, nothing ever asks the question again. The trigger stays; the calendar date is
+added beside it.
+
+### Register
+
+| # | Item | Tracker | Direction on canon | Gate | Calendar review | Status |
+|---|---|---|---|---|---|---|
+| G1 | **F5-02** — make debt denomination and repayment numeraire explicit before canonical re-baseline | #1095 → **#1110** | **Raises equity IRR** (audit estimate ≈ +1.8 pp), *opposite in direction* to F5-01, which has landed (#1034, 2026-08-16) | Transaction evidence. The analyst-generated synthetic term sheet is explicitly **not** lender evidence; authenticated lender/legal documents are required before binding canon | **2026-11-30** | **Open — consolidated, not resolved.** #1095 was closed `NOT_PLANNED` on 2026-08-20 as a *documented queue consolidation*: its technical acceptance criteria moved to #1110 and the closing note states the finding is not resolved. The controlled-successor registers still carry F5-02 as a separately-closeable finding. **F5-01 and F5-02 must never be netted, rhetorically or technically** |
+| G2 | **6-month DSRA vs the CEB-PPA lender term sheet** | #920 | Depends on the lender's reserve requirement | Business confirmation on receipt of an executed/indicative term sheet | **2026-11-30** | Open. Detail is held in watch item 2 above — **cross-referenced here, not duplicated**. Trigger armed since 2026-07-11; the calendar date is what this register adds |
+| G3 | **Canon-gated credibility defaults for lender runs** | #962 | KPI-moving by construction (per-PR defaults + re-baseline) | User-gated | **2026-11-30** | Open |
+| G4 | **Authenticated real AEP/QSTS financial outcome and finance-wiring decision** (`#923-B`) | #1078 | KPI-moving if the finance wiring is enabled | Blocked on G5 | **2026-11-30** | Open, `blocked` |
+| G5 | **Authenticated real DutchBay POC feeder evidence** — ingest (#1075) and engineering validation (#1076) | #1075, #1076 | None directly; unblocks G4 | Blocked on obtaining authenticated third-party evidence | **2026-11-30** | Open, `blocked` |
+| G6 | **Controlled-successor remediation queue and release gate** | #1110 | Umbrella for G1 and the 111-row findings register | Condition-gated: `HOLD` lifts only on an explicit `RELEASED` disposition | **2026-11-30** | Open, blocking. Condition-gating is correct for a release gate; the calendar date exists so the *conditions* are re-read, not to force the gate |
+
+### Review procedure
+
+At each calendar review, for every row: confirm the gate still holds and say why, or move the
+item. An item may be closed out of this register only by being **done**, or by an explicit
+recorded decision not to do it — never by going stale. A review that changes nothing is a
+valid outcome and should be dated in the Status cell, exactly as watch item 2 records its
+2026-07-11 re-check.
+
+Out of scope for this register: #924 (full feasibility study) and #925 (mobile epic) are
+user-gated *deliverables*, not canon-movers, and are tracked in the issue queue alone.
 
 ## Sources
 
