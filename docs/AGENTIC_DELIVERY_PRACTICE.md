@@ -45,7 +45,7 @@ hashes and limitations are retained here; a governed private capture is held out
 | `sha256` (extracted text) | `2bc669af70993a38fa93848ac240602cbbc2e05edaa3b69735342e33110e63f6` |
 | Private capture | `~/Downloads/adamadam_codex_500b_retrospective_2026-06-10_capture.md` (outside the repository) |
 | Copyright | Retained by the author. Not republished here. At most one short attributed quotation appears below. |
-| Related, not ingested | Same author, *Running 80 concurrent Codex sessions* (2026-05-26) — the prior instalment; not retrieved. |
+| Related | Two sibling posts by the same author were followed on 2026-08-24 and are registered as secondary sources below. |
 
 **Evidence tier: `practitioner testimony`.** Uncontrolled single-subject experience report.
 No counterfactual, no released data, no independent replication, no cost figure (the author's
@@ -53,6 +53,16 @@ access was unmetered, so his economics do not transfer). It is legitimate input 
 *hypothesis generation and control design*. It must **not** be cited as a quantitative claim,
 a benchmark, or evidence for any modelling decision. It sits below every standards-body and
 primary-document source in the corpus.
+
+### Secondary sources (followed 2026-08-24)
+
+Followed to check `AGP-SRC-001`'s own claims against the primary material behind them. Same
+author, same tier — `practitioner testimony`. Cited for provenance; not separately captured.
+
+| Ref | Source | Why it matters here |
+|---|---|---|
+| `AGP-SRC-002` | *AI, generate 100 designs for WordPress Playground* (2026-05-22) | The origin of the *n*-sampling technique — and the reason §5.5 needed correcting. The reported unlock was asking for **100 different designs**, not 100 iterations on one; iterating on a single design is the strategy recorded as having *failed*. Also records 400+ variations, that the overwhelming majority is meant to be discarded, and that no usable design existed at the time of writing. |
+| `AGP-SRC-003` | *Running 80 concurrent Codex sessions* (2026-05-26) | The prior instalment. Carries the fabricated-progress finding as **numbers** rather than recollection: self-reported completion on one project moved 88% → 60% → 92% → 70%, while another sat at 95% through sustained repository activity. Strengthens §3's first finding — the fabrication was observed and logged a fortnight before the retrospective generalised it. |
 
 ---
 
@@ -261,19 +271,38 @@ gateway and gateway prose that drifts from the canonical CSV is how the contract
 apart. `tests/lint/test_gwtf_canonical_source.py` pins the clause in both surfaces so the
 two cannot separate silently.
 
-### 5.5 *n*-sampling for generation — *adopted 2026-08-23 as a documented technique, not a rule*
+### 5.5 *n*-sampling for generation — *adopted 2026-08-23 as a documented technique, not a rule; framing corrected 2026-08-24*
 
-Sampling the same task *k* times and keeping the best is standard practice here for
-*verification* (refuters, multi-lens judging) and unused for *generation*. It is recorded
-here as an **available technique**, deliberately **not** promoted to a rule: the binding
-constraint in this repository is verification capacity, not generation capacity, so
-mandating more generation would optimise the wrong side of the ledger.
+**Correction (2026-08-24).** This section first described the technique as *sampling the
+same task k times and keeping the best*, which is how `AGP-SRC-001` frames it. Following that
+claim back to its own primary source (`AGP-SRC-002`) shows the framing is wrong in a way that
+changes the practice: the reported unlock was asking for ***k* genuinely different attempts**,
+not ***k* retries of one**. Repeatedly iterating on a single candidate is the strategy the
+author records as having *failed*.
 
-**Preconditions for using it at all.** A scalar, machine-checkable objective must already
-exist — solver robustness, convergence behaviour, runtime — so that "best" is *measured*
-rather than judged. Declare the objective before sampling, give each sample an explicit
-seed (`MRM-01`), and record the whole sample set, not only the winner: the discarded
-samples are the evidence that the choice was made on the objective.
+The distinction is not cosmetic. **Diversity sampling searches the solution space; repeat
+sampling buys more lottery tickets on one point in it.** They have different preconditions and
+different failure modes, and only the first is what the evidence supports.
+
+**Standing here.** Multi-sampling is already routine for *verification* — refuter packs and
+multi-lens judging, where the lenses are deliberately unlike one another, which is itself
+diversity sampling — and unused for *generation*. It stays an **available technique**,
+deliberately **not** promoted to a rule: the binding constraint in this repository is
+verification capacity, not generation capacity, so mandating more generation would optimise the
+wrong side of the ledger.
+
+**Preconditions for using it at all.** The candidates must be *materially different* in
+approach, not the same prompt re-rolled. A scalar, machine-checkable objective must already
+exist — solver robustness, convergence behaviour, runtime — so that "best" is *measured* rather
+than judged. Declare the objective before sampling, give each sample an explicit seed
+(`MRM-01`), and record the whole sample set, not only the winner: the discarded samples are the
+evidence that the choice was made on the objective.
+
+**What it does not promise.** In the source experiment the great majority of output was
+generated to be thrown away, and it had still not produced a usable artifact when the post was
+written. Treat it as a way to *widen the option set*, not a way to converge on a correct one.
+Whatever survives selection faces exactly the same verification as hand-written work — being
+the best of *k* is not evidence of anything.
 
 **Hard boundary — never on finance logic.** Correctness in the finance path is not a
 scalar, so "pick the best of *k*" degenerates into selecting the most plausible-*looking*
