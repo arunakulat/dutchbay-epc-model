@@ -3,6 +3,16 @@
 This directory preserves the controlling procurement documents and the available Envision
 design material for National System Operator tender `TR/REP&PM/ICB/2026/001/C`.
 
+The tender establishes **250 MW / 1000 MWh of standalone BESS from 10 MW / 40 MWh AC-capacity
+projects** on a build-own-operate basis with a 15-year operational period. The submission deadline
+was **extended from 14 August to 2 September 2026** (recorded 21 August 2026), so the open items in
+the 21 August dossier evaluation remain correctable before submission. The programme is
+therefore procured as roughly 25 unit-scale projects, which is why the OEM design calculations are
+sized at 10 MW / 40 MWh and 11 MW / 44 MWh (the latter being the 10 MW + 10 % export-limit case).
+The bidder is a Sri Lankan listed-group company; the equipment supply commitment is given by
+**an affiliated supply entity** on the battery affiliate's letterhead, following the transfer of
+Envision's BESS business to a group battery affiliate.
+
 ## Handling classification
 
 - The NSO tender documents are procurement source records.
@@ -19,6 +29,12 @@ design material for National System Operator tender `TR/REP&PM/ICB/2026/001/C`.
   Envision covering the two new source files, their extracts and the 6 August evaluation, and
   directed public GitHub publication on the project owner's authority. The scope and limitations
   are recorded in `PUBLICATION_AUTHORIZATION.md`.
+- The NSO 250 MW checklist dossier received on 21 August 2026 is **not** covered by that
+  authorization, and parts of it are **not Envision's to authorise** — it contains a the independent test house
+  report classified at the battery affiliate's discretion, third-party operator letterheads, certification-body
+  copyright, compiled model binaries and a test record bearing named individuals' signatures.
+  Its binaries are therefore **held outside this repository**, recorded by manifest only. See
+  `source_packages/README.md`.
 
 ## Package documents and roles
 
@@ -31,6 +47,7 @@ design material for National System Operator tender `TR/REP&PM/ICB/2026/001/C`.
 | Envision 10 MW / 40 MWh design calculation | `oem/envision/Envision_10MW_40MWh_Design_Calculation_V1.0_2026-07-29.pdf` | Earlier OEM design and performance calculation |
 | Envision 11 MW / 44 MWh design calculation | `oem/envision/Envision_Sri_Lanka_11MW_44MWh_Design_Calculation_V1.0_2026-08-05.pdf` | Later, distinct candidate configuration; document does not state the tender number |
 | Envision functional-requirements checklist | `oem/envision/compliance_evidence/Envision_Functional_Requirements_Checklist_2026-07-21.xlsx` | Supplier declaration against selected Annex A/B clauses; not the official annex and not evidence-complete |
+| NSO 250 MW checklist dossier, 21 Aug 2026 | `source_packages/NSO250MW_checklist_2026-08-21.MANIFEST.sha256` | Manifest only — 72 files / 58 unique across checklist sections A-J. Certificates, grid-forming letters, PSS(R)E and PSCAD models, fire-safety package, independent bankability study, filled Volume 2 GTP, grid-compliance list. Binaries held outside the repository |
 
 The files are stored byte-for-byte from the supplied originals. SHA-256 checksums are recorded
 in `MANIFEST.sha256`.
@@ -46,6 +63,7 @@ and clarification register remain required where they control or qualify the RFP
 | Initial Envision offer gap review | `reviews/Envision_Offer_Gap_Review_2026-07-30.md` | Preliminary issue identification against the tender package |
 | Detailed Envision gap statement | `reviews/Envision_NSO_250MW_BESS_Detailed_Gap_Statement_2026-07-31.pdf` | Tender-response improvement requirements, design-calculation critique, evidence matrix, OEM dossier and closure plan |
 | 11 MW / 44 MWh and checklist ingress evaluation | `reviews/Envision_11MW_44MWh_and_Functional_Checklist_Ingress_Evaluation_2026-08-06.md` | Source QA, complete normalized performance curve, checklist status analysis, comparison and closure requirements |
+| NSO 250 MW checklist dossier ingress evaluation | `reviews/NSO250MW_Checklist_Package_Ingress_Evaluation_2026-08-21.md` | Full evaluation of the 21 August dossier: 15 findings, evidence-register movement, recovered technical reference data, recommended actions and handling classification |
 
 These reviews are derived analysis, not controlling tender or OEM documents. When a review
 conflicts with a source file, the source file governs. The detailed gap statement and the 6 August
