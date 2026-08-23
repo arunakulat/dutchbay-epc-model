@@ -282,17 +282,33 @@ failure `tests/finance/test_canon_vector_is_computed.py` exists to catch. This b
 holds regardless of how attractive the objective looks; lifting it requires an explicit
 analyst instruction, not an agent's judgement.
 
-### 5.6 A `VERIFY-01` ruleset row — *proposed, user decision*
+### 5.6 `VERIFY-01` — *adopted 2026-08-23; ruleset row 72, with a CI check*
 
 `TEST-05` already establishes "independent evidence, bound to the head SHA, fails closed" for
 the QSTS surface. The general principle — *a claimed check that carries no receipt is not a
 check* — is currently distributed across `AGENTS.md` prose, `TEST-03/04/05`, and the audit
 pack's convention rather than stated once.
 
-Promoting it to a `VERIFY-01` row (Continuity & Persistence, or a new Verification family)
-would make it citable at review time. Adding a 72nd rule to the standing governance contract is
-explicitly a **user decision** and is not taken here; the ruleset also requires that a
-conflict between rules stop for a user decision rather than be resolved silently.
+It is now `VERIFY-01`, the 72nd rule, in a new **Verification** category — citable at
+review time instead of reconstructed from four places each time it matters.
+
+The rule carries its own conflict clause rather than creating a decision point: it
+*generalises* `TEST-03`, `TEST-04`, `TEST-05` and the audit reproduction registers, and
+where it appears to conflict with any of them the **specific rule wins and `VERIFY-01`
+yields**. That keeps `TEST-05` — the strictest and only machine-enforced form — undiluted.
+
+Enforcement is `.github/workflows/pr-receipts.yml` + `scripts/ci/check_pr_receipts.py`,
+which fail a pull request whose receipts table is absent, empty, or carries a silent
+Result cell. A declared `not run — <reason>` **passes**: declaring a gap is the whole
+point, and a reviewer can then judge it. Bot authors are exempt.
+
+**Known enforcement limit, stated rather than papered over:** promoting this job to a
+*required* status check is a repository-ruleset setting and remains the owner's decision.
+Until that is done the rule is enforced by a visible failing check plus review, not by a
+merge block — which is weaker than `TEST-05` and should not be described otherwise.
+
+The rule also codifies the negative-control practice used when building §5.2: a guard
+nobody has watched fail is itself an unverified claim.
 
 ---
 
