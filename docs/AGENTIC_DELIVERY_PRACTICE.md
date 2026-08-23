@@ -190,6 +190,10 @@ enforced more strictly than in the source** — including under a name of our ow
 
 Each is dolphin-sized (`DELIVERY-01`), KPI-neutral, and independently reversible.
 
+**Decision record.** The proposals in this section were put to the analyst as a decision
+sheet and resolved on **2026-08-23**: every recommendation was adopted. Each subsection
+states its own status; nothing here remains open.
+
 ### 5.1 PR evidence: receipts, not checkboxes — *implemented*
 
 The PR template was the one place in the delivery chain that accepted a **claim** where
@@ -216,7 +220,7 @@ through the canonical gateway and assert every pinned KPI **moves**. An engine t
 canon instead of computing it now fails a test whose stated purpose is exactly that. This
 hardens an existing implicit defence; it does not fill an open hole.
 
-### 5.3 Hard-items register — *proposed, user-gated*
+### 5.3 Hard-items register — *adopted 2026-08-23; implemented*
 
 The sharpest transferable finding is drift to easy work, and this repository shows the pattern:
 a large volume of merged KPI-neutral work (docs, lint, CI, provenance) alongside canon-moving
@@ -228,8 +232,18 @@ The gating itself is **correct**: KPI-moving changes are the user's call. The ri
 the one already used for deferred standards in `STANDARDS_WATCH.md`: give each gated
 canon-mover an owner, a review date, and a status, so a deferral is *tracked*, not silent.
 
-Proposed as a short section in `STANDARDS_WATCH.md` or a sibling register. **Not implemented —
-it asserts a work programme, which is a user decision.**
+Implemented as the **Gated canon-movers** section of
+[`STANDARDS_WATCH.md`](STANDARDS_WATCH.md), reusing the proven tracked-deferral pattern
+rather than opening a second watch-list.
+
+The register was populated from a sweep of the open issue queue rather than from memory,
+which changed the picture: **F5-02's tracker issue (#1095) is closed** — as a *documented*
+queue consolidation into #1110, with a closing note stating the finding is not resolved,
+so it is tracked rather than orphaned. But its disposition, like that of the other four
+gated items, was **condition-gated with no calendar review** — trigger-only tracking, which
+is exactly the state in which a live deferral stops being asked about. The register's one
+rule follows from that: a calendar review date is mandatory *even where a trigger exists*.
+The trigger stays; the date is added beside it.
 
 ### 5.4 State the verification-capacity principle — *proposed*
 
@@ -244,14 +258,26 @@ never written down:
 Natural home: an addition to `TEST-01`, or a paragraph in `AGENTS.md` under
 "Financial-model changes." **Not implemented — a ruleset edit is governance.**
 
-### 5.5 *n*-sampling for generation, where an objective is machine-checkable — *proposed, narrow*
+### 5.5 *n*-sampling for generation — *adopted 2026-08-23 as a documented technique, not a rule*
 
 Sampling the same task *k* times and keeping the best is standard practice here for
-*verification* and unused for *generation*. It is worth adopting **only** where a scalar,
-machine-checkable objective exists — solver robustness, convergence behaviour, runtime — so
-"best" is measured rather than judged. It should **not** be used for finance logic, where
-correctness is not a scalar and "pick the best of 4" would select the most plausible-looking
-implementation. Cost is real; scope it to specific optimisation tasks.
+*verification* (refuters, multi-lens judging) and unused for *generation*. It is recorded
+here as an **available technique**, deliberately **not** promoted to a rule: the binding
+constraint in this repository is verification capacity, not generation capacity, so
+mandating more generation would optimise the wrong side of the ledger.
+
+**Preconditions for using it at all.** A scalar, machine-checkable objective must already
+exist — solver robustness, convergence behaviour, runtime — so that "best" is *measured*
+rather than judged. Declare the objective before sampling, give each sample an explicit
+seed (`MRM-01`), and record the whole sample set, not only the winner: the discarded
+samples are the evidence that the choice was made on the objective.
+
+**Hard boundary — never on finance logic.** Correctness in the finance path is not a
+scalar, so "pick the best of *k*" degenerates into selecting the most plausible-*looking*
+implementation. That is the phantom-solver class with extra steps, and it is precisely the
+failure `tests/finance/test_canon_vector_is_computed.py` exists to catch. This boundary
+holds regardless of how attractive the objective looks; lifting it requires an explicit
+analyst instruction, not an agent's judgement.
 
 ### 5.6 A `VERIFY-01` ruleset row — *proposed, user decision*
 
