@@ -123,6 +123,28 @@ def test_env_01_binds_one_shared_environment_to_each_active_worktree() -> None:
         assert required in policy
 
 
+def test_test_01_requires_an_independent_oracle() -> None:
+    """Keep the independent-oracle clause in TEST-01 and its AGENTS.md echo together."""
+
+    test_01 = _rules_by_id()["TEST-01"]
+    policy = " ".join(
+        (test_01["title"], test_01["description"], test_01["enforcement"])
+    )
+
+    assert test_01["status"] == "active"
+    for required in (
+        "responsiveness guard",
+        "did not originate in the same change",
+        "property/invariant",
+        "tests/finance/test_canon_vector_is_computed.py",
+    ):
+        assert required in policy
+
+    agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    assert "independent-oracle clause" in agents
+    assert "responsiveness guard" in agents
+
+
 def test_active_r25_scripts_do_not_hardcode_a_retired_branch() -> None:
     """Keep operational R25 scripts branch-agnostic."""
     for relative_path in (

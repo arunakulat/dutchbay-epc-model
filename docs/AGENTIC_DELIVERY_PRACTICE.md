@@ -245,7 +245,7 @@ is exactly the state in which a live deferral stops being asked about. The regis
 rule follows from that: a calendar review date is mandatory *even where a trigger exists*.
 The trigger stays; the date is added beside it.
 
-### 5.4 State the verification-capacity principle — *proposed*
+### 5.4 The verification-capacity principle — *adopted 2026-08-23; implemented*
 
 ForkPress versus the libsqlite port yields a rule this repository follows in practice but has
 never written down:
@@ -255,8 +255,11 @@ never written down:
 > check, an independent implementation, or a property/invariant. A change whose only evidence
 > is tests written alongside it is unverified, however green.
 
-Natural home: an addition to `TEST-01`, or a paragraph in `AGENTS.md` under
-"Financial-model changes." **Not implemented — a ruleset edit is governance.**
+Implemented in both places, deliberately: `TEST-01` carries the rule and `AGENTS.md`
+echoes it under "Financial-model changes," because `AGENTS.md` is the agent-facing
+gateway and gateway prose that drifts from the canonical CSV is how the contract comes
+apart. `tests/lint/test_gwtf_canonical_source.py` pins the clause in both surfaces so the
+two cannot separate silently.
 
 ### 5.5 *n*-sampling for generation — *adopted 2026-08-23 as a documented technique, not a rule*
 
