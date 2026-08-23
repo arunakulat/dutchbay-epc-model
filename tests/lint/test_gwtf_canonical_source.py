@@ -145,6 +145,29 @@ def test_test_01_requires_an_independent_oracle() -> None:
     assert "responsiveness guard" in agents
 
 
+def test_verify_01_requires_receipts_for_claimed_checks() -> None:
+    """Keep VERIFY-01 bound to its template, workflow, checker and yield clause."""
+
+    verify_01 = _rules_by_id()["VERIFY-01"]
+    policy = " ".join(
+        (verify_01["title"], verify_01["description"], verify_01["enforcement"])
+    )
+
+    assert verify_01["status"] == "active"
+    assert verify_01["category"] == "Verification"
+    for required in (
+        "not run",
+        "required-not-run",
+        ".github/pull_request_template.md",
+        "scripts/ci/check_pr_receipts.py",
+        ".github/workflows/pr-receipts.yml",
+        "TEST-05",
+        "negative control",
+        "the SPECIFIC rule wins",
+    ):
+        assert required in policy
+
+
 def test_active_r25_scripts_do_not_hardcode_a_retired_branch() -> None:
     """Keep operational R25 scripts branch-agnostic."""
     for relative_path in (

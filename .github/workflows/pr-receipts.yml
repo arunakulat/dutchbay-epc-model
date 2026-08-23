@@ -1,0 +1,45 @@
+# GWTF VERIFY-01 — a claimed check without a receipt is not a check.
+#
+# Makes .github/pull_request_template.md load-bearing: the receipts table must exist and
+# every Result cell must say something a reviewer can act on. A check that was not run is
+# declared as "not run - <reason>"; a blank cell fails.
+#
+# This is a cheap, self-contained job (no dependency install, no test run). It is not a
+# substitute for the real gates — CI remains the merge authority for whether the checks
+# themselves passed. Promoting this job to a *required* status check is a repository-ruleset
+# setting and remains an explicit owner decision.
+name: PR Receipts
+
+on:
+  pull_request:
+    # `edited` matters: editing the description to add the receipts must re-run the check,
+    # otherwise a fix cannot clear the failure without an unrelated push.
+    types: [opened, edited, synchronize, reopened]
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-receipts-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  receipts:
+    name: Verification receipts (VERIFY-01)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Check verification receipts
+        # The body is untrusted, author-controlled text. It is passed through the
+        # environment and never interpolated into the shell — a `${{ }}` expansion of the
+        # body directly into `run:` would be a script-injection hole.
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: python scripts/ci/check_pr_receipts.py
