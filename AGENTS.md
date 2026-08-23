@@ -141,6 +141,12 @@ one, because the next session acts on it.
   frozen reference that is no longer the applicable basis. Reconciliation guards must
   compare like-for-like cases and expose provenance.
 - Stochastic analysis must accept or record an explicit seed so results are reproducible.
+- Follow `TEST-01`'s independent-oracle clause. A pinned value proves only that a number
+  has not changed, never that it is still being derived, so a pinned-constant oracle is
+  paired with a responsiveness guard. Finance-material code must answer to an oracle that
+  did not originate in the same change — a pre-existing test, an external benchmark, a
+  closed-form check, an independent implementation, or a property/invariant. A change whose
+  only evidence is tests written alongside it is unverified, however green.
 
 ## Source ingestion and documentation
 
