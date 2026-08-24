@@ -1,0 +1,32 @@
+{
+  "name": "DutchBay independent audit review",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm@sha256:7876580dc67fd460fd962f004cbeb480027e9bbc0657096f1087db11f9eaff39",
+  "features": {
+    "ghcr.io/devcontainers/features/sshd:1.1.0": {}
+  },
+  "postCreateCommand": "bash .devcontainer/bootstrap_audit_review.sh",
+  "remoteEnv": {
+    "DUTCHBAY_VENV": "/workspaces/.dutchbay-audit-review-venv",
+    "DUTCHBAY_P03_SOURCE_ROOT": "/workspaces/.dutchbay-private/p03/sources",
+    "PATH": "/workspaces/.dutchbay-audit-review-venv/bin:${containerEnv:PATH}",
+    "PYTHONPATH": "${containerWorkspaceFolder}"
+  },
+  "forwardPorts": [],
+  "portsAttributes": {},
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/workspaces/.dutchbay-audit-review-venv/bin/python",
+        "python.terminal.activateEnvironment": true,
+        "extensions.autoCheckUpdates": false,
+        "extensions.autoUpdate": false,
+        "remote.autoForwardPorts": false
+      }
+    }
+  }
+}
