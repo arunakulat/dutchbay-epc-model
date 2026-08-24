@@ -13,7 +13,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field, fields, is_dataclass
 from datetime import datetime, timezone
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from analytics.fx.fx_contracts import FXCurveOutput, FXRiskProfile, FXStructuredBlock
 from analytics.resource_contracts import ResourceAssessment
@@ -3558,4 +3558,191 @@ __all__ = [
     "CovenantConstraint",
     "CapitalStructureOptimizationResult",
     "ResourceAssessment",
+    "CANONICAL_WIND_INTERFACE_FIELDS",
+    "SyntheticMCPMeasurementRecord",
+    "require_canonical_wind_measurement",
 ]
+
+
+# ---------------------------------------------------------------------------------------
+# Synthetic MCP measurement (#961)
+#
+# wind_resource/mcp.py implements measure-correlate-predict but had no production consumer.
+# It cannot be wired to the CANONICAL path: with no on-site campaign in the repository it
+# would emit a long-term-adjusted number that resembles a measured one, which is worse than
+# honest dead code. It CAN be wired inside the governed synthetic lane, which is already
+# fenced off from canonical finance by contract, so the code path is exercised end to end
+# before the real evidence chain (#1075 -> #1076 -> #1078) lands.
+#
+# The fence below is three layers, all reusing the existing vocabulary rather than inventing
+# a parallel one:
+#   1. TYPE      - Literal-typed classification fields; mypy rejects a canonical value.
+#   2. VALIDATOR - __post_init__ re-checks against SYNTHETIC_FEEDER_INPUT_KINDS,
+#                  QSTS_SYNTHETIC_OUTPUT_CLASS and SYNTHETIC_PROCESS_PROVENANCE_WARNING, so
+#                  dataclasses.replace() cannot launder the record either.
+#   3. ADMISSION - require_canonical_wind_measurement() refuses it at the door.
+#
+# Layer 1b is the copy-paste stopper: the canonical wind->finance interface is the six keys
+# resource.wind.{ws150_mean_ms, ws150_std_ms, capacity_factor, aep_gwh, source_id,
+# source_type}. This record deliberately shares NONE of those names, and asserts that
+# disjointness, so `resource.wind.update(record.model_dump())` cannot populate a canonical
+# field even by accident.
+# ---------------------------------------------------------------------------------------
+
+#: The canonical wind -> finance interface field names. A synthetic record must not collide
+#: with any of them (see SyntheticMCPMeasurementRecord.__post_init__).
+CANONICAL_WIND_INTERFACE_FIELDS: frozenset[str] = frozenset(
+    {
+        "ws150_mean_ms",
+        "ws150_std_ms",
+        "capacity_factor",
+        "aep_gwh",
+        "source_id",
+        "source_type",
+    }
+)
+
+
+@dataclass(frozen=True)
+class SyntheticMCPMeasurementRecord(ContractMixin):
+    """A measure-correlate-predict estimate fitted on a SYNTHETIC, GENERATED mast series.
+
+    This is process provenance, not a wind resource assessment. The mast series it was fitted
+    on does not exist: it is deterministically generated from the pinned reanalysis summary
+    so the MCP code path can be exercised. Nothing here may reach canonical finance, a lender
+    pack, or a board pack.
+    """
+
+    # --- identity / provenance -----------------------------------------------------------
+    schema: str
+    generated_at_utc: str
+    generator_version: str
+    reference_seed: int
+    mast_seed: int
+    source_scenario_sha256: str
+    source_era5_summary_sha256: str
+
+    # --- the MCP result, deliberately NOT named like the canonical interface --------------
+    mcp_method: str
+    mcp_n_concurrent: int
+    synthetic_predicted_long_term_mean_ms: float
+    synthetic_weibull_a: float
+    synthetic_weibull_k: float
+    synthetic_uplift_pct: float
+    campaign_adequacy: str
+
+    # --- classification: Literal-typed so mypy refuses a canonical value ------------------
+    input_kind: Literal["synthetic_placeholder"] = "synthetic_placeholder"
+    output_class: Literal["synthetic_process_provenance"] = (
+        "synthetic_process_provenance"
+    )
+    required_warning: str = SYNTHETIC_PROCESS_PROVENANCE_WARNING
+    finance_wiring_mode: Literal["synthetic_counterfactual"] = (
+        "synthetic_counterfactual"
+    )
+    finance_wiring_enabled: Literal[False] = False
+    canonical_finance_eligible: Literal[False] = False
+    generated_input: Literal[True] = True
+    observed_measurement: Literal[False] = False
+    site_representative: Literal[False] = False
+    bankable: Literal[False] = False
+    lender_eligible: Literal[False] = False
+    board_eligible: Literal[False] = False
+
+    def __post_init__(self) -> None:
+        if self.input_kind not in SYNTHETIC_FEEDER_INPUT_KINDS:
+            raise ValueError(
+                "SyntheticMCPMeasurementRecord.input_kind must be a synthetic kind from "
+                f"{sorted(SYNTHETIC_FEEDER_INPUT_KINDS)}; got {self.input_kind!r}."
+            )
+        if self.output_class != QSTS_SYNTHETIC_OUTPUT_CLASS:
+            raise ValueError(
+                "SyntheticMCPMeasurementRecord requires the segregated "
+                f"{QSTS_SYNTHETIC_OUTPUT_CLASS!r} output class."
+            )
+        if self.required_warning != SYNTHETIC_PROCESS_PROVENANCE_WARNING:
+            raise ValueError(
+                "SyntheticMCPMeasurementRecord must carry the exact mandatory synthetic "
+                "warning; a softer synonym is not acceptable and stripping it is refused."
+            )
+        # Read through str() deliberately: the Literal annotation makes mypy consider this
+        # comparison dead, but Literal is not enforced at RUNTIME - dataclasses.replace()
+        # will happily set "canonical" - so the guard is what actually stops laundering.
+        if str(self.finance_wiring_mode) == "canonical":
+            raise ValueError(
+                "A synthetic MCP measurement can never be wired to canonical finance."
+            )
+        # Strict booleans: the repo's house rule. `1`/`0` must not pass for True/False.
+        for field_name in (
+            "finance_wiring_enabled",
+            "canonical_finance_eligible",
+            "generated_input",
+            "observed_measurement",
+            "site_representative",
+            "bankable",
+            "lender_eligible",
+            "board_eligible",
+        ):
+            value = getattr(self, field_name)
+            if type(value) is not bool:
+                raise ValueError(
+                    f"SyntheticMCPMeasurementRecord.{field_name} must be a real bool."
+                )
+        if self.canonical_finance_eligible is not False:
+            raise ValueError(
+                "SyntheticMCPMeasurementRecord.canonical_finance_eligible must be False."
+            )
+        if self.generated_input is not True or self.observed_measurement is not False:
+            raise ValueError(
+                "SyntheticMCPMeasurementRecord describes a GENERATED series; it must not "
+                "claim to be an observed measurement."
+            )
+        for flag in (
+            "bankable",
+            "lender_eligible",
+            "board_eligible",
+            "site_representative",
+        ):
+            if getattr(self, flag) is not False:
+                raise ValueError(
+                    f"SyntheticMCPMeasurementRecord.{flag} must be False - a synthetic mast "
+                    "series is not evidence of anything about the site."
+                )
+        # Layer 1b: refuse any field name that could populate the canonical wind interface.
+        collisions = CANONICAL_WIND_INTERFACE_FIELDS.intersection(self.model_dump())
+        if collisions:
+            raise ValueError(
+                "SyntheticMCPMeasurementRecord must not share field names with the "
+                f"canonical wind interface; collided on {sorted(collisions)}."
+            )
+
+
+def require_canonical_wind_measurement(record: object) -> None:
+    """Refuse a synthetic wind estimate at the door of any canonical/bankable consumer.
+
+    Mirrors the admission gates the repository already uses to keep noncanonical results out
+    of canonical finance. Call this from anything that is about to treat a wind estimate as
+    real, so the refusal is mechanical rather than a matter of the caller remembering.
+
+    Raises:
+        ValueError: if ``record`` is a synthetic measurement, or is not marked canonical.
+    """
+
+    input_kind = getattr(record, "input_kind", None)
+    if input_kind in SYNTHETIC_FEEDER_INPUT_KINDS:
+        raise ValueError(
+            "This wind estimate was fitted on a SYNTHETIC generated mast series and cannot "
+            "enter canonical finance, a lender pack or a board pack. It exists to exercise "
+            "the MCP path before real evidence lands (#1075 -> #1076 -> #1078). Never "
+            "reclassify a generated series as a measurement."
+        )
+    if getattr(record, "canonical_finance_eligible", False) is not True:
+        raise ValueError(
+            "Wind estimate is not marked canonical_finance_eligible; it cannot enter "
+            "canonical finance."
+        )
+    if getattr(record, "finance_wiring_mode", None) != "canonical":
+        raise ValueError(
+            "Wind estimate is not wired in canonical mode; it cannot enter canonical "
+            "finance."
+        )

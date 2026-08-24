@@ -1,0 +1,59 @@
+# Governed synthetic MCP measurement (#961)
+#
+# WHAT THIS CONFIGURES, STATED PLAINLY: a mast series that does not exist. DutchBay has no
+# on-site measurement campaign, so wind_resource/mcp.py has never had a mast to correlate
+# against and has sat unwired since it was written. This config generates one
+# deterministically so the MCP path is exercised before the blocked real-evidence chain
+# (#1075 -> #1076 -> #1078) lands.
+#
+# Nothing produced from this file is a measurement, is evidence about the site, or may reach
+# canonical finance, a lender pack or a board pack. The emitted record is a
+# SyntheticMCPMeasurementRecord, which is finance-ineligible by contract and is refused by
+# analytics.contracts_v14.require_canonical_wind_measurement.
+#
+# CESSPIT: every key below is required. There are no defaults and no fallbacks; a missing or
+# extra key raises at parse time rather than being quietly filled in.
+
+generator:
+  # Seeds are frozen so the generated series is reproducible (MRM-01). Changing either seed
+  # changes the series and therefore every number derived from it - do so deliberately.
+  reference_seed: 923
+  mast_seed: 961
+  # 5 years of hourly reference, matching the span of the committed ERA5 basis.
+  reference_hours: 43800
+  # 12 months of concurrent "campaign" - the span MEASNET v3.1 / IEC 61400-15-1:2025 require.
+  # Deliberately set at the standard so the synthetic run exercises the compliant branch;
+  # shorten it to exercise the disclosure tiers instead.
+  campaign_hours: 8760
+  # Calibrated to the pinned ERA5 summary hub-height mean, not invented.
+  reference_mean_ms: 7.46
+  reference_sigma_ms: 3.1
+  # AR(1) persistence - wind is autocorrelated hour to hour; white noise would understate
+  # the effective sample size and flatter the transfer fit.
+  ar1_phi: 0.88
+
+mast_bias:
+  # THE PLANTED BIAS. This is the whole point of a synthetic mast: we declare a known
+  # site-vs-reanalysis relationship in config so the MCP transfer can be checked against a
+  # ground truth we chose. It is NOT a discovered property of the DutchBay site, and must
+  # never be quoted as one.
+  slope: 1.08
+  intercept: 0.15
+  noise_sigma_ms: 0.35
+
+mcp:
+  # variance_ratio preserves on-site variance and hence the high-wind tail that drives
+  # E[v^3]; linear_regression deflates variance and is diagnostic only.
+  method: variance_ratio
+  min_concurrent: 24
+  # Left false: with campaign_hours at the 12-month standard there is nothing to opt out of,
+  # and an opt-out that is on by default is exactly the silent sub-threshold fit CESSPIT and
+  # FIN-01 forbid.
+  allow_below_bankable: false
+
+source:
+  # Identity of the pinned inputs this synthetic run is calibrated against, so a stored
+  # record can be tied back to the tree state that produced it (MRM-02). These are the same
+  # digests the #923 synthetic feeder package pins.
+  scenario_sha256: bb83a662c754ef1376201818c2e294c660d4e9cc4cae0947ba091cdb62f53c39
+  era5_summary_sha256: b2d6fd4a4373d3634383d5aec215e4c2dadd2e0b6a3db6d4139a4c850b4578d0
