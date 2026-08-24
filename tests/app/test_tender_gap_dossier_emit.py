@@ -350,7 +350,7 @@ def test_dbpl_gap_section_carries_clause_question_and_closure_test() -> None:
     model = _rich_dossier()
     doc = as_dbpl_document(model)
     section = next(s for s in doc["sections"] if s["heading"].startswith("A1 - "))
-    fields = {row[0]: row[1] for row in section["table"]["rows"]}
+    fields = {r["cells"][0]: r["cells"][1] for r in section["table"]["rows"]}
     assert fields["Severity"] == "CRITICAL"
     assert fields["Controlling clause"]
     assert fields[f"Question to {model.oem_label}"]
@@ -360,7 +360,7 @@ def test_dbpl_gap_section_carries_clause_question_and_closure_test() -> None:
 def test_dbpl_marks_an_unverified_gap_rather_than_dropping_it() -> None:
     doc = as_dbpl_document(_rich_dossier())
     section = next(s for s in doc["sections"] if s["heading"].startswith("A2 - "))
-    fields = {row[0]: row[1] for row in section["table"]["rows"]}
+    fields = {r["cells"][0]: r["cells"][1] for r in section["table"]["rows"]}
     assert "UNVERIFIED" in fields["Verification"]
 
 
@@ -376,3 +376,45 @@ def test_dbpl_sections_use_points_not_items() -> None:
 def test_dbpl_document_accepts_print_core_provenance() -> None:
     doc = as_dbpl_document(_rich_dossier(), provenance_lines=("line one", "line two"))
     assert doc["provenance_lines"] == ("line one", "line two")
+
+
+# ── row-shape contract with the DBPL template ────────────────────────────────
+
+
+def test_every_adapter_table_row_is_a_mapping() -> None:
+    """The v2 template reads `row.cells` / `row.group`.
+
+    A bare list silently rendered NOTHING: the gap headings all appeared, so the document looked
+    complete while ~85% of its body text was missing. This guards the adapter side of that
+    contract.
+    """
+    doc = as_dbpl_document(_rich_dossier())
+    for section in doc["sections"]:
+        table = section.get("table")
+        if not table:
+            continue
+        for row in table["rows"]:
+            assert isinstance(
+                row, dict
+            ), f"{section['heading']}: row is {type(row).__name__}"
+            assert "cells" in row or "group" in row
+
+
+def test_adapter_output_renders_every_gap_field() -> None:
+    """End-to-end: the fields must survive the adapter AND the template."""
+    from jinja2 import Environment, FileSystemLoader
+
+    model = _rich_dossier()
+    env = Environment(
+        loader=FileSystemLoader("app/reports/dbpl/templates"),
+        autoescape=True,
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+    html = env.get_template("dbpl_base.html.j2").render(doc=as_dbpl_document(model))
+    for gap in model.gaps:
+        assert gap.requirement in html
+        assert gap.supplied in html
+        assert gap.why_insufficient in html
+        assert gap.question in html
+        assert gap.closure_test in html
