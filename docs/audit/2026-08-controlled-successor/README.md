@@ -16,6 +16,9 @@ The authoritative live remediation queue and eventual release decision are track
 - immutable 56-row pre-execution architecture examination plan plus deterministic
   JSON/CSV ledger descendants; all 56 rows remain pending, unreviewed and
   HOLD-blocking;
+- immutable 23-row issue #1110 remediation/release plan plus deterministic JSON/CSV
+  ledger descendants, sourced from a byte-frozen OPEN issue snapshot; all 23 gates
+  remain unchecked, pending, unreviewed, closure-disabled and HOLD-blocking;
 - 34-row reproduction register plus concise machine-readable reproduction records;
 - four independent refuter reports and the P3 register patch map;
 - semantic-closure and structural-validation records;
@@ -28,6 +31,8 @@ The latest controlled validation represented here reports:
 - 72 architecture pointers: 2 confirmed, 13 partially confirmed, 1 not a defect, 5 deferred and 51 not examined;
 - 56 architecture examinations planned in 15 dependency-aware batches: 56 pending,
   zero independently reviewed and zero result-hashed;
+- 23 issue #1110 gates planned in 11 dependency-ordered stages: 23 pending, zero
+  independently reviewed, zero completion-hashed and zero closure-authorized;
 - 34 reproduction controls: 18 completed, 11 required-not-run and 5 unavailable;
 - structural status `PASS`, release status `HOLD`.
 
@@ -49,10 +54,12 @@ python docs/audit/2026-08-controlled-successor/scripts/validate_published_pack.p
 
 The validator checks the publication manifest, JSON parsing, exact register populations,
 audited-commit identity, F5-01/F5-02 separation language, the deterministic 56-row
-architecture-examination descendants, and HOLD controls. It rejects a missing/extra
-pointer, duplicate JSON member, path escape, owner/reviewer-role conflict, result-state
-field in the immutable plan, descendant drift, or any v1 row presented as examined. It
-does not execute the planned negative controls or replace independent semantic review.
+architecture-examination descendants, the frozen OPEN issue source and deterministic
+23-row programme-gate descendants, and HOLD controls. It rejects a missing/extra
+pointer or gate, duplicate JSON member, path escape, owner/reviewer-role conflict,
+dependency-order bypass, result-state field in an immutable plan, premature closure,
+descendant drift, or any v1 row presented as examined or completed. It does not execute
+the planned negative controls or replace independent semantic review.
 
 ## Release boundary
 

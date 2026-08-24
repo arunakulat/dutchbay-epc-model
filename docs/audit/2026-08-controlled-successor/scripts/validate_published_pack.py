@@ -34,6 +34,9 @@ ARCHITECTURE_EXAMINATION_JSON = (
 ARCHITECTURE_EXAMINATION_CSV = (
     PACK_ROOT / "registers" / "architecture_examination_ledger.v1.csv"
 )
+PROGRAMME_GATE_BUILDER = PACK_ROOT / "scripts" / "build_programme_gate_ledger.py"
+PROGRAMME_GATE_JSON = PACK_ROOT / "registers" / "programme_gate_ledger.v1.json"
+PROGRAMME_GATE_CSV = PACK_ROOT / "registers" / "programme_gate_ledger.v1.csv"
 
 
 class ValidationError(RuntimeError):
@@ -68,6 +71,18 @@ def _load_architecture_examination_builder() -> ModuleType:
     )
     if spec is None or spec.loader is None:
         raise ValidationError("architecture examination builder cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_programme_gate_builder() -> ModuleType:
+    """Load the pure programme-gate builder without packaging the scripts dir."""
+    spec = importlib.util.spec_from_file_location(
+        "programme_gate_builder", PROGRAMME_GATE_BUILDER
+    )
+    if spec is None or spec.loader is None:
+        raise ValidationError("programme gate builder cannot be loaded")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -139,6 +154,91 @@ def _validate_architecture_examination_ledger() -> dict[str, int]:
         "records": len(records),
         "pending_examination": len(records),
         "hash_bound_results": 0,
+    }
+
+
+def _validate_programme_gate_ledger() -> dict[str, int]:
+    """Rebuild the 23-gate descendants and enforce OPEN/HOLD pre-execution state."""
+    _require(PROGRAMME_GATE_BUILDER.is_file(), "programme gate builder is missing")
+    _require(PROGRAMME_GATE_JSON.is_file(), "programme gate JSON ledger is missing")
+    _require(PROGRAMME_GATE_CSV.is_file(), "programme gate CSV ledger is missing")
+    builder = _load_programme_gate_builder()
+    payload = cast(dict[str, Any], builder.build_from_disk())
+    _require(
+        PROGRAMME_GATE_JSON.read_text(encoding="utf-8") == builder.render_json(payload),
+        "programme gate JSON descendant drift",
+    )
+    _require(
+        PROGRAMME_GATE_CSV.read_text(encoding="utf-8") == builder.render_csv(payload),
+        "programme gate CSV descendant drift",
+    )
+    records = payload.get("records", [])
+    _require(len(records) == 23, "programme gate population drift")
+    _require(
+        Counter(str(record.get("source_section")) for record in records)
+        == Counter(
+            {
+                "reconciled_predecessor_queue": 9,
+                "additional_live_remediation_gates": 6,
+                "release_gates": 8,
+            }
+        ),
+        "programme gate source-section drift",
+    )
+    _require(
+        all(record.get("source_checkbox_state") == "unchecked" for record in records),
+        "programme source must remain unchecked at the frozen cutoff",
+    )
+    _require(
+        all(record.get("gate_status") == "pending" for record in records),
+        "v1 programme gates must remain pending",
+    )
+    _require(
+        all(
+            record.get("completion_record", {}).get("sha256") is None
+            for record in records
+        ),
+        "v1 programme gates cannot carry completion hashes",
+    )
+    _require(
+        all(
+            record.get("independent_reviewer", {}).get("identity") is None
+            for record in records
+        ),
+        "v1 programme gates cannot claim completed independent review",
+    )
+    _require(
+        all(record.get("closure_authorized") is False for record in records),
+        "v1 programme gate ledger cannot authorize issue closure",
+    )
+    _require(
+        all(
+            record.get("hold_effect") == "blocks_board_lender_release"
+            for record in records
+        ),
+        "programme gate HOLD effect drift",
+    )
+    _require(
+        payload.get("source_issue", {}).get("state_at_cutoff") == "OPEN",
+        "programme source issue cutoff state must remain OPEN",
+    )
+    _require(payload.get("release_status") == "HOLD", "programme ledger HOLD missing")
+    _require(
+        payload.get("f5_separation", {}).get("f5_01_gate") == "L01"
+        and payload.get("f5_separation", {}).get("f5_02_evidence_gate") == "P06"
+        and payload.get("f5_separation", {}).get("f5_02_decision_gate") == "L03",
+        "programme ledger F5 separation drift",
+    )
+    _require(
+        payload.get("closure_control", {}).get("release_decision_gate") == "R07"
+        and payload.get("closure_control", {}).get("only_closure_action_gate") == "R08",
+        "programme ledger closure-control drift",
+    )
+    return {
+        "records": len(records),
+        "pending": len(records),
+        "completion_hashes": 0,
+        "closure_authorized": 0,
     }
 
 
@@ -223,6 +323,7 @@ def main() -> None:
     manifest_entries = _validate_manifest()
     _validate_ruleset_count_erratum()
     architecture_examinations = _validate_architecture_examination_ledger()
+    programme_gates = _validate_programme_gate_ledger()
     findings = _load("registers/findings_register.v2.json")
     sources = _load("registers/primary_source_register.v2.json")
     architecture = _load("registers/architecture_pointer_dispositions.json")
@@ -274,6 +375,7 @@ def main() -> None:
         "ruleset_count_erratum": "PASS",
         "architecture_pointers": 72,
         "architecture_examinations": architecture_examinations,
+        "programme_gates": programme_gates,
         "reproductions": dict(sorted(reproduction_counts.items())),
     }
     print(json.dumps(result, indent=2, sort_keys=True))

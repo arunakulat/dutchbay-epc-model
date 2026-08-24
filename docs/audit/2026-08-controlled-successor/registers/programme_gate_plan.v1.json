@@ -1,0 +1,729 @@
+{
+  "schema_version": "1.0.0",
+  "document_id": "DUTCHBAY-1110-PROGRAMME-GATE-PLAN-v1",
+  "authority_status": "active_pre_execution_plan",
+  "created_at": "2026-08-24T17:04:04+05:30",
+  "source_issue_number": 1110,
+  "source_issue_url": "https://github.com/arunakulat/dutchbay-epc-model/issues/1110",
+  "source_issue_state_at_cutoff": "OPEN",
+  "source_issue_updated_at": "2026-08-24T11:29:43Z",
+  "source_issue_snapshot_path": "registers/history/github_issue_1110.remediation_and_release_gates.20260824.9f7348f7.md",
+  "source_issue_snapshot_sha256": "cf8d4709e4939589284a57dbda8cc0e6249da0abb28b5a10f9eda8e4d735bd02",
+  "source_issue_body_sha256": "9f7348f7a5c56f8aff45a5074e323d96abda418567f8cfd0eefb16f43855e0b9",
+  "current_main_cutoff_commit": "e788fe3b40bf0ffd3bcc3d40043bb94cfa6de5f4",
+  "release_status": "HOLD",
+  "immutability_rule": "Do not edit this v1 plan after execution begins; issue an additive completion overlay or a new version.",
+  "closure_rule": "Issue #1110 must remain OPEN unless R07 records RELEASED and every other gate is complete in an independently validated additive overlay; R08 is the only closure-action gate.",
+  "records": [
+    {
+      "gate_id": "P01",
+      "source_checkbox_ordinal": 1,
+      "source_section": "reconciled_predecessor_queue",
+      "execution_stage": "S01_CONTROL_BASELINE",
+      "owner_role": "Controlled evidence-pack custodian",
+      "independent_reviewer_role": "Independent evidence-integrity reviewer",
+      "initial_evidence_state": "partial_evidence_present",
+      "known_artifact_refs": [
+        "docs/audit/2026-08-controlled-successor/qa/STRUCTURAL_VALIDATION_2026-08-16T145800+0530.json",
+        "docs/audit/2026-08-controlled-successor/01_BASELINE.json"
+      ],
+      "dependencies": [],
+      "evidence_requirements": [
+        "A clean extracted archive or clean repository worktree must validate from documented relative inputs without relying on a predecessor machine path.",
+        "Every required repository and private-archive object must be represented by a non-self-attesting manifest or an explicit governed exclusion."
+      ],
+      "completion_criteria": [
+        "Independent clean-room execution records structural PASS while preserving release HOLD and immutable-input identities.",
+        "The partially expanded checkpoint ambiguity is resolved by a complete portable successor or an explicit retained-archive dependency with verified hashes."
+      ],
+      "planned_negative_control": "Remove one manifest-listed portable input and confirm that validation fails closed with the exact missing relative path instead of silently using an external or absolute-path fallback.",
+      "limitations": [
+        "Earlier private and repository-safe validator passes are prerequisite evidence, not independent completion of this portability gate."
+      ]
+    },
+    {
+      "gate_id": "P02",
+      "source_checkbox_ordinal": 2,
+      "source_section": "reconciled_predecessor_queue",
+      "execution_stage": "S01_CONTROL_BASELINE",
+      "owner_role": "Findings register adjudication lead",
+      "independent_reviewer_role": "Independent model-risk reviewer",
+      "initial_evidence_state": "partial_evidence_present",
+      "known_artifact_refs": [
+        "docs/audit/2026-08-controlled-successor/registers/findings_register.v2.json",
+        "docs/audit/2026-08-controlled-successor/qa/P3_REGISTER_GRANULARITY_ADJUDICATION.md"
+      ],
+      "dependencies": [],
+      "evidence_requirements": [
+        "All 111 findings must retain audited-commit anchors while recording current-main implementation state through additive evidence rather than rewritten historical claims.",
+        "Every independent refuter disposition must be ingressed at claim-level granularity with source, reproduction, confidence, limitation and owner linkage."
+      ],
+      "completion_criteria": [
+        "A machine-validated successor overlay accounts for all 111 finding IDs exactly once and exposes every unresolved, deferred or evidence-blocked condition.",
+        "An independent reviewer confirms that no audited-commit fact, refuter conclusion or current-main state has been laundered across evidence periods."
+      ],
+      "planned_negative_control": "Inject a current-main remediation claim into an audited-commit field and confirm that the findings control rejects the period-boundary violation rather than accepting a semantically improved but historically false row.",
+      "limitations": [
+        "The published 111-row register is a controlled baseline and does not by itself prove that every finding is reconciled to current implementation state."
+      ]
+    },
+    {
+      "gate_id": "P03",
+      "source_checkbox_ordinal": 3,
+      "source_section": "reconciled_predecessor_queue",
+      "execution_stage": "S01_CONTROL_BASELINE",
+      "owner_role": "Primary-source register custodian",
+      "independent_reviewer_role": "Independent source-verification reviewer",
+      "initial_evidence_state": "partial_evidence_present",
+      "known_artifact_refs": [
+        "docs/audit/2026-08-controlled-successor/registers/primary_source_register.v2.json",
+        "docs/audit/2026-08-controlled-successor/source-controls/SOURCE_ARCHIVE_MANIFEST.v2.sha256"
+      ],
+      "dependencies": [],
+      "evidence_requirements": [
+        "All 42 registered claims must retain exact source locations, access dates, hashes, publication limitations and evidence-status boundaries.",
+        "Supplier, agent, analyst-generated and synthetic material must remain explicitly distinguished from authenticated primary evidence."
+      ],
+      "completion_criteria": [
+        "Independent hash and source-location sampling confirms the complete 42-record population and all retained source-manifest objects without unsupported upgrades in evidence status.",
+        "Every material claim used by a Critical or High finding resolves to a valid source record or remains explicitly unsupported and HOLD-blocking."
+      ],
+      "planned_negative_control": "Change a supplier assertion to verified primary evidence without adding an authenticated source object and confirm that semantic validation or independent review rejects the status escalation.",
+      "limitations": [
+        "Registration records provenance and limitations; it never makes an assertion true merely because the row is structurally valid."
+      ]
+    },
+    {
+      "gate_id": "P04",
+      "source_checkbox_ordinal": 4,
+      "source_section": "reconciled_predecessor_queue",
+      "execution_stage": "S02_EVIDENCE_EXECUTION",
+      "owner_role": "Reproduction programme lead",
+      "independent_reviewer_role": "Independent reproduction reviewer",
+      "initial_evidence_state": "partial_evidence_present",
+      "known_artifact_refs": [
+        "docs/audit/2026-08-controlled-successor/reproductions/reproduction_register.json",
+        "docs/audit/2026-08-controlled-successor/reproductions/p2_population_reconciliation.v2.json"
+      ],
+      "dependencies": [
+        "P01",
+        "P02",
+        "P03"
+      ],
+      "evidence_requirements": [
+        "The 34-control reproduction population must remain exact, including 18 completed, 11 required-not-run and five unavailable at the frozen baseline.",
+        "Each outstanding control must be executed with a versioned method and independent oracle or formally governed as unavailable or deferred with owner, rationale and release effect."
+      ],
+      "completion_criteria": [
+        "No required-not-run or unavailable control is relabelled completed without a hash-bound reproduction artifact and independent review.",
+        "Every remaining control has a final execution or governed-disposition record that is surfaced in the release synthesis and dependency graph."
+      ],
+      "planned_negative_control": "Mark a required-not-run record completed while leaving its artifact hash and independent reviewer absent, and confirm that the completion overlay and release validator fail closed.",
+      "limitations": [
+        "The baseline count is a source-state fact and must change only through additive per-control results, never through denominator reduction."
+      ]
+    },
+    {
+      "gate_id": "P05",
+      "source_checkbox_ordinal": 5,
+      "source_section": "reconciled_predecessor_queue",
+      "execution_stage": "S02_EVIDENCE_EXECUTION",
+      "owner_role": "Architecture examination programme lead",
+      "independent_reviewer_role": "Independent software-architecture reviewer",
+      "initial_evidence_state": "control_surface_published_execution_pending",
+      "known_artifact_refs": [
+        "docs/audit/2026-08-controlled-successor/registers/architecture_examination_plan.v1.json",
+        "docs/audit/2026-08-controlled-successor/registers/architecture_examination_ledger.v1.json"
+      ],
+      "dependencies": [
+        "P01",
+        "P02"
+      ],
+      "evidence_requirements": [
+        "All 72 historical architecture pointers must remain visible while the 51 not-examined and five deferred pointers receive dedicated current-main examination or explicit governed deferral.",
+        "Each of the 56 open examinations requires its planned negative control, a hash-bound result, owner, independent reviewer and final rationale."
+      ],
+      "completion_criteria": [
+        "An additive result overlay accounts for all 56 pre-execution rows exactly once with no pending examination, absent result hash or absent independent review hidden from release.",
+        "The 72-pointer active overlay is reconciled without overwriting the frozen historical source snapshot or treating file-level scout seams as completed examination."
+      ],
+      "planned_negative_control": "Populate a final disposition without a result hash or independent reviewer identity and confirm that the architecture completion control rejects the row while preserving the immutable plan.",
+      "limitations": [
+        "PR #1151 published a 56-row plan only; zero of those rows were represented as examined, reviewed or result-hashed at this cutoff."
+      ]
+    },
+    {
+      "gate_id": "P06",
+      "source_checkbox_ordinal": 6,
+      "source_section": "reconciled_predecessor_queue",
+      "execution_stage": "S02_EVIDENCE_EXECUTION",
+      "owner_role": "Transaction evidence custodian",
+      "independent_reviewer_role": "Independent project-finance legal reviewer",
+      "initial_evidence_state": "blocked_external",
+      "known_artifact_refs": [
+        "docs/audit/lender-input/DUTCHBAY_F5_02_LENDER_CONFIRMATION_TEMPLATE_v1.yaml",
+        "docs/audit/lender-input/DUTCHBAY_F5_02_PRIVATE_INGRESS_MANIFEST_TEMPLATE_v1.yaml",
+        "scripts/validate_f5_02_lender_return.py"
+      ],
+      "dependencies": [
+        "P01"
+      ],
+      "evidence_requirements": [
+        "Authenticated lender and legal evidence must identify debt denomination, repayment and settlement numeraire, currency-conversion mechanics and binding transaction terms.",
+        "Private ingress must bind exact raw-byte hashes, provenance, conflicts, reviewer authority and confidentiality without persisting private absolute paths in repository artifacts."
+      ],
+      "completion_criteria": [
+        "An authenticated, independently reviewed lender/legal return passes the fail-closed private-ingress controls and resolves all mandatory transaction fields without semantic placeholders.",
+        "The evidence remains separate from F5-01 and provides no canonical or implementation decision until the distinct L03 decision gate is executed."
+      ],
+      "planned_negative_control": "Submit an analyst-generated synthetic term sheet or structurally complete placeholder as closure-grade evidence and confirm that the F5-02 validator refuses completion and preserves the external-evidence HOLD.",
+      "limitations": [
+        "Templates, synthetic lender terms and precedent research are collection aids only; no authenticated DutchBay transaction evidence exists at this cutoff."
+      ]
+    },
+    {
+      "gate_id": "P07",
+      "source_checkbox_ordinal": 7,
+      "source_section": "reconciled_predecessor_queue",
+      "execution_stage": "S02_EVIDENCE_EXECUTION",
+      "owner_role": "Finance Monte Carlo assurance lead",
+      "independent_reviewer_role": "Independent quantitative model-risk reviewer",
+      "initial_evidence_state": "independent_review_required",
+      "known_artifact_refs": [
+        "docs/audit/2026-08-controlled-successor/reproductions/governed_mc_pr1030_spec.json",
+        "docs/audit/2026-08-controlled-successor/reproductions/governed_mc_pr1030_secondary_verification.json"
+      ],
+      "dependencies": [
+        "P01"
+      ],
+      "evidence_requirements": [
+        "The 10,000-trial evidence pack must retain exact seed, configuration, input hashes, runtime contract, full-array identity and no-toy-data controls.",
+        "Independent successor QA must challenge trial routing, convergence, KPI definitions, tail-risk calculations and responsiveness rather than accepting pinned output alone."
+      ],
+      "completion_criteria": [
+        "A reviewer independent of the implementation records a hash-bound semantic QA decision against the exact governed Monte Carlo successor artifacts.",
+        "Any variance between audited claims, current implementation and evidence-pack presentation is corrected or explicitly retained as a release-blocking limitation."
+      ],
+      "planned_negative_control": "Replace the governed finance trial routing with a toy or wind-AEP scenario count while preserving pinned headline values, and confirm that provenance and responsiveness checks detect the substitution.",
+      "limitations": [
+        "A completed governed run and same-agent secondary verification do not satisfy the issue requirement for independent successor QA."
+      ]
+    },
+    {
+      "gate_id": "P08",
+      "source_checkbox_ordinal": 8,
+      "source_section": "reconciled_predecessor_queue",
+      "execution_stage": "S03_LINEAGE_RECONCILIATION",
+      "owner_role": "Evidence lineage and manifest custodian",
+      "independent_reviewer_role": "Independent provenance reviewer",
+      "initial_evidence_state": "partial_evidence_present",
+      "known_artifact_refs": [
+        "docs/audit/2026-08-controlled-successor/01_BASELINE.json",
+        "docs/audit/2026-08-controlled-successor/registers/history/architecture_pointer_dispositions.pre-architecture-examination-plan.20260824.0b9c6803.json"
+      ],
+      "dependencies": [
+        "P01",
+        "P02",
+        "P03",
+        "P04",
+        "P05",
+        "P06",
+        "P07"
+      ],
+      "evidence_requirements": [
+        "Every predecessor identity and additive successor delta must be traceable through immutable hashes, source cutoffs, semantic version boundaries and non-self-attesting manifests.",
+        "Mutable current-state files must not attest their own digest or silently replace dated predecessor manifests and frozen preimages."
+      ],
+      "completion_criteria": [
+        "An independent lineage review resolves every predecessor-to-successor edge and verifies all root and child digests from outside the artifacts they attest.",
+        "Historical manifests remain preserved as dated snapshots while a distinct current-state manifest covers the complete release candidate without missing or extra files."
+      ],
+      "planned_negative_control": "Alter a predecessor file and regenerate only the mutable manifest that contains its own attestation, then confirm that independent root-digest and frozen-preimage controls reject the apparently self-consistent package.",
+      "limitations": [
+        "Existing manifests and lineage fields are partial evidence until the complete predecessor and successor graph is independently reconciled."
+      ]
+    },
+    {
+      "gate_id": "P09",
+      "source_checkbox_ordinal": 9,
+      "source_section": "reconciled_predecessor_queue",
+      "execution_stage": "S10_PROGRAMME_CONSOLIDATION",
+      "owner_role": "Audit release-pack lead",
+      "independent_reviewer_role": "Independent release-pack authority",
+      "initial_evidence_state": "partial_evidence_present",
+      "known_artifact_refs": [
+        "docs/audit/2026-08-controlled-successor/02_AUDIT_CORRIGENDUM_v1.0.1_2026-08-16.md",
+        "docs/audit/2026-08-controlled-successor/03_AUDIT_ERRATA_2026-08-24.md"
+      ],
+      "dependencies": [
+        "R05",
+        "R06",
+        "R07"
+      ],
+      "evidence_requirements": [
+        "The versioned corrigendum must resolve stale P6, score, population, method and source claims without rewriting the immutable received audit.",
+        "The release pack must bind the last-generated synthesis, rendered review receipt and independent disposition to the exact reconciled register state."
+      ],
+      "completion_criteria": [
+        "The final versioned corrigendum and release pack contain no stale material claim and reproduce their calculations, citations, links and controlled-register populations.",
+        "The independent R07 disposition is recorded and the pack remains HOLD unless that exact disposition is RELEASED with every prior gate complete."
+      ],
+      "planned_negative_control": "Reuse a pre-reconciliation board synthesis or stale rule, pointer, finding or reproduction count and confirm that the release-pack control rejects the version even when its Markdown renders successfully.",
+      "limitations": [
+        "The existing corrigendum and erratum are partial predecessors; this source checkbox also requires final synthesis, rendering and independent approval."
+      ]
+    },
+    {
+      "gate_id": "L01",
+      "source_checkbox_ordinal": 10,
+      "source_section": "additional_live_remediation_gates",
+      "execution_stage": "S04_IMPLEMENTATION_REMEDIATION",
+      "owner_role": "Project-finance implementation lead",
+      "independent_reviewer_role": "Independent project-finance model reviewer",
+      "initial_evidence_state": "requires_current_main_reconciliation",
+      "known_artifact_refs": [
+        "docs/audit/2026-08-controlled-successor/reproductions/p2_f5_01_d1_empty_debt_parity_merged_dac8c7a.json",
+        "docs/audit/2026-08-controlled-successor/reproductions/p5_a15_irr_scale_reproduction_v1_0_1.json"
+      ],
+      "dependencies": [
+        "P02",
+        "P04"
+      ],
+      "evidence_requirements": [
+        "Current-main production caller binding must be traced through canonical and lender-report consumers with versioned before-and-after KPI reconciliation.",
+        "Any canon or report rebaseline must use independent oracles, exact-head protected delivery and an explicit F5-01-only rollback surface."
+      ],
+      "completion_criteria": [
+        "F5-01 production behavior, canonical impacts and lender-report outputs are reconciled to current main and independently approved with exact hashes.",
+        "The change and rebaseline remain separate from every F5-02 evidence, decision, test, commit and pull-request surface."
+      ],
+      "planned_negative_control": "Apply the expected F5-01 headline KPI pins without routing the production caller through the corrected implementation and confirm that a responsiveness or independent-oracle test rejects the false pass.",
+      "limitations": [
+        "Historical F5-01 parity and canon receipts do not alone prove complete current-main caller and lender-report reconciliation."
+      ]
+    },
+    {
+      "gate_id": "L02",
+      "source_checkbox_ordinal": 11,
+      "source_section": "additional_live_remediation_gates",
+      "execution_stage": "S04_IMPLEMENTATION_REMEDIATION",
+      "owner_role": "Successor semantic QA lead",
+      "independent_reviewer_role": "Independent quantitative review panel",
+      "initial_evidence_state": "independent_review_required",
+      "known_artifact_refs": [
+        "docs/audit/2026-08-controlled-successor/reproductions/p3_eq_04_fx_report_merged_8a6b48f.json",
+        "docs/audit/2026-08-controlled-successor/reproductions/p3_mcfx_03_remediation_merged_9faa6a2.json",
+        "docs/audit/2026-08-controlled-successor/reproductions/p2_mc_sens_01_casper_tornado_merged_50adfe7.json"
+      ],
+      "dependencies": [
+        "P04",
+        "P07"
+      ],
+      "evidence_requirements": [
+        "Independent reviewers must challenge P3-EQ-04 and P2-MC-SENS-02/P3-MCFX-03 against current production paths, semantic claims and separate external or property-based oracles.",
+        "Merged implementation receipts must remain distinct from the independent successor review decision and its evidence limitations."
+      ],
+      "completion_criteria": [
+        "Each named finding receives an independently signed, hash-bound final adjudication with exact source and reproduction references.",
+        "Any residual misleading presentation, probability semantics, configuration bypass or unsupported calibration claim remains open or is corrected through a separate protected dolphin."
+      ],
+      "planned_negative_control": "Preserve the expected merged output while bypassing the probability, FX provenance or report-label path under review, and confirm the independent responsiveness controls reject the pinned-value result.",
+      "limitations": [
+        "Protected CI and merged reproduction records establish delivery, not independent semantic acceptance of the named findings."
+      ]
+    },
+    {
+      "gate_id": "L03",
+      "source_checkbox_ordinal": 12,
+      "source_section": "additional_live_remediation_gates",
+      "execution_stage": "S04_IMPLEMENTATION_REMEDIATION",
+      "owner_role": "F5-02 transaction decision owner",
+      "independent_reviewer_role": "Independent lender and legal decision reviewer",
+      "initial_evidence_state": "blocked_external",
+      "known_artifact_refs": [
+        "docs/audit/lender-input/DUTCHBAY_F5_02_INTERNAL_DECISION_RECORD_TEMPLATE_v1.yaml",
+        "analysis_tools/f5_02_lender_return.py"
+      ],
+      "dependencies": [
+        "P06"
+      ],
+      "evidence_requirements": [
+        "The decision record must consume the authenticated P06 lender/legal evidence and select treatment only within the documented transaction authority and conflict-resolution boundary.",
+        "Synthetic term sheets, ERA5 data, compile-only QSTS, analyst assumptions and software success receipts must be excluded as transaction evidence."
+      ],
+      "completion_criteria": [
+        "An authorised decision record selects, defers or rejects F5-02 treatment with exact private-evidence hashes and independent legal/project-finance review.",
+        "Any resulting implementation or rebaseline is delivered as a separate F5-02 dolphin after the decision and remains completely separate from F5-01."
+      ],
+      "planned_negative_control": "Attempt to select F5-02 treatment from the analyst-generated synthetic lender term sheet or an unverified placeholder return and confirm that the decision control refuses authority and preserves HOLD.",
+      "limitations": [
+        "No implementation choice is authorised until P06 closes with authenticated external evidence; this gate cannot be completed by synthetic substitution."
+      ]
+    },
+    {
+      "gate_id": "L04",
+      "source_checkbox_ordinal": 13,
+      "source_section": "additional_live_remediation_gates",
+      "execution_stage": "S04_IMPLEMENTATION_REMEDIATION",
+      "owner_role": "Wind-resource evidence custodian",
+      "independent_reviewer_role": "Independent wind-resource assessment reviewer",
+      "initial_evidence_state": "evidence_gap_must_remain_disclosed",
+      "known_artifact_refs": [
+        "docs/audit/2026-08-controlled-successor/refuters/01_WIND_STANDARDS_REFUTER.md",
+        "docs/audit/2026-08-controlled-successor/source-controls/IEC_CATALOGUE_QUERY_LOG.json"
+      ],
+      "dependencies": [
+        "P03",
+        "P05"
+      ],
+      "evidence_requirements": [
+        "Every resource claim must disclose the absence of on-site mast and MCP evidence and distinguish synthetic or ERA5-compatible placeholders from measured bankable data.",
+        "Any future bankable claim requires authenticated measurement campaign, MCP methodology, uncertainty treatment and independent resource-assessment evidence."
+      ],
+      "completion_criteria": [
+        "All controlled registers, reports and release synthesis surface the unresolved mast/MCP gap without implying that software, ERA5 or synthetic placeholders close it.",
+        "The gate may close as a governed disclosure condition while the evidence gap remains, but no bankable resource conclusion is permitted without new authenticated evidence."
+      ],
+      "planned_negative_control": "Label an ERA5-compatible synthetic mast profile as measured or bankable evidence and confirm that provenance, report and release controls reject the claim despite numerically plausible results.",
+      "limitations": [
+        "The user-authorised synthetic placeholder is suitable for software-path testing only and cannot establish site resource bankability."
+      ]
+    },
+    {
+      "gate_id": "L05",
+      "source_checkbox_ordinal": 14,
+      "source_section": "additional_live_remediation_gates",
+      "execution_stage": "S04_IMPLEMENTATION_REMEDIATION",
+      "owner_role": "Current-main reconciliation lead",
+      "independent_reviewer_role": "Independent evidence-boundary reviewer",
+      "initial_evidence_state": "requires_current_main_reconciliation",
+      "known_artifact_refs": [
+        "docs/SESSION_HANDOVER_2026-08-24_4.md",
+        "docs/audit/2026-08-controlled-successor/registers/architecture_examination_ledger.v1.json"
+      ],
+      "dependencies": [
+        "P02",
+        "P05",
+        "P08"
+      ],
+      "evidence_requirements": [
+        "Every material issue, workflow and implementation delta from the audited commit through current main must be mapped to the controlled successor with exact commit and evidence-period boundaries.",
+        "Synthetic QSTS, compile-only output and software-path success must remain classified as engineering workflow evidence rather than authenticated feeder, utility or bankability evidence."
+      ],
+      "completion_criteria": [
+        "A complete current-main delta ledger links every material change to findings, architecture pointers, reproductions, provenance and unresolved release effects.",
+        "Independent review confirms no synthetic, compile-only or code-quality receipt has been laundered into a real engineering or transaction-evidence claim."
+      ],
+      "planned_negative_control": "Present a successful synthetic feeder compile or QSTS software-path result as utility-accepted network evidence and confirm that the delta and release controls reject the provenance escalation.",
+      "limitations": [
+        "The existing architecture plan and handover identify seams and delivered dolphins but are not a complete audited-commit-to-current-main adjudication."
+      ]
+    },
+    {
+      "gate_id": "L06",
+      "source_checkbox_ordinal": 15,
+      "source_section": "additional_live_remediation_gates",
+      "execution_stage": "S05_PROTECTED_DELIVERY",
+      "owner_role": "Remediation delivery coordinator",
+      "independent_reviewer_role": "Independent protected-delivery reviewer",
+      "initial_evidence_state": "requires_dolphin_inventory",
+      "known_artifact_refs": [
+        "docs/SESSION_HANDOVER_2026-08-24_4.md"
+      ],
+      "dependencies": [
+        "P04",
+        "P05",
+        "P07",
+        "L01",
+        "L02",
+        "L03",
+        "L04",
+        "L05"
+      ],
+      "evidence_requirements": [
+        "Every implementation dolphin must have a unique scope, owner, exact reviewed head, protected required and aggregate CI receipt, merge identity and post-merge verification or an explicit governed deferral.",
+        "Branches, worktrees and rollback surfaces must remain independently attributable, especially for F5-01, F5-02, wind evidence, Monte Carlo and architecture work."
+      ],
+      "completion_criteria": [
+        "A complete dolphin inventory accounts for every required implementation and records merged exact-head green delivery or a reviewer-approved deferral with owner, rationale and release effect.",
+        "No whale-sized combined change, unresolved merge conflict, unreviewed local branch or ambiguous ownership remains hidden from the release decision."
+      ],
+      "planned_negative_control": "Insert a locally green but unmerged or stale-head implementation into the delivery inventory as complete and confirm that exact-head, branch-currency and post-merge controls reject it.",
+      "limitations": [
+        "Individual merged pull requests are positive delivery receipts but do not establish that the complete remediation population has been accounted for."
+      ]
+    },
+    {
+      "gate_id": "R01",
+      "source_checkbox_ordinal": 16,
+      "source_section": "release_gates",
+      "execution_stage": "S06_RELEASE_QUALIFICATION",
+      "owner_role": "Controlled pack validation lead",
+      "independent_reviewer_role": "Independent clean-room validator",
+      "initial_evidence_state": "not_started",
+      "known_artifact_refs": [
+        "docs/audit/2026-08-controlled-successor/scripts/validate_published_pack.py"
+      ],
+      "dependencies": [
+        "P01",
+        "P02",
+        "P03",
+        "P04",
+        "P05",
+        "P06",
+        "P07",
+        "P08",
+        "L01",
+        "L02",
+        "L03",
+        "L04",
+        "L05",
+        "L06"
+      ],
+      "evidence_requirements": [
+        "The final controlled successor must validate from a clean clone or worktree using only documented repository and explicitly governed private-archive inputs.",
+        "The execution receipt must bind exact commit, environment, validator, input manifests, structured result and limitations without retaining high-volume runtime logs."
+      ],
+      "completion_criteria": [
+        "An independent clean-room run returns structural PASS for the exact final candidate while retaining HOLD until R07 authorises release.",
+        "No undeclared absolute path, sibling worktree, cached generated output or unavailable external object is required for a passing result."
+      ],
+      "planned_negative_control": "Remove access to the authoring checkout, caches and external absolute paths and confirm that the documented clean-room command either passes solely from governed inputs or fails closed with the missing dependency exposed.",
+      "limitations": [
+        "Earlier validator passes applied to predecessor snapshots and cannot qualify a later final release candidate without exact-candidate rerun."
+      ]
+    },
+    {
+      "gate_id": "R02",
+      "source_checkbox_ordinal": 17,
+      "source_section": "release_gates",
+      "execution_stage": "S06_RELEASE_QUALIFICATION",
+      "owner_role": "Manifest and root-digest custodian",
+      "independent_reviewer_role": "Independent provenance verifier",
+      "initial_evidence_state": "not_started",
+      "known_artifact_refs": [
+        "docs/audit/2026-08-controlled-successor/source-controls/SOURCE_ARCHIVE_MANIFEST.v2.sha256"
+      ],
+      "dependencies": [
+        "P01",
+        "P08"
+      ],
+      "evidence_requirements": [
+        "The final evidence-pack manifest must cover every in-scope file exactly once while excluding its own bytes from self-attestation.",
+        "A separate root digest and independent verifier must bind the manifest, candidate tree and retained private source archive from outside the attested payload."
+      ],
+      "completion_criteria": [
+        "Independent verification reports zero missing, extra, duplicate, escaping or mismatched manifest targets and proves the external root digest.",
+        "Historical manifests remain preserved as historical snapshots and are never silently overwritten to match mutable current files."
+      ],
+      "planned_negative_control": "Modify one payload and regenerate the internal manifest while leaving the external root digest unchanged, then confirm that independent root verification rejects the self-consistent internal package.",
+      "limitations": [
+        "The publication manifest is intentionally mutable during authoring and cannot serve as its own independent root attestation."
+      ]
+    },
+    {
+      "gate_id": "R03",
+      "source_checkbox_ordinal": 18,
+      "source_section": "release_gates",
+      "execution_stage": "S06_RELEASE_QUALIFICATION",
+      "owner_role": "Critical and High adjudication lead",
+      "independent_reviewer_role": "Independent model-risk review panel",
+      "initial_evidence_state": "not_started",
+      "known_artifact_refs": [
+        "docs/audit/2026-08-controlled-successor/registers/findings_register.v2.json",
+        "docs/audit/2026-08-controlled-successor/registers/primary_source_register.v2.json",
+        "docs/audit/2026-08-controlled-successor/reproductions/reproduction_register.json"
+      ],
+      "dependencies": [
+        "P02",
+        "P03",
+        "P04",
+        "P05",
+        "P06",
+        "P07",
+        "L01",
+        "L02",
+        "L03",
+        "L04",
+        "L05",
+        "L06"
+      ],
+      "evidence_requirements": [
+        "Every Critical and High claim must have an independent final adjudication linked to exact primary-source and reproduction identifiers or an explicit unresolved evidence dependency.",
+        "Severity, claim granularity, current-main state, canon impact and release effect must be reconciled without collapsing distinct findings or evidence periods."
+      ],
+      "completion_criteria": [
+        "A population-exact query returns no Critical or High row lacking independent reviewer identity, final rationale, source links and reproduction links or an explicit approved external-evidence block.",
+        "Independent sampling confirms that linked artifacts support the corrected claim and are not merely structurally present."
+      ],
+      "planned_negative_control": "Delete the source or reproduction link from one Critical or High row while preserving its final disposition and confirm that the release qualification fails closed rather than accepting narrative rationale alone.",
+      "limitations": [
+        "Structural link presence is necessary but not sufficient; the independent panel must test whether each linked artifact actually supports the adjudication."
+      ]
+    },
+    {
+      "gate_id": "R04",
+      "source_checkbox_ordinal": 19,
+      "source_section": "release_gates",
+      "execution_stage": "S06_RELEASE_QUALIFICATION",
+      "owner_role": "Release synthesis completeness lead",
+      "independent_reviewer_role": "Independent omission-control reviewer",
+      "initial_evidence_state": "not_started",
+      "known_artifact_refs": [
+        "docs/audit/2026-08-controlled-successor/reproductions/reproduction_register.json",
+        "docs/audit/2026-08-controlled-successor/registers/architecture_examination_ledger.v1.json"
+      ],
+      "dependencies": [
+        "P02",
+        "P04",
+        "P05",
+        "L01",
+        "L02",
+        "L03",
+        "L04",
+        "L05",
+        "L06"
+      ],
+      "evidence_requirements": [
+        "Every required-not-run, unavailable, not-examined, externally blocked, deferred and unresolved item must remain machine-visible to the synthesis generator.",
+        "Population denominators and controlled vocabularies must be reconciled before synthesis so closed, deferred and open rows cannot be silently filtered."
+      ],
+      "completion_criteria": [
+        "Automated release-synthesis inputs enumerate every unresolved category and reconcile exactly to the controlled register and overlay populations.",
+        "Independent omission testing confirms that no filter, default, severity threshold or prose summarization removes a release-relevant unresolved item."
+      ],
+      "planned_negative_control": "Configure the synthesis input to omit one required-not-run, unavailable or not-examined record and confirm that the population and omission controls reject generation before any Board/lender output is produced.",
+      "limitations": [
+        "The current baseline deliberately contains unresolved reproduction and architecture populations, all of which remain HOLD-visible."
+      ]
+    },
+    {
+      "gate_id": "R05",
+      "source_checkbox_ordinal": 20,
+      "source_section": "release_gates",
+      "execution_stage": "S07_SYNTHESIS_GENERATION",
+      "owner_role": "Board and lender synthesis generator owner",
+      "independent_reviewer_role": "Independent synthesis reviewer",
+      "initial_evidence_state": "not_started",
+      "known_artifact_refs": [
+        "docs/audit/2026-08-controlled-successor/registers/findings_register.v2.json",
+        "docs/audit/2026-08-controlled-successor/registers/primary_source_register.v2.json"
+      ],
+      "dependencies": [
+        "P01",
+        "P02",
+        "P03",
+        "P04",
+        "P05",
+        "P06",
+        "P07",
+        "P08",
+        "L01",
+        "L02",
+        "L03",
+        "L04",
+        "L05",
+        "L06",
+        "R01",
+        "R02",
+        "R03",
+        "R04"
+      ],
+      "evidence_requirements": [
+        "The Board/lender synthesis must be generated after every preceding evidence, remediation and release-qualification gate from controlled machine-readable registers.",
+        "Generation must bind exact input digests, deterministic code version, calculation rules, citation mappings and unresolved-item disclosure without manual prose reconciliation."
+      ],
+      "completion_criteria": [
+        "The synthesis is reproducibly regenerated from the exact reconciled input state after all dependencies close and contains no manually introduced material claim.",
+        "Every headline, score, population, methodology statement, financial metric and release limitation traces to controlled data and reproducible calculations."
+      ],
+      "planned_negative_control": "Run the generator against a predecessor register or manually edited prose after the final input digest is frozen and confirm that input-binding or deterministic-output controls reject the stale synthesis.",
+      "limitations": [
+        "No predecessor board synthesis can be reused as the final deliverable; this gate is intentionally sequenced after all qualification dependencies."
+      ]
+    },
+    {
+      "gate_id": "R06",
+      "source_checkbox_ordinal": 21,
+      "source_section": "release_gates",
+      "execution_stage": "S08_RENDERED_OUTPUT_REVIEW",
+      "owner_role": "Rendered deliverable QA lead",
+      "independent_reviewer_role": "Independent document assurance reviewer",
+      "initial_evidence_state": "not_started",
+      "known_artifact_refs": [
+        "docs/dbpl_styleguide.md"
+      ],
+      "dependencies": [
+        "R05"
+      ],
+      "evidence_requirements": [
+        "The final Markdown and PDF must be rendered from the exact R05 synthesis and retain calculation, citation, hyperlink, font and document-control provenance.",
+        "Visual and machine-assisted review must cover page layout, table continuity, clipping, contrast, headings, bookmarks, accessible text and link targets."
+      ],
+      "completion_criteria": [
+        "Independent calculation and citation sampling agrees with controlled inputs, every hyperlink resolves or is explicitly limited, and no rendered material content is clipped or obscured.",
+        "PDF metadata, fonts, pagination, accessibility and DBPL controls pass the applicable render-and-verify harness with exact output hashes."
+      ],
+      "planned_negative_control": "Render a document with a substituted font, broken citation link or clipped table while preserving a successful renderer exit code and confirm that the document-assurance review rejects the output.",
+      "limitations": [
+        "A successful Markdown conversion or PDF render call is not evidence that calculations, citations, accessibility or visual layout are correct."
+      ]
+    },
+    {
+      "gate_id": "R07",
+      "source_checkbox_ordinal": 22,
+      "source_section": "release_gates",
+      "execution_stage": "S09_INDEPENDENT_DISPOSITION",
+      "owner_role": "Programme release coordinator",
+      "independent_reviewer_role": "Independent release decision authority",
+      "initial_evidence_state": "not_started",
+      "known_artifact_refs": [],
+      "dependencies": [
+        "R01",
+        "R02",
+        "R03",
+        "R04",
+        "R05",
+        "R06"
+      ],
+      "evidence_requirements": [
+        "The independent release authority must review the exact candidate, all gate overlays, unresolved conditions, manifests and rendered-output receipt without having authored the underlying completion claims.",
+        "The decision record must select exactly RELEASED or HOLD, state rationale and limitations, bind exact artifact hashes and identify the reviewer and review date."
+      ],
+      "completion_criteria": [
+        "A hash-bound independent decision records RELEASED only if every prerequisite gate is complete and no release-blocking condition remains; otherwise it records a new explicit HOLD reason.",
+        "The controlled pack, issue state and user-facing synthesis all reflect the same decision without inferring release from CI, structural PASS or implementation completion."
+      ],
+      "planned_negative_control": "Present exact-head green CI and a structural validator PASS while one external-evidence or not-examined dependency remains, and confirm that the independent authority records HOLD rather than RELEASED.",
+      "limitations": [
+        "Only this independent decision gate can record a release disposition; all earlier PASS receipts remain subordinate evidence."
+      ]
+    },
+    {
+      "gate_id": "R08",
+      "source_checkbox_ordinal": 23,
+      "source_section": "release_gates",
+      "execution_stage": "S11_AUTHORISED_CLOSURE",
+      "owner_role": "Repository and evidence retention custodian",
+      "independent_reviewer_role": "Independent closure-control reviewer",
+      "initial_evidence_state": "not_started",
+      "known_artifact_refs": [],
+      "dependencies": [
+        "R07",
+        "P09"
+      ],
+      "evidence_requirements": [
+        "The exact R07 decision must be RELEASED and the P09 programme consolidation must prove every other gate complete before any issue closure or audit-environment retirement.",
+        "Immutable evidence, manifests, final release records and retention metadata must be preserved before recoverable worktree or audit-only environment retirement."
+      ],
+      "completion_criteria": [
+        "Issue #1110 is closed only after verifying the RELEASED decision and complete gate population; closure timing and actor are recorded in the additive overlay.",
+        "Audit-only worktrees and environments are retired safely after preservation checks, while repository-retention evidence remains independently verifiable."
+      ],
+      "planned_negative_control": "Attempt issue closure or audit-environment retirement while R07 is HOLD, absent, or unbound to the final pack and confirm that the closure controller refuses the action without deleting evidence.",
+      "limitations": [
+        "This v1 plan never authorises closure; R08 remains pending and closure_authorized remains false until an independently validated successor overlay proves every condition."
+      ]
+    }
+  ]
+}

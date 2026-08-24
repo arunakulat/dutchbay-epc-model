@@ -21,6 +21,24 @@ Registers in this directory use stable identifiers, explicit enumerations, recip
   `pending_examination`/`not_assessed`, has no reviewer identity or result hash, and
   blocks Board/lender release. Completed examinations must use an additive result
   overlay or a new plan version; v1 must not be rewritten.
+- `history/github_issue_1110.remediation_and_release_gates.20260824.9f7348f7.md`:
+  byte-preserved source snapshot of the OPEN issue #1110 body at GitHub
+  `updated_at=2026-08-24T11:29:43Z`. Its exact 5,371-byte body has SHA-256
+  `9f7348f7a5c56f8aff45a5074e323d96abda418567f8cfd0eefb16f43855e0b9` and
+  contains 23 unchecked checkboxes. The live issue remains authoritative for later
+  state; this snapshot makes v1 portable and reproducible without a live GitHub call.
+- `programme_gate_plan.v1.json`: immutable pre-execution execution plan for all 23
+  issue #1110 gates. It adds 11 dependency-ordered stages, owner/reviewer-role
+  separation, known prerequisite artifacts, evidence requirements, completion
+  criteria, negative controls and limitations. It cannot carry a result, reviewer
+  identity, completion state or closure authorization.
+- `programme_gate_ledger.v1.json` and `.csv`: deterministic descendants of the
+  frozen issue snapshot and programme plan. All 23 rows remain `pending`, source
+  checkboxes remain `unchecked`, completion hashes and reviewer identities are null,
+  `closure_authorized=false`, and every row blocks Board/lender release. P06
+  (authenticated F5-02 evidence) and L03 (the evidence-dependent decision) are
+  separate gates; L01 is the separate F5-01 rollback surface. Only a later additive
+  completion overlay may record results.
 - `../reproductions/reproduction_register.json`: completed, required-not-run, and unavailable reproduction controls. Only completed, output-hashed records may appear in `reproduction_refs`; planned or unavailable work belongs in typed validation dependencies.
 
 The 22-row primary-source files, 107-row findings draft, historical source manifest, pre-normalization architecture overlay, pre-PR-#1030/pre-PR-#1031/pre-corrigendum-v1.0.1/pre-PR-#1032/pre-A15 111-row findings states, pre-A15 reproduction/architecture states, the local PR-#1037 candidate evidence, and corrigendum v1.0.0 are preserved as predecessors. They are not active successor inputs. Historical register states live under `history/`, are byte-preserved, and are explicitly superseded. The additive PR #1037 merged evidence validates the narrow empty-`debt` parity correction but deliberately leaves the underlying P2-F5-01 finding open.
