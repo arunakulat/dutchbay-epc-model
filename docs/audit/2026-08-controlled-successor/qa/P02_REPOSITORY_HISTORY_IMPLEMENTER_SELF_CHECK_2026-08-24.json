@@ -1,0 +1,127 @@
+{
+  "schema_version": "dutchbay.p02_repository_history_implementer_self_check.v1",
+  "document_id": "DUTCHBAY-1110-P02-REPOSITORY-HISTORY-IMPLEMENTER-SELF-CHECK-2026-08-24",
+  "created_at": "2026-08-24T19:34:20+05:30",
+  "gate_id": "P02",
+  "repository": "arunakulat/dutchbay-epc-model",
+  "verification_environment": {
+    "repository_was_shallow": false,
+    "object_database_scope": "full_local_history_and_tags",
+    "current_main_cutoff_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+    "current_main_cutoff_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a"
+  },
+  "commit_objects": [
+    {
+      "commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "tree_oid": "316b37a8f385e1a8e099fdbb1b2aa611ac9e462a",
+      "subject": "feat(wind): make async-path capacity_mw/capacity_factor optional (derive-authoritative) (#1023) (#1026)",
+      "role": "historical audited commit",
+      "is_ancestor_of_current_main_cutoff": true
+    },
+    {
+      "commit": "72f1bf1e9601c815c53333f09c8f73a546b2c109",
+      "tree_oid": "b7805f11a105f8f98553eb94d4baadf92780294e",
+      "subject": "refactor: share construction-period resolution (#1035)",
+      "role": "F5-01 delivery chain",
+      "is_ancestor_of_current_main_cutoff": true
+    },
+    {
+      "commit": "e458a78c3377595e49b8c69ceb1afc5c5ff9869e",
+      "tree_oid": "cd556f3e7c0981b741f0769229c087ed70a4fe88",
+      "subject": "feat: add offset-aware FX curve primitives (#1036)",
+      "role": "F5-01 delivery chain",
+      "is_ancestor_of_current_main_cutoff": true
+    },
+    {
+      "commit": "dac8c7a36c63f1dbb8dcf855b263e645b57ed676",
+      "tree_oid": "8343bc8065f2684904c738d9ea730818ef49ed3f",
+      "subject": "fix(debt): preserve empty debt construction default (#1037)",
+      "role": "F5-01 delivery chain",
+      "is_ancestor_of_current_main_cutoff": true
+    },
+    {
+      "commit": "7e64d336759292d1fa1c3f1533f6ec20ea6c0250",
+      "tree_oid": "637c9813d58f35d1f75458cb4e420f4cde26d189",
+      "subject": "fix(finance): bind operating FX to COD (#1038)",
+      "role": "F5-01 delivery chain",
+      "is_ancestor_of_current_main_cutoff": true
+    },
+    {
+      "commit": "32f83d2708759912636efe34cb795db60e0d1fa5",
+      "tree_oid": "27b0d999a74797d7a09489364803ceb378fe5300",
+      "subject": "fix(feasibility): re-baseline reproduce kit to the COD-aligned canon (#1040)",
+      "role": "F5-01 delivery chain",
+      "is_ancestor_of_current_main_cutoff": true
+    },
+    {
+      "commit": "15d450ec5eef88718286b3251e4264493a26538d",
+      "tree_oid": "96e916672e623ab30c6ab7b183e2e998b4112161",
+      "subject": "docs(feasibility): reconcile F5-01 report semantics (#1057)",
+      "role": "F5-01 delivery chain",
+      "is_ancestor_of_current_main_cutoff": true
+    },
+    {
+      "commit": "9faa6a23d1e655533e5231b6959c6ce3f66be5ad",
+      "tree_oid": "a5a450affd11da6f90683a225d8936f06e058193",
+      "subject": "fix(mc): unify covenant breach classification (#1030)",
+      "role": "P2-MC-SENS-02 and P3-MCFX-03 delivery",
+      "is_ancestor_of_current_main_cutoff": true
+    },
+    {
+      "commit": "50adfe7ee59f91660678c0ca32c2cd6513e1c611",
+      "tree_oid": "0317bcf11dd7980c96e90740887dd88730a52cf6",
+      "subject": "fix(casper): populate tornado shock metadata (#1031)",
+      "role": "P2-MC-SENS-01 delivery",
+      "is_ancestor_of_current_main_cutoff": true
+    },
+    {
+      "commit": "8a6b48f6573e4ac9074da8fbbcb1e48f4353ce9a",
+      "tree_oid": "869eac8a1cfe409bf8e6e693bb03acf72bedc56d",
+      "subject": "fix(report): bind FX methodology to run manifest (#1032)",
+      "role": "P3-EQ-04 delivery",
+      "is_ancestor_of_current_main_cutoff": true
+    },
+    {
+      "commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "tree_oid": "d714ba756dc4ad57d69dd678a116b161f690dea6",
+      "subject": "feat(audit): add fail-closed F5-02 lender evidence intake (#1150)",
+      "role": "F5-02 intake control only",
+      "is_ancestor_of_current_main_cutoff": true
+    },
+    {
+      "commit": "0379843b28c493a1957b6b24f2853dd92a9ace05",
+      "tree_oid": "ed25f241b927f858e204649d78362141ecb2f7c9",
+      "subject": "chore(release): v15.4.0 — changelog cut, micrositing in the lock, dead test revived (#1045)",
+      "role": "v15.4.0 annotated-tag target",
+      "is_ancestor_of_current_main_cutoff": true
+    },
+    {
+      "commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+      "tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+      "subject": "feat(audit): add portable P01 checkpoint recovery (#1153)",
+      "role": "P02 current-main cutoff",
+      "is_ancestor_of_current_main_cutoff": true
+    }
+  ],
+  "tag_object": {
+    "name": "v15.4.0",
+    "object_type": "tag",
+    "tag_object_oid": "5bbfacc37e0f072d6ac59f96f648a9f14f364f83",
+    "peeled_target_commit": "0379843b28c493a1957b6b24f2853dd92a9ace05",
+    "canonical_object_body_sha256": "7cb6b682021a5c5bad1e464c43b281ba07690614047a2c9830cd56d8c77ac6f7",
+    "embedded_signature_present": false,
+    "disposition": "unsigned_exception_accepted_by_user"
+  },
+  "review": {
+    "kind": "implementer_self_check",
+    "independence_satisfied": false,
+    "independent_reviewer_identity": null,
+    "independent_decision": "pending"
+  },
+  "release_status": "HOLD",
+  "limitations": [
+    "This concise record preserves the minimum full-history object and ancestry facts used by the implementer; it is not an independent repository-history review.",
+    "Shallow consumers validate this exact file and the current repository-published evidence bytes without pretending their local object database contains the historical commits or tag.",
+    "The accepted v15.4.0 exception does not make the tag signed, and this record does not authorize tag mutation, P02 completion, issue closure or Board/lender release."
+  ]
+}

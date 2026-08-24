@@ -68,6 +68,13 @@ def test_controlled_audit_successor_pack_is_internally_valid() -> None:
     assert '"gate_status": "pending_independent_review"' in completed.stdout
     assert '"p01_implementer_self_check"' in completed.stdout
     assert '"independence_satisfied": false' in completed.stdout
+    assert '"findings_current_state"' in completed.stdout
+    assert '"delivered_review_pending": 5' in completed.stdout
+    assert '"external_evidence_blocked": 1' in completed.stdout
+    assert '"not_reassessed_or_examined": 105' in completed.stdout
+    assert '"gate_status": "candidate_overlay_pending_independent_review"' in (
+        completed.stdout
+    )
 
 
 def test_architecture_examination_plan_is_exactly_pending_and_hold_blocking() -> None:

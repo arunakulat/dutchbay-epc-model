@@ -22,6 +22,12 @@ The authoritative live remediation queue and eventual release decision are track
 - repository-safe P01 clean-room recovery descriptor and fail-closed materializer;
   the implementation is a published candidate while independent review and the P01
   programme gate remain pending;
+- additive 111-row P02 current-main findings overlay and deterministic builder; five
+  findings have positively evidenced implementation delivery but remain independently
+  unreviewed, F5-02 remains separately blocked on authenticated external evidence, and
+  the other 105 rows are explicitly not reassessed against the pinned current-main
+  cutoff; a hash-bound full-history implementer self-check keeps depth-1 CI portable
+  without masquerading as independent ancestry review;
 - 34-row reproduction register plus concise machine-readable reproduction records;
 - four independent refuter reports and the P3 register patch map;
 - semantic-closure and structural-validation records;
@@ -36,6 +42,9 @@ The latest controlled validation represented here reports:
   zero independently reviewed and zero result-hashed;
 - 23 issue #1110 gates planned in 11 dependency-ordered stages: 23 pending, zero
   independently reviewed, zero completion-hashed and zero closure-authorized;
+- 111 additive current-state rows: five implementation-delivered/review-pending, one
+  F5-02 external-evidence-blocked, 105 not reassessed or examined, zero independently
+  reviewed and 111 HOLD-blocking;
 - 34 reproduction controls: 18 completed, 11 required-not-run and 5 unavailable;
 - structural status `PASS`, release status `HOLD`.
 
@@ -58,12 +67,15 @@ python docs/audit/2026-08-controlled-successor/scripts/validate_published_pack.p
 The validator checks the publication manifest, JSON parsing, exact register populations,
 audited-commit identity, F5-01/F5-02 separation language, the deterministic 56-row
 architecture-examination descendants, the frozen OPEN issue source and deterministic
-23-row programme-gate descendants, the P01 recovery descriptor and HOLD controls. It
+23-row programme-gate descendants, the P01 recovery descriptor, the deterministic
+111-row P02 additive overlay and HOLD controls. It
 rejects a missing/extra
 pointer or gate, duplicate JSON member, path escape, owner/reviewer-role conflict,
 dependency-order bypass, result-state field in an immutable plan, premature closure,
-descendant drift, or any v1 row presented as examined or completed. It does not execute
-the planned negative controls or replace independent semantic review.
+descendant drift, audited/current evidence-period laundering, false implementation
+evidence, F5-01/F5-02 evidence sharing, or any v1 row presented as examined or
+completed. It does not execute the planned negative controls or replace independent
+semantic review.
 
 ## Release boundary
 

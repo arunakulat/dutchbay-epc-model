@@ -6,6 +6,20 @@ Registers in this directory use stable identifiers, explicit enumerations, recip
 
 - `primary_source_register.v2.csv` and `.json`: 42 claim-level records with many-to-many finding links, hashed artefacts, source gaps, and explicit claim boundaries.
 - `findings_register.v2.json`: 111 findings with atomic audited-commit code anchors, typed dependencies, completed reproduction links, confidence, canon impact, owner, limitations, and additive remediation evidence. P3-MCFX-03/P2-MC-SENS-02 record PR #1030 as merged/green while retaining independent review of the governed post-merge run; P2-MC-SENS-01 records PR #1031 as merged/green while retaining independent successor semantic QA; P3-EQ-04 records PR #1032 as merged/green while retaining independent review of the manifest-bound FX disclosure. P5-HDL-003 and P5-FIN-002 now cite completed governed reproduction `P5-REPRO-A15-001`: current deterministic canon unchanged, noncanonical project-IRR scale sensitivity confirmed, independent successor review still blocking, and no date-aware `xirr` defect asserted. Six audit-control rows record corrigendum v1.0.1 implementation complete while remaining `requires_correction` behind document-QA and final-synthesis gates.
+- `findings_current_state_plan.v1.json`: immutable P02 v1 plan that binds the exact
+  111-row audited register hash, current-main cutoff commit/tree, five positive
+  implementation-delivery evidence sets, the separate F5-02 intake-only boundary and
+  the accepted-but-still-unsigned `v15.4.0` exception. It contains no current result or
+  independent reviewer approval.
+- `findings_current_state_overlay.v1.json`: deterministic additive projection over all
+  111 finding IDs. Five rows are `implementation_delivered_review_pending`, P2-F5-02 is
+  `external_evidence_blocked`, and the remaining 105 are explicitly not reassessed or
+  examined against the cutoff. Every row carries the canonical hash of its untouched
+  audited source object; all 111 remain HOLD-blocking and P02 remains pending independent
+  model-risk review. Repository-history identities are carried by the exact
+  `../qa/P02_REPOSITORY_HISTORY_IMPLEMENTER_SELF_CHECK_2026-08-24.json` receipt so a
+  shallow clone validates portable evidence rather than silently weakening Git checks;
+  the receipt is explicitly same-implementer and independently unreviewed.
 - `architecture_pointer_adjudications.json`: the sole active 25-row overlay over the immutable architecture map.
 - `architecture_pointer_dispositions.csv` and `.json`: generated full-population register for all 72 `RS-*` pointers, including examination coverage and typed validation dependencies.
 - `architecture_examination_plan.v1.json`: immutable pre-execution plan for the 51
@@ -77,6 +91,15 @@ Source class uses only:
 
 ## Release boundary
 
-Run `../scripts/validate_controlled_registers_v2.py` for structural, lineage, deterministic, and ingressed-remediation controls. Its result remains `release_status=HOLD`: corrigendum v1.0.1 is issued; PRs #1030/#1031/#1032 are merged/green; A15 is a completed governed same-agent reproduction with a separately blocking independent-review gate; and F5-01 parity correction PR #1037 is merged/green with post-merge pins. The canon-moving F5-01 caller binding/reconciliation, seven other P5 impact programmes, unavailable transaction evidence, remaining implementation dolphins, successor semantic QA, and synthesis regeneration remain open. F5-02 is not part of PR #1037.
+Run `../scripts/validate_controlled_registers_v2.py` for the historical-register controls
+and `../scripts/validate_published_pack.py` for the repository-published successor. The
+result remains `release_status=HOLD`: PRs #1030/#1031/#1032 are merged/green; the full
+F5-01 #1035/#1036/#1037/#1038/#1040/#1057 delivery chain is now admitted only in the
+additive current-state overlay; and all five delivered mappings still require
+independent semantic review. F5-02 remains separately blocked on authenticated
+transaction evidence despite its delivered intake controls. The other 105 findings,
+seven other P5 impact programmes, remaining reproductions and implementation dolphins,
+successor semantic QA, architecture examinations and synthesis regeneration remain
+open or unexamined. P02 is a candidate overlay, not a completed programme gate.
 
 The final synthesis may summarize the active controlled successors but must not introduce an unregistered material claim. F5-01 and F5-02 remain separate findings, specifications, changes, tests, reconciliations, commits, and pull requests.
