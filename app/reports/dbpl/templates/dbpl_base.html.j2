@@ -121,6 +121,12 @@
   </tr></thead>
   <tbody>
     {% for row in section.table.rows %}
+    {# CESSPIT: a row must be a mapping with `cells` or `group`. A bare list silently rendered
+       NOTHING and cost a whole document its body text before anyone noticed — the gap headings
+       were all present, so it looked complete. Fail loud instead. #}
+    {% if row.cells is not defined and row.group is not defined %}
+    {{ undefined_row_shape_must_be_a_mapping_with_cells_or_group() }}
+    {% endif %}
     {% if row.group %}
     <tr class="dbpl-group"><td colspan="{{ section.table.columns | length }}">{{ row.group }}</td></tr>
     {% else %}
