@@ -9,6 +9,7 @@ The authoritative live remediation queue and eventual release decision are track
 ## What is included
 
 - controlled corrigendum v1.0.1;
+- additive 2026-08-24 errata control for fixed GWTF rule-count instructions;
 - 111-row findings register with audited-commit anchors, evidence links, dependencies and implementation state;
 - 42-row claim-level source register;
 - 72-pointer architecture register and active adjudication overlay;
