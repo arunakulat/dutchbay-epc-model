@@ -19,6 +19,9 @@ The authoritative live remediation queue and eventual release decision are track
 - immutable 23-row issue #1110 remediation/release plan plus deterministic JSON/CSV
   ledger descendants, sourced from a byte-frozen OPEN issue snapshot; all 23 gates
   remain unchecked, pending, unreviewed, closure-disabled and HOLD-blocking;
+- repository-safe P01 clean-room recovery descriptor and fail-closed materializer;
+  the implementation is a published candidate while independent review and the P01
+  programme gate remain pending;
 - 34-row reproduction register plus concise machine-readable reproduction records;
 - four independent refuter reports and the P3 register patch map;
 - semantic-closure and structural-validation records;
@@ -55,7 +58,8 @@ python docs/audit/2026-08-controlled-successor/scripts/validate_published_pack.p
 The validator checks the publication manifest, JSON parsing, exact register populations,
 audited-commit identity, F5-01/F5-02 separation language, the deterministic 56-row
 architecture-examination descendants, the frozen OPEN issue source and deterministic
-23-row programme-gate descendants, and HOLD controls. It rejects a missing/extra
+23-row programme-gate descendants, the P01 recovery descriptor and HOLD controls. It
+rejects a missing/extra
 pointer or gate, duplicate JSON member, path escape, owner/reviewer-role conflict,
 dependency-order bypass, result-state field in an immutable plan, premature closure,
 descendant drift, or any v1 row presented as examined or completed. It does not execute

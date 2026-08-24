@@ -1,0 +1,108 @@
+{
+  "schema_version": "dutchbay.audit_recovery_descriptor.v1",
+  "document_id": "P01-RECOVERY-DESCRIPTOR-v1",
+  "gate_id": "P01",
+  "release_status": "HOLD",
+  "independent_review_status": "pending_independent_review",
+  "checkpoint": {
+    "checkpoint_payload_manifest": {
+      "relative_path": "CHECKPOINT_PAYLOAD_MANIFEST.sha256",
+      "sha256": "8afeb079a1b7ce88a14cc91eebcb18db0eec31e9b77633029abc46224354230a",
+      "entries": 68
+    },
+    "remediation_archive": {
+      "filename": "DutchBay_Comprehensive_Audit_Remediation_2026-08.tar.gz",
+      "sha256": "13d5b7aca2f064b8f8b16224e366ce038e39a43cfeff85d5c6279916471c7a91",
+      "tar_root": "DutchBay_Comprehensive_Audit_Remediation_2026-08",
+      "governed_file_members": 64,
+      "appledouble_metadata_members": 74,
+      "total_regular_file_members": 138
+    },
+    "inner_manifest": {
+      "relative_path": "remediation_workspace/CHECKPOINT_MANIFEST.sha256",
+      "sha256": "203073976dfc14b6a27a345dda2a5261751ffaf08379fb0cd42cd1f5f5f5962c",
+      "entries": 63
+    },
+    "source_manifest": {
+      "relative_path": "remediation_workspace/sources/SOURCE_ARCHIVE_MANIFEST.sha256",
+      "sha256": "568c54095213821a683fd385fe5f7dabfb8d026ddfa9b4d750c386ed145aed93",
+      "entries": 23,
+      "parent_governed_unlisted_paths": [
+        "IEC_CATALOGUE_QUERY_LOG.json"
+      ]
+    },
+    "repository_bundle": {
+      "filename": "dutchbay-epc-model-branches.bundle",
+      "sha256": "abbb35f4f3a4a018fd0f767e6a8e9fba7bfbe848d643d665c86828dabbafbc9b",
+      "refs": {
+        "refs/heads/main": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "refs/heads/codex/audit-corrigendum-2026-08": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "refs/heads/codex/f5-01-fx-cod-alignment": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "refs/heads/codex/bess-corpus-11mw-44mwh": "b4969ef0af14769f8f4a2a8daed3cbda9f513365"
+      }
+    }
+  },
+  "audit_corpus": {
+    "manifest": {
+      "relative_path": "INGRESS_MANIFEST.sha256",
+      "sha256": "793385bc576cde2981995cf263f20d9712b69837ed10aa79e3096c91230e7a07",
+      "entries": 73
+    },
+    "ingress_scope_root_digest_sha256": "30b11ad2e3afa3f3714442e50d2c3193410433295962628e0c6f32771145e426",
+    "excluded_post_ingress_files": [
+      {
+        "relative_path": "06_CODEX_INGRESS_EVALUATION.md",
+        "sha256": "f835856a7c9eac693ca39220fb5ea925f6eaf0134b56fddbd9debcdbc5d79dec",
+        "classification": "derived_evaluation_not_received_ingress_evidence"
+      }
+    ],
+    "retained_directory_files": 75,
+    "root_digest_sha256": "a2e3ab93c7331d26aaa0f8c1ccc54f242f07787d99ed636d1c0004e556da415c",
+    "publication_classification": "retained_private_external_dependency"
+  },
+  "repository": {
+    "origin_repository": "arunakulat/dutchbay-epc-model",
+    "audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+    "successor_validator_relative_path": "docs/audit/2026-08-controlled-successor/scripts/validate_published_pack.py",
+    "expected_successor_contract": {
+      "status": "PASS",
+      "release_status": "HOLD",
+      "programme_gate_records": 23,
+      "architecture_examination_records": 56
+    }
+  },
+  "materialized_successor": {
+    "files": 69,
+    "root_digest_sha256": "08e406ae8c5cc67f6f3780349592de9fad8a9d31febdfa8be31c1e0fa9f60208",
+    "authoritative_remediation_source": "verified_tar_archive"
+  },
+  "trust_boundary": [
+    "SHA-256 and exact-set checks establish internal byte consistency and detect accidental or adversarial drift against this Git-controlled descriptor.",
+    "The protected Git merge that publishes this descriptor is the external repository attestation; no payload manifest is permitted to attest itself.",
+    "Hashes do not authenticate third-party authorship, publisher authority, legal admissibility, or truth of the underlying claims.",
+    "Structural recovery does not establish semantic correctness, bankability, Board/lender readiness, independent approval, or RELEASED status."
+  ],
+  "publication_boundary": {
+    "committed_metadata_only": [
+      "hashes",
+      "relative filenames",
+      "population counts",
+      "repository object identities",
+      "trust and release limitations"
+    ],
+    "excluded_payload_classes": [
+      "the immutable received audit corpus",
+      "third-party PDFs and publisher captures",
+      "rendered source-page images",
+      "the checkpoint tar archive and Git bundle",
+      "unrelated checkpoint-preserved workbook material"
+    ]
+  },
+  "limitations": [
+    "The historical convenience-expanded remediation_workspace remains incomplete and is not repaired or silently refilled by this control.",
+    "The complete tar archive is authoritative only for remediation_workspace payloads; other outer-manifest files remain bound to the checkpoint package.",
+    "The 73 received audit files remain a separately retained private dependency identified by their exact ingress-manifest and ingress-scope root digest; one later derived evaluation is separately classified and hash-attested without becoming received evidence.",
+    "P01 remains pending until an independent evidence-integrity reviewer executes the clean-room recovery against the exact merged implementation and records a hash-bound decision.",
+    "Issue #1110 remains OPEN and Board/lender circulation remains HOLD."
+  ]
+}

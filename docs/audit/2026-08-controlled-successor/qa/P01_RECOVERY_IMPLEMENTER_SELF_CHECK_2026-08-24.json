@@ -1,0 +1,63 @@
+{
+  "schema_version": "dutchbay.audit_recovery_implementer_self_check.v1",
+  "document_id": "P01-RECOVERY-IMPLEMENTER-SELF-CHECK-2026-08-24",
+  "created_at": "2026-08-24T18:45:43+05:30",
+  "last_revalidated_at": "2026-08-24T18:49:38+05:30",
+  "gate_id": "P01",
+  "candidate_base_commit": "613abec9f89cef5589f411da3cee62273bdee364",
+  "tested_snapshot": {
+    "analysis_tools/audit_recovery.py": "5648dfcdd586946bb66b5fb64e4cbfa6e0335fc4f3a8051397e40e924c452d6b",
+    "scripts/validate_audit_recovery.py": "fd5ebfb150c473d694d76243952f7a562108d08b714c5600d63289b49707bbdf",
+    "conf/audit_recovery.yaml": "611c723a0a7af4549b246793bd1e42436c27367d284a151b4a08dbc1206b1aee",
+    "docs/audit/2026-08-controlled-successor/recovery/P01_RECOVERY_DESCRIPTOR.v1.json": "018b7df4fa0409fa7d78964b3134cb2be89ae4b3ab0f59a0c3575141e319c60f"
+  },
+  "positive_clean_room": {
+    "status": "PASS",
+    "structural_status": "structural_pass",
+    "checkpoint_outer_entries": 68,
+    "archive_governed_file_members": 64,
+    "archive_appledouble_metadata_members": 74,
+    "archive_total_regular_file_members": 138,
+    "inner_manifest_entries": 63,
+    "source_manifest_entries": 23,
+    "audit_ingress_entries": 73,
+    "audit_excluded_post_ingress_files": 1,
+    "audit_retained_directory_files": 75,
+    "materialized_successor_files": 69,
+    "materialized_successor_root_digest_sha256": "08e406ae8c5cc67f6f3780349592de9fad8a9d31febdfa8be31c1e0fa9f60208"
+  },
+  "negative_controls": [
+    {
+      "control": "macos_tmp_symlink_alias",
+      "status": "PASS",
+      "expected_error_code": "PATH_SYMLINK",
+      "observed_error_code": "PATH_SYMLINK",
+      "output_created": false
+    },
+    {
+      "control": "remove_outer_manifest_readme",
+      "status": "PASS",
+      "expected_error_code": "MANIFEST_MISSING",
+      "observed_error_code": "MANIFEST_MISSING",
+      "expected_relative_path": "README.md",
+      "observed_relative_path": "README.md",
+      "output_created": false,
+      "staging_residue": false
+    }
+  ],
+  "review": {
+    "kind": "implementer_self_check",
+    "independence_satisfied": false,
+    "independent_reviewer_identity": null,
+    "independent_decision": "pending"
+  },
+  "gate_status": "pending_independent_review",
+  "release_status": "HOLD",
+  "issue_1110_status_required": "OPEN",
+  "limitations": [
+    "This record is an implementer self-check and cannot satisfy the independent evidence-integrity review required by P01.",
+    "Structural byte recovery does not establish semantic correctness, third-party authorship, bankability, Board/lender readiness, or RELEASED status.",
+    "The separately attested post-ingress evaluation remains derived analysis and is not promoted into the 73-file received ingress population.",
+    "The P01 programme gate remains pending and issue #1110 remains OPEN."
+  ]
+}
