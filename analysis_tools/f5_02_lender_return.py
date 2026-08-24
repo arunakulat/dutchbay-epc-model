@@ -7,10 +7,14 @@ canonical model binding or a lender/Board release.
 from __future__ import annotations
 
 import hashlib
+import os
 import re
+import subprocess
+import unicodedata
 from collections.abc import Iterator, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -21,6 +25,15 @@ ValidationMode = Literal["template", "structural", "closure_candidate"]
 RequirementContext = tuple[Mapping[str, Any], str | None]
 
 SCHEMA_VERSION = "dutchbay.f5_02_lender_confirmation.v1"
+PRIVATE_INGRESS_MANIFEST_SCHEMA_VERSION = "dutchbay.f5_02_private_ingress_manifest.v1"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CANONICAL_TEMPLATE_PATH = (
+    REPO_ROOT
+    / "docs"
+    / "audit"
+    / "lender-input"
+    / "DUTCHBAY_F5_02_LENDER_CONFIRMATION_TEMPLATE_v1.yaml"
+)
 ALLOWED_STATUSES = {
     "unknown",
     "provisional",
@@ -139,7 +152,33 @@ _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _TIMESTAMP_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})$"
 )
-_CURRENCY_RE = re.compile(r"^[A-Z]{3}$")
+# Frozen from SIX ISO-4217 Maintenance Agency List One on 2026-08-24.
+# Source: https://www.six-group.com/dam/download/financial-information/
+# data-center/iso-currrency/lists/list-one.xml
+# Retained source SHA-256 at the cutoff:
+# 838dfb991648cf36df939edd5fe3811737962b75a32252847d239cedd1e291c9
+_CURRENT_ISO_4217_CODES = frozenset("""
+    AED AFN ALL AMD AOA ARS AUD AWG AZN BAM BBD BDT BHD BIF BMD BND BOB BOV
+    BRL BSD BTN BWP BYN BZD CAD CDF CHE CHF CHW CLF CLP CNY COP COU CRC CUP
+    CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP GEL GHS GIP GMD GNF
+    GTQ GYD HKD HNL HTG HUF IDR ILS INR IQD IRR ISK JMD JOD JPY KES KGS KHR
+    KMF KPW KRW KWD KYD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD MMK MNT
+    MOP MRU MUR MVR MWK MXN MXV MYR MZN NAD NGN NIO NOK NPR NZD OMR PAB PEN
+    PGK PHP PKR PLN PYG QAR RON RSD RUB RWF SAR SBD SCR SDG SEK SGD SHP SLE
+    SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD TWD TZS UAH UGX
+    USD USN UYI UYU UYW UZS VED VES VND VUV WST XAD XAF XAG XAU XBA XBB XBC
+    XBD XCD XCG XDR XOF XPD XPF XPT XSU XTS XUA XXX YER ZAR ZMW ZWG
+    """.split())
+_NON_TRANSACTIONAL_ISO_4217_CODES = {"XTS", "XXX"}
+_GIT_ROUTING_ENVIRONMENT_KEYS = {
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_WORK_TREE",
+}
 _CURRENCY_SCALAR_KEYS = {
     "account_currency",
     "accounting_currency",
@@ -199,6 +238,77 @@ _CONFIRMED_AUTHENTICATION_METHODS = {
     "issuer_direct_confirmation",
 }
 _CONFIRMED_REVIEW_DISPOSITIONS = {"accepted", "accepted_with_qualifications"}
+_CONFIRMED_PLACEHOLDER_VALUES = {
+    "awaiting confirmation",
+    "not available",
+    "not confirmed",
+    "not known",
+    "not provided",
+    "null",
+    "pending",
+    "tbc",
+    "tbd",
+    "unknown",
+}
+_NOT_APPLICABLE_PROHIBITED_REQUIREMENT_IDS = {
+    "F502-EV-001",  # borrower identity
+    "F502-EV-002",  # lender, agent, and trustee identities
+    "F502-EV-004",  # legal facility/tranche to model mapping
+    "F502-EV-010",  # commitment currency
+    "F502-EV-012",  # principal-accounting currency
+    "F502-EV-013",  # interest-payment currency
+    "F502-EV-014",  # principal-repayment currency
+}
+_PRIVATE_INGRESS_MANIFEST_KEYS = {
+    "schema_version",
+    "lender_return_sha256",
+    "custodian_role",
+    "ingress_timestamp",
+    "evidence_records",
+}
+_INGRESS_BOUND_EVIDENCE_FIELDS = (
+    "exact_title",
+    "document_type",
+    "issuer_or_parties",
+    "execution_status",
+    "version",
+    "effective_date",
+    "expiry_date",
+    "amendment_and_waiver_status",
+    "governing_law_relevance",
+    "acquisition_date",
+    "confidentiality",
+    "evidence_tier",
+    "source_form",
+    "authentication_method",
+    "controlling_original_evidence_id",
+    "authenticated_by",
+    "authentication_date",
+    "reviewed_by",
+    "reviewer_independence",
+    "review_scope",
+    "review_date",
+    "review_disposition",
+    "supersedes_evidence_ids",
+    "superseded_by_evidence_ids",
+    "limitations",
+)
+_PRIVATE_INGRESS_EVIDENCE_KEYS = {
+    "evidence_id",
+    "retained_path",
+    "sha256",
+    "byte_count",
+    *_INGRESS_BOUND_EVIDENCE_FIELDS,
+}
+_PROHIBITED_CLOSURE_DOCUMENT_TYPE_TOKENS = {
+    "analyst",
+    "draft",
+    "model",
+    "reproduction",
+    "simulation",
+    "synthetic",
+    "working_paper",
+}
 
 
 class F502LenderReturnError(ValueError):
@@ -286,6 +396,7 @@ class F502ValidationSummary:
     status_counts: Mapping[str, int]
     canonical_binding_status: str = "blocked"
     release_status: str = "HOLD"
+    bound_custodian_role: str | None = None
 
     def to_private_dict(self) -> dict[str, Any]:
         """Return detailed private validation facts without lender-entered values."""
@@ -304,6 +415,7 @@ class F502ValidationSummary:
             "status_counts": dict(sorted(self.status_counts.items())),
             "canonical_binding_status": self.canonical_binding_status,
             "release_status": self.release_status,
+            "bound_custodian_role": self.bound_custodian_role,
         }
 
     def to_public_receipt(
@@ -312,10 +424,12 @@ class F502ValidationSummary:
         """Return the exact five-field public receipt allowed by the template."""
 
         _require(_is_nonempty_string(custodian_role), "custodian_role is required")
-        _require(
-            _TIMESTAMP_RE.fullmatch(receipt_timestamp) is not None,
-            "receipt_timestamp must be RFC3339 with seconds and timezone",
-        )
+        if self.bound_custodian_role is not None:
+            _require(
+                custodian_role == self.bound_custodian_role,
+                "custodian_role does not match the private ingress manifest",
+            )
+        _require_valid_timestamp(receipt_timestamp, "receipt_timestamp")
         return {
             "document_id": self.document_id,
             "custodian_role": custodian_role,
@@ -336,6 +450,173 @@ def _require(condition: bool, message: str) -> None:
 
 def _is_nonempty_string(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
+
+
+def _is_confirmed_placeholder(value: str) -> bool:
+    normalized = re.sub(r"[\s._/\\-]+", " ", value.strip().lower()).strip()
+    return normalized in _CONFIRMED_PLACEHOLDER_VALUES or normalized in {
+        "n a",
+        "na",
+        "none",
+    }
+
+
+def _is_blank_template_row(record: Mapping[str, Any]) -> bool:
+    return all(value is None or value == [] for value in record.values())
+
+
+def _require_valid_date(value: Any, path: str) -> str:
+    """Require a real Gregorian calendar date, not only date-shaped text."""
+
+    _require(
+        isinstance(value, str) and _DATE_RE.fullmatch(value) is not None,
+        f"{path}: expected a quoted YYYY-MM-DD string",
+    )
+    try:
+        date.fromisoformat(value)
+    except ValueError as exc:
+        raise F502LenderReturnError(f"{path}: invalid calendar date") from exc
+    return cast(str, value)
+
+
+def _require_valid_timestamp(value: Any, path: str) -> str:
+    """Require RFC3339 seconds precision and a valid explicit timezone."""
+
+    _require(
+        isinstance(value, str) and _TIMESTAMP_RE.fullmatch(value) is not None,
+        f"{path}: expected RFC3339 timestamp with seconds and timezone",
+    )
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise F502LenderReturnError(f"{path}: invalid RFC3339 timestamp") from exc
+    _require(
+        parsed.tzinfo is not None and parsed.utcoffset() is not None,
+        f"{path}: timezone is required",
+    )
+    return cast(str, value)
+
+
+def _require_currency_code(value: Any, path: str) -> str:
+    """Require a transactional code from the frozen current ISO-4217 list."""
+
+    _require(
+        isinstance(value, str) and value in _CURRENT_ISO_4217_CODES,
+        f"{path}: expected current ISO-4217 code",
+    )
+    _require(
+        value not in _NON_TRANSACTIONAL_ISO_4217_CODES,
+        f"{path}: ISO-4217 test/no-currency code is not transactional",
+    )
+    return cast(str, value)
+
+
+def _require_string_list(value: Any, path: str) -> list[str]:
+    """Require a duplicate-free list of non-empty strings with controlled errors."""
+
+    _require(isinstance(value, list), f"{path}: expected list")
+    result = cast(list[Any], value)
+    _require(
+        all(_is_nonempty_string(item) for item in result),
+        f"{path}: every member must be a non-empty string",
+    )
+    strings = cast(list[str], result)
+    _require(len(strings) == len(set(strings)), f"{path}: duplicate member")
+    return strings
+
+
+def _normalized_path_identity_parts(path: Path) -> tuple[str, ...]:
+    """Return conservative NFC/casefold components for an existing path."""
+
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError as exc:
+        raise F502LenderReturnError("protected path identity is unavailable") from exc
+    return tuple(
+        unicodedata.normalize("NFC", component).casefold()
+        for component in resolved.parts
+    )
+
+
+def _path_is_same_or_descendant(path: Path, root: Path) -> bool:
+    """Detect public-root overlap across case, Unicode, symlink, and samefile aliases."""
+
+    path_parts = _normalized_path_identity_parts(path)
+    root_parts = _normalized_path_identity_parts(root)
+    if path_parts[: len(root_parts)] == root_parts:
+        return True
+
+    try:
+        if path.samefile(root):
+            return True
+        return any(ancestor.samefile(root) for ancestor in path.resolve().parents)
+    except OSError:
+        return False
+
+
+def _repository_worktree_roots() -> tuple[Path, ...]:
+    """Return every worktree that shares this public repository's common Git dir."""
+
+    git_environment = os.environ.copy()
+    for key in _GIT_ROUTING_ENVIRONMENT_KEYS:
+        git_environment.pop(key, None)
+    try:
+        result = subprocess.run(
+            ["git", "worktree", "list", "--porcelain", "-z"],
+            cwd=REPO_ROOT,
+            env=git_environment,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError, UnicodeError) as exc:
+        raise F502LenderReturnError(
+            "public repository worktree inventory is unavailable"
+        ) from exc
+    root_paths = [
+        Path(token.removeprefix("worktree "))
+        for token in result.stdout.split("\0")
+        if token.startswith("worktree ")
+    ]
+    _require(
+        all(root.is_absolute() for root in root_paths),
+        "public repository worktree inventory contains a relative path",
+    )
+    try:
+        roots = tuple(root.resolve(strict=True) for root in root_paths)
+    except OSError as exc:
+        raise F502LenderReturnError(
+            "public repository worktree inventory contains an unreadable path"
+        ) from exc
+    _require(bool(roots), "public repository worktree inventory is empty")
+    _require(
+        any(_path_is_same_or_descendant(REPO_ROOT, root) for root in roots),
+        "validator checkout is absent from the public worktree inventory",
+    )
+    return roots
+
+
+def _require_path_outside_public_worktrees(path: Path, *, label: str) -> Path:
+    _require(path.is_absolute(), f"{label} must be an absolute path")
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError as exc:
+        raise F502LenderReturnError(f"{label}: path is unavailable") from exc
+    for root in _repository_worktree_roots():
+        _require(
+            not _path_is_same_or_descendant(path, root),
+            f"{label} must be outside every public repository worktree",
+        )
+    return resolved
+
+
+def _read_utf8_bytes(path: Path, *, label: str) -> tuple[bytes, str]:
+    try:
+        raw_bytes = path.read_bytes()
+        text = raw_bytes.decode("utf-8", errors="strict")
+    except (OSError, UnicodeError) as exc:
+        raise F502LenderReturnError(f"{label}: unreadable UTF-8 input") from exc
+    return raw_bytes, text
 
 
 def _load_one_mapping(text: str, *, label: str) -> dict[str, Any]:
@@ -441,23 +722,15 @@ def _validate_named_scalar_contracts(document: Mapping[str, Any]) -> None:
         if key.endswith("unit_scale") or key == "unit_scale":
             _require(value == "base_units", f"{path}: only base_units is permitted")
         if key.endswith("_date") or key in {"date", "prepared_date", "evidence_cutoff"}:
-            _require(
-                isinstance(value, str) and _DATE_RE.fullmatch(value) is not None,
-                f"{path}: expected a quoted YYYY-MM-DD string",
-            )
+            _require_valid_date(value, path)
+        if key.endswith("_timestamp") or key == "timestamp":
+            _require_valid_timestamp(value, path)
         if key in _CURRENCY_SCALAR_KEYS and isinstance(value, str):
-            _require(
-                _CURRENCY_RE.fullmatch(value) is not None,
-                f"{path}: expected ISO-4217 code",
-            )
+            _require_currency_code(value, path)
         if key.endswith("currencies") and isinstance(value, list):
-            _require(
-                all(
-                    isinstance(item, str) and _CURRENCY_RE.fullmatch(item)
-                    for item in value
-                ),
-                f"{path}: expected ISO-4217 code list",
-            )
+            currencies = _require_string_list(value, path)
+            for index, currency in enumerate(currencies):
+                _require_currency_code(currency, f"{path}[{index}]")
 
 
 def _collect_requirement_records(value: Any) -> list[dict[str, Any]]:
@@ -536,7 +809,11 @@ def _validate_evidence_catalog(
             f"$.evidence_catalog[{index}]: expected mapping",
         )
         evidence_id = record.get("evidence_id")
-        if evidence_id is None and mode == "template":
+        if (
+            evidence_id is None
+            and mode != "closure_candidate"
+            and _is_blank_template_row(record)
+        ):
             continue
         _require(
             _is_nonempty_string(evidence_id),
@@ -563,7 +840,11 @@ def _validate_claim_citations(
             f"$.claim_citations[{index}]: wrong fields",
         )
         citation_id = record.get("citation_id")
-        if citation_id is None and mode == "template":
+        if (
+            citation_id is None
+            and mode != "closure_candidate"
+            and _is_blank_template_row(record)
+        ):
             continue
         _require(
             _is_nonempty_string(citation_id),
@@ -601,6 +882,11 @@ def _require_complete_confirmed_value(
         value is True or value is False or _is_nonempty_string(value),
         f"{path}: confirmed value is incomplete",
     )
+    if isinstance(value, str):
+        _require(
+            not _is_confirmed_placeholder(value),
+            f"{path}: confirmed value cannot be an unknown placeholder",
+        )
 
 
 def _require_confirmed_evidence_eligible(
@@ -725,32 +1011,13 @@ def _validate_requirement_records(
         if requirement_id in _SCALAR_CURRENCY_REQUIREMENT_IDS:
             value = record.get("value")
             if value is not None:
-                _require(
-                    isinstance(value, str)
-                    and _CURRENCY_RE.fullmatch(value) is not None,
-                    f"{requirement_id}.value: expected ISO-4217 code",
-                )
-        evidence_refs = record.get("evidence_refs")
-        citation_ids = record.get("claim_citation_ids")
-        _require(
-            isinstance(evidence_refs, list)
-            and all(_is_nonempty_string(item) for item in evidence_refs),
-            f"{requirement_id}: evidence_refs must be a string list",
+                _require_currency_code(value, f"{requirement_id}.value")
+        evidence_refs = _require_string_list(
+            record.get("evidence_refs"), f"{requirement_id}.evidence_refs"
         )
-        _require(
-            isinstance(citation_ids, list)
-            and all(_is_nonempty_string(item) for item in citation_ids),
-            f"{requirement_id}: claim_citation_ids must be a string list",
-        )
-        evidence_refs = cast(list[str], evidence_refs)
-        citation_ids = cast(list[str], citation_ids)
-        _require(
-            len(evidence_refs) == len(set(evidence_refs)),
-            f"{requirement_id}: duplicate evidence ref",
-        )
-        _require(
-            len(citation_ids) == len(set(citation_ids)),
-            f"{requirement_id}: duplicate citation ref",
+        citation_ids = _require_string_list(
+            record.get("claim_citation_ids"),
+            f"{requirement_id}.claim_citation_ids",
         )
         for evidence_id in evidence_refs:
             _require(
@@ -777,6 +1044,11 @@ def _validate_requirement_records(
             )
             referenced_citations.add(citation_id)
         if status in {"confirmed", "not_applicable"}:
+            if status == "not_applicable":
+                _require(
+                    requirement_id not in _NOT_APPLICABLE_PROHIBITED_REQUIREMENT_IDS,
+                    f"{requirement_id}: this transaction fact cannot be not_applicable",
+                )
             _require(
                 bool(evidence_refs) and bool(citation_ids),
                 f"{requirement_id}: evidence and citations required",
@@ -851,22 +1123,25 @@ def _validate_requirement_records(
     return status_counts
 
 
-def _validate_referenced_evidence(
-    evidence: Mapping[str, Mapping[str, Any]], contexts: Sequence[RequirementContext]
+def _validate_evidence_integrity(
+    evidence: Mapping[str, Mapping[str, Any]],
 ) -> None:
-    referenced = {
-        str(evidence_id)
-        for record, _facility_id in contexts
-        for evidence_id in cast(list[Any], record["evidence_refs"])
-    }
-    for evidence_id in referenced:
-        record = evidence[evidence_id]
+    """Require complete claim-level integrity metadata for every admitted item."""
+
+    evidence_ids = set(evidence)
+    for evidence_id, record in evidence.items():
         for field in (
             "exact_title",
             "document_type",
             "execution_status",
+            "version",
+            "effective_date",
+            "amendment_and_waiver_status",
+            "governing_law_relevance",
             "retained_path_or_stable_url",
+            "acquisition_date",
             "sha256",
+            "confidentiality",
             "evidence_tier",
             "source_form",
             "authentication_method",
@@ -882,10 +1157,59 @@ def _validate_referenced_evidence(
                 _is_nonempty_string(record.get(field)),
                 f"evidence {evidence_id}.{field}: required",
             )
+        parties = _require_string_list(
+            record.get("issuer_or_parties"),
+            f"evidence {evidence_id}.issuer_or_parties",
+        )
+        _require(bool(parties), f"evidence {evidence_id}.issuer_or_parties: required")
         _require(
             _SHA256_RE.fullmatch(cast(str, record["sha256"])) is not None,
             f"evidence {evidence_id}: invalid sha256",
         )
+        for field in ("supersedes_evidence_ids", "superseded_by_evidence_ids"):
+            references = _require_string_list(
+                record.get(field), f"evidence {evidence_id}.{field}"
+            )
+            _require(
+                set(references) <= evidence_ids,
+                f"evidence {evidence_id}.{field}: unknown evidence",
+            )
+            _require(
+                evidence_id not in references,
+                f"evidence {evidence_id}.{field}: self-reference",
+            )
+        limitations = _require_string_list(
+            record.get("limitations"), f"evidence {evidence_id}.limitations"
+        )
+        if record.get("review_disposition") == "accepted_with_qualifications":
+            _require(
+                bool(limitations),
+                f"evidence {evidence_id}.limitations: qualification required",
+            )
+        original_id = record.get("controlling_original_evidence_id")
+        if original_id is not None:
+            _require(
+                _is_nonempty_string(original_id),
+                f"evidence {evidence_id}.controlling_original_evidence_id: invalid",
+            )
+            _require(
+                original_id in evidence_ids and original_id != evidence_id,
+                f"evidence {evidence_id}.controlling_original_evidence_id: unknown or self-referential",
+            )
+        for superseded_id in cast(list[str], record["supersedes_evidence_ids"]):
+            _require(
+                evidence_id
+                in cast(
+                    list[Any], evidence[superseded_id]["superseded_by_evidence_ids"]
+                ),
+                f"evidence {evidence_id}: supersession link is not reciprocal",
+            )
+        for superseding_id in cast(list[str], record["superseded_by_evidence_ids"]):
+            _require(
+                evidence_id
+                in cast(list[Any], evidence[superseding_id]["supersedes_evidence_ids"]),
+                f"evidence {evidence_id}: superseded-by link is not reciprocal",
+            )
 
 
 def _nested_list(value: Any, keys: Sequence[str]) -> list[Any]:
@@ -916,6 +1240,8 @@ def _validate_multi_entity_ids(
     for record, facility_id in contexts:
         requirement_id = cast(str, record["requirement_id"])
         if requirement_id not in entity_contracts:
+            continue
+        if record["status"] == "not_applicable":
             continue
         keys, id_key = entity_contracts[requirement_id]
         items = (
@@ -957,7 +1283,12 @@ def _validate_multi_entity_ids(
 
 
 def _validate_conflicts(
-    document: Mapping[str, Any], *, evidence_ids: set[str], facility_ids: set[str]
+    document: Mapping[str, Any],
+    *,
+    evidence: Mapping[str, Mapping[str, Any]],
+    citation_ids: set[str],
+    facility_ids: set[str],
+    mode: ValidationMode,
 ) -> list[Mapping[str, Any]]:
     conflicts = document["conflicts_and_open_items"]
     _require(isinstance(conflicts, list), "$.conflicts_and_open_items: expected list")
@@ -966,7 +1297,21 @@ def _validate_conflicts(
     for index, conflict in enumerate(conflicts):
         _require(isinstance(conflict, Mapping), f"conflict[{index}]: expected mapping")
         conflict_id = conflict.get("conflict_id")
-        if conflict_id is None:
+        blank_placeholder = conflict == {
+            "conflict_id": None,
+            "requirement_ids": [],
+            "facility_ids": [],
+            "evidence_ids": [],
+            "description": None,
+            "order_of_precedence_analysis": None,
+            "resolution_text": None,
+            "resolution_evidence_ids": [],
+            "resolution_citation_ids": [],
+            "resolution_owner": None,
+            "target_resolution_date": None,
+            "status": "open",
+        }
+        if mode == "template" and blank_placeholder:
             continue
         _require(
             _is_nonempty_string(conflict_id), f"conflict[{index}].conflict_id: required"
@@ -974,16 +1319,42 @@ def _validate_conflicts(
         conflict_id = cast(str, conflict_id)
         _require(conflict_id not in indexed, f"duplicate conflict_id {conflict_id}")
         indexed.add(conflict_id)
+        requirement_ids = _require_string_list(
+            conflict.get("requirement_ids"), f"{conflict_id}.requirement_ids"
+        )
+        conflict_evidence_ids = _require_string_list(
+            conflict.get("evidence_ids"), f"{conflict_id}.evidence_ids"
+        )
+        resolution_evidence_ids = _require_string_list(
+            conflict.get("resolution_evidence_ids"),
+            f"{conflict_id}.resolution_evidence_ids",
+        )
+        resolution_citation_ids = _require_string_list(
+            conflict.get("resolution_citation_ids"),
+            f"{conflict_id}.resolution_citation_ids",
+        )
+        conflict_facility_ids = _require_string_list(
+            conflict.get("facility_ids"), f"{conflict_id}.facility_ids"
+        )
+        _require(bool(requirement_ids), f"{conflict_id}: requirement_ids required")
         _require(
-            set(conflict.get("requirement_ids", [])) <= ALL_REQUIREMENT_IDS,
+            set(requirement_ids) <= ALL_REQUIREMENT_IDS,
             f"{conflict_id}: unknown requirement",
         )
         _require(
-            set(conflict.get("evidence_ids", [])) <= evidence_ids,
+            set(conflict_evidence_ids) <= set(evidence),
             f"{conflict_id}: unknown evidence",
         )
         _require(
-            set(conflict.get("facility_ids", [])) <= facility_ids,
+            set(resolution_evidence_ids) <= set(evidence),
+            f"{conflict_id}: unknown resolution evidence",
+        )
+        _require(
+            set(resolution_citation_ids) <= citation_ids,
+            f"{conflict_id}: unknown resolution citation",
+        )
+        _require(
+            set(conflict_facility_ids) <= facility_ids,
             f"{conflict_id}: unknown facility",
         )
         _require(
@@ -998,6 +1369,25 @@ def _validate_conflicts(
             conflict.get("status") in {"open", "resolved"},
             f"{conflict_id}: status must be open or resolved",
         )
+        if mode == "closure_candidate":
+            _require(
+                conflict.get("status") == "resolved",
+                f"{conflict_id}: open conflict blocks closure candidate",
+            )
+            _require(
+                _is_nonempty_string(conflict.get("resolution_text")),
+                f"{conflict_id}: resolution text required",
+            )
+            _require(
+                _is_nonempty_string(conflict.get("order_of_precedence_analysis")),
+                f"{conflict_id}: order-of-precedence analysis required",
+            )
+            _require(
+                bool(resolution_evidence_ids) and bool(resolution_citation_ids),
+                f"{conflict_id}: resolution evidence and citations required",
+            )
+            for evidence_id in resolution_evidence_ids:
+                _require_confirmed_evidence_eligible(evidence_id, evidence[evidence_id])
         retained.append(conflict)
     return retained
 
@@ -1015,11 +1405,154 @@ def _require_all_leaf_values(mapping: Mapping[str, Any], path: str) -> None:
             )
 
 
+def _validate_private_ingress_manifest(
+    path: Path,
+    *,
+    lender_return_sha256: str,
+    evidence: Mapping[str, Mapping[str, Any]],
+) -> str:
+    """Bind closure evidence to retained bytes reviewed outside the lender return."""
+
+    resolved_manifest = _require_path_outside_public_worktrees(
+        path, label="private ingress manifest"
+    )
+    _manifest_bytes, manifest_text = _read_utf8_bytes(
+        resolved_manifest, label="private ingress manifest"
+    )
+    manifest = _load_one_mapping(manifest_text, label="private ingress manifest")
+    _validate_json_safe_scalars(manifest)
+    _validate_named_scalar_contracts(manifest)
+    _require(
+        set(manifest) == _PRIVATE_INGRESS_MANIFEST_KEYS,
+        "private ingress manifest has wrong fields",
+    )
+    _require(
+        manifest.get("schema_version") == PRIVATE_INGRESS_MANIFEST_SCHEMA_VERSION,
+        "private ingress manifest has wrong schema_version",
+    )
+    _require(
+        manifest.get("lender_return_sha256") == lender_return_sha256,
+        "private ingress manifest does not bind the returned file bytes",
+    )
+    _require(
+        _is_nonempty_string(manifest.get("custodian_role")),
+        "private ingress manifest custodian_role is required",
+    )
+    ingress_timestamp = manifest.get("ingress_timestamp")
+    _require_valid_timestamp(
+        ingress_timestamp, "private ingress manifest ingress_timestamp"
+    )
+    records = manifest.get("evidence_records")
+    _require(
+        isinstance(records, list),
+        "private ingress manifest evidence_records must be a list",
+    )
+    indexed: dict[str, Mapping[str, Any]] = {}
+    for index, candidate in enumerate(cast(list[Any], records)):
+        _require(
+            isinstance(candidate, Mapping),
+            f"private ingress evidence record {index} must be a mapping",
+        )
+        record = cast(Mapping[str, Any], candidate)
+        _require(
+            set(record) == _PRIVATE_INGRESS_EVIDENCE_KEYS,
+            f"private ingress evidence record {index} has wrong fields",
+        )
+        evidence_id = record.get("evidence_id")
+        _require(
+            _is_nonempty_string(evidence_id),
+            f"private ingress evidence record {index} requires evidence_id",
+        )
+        evidence_id = cast(str, evidence_id)
+        _require(
+            evidence_id in evidence,
+            f"private ingress manifest has unknown evidence {evidence_id}",
+        )
+        _require(
+            evidence_id not in indexed,
+            f"private ingress manifest duplicates evidence {evidence_id}",
+        )
+        retained_path_value = record.get("retained_path")
+        _require(
+            _is_nonempty_string(retained_path_value),
+            f"private ingress evidence {evidence_id} retained_path is required",
+        )
+        retained_path = Path(cast(str, retained_path_value))
+        _require(
+            retained_path.is_absolute(),
+            f"private ingress evidence {evidence_id} retained_path must be absolute",
+        )
+        resolved_evidence_path = _require_path_outside_public_worktrees(
+            retained_path, label=f"private ingress evidence {evidence_id}"
+        )
+        try:
+            retained_bytes = resolved_evidence_path.read_bytes()
+        except OSError as exc:
+            raise F502LenderReturnError(
+                f"private ingress evidence {evidence_id} is unreadable"
+            ) from exc
+        retained_sha256 = hashlib.sha256(retained_bytes).hexdigest()
+        _require(
+            record.get("sha256") == retained_sha256,
+            f"private ingress evidence {evidence_id} raw sha256 mismatch",
+        )
+        _require(
+            type(record.get("byte_count")) is int
+            and record.get("byte_count") == len(retained_bytes),
+            f"private ingress evidence {evidence_id} byte_count mismatch",
+        )
+        catalog_record = evidence[evidence_id]
+        _require(
+            catalog_record.get("sha256") == retained_sha256,
+            f"evidence catalog {evidence_id} does not bind retained bytes",
+        )
+        catalog_path = catalog_record.get("retained_path_or_stable_url")
+        _require(
+            catalog_path == str(resolved_evidence_path),
+            f"evidence catalog {evidence_id} retained path mismatch",
+        )
+        for field in _INGRESS_BOUND_EVIDENCE_FIELDS:
+            _require(
+                record.get(field) == catalog_record.get(field),
+                f"private ingress evidence {evidence_id}.{field} mismatch",
+            )
+        _require(
+            _is_nonempty_string(record.get("document_type")),
+            f"private ingress evidence {evidence_id}.document_type is required",
+        )
+        _require(
+            isinstance(record.get("issuer_or_parties"), list)
+            and bool(record["issuer_or_parties"])
+            and all(
+                _is_nonempty_string(party)
+                for party in cast(list[Any], record["issuer_or_parties"])
+            ),
+            f"private ingress evidence {evidence_id}.issuer_or_parties is required",
+        )
+        document_type = cast(str, record["document_type"])
+        normalized_document_type = document_type.strip().lower()
+        _require(
+            not any(
+                token in normalized_document_type
+                for token in _PROHIBITED_CLOSURE_DOCUMENT_TYPE_TOKENS
+            ),
+            f"private ingress evidence {evidence_id} document_type is ineligible",
+        )
+        _require_confirmed_evidence_eligible(evidence_id, record)
+        indexed[evidence_id] = record
+    _require(
+        set(indexed) == set(evidence),
+        "private ingress manifest must bind every catalogued evidence record",
+    )
+    return cast(str, manifest["custodian_role"])
+
+
 def validate_f5_02_lender_return(
     path: Path,
     *,
     template_path: Path,
     mode: ValidationMode = "structural",
+    private_ingress_manifest_path: Path | None = None,
 ) -> F502ValidationSummary:
     """Validate one confidential lender return and emit a non-secret receipt.
 
@@ -1028,6 +1561,8 @@ def validate_f5_02_lender_return(
         template_path: Immutable public blank template defining the versioned shape.
         mode: ``template`` for the public blank, ``structural`` for partial returns,
             or ``closure_candidate`` for a fully evidenced confirmation package.
+        private_ingress_manifest_path: Custodian-produced manifest that binds every
+            closure-candidate evidence record to retained bytes outside the repository.
 
     Returns:
         A compact receipt that contains no lender-entered values or identities.
@@ -1037,19 +1572,40 @@ def validate_f5_02_lender_return(
     """
 
     _require(
-        mode in {"template", "structural", "closure_candidate"}, f"invalid mode {mode}"
+        isinstance(mode, str)
+        and mode in {"template", "structural", "closure_candidate"},
+        "invalid validation mode",
     )
-    resolved_path = path.resolve(strict=True)
-    repository_root = template_path.resolve(strict=True).parents[3]
-    if mode != "template":
+    try:
+        canonical_template = CANONICAL_TEMPLATE_PATH.resolve(strict=True)
+        supplied_template = template_path.resolve(strict=True)
+    except OSError as exc:
+        raise F502LenderReturnError("canonical template path is unavailable") from exc
+    _require(
+        supplied_template == canonical_template,
+        "template_path must be the canonical public blank template",
+    )
+    if mode == "template":
+        try:
+            resolved_path = path.resolve(strict=True)
+        except OSError as exc:
+            raise F502LenderReturnError("template-mode path is unavailable") from exc
         _require(
-            not resolved_path.is_relative_to(repository_root),
-            "confidential structural/closure returns must be outside the public repository",
+            path.absolute() == canonical_template
+            and resolved_path == canonical_template,
+            "template mode is restricted to the canonical public blank template",
         )
-    text = path.read_text(encoding="utf-8")
-    template_text = template_path.read_text(encoding="utf-8")
-    document = _load_one_mapping(text, label=str(path))
-    template = _load_one_mapping(template_text, label=str(template_path))
+    else:
+        resolved_path = _require_path_outside_public_worktrees(
+            path, label="confidential lender return"
+        )
+    raw_bytes, text = _read_utf8_bytes(resolved_path, label="lender return")
+    _template_bytes, template_text = _read_utf8_bytes(
+        canonical_template, label="canonical template"
+    )
+    lender_return_sha256 = hashlib.sha256(raw_bytes).hexdigest()
+    document = _load_one_mapping(text, label="lender return")
+    template = _load_one_mapping(template_text, label="canonical template")
     _validate_json_safe_scalars(document)
     _validate_shape(document, template, "$")
     _require(document.get("schema_version") == SCHEMA_VERSION, "wrong schema_version")
@@ -1097,8 +1653,10 @@ def validate_f5_02_lender_return(
     }
     conflicts = _validate_conflicts(
         document,
-        evidence_ids=set(evidence),
+        evidence=evidence,
+        citation_ids=set(citations),
         facility_ids=facility_ids,
+        mode=mode,
     )
     status_counts = _validate_requirement_records(
         contexts,
@@ -1108,7 +1666,28 @@ def validate_f5_02_lender_return(
         mode=mode,
     )
     _validate_multi_entity_ids(contexts, mode=mode)
-    _validate_referenced_evidence(evidence, contexts)
+    _validate_evidence_integrity(evidence)
+
+    bound_custodian_role: str | None = None
+    if mode == "closure_candidate":
+        _require_valid_date(
+            document_control.get("evidence_cutoff"),
+            "document_control.evidence_cutoff",
+        )
+        _require(
+            private_ingress_manifest_path is not None,
+            "closure_candidate requires a private ingress manifest",
+        )
+        bound_custodian_role = _validate_private_ingress_manifest(
+            cast(Path, private_ingress_manifest_path),
+            lender_return_sha256=lender_return_sha256,
+            evidence=evidence,
+        )
+    else:
+        _require(
+            private_ingress_manifest_path is None,
+            "private ingress manifest is only permitted for closure_candidate mode",
+        )
 
     if mode != "template":
         submission = cast(Mapping[str, Any], document["submission"])
@@ -1171,13 +1750,14 @@ def validate_f5_02_lender_return(
         document_id=cast(str, document_control["document_id"]),
         confidentiality_classification=cast(str, document_control["confidentiality"]),
         mode=mode,
-        sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        sha256=lender_return_sha256,
         facility_count=facility_count,
         requirement_record_count=len(contexts),
         evidence_count=len(evidence),
         citation_count=len(citations),
         conflict_count=len(conflicts),
         status_counts=status_counts,
+        bound_custodian_role=bound_custodian_role,
     )
 
 

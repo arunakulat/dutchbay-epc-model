@@ -248,7 +248,7 @@ Pass boundary: five new output-hashed controls exist and independently rerun; fi
 
 Input template: `DUTCHBAY_F5_02_LENDER_CONFIRMATION_TEMPLATE_v1.yaml`.
 
-Repository-owned internal decision template: `DUTCHBAY_F5_02_INTERNAL_DECISION_RECORD_TEMPLATE_v1.yaml`. Do **not** send this second file to the lender team and do not let a respondent select the canonical treatment or release state.
+Repository-owned internal decision template: `DUTCHBAY_F5_02_INTERNAL_DECISION_RECORD_TEMPLATE_v1.yaml`. Repository-owned private-ingress manifest template: `DUTCHBAY_F5_02_PRIVATE_INGRESS_MANIFEST_TEMPLATE_v1.yaml`. Do **not** send either internal file to the lender team and do not let a respondent select the canonical treatment, evidence eligibility, or release state.
 
 Controlling requirements source: `F5-02 Transaction-Evidence, Legal-Currency and Repayment Requirements Register`, evidence cutoff 2026-08-18, SHA-256 `7f3199867ae6aaae2e7365b0cb15fe7ca81b3348060e9ac443622fbc231a9416`. Its tabulated register contains 53 distinct requirement IDs; an older narrative reference to a “55-item” list is a stale count, not authority to invent two fields.
 
@@ -259,6 +259,7 @@ Outbound procedure:
 - [ ] Before dispatch, assign a private access-controlled return location and evidence custodian outside this public repository; communicate that location through the approved confidential channel.
 - [ ] Ask the lender/agent, borrower, legal counsel, tax adviser, and authorized dealer to complete only fields within their authority.
 - [ ] Require every `confirmed` and `not_applicable` field to cite evidence ID, exact clause, and exact page.
+- [ ] Do not permit `not_applicable` for borrower identity, lender/agent/trustee identity, facility/tranche mapping, commitment currency, principal-accounting currency, interest-payment currency, or principal-repayment currency.
 - [ ] Require each facility/tranche to have a separate complete item.
 - [ ] Permit `unknown`, `provisional`, and `conflicted`; prohibit guessed completion.
 
@@ -266,13 +267,15 @@ Inbound procedure:
 
 - [ ] Preserve the exact returned file as immutable source evidence in the assigned private access-controlled store before editing or normalization; never copy it into this repository or a public issue/PR.
 - [ ] Record received timestamp, sender, channel, filename, size, and SHA-256.
-- [ ] Preflight the YAML with a duplicate-key, alias, and multi-document rejecting loader, then parse the accepted single document with `yaml.safe_load` so unsafe tags also fail closed.
-- [ ] Run the repository validator from the current governed checkout: `python scripts/validate_f5_02_lender_return.py +input=/private/absolute/path/returned.yaml +mode=structural +custodian_role=evidence_custodian +receipt_timestamp=YYYY-MM-DDTHH:MM:SS+HH:MM`. The CLI emits only the permitted five-field public receipt; detailed validation facts remain private.
-- [ ] Validate schema/version, all 53 requirement IDs per the project/facility scope, exact response shapes, quoted date strings, ISO-4217 currency codes, decimal-string rate/amount fields, base-unit scale, facility/entity uniqueness, evidence/citation referential integrity, sign-offs, conflicts, and protected HOLD controls.
+- [ ] Preflight the YAML with the validator's duplicate-key, alias, unsafe-tag, and multi-document rejecting safe loader. Do not normalize the bytes before hashing.
+- [ ] Run the repository validator from the current governed checkout with the confidential path outside Hydra composition and the mandated shared Python 3.12 environment: `PYTHONPATH="$PWD" DUTCHBAY_F5_02_RETURN_PATH=/private/absolute/path/returned.yaml DUTCHBAY_F5_02_CUSTODIAN_ROLE=evidence_custodian DUTCHBAY_F5_02_RECEIPT_TIMESTAMP=YYYY-MM-DDTHH:MM:SS+HH:MM /Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python scripts/validate_f5_02_lender_return.py mode=structural`. The privacy-safe Hydra config disables job/config/log artifacts. The CLI accepts exactly one explicit validation-mode override and emits only the permitted five-field public receipt on success or one stable error code on rejection; detailed validation facts remain private.
+- [ ] Validate schema/version, all 53 requirement IDs per the project/facility scope, exact response shapes, real quoted Gregorian dates, currency codes against the frozen SIX ISO-4217 Maintenance Agency List One cutoff, decimal-string rate/amount fields, base-unit scale, facility/entity uniqueness, evidence/citation referential integrity, sign-offs, conflicts, and protected HOLD controls.
 - [ ] Reject a confirmed/not-applicable field lacking clause/page evidence.
 - [ ] Reconcile every cited evidence item to a retained authenticated file and SHA-256.
+- [ ] Remove the untouched conflict placeholder when there are no conflicts. Any populated conflict row requires a unique ID; a resolved conflict requires resolution text plus eligible resolution evidence and citations.
 - [ ] Commission separate legal/tax/authorized-dealer review for the fields in their scope.
-- [ ] Run `+mode=closure_candidate` only when every requirement is confirmed/not-applicable, every conflict is resolved, all confirmations/sign-offs are complete, and all evidence survives review.
+- [ ] Independently create the private custodian manifest from `DUTCHBAY_F5_02_PRIVATE_INGRESS_MANIFEST_TEMPLATE_v1.yaml`. Bind the exact raw lender-return SHA-256 and every evidence ID to an existing retained absolute path, exact byte count, raw-file SHA-256, exact title, parties, version/effective/amendment status, governing-law relevance, acquisition date, confidentiality, source/authentication fields, independent review disposition, limitations, and supersession links. Store the completed manifest outside every public worktree.
+- [ ] Run closure-candidate validation only after the previous step: `PYTHONPATH="$PWD" DUTCHBAY_F5_02_RETURN_PATH=/private/absolute/path/returned.yaml DUTCHBAY_F5_02_INGRESS_MANIFEST_PATH=/private/absolute/path/ingress-manifest.yaml DUTCHBAY_F5_02_CUSTODIAN_ROLE=evidence_custodian DUTCHBAY_F5_02_RECEIPT_TIMESTAMP=YYYY-MM-DDTHH:MM:SS+HH:MM /Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python scripts/validate_f5_02_lender_return.py mode=closure_candidate`. Every requirement must be confirmed or validly not applicable, every conflict resolved, all confirmations/sign-offs complete, the return must state a valid evidence cutoff, and all evidence must be byte- and metadata-bound by the separate manifest. A passing closure-candidate validation remains non-authorizing and does not lift HOLD.
 - [ ] Retain publicly only a redacted receipt containing document ID, custodian role, receipt timestamp, confidentiality classification, and SHA-256—never returned values.
 - [ ] Commission independent model semantic review; record reviewer independence/conflicts, fixed specification and hash, exact rerun, counterexamples, disposition, unresolved rebuttals, signature, and date in the internal decision record.
 - [ ] Select Option A, Option B, or a hybrid only in the separate internal decision record with clause-level evidence, legal/tax/authorized-dealer conclusions, model-owner approval, and release-authority decision.

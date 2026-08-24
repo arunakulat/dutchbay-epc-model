@@ -27,6 +27,7 @@ document_control:
     - This file is not a scenario YAML and must not be ingested as canonical model configuration.
     - Do not alter repository_owned_controls; the inbound validator rejects any change.
     - Completed returns and cited evidence are confidential and must never be committed to the public repository.
+    - Complete document_control.evidence_cutoff before any closure-candidate review.
     - F5-01 and F5-02 remain separate; do not combine or net their financial effects.
 
 field_status_protocol:
@@ -79,6 +80,15 @@ response_contract:
     - not_applicable_reason
   date_format: quoted_yyyy_mm_dd_string
   currency_format: iso_4217_alpha_3
+  currency_code_list:
+    maintenance_agency: SIX Financial Information AG
+    list: ISO-4217 List One Current Currency and Funds
+    source_url: https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml
+    cutoff: "2026-08-24"
+    retained_source_sha256: 838dfb991648cf36df939edd5fe3811737962b75a32252847d239cedd1e291c9
+    prohibited_non_transactional_codes:
+      - XTS
+      - XXX
   monetary_value_format:
     amount_decimal_string: null
     currency: null
@@ -118,12 +128,17 @@ response_contract:
     review_disposition:
       - accepted
       - accepted_with_qualifications
+  closure_candidate_requires_private_ingress_manifest: true
   prohibition: Do not enter bare unlabeled monetary amounts or rates.
 
 privacy_and_return_handling:
   completed_return_public_commit_allowed: false
   completed_return_storage: private_access_controlled_evidence_store_only
   public_repository_retention: blank_template_validator_and_redacted_receipt_only
+  validator_private_path_transport: environment_only_not_hydra_override
+  generated_hydra_logs_and_config_allowed: false
+  blank_private_ingress_manifest_template_public_commit_allowed: true
+  completed_private_ingress_manifest_public_commit_allowed: false
   permitted_public_receipt_fields:
     - document_id
     - custodian_role
@@ -881,6 +896,9 @@ conflicts_and_open_items:
     evidence_ids: []
     description: null
     order_of_precedence_analysis: null
+    resolution_text: null
+    resolution_evidence_ids: []
+    resolution_citation_ids: []
     resolution_owner: null
     target_resolution_date: null
     status: open
@@ -898,13 +916,13 @@ signoff:
   borrower_authorized_representative:
     name: null
     role: null
-    signature_reference: null
+    signature_evidence_id: null
     date: null
   facility_agent_or_lender_representative:
     name: null
     organization: null
     role: null
-    signature_reference: null
+    signature_evidence_id: null
     date: null
   sri_lankan_legal_counsel:
     name: null
