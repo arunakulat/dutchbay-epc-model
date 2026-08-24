@@ -1,0 +1,13 @@
+defaults:
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+  - _self_
+
+mode: recover_and_validate
+
+hydra:
+  run:
+    dir: .
+  job:
+    chdir: false
+  output_subdir: null

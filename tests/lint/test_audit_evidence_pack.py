@@ -64,6 +64,10 @@ def test_controlled_audit_successor_pack_is_internally_valid() -> None:
     assert '"programme_gates"' in completed.stdout
     assert '"pending": 23' in completed.stdout
     assert '"closure_authorized": 0' in completed.stdout
+    assert '"p01_recovery"' in completed.stdout
+    assert '"gate_status": "pending_independent_review"' in completed.stdout
+    assert '"p01_implementer_self_check"' in completed.stdout
+    assert '"independence_satisfied": false' in completed.stdout
 
 
 def test_architecture_examination_plan_is_exactly_pending_and_hold_blocking() -> None:
@@ -353,3 +357,93 @@ def test_ruleset_count_erratum_guard_rejects_drift(
 
     with pytest.raises(validator.ValidationError, match=expected):
         validator._validate_ruleset_count_erratum()
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        ("release", "release HOLD missing"),
+        ("review", "completed independent review"),
+        ("local_path", "machine-local path"),
+        ("source_scope", "source-manifest scope drift"),
+    ],
+)
+def test_p01_recovery_descriptor_rejects_boundary_drift(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+    expected: str,
+) -> None:
+    """P01 metadata cannot launder release, review, paths or source scope."""
+    validator = _load_validator()
+    source = validator.PACK_ROOT / validator.P01_RECOVERY_DESCRIPTOR
+    pack_root = tmp_path / "pack"
+    destination = pack_root / validator.P01_RECOVERY_DESCRIPTOR
+    destination.parent.mkdir(parents=True)
+    payload = json.loads(source.read_text(encoding="utf-8"))
+
+    if mutation == "release":
+        payload["release_status"] = "RELEASED"
+    elif mutation == "review":
+        payload["independent_review_status"] = "completed"
+    elif mutation == "local_path":
+        payload["limitations"].append("Use /Users/example/private evidence")
+    else:
+        payload["checkpoint"]["source_manifest"]["parent_governed_unlisted_paths"] = []
+    destination.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(validator, "PACK_ROOT", pack_root)
+
+    with pytest.raises(validator.ValidationError, match=expected):
+        validator._validate_p01_recovery_descriptor()
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        ("review", "explicitly non-independent"),
+        ("gate", "cannot complete the programme gate"),
+        ("snapshot", "tested snapshot drift"),
+    ],
+)
+def test_p01_self_check_cannot_launder_independence_or_stale_code(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+    expected: str,
+) -> None:
+    """An implementer receipt is useful evidence but never independent approval."""
+    validator = _load_validator()
+    source = validator.PACK_ROOT / validator.P01_IMPLEMENTER_SELF_CHECK
+    pack_root = tmp_path / "pack"
+    destination = pack_root / validator.P01_IMPLEMENTER_SELF_CHECK
+    destination.parent.mkdir(parents=True)
+    payload = json.loads(source.read_text(encoding="utf-8"))
+
+    if mutation == "review":
+        payload["review"]["independence_satisfied"] = True
+    elif mutation == "gate":
+        payload["gate_status"] = "completed"
+    else:
+        payload["tested_snapshot"]["analysis_tools/audit_recovery.py"] = "0" * 64
+    destination.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(validator, "PACK_ROOT", pack_root)
+
+    with pytest.raises(validator.ValidationError, match=expected):
+        validator._validate_p01_implementer_self_check()
+
+
+def test_pack_loader_rejects_duplicate_json_keys(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Publication controls cannot inherit JSON's last-key-wins ambiguity."""
+    validator = _load_validator()
+    pack_root = tmp_path / "pack"
+    pack_root.mkdir()
+    (pack_root / "duplicate.json").write_text(
+        '{"release_status":"HOLD","release_status":"RELEASED"}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(validator, "PACK_ROOT", pack_root)
+
+    with pytest.raises(validator.ValidationError, match="duplicate JSON key"):
+        validator._load("duplicate.json")

@@ -12,6 +12,7 @@ from types import ModuleType
 from typing import Any, cast
 
 PACK_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = PACK_ROOT.parents[2]
 MANIFEST = PACK_ROOT / "PUBLICATION_MANIFEST.sha256"
 AUDITED_COMMIT = "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8"
 IMMUTABLE_CONTROL_RECORD = Path(
@@ -37,6 +38,11 @@ ARCHITECTURE_EXAMINATION_CSV = (
 PROGRAMME_GATE_BUILDER = PACK_ROOT / "scripts" / "build_programme_gate_ledger.py"
 PROGRAMME_GATE_JSON = PACK_ROOT / "registers" / "programme_gate_ledger.v1.json"
 PROGRAMME_GATE_CSV = PACK_ROOT / "registers" / "programme_gate_ledger.v1.csv"
+P01_RECOVERY_DESCRIPTOR = Path("recovery/P01_RECOVERY_DESCRIPTOR.v1.json")
+P01_IMPLEMENTER_SELF_CHECK = Path(
+    "qa/P01_RECOVERY_IMPLEMENTER_SELF_CHECK_2026-08-24.json"
+)
+P01_DESCRIPTOR_SCHEMA = "dutchbay.audit_recovery_descriptor.v1"
 
 
 class ValidationError(RuntimeError):
@@ -56,10 +62,21 @@ def _digest(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        _require(key not in result, f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
 def _load(relative: str) -> dict[str, Any]:
     path = PACK_ROOT / relative
     _require(path.is_file(), f"missing JSON: {relative}")
-    value = json.loads(path.read_text(encoding="utf-8"))
+    value = json.loads(
+        path.read_text(encoding="utf-8"),
+        object_pairs_hook=_reject_duplicate_json_keys,
+    )
     _require(isinstance(value, dict), f"JSON root must be an object: {relative}")
     return cast(dict[str, Any], value)
 
@@ -318,10 +335,303 @@ def _validate_ruleset_count_erratum() -> None:
     )
 
 
+def _validate_p01_recovery_descriptor() -> dict[str, Any]:
+    """Bind the portable recovery candidate to its exact HOLD-side boundary."""
+    relative = P01_RECOVERY_DESCRIPTOR.as_posix()
+    descriptor_path = PACK_ROOT / P01_RECOVERY_DESCRIPTOR
+    raw = descriptor_path.read_text(encoding="utf-8")
+    _require("/Users/" not in raw, "P01 descriptor contains a machine-local path")
+    descriptor = _load(relative)
+    _require(
+        set(descriptor)
+        == {
+            "schema_version",
+            "document_id",
+            "gate_id",
+            "release_status",
+            "independent_review_status",
+            "checkpoint",
+            "audit_corpus",
+            "repository",
+            "materialized_successor",
+            "trust_boundary",
+            "publication_boundary",
+            "limitations",
+        },
+        "P01 descriptor fields drift",
+    )
+    _require(
+        descriptor.get("schema_version") == P01_DESCRIPTOR_SCHEMA,
+        "P01 descriptor schema drift",
+    )
+    _require(descriptor.get("gate_id") == "P01", "P01 gate identity drift")
+    _require(
+        descriptor.get("release_status") == "HOLD",
+        "P01 descriptor release HOLD missing",
+    )
+    _require(
+        descriptor.get("independent_review_status") == "pending_independent_review",
+        "P01 descriptor cannot claim completed independent review",
+    )
+
+    checkpoint = descriptor.get("checkpoint")
+    _require(isinstance(checkpoint, dict), "P01 checkpoint contract missing")
+    checkpoint = cast(dict[str, Any], checkpoint)
+    outer = checkpoint.get("checkpoint_payload_manifest")
+    archive = checkpoint.get("remediation_archive")
+    inner = checkpoint.get("inner_manifest")
+    source = checkpoint.get("source_manifest")
+    bundle = checkpoint.get("repository_bundle")
+    for value, label in (
+        (outer, "outer manifest"),
+        (archive, "archive"),
+        (inner, "inner manifest"),
+        (source, "source manifest"),
+        (bundle, "bundle"),
+    ):
+        _require(isinstance(value, dict), f"P01 {label} contract missing")
+    outer = cast(dict[str, Any], outer)
+    archive = cast(dict[str, Any], archive)
+    inner = cast(dict[str, Any], inner)
+    source = cast(dict[str, Any], source)
+    bundle = cast(dict[str, Any], bundle)
+    _require(
+        outer
+        == {
+            "relative_path": "CHECKPOINT_PAYLOAD_MANIFEST.sha256",
+            "sha256": "8afeb079a1b7ce88a14cc91eebcb18db0eec31e9b77633029abc46224354230a",
+            "entries": 68,
+        },
+        "P01 outer-manifest contract drift",
+    )
+    _require(
+        archive
+        == {
+            "filename": "DutchBay_Comprehensive_Audit_Remediation_2026-08.tar.gz",
+            "sha256": "13d5b7aca2f064b8f8b16224e366ce038e39a43cfeff85d5c6279916471c7a91",
+            "tar_root": "DutchBay_Comprehensive_Audit_Remediation_2026-08",
+            "governed_file_members": 64,
+            "appledouble_metadata_members": 74,
+            "total_regular_file_members": 138,
+        },
+        "P01 archive contract drift",
+    )
+    _require(
+        inner.get("sha256")
+        == "203073976dfc14b6a27a345dda2a5261751ffaf08379fb0cd42cd1f5f5f5962c"
+        and inner.get("entries") == 63,
+        "P01 inner-manifest contract drift",
+    )
+    _require(
+        source.get("sha256")
+        == "568c54095213821a683fd385fe5f7dabfb8d026ddfa9b4d750c386ed145aed93"
+        and source.get("entries") == 23
+        and source.get("parent_governed_unlisted_paths")
+        == ["IEC_CATALOGUE_QUERY_LOG.json"],
+        "P01 source-manifest scope drift",
+    )
+    _require(
+        bundle.get("sha256")
+        == "abbb35f4f3a4a018fd0f767e6a8e9fba7bfbe848d643d665c86828dabbafbc9b",
+        "P01 Git-bundle contract drift",
+    )
+
+    audit = descriptor.get("audit_corpus")
+    _require(isinstance(audit, dict), "P01 audit-corpus contract missing")
+    audit = cast(dict[str, Any], audit)
+    audit_manifest = audit.get("manifest")
+    _require(isinstance(audit_manifest, dict), "P01 audit manifest missing")
+    audit_manifest = cast(dict[str, Any], audit_manifest)
+    _require(
+        audit_manifest.get("sha256")
+        == "793385bc576cde2981995cf263f20d9712b69837ed10aa79e3096c91230e7a07"
+        and audit_manifest.get("entries") == 73
+        and audit.get("ingress_scope_root_digest_sha256")
+        == "30b11ad2e3afa3f3714442e50d2c3193410433295962628e0c6f32771145e426"
+        and audit.get("excluded_post_ingress_files")
+        == [
+            {
+                "relative_path": "06_CODEX_INGRESS_EVALUATION.md",
+                "sha256": "f835856a7c9eac693ca39220fb5ea925f6eaf0134b56fddbd9debcdbc5d79dec",
+                "classification": "derived_evaluation_not_received_ingress_evidence",
+            }
+        ]
+        and audit.get("retained_directory_files") == 75
+        and audit.get("root_digest_sha256")
+        == "a2e3ab93c7331d26aaa0f8c1ccc54f242f07787d99ed636d1c0004e556da415c"
+        and audit.get("publication_classification")
+        == "retained_private_external_dependency",
+        "P01 external audit-corpus boundary drift",
+    )
+
+    repository = descriptor.get("repository")
+    _require(isinstance(repository, dict), "P01 repository contract missing")
+    repository = cast(dict[str, Any], repository)
+    expected_successor = repository.get("expected_successor_contract")
+    _require(
+        repository.get("origin_repository") == "arunakulat/dutchbay-epc-model"
+        and repository.get("audited_commit") == AUDITED_COMMIT
+        and expected_successor
+        == {
+            "status": "PASS",
+            "release_status": "HOLD",
+            "programme_gate_records": 23,
+            "architecture_examination_records": 56,
+        },
+        "P01 repository/successor contract drift",
+    )
+
+    materialized = descriptor.get("materialized_successor")
+    _require(isinstance(materialized, dict), "P01 materialized contract missing")
+    materialized = cast(dict[str, Any], materialized)
+    _require(
+        materialized
+        == {
+            "files": 69,
+            "root_digest_sha256": "08e406ae8c5cc67f6f3780349592de9fad8a9d31febdfa8be31c1e0fa9f60208",
+            "authoritative_remediation_source": "verified_tar_archive",
+        },
+        "P01 materialized-successor contract drift",
+    )
+    return {
+        "status": "published_candidate",
+        "gate_status": "pending_independent_review",
+        "release_status": "HOLD",
+        "outer_entries": 68,
+        "audit_entries": 73,
+        "audit_retained_files": 75,
+    }
+
+
+def _validate_p01_implementer_self_check() -> dict[str, Any]:
+    """Keep the self-check hash-bound and visibly non-independent."""
+    relative = P01_IMPLEMENTER_SELF_CHECK.as_posix()
+    self_check_path = PACK_ROOT / P01_IMPLEMENTER_SELF_CHECK
+    raw = self_check_path.read_text(encoding="utf-8")
+    _require("/Users/" not in raw, "P01 self-check contains a machine-local path")
+    self_check = _load(relative)
+    _require(
+        self_check.get("schema_version")
+        == "dutchbay.audit_recovery_implementer_self_check.v1",
+        "P01 self-check schema drift",
+    )
+    _require(self_check.get("gate_id") == "P01", "P01 self-check gate drift")
+    _require(
+        self_check.get("gate_status") == "pending_independent_review",
+        "P01 self-check cannot complete the programme gate",
+    )
+    _require(
+        self_check.get("release_status") == "HOLD",
+        "P01 self-check release HOLD missing",
+    )
+    review = self_check.get("review")
+    _require(isinstance(review, dict), "P01 self-check review control missing")
+    review = cast(dict[str, Any], review)
+    _require(
+        review
+        == {
+            "kind": "implementer_self_check",
+            "independence_satisfied": False,
+            "independent_reviewer_identity": None,
+            "independent_decision": "pending",
+        },
+        "P01 self-check must remain explicitly non-independent",
+    )
+    tested_snapshot = self_check.get("tested_snapshot")
+    _require(isinstance(tested_snapshot, dict), "P01 tested snapshot missing")
+    tested_snapshot = cast(dict[str, Any], tested_snapshot)
+    _require(
+        set(tested_snapshot)
+        == {
+            "analysis_tools/audit_recovery.py",
+            "scripts/validate_audit_recovery.py",
+            "conf/audit_recovery.yaml",
+            (
+                "docs/audit/2026-08-controlled-successor/recovery/"
+                "P01_RECOVERY_DESCRIPTOR.v1.json"
+            ),
+        },
+        "P01 tested snapshot population drift",
+    )
+    for path_text, expected_sha in tested_snapshot.items():
+        _require(isinstance(path_text, str), "P01 tested snapshot path invalid")
+        _require(
+            isinstance(expected_sha, str) and len(expected_sha) == 64,
+            f"P01 tested snapshot SHA invalid: {path_text}",
+        )
+        target = REPO_ROOT / path_text
+        _require(target.is_file(), f"P01 tested snapshot target missing: {path_text}")
+        _require(
+            _digest(target) == expected_sha,
+            f"P01 tested snapshot drift: {path_text}",
+        )
+    positive = self_check.get("positive_clean_room")
+    _require(isinstance(positive, dict), "P01 positive clean-room record missing")
+    positive = cast(dict[str, Any], positive)
+    _require(
+        positive
+        == {
+            "status": "PASS",
+            "structural_status": "structural_pass",
+            "checkpoint_outer_entries": 68,
+            "archive_governed_file_members": 64,
+            "archive_appledouble_metadata_members": 74,
+            "archive_total_regular_file_members": 138,
+            "inner_manifest_entries": 63,
+            "source_manifest_entries": 23,
+            "audit_ingress_entries": 73,
+            "audit_excluded_post_ingress_files": 1,
+            "audit_retained_directory_files": 75,
+            "materialized_successor_files": 69,
+            "materialized_successor_root_digest_sha256": (
+                "08e406ae8c5cc67f6f3780349592de9fad8a9d31febdfa8be31c1e0fa9f60208"
+            ),
+        },
+        "P01 positive clean-room facts drift",
+    )
+    negatives = self_check.get("negative_controls")
+    _require(
+        isinstance(negatives, list) and len(negatives) == 2,
+        "P01 negative-control population drift",
+    )
+    negative_records = cast(list[Any], negatives)
+    by_control = {
+        record.get("control"): record
+        for record in negative_records
+        if isinstance(record, dict)
+    }
+    _require(
+        set(by_control) == {"macos_tmp_symlink_alias", "remove_outer_manifest_readme"},
+        "P01 negative-control identity drift",
+    )
+    _require(
+        all(record.get("status") == "PASS" for record in by_control.values())
+        and by_control["macos_tmp_symlink_alias"].get("observed_error_code")
+        == "PATH_SYMLINK"
+        and by_control["remove_outer_manifest_readme"].get("observed_error_code")
+        == "MANIFEST_MISSING"
+        and by_control["remove_outer_manifest_readme"].get("observed_relative_path")
+        == "README.md"
+        and not any(
+            bool(record.get("output_created")) for record in by_control.values()
+        ),
+        "P01 negative-control result drift",
+    )
+    return {
+        "status": "PASS",
+        "review_kind": "implementer_self_check",
+        "independence_satisfied": False,
+        "gate_status": "pending_independent_review",
+        "release_status": "HOLD",
+    }
+
+
 def main() -> None:
     """Validate manifest integrity and controlled register invariants."""
     manifest_entries = _validate_manifest()
     _validate_ruleset_count_erratum()
+    p01_recovery = _validate_p01_recovery_descriptor()
+    p01_self_check = _validate_p01_implementer_self_check()
     architecture_examinations = _validate_architecture_examination_ledger()
     programme_gates = _validate_programme_gate_ledger()
     findings = _load("registers/findings_register.v2.json")
@@ -376,6 +686,8 @@ def main() -> None:
         "architecture_pointers": 72,
         "architecture_examinations": architecture_examinations,
         "programme_gates": programme_gates,
+        "p01_recovery": p01_recovery,
+        "p01_implementer_self_check": p01_self_check,
         "reproductions": dict(sorted(reproduction_counts.items())),
     }
     print(json.dumps(result, indent=2, sort_keys=True))
