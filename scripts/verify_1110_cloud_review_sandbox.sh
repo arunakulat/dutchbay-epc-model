@@ -11,6 +11,7 @@ readonly SOURCE_ROOT="/workspaces/.dutchbay-private/p03/sources"
 readonly DEPENDENCY_MARKER="$VENV_ROOT/.dutchbay-inputs.sha256"
 readonly IMAGE_MARKER="$VENV_ROOT/.dutchbay-image.sha256"
 readonly PACKAGE_MARKER="$VENV_ROOT/.dutchbay-environment-content.sha256"
+readonly SSHD_MARKER="$VENV_ROOT/.dutchbay-sshd-identity.sha256"
 
 fail() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -35,6 +36,20 @@ fail() {
 [ -f "$DEPENDENCY_MARKER" ] || fail "sandbox dependency marker is unavailable"
 [ -f "$IMAGE_MARKER" ] || fail "sandbox image marker is unavailable"
 [ -f "$PACKAGE_MARKER" ] || fail "sandbox environment-content marker is unavailable"
+[ -f "$SSHD_MARKER" ] && [ ! -L "$SSHD_MARKER" ] || fail \
+  "sandbox SSH transport identity marker is unavailable or unsafe"
+/usr/bin/sudo --non-interactive /usr/sbin/sshd -t
+"$CONTAINER_PYTHON" -S /usr/local/lib/dutchbay/sshd_readiness.py \
+  5 /run/dutchbay-sshd-pre-lifecycle.ready \
+  || fail "sandbox SSH transport listener is not ready"
+sshd_identity_json=$(bash .devcontainer/attest_audit_review_sshd.sh)
+sshd_identity_digest=$(
+  SANDBOX_SSHD_IDENTITY_JSON="$sshd_identity_json" \
+    "$CONTAINER_PYTHON" -S -c \
+    'import json, os; print(json.loads(os.environ["SANDBOX_SSHD_IDENTITY_JSON"])["sshd_identity_sha256"])'
+)
+[ "$(tr -d '\r\n' < "$SSHD_MARKER")" = "$sshd_identity_digest" ] || fail \
+  "sandbox SSH transport identity changed; delete and recreate the Codespace"
 case "$(git branch --show-current)" in
   main|"") ;;
   *) fail "sandbox checkout must be protected main or detached origin/main" ;;
@@ -84,6 +99,7 @@ SANDBOX_IMAGE_MARKER="$IMAGE_MARKER" \
 SANDBOX_PACKAGE_MARKER="$PACKAGE_MARKER" \
 SANDBOX_VENV_ROOT="$VENV_ROOT" \
 SANDBOX_CONTAINER_PYTHON="$CONTAINER_PYTHON" \
+SANDBOX_SSHD_IDENTITY_JSON="$sshd_identity_json" \
 PYTHONPATH="$PWD/.devcontainer" "$CONTAINER_PYTHON" -S - <<'PY'
 from __future__ import annotations
 
@@ -91,7 +107,7 @@ import json
 import os
 from pathlib import Path
 
-from audit_review_identity import build_identity
+from audit_review_identity import build_identity, build_verification_receipt
 
 identity = build_identity(
     Path.cwd(),
@@ -101,21 +117,15 @@ identity = build_identity(
     Path(os.environ["SANDBOX_VENV_ROOT"]),
     Path(os.environ["SANDBOX_CONTAINER_PYTHON"]),
 )
+sshd_identity = json.loads(os.environ["SANDBOX_SSHD_IDENTITY_JSON"])
 
 print(
     json.dumps(
-        {
-            "schema": "dutchbay.audit_review_sandbox_receipt.v1",
-            "status": "PASS",
-            "environment": "github_codespaces",
-            **identity,
-            "p02_structural_controls": "passed",
-            "p03_source_state": os.environ["SANDBOX_SOURCE_STATE"],
-            "network_boundary": "creator_private_codespace_outbound_egress_available",
-            "semantic_review_completed": False,
-            "completion_authorized": False,
-            "release_status": "HOLD",
-        },
+        build_verification_receipt(
+            identity=identity,
+            sshd_identity=sshd_identity,
+            source_state=os.environ["SANDBOX_SOURCE_STATE"],
+        ),
         sort_keys=True,
     )
 )

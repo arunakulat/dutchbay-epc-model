@@ -7,6 +7,7 @@
 set -euo pipefail
 
 readonly REPOSITORY="arunakulat/dutchbay-epc-model"
+readonly DISPLAY_NAME="DutchBay 1110 independent review"
 readonly REMOTE_SOURCE_ROOT="/workspaces/.dutchbay-private/p03/sources"
 readonly REMOTE_SMOKE_ROOT="/workspaces/.dutchbay-private/transport-smoke"
 readonly REMOTE_SMOKE_PATH="$REMOTE_SMOKE_ROOT/devcontainer.json"
@@ -16,6 +17,24 @@ transport_probe_pending="false"
 fail() {
   printf 'ERROR: %s\n' "$*" >&2
   exit 2
+}
+
+verify_codespace_identity() {
+  local codespace_name=$1
+  local identity_json
+  identity_json=$(
+    gh api \
+      -H "Accept: application/vnd.github+json" \
+      -H "X-GitHub-Api-Version: 2022-11-28" \
+      "/user/codespaces/$codespace_name"
+  )
+  jq -e \
+    --arg name "$codespace_name" \
+    --arg display "$DISPLAY_NAME" \
+    --arg repository "$REPOSITORY" \
+    '.name == $name and .display_name == $display and .repository.full_name == $repository' \
+    <<< "$identity_json" >/dev/null \
+    || fail "review Codespace API identity differs from authorization"
 }
 
 cleanup_transport_probe() {
@@ -97,6 +116,7 @@ venv_root=${DUTCHBAY_VENV:-}
 [ "${venv_root#/}" != "$venv_root" ] || fail "DUTCHBAY_VENV must be absolute"
 [ -x "$venv_root/bin/python" ] || fail "governed Python is unavailable"
 command -v gh >/dev/null 2>&1 || fail "GitHub CLI is unavailable"
+command -v jq >/dev/null 2>&1 || fail "jq is unavailable"
 [ "$(git branch --show-current)" = "main" ] || fail \
   "local P03 ingress checkout must be protected main"
 [ -z "$(git status --porcelain)" ] || fail \
@@ -112,16 +132,13 @@ DUTCHBAY_P03_SOURCE_ROOT="$resolved_source_root" \
   PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" \
   "$venv_root/bin/python" scripts/verify_p03_primary_sources.py
 
-codespace_name=$(
-  gh codespace list -R "$REPOSITORY" \
-    --json name,displayName \
-    --jq 'map(select(.displayName == "DutchBay 1110 independent review")) |
-      if length == 1 then .[0].name else error("expected exactly one review Codespace") end'
-)
-[ -n "$codespace_name" ] || fail "review Codespace was not resolved"
+codespace_name=${DUTCHBAY_1110_REVIEW_CODESPACE_NAME:-}
+[ -n "$codespace_name" ] || fail \
+  "DUTCHBAY_1110_REVIEW_CODESPACE_NAME is unset"
 case "$codespace_name" in
-  *[!A-Za-z0-9-]*) fail "review Codespace name contains unexpected characters" ;;
+  *[!A-Za-z0-9_-]*) fail "review Codespace name contains unexpected characters" ;;
 esac
+verify_codespace_identity "$codespace_name"
 
 # Currency and destination checks happen before ingress while network access is
 # still required. No fetch or package installation occurs after retained data is
@@ -160,6 +177,7 @@ REMOTE_PREFLIGHT
 # attempt exact cleanup if copy or follow-up SSH fails.
 run_transport_smoke "$codespace_name"
 
+verify_codespace_identity "$codespace_name"
 gh codespace cp --recursive -c "$codespace_name" \
   "$resolved_source_root/original" \
   "$resolved_source_root/converted" \

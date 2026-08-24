@@ -12,10 +12,11 @@ readonly PRIVATE_ROOT="/workspaces/.dutchbay-private"
 readonly P03_ROOT="$PRIVATE_ROOT/p03"
 readonly SOURCE_ROOT="$P03_ROOT/sources"
 readonly TRANSPORT_ROOT="$PRIVATE_ROOT/transport-smoke"
-readonly SITE_PACKAGES="$VENV_ROOT/lib/python3.12/site-packages"
+readonly PRE_LIFECYCLE_SSHD_MARKER="/run/dutchbay-sshd-pre-lifecycle.ready"
 readonly MARKER="$VENV_ROOT/.dutchbay-inputs.sha256"
 readonly IMAGE_MARKER="$VENV_ROOT/.dutchbay-image.sha256"
 readonly PACKAGE_MARKER="$VENV_ROOT/.dutchbay-environment-content.sha256"
+readonly SSHD_MARKER="$VENV_ROOT/.dutchbay-sshd-identity.sha256"
 readonly REQUIRED_PIP_VERSION="26.2.1"
 readonly REQUIRED_SETUPTOOLS_VERSION="84.0.0"
 readonly REQUIRED_WHEEL_VERSION="0.48.0"
@@ -31,15 +32,12 @@ package_content_fingerprint() {
     "$VENV_ROOT" "$CONTAINER_PYTHON"
 }
 
-package_set_fingerprint() {
-  PYTHONPATH="$PWD/.devcontainer" "$CONTAINER_PYTHON" -S -c \
-    'import sys; from pathlib import Path; from audit_review_identity import installed_distribution_set_sha256; print(installed_distribution_set_sha256(Path(sys.argv[1])))' \
-    "$SITE_PACKAGES"
-}
-
 [ "${CODESPACES:-}" = "true" ] || fail \
   "the independent audit sandbox must be built inside a GitHub Codespace"
 [ -n "${CODESPACE_NAME:-}" ] || fail "CODESPACE_NAME is missing"
+"$CONTAINER_PYTHON" -S /usr/local/lib/dutchbay/sshd_readiness.py \
+  30 "$PRE_LIFECYCLE_SSHD_MARKER" \
+  || fail "SSH transport did not become ready before the post-create lifecycle"
 [ -f "requirements.txt" ] && [ -f "pyproject.toml" ] || fail \
   "run the bootstrap from the DutchBay repository root"
 [ -x "$CONTAINER_PYTHON" ] && [ ! -L "$CONTAINER_PYTHON" ] || fail \
@@ -59,8 +57,6 @@ package_set_fingerprint() {
   "unexpected P03 source-root target"
 [ "$TRANSPORT_ROOT" = "/workspaces/.dutchbay-private/transport-smoke" ] || fail \
   "unexpected transport-smoke target"
-[ "$SITE_PACKAGES" = "/workspaces/.dutchbay-audit-review-venv/lib/python3.12/site-packages" ] || fail \
-  "unexpected sandbox site-packages target"
 [ ! -L "$PRIVATE_ROOT" ] || fail "private-source root must not be a symlink"
 [ ! -L "$P03_ROOT" ] || fail "P03 private root must not be a symlink"
 [ ! -L "$SOURCE_ROOT" ] || fail "P03 source root must not be a symlink"
@@ -77,10 +73,18 @@ install -d -m 0700 \
 [ "$(realpath -e "$TRANSPORT_ROOT")" = "$TRANSPORT_ROOT" ] || fail \
   "transport-smoke root resolved outside its fixed path"
 
+bash .devcontainer/start_audit_review_sshd.sh --prepare-only
+sshd_identity_json=$(bash .devcontainer/attest_audit_review_sshd.sh)
+sshd_identity_digest=$(
+  SANDBOX_SSHD_IDENTITY_JSON="$sshd_identity_json" \
+    "$CONTAINER_PYTHON" -S -c \
+    'import json, os; print(json.loads(os.environ["SANDBOX_SSHD_IDENTITY_JSON"])["sshd_identity_sha256"])'
+)
+
 input_digest=$(PYTHONPATH="$PWD/.devcontainer" "$CONTAINER_PYTHON" -S -c \
   'from pathlib import Path; from audit_review_identity import dependency_input_sha256; print(dependency_input_sha256(Path.cwd()))')
 image_digest=$(PYTHONPATH="$PWD/.devcontainer" "$CONTAINER_PYTHON" -S -c \
-  'from pathlib import Path; from audit_review_identity import configured_image_digest; print(configured_image_digest(Path.cwd()).removeprefix("sha256:"))')
+  'from pathlib import Path; from audit_review_identity import configured_base_image_digest; print(configured_base_image_digest(Path.cwd()).removeprefix("sha256:"))')
 
 installed_digest=""
 if [ -f "$MARKER" ]; then
@@ -96,13 +100,22 @@ fi
 if [ -f "$MARKER" ] && [ ! -f "$PACKAGE_MARKER" ]; then
   fail "installed environment-content marker is missing; delete and recreate the Codespace"
 fi
+if [ -f "$MARKER" ] && [ ! -f "$SSHD_MARKER" ]; then
+  fail "SSH transport identity marker is missing; delete and recreate the Codespace"
+fi
 if [ ! -f "$MARKER" ] \
-  && { [ -e "$IMAGE_MARKER" ] || [ -e "$PACKAGE_MARKER" ]; }; then
+  && { [ -e "$IMAGE_MARKER" ] || [ -e "$PACKAGE_MARKER" ] \
+    || [ -e "$SSHD_MARKER" ]; }; then
   fail "unbound sandbox identity marker exists; delete and recreate the Codespace"
 fi
 if [ -f "$IMAGE_MARKER" ] \
   && [ "$(tr -d '\r\n' < "$IMAGE_MARKER")" != "$image_digest" ]; then
   fail "container image changed; delete and recreate the Codespace"
+fi
+if [ -f "$SSHD_MARKER" ] \
+  && { [ -L "$SSHD_MARKER" ] \
+    || [ "$(tr -d '\r\n' < "$SSHD_MARKER")" != "$sshd_identity_digest" ]; }; then
+  fail "SSH transport identity changed; delete and recreate the Codespace"
 fi
 
 if [ ! -f "$MARKER" ]; then
@@ -119,6 +132,7 @@ if [ ! -f "$MARKER" ]; then
   printf '%s\n' "$input_digest" > "$MARKER"
   printf '%s\n' "$image_digest" > "$IMAGE_MARKER"
   printf '%s\n' "$package_content_digest" > "$PACKAGE_MARKER"
+  printf '%s\n' "$sshd_identity_digest" > "$SSHD_MARKER"
 fi
 
 # Reused environments are content-verified by container Python under -S before
@@ -139,41 +153,43 @@ if find "$SOURCE_ROOT" -mindepth 1 -print -quit | grep -q .; then
   source_state="private_root_populated"
 fi
 
-package_set_digest=$(package_set_fingerprint)
 package_content_digest=$(package_content_fingerprint)
 [ "$(tr -d '\r\n' < "$PACKAGE_MARKER")" = "$package_content_digest" ] || fail \
   "installed environment content changed during bootstrap; recreate the Codespace"
 
-SANDBOX_INPUT_DIGEST="$input_digest" \
-SANDBOX_IMAGE_DIGEST="sha256:$image_digest" \
-SANDBOX_PACKAGE_SET_DIGEST="$package_set_digest" \
-SANDBOX_PACKAGE_CONTENT_DIGEST="$package_content_digest" \
-SANDBOX_SOURCE_STATE="$source_state" "$CONTAINER_PYTHON" -S - <<'PY'
+SANDBOX_SOURCE_STATE="$source_state" \
+SANDBOX_DEPENDENCY_MARKER="$MARKER" \
+SANDBOX_IMAGE_MARKER="$IMAGE_MARKER" \
+SANDBOX_PACKAGE_MARKER="$PACKAGE_MARKER" \
+SANDBOX_VENV_ROOT="$VENV_ROOT" \
+SANDBOX_CONTAINER_PYTHON="$CONTAINER_PYTHON" \
+SANDBOX_SSHD_IDENTITY_JSON="$sshd_identity_json" \
+PYTHONPATH="$PWD/.devcontainer" "$CONTAINER_PYTHON" -S - <<'PY'
 from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
+
+from audit_review_identity import build_bootstrap_receipt, build_identity
+
+identity = build_identity(
+    Path.cwd(),
+    Path(os.environ["SANDBOX_DEPENDENCY_MARKER"]),
+    Path(os.environ["SANDBOX_IMAGE_MARKER"]),
+    Path(os.environ["SANDBOX_PACKAGE_MARKER"]),
+    Path(os.environ["SANDBOX_VENV_ROOT"]),
+    Path(os.environ["SANDBOX_CONTAINER_PYTHON"]),
+)
+sshd_identity = json.loads(os.environ["SANDBOX_SSHD_IDENTITY_JSON"])
 
 print(
     json.dumps(
-        {
-            "schema": "dutchbay.audit_review_sandbox_bootstrap.v1",
-            "status": "PASS",
-            "environment": "github_codespaces",
-            "python": "3.12",
-            "dependency_input_sha256": os.environ["SANDBOX_INPUT_DIGEST"],
-            "devcontainer_image_digest": os.environ["SANDBOX_IMAGE_DIGEST"],
-            "installed_distribution_set_sha256": os.environ[
-                "SANDBOX_PACKAGE_SET_DIGEST"
-            ],
-            "installed_environment_content_sha256": os.environ[
-                "SANDBOX_PACKAGE_CONTENT_DIGEST"
-            ],
-            "p03_source_state": os.environ["SANDBOX_SOURCE_STATE"],
-            "network_boundary": "creator_private_codespace_outbound_egress_available",
-            "completion_authorized": False,
-            "release_status": "HOLD",
-        },
+        build_bootstrap_receipt(
+            identity=identity,
+            sshd_identity=sshd_identity,
+            source_state=os.environ["SANDBOX_SOURCE_STATE"],
+        ),
         sort_keys=True,
     )
 )

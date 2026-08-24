@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import importlib.metadata
 import json
@@ -10,23 +12,78 @@ import re
 import subprocess
 from pathlib import Path
 
-EXPECTED_IMAGE_DIGEST = (
+EXPECTED_BASE_IMAGE = (
+    "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm@"
     "sha256:7876580dc67fd460fd962f004cbeb480027e9bbc0657096f1087db11f9eaff39"
 )
-EXPECTED_SSHD_FEATURE = "ghcr.io/devcontainers/features/sshd:1.1.0"
-EXPECTED_SSHD_MANIFEST_DIGEST = (
-    "sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee"
-)
+BASE_IMAGE_EMBEDDED_FEATURE_METADATA_BY_DIGEST = {
+    "sha256:7876580dc67fd460fd962f004cbeb480027e9bbc0657096f1087db11f9eaff39": (
+        "ghcr.io/devcontainers/features/common-utils:2",
+        "ghcr.io/devcontainers/features/git:1",
+        "ghcr.io/devcontainers/features/node:1",
+        "ghcr.io/devcontainers/features/python:1",
+    )
+}
+EXPECTED_SSHD_EFFECTIVE_VALUES = {
+    "allowagentforwarding": "no",
+    "allowgroups": "ssh",
+    "allowstreamlocalforwarding": "no",
+    "allowtcpforwarding": "no",
+    "authenticationmethods": "publickey",
+    "disableforwarding": "yes",
+    "gatewayports": "no",
+    "gssapiauthentication": "no",
+    "hostbasedauthentication": "no",
+    "kbdinteractiveauthentication": "no",
+    "kerberosauthentication": "no",
+    "passwordauthentication": "no",
+    "permitemptypasswords": "no",
+    "permitrootlogin": "no",
+    "permittunnel": "no",
+    "port": "2222",
+    "pubkeyauthentication": "yes",
+    "usepam": "yes",
+    "x11forwarding": "no",
+}
+EXPECTED_OPENSSH_PACKAGES = {
+    "openssh-client",
+    "openssh-server",
+    "openssh-sftp-server",
+}
+EXPECTED_SSH_HOST_KEY_ALGORITHMS = {
+    "ecdsa-sha2-nistp256",
+    "ssh-ed25519",
+    "ssh-rsa",
+}
+BOOTSTRAP_RECEIPT_SCHEMA = "dutchbay.audit_review_sandbox_bootstrap.v2"
+VERIFICATION_RECEIPT_SCHEMA = "dutchbay.audit_review_sandbox_receipt.v2"
+BOOTSTRAP_SOURCE_STATES = {
+    "private_root_empty",
+    "private_root_populated",
+}
+VERIFICATION_SOURCE_STATES = {
+    "private_root_empty_p03_not_executed",
+    "private_root_populated_p03_structural_verification_passed",
+}
 HEX_64 = re.compile(r"[0-9a-f]{64}\Z")
+SSH_FINGERPRINT = re.compile(r"SHA256:[A-Za-z0-9+/]{43}\Z")
+P256_PRIME = 0xFFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF
+P256_B = 0x5AC635D8AA3A93E7B3EBBD55769886BC651D06B0CC53B0F63BCE3C3E27D2604B
 
 DEPENDENCY_INPUT_RELATIVES = (
     "requirements.txt",
     "pyproject.toml",
     "constraints.txt",
     ".devcontainer/devcontainer.json",
-    ".devcontainer/devcontainer-lock.json",
+    ".devcontainer/Dockerfile",
+    ".devcontainer/install_audit_review_sshd.sh",
+    ".devcontainer/ssh_entrypoint.sh",
+    ".devcontainer/start_audit_review_sshd.sh",
+    ".devcontainer/attest_audit_review_sshd.sh",
+    ".devcontainer/sshd_readiness.py",
     ".devcontainer/bootstrap_audit_review.sh",
     ".devcontainer/audit_review_identity.py",
+    "scripts/create_1110_cloud_review_codespace.sh",
 )
 
 CONTROLLED_INPUT_RELATIVES = (
@@ -47,8 +104,14 @@ CONTROLLED_INPUT_RELATIVES = (
     "scripts/verify_p03_primary_sources.py",
     "scripts/upload_1110_p03_sources_to_codespace.sh",
     "scripts/verify_1110_cloud_review_sandbox.sh",
+    "scripts/create_1110_cloud_review_codespace.sh",
     ".devcontainer/devcontainer.json",
-    ".devcontainer/devcontainer-lock.json",
+    ".devcontainer/Dockerfile",
+    ".devcontainer/install_audit_review_sshd.sh",
+    ".devcontainer/ssh_entrypoint.sh",
+    ".devcontainer/start_audit_review_sshd.sh",
+    ".devcontainer/attest_audit_review_sshd.sh",
+    ".devcontainer/sshd_readiness.py",
     ".devcontainer/bootstrap_audit_review.sh",
     ".devcontainer/audit_review_identity.py",
 )
@@ -83,47 +146,278 @@ def dependency_input_sha256(repo_root: Path) -> str:
     return digest.hexdigest()
 
 
-def configured_image_digest(repo_root: Path) -> str:
-    """Return and validate the digest-pinned devcontainer image identity."""
+def configured_base_image_digest(repo_root: Path) -> str:
+    """Return and validate the repository-owned devcontainer build identity."""
     payload = json.loads(
         (repo_root / ".devcontainer" / "devcontainer.json").read_text(encoding="utf-8")
     )
-    image = payload.get("image")
-    if not isinstance(image, str) or "@" not in image:
-        raise SandboxIdentityError("devcontainer image is not digest pinned")
-    digest = image.rsplit("@", 1)[1]
-    if digest != EXPECTED_IMAGE_DIGEST:
-        raise SandboxIdentityError("devcontainer image digest differs from policy")
+    expected_build = {"dockerfile": "Dockerfile", "context": ".."}
+    if payload.get("build") != expected_build or "image" in payload:
+        raise SandboxIdentityError("devcontainer build differs from policy")
+    if payload.get("overrideCommand") is not False:
+        raise SandboxIdentityError("devcontainer image entrypoint must be preserved")
+    if payload.get("init") is not True:
+        raise SandboxIdentityError("devcontainer init/reaper must be enabled")
+    if payload.get("containerUser") != "root" or payload.get("remoteUser") != "vscode":
+        raise SandboxIdentityError("devcontainer user boundary differs from policy")
+    if payload.get("postStartCommand") != (
+        "bash .devcontainer/start_audit_review_sshd.sh --start"
+    ):
+        raise SandboxIdentityError("devcontainer SSH lifecycle differs from policy")
+    if "features" in payload:
+        raise SandboxIdentityError(
+            "repository-configured devcontainer features are not permitted"
+        )
+    lock_path = repo_root / ".devcontainer" / "devcontainer-lock.json"
+    if lock_path.exists() or lock_path.is_symlink():
+        raise SandboxIdentityError("devcontainer feature lock must be absent")
+    dockerfile = repo_root / ".devcontainer" / "Dockerfile"
+    if not dockerfile.is_file() or dockerfile.is_symlink():
+        raise SandboxIdentityError("devcontainer Dockerfile is unavailable or unsafe")
+    from_lines = [
+        line.strip()
+        for line in dockerfile.read_text(encoding="utf-8").splitlines()
+        if line.strip().upper().startswith("FROM ")
+    ]
+    expected_from = f"FROM {EXPECTED_BASE_IMAGE}"
+    if from_lines != [expected_from]:
+        raise SandboxIdentityError("devcontainer base image differs from policy")
+    digest = EXPECTED_BASE_IMAGE.rsplit("@", 1)[-1]
+    if (
+        not digest.startswith("sha256:")
+        or HEX_64.fullmatch(digest.removeprefix("sha256:")) is None
+    ):
+        raise SandboxIdentityError("devcontainer base-image digest is malformed")
+    if digest not in BASE_IMAGE_EMBEDDED_FEATURE_METADATA_BY_DIGEST:
+        raise SandboxIdentityError(
+            "devcontainer base-image metadata policy is unavailable"
+        )
     return digest
 
 
-def configured_features(repo_root: Path) -> dict[str, dict[str, str]]:
-    """Return and validate the exact feature and OCI lock entry."""
-    payload = json.loads(
-        (repo_root / ".devcontainer" / "devcontainer.json").read_text(encoding="utf-8")
+def configured_image_digest(repo_root: Path) -> str:
+    """Compatibility alias for the digest-pinned base-image identity."""
+    return configured_base_image_digest(repo_root)
+
+
+def _filesystem_content_sha256(paths: list[Path]) -> str:
+    """Hash regular files, symlinks and directory modes without following links."""
+    digest = hashlib.sha256()
+    unique_paths = sorted({path for path in paths}, key=lambda path: path.as_posix())
+    if not unique_paths:
+        raise SandboxIdentityError("SSH transport content population is empty")
+    for path in unique_paths:
+        if not path.is_absolute():
+            raise SandboxIdentityError("SSH transport content path is not absolute")
+        try:
+            mode = path.lstat().st_mode & 0o7777
+        except FileNotFoundError as exc:
+            raise SandboxIdentityError(
+                f"SSH transport content is missing: {path.name}"
+            ) from exc
+        digest.update(path.as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(f"{mode:o}".encode("ascii"))
+        digest.update(b"\0")
+        if path.is_symlink():
+            digest.update(b"symlink\0")
+            digest.update(os.readlink(path).encode("utf-8"))
+        elif path.is_file():
+            digest.update(b"file\0")
+            with path.open("rb") as stream:
+                while chunk := stream.read(1024 * 1024):
+                    digest.update(chunk)
+        elif path.is_dir():
+            digest.update(b"directory\0")
+        else:
+            raise SandboxIdentityError(f"SSH transport content is unsafe: {path.name}")
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def validate_sshd_effective_config(config_text: str) -> str:
+    """Return normalized sshd output after enforcing the complete hardening policy."""
+    lines = sorted(line.strip() for line in config_text.splitlines() if line.strip())
+    values: dict[str, list[str]] = {}
+    for line in lines:
+        key, separator, value = line.partition(" ")
+        if not separator:
+            raise SandboxIdentityError("effective SSH configuration is malformed")
+        if key in EXPECTED_SSHD_EFFECTIVE_VALUES:
+            values.setdefault(key, []).append(value.strip())
+    for key, expected in EXPECTED_SSHD_EFFECTIVE_VALUES.items():
+        if values.get(key) != [expected]:
+            raise SandboxIdentityError(
+                f"effective SSH policy differs for {key}: expected {expected}"
+            )
+    return "\n".join(lines) + "\n"
+
+
+def _validate_openssh_package_inventory(inventory: list[str]) -> None:
+    """Require one exact installed record for every governed OpenSSH package."""
+    if len(inventory) != len(EXPECTED_OPENSSH_PACKAGES) or len(set(inventory)) != len(
+        inventory
+    ):
+        raise SandboxIdentityError("OpenSSH package inventory is malformed")
+    package_names: set[str] = set()
+    for line in inventory:
+        parts = line.split("|", 3)
+        if (
+            len(parts) != 4
+            or not parts[0]
+            or not parts[1]
+            or parts[2] != "install ok installed"
+            or not parts[3]
+            or parts[0] in package_names
+        ):
+            raise SandboxIdentityError("OpenSSH package inventory is malformed")
+        package_names.add(parts[0])
+    if package_names != EXPECTED_OPENSSH_PACKAGES:
+        raise SandboxIdentityError("OpenSSH package inventory is incomplete")
+
+
+def _read_ssh_wire_string(blob: bytes, offset: int) -> tuple[bytes, int]:
+    """Read one RFC 4251 length-prefixed string from an SSH key blob."""
+    if offset + 4 > len(blob):
+        raise SandboxIdentityError("SSH host public-key wire data is malformed")
+    length = int.from_bytes(blob[offset : offset + 4], "big")
+    start = offset + 4
+    end = start + length
+    if length == 0 or end > len(blob):
+        raise SandboxIdentityError("SSH host public-key wire data is malformed")
+    return blob[start:end], end
+
+
+def _positive_ssh_mpint(value: bytes) -> int:
+    """Decode one canonical positive RFC 4251 mpint."""
+    if value[0] & 0x80 or (len(value) > 1 and value[0] == 0 and value[1] & 0x80 == 0):
+        raise SandboxIdentityError("SSH RSA public-key mpint is malformed")
+    decoded = int.from_bytes(value, "big")
+    if decoded <= 0:
+        raise SandboxIdentityError("SSH RSA public-key mpint is malformed")
+    return decoded
+
+
+def _validated_ssh_public_key_blob(value: str) -> bytes:
+    """Decode one allowed OpenSSH public key and validate its wire structure."""
+    parts = value.split()
+    if len(parts) != 2 or parts[0] not in EXPECTED_SSH_HOST_KEY_ALGORITHMS:
+        raise SandboxIdentityError("SSH host public-key identity is malformed")
+    algorithm, encoded = parts
+    try:
+        key_blob = base64.b64decode(
+            encoded + "=" * (-len(encoded) % 4),
+            validate=True,
+        )
+    except (ValueError, binascii.Error) as exc:
+        raise SandboxIdentityError("SSH host public-key identity is malformed") from exc
+
+    wire_algorithm, offset = _read_ssh_wire_string(key_blob, 0)
+    try:
+        wire_algorithm_name = wire_algorithm.decode("ascii")
+    except UnicodeDecodeError as exc:
+        raise SandboxIdentityError(
+            "SSH host public-key wire algorithm is malformed"
+        ) from exc
+    if wire_algorithm_name != algorithm:
+        raise SandboxIdentityError("SSH host public-key text/wire algorithms differ")
+
+    if algorithm == "ssh-ed25519":
+        public_key, offset = _read_ssh_wire_string(key_blob, offset)
+        valid_structure = len(public_key) == 32
+    elif algorithm == "ecdsa-sha2-nistp256":
+        curve, offset = _read_ssh_wire_string(key_blob, offset)
+        public_key, offset = _read_ssh_wire_string(key_blob, offset)
+        x = int.from_bytes(public_key[1:33], "big") if len(public_key) == 65 else -1
+        y = int.from_bytes(public_key[33:65], "big") if len(public_key) == 65 else -1
+        valid_structure = (
+            curve == b"nistp256"
+            and len(public_key) == 65
+            and public_key.startswith(b"\x04")
+            and 0 <= x < P256_PRIME
+            and 0 <= y < P256_PRIME
+            and pow(y, 2, P256_PRIME)
+            == (pow(x, 3, P256_PRIME) - 3 * x + P256_B) % P256_PRIME
+        )
+    else:
+        exponent_bytes, offset = _read_ssh_wire_string(key_blob, offset)
+        modulus_bytes, offset = _read_ssh_wire_string(key_blob, offset)
+        exponent = _positive_ssh_mpint(exponent_bytes)
+        modulus = _positive_ssh_mpint(modulus_bytes)
+        valid_structure = (
+            exponent > 1
+            and exponent % 2 == 1
+            and modulus.bit_length() >= 1024
+            and modulus % 2 == 1
+        )
+    if not valid_structure or offset != len(key_blob):
+        raise SandboxIdentityError("SSH host public-key wire data is malformed")
+    return key_blob
+
+
+def build_sshd_transport_identity(
+    *,
+    effective_config: str,
+    package_inventory: str,
+    package_paths: list[Path],
+    extra_paths: list[Path],
+    host_public_key_material: list[str],
+    host_public_key_sidecars: list[str],
+) -> dict[str, object]:
+    """Build a path-free identity for the installed SSH transport surface."""
+    normalized_config = validate_sshd_effective_config(effective_config)
+    inventory = sorted(
+        line.strip() for line in package_inventory.splitlines() if line.strip()
     )
-    expected: dict[str, dict[str, object]] = {EXPECTED_SSHD_FEATURE: {}}
-    if payload.get("features") != expected:
-        raise SandboxIdentityError(
-            "devcontainer features differ from the reviewed SSH surface"
+    _validate_openssh_package_inventory(inventory)
+
+    if (
+        len(host_public_key_material) != 3
+        or len(host_public_key_sidecars) != 3
+        or any(
+            derived != sidecar
+            for derived, sidecar in zip(
+                host_public_key_material,
+                host_public_key_sidecars,
+                strict=True,
+            )
         )
-    lock_path = repo_root / ".devcontainer" / "devcontainer-lock.json"
-    if not lock_path.is_file() or lock_path.is_symlink():
-        raise SandboxIdentityError("devcontainer feature lock is unavailable")
-    lock = json.loads(lock_path.read_text(encoding="utf-8"))
-    expected_entry = {
-        "version": "1.1.0",
-        "resolved": (
-            f"ghcr.io/devcontainers/features/sshd@{EXPECTED_SSHD_MANIFEST_DIGEST}"
-        ),
-        "integrity": EXPECTED_SSHD_MANIFEST_DIGEST,
+    ):
+        raise SandboxIdentityError("SSH host private/public key population differs")
+    derived_public_keys = sorted(set(host_public_key_material))
+    if len(derived_public_keys) != 3:
+        raise SandboxIdentityError("SSH host private/public key population differs")
+    algorithms = {
+        value.split(" ", 1)[0] for value in derived_public_keys if " " in value
     }
-    expected_lock = {"features": {EXPECTED_SSHD_FEATURE: expected_entry}}
-    if lock != expected_lock:
-        raise SandboxIdentityError(
-            "devcontainer feature lock differs from the reviewed OCI artifact"
-        )
-    return {EXPECTED_SSHD_FEATURE: expected_entry}
+    if algorithms != EXPECTED_SSH_HOST_KEY_ALGORITHMS:
+        raise SandboxIdentityError("SSH host-key algorithm population differs")
+
+    fingerprints: list[str] = []
+    for value in derived_public_keys:
+        key_blob = _validated_ssh_public_key_blob(value)
+        encoded_fingerprint = base64.b64encode(
+            hashlib.sha256(key_blob).digest()
+        ).decode("ascii")
+        fingerprints.append(f"SHA256:{encoded_fingerprint.rstrip('=')}")
+    if len(set(fingerprints)) != 3:
+        raise SandboxIdentityError("SSH host public-key identity is malformed")
+
+    payload: dict[str, object] = {
+        "openssh_packages": inventory,
+        "sshd_effective_config_sha256": hashlib.sha256(
+            normalized_config.encode("utf-8")
+        ).hexdigest(),
+        "sshd_transport_content_sha256": _filesystem_content_sha256(
+            package_paths + extra_paths
+        ),
+        "sshd_host_public_key_fingerprints": fingerprints,
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    payload["sshd_identity_sha256"] = hashlib.sha256(
+        canonical.encode("utf-8")
+    ).hexdigest()
+    return payload
 
 
 def installed_distribution_set_sha256(site_packages: Path | None = None) -> str:
@@ -273,7 +567,7 @@ def build_identity(
         raise SandboxIdentityError(
             "sandbox inputs changed; delete and recreate the Codespace"
         )
-    current_image = configured_image_digest(repo_root)
+    current_image = configured_base_image_digest(repo_root)
     if _read_marker(image_marker, "container image") != current_image.removeprefix(
         "sha256:"
     ):
@@ -293,16 +587,15 @@ def build_identity(
         )
     site_packages = venv_root / "lib" / "python3.12" / "site-packages"
     current_packages = installed_distribution_set_sha256(site_packages)
-    features = configured_features(repo_root)
-    feature_lock_path = repo_root / ".devcontainer" / "devcontainer-lock.json"
 
     return {
         "git_commit": _git(repo_root, "rev-parse", "HEAD"),
         "git_tree": _git(repo_root, "rev-parse", "HEAD^{tree}"),
-        "devcontainer_image_digest": current_image,
-        "devcontainer_features": list(features),
-        "devcontainer_feature_lock": features,
-        "devcontainer_feature_lock_sha256": _sha256_file(feature_lock_path),
+        "devcontainer_base_image_digest": current_image,
+        "repository_configured_devcontainer_features": [],
+        "base_image_embedded_feature_metadata": list(
+            BASE_IMAGE_EMBEDDED_FEATURE_METADATA_BY_DIGEST[current_image]
+        ),
         "dependency_input_sha256": current_dependency,
         "installed_distribution_set_sha256": current_packages,
         "installed_environment_content_sha256": current_package_content,
@@ -310,4 +603,160 @@ def build_identity(
             relative: _sha256_file(repo_root / relative)
             for relative in CONTROLLED_INPUT_RELATIVES
         },
+    }
+
+
+def _validate_receipt_inputs(
+    identity: dict[str, object],
+    sshd_identity: dict[str, object],
+) -> None:
+    """Fail closed when a receipt builder receives an incomplete identity."""
+    expected_identity_keys = {
+        "git_commit",
+        "git_tree",
+        "devcontainer_base_image_digest",
+        "repository_configured_devcontainer_features",
+        "base_image_embedded_feature_metadata",
+        "dependency_input_sha256",
+        "installed_distribution_set_sha256",
+        "installed_environment_content_sha256",
+        "controlled_input_sha256",
+    }
+    if set(identity) != expected_identity_keys:
+        raise SandboxIdentityError("sandbox identity receipt fields differ from schema")
+    expected_sshd_keys = {
+        "openssh_packages",
+        "sshd_effective_config_sha256",
+        "sshd_transport_content_sha256",
+        "sshd_host_public_key_fingerprints",
+        "sshd_identity_sha256",
+    }
+    if set(sshd_identity) != expected_sshd_keys:
+        raise SandboxIdentityError("SSH identity receipt fields differ from schema")
+    for key in (
+        "dependency_input_sha256",
+        "installed_distribution_set_sha256",
+        "installed_environment_content_sha256",
+    ):
+        if (
+            not isinstance(identity[key], str)
+            or HEX_64.fullmatch(identity[key]) is None
+        ):
+            raise SandboxIdentityError(f"sandbox identity digest is malformed: {key}")
+    for key in (
+        "sshd_effective_config_sha256",
+        "sshd_transport_content_sha256",
+        "sshd_identity_sha256",
+    ):
+        if (
+            not isinstance(sshd_identity[key], str)
+            or HEX_64.fullmatch(sshd_identity[key]) is None
+        ):
+            raise SandboxIdentityError(f"SSH identity digest is malformed: {key}")
+    for key in ("git_commit", "git_tree"):
+        value = identity[key]
+        if (
+            not isinstance(value, str)
+            or re.fullmatch(r"[0-9a-f]{40,64}", value) is None
+        ):
+            raise SandboxIdentityError(f"Git identity is malformed: {key}")
+    base_digest = identity["devcontainer_base_image_digest"]
+    if (
+        not isinstance(base_digest, str)
+        or not base_digest.startswith("sha256:")
+        or HEX_64.fullmatch(base_digest.removeprefix("sha256:")) is None
+    ):
+        raise SandboxIdentityError("base-image identity is malformed")
+    if identity["repository_configured_devcontainer_features"] != []:
+        raise SandboxIdentityError("repository-configured Feature surface is not empty")
+    embedded = identity["base_image_embedded_feature_metadata"]
+    expected_embedded = BASE_IMAGE_EMBEDDED_FEATURE_METADATA_BY_DIGEST.get(base_digest)
+    if (
+        not isinstance(embedded, list)
+        or expected_embedded is None
+        or embedded != list(expected_embedded)
+    ):
+        raise SandboxIdentityError("base-image Feature metadata is malformed")
+    controlled = identity["controlled_input_sha256"]
+    if (
+        not isinstance(controlled, dict)
+        or set(controlled) != set(CONTROLLED_INPUT_RELATIVES)
+        or not all(
+            isinstance(path, str)
+            and path
+            and isinstance(digest, str)
+            and HEX_64.fullmatch(digest) is not None
+            for path, digest in controlled.items()
+        )
+    ):
+        raise SandboxIdentityError("controlled-input identity is malformed")
+    packages = sshd_identity["openssh_packages"]
+    fingerprints = sshd_identity["sshd_host_public_key_fingerprints"]
+    if (
+        not isinstance(packages, list)
+        or not all(isinstance(value, str) and value for value in packages)
+        or not isinstance(fingerprints, list)
+        or len(fingerprints) != 3
+        or len(set(fingerprints)) != 3
+        or not all(
+            isinstance(value, str) and SSH_FINGERPRINT.fullmatch(value) is not None
+            for value in fingerprints
+        )
+    ):
+        raise SandboxIdentityError("SSH identity populations are malformed")
+    _validate_openssh_package_inventory(packages)
+    canonical_sshd = dict(sshd_identity)
+    recorded_sshd_digest = canonical_sshd.pop("sshd_identity_sha256")
+    canonical = json.dumps(canonical_sshd, sort_keys=True, separators=(",", ":"))
+    if recorded_sshd_digest != hashlib.sha256(canonical.encode("utf-8")).hexdigest():
+        raise SandboxIdentityError("SSH identity self-digest is malformed")
+
+
+def build_bootstrap_receipt(
+    *,
+    identity: dict[str, object],
+    sshd_identity: dict[str, object],
+    source_state: str,
+) -> dict[str, object]:
+    """Build the exact v2 bootstrap receipt on the release-HOLD side."""
+    _validate_receipt_inputs(identity, sshd_identity)
+    if source_state not in BOOTSTRAP_SOURCE_STATES:
+        raise SandboxIdentityError("bootstrap P03 source state differs from schema")
+    return {
+        "schema": BOOTSTRAP_RECEIPT_SCHEMA,
+        "status": "PASS",
+        "environment": "github_codespaces",
+        "python": "3.12",
+        **identity,
+        **sshd_identity,
+        "p03_source_state": source_state,
+        "network_boundary": "creator_private_codespace_outbound_egress_available",
+        "completion_authorized": False,
+        "release_status": "HOLD",
+    }
+
+
+def build_verification_receipt(
+    *,
+    identity: dict[str, object],
+    sshd_identity: dict[str, object],
+    source_state: str,
+) -> dict[str, object]:
+    """Build the exact v2 structural-verification receipt without semantic closure."""
+    _validate_receipt_inputs(identity, sshd_identity)
+    if source_state not in VERIFICATION_SOURCE_STATES:
+        raise SandboxIdentityError("verification P03 source state differs from schema")
+    return {
+        "schema": VERIFICATION_RECEIPT_SCHEMA,
+        "status": "PASS",
+        "environment": "github_codespaces",
+        **identity,
+        **sshd_identity,
+        "sshd_process": "running",
+        "p02_structural_controls": "passed",
+        "p03_source_state": source_state,
+        "network_boundary": "creator_private_codespace_outbound_egress_available",
+        "semantic_review_completed": False,
+        "completion_authorized": False,
+        "release_status": "HOLD",
     }
