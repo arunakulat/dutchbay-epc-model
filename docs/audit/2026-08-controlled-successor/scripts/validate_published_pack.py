@@ -49,6 +49,13 @@ FINDINGS_CURRENT_STATE_BUILDER = (
 FINDINGS_CURRENT_STATE_JSON = (
     PACK_ROOT / "registers" / "findings_current_state_overlay.v1.json"
 )
+P03_PRIMARY_SOURCE_BUILDER = (
+    PACK_ROOT / "scripts" / "build_primary_source_review_plan.py"
+)
+P03_PRIMARY_SOURCE_PLAN = PACK_ROOT / "registers" / "primary_source_review_plan.v1.json"
+P03_IMPLEMENTER_SELF_CHECK = Path(
+    "qa/P03_PRIMARY_SOURCE_IMPLEMENTER_SELF_CHECK_2026-08-24.json"
+)
 
 
 class ValidationError(RuntimeError):
@@ -118,6 +125,18 @@ def _load_findings_current_state_builder() -> ModuleType:
     )
     if spec is None or spec.loader is None:
         raise ValidationError("findings current-state builder cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_p03_primary_source_builder() -> ModuleType:
+    """Load the pure P03 control without packaging the audit scripts directory."""
+    spec = importlib.util.spec_from_file_location(
+        "p03_primary_source_builder", P03_PRIMARY_SOURCE_BUILDER
+    )
+    if spec is None or spec.loader is None:
+        raise ValidationError("P03 primary-source builder cannot be loaded")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -226,6 +245,154 @@ def _validate_findings_current_state_overlay() -> dict[str, int | str]:
         "independently_reviewed": 0,
         "history_self_check_independent": 0,
         "gate_status": "candidate_overlay_pending_independent_review",
+    }
+
+
+def _validate_p03_primary_source_control() -> dict[str, int | str | bool]:
+    """Rebuild P03 and bind its same-implementer retained-source self-check."""
+    _require(
+        P03_PRIMARY_SOURCE_BUILDER.is_file(),
+        "P03 primary-source builder is missing",
+    )
+    _require(P03_PRIMARY_SOURCE_PLAN.is_file(), "P03 review plan is missing")
+    builder = _load_p03_primary_source_builder()
+    plan_receipt = cast(dict[str, Any], builder.validate_committed_plan())
+    _require(
+        plan_receipt
+        == {
+            "status": "PASS",
+            "release_status": "HOLD",
+            "gate_status": "pending_independent_review",
+            "claim_records": 42,
+            "manifest_objects": 74,
+            "independently_reviewed": 0,
+            "completion_authorized": False,
+        },
+        "P03 deterministic-plan receipt drift",
+    )
+    plan = cast(dict[str, Any], builder.build_review_plan())
+    coverage = plan.get("coverage", {})
+    review_rows = plan.get("review_rows", [])
+    manifest_objects = plan.get("manifest_objects", [])
+    _require(
+        plan.get("release_status") == "HOLD"
+        and plan.get("completion_authorized") is False
+        and plan.get("independent_review", {}).get("status")
+        == "pending_independent_review"
+        and plan.get("independent_review", {}).get("reviewer_identity") is None,
+        "P03 plan completion/release boundary drift",
+    )
+    _require(
+        coverage.get("claim_records") == 42
+        and coverage.get("claim_records_requiring_independent_semantic_review") == 42
+        and coverage.get("claim_records_independently_reviewed") == 0
+        and coverage.get("manifest_objects") == 74
+        and coverage.get("manifest_objects_requiring_full_hash_verification") == 74
+        and coverage.get("manifest_objects_independently_verified") == 0
+        and coverage.get("publication_rights_reviews_required") == 42
+        and coverage.get("publication_rights_reviews_completed") == 0
+        and coverage.get("hold_blocking_claim_records") == 42,
+        "P03 plan coverage boundary drift",
+    )
+    _require(
+        len(review_rows) == 42
+        and all(
+            row.get("publication_rights_status")
+            == "not_assessed_no_republication_authorized"
+            and row.get("review_result", {}).get("status")
+            == "pending_independent_review"
+            and row.get("review_result", {}).get("reviewer_identity") is None
+            and row.get("hold_effect") == "blocks_board_lender_release"
+            for row in review_rows
+        ),
+        "P03 claim-review boundary drift",
+    )
+    _require(
+        len(manifest_objects) == 74
+        and all(
+            row.get("full_hash_verification_required") is True
+            and row.get("verification_status") == "pending_independent_verification"
+            for row in manifest_objects
+        ),
+        "P03 retained-object review boundary drift",
+    )
+
+    relative = P03_IMPLEMENTER_SELF_CHECK.as_posix()
+    self_check_path = PACK_ROOT / P03_IMPLEMENTER_SELF_CHECK
+    _require(self_check_path.is_file(), "P03 implementer self-check is missing")
+    raw = self_check_path.read_text(encoding="utf-8")
+    _require("/Users/" not in raw, "P03 implementer self-check leaks a local path")
+    self_check = _load(relative)
+    _require(
+        self_check.get("schema_version")
+        == "dutchbay.p03_primary_source_verification_receipt.v1"
+        and self_check.get("status") == "PASS"
+        and self_check.get("gate_id") == "P03"
+        and self_check.get("gate_status") == "pending_independent_review"
+        and self_check.get("release_status") == "HOLD"
+        and self_check.get("review_kind") == "implementer_self_check"
+        and self_check.get("independence_satisfied") is False
+        and self_check.get("completion_authorized") is False,
+        "P03 implementer self-check authority boundary drift",
+    )
+    _require(
+        self_check.get("source_root_recorded") is False
+        and self_check.get("source_root_selection")
+        == "DUTCHBAY_P03_SOURCE_ROOT_environment_only"
+        and self_check.get("source_register_sha256") == builder.REGISTER_SHA256
+        and self_check.get("csv_sha256") == builder.CSV_SHA256
+        and self_check.get("source_manifest_sha256") == builder.SOURCE_MANIFEST_SHA256,
+        "P03 implementer self-check source identity drift",
+    )
+    _require(
+        self_check.get("source_manifest_objects") == 74
+        and self_check.get("source_manifest_objects_verified") == 74
+        and self_check.get("source_manifest_unique_digests") == 70
+        and self_check.get("source_payload_bytes_verified") == 50_938_825
+        and self_check.get("verified_content_set_sha256")
+        == "434b5fac35c726ec64338db2b20da9a1eceef4f05908dbe0d4969461263e9918"
+        and self_check.get("parent_governed_query_log_sha256")
+        == "6a7b24b58e952f684267ed21b46470951b11a28cdcf281850175ded70ab602dc"
+        and self_check.get("parent_governed_query_log_bytes") == 2_691
+        and self_check.get("governed_repository_exceptions_verified") == 2,
+        "P03 implementer self-check retained population drift",
+    )
+    _require(
+        self_check.get("claim_records_structurally_verified") == 42
+        and self_check.get("claim_records_semantically_reviewed") == 0
+        and self_check.get("publication_rights_reviews_completed") == 0,
+        "P03 implementer self-check review boundary drift",
+    )
+    raw_tested_snapshot = self_check.get("tested_snapshot")
+    _require(
+        isinstance(raw_tested_snapshot, dict)
+        and set(raw_tested_snapshot) == set(builder.TESTED_SNAPSHOT_RELATIVES),
+        "P03 implementer tested-snapshot population drift",
+    )
+    tested_snapshot = cast(dict[str, Any], raw_tested_snapshot)
+    for path_text, digest in tested_snapshot.items():
+        _require(
+            isinstance(path_text, str)
+            and isinstance(digest, str)
+            and len(digest) == 64,
+            "P03 tested-snapshot identity invalid",
+        )
+        target = REPO_ROOT / path_text
+        _require(
+            target.is_file() and _digest(target) == digest,
+            f"P03 tested-snapshot drift: {path_text}",
+        )
+    return {
+        "status": "PASS",
+        "review_kind": "implementer_self_check",
+        "independence_satisfied": False,
+        "claim_records": 42,
+        "manifest_objects_verified": 74,
+        "semantic_reviews_completed": 0,
+        "publication_rights_reviews_completed": 0,
+        "gate_status": "pending_independent_review",
+        "release_status": "HOLD",
+        "completion_authorized": False,
     }
 
 
@@ -759,6 +926,7 @@ def main() -> None:
     architecture_examinations = _validate_architecture_examination_ledger()
     programme_gates = _validate_programme_gate_ledger()
     findings_current_state = _validate_findings_current_state_overlay()
+    p03_primary_sources = _validate_p03_primary_source_control()
     findings = _load("registers/findings_register.v2.json")
     sources = _load("registers/primary_source_register.v2.json")
     architecture = _load("registers/architecture_pointer_dispositions.json")
@@ -814,6 +982,7 @@ def main() -> None:
         "findings_current_state": findings_current_state,
         "p01_recovery": p01_recovery,
         "p01_implementer_self_check": p01_self_check,
+        "p03_primary_sources": p03_primary_sources,
         "reproductions": dict(sorted(reproduction_counts.items())),
     }
     print(json.dumps(result, indent=2, sort_keys=True))

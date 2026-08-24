@@ -1,0 +1,2898 @@
+{
+  "schema_version": "dutchbay.primary_source_review_plan.v1",
+  "document_id": "DUTCHBAY-1110-P03-PRIMARY-SOURCE-REVIEW-PLAN-v1",
+  "authority_status": "active_pre_review_candidate_plan",
+  "created_at": "2026-08-24T20:43:04+05:30",
+  "gate_id": "P03",
+  "release_status": "HOLD",
+  "completion_authorized": false,
+  "independent_review": {
+    "status": "pending_independent_review",
+    "reviewer_identity": null,
+    "decision": null,
+    "decision_artifact_sha256": null,
+    "review_policy": "Verify all 42 claim rows and all 74 retained source objects; this is a population-exact review, not statistical sampling."
+  },
+  "source_inputs": {
+    "primary_source_register": {
+      "path": "registers/primary_source_register.v2.json",
+      "sha256": "4c8cc05648abd31f5123c80de09a65b60f60bb57cb12e8ed6fad309498a6df96",
+      "semantic_sha256": "a0ca6e545ef0f254aee6dbd4a2533f1f9e337fa5a8f6d939ad8eaaebc17cc7c4",
+      "records": 42
+    },
+    "csv_companion": {
+      "path": "registers/primary_source_register.v2.csv",
+      "sha256": "eb40b182debefb45a0492d5eb0052f035b972204f99336a5302ba2d5d3e2ab8d",
+      "records": 42,
+      "parity_required": true
+    },
+    "source_archive_manifest": {
+      "path": "source-controls/SOURCE_ARCHIVE_MANIFEST.v2.sha256",
+      "sha256": "d1f376941576cd000c3162009dc30a4c21ce64bd2cee18da4801fb7cabf491bb",
+      "objects": 74,
+      "unique_digests": 70,
+      "scope": "sources/original and sources/converted only"
+    },
+    "findings_register": {
+      "path": "registers/findings_register.v2.json",
+      "sha256": "71d16a15357a6073456b241d713ba775e2945990b22fa72045d5f312e183b4b8",
+      "records": 111
+    },
+    "current_main_cutoff": {
+      "commit": "594fbac4da33e1836481b482c962a7f5a9539b2d",
+      "tree_oid": "b3fdb1692271f11e984c2bf5f332393126049e62"
+    }
+  },
+  "coverage": {
+    "claim_records": 42,
+    "claim_records_requiring_independent_semantic_review": 42,
+    "claim_records_independently_reviewed": 0,
+    "manifest_objects": 74,
+    "manifest_objects_requiring_full_hash_verification": 74,
+    "manifest_objects_independently_verified": 0,
+    "artifact_references": 92,
+    "unique_artifact_paths": 64,
+    "claim_referenced_manifest_objects": 62,
+    "retained_unreferenced_manifest_objects": 12,
+    "governed_artifacts_outside_source_manifest": 2,
+    "publication_rights_reviews_required": 42,
+    "publication_rights_reviews_completed": 0,
+    "source_class_counts": {
+      "academic_primary": 9,
+      "analyst_judgment": 1,
+      "official_catalogue_record": 2,
+      "official_guidance": 8,
+      "official_project_document": 7,
+      "official_source_code": 5,
+      "repository_evidence": 4,
+      "standard": 6
+    },
+    "evidence_status_counts": {
+      "context_only": 3,
+      "contradicts": 3,
+      "supports": 36
+    },
+    "review_priority_counts": {
+      "full_semantic_priority": 31,
+      "full_semantic_standard": 11
+    },
+    "hold_blocking_claim_records": 42
+  },
+  "governed_artifacts_outside_source_manifest": [
+    {
+      "source_register_path": "reproductions/p2_population_reconciliation.v2.json",
+      "repository_path": "reproductions/p2_population_reconciliation.v2.json",
+      "sha256": "e357fca869e3b14f97d66bb0a011f220fa161c8c39341d38e76017931aed7455",
+      "record_ids": [
+        "PSR-0022"
+      ],
+      "role": "controlled_reproduction",
+      "external_source_root_copy_required": false,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "source_register_path": "sources/IEC_CATALOGUE_QUERY_LOG.json",
+      "repository_path": "source-controls/IEC_CATALOGUE_QUERY_LOG.json",
+      "sha256": "6a7b24b58e952f684267ed21b46470951b11a28cdcf281850175ded70ab602dc",
+      "record_ids": [
+        "PSR-0015"
+      ],
+      "role": "official_catalogue_query_log",
+      "external_source_root_copy_required": true,
+      "verification_status": "pending_independent_verification"
+    }
+  ],
+  "manifest_objects": [
+    {
+      "object_number": 1,
+      "relative_path": "converted/ADB_42362-013_Project_Completion_Report.md",
+      "sha256": "1ea35b62c77b203d63a93c89306ac89bf1d6245178082c6b20c3852d1fcfca11",
+      "referenced_by_record_ids": [
+        "PSR-0006"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 2,
+      "relative_path": "converted/ADB_Burgos_Wind_Farm_Extended_Annual_Review_2019.txt",
+      "sha256": "f764e3c2261b740912f87a235559207ebd67b634ef3dd9ef701e9130b0a1f84a",
+      "referenced_by_record_ids": [
+        "PSR-0018"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 3,
+      "relative_path": "converted/IFC_Utility_Scale_Solar_Project_Developer_Guide_2015.txt",
+      "sha256": "1056eb25aff641de1e14722bc7f400a9bdc4d5eed8c89556c3d64052a1e14153",
+      "referenced_by_record_ids": [
+        "PSR-0016",
+        "PSR-0017",
+        "PSR-0023",
+        "PSR-0039"
+      ],
+      "reference_count": 4,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 4,
+      "relative_path": "converted/MEASNET_Evaluation_Site_Specific_Wind_Conditions_v3_2022.md",
+      "sha256": "5b91a3ee1bc7c1a9bd1c5214e7038d3214ac705ebab72f531356da29b06aca16",
+      "referenced_by_record_ids": [
+        "PSR-0001",
+        "PSR-0002",
+        "PSR-0003",
+        "PSR-0005",
+        "PSR-0041"
+      ],
+      "reference_count": 5,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 5,
+      "relative_path": "converted/WBG_PPP_Handbook_2024.txt",
+      "sha256": "ba5716a8b1d4052dc5f324bfd4275e1aa21628d1434f64a3349fe6dc9307b6cc",
+      "referenced_by_record_ids": [
+        "PSR-0019",
+        "PSR-0020",
+        "PSR-0021",
+        "PSR-0024"
+      ],
+      "reference_count": 4,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 6,
+      "relative_path": "converted/World_Bank_IDA_Sri_Lanka_Renewable_Energy_2025_PAD.txt",
+      "sha256": "34b8f16ce2c639ab99486c6782c443216fea5ca36e1979a127889bda4bf2e9e2",
+      "referenced_by_record_ids": [
+        "PSR-0013",
+        "PSR-0014",
+        "PSR-0025"
+      ],
+      "reference_count": 3,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 7,
+      "relative_path": "converted/World_Bank_Peru_Electricity_Sector_Project_Finance.md",
+      "sha256": "d7e211636d8a4bc9900e205b25d11229e233b8a5c7388d0d30bdf4e11bb5ce44",
+      "referenced_by_record_ids": [
+        "PSR-0008"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 8,
+      "relative_path": "converted/World_Bank_Vietnam_Phu_My_2_Phase_2.md",
+      "sha256": "993a2effaa89646ecfb16dffbdf6e9726bfebd82f828d3bdb37976cfd85942cd",
+      "referenced_by_record_ids": [
+        "PSR-0007"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 9,
+      "relative_path": "converted/p5/campolongo_cariboni_saltelli_2007_effective_screening.md",
+      "sha256": "d72609edb00c2b5b60fe68608a7842a805fdc611dac7786566513774508a62ed",
+      "referenced_by_record_ids": [
+        "PSR-0033"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 10,
+      "relative_path": "converted/p5/furman_kuznetsov_su_zitikis_2016_gaussian_copula_tail.md",
+      "sha256": "d65d88980f8dfb1c177970f0b95d4f6c304f7261d0f480ddac324bbd3edcbf1c",
+      "referenced_by_record_ids": [
+        "PSR-0029"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 11,
+      "relative_path": "converted/p5/lee_fields_2021_wind_prediction_bias_losses_uncertainties.md",
+      "sha256": "68ed77481fc43c655e8c5bb1d056c8518db3361e032ebfe4566082fc91c2a77e",
+      "referenced_by_record_ids": [
+        "PSR-0040"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 12,
+      "relative_path": "converted/p5/mckay_beckman_conover_1979_primary_scan.md",
+      "sha256": "dcc4b086d64fb647c6917672b1be6c43e03e68a050061a2ebcaf2b99465b73d3",
+      "referenced_by_record_ids": [
+        "PSR-0027"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 13,
+      "relative_path": "converted/p5/morris_1991_primary_scan.md",
+      "sha256": "60bf1c2bb9ee775443b81b007861da1a3c28f849447d6e54e7b64927265cffaa",
+      "referenced_by_record_ids": [
+        "PSR-0032"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 14,
+      "relative_path": "converted/p5/pianosi_wagener_2018_primary_aam.md",
+      "sha256": "6f23659bd76b4da9a8fd3c6b6d5362d597e7ff42526c82667e3dd2bac399063f",
+      "referenced_by_record_ids": [
+        "PSR-0036"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 15,
+      "relative_path": "converted/p5/rockafellar_uryasev_2000_cvar.md",
+      "sha256": "50e09d87584652c8f6478e350443a4b619c3e2f6fe05f0a07f08451b9ba0b25b",
+      "referenced_by_record_ids": [],
+      "reference_count": 0,
+      "reference_status": "retained_unreferenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 16,
+      "relative_path": "converted/p5/rockafellar_uryasev_2002_cvar_general_distributions.md",
+      "sha256": "f94437f73610a9fc81dbb57055c9a5fa34704af4af002bf3b10ebbc701a68f66",
+      "referenced_by_record_ids": [
+        "PSR-0038"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 17,
+      "relative_path": "converted/p5/saltelli_2002_primary_author_copy.md",
+      "sha256": "d460ef76e207b90fba01effe552a2ada1fc45309888ec25c89753f47d8c69299",
+      "referenced_by_record_ids": [
+        "PSR-0031"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 18,
+      "relative_path": "original/01_architecture_map.md",
+      "sha256": "5b77d92715ab6cf107d71235b79d3ceaa92a932a4087b2b0ea98483337f1ff6d",
+      "referenced_by_record_ids": [
+        "PSR-0010"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 19,
+      "relative_path": "original/02_finance_correctness_findings.md",
+      "sha256": "1c0e11501a41b283edb41a9a8e97ec397422694d62e2188b198469d23b74edbc",
+      "referenced_by_record_ids": [
+        "PSR-0022"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 20,
+      "relative_path": "original/ADB_42362-013_Project_Completion_Report.pdf",
+      "sha256": "4f7350335f52db61a924194152b18f5af2b085fd672f012b168f9ae9df1b3a56",
+      "referenced_by_record_ids": [
+        "PSR-0006"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 21,
+      "relative_path": "original/ADB_Burgos_Wind_Farm_Extended_Annual_Review_2019.pdf",
+      "sha256": "32bd4fa2992c68db1e6929f2a8d2e61e821f8a38fc54b8f70839a960f4b90a92",
+      "referenced_by_record_ids": [
+        "PSR-0018"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 22,
+      "relative_path": "original/GitHub_Issue_920_DSRA_Term_Sheet_Status.json",
+      "sha256": "9f69d62dde3c0616933edcbfe414346b69d99a0cdd3f2941ac70c0518a0cf288",
+      "referenced_by_record_ids": [
+        "PSR-0012"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 23,
+      "relative_path": "original/IEC_61400-15-1_2025_official_scope.html",
+      "sha256": "f31b1a7bffe21d6069654a41186760a0fe2888cf905b2d10ae95a92f7b4d5765",
+      "referenced_by_record_ids": [
+        "PSR-0004"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 24,
+      "relative_path": "original/IEC_catalogue_61400-15-1_positive_control.json",
+      "sha256": "16312898bb0ed8027bcb8835790922387530d9ff98e6321cf92525a1fcd6a728",
+      "referenced_by_record_ids": [
+        "PSR-0015"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 25,
+      "relative_path": "original/IEC_catalogue_61400-15-2_all.json",
+      "sha256": "9e324b99e9607a87569551356e1825ca631d5200337a12cad7bd882e93f92058",
+      "referenced_by_record_ids": [
+        "PSR-0015"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 26,
+      "relative_path": "original/IEC_catalogue_61400-15-2_valid.json",
+      "sha256": "9e324b99e9607a87569551356e1825ca631d5200337a12cad7bd882e93f92058",
+      "referenced_by_record_ids": [
+        "PSR-0015"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 27,
+      "relative_path": "original/IFC_Utility_Scale_Solar_Project_Developer_Guide_2015.pdf",
+      "sha256": "d908e55d40c035fa97c823cff642461598f39ad8986ca23b06a53e3b2764a1d5",
+      "referenced_by_record_ids": [
+        "PSR-0016",
+        "PSR-0017",
+        "PSR-0023",
+        "PSR-0039"
+      ],
+      "reference_count": 4,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 28,
+      "relative_path": "original/MEASNET_Evaluation_Site_Specific_Wind_Conditions_v3_2022.pdf",
+      "sha256": "ba41752ad61af65d3fdc28e61788dc7371c6f555780525f8eb7336199faf355e",
+      "referenced_by_record_ids": [
+        "PSR-0001",
+        "PSR-0002",
+        "PSR-0003",
+        "PSR-0005",
+        "PSR-0041"
+      ],
+      "reference_count": 5,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 29,
+      "relative_path": "original/WBG_PPP_Handbook_2024.pdf",
+      "sha256": "6c0b3eac82b5e5d822bcdf1692a1d2b0ce46b31769e10764e45441729272c635",
+      "referenced_by_record_ids": [
+        "PSR-0019",
+        "PSR-0020",
+        "PSR-0021",
+        "PSR-0024"
+      ],
+      "reference_count": 4,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 30,
+      "relative_path": "original/World_Bank_IDA_Sri_Lanka_Renewable_Energy_2025_PAD.pdf",
+      "sha256": "a3ca5d93fea55725f9655124802ba49a55b11fcbfd37bc6a7e389f9fcb8b19a0",
+      "referenced_by_record_ids": [
+        "PSR-0013",
+        "PSR-0014",
+        "PSR-0025"
+      ],
+      "reference_count": 3,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 31,
+      "relative_path": "original/World_Bank_Peru_Electricity_Sector_Project_Finance.pdf",
+      "sha256": "6c190ea57efcf1b7ea72879622670f0395df2e5ef5906813dfbfc5a3264beec8",
+      "referenced_by_record_ids": [
+        "PSR-0008"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 32,
+      "relative_path": "original/World_Bank_Vietnam_Phu_My_2_Phase_2.pdf",
+      "sha256": "e550b12dc904806a5bdea3458ae8d387b936be32c1fdf1fa6aa2d269627f5f85",
+      "referenced_by_record_ids": [
+        "PSR-0007"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 33,
+      "relative_path": "original/p5/Campolongo_Cariboni_Saltelli_2007_effective_screening.pdf",
+      "sha256": "65486ab3ce3b7d35113e6e219e5804cfbbe5d9a0cd682f3bbec7c388b3bf566b",
+      "referenced_by_record_ids": [
+        "PSR-0033"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 34,
+      "relative_path": "original/p5/Furman_Kuznetsov_Su_Zitikis_2016_Gaussian_copula_tail.pdf",
+      "sha256": "686ace21569decfa8f6b608a1b9a6bfc4317747fc3c6783cd1b7d62fa633122f",
+      "referenced_by_record_ids": [
+        "PSR-0029"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 35,
+      "relative_path": "original/p5/Lee_Fields_2021_wind_prediction_bias_losses_uncertainties.pdf",
+      "sha256": "153a3ed55bebb8cbbbbdcd419281bb9aa1b47d5d1fe26b33dee4a8d42141e6e4",
+      "referenced_by_record_ids": [
+        "PSR-0040"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 36,
+      "relative_path": "original/p5/McKay_Beckman_Conover_1979_LHS.pdf",
+      "sha256": "45baafb7013b3404258d6b72b797d770498902db6b0b9657497dec7521c4a344",
+      "referenced_by_record_ids": [
+        "PSR-0027"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 37,
+      "relative_path": "original/p5/Morris_1991_factorial_sampling_plans.pdf",
+      "sha256": "4153f39f14384c3a126773f46f6fe6d5fb045f42f9a706349d216a5c793a4567",
+      "referenced_by_record_ids": [
+        "PSR-0032"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 38,
+      "relative_path": "original/p5/Pianosi_Wagener_2018_distribution_based_sensitivity.pdf",
+      "sha256": "1d7cf17c58ec08f75783972d67229c16bf3588717c759574badcd44477c15939",
+      "referenced_by_record_ids": [
+        "PSR-0036"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 39,
+      "relative_path": "original/p5/Rockafellar_Uryasev_2000_CVaR.pdf",
+      "sha256": "34aff2161733085ca8e5a067053a8f144cba52f556e253d69c932f7d22d842f4",
+      "referenced_by_record_ids": [],
+      "reference_count": 0,
+      "reference_status": "retained_unreferenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 40,
+      "relative_path": "original/p5/Rockafellar_Uryasev_2002_CVaR_general_distributions.pdf",
+      "sha256": "3787172ff2065c0ca3d233b4aa31b503dff7c327745bd079e0a0d9c17ff4f4ab",
+      "referenced_by_record_ids": [
+        "PSR-0038"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 41,
+      "relative_path": "original/p5/SALib_v1.5.2.tar.gz",
+      "sha256": "de0e88d1fd7df5574573c70a0e1933faab136b2845e64d7ad65ebb883e6cc69e",
+      "referenced_by_record_ids": [
+        "PSR-0030"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 42,
+      "relative_path": "original/p5/SALib_v1.5.2_tag.json",
+      "sha256": "6ab546819db303a68bcc1bd0abb2adb7892cd58162fc3baa679a45636d20a8c6",
+      "referenced_by_record_ids": [
+        "PSR-0030",
+        "PSR-0034",
+        "PSR-0037"
+      ],
+      "reference_count": 3,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 43,
+      "relative_path": "original/p5/SciPy_v1.17.1_scipy_optimize_zeros_py.py",
+      "sha256": "14f88f1080985eae0af84bb5952da5b994ab2043e7fe5b0c8603839475391161",
+      "referenced_by_record_ids": [
+        "PSR-0042"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 44,
+      "relative_path": "original/p5/SciPy_v1.17.1_scipy_stats_qmc.py",
+      "sha256": "2b26111475f4d1aff68a920fc3c78811321b3b8315a302f2782b411fc2fe8911",
+      "referenced_by_record_ids": [
+        "PSR-0028"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 45,
+      "relative_path": "original/p5/SciPy_v1.17.1_tag.json",
+      "sha256": "f5737e50227ceedce773d55c9aaed1596cb440939b78c6b6905e995906b54149",
+      "referenced_by_record_ids": [
+        "PSR-0028",
+        "PSR-0042"
+      ],
+      "reference_count": 2,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 46,
+      "relative_path": "original/p5/campolongo_et_al_2007_crossref_metadata.json",
+      "sha256": "3226a36db5353adbe744c7d79d4a2b500739e7046404cad7618966608faced88",
+      "referenced_by_record_ids": [
+        "PSR-0033"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 47,
+      "relative_path": "original/p5/iman_conover_1980_osti_metadata.json",
+      "sha256": "348bedf6e56a2c15931c4898437a4e68cf366bc7bba1bb09d95657d71acf7479",
+      "referenced_by_record_ids": [
+        "PSR-0026"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 48,
+      "relative_path": "original/p5/iman_conover_1980_osti_record.html",
+      "sha256": "2d8bd1409d2e72b27a8efb44c4f8f33aace5530b4371eefe493635a64c25ddb7",
+      "referenced_by_record_ids": [
+        "PSR-0026"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 49,
+      "relative_path": "original/p5/iman_conover_1982_crossref_metadata.json",
+      "sha256": "b36b993d7107dcc7a3eb3445cea939a06d08bb9b69a2e62674c57fa789c9054d",
+      "referenced_by_record_ids": [
+        "PSR-0026"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 50,
+      "relative_path": "original/p5/mckay_beckman_conover_1979_crossref_metadata.json",
+      "sha256": "8c54c73b39940c91b7f2084e7c0830bd0fc1307aceb7fec134d07b8b58eb3c40",
+      "referenced_by_record_ids": [
+        "PSR-0027"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 51,
+      "relative_path": "original/p5/mckay_beckman_conover_1979_osti_metadata.json",
+      "sha256": "fba82a5a8b72422b9df0a94e91ed4f1d3f11fc79497df26253e7780eb9e0529b",
+      "referenced_by_record_ids": [
+        "PSR-0027"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 52,
+      "relative_path": "original/p5/mckay_beckman_conover_1979_primary_scan.pdf",
+      "sha256": "45baafb7013b3404258d6b72b797d770498902db6b0b9657497dec7521c4a344",
+      "referenced_by_record_ids": [],
+      "reference_count": 0,
+      "reference_status": "retained_unreferenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 53,
+      "relative_path": "original/p5/morris_1991_crossref_metadata.json",
+      "sha256": "c3f6aa36c5af3d8bda3578570b4489ef7e4971244374359921f4870b452899df",
+      "referenced_by_record_ids": [
+        "PSR-0032"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 54,
+      "relative_path": "original/p5/morris_1991_primary_scan.pdf",
+      "sha256": "4153f39f14384c3a126773f46f6fe6d5fb045f42f9a706349d216a5c793a4567",
+      "referenced_by_record_ids": [],
+      "reference_count": 0,
+      "reference_status": "retained_unreferenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 55,
+      "relative_path": "original/p5/pianosi_wagener_2015_bristol_record.html",
+      "sha256": "276529f26843648e461be1342b0944a6f60d07e2efa0969ae4442e8d815958aa",
+      "referenced_by_record_ids": [
+        "PSR-0035"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 56,
+      "relative_path": "original/p5/pianosi_wagener_2015_crossref_metadata.json",
+      "sha256": "760f7fa79300a7fd0dd0f338c63c1542747cdcbd8f8dc0d423ee389c6d1e7af1",
+      "referenced_by_record_ids": [
+        "PSR-0035"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 57,
+      "relative_path": "original/p5/pianosi_wagener_2018_crossref_metadata.json",
+      "sha256": "f42f7b02418962f5681b43ea022964266236bde8decc1394238e576325b45675",
+      "referenced_by_record_ids": [
+        "PSR-0036"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 58,
+      "relative_path": "original/p5/pianosi_wagener_2018_primary_aam.pdf",
+      "sha256": "c8799de04ff7784c88777fd29bcf52ec35016385247c5e85c1c94dbc7af362df",
+      "referenced_by_record_ids": [],
+      "reference_count": 0,
+      "reference_status": "retained_unreferenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 59,
+      "relative_path": "original/p5/salib_official_citations.html",
+      "sha256": "94e1f3380de93fd7ef0b307cb828f2d5e22a6ff7aca5822a1ece80ba34dc64da",
+      "referenced_by_record_ids": [],
+      "reference_count": 0,
+      "reference_status": "retained_unreferenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 60,
+      "relative_path": "original/p5/salib_v1.5.2_CITATION.cff",
+      "sha256": "63c1be4639de5e58ff9e9f4bf735d5df58097edbfbe236a6380c438c40e064dc",
+      "referenced_by_record_ids": [],
+      "reference_count": 0,
+      "reference_status": "retained_unreferenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 61,
+      "relative_path": "original/p5/salib_v1.5.2_analyze_morris.py",
+      "sha256": "c81b5aefc88fea6e2b18b70fca65e6efd7a7dc37db63970ed35bc2c80ad6dde5",
+      "referenced_by_record_ids": [
+        "PSR-0034"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 62,
+      "relative_path": "original/p5/salib_v1.5.2_analyze_pawn.py",
+      "sha256": "923d7d050760e4bae23e6cdd8574e2ffb6c72ed7d7c80677f4d3db4051c2cd49",
+      "referenced_by_record_ids": [
+        "PSR-0037"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 63,
+      "relative_path": "original/p5/salib_v1.5.2_analyze_sobol.py",
+      "sha256": "32b5c6b0ce24a887bb1a252e50297bdbc71b3328ca9e3e5a4640320a3d1cf97e",
+      "referenced_by_record_ids": [
+        "PSR-0030"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 64,
+      "relative_path": "original/p5/salib_v1.5.2_release_metadata.json",
+      "sha256": "357e46e33b0a19b7f2e777b7919a289a1d7af6cfb0d3418aacea2702153e4b4f",
+      "referenced_by_record_ids": [],
+      "reference_count": 0,
+      "reference_status": "retained_unreferenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 65,
+      "relative_path": "original/p5/salib_v1.5.2_sample_morris.py",
+      "sha256": "15abcc26cf21a21b8f0fff86d96d33134b920153106fc9f73f09b29dd4afe9ec",
+      "referenced_by_record_ids": [
+        "PSR-0034"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 66,
+      "relative_path": "original/p5/salib_v1.5.2_sample_saltelli.py",
+      "sha256": "35f0b732dfd3b9a68ae12b8ad65db61f7e120d6e72cb7ac1b13e89c5a663d043",
+      "referenced_by_record_ids": [],
+      "reference_count": 0,
+      "reference_status": "retained_unreferenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 67,
+      "relative_path": "original/p5/salib_v1.5.2_sample_sobol.py",
+      "sha256": "7600919e3875162d8a59a29965683daa86e1fb8f1c0c56874757dd95ffe98d9a",
+      "referenced_by_record_ids": [
+        "PSR-0030"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 68,
+      "relative_path": "original/p5/saltelli_2002_crossref_metadata.json",
+      "sha256": "4669a48cc7dff8f62fb8c87435afadb93fa7975add0175d84178c25d56e1c98b",
+      "referenced_by_record_ids": [
+        "PSR-0031"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 69,
+      "relative_path": "original/p5/saltelli_2002_primary_author_copy.pdf",
+      "sha256": "2d4f2755e017ba0e6246931a1eb524f15755a80a79be5e575f28d75c48cdb8f4",
+      "referenced_by_record_ids": [
+        "PSR-0031"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 70,
+      "relative_path": "original/p5/saltelli_et_al_2010_crossref_metadata.json",
+      "sha256": "285b11d6dfae96c51844b3264f148c1fcb43f1baa0dbd186688b9db745a8a2a0",
+      "referenced_by_record_ids": [],
+      "reference_count": 0,
+      "reference_status": "retained_unreferenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 71,
+      "relative_path": "original/p5/scipy_v1.17.0_sobol_docs.html",
+      "sha256": "65a592a6e8779ea041ddb67fa36b5de4adb9758ac2e729e78e27c97cd59f2248",
+      "referenced_by_record_ids": [],
+      "reference_count": 0,
+      "reference_status": "retained_unreferenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 72,
+      "relative_path": "original/p5/scipy_v1.17.1_qmc_source.py",
+      "sha256": "2b26111475f4d1aff68a920fc3c78811321b3b8315a302f2782b411fc2fe8911",
+      "referenced_by_record_ids": [],
+      "reference_count": 0,
+      "reference_status": "retained_unreferenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 73,
+      "relative_path": "original/p5/scipy_v1.17.1_release_metadata.json",
+      "sha256": "00d376f50929b66704a54a19b13719a93c1445af2800cc9738ec8ee5bea1b33c",
+      "referenced_by_record_ids": [
+        "PSR-0028",
+        "PSR-0042"
+      ],
+      "reference_count": 2,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    },
+    {
+      "object_number": 74,
+      "relative_path": "original/repository_scenarios_7e99f34.txt",
+      "sha256": "87557352c24d1d5835d53fd29ce9bf35233caf1cf051768a96de3bfed0c1063a",
+      "referenced_by_record_ids": [
+        "PSR-0011"
+      ],
+      "reference_count": 1,
+      "reference_status": "claim_referenced",
+      "full_hash_verification_required": true,
+      "verification_status": "pending_independent_verification"
+    }
+  ],
+  "review_rows": [
+    {
+      "review_row_number": 1,
+      "record_id": "PSR-0001",
+      "claim_id": "WIND-MEAS-12M",
+      "source_id": "SRC-MEASNET-V3",
+      "source_class": "standard",
+      "evidence_status": "supports",
+      "evidence_role": "standard_text",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "fb4f485271fc21d2b3af812291d92eea2f739cdc0bdaca8741e6b68fc4d0f449",
+      "claim_text_sha256": "931a90e291280fcb5882111160e3ee88c4c0fff86ef26d5181341799643dba89",
+      "paraphrased_support_sha256": "aafbe3c5f1c4b48152d61b7c29c73a34a9e14ad9b3fe587082801787bc751a7f",
+      "finding_links": [
+        {
+          "finding_id": "P3-G1",
+          "severity": "critical",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "critical",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 2,
+      "record_id": "PSR-0002",
+      "claim_id": "WIND-MEAS-DEVIATION",
+      "source_id": "SRC-MEASNET-V3",
+      "source_class": "standard",
+      "evidence_status": "supports",
+      "evidence_role": "standard_text",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "6dfbb5fe9833b0da3f4902f75c093b6298b0c40bdf578b13453ae953bed988b8",
+      "claim_text_sha256": "b904f6c06db81197c08e41dff09b934d1fa12d5e8b3ac0d5a8c229719d107289",
+      "paraphrased_support_sha256": "c471790cce98d009ff060d917f069b528e24c405ec744bb35952117dc50ac461",
+      "finding_links": [
+        {
+          "finding_id": "P3-G1",
+          "severity": "critical",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "critical",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 3,
+      "record_id": "PSR-0003",
+      "claim_id": "WIND-MEAS-BASIS",
+      "source_id": "SRC-MEASNET-V3",
+      "source_class": "standard",
+      "evidence_status": "supports",
+      "evidence_role": "standard_text",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "107c81d31f213f995a26b9a28a6ed71163a3f129bb83c82cfe52e27ee9404802",
+      "claim_text_sha256": "a56ad3fcca027ace06d1c0ff418b7d94f78ba13d87014b38f2d1fbd554a806ec",
+      "paraphrased_support_sha256": "05e6f92773d02f1d15135e928e8c30bce8882750386cf5f6b34ce341853f4b69",
+      "finding_links": [
+        {
+          "finding_id": "P3-G1",
+          "severity": "critical",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "critical",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 4,
+      "record_id": "PSR-0004",
+      "claim_id": "WIND-IEC-SCOPE",
+      "source_id": "SRC-IEC-61400-15-1",
+      "source_class": "standard",
+      "evidence_status": "supports",
+      "evidence_role": "standard_scope",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "02f1f43e187eca38c5720f254b6b2f2d1516057f0bbaa50266bb86098c3f3602",
+      "claim_text_sha256": "4ebf51764e9e1aab0ee57a267ed7cb57559602fcbc6d09fdee77a43205da2efc",
+      "paraphrased_support_sha256": "a5b30a09c33a433ed3db85dbf0da6b85a5487ab0a67ed3fae7574c2d767ef4cf",
+      "finding_links": [
+        {
+          "finding_id": "P3-G1",
+          "severity": "critical",
+          "status": "open"
+        },
+        {
+          "finding_id": "P5-WIND-001",
+          "severity": "high",
+          "status": "requires_correction"
+        }
+      ],
+      "highest_linked_severity": "critical",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 1,
+      "manifested_source_artifact_count": 1,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 5,
+      "record_id": "PSR-0005",
+      "claim_id": "WIND-BANKABILITY-CP",
+      "source_id": "SRC-MEASNET-V3",
+      "source_class": "standard",
+      "evidence_status": "context_only",
+      "evidence_role": "analyst_judgment_boundary",
+      "transaction_evidence_status": "unavailable",
+      "source_register_record_sha256": "001d42d3cda0abb540342462532774588bb7ec384de6b9cb68f34f85dada170f",
+      "claim_text_sha256": "38ee185e47e9a8ad1248f0b352de6bfc08bebfed395de98285cfbc45fe42f02a",
+      "paraphrased_support_sha256": "908ba09c6727728cc1c54f1e884940b755c4cba6fe2f658d83e0800604f50a9e",
+      "finding_links": [
+        {
+          "finding_id": "P3-G1",
+          "severity": "critical",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "critical",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 6,
+      "record_id": "PSR-0006",
+      "claim_id": "DFI-COV-ADB-EXAMPLE",
+      "source_id": "SRC-ADB-42362-013",
+      "source_class": "official_project_document",
+      "evidence_status": "supports",
+      "evidence_role": "financing_precedent",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "3abe3c79a2acc6555aec0f516d2b0a80f6b016d54228756e3829f77ac8cea645",
+      "claim_text_sha256": "7d15495fa7456caf034897d934c53f565c86ad268a6f52d21c9b6905278c45b1",
+      "paraphrased_support_sha256": "e8d092e2e61fdce6e03649443843e1e134b284e9b0c0752787ca2abc5bf2dc08",
+      "finding_links": [
+        {
+          "finding_id": "P3-COV-01",
+          "severity": "critical",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "critical",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 7,
+      "record_id": "PSR-0007",
+      "claim_id": "DFI-COV-WB-VIETNAM",
+      "source_id": "SRC-WB-PHU-MY-2",
+      "source_class": "official_project_document",
+      "evidence_status": "supports",
+      "evidence_role": "financing_precedent",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "c55b6ecd3e05adc0dd6a3fbe3a6f1b0b7f5dd19b658cff2135e66a7ccad1cbb7",
+      "claim_text_sha256": "f9e438a37dafe350e3b5a6f2b108e128cc92ebe3c3c2a34d28696cd769cc366e",
+      "paraphrased_support_sha256": "d1d44979e1eaab8a2412c778ac2a7392c8a94c8a08eeb80003766f18e5f77c20",
+      "finding_links": [
+        {
+          "finding_id": "P3-COV-01",
+          "severity": "critical",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "critical",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 8,
+      "record_id": "PSR-0008",
+      "claim_id": "DFI-COV-WB-PERU",
+      "source_id": "SRC-WB-PERU-HYDRO",
+      "source_class": "official_project_document",
+      "evidence_status": "supports",
+      "evidence_role": "financing_precedent",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "a6acbc7f3e82a03889087d57d6f936fb1b52985edad01e82d78a2253021175f8",
+      "claim_text_sha256": "c1e3a7ea24281b908a93696427dea2a9f742c3830768fa924b443a1198d677e5",
+      "paraphrased_support_sha256": "bdbab8bfa96abb36bded910cfb935a09cdf6b05ea4d7866b76e01b64a2f5c1b9",
+      "finding_links": [
+        {
+          "finding_id": "P3-COV-01",
+          "severity": "critical",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "critical",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 9,
+      "record_id": "PSR-0009",
+      "claim_id": "DFI-COV-UNIVERSAL",
+      "source_id": "SRC-MULTIPLE-DFI-EXAMPLES",
+      "source_class": "analyst_judgment",
+      "evidence_status": "contradicts",
+      "evidence_role": "claim_boundary",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "68a68e256f3757c8af2e702288595fdc5feb545fbbefc025c337d60a8d034131",
+      "claim_text_sha256": "d0885f0800b89b766a8d490c4faed63e1d62e9246b2ea9fb55d0b0334d90f892",
+      "paraphrased_support_sha256": "79902a204b7cafada84e8cac80e58d9b1c80cc9228f3d97b731f6a5ec4382e0a",
+      "finding_links": [
+        {
+          "finding_id": "P3-COV-01",
+          "severity": "critical",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "critical",
+      "source_location_status": "analyst_judgment_boundary_no_publisher_source",
+      "artifact_ref_count": 0,
+      "manifested_source_artifact_count": 0,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 10,
+      "record_id": "PSR-0010",
+      "claim_id": "AUDIT-POINTER-COUNT",
+      "source_id": "SRC-AUDIT-ARCHMAP",
+      "source_class": "repository_evidence",
+      "evidence_status": "supports",
+      "evidence_role": "audit_arithmetic",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "28cc1dca8c755a7af8d21bf966f6f7527ef2ec0531fd603d255a5e6a20168aa0",
+      "claim_text_sha256": "71715db923746c3b71e5afa91c896cb29522609aad555f07070dcae142269dd2",
+      "paraphrased_support_sha256": "6213e329fa1db46fcacaf5b6aee768942398c6dc95134d5b6102849be2d83f16",
+      "finding_links": [
+        {
+          "finding_id": "EVAL-06",
+          "severity": "medium",
+          "status": "requires_correction"
+        }
+      ],
+      "highest_linked_severity": "medium",
+      "source_location_status": "repository_evidence_no_external_url",
+      "artifact_ref_count": 1,
+      "manifested_source_artifact_count": 1,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 11,
+      "record_id": "PSR-0011",
+      "claim_id": "AUDIT-SCENARIO-COUNT",
+      "source_id": "SRC-GIT-TREE-7E99F34",
+      "source_class": "repository_evidence",
+      "evidence_status": "supports",
+      "evidence_role": "scope_accounting",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "024fa3400e01113c3b16c5524e522938106648c3e4bdd7568f628a697118bbc7",
+      "claim_text_sha256": "64cfb3454d097b080aeba2fa9b841a30fa4564eb6c2ec445c73301c2f1c38d21",
+      "paraphrased_support_sha256": "741066ee91434a9124ada0b9a96f4f4b22e6d37018fa101226b944b183279eb1",
+      "finding_links": [
+        {
+          "finding_id": "EVAL-08",
+          "severity": "medium",
+          "status": "requires_correction"
+        }
+      ],
+      "highest_linked_severity": "medium",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 1,
+      "manifested_source_artifact_count": 1,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 12,
+      "record_id": "PSR-0012",
+      "claim_id": "DFI-DSRA-TERM-SHEET",
+      "source_id": "SRC-GH-ISSUE-920",
+      "source_class": "repository_evidence",
+      "evidence_status": "supports",
+      "evidence_role": "transaction_evidence_status",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "4098d2c267a8f13044c6336d4dc70583c6b1b8d991a173eb30f87805848bc93f",
+      "claim_text_sha256": "f3a08f38b0899352f92a62a33d528adb90070cdedf783f7ae02f33f5c6146031",
+      "paraphrased_support_sha256": "b3ee382a652aa1340c404d3900ece9ec283e955ed1c253f8860476c35bbc0e18",
+      "finding_links": [
+        {
+          "finding_id": "P3-COV-05",
+          "severity": "high",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 1,
+      "manifested_source_artifact_count": 1,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 13,
+      "record_id": "PSR-0013",
+      "claim_id": "DFI-CEB-LEGACY-PAYMENT-SECURITY",
+      "source_id": "SRC-WB-SL-P505052",
+      "source_class": "official_project_document",
+      "evidence_status": "supports",
+      "evidence_role": "financing_precedent",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "e867b6e80f599a43ac23cd16c8315012beb9dbc79ffb9a65ae78eb2ff6114446",
+      "claim_text_sha256": "47ace9697a2e0ee7b781f4fe47a1704f30484980873ca5245a0293e2244fd972",
+      "paraphrased_support_sha256": "5052ea30f770f68d66e34a5438c1d9c304b9ee0dc18678f399159e17f517e726",
+      "finding_links": [
+        {
+          "finding_id": "P3-COV-05",
+          "severity": "high",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 14,
+      "record_id": "PSR-0014",
+      "claim_id": "DFI-CEB-IDA-SBLC",
+      "source_id": "SRC-WB-SL-P505052",
+      "source_class": "official_project_document",
+      "evidence_status": "supports",
+      "evidence_role": "financing_precedent",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "eaa5b3aa34fa7644032ed75d883d7dd938c3ee0f035332498abf1e2e072a453d",
+      "claim_text_sha256": "305998d90f5b8da8224bf5de5fdcebc376c3032889663eaddf8a8d740f89aad2",
+      "paraphrased_support_sha256": "13e6a492b6012f9fadd87b63f90dfe34ddf11d9afb6c7c6862979972c27fea4b",
+      "finding_links": [
+        {
+          "finding_id": "P3-COV-05",
+          "severity": "high",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 15,
+      "record_id": "PSR-0015",
+      "claim_id": "WIND-IEC-15-2-PUBLICATION-STATUS",
+      "source_id": "SRC-IEC-CATALOGUE-20260812",
+      "source_class": "official_catalogue_record",
+      "evidence_status": "contradicts",
+      "evidence_role": "catalogue_status",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "55e4ecdfef3eed773396cb6b45f53fe1b4d0686781f6108468e02445e048e2f0",
+      "claim_text_sha256": "877fca9ab35d24c09e118e67dd38b177ecd447d02567b1b74ec2f00f3d54ca11",
+      "paraphrased_support_sha256": "0f780fe5a073306b2601e0010258c63cc5ddf9f1d4888ecd4c5164af872abd39",
+      "finding_links": [
+        {
+          "finding_id": "P3-G3",
+          "severity": "medium",
+          "status": "open"
+        },
+        {
+          "finding_id": "P5-WIND-001",
+          "severity": "high",
+          "status": "requires_correction"
+        },
+        {
+          "finding_id": "P5-WIND-002",
+          "severity": "high",
+          "status": "requires_correction"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 4,
+      "manifested_source_artifact_count": 3,
+      "governed_repository_artifact_count": 1,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 16,
+      "record_id": "PSR-0016",
+      "claim_id": "DFI-DSRA-IFC-GENERIC",
+      "source_id": "SRC-IFC-SOLAR-GUIDE-2015",
+      "source_class": "official_guidance",
+      "evidence_status": "supports",
+      "evidence_role": "financing_precedent",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "e1ae23eee70cd6d09a994980bfbaa070ff98cb5e92cadb851fc7c7f17bd00b96",
+      "claim_text_sha256": "c8731cfd573da7b6568974d901f4b50773c211bd220548e123185e9ec738eca4",
+      "paraphrased_support_sha256": "0b02a8c84811706d2f792ceea9406ab9e9a8fa204a8f4a00a96ac6fb258f0796",
+      "finding_links": [
+        {
+          "finding_id": "P3-COV-05",
+          "severity": "high",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 17,
+      "record_id": "PSR-0017",
+      "claim_id": "DFI-DSCR-IFC-GENERIC",
+      "source_id": "SRC-IFC-SOLAR-GUIDE-2015",
+      "source_class": "official_guidance",
+      "evidence_status": "supports",
+      "evidence_role": "financing_precedent",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "0c488fe520dfd14aaf6ac60598195d9f616af63c35b151e9c8ceeec24dea3b27",
+      "claim_text_sha256": "925eab8a110d0bb0c1a4a66e73188bb679426e6415c4d2764656cc500b7ff87b",
+      "paraphrased_support_sha256": "8aeb33df0649b869e06d08191c4339f07e593e00c7ef66e5da444e6305abb1c9",
+      "finding_links": [
+        {
+          "finding_id": "P3-COV-01",
+          "severity": "critical",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "critical",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 18,
+      "record_id": "PSR-0018",
+      "claim_id": "DFI-DSRA-ADB-BURGOS",
+      "source_id": "SRC-ADB-BURGOS-XARR-2019",
+      "source_class": "official_project_document",
+      "evidence_status": "supports",
+      "evidence_role": "financing_precedent",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "b153b9bcf3a3a0c55d7ec5e4623d4073c3b7f6a7379e384748a03005a847fe35",
+      "claim_text_sha256": "889160d48019d9784ebd08c4ccacb733f3a6767dfc59ea18556a257d7fa91675",
+      "paraphrased_support_sha256": "470d2e4ac9ac13524aec27cce17c77a91768608802208c47e9c3c4fa03fb76ad",
+      "finding_links": [
+        {
+          "finding_id": "P3-COV-05",
+          "severity": "high",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 19,
+      "record_id": "PSR-0019",
+      "claim_id": "FIN-DSCR-DEFINITION",
+      "source_id": "SRC-WBG-BD-PPP-HANDBOOK-2024",
+      "source_class": "official_guidance",
+      "evidence_status": "supports",
+      "evidence_role": "ratio_definition",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "7ee655b2b072b90e3693f0b5d617b31363dbe41ad4ef26fe3bf5da660c2e9e91",
+      "claim_text_sha256": "852f4be0f1c959d913c8731a2c1b419830873ff71457b0ad27d78d2b9135046b",
+      "paraphrased_support_sha256": "dcae3169cbc8f8285c7a8ddebdce9c0a942d3089d15d97301c0759de67db4081",
+      "finding_links": [
+        {
+          "finding_id": "P5-FIN-003",
+          "severity": "medium",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "medium",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_standard",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 20,
+      "record_id": "PSR-0020",
+      "claim_id": "FIN-LLCR-DEFINITION",
+      "source_id": "SRC-WBG-BD-PPP-HANDBOOK-2024",
+      "source_class": "official_guidance",
+      "evidence_status": "supports",
+      "evidence_role": "ratio_definition",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "4ed953a32c4249a33f2845d60cde46f8fd38943de5a7f04f31d5cb82baff373d",
+      "claim_text_sha256": "a9d18de764480057d98ac34ed9247396cf87770e8220fa0ed8811df4e072a793",
+      "paraphrased_support_sha256": "51fe82b81fcded296be953536baa1cc65a55745cd6bb67100924aa44d4640977",
+      "finding_links": [
+        {
+          "finding_id": "P5-FIN-004",
+          "severity": "high",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 21,
+      "record_id": "PSR-0021",
+      "claim_id": "FIN-PLCR-DEFINITION",
+      "source_id": "SRC-WBG-BD-PPP-HANDBOOK-2024",
+      "source_class": "official_guidance",
+      "evidence_status": "supports",
+      "evidence_role": "ratio_definition",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "720be7b3cc2a5b0bb364cc392155c23b25c256a9a1c1721ecd444e461d37fcbd",
+      "claim_text_sha256": "055ac9a839a615b9e22cda60e7d4cb34adbb1180da0191bca5308b4e9be1d054",
+      "paraphrased_support_sha256": "8af3d14909b515582a4b6650df6ffcca3fd658603bc8e5b316ecb732e154d082",
+      "finding_links": [
+        {
+          "finding_id": "P5-FIN-004",
+          "severity": "high",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 22,
+      "record_id": "PSR-0022",
+      "claim_id": "AUDIT-P2-POPULATION",
+      "source_id": "SRC-AUDIT-P2-VERDICTS",
+      "source_class": "repository_evidence",
+      "evidence_status": "contradicts",
+      "evidence_role": "audit_arithmetic",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "83a6065b3e2475c7cacdb39952c8b2da49fb447173ccdf2ab07d716bacf9d2cf",
+      "claim_text_sha256": "d9ed8e83c38d1008dfc767c1e2b1b62ccf5a6f919b42310a0f3134adb8d072c1",
+      "paraphrased_support_sha256": "5058b189540671d423f313f45b3f5e1c8bdacf145ef4b922aece3ed21937fbae",
+      "finding_links": [
+        {
+          "finding_id": "EVAL-09",
+          "severity": "high",
+          "status": "requires_correction"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "repository_evidence_no_external_url",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 1,
+      "governed_repository_artifact_count": 1,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 23,
+      "record_id": "PSR-0023",
+      "claim_id": "MC-RISK-IFC-SENSITIVITY",
+      "source_id": "SRC-IFC-SOLAR-GUIDE-2015",
+      "source_class": "official_guidance",
+      "evidence_status": "supports",
+      "evidence_role": "risk_treatment_guidance",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "593f8b139112d1a71613e6878c19e17332095d260e9a297e2fa178e7c1144359",
+      "claim_text_sha256": "5659f0adbfbfee065f755bd24c1406ff9a738e4a5c228d7271eec80a6431282b",
+      "paraphrased_support_sha256": "ded779680e678312390895257727e4666b51e9ab3df51be61b63a6707bd85ff0",
+      "finding_links": [
+        {
+          "finding_id": "P3-MCFX-02",
+          "severity": "high",
+          "status": "deferred"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 24,
+      "record_id": "PSR-0024",
+      "claim_id": "MC-RISK-WBG-PPP-UNIVERSE",
+      "source_id": "SRC-WBG-BD-PPP-HANDBOOK-2024",
+      "source_class": "official_guidance",
+      "evidence_status": "supports",
+      "evidence_role": "risk_treatment_guidance",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "aca49f12460300ed942afd3a5ba12be253c25d1e9d6b8436b014a87774e78fab",
+      "claim_text_sha256": "79dfc471ffcc00eca52e29bd209a894940cfc25ba04a754763fe311be61ccdf6",
+      "paraphrased_support_sha256": "a2c247b2359846ddc996736dcea8a55fbb30f2a08efc0ae69e30c6ed4c5e2213",
+      "finding_links": [
+        {
+          "finding_id": "P3-MCFX-02",
+          "severity": "high",
+          "status": "deferred"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 25,
+      "record_id": "PSR-0025",
+      "claim_id": "MC-RISK-WB-SRI-LANKA",
+      "source_id": "SRC-WB-SL-P505052",
+      "source_class": "official_project_document",
+      "evidence_status": "supports",
+      "evidence_role": "financing_precedent",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "53dac4ae83ee8a789882f0c7a9872adf34581d6feff62c1578aa8f8637851bb6",
+      "claim_text_sha256": "322870c5ec51b9f9b762623f96d87db7b71eb959b3c7f184597e441e6048b6a3",
+      "paraphrased_support_sha256": "b08473e2e067f8b5102ace804941ccf3a32a0503fb7beb234733a035daae7d80",
+      "finding_links": [
+        {
+          "finding_id": "P3-MCFX-02",
+          "severity": "high",
+          "status": "deferred"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 26,
+      "record_id": "PSR-0026",
+      "claim_id": "MC-IMAN-CONOVER-SOURCE-GAP",
+      "source_id": "SRC-IMAN-CONOVER-1980-1982-METADATA",
+      "source_class": "official_catalogue_record",
+      "evidence_status": "context_only",
+      "evidence_role": "source_gap",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "c3531f97091bbb160e61d7de8dcb04f9c4fa3321fbc0f81ddb4874ccf389bdb7",
+      "claim_text_sha256": "25dc4fd5007158823103e875469732d3a95b6403904128808bb6a27722b85e12",
+      "paraphrased_support_sha256": "7d63c6727610b7513af7239e6513454d3afa3b321aea7588a335bea50b2c5095",
+      "finding_links": [
+        {
+          "finding_id": "P5-MC-001",
+          "severity": "medium",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "medium",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 3,
+      "manifested_source_artifact_count": 3,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 27,
+      "record_id": "PSR-0027",
+      "claim_id": "MC-LHS-DEFINITION",
+      "source_id": "SRC-MCKAY-BECKMAN-CONOVER-1979",
+      "source_class": "academic_primary",
+      "evidence_status": "supports",
+      "evidence_role": "method_definition",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "a307d813a096fa77362ee3fdbdb55d2bcf3f321f745ccc6e32e14bebe2777b73",
+      "claim_text_sha256": "ed6b7d8db610d17c1b578508d379cfb24b76ad8019c26454c6612f5ad12652c9",
+      "paraphrased_support_sha256": "d271dd80a88416d27735f994cf5c4531292aaf657d968ed875e2f97782c74021",
+      "finding_links": [
+        {
+          "finding_id": "P5-MC-001",
+          "severity": "medium",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "medium",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 4,
+      "manifested_source_artifact_count": 4,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_standard",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 28,
+      "record_id": "PSR-0028",
+      "claim_id": "MC-SCIPY-SOBOL-CONTRACT",
+      "source_id": "SRC-SCIPY-1.17.1-QMC",
+      "source_class": "official_source_code",
+      "evidence_status": "supports",
+      "evidence_role": "software_contract",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "fda839205b8d2df4f84e0dc371936e1c0e834efa784a9b07c404c5d4e8623e6e",
+      "claim_text_sha256": "61733c1856404aea36001c46999c5e8d71e795068892229910906c028b3d0617",
+      "paraphrased_support_sha256": "b412ffe02e199a5a088ca20ec3e34bd5035db90c541deac6357bdd2b2978d110",
+      "finding_links": [
+        {
+          "finding_id": "P5-MC-002",
+          "severity": "medium",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "medium",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 3,
+      "manifested_source_artifact_count": 3,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_standard",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 29,
+      "record_id": "PSR-0029",
+      "claim_id": "MC-GAUSSIAN-COPULA-TAIL",
+      "source_id": "SRC-FURMAN-ET-AL-2016",
+      "source_class": "academic_primary",
+      "evidence_status": "supports",
+      "evidence_role": "methodology_boundary",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "0872a26c3a69b2df44f8c8338eec693d09de128495855db54ef85c0bb82d2a60",
+      "claim_text_sha256": "ce205d66ad7c3e4185716b001474a1d8272681e8a198c31191c47cba5583f1a6",
+      "paraphrased_support_sha256": "dd766f860bef06277a0c4ac2ea5a8d7e6da420245869c61a3c1aa4d683a035bd",
+      "finding_links": [
+        {
+          "finding_id": "P5-MC-003",
+          "severity": "medium",
+          "status": "deferred"
+        }
+      ],
+      "highest_linked_severity": "medium",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_standard",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 30,
+      "record_id": "PSR-0030",
+      "claim_id": "SA-SALIB-SOBOL-CONTRACT",
+      "source_id": "SRC-SALIB-1.5.2-SOBOL",
+      "source_class": "official_source_code",
+      "evidence_status": "supports",
+      "evidence_role": "software_contract",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "d43a84d724436d2996d7923ee8988367f689e5eb255fdf66d3c36aedcf6f1233",
+      "claim_text_sha256": "f102fc4d4fd1b8b99e8f588ac9287cd1f770a0408345ff60ea0227ce504215e1",
+      "paraphrased_support_sha256": "0798abcb66471d96674fbacb4d81da4babb96b48a8faacee12f1cd6623e685eb",
+      "finding_links": [
+        {
+          "finding_id": "P5-SA-001",
+          "severity": "medium",
+          "status": "open"
+        },
+        {
+          "finding_id": "P5-SA-002",
+          "severity": "medium",
+          "status": "deferred"
+        }
+      ],
+      "highest_linked_severity": "medium",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 4,
+      "manifested_source_artifact_count": 4,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_standard",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 31,
+      "record_id": "PSR-0031",
+      "claim_id": "SA-SALTELLI-SOBOL-ESTIMATORS",
+      "source_id": "SRC-SALTELLI-2002",
+      "source_class": "academic_primary",
+      "evidence_status": "supports",
+      "evidence_role": "method_definition",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "2f0fd8f0e07243abe2b03a557c9b2cdd419c75de867e62eb0a34d9a66a597a8a",
+      "claim_text_sha256": "0e4d3b9c1bdd67c41068fc0e1adf9eb43c21cee16e683d9654fe81444541ef8c",
+      "paraphrased_support_sha256": "131469460d13359e2ddef6bfee33026c5d0e373ae62f9a66da023d4c81bfe57a",
+      "finding_links": [
+        {
+          "finding_id": "P5-SA-001",
+          "severity": "medium",
+          "status": "open"
+        },
+        {
+          "finding_id": "P5-SA-002",
+          "severity": "medium",
+          "status": "deferred"
+        }
+      ],
+      "highest_linked_severity": "medium",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 3,
+      "manifested_source_artifact_count": 3,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_standard",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 32,
+      "record_id": "PSR-0032",
+      "claim_id": "SA-MORRIS-METHOD",
+      "source_id": "SRC-MORRIS-1991",
+      "source_class": "academic_primary",
+      "evidence_status": "supports",
+      "evidence_role": "method_definition",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "d16fac75d16bf2e610944cedb43bc8b0fe83b67aed3fcd7ade645e55cc273abf",
+      "claim_text_sha256": "377f6c2e60b60d9713acdb0c2e6cdfe1bed9903e07122b3ae82063d1a055ad48",
+      "paraphrased_support_sha256": "0a4e5c1f199aba650b4f3de5e46b79ccc1dd93ab5d4a92ff5226f7faf7b72ea9",
+      "finding_links": [
+        {
+          "finding_id": "P5-SA-001",
+          "severity": "medium",
+          "status": "open"
+        },
+        {
+          "finding_id": "P5-SA-002",
+          "severity": "medium",
+          "status": "deferred"
+        }
+      ],
+      "highest_linked_severity": "medium",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 3,
+      "manifested_source_artifact_count": 3,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_standard",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 33,
+      "record_id": "PSR-0033",
+      "claim_id": "SA-ENHANCED-MORRIS",
+      "source_id": "SRC-CAMPOLONGO-ET-AL-2007",
+      "source_class": "academic_primary",
+      "evidence_status": "supports",
+      "evidence_role": "method_definition",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "fb1ecda5ef3abb90e9298976b8b9bc59860d1898331df2f82a9cf3cb344a1d22",
+      "claim_text_sha256": "ad9695d38ceffd404af2a526bca02f0205a9dbb9b079cb153d681043f2b1f686",
+      "paraphrased_support_sha256": "dc339cf0366f0b650e916b6cd8aeb76062cabf567804a46423e9f3b9376305b8",
+      "finding_links": [
+        {
+          "finding_id": "P5-SA-001",
+          "severity": "medium",
+          "status": "open"
+        },
+        {
+          "finding_id": "P5-SA-002",
+          "severity": "medium",
+          "status": "deferred"
+        }
+      ],
+      "highest_linked_severity": "medium",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 3,
+      "manifested_source_artifact_count": 3,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_standard",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 34,
+      "record_id": "PSR-0034",
+      "claim_id": "SA-SALIB-MORRIS-CONTRACT",
+      "source_id": "SRC-SALIB-1.5.2-MORRIS",
+      "source_class": "official_source_code",
+      "evidence_status": "supports",
+      "evidence_role": "software_contract",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "917d1a9df75b141e803bd4f0d51220cb44560e165a3c2e507a1169116a4b8099",
+      "claim_text_sha256": "4e3256e977177a43ab754d19fd4557590872f53be541858d1e0794a3cb1a8668",
+      "paraphrased_support_sha256": "fdaaba59e3922f2198b6e6eb089321e93ae4f75eb332cbb57d90ee29380655e0",
+      "finding_links": [
+        {
+          "finding_id": "P5-SA-001",
+          "severity": "medium",
+          "status": "open"
+        },
+        {
+          "finding_id": "P5-SA-002",
+          "severity": "medium",
+          "status": "deferred"
+        }
+      ],
+      "highest_linked_severity": "medium",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 3,
+      "manifested_source_artifact_count": 3,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_standard",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 35,
+      "record_id": "PSR-0035",
+      "claim_id": "SA-PAWN-2015-METADATA",
+      "source_id": "SRC-PIANOSI-WAGENER-2015-RECORD",
+      "source_class": "academic_primary",
+      "evidence_status": "context_only",
+      "evidence_role": "method_definition",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "c5fb18931ca9c949b819d653fb1e670ff7af47afe6a80cc8ab35080cde96f6bc",
+      "claim_text_sha256": "2580725d78aa53fea3648abd9bd23bba153622bd30b8a9fc6fd34b5fef5ebe4b",
+      "paraphrased_support_sha256": "5a00c2d4e39e93a2ba02c4409dce02dfb027346155f59eeefd32d4af67fb7986",
+      "finding_links": [
+        {
+          "finding_id": "P5-SA-002",
+          "severity": "medium",
+          "status": "deferred"
+        }
+      ],
+      "highest_linked_severity": "medium",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 36,
+      "record_id": "PSR-0036",
+      "claim_id": "SA-PAWN-GENERIC-SAMPLE",
+      "source_id": "SRC-PIANOSI-WAGENER-2018",
+      "source_class": "academic_primary",
+      "evidence_status": "supports",
+      "evidence_role": "method_definition",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "eeb0b71d4ffbda2f01ca21ed5c2adb6b95af74fdafc3d182d234cd4eab5c69de",
+      "claim_text_sha256": "5d1b7cb6dda677948d4beb7b00237ce4571a1ac789817c9939e924a1c3fe2cf0",
+      "paraphrased_support_sha256": "392737647104df4e996ff917cd3cb2a2587e2d3f6334f34e2c3782ddafd3a778",
+      "finding_links": [
+        {
+          "finding_id": "P5-SA-002",
+          "severity": "medium",
+          "status": "deferred"
+        }
+      ],
+      "highest_linked_severity": "medium",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 3,
+      "manifested_source_artifact_count": 3,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_standard",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 37,
+      "record_id": "PSR-0037",
+      "claim_id": "SA-SALIB-PAWN-CONTRACT",
+      "source_id": "SRC-SALIB-1.5.2-PAWN",
+      "source_class": "official_source_code",
+      "evidence_status": "supports",
+      "evidence_role": "software_contract",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "c07f37b27ae3613caca5ca1634050d48b24eb8a70e35134ff39ed4b7786e46da",
+      "claim_text_sha256": "338c623a9c3e3a30040ee9e9a3bf6bd51f372de8fe3eadb61745cb6562a862c7",
+      "paraphrased_support_sha256": "9177d91ce4cdebc494fb0ad18cd541109b4ab9fd83e068748239c09b4f84f5d6",
+      "finding_links": [
+        {
+          "finding_id": "P5-SA-002",
+          "severity": "medium",
+          "status": "deferred"
+        }
+      ],
+      "highest_linked_severity": "medium",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_standard",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 38,
+      "record_id": "PSR-0038",
+      "claim_id": "RISK-CVAR-DISCRETE-DEFINITION",
+      "source_id": "SRC-ROCKAFELLAR-URYASEV-2002",
+      "source_class": "academic_primary",
+      "evidence_status": "supports",
+      "evidence_role": "method_definition",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "285c1e1089945c5b67a085eb06bd5ec3703ed8915ef8d24548887171eb4c37d0",
+      "claim_text_sha256": "684ebbac7156eaa14eeef9de36668210e73f9e3d38d2355f9fcc00b04ad36612",
+      "paraphrased_support_sha256": "7c1ee5d53ec086dcc2a180b65844caadf7123079d4f76c80b64227cf2c78420e",
+      "finding_links": [
+        {
+          "finding_id": "P5-RISK-001",
+          "severity": "high",
+          "status": "requires_correction"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 39,
+      "record_id": "PSR-0039",
+      "claim_id": "RISK-LENDER-PXX-IFC",
+      "source_id": "SRC-IFC-SOLAR-GUIDE-2015",
+      "source_class": "official_guidance",
+      "evidence_status": "supports",
+      "evidence_role": "energy_yield_convention",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "a196dbf9ef50d58f8f09a65b6b09d2d4582475a44a86bba0ecb9dfdca65b591e",
+      "claim_text_sha256": "8f31246460c85f0f979a1cb7ac6eef33bd30efc268d5897b22234697a2b89101",
+      "paraphrased_support_sha256": "bccb1f2833dd576d8307be22690d8c058b1913dbb0eb4d5247225c1fdbdf042e",
+      "finding_links": [
+        {
+          "finding_id": "P5-RISK-002",
+          "severity": "high",
+          "status": "requires_correction"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 40,
+      "record_id": "PSR-0040",
+      "claim_id": "WIND-LEE-FIELDS-PROPOSED-FRAMEWORK",
+      "source_id": "SRC-LEE-FIELDS-2021",
+      "source_class": "academic_primary",
+      "evidence_status": "supports",
+      "evidence_role": "methodology_boundary",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "f5dcc110b6905a27007050a4852255a2788d0d2c7878bff7cf2307f6e1c86ee0",
+      "claim_text_sha256": "ae53c0cd74c369334e65b22690332890587696fbdc4ce1733a4401d050618f62",
+      "paraphrased_support_sha256": "0bf8d8860f732e0fc3abf49a0b79eb663b1ec3db93554bffb613fb0769bcfed3",
+      "finding_links": [
+        {
+          "finding_id": "P5-WIND-001",
+          "severity": "high",
+          "status": "requires_correction"
+        },
+        {
+          "finding_id": "P5-WIND-002",
+          "severity": "high",
+          "status": "requires_correction"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 41,
+      "record_id": "PSR-0041",
+      "claim_id": "WIND-MEASNET-PXX-CONVENTION",
+      "source_id": "SRC-MEASNET-V3",
+      "source_class": "standard",
+      "evidence_status": "supports",
+      "evidence_role": "energy_yield_convention",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "50bd35745f4b5eb863525aba22c081eaf8a4a804c5425bb0b624dee129b0e0f2",
+      "claim_text_sha256": "f5647f00c063f0578f83a51cbe70536587853e9c561d7f844ac1984638131b2d",
+      "paraphrased_support_sha256": "ce47f8343142c64e17ed95b90047e0df2a9d8637915fec2e7ba74ff61c6f2d42",
+      "finding_links": [
+        {
+          "finding_id": "P5-WIND-003",
+          "severity": "high",
+          "status": "open"
+        },
+        {
+          "finding_id": "P5-RISK-002",
+          "severity": "high",
+          "status": "requires_correction"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 2,
+      "manifested_source_artifact_count": 2,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "review_row_number": 42,
+      "record_id": "PSR-0042",
+      "claim_id": "FIN-SCIPY-BISECT-CONTRACT",
+      "source_id": "SRC-SCIPY-1.17.1-BISECT",
+      "source_class": "official_source_code",
+      "evidence_status": "supports",
+      "evidence_role": "numerical_solver_contract",
+      "transaction_evidence_status": "not_applicable",
+      "source_register_record_sha256": "694599923f73e39eb38a6bdcb70aa08bd2e25ffcf89e41a1214f67d688ea77ad",
+      "claim_text_sha256": "3b2c73b95a13243b18bca9615ee0cd32d73a9397082c59bd5d7b72f8345fb7c8",
+      "paraphrased_support_sha256": "73abac45d59a9c895bf5312bfb02e374323c61254ff8eb11e8f115b4b842492c",
+      "finding_links": [
+        {
+          "finding_id": "P5-FIN-002",
+          "severity": "high",
+          "status": "open"
+        }
+      ],
+      "highest_linked_severity": "high",
+      "source_location_status": "url_and_locator_present",
+      "artifact_ref_count": 3,
+      "manifested_source_artifact_count": 3,
+      "governed_repository_artifact_count": 0,
+      "review_priority": "full_semantic_priority",
+      "review_requirements": {
+        "artifact_hash_review_required": true,
+        "source_location_review_required": true,
+        "semantic_support_review_required": true,
+        "limitation_review_required": true,
+        "publication_rights_review_required": true
+      },
+      "publication_rights_status": "not_assessed_no_republication_authorized",
+      "review_result": {
+        "status": "pending_independent_review",
+        "reviewer_identity": null,
+        "reviewed_at": null,
+        "semantic_support_decision": null,
+        "publication_rights_decision": null,
+        "result_artifact_sha256": null
+      },
+      "hold_effect": "blocks_board_lender_release"
+    }
+  ],
+  "negative_controls": [
+    {
+      "control_id": "P03-NC-01",
+      "purpose": "reject unsupported promotion to verified primary evidence",
+      "expected_result": "EVIDENCE_BOUNDARY_ESCALATION"
+    },
+    {
+      "control_id": "P03-NC-02",
+      "purpose": "reject missing, extra, escaping, colliding or hash-mismatched retained objects",
+      "expected_result": "retained-source verification fails before PASS"
+    },
+    {
+      "control_id": "P03-NC-03",
+      "purpose": "reject CSV/JSON population or field drift",
+      "expected_result": "CSV_PARITY"
+    },
+    {
+      "control_id": "P03-NC-04",
+      "purpose": "reject analyst judgment presented as publisher source text",
+      "expected_result": "ANALYST_EXCEPTION"
+    }
+  ],
+  "boundaries": {
+    "source_register_modified": false,
+    "source_manifest_modified": false,
+    "evidence_status_upgrades_authorized": false,
+    "publication_or_redistribution_rights_claimed": false,
+    "synthetic_or_analyst_material_promoted_to_primary": false,
+    "structural_or_hash_pass_is_semantic_acceptance": false,
+    "f5_01_f5_02_netting_permitted": false
+  },
+  "required_circulation_wording": "P03 remains pending independent review. The register contains 42 claim records and the retained source manifest contains 74 objects; implementer hash verification does not establish semantic support, publication rights, transaction evidence, bankability or release approval.",
+  "limitations": [
+    "The source register contains historical absolute predecessor paths; this additive plan binds only portable repository-relative successors and does not rewrite the register.",
+    "No publication or redistribution right is inferred from public availability, an official URL, local retention or successful hash verification.",
+    "PSR-0009 is analyst judgment over six supporting official records and has no separate publisher artifact; it cannot be presented as primary-source text.",
+    "The IEC catalogue result establishes only public-catalogue status at the cutoff and does not prove that no unpublished committee draft exists.",
+    "The P2 population reproduction and IEC query log are governed outside the 74-object original/converted source-manifest scope and remain separately hash-bound.",
+    "A same-implementer preflight cannot satisfy the independent source-verification reviewer or final P03 decision requirements.",
+    "Issue #1110 remains OPEN, all programme gates remain pending and Board/lender circulation remains HOLD."
+  ]
+}
