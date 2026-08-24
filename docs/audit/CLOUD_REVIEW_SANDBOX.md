@@ -70,7 +70,9 @@ repository's exact `requirements.txt`, `constraints.txt` and
 `pyproject.toml` inputs at `/workspaces/.dutchbay-audit-review-venv`, outside the
 checkout. The retained P03 corpus is copied only to
 `/workspaces/.dutchbay-private/p03/sources`, also outside the checkout and with
-owner-only directory permissions.
+owner-only directory permissions. The image assigns the fixed `/workspaces`
+parent to the non-root `vscode` user so post-create can materialize those two
+out-of-checkout roots without broad permissions or a root lifecycle command.
 
 Do not commit, publish, upload as an Actions artifact, or copy retained source
 objects back into the repository. Do not expose a source path, source name,

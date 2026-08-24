@@ -349,6 +349,7 @@ def test_repository_owned_ssh_transport_is_narrow_and_base_pinned() -> None:
     assert dockerfile.count("FROM ") == 1
     assert "install_audit_review_sshd.sh" in dockerfile
     assert "sshd_readiness.py" in dockerfile
+    assert "install -d -m 0755 -o vscode -g vscode /workspaces" in dockerfile
     assert "ENTRYPOINT" not in dockerfile
     assert "CMD" not in dockerfile
     assert "Dir::Etc::sourcelist=$DEBIAN_SOURCES" in installer
