@@ -1,0 +1,577 @@
+{
+  "schema_version": "1.0.0",
+  "document_id": "DUTCHBAY-1110-ARCHITECTURE-EXAMINATION-PLAN-v1",
+  "authority_status": "active_pre_execution_plan",
+  "created_at": "2026-08-24T16:06:53+05:30",
+  "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+  "historical_register_path": "registers/history/architecture_pointer_dispositions.pre-architecture-examination-plan.20260824.0b9c6803.json",
+  "historical_register_sha256": "0b9c68039c24a4f23b2c6299b4189db6b6cabaffddf0cec628de5afc70ea96d8",
+  "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+  "release_status": "HOLD",
+  "immutability_rule": "Do not edit this v1 plan after execution begins; issue an additive result overlay or a new version.",
+  "records": [
+    {
+      "pointer_id": "RS-F3",
+      "batch_id": "B01",
+      "owner_role": "governance_controls_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["go_with_the_flow_rules_v3_0_clean.csv", "dutchbay_bootstrap_rules.py"],
+      "planned_negative_control": "Seed a ruleset enforcement claim with a retired or nonexistent governed artefact and require source-derived reconciliation to reject the stale claim rather than count the row as enforced.",
+      "dependencies": [],
+      "additional_unresolved_gaps": ["The historical 63-of-66 wording is stale because the live source-derived population is now 72 active rules; every row still requires claim-level enforcement reconciliation."]
+    },
+    {
+      "pointer_id": "RS-F1",
+      "batch_id": "B02",
+      "owner_role": "governance_controls_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["go_with_the_flow_rules_v3_0_clean.csv", "analytics/schema_guard.py", "tests/lint/test_no_direct_finance_pipeline_imports.py"],
+      "planned_negative_control": "Introduce one controlled violation for each CASPER, CESSPIT and CCCDIR framework claim and require an identified automated control to fail; otherwise classify that framework slice as review-only.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-F5",
+      "batch_id": "B02",
+      "owner_role": "software_quality_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["tests/_canon.py", "tests/lint/test_wacc_fence_v14.py", "tests/lint/test_irr_location_v14.py"],
+      "planned_negative_control": "Reinsert one canonical KPI numeric literal into a disposable test module and require the proposed completeness fence to fail without relying on the literal's current value.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-F6",
+      "batch_id": "B02",
+      "owner_role": "software_quality_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["tests/lint/test_no_argparse_anywhere.py", "tests/lint/test_no_typer_v14.py", "tests/lint/test_contracts_gateway_imports.py", "tests/lint/test_no_direct_finance_pipeline_imports.py"],
+      "planned_negative_control": "Place a prohibited import inside a function body in a disposable module and require every applicable LibCST boundary guard to detect it rather than stopping traversal below module scope.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-F7",
+      "batch_id": "B02",
+      "owner_role": "software_quality_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["tests/lint/test_no_argparse_anywhere.py", "tests/lint/test_no_direct_finance_pipeline_imports.py"],
+      "planned_negative_control": "Add a live allowlist exception without an expiry, owner or bounded count and require the governance control to fail even though the allowlisted import or CLI still exists.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-F11",
+      "batch_id": "B02",
+      "owner_role": "software_quality_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["analytics/cli/cli_capital_structure_optimize_hydra.py", "tests/lint/test_entrypoints_hydra_only.py"],
+      "planned_negative_control": "Add a disposable Hydra entry point outside the hand-maintained canonical list and require completeness, JSON-stdout and deprecation controls to fail before the entry point can be treated as governed.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-F2",
+      "batch_id": "B03",
+      "owner_role": "grid_model_owner",
+      "independent_reviewer_role": "independent_grid_software_reviewer",
+      "current_main_code_seams": ["analytics/grid/evaluate_grid.py", "analytics/contracts_v14.py", "tests/lint/test_no_direct_finance_pipeline_imports.py"],
+      "planned_negative_control": "Introduce a disposable grid-to-finance import or a grid result marked bankable and require a structural guard or contract invariant to reject it before any KPI comparison is performed.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-F10",
+      "batch_id": "B03",
+      "owner_role": "configuration_architecture_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["conf/run_full_pipeline_v14.yaml", "run_full_pipeline_v14.py"],
+      "planned_negative_control": "Construct an override whose result differs between Hydra composition and the hand-written scenario merge, then require documentation and tests to identify the actual merge authority without calling flat files a config tree.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-F8",
+      "batch_id": "B04",
+      "owner_role": "scenario_model_owner",
+      "independent_reviewer_role": "independent_project_finance_model_reviewer",
+      "current_main_code_seams": ["scenarios/dutchbay_basecase_2025Q4.yaml", "scenarios/dutchbay_lendercase_2025Q4.yaml", "scenarios/dutchbay_equitycase_2025Q4.yaml"],
+      "planned_negative_control": "Harmonize only the resource basis across the three scenario families and require the comparison control to distinguish that counterfactual from the original mixed-resource and mixed-capital-structure cases.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-B1",
+      "batch_id": "B05",
+      "owner_role": "evaluation_gateway_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["analytics/evaluation_v14.py", "analytics/pipeline_v14_enhanced.py", "app/jobs/analysis_runner.py"],
+      "planned_negative_control": "Pass a raw_config that violates a load-time provenance or integrity guard through each MC, sensitivity, Morris and optimizer path and require equivalent fail-loud or explicit qualification behavior.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-B2",
+      "batch_id": "B05",
+      "owner_role": "configuration_validation_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["analytics/schema_guard.py", "finance/epc_helper_v14.py", "analytics/pipeline_v14_enhanced.py"],
+      "planned_negative_control": "Exercise every empty, missing-module and warning-only schema path with a known invalid value and require the outcome to be fail-loud or visibly qualified rather than a silent validation pass.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-B3",
+      "batch_id": "B05",
+      "owner_role": "evaluation_gateway_owner",
+      "independent_reviewer_role": "independent_api_contract_reviewer",
+      "current_main_code_seams": ["analytics/pipeline_v14_enhanced.py", "app/api/main.py", "app/services/pipeline_service.py"],
+      "planned_negative_control": "Raise a known ConfigValidationError at the pipeline seam and require the service and API layers to preserve the documented client-error class and status instead of returning a generic server failure.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-E1",
+      "batch_id": "B05",
+      "owner_role": "configuration_validation_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["app/services/pipeline_service.py", "api/pipeline_api.py", "run_full_pipeline_v14.py", "analytics/pipeline_v14_enhanced.py"],
+      "planned_negative_control": "Inject a violation into a registered module outside cashflow and debt, invoke every live entry point with defaults, and require either validation of that module or an explicit limitation naming its omission.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-E2",
+      "batch_id": "B05",
+      "owner_role": "async_analysis_owner",
+      "independent_reviewer_role": "independent_api_contract_reviewer",
+      "current_main_code_seams": ["app/jobs/analysis_runner.py", "analytics/evaluation_v14.py", "analytics/scenario_loader.py"],
+      "planned_negative_control": "Submit an analysis job with an unapproved AEP source and a self-inconsistent FX triple and require the analysis route to reject the same invalid state as the governed finance-case route.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-A13",
+      "batch_id": "B06",
+      "owner_role": "analytics_contracts_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["analytics/pipeline_v14_enhanced.py", "analytics/core/metrics.py", "analytics/three_statement.py", "analytics/irr_bridge.py", "analytics/cost/mc_capex.py", "analytics/portfolio/tech_wbs.py", "analytics/fx/fx_builder.py", "finance/cashflow_v14_fx.py"],
+      "planned_negative_control": "Rename or make unavailable one private finance helper in an isolated tree and require a public-surface or import-contract control to identify every cross-package consumer before runtime.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-B4",
+      "batch_id": "B06",
+      "owner_role": "analytics_contracts_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["analytics/evaluation_v14.py", "analytics/pipeline_v14_enhanced.py", "analytics/contracts_v14.py"],
+      "planned_negative_control": "Round-trip a ScenarioResult containing typed nested contracts through the current flatten-and-rehydrate seam and require exact runtime types, values and serialization shapes to survive.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-B5",
+      "batch_id": "B06",
+      "owner_role": "evaluation_gateway_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["analytics/evaluate_scenario.py", "analytics/evaluation_v14.py", "tests/lint/test_no_direct_finance_pipeline_imports.py"],
+      "planned_negative_control": "Run the same fixed scenario, overrides and invalid input through both gateway surfaces and compare the complete result, defaults and exception contract; inject one divergence to prove the equivalence oracle is responsive.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-B6",
+      "batch_id": "B06",
+      "owner_role": "configuration_validation_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["analytics/config_schema.py", "analytics/schema_guard.py"],
+      "planned_negative_control": "Import and reload registering modules in multiple orders, including a missing and duplicate registration, and require the registry population to remain exact or fail deterministically.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-B9",
+      "batch_id": "B06",
+      "owner_role": "analytics_contracts_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["analytics/contracts_v14.py"],
+      "planned_negative_control": "Construct a MonteCarloResult with contradictory named and generic percentile shapes plus false provenance flags and require construction or serialization to reject the ambiguity.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-C12",
+      "batch_id": "B06",
+      "owner_role": "analytics_contracts_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["analytics/monte_carlo_v14.py", "analytics/sensitivity_v14.py", "analytics/dscr_sensitivity.py", "analytics/fx_sensitivity_real.py", "analytics/sensitivity_pareto.py", "analytics/wacc_sensitivity.py", "scripts/FINAL_CORRECTED_sensitivity_v14.py", "scripts/FIX_SENSITIVITY_LINE_489.py"],
+      "planned_negative_control": "Enumerate importable legacy surfaces and deliberately diverge one deprecated shim in an isolated copy; require canonical-path or deprecation controls to catch the non-equivalence before publication.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-A11",
+      "batch_id": "B07",
+      "owner_role": "project_finance_model_owner",
+      "independent_reviewer_role": "independent_project_finance_model_reviewer",
+      "current_main_code_seams": ["finance/debt_v14.py", "analytics/pipeline_v14_enhanced.py"],
+      "planned_negative_control": "Enable each toy fallback while omitting run.mode and require the production evaluation path to reject or visibly quarantine the CAPEX, rate and debt outputs rather than self-authorize them.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-A12",
+      "batch_id": "B07",
+      "owner_role": "project_finance_model_owner",
+      "independent_reviewer_role": "independent_project_finance_model_reviewer",
+      "current_main_code_seams": ["finance/cashflow_v14.py", "finance/utils.py", "finance/cashflow_v14_utils.py", "finance/debt_v14.py"],
+      "planned_negative_control": "Perturb one duplicated waterfall or coercion path in an isolated implementation and require a multi-case parity oracle to detect row, key, type and amount divergence.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-B7",
+      "batch_id": "B07",
+      "owner_role": "model_governance_owner",
+      "independent_reviewer_role": "independent_project_finance_model_reviewer",
+      "current_main_code_seams": ["analytics/aep_reconciliation.py", "analytics/contracts_v14.py"],
+      "planned_negative_control": "Widen the AEP reconciliation tolerance enough to pass a known material mismatch and require the run manifest, result and report posture to disclose the override and its consequence.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-B8",
+      "batch_id": "B07",
+      "owner_role": "model_governance_owner",
+      "independent_reviewer_role": "independent_project_finance_model_reviewer",
+      "current_main_code_seams": ["analytics/scenario_loader.py"],
+      "planned_negative_control": "Remove all evidence, conditions-precedent and readiness blocks from an otherwise valid scenario and require a visible non-lender-grade status rather than a silent load-path pass.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-D11",
+      "batch_id": "B07",
+      "owner_role": "project_finance_model_owner",
+      "independent_reviewer_role": "independent_project_finance_model_reviewer",
+      "current_main_code_seams": ["finance/debt_v14.py", "app/jobs/runner.py"],
+      "planned_negative_control": "Omit P90 from a downside-binding debt-sizing scenario and require fail-loud behavior or an explicit, provenance-bearing flat-factor assumption rather than a silent 0.80 fallback.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-C3",
+      "batch_id": "B08",
+      "owner_role": "quantitative_risk_lead",
+      "independent_reviewer_role": "independent_quantitative_risk_reviewer",
+      "current_main_code_seams": ["analytics/mc/aggregate.py", "analytics/mc/exports.py", "analytics/mc/engine.py", "analytics/core/risk_metrics.py"],
+      "planned_negative_control": "Use a small asymmetric trial array with independently calculated quantiles, VaR and expected shortfall and require every surface to match the fixed convention, including the exact tail membership.",
+      "dependencies": [{"dependency_id": "P5-REPRO-RISK-001", "kind": "registered_reproduction", "status": "required_not_run", "blocking": true, "requirement": "Complete and independently review the fixed quantile, exceedance, VaR and tail-risk arithmetic reproduction."}],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-C4",
+      "batch_id": "B08",
+      "owner_role": "quantitative_risk_lead",
+      "independent_reviewer_role": "independent_quantitative_risk_reviewer",
+      "current_main_code_seams": ["analytics/mc/exports.py", "analytics/mc/aggregate.py", "analytics/capital_risk_layer_v14.py"],
+      "planned_negative_control": "Use an asymmetric distribution where the raw 90th percentile and higher-is-better exceedance P90 are far apart, then require payload labels and provenance to prevent the two from being joined as equivalent.",
+      "dependencies": [{"dependency_id": "P5-REPRO-RISK-001", "kind": "registered_reproduction", "status": "required_not_run", "blocking": true, "requirement": "Complete and independently review the fixed quantile, exceedance, VaR and tail-risk arithmetic reproduction."}],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-C5",
+      "batch_id": "B08",
+      "owner_role": "quantitative_risk_lead",
+      "independent_reviewer_role": "independent_quantitative_risk_reviewer",
+      "current_main_code_seams": ["analytics/mc/exports.py", "analytics/core/covenant_breach.py", "analytics/mc/engine.py"],
+      "planned_negative_control": "Run the same adverse cash-flow trials under dual-DSCR-resculpted and fixed-debt schedules and require the output to distinguish a structural zero from an informative breach probability.",
+      "dependencies": [{"dependency_id": "P5-REPRO-RISK-001", "kind": "registered_reproduction", "status": "required_not_run", "blocking": true, "requirement": "Complete and independently review the fixed quantile, exceedance, VaR and tail-risk arithmetic reproduction."}],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-C6",
+      "batch_id": "B08",
+      "owner_role": "quantitative_risk_lead",
+      "independent_reviewer_role": "independent_quantitative_risk_reviewer",
+      "current_main_code_seams": ["app/reports/capital_risk_emit.py", "analytics/capital_risk_layer_v14.py", "analytics/mc/convergence.py", "analytics/evaluation_v14.py"],
+      "planned_negative_control": "Send a below-minimum trial count through the CASPER evaluation path and require refusal or explicit non-lender qualification before any tail statistic is serialised or rendered.",
+      "dependencies": [{"dependency_id": "P5-REPRO-RISK-001", "kind": "registered_reproduction", "status": "required_not_run", "blocking": true, "requirement": "Complete and independently review the fixed quantile, exceedance, VaR and tail-risk arithmetic reproduction."}],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-C7",
+      "batch_id": "B08",
+      "owner_role": "quantitative_risk_lead",
+      "independent_reviewer_role": "independent_quantitative_risk_reviewer",
+      "current_main_code_seams": ["analytics/fx/fx_calibration.py", "analytics/fx/fx_builder.py", "analytics/contracts_v14.py"],
+      "planned_negative_control": "Compare the calibrated regime-mixture driver with the fixed shock and hardcoded CVaR multiplier on the same FX history, and require every lender-visible result to identify its actual model and provenance.",
+      "dependencies": [{"dependency_id": "P5-REPRO-RISK-001", "kind": "registered_reproduction", "status": "required_not_run", "blocking": true, "requirement": "Complete and independently review the fixed quantile, exceedance, VaR and tail-risk arithmetic reproduction."}],
+      "additional_unresolved_gaps": ["External calibration and transaction hedging evidence remain separate from arithmetic conformance."]
+    },
+    {
+      "pointer_id": "RS-C9",
+      "batch_id": "B09",
+      "owner_role": "quantitative_risk_lead",
+      "independent_reviewer_role": "independent_quantitative_risk_reviewer",
+      "current_main_code_seams": ["analytics/mc/engine.py"],
+      "planned_negative_control": "Declare a non-uniform distribution whose realised support exceeds the authored band and require the output provenance to retain both authored and transformed bounds without rewriting history.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-C10",
+      "batch_id": "B09",
+      "owner_role": "quantitative_risk_lead",
+      "independent_reviewer_role": "independent_quantitative_risk_reviewer",
+      "current_main_code_seams": ["analytics/mc/engine.py", "analytics/mc/aggregate.py"],
+      "planned_negative_control": "Hash the pre-mapping and realised sample matrices, mutate one distribution and FX transform, and require each downstream consumer to receive the declared space or an explicitly named transformed space.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-C11",
+      "batch_id": "B09",
+      "owner_role": "analytics_contracts_owner",
+      "independent_reviewer_role": "independent_software_assurance_reviewer",
+      "current_main_code_seams": ["analytics/sensitivity/global_sa.py", "analytics/mc/exports.py", "analytics/mc/samplers.py", "analytics/casper/casper_payload.py", "analytics/sensitivity/optimizer.py"],
+      "planned_negative_control": "Remove each optional dependency in isolation and compare the complete CASPER payload, requiring an explicit unavailable or degraded marker wherever content changes.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-C1",
+      "batch_id": "B10",
+      "owner_role": "quantitative_risk_lead",
+      "independent_reviewer_role": "independent_quantitative_risk_reviewer",
+      "current_main_code_seams": ["analytics/mc/samplers.py", "analytics/mc/engine.py"],
+      "planned_negative_control": "Run replicated LHS and independently scrambled Sobol designs at fixed budgets against an independent high-sample reference on smooth and kinked KPIs, reporting error distributions rather than one seed.",
+      "dependencies": [{"dependency_id": "P5-REPRO-C1-001", "kind": "registered_reproduction", "status": "required_not_run", "blocking": true, "requirement": "Complete replicated LHS-versus-RQMC convergence and error-estimation work before adjudicating estimator efficiency."}],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-C2",
+      "batch_id": "B10",
+      "owner_role": "quantitative_risk_lead",
+      "independent_reviewer_role": "independent_quantitative_risk_reviewer",
+      "current_main_code_seams": ["analytics/mc/correlation.py", "analytics/mc/engine.py"],
+      "planned_negative_control": "Measure achieved rank and tail dependence across independent seeds, then separate sampler and score seeds and compare Gaussian and heavy-tail dependence designs without treating calibration assumptions as facts.",
+      "dependencies": [{"dependency_id": "P5-REPRO-C2-001", "kind": "registered_reproduction", "status": "required_not_run", "blocking": true, "requirement": "Complete correlation-method conformance and calibrated tail-dependence validation before adjudicating the dependence design."}],
+      "additional_unresolved_gaps": ["Project-specific joint-tail calibration data are not currently available."]
+    },
+    {
+      "pointer_id": "RS-C8",
+      "batch_id": "B10",
+      "owner_role": "quantitative_risk_lead",
+      "independent_reviewer_role": "independent_quantitative_risk_reviewer",
+      "current_main_code_seams": ["analytics/sensitivity/global_sa.py"],
+      "planned_negative_control": "Replicate Sobol, Morris and PAWN estimates across increasing sample sizes with a known-interaction function near the 0.05 threshold and require convergence criteria to distinguish signal from estimator noise.",
+      "dependencies": [{"dependency_id": "P5-REPRO-C8-001", "kind": "registered_reproduction", "status": "required_not_run", "blocking": true, "requirement": "Complete sample-adequacy, convergence and heuristic-sensitivity reproductions before adjudicating the sensitivity defaults."}],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-D5",
+      "batch_id": "B11",
+      "owner_role": "wind_resource_methodology_owner",
+      "independent_reviewer_role": "independent_wind_resource_reviewer",
+      "current_main_code_seams": ["wind_resource/energy_calculator.py", "analytics/wind/aep_summary_builder.py", "analytics/aep_reconciliation.py"],
+      "planned_negative_control": "Run identical turbine, wind and loss inputs through both AEP engines and require a reconciled difference with method labels; perturb above-curve behavior to prove the comparison is responsive.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-D6",
+      "batch_id": "B11",
+      "owner_role": "wind_resource_methodology_owner",
+      "independent_reviewer_role": "independent_wind_resource_reviewer",
+      "current_main_code_seams": ["wind_resource/wind_pipeline.py"],
+      "planned_negative_control": "Create a lexicographically later stale result beside a chronologically latest run and require cash-flow export to use the in-memory or explicitly bound run rather than filename ordering.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-D7",
+      "batch_id": "B11",
+      "owner_role": "wind_resource_methodology_owner",
+      "independent_reviewer_role": "independent_wind_resource_reviewer",
+      "current_main_code_seams": ["wind_resource/bankable_aep.py"],
+      "planned_negative_control": "Use a distribution with material probability above 30 m/s and a turbine-specific operating window, compare against an independent integral, and require no renormalisation of excluded mass into the powered band.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-D8",
+      "batch_id": "B11",
+      "owner_role": "wind_resource_methodology_owner",
+      "independent_reviewer_role": "independent_wind_resource_reviewer",
+      "current_main_code_seams": ["app/services/pipeline_service.py", "app/jobs/analysis_runner.py", "app/jobs/runner.py"],
+      "planned_negative_control": "Provide a partial ResourceAssessment with a known capacity or capacity-factor mismatch and require every screening path to reject or visibly qualify it rather than skipping both reconciliation guards.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-D10",
+      "batch_id": "B11",
+      "owner_role": "resource_contracts_owner",
+      "independent_reviewer_role": "independent_wind_resource_reviewer",
+      "current_main_code_seams": ["wind_resource/cashflow_adapter.py", "solar_resource/cashflow_adapter.py", "wind_resource/era5_retrieval.py", "analytics/resource_contracts.py"],
+      "planned_negative_control": "Exercise a valid 0.5 percent wind capacity factor and an invalid 101 percent solar value and require exact unit contracts to reject ambiguity without heuristic percent-versus-decimal guessing.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-D2",
+      "batch_id": "B12",
+      "owner_role": "wind_resource_methodology_owner",
+      "independent_reviewer_role": "independent_wind_resource_reviewer",
+      "current_main_code_seams": ["wind_resource/era5_retrieval.py"],
+      "planned_negative_control": "Vary the shear exponent across clipping and fallback boundaries and compare hub-height wind and AEP sensitivity, requiring the specific extrapolation uncertainty and source provenance to remain visible.",
+      "dependencies": [{"dependency_id": "WIND-SITE-MAST-MCP-EVIDENCE", "kind": "external_evidence", "status": "blocked_external", "blocking": true, "requirement": "Authenticated on-site mast and MCP evidence is required before any project-specific bankable resource conclusion."}],
+      "additional_unresolved_gaps": ["No authenticated on-site mast or MCP dataset is available for a project-specific shear calibration."]
+    },
+    {
+      "pointer_id": "RS-D4",
+      "batch_id": "B12",
+      "owner_role": "wind_resource_methodology_owner",
+      "independent_reviewer_role": "independent_wind_resource_reviewer",
+      "current_main_code_seams": ["analytics/core/exceedance.py", "wind_resource/bankable_aep.py"],
+      "planned_negative_control": "Compute normal and lognormal P90, P95 and P99 from the same fixed P50 and uncertainty using independent closed forms, including a high-uncertainty case that tests positivity and tail behavior.",
+      "dependencies": [{"dependency_id": "P5-REPRO-D4-001", "kind": "registered_reproduction", "status": "required_not_run", "blocking": true, "requirement": "Complete and independently review the distribution-choice and P90, P95 and P99 impact reproduction."}],
+      "additional_unresolved_gaps": ["The project-specific distribution choice remains conditional on independent resource evidence."]
+    },
+    {
+      "pointer_id": "RS-D12",
+      "batch_id": "B12",
+      "owner_role": "wind_resource_methodology_owner",
+      "independent_reviewer_role": "independent_wind_resource_reviewer",
+      "current_main_code_seams": ["wind_resource/weibull_fit.py", "wind_resource/bankable_aep.py"],
+      "planned_negative_control": "Fit a controlled monsoon-season mixture both pooled and seasonally, compare independent energy-tail error and AEP, and require a declared acceptance threshold to gate an inadequate pooled fit.",
+      "dependencies": [{"dependency_id": "P5-REPRO-WIND-001", "kind": "registered_reproduction", "status": "required_not_run", "blocking": true, "requirement": "Complete and independently review pooled-versus-seasonal wind-distribution behavior and energy-tail adequacy."}],
+      "additional_unresolved_gaps": ["Synthetic seasonal structure cannot substitute for authenticated site measurements."]
+    },
+    {
+      "pointer_id": "RS-E3",
+      "batch_id": "B13",
+      "owner_role": "async_analysis_owner",
+      "independent_reviewer_role": "independent_api_contract_reviewer",
+      "current_main_code_seams": ["app/jobs/analysis_runner.py", "app/services/pipeline_service.py", "app/jobs/runner.py"],
+      "planned_negative_control": "Alter screening semantics in the central run-mode resolver in an isolated tree and require both synchronous and analysis-job seams to consume that change rather than retain hard-coded copies.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-E4",
+      "batch_id": "B13",
+      "owner_role": "async_analysis_owner",
+      "independent_reviewer_role": "independent_api_contract_reviewer",
+      "current_main_code_seams": ["app/jobs/runner.py", "app/jobs/analysis_runner.py", "app/jobs/models.py"],
+      "planned_negative_control": "Submit an asynchronous request that asks for bankable posture and require the boundary to refuse it or return an unmissable screening grade in both the request contract and result envelope.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-E5",
+      "batch_id": "B13",
+      "owner_role": "api_model_owner",
+      "independent_reviewer_role": "independent_api_contract_reviewer",
+      "current_main_code_seams": ["app/models/inputs.py", "app/services/pipeline_service.py"],
+      "planned_negative_control": "Change capacity and capacity factor within the present tolerance while retaining a frozen AEP summary and require the sync response to expose the basis mismatch rather than return unlabeled lender KPIs.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-E6",
+      "batch_id": "B13",
+      "owner_role": "reporting_surface_owner",
+      "independent_reviewer_role": "independent_reporting_contract_reviewer",
+      "current_main_code_seams": ["app/api/main.py", "app/reports/capital_risk_emit.py", "app/api/surface.py", "app/reports/report_model.py"],
+      "planned_negative_control": "Generate a web report where capital risk is intentionally not computed and another where it is computed, requiring the surface to distinguish unavailable from zero-risk and no-breach outcomes.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-E7",
+      "batch_id": "B13",
+      "owner_role": "async_analysis_owner",
+      "independent_reviewer_role": "independent_api_contract_reviewer",
+      "current_main_code_seams": ["app/jobs/models.py", "app/jobs/analysis_runner.py"],
+      "planned_negative_control": "Submit tornado analysis with the legacy dict-form parameter block and no resolvable drivers and require a boundary-level 422 response rather than a generic runtime failure class.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-E8",
+      "batch_id": "B13",
+      "owner_role": "api_model_owner",
+      "independent_reviewer_role": "independent_api_contract_reviewer",
+      "current_main_code_seams": ["app/jobs/models.py", "app/jobs/runner.py", "app/jobs/analysis_runner.py"],
+      "planned_negative_control": "Return a malformed or wrong-kind job result payload and require response-model or discriminated-union validation to fail before an API client can consume the envelope.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-E9",
+      "batch_id": "B13",
+      "owner_role": "api_model_owner",
+      "independent_reviewer_role": "independent_api_contract_reviewer",
+      "current_main_code_seams": ["app/api/main.py", "api/pipeline_api.py"],
+      "planned_negative_control": "Enumerate the OpenAPI operation and route pairs and deliberately mount the same router twice in an isolated app, requiring a uniqueness guard to fail on the duplicate public alias.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-E10",
+      "batch_id": "B14",
+      "owner_role": "application_security_owner",
+      "independent_reviewer_role": "independent_security_reviewer",
+      "current_main_code_seams": ["app/api/security.py", "app/web/templates/wizard.html.j2"],
+      "planned_negative_control": "Inject hostile site-name markup and inline script content through the rendered wizard and require template escaping plus the deployed CSP to prevent executable content without assuming either layer alone.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-E11",
+      "batch_id": "B14",
+      "owner_role": "application_security_owner",
+      "independent_reviewer_role": "independent_security_reviewer",
+      "current_main_code_seams": ["app/api/auth.py", "app/api/main.py"],
+      "planned_negative_control": "Reuse a captured token after logout or an explicit revocation event and require rejection; if no revocation mechanism exists, measure and disclose the full residual TTL exposure.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-E12",
+      "batch_id": "B14",
+      "owner_role": "reporting_surface_owner",
+      "independent_reviewer_role": "independent_reporting_contract_reviewer",
+      "current_main_code_seams": ["app/reports/report_model.py", "app/reports/report_orchestration.py", "app/reports/renderer.py"],
+      "planned_negative_control": "Mutate one optional report-section contract and require independently selected JSON, HTML, PDF and workbook consumers to detect or isolate the change rather than fail through one monolithic builder.",
+      "dependencies": [],
+      "additional_unresolved_gaps": []
+    },
+    {
+      "pointer_id": "RS-E13",
+      "batch_id": "B14",
+      "owner_role": "async_operations_owner",
+      "independent_reviewer_role": "independent_operations_reviewer",
+      "current_main_code_seams": ["app/jobs/config.py", "app/jobs/worker.py", "app/api/jobs_router.py", "app/jobs/models.py"],
+      "planned_negative_control": "Mismatch queue name, task string, JSON round-trip shape and shared-store handoff one at a time in an integration harness and require each incompatibility to fail before production dispatch.",
+      "dependencies": [],
+      "additional_unresolved_gaps": ["A real Redis/ARQ integration execution remains required; source inspection alone is insufficient."]
+    },
+    {
+      "pointer_id": "RS-A14",
+      "batch_id": "B15",
+      "owner_role": "project_finance_model_owner",
+      "independent_reviewer_role": "independent_project_finance_model_reviewer",
+      "current_main_code_seams": ["finance/debt_v14.py"],
+      "planned_negative_control": "Compare pro-rata and cost-weighted principal allocation on a fixed multi-tranche schedule, reconciling debt service and interest exactly while refusing to select transaction treatment without authenticated facility terms.",
+      "dependencies": [
+        {"dependency_id": "P5-REPRO-A14-001", "kind": "registered_reproduction", "status": "required_not_run", "blocking": true, "requirement": "Complete and independently review the facility-allocation method reproduction against a fixed multi-tranche schedule."},
+        {"dependency_id": "F5-02-TRANSACTION-EVIDENCE", "kind": "external_evidence", "status": "blocked_external", "blocking": true, "requirement": "Authenticated facility and intercreditor terms are required before deciding the transaction-specific principal-allocation convention."}
+      ],
+      "additional_unresolved_gaps": ["No authenticated lender or intercreditor evidence currently supports a transaction-specific allocation choice."]
+    }
+  ]
+}
