@@ -61,6 +61,9 @@ def test_controlled_audit_successor_pack_is_internally_valid() -> None:
     assert '"release_status": "HOLD"' in completed.stdout
     assert '"ruleset_count_erratum": "PASS"' in completed.stdout
     assert '"pending_examination": 56' in completed.stdout
+    assert '"programme_gates"' in completed.stdout
+    assert '"pending": 23' in completed.stdout
+    assert '"closure_authorized": 0' in completed.stdout
 
 
 def test_architecture_examination_plan_is_exactly_pending_and_hold_blocking() -> None:
@@ -150,6 +153,179 @@ def test_architecture_examination_plan_rejects_duplicate_json_keys(
         builder.LedgerBuildError, match="duplicate JSON key: pointer_id"
     ):
         builder._load_object(malformed)
+
+
+def test_programme_gate_plan_is_exactly_pending_open_and_hold_blocking() -> None:
+    """The issue-derived v1 gate plan must authorize neither completion nor closure."""
+    validator = _load_validator()
+    builder = validator._load_programme_gate_builder()
+    payload = builder.build_from_disk()
+    records = payload["records"]
+    by_id = {record["gate_id"]: record for record in records}
+
+    assert len(records) == 23
+    assert Counter(record["source_section"] for record in records) == Counter(
+        {
+            "reconciled_predecessor_queue": 9,
+            "additional_live_remediation_gates": 6,
+            "release_gates": 8,
+        }
+    )
+    assert {record["source_checkbox_state"] for record in records} == {"unchecked"}
+    assert {record["gate_status"] for record in records} == {"pending"}
+    assert all(record["completion_record"]["sha256"] is None for record in records)
+    assert all(record["independent_reviewer"]["identity"] is None for record in records)
+    assert not any(record["closure_authorized"] for record in records)
+    assert {record["hold_effect"] for record in records} == {
+        "blocks_board_lender_release"
+    }
+    assert payload["source_issue"]["state_at_cutoff"] == "OPEN"
+    assert payload["release_status"] == "HOLD"
+    assert payload["f5_separation"] == {
+        "f5_01_gate": "L01",
+        "f5_02_evidence_gate": "P06",
+        "f5_02_decision_gate": "L03",
+        "rule": (
+            "F5-01 and F5-02 remain separate rollback surfaces; P06 and L03 "
+            "remain distinct, and synthetic material cannot satisfy either F5-02 gate."
+        ),
+    }
+    assert by_id["L03"]["dependencies"] == ["P06"]
+    assert by_id["R08"]["dependencies"] == ["R07", "P09"]
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        ("missing_gate", "plan gate population mismatch"),
+        ("escaping_artifact", "escaping artifact reference"),
+        ("reviewer_conflict", "owner and independent reviewer roles conflict"),
+        ("smuggled_status", "plan record keys are not exact"),
+        ("unhashable_stage", "execution stage invalid"),
+        ("unhashable_evidence_state", "initial evidence state invalid"),
+        ("late_dependency", "dependency is not in an earlier execution stage"),
+        ("f5_dependency_drift", "L03 must depend only"),
+        ("closure_dependency_drift", "R08 closure dependencies drift"),
+    ],
+)
+def test_programme_gate_plan_rejects_control_bypasses(
+    mutation: str, expected: str
+) -> None:
+    """Population, provenance, independence, ordering and closure bypasses fail."""
+    validator = _load_validator()
+    builder = validator._load_programme_gate_builder()
+    snapshot = builder.ISSUE_SNAPSHOT.read_text(encoding="utf-8")
+    plan = copy.deepcopy(json.loads(builder.PLAN.read_text(encoding="utf-8")))
+    by_id = {record["gate_id"]: record for record in plan["records"]}
+
+    if mutation == "missing_gate":
+        plan["records"].pop()
+    elif mutation == "escaping_artifact":
+        plan["records"][0]["known_artifact_refs"] = ["../outside.json"]
+    elif mutation == "reviewer_conflict":
+        plan["records"][0]["independent_reviewer_role"] = plan["records"][0][
+            "owner_role"
+        ]
+    elif mutation == "smuggled_status":
+        plan["records"][0]["gate_status"] = "completed"
+    elif mutation == "unhashable_stage":
+        plan["records"][0]["execution_stage"] = ["S01_CONTROL_BASELINE"]
+    elif mutation == "unhashable_evidence_state":
+        plan["records"][0]["initial_evidence_state"] = {
+            "value": "partial_evidence_present"
+        }
+    elif mutation == "late_dependency":
+        by_id["L01"]["dependencies"] = ["R01"]
+    elif mutation == "f5_dependency_drift":
+        by_id["L03"]["dependencies"] = ["P06", "P01"]
+    else:
+        by_id["R08"]["dependencies"] = ["R07"]
+
+    with pytest.raises(builder.GateLedgerBuildError, match=expected):
+        builder.build_controlled_ledger(snapshot, plan, builder.REPO_ROOT)
+
+
+def test_programme_gate_plan_rejects_frozen_issue_snapshot_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The v1 gate plan must rebuild only from the exact portable issue snapshot."""
+    validator = _load_validator()
+    builder = validator._load_programme_gate_builder()
+    mutated_source = tmp_path / builder.ISSUE_SNAPSHOT.name
+    shutil.copy2(builder.ISSUE_SNAPSHOT, mutated_source)
+    mutated_source.write_text(
+        mutated_source.read_text(encoding="utf-8") + "\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(builder, "PACK_ROOT", tmp_path)
+    monkeypatch.setattr(builder, "ISSUE_SNAPSHOT", mutated_source)
+
+    with pytest.raises(
+        builder.GateLedgerBuildError,
+        match="frozen issue snapshot digest drift",
+    ):
+        builder.build_from_disk()
+
+
+def test_programme_gate_source_rejects_checked_checkbox() -> None:
+    """A checked live-source row cannot be represented as a pending v1 source."""
+    validator = _load_validator()
+    builder = validator._load_programme_gate_builder()
+    body = builder._extract_issue_body(
+        builder.ISSUE_SNAPSHOT.read_text(encoding="utf-8")
+    )
+    mutated = body.replace("- [ ] **Checkpoint", "- [x] **Checkpoint", 1)
+
+    with pytest.raises(
+        builder.GateLedgerBuildError, match="frozen source contains a checked gate"
+    ):
+        builder._parse_issue_checkboxes(mutated)
+
+
+def test_programme_gate_plan_rejects_duplicate_json_keys(tmp_path: Path) -> None:
+    """Duplicate governed JSON members cannot exploit last-key-wins parsing."""
+    validator = _load_validator()
+    builder = validator._load_programme_gate_builder()
+    malformed = tmp_path / "duplicate-gate-key.json"
+    malformed.write_text('{"gate_id":"P01","gate_id":"R08"}\n')
+
+    with pytest.raises(
+        builder.GateLedgerBuildError, match="duplicate JSON key: gate_id"
+    ):
+        builder._load_object(malformed)
+
+
+def test_programme_gate_plan_rejects_symlink_backed_artifact(
+    tmp_path: Path,
+) -> None:
+    """A repository-relative display path cannot launder an external artifact."""
+    validator = _load_validator()
+    builder = validator._load_programme_gate_builder()
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    outside = tmp_path / "outside.json"
+    outside.write_text("{}\n", encoding="utf-8")
+    alias = repository / "evidence.json"
+    alias.symlink_to(outside)
+
+    with pytest.raises(
+        builder.GateLedgerBuildError, match="symlink-backed artifact reference"
+    ):
+        builder._validate_artifact_refs("P01", ["evidence.json"], repository)
+
+
+def test_programme_gate_plan_rejects_symlink_backed_governed_json(
+    tmp_path: Path,
+) -> None:
+    """The governed plan cannot be redirected to an external JSON document."""
+    validator = _load_validator()
+    builder = validator._load_programme_gate_builder()
+    outside = tmp_path / "outside.json"
+    outside.write_text("{}\n", encoding="utf-8")
+    alias = tmp_path / "programme_gate_plan.v1.json"
+    alias.symlink_to(outside)
+
+    with pytest.raises(builder.GateLedgerBuildError, match="cannot be a symlink"):
+        builder._load_object(alias)
 
 
 @pytest.mark.parametrize("mutation", ["record", "instruction"])
