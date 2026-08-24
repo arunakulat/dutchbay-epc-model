@@ -155,6 +155,14 @@ DutchBay_DevPkg_PREFERRED_ONLY/
 # Validation freeze evidence (never commit)
 _freeze_artifacts/
 
+# Confidential F5-02 lender returns/evidence (blank public template only)
+docs/audit/lender-input/private-returns/
+docs/audit/lender-input/returns/
+**/DUTCHBAY_F5_02_*RETURNED*
+**/DUTCHBAY_F5_02_*COMPLETED*
+**/dutchbay_f5_02_*returned*
+**/dutchbay_f5_02_*completed*
+
 # Generated reporting / regression / analysis artifacts (regenerable; never commit)
 _out_reporting_cli/
 _regression/
