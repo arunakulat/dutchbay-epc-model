@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 from collections import Counter
 from pathlib import Path
+from types import ModuleType
 from typing import Any, cast
 
 PACK_ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +24,15 @@ RULESET_COUNT_ERRATUM = Path("03_AUDIT_ERRATA_2026-08-24.md")
 ARCHITECTURE_REGISTER = Path("registers/architecture_pointer_dispositions.json")
 STABLE_RULESET_INGRESS_INSTRUCTION = (
     "Re-ingress every active rule from `go_with_the_flow_rules_v3_0_clean.csv`"
+)
+ARCHITECTURE_EXAMINATION_BUILDER = (
+    PACK_ROOT / "scripts" / "build_architecture_examination_ledger.py"
+)
+ARCHITECTURE_EXAMINATION_JSON = (
+    PACK_ROOT / "registers" / "architecture_examination_ledger.v1.json"
+)
+ARCHITECTURE_EXAMINATION_CSV = (
+    PACK_ROOT / "registers" / "architecture_examination_ledger.v1.csv"
 )
 
 
@@ -48,6 +59,87 @@ def _load(relative: str) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8"))
     _require(isinstance(value, dict), f"JSON root must be an object: {relative}")
     return cast(dict[str, Any], value)
+
+
+def _load_architecture_examination_builder() -> ModuleType:
+    """Load the pure ledger builder without making the scripts dir a package."""
+    spec = importlib.util.spec_from_file_location(
+        "architecture_examination_builder", ARCHITECTURE_EXAMINATION_BUILDER
+    )
+    if spec is None or spec.loader is None:
+        raise ValidationError("architecture examination builder cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _validate_architecture_examination_ledger() -> dict[str, int]:
+    """Rebuild both descendants in memory and enforce the pre-execution boundary."""
+    _require(
+        ARCHITECTURE_EXAMINATION_BUILDER.is_file(),
+        "architecture examination builder is missing",
+    )
+    _require(
+        ARCHITECTURE_EXAMINATION_JSON.is_file(),
+        "architecture examination JSON ledger is missing",
+    )
+    _require(
+        ARCHITECTURE_EXAMINATION_CSV.is_file(),
+        "architecture examination CSV ledger is missing",
+    )
+    builder = _load_architecture_examination_builder()
+    payload = cast(dict[str, Any], builder.build_from_disk())
+    _require(
+        ARCHITECTURE_EXAMINATION_JSON.read_text(encoding="utf-8")
+        == builder.render_json(payload),
+        "architecture examination JSON descendant drift",
+    )
+    _require(
+        ARCHITECTURE_EXAMINATION_CSV.read_text(encoding="utf-8")
+        == builder.render_csv(payload),
+        "architecture examination CSV descendant drift",
+    )
+    records = payload.get("records", [])
+    _require(len(records) == 56, "architecture examination population drift")
+    _require(
+        Counter(str(record.get("source_disposition")) for record in records)
+        == Counter({"not_examined": 51, "deferred": 5}),
+        "architecture examination source-disposition drift",
+    )
+    _require(
+        all(record.get("disposition") == "pending_examination" for record in records),
+        "v1 architecture plan must remain pending examination",
+    )
+    _require(
+        all(record.get("confidence") == "not_assessed" for record in records),
+        "v1 architecture plan must remain not assessed",
+    )
+    _require(
+        all(record.get("result", {}).get("sha256") is None for record in records),
+        "v1 architecture plan cannot carry result hashes",
+    )
+    _require(
+        all(
+            record.get("independent_reviewer", {}).get("identity") is None
+            for record in records
+        ),
+        "v1 architecture plan cannot claim completed independent review",
+    )
+    _require(
+        all(
+            record.get("hold_effect") == "blocks_board_lender_release"
+            for record in records
+        ),
+        "architecture examination HOLD effect drift",
+    )
+    _require(
+        payload.get("release_status") == "HOLD", "architecture ledger HOLD missing"
+    )
+    return {
+        "records": len(records),
+        "pending_examination": len(records),
+        "hash_bound_results": 0,
+    }
 
 
 def _validate_manifest() -> int:
@@ -130,6 +222,7 @@ def main() -> None:
     """Validate manifest integrity and controlled register invariants."""
     manifest_entries = _validate_manifest()
     _validate_ruleset_count_erratum()
+    architecture_examinations = _validate_architecture_examination_ledger()
     findings = _load("registers/findings_register.v2.json")
     sources = _load("registers/primary_source_register.v2.json")
     architecture = _load("registers/architecture_pointer_dispositions.json")
@@ -180,6 +273,7 @@ def main() -> None:
         "primary_sources": 42,
         "ruleset_count_erratum": "PASS",
         "architecture_pointers": 72,
+        "architecture_examinations": architecture_examinations,
         "reproductions": dict(sorted(reproduction_counts.items())),
     }
     print(json.dumps(result, indent=2, sort_keys=True))

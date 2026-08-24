@@ -13,6 +13,9 @@ The authoritative live remediation queue and eventual release decision are track
 - 111-row findings register with audited-commit anchors, evidence links, dependencies and implementation state;
 - 42-row claim-level source register;
 - 72-pointer architecture register and active adjudication overlay;
+- immutable 56-row pre-execution architecture examination plan plus deterministic
+  JSON/CSV ledger descendants; all 56 rows remain pending, unreviewed and
+  HOLD-blocking;
 - 34-row reproduction register plus concise machine-readable reproduction records;
 - four independent refuter reports and the P3 register patch map;
 - semantic-closure and structural-validation records;
@@ -23,6 +26,8 @@ The latest controlled validation represented here reports:
 - 111 findings, 299 audited-commit anchors, 367 evidence links and 187 typed dependencies;
 - 42 source records and 74 externally retained source-manifest objects;
 - 72 architecture pointers: 2 confirmed, 13 partially confirmed, 1 not a defect, 5 deferred and 51 not examined;
+- 56 architecture examinations planned in 15 dependency-aware batches: 56 pending,
+  zero independently reviewed and zero result-hashed;
 - 34 reproduction controls: 18 completed, 11 required-not-run and 5 unavailable;
 - structural status `PASS`, release status `HOLD`.
 
@@ -42,7 +47,12 @@ From the repository root:
 python docs/audit/2026-08-controlled-successor/scripts/validate_published_pack.py
 ```
 
-The validator checks the publication manifest, JSON parsing, exact register populations, audited-commit identity, F5-01/F5-02 separation language, and HOLD controls. It does not replace independent semantic review.
+The validator checks the publication manifest, JSON parsing, exact register populations,
+audited-commit identity, F5-01/F5-02 separation language, the deterministic 56-row
+architecture-examination descendants, and HOLD controls. It rejects a missing/extra
+pointer, duplicate JSON member, path escape, owner/reviewer-role conflict, result-state
+field in the immutable plan, descendant drift, or any v1 row presented as examined. It
+does not execute the planned negative controls or replace independent semantic review.
 
 ## Release boundary
 

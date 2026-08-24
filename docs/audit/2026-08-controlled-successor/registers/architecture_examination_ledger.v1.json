@@ -1,0 +1,2670 @@
+{
+  "schema_version": "1.0.0",
+  "document_id": "DUTCHBAY-1110-ARCHITECTURE-EXAMINATION-PLAN-v1",
+  "authority_status": "active_pre_execution_ledger",
+  "created_at": "2026-08-24T16:06:53+05:30",
+  "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+  "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+  "source_register": {
+    "path": "registers/history/architecture_pointer_dispositions.pre-architecture-examination-plan.20260824.0b9c6803.json",
+    "sha256": "0b9c68039c24a4f23b2c6299b4189db6b6cabaffddf0cec628de5afc70ea96d8",
+    "record_count": 72,
+    "selected_source_disposition_counts": {
+      "deferred": 5,
+      "not_examined": 51
+    }
+  },
+  "plan_input": {
+    "path": "registers/architecture_examination_plan.v1.json",
+    "semantic_sha256": "11e64a5e8b5d1be191a533974725d874f824fe1ca44c7efe64bf4585612d2319",
+    "immutability_rule": "Do not edit this v1 plan after execution begins; issue an additive result overlay or a new version."
+  },
+  "coverage": {
+    "record_count": 56,
+    "batch_count": 15,
+    "pending_examination_count": 56,
+    "hash_bound_result_count": 0,
+    "independently_reviewed_count": 0,
+    "hold_blocking_count": 56
+  },
+  "controlled_vocabularies": {
+    "future_final_disposition": [
+      "blocked_external",
+      "confirmed",
+      "not_a_defect",
+      "partially_confirmed",
+      "refuted",
+      "remediated"
+    ],
+    "initial_disposition": [
+      "pending_examination"
+    ],
+    "initial_confidence": [
+      "not_assessed"
+    ],
+    "hold_effect": [
+      "blocks_board_lender_release"
+    ]
+  },
+  "required_circulation_wording": "This 56-row ledger is a pre-execution control plan, not completed architecture examination. All 56 rows remain pending, have no independent reviewer or result hash, and block Board/lender release.",
+  "release_status": "HOLD",
+  "records": [
+    {
+      "ledger_row_number": 1,
+      "pointer_id": "RS-F3",
+      "batch_id": "B01",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:537",
+      "historical_area": "**63 of 66 GWTF rules have unpinned enforcement text**",
+      "historical_code_location": "`go_with_the_flow_rules_v3_0_clean.csv`; only R24, R25 and the ruleset-file identity are reconciled",
+      "historical_risk_claim": "The R24 test exists precisely because R24 had drifted into an overclaim (#958) — proving the failure mode is real and recurrent. Rows such as R1/CLI-02, R11, R13, R16 and R8/TEST-02 name artifacts whose existence is unverified — and `pytest.ini` was in fact **retired** in favour of `pyproject.toml`, so R8/TEST-02's text is already stale",
+      "historical_assigned_phase": "P3",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "The R24 test exists precisely because R24 had drifted into an overclaim (#958) — proving the failure mode is real and recurrent. Rows such as R1/CLI-02, R11, R13, R16 and R8/TEST-02 name artifacts whose existence is unverified — and `pytest.ini` was in fact **retired** in favour of `pyproject.toml`, so R8/TEST-02's text is already stale",
+      "fixed_claim_sha256": "e1f3b6345612e4027cfd3ffa2f11585f8133e26f257d0123d4a4e5cc41671b49",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "go_with_the_flow_rules_v3_0_clean.csv",
+        "dutchbay_bootstrap_rules.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "governance_controls_owner",
+      "dependencies": [],
+      "planned_negative_control": "Seed a ruleset enforcement claim with a retired or nonexistent governed artefact and require source-derived reconciliation to reject the stale claim rather than count the row as enforced.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent.",
+        "The historical 63-of-66 wording is stale because the live source-derived population is now 72 active rules; every row still requires claim-level enforcement reconciliation."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 2,
+      "pointer_id": "RS-F1",
+      "batch_id": "B02",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:535",
+      "historical_area": "FRAMEWORK-01/02/03 (CASPER/CESSPIT/CCCDIR) are declared \"Code review enforces\" in the ruleset, not test-enforced as frameworks",
+      "historical_code_location": "`go_with_the_flow_rules_v3_0_clean.csv` rows FRAMEWORK-01/02/03",
+      "historical_risk_claim": "The three named governing frameworks have **no single test asserting them**. What exists are proxies for slices: CASPER → `_require_*` cold-import guards; CESSPIT → `schema_guard` at runtime plus one fail-loud discount-rate check; CCCDIR → two LibCST guards, both with live allowlists. A framework claim in a lender-facing doc therefore rests on review discipline, unevenly across the three",
+      "historical_assigned_phase": "P3",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "The three named governing frameworks have **no single test asserting them**. What exists are proxies for slices: CASPER → `_require_*` cold-import guards; CESSPIT → `schema_guard` at runtime plus one fail-loud discount-rate check; CCCDIR → two LibCST guards, both with live allowlists. A framework claim in a lender-facing doc therefore rests on review discipline, unevenly across the three",
+      "fixed_claim_sha256": "ea036da2ddf939c10c82d55d14cbb49671767027a7129f9c08c754da967e6eba",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "go_with_the_flow_rules_v3_0_clean.csv",
+        "analytics/schema_guard.py",
+        "tests/lint/test_no_direct_finance_pipeline_imports.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "governance_controls_owner",
+      "dependencies": [],
+      "planned_negative_control": "Introduce one controlled violation for each CASPER, CESSPIT and CCCDIR framework claim and require an identified automated control to fail; otherwise classify that framework slice as review-only.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 3,
+      "pointer_id": "RS-F11",
+      "batch_id": "B02",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:545",
+      "historical_area": "`cli_capital_structure_optimize_hydra.py` is a Hydra CLI **outside** the canonical guard list",
+      "historical_code_location": "`analytics/cli/cli_capital_structure_optimize_hydra.py:101-102` vs `test_entrypoints_hydra_only.py:71-76`",
+      "historical_risk_claim": "Covered incidentally by the argparse scan (it lives under a guarded dir) but not by the `@hydra.main` / JSON-stdout / deprecation assertions the other four get. **`CANONICAL_CLIS` is hand-maintained with no test that it is complete**",
+      "historical_assigned_phase": "P4",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Covered incidentally by the argparse scan (it lives under a guarded dir) but not by the `@hydra.main` / JSON-stdout / deprecation assertions the other four get. **`CANONICAL_CLIS` is hand-maintained with no test that it is complete**",
+      "fixed_claim_sha256": "177694cf38ff9e0c89a2e1c40435aca32cef8b02eb236fb0cd3d7656971aedf8",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/cli/cli_capital_structure_optimize_hydra.py",
+        "tests/lint/test_entrypoints_hydra_only.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "software_quality_owner",
+      "dependencies": [],
+      "planned_negative_control": "Add a disposable Hydra entry point outside the hand-maintained canonical list and require completeness, JSON-stdout and deprecation controls to fail before the entry point can be treated as governed.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 4,
+      "pointer_id": "RS-F5",
+      "batch_id": "B02",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:539",
+      "historical_area": "The canonical KPI vector has **no lint fence** preventing re-hardcoding",
+      "historical_code_location": "`tests/_canon.py:35-51` vs ~19 consumers; contrast `test_wacc_fence_v14.py:69,111` and `test_irr_location_v14.py:57,167`",
+      "historical_risk_claim": "#955's whole point was collapsing a dozen bare literals into one module. **Nothing stops the next test from writing `0.014551597740253388` inline again** — exactly the state the consolidation removed. The repo already owns the guard idiom needed",
+      "historical_assigned_phase": "P4",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "#955's whole point was collapsing a dozen bare literals into one module. **Nothing stops the next test from writing `0.014551597740253388` inline again** — exactly the state the consolidation removed. The repo already owns the guard idiom needed",
+      "fixed_claim_sha256": "eecaf85d88d471eac9f48034d845a9f9ebfa1283b576b9020e7ab2c2d2ba06bd",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "tests/_canon.py",
+        "tests/lint/test_wacc_fence_v14.py",
+        "tests/lint/test_irr_location_v14.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "software_quality_owner",
+      "dependencies": [],
+      "planned_negative_control": "Reinsert one canonical KPI numeric literal into a disposable test module and require the proposed completeness fence to fail without relying on the literal's current value.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 5,
+      "pointer_id": "RS-F6",
+      "batch_id": "B02",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:540",
+      "historical_area": "LibCST guards are **structurally blind below module level**",
+      "historical_code_location": "`test_no_argparse_anywhere.py:89-91` (`visit_FunctionDef` returns `False`); same pattern in `test_no_typer_v14.py`, `test_contracts_gateway_imports.py:46-47`, `test_no_direct_finance_pipeline_imports.py`",
+      "historical_risk_claim": "Every import-boundary guard shares one evasion: a function-scoped import. This is a deliberate scope choice, and **it interacts badly with REFACTOR-02, whose sanctioned circular-import fix is precisely a lazy import** — the pattern the guards cannot see. The finance/analytics graph uses ~15 such lazy edges",
+      "historical_assigned_phase": "P2",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Every import-boundary guard shares one evasion: a function-scoped import. This is a deliberate scope choice, and **it interacts badly with REFACTOR-02, whose sanctioned circular-import fix is precisely a lazy import** — the pattern the guards cannot see. The finance/analytics graph uses ~15 such lazy edges",
+      "fixed_claim_sha256": "0b0034ef0ae383e893b6422c37c1090a3a2ba3a8b4ae18111fd246f061846499",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "tests/lint/test_no_argparse_anywhere.py",
+        "tests/lint/test_no_typer_v14.py",
+        "tests/lint/test_contracts_gateway_imports.py",
+        "tests/lint/test_no_direct_finance_pipeline_imports.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "software_quality_owner",
+      "dependencies": [],
+      "planned_negative_control": "Place a prohibited import inside a function body in a disposable module and require every applicable LibCST boundary guard to detect it rather than stopping traversal below module scope.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 6,
+      "pointer_id": "RS-F7",
+      "batch_id": "B02",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:541",
+      "historical_area": "Argparse ALLOWLIST and the direct-import ALLOWLIST are live debt with no expiry",
+      "historical_code_location": "`test_no_argparse_anywhere.py:63-69`; `test_no_direct_finance_pipeline_imports.py:96` (several entries marked `[PERMANENT]`)",
+      "historical_risk_claim": "Entries marked `[PERMANENT]` convert a boundary rule into a documented exception set. The hygiene tests only prevent **dead** entries; they never force a live one to be paid down, and no test caps allowlist size",
+      "historical_assigned_phase": "P4",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Entries marked `[PERMANENT]` convert a boundary rule into a documented exception set. The hygiene tests only prevent **dead** entries; they never force a live one to be paid down, and no test caps allowlist size",
+      "fixed_claim_sha256": "7541a8bde30a672f989b7a06ec0f73013371399a2bb96a4284d606f633204260",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "tests/lint/test_no_argparse_anywhere.py",
+        "tests/lint/test_no_direct_finance_pipeline_imports.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "software_quality_owner",
+      "dependencies": [],
+      "planned_negative_control": "Add a live allowlist exception without an expiry, owner or bounded count and require the governance control to fail even though the allowlisted import or CLI still exists.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 7,
+      "pointer_id": "RS-F10",
+      "batch_id": "B03",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:544",
+      "historical_area": "`conf/` has no config groups, so \"Hydra config tree\" overstates the composition in use",
+      "historical_code_location": "`conf/` (8 flat files); `conf/run_full_pipeline_v14.yaml:4-5`",
+      "historical_risk_claim": "Hydra buys override syntax and typed CLI parsing here, **not composition** — scenario selection is a file path string and merging happens in hand-written Python (`run_full_pipeline_v14.py:988-1027`) that writes temp patched files. That hand-rolled merge is the real config seam and is far less scrutinised than Hydra's would be; `scenarios/overrides/` looks like a group but is not wired as one",
+      "historical_assigned_phase": "P5",
+      "source_disposition": "not_examined",
+      "source_confidence": "high",
+      "fixed_claim": "Hydra buys override syntax and typed CLI parsing here, **not composition** — scenario selection is a file path string and merging happens in hand-written Python (`run_full_pipeline_v14.py:988-1027`) that writes temp patched files. That hand-rolled merge is the real config seam and is far less scrutinised than Hydra's would be; `scenarios/overrides/` looks like a group but is not wired as one",
+      "fixed_claim_sha256": "0f3d201d644876956e9a79b4b8ebcd36569811f636f87252009db75c6ad2baed",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "conf/run_full_pipeline_v14.yaml",
+        "run_full_pipeline_v14.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "configuration_architecture_owner",
+      "dependencies": [],
+      "planned_negative_control": "Construct an override whose result differs between Hydra composition and the hand-written scenario merge, then require documentation and tests to identify the actual merge authority without calling flat files a config tree.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 8,
+      "pointer_id": "RS-F2",
+      "batch_id": "B03",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:536",
+      "historical_area": "The grid stack's \"never feeds the finance engine\" KPI-neutrality claim is asserted in docstrings but **not structurally guarded**",
+      "historical_code_location": "`analytics/grid/evaluate_grid.py:16-19`; `contracts_v14.py:624-626`, `:704-710`; no corresponding test found",
+      "historical_risk_claim": "The claim is load-bearing for the \"byte-identical committed scenarios\" story the whole default-off grid programme rests on. **The guard pattern already exists in this repo** (`test_no_direct_finance_pipeline_imports.py`) but `analytics/grid/` is not scoped by a dedicated assertion. `bankable` is a plain mutable field with no validator forbidding `True`",
+      "historical_assigned_phase": "P2",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "The claim is load-bearing for the \"byte-identical committed scenarios\" story the whole default-off grid programme rests on. **The guard pattern already exists in this repo** (`test_no_direct_finance_pipeline_imports.py`) but `analytics/grid/` is not scoped by a dedicated assertion. `bankable` is a plain mutable field with no validator forbidding `True`",
+      "fixed_claim_sha256": "fb6da80f70295368f70d3d79f09be91387b6afeebb0f2e114481c19b695b61be",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/grid/evaluate_grid.py",
+        "analytics/contracts_v14.py",
+        "tests/lint/test_no_direct_finance_pipeline_imports.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "grid_model_owner",
+      "dependencies": [],
+      "planned_negative_control": "Introduce a disposable grid-to-finance import or a grid result marked bankable and require a structural guard or contract invariant to reject it before any KPI comparison is performed.",
+      "independent_reviewer": {
+        "required_role": "independent_grid_software_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 9,
+      "pointer_id": "RS-F8",
+      "batch_id": "B04",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:542",
+      "historical_area": "**Scenario family divergence is undocumented in code and unpinned by any cross-scenario test**",
+      "historical_code_location": "`basecase:4` (cf 0.4), `:90` (debt_ratio 0.7); `lendercase:23` (cf 0.332), `:458-459` (0.7 as a CAP with dual_dscr); `equitycase:4` (cf 0.4), `:52` (equity 0.15), `:90` (debt_ratio 0.4)",
+      "historical_risk_claim": "Base and equity run an **unhaircut 0.40 capacity factor** while the lender case runs the bankable 0.332 with the full IEC 61400-15-2 uncertainty stack; base/equity also lack `dual_dscr` sizing. A reader comparing the three side by side is comparing **different resource bases as well as different capital structures**, and no test asserts the intended relationship — only the lendercase has an oracle",
+      "historical_assigned_phase": "P3",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Base and equity run an **unhaircut 0.40 capacity factor** while the lender case runs the bankable 0.332 with the full IEC 61400-15-2 uncertainty stack; base/equity also lack `dual_dscr` sizing. A reader comparing the three side by side is comparing **different resource bases as well as different capital structures**, and no test asserts the intended relationship — only the lendercase has an oracle",
+      "fixed_claim_sha256": "3ab418263a46a1aedcf500ffaa0129242abdc2b80678df79c45f3b65fc1cb0ea",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "scenarios/dutchbay_basecase_2025Q4.yaml",
+        "scenarios/dutchbay_lendercase_2025Q4.yaml",
+        "scenarios/dutchbay_equitycase_2025Q4.yaml"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "scenario_model_owner",
+      "dependencies": [],
+      "planned_negative_control": "Harmonize only the resource basis across the three scenario families and require the comparison control to distinguish that counterfactual from the original mixed-resource and mixed-capital-structure cases.",
+      "independent_reviewer": {
+        "required_role": "independent_project_finance_model_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 10,
+      "pointer_id": "RS-B1",
+      "batch_id": "B05",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:489",
+      "historical_area": "Gateway bypass via `raw_config` (in-memory) evaluation",
+      "historical_code_location": "`analytics/evaluation_v14.py:334-340`; `pipeline_v14_enhanced.py:117-127`; exploited `app/jobs/analysis_runner.py:159-172`",
+      "historical_risk_claim": "The gateway's own documented escape hatch from every load-time guard. **All MC/sensitivity/Morris/optimizer evaluation runs through it.** Whether those numbers are bankable depends on guards that by construction did not run, and the only compensating controls are two hand-placed re-applications",
+      "historical_assigned_phase": "P3",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "The gateway's own documented escape hatch from every load-time guard. **All MC/sensitivity/Morris/optimizer evaluation runs through it.** Whether those numbers are bankable depends on guards that by construction did not run, and the only compensating controls are two hand-placed re-applications",
+      "fixed_claim_sha256": "6db664e45e428ae1fa7ca6c99c5b9f489847245ee4563863010978b96a48695f",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/evaluation_v14.py",
+        "analytics/pipeline_v14_enhanced.py",
+        "app/jobs/analysis_runner.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "evaluation_gateway_owner",
+      "dependencies": [],
+      "planned_negative_control": "Pass a raw_config that violates a load-time provenance or integrity guard through each MC, sensitivity, Morris and optimizer path and require equivalent fail-loud or explicit qualification behavior.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 11,
+      "pointer_id": "RS-B2",
+      "batch_id": "B05",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:490",
+      "historical_area": "Silent-default surface of the CESSPIT gatekeeper",
+      "historical_code_location": "`analytics/schema_guard.py:407`, `:435-436`, `:443-447`; `finance/epc_helper_v14.py:472-491`; `pipeline_v14_enhanced.py:76-77`",
+      "historical_risk_claim": "Presented as strict-by-default but has **three quiet no-op paths** and a warning channel with no consumer. Actual coverage is far narrower than the documentation implies, so \"schema validation passed\" (logged at `:683`) is weak evidence",
+      "historical_assigned_phase": "P2",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Presented as strict-by-default but has **three quiet no-op paths** and a warning channel with no consumer. Actual coverage is far narrower than the documentation implies, so \"schema validation passed\" (logged at `:683`) is weak evidence",
+      "fixed_claim_sha256": "fa982a3ddf2f297a26992e32898dc278771c5cf72982670539c9733e0616a141",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/schema_guard.py",
+        "finance/epc_helper_v14.py",
+        "analytics/pipeline_v14_enhanced.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "configuration_validation_owner",
+      "dependencies": [],
+      "planned_negative_control": "Exercise every empty, missing-module and warning-only schema path with a known invalid value and require the outcome to be fail-loud or visibly qualified rather than a silent validation pass.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 12,
+      "pointer_id": "RS-B3",
+      "batch_id": "B05",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:491",
+      "historical_area": "Exception-type erasure at the pipeline boundary",
+      "historical_code_location": "`pipeline_v14_enhanced.py:1019-1031` vs `app/api/main.py:305-317`, `app/services/pipeline_service.py:84-86`",
+      "historical_risk_claim": "The blanket re-wrap converts a documented `ConfigValidationError` into `PipelineValidationError`, breaking the API's 400-vs-500 mapping and the service docstring's stated Raises contract. A CASPER \"predictable error responses\" violation **at the exact seam where predictability was claimed**",
+      "historical_assigned_phase": "P2",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "The blanket re-wrap converts a documented `ConfigValidationError` into `PipelineValidationError`, breaking the API's 400-vs-500 mapping and the service docstring's stated Raises contract. A CASPER \"predictable error responses\" violation **at the exact seam where predictability was claimed**",
+      "fixed_claim_sha256": "f61d5216cb258c4186b4292cf843d3ce3916acfec5e68cbbfbd06baee5969655",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/pipeline_v14_enhanced.py",
+        "app/api/main.py",
+        "app/services/pipeline_service.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "evaluation_gateway_owner",
+      "dependencies": [],
+      "planned_negative_control": "Raise a known ConfigValidationError at the pipeline seam and require the service and API layers to preserve the documented client-error class and status instead of returning a generic server failure.",
+      "independent_reviewer": {
+        "required_role": "independent_api_contract_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 13,
+      "pointer_id": "RS-E1",
+      "batch_id": "B05",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:522",
+      "historical_area": "Validation-module scope claimed to differ between the service seam and other entry points",
+      "historical_code_location": "`pipeline_service.py:44`,`:53` vs `api/pipeline_api.py:595` vs `run_full_pipeline_v14.py:1126-1138`; engine default `pipeline_v14_enhanced.py:628`",
+      "historical_risk_claim": "**Reader (e)'s claim is incorrect — spot-checked, see §7.1.** All three paths resolve to the same `['cashflow','debt']` set. The residual, real risk is narrower: the module set is a **two-module default that no entry point widens**, so every registered spec outside `cashflow`/`debt` (wind, era5, crossval, grid, irr) goes unvalidated on every live path unless a caller explicitly passes `validation_modules`",
+      "historical_assigned_phase": "P2",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "**Reader (e)'s claim is incorrect — spot-checked, see §7.1.** All three paths resolve to the same `['cashflow','debt']` set. The residual, real risk is narrower: the module set is a **two-module default that no entry point widens**, so every registered spec outside `cashflow`/`debt` (wind, era5, crossval, grid, irr) goes unvalidated on every live path unless a caller explicitly passes `validation_modules`",
+      "fixed_claim_sha256": "9ed46f2ac3a83ea0bf2a4f390f4d3ce7935198052420dd9ab57a7b8ed943db26",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "app/services/pipeline_service.py",
+        "api/pipeline_api.py",
+        "run_full_pipeline_v14.py",
+        "analytics/pipeline_v14_enhanced.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "configuration_validation_owner",
+      "dependencies": [],
+      "planned_negative_control": "Inject a violation into a registered module outside cashflow and debt, invoke every live entry point with defaults, and require either validation of that module or an explicit limitation naming its omission.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 14,
+      "pointer_id": "RS-E2",
+      "batch_id": "B05",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:523",
+      "historical_area": "Analysis jobs run MC/tornado/Morris on a scenario that never passes through `run_finance_case`'s integrity guards",
+      "historical_code_location": "`app/jobs/analysis_runner.py:56-87`, `:118-180`",
+      "historical_risk_claim": "`register_scenario_approved_sources`, `enforce_aep_provenance`, `validate_evidence_register`, `validate_development_readiness`, `validate_conditions_precedent`, `validate_feasibility_sections` and `_assert_fx_spot_consistency` are all skipped. An unapproved AEP source or a self-inconsistent FX triple fails loud on `/v1/cases` and `/v1/jobs` but **produces a clean Monte-Carlo/Morris envelope on `/v1/jobs/analysis`**",
+      "historical_assigned_phase": "P2",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "`register_scenario_approved_sources`, `enforce_aep_provenance`, `validate_evidence_register`, `validate_development_readiness`, `validate_conditions_precedent`, `validate_feasibility_sections` and `_assert_fx_spot_consistency` are all skipped. An unapproved AEP source or a self-inconsistent FX triple fails loud on `/v1/cases` and `/v1/jobs` but **produces a clean Monte-Carlo/Morris envelope on `/v1/jobs/analysis`**",
+      "fixed_claim_sha256": "642dd1f76e65e3a620db6e0e969d7dba6376407dd6728c27c11a3efee5fc7870",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "app/jobs/analysis_runner.py",
+        "analytics/evaluation_v14.py",
+        "analytics/scenario_loader.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "async_analysis_owner",
+      "dependencies": [],
+      "planned_negative_control": "Submit an analysis job with an unapproved AEP source and a self-inconsistent FX triple and require the analysis route to reject the same invalid state as the governed finance-case route.",
+      "independent_reviewer": {
+        "required_role": "independent_api_contract_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 15,
+      "pointer_id": "RS-A13",
+      "batch_id": "B06",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:486",
+      "historical_area": "Private cross-package imports (`_extract_capex_usd`, `_extract_financing_terms`, `_rate_decimal`, `_fx_curve`)",
+      "historical_code_location": "`pipeline_v14_enhanced.py:54`, `core/metrics.py:177`, `three_statement.py:354`, `irr_bridge.py:297`, `cost/mc_capex.py:111`, `portfolio/tech_wbs.py:147`, `fx/fx_builder.py:352`, `cashflow_v14_fx.py:201`",
+      "historical_risk_claim": "Underscore-prefixed finance internals are load-bearing public API for eight analytics call sites. CASPER (clear API surfaces) and CCCDIR (explicit import relationships) are both compromised; refactoring any of these is a silent breaking change across the package boundary",
+      "historical_assigned_phase": "P4",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Underscore-prefixed finance internals are load-bearing public API for eight analytics call sites. CASPER (clear API surfaces) and CCCDIR (explicit import relationships) are both compromised; refactoring any of these is a silent breaking change across the package boundary",
+      "fixed_claim_sha256": "c6a5196afe78ac679f7a6d95839ae02f794e47f3d9f17b3b4f7b2d2caf3fe9f9",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/pipeline_v14_enhanced.py",
+        "analytics/core/metrics.py",
+        "analytics/three_statement.py",
+        "analytics/irr_bridge.py",
+        "analytics/cost/mc_capex.py",
+        "analytics/portfolio/tech_wbs.py",
+        "analytics/fx/fx_builder.py",
+        "finance/cashflow_v14_fx.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "analytics_contracts_owner",
+      "dependencies": [],
+      "planned_negative_control": "Rename or make unavailable one private finance helper in an isolated tree and require a public-surface or import-contract control to identify every cross-package consumer before runtime.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 16,
+      "pointer_id": "RS-B4",
+      "batch_id": "B06",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:492",
+      "historical_area": "Contract rehydration without type coercion",
+      "historical_code_location": "`analytics/evaluation_v14.py:451-459`; `pipeline_v14_enhanced.py:989`; `contracts_v14.py:119-144`",
+      "historical_risk_claim": "`asdict` flattens typed sub-contracts; `ScenarioResult(**sr_dict)` reconstructs them as plain dicts while annotations still say `WaccResult` etc. Consumers must defensively handle both shapes; any that do not will fail or read the wrong field. mypy cannot see it",
+      "historical_assigned_phase": "P4",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "`asdict` flattens typed sub-contracts; `ScenarioResult(**sr_dict)` reconstructs them as plain dicts while annotations still say `WaccResult` etc. Consumers must defensively handle both shapes; any that do not will fail or read the wrong field. mypy cannot see it",
+      "fixed_claim_sha256": "9977e8c5ea9c347ab968354a3f48fb3b3e5e9b2c3d47529a8127517b29c0ffad",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/evaluation_v14.py",
+        "analytics/pipeline_v14_enhanced.py",
+        "analytics/contracts_v14.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "analytics_contracts_owner",
+      "dependencies": [],
+      "planned_negative_control": "Round-trip a ScenarioResult containing typed nested contracts through the current flatten-and-rehydrate seam and require exact runtime types, values and serialization shapes to survive.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 17,
+      "pointer_id": "RS-B5",
+      "batch_id": "B06",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:493",
+      "historical_area": "Duplicate legacy gateway",
+      "historical_code_location": "`analytics/evaluate_scenario.py:49-137`; allowlisted `tests/lint/test_no_direct_finance_pipeline_imports.py:173-177`",
+      "historical_risk_claim": "Two functions with the same name and overlapping purpose, one on a TODO-delete allowlist. Divergent defaults and divergent KPI normalisation; only one behavioural equivalence test exists, and only for dotted keys",
+      "historical_assigned_phase": "P4",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Two functions with the same name and overlapping purpose, one on a TODO-delete allowlist. Divergent defaults and divergent KPI normalisation; only one behavioural equivalence test exists, and only for dotted keys",
+      "fixed_claim_sha256": "01aee397a6be1f2246d247d63419e1178d2ca33bbf9b6792f4e863548125be43",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/evaluate_scenario.py",
+        "analytics/evaluation_v14.py",
+        "tests/lint/test_no_direct_finance_pipeline_imports.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "evaluation_gateway_owner",
+      "dependencies": [],
+      "planned_negative_control": "Run the same fixed scenario, overrides and invalid input through both gateway surfaces and compare the complete result, defaults and exception contract; inject one divergence to prove the equivalence oracle is responsive.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 18,
+      "pointer_id": "RS-B6",
+      "batch_id": "B06",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:494",
+      "historical_area": "Process-global mutable schema registry with import-order sensitivity",
+      "historical_code_location": "`analytics/config_schema.py:47`, `:65-67`; `schema_guard.py:74-101`",
+      "historical_risk_claim": "Registration is an import side effect into a module-global dict that **extends**. Correctness depends on `_MODULE_IMPORTS` listing every registering module (a real past miss documented at `:47-52`) and on the reload-only-when-empty precondition holding, or specs duplicate",
+      "historical_assigned_phase": "P4",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Registration is an import side effect into a module-global dict that **extends**. Correctness depends on `_MODULE_IMPORTS` listing every registering module (a real past miss documented at `:47-52`) and on the reload-only-when-empty precondition holding, or specs duplicate",
+      "fixed_claim_sha256": "93dc5029fd2ddcf3a750c4c354c88946d4aa72dfc0aac3b3d5f2c9145826e691",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/config_schema.py",
+        "analytics/schema_guard.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "configuration_validation_owner",
+      "dependencies": [],
+      "planned_negative_control": "Import and reload registering modules in multiple orders, including a missing and duplicate registration, and require the registry population to remain exact or fail deterministically.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 19,
+      "pointer_id": "RS-B9",
+      "batch_id": "B06",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:497",
+      "historical_area": "Unbounded contract module (1,948 LOC, ~59 exported types)",
+      "historical_code_location": "`analytics/contracts_v14.py`, `__all__` at `:1888`",
+      "historical_risk_claim": "One file spanning finance, sensitivity, MC, CASPER, multi-tech, grid, IRR-bridge and capital-structure contracts with **one** runtime invariant in the whole file. `MonteCarloResult` carries two overlapping shapes (named fields **and** generic mean/std/p10/p50/p90), so the same result can be populated two ways",
+      "historical_assigned_phase": "P5",
+      "source_disposition": "not_examined",
+      "source_confidence": "high",
+      "fixed_claim": "One file spanning finance, sensitivity, MC, CASPER, multi-tech, grid, IRR-bridge and capital-structure contracts with **one** runtime invariant in the whole file. `MonteCarloResult` carries two overlapping shapes (named fields **and** generic mean/std/p10/p50/p90), so the same result can be populated two ways",
+      "fixed_claim_sha256": "be18d0ae4ed3349fade253a9b2f74ee9da3b3b637675e78152cce2988aaecc7b",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/contracts_v14.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "analytics_contracts_owner",
+      "dependencies": [],
+      "planned_negative_control": "Construct a MonteCarloResult with contradictory named and generic percentile shapes plus false provenance flags and require construction or serialization to reject the ambiguity.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 20,
+      "pointer_id": "RS-C12",
+      "batch_id": "B06",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:509",
+      "historical_area": "Legacy shims and duplicate surfaces still importable",
+      "historical_code_location": "`analytics/monte_carlo_v14.py`, `analytics/sensitivity_v14.py`, `analytics/dscr_sensitivity.py`, `analytics/fx_sensitivity_real.py`, `analytics/sensitivity_pareto.py`, `analytics/wacc_sensitivity.py`, `scripts/FINAL_CORRECTED_sensitivity_v14.py`, `scripts/FIX_SENSITIVITY_LINE_489.py`",
+      "historical_risk_claim": "Multiple import surfaces for the same analytics increase the chance a caller reaches a non-canonical path. The `FINAL_CORRECTED` / `FIX_..._LINE_489` scripts are prima facie stale duplicates **that were not read in this pass**",
+      "historical_assigned_phase": "P4",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Multiple import surfaces for the same analytics increase the chance a caller reaches a non-canonical path. The `FINAL_CORRECTED` / `FIX_..._LINE_489` scripts are prima facie stale duplicates **that were not read in this pass**",
+      "fixed_claim_sha256": "16a49ee195c23d5c6d25fd4352458853416574c50e232a59fd4a49fedbf2fb64",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/monte_carlo_v14.py",
+        "analytics/sensitivity_v14.py",
+        "analytics/dscr_sensitivity.py",
+        "analytics/fx_sensitivity_real.py",
+        "analytics/sensitivity_pareto.py",
+        "analytics/wacc_sensitivity.py",
+        "scripts/FINAL_CORRECTED_sensitivity_v14.py",
+        "scripts/FIX_SENSITIVITY_LINE_489.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "analytics_contracts_owner",
+      "dependencies": [],
+      "planned_negative_control": "Enumerate importable legacy surfaces and deliberately diverge one deprecated shim in an isolated copy; require canonical-path or deprecation controls to catch the non-equivalence before publication.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 21,
+      "pointer_id": "RS-A11",
+      "batch_id": "B07",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:484",
+      "historical_area": "Toy fallbacks reachable in production configs",
+      "historical_code_location": "`finance/debt_v14.py:156-179`, `:310-315` (CAPEX=100.0), `:752-760`",
+      "historical_risk_claim": "Both fallbacks are opt-in via a config flag, and the run-mode ceiling (`forbid_toy_fallback`) is applied only when a run mode is declared (`pipeline_v14_enhanced.py:721-729`). An **undeclared mode leaves the config's own opt-in authoritative** — a scenario can self-authorise a CAPEX of 100.0 or zero-rate debt",
+      "historical_assigned_phase": "P3",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Both fallbacks are opt-in via a config flag, and the run-mode ceiling (`forbid_toy_fallback`) is applied only when a run mode is declared (`pipeline_v14_enhanced.py:721-729`). An **undeclared mode leaves the config's own opt-in authoritative** — a scenario can self-authorise a CAPEX of 100.0 or zero-rate debt",
+      "fixed_claim_sha256": "8878220ac1d805e1181699cee41d9508ee2f9ee211999a1a496eb0f74b397bb8",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "finance/debt_v14.py",
+        "analytics/pipeline_v14_enhanced.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "project_finance_model_owner",
+      "dependencies": [],
+      "planned_negative_control": "Enable each toy fallback while omitting run.mode and require the production evaluation path to reject or visibly quarantine the CAPEX, rate and debt outputs rather than self-authorize them.",
+      "independent_reviewer": {
+        "required_role": "independent_project_finance_model_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 22,
+      "pointer_id": "RS-A12",
+      "batch_id": "B07",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:485",
+      "historical_area": "Duplicated waterfall implementations and duplicated util surfaces",
+      "historical_code_location": "`finance/cashflow_v14.py:373-600` vs `:768-983`; `finance/utils.py` vs `finance/cashflow_v14_utils.py`; `finance/debt_v14.py:108-134` local helpers",
+      "historical_risk_claim": "Three parallel coercion/lookup surfaces and two full waterfall builders. The comments repeatedly say \"mirrors calculate_single_year_cfads so the two builders stay identical\" — a **maintenance contract, not an enforced one**",
+      "historical_assigned_phase": "P4",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Three parallel coercion/lookup surfaces and two full waterfall builders. The comments repeatedly say \"mirrors calculate_single_year_cfads so the two builders stay identical\" — a **maintenance contract, not an enforced one**",
+      "fixed_claim_sha256": "ce23fffbfee605057b47f6ea5844cb9661e396ed4f86643ebd677d8d93be00a1",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "finance/cashflow_v14.py",
+        "finance/utils.py",
+        "finance/cashflow_v14_utils.py",
+        "finance/debt_v14.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "project_finance_model_owner",
+      "dependencies": [],
+      "planned_negative_control": "Perturb one duplicated waterfall or coercion path in an isolated implementation and require a multi-case parity oracle to detect row, key, type and amount divergence.",
+      "independent_reviewer": {
+        "required_role": "independent_project_finance_model_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 23,
+      "pointer_id": "RS-B7",
+      "batch_id": "B07",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:495",
+      "historical_area": "AEP tolerance is a config-widenable override on a bankability-critical invariant",
+      "historical_code_location": "`analytics/aep_reconciliation.py:90-106`, `:307-313`",
+      "historical_risk_claim": "A scenario can set its own `aep_reconciliation.tolerance_pct` and relax the single check tying billed generation to bankable AEP. The only control is a WARNING log; **nothing propagates the override into the run manifest, the `ScenarioResult`, or the report surface**",
+      "historical_assigned_phase": "P3",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "A scenario can set its own `aep_reconciliation.tolerance_pct` and relax the single check tying billed generation to bankable AEP. The only control is a WARNING log; **nothing propagates the override into the run manifest, the `ScenarioResult`, or the report surface**",
+      "fixed_claim_sha256": "ddcb0a13995b8ef7ccb324892cf5def7f8b090988c2619848a30535fd947ab7e",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/aep_reconciliation.py",
+        "analytics/contracts_v14.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "model_governance_owner",
+      "dependencies": [],
+      "planned_negative_control": "Widen the AEP reconciliation tolerance enough to pass a known material mismatch and require the run manifest, result and report posture to disclose the override and its consequence.",
+      "independent_reviewer": {
+        "required_role": "independent_project_finance_model_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 24,
+      "pointer_id": "RS-B8",
+      "batch_id": "B07",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:496",
+      "historical_area": "Soft-by-default lender registers on the load path",
+      "historical_code_location": "`analytics/scenario_loader.py:279-297`",
+      "historical_risk_claim": "Four of the seven load-time lender-grade validators warn rather than block, and are no-ops when the block is absent. A scenario with no evidence/CP/readiness declarations passes every gate while carrying zero assumption provenance — the pass is **silent, not merely lenient**",
+      "historical_assigned_phase": "P3",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Four of the seven load-time lender-grade validators warn rather than block, and are no-ops when the block is absent. A scenario with no evidence/CP/readiness declarations passes every gate while carrying zero assumption provenance — the pass is **silent, not merely lenient**",
+      "fixed_claim_sha256": "e5b66db3ac1b57cf893feb280613291ca080e92a425c78da423e60f1d6594ba1",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/scenario_loader.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "model_governance_owner",
+      "dependencies": [],
+      "planned_negative_control": "Remove all evidence, conditions-precedent and readiness blocks from an otherwise valid scenario and require a visible non-lender-grade status rather than a silent load-path pass.",
+      "independent_reviewer": {
+        "required_role": "independent_project_finance_model_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 25,
+      "pointer_id": "RS-D11",
+      "batch_id": "B07",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:520",
+      "historical_area": "Silent 0.80 fallback in the P90-binds-gearing path",
+      "historical_code_location": "`finance/debt_v14.py:1082-1089`, fed by `app/jobs/runner.py:309-315`",
+      "historical_risk_claim": "The link between the resource P90 and debt sizing degrades to an unrelated flat literal without raising or warning. For a lender pack the provenance of the downside case must be explicit; here `p90_aep` vs `flat_factor` is returned as a string but nothing forces a downside-binding scenario to actually have a P90",
+      "historical_assigned_phase": "P2",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "The link between the resource P90 and debt sizing degrades to an unrelated flat literal without raising or warning. For a lender pack the provenance of the downside case must be explicit; here `p90_aep` vs `flat_factor` is returned as a string but nothing forces a downside-binding scenario to actually have a P90",
+      "fixed_claim_sha256": "92cbe0713e2c557ae7e307ccb78a63299ba98595602363bee27931a23d013129",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "finance/debt_v14.py",
+        "app/jobs/runner.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "project_finance_model_owner",
+      "dependencies": [],
+      "planned_negative_control": "Omit P90 from a downside-binding debt-sizing scenario and require fail-loud behavior or an explicit, provenance-bearing flat-factor assumption rather than a silent 0.80 fallback.",
+      "independent_reviewer": {
+        "required_role": "independent_project_finance_model_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 26,
+      "pointer_id": "RS-C3",
+      "batch_id": "B08",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:500",
+      "historical_area": "Estimator arithmetic: **three different quantile conventions on the same trial arrays** across four surfaces",
+      "historical_code_location": "`mc/aggregate.py:23-37`; `mc/exports.py:88-110`; `mc/engine.py:204-207`; `core/risk_metrics.py:266-274`",
+      "historical_risk_claim": "`np.percentile` (linear interpolation) in the aggregator and exports, `np.quantile` in `_tail_risk`, integer indexing in `TailRiskAnalyzer` — which additionally has an off-by-one between the VaR point and the ES tail set. Reconcile numerically on a real trial array",
+      "historical_assigned_phase": "P2",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "`np.percentile` (linear interpolation) in the aggregator and exports, `np.quantile` in `_tail_risk`, integer indexing in `TailRiskAnalyzer` — which additionally has an off-by-one between the VaR point and the ES tail set. Reconcile numerically on a real trial array",
+      "fixed_claim_sha256": "afc6df79605223019f537e9d40028b95674fe213b08e826160e63b9d17d9287b",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/mc/aggregate.py",
+        "analytics/mc/exports.py",
+        "analytics/mc/engine.py",
+        "analytics/core/risk_metrics.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "quantitative_risk_lead",
+      "dependencies": [
+        {
+          "dependency_id": "P5-REPRO-RISK-001",
+          "kind": "registered_reproduction",
+          "status": "required_not_run",
+          "blocking": true,
+          "requirement": "Complete and independently review the fixed quantile, exceedance, VaR and tail-risk arithmetic reproduction."
+        }
+      ],
+      "planned_negative_control": "Use a small asymmetric trial array with independently calculated quantiles, VaR and expected shortfall and require every surface to match the fixed convention, including the exact tail membership.",
+      "independent_reviewer": {
+        "required_role": "independent_quantitative_risk_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 27,
+      "pointer_id": "RS-C4",
+      "batch_id": "B08",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:501",
+      "historical_area": "Lender-facing exceedance convention coexists with raw percentiles in one payload",
+      "historical_code_location": "`mc/exports.py:156-176`; `mc/aggregate.py:40-51`; `capital_risk_layer_v14.py:172-179`",
+      "historical_risk_claim": "`result.summary` percentiles are **raw**; `mc_risk` table columns are **exceedance** (P90 = 10th pct, P95 = 5th pct for higher-is-better metrics). A consumer joining both, or a report author reading \"P90\" from the wrong block, inverts the tail. Bankability-critical labelling",
+      "historical_assigned_phase": "P3",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "`result.summary` percentiles are **raw**; `mc_risk` table columns are **exceedance** (P90 = 10th pct, P95 = 5th pct for higher-is-better metrics). A consumer joining both, or a report author reading \"P90\" from the wrong block, inverts the tail. Bankability-critical labelling",
+      "fixed_claim_sha256": "e8d3a8478889e49f5ddb169eb7388b5f654c2c035284222aa3c790ebc891b681",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/mc/exports.py",
+        "analytics/mc/aggregate.py",
+        "analytics/capital_risk_layer_v14.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "quantitative_risk_lead",
+      "dependencies": [
+        {
+          "dependency_id": "P5-REPRO-RISK-001",
+          "kind": "registered_reproduction",
+          "status": "required_not_run",
+          "blocking": true,
+          "requirement": "Complete and independently review the fixed quantile, exceedance, VaR and tail-risk arithmetic reproduction."
+        }
+      ],
+      "planned_negative_control": "Use an asymmetric distribution where the raw 90th percentile and higher-is-better exceedance P90 are far apart, then require payload labels and provenance to prevent the two from being joined as equivalent.",
+      "independent_reviewer": {
+        "required_role": "independent_quantitative_risk_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 28,
+      "pointer_id": "RS-C5",
+      "batch_id": "B08",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:502",
+      "historical_area": "Covenant breach probability is **structurally 0.0** under dual-DSCR sculpting; the pin is disclosed but the headline row is still emitted",
+      "historical_code_location": "`mc/exports.py:186-209`, `:254-263`; `core/covenant_breach.py:30-79`; alternative `engine.py:211-232`, `:838-856`",
+      "historical_risk_claim": "The only informative covenant statistic is the **opt-in** `fixed_debt_stress` block (default False, `engine.py:360-364`) — the lender-grade number is off by default while an uninformative structural 0.0 is on by default",
+      "historical_assigned_phase": "P3",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "The only informative covenant statistic is the **opt-in** `fixed_debt_stress` block (default False, `engine.py:360-364`) — the lender-grade number is off by default while an uninformative structural 0.0 is on by default",
+      "fixed_claim_sha256": "9ba606b1a2894659db0c08a7cbb3346857c6c887e26bd40dc7279c9cb4e7addc",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/mc/exports.py",
+        "analytics/core/covenant_breach.py",
+        "analytics/mc/engine.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "quantitative_risk_lead",
+      "dependencies": [
+        {
+          "dependency_id": "P5-REPRO-RISK-001",
+          "kind": "registered_reproduction",
+          "status": "required_not_run",
+          "blocking": true,
+          "requirement": "Complete and independently review the fixed quantile, exceedance, VaR and tail-risk arithmetic reproduction."
+        }
+      ],
+      "planned_negative_control": "Run the same adverse cash-flow trials under dual-DSCR-resculpted and fixed-debt schedules and require the output to distinguish a structural zero from an informative breach probability.",
+      "independent_reviewer": {
+        "required_role": "independent_quantitative_risk_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 29,
+      "pointer_id": "RS-C6",
+      "batch_id": "B08",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:503",
+      "historical_area": "Trial-count sufficiency: no minimum n in the engine; the lender floor lives only in the report emitter",
+      "historical_code_location": "`app/reports/capital_risk_emit.py:118-123`; `capital_risk_layer_v14.py:119-153`; `mc/convergence.py:14-18`",
+      "historical_risk_claim": "A CASPER-path MC (`evaluation_v14.py:517-521`) can produce lender-quoted tail numbers with **no minimum-n gate at all**",
+      "historical_assigned_phase": "P3",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "A CASPER-path MC (`evaluation_v14.py:517-521`) can produce lender-quoted tail numbers with **no minimum-n gate at all**",
+      "fixed_claim_sha256": "99ce2c5f9aab53ff4c41a3a0c09f2b9399052f20ad6e0cec9a86d659ce0ff47a",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "app/reports/capital_risk_emit.py",
+        "analytics/capital_risk_layer_v14.py",
+        "analytics/mc/convergence.py",
+        "analytics/evaluation_v14.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "quantitative_risk_lead",
+      "dependencies": [
+        {
+          "dependency_id": "P5-REPRO-RISK-001",
+          "kind": "registered_reproduction",
+          "status": "required_not_run",
+          "blocking": true,
+          "requirement": "Complete and independently review the fixed quantile, exceedance, VaR and tail-risk arithmetic reproduction."
+        }
+      ],
+      "planned_negative_control": "Send a below-minimum trial count through the CASPER evaluation path and require refusal or explicit non-lender qualification before any tail statistic is serialised or rendered.",
+      "independent_reviewer": {
+        "required_role": "independent_quantitative_risk_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 30,
+      "pointer_id": "RS-C7",
+      "batch_id": "B08",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:504",
+      "historical_area": "FX risk modelled twice and inconsistently",
+      "historical_code_location": "`analytics/fx/fx_calibration.py:1-35`, `:279-327` vs `fx_builder.py:566-579`",
+      "historical_risk_claim": "A calibrated two-regime log-normal mixture for the MC driver vs a fixed 5% shock with a hardcoded CVaR = 1.5 × VaR. The multiplier and the point shock have **no empirical provenance**, in a codebase whose FX calibration module was built specifically to remove provenance-free FX assumptions. Directly lender-visible via `FXRiskProfile`",
+      "historical_assigned_phase": "P3",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "A calibrated two-regime log-normal mixture for the MC driver vs a fixed 5% shock with a hardcoded CVaR = 1.5 × VaR. The multiplier and the point shock have **no empirical provenance**, in a codebase whose FX calibration module was built specifically to remove provenance-free FX assumptions. Directly lender-visible via `FXRiskProfile`",
+      "fixed_claim_sha256": "9f84456703b7ff3bfb93bc7ae49e44a619ebb90fff6f3a902747df20eb616df9",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/fx/fx_calibration.py",
+        "analytics/fx/fx_builder.py",
+        "analytics/contracts_v14.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "quantitative_risk_lead",
+      "dependencies": [
+        {
+          "dependency_id": "P5-REPRO-RISK-001",
+          "kind": "registered_reproduction",
+          "status": "required_not_run",
+          "blocking": true,
+          "requirement": "Complete and independently review the fixed quantile, exceedance, VaR and tail-risk arithmetic reproduction."
+        }
+      ],
+      "planned_negative_control": "Compare the calibrated regime-mixture driver with the fixed shock and hardcoded CVaR multiplier on the same FX history, and require every lender-visible result to identify its actual model and provenance.",
+      "independent_reviewer": {
+        "required_role": "independent_quantitative_risk_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent.",
+        "External calibration and transaction hedging evidence remain separate from arithmetic conformance."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 31,
+      "pointer_id": "RS-C10",
+      "batch_id": "B09",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:507",
+      "historical_area": "Sample-matrix mutation during the trial loop",
+      "historical_code_location": "`mc/engine.py:504-506`, `:566-569`, `:858-862`, `:968-973`",
+      "historical_risk_claim": "`_apply_distribution_shapes` and `_apply_fx_calibration` write realised values back into the same `samples` array later handed to `aggregate_trials`. Documented as deliberate; verify no consumer expects the **pre-mapping** design (e.g. PAWN given-data reuse, which expects columns in `problem.names` order over the authored bounds)",
+      "historical_assigned_phase": "P2",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "`_apply_distribution_shapes` and `_apply_fx_calibration` write realised values back into the same `samples` array later handed to `aggregate_trials`. Documented as deliberate; verify no consumer expects the **pre-mapping** design (e.g. PAWN given-data reuse, which expects columns in `problem.names` order over the authored bounds)",
+      "fixed_claim_sha256": "61a73864a8d52f6469db1af28d63f7776fd493c139eb99ed8d26baf5cdd595e8",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/mc/engine.py",
+        "analytics/mc/aggregate.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "quantitative_risk_lead",
+      "dependencies": [],
+      "planned_negative_control": "Hash the pre-mapping and realised sample matrices, mutate one distribution and FX transform, and require each downstream consumer to receive the declared space or an explicitly named transformed space.",
+      "independent_reviewer": {
+        "required_role": "independent_quantitative_risk_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 32,
+      "pointer_id": "RS-C11",
+      "batch_id": "B09",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:508",
+      "historical_area": "Optional-dependency degradation surfaces",
+      "historical_code_location": "`global_sa.py:265-276`; `mc/exports.py:33-36`, `:135-136`; `samplers.py:144-150`; `casper_payload.py:439-448`; `sensitivity/optimizer.py:14-16`",
+      "historical_risk_claim": "CASPER compliance is good, but the payload's **silent-omission** path means an environment difference changes the lender deliverable's content with no visible marker",
+      "historical_assigned_phase": "P4",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "CASPER compliance is good, but the payload's **silent-omission** path means an environment difference changes the lender deliverable's content with no visible marker",
+      "fixed_claim_sha256": "0ac6ea555fc932011462217daa7c42963529a6e94a55af44466d090c9cbb5b9c",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/sensitivity/global_sa.py",
+        "analytics/mc/exports.py",
+        "analytics/mc/samplers.py",
+        "analytics/casper/casper_payload.py",
+        "analytics/sensitivity/optimizer.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "analytics_contracts_owner",
+      "dependencies": [],
+      "planned_negative_control": "Remove each optional dependency in isolation and compare the complete CASPER payload, requiring an explicit unavailable or degraded marker wherever content changes.",
+      "independent_reviewer": {
+        "required_role": "independent_software_assurance_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 33,
+      "pointer_id": "RS-C9",
+      "batch_id": "B09",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:506",
+      "historical_area": "Non-uniform distribution shapes reinterpret the authored band and rewrite bounds after diagnostics",
+      "historical_code_location": "`mc/engine.py:243-271`, `:538-570`",
+      "historical_risk_claim": "Sampled support can exceed the authored band and the recorded provenance no longer matches the sampled distribution. Verify on any scenario declaring a non-uniform distribution",
+      "historical_assigned_phase": "P2",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Sampled support can exceed the authored band and the recorded provenance no longer matches the sampled distribution. Verify on any scenario declaring a non-uniform distribution",
+      "fixed_claim_sha256": "78ef901b38fd1536067efdd3861a0a0f5cd6b4d4e6ebd44fb185ab4dc13ca0f7",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/mc/engine.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "quantitative_risk_lead",
+      "dependencies": [],
+      "planned_negative_control": "Declare a non-uniform distribution whose realised support exceeds the authored band and require the output provenance to retain both authored and transformed bounds without rewriting history.",
+      "independent_reviewer": {
+        "required_role": "independent_quantitative_risk_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 34,
+      "pointer_id": "RS-C1",
+      "batch_id": "B10",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:498",
+      "historical_area": "Sampling design: LHS default, Sobol opt-in and effectively disabled whenever correlation is on; no randomized-QMC replication, no scrambled-net error estimate, no antithetic/control variates",
+      "historical_code_location": "`analytics/mc/samplers.py:19-164`; `engine.py:357`, `:791-834`",
+      "historical_risk_claim": "Benchmark actual estimator efficiency against SOTA practice. The code's own docstring argues QMC buys little on kinked KPIs (`samplers.py:112-121`) — that argument should be tested empirically rather than assumed",
+      "historical_assigned_phase": "P5",
+      "source_disposition": "deferred",
+      "source_confidence": "high",
+      "fixed_claim": "Benchmark actual estimator efficiency against SOTA practice. The code's own docstring argues QMC buys little on kinked KPIs (`samplers.py:112-121`) — that argument should be tested empirically rather than assumed",
+      "fixed_claim_sha256": "9fa2078a61c6d2971cc75600667537d99a48b5465efa7418d3a458c908775bcb",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/mc/samplers.py",
+        "analytics/mc/engine.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "quantitative_risk_lead",
+      "dependencies": [
+        {
+          "dependency_id": "P5-REPRO-C1-001",
+          "kind": "registered_reproduction",
+          "status": "required_not_run",
+          "blocking": true,
+          "requirement": "Complete replicated LHS-versus-RQMC convergence and error-estimation work before adjudicating estimator efficiency."
+        }
+      ],
+      "planned_negative_control": "Run replicated LHS and independently scrambled Sobol designs at fixed budgets against an independent high-sample reference on smooth and kinked KPIs, reporting error distributions rather than one seed.",
+      "independent_reviewer": {
+        "required_role": "independent_quantitative_risk_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 35,
+      "pointer_id": "RS-C2",
+      "batch_id": "B10",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:499",
+      "historical_area": "Correlation/dependence: Iman-Conover default, opt-in Gaussian copula with latent-scale distortion, zero tail dependence, seed shared with the sampler",
+      "historical_code_location": "`analytics/mc/correlation.py:107-225`, `:119-143`",
+      "historical_risk_claim": "Two checks: (P2) whether achieved rank correlation matches the authored matrix on the live lender scenario and whether the shared seed induces sampler/score dependence; (P5) whether a t-copula or vine copula is warranted for FX-crisis × curtailment co-movement, which the module names as an explicit non-goal",
+      "historical_assigned_phase": "P5 (P2 sub-check)",
+      "source_disposition": "deferred",
+      "source_confidence": "high",
+      "fixed_claim": "Two checks: (P2) whether achieved rank correlation matches the authored matrix on the live lender scenario and whether the shared seed induces sampler/score dependence; (P5) whether a t-copula or vine copula is warranted for FX-crisis × curtailment co-movement, which the module names as an explicit non-goal",
+      "fixed_claim_sha256": "3c23e9a597ad5dd91e954025bce11ca8fbd582da6ab39eaa32f9292c66f71dcd",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/mc/correlation.py",
+        "analytics/mc/engine.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "quantitative_risk_lead",
+      "dependencies": [
+        {
+          "dependency_id": "P5-REPRO-C2-001",
+          "kind": "registered_reproduction",
+          "status": "required_not_run",
+          "blocking": true,
+          "requirement": "Complete correlation-method conformance and calibrated tail-dependence validation before adjudicating the dependence design."
+        }
+      ],
+      "planned_negative_control": "Measure achieved rank and tail dependence across independent seeds, then separate sampler and score seeds and compare Gaussian and heavy-tail dependence designs without treating calibration assumptions as facts.",
+      "independent_reviewer": {
+        "required_role": "independent_quantitative_risk_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent.",
+        "Project-specific joint-tail calibration data are not currently available."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 36,
+      "pointer_id": "RS-C8",
+      "batch_id": "B10",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:505",
+      "historical_area": "Global SA estimator configuration",
+      "historical_code_location": "`global_sa.py:501-536`, `:606-624`, `:629-658`, `:759-806`",
+      "historical_risk_claim": "Sobol default n=256, Morris 16 trajectories, PAWN n=256/s=10 with a documented ~0.15 median-KS noise floor. SALib `S1_conf`/`ST_conf` are surfaced but **no acceptance criterion is applied**. Benchmark whether these defaults resolve S1/ST within their own CIs, and whether `INTERACTION_TOL=0.05` survives estimator noise at n=256",
+      "historical_assigned_phase": "P5",
+      "source_disposition": "deferred",
+      "source_confidence": "high",
+      "fixed_claim": "Sobol default n=256, Morris 16 trajectories, PAWN n=256/s=10 with a documented ~0.15 median-KS noise floor. SALib `S1_conf`/`ST_conf` are surfaced but **no acceptance criterion is applied**. Benchmark whether these defaults resolve S1/ST within their own CIs, and whether `INTERACTION_TOL=0.05` survives estimator noise at n=256",
+      "fixed_claim_sha256": "073b8edfc93a51d81c8fb1069b8568c03a1a47e362fbbbd07728e058de0d84a0",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/sensitivity/global_sa.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "quantitative_risk_lead",
+      "dependencies": [
+        {
+          "dependency_id": "P5-REPRO-C8-001",
+          "kind": "registered_reproduction",
+          "status": "required_not_run",
+          "blocking": true,
+          "requirement": "Complete sample-adequacy, convergence and heuristic-sensitivity reproductions before adjudicating the sensitivity defaults."
+        }
+      ],
+      "planned_negative_control": "Replicate Sobol, Morris and PAWN estimates across increasing sample sizes with a known-interaction function near the 0.05 threshold and require convergence criteria to distinguish signal from estimator noise.",
+      "independent_reviewer": {
+        "required_role": "independent_quantitative_risk_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 37,
+      "pointer_id": "RS-D10",
+      "batch_id": "B11",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:519",
+      "historical_area": "Percent-vs-decimal capacity-factor convention is **inverted** between the wind and solar producers",
+      "historical_code_location": "`wind_resource/cashflow_adapter.py:158-169` vs `solar_resource/cashflow_adapter.py:170-186`; conversions at `:198`, `era5_retrieval.py:434`, `resource_contracts.py:228-229`",
+      "historical_risk_claim": "Two sibling adapters with opposite unit contracts, each defended only by a heuristic validator. A genuine wind CF below 1% or a solar CF above 100% would be misclassified, and any new consumer must know which of the three conversion sites it is downstream of",
+      "historical_assigned_phase": "P4",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Two sibling adapters with opposite unit contracts, each defended only by a heuristic validator. A genuine wind CF below 1% or a solar CF above 100% would be misclassified, and any new consumer must know which of the three conversion sites it is downstream of",
+      "fixed_claim_sha256": "506f94be16d6bc032a8f119731af798a6a3026900415cb2a13959af867e4e903",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "wind_resource/cashflow_adapter.py",
+        "solar_resource/cashflow_adapter.py",
+        "wind_resource/era5_retrieval.py",
+        "analytics/resource_contracts.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "resource_contracts_owner",
+      "dependencies": [],
+      "planned_negative_control": "Exercise a valid 0.5 percent wind capacity factor and an invalid 101 percent solar value and require exact unit contracts to reject ambiguity without heuristic percent-versus-decimal guessing.",
+      "independent_reviewer": {
+        "required_role": "independent_wind_resource_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 38,
+      "pointer_id": "RS-D5",
+      "batch_id": "B11",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:514",
+      "historical_area": "**Two divergent AEP engines for the same site with no cross-reconciliation**",
+      "historical_code_location": "`energy_calculator.py:351-513` (timeseries) vs `aep_summary_builder.py:463-499` (analytic Weibull); differing loss stacks, haircut policy (0.0 pinned vs 5.0 default), above-curve interpolation (fill 0 vs hold rated)",
+      "historical_risk_claim": "Nothing computes both and compares them. The AEP reconciliation guard compares capacity×CF against a bankable reference, but **on the screening path — the only path that runs the timeseries engine — it is explicitly skipped**. A user gets a screening P50 that can differ materially from the bankable P50 for identical inputs with no signal",
+      "historical_assigned_phase": "P2",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Nothing computes both and compares them. The AEP reconciliation guard compares capacity×CF against a bankable reference, but **on the screening path — the only path that runs the timeseries engine — it is explicitly skipped**. A user gets a screening P50 that can differ materially from the bankable P50 for identical inputs with no signal",
+      "fixed_claim_sha256": "56465a0db99050e13c0e75eeda614400d7f4bc11ef2416dc8bac37f851db5e8b",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "wind_resource/energy_calculator.py",
+        "analytics/wind/aep_summary_builder.py",
+        "analytics/aep_reconciliation.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "wind_resource_methodology_owner",
+      "dependencies": [],
+      "planned_negative_control": "Run identical turbine, wind and loss inputs through both AEP engines and require a reconciled difference with method labels; perturb above-curve behavior to prove the comparison is responsive.",
+      "independent_reviewer": {
+        "required_role": "independent_wind_resource_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 39,
+      "pointer_id": "RS-D6",
+      "batch_id": "B11",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:515",
+      "historical_area": "`export_for_cashflow_model` round-trips through the filesystem with a lexicographic newest-file heuristic",
+      "historical_code_location": "`wind_resource/wind_pipeline.py:466-478`",
+      "historical_risk_claim": "The financed capacity factor is sourced from `sorted(glob(...))[-1]` rather than the in-memory result; ordering is by date-range string, not run time. In the async path the workspace is ephemeral so the risk is contained, but repeated CLI use in a persistent `output_dir` can silently finance a stale assessment",
+      "historical_assigned_phase": "P2",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "The financed capacity factor is sourced from `sorted(glob(...))[-1]` rather than the in-memory result; ordering is by date-range string, not run time. In the async path the workspace is ephemeral so the risk is contained, but repeated CLI use in a persistent `output_dir` can silently finance a stale assessment",
+      "fixed_claim_sha256": "e59de2ded644681e6ebaf3ae5812391a26b764d5d6783f23ef7622a206fb5860",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "wind_resource/wind_pipeline.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "wind_resource_methodology_owner",
+      "dependencies": [],
+      "planned_negative_control": "Create a lexicographically later stale result beside a chronologically latest run and require cash-flow export to use the in-memory or explicitly bound run rather than filename ordering.",
+      "independent_reviewer": {
+        "required_role": "independent_wind_resource_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 40,
+      "pointer_id": "RS-D7",
+      "batch_id": "B11",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:516",
+      "historical_area": "Truncated/renormalised Weibull integration grid and hardcoded 3/25 m/s window in the bankable gross AEP",
+      "historical_code_location": "`bankable_aep.py:100-101`, `:118-120`, `:124`",
+      "historical_risk_claim": "Renormalising the pdf on a 0.01-30 m/s grid redistributes above-30 m/s mass into the powered band, biasing gross AEP upward; and the default cut-in/cut-out are turbine-independent literals **in a module whose whole premise is that nothing is hardcoded (ARCH-01)**. The EN220 machine's real operating window is not read from the power-curve config here",
+      "historical_assigned_phase": "P2",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Renormalising the pdf on a 0.01-30 m/s grid redistributes above-30 m/s mass into the powered band, biasing gross AEP upward; and the default cut-in/cut-out are turbine-independent literals **in a module whose whole premise is that nothing is hardcoded (ARCH-01)**. The EN220 machine's real operating window is not read from the power-curve config here",
+      "fixed_claim_sha256": "0c48c48e8b6cda31b04dcb434a02cdb5eabbfdaf1730ba6c030624e858536578",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "wind_resource/bankable_aep.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "wind_resource_methodology_owner",
+      "dependencies": [],
+      "planned_negative_control": "Use a distribution with material probability above 30 m/s and a turbine-specific operating window, compare against an independent integral, and require no renormalisation of excluded mass into the powered band.",
+      "independent_reviewer": {
+        "required_role": "independent_wind_resource_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 41,
+      "pointer_id": "RS-D8",
+      "batch_id": "B11",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:517",
+      "historical_area": "The screening seam disarms the AEP reconciliation guard by design, and the compensating `ResourceAssessment` check is skippable",
+      "historical_code_location": "`pipeline_service.py:96-100`,`:250`; `analysis_runner.py:104-109`; `runner.py:272-278`",
+      "historical_risk_claim": "The disarm is justified (comparing a fresh assessment to an unrelated frozen P50 is a false failure) but it removes the single detector standing between a stale capacity/CF and billed revenue. The replacement guard is \"lenient on absence\" — a partial result block yields `None` and the run proceeds with **no resource-side integrity check at all**",
+      "historical_assigned_phase": "P2",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "The disarm is justified (comparing a fresh assessment to an unrelated frozen P50 is a false failure) but it removes the single detector standing between a stale capacity/CF and billed revenue. The replacement guard is \"lenient on absence\" — a partial result block yields `None` and the run proceeds with **no resource-side integrity check at all**",
+      "fixed_claim_sha256": "e1f14897c87d27b6c0def1d2df21215faff5e195a23fa8767bcbbc32ba27b2cd",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "app/services/pipeline_service.py",
+        "app/jobs/analysis_runner.py",
+        "app/jobs/runner.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "wind_resource_methodology_owner",
+      "dependencies": [],
+      "planned_negative_control": "Provide a partial ResourceAssessment with a known capacity or capacity-factor mismatch and require every screening path to reject or visibly qualify it rather than skipping both reconciliation guards.",
+      "independent_reviewer": {
+        "required_role": "independent_wind_resource_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 42,
+      "pointer_id": "RS-D12",
+      "batch_id": "B12",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:521",
+      "historical_area": "Pooled all-hours Weibull fit with a reporting-only energy-tail diagnostic",
+      "historical_code_location": "`wind_resource/weibull_fit.py:122-180`; `energy_moment_gof_pct` at `:101-119` with no threshold enforced anywhere",
+      "historical_risk_claim": "Kalpitiya is a monsoon site — precisely the case the docstring says warrants a time-stratified fit. The (A,k) that feeds the bankable analytic AEP is a single pooled distribution, and the guard that would catch a bad energy tail is computed and displayed but never gates",
+      "historical_assigned_phase": "P5",
+      "source_disposition": "not_examined",
+      "source_confidence": "high",
+      "fixed_claim": "Kalpitiya is a monsoon site — precisely the case the docstring says warrants a time-stratified fit. The (A,k) that feeds the bankable analytic AEP is a single pooled distribution, and the guard that would catch a bad energy tail is computed and displayed but never gates",
+      "fixed_claim_sha256": "5ec3a5f1e02a8d1c9327182e7c8bd7e137e38089aa3aeec37e8bb0d3211cb3bb",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "wind_resource/weibull_fit.py",
+        "wind_resource/bankable_aep.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "wind_resource_methodology_owner",
+      "dependencies": [
+        {
+          "dependency_id": "P5-REPRO-WIND-001",
+          "kind": "registered_reproduction",
+          "status": "required_not_run",
+          "blocking": true,
+          "requirement": "Complete and independently review pooled-versus-seasonal wind-distribution behavior and energy-tail adequacy."
+        }
+      ],
+      "planned_negative_control": "Fit a controlled monsoon-season mixture both pooled and seasonally, compare independent energy-tail error and AEP, and require a declared acceptance threshold to gate an inadequate pooled fit.",
+      "independent_reviewer": {
+        "required_role": "independent_wind_resource_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent.",
+        "Synthetic seasonal structure cannot substitute for authenticated site measurements."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 43,
+      "pointer_id": "RS-D2",
+      "batch_id": "B12",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:511",
+      "historical_area": "150 m hub-height extrapolation from ERA5's 100 m level with an unvalidated shear exponent",
+      "historical_code_location": "`wind_resource/era5_retrieval.py:338-359`",
+      "historical_risk_claim": "α derived from a 10 m/100 m ratio within the same coarse cell, clipped to [0.05, 0.40], NaN-filled with 0.143, and **replaceable wholesale by a caller-supplied constant**. AEP responds roughly cubically to hub wind speed, so this is a first-order bankability driver with no measurement anchor and no uncertainty term of its own beyond the generic `vertical_extrapolation_pct = 3.0`",
+      "historical_assigned_phase": "P3",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "α derived from a 10 m/100 m ratio within the same coarse cell, clipped to [0.05, 0.40], NaN-filled with 0.143, and **replaceable wholesale by a caller-supplied constant**. AEP responds roughly cubically to hub wind speed, so this is a first-order bankability driver with no measurement anchor and no uncertainty term of its own beyond the generic `vertical_extrapolation_pct = 3.0`",
+      "fixed_claim_sha256": "840e6eb9d37c0f7857e316387c43b24a02ea7b5636b400e883ab3ed2c7fa6aa0",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "wind_resource/era5_retrieval.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "wind_resource_methodology_owner",
+      "dependencies": [
+        {
+          "dependency_id": "WIND-SITE-MAST-MCP-EVIDENCE",
+          "kind": "external_evidence",
+          "status": "blocked_external",
+          "blocking": true,
+          "requirement": "Authenticated on-site mast and MCP evidence is required before any project-specific bankable resource conclusion."
+        }
+      ],
+      "planned_negative_control": "Vary the shear exponent across clipping and fallback boundaries and compare hub-height wind and AEP sensitivity, requiring the specific extrapolation uncertainty and source provenance to remain visible.",
+      "independent_reviewer": {
+        "required_role": "independent_wind_resource_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent.",
+        "No authenticated on-site mast or MCP dataset is available for a project-specific shear calibration."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 44,
+      "pointer_id": "RS-D4",
+      "batch_id": "B12",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:513",
+      "historical_area": "Normal (not lognormal) exceedance model with a symmetric linear haircut",
+      "historical_code_location": "`analytics/core/exceedance.py:14-18`, `:38-49`; `bankable_aep.py:603-604`",
+      "historical_risk_claim": "`P_x = P50×(1−z·σ/100)` is a linear normal quantile. At the combined σ this stack produces (systematic RSS of 4.5/4.0/3.0/2.5/5.0/3.0 plus IAV) the 1-year σ is roughly 9-10%, so a P99 would be ~P50×0.77 — the linear form can approach implausible territory at high z and understates the left tail relative to a lognormal",
+      "historical_assigned_phase": "P5",
+      "source_disposition": "deferred",
+      "source_confidence": "high",
+      "fixed_claim": "`P_x = P50×(1−z·σ/100)` is a linear normal quantile. At the combined σ this stack produces (systematic RSS of 4.5/4.0/3.0/2.5/5.0/3.0 plus IAV) the 1-year σ is roughly 9-10%, so a P99 would be ~P50×0.77 — the linear form can approach implausible territory at high z and understates the left tail relative to a lognormal",
+      "fixed_claim_sha256": "a824b0ef97c35f58a45b0a53f7df3a8e229ce6d04627a7f7e2501a8a2d25951e",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "analytics/core/exceedance.py",
+        "wind_resource/bankable_aep.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "wind_resource_methodology_owner",
+      "dependencies": [
+        {
+          "dependency_id": "P5-REPRO-D4-001",
+          "kind": "registered_reproduction",
+          "status": "required_not_run",
+          "blocking": true,
+          "requirement": "Complete and independently review the distribution-choice and P90, P95 and P99 impact reproduction."
+        }
+      ],
+      "planned_negative_control": "Compute normal and lognormal P90, P95 and P99 from the same fixed P50 and uncertainty using independent closed forms, including a high-uncertainty case that tests positivity and tail behavior.",
+      "independent_reviewer": {
+        "required_role": "independent_wind_resource_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent.",
+        "The project-specific distribution choice remains conditional on independent resource evidence."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 45,
+      "pointer_id": "RS-E3",
+      "batch_id": "B13",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:524",
+      "historical_area": "The screening switch is **duplicated rather than shared**",
+      "historical_code_location": "`analysis_runner.py:73-86` re-implements `pipeline_service.py:224-250`; `runner.py:513-515` sets `run.mode='screening'` unconditionally",
+      "historical_risk_claim": "Two copies must stay in lockstep. The analysis copy **hard-codes** `adapter_mode='overwrite'` and `physical_only=True` rather than deriving them from `resolve_run_mode`, so a future change to the seam's screening semantics will silently not reach the analysis path. Directly contradicts the Dolphin claim in its own docstring",
+      "historical_assigned_phase": "P4",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Two copies must stay in lockstep. The analysis copy **hard-codes** `adapter_mode='overwrite'` and `physical_only=True` rather than deriving them from `resolve_run_mode`, so a future change to the seam's screening semantics will silently not reach the analysis path. Directly contradicts the Dolphin claim in its own docstring",
+      "fixed_claim_sha256": "4118cd6b1d0f1baa82e3fef42cfa0bb234832745a1ad94b7ccf337a1aad72650",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "app/jobs/analysis_runner.py",
+        "app/services/pipeline_service.py",
+        "app/jobs/runner.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "async_analysis_owner",
+      "dependencies": [],
+      "planned_negative_control": "Alter screening semantics in the central run-mode resolver in an isolated tree and require both synchronous and analysis-job seams to consume that change rather than retain hard-coded copies.",
+      "independent_reviewer": {
+        "required_role": "independent_api_contract_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 46,
+      "pointer_id": "RS-E4",
+      "batch_id": "B13",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:525",
+      "historical_area": "No async wind or analysis job can ever run under the bankable reconciliation",
+      "historical_code_location": "`app/jobs/runner.py:507-515`; `analysis_runner.py:74-76`",
+      "historical_risk_claim": "`WindJobRequest` exposes **no run-mode field**, so the entire async surface is permanently screening-grade. Correct for a live location assessment (#996) but means the async path can never be used for a bankable re-run, and a client cannot tell from the request which posture it got — only from a grade string buried in `WindAssessment.provenance`",
+      "historical_assigned_phase": "P3",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "`WindJobRequest` exposes **no run-mode field**, so the entire async surface is permanently screening-grade. Correct for a live location assessment (#996) but means the async path can never be used for a bankable re-run, and a client cannot tell from the request which posture it got — only from a grade string buried in `WindAssessment.provenance`",
+      "fixed_claim_sha256": "86aba6814202cabfa98a4da9595342766dc0f32b9c9ee869c15fdc8c72268bfa",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "app/jobs/runner.py",
+        "app/jobs/analysis_runner.py",
+        "app/jobs/models.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "async_analysis_owner",
+      "dependencies": [],
+      "planned_negative_control": "Submit an asynchronous request that asks for bankable posture and require the boundary to refuse it or return an unmissable screening grade in both the request contract and result envelope.",
+      "independent_reviewer": {
+        "required_role": "independent_api_contract_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 47,
+      "pointer_id": "RS-E5",
+      "batch_id": "B13",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:526",
+      "historical_area": "Sync `/v1/cases` keeps the base variant's **frozen `aep_summary`** while accepting capacity/CF edits",
+      "historical_code_location": "`app/models/inputs.py:13-15`; only backstop is the reconciliation at `pipeline_service.py:100`",
+      "historical_risk_claim": "A wizard edit changes the finance inputs but not the AEP basis. **Within the reconciliation tolerance the run succeeds and returns lender KPIs computed against an AEP that belongs to a different machine configuration**; beyond it the client gets an opaque 400. There is no sync-path equivalent of the async `_input_reconciliation` note",
+      "historical_assigned_phase": "P3",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "A wizard edit changes the finance inputs but not the AEP basis. **Within the reconciliation tolerance the run succeeds and returns lender KPIs computed against an AEP that belongs to a different machine configuration**; beyond it the client gets an opaque 400. There is no sync-path equivalent of the async `_input_reconciliation` note",
+      "fixed_claim_sha256": "c3deb6cb2bbbf80009d8e4b4af74dc1e3da19ec62d0f0afa3cd9f98ed1747061",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "app/models/inputs.py",
+        "app/services/pipeline_service.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "api_model_owner",
+      "dependencies": [],
+      "planned_negative_control": "Change capacity and capacity factor within the present tolerance while retaining a frozen AEP summary and require the sync response to expose the basis mismatch rather than return unlabeled lender KPIs.",
+      "independent_reviewer": {
+        "required_role": "independent_api_contract_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 48,
+      "pointer_id": "RS-E6",
+      "batch_id": "B13",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:527",
+      "historical_area": "The web report pack **permanently omits** the Monte-Carlo capital-risk section",
+      "historical_code_location": "`app/api/main.py:348-359` passes no `capital_risk`; acknowledged `app/reports/capital_risk_emit.py:14`; field exists at `surface.py:183` and projects None",
+      "historical_risk_claim": "Every HTTP-delivered report and every `CaseSurface` has `capital_risk=None`, so covenant-breach probabilities, probability-below-hurdle and VaR/CVaR rows that the CLI emitter produces are **structurally absent from the web deliverable**. A client cannot distinguish \"not computed\" from \"no risk\"",
+      "historical_assigned_phase": "P3",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Every HTTP-delivered report and every `CaseSurface` has `capital_risk=None`, so covenant-breach probabilities, probability-below-hurdle and VaR/CVaR rows that the CLI emitter produces are **structurally absent from the web deliverable**. A client cannot distinguish \"not computed\" from \"no risk\"",
+      "fixed_claim_sha256": "cb85bd54deef4524dbe781a1ca1f091fc760e36b9fb3c1100f2902508f131a33",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "app/api/main.py",
+        "app/reports/capital_risk_emit.py",
+        "app/api/surface.py",
+        "app/reports/report_model.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "reporting_surface_owner",
+      "dependencies": [],
+      "planned_negative_control": "Generate a web report where capital risk is intentionally not computed and another where it is computed, requiring the surface to distinguish unavailable from zero-risk and no-breach outcomes.",
+      "independent_reviewer": {
+        "required_role": "independent_reporting_contract_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 49,
+      "pointer_id": "RS-E7",
+      "batch_id": "B13",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:528",
+      "historical_area": "The 422 guard for legacy dict-form `monte_carlo.parameters` covers `mc` and `morris` but **not** `tornado`",
+      "historical_code_location": "`app/jobs/models.py:210`, `:286-315`",
+      "historical_risk_claim": "Only lendercase pins the list form; basecase and equitycase carry a legacy dict, so mc/morris on those variants correctly 422 at the boundary. `tornado` is exempt because it builds its own driver library — but that library resolves at **run** time (`analysis_runner.py:139-144`), where an empty result raises inside the generic failure boundary and reaches the client as a class name only. Same defect class, worse surfacing",
+      "historical_assigned_phase": "P2",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Only lendercase pins the list form; basecase and equitycase carry a legacy dict, so mc/morris on those variants correctly 422 at the boundary. `tornado` is exempt because it builds its own driver library — but that library resolves at **run** time (`analysis_runner.py:139-144`), where an empty result raises inside the generic failure boundary and reaches the client as a class name only. Same defect class, worse surfacing",
+      "fixed_claim_sha256": "4acdcdc5a0bd343bbd5137233a15c0e8ff1c183f206de658546351c11196bc31",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "app/jobs/models.py",
+        "app/jobs/analysis_runner.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "async_analysis_owner",
+      "dependencies": [],
+      "planned_negative_control": "Submit tornado analysis with the legacy dict-form parameter block and no resolvable drivers and require a boundary-level 422 response rather than a generic runtime failure class.",
+      "independent_reviewer": {
+        "required_role": "independent_api_contract_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 50,
+      "pointer_id": "RS-E8",
+      "batch_id": "B13",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:529",
+      "historical_area": "`JobRecord.result` is an untyped `Dict` — the envelope is convention, not contract",
+      "historical_code_location": "`app/jobs/models.py:87-91`; produced `runner.py:530`, `analysis_runner.py:184-189`",
+      "historical_risk_claim": "`GET /v1/jobs/{id}` is `response_model=JobRecord`, so FastAPI validates everything **except the payload the client actually consumes**. A change to `CaseResult` or `AnalysisResult` cannot be caught by the OpenAPI contract test on this route",
+      "historical_assigned_phase": "P4",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "`GET /v1/jobs/{id}` is `response_model=JobRecord`, so FastAPI validates everything **except the payload the client actually consumes**. A change to `CaseResult` or `AnalysisResult` cannot be caught by the OpenAPI contract test on this route",
+      "fixed_claim_sha256": "c8d635cc68527386cbd3bd7104e9f66e42ae6da1c3454df00e10eae8869b4928",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "app/jobs/models.py",
+        "app/jobs/runner.py",
+        "app/jobs/analysis_runner.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "api_model_owner",
+      "dependencies": [],
+      "planned_negative_control": "Return a malformed or wrong-kind job result payload and require response-model or discriminated-union validation to fail before an API client can consume the envelope.",
+      "independent_reviewer": {
+        "required_role": "independent_api_contract_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 51,
+      "pointer_id": "RS-E9",
+      "batch_id": "B13",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:530",
+      "historical_area": "`api.pipeline_api`'s router is **mounted twice**, producing a duplicate public surface",
+      "historical_code_location": "`app/api/main.py:111-116` and `:120-125`",
+      "historical_risk_claim": "`POST /v1/sensitivity/run-pipeline` is a second, undocumented alias of `POST /v1/run-pipeline` with the same handler. It widens the frozen `/v1` contract surface (#841) with routes nobody intended to freeze, and duplicates the route in the OpenAPI schema",
+      "historical_assigned_phase": "P4",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "`POST /v1/sensitivity/run-pipeline` is a second, undocumented alias of `POST /v1/run-pipeline` with the same handler. It widens the frozen `/v1` contract surface (#841) with routes nobody intended to freeze, and duplicates the route in the OpenAPI schema",
+      "fixed_claim_sha256": "67fbbc9f825a3e397871961568130df7c4ec6ea29fb22b76b1731084b99269fb",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "app/api/main.py",
+        "api/pipeline_api.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "api_model_owner",
+      "dependencies": [],
+      "planned_negative_control": "Enumerate the OpenAPI operation and route pairs and deliberately mount the same router twice in an isolated app, requiring a uniqueness guard to fail on the duplicate public alias.",
+      "independent_reviewer": {
+        "required_role": "independent_api_contract_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 52,
+      "pointer_id": "RS-E10",
+      "batch_id": "B14",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:531",
+      "historical_area": "CSP still permits `'unsafe-inline'` for both scripts and styles",
+      "historical_code_location": "`app/api/security.py:58-67`, rationale `:21-26`",
+      "historical_risk_claim": "The wizard ships an inline bootstrap script and inline `style=\"width:…%\"` progress bars, so the policy cannot block inline execution — the primary XSS mitigation a CSP exists to provide. Mitigated by forced Jinja autoescaping, but that is **single-layer defence** for a surface rendering user-supplied `site_name` and `location`",
+      "historical_assigned_phase": "P4",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "The wizard ships an inline bootstrap script and inline `style=\"width:…%\"` progress bars, so the policy cannot block inline execution — the primary XSS mitigation a CSP exists to provide. Mitigated by forced Jinja autoescaping, but that is **single-layer defence** for a surface rendering user-supplied `site_name` and `location`",
+      "fixed_claim_sha256": "bfc880cfb44e2402dad5e4a46a610eeaaf3c0bb9bac737605e0058ec46836041",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "app/api/security.py",
+        "app/web/templates/wizard.html.j2"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "application_security_owner",
+      "dependencies": [],
+      "planned_negative_control": "Inject hostile site-name markup and inline script content through the rendered wizard and require template escaping plus the deployed CSP to prevent executable content without assuming either layer alone.",
+      "independent_reviewer": {
+        "required_role": "independent_security_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 53,
+      "pointer_id": "RS-E11",
+      "batch_id": "B14",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:532",
+      "historical_area": "Token revocation is out of code scope",
+      "historical_code_location": "`app/api/auth.py:45-47` (explicit, tracked on #858); TTL 3600s; cookie max-age matched",
+      "historical_risk_claim": "No jti denylist, no rotation, no logout-invalidates-token. `POST /logout` only clears the cookie client-side — **the JWT it carried remains valid against `/v1` for up to an hour**",
+      "historical_assigned_phase": "P3",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "No jti denylist, no rotation, no logout-invalidates-token. `POST /logout` only clears the cookie client-side — **the JWT it carried remains valid against `/v1` for up to an hour**",
+      "fixed_claim_sha256": "d90c973ec4c38d4de87791e17307c5b0fe375220a682860a628d76a12ae9d7d9",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "app/api/auth.py",
+        "app/api/main.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "application_security_owner",
+      "dependencies": [],
+      "planned_negative_control": "Reuse a captured token after logout or an explicit revocation event and require rejection; if no revocation mechanism exists, measure and disclose the full residual TTL exposure.",
+      "independent_reviewer": {
+        "required_role": "independent_security_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 54,
+      "pointer_id": "RS-E12",
+      "batch_id": "B14",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:533",
+      "historical_area": "`app/reports/report_model.py` is a 2,434-line module carrying the entire presentation contract",
+      "historical_code_location": "`report_model.py:2314-2331` (a 14-keyword builder) — 24% of the subsystem's 10,199 lines in one file",
+      "historical_risk_claim": "Every report section, formatter and optional block resolves through one module that `surface.py`, `main.py` and four emit modules all depend on. Any change touches the JSON surface contract, the HTML report, the PDF and the workbook simultaneously — the opposite of dolphin-sized",
+      "historical_assigned_phase": "P4",
+      "source_disposition": "not_examined",
+      "source_confidence": "unknown",
+      "fixed_claim": "Every report section, formatter and optional block resolves through one module that `surface.py`, `main.py` and four emit modules all depend on. Any change touches the JSON surface contract, the HTML report, the PDF and the workbook simultaneously — the opposite of dolphin-sized",
+      "fixed_claim_sha256": "04fdb0d6026d6d9a0ca7b70c31850192bb150c6b1e3d09049fa034e186b7a113",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "app/reports/report_model.py",
+        "app/reports/report_orchestration.py",
+        "app/reports/renderer.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "reporting_surface_owner",
+      "dependencies": [],
+      "planned_negative_control": "Mutate one optional report-section contract and require independently selected JSON, HTML, PDF and workbook consumers to detect or isolate the change rather than fail through one monolithic builder.",
+      "independent_reviewer": {
+        "required_role": "independent_reporting_contract_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 55,
+      "pointer_id": "RS-E13",
+      "batch_id": "B14",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:534",
+      "historical_area": "The redis/arq durability path is entirely un-CI-verified",
+      "historical_code_location": "`app/jobs/config.py:56-63`; `worker.py:10-13`; `jobs_router.py:52-62`",
+      "historical_risk_claim": "The queue-name/DSN agreement, the task-name strings, the `model_dump(mode='json')` round-trip and the shared-store handoff are all string- and convention-coupled across two modules **with no integration test**. A rename on one side fails only in production",
+      "historical_assigned_phase": "P5",
+      "source_disposition": "not_examined",
+      "source_confidence": "high",
+      "fixed_claim": "The queue-name/DSN agreement, the task-name strings, the `model_dump(mode='json')` round-trip and the shared-store handoff are all string- and convention-coupled across two modules **with no integration test**. A rename on one side fails only in production",
+      "fixed_claim_sha256": "cff17bddba494fad6ae186823e0f7a5548d884731b43228aa84cd809aea25140",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "app/jobs/config.py",
+        "app/jobs/worker.py",
+        "app/api/jobs_router.py",
+        "app/jobs/models.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "async_operations_owner",
+      "dependencies": [],
+      "planned_negative_control": "Mismatch queue name, task string, JSON round-trip shape and shared-store handoff one at a time in an integration harness and require each incompatibility to fail before production dispatch.",
+      "independent_reviewer": {
+        "required_role": "independent_operations_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent.",
+        "A real Redis/ARQ integration execution remains required; source inspection alone is insufficient."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "ledger_row_number": 56,
+      "pointer_id": "RS-A14",
+      "batch_id": "B15",
+      "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+      "historical_source_anchor": "01_architecture_map.md:487",
+      "historical_area": "Sculpt allocation convention (pari-passu pro-rata) vs cost-optimal amortisation",
+      "historical_code_location": "`finance/debt_v14.py:655-669`",
+      "historical_risk_claim": "Principal shared pro-rata by outstanding balance across LKR/USD/DFI. The in-code note acknowledges cost-weighted allocation would lower total interest but is non-standard inter-creditor terms. Benchmark against current market sculpting practice",
+      "historical_assigned_phase": "P5",
+      "source_disposition": "deferred",
+      "source_confidence": "high",
+      "fixed_claim": "Principal shared pro-rata by outstanding balance across LKR/USD/DFI. The in-code note acknowledges cost-weighted allocation would lower total interest but is non-standard inter-creditor terms. Benchmark against current market sculpting practice",
+      "fixed_claim_sha256": "c5c7865a4cac8a613a3dbe0844b6e714c3c8fa074e8f46b0ffc36ae9a70f1526",
+      "current_main_cutoff_commit": "5503ff0e49683ddb8d8439d2460e2ebd08451985",
+      "current_main_code_seams": [
+        "finance/debt_v14.py"
+      ],
+      "seam_mapping_status": "file_level_scout_only_not_examination",
+      "historical_wording_status": "not_assessed",
+      "owner_role": "project_finance_model_owner",
+      "dependencies": [
+        {
+          "dependency_id": "P5-REPRO-A14-001",
+          "kind": "registered_reproduction",
+          "status": "required_not_run",
+          "blocking": true,
+          "requirement": "Complete and independently review the facility-allocation method reproduction against a fixed multi-tranche schedule."
+        },
+        {
+          "dependency_id": "F5-02-TRANSACTION-EVIDENCE",
+          "kind": "external_evidence",
+          "status": "blocked_external",
+          "blocking": true,
+          "requirement": "Authenticated facility and intercreditor terms are required before deciding the transaction-specific principal-allocation convention."
+        }
+      ],
+      "planned_negative_control": "Compare pro-rata and cost-weighted principal allocation on a fixed multi-tranche schedule, reconciling debt service and interest exactly while refusing to select transaction treatment without authenticated facility terms.",
+      "independent_reviewer": {
+        "required_role": "independent_project_finance_model_reviewer",
+        "identity": null,
+        "independence_statement": null,
+        "reviewed_at": null
+      },
+      "result": {
+        "artifact_path": null,
+        "sha256": null,
+        "evidence_refs": [],
+        "reproduction_refs": []
+      },
+      "disposition": "pending_examination",
+      "confidence": "not_assessed",
+      "unresolved_gaps": [
+        "Dedicated current-main examination has not been executed.",
+        "Independent review and a hash-bound result are absent.",
+        "No authenticated lender or intercreditor evidence currently supports a transaction-specific allocation choice."
+      ],
+      "hold_effect": "blocks_board_lender_release"
+    }
+  ]
+}

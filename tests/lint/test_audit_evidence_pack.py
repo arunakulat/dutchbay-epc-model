@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import copy
 import importlib.util
+import json
 import shutil
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 from types import ModuleType
 
@@ -57,6 +60,96 @@ def test_controlled_audit_successor_pack_is_internally_valid() -> None:
     assert '"status": "PASS"' in completed.stdout
     assert '"release_status": "HOLD"' in completed.stdout
     assert '"ruleset_count_erratum": "PASS"' in completed.stdout
+    assert '"pending_examination": 56' in completed.stdout
+
+
+def test_architecture_examination_plan_is_exactly_pending_and_hold_blocking() -> None:
+    """The v1 control plan must not masquerade as completed examination."""
+    validator = _load_validator()
+    builder = validator._load_architecture_examination_builder()
+    payload = builder.build_from_disk()
+    records = payload["records"]
+
+    assert len(records) == 56
+    assert Counter(record["source_disposition"] for record in records) == Counter(
+        {"not_examined": 51, "deferred": 5}
+    )
+    assert {record["disposition"] for record in records} == {"pending_examination"}
+    assert {record["confidence"] for record in records} == {"not_assessed"}
+    assert all(record["result"]["sha256"] is None for record in records)
+    assert all(record["independent_reviewer"]["identity"] is None for record in records)
+    assert {record["hold_effect"] for record in records} == {
+        "blocks_board_lender_release"
+    }
+    assert payload["release_status"] == "HOLD"
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        ("missing_pointer", "plan pointer population mismatch"),
+        ("escaping_seam", "escaping code seam"),
+        ("reviewer_conflict", "owner and independent reviewer roles conflict"),
+        ("smuggled_disposition", "plan record keys are not exact"),
+    ],
+)
+def test_architecture_examination_plan_rejects_control_bypasses(
+    mutation: str, expected: str
+) -> None:
+    """Population, path, independence and result-state bypasses must fail closed."""
+    validator = _load_validator()
+    builder = validator._load_architecture_examination_builder()
+    architecture = json.loads(builder.ARCHITECTURE_REGISTER.read_text(encoding="utf-8"))
+    plan = copy.deepcopy(json.loads(builder.PLAN.read_text(encoding="utf-8")))
+
+    if mutation == "missing_pointer":
+        plan["records"].pop()
+    elif mutation == "escaping_seam":
+        plan["records"][0]["current_main_code_seams"] = ["../outside.py"]
+    elif mutation == "reviewer_conflict":
+        plan["records"][0]["independent_reviewer_role"] = plan["records"][0][
+            "owner_role"
+        ]
+    else:
+        plan["records"][0]["disposition"] = "confirmed"
+
+    with pytest.raises(builder.LedgerBuildError, match=expected):
+        builder.build_controlled_ledger(architecture, plan, builder.REPO_ROOT)
+
+
+def test_architecture_examination_plan_rejects_frozen_source_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The v1 plan must rebuild only from its exact byte-preserved source state."""
+    validator = _load_validator()
+    builder = validator._load_architecture_examination_builder()
+    mutated_source = tmp_path / builder.ARCHITECTURE_REGISTER.name
+    shutil.copy2(builder.ARCHITECTURE_REGISTER, mutated_source)
+    mutated_source.write_text(
+        mutated_source.read_text(encoding="utf-8") + "\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(builder, "ARCHITECTURE_REGISTER", mutated_source)
+
+    with pytest.raises(
+        builder.LedgerBuildError,
+        match="frozen architecture source-register digest drift",
+    ):
+        builder.build_from_disk()
+
+
+def test_architecture_examination_plan_rejects_duplicate_json_keys(
+    tmp_path: Path,
+) -> None:
+    """Malformed governed JSON must not be normalized by last-key-wins parsing."""
+    validator = _load_validator()
+    builder = validator._load_architecture_examination_builder()
+    malformed = tmp_path / "duplicate-key.json"
+    malformed.write_text('{"pointer_id":"RS-B2","pointer_id":"RS-B3"}\n')
+
+    with pytest.raises(
+        builder.LedgerBuildError, match="duplicate JSON key: pointer_id"
+    ):
+        builder._load_object(malformed)
 
 
 @pytest.mark.parametrize("mutation", ["record", "instruction"])
