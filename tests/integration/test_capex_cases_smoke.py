@@ -21,11 +21,15 @@ capex, is the binding constraint.
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
+from typing import Any, Mapping
 
 import pytest
+import yaml
 
+from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
 
@@ -64,6 +68,22 @@ FINANCIAL_TARGETS = {
     "plcr": ("plcr", 1.0, 0.02),
 }
 
+# ``min_dscr`` is excluded because the debt sizer solves to its covenant target.
+# Every other value KPI pinned by the fixture must remain responsive.
+RESPONSIVE_KPIS = (
+    "project_irr",
+    "equity_irr",
+    "project_npv",
+    "avg_dscr",
+    "llcr",
+    "plcr",
+)
+MIN_RELATIVE_MOVE = 1e-4
+DRIVERS = (
+    ("tariff +10%", {"tariff.lkr_per_kwh": 22.33}),
+    ("opex +25%", {"opex.usd_per_year": 3_750_000.0}),
+)
+
 
 @pytest.fixture(scope="module")
 def kpis() -> dict[str, dict[str, float]]:
@@ -72,6 +92,34 @@ def kpis() -> dict[str, dict[str, float]]:
         name: run_v14_pipeline(config=str(case["file"]))["kpis"]
         for name, case in CASES.items()
     }
+
+
+def _evaluate_kpis(
+    raw_config: Mapping[str, Any], overrides: Mapping[str, float]
+) -> dict[str, Any]:
+    """Evaluate one in-memory case through the canonical gateway."""
+    result = evaluate_with_overrides(
+        config_path=None,
+        raw_config=copy.deepcopy(dict(raw_config)),
+        overrides=dict(overrides),
+    )
+    return dict(result.get("kpis", result))
+
+
+def _assert_kpis_respond(
+    base_kpis: Mapping[str, Any], shocked_kpis: Mapping[str, Any], label: str
+) -> None:
+    """Fail with an actionable list when any fixture value remains frozen."""
+    unmoved = []
+    for key in RESPONSIVE_KPIS:
+        base, shocked = float(base_kpis[key]), float(shocked_kpis[key])
+        relative = abs(shocked - base) / max(abs(base), 1e-6)
+        if relative <= MIN_RELATIVE_MOVE:
+            unmoved.append(f"{key}: {base!r} -> {shocked!r} (rel {relative:.3e})")
+    assert not unmoved, (
+        f"{label} left fixture KPIs unresponsive — the vector may be returned rather "
+        "than computed: " + "; ".join(unmoved)
+    )
 
 
 @pytest.mark.parametrize("name", list(CASES))
@@ -132,6 +180,28 @@ def test_expected_results_bind_to_engine(
         "tests/fixtures/finance/capex_cases_expected_kpis.json from the canonical run "
         "(do NOT hand-edit toward a rosier number):\n  " + "\n  ".join(mismatches)
     )
+
+
+@pytest.mark.parametrize("name", list(CASES))
+@pytest.mark.parametrize("label,overrides", DRIVERS, ids=[item[0] for item in DRIVERS])
+def test_capex_fixture_kpis_respond_to_economic_drivers(
+    name: str, label: str, overrides: dict[str, float]
+) -> None:
+    """TEST-01: every non-solved fixture KPI responds to real drivers."""
+    raw_config = yaml.safe_load(Path(CASES[name]["file"]).read_text(encoding="utf-8"))
+    base = _evaluate_kpis(raw_config, {})
+    shocked = _evaluate_kpis(raw_config, overrides)
+    _assert_kpis_respond(base, shocked, f"{name} / {label}")
+    assert shocked["min_dscr"] == pytest.approx(base["min_dscr"], abs=1e-9)
+
+
+def test_capex_responsiveness_guard_rejects_frozen_output(
+    kpis: dict[str, dict[str, float]],
+) -> None:
+    """VERIFY-01 negative control: a frozen-output stub must trip the guard."""
+    frozen = kpis["lean_977"]
+    with pytest.raises(AssertionError, match="returned rather than computed"):
+        _assert_kpis_respond(frozen, dict(frozen), "frozen-output stub")
 
 
 def test_lower_capex_is_better(kpis: dict[str, dict[str, float]]) -> None:

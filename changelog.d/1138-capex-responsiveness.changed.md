@@ -1,0 +1,1 @@
+- Pair both CAPEX-case financial-KPI fixtures with tariff and operating-cost responsiveness guards plus a frozen-output negative control.
