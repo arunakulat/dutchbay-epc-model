@@ -1,0 +1,315 @@
+{
+  "schema_version": "dutchbay.findings_current_state_overlay_plan.v1",
+  "document_id": "DUTCHBAY-1110-P02-FINDINGS-CURRENT-STATE-PLAN-v1",
+  "authority_status": "active_pre_review_candidate_plan",
+  "created_at": "2026-08-24T19:34:20+05:30",
+  "gate_id": "P02",
+  "historical_audited_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+  "historical_findings_register_path": "registers/findings_register.v2.json",
+  "historical_findings_register_sha256": "71d16a15357a6073456b241d713ba775e2945990b22fa72045d5f312e183b4b8",
+  "historical_finding_count": 111,
+  "current_main_cutoff_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+  "current_main_cutoff_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+  "repository_history_implementer_self_check": {
+    "path": "docs/audit/2026-08-controlled-successor/qa/P02_REPOSITORY_HISTORY_IMPLEMENTER_SELF_CHECK_2026-08-24.json",
+    "sha256": "8a8c481a3beb60ed54ef0f865f134bb9c82766e66e5e820db398fd19b684dc0a",
+    "review_kind": "implementer_self_check",
+    "independence_satisfied": false
+  },
+  "release_status": "HOLD",
+  "independent_review_status": "pending_independent_review",
+  "default_state_by_audited_status": {
+    "closed": "baseline_closed_current_state_not_reassessed",
+    "deferred": "deferred_current_state_not_examined",
+    "open": "open_current_state_not_examined",
+    "requires_correction": "requires_correction_current_state_not_examined"
+  },
+  "evidence_catalog": [
+    {
+      "evidence_id": "EVD-PR1030-MC-BREACH",
+      "evidence_class": "merged_implementation",
+      "status": "delivered_review_pending",
+      "finding_ids": [
+        "P2-MC-SENS-02",
+        "P3-MCFX-03"
+      ],
+      "pull_request_urls": [
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1030"
+      ],
+      "merge_commits": [
+        "9faa6a23d1e655533e5231b6959c6ce3f66be5ad"
+      ],
+      "artifact_refs": [
+        {
+          "path": "docs/audit/2026-08-controlled-successor/reproductions/p3_mcfx_03_remediation_merged_9faa6a2.json",
+          "sha256": "90601e833ce19061d1926c864ceb64c8f6ddc91b623a5580cb667f0ca7397164",
+          "role": "merged implementation and protected-delivery receipt"
+        },
+        {
+          "path": "docs/audit/2026-08-controlled-successor/reproductions/governed_mc_pr1030_spec.json",
+          "sha256": "757f0964f09809f64845914d5278024803eef15539904d37da254448c5cc79e9",
+          "role": "governed post-merge run specification"
+        },
+        {
+          "path": "docs/audit/2026-08-controlled-successor/reproductions/governed_mc_pr1030_secondary_verification.json",
+          "sha256": "29ea11da068b6a2bb80dd09a1cf526a9ab590d2a465b4005e543423d48089391",
+          "role": "same-agent separate-code-path verification"
+        }
+      ],
+      "scope": "Binds current-main delivery and governed post-merge evidence for P2-MC-SENS-02 and P3-MCFX-03 without changing either audited-commit finding.",
+      "limitations": "The secondary verifier is same-agent rather than independent model-risk review; scenario calibration and placeholder construction draw/phasing remain outside the delivery claim."
+    },
+    {
+      "evidence_id": "EVD-PR1031-CASPER-TORNADO",
+      "evidence_class": "merged_implementation",
+      "status": "delivered_review_pending",
+      "finding_ids": [
+        "P2-MC-SENS-01"
+      ],
+      "pull_request_urls": [
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1031"
+      ],
+      "merge_commits": [
+        "50adfe7ee59f91660678c0ca32c2cd6513e1c611"
+      ],
+      "artifact_refs": [
+        {
+          "path": "docs/audit/2026-08-controlled-successor/reproductions/p2_mc_sens_01_casper_tornado_merged_50adfe7.json",
+          "sha256": "75575787da4ebd55eda9c9fb4a43f8aec59f81b1b8ab9c976ed6ccb4b133d64b",
+          "role": "merged implementation and canonical CASPER reproduction"
+        }
+      ],
+      "scope": "Binds current-main delivery of the CASPER tornado metadata repair for P2-MC-SENS-01 without changing the audited-commit defect statement.",
+      "limitations": "Delivery evidence does not validate the economic reasonableness of the authored sensitivity ranges and is not independent semantic approval."
+    },
+    {
+      "evidence_id": "EVD-PR1032-FX-DISCLOSURE",
+      "evidence_class": "merged_implementation",
+      "status": "delivered_review_pending",
+      "finding_ids": [
+        "P3-EQ-04"
+      ],
+      "pull_request_urls": [
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1032"
+      ],
+      "merge_commits": [
+        "8a6b48f6573e4ac9074da8fbbcb1e48f4353ce9a"
+      ],
+      "artifact_refs": [
+        {
+          "path": "docs/audit/2026-08-controlled-successor/reproductions/p3_eq_04_fx_report_merged_8a6b48f.json",
+          "sha256": "1e8f58989eee0cb999c7655586bdc70e8f727bbd037f711eff26989bbc62ed8c",
+          "role": "merged manifest-bound FX-disclosure reproduction"
+        }
+      ],
+      "scope": "Binds current-main delivery of the P3-EQ-04 report wording repair while retaining the audited false-attribution finding and its evidence period.",
+      "limitations": "The manifest binding does not independently validate the provenance or economic reasonableness of the configured FX assumptions, and previously circulated reports were not recalled."
+    },
+    {
+      "evidence_id": "EVD-F5-01-FULL-SEQUENCE",
+      "evidence_class": "merged_delivery_chain",
+      "status": "delivered_review_pending",
+      "finding_ids": [
+        "P2-F5-01"
+      ],
+      "pull_request_urls": [
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1035",
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1036",
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1037",
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1038",
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1040",
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1057"
+      ],
+      "merge_commits": [
+        "72f1bf1e9601c815c53333f09c8f73a546b2c109",
+        "e458a78c3377595e49b8c69ceb1afc5c5ff9869e",
+        "dac8c7a36c63f1dbb8dcf855b263e645b57ed676",
+        "7e64d336759292d1fa1c3f1533f6ec20ea6c0250",
+        "32f83d2708759912636efe34cb795db60e0d1fa5",
+        "15d450ec5eef88718286b3251e4264493a26538d"
+      ],
+      "artifact_refs": [
+        {
+          "path": "docs/audit/2026-08-controlled-successor/reproductions/p2_f5_01_d1_empty_debt_parity_merged_dac8c7a.json",
+          "sha256": "f05b43487965709a2d23bb0aed7a9bbf43f061d8ce140443d016b678cab48532",
+          "role": "narrow D1 parity receipt with explicit non-closure limitation"
+        },
+        {
+          "path": "docs/SESSION_HANDOVER_2026-08-17_18.md",
+          "sha256": "7ed2405c3909501748e00d0127412c61aaa9382e4ee3dac84b40a862748b4c24",
+          "role": "dated six-PR delivery and release-chain handover"
+        }
+      ],
+      "scope": "Binds the complete F5-01 construction-period resolver, offset primitive, empty-debt parity, production caller, canonical rebaseline and report-semantics sequence to current main.",
+      "limitations": "The D1 receipt alone does not prove full F5-01 completion. The overlay relies on the complete six-commit chain and current code seams, and formal P02/L01 closure still requires independent current-main semantic review."
+    },
+    {
+      "evidence_id": "EVD-F5-02-INTAKE-CONTROL",
+      "evidence_class": "external_evidence_intake_control",
+      "status": "intake_ready_external_evidence_absent",
+      "finding_ids": [
+        "P2-F5-02"
+      ],
+      "pull_request_urls": [
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1150"
+      ],
+      "merge_commits": [
+        "5503ff0e49683ddb8d8439d2460e2ebd08451985"
+      ],
+      "artifact_refs": [
+        {
+          "path": "analysis_tools/f5_02_lender_return.py",
+          "sha256": "459c703aadfc79702201f097f78dc4564333c36c7246933221fc22537dbd9961",
+          "role": "fail-closed private lender-return validator"
+        },
+        {
+          "path": "docs/audit/lender-input/DUTCHBAY_F5_02_LENDER_CONFIRMATION_TEMPLATE_v1.yaml",
+          "sha256": "a7ccc9cdd13c82308f78c739f735f5bd9d390520c0e09128f4fe191df35382dc",
+          "role": "lender and legal confirmation template"
+        },
+        {
+          "path": "docs/audit/lender-input/DUTCHBAY_F5_02_PRIVATE_INGRESS_MANIFEST_TEMPLATE_v1.yaml",
+          "sha256": "438f13f07c4658c998d21e1585f8f8cd8fb7c44c3a624abf6eae1cd1ecf6ba4b",
+          "role": "private-ingress manifest template"
+        },
+        {
+          "path": "docs/audit/lender-input/DUTCHBAY_F5_02_INTERNAL_DECISION_RECORD_TEMPLATE_v1.yaml",
+          "sha256": "d5f741e668b451dc278d9378dd53eedf78304e682dc2fa25017cd73f5852509b",
+          "role": "post-evidence internal decision template"
+        },
+        {
+          "path": "docs/audit/lender-input/DUTCHBAY_1110_NONCANONICAL_QA_AND_REINGRESS_CHECKLIST_v1.md",
+          "sha256": "9e34a73dcc97338a2dcb6cd39a4eb12f4d267c29bb11ddd7e1cbfc181f25f3a7",
+          "role": "noncanonical QA and re-ingress checklist"
+        }
+      ],
+      "scope": "Records that a fail-closed collection and decision-control surface exists for F5-02; it does not record authenticated DutchBay lender or legal transaction evidence.",
+      "limitations": "No authenticated lender/legal return is present. The analyst-generated synthetic lender term sheet, ERA5 or mast/MCP synthetic placeholders, software receipts and precedent research are explicitly not F5-02 transaction evidence."
+    }
+  ],
+  "release_provenance_exception": {
+    "tag_name": "v15.4.0",
+    "tag_object_oid": "5bbfacc37e0f072d6ac59f96f648a9f14f364f83",
+    "target_commit": "0379843b28c493a1957b6b24f2853dd92a9ace05",
+    "signature_status": "unsigned_exception_accepted_by_user",
+    "acceptance_control_ref": {
+      "path": "docs/audit/2026-08-controlled-successor/06_CURRENT_PROGRAMMING_REVIEW_AND_TODO_v3_2026-08-19.md",
+      "sha256": "7e22468672ff52cd70b669fb85a2dd16087477785f432b8b14ff74940877e799"
+    },
+    "limitation": "Acceptance is a documented one-release governance exception, not a claim that the tag is cryptographically signed; the tag must not be mutated and the next release must be signed."
+  },
+  "overrides": [
+    {
+      "finding_id": "P2-F5-01",
+      "current_state": "implementation_delivered_review_pending",
+      "evidence_ids": [
+        "EVD-F5-01-FULL-SEQUENCE"
+      ],
+      "current_code_seams": [
+        "finance/debt_v14.py",
+        "finance/cashflow_v14_fx.py",
+        "finance/cashflow_v14.py",
+        "analytics/fx/fx_builder.py",
+        "scenarios/dutchbay_lendercase_2025Q4.yaml",
+        "tests/_canon.py",
+        "feasibility_reproduce/MANIFEST.md",
+        "feasibility_reproduce/report/DutchBay_Complete_Feasibility_Study.md"
+      ],
+      "review_status": "pending_independent_review",
+      "remaining_gate": "Independently trace the complete F5-01 caller, canonical KPI and lender-report chain at the current-main cutoff; verify the six-PR sequence and its rollback surface without relying on the partial D1 receipt alone.",
+      "limitations": "Implementation delivery is positively evidenced, but P02 and L01 remain open until independent current-main semantic review is hash-bound. F5-02 is excluded and may not be netted."
+    },
+    {
+      "finding_id": "P2-F5-02",
+      "current_state": "external_evidence_blocked",
+      "evidence_ids": [
+        "EVD-F5-02-INTAKE-CONTROL"
+      ],
+      "current_code_seams": [
+        "analysis_tools/f5_02_lender_return.py",
+        "scripts/validate_f5_02_lender_return.py",
+        "docs/audit/lender-input/DUTCHBAY_F5_02_LENDER_CONFIRMATION_TEMPLATE_v1.yaml",
+        "docs/audit/lender-input/DUTCHBAY_F5_02_PRIVATE_INGRESS_MANIFEST_TEMPLATE_v1.yaml",
+        "docs/audit/lender-input/DUTCHBAY_F5_02_INTERNAL_DECISION_RECORD_TEMPLATE_v1.yaml"
+      ],
+      "review_status": "not_applicable_until_authenticated_evidence",
+      "remaining_gate": "Obtain an authenticated lender/legal return establishing debt denomination, repayment and settlement numeraire, conversion mechanics and binding transaction terms; independently review its private-ingress hashes before any treatment decision or code change.",
+      "limitations": "The intake framework is delivered, but no authenticated transaction evidence exists. Synthetic lender terms, ERA5-compatible placeholders, mast/MCP placeholders and software success cannot satisfy P06 or L03."
+    },
+    {
+      "finding_id": "P2-MC-SENS-01",
+      "current_state": "implementation_delivered_review_pending",
+      "evidence_ids": [
+        "EVD-PR1031-CASPER-TORNADO"
+      ],
+      "current_code_seams": [
+        "analytics/sensitivity/adapters.py",
+        "analytics/casper/casper_payload.py"
+      ],
+      "review_status": "pending_independent_review",
+      "remaining_gate": "Independently review the merged seven-row CASPER tornado evidence, current adapter wiring and controlled-overlay ingress before any formal finding closure.",
+      "limitations": "The repair is metadata-only and does not validate the authored sensitivity ranges or authorize lender-pack regeneration."
+    },
+    {
+      "finding_id": "P2-MC-SENS-02",
+      "current_state": "implementation_delivered_review_pending",
+      "evidence_ids": [
+        "EVD-PR1030-MC-BREACH"
+      ],
+      "current_code_seams": [
+        "analytics/mc/convergence.py",
+        "analytics/mc/aggregate.py",
+        "analytics/mc/engine.py",
+        "analytics/core/covenant_breach.py"
+      ],
+      "review_status": "pending_independent_review",
+      "remaining_gate": "Independently review the governed post-merge finance-MC artifacts, assumption limitations and current-main wiring before formal finding closure.",
+      "limitations": "The reported 16.24 percentage-point change is specific to the pinned run; scenario calibration and placeholder construction draw/phasing remain open."
+    },
+    {
+      "finding_id": "P3-EQ-04",
+      "current_state": "implementation_delivered_review_pending",
+      "evidence_ids": [
+        "EVD-PR1032-FX-DISCLOSURE"
+      ],
+      "current_code_seams": [
+        "app/reports/report_config.py",
+        "app/reports/report_model.py",
+        "config/report_defaults.yaml"
+      ],
+      "review_status": "pending_independent_review",
+      "remaining_gate": "Independently review the manifest-bound FX disclosure, current report wiring and controlled-overlay ingress before formal finding closure or report regeneration.",
+      "limitations": "The wording correction does not authenticate the FX assumptions and does not recall previously circulated reports."
+    },
+    {
+      "finding_id": "P3-MCFX-03",
+      "current_state": "implementation_delivered_review_pending",
+      "evidence_ids": [
+        "EVD-PR1030-MC-BREACH"
+      ],
+      "current_code_seams": [
+        "analytics/mc/convergence.py",
+        "analytics/mc/aggregate.py",
+        "analytics/mc/engine.py",
+        "analytics/core/covenant_breach.py"
+      ],
+      "review_status": "pending_independent_review",
+      "remaining_gate": "Independently review the governed post-merge finance-MC artifacts, the current tolerance-aware comparator wiring and controlled-overlay ingress before formal finding closure.",
+      "limitations": "The delivered repair does not approve model calibration, placeholder schedules or unrelated percentile and Monte Carlo methodology findings."
+    }
+  ],
+  "f5_separation": {
+    "f5_01_finding_id": "P2-F5-01",
+    "f5_02_finding_id": "P2-F5-02",
+    "netting_permitted": false,
+    "shared_evidence_ids": [],
+    "rule": "F5-01 and F5-02 remain separate findings, evidence periods, decisions, implementations, tests, reconciliations, commits, pull requests and rollback surfaces; neither evidence set can close or offset the other."
+  },
+  "immutability_rule": "Do not edit findings_register.v2.json or any audited-commit field to express current-main remediation; rebuild this additive overlay from the exact source hash and issue a new overlay version for later evidence.",
+  "limitations": [
+    "This is an implementer-authored P02 candidate overlay, not independent model-risk approval and not P02 completion.",
+    "Only five findings have positive current-main implementation delivery evidence in v1; one F5-02 row is explicitly external-evidence blocked and the remaining 105 rows are not reassessed against current main.",
+    "Green CI, merged commits, synthetic placeholders and analyst-generated documents do not by themselves close findings, authenticate external evidence or lift the Board/lender release HOLD.",
+    "Issue #1110 remains OPEN, all 23 programme gates remain pending in the immutable v1 gate ledger, and all 56 architecture examinations remain pending."
+  ]
+}

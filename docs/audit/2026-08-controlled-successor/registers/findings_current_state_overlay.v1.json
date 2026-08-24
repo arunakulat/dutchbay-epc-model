@@ -1,0 +1,3748 @@
+{
+  "schema_version": "dutchbay.findings_current_state_overlay.v1",
+  "document_id": "DUTCHBAY-1110-P02-FINDINGS-CURRENT-STATE-OVERLAY-v1",
+  "authority_status": "active_additive_candidate_overlay",
+  "created_at": "2026-08-24T19:34:20+05:30",
+  "gate_id": "P02",
+  "p02_gate": {
+    "status": "candidate_overlay_pending_independent_review",
+    "completion_authorized": false,
+    "independent_reviewer_identity": null
+  },
+  "release_status": "HOLD",
+  "source_findings_register": {
+    "path": "registers/findings_register.v2.json",
+    "sha256": "71d16a15357a6073456b241d713ba775e2945990b22fa72045d5f312e183b4b8",
+    "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+    "record_count": 111
+  },
+  "current_main_snapshot": {
+    "commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+    "tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+    "evidence_period": "current_main_cutoff_not_overlay_merge_commit"
+  },
+  "repository_history_implementer_self_check": {
+    "path": "docs/audit/2026-08-controlled-successor/qa/P02_REPOSITORY_HISTORY_IMPLEMENTER_SELF_CHECK_2026-08-24.json",
+    "sha256": "8a8c481a3beb60ed54ef0f865f134bb9c82766e66e5e820db398fd19b684dc0a",
+    "review_kind": "implementer_self_check",
+    "independence_satisfied": false,
+    "commit_objects": 13,
+    "tag_object_verified_in_full_history_self_check": true,
+    "portable_validation_boundary": "Shallow consumers validate the hash-bound self-check; they do not claim to have reperformed full-history object or ancestry checks."
+  },
+  "plan_input": {
+    "path": "registers/findings_current_state_plan.v1.json",
+    "semantic_sha256": "032d45ab0245b4055dfb62e7a426c820dde2b417326b48fd32a6f8f3db7aaf8f",
+    "immutability_rule": "Do not edit findings_register.v2.json or any audited-commit field to express current-main remediation; rebuild this additive overlay from the exact source hash and issue a new overlay version for later evidence."
+  },
+  "coverage": {
+    "record_count": 111,
+    "explicit_evidence_override_count": 6,
+    "implementation_delivered_review_pending_count": 5,
+    "external_evidence_blocked_count": 1,
+    "current_state_not_reassessed_or_examined_count": 105,
+    "independently_reviewed_count": 0,
+    "hold_blocking_count": 111,
+    "current_state_counts": {
+      "baseline_closed_current_state_not_reassessed": 4,
+      "deferred_current_state_not_examined": 16,
+      "external_evidence_blocked": 1,
+      "implementation_delivered_review_pending": 5,
+      "open_current_state_not_examined": 65,
+      "requires_correction_current_state_not_examined": 20
+    }
+  },
+  "controlled_vocabularies": {
+    "current_state": [
+      "baseline_closed_current_state_not_reassessed",
+      "deferred_current_state_not_examined",
+      "external_evidence_blocked",
+      "implementation_delivered_review_pending",
+      "open_current_state_not_examined",
+      "requires_correction_current_state_not_examined"
+    ],
+    "review_status": [
+      "not_applicable_until_authenticated_evidence",
+      "not_started",
+      "pending_independent_review"
+    ],
+    "hold_effect": [
+      "blocks_board_lender_release"
+    ]
+  },
+  "evidence_catalog": [
+    {
+      "evidence_id": "EVD-F5-01-FULL-SEQUENCE",
+      "evidence_class": "merged_delivery_chain",
+      "status": "delivered_review_pending",
+      "finding_ids": [
+        "P2-F5-01"
+      ],
+      "pull_request_urls": [
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1035",
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1036",
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1037",
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1038",
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1040",
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1057"
+      ],
+      "merge_commits": [
+        "72f1bf1e9601c815c53333f09c8f73a546b2c109",
+        "e458a78c3377595e49b8c69ceb1afc5c5ff9869e",
+        "dac8c7a36c63f1dbb8dcf855b263e645b57ed676",
+        "7e64d336759292d1fa1c3f1533f6ec20ea6c0250",
+        "32f83d2708759912636efe34cb795db60e0d1fa5",
+        "15d450ec5eef88718286b3251e4264493a26538d"
+      ],
+      "artifact_refs": [
+        {
+          "path": "docs/audit/2026-08-controlled-successor/reproductions/p2_f5_01_d1_empty_debt_parity_merged_dac8c7a.json",
+          "sha256": "f05b43487965709a2d23bb0aed7a9bbf43f061d8ce140443d016b678cab48532",
+          "role": "narrow D1 parity receipt with explicit non-closure limitation"
+        },
+        {
+          "path": "docs/SESSION_HANDOVER_2026-08-17_18.md",
+          "sha256": "7ed2405c3909501748e00d0127412c61aaa9382e4ee3dac84b40a862748b4c24",
+          "role": "dated six-PR delivery and release-chain handover"
+        }
+      ],
+      "scope": "Binds the complete F5-01 construction-period resolver, offset primitive, empty-debt parity, production caller, canonical rebaseline and report-semantics sequence to current main.",
+      "limitations": "The D1 receipt alone does not prove full F5-01 completion. The overlay relies on the complete six-commit chain and current code seams, and formal P02/L01 closure still requires independent current-main semantic review."
+    },
+    {
+      "evidence_id": "EVD-F5-02-INTAKE-CONTROL",
+      "evidence_class": "external_evidence_intake_control",
+      "status": "intake_ready_external_evidence_absent",
+      "finding_ids": [
+        "P2-F5-02"
+      ],
+      "pull_request_urls": [
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1150"
+      ],
+      "merge_commits": [
+        "5503ff0e49683ddb8d8439d2460e2ebd08451985"
+      ],
+      "artifact_refs": [
+        {
+          "path": "analysis_tools/f5_02_lender_return.py",
+          "sha256": "459c703aadfc79702201f097f78dc4564333c36c7246933221fc22537dbd9961",
+          "role": "fail-closed private lender-return validator"
+        },
+        {
+          "path": "docs/audit/lender-input/DUTCHBAY_F5_02_LENDER_CONFIRMATION_TEMPLATE_v1.yaml",
+          "sha256": "a7ccc9cdd13c82308f78c739f735f5bd9d390520c0e09128f4fe191df35382dc",
+          "role": "lender and legal confirmation template"
+        },
+        {
+          "path": "docs/audit/lender-input/DUTCHBAY_F5_02_PRIVATE_INGRESS_MANIFEST_TEMPLATE_v1.yaml",
+          "sha256": "438f13f07c4658c998d21e1585f8f8cd8fb7c44c3a624abf6eae1cd1ecf6ba4b",
+          "role": "private-ingress manifest template"
+        },
+        {
+          "path": "docs/audit/lender-input/DUTCHBAY_F5_02_INTERNAL_DECISION_RECORD_TEMPLATE_v1.yaml",
+          "sha256": "d5f741e668b451dc278d9378dd53eedf78304e682dc2fa25017cd73f5852509b",
+          "role": "post-evidence internal decision template"
+        },
+        {
+          "path": "docs/audit/lender-input/DUTCHBAY_1110_NONCANONICAL_QA_AND_REINGRESS_CHECKLIST_v1.md",
+          "sha256": "9e34a73dcc97338a2dcb6cd39a4eb12f4d267c29bb11ddd7e1cbfc181f25f3a7",
+          "role": "noncanonical QA and re-ingress checklist"
+        }
+      ],
+      "scope": "Records that a fail-closed collection and decision-control surface exists for F5-02; it does not record authenticated DutchBay lender or legal transaction evidence.",
+      "limitations": "No authenticated lender/legal return is present. The analyst-generated synthetic lender term sheet, ERA5 or mast/MCP synthetic placeholders, software receipts and precedent research are explicitly not F5-02 transaction evidence."
+    },
+    {
+      "evidence_id": "EVD-PR1030-MC-BREACH",
+      "evidence_class": "merged_implementation",
+      "status": "delivered_review_pending",
+      "finding_ids": [
+        "P2-MC-SENS-02",
+        "P3-MCFX-03"
+      ],
+      "pull_request_urls": [
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1030"
+      ],
+      "merge_commits": [
+        "9faa6a23d1e655533e5231b6959c6ce3f66be5ad"
+      ],
+      "artifact_refs": [
+        {
+          "path": "docs/audit/2026-08-controlled-successor/reproductions/p3_mcfx_03_remediation_merged_9faa6a2.json",
+          "sha256": "90601e833ce19061d1926c864ceb64c8f6ddc91b623a5580cb667f0ca7397164",
+          "role": "merged implementation and protected-delivery receipt"
+        },
+        {
+          "path": "docs/audit/2026-08-controlled-successor/reproductions/governed_mc_pr1030_spec.json",
+          "sha256": "757f0964f09809f64845914d5278024803eef15539904d37da254448c5cc79e9",
+          "role": "governed post-merge run specification"
+        },
+        {
+          "path": "docs/audit/2026-08-controlled-successor/reproductions/governed_mc_pr1030_secondary_verification.json",
+          "sha256": "29ea11da068b6a2bb80dd09a1cf526a9ab590d2a465b4005e543423d48089391",
+          "role": "same-agent separate-code-path verification"
+        }
+      ],
+      "scope": "Binds current-main delivery and governed post-merge evidence for P2-MC-SENS-02 and P3-MCFX-03 without changing either audited-commit finding.",
+      "limitations": "The secondary verifier is same-agent rather than independent model-risk review; scenario calibration and placeholder construction draw/phasing remain outside the delivery claim."
+    },
+    {
+      "evidence_id": "EVD-PR1031-CASPER-TORNADO",
+      "evidence_class": "merged_implementation",
+      "status": "delivered_review_pending",
+      "finding_ids": [
+        "P2-MC-SENS-01"
+      ],
+      "pull_request_urls": [
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1031"
+      ],
+      "merge_commits": [
+        "50adfe7ee59f91660678c0ca32c2cd6513e1c611"
+      ],
+      "artifact_refs": [
+        {
+          "path": "docs/audit/2026-08-controlled-successor/reproductions/p2_mc_sens_01_casper_tornado_merged_50adfe7.json",
+          "sha256": "75575787da4ebd55eda9c9fb4a43f8aec59f81b1b8ab9c976ed6ccb4b133d64b",
+          "role": "merged implementation and canonical CASPER reproduction"
+        }
+      ],
+      "scope": "Binds current-main delivery of the CASPER tornado metadata repair for P2-MC-SENS-01 without changing the audited-commit defect statement.",
+      "limitations": "Delivery evidence does not validate the economic reasonableness of the authored sensitivity ranges and is not independent semantic approval."
+    },
+    {
+      "evidence_id": "EVD-PR1032-FX-DISCLOSURE",
+      "evidence_class": "merged_implementation",
+      "status": "delivered_review_pending",
+      "finding_ids": [
+        "P3-EQ-04"
+      ],
+      "pull_request_urls": [
+        "https://github.com/arunakulat/dutchbay-epc-model/pull/1032"
+      ],
+      "merge_commits": [
+        "8a6b48f6573e4ac9074da8fbbcb1e48f4353ce9a"
+      ],
+      "artifact_refs": [
+        {
+          "path": "docs/audit/2026-08-controlled-successor/reproductions/p3_eq_04_fx_report_merged_8a6b48f.json",
+          "sha256": "1e8f58989eee0cb999c7655586bdc70e8f727bbd037f711eff26989bbc62ed8c",
+          "role": "merged manifest-bound FX-disclosure reproduction"
+        }
+      ],
+      "scope": "Binds current-main delivery of the P3-EQ-04 report wording repair while retaining the audited false-attribution finding and its evidence period.",
+      "limitations": "The manifest binding does not independently validate the provenance or economic reasonableness of the configured FX assumptions, and previously circulated reports were not recalled."
+    }
+  ],
+  "release_provenance_exception": {
+    "tag_name": "v15.4.0",
+    "tag_object_oid": "5bbfacc37e0f072d6ac59f96f648a9f14f364f83",
+    "target_commit": "0379843b28c493a1957b6b24f2853dd92a9ace05",
+    "signature_status": "unsigned_exception_accepted_by_user",
+    "acceptance_control_ref": {
+      "path": "docs/audit/2026-08-controlled-successor/06_CURRENT_PROGRAMMING_REVIEW_AND_TODO_v3_2026-08-19.md",
+      "sha256": "7e22468672ff52cd70b669fb85a2dd16087477785f432b8b14ff74940877e799"
+    },
+    "limitation": "Acceptance is a documented one-release governance exception, not a claim that the tag is cryptographically signed; the tag must not be mutated and the next release must be signed."
+  },
+  "f5_separation": {
+    "f5_01_finding_id": "P2-F5-01",
+    "f5_02_finding_id": "P2-F5-02",
+    "netting_permitted": false,
+    "shared_evidence_ids": [],
+    "rule": "F5-01 and F5-02 remain separate findings, evidence periods, decisions, implementations, tests, reconciliations, commits, pull requests and rollback surfaces; neither evidence set can close or offset the other."
+  },
+  "required_circulation_wording": "This 111-row overlay preserves the audited findings register and records only five positively evidenced current-main implementation deliveries. Those five remain pending independent review; F5-02 remains separately blocked on authenticated external evidence; the other 105 rows are not reassessed. P02 is not complete and Board/lender release remains HOLD.",
+  "limitations": [
+    "This is an implementer-authored P02 candidate overlay, not independent model-risk approval and not P02 completion.",
+    "Only five findings have positive current-main implementation delivery evidence in v1; one F5-02 row is explicitly external-evidence blocked and the remaining 105 rows are not reassessed against current main.",
+    "Green CI, merged commits, synthetic placeholders and analyst-generated documents do not by themselves close findings, authenticate external evidence or lift the Board/lender release HOLD.",
+    "Issue #1110 remains OPEN, all 23 programme gates remain pending in the immutable v1 gate ledger, and all 56 architecture examinations remain pending."
+  ],
+  "records": [
+    {
+      "overlay_row_number": 1,
+      "finding_id": "EVAL-01",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "de39b6bcbc07a36640f533e89c4495acb769b6669b1a39c9f20bd927489a1a97",
+        "title_sha256": "db3b2ff55309bb246d518f1059dd29b9fc704534aac16093ff48a8a51bd702ac",
+        "corrected_claim_sha256": "9b0c102a34be298112db2732f3bee5ec09d824e52ee3fe03cefda4d740a1fd32",
+        "source_phase": "EVAL",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "requires_correction",
+        "code_anchor_count": 0
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 2,
+      "finding_id": "EVAL-02",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "8f72899d401bddbf775f7b23946c5e0a7baf19b2f31275d3100dc6bf7787ca0f",
+        "title_sha256": "e38b502ab0d55225db71c586398e655e04b823eb80a55b4381c8c1ac082f8181",
+        "corrected_claim_sha256": "3980bb618033091aa562ac270266c673ead14ed7ba23965682498b29dc7d8faa",
+        "source_phase": "EVAL",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "requires_correction",
+        "code_anchor_count": 0
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 3,
+      "finding_id": "EVAL-03",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "c0c7d776f14adff1380811f603d76d155d4bd98b875d7885f9feda12c0079442",
+        "title_sha256": "beaa4dffc398863a0644bb18e6aeccbebee9ad7a21626c268f0ae3134de4a763",
+        "corrected_claim_sha256": "c8d404d6be0a9f9fb7c76f59094b73ac54b6815501bfc001c491b325aab2212c",
+        "source_phase": "EVAL",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "requires_correction",
+        "code_anchor_count": 0
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 4,
+      "finding_id": "EVAL-04",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "fe793c20ba20a0268e4ab68012abf8973f402904816c201903302ca17150cf71",
+        "title_sha256": "fcde012c189b599c8539331c901a74b1cea041f2de12b22fd1fec81513fd9c7e",
+        "corrected_claim_sha256": "209b30a7a0ff63ba2fa1665439243b060a90bbebe8c5cf2d465321abdb727d35",
+        "source_phase": "EVAL",
+        "severity": "high",
+        "disposition": "partially_confirmed",
+        "status": "requires_correction",
+        "code_anchor_count": 0
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 5,
+      "finding_id": "EVAL-05",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "e2d72cba333d926c4eb79bad3498fdc5f2e7a6a5e72387a688c69a1a162749c8",
+        "title_sha256": "407e515261281b993603e7580b2c54257b0551f4ddc44e37cbadd6e604b0a510",
+        "corrected_claim_sha256": "757d0819d803ab58dd06ddeaae46ea30e2fc106195cbf5e3b960ffb7a156eb41",
+        "source_phase": "EVAL",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "requires_correction",
+        "code_anchor_count": 0
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 6,
+      "finding_id": "EVAL-06",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "1539a0ccdfddf67a5e59acc67bc143dc8513810845293fc381a6dcf811c33212",
+        "title_sha256": "5550dc5e568fe1d53b08f73188bd76a1a7c3a8bbba550ab266922b8da83ecb43",
+        "corrected_claim_sha256": "fa5ce3156dee7fff84e2fff0fd60884d7dd505bbeaa7a8950a3701c05d8341fd",
+        "source_phase": "EVAL",
+        "severity": "medium",
+        "disposition": "confirmed",
+        "status": "requires_correction",
+        "code_anchor_count": 0
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 7,
+      "finding_id": "EVAL-07",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "8713d5ae682693c224397e21b18b1a21e094a143d3bc62b501dee3c42d6dd6e7",
+        "title_sha256": "67dccb8715e63aced64328e04af8f148ea384ad1866404a0460fd18a74efdbfe",
+        "corrected_claim_sha256": "73a2466bca3b1d11ed4a979b6b8006c0c6944ee8fd945eca4afd702105aa7e1f",
+        "source_phase": "EVAL",
+        "severity": "medium",
+        "disposition": "confirmed",
+        "status": "requires_correction",
+        "code_anchor_count": 0
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 8,
+      "finding_id": "EVAL-08",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "c0bab4ea0cdcd9e7502504dd228a73445b9421aae7eff9d80dc17bccee0ce664",
+        "title_sha256": "891828b86f9c85c65945720ef094ce21c05497c8706a8ac69570e1638f02f99e",
+        "corrected_claim_sha256": "c607ee1e40e12786bd4ac9fce742336532f2f22249b0a97b3f474d0c93b58465",
+        "source_phase": "EVAL",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "requires_correction",
+        "code_anchor_count": 0
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 9,
+      "finding_id": "EVAL-09",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "e0b75786f090537b3afc38d7e8e90f07e3dd25f857a9875ade61f152ca8590fb",
+        "title_sha256": "2d535ae5d3baa5c00fd79ccb6790204920d4269ca494eeb8130c5e9313b22c94",
+        "corrected_claim_sha256": "1526e237513a9c83b354490862908d4171617e97f756f34ada641df06c4c9b20",
+        "source_phase": "EVAL",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "requires_correction",
+        "code_anchor_count": 0
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 10,
+      "finding_id": "P2-F1-01",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "c1d3d5178a1f0efad44b3f1cacadc1cc5df0d29a40a997cb7a73f8926f5a0ceb",
+        "title_sha256": "fc808312e5be5c08334855032c0f03e501130d2ae11c43e9a84971508e050691",
+        "corrected_claim_sha256": "1e04d5738ea7dace8f2abef85bc5b02e0659479ff9dea903ba444bc878ac5f99",
+        "source_phase": "P2",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 4
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 11,
+      "finding_id": "P2-F1-02",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "1153cd3aee66281a876f0a92f2af1ef598ca9d7997b4f95c531a29e2a439de39",
+        "title_sha256": "02e97b315b1d970f7504f2f512137e1a28077534c7a0bb5ea0bce01af9b657da",
+        "corrected_claim_sha256": "4c70556e7a801df4db44f598957ff3bb838a99bc6343d4d395ecfbc86552e201",
+        "source_phase": "P2",
+        "severity": "low",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 12,
+      "finding_id": "P2-F1-03",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "0446436c246435dfd34d8e3d8b35bfa63e071855844d7c7dd1bd9ee6dbf8020c",
+        "title_sha256": "e26768da8f66e6dfa97ce60bd3658ed0de16858b149f138c0476a5f226ce35f3",
+        "corrected_claim_sha256": "8b204e3bfdcd6ebad3286d19a9ce5c9e02224975ad7f6021de09733b5297f0f6",
+        "source_phase": "P2",
+        "severity": "medium",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 4
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 13,
+      "finding_id": "P2-F1-04",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "15bf4d1b3cf5b3f84baac6af5f6c263f2c953ad3361dffc39cab1c73d6f2ffdf",
+        "title_sha256": "ba996a94bfc6a713de89b8f33c73b921abb8f30e8ed6282d0f388799a4eeaa8f",
+        "corrected_claim_sha256": "c56da58a57f15a05c3031fe965afacaca7bc8994474b9085dfb9e3b8529b7f59",
+        "source_phase": "P2",
+        "severity": "low",
+        "disposition": "not_a_defect",
+        "status": "closed",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "baseline_closed_current_state_not_reassessed",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Reassess the historical closure against the current-main cutoff and obtain independent model-risk confirmation before relying on it for release.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 14,
+      "finding_id": "P2-F1-05",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "e1b2fb8c4ad11d089ab9c01a204f2ab3c1f7b9d45bccab24ad61c7e6af353b7a",
+        "title_sha256": "e73c2a816b92ffe83e41fe8d9bb7a1fe25977f7a724dab1d30a99ba0ea0fcd5c",
+        "corrected_claim_sha256": "8fc39a6106ad415dc73187053acc076a0645bd20693617c89c4e50bcbf950523",
+        "source_phase": "P2",
+        "severity": "low",
+        "disposition": "not_a_defect",
+        "status": "closed",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "baseline_closed_current_state_not_reassessed",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Reassess the historical closure against the current-main cutoff and obtain independent model-risk confirmation before relying on it for release.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 15,
+      "finding_id": "P2-F2-01",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "c33c408cdd76d4abf4ea2f7e87d82146ee2c0cb5355a1845608862ce00ef4f66",
+        "title_sha256": "091a41c5ecdbbfa23299d69b0bb2f2be65a9acd356f6c1fa1f471af70dce6cd7",
+        "corrected_claim_sha256": "eae14d53c759ef3b3e558ba5c722da30bffb67e9314a8c3a4775dbde36ae5032",
+        "source_phase": "P2",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 4
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 16,
+      "finding_id": "P2-F2-02",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "547d8ef00dcdc9c48d01b8cf10ba2aca0e9ce8fc338e510c04dff8e52cf28843",
+        "title_sha256": "904ab590bbce22c3ffe5a7893c1387ddccc533e6b6b3778284a6831a8fd5f9ed",
+        "corrected_claim_sha256": "d921bf8b5faac2152181aaecd273618304e43febc1e82ae53fece221733b96ad",
+        "source_phase": "P2",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 4
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 17,
+      "finding_id": "P2-F2-03",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "0446dba994e707eff08ef3520d8384cdafa67f71e18e6b312496163b77844965",
+        "title_sha256": "1f389f9a856ca301f74015ed31784a9194bb124f81e0526c0eac25398e41199f",
+        "corrected_claim_sha256": "271256dccc460cc8769604e493f3a791ff1f06ba8e1fcc626defe54e0b329008",
+        "source_phase": "P2",
+        "severity": "low",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 18,
+      "finding_id": "P2-F2-04",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "52f2a20af7d537ae6ae0b8ddcb332d92313e3948148f57905d2d2200d7395c16",
+        "title_sha256": "bbb43d670252e043642b82348f190e08228a3d8f0da759c3a3d22f5e23712f56",
+        "corrected_claim_sha256": "6b8d4780b7a23eb41b5cdd6c016ca5ab6e312c8a63f36137dfc4cb5461db5742",
+        "source_phase": "P2",
+        "severity": "low",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 19,
+      "finding_id": "P2-F2-05",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "01422aba534ba7ecbc0df7c2d70888dc7d2ecef4f19116048062944d56cd9b7e",
+        "title_sha256": "40a38fa6f4d68c74e3adcd8da140a5ed1689bd7994d3bf6576209156b2c69133",
+        "corrected_claim_sha256": "cfb3588065ab3d72348bc090680a92ce1a87ee30c19d3ddab6ff3f0d35c3637f",
+        "source_phase": "P2",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 20,
+      "finding_id": "P2-F2-06",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "ed0641a1556cc7529758139c4273c8ceaebe06910418e31a6cde34b741e0dd97",
+        "title_sha256": "65d5fdf7a6938454796a18efcf0d8c15598b9c99b9fab473df53f3adc90e5b7b",
+        "corrected_claim_sha256": "fde9c13f40b05859d7818c0b5e50c7d30c8b488c3c1b4557d8be228c90cfa32b",
+        "source_phase": "P2",
+        "severity": "low",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 21,
+      "finding_id": "P2-F2-07",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "a3ad2b72debb3d1279a2444f8382b896844bf8d6793e24507176d09318b08bd0",
+        "title_sha256": "478f0e200e3684ff789f7dca1097f21b0b808a91a4361cf14c7cc492c7393d61",
+        "corrected_claim_sha256": "02abb9fd0dff10bfe2091e3957f44cdc21c6bd4ca2f34ddff4d4a14f4f4634c5",
+        "source_phase": "P2",
+        "severity": "low",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 22,
+      "finding_id": "P2-F3-01",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "d487d0730a2c5b3d7cff2392c3654a58a116ff5056de11c02c75e2515965729a",
+        "title_sha256": "496e2164a1f781377fe427470112b8365ef33318daab9f36a5737116e9cc2bac",
+        "corrected_claim_sha256": "496e2164a1f781377fe427470112b8365ef33318daab9f36a5737116e9cc2bac",
+        "source_phase": "P2",
+        "severity": "medium",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 23,
+      "finding_id": "P2-F3-02",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "5cad731b7a0e2414c2bc8a6f9f5f870b205288bc3aaa9278318957b0327b2f41",
+        "title_sha256": "7aacfc6b3f514bff60232b383fecad32250dcf934bbdaa8a2297cc67d02be400",
+        "corrected_claim_sha256": "7aacfc6b3f514bff60232b383fecad32250dcf934bbdaa8a2297cc67d02be400",
+        "source_phase": "P2",
+        "severity": "low",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 24,
+      "finding_id": "P2-F3-03",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "e2ff1dedd074b3319aae6645fb61feea073d5b901ce6ba85c86a6a730e65e312",
+        "title_sha256": "6f4155a3498d61792523a9064b390d6d3be9c726fc7db66cd8b183daccd7e683",
+        "corrected_claim_sha256": "4b6ba0d3412344a664f9d1eb1a45f5ed101e92972d66d7297582160b09628ab8",
+        "source_phase": "P2",
+        "severity": "none",
+        "disposition": "refuted",
+        "status": "closed",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "baseline_closed_current_state_not_reassessed",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Reassess the historical closure against the current-main cutoff and obtain independent model-risk confirmation before relying on it for release.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 25,
+      "finding_id": "P2-F3-04",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "dcdb6c55d686e175ffb364aaa618aa4b1f8a7b0b2b4839ee361c4f5932bd7cf4",
+        "title_sha256": "e846bcd048512eb511d95d1de2edfdcfef2a85b1db15d421ea0e4c347a6e68ea",
+        "corrected_claim_sha256": "e846bcd048512eb511d95d1de2edfdcfef2a85b1db15d421ea0e4c347a6e68ea",
+        "source_phase": "P2",
+        "severity": "low",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 26,
+      "finding_id": "P2-F3-05",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "81b742ff10e4104a5e50406b317eb31ba573adc7d83e8cb952057da07dc37f4e",
+        "title_sha256": "2436179bb569dbed7ce7337e65e44bf0e73f7051374bf6697b93e8a63c864428",
+        "corrected_claim_sha256": "2436179bb569dbed7ce7337e65e44bf0e73f7051374bf6697b93e8a63c864428",
+        "source_phase": "P2",
+        "severity": "low",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 27,
+      "finding_id": "P2-F3-06",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "932fa334621bf571589f45f8de4193b7df3565c6b8c9235499574ce4db3f637b",
+        "title_sha256": "8d855f4a87e541dd861191c0fa155363a21a7c35c31b9ef4280853373efc2dea",
+        "corrected_claim_sha256": "8d855f4a87e541dd861191c0fa155363a21a7c35c31b9ef4280853373efc2dea",
+        "source_phase": "P2",
+        "severity": "low",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 28,
+      "finding_id": "P2-F4-01",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "2a814e929505ef5b4a6671433f0a3f6bfd0b0dae8165219ebdffe58dd32bcb3e",
+        "title_sha256": "c2a7ad6648eff1d4a6d6ad2d55fad9dd979f0f46dd00968fa3ef43846a22d926",
+        "corrected_claim_sha256": "c2a7ad6648eff1d4a6d6ad2d55fad9dd979f0f46dd00968fa3ef43846a22d926",
+        "source_phase": "P2",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 5
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 29,
+      "finding_id": "P2-F4-02",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "d4a06fc2a39e5ee1a6ea0133b7e106bed16bdeb292547c4de494e9eec7c11754",
+        "title_sha256": "d362e252a4ea222bb00acfe1ff90697292998077a0397270ae55d35b8b191486",
+        "corrected_claim_sha256": "d362e252a4ea222bb00acfe1ff90697292998077a0397270ae55d35b8b191486",
+        "source_phase": "P2",
+        "severity": "medium",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 4
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 30,
+      "finding_id": "P2-F4-03",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "ec44de5da7cb2376bfa419e8c4a08913eb0dd46ea8a6b6df32223218c199a2f8",
+        "title_sha256": "0888697b410bdb70f18503ed4240c9c24875eb3676219621652573101591bcdf",
+        "corrected_claim_sha256": "1e470ef2a881fdf87aa709de34048037ad6e0aa63492079762b88ee25471b1d6",
+        "source_phase": "P2",
+        "severity": "low",
+        "disposition": "not_a_defect",
+        "status": "closed",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "baseline_closed_current_state_not_reassessed",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Reassess the historical closure against the current-main cutoff and obtain independent model-risk confirmation before relying on it for release.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 31,
+      "finding_id": "P2-F4-04",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "8baf61544a93e9692dcb2897308445e352d20dcedd7fac0641e37f73c53e65ce",
+        "title_sha256": "efcbd9dfdbf69a4c761f719fa184d6e54f374664a608b51a497ed000e28c450f",
+        "corrected_claim_sha256": "efcbd9dfdbf69a4c761f719fa184d6e54f374664a608b51a497ed000e28c450f",
+        "source_phase": "P2",
+        "severity": "low",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 32,
+      "finding_id": "P2-F4-05",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "77ae8a3e27505ffd1f1763ad205c15bf0f1bf02ffa5a2d0a5a727a90e3d16f5b",
+        "title_sha256": "eda5dcaef0366c5062452c97081c2306aa1d0bf51156d24bf5161d3db60734eb",
+        "corrected_claim_sha256": "eda5dcaef0366c5062452c97081c2306aa1d0bf51156d24bf5161d3db60734eb",
+        "source_phase": "P2",
+        "severity": "medium",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 33,
+      "finding_id": "P2-F5-01",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "d148f4eaecbce301d20e33e56c9e194b1660374b98137b580e0aec61bfb70335",
+        "title_sha256": "e4e590828465e47e910802ca39629cd2a79e171dc7377204caa9f18debb81b67",
+        "corrected_claim_sha256": "e4e590828465e47e910802ca39629cd2a79e171dc7377204caa9f18debb81b67",
+        "source_phase": "P2",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 7
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "implementation_delivered_review_pending",
+        "state_basis": "explicit_current_main_evidence_override",
+        "current_code_seams": [
+          "finance/debt_v14.py",
+          "finance/cashflow_v14_fx.py",
+          "finance/cashflow_v14.py",
+          "analytics/fx/fx_builder.py",
+          "scenarios/dutchbay_lendercase_2025Q4.yaml",
+          "tests/_canon.py",
+          "feasibility_reproduce/MANIFEST.md",
+          "feasibility_reproduce/report/DutchBay_Complete_Feasibility_Study.md"
+        ],
+        "evidence_ids": [
+          "EVD-F5-01-FULL-SEQUENCE"
+        ],
+        "review_status": "pending_independent_review",
+        "remaining_gate": "Independently trace the complete F5-01 caller, canonical KPI and lender-report chain at the current-main cutoff; verify the six-PR sequence and its rollback surface without relying on the partial D1 receipt alone.",
+        "limitations": "Implementation delivery is positively evidenced, but P02 and L01 remain open until independent current-main semantic review is hash-bound. F5-02 is excluded and may not be netted."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 34,
+      "finding_id": "P2-F5-02",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "60b0bc077491b6c19a3bb2f6edaf51e96b5bee9dc0978268bdecdb3a9b70d228",
+        "title_sha256": "3d3184a98c3b2d708c9c6b1647ea181f9a992537eb8a4f47189c2bacd7f47989",
+        "corrected_claim_sha256": "3d3184a98c3b2d708c9c6b1647ea181f9a992537eb8a4f47189c2bacd7f47989",
+        "source_phase": "P2",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 6
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "external_evidence_blocked",
+        "state_basis": "explicit_current_main_evidence_override",
+        "current_code_seams": [
+          "analysis_tools/f5_02_lender_return.py",
+          "scripts/validate_f5_02_lender_return.py",
+          "docs/audit/lender-input/DUTCHBAY_F5_02_LENDER_CONFIRMATION_TEMPLATE_v1.yaml",
+          "docs/audit/lender-input/DUTCHBAY_F5_02_PRIVATE_INGRESS_MANIFEST_TEMPLATE_v1.yaml",
+          "docs/audit/lender-input/DUTCHBAY_F5_02_INTERNAL_DECISION_RECORD_TEMPLATE_v1.yaml"
+        ],
+        "evidence_ids": [
+          "EVD-F5-02-INTAKE-CONTROL"
+        ],
+        "review_status": "not_applicable_until_authenticated_evidence",
+        "remaining_gate": "Obtain an authenticated lender/legal return establishing debt denomination, repayment and settlement numeraire, conversion mechanics and binding transaction terms; independently review its private-ingress hashes before any treatment decision or code change.",
+        "limitations": "The intake framework is delivered, but no authenticated transaction evidence exists. Synthetic lender terms, ERA5-compatible placeholders, mast/MCP placeholders and software success cannot satisfy P06 or L03."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 35,
+      "finding_id": "P2-F5-03",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "478fd5b600ce49d3be63daf5fbe86933fa10b9424bbfd4073d86f4ba543df9e6",
+        "title_sha256": "b1a30e601cea88e351659f82f0a575bac6613ce6fbce18d753602872459d9005",
+        "corrected_claim_sha256": "b1a30e601cea88e351659f82f0a575bac6613ce6fbce18d753602872459d9005",
+        "source_phase": "P2",
+        "severity": "medium",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 6
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 36,
+      "finding_id": "P2-F5-04",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "eaed5eae67a48be64fcf513983256f30043065efc5700440791c0013713ae39a",
+        "title_sha256": "5c0fee5b80015a891e2993896d0322b3b5f4ba1cc38c83ea412a7be1e39d5113",
+        "corrected_claim_sha256": "5c0fee5b80015a891e2993896d0322b3b5f4ba1cc38c83ea412a7be1e39d5113",
+        "source_phase": "P2",
+        "severity": "low",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 4
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 37,
+      "finding_id": "P2-MC-SENS-01",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "1fcfd01d2c661384545dee2ccf067d9a39744990adad3838d72ba7ef3ed01fa7",
+        "title_sha256": "0983a1e26744cfabf9e15a5c48a9a62fd5ecd56d9f3d7e688a70bc577e60bf0c",
+        "corrected_claim_sha256": "dc41b431ec01efac914e2ef8e80da7219b3439e39726f46f79045625066107ee",
+        "source_phase": "P2",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "implementation_delivered_review_pending",
+        "state_basis": "explicit_current_main_evidence_override",
+        "current_code_seams": [
+          "analytics/sensitivity/adapters.py",
+          "analytics/casper/casper_payload.py"
+        ],
+        "evidence_ids": [
+          "EVD-PR1031-CASPER-TORNADO"
+        ],
+        "review_status": "pending_independent_review",
+        "remaining_gate": "Independently review the merged seven-row CASPER tornado evidence, current adapter wiring and controlled-overlay ingress before any formal finding closure.",
+        "limitations": "The repair is metadata-only and does not validate the authored sensitivity ranges or authorize lender-pack regeneration."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 38,
+      "finding_id": "P2-MC-SENS-02",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "74486f1b27e5d1c3334e78b2452eefbed533a0ddb236fdca97980e5459779c59",
+        "title_sha256": "1382de0be13182b2ff0452b20316c32d442abef52a776b26f94fba4587136dc5",
+        "corrected_claim_sha256": "088846bcc8d8d11061a67eef8cab701896d0b0455d5708286fa72b736634e3ee",
+        "source_phase": "P2",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "implementation_delivered_review_pending",
+        "state_basis": "explicit_current_main_evidence_override",
+        "current_code_seams": [
+          "analytics/mc/convergence.py",
+          "analytics/mc/aggregate.py",
+          "analytics/mc/engine.py",
+          "analytics/core/covenant_breach.py"
+        ],
+        "evidence_ids": [
+          "EVD-PR1030-MC-BREACH"
+        ],
+        "review_status": "pending_independent_review",
+        "remaining_gate": "Independently review the governed post-merge finance-MC artifacts, assumption limitations and current-main wiring before formal finding closure.",
+        "limitations": "The reported 16.24 percentage-point change is specific to the pinned run; scenario calibration and placeholder construction draw/phasing remain open."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 39,
+      "finding_id": "P3-G1",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "98f1dcbe7dd60d7d2bd2b6c79f020ea37ccccad4bd8530a819ef7e45676b2159",
+        "title_sha256": "1f465b22dbdfe0cdc50cf9fe939ebc09b374693971232a66b9ca46f5ebc46d35",
+        "corrected_claim_sha256": "805a4581ab8d01b26faf60a21e7315510deb144aec8a4dde55ab1ef7d5b79ea0",
+        "source_phase": "P3_WIND",
+        "severity": "critical",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 40,
+      "finding_id": "P3-G2",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "be40bee310ef295a2ca9703687305a8ff52bf0a7878853e29385b91f1dd5c4fc",
+        "title_sha256": "c42430210877b22cc1b98ffa281519a7bbf377e828a3856ad23973791417248f",
+        "corrected_claim_sha256": "fb5021fc92f6764b28b42b2c180f8dc16eaf12464d22547d362c90c74ca300e9",
+        "source_phase": "P3_WIND",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 41,
+      "finding_id": "P3-G3",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "e2c8e90eae5a848f4dea3a6b4019ea2faf9b7d55422372f49bbf52e87268ea76",
+        "title_sha256": "09d985ede5e89df3abe53bde3a0ebb6561cafd7d8a02a282ecca397ecd9afcd1",
+        "corrected_claim_sha256": "187d8760083dd21fb72eb8f138c722cb37c25b34c87092e7119e8546cfe89dfe",
+        "source_phase": "P3_WIND",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 42,
+      "finding_id": "P3-G4",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "e915114be36e6f6c3fc69a034c2ad965b7139ac0d409bb725e33fbca3bcf0af7",
+        "title_sha256": "db04fada37317344b838eb244399c2411457eaba89da5aeafc2bcbd2b069f518",
+        "corrected_claim_sha256": "fa478a48f768846cd7bd5b4b603d34f82be45411498a1be2c3164a12b52103bc",
+        "source_phase": "P3_WIND",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 43,
+      "finding_id": "P3-G5",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "91b98d2a360d267ba06f90381bc9185a9c4f22848dad3b8df3883967d1d721c6",
+        "title_sha256": "1c3793837a92545c35c61942d6588745e71faf303ed784a49ac254d46355d3b8",
+        "corrected_claim_sha256": "dfa52e8305f6f225731b0e3ff5e757f221c7844375acfa3897139e4690eac80a",
+        "source_phase": "P3_WIND",
+        "severity": "low",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 44,
+      "finding_id": "P3-G6",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "f7b3e1c2f37921eb8971f5a5601b3483602b961264f806b932c7bff40e764102",
+        "title_sha256": "bbc25d4dbf0260f5d882d6e4d3b4971f39a1a2ea913a7abee90c3fcbdb8b23ba",
+        "corrected_claim_sha256": "4b2c43672eaef72dac252ac9ff74a4d0e8c38c34e0e9146d0eee604b84f8d5a0",
+        "source_phase": "P3_WIND",
+        "severity": "low",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 45,
+      "finding_id": "P3-G7",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "be51abcdb449e260bf6e43df3f2f7ef7c424c77ee730b28525ffb6975ecd152b",
+        "title_sha256": "08a89aea986346869f2638b6c5361c1d3e647dfa890922c0db9d531e196764eb",
+        "corrected_claim_sha256": "06a5058640cea4fc5ae62e46693218320527325a629989cd70c85ba936eaeeae",
+        "source_phase": "P3_WIND",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 46,
+      "finding_id": "P3-COV-01",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "8cfad163068676ad6c1c9810ac8e28f09c6cce5060204ae5bbc8b6532def9645",
+        "title_sha256": "2970cc09ba798124f2d93a7115feeb5ebcfb17ca43750ece6266327ef18c4af4",
+        "corrected_claim_sha256": "6aac8ab9362e0bdff05b4dabdfa1e2ff9461a546f2474cbc7f4d85710cbc8c16",
+        "source_phase": "P3_COVENANTS",
+        "severity": "critical",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 47,
+      "finding_id": "P3-COV-02",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "13ab600766b6701105691db355d55313055484d70128ba0f0501ad2919bb39e3",
+        "title_sha256": "f8ae86cfda1cfec7b3974c862df0de80c7debf27a3ff6a4fadd44d3e8d85637d",
+        "corrected_claim_sha256": "8739fce4824d12b4f0f77e8173c95632d7b0106330383f320e0fe305f58dff43",
+        "source_phase": "P3_COVENANTS",
+        "severity": "critical",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 48,
+      "finding_id": "P3-COV-03",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "658489dbb39b6cbfabf870af495fb4ea6358ebd2a0ef5b55e4939df33a11c222",
+        "title_sha256": "f0416b3575b4689bf4e39e10da1d9e04025abb6e7c112ba7ef80208a728cbdb5",
+        "corrected_claim_sha256": "c031077896f80b24832786ab5944349b64f993463860d5cc83a23be567abceff",
+        "source_phase": "P3_COVENANTS",
+        "severity": "critical",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 49,
+      "finding_id": "P3-COV-04",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "8a4782311a7245350d8cb9f461aacba140b8c26effe9669c7c67f33936eeb50d",
+        "title_sha256": "296352f0ec3caae8c43a8ccc3cfe9096168716e962e01c5bcd6c0e74a90999a7",
+        "corrected_claim_sha256": "49dd8af4c170acbb3be3c5337bf8601870b92fce30f500f78730a6e29077d622",
+        "source_phase": "P3_COVENANTS",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 50,
+      "finding_id": "P3-COV-05",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "02732bfd945e33c17be196d7adf5222f10103b94df93e5422206faf7b4946c6b",
+        "title_sha256": "79d0ac94240b26f687e58d8a2dda9c7e24383ab6767dcea74c48a5bdfcc6afec",
+        "corrected_claim_sha256": "7b5e7335033a84fef1eabe0d0fc689da16ab04c17036e13cf5e4141ecc4e8f23",
+        "source_phase": "P3_COVENANTS",
+        "severity": "high",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 51,
+      "finding_id": "P3-COV-06",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "9ef62cd41b74b3a20a18d408d6a5178f397f98da3c0599e66615ecf24a36c3f1",
+        "title_sha256": "2db4fef40b687eb56d98796a35cd298aef73785b79a39eff133e7938b763ddcf",
+        "corrected_claim_sha256": "0f8fe21d550fa3c56e1efa15cb342bca3691afd822a7f5531909621ead366e3f",
+        "source_phase": "P3_COVENANTS",
+        "severity": "high",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 52,
+      "finding_id": "P3-COV-07",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "9fd5ddba0e5796bf8494819eec28d3832e44c9bd3fe5d3b20188ee3f35f49465",
+        "title_sha256": "1b48ac4acc131e84fe53da0927b5a09e22ab19e57c661b92a32eb61d760ff3a5",
+        "corrected_claim_sha256": "9d19433f3c809b0756849a4223c996cba7cb0dc2b4a5d06d4301763c1f984ab5",
+        "source_phase": "P3_COVENANTS",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 53,
+      "finding_id": "P3-COV-08",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "5809164cea89ed84ce5e3a3cbf39ee675c6ef7d05046fe2d2a5c298370b2f70f",
+        "title_sha256": "47d730b590a09f6fe482672f7696939e87c8f85c23b567481405409ba69d221f",
+        "corrected_claim_sha256": "cce1047e3dbfa9a1919fbf15af9881d4fbd4b3fd1740d841f78b3d9615ec5d58",
+        "source_phase": "P3_COVENANTS",
+        "severity": "medium",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 54,
+      "finding_id": "P3-MCFX-01",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "aa09e5ad35f118610b4ac2c6c3ea2bd697a46d1d5ef4279f02502fa0c385b4b1",
+        "title_sha256": "03d0d5d4445b4a4907659a0f1bddbe91a4f41c7c276184f9e8a138719f437600",
+        "corrected_claim_sha256": "e5993aad5a0c8a03d8b5b537a7de8397ee0485e58858c412d770a064dfb9f2f8",
+        "source_phase": "P3_MC_FX",
+        "severity": "high",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 9
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 55,
+      "finding_id": "P3-MCFX-02",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "b992ead6d23d7ae82fcc0c20758e1dea1c6969529fdf70e5a79055baa459b0e9",
+        "title_sha256": "44b1ebe1790b38cb5da38e05860d32407ba5648874abb4bd8b136cc1347031aa",
+        "corrected_claim_sha256": "fef859404db66a115b01bfe18a881cdafaf814cf141a00e887a613e66734e7f7",
+        "source_phase": "P3_MC_FX",
+        "severity": "high",
+        "disposition": "partially_confirmed",
+        "status": "deferred",
+        "code_anchor_count": 6
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "deferred_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Resolve or govern the historical deferral, examine the current-main code and evidence state, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 56,
+      "finding_id": "P3-MCFX-03",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "f9f50fb56e096407a97232bc3e9c60dfbee96d35ffd4d2ebdb57b1a0a7daa973",
+        "title_sha256": "031be0ba7d054508301bc469371d09b352774c4e4545f4eef1261f7b6c964251",
+        "corrected_claim_sha256": "4127b3d0d62b678bf17055603dafd22e8fb9099cde03cb74684d10d37e653b84",
+        "source_phase": "P3_MC_FX",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 5
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "implementation_delivered_review_pending",
+        "state_basis": "explicit_current_main_evidence_override",
+        "current_code_seams": [
+          "analytics/mc/convergence.py",
+          "analytics/mc/aggregate.py",
+          "analytics/mc/engine.py",
+          "analytics/core/covenant_breach.py"
+        ],
+        "evidence_ids": [
+          "EVD-PR1030-MC-BREACH"
+        ],
+        "review_status": "pending_independent_review",
+        "remaining_gate": "Independently review the governed post-merge finance-MC artifacts, the current tolerance-aware comparator wiring and controlled-overlay ingress before formal finding closure.",
+        "limitations": "The delivered repair does not approve model calibration, placeholder schedules or unrelated percentile and Monte Carlo methodology findings."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 57,
+      "finding_id": "P3-MCFX-04",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "d4daade881b0b2fbecd5ce15312dbf938ef1320cddf0106e8a3b0e17a58f657f",
+        "title_sha256": "8295e3ddbfea5620f21d856902c56ae50eaf679f05acbb9de0220f1732ae9376",
+        "corrected_claim_sha256": "a32201277250bb12f2ceccd63479ba7512691846dd1975ed0324469ba529b8c5",
+        "source_phase": "P3_MC_FX",
+        "severity": "medium",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 10
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 58,
+      "finding_id": "P3-MCFX-05",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "8a3f0e8417e9cb9dfbee9c442808f773e73305399809ee55146480ca3824de09",
+        "title_sha256": "60fb855c369aaed130bd521f397faaddd834978167ab449a494ac7cef9578189",
+        "corrected_claim_sha256": "35b6609caf4cac07881d628e8da590c5296b76c082ed15faa817efecd55d612d",
+        "source_phase": "P3_MC_FX",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 6
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 59,
+      "finding_id": "P3-MCFX-06",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "1ddab94f023f9968cd8e938bf921865452f6ceaf92bc0dd0d29477f3ba6aff73",
+        "title_sha256": "407f25d5d887821ed23b926f589d3354da9f1a4cb27628597105bd038a5281e9",
+        "corrected_claim_sha256": "257743c5ab81a7bd84c560da3af196e1b53f7cf8f602fe32fc723ea455470d36",
+        "source_phase": "P3_MC_FX",
+        "severity": "low",
+        "disposition": "partially_confirmed",
+        "status": "requires_correction",
+        "code_anchor_count": 4
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 60,
+      "finding_id": "P3-MCFX-07",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "0261952a5ab589ee1ec5b638322e137ce117dff494825420ac5d746101d4683e",
+        "title_sha256": "fa9b629932ce583c5d910f7bc611866157cec4e257ac954c519c1d5dd0286fbb",
+        "corrected_claim_sha256": "18d5f66c95e7813fd60dd69b9ec9e530e4cf046f4237fb1057f6221ef4d50a35",
+        "source_phase": "P3_MC_FX",
+        "severity": "high",
+        "disposition": "refuted",
+        "status": "requires_correction",
+        "code_anchor_count": 11
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 61,
+      "finding_id": "P3-MCFX-08",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "d76282b47faef11dfc7afa9e9e41a6f369c2b7c40fd98dde5c572481dc1d6442",
+        "title_sha256": "a910ae774c8e977ec78eaf186f6604bdd23eb2b4ca9a1860f87d8f76f89ccd0f",
+        "corrected_claim_sha256": "5bdb42720a012e636597373dc0ad8051ff63901c96106696dbaf35b8fdad8565",
+        "source_phase": "P3_MC_FX",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 62,
+      "finding_id": "P3-EQ-01",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "2a1a58f5277587abbd9494d4373115f4172d10f67aef296f29908bc90a3c3aa1",
+        "title_sha256": "b9c64bcc86ef5cae2ffd6ab4d74f078d6cf2075098208de1790cc9eb4e85e9d3",
+        "corrected_claim_sha256": "4b89f2bc66668470ecee027af8f6a2e8ba6657cd0b4fc4abb631b0cf8344d8e1",
+        "source_phase": "P3_EQUITY_DISCLOSURE",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "requires_correction",
+        "code_anchor_count": 11
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 63,
+      "finding_id": "P3-EQ-02",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "2fe97689239a8b03b17456a9233b6b60848ddab3224417a14d3342dbc9f7bbff",
+        "title_sha256": "b3b66c72e015b3133c7977ed25380f7552632d03d79dbbf5f5b275dcef7bb062",
+        "corrected_claim_sha256": "1e749996f0347dbc1cb35861b6ef2cb429ce596a2d1e99f2631e44c77591fcd7",
+        "source_phase": "P3_EQUITY_DISCLOSURE",
+        "severity": "low",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 4
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 64,
+      "finding_id": "P3-EQ-03",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "b8a784d8d275d72b94277d80adaaef87eb7d9533adc4911566e990966c222144",
+        "title_sha256": "aeb0634430da7b13dd1e071ecb502c363863800f0afa0da0c3f1a6a4c61351ca",
+        "corrected_claim_sha256": "67b94d7b0fa0af867b10b45b2b43f31d00e00b19a71a7e8903bc90316b13f3f9",
+        "source_phase": "P3_EQUITY_DISCLOSURE",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 8
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 65,
+      "finding_id": "P3-EQ-04",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "701c75d72b1c63232cfbadc16ed36f8b40288ca5453571caa4d68944d5504967",
+        "title_sha256": "e1e332531334df34feeadd5c43216705c9856a32d39670c9aa428ade3fb12af0",
+        "corrected_claim_sha256": "fb2c23b78b5f0221a289c18d04a321eb6df20d911e0b6dc88010361ba9f4ae82",
+        "source_phase": "P3_EQUITY_DISCLOSURE",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "requires_correction",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "implementation_delivered_review_pending",
+        "state_basis": "explicit_current_main_evidence_override",
+        "current_code_seams": [
+          "app/reports/report_config.py",
+          "app/reports/report_model.py",
+          "config/report_defaults.yaml"
+        ],
+        "evidence_ids": [
+          "EVD-PR1032-FX-DISCLOSURE"
+        ],
+        "review_status": "pending_independent_review",
+        "remaining_gate": "Independently review the manifest-bound FX disclosure, current report wiring and controlled-overlay ingress before formal finding closure or report regeneration.",
+        "limitations": "The wording correction does not authenticate the FX assumptions and does not recall previously circulated reports."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 66,
+      "finding_id": "P3-EQ-05",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "449aa517e033527e2c4a168a1e3835ae362837b14bfeaaf6e11ca9dcb2a5f309",
+        "title_sha256": "ad4886b5147141e6e5e68742b0415fd332ad25234d90c8b9f819b3c338d69967",
+        "corrected_claim_sha256": "3f295902f27dcaf10d9932670b9f2ae9587787a582f9b21923fb416ae6ad871a",
+        "source_phase": "P3_EQUITY_DISCLOSURE",
+        "severity": "medium",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 67,
+      "finding_id": "P4-DC-1",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "3a226877b74e869ec8dcd1495053289a306522f6166595e8158a2e596951f0ce",
+        "title_sha256": "5fd14e2b8834ad8f0007a6ea4ba175876359ec8d3fb333cca2f674f975c01db0",
+        "corrected_claim_sha256": "5fd14e2b8834ad8f0007a6ea4ba175876359ec8d3fb333cca2f674f975c01db0",
+        "source_phase": "P4",
+        "severity": "medium",
+        "disposition": "deferred",
+        "status": "deferred",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "deferred_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Resolve or govern the historical deferral, examine the current-main code and evidence state, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 68,
+      "finding_id": "P4-DC-2",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "8db1dbdd5fc4a5660a760b28373754f3305c77b85ceeae77fcc483ffd21add78",
+        "title_sha256": "d1d559366fd6e15492ad6e95eceff7a6abad05b9d32ce6c46b157276c4cd1e6c",
+        "corrected_claim_sha256": "d1d559366fd6e15492ad6e95eceff7a6abad05b9d32ce6c46b157276c4cd1e6c",
+        "source_phase": "P4",
+        "severity": "low",
+        "disposition": "deferred",
+        "status": "deferred",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "deferred_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Resolve or govern the historical deferral, examine the current-main code and evidence state, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 69,
+      "finding_id": "P4-DC-3",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "59c03569b5cb5c06043b05e5f6790239b1425fd0788c840e5e2ad93d6d4b3c7e",
+        "title_sha256": "125b524ef924e49e77bddda36263ecb954fae10c741af32a0ff9c080dffcb726",
+        "corrected_claim_sha256": "125b524ef924e49e77bddda36263ecb954fae10c741af32a0ff9c080dffcb726",
+        "source_phase": "P4",
+        "severity": "low",
+        "disposition": "deferred",
+        "status": "deferred",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "deferred_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Resolve or govern the historical deferral, examine the current-main code and evidence state, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 70,
+      "finding_id": "P4-DC-4",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "4d84a40dae1189e1b4603d912500d8df78f4e80b1ef20640b33fbe9bac9ad9f6",
+        "title_sha256": "0deef4146941722baa1424f4ed9e11e055bb1a0873e78bda3c00a22b7e09c336",
+        "corrected_claim_sha256": "0deef4146941722baa1424f4ed9e11e055bb1a0873e78bda3c00a22b7e09c336",
+        "source_phase": "P4",
+        "severity": "medium",
+        "disposition": "deferred",
+        "status": "deferred",
+        "code_anchor_count": 7
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "deferred_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Resolve or govern the historical deferral, examine the current-main code and evidence state, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 71,
+      "finding_id": "P4-DC-5",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "b2f6ad1c4229dac1318f9e9812543ec690748046b435007b0f7f58b6c962558c",
+        "title_sha256": "b6dd70988b9aa6c1c5654deef4083c3188d2853c0f861553148bebcbd69a2abe",
+        "corrected_claim_sha256": "294ccea04e015307f2d8ce65045c787d749dd31862d30f6712389607692c4e80",
+        "source_phase": "P4",
+        "severity": "medium",
+        "disposition": "deferred",
+        "status": "deferred",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "deferred_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Resolve or govern the historical deferral, examine the current-main code and evidence state, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 72,
+      "finding_id": "P4-CFG-1",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "f96362fb257e65e0ae5d968769265d5621f43e4abefdc5d54145a694e671f4ee",
+        "title_sha256": "57d904825754777511016c931f4bcc133f935e6f6951b595cd39f19776724985",
+        "corrected_claim_sha256": "57d904825754777511016c931f4bcc133f935e6f6951b595cd39f19776724985",
+        "source_phase": "P4",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 73,
+      "finding_id": "P4-CFG-2",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "e37aabc46af59712b2af984fed0afe237aa14ffe6771a2845e6602485158f659",
+        "title_sha256": "a8ac03442e0f5a1e8b8efed6937f9ad4da41f078bcb2e021058278a687cc05e2",
+        "corrected_claim_sha256": "a8ac03442e0f5a1e8b8efed6937f9ad4da41f078bcb2e021058278a687cc05e2",
+        "source_phase": "P4",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 74,
+      "finding_id": "P4-CFG-3",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "b75e471fb839ba71140c9c1006cee9b305b0fce785ece9a6370c2b38f47f77b8",
+        "title_sha256": "147cd482be67b9db820170473ce7d5da112cd31d5f78fede234fa4dbdf8b003d",
+        "corrected_claim_sha256": "147cd482be67b9db820170473ce7d5da112cd31d5f78fede234fa4dbdf8b003d",
+        "source_phase": "P4",
+        "severity": "low",
+        "disposition": "deferred",
+        "status": "deferred",
+        "code_anchor_count": 4
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "deferred_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Resolve or govern the historical deferral, examine the current-main code and evidence state, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 75,
+      "finding_id": "P4-COV-01",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "329215df12df22132a0ebc076c60ffab736a9ed4db94b148ba567eacf637ec17",
+        "title_sha256": "145529cb212187efae483f8c836ef7983980f3def37fee2ca847093030c58e7c",
+        "corrected_claim_sha256": "145529cb212187efae483f8c836ef7983980f3def37fee2ca847093030c58e7c",
+        "source_phase": "P4",
+        "severity": "high",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 76,
+      "finding_id": "P4-COMPLEX-01",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "5b6925562e43ccd4b99e42cfca7e42aaa8fc8778d328ea7c9b22e1b918129a17",
+        "title_sha256": "1565cd8cec953ced7582e8c0ea7146dac6e59687f71740cffd9c8361199db05b",
+        "corrected_claim_sha256": "1565cd8cec953ced7582e8c0ea7146dac6e59687f71740cffd9c8361199db05b",
+        "source_phase": "P4",
+        "severity": "high",
+        "disposition": "deferred",
+        "status": "deferred",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "deferred_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Resolve or govern the historical deferral, examine the current-main code and evidence state, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 77,
+      "finding_id": "P4-COV-02",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "3bcd3c4f2eefd300152ad39deeef249333b98ba2768788dcb28b4a50e49bfd1d",
+        "title_sha256": "4337e3f29d35cfafb55edaa3387cf26f870b2ff2ef52463827d3d537f6e7d0e7",
+        "corrected_claim_sha256": "4337e3f29d35cfafb55edaa3387cf26f870b2ff2ef52463827d3d537f6e7d0e7",
+        "source_phase": "P4",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 78,
+      "finding_id": "P4-COV-03",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "22cb0d46b9201b7021ac789a70fd5fb983d096bef4c0716b50293875ab183892",
+        "title_sha256": "45d58c03d5b091d24e10c5e5f73056285001dcd3143cb7e9ab3733948163e82b",
+        "corrected_claim_sha256": "45d58c03d5b091d24e10c5e5f73056285001dcd3143cb7e9ab3733948163e82b",
+        "source_phase": "P4",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 79,
+      "finding_id": "P4-DUP-01",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "9fa33f5755590b2ce602f759c5cebf53213ef10b36d67366b5be595e1336721b",
+        "title_sha256": "94937a6cdd2d1b89f6fb9c75ebd24dd9ee91c761c37c2ea2d0aed39a896f1250",
+        "corrected_claim_sha256": "94937a6cdd2d1b89f6fb9c75ebd24dd9ee91c761c37c2ea2d0aed39a896f1250",
+        "source_phase": "P4",
+        "severity": "medium",
+        "disposition": "deferred",
+        "status": "deferred",
+        "code_anchor_count": 13
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "deferred_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Resolve or govern the historical deferral, examine the current-main code and evidence state, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 80,
+      "finding_id": "P4-COV-04",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "4317216639bd1b163d15b7538b0ca3e6d168377d17a1eeb8416a861b5ce6f8eb",
+        "title_sha256": "2f02099d9f3175eeecdfa1422dca66ac3e3e5cb11a36392d029c6c052ff24722",
+        "corrected_claim_sha256": "2f02099d9f3175eeecdfa1422dca66ac3e3e5cb11a36392d029c6c052ff24722",
+        "source_phase": "P4",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 81,
+      "finding_id": "P4-COV-05",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "5fff7a408947c270cf02d12b38e4478f31c62a1885d12080ddfef3475b3d5781",
+        "title_sha256": "40e66a1bffa59f3b0b892af93426c65a1e3f203e577c4d885927162ebe5027b2",
+        "corrected_claim_sha256": "40e66a1bffa59f3b0b892af93426c65a1e3f203e577c4d885927162ebe5027b2",
+        "source_phase": "P4",
+        "severity": "low",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 82,
+      "finding_id": "P4-COV-06",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "dfba2a8b4a7504afc44f806d27278bb98f149150c19a0e7b20683d5f2d673eab",
+        "title_sha256": "058896abdf722aa142dbe31167db3199db736147744e261cdcde4785deb034e1",
+        "corrected_claim_sha256": "058896abdf722aa142dbe31167db3199db736147744e261cdcde4785deb034e1",
+        "source_phase": "P4",
+        "severity": "low",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 83,
+      "finding_id": "P4-COMPLEX-02",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "0afc7525d5083e7ec1498a309e35151c7b4a9f5bb74e092f76164ac9b784d89d",
+        "title_sha256": "fa2628c4dc9febdf4fbe614b491f76d72c1afc73fe4882f4e0d23fba8fcf1bdf",
+        "corrected_claim_sha256": "fa2628c4dc9febdf4fbe614b491f76d72c1afc73fe4882f4e0d23fba8fcf1bdf",
+        "source_phase": "P4",
+        "severity": "low",
+        "disposition": "deferred",
+        "status": "deferred",
+        "code_anchor_count": 11
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "deferred_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Resolve or govern the historical deferral, examine the current-main code and evidence state, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 84,
+      "finding_id": "P4-COMPLEX-03",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "bf8e02fbdf81c349ea3a64b7fb0141c54a7d9d81156e84e9eabba4e61643ab18",
+        "title_sha256": "b7a0a0f061d2d655ad0e9303404a32e25288b76d382b9e7b2097eeb4f96be643",
+        "corrected_claim_sha256": "b7a0a0f061d2d655ad0e9303404a32e25288b76d382b9e7b2097eeb4f96be643",
+        "source_phase": "P4",
+        "severity": "low",
+        "disposition": "deferred",
+        "status": "deferred",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "deferred_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Resolve or govern the historical deferral, examine the current-main code and evidence state, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 85,
+      "finding_id": "P4-DOC-01",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "a9a8cdfba9f13beec7af16c50b7523cb395dc3f58cda0db968bbaed9bf7a7fc4",
+        "title_sha256": "0c6185082b02aeda8116250b444f0f393b97b92842971d487c7ac699f22a2a50",
+        "corrected_claim_sha256": "0c6185082b02aeda8116250b444f0f393b97b92842971d487c7ac699f22a2a50",
+        "source_phase": "P4",
+        "severity": "low",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 86,
+      "finding_id": "P4-COV-07",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "680e715405da1cc7fb7bccde2e9997bd18516f77c43c20a7b61ee3a788c640ef",
+        "title_sha256": "04ac7ec05718697b68af4bd9dc02b5284c1d47e234514263962aac524751107d",
+        "corrected_claim_sha256": "04ac7ec05718697b68af4bd9dc02b5284c1d47e234514263962aac524751107d",
+        "source_phase": "P4",
+        "severity": "low",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 87,
+      "finding_id": "P4-SEC-1",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "938a5fd45c21fb5643e34df1f0f63852c56d7ef8d2183881414d76a6bc425ac5",
+        "title_sha256": "622c94e2797a86a9e370244a9f767a14c7ecdd34ae59748455c44548ccfc07e9",
+        "corrected_claim_sha256": "622c94e2797a86a9e370244a9f767a14c7ecdd34ae59748455c44548ccfc07e9",
+        "source_phase": "P4",
+        "severity": "high",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 6
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 88,
+      "finding_id": "P4-SCRIPTS-RUFF",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "b8039aa8d26757f2d7ce0a85d2c2ec108c0d781060a2f91e5b316c04fc9c7b30",
+        "title_sha256": "b93db180f46c3ba8e5fcf41126847e1054ef9816c4f9587e93933d4168bb4c5f",
+        "corrected_claim_sha256": "b93db180f46c3ba8e5fcf41126847e1054ef9816c4f9587e93933d4168bb4c5f",
+        "source_phase": "P4",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 89,
+      "finding_id": "P4-MYPY-EXCLUSIONS",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "2f5d6185a1d6d579992329d1897d93227f948a59d7b3d1a5b43254a34f4c3ddb",
+        "title_sha256": "c94988390404ce6687df01f711f17b6ae466283f0dda001a40a439ac1cb0a0c6",
+        "corrected_claim_sha256": "c94988390404ce6687df01f711f17b6ae466283f0dda001a40a439ac1cb0a0c6",
+        "source_phase": "P4",
+        "severity": "low",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 90,
+      "finding_id": "P4-MAKEFILE-COMMENT",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "86c147ae63c410ae91c3a10f8cff870b71db8dcbb2998f3e6fafe415f0aa3c3a",
+        "title_sha256": "267d17dc9d7e6633b4f3d94e5628646f955fcd828e43ff5398434c5fdcc4331c",
+        "corrected_claim_sha256": "267d17dc9d7e6633b4f3d94e5628646f955fcd828e43ff5398434c5fdcc4331c",
+        "source_phase": "P4",
+        "severity": "low",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 91,
+      "finding_id": "P4-TQ-1",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "c51fe85c8915bf7c32e1d690991f2bbf1d08263acbe107d675c67cd08dc73090",
+        "title_sha256": "5d109b07088204f735c51cc4c21efd4707eaf9698432eb166465b4e9f3da9c30",
+        "corrected_claim_sha256": "5d109b07088204f735c51cc4c21efd4707eaf9698432eb166465b4e9f3da9c30",
+        "source_phase": "P4",
+        "severity": "medium",
+        "disposition": "deferred",
+        "status": "deferred",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "deferred_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Resolve or govern the historical deferral, examine the current-main code and evidence state, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 92,
+      "finding_id": "P4-TQ-2",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "910ea7894d49d187f99bd108b6e74a9190b8d1ecf6fa220c08553ca81ea4f8f1",
+        "title_sha256": "dc49c49449e40703e52f224cba4eb2fe93da2c2e6bcd5b60c842d4e5782e49b7",
+        "corrected_claim_sha256": "dc49c49449e40703e52f224cba4eb2fe93da2c2e6bcd5b60c842d4e5782e49b7",
+        "source_phase": "P4",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 93,
+      "finding_id": "P4-TQ-3",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "7cc07b1f15689de6d1b2b30ea5c4cd0d5b8d5d104cb338609d599260b79d8856",
+        "title_sha256": "d1338b36742854aa21577e9561195b1203ec167ad3216de02af62e693759059f",
+        "corrected_claim_sha256": "d1338b36742854aa21577e9561195b1203ec167ad3216de02af62e693759059f",
+        "source_phase": "P4",
+        "severity": "low",
+        "disposition": "deferred",
+        "status": "deferred",
+        "code_anchor_count": 3
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "deferred_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Resolve or govern the historical deferral, examine the current-main code and evidence state, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 94,
+      "finding_id": "P5-HDL-001",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "f271ac5b5ca8f84c55b34dae2a38cff2ff967c5dbe749a3b739d0b9737602e60",
+        "title_sha256": "78a9246ff13e03676fb0a3e8cbbc06cbff1bf2541ca8e6c301cdf47b2cd82062",
+        "corrected_claim_sha256": "c6afc9ff40dd05e4bd6812cc96c8aafceac0da5c2436de5c33ae8418653cfc37",
+        "source_phase": "P5",
+        "severity": "high",
+        "disposition": "refuted",
+        "status": "requires_correction",
+        "code_anchor_count": 0
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 95,
+      "finding_id": "P5-HDL-002",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "a05576750693cb1d870241200500af1623c5206ed2657dc73d41311620a9cdad",
+        "title_sha256": "6d8687ff01553a60a84f97e1903ba7e1e9f1bed02cd372b9e7cd477ba541a19d",
+        "corrected_claim_sha256": "1ff2eb58f9b9681251f17a9f8448001161a824adcac0932270f47009575a822d",
+        "source_phase": "P5",
+        "severity": "high",
+        "disposition": "refuted",
+        "status": "requires_correction",
+        "code_anchor_count": 0
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 96,
+      "finding_id": "P5-HDL-003",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "c14da11dc66db161f9136b53394faf5f43a05619fa9b27a762654ba0d2a3db35",
+        "title_sha256": "28c5b3f6e28378b2928a622364f52e710328f41d6a901d4adf9532e7dc8b0010",
+        "corrected_claim_sha256": "df56274b0d2c492682b1c9454dded1d93af839b3b49e9600bca4e2170f02ec22",
+        "source_phase": "P5",
+        "severity": "high",
+        "disposition": "refuted",
+        "status": "requires_correction",
+        "code_anchor_count": 0
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 97,
+      "finding_id": "P5-MC-001",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "da390fa5cd4f8f0a2d7f5ecd72669d2f098753c5b4ff77184ef4e7132de61388",
+        "title_sha256": "269f873d7e4409c5c866edbd712736a63b84207317397c85401d251af2bceb31",
+        "corrected_claim_sha256": "91aaf5dbbe400d2f125562fb4ed64d7e87e11929cc4cb9d0d8dd22838bd5eec0",
+        "source_phase": "P5",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 98,
+      "finding_id": "P5-MC-002",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "84bb5aaadf1843ca4c6cc83762d7ec0c0f47a2f4e4b5fd980f770d5ad2b95778",
+        "title_sha256": "6fd69a5bfd18dcd3a0a491aaf2fbba68453764c41e0b19ec84f76478d828f58f",
+        "corrected_claim_sha256": "6e5c6d04cdae7936594af6efb1a9a1f701ec2ceb67a218543696be8a0a6820e1",
+        "source_phase": "P5",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 99,
+      "finding_id": "P5-MC-003",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "38a86b8b6ea8a72889184817348e6315b479bc179e4b1b230305f4b16d05f0f1",
+        "title_sha256": "ccf35060a299368325d1467ae1316f8faf68991be86584df8b94dd46867943f2",
+        "corrected_claim_sha256": "77e751ec14990ab6765f01e3d8f5bc9d0f7840019a59ee282e498784a6122476",
+        "source_phase": "P5",
+        "severity": "medium",
+        "disposition": "deferred",
+        "status": "deferred",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "deferred_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Resolve or govern the historical deferral, examine the current-main code and evidence state, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 100,
+      "finding_id": "P5-SA-001",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "d4194370d8d10ca45bbed3b8cc7cfc7ae5cf304aac753eee599495667b0dc43b",
+        "title_sha256": "4d4a9eab0410b765061ec02c95dcebc73d0d5ed86f4c7c6c8a98d54e0c279451",
+        "corrected_claim_sha256": "91e27e899025da023a44b8350ca60b4299c6524495cefde7207212ceb90ae229",
+        "source_phase": "P5",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 101,
+      "finding_id": "P5-SA-002",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "ba90d979973fea1533ca84cf95c4a03d296fd81336cab4dbd23a4977ef009a11",
+        "title_sha256": "4bbb31b300d907f2ed38ae1b8fb3fdbeb18230172d6949ad044d14abdd5b8d92",
+        "corrected_claim_sha256": "c89bd43d1a8d0c1addbe1589058a1f2446551e670fc32284d379b26db11fff1e",
+        "source_phase": "P5",
+        "severity": "medium",
+        "disposition": "deferred",
+        "status": "deferred",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "deferred_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Resolve or govern the historical deferral, examine the current-main code and evidence state, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 102,
+      "finding_id": "P5-RISK-001",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "52097f5329f6a0a9b98ee1b64edfe79756f458c275f8c6cbf5319e387e561b3d",
+        "title_sha256": "e753f345278ebf0e456af6c883297f0cd584fc767efee92fa189fe78df6bf9de",
+        "corrected_claim_sha256": "83c0381188fadf38ff1c5f63ddf710a9968b463fe20921f361261561a568696e",
+        "source_phase": "P5",
+        "severity": "high",
+        "disposition": "refuted",
+        "status": "requires_correction",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 103,
+      "finding_id": "P5-RISK-002",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "441ebbcf7955d75d7db7c97a9384f00ca6f6bd30d17cba80f3d0d2d1ed42bfd1",
+        "title_sha256": "59cd237b9429fa1d24224d1ebbef31511af0a577d1bafe0c7f4f2149fc00c3ed",
+        "corrected_claim_sha256": "fa0e403ff9f6130d0977645eb89916d372948ea6cf20062c8c8bccbaeb79965a",
+        "source_phase": "P5",
+        "severity": "high",
+        "disposition": "refuted",
+        "status": "requires_correction",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 104,
+      "finding_id": "P5-WIND-001",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "52fa4723da5de069274e418dbf0dd669c3d519fefd88d959ef6fa3ccbfa180a9",
+        "title_sha256": "d2dfd2dbf6c5310fe9eca1fa6c47df7fc49eb7da1523d80892cc0fc2e051ee0f",
+        "corrected_claim_sha256": "f284f1ed700563d0aa0b971745dc66940c65c025b631f029b19b45b23815189a",
+        "source_phase": "P5",
+        "severity": "high",
+        "disposition": "refuted",
+        "status": "requires_correction",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 105,
+      "finding_id": "P5-WIND-002",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "589c38522e36377e6c6e47c083e5ee31a10ff3b019b0a7621471fba284d81e8e",
+        "title_sha256": "132099154ea6e0fba292a0c0d6c217ff81bc8a562f669ca05832ba2e163e6591",
+        "corrected_claim_sha256": "b1636a5d1b33d0d0d6a96fe2b2100a047ee528a6dba62aedff3b744bcd2e1cfc",
+        "source_phase": "P5",
+        "severity": "high",
+        "disposition": "refuted",
+        "status": "requires_correction",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 106,
+      "finding_id": "P5-WIND-003",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "ea30d2b2054984c5fbc8ba7650fca9fc9374dccfd76e40cd747d5f30e857f7e2",
+        "title_sha256": "0561961eab45336f3a34e1567b51e5f8fad48adc25aa066a5e13dd96628ae3d1",
+        "corrected_claim_sha256": "c3cfb3803b2f47ad3310118548128eaf25db875ba9e9466ac91a825d96130718",
+        "source_phase": "P5",
+        "severity": "high",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 107,
+      "finding_id": "P5-FIN-001",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "d27b8b3d69899412fdee219b9551b8d6210a02904da45441de1f724bd1dfc6b5",
+        "title_sha256": "b44a0581a0481d53f72d6a29e4c1cca9a99d97251ed042da4376c996a52cdd48",
+        "corrected_claim_sha256": "7d910bfc58974f641d9702857f3f9eaa77e147ec4b037b65e92abbea0612b323",
+        "source_phase": "P5",
+        "severity": "medium",
+        "disposition": "deferred",
+        "status": "deferred",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "deferred_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Resolve or govern the historical deferral, examine the current-main code and evidence state, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 108,
+      "finding_id": "P5-FIN-002",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "09c1f65d25d1c544e5e337407c17650c1edb20367066a43cc869d43f681df98c",
+        "title_sha256": "74a37e8d7b964722d29590fd1544848e5c5449ec1c47321c1b0434aebcdd6027",
+        "corrected_claim_sha256": "917943fdd8263de1d1e365d28dccba4ec12e87d3968b79783072c66e6c231ff6",
+        "source_phase": "P5",
+        "severity": "high",
+        "disposition": "confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 109,
+      "finding_id": "P5-FIN-003",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "24162d59541e7f59d21efae95fc030adb587acf23821b93a2ba8c0f8baf7e86b",
+        "title_sha256": "c06e2a104a900384186e99d9ab695da4b3c946a584a6e1cc408b3406aa39c0f2",
+        "corrected_claim_sha256": "c41efa669e1818e88011c03aeed74673a2873c2c639bdd085029dde7e2e05ba1",
+        "source_phase": "P5",
+        "severity": "medium",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 2
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 110,
+      "finding_id": "P5-FIN-004",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "d0ebd1308a895670cc7e5e63c83510481f1708ebad187c220a66bd48f710fea5",
+        "title_sha256": "a6886afc084d34aa0bfce49837438fa50e9a9782c58842c8b2f1d6a917ee1214",
+        "corrected_claim_sha256": "8c2df3198c58e5aa97e4e05d78520d327f9b9b25d718c163737c4ef02b4c6caf",
+        "source_phase": "P5",
+        "severity": "high",
+        "disposition": "partially_confirmed",
+        "status": "open",
+        "code_anchor_count": 1
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "open_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Examine the finding against the current-main cutoff, bind any implementation or evidence result, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    },
+    {
+      "overlay_row_number": 111,
+      "finding_id": "P5-COV-001",
+      "audited_record": {
+        "repository_commit": "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8",
+        "row_sha256": "736eee25208bcd6fbc519975d31d146bdc6b09827a3e27fb7afde98c3f7bc483",
+        "title_sha256": "976a9f6584341b915b96a5d7562cc56740238a239f799d7310f02fef9f09c976",
+        "corrected_claim_sha256": "0178a9f357424fb320e556e643c9c4d67fb0f293375985eec5578d84125bf792",
+        "source_phase": "P5",
+        "severity": "high",
+        "disposition": "refuted",
+        "status": "requires_correction",
+        "code_anchor_count": 0
+      },
+      "current_main": {
+        "evaluated_commit": "63b67eb62789da9ad712e9d0569737ec79988c65",
+        "evaluated_tree_oid": "272e608c729a6b836d45df16f7903c142d90bd0a",
+        "state": "requires_correction_current_state_not_examined",
+        "state_basis": "audited_status_default_not_current_examination",
+        "current_code_seams": [],
+        "evidence_ids": [],
+        "review_status": "not_started",
+        "remaining_gate": "Determine whether the required correction is present at the current-main cutoff, bind the evidence, and obtain independent model-risk review.",
+        "limitations": "No current-main code examination or positive implementation evidence was admitted for this row in P02 v1; the audited baseline state is preserved."
+      },
+      "period_boundary": {
+        "audited_fields_modified": false,
+        "current_state_additive_only": true
+      },
+      "hold_effect": "blocks_board_lender_release"
+    }
+  ]
+}

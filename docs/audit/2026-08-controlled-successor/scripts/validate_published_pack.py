@@ -43,6 +43,12 @@ P01_IMPLEMENTER_SELF_CHECK = Path(
     "qa/P01_RECOVERY_IMPLEMENTER_SELF_CHECK_2026-08-24.json"
 )
 P01_DESCRIPTOR_SCHEMA = "dutchbay.audit_recovery_descriptor.v1"
+FINDINGS_CURRENT_STATE_BUILDER = (
+    PACK_ROOT / "scripts" / "build_findings_current_state_overlay.py"
+)
+FINDINGS_CURRENT_STATE_JSON = (
+    PACK_ROOT / "registers" / "findings_current_state_overlay.v1.json"
+)
 
 
 class ValidationError(RuntimeError):
@@ -103,6 +109,124 @@ def _load_programme_gate_builder() -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _load_findings_current_state_builder() -> ModuleType:
+    """Load the pure P02 overlay builder without packaging the scripts directory."""
+    spec = importlib.util.spec_from_file_location(
+        "findings_current_state_builder", FINDINGS_CURRENT_STATE_BUILDER
+    )
+    if spec is None or spec.loader is None:
+        raise ValidationError("findings current-state builder cannot be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _validate_findings_current_state_overlay() -> dict[str, int | str]:
+    """Rebuild P02 in memory and enforce its additive HOLD-side boundary."""
+    _require(
+        FINDINGS_CURRENT_STATE_BUILDER.is_file(),
+        "findings current-state builder is missing",
+    )
+    _require(
+        FINDINGS_CURRENT_STATE_JSON.is_file(),
+        "findings current-state overlay is missing",
+    )
+    builder = _load_findings_current_state_builder()
+    payload = cast(dict[str, Any], builder.build_from_disk())
+    _require(
+        FINDINGS_CURRENT_STATE_JSON.read_text(encoding="utf-8")
+        == builder.render_json(payload),
+        "findings current-state overlay drift",
+    )
+    records = payload.get("records", [])
+    _require(len(records) == 111, "findings overlay population drift")
+    state_counts = Counter(
+        str(record.get("current_main", {}).get("state")) for record in records
+    )
+    _require(
+        state_counts
+        == Counter(
+            {
+                "baseline_closed_current_state_not_reassessed": 4,
+                "deferred_current_state_not_examined": 16,
+                "external_evidence_blocked": 1,
+                "implementation_delivered_review_pending": 5,
+                "open_current_state_not_examined": 65,
+                "requires_correction_current_state_not_examined": 20,
+            }
+        ),
+        "findings overlay current-state counts drift",
+    )
+    _require(
+        all(
+            record.get("period_boundary", {}).get("audited_fields_modified") is False
+            and record.get("period_boundary", {}).get("current_state_additive_only")
+            is True
+            for record in records
+        ),
+        "findings overlay period-boundary drift",
+    )
+    delivered = {
+        str(record.get("finding_id"))
+        for record in records
+        if record.get("current_main", {}).get("state")
+        == "implementation_delivered_review_pending"
+    }
+    _require(
+        delivered
+        == {
+            "P2-F5-01",
+            "P2-MC-SENS-01",
+            "P2-MC-SENS-02",
+            "P3-EQ-04",
+            "P3-MCFX-03",
+        },
+        "findings overlay delivered-finding population drift",
+    )
+    external_blocked = [
+        record
+        for record in records
+        if record.get("current_main", {}).get("state") == "external_evidence_blocked"
+    ]
+    _require(
+        len(external_blocked) == 1
+        and external_blocked[0].get("finding_id") == "P2-F5-02",
+        "F5-02 external-evidence boundary drift",
+    )
+    _require(
+        payload.get("p02_gate", {}).get("status")
+        == "candidate_overlay_pending_independent_review"
+        and payload.get("p02_gate", {}).get("completion_authorized") is False,
+        "P02 overlay cannot claim gate completion",
+    )
+    _require(payload.get("release_status") == "HOLD", "P02 overlay HOLD missing")
+    history_self_check = payload.get("repository_history_implementer_self_check", {})
+    _require(
+        history_self_check.get("review_kind") == "implementer_self_check"
+        and history_self_check.get("independence_satisfied") is False
+        and history_self_check.get("commit_objects") == 13
+        and history_self_check.get("tag_object_verified_in_full_history_self_check")
+        is True,
+        "P02 repository-history self-check boundary drift",
+    )
+    _require(
+        payload.get("f5_separation", {}).get("netting_permitted") is False
+        and payload.get("f5_separation", {}).get("shared_evidence_ids") == [],
+        "P02 overlay F5 separation drift",
+    )
+    return {
+        "records": len(records),
+        "delivered_review_pending": state_counts[
+            "implementation_delivered_review_pending"
+        ],
+        "external_evidence_blocked": state_counts["external_evidence_blocked"],
+        "not_reassessed_or_examined": 105,
+        "independently_reviewed": 0,
+        "history_self_check_independent": 0,
+        "gate_status": "candidate_overlay_pending_independent_review",
+    }
 
 
 def _validate_architecture_examination_ledger() -> dict[str, int]:
@@ -634,6 +758,7 @@ def main() -> None:
     p01_self_check = _validate_p01_implementer_self_check()
     architecture_examinations = _validate_architecture_examination_ledger()
     programme_gates = _validate_programme_gate_ledger()
+    findings_current_state = _validate_findings_current_state_overlay()
     findings = _load("registers/findings_register.v2.json")
     sources = _load("registers/primary_source_register.v2.json")
     architecture = _load("registers/architecture_pointer_dispositions.json")
@@ -686,6 +811,7 @@ def main() -> None:
         "architecture_pointers": 72,
         "architecture_examinations": architecture_examinations,
         "programme_gates": programme_gates,
+        "findings_current_state": findings_current_state,
         "p01_recovery": p01_recovery,
         "p01_implementer_self_check": p01_self_check,
         "reproductions": dict(sorted(reproduction_counts.items())),
