@@ -434,3 +434,42 @@ This Codex session is rooted at `/Users/aruna/Downloads`, not at the repository
 root. The built-in post-PR monitor is therefore blind under ENV-01; Git and
 GitHub operations must use explicit repository context until the task is
 reopened at `/Users/aruna/Downloads/dutchbay-epc-model`.
+
+## 11. PR #1150 first-head CI correction
+
+PR #1150 opened against `main` with exact head
+`0945542624f1901e7f364ceb28e151a92e4d326c`. VERIFY-01, path classification,
+CodeQL, Security Scan, fastlane and smoke passed. The first-head Code Quality
+job failed in its second mypy invocation:
+
+```text
+analysis_tools/f5_02_lender_return.py:325: error: Unused "type: ignore" comment
+```
+
+The first strict library invocation required the `no-untyped-call` suppression
+on PyYAML's untyped `peek_event()`. The subsequent scripts invocation uses
+`--allow-untyped-calls`, so the same imported suppression became unused. The
+correction removes the configuration-dependent suppression and instead casts
+the bound method to `Callable[[], yaml.AliasEvent]` after the existing
+`AliasEvent` look-ahead check. Runtime behavior is unchanged; both mypy
+configurations now see a typed call.
+
+The exact post-correction receipts were:
+
+```bash
+python -m mypy finance/ analytics/ wind_resource/ solar_resource/ api/ app/ \
+  analysis_tools/ run_full_pipeline_v14.py run_scenario_analytics_v14.py \
+  dutchbay_bootstrap.py dutchbay_bootstrap_rules.py constants.py \
+  --no-incremental
+# PASS: Success: no issues found in 255 source files
+
+python -m mypy scripts/ --ignore-missing-imports \
+  --allow-untyped-defs --allow-untyped-calls --allow-any-generics \
+  --no-incremental
+# PASS: Success: no issues found in 63 source files
+```
+
+The failed first head is preserved as evidence; it must not be relabelled
+green. Merge remains blocked until the corrected head completes all required
+and aggregate GitHub checks. F5-02 and release remain on HOLD regardless of the
+CI result.

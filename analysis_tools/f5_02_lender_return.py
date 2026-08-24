@@ -11,7 +11,7 @@ import os
 import re
 import subprocess
 import unicodedata
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -322,7 +322,8 @@ class _UniqueKeySafeLoader(yaml.SafeLoader):
 
     def compose_node(self, parent: Any, index: Any) -> yaml.Node:
         if self.check_event(yaml.AliasEvent):
-            event = self.peek_event()  # type: ignore[no-untyped-call]
+            peek_alias_event = cast(Callable[[], yaml.AliasEvent], self.peek_event)
+            event = peek_alias_event()
             raise yaml.constructor.ConstructorError(
                 None,
                 None,
