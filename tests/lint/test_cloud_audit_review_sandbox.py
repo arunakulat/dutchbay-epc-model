@@ -22,7 +22,6 @@ DEVCONTAINER = REPO_ROOT / ".devcontainer" / "devcontainer.json"
 DEVCONTAINER_LOCK = REPO_ROOT / ".devcontainer" / "devcontainer-lock.json"
 DOCKERFILE = REPO_ROOT / ".devcontainer" / "Dockerfile"
 SSHD_INSTALLER = REPO_ROOT / ".devcontainer" / "install_audit_review_sshd.sh"
-SSHD_ENTRYPOINT = REPO_ROOT / ".devcontainer" / "ssh_entrypoint.sh"
 SSHD_START = REPO_ROOT / ".devcontainer" / "start_audit_review_sshd.sh"
 SSHD_ATTESTOR = REPO_ROOT / ".devcontainer" / "attest_audit_review_sshd.sh"
 SSHD_READINESS = REPO_ROOT / ".devcontainer" / "sshd_readiness.py"
@@ -33,6 +32,7 @@ CREATE_CODESPACE = REPO_ROOT / "scripts" / "create_1110_cloud_review_codespace.s
 UPLOAD = REPO_ROOT / "scripts" / "upload_1110_p03_sources_to_codespace.sh"
 DOC = REPO_ROOT / "docs" / "audit" / "CLOUD_REVIEW_SANDBOX.md"
 IMAGE_SMOKE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "audit-cloud-sandbox.yml"
+PATH_CLASSIFIER = REPO_ROOT / "scripts" / "classify_1110_cloud_sandbox_paths.sh"
 
 EXPECTED_IMAGE = (
     "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm@"
@@ -61,6 +61,22 @@ REQUIRED_SSHD_EFFECTIVE_POLICY = {
     "usepam": "yes",
     "x11forwarding": "no",
 }
+REQUIRED_SSHD_SETENV_POLICY = {
+    "DUTCHBAY_P03_SOURCE_ROOT=/workspaces/.dutchbay-private/p03/sources",
+    "DUTCHBAY_VENV=/workspaces/.dutchbay-audit-review-venv",
+    (
+        "PATH=/workspaces/.dutchbay-audit-review-venv/bin:/usr/local/bin:"
+        "/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"
+    ),
+    "PYTHONPATH=/workspaces/dutchbay-epc-model",
+}
+REQUIRED_SSHD_SETENV_DIRECTIVE = (
+    "SetEnv DUTCHBAY_VENV=/workspaces/.dutchbay-audit-review-venv "
+    "DUTCHBAY_P03_SOURCE_ROOT=/workspaces/.dutchbay-private/p03/sources "
+    "PYTHONPATH=/workspaces/dutchbay-epc-model "
+    "PATH=/workspaces/.dutchbay-audit-review-venv/bin:/usr/local/bin:"
+    "/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"
+)
 REQUIRED_SSHD_INSTALLER_DIRECTIVES = {
     "AllowAgentForwarding no",
     "AllowGroups ssh",
@@ -81,6 +97,7 @@ REQUIRED_SSHD_INSTALLER_DIRECTIVES = {
     "PubkeyAuthentication yes",
     "UsePAM yes",
     "X11Forwarding no",
+    REQUIRED_SSHD_SETENV_DIRECTIVE,
 }
 VALID_SSH_HOST_PUBLIC_KEYS = [
     (
@@ -113,9 +130,9 @@ INDEPENDENT_DEPENDENCY_INPUT_RELATIVES = (
     "pyproject.toml",
     "constraints.txt",
     ".devcontainer/devcontainer.json",
+    ".devcontainer/devcontainer-lock.json",
     ".devcontainer/Dockerfile",
     ".devcontainer/install_audit_review_sshd.sh",
-    ".devcontainer/ssh_entrypoint.sh",
     ".devcontainer/start_audit_review_sshd.sh",
     ".devcontainer/attest_audit_review_sshd.sh",
     ".devcontainer/sshd_readiness.py",
@@ -143,9 +160,9 @@ INDEPENDENT_CONTROLLED_INPUT_RELATIVES = (
     "scripts/verify_1110_cloud_review_sandbox.sh",
     "scripts/create_1110_cloud_review_codespace.sh",
     ".devcontainer/devcontainer.json",
+    ".devcontainer/devcontainer-lock.json",
     ".devcontainer/Dockerfile",
     ".devcontainer/install_audit_review_sshd.sh",
-    ".devcontainer/ssh_entrypoint.sh",
     ".devcontainer/start_audit_review_sshd.sh",
     ".devcontainer/attest_audit_review_sshd.sh",
     ".devcontainer/sshd_readiness.py",
@@ -234,7 +251,10 @@ def _sample_sandbox_identity(controlled_paths: tuple[str, ...]) -> dict[str, obj
         "devcontainer_base_image_digest": (
             "sha256:7876580dc67fd460fd962f004cbeb480027e9bbc0657096f1087db11f9eaff39"
         ),
-        "repository_configured_devcontainer_features": [],
+        "repository_configured_devcontainer_features": [
+            "ghcr.io/devcontainers/features/sshd@"
+            "sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee"
+        ],
         "base_image_embedded_feature_metadata": [
             "ghcr.io/devcontainers/features/common-utils:2",
             "ghcr.io/devcontainers/features/git:1",
@@ -261,7 +281,8 @@ def _with_sshd_self_digest(payload: dict[str, object]) -> dict[str, object]:
 
 def _sample_sshd_identity() -> dict[str, object]:
     payload: dict[str, object] = {
-        "openssh_packages": [
+        "ssh_transport_packages": [
+            "lsof|amd64|install ok installed|4.95.0",
             "openssh-client|amd64|install ok installed|1:9.2p1",
             "openssh-server|amd64|install ok installed|1:9.2p1",
             "openssh-sftp-server|amd64|install ok installed|1:9.2p1",
@@ -283,9 +304,22 @@ def test_devcontainer_is_digest_pinned_private_and_portless() -> None:
 
     assert payload["build"] == {"dockerfile": "Dockerfile", "context": ".."}
     assert "image" not in payload
-    assert "features" not in payload
-    assert not DEVCONTAINER_LOCK.exists()
-    assert payload["overrideCommand"] is False
+    assert payload["features"] == {"ghcr.io/devcontainers/features/sshd:1.1.0": {}}
+    assert json.loads(DEVCONTAINER_LOCK.read_text(encoding="utf-8")) == {
+        "features": {
+            "ghcr.io/devcontainers/features/sshd:1.1.0": {
+                "version": "1.1.0",
+                "resolved": (
+                    "ghcr.io/devcontainers/features/sshd@"
+                    "sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee"
+                ),
+                "integrity": (
+                    "sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee"
+                ),
+            }
+        }
+    }
+    assert payload["overrideCommand"] is True
     assert payload["init"] is True
     assert payload["containerUser"] == "root"
     assert payload["remoteUser"] == "vscode"
@@ -314,14 +348,12 @@ def test_repository_owned_ssh_transport_is_narrow_and_base_pinned() -> None:
     assert dockerfile.splitlines()[0] == f"FROM {EXPECTED_IMAGE}"
     assert dockerfile.count("FROM ") == 1
     assert "install_audit_review_sshd.sh" in dockerfile
-    assert "dutchbay-ssh-entrypoint.sh" in dockerfile
     assert "sshd_readiness.py" in dockerfile
-    assert 'ENTRYPOINT ["/usr/local/sbin/dutchbay-ssh-entrypoint.sh"]' in dockerfile
-    assert 'CMD ["/usr/bin/sleep", "infinity"]' in dockerfile
+    assert "ENTRYPOINT" not in dockerfile
+    assert "CMD" not in dockerfile
     assert "Dir::Etc::sourcelist=$DEBIAN_SOURCES" in installer
     assert "Dir::Etc::sourceparts=-" in installer
-    assert "openssh-client openssh-server" in installer
-    assert "lsof" not in installer
+    assert "lsof openssh-client openssh-server" in installer
     for directive in REQUIRED_SSHD_INSTALLER_DIRECTIVES:
         assert directive in installer
     assert "yarn" not in installer.lower()
@@ -330,8 +362,12 @@ def test_repository_owned_ssh_transport_is_narrow_and_base_pinned() -> None:
     )
     start = SSHD_START.read_text(encoding="utf-8")
     assert "/usr/bin/ssh-keygen -A" in start
-    assert "/usr/bin/flock --exclusive 9" in start
+    assert '/usr/bin/flock --exclusive --wait "$LOCK_WAIT_SECONDS" 9' in start
+    assert start.count("/usr/bin/timeout --signal=TERM --kill-after=2") == 3
     assert "exec 9>/run/dutchbay-sshd-start.lock" in start
+    assert start.index('/usr/bin/unlink -- "$SSHD_READY_MARKER"') < start.index(
+        "/usr/bin/ssh-keygen -A"
+    )
     assert start.index("/etc/init.d/ssh start") < start.index(
         "/usr/local/lib/dutchbay/sshd_readiness.py 15"
     )
@@ -340,11 +376,9 @@ def test_repository_owned_ssh_transport_is_narrow_and_base_pinned() -> None:
     )
     assert 'SSHD_READY_VALUE="sshd_ready_before_audit_bootstrap"' in start
     assert "/run/dutchbay-sshd-runtime.ready" in start
-    entrypoint = SSHD_ENTRYPOINT.read_text(encoding="utf-8")
-    assert "/usr/local/sbin/dutchbay-sshd-start.sh --start" in entrypoint
-    assert 'exec "$@"' in entrypoint
     attestor = SSHD_ATTESTOR.read_text(encoding="utf-8")
     assert "build_sshd_transport_identity" in attestor
+    assert 'Path("/usr/local/share/ssh-init.sh")' in attestor
     assert '/usr/bin/ssh-keygen -y -f "$key"' in attestor
     assert '[ "$derived" = "$sidecar" ]' in attestor
     assert '[ "${derived%% *}" = "$expected_algorithm" ]' in attestor
@@ -352,19 +386,127 @@ def test_repository_owned_ssh_transport_is_narrow_and_base_pinned() -> None:
 
 
 def test_ci_builds_and_boots_exact_audit_review_image() -> None:
-    """The merge gate must exercise the real entrypoint and SSH banner."""
+    """The merge gate must exercise the locked Dev Container lifecycle."""
     workflow = IMAGE_SMOKE_WORKFLOW.read_text(encoding="utf-8")
+    classifier = PATH_CLASSIFIER.read_text(encoding="utf-8")
 
-    assert "file: .devcontainer/Dockerfile" in workflow
-    assert "load: true" in workflow
-    assert "docker run -d --name dutchbay-audit-review-ci" in workflow
-    assert "--name dutchbay-audit-review-lifecycle-ci" in workflow
-    assert "--entrypoint /usr/bin/sleep" in workflow
-    assert "/usr/local/sbin/dutchbay-sshd-start.sh --start" in workflow
+    assert "pull_request:\n    paths:" not in workflow
+    assert "permissions:\n  contents: read" in workflow
+    assert "persist-credentials: false" in workflow
+    assert "pull_request.head.sha || github.sha" in workflow
+    assert 'test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"' in workflow
+    assert "Exact candidate head: `%s`" in workflow
+    assert "scripts/classify_1110_cloud_sandbox_paths.sh" in workflow
+    assert "git diff --name-only -z --diff-filter=ACDMRT" in classifier
+    assert ".devcontainer/*|.dockerignore" in classifier
+    assert "done < <(git diff" not in classifier
+    assert '"$BASE_SHA" "$HEAD_SHA" > "$changed_paths"' in classifier
+    assert "base commit is unavailable" in classifier
+    assert "head commit is unavailable" in classifier
+    assert 'if [ ! -s "$changed_paths" ]' in classifier
+    assert "relevant=%s" in workflow
+    assert "@devcontainers/cli@0.88.0" in workflow
+    assert "sha512-sMkruPy/icfov20mdQh2EjFYZogxvMEZptDEvg5/" in workflow
+    assert "npm view @devcontainers/cli@0.88.0 dist.integrity" in workflow
+    assert 'test "$(devcontainer --version)" = "0.88.0"' in workflow
+    assert "devcontainer up" in workflow
+    assert workflow.count("devcontainer up") == 2
+    assert '--workspace-folder "$GITHUB_WORKSPACE"' in workflow
+    assert "--expect-existing-container" in workflow
+    assert "--frozen-lockfile" in workflow
+    assert "--remote-env CODESPACES=true" in workflow
+    assert "--remote-env CODESPACE_NAME=dutchbay-ci-audit-review" in workflow
+    assert "label=devcontainer.local_folder=$GITHUB_WORKSPACE" in workflow
+    assert "docker exec --user vscode" in workflow
+    assert "--workdir /workspaces/dutchbay-epc-model" in workflow
     assert "/usr/local/lib/dutchbay/sshd_readiness.py" in workflow
     assert "/run/dutchbay-sshd-runtime.ready" in workflow
-    assert "docker logs dutchbay-audit-review-ci" in workflow
+    assert "ssh-keygen -q -t ed25519" in workflow
+    assert "/home/vscode/.ssh/authorized_keys" in workflow
+    assert "IdentitiesOnly=yes" in workflow
+    assert "StrictHostKeyChecking=yes" in workflow
+    assert 'UserKnownHostsFile="$probe_root/known_hosts"' in workflow
+    assert "vscode@127.0.0.1" in workflow
+    assert 'test "${DUTCHBAY_VENV:-}" = ' in workflow
+    assert 'test "${DUTCHBAY_P03_SOURCE_ROOT:-}" = ' in workflow
+    assert 'test "${PYTHONPATH:-}" = ' in workflow
+    assert "bash .devcontainer/attest_audit_review_sshd.sh" in workflow
+    assert workflow.count("\n          exercise_authenticated_transport\n") == 2
+    assert workflow.count("bash .devcontainer/start_audit_review_sshd.sh --start") == 2
+    assert "before_marker" in workflow
+    assert "after_resume_marker" in workflow
+    assert 'docker stop "$CONTAINER_ID"' in workflow
+    assert 'docker start "$CONTAINER_ID"' not in workflow
+    assert 'test "${resumed_ids[0]}" = "$CONTAINER_ID"' in workflow
+    assert 'docker logs "$CONTAINER_ID"' in workflow
     assert "if: failure()" in workflow
+    assert PATH_CLASSIFIER.stat().st_mode & 0o111
+
+
+def test_cloud_sandbox_path_classifier_fails_closed(tmp_path: Path) -> None:
+    """Invalid, deleted and empty diffs must never bypass the heavy gate."""
+
+    def git(*arguments: str) -> str:
+        return subprocess.run(
+            ("git", *arguments),
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    def classify(base: str, head: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            (str(PATH_CLASSIFIER), base, head),
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    git("init", "-q")
+    git("config", "user.name", "DutchBay CI")
+    git("config", "user.email", "ci@example.invalid")
+    (tmp_path / "unrelated.txt").write_text("base\n", encoding="utf-8")
+    git("add", "unrelated.txt")
+    git("commit", "-qm", "base")
+    base = git("rev-parse", "HEAD")
+
+    (tmp_path / "unrelated.txt").write_text("head\n", encoding="utf-8")
+    git("commit", "-qam", "unrelated")
+    unrelated = git("rev-parse", "HEAD")
+    result = classify(base, unrelated)
+    assert result.returncode == 0
+    assert result.stdout.strip() == "false"
+
+    relevant_path = tmp_path / ".devcontainer" / "probe"
+    relevant_path.parent.mkdir()
+    relevant_path.write_text("probe\n", encoding="utf-8")
+    git("add", ".devcontainer/probe")
+    git("commit", "-qm", "relevant")
+    relevant = git("rev-parse", "HEAD")
+    result = classify(unrelated, relevant)
+    assert result.returncode == 0
+    assert result.stdout.strip() == "true"
+
+    relevant_path.unlink()
+    git("add", "-u")
+    git("commit", "-qm", "delete relevant")
+    deletion = git("rev-parse", "HEAD")
+    result = classify(relevant, deletion)
+    assert result.returncode == 0
+    assert result.stdout.strip() == "true"
+
+    git("commit", "--allow-empty", "-qm", "empty")
+    empty = git("rev-parse", "HEAD")
+    result = classify(deletion, empty)
+    assert result.returncode == 0
+    assert result.stdout.strip() == "true"
+
+    result = classify(base, "f" * 40)
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "head commit is unavailable" in result.stderr
 
 
 def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
@@ -380,9 +522,9 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert SANDBOX_VENV in combined
     assert "CODESPACES" in combined
     assert ".devcontainer/devcontainer.json" in identity
+    assert ".devcontainer/devcontainer-lock.json" in identity
     assert ".devcontainer/Dockerfile" in identity
     assert ".devcontainer/install_audit_review_sshd.sh" in identity
-    assert ".devcontainer/ssh_entrypoint.sh" in identity
     assert ".devcontainer/start_audit_review_sshd.sh" in identity
     assert ".devcontainer/attest_audit_review_sshd.sh" in identity
     assert ".devcontainer/bootstrap_audit_review.sh" in identity
@@ -467,7 +609,7 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
         "devcontainer_base_image_digest",
         "repository_configured_devcontainer_features",
         "base_image_embedded_feature_metadata",
-        "openssh_packages",
+        "ssh_transport_packages",
         "sshd_effective_config_sha256",
         "sshd_transport_content_sha256",
         "sshd_host_public_key_fingerprints",
@@ -482,7 +624,6 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert "actions/upload-artifact" not in combined
     assert "forwardPorts" not in combined
     assert BOOTSTRAP.stat().st_mode & 0o111
-    assert SSHD_ENTRYPOINT.stat().st_mode & 0o111
     assert SSHD_START.stat().st_mode & 0o111
     assert SSHD_ATTESTOR.stat().st_mode & 0o111
     assert VERIFY.stat().st_mode & 0o111
@@ -663,7 +804,10 @@ def test_identity_contract_binds_ingress_and_rejects_stale_markers(
     )
     assert receipt["dependency_input_sha256"] == dependency_digest
     assert receipt["devcontainer_base_image_digest"] == image_digest
-    assert receipt["repository_configured_devcontainer_features"] == []
+    assert receipt["repository_configured_devcontainer_features"] == [
+        "ghcr.io/devcontainers/features/sshd@"
+        "sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee"
+    ]
     assert receipt["base_image_embedded_feature_metadata"] == [
         "ghcr.io/devcontainers/features/common-utils:2",
         "ghcr.io/devcontainers/features/git:1",
@@ -718,11 +862,19 @@ def test_sshd_policy_content_and_host_identity_fail_closed(tmp_path: Path) -> No
     """The attestor must reject policy drift and bind every transport byte."""
     identity = _load_identity_contract()
     assert identity.EXPECTED_SSHD_EFFECTIVE_VALUES == REQUIRED_SSHD_EFFECTIVE_POLICY
+    assert identity.EXPECTED_SSHD_SETENV_VALUES == REQUIRED_SSHD_SETENV_POLICY
     effective = "\n".join(
-        f"{key} {value}" for key, value in REQUIRED_SSHD_EFFECTIVE_POLICY.items()
+        [
+            *(
+                f"{key} {value}"
+                for key, value in REQUIRED_SSHD_EFFECTIVE_POLICY.items()
+            ),
+            f"setenv {' '.join(sorted(REQUIRED_SSHD_SETENV_POLICY))}",
+        ]
     )
     package_inventory = "\n".join(
         (
+            "lsof|amd64|install ok installed|4.95.0",
             "openssh-client|amd64|install ok installed|1:9.2p1",
             "openssh-server|amd64|install ok installed|1:9.2p1",
             "openssh-sftp-server|amd64|install ok installed|1:9.2p1",
@@ -745,6 +897,19 @@ def test_sshd_policy_content_and_host_identity_fail_closed(tmp_path: Path) -> No
     assert first["sshd_effective_config_sha256"]
     assert first["sshd_transport_content_sha256"]
     assert first["sshd_host_public_key_fingerprints"] == (VALID_SSH_HOST_FINGERPRINTS)
+
+    wrong_environment = effective.replace(
+        "DUTCHBAY_VENV=/workspaces/.dutchbay-audit-review-venv",
+        "DUTCHBAY_VENV=/tmp/untrusted",
+    )
+    try:
+        identity.build_sshd_transport_identity(
+            **{**arguments, "effective_config": wrong_environment}
+        )
+    except identity.SandboxIdentityError as exc:
+        assert "session environment" in str(exc)
+    else:  # pragma: no cover - explicit fail branch
+        raise AssertionError("redirected SSH session environment was accepted")
 
     executable.write_bytes(b"binary-v2")
     second = identity.build_sshd_transport_identity(**arguments)
@@ -881,26 +1046,42 @@ def test_base_image_policy_cannot_drift_from_reported_digest(tmp_path: Path) -> 
     devcontainer_dir.mkdir()
     config = {
         "build": {"dockerfile": "Dockerfile", "context": ".."},
-        "overrideCommand": True,
+        "features": {identity.EXPECTED_REPOSITORY_FEATURE: {}},
+        "overrideCommand": False,
         "init": True,
         "containerUser": "root",
         "remoteUser": "vscode",
         "postStartCommand": "bash .devcontainer/start_audit_review_sshd.sh --start",
     }
     config_path = devcontainer_dir / "devcontainer.json"
+    lock_path = devcontainer_dir / "devcontainer-lock.json"
     dockerfile_path = devcontainer_dir / "Dockerfile"
     config_path.write_text(json.dumps(config), encoding="utf-8")
+    lock_path.write_text(
+        json.dumps(
+            {
+                "features": {
+                    identity.EXPECTED_REPOSITORY_FEATURE: {
+                        "version": "1.1.0",
+                        "resolved": identity.EXPECTED_REPOSITORY_FEATURE_RESOLVED,
+                        "integrity": identity.EXPECTED_REPOSITORY_FEATURE_DIGEST,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     dockerfile_path.write_text(
         f"FROM {identity.EXPECTED_BASE_IMAGE}\n", encoding="utf-8"
     )
     try:
         identity.configured_base_image_digest(tmp_path)
     except identity.SandboxIdentityError as exc:
-        assert "entrypoint" in str(exc)
+        assert "keepalive" in str(exc)
     else:  # pragma: no cover - explicit fail branch
-        raise AssertionError("disabled devcontainer image entrypoint was accepted")
+        raise AssertionError("disabled devcontainer keepalive was accepted")
 
-    config["overrideCommand"] = False
+    config["overrideCommand"] = True
     config_path.write_text(json.dumps(config), encoding="utf-8")
     replacement = "mcr.microsoft.com/devcontainers/python:test@" + f"sha256:{'b' * 64}"
     dockerfile_path.write_text(f"FROM {replacement}\n", encoding="utf-8")
@@ -916,8 +1097,8 @@ def test_base_image_policy_cannot_drift_from_reported_digest(tmp_path: Path) -> 
         identity.EXPECTED_BASE_IMAGE = original
 
 
-def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
-    """Bootstrap and verification receipts must each preserve their v2 contract."""
+def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
+    """Bootstrap and verification receipts must each preserve their v3 contract."""
     identity = _load_identity_contract()
     assert identity.DEPENDENCY_INPUT_RELATIVES == (
         INDEPENDENT_DEPENDENCY_INPUT_RELATIVES
@@ -954,7 +1135,7 @@ def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
         }
     )
     assert set(bootstrap) == common_keys | {"python"}
-    assert bootstrap["schema"] == "dutchbay.audit_review_sandbox_bootstrap.v2"
+    assert bootstrap["schema"] == "dutchbay.audit_review_sandbox_bootstrap.v3"
     assert bootstrap["status"] == "PASS"
     assert bootstrap["completion_authorized"] is False
     assert bootstrap["release_status"] == "HOLD"
@@ -963,7 +1144,7 @@ def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
         "p02_structural_controls",
         "semantic_review_completed",
     }
-    assert verification["schema"] == "dutchbay.audit_review_sandbox_receipt.v2"
+    assert verification["schema"] == "dutchbay.audit_review_sandbox_receipt.v3"
     assert verification["status"] == "PASS"
     assert verification["sshd_process"] == "running"
     assert verification["p02_structural_controls"] == "passed"
@@ -1011,8 +1192,8 @@ def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
             raise AssertionError("invalid controlled-input population was accepted")
 
     bad_status = dict(sshd_identity)
-    bad_status["openssh_packages"] = list(sshd_identity["openssh_packages"])
-    bad_status["openssh_packages"][0] = "openssh-client|amd64|BROKEN|1:9.2p1"
+    bad_status["ssh_transport_packages"] = list(sshd_identity["ssh_transport_packages"])
+    bad_status["ssh_transport_packages"][0] = "lsof|amd64|BROKEN|4.95.0"
     bad_status = _with_sshd_self_digest(bad_status)
     duplicate_fingerprints = dict(sshd_identity)
     duplicate_fingerprints["sshd_host_public_key_fingerprints"] = [
@@ -1020,7 +1201,7 @@ def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
     ] * 3
     duplicate_fingerprints = _with_sshd_self_digest(duplicate_fingerprints)
     for invalid_sshd, expected_error in (
-        (bad_status, "OpenSSH package inventory"),
+        (bad_status, "SSH transport package inventory"),
         (duplicate_fingerprints, "SSH identity populations"),
     ):
         try:
@@ -1161,10 +1342,10 @@ def test_absolute_attestor_rejects_shadowed_venv_launcher(tmp_path: Path) -> Non
     assert not sentinel.exists()
 
 
-def test_identity_rejects_any_executable_feature_or_feature_lock(
+def test_identity_rejects_unlocked_or_extra_repository_features(
     tmp_path: Path,
 ) -> None:
-    """The sandbox must reject every repository-configured Feature add-on."""
+    """Only the exact digest-locked SSH integration Feature is permitted."""
     identity = _load_identity_contract()
     config = json.loads(DEVCONTAINER.read_text(encoding="utf-8"))
     devcontainer_dir = tmp_path / ".devcontainer"
@@ -1172,21 +1353,29 @@ def test_identity_rejects_any_executable_feature_or_feature_lock(
     config_path = devcontainer_dir / "devcontainer.json"
     lock_path = devcontainer_dir / "devcontainer-lock.json"
 
+    original_lock = DEVCONTAINER_LOCK.read_text(encoding="utf-8")
     added_feature = json.loads(json.dumps(config))
-    added_feature["features"] = {"ghcr.io/example/extra:1": {}}
-    invalid_cases = ((added_feature, False), (config, True))
-    for candidate_config, add_lock in invalid_cases:
+    added_feature["features"]["ghcr.io/example/extra:1"] = {}
+    wrong_lock = json.loads(original_lock)
+    wrong_feature = wrong_lock["features"][identity.EXPECTED_REPOSITORY_FEATURE]
+    wrong_feature["integrity"] = f"sha256:{'0' * 64}"
+    invalid_cases = (
+        (added_feature, original_lock),
+        (config, None),
+        (config, json.dumps(wrong_lock)),
+    )
+    for candidate_config, lock_content in invalid_cases:
         config_path.write_text(json.dumps(candidate_config), encoding="utf-8")
         if lock_path.exists():
             lock_path.unlink()
-        if add_lock:
-            lock_path.write_text('{"features": {}}\n', encoding="utf-8")
+        if lock_content is not None:
+            lock_path.write_text(lock_content, encoding="utf-8")
         try:
             identity.configured_base_image_digest(tmp_path)
         except identity.SandboxIdentityError as exc:
-            assert "feature" in str(exc)
+            assert "feature" in str(exc).lower()
         else:  # pragma: no cover - explicit fail branch
-            raise AssertionError("executable devcontainer add-on was accepted")
+            raise AssertionError("unlocked or extra devcontainer Feature was accepted")
 
 
 def test_private_source_root_satisfies_the_merged_p03_scope_contract(
@@ -1337,8 +1526,9 @@ def test_runbook_requires_population_exact_additive_results() -> None:
         "HEAD == origin/main",
         "git switch --detach origin/main",
         "clean detached exact-main state",
-        "no repository-configured Dev Container Features",
-        "base image itself carries embedded Dev Container Feature metadata",
+        "declares one repository-configured Dev Container Feature",
+        "locked to its exact OCI digest",
+        "The base image itself carries separate embedded Dev Container Feature metadata",
         "Debian-only package source",
         "Host private keys are removed in the same image-build layer",
         "allowlist-validated effective SSH policy",

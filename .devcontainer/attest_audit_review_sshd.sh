@@ -23,12 +23,12 @@ effective_config=$(
 package_inventory=$(
   /usr/bin/dpkg-query --show \
     --showformat='${Package}|${Architecture}|${Status}|${Version}\n' \
-    openssh-client openssh-server openssh-sftp-server \
+    lsof openssh-client openssh-server openssh-sftp-server \
     | LC_ALL=C /usr/bin/sort
 )
 package_paths=$(
   /usr/bin/dpkg-query --listfiles \
-    openssh-client openssh-server openssh-sftp-server \
+    lsof openssh-client openssh-server openssh-sftp-server \
     | LC_ALL=C /usr/bin/sort --unique
 )
 
@@ -96,7 +96,7 @@ identity = build_sshd_transport_identity(
     extra_paths=[
         Path("/etc/pam.d/sshd"),
         Path("/etc/ssh/sshd_config.d/00-dutchbay-audit-review.conf"),
-        Path("/usr/local/sbin/dutchbay-ssh-entrypoint.sh"),
+        Path("/usr/local/share/ssh-init.sh"),
         Path("/usr/local/sbin/dutchbay-sshd-start.sh"),
         Path("/usr/local/lib/dutchbay/sshd_readiness.py"),
     ],

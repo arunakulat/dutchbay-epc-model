@@ -24,37 +24,48 @@ The environment applies the current GWTF rules and the canonical frameworks:
 
 ## Isolation and private-data controls
 
-The container is built from a base image pinned by digest and declares no
-repository-configured Dev Container Features or feature lock. The base image
-itself carries embedded Dev Container Feature metadata for `common-utils`,
-`git`, `node` and `python`; those inherited contents are transitively bound by
-the base-image digest and disclosed separately in the sandbox receipt.
+The container is built from a base image pinned by digest and declares one
+repository-configured Dev Container Feature: `sshd` 1.1.0, locked to its exact
+OCI digest. That Feature supplies the Codespaces-supported SSH entrypoint
+integration. The base image itself carries separate embedded Dev Container
+Feature metadata for `common-utils`, `git`, `node` and `python`; those inherited
+contents are transitively bound by the base-image digest and disclosed
+separately in the sandbox receipt.
 
 GitHub CLI SSH and copy require a running SSH server for a custom image. A
-checked-in Dockerfile therefore installs `openssh-client` and `openssh-server`
-directly from the pinned base image's Debian-only package source. It does
-not consult the unrelated Yarn source that broke the upstream create-time SSH
-Feature. Host private keys are removed in the same image-build layer and are
+checked-in Dockerfile therefore installs `lsof`, `openssh-client` and
+`openssh-server` directly from the pinned base image's Debian-only package
+source. All packages probed by the locked Feature are already installed before
+Feature composition, so its package guard does not invoke the unrelated Yarn
+source that broke the original create-time build. Host private keys are removed
+in the same image-build layer and are
 generated uniquely when the Codespace container is created; only public-key
 fingerprints derived from those private keys enter the receipt, and each derived
 public key must match its `.pub` sidecar. The reusable identity binds the exact
-installed OpenSSH package/architecture/status/version inventory, every package-owned
-transport path and mode, the controlled PAM and drop-in configuration, the
+installed SSH transport package/architecture/status/version inventory, every
+package-owned transport path and mode, the locked Feature entrypoint, the
+controlled PAM and drop-in configuration, the
 allowlist-validated effective SSH policy, and the host public-key fingerprints.
+The same drop-in sets the four fixed, non-secret review environment values that
+raw `gh codespace ssh` sessions require (`DUTCHBAY_VENV`,
+`DUTCHBAY_P03_SOURCE_ROOT`, `PYTHONPATH` and `PATH`); the attestor binds their
+effective `SetEnv` population, so the SSH review surface cannot silently lose or
+redirect the governed runtime.
 Package selection at initial image build remains a disclosed Debian-repository
 trust boundary; a changed identity requires recreation and a new receipt. SSH
 runs on port 2222 for the explicit `vscode` remote user, requires the
 `publickey` authentication method, denies root, every alternative authentication
 method and every forwarding class, and is not a publicly forwarded application
-port. A root container entrypoint and the post-create bootstrap both invoke the
-same root-owned, serialized start control; the post-start control invokes it
-again as an idempotent validation/restart fallback. The start control writes a
+port. The locked Feature's root entrypoint starts the daemon through the
+Codespaces-supported integration. The post-create bootstrap and post-start
+lifecycle both invoke the same repository-owned, root-reexecuted and serialized
+start control as fail-closed validation/restart paths. The start control writes a
 runtime-only marker atomically only after a bounded loop receives the expected
 `SSH-2.0-OpenSSH_` banner on `127.0.0.1:2222`. The post-create bootstrap starts
 the control before audit setup, then requires both that exact marker and the same
-listener-specific banner. A Codespaces lifecycle that bypasses or delays the
-image entrypoint therefore takes the explicit lifecycle-recovery path, while a
-real start or banner failure still fails setup closed. The Python environment is rebuilt from the
+listener-specific banner. A Codespaces lifecycle that delays the Feature
+entrypoint therefore takes the explicit lifecycle-recovery path, while a real
+start or banner failure still fails setup closed. The Python environment is rebuilt from the
 repository's exact `requirements.txt`, `constraints.txt` and
 `pyproject.toml` inputs at `/workspaces/.dutchbay-audit-review-venv`, outside the
 checkout. The retained P03 corpus is copied only to
@@ -81,7 +92,7 @@ export DUTCHBAY_1110_REVIEW_CODESPACE_NAME
 ```
 
 The wrapper deliberately omits `gh codespace create -s`: that option can request
-SSH status before a custom image entrypoint finishes. It first rejects a
+SSH status before the locked Feature lifecycle settles. It first rejects a
 same-display-name collision, creates the protected-`main` Codespace, then retries
 the exact SSH banner/marker probe for at most five minutes. It prints the unique
 Codespace name only after transport is ready, or fails with the unresolved name
@@ -186,10 +197,10 @@ environment fingerprint covers
 surface, and all site-packages content. The three Python launchers must resolve
 to `/usr/local/bin/python3.12` from the digest-pinned image; that absolute
 interpreter performs every pre-attestation check regardless of `PATH`. The
-dependency identity includes the Dockerfile, repository-owned SSH installer,
-image entrypoint, runtime host-key/start control and transport attestor.
-The receipt distinguishes an empty
-`repository_configured_devcontainer_features` list from the four inherited
+dependency identity includes the Dev Container Feature lock, Dockerfile,
+repository-owned SSH installer, runtime host-key/start control and transport
+attestor. The receipt distinguishes the one digest-resolved
+`repository_configured_devcontainer_features` entry from the four inherited
 `base_image_embedded_feature_metadata` entries. Before transfer, current-main
 inputs and the live environment must reproduce those markers. Any dependency,
 bootstrap, identity-contract, devcontainer, base-image, SSH or
