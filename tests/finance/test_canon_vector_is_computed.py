@@ -47,6 +47,9 @@ RESPONSIVE_KPIS: tuple[str, ...] = (
     "project_irr",
     "equity_irr",
     "project_npv",
+    "avg_dscr",
+    "llcr",
+    "plcr",
     "total_cfads_usd",
     "project_npv_prudential",
     "prudential_rate_used",
@@ -88,6 +91,22 @@ def _kpis(cfg: Mapping[str, Any], overrides: Mapping[str, float]) -> dict[str, A
     return dict(kpis)
 
 
+def _assert_kpis_respond(
+    base_kpis: Mapping[str, Any], shocked_kpis: Mapping[str, Any], label: str
+) -> None:
+    """Fail with an actionable list when any value KPI remains frozen."""
+    unmoved: list[str] = []
+    for key in RESPONSIVE_KPIS:
+        base, new = float(base_kpis[key]), float(shocked_kpis[key])
+        relative = abs(new - base) / max(abs(base), 1e-6)
+        if relative <= MIN_RELATIVE_MOVE:
+            unmoved.append(f"{key}: {base!r} -> {new!r} (rel {relative:.3e})")
+    assert not unmoved, (
+        f"{label} left canon KPIs unresponsive — the vector may be returned rather "
+        f"than computed: " + "; ".join(unmoved)
+    )
+
+
 @pytest.fixture(scope="module")
 def base_kpis(lendercase: dict[str, Any]) -> dict[str, Any]:
     """Return the unperturbed KPI vector from the gateway."""
@@ -124,16 +143,15 @@ def test_canon_kpis_respond_to_economic_drivers(
     the value oracle.
     """
     shocked = _kpis(lendercase, overrides)
-    unmoved: list[str] = []
-    for key in RESPONSIVE_KPIS:
-        base, new = float(base_kpis[key]), float(shocked[key])
-        relative = abs(new - base) / max(abs(base), 1e-6)
-        if relative <= MIN_RELATIVE_MOVE:
-            unmoved.append(f"{key}: {base!r} -> {new!r} (rel {relative:.3e})")
-    assert not unmoved, (
-        f"{label} left canon KPIs unresponsive — the vector may be returned rather "
-        f"than computed: " + "; ".join(unmoved)
-    )
+    _assert_kpis_respond(base_kpis, shocked, label)
+
+
+def test_responsiveness_guard_rejects_frozen_output(
+    base_kpis: dict[str, Any],
+) -> None:
+    """VERIFY-01 negative control: the guard must reject a frozen KPI vector."""
+    with pytest.raises(AssertionError, match="returned rather than computed"):
+        _assert_kpis_respond(base_kpis, dict(base_kpis), "frozen-output stub")
 
 
 @pytest.mark.parametrize(

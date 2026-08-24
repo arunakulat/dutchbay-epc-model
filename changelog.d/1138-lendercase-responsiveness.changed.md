@@ -1,0 +1,1 @@
+- Pair the lender-case financial-KPI fixture with a tariff responsiveness guard and a frozen-output negative control, so pinned values cannot pass by being returned without computation.
