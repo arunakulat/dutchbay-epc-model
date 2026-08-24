@@ -24,11 +24,37 @@ The environment applies the current GWTF rules and the canonical frameworks:
 
 ## Isolation and private-data controls
 
-The container image is pinned by digest. The official SSH daemon feature is
-pinned to version `1.1.0` and its resolved OCI manifest digest and integrity are
-locked in `.devcontainer/devcontainer-lock.json`, because the controlled
-ingress uses the Codespaces SSH and copy transports. The Python environment is
-rebuilt from the
+The container is built from a base image pinned by digest and declares no
+repository-configured Dev Container Features or feature lock. The base image
+itself carries embedded Dev Container Feature metadata for `common-utils`,
+`git`, `node` and `python`; those inherited contents are transitively bound by
+the base-image digest and disclosed separately in the sandbox receipt.
+
+GitHub CLI SSH and copy require a running SSH server for a custom image. A
+checked-in Dockerfile therefore installs `openssh-client` and `openssh-server`
+directly from the pinned base image's Debian-only package source. It does
+not consult the unrelated Yarn source that broke the upstream create-time SSH
+Feature. Host private keys are removed in the same image-build layer and are
+generated uniquely when the Codespace container is created; only public-key
+fingerprints derived from those private keys enter the receipt, and each derived
+public key must match its `.pub` sidecar. The reusable identity binds the exact
+installed OpenSSH package/architecture/status/version inventory, every package-owned
+transport path and mode, the controlled PAM and drop-in configuration, the
+allowlist-validated effective SSH policy, and the host public-key fingerprints.
+Package selection at initial image build remains a disclosed Debian-repository
+trust boundary; a changed identity requires recreation and a new receipt. SSH
+runs on port 2222 for the explicit `vscode` remote user, requires the
+`publickey` authentication method, denies root, every alternative authentication
+method and every forwarding class, and is not a publicly forwarded application
+port. A root container entrypoint generates the keys and starts the daemon while
+the creation wrapper waits outside the Codespace; the post-start control uses the
+same root-owned lock as an idempotent validation/restart fallback. The
+entrypoint writes a runtime-only pre-lifecycle marker atomically after a bounded
+loop receives the expected
+`SSH-2.0-OpenSSH_` banner on `127.0.0.1:2222`. The post-create bootstrap waits
+for both that exact marker and the same listener-specific banner; disabling,
+bypassing or merely delaying the image entrypoint therefore cannot silently pass
+setup or create a scheduling race. The Python environment is rebuilt from the
 repository's exact `requirements.txt`, `constraints.txt` and
 `pyproject.toml` inputs at `/workspaces/.dutchbay-audit-review-venv`, outside the
 checkout. The retained P03 corpus is copied only to
@@ -48,15 +74,25 @@ After this configuration is protected-merged to current `main`, create a
 creator-private Codespace attached to the public source repository:
 
 ```bash
-gh codespace create \
-  -R arunakulat/dutchbay-epc-model \
-  -b main \
-  -d "DutchBay 1110 independent review" \
-  -l SouthEastAsia \
-  --idle-timeout 30m \
-  --retention-period 72h \
-  -s
+DUTCHBAY_1110_REVIEW_CODESPACE_NAME="$(
+  scripts/create_1110_cloud_review_codespace.sh
+)" || exit 2
+export DUTCHBAY_1110_REVIEW_CODESPACE_NAME
 ```
+
+The wrapper deliberately omits `gh codespace create -s`: that option can request
+SSH status before a custom image entrypoint finishes. It first rejects a
+same-display-name collision, creates the protected-`main` Codespace, then retries
+the exact SSH banner/marker probe for at most five minutes. It prints the unique
+Codespace name only after transport is ready, or fails with the unresolved name
+so the disposable environment can be inspected or deleted. Preserve that exact
+name in `DUTCHBAY_1110_REVIEW_CODESPACE_NAME`; the later private-ingress control
+requires it, authenticates it against the exact repository and display name
+before preflight and again before private copy, and never re-resolves a mutable
+display name from a truncated list. A local create lock plus a post-create
+all-page identity check prevents two local creators from silently succeeding;
+cross-host creation remains outside that lock and therefore fails loud if the
+post-create population is not exactly the one immutable name returned here.
 
 Run the structural preflight inside the Codespace before reviewing P02:
 
@@ -141,18 +177,24 @@ traps. P03 therefore starts from the protected P02
 merge and any intervening controlled updates, never from the older
 sandbox-creation commit.
 
-The bootstrap markers bind the initial dependency inputs, configured image
-digest and installed environment-content fingerprint. The latter covers
+The bootstrap markers bind the initial dependency inputs, configured base-image
+digest, full SSH transport identity and installed environment-content
+fingerprint. The SSH identity includes the installed file surface, PAM policy,
+effective configuration and Codespace-unique host public keys. The Python
+environment fingerprint covers
 `pyvenv.cfg`, every regular file and symlink under the venv `bin/` launch
 surface, and all site-packages content. The three Python launchers must resolve
 to `/usr/local/bin/python3.12` from the digest-pinned image; that absolute
 interpreter performs every pre-attestation check regardless of `PATH`. The
-dependency identity includes the feature lock, and the receipt separately
-exposes the resolved feature lock and lockfile hash. Before transfer,
-current-main
+dependency identity includes the Dockerfile, repository-owned SSH installer,
+pre-lifecycle entrypoint, runtime host-key/start control and transport attestor.
+The receipt distinguishes an empty
+`repository_configured_devcontainer_features` list from the four inherited
+`base_image_embedded_feature_metadata` entries. Before transfer, current-main
 inputs and the live environment must reproduce those markers. Any dependency,
-bootstrap, identity-contract, devcontainer, image or environment-content drift fails
-before ingress and requires deletion/recreation of the disposable Codespace.
+bootstrap, identity-contract, devcontainer, base-image, SSH or
+environment-content drift fails before ingress and requires deletion/recreation
+of the disposable Codespace.
 
 Re-run `scripts/verify_1110_cloud_review_sandbox.sh`. It must independently hash
 all 74 retained objects before semantic review begins. Then follow issue #1162
