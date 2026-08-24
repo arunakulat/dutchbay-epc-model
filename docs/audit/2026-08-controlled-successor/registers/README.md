@@ -5,6 +5,16 @@ Registers in this directory use stable identifiers, explicit enumerations, recip
 ## Active working successors
 
 - `primary_source_register.v2.csv` and `.json`: 42 claim-level records with many-to-many finding links, hashed artefacts, source gaps, and explicit claim boundaries.
+- `primary_source_review_plan.v1.json`: deterministic, additive P03 plan for a
+  population-exact independent review of all 42 claim rows and full hash verification of
+  all 74 retained source-manifest objects. It separately maps the 12 retained-unreferenced
+  objects and two governed artifacts outside the original/converted manifest scope. Every
+  claim row remains `pending_independent_review`, every publication-rights status remains
+  `not_assessed_no_republication_authorized`, reviewer/result fields remain null, and all
+  42 rows block Board/lender release. The path-free
+  `../qa/P03_PRIMARY_SOURCE_IMPLEMENTER_SELF_CHECK_2026-08-24.json` records successful
+  same-implementer byte/structure preflight only; it records zero semantic and rights
+  reviews, cannot complete P03, and cannot authorize republication or circulation.
 - `findings_register.v2.json`: 111 findings with atomic audited-commit code anchors, typed dependencies, completed reproduction links, confidence, canon impact, owner, limitations, and additive remediation evidence. P3-MCFX-03/P2-MC-SENS-02 record PR #1030 as merged/green while retaining independent review of the governed post-merge run; P2-MC-SENS-01 records PR #1031 as merged/green while retaining independent successor semantic QA; P3-EQ-04 records PR #1032 as merged/green while retaining independent review of the manifest-bound FX disclosure. P5-HDL-003 and P5-FIN-002 now cite completed governed reproduction `P5-REPRO-A15-001`: current deterministic canon unchanged, noncanonical project-IRR scale sensitivity confirmed, independent successor review still blocking, and no date-aware `xirr` defect asserted. Six audit-control rows record corrigendum v1.0.1 implementation complete while remaining `requires_correction` behind document-QA and final-synthesis gates.
 - `findings_current_state_plan.v1.json`: immutable P02 v1 plan that binds the exact
   111-row audited register hash, current-main cutoff commit/tree, five positive
@@ -101,5 +111,10 @@ transaction evidence despite its delivered intake controls. The other 105 findin
 seven other P5 impact programmes, remaining reproductions and implementation dolphins,
 successor semantic QA, architecture examinations and synthesis regeneration remain
 open or unexamined. P02 is a candidate overlay, not a completed programme gate.
+
+P03 is likewise a candidate review surface, not a completed programme gate. Its
+implementer self-check verified all 74 retained objects and the two separately governed
+artifact routes, but only a genuinely independent reviewer may record the semantic,
+publication-rights and hash-bound P03 decision.
 
 The final synthesis may summarize the active controlled successors but must not introduce an unregistered material claim. F5-01 and F5-02 remain separate findings, specifications, changes, tests, reconciliations, commits, and pull requests.

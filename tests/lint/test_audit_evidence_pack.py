@@ -75,6 +75,10 @@ def test_controlled_audit_successor_pack_is_internally_valid() -> None:
     assert '"gate_status": "candidate_overlay_pending_independent_review"' in (
         completed.stdout
     )
+    assert '"p03_primary_sources"' in completed.stdout
+    assert '"manifest_objects_verified": 74' in completed.stdout
+    assert '"semantic_reviews_completed": 0' in completed.stdout
+    assert '"publication_rights_reviews_completed": 0' in completed.stdout
 
 
 def test_architecture_examination_plan_is_exactly_pending_and_hold_blocking() -> None:
@@ -437,6 +441,51 @@ def test_p01_self_check_cannot_launder_independence_or_stale_code(
 
     with pytest.raises(validator.ValidationError, match=expected):
         validator._validate_p01_implementer_self_check()
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        ("independence", "authority boundary drift"),
+        ("completion", "authority boundary drift"),
+        ("recorded_root", "source identity drift"),
+        ("payload_bytes", "retained population drift"),
+        ("semantic_review", "review boundary drift"),
+        ("snapshot", "tested-snapshot drift"),
+    ],
+)
+def test_p03_self_check_cannot_launder_review_release_or_stale_code(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+    expected: str,
+) -> None:
+    """The P03 implementer receipt remains useful but non-independent evidence."""
+    validator = _load_validator()
+    source = validator.PACK_ROOT / validator.P03_IMPLEMENTER_SELF_CHECK
+    pack_root = tmp_path / "pack"
+    destination = pack_root / validator.P03_IMPLEMENTER_SELF_CHECK
+    destination.parent.mkdir(parents=True)
+    payload = json.loads(source.read_text(encoding="utf-8"))
+
+    if mutation == "independence":
+        payload["independence_satisfied"] = True
+    elif mutation == "completion":
+        payload["completion_authorized"] = True
+    elif mutation == "recorded_root":
+        payload["source_root_recorded"] = True
+    elif mutation == "payload_bytes":
+        payload["source_payload_bytes_verified"] += 1
+    elif mutation == "semantic_review":
+        payload["claim_records_semantically_reviewed"] = 1
+    else:
+        snapshot_path = next(iter(payload["tested_snapshot"]))
+        payload["tested_snapshot"][snapshot_path] = "0" * 64
+    destination.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(validator, "PACK_ROOT", pack_root)
+
+    with pytest.raises(validator.ValidationError, match=expected):
+        validator._validate_p03_primary_source_control()
 
 
 def test_pack_loader_rejects_duplicate_json_keys(
