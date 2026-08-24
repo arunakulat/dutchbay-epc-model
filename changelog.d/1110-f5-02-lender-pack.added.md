@@ -1,0 +1,1 @@
+- Add a lender-fillable F5-02 transaction-evidence YAML, protected internal decision template, fail-closed private-return validator, and HOLD-preserving #1110 QA, reconstruction, independent-review, and controlled re-ingress checklist.
