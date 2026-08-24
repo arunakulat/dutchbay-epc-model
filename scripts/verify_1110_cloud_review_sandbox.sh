@@ -40,7 +40,7 @@ fail() {
   "sandbox SSH transport identity marker is unavailable or unsafe"
 /usr/bin/sudo --non-interactive /usr/sbin/sshd -t
 "$CONTAINER_PYTHON" -S /usr/local/lib/dutchbay/sshd_readiness.py \
-  5 /run/dutchbay-sshd-pre-lifecycle.ready \
+  5 /run/dutchbay-sshd-runtime.ready \
   || fail "sandbox SSH transport listener is not ready"
 sshd_identity_json=$(bash .devcontainer/attest_audit_review_sshd.sh)
 sshd_identity_digest=$(

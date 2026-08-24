@@ -7,7 +7,7 @@ set -euo pipefail
 
 readonly REPOSITORY="arunakulat/dutchbay-epc-model"
 readonly DISPLAY_NAME="DutchBay 1110 independent review"
-readonly READY_COMMAND="/usr/local/bin/python3.12 -S /usr/local/lib/dutchbay/sshd_readiness.py 5 /run/dutchbay-sshd-pre-lifecycle.ready"
+readonly READY_COMMAND="/usr/local/bin/python3.12 -S /usr/local/lib/dutchbay/sshd_readiness.py 5 /run/dutchbay-sshd-runtime.ready"
 readonly POLL_SECONDS=5
 readonly MAX_TRANSPORT_TIMEOUT_SECONDS=300
 readonly TRANSPORT_TIMEOUT_SECONDS="${DUTCHBAY_CODESPACE_TRANSPORT_TIMEOUT_SECONDS:-300}"

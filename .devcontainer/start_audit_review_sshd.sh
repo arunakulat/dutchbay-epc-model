@@ -5,6 +5,9 @@
 
 set -euo pipefail
 
+readonly SSHD_READY_MARKER="/run/dutchbay-sshd-runtime.ready"
+readonly SSHD_READY_VALUE="sshd_ready_before_audit_bootstrap"
+
 mode=${1:-}
 case "$mode" in
   --prepare-only|--start) ;;
@@ -27,4 +30,10 @@ exec 9>/run/dutchbay-sshd-start.lock
 
 if [ "$mode" = "--start" ]; then
   /etc/init.d/ssh start
+  /usr/local/bin/python3.12 -S \
+    /usr/local/lib/dutchbay/sshd_readiness.py 15
+  marker_tmp=$(/usr/bin/mktemp "$SSHD_READY_MARKER.XXXXXX")
+  printf '%s\n' "$SSHD_READY_VALUE" > "$marker_tmp"
+  chmod 0444 "$marker_tmp"
+  mv -- "$marker_tmp" "$SSHD_READY_MARKER"
 fi

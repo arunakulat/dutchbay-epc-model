@@ -12,7 +12,7 @@ readonly PRIVATE_ROOT="/workspaces/.dutchbay-private"
 readonly P03_ROOT="$PRIVATE_ROOT/p03"
 readonly SOURCE_ROOT="$P03_ROOT/sources"
 readonly TRANSPORT_ROOT="$PRIVATE_ROOT/transport-smoke"
-readonly PRE_LIFECYCLE_SSHD_MARKER="/run/dutchbay-sshd-pre-lifecycle.ready"
+readonly SSHD_RUNTIME_MARKER="/run/dutchbay-sshd-runtime.ready"
 readonly MARKER="$VENV_ROOT/.dutchbay-inputs.sha256"
 readonly IMAGE_MARKER="$VENV_ROOT/.dutchbay-image.sha256"
 readonly PACKAGE_MARKER="$VENV_ROOT/.dutchbay-environment-content.sha256"
@@ -35,9 +35,10 @@ package_content_fingerprint() {
 [ "${CODESPACES:-}" = "true" ] || fail \
   "the independent audit sandbox must be built inside a GitHub Codespace"
 [ -n "${CODESPACE_NAME:-}" ] || fail "CODESPACE_NAME is missing"
+/usr/local/sbin/dutchbay-sshd-start.sh --start
 "$CONTAINER_PYTHON" -S /usr/local/lib/dutchbay/sshd_readiness.py \
-  30 "$PRE_LIFECYCLE_SSHD_MARKER" \
-  || fail "SSH transport did not become ready before the post-create lifecycle"
+  30 "$SSHD_RUNTIME_MARKER" \
+  || fail "SSH transport did not become ready before the audit bootstrap"
 [ -f "requirements.txt" ] && [ -f "pyproject.toml" ] || fail \
   "run the bootstrap from the DutchBay repository root"
 [ -x "$CONTAINER_PYTHON" ] && [ ! -L "$CONTAINER_PYTHON" ] || fail \

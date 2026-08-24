@@ -332,15 +332,16 @@ def test_repository_owned_ssh_transport_is_narrow_and_base_pinned() -> None:
     assert "/usr/bin/ssh-keygen -A" in start
     assert "/usr/bin/flock --exclusive 9" in start
     assert "exec 9>/run/dutchbay-sshd-start.lock" in start
+    assert start.index("/etc/init.d/ssh start") < start.index(
+        "/usr/local/lib/dutchbay/sshd_readiness.py 15"
+    )
+    assert start.index("/usr/local/lib/dutchbay/sshd_readiness.py 15") < (
+        start.index("marker_tmp=$(")
+    )
+    assert 'SSHD_READY_VALUE="sshd_ready_before_audit_bootstrap"' in start
+    assert "/run/dutchbay-sshd-runtime.ready" in start
     entrypoint = SSHD_ENTRYPOINT.read_text(encoding="utf-8")
     assert "/usr/local/sbin/dutchbay-sshd-start.sh --start" in entrypoint
-    assert entrypoint.index("/usr/local/sbin/dutchbay-sshd-start.sh --start") < (
-        entrypoint.index("/usr/local/lib/dutchbay/sshd_readiness.py 15")
-    )
-    assert entrypoint.index("/usr/local/lib/dutchbay/sshd_readiness.py 15") < (
-        entrypoint.index("sshd_started_before_post_create")
-    )
-    assert "sshd_started_before_post_create" in entrypoint
     assert 'exec "$@"' in entrypoint
     attestor = SSHD_ATTESTOR.read_text(encoding="utf-8")
     assert "build_sshd_transport_identity" in attestor
@@ -357,8 +358,11 @@ def test_ci_builds_and_boots_exact_audit_review_image() -> None:
     assert "file: .devcontainer/Dockerfile" in workflow
     assert "load: true" in workflow
     assert "docker run -d --name dutchbay-audit-review-ci" in workflow
+    assert "--name dutchbay-audit-review-lifecycle-ci" in workflow
+    assert "--entrypoint /usr/bin/sleep" in workflow
+    assert "/usr/local/sbin/dutchbay-sshd-start.sh --start" in workflow
     assert "/usr/local/lib/dutchbay/sshd_readiness.py" in workflow
-    assert "/run/dutchbay-sshd-pre-lifecycle.ready" in workflow
+    assert "/run/dutchbay-sshd-runtime.ready" in workflow
     assert "docker logs dutchbay-audit-review-ci" in workflow
     assert "if: failure()" in workflow
 
@@ -384,10 +388,13 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert ".devcontainer/bootstrap_audit_review.sh" in identity
     assert 'realpath -e "$SOURCE_ROOT"' in combined
     assert "private P03 source root must not be a symlink" in combined
-    assert "SSH transport did not become ready before the post-create lifecycle" in (
+    assert "SSH transport did not become ready before the audit bootstrap" in (
         bootstrap
     )
-    assert "/run/dutchbay-sshd-pre-lifecycle.ready" in bootstrap
+    assert bootstrap.index(
+        "/usr/local/sbin/dutchbay-sshd-start.sh --start"
+    ) < bootstrap.index("/usr/local/lib/dutchbay/sshd_readiness.py")
+    assert "/run/dutchbay-sshd-runtime.ready" in bootstrap
     assert "/usr/local/lib/dutchbay/sshd_readiness.py" in bootstrap
     assert "/usr/local/lib/dutchbay/sshd_readiness.py" in verify
     assert '"completion_authorized": False' in identity

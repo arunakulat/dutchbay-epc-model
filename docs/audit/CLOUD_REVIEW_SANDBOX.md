@@ -46,15 +46,15 @@ trust boundary; a changed identity requires recreation and a new receipt. SSH
 runs on port 2222 for the explicit `vscode` remote user, requires the
 `publickey` authentication method, denies root, every alternative authentication
 method and every forwarding class, and is not a publicly forwarded application
-port. A root container entrypoint generates the keys and starts the daemon while
-the creation wrapper waits outside the Codespace; the post-start control uses the
-same root-owned lock as an idempotent validation/restart fallback. The
-entrypoint writes a runtime-only pre-lifecycle marker atomically after a bounded
-loop receives the expected
-`SSH-2.0-OpenSSH_` banner on `127.0.0.1:2222`. The post-create bootstrap waits
-for both that exact marker and the same listener-specific banner; disabling,
-bypassing or merely delaying the image entrypoint therefore cannot silently pass
-setup or create a scheduling race. The Python environment is rebuilt from the
+port. A root container entrypoint and the post-create bootstrap both invoke the
+same root-owned, serialized start control; the post-start control invokes it
+again as an idempotent validation/restart fallback. The start control writes a
+runtime-only marker atomically only after a bounded loop receives the expected
+`SSH-2.0-OpenSSH_` banner on `127.0.0.1:2222`. The post-create bootstrap starts
+the control before audit setup, then requires both that exact marker and the same
+listener-specific banner. A Codespaces lifecycle that bypasses or delays the
+image entrypoint therefore takes the explicit lifecycle-recovery path, while a
+real start or banner failure still fails setup closed. The Python environment is rebuilt from the
 repository's exact `requirements.txt`, `constraints.txt` and
 `pyproject.toml` inputs at `/workspaces/.dutchbay-audit-review-venv`, outside the
 checkout. The retained P03 corpus is copied only to
@@ -187,7 +187,7 @@ surface, and all site-packages content. The three Python launchers must resolve
 to `/usr/local/bin/python3.12` from the digest-pinned image; that absolute
 interpreter performs every pre-attestation check regardless of `PATH`. The
 dependency identity includes the Dockerfile, repository-owned SSH installer,
-pre-lifecycle entrypoint, runtime host-key/start control and transport attestor.
+image entrypoint, runtime host-key/start control and transport attestor.
 The receipt distinguishes an empty
 `repository_configured_devcontainer_features` list from the four inherited
 `base_image_embedded_feature_metadata` entries. Before transfer, current-main

@@ -33,33 +33,53 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Boot image and require SSH transport
+      - name: Boot image and require both SSH startup paths
         run: |
           set -euo pipefail
 
+          wait_for_transport() {
+            local container_name=$1
+            local attempt
+            for attempt in $(seq 1 30); do
+              if docker exec "$container_name" \
+                /usr/local/bin/python3.12 -S \
+                /usr/local/lib/dutchbay/sshd_readiness.py \
+                1 /run/dutchbay-sshd-runtime.ready; then
+                printf 'Audit-review SSH transport ready in %s on attempt %s.\n' \
+                  "$container_name" "$attempt"
+                return 0
+              fi
+              sleep 1
+            done
+            return 1
+          }
+
           docker run -d --name dutchbay-audit-review-ci \
             dutchbay-audit-review:ci
+          wait_for_transport dutchbay-audit-review-ci || {
+            printf '%s\n' '::error::Image-entrypoint SSH transport did not become ready.'
+            exit 1
+          }
 
-          for attempt in $(seq 1 30); do
-            if docker exec dutchbay-audit-review-ci \
-              /usr/local/bin/python3.12 -S \
-              /usr/local/lib/dutchbay/sshd_readiness.py \
-              1 /run/dutchbay-sshd-pre-lifecycle.ready; then
-              printf 'Audit-review SSH transport ready on attempt %s.\n' "$attempt"
-              exit 0
-            fi
-            sleep 1
-          done
-
-          printf '%s\n' '::error::Audit-review SSH transport did not become ready.'
-          exit 1
+          docker run -d --name dutchbay-audit-review-lifecycle-ci \
+            --entrypoint /usr/bin/sleep dutchbay-audit-review:ci infinity
+          docker exec dutchbay-audit-review-lifecycle-ci \
+            /usr/local/sbin/dutchbay-sshd-start.sh --start
+          wait_for_transport dutchbay-audit-review-lifecycle-ci || {
+            printf '%s\n' '::error::Lifecycle-recovery SSH transport did not become ready.'
+            exit 1
+          }
 
       - name: Show startup output on failure
         if: failure()
-        run: docker logs dutchbay-audit-review-ci || true
+        run: |
+          docker logs dutchbay-audit-review-ci || true
+          docker logs dutchbay-audit-review-lifecycle-ci || true
 
       - name: Remove smoke container
         if: always()
         run: |
           docker stop dutchbay-audit-review-ci || true
           docker rm dutchbay-audit-review-ci || true
+          docker stop dutchbay-audit-review-lifecycle-ci || true
+          docker rm dutchbay-audit-review-lifecycle-ci || true
