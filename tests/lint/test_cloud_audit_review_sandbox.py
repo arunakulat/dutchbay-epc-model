@@ -349,7 +349,6 @@ def test_repository_owned_ssh_transport_is_narrow_and_base_pinned() -> None:
     assert dockerfile.count("FROM ") == 1
     assert "install_audit_review_sshd.sh" in dockerfile
     assert "sshd_readiness.py" in dockerfile
-    assert "install -d -m 0755 -o vscode -g vscode /workspaces" in dockerfile
     assert "ENTRYPOINT" not in dockerfile
     assert "CMD" not in dockerfile
     assert "Dir::Etc::sourcelist=$DEBIAN_SOURCES" in installer
@@ -522,6 +521,12 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert PRIVATE_SOURCE_ROOT in combined
     assert SANDBOX_VENV in combined
     assert "CODESPACES" in combined
+    assert '"$(id -un)" = "vscode"' in bootstrap
+    assert "-d -m 0755 -o vscode -g vscode /workspaces" in bootstrap
+    assert '"vscode:vscode:755"' in bootstrap
+    assert bootstrap.index("-d -m 0755 -o vscode -g vscode /workspaces") < (
+        bootstrap.index('install -d -m 0700 \\\n  "$PRIVATE_ROOT"')
+    )
     assert ".devcontainer/devcontainer.json" in identity
     assert ".devcontainer/devcontainer-lock.json" in identity
     assert ".devcontainer/Dockerfile" in identity

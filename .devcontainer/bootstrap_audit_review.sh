@@ -58,6 +58,12 @@ package_content_fingerprint() {
   "unexpected P03 source-root target"
 [ "$TRANSPORT_ROOT" = "/workspaces/.dutchbay-private/transport-smoke" ] || fail \
   "unexpected transport-smoke target"
+[ "$(id -un)" = "vscode" ] || fail \
+  "the audit bootstrap must run as the non-root vscode user"
+/usr/bin/sudo --non-interactive /usr/bin/install \
+  -d -m 0755 -o vscode -g vscode /workspaces
+[ "$(/usr/bin/stat -c '%U:%G:%a' /workspaces)" = "vscode:vscode:755" ] || fail \
+  "the fixed workspace parent ownership differs"
 [ ! -L "$PRIVATE_ROOT" ] || fail "private-source root must not be a symlink"
 [ ! -L "$P03_ROOT" ] || fail "P03 private root must not be a symlink"
 [ ! -L "$SOURCE_ROOT" ] || fail "P03 source root must not be a symlink"
