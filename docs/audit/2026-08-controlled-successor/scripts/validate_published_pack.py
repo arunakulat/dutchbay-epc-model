@@ -7,11 +7,22 @@ import hashlib
 import json
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 PACK_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = PACK_ROOT / "PUBLICATION_MANIFEST.sha256"
 AUDITED_COMMIT = "7e99f34d75b9c3d44a5c5b260cedbe403d2f79e8"
+IMMUTABLE_CONTROL_RECORD = Path(
+    "06_CURRENT_PROGRAMMING_REVIEW_AND_TODO_v3_2026-08-19.md"
+)
+IMMUTABLE_CONTROL_RECORD_SHA256 = (
+    "7e22468672ff52cd70b669fb85a2dd16087477785f432b8b14ff74940877e799"
+)
+RULESET_COUNT_ERRATUM = Path("03_AUDIT_ERRATA_2026-08-24.md")
+ARCHITECTURE_REGISTER = Path("registers/architecture_pointer_dispositions.json")
+STABLE_RULESET_INGRESS_INSTRUCTION = (
+    "Re-ingress every active rule from `go_with_the_flow_rules_v3_0_clean.csv`"
+)
 
 
 class ValidationError(RuntimeError):
@@ -36,7 +47,7 @@ def _load(relative: str) -> dict[str, Any]:
     _require(path.is_file(), f"missing JSON: {relative}")
     value = json.loads(path.read_text(encoding="utf-8"))
     _require(isinstance(value, dict), f"JSON root must be an object: {relative}")
-    return value
+    return cast(dict[str, Any], value)
 
 
 def _validate_manifest() -> int:
@@ -72,9 +83,53 @@ def _validate_manifest() -> int:
     return len(seen)
 
 
+def _validate_ruleset_count_erratum() -> None:
+    """Require an additive erratum while preserving the dated source records."""
+    control_record = PACK_ROOT / IMMUTABLE_CONTROL_RECORD
+    _require(control_record.is_file(), "immutable programming record is missing")
+    _require(
+        _digest(control_record) == IMMUTABLE_CONTROL_RECORD_SHA256,
+        "immutable programming record digest drift",
+    )
+
+    erratum_path = PACK_ROOT / RULESET_COUNT_ERRATUM
+    _require(erratum_path.is_file(), "GWTF rule-count erratum is missing")
+    erratum = erratum_path.read_text(encoding="utf-8")
+    _require(
+        IMMUTABLE_CONTROL_RECORD.as_posix() in erratum,
+        "GWTF erratum omits the immutable programming record",
+    )
+    _require(
+        ARCHITECTURE_REGISTER.as_posix() in erratum,
+        "GWTF erratum omits the architecture register",
+    )
+    _require(
+        STABLE_RULESET_INGRESS_INSTRUCTION in erratum,
+        "GWTF erratum omits the source-derived re-ingress instruction",
+    )
+
+    architecture = _load(ARCHITECTURE_REGISTER.as_posix())
+    rs_f3 = [
+        record
+        for record in architecture.get("records", [])
+        if record.get("pointer_id") == "RS-F3"
+    ]
+    _require(len(rs_f3) == 1, "architecture register must contain exactly one RS-F3")
+    _require(
+        rs_f3[0].get("area")
+        == "**63 of 66 GWTF rules have unpinned enforcement text**",
+        "RS-F3 historical pointer text drift",
+    )
+    _require(
+        rs_f3[0].get("disposition") == "not_examined",
+        "RS-F3 must remain not_examined until separately adjudicated",
+    )
+
+
 def main() -> None:
     """Validate manifest integrity and controlled register invariants."""
     manifest_entries = _validate_manifest()
+    _validate_ruleset_count_erratum()
     findings = _load("registers/findings_register.v2.json")
     sources = _load("registers/primary_source_register.v2.json")
     architecture = _load("registers/architecture_pointer_dispositions.json")
@@ -123,6 +178,7 @@ def main() -> None:
         "manifest_entries": manifest_entries,
         "findings": 111,
         "primary_sources": 42,
+        "ruleset_count_erratum": "PASS",
         "architecture_pointers": 72,
         "reproductions": dict(sorted(reproduction_counts.items())),
     }
