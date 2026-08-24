@@ -1,0 +1,65 @@
+name: audit-cloud-sandbox
+
+on:
+  pull_request:
+    paths:
+      - .devcontainer/**
+      - scripts/create_1110_cloud_review_codespace.sh
+      - scripts/upload_1110_p03_sources_to_codespace.sh
+      - scripts/verify_1110_cloud_review_sandbox.sh
+      - tests/lint/test_cloud_audit_review_sandbox.py
+      - .github/workflows/audit-cloud-sandbox.yml
+  workflow_dispatch:
+
+jobs:
+  build-and-smoke:
+    name: build and boot audit review image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build exact audit-review image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: .devcontainer/Dockerfile
+          push: false
+          load: true
+          tags: dutchbay-audit-review:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Boot image and require SSH transport
+        run: |
+          set -euo pipefail
+
+          docker run -d --name dutchbay-audit-review-ci \
+            dutchbay-audit-review:ci
+
+          for attempt in $(seq 1 30); do
+            if docker exec dutchbay-audit-review-ci \
+              /usr/local/bin/python3.12 -S \
+              /usr/local/lib/dutchbay/sshd_readiness.py \
+              1 /run/dutchbay-sshd-pre-lifecycle.ready; then
+              printf 'Audit-review SSH transport ready on attempt %s.\n' "$attempt"
+              exit 0
+            fi
+            sleep 1
+          done
+
+          printf '%s\n' '::error::Audit-review SSH transport did not become ready.'
+          exit 1
+
+      - name: Show startup output on failure
+        if: failure()
+        run: docker logs dutchbay-audit-review-ci || true
+
+      - name: Remove smoke container
+        if: always()
+        run: |
+          docker stop dutchbay-audit-review-ci || true
+          docker rm dutchbay-audit-review-ci || true

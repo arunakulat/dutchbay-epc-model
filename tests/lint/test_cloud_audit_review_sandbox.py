@@ -32,6 +32,7 @@ VERIFY = REPO_ROOT / "scripts" / "verify_1110_cloud_review_sandbox.sh"
 CREATE_CODESPACE = REPO_ROOT / "scripts" / "create_1110_cloud_review_codespace.sh"
 UPLOAD = REPO_ROOT / "scripts" / "upload_1110_p03_sources_to_codespace.sh"
 DOC = REPO_ROOT / "docs" / "audit" / "CLOUD_REVIEW_SANDBOX.md"
+IMAGE_SMOKE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "audit-cloud-sandbox.yml"
 
 EXPECTED_IMAGE = (
     "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm@"
@@ -347,6 +348,19 @@ def test_repository_owned_ssh_transport_is_narrow_and_base_pinned() -> None:
     assert '[ "$derived" = "$sidecar" ]' in attestor
     assert '[ "${derived%% *}" = "$expected_algorithm" ]' in attestor
     assert SSHD_INSTALLER.stat().st_mode & 0o111
+
+
+def test_ci_builds_and_boots_exact_audit_review_image() -> None:
+    """The merge gate must exercise the real entrypoint and SSH banner."""
+    workflow = IMAGE_SMOKE_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "file: .devcontainer/Dockerfile" in workflow
+    assert "load: true" in workflow
+    assert "docker run -d --name dutchbay-audit-review-ci" in workflow
+    assert "/usr/local/lib/dutchbay/sshd_readiness.py" in workflow
+    assert "/run/dutchbay-sshd-pre-lifecycle.ready" in workflow
+    assert "docker logs dutchbay-audit-review-ci" in workflow
+    assert "if: failure()" in workflow
 
 
 def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
