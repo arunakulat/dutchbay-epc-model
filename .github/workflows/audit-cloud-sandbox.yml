@@ -111,6 +111,7 @@ jobs:
               "schema": "dutchbay.audit_review_sandbox_bootstrap.v3",
               "status": "PASS",
               "environment": "github_actions_devcontainer_emulation",
+              "codespace_name": "dutchbay-ci-audit-review",
               "network_boundary": "github_actions_hosted_runner_outbound_egress_available",
               "git_commit": sys.argv[2],
               "completion_authorized": False,

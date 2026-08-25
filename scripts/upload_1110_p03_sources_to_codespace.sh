@@ -158,9 +158,19 @@ readonly expected_codespace_name=$1
 readonly repo_root="/workspaces/dutchbay-epc-model"
 readonly source_root="/workspaces/.dutchbay-private/p03/sources"
 readonly smoke_root="/workspaces/.dutchbay-private/transport-smoke"
+readonly bootstrap_receipt="/workspaces/.dutchbay-private/bootstrap-receipt.json"
 cd "$repo_root"
 test "$CODESPACES" = true
-test "$CODESPACE_NAME" = "$expected_codespace_name"
+/usr/local/bin/python3.12 -S - \
+  "$bootstrap_receipt" "$expected_codespace_name" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    receipt = json.load(stream)
+if receipt.get("codespace_name") != sys.argv[2]:
+    raise SystemExit("bootstrap Codespace identity differs")
+PY
 checkout_branch=$(git branch --show-current) || exit 2
 case "$checkout_branch" in
   main|"") ;;
@@ -211,9 +221,19 @@ gh codespace ssh -c "$codespace_name" \
 set -euo pipefail
 readonly expected_codespace_name=$1
 readonly repo_root="/workspaces/dutchbay-epc-model"
+readonly bootstrap_receipt="/workspaces/.dutchbay-private/bootstrap-receipt.json"
 cd "$repo_root"
 test "$CODESPACES" = true
-test "$CODESPACE_NAME" = "$expected_codespace_name"
+/usr/local/bin/python3.12 -S - \
+  "$bootstrap_receipt" "$expected_codespace_name" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    receipt = json.load(stream)
+if receipt.get("codespace_name") != sys.argv[2]:
+    raise SystemExit("bootstrap Codespace identity differs")
+PY
 export DUTCHBAY_VENV="/workspaces/.dutchbay-audit-review-venv"
 export DUTCHBAY_P03_SOURCE_ROOT="/workspaces/.dutchbay-private/p03/sources"
 export PYTHONPATH="$repo_root"

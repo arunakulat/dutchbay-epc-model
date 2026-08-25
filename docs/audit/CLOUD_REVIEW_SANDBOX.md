@@ -259,7 +259,9 @@ The in-container host field is a provenance label, not independent proof of a
 GitHub resource: the `vscode` owner can replace its own private receipt. Real
 Codespaces evidence is authoritative only through the outer governed controls,
 which authenticate with GitHub, verify exact name/repository/ref, pass that
-name into the SSH child, and require it to equal the platform `CODESPACE_NAME`.
+name into the SSH child, and require it to equal the platform `CODESPACE_NAME`
+captured in the atomic bootstrap receipt. GitHub's non-interactive SSH shell is
+not assumed to re-export that platform variable.
 The hosted oracle supplies and asserts its separate explicit Actions label.
 
 The bootstrap writes that provenance atomically to the fixed owner-only path

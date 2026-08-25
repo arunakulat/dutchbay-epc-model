@@ -327,7 +327,6 @@ readonly bootstrap_receipt="/workspaces/.dutchbay-private/bootstrap-receipt.json
 cd "$repo_root"
 test "$(id -un)" = vscode
 test "$CODESPACES" = true
-test "$CODESPACE_NAME" = "$expected_codespace_name"
 test "$DUTCHBAY_VENV" = /workspaces/.dutchbay-audit-review-venv
 test "$DUTCHBAY_P03_SOURCE_ROOT" = "$source_root"
 test "$PYTHONPATH" = "$repo_root"
@@ -351,7 +350,8 @@ test -f "$bootstrap_receipt"
 test ! -L "$bootstrap_receipt"
 test "$(realpath -e "$bootstrap_receipt")" = "$bootstrap_receipt"
 test "$(stat -c '%U:%G:%a' "$bootstrap_receipt")" = vscode:vscode:400
-/usr/local/bin/python3.12 -S - "$bootstrap_receipt" "$expected_sha" <<'PY'
+/usr/local/bin/python3.12 -S - \
+  "$bootstrap_receipt" "$expected_sha" "$expected_codespace_name" <<'PY'
 from __future__ import annotations
 
 import json
@@ -364,6 +364,7 @@ expected = {
     "schema": "dutchbay.audit_review_sandbox_bootstrap.v3",
     "status": "PASS",
     "environment": "github_codespaces",
+    "codespace_name": sys.argv[3],
     "network_boundary": "creator_private_codespace_outbound_egress_available",
     "git_commit": sys.argv[2],
     "completion_authorized": False,

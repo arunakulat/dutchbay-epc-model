@@ -103,6 +103,7 @@ EXECUTION_HOST_NETWORK_BOUNDARIES = {
 }
 HEX_64 = re.compile(r"[0-9a-f]{64}\Z")
 SSH_FINGERPRINT = re.compile(r"SHA256:[A-Za-z0-9+/]{43}\Z")
+CODESPACE_NAME = re.compile(r"[A-Za-z0-9_-]+\Z")
 P256_PRIME = 0xFFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF
 P256_B = 0x5AC635D8AA3A93E7B3EBBD55769886BC651D06B0CC53B0F63BCE3C3E27D2604B
 
@@ -854,6 +855,7 @@ def build_bootstrap_receipt(
     sshd_identity: dict[str, object],
     source_state: str,
     execution_host: str,
+    codespace_name: str,
 ) -> dict[str, object]:
     """Build the exact v3 bootstrap receipt on the release-HOLD side."""
     _validate_receipt_inputs(identity, sshd_identity)
@@ -865,10 +867,16 @@ def build_bootstrap_receipt(
         raise SandboxIdentityError(
             "bootstrap execution-host provenance differs from schema"
         ) from exc
+    if (
+        not isinstance(codespace_name, str)
+        or CODESPACE_NAME.fullmatch(codespace_name) is None
+    ):
+        raise SandboxIdentityError("bootstrap Codespace identity is malformed")
     return {
         "schema": BOOTSTRAP_RECEIPT_SCHEMA,
         "status": "PASS",
         "environment": execution_host,
+        "codespace_name": codespace_name,
         "python": "3.12",
         **identity,
         **sshd_identity,

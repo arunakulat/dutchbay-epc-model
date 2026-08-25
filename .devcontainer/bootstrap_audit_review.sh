@@ -211,6 +211,7 @@ SANDBOX_VENV_ROOT="$VENV_ROOT" \
 SANDBOX_CONTAINER_PYTHON="$CONTAINER_PYTHON" \
 SANDBOX_SSHD_IDENTITY_JSON="$sshd_identity_json" \
 SANDBOX_EXECUTION_HOST="$EXECUTION_HOST" \
+SANDBOX_CODESPACE_NAME="$CODESPACE_NAME" \
 PYTHONPATH="$PWD/.devcontainer" "$CONTAINER_PYTHON" -S - <<'PY' \
   > "$receipt_tmp"
 from __future__ import annotations
@@ -238,6 +239,7 @@ print(
             sshd_identity=sshd_identity,
             source_state=os.environ["SANDBOX_SOURCE_STATE"],
             execution_host=os.environ["SANDBOX_EXECUTION_HOST"],
+            codespace_name=os.environ["SANDBOX_CODESPACE_NAME"],
         ),
         sort_keys=True,
     )

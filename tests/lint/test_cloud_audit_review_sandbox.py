@@ -543,6 +543,7 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
     assert 'gh codespace delete -c "$codespace_name" --force' in candidate
     assert 'readonly bootstrap_receipt="/workspaces/.dutchbay-private/' in candidate
     assert '"environment": "github_codespaces"' in candidate
+    assert '"codespace_name": sys.argv[3]' in candidate
     assert '"git_commit": sys.argv[2]' in candidate
     assert 'delete_candidate_and_confirm_absent "$CANDIDATE_BRANCH"' in candidate
     assert 'creation_pending="true"' in candidate
@@ -874,7 +875,8 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert "delete and recreate it before retrying" in upload
     assert "DUTCHBAY_P03_CLOUD_INGRESS_AUTHORIZED" in upload
     assert "DUTCHBAY_1110_REVIEW_CODESPACE_NAME" in upload
-    assert 'test "$CODESPACE_NAME" = "$expected_codespace_name"' in upload
+    assert 'receipt.get("codespace_name") != sys.argv[2]' in upload
+    assert 'test "$CODESPACE_NAME" = "$expected_codespace_name"' not in upload
     assert "gh codespace list" not in upload
     assert upload.count('verify_codespace_identity "$codespace_name"') == 2
     assert '"/user/codespaces/$codespace_name"' in upload
@@ -908,6 +910,7 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert '"$CONTAINER_PYTHON" -S' in bootstrap
     assert '"$CONTAINER_PYTHON" -S' in verify
     assert 'PYTHONPATH="$PWD/.devcontainer" python3.12' not in combined
+    assert 'SANDBOX_CODESPACE_NAME="$CODESPACE_NAME"' in bootstrap
     assert "PYTHONDONTWRITEBYTECODE=1" in bootstrap
     assert "PYTHONDONTWRITEBYTECODE=1" in verify
     assert '"installed_environment_content_sha256"' in identity
@@ -1571,6 +1574,7 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
         sshd_identity=sshd_identity,
         source_state="private_root_empty",
         execution_host="github_codespaces",
+        codespace_name="dutchbay-review-test",
     )
     verification = identity.build_verification_receipt(
         identity=sandbox_identity,
@@ -1591,10 +1595,11 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
             "release_status",
         }
     )
-    assert set(bootstrap) == common_keys | {"python"}
+    assert set(bootstrap) == common_keys | {"python", "codespace_name"}
     assert bootstrap["schema"] == "dutchbay.audit_review_sandbox_bootstrap.v3"
     assert bootstrap["status"] == "PASS"
     assert bootstrap["environment"] == "github_codespaces"
+    assert bootstrap["codespace_name"] == "dutchbay-review-test"
     assert bootstrap["network_boundary"] == (
         "creator_private_codespace_outbound_egress_available"
     )
@@ -1622,6 +1627,7 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
         sshd_identity=sshd_identity,
         source_state="private_root_empty",
         execution_host="github_actions_devcontainer_emulation",
+        codespace_name="dutchbay-ci-audit-review",
     )
     assert hosted_bootstrap["environment"] == ("github_actions_devcontainer_emulation")
     assert hosted_bootstrap["network_boundary"] == (
@@ -1663,6 +1669,7 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
                 sshd_identity=sshd_identity,
                 source_state="private_root_empty",
                 execution_host="github_codespaces",
+                codespace_name="dutchbay-review-test",
             )
         except identity.SandboxIdentityError as exc:
             assert "controlled-input" in str(exc)
@@ -1715,6 +1722,7 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
                 sshd_identity=sshd_identity,
                 source_state=invalid_state,
                 execution_host="github_codespaces",
+                codespace_name="dutchbay-review-test",
             )
         except identity.SandboxIdentityError as exc:
             assert "source state" in str(exc)
@@ -1739,11 +1747,26 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
                 sshd_identity=sshd_identity,
                 source_state="private_root_empty",
                 execution_host=invalid_host,
+                codespace_name="dutchbay-review-test",
             )
         except identity.SandboxIdentityError as exc:
             assert "execution-host provenance" in str(exc)
         else:  # pragma: no cover - explicit fail branch
             raise AssertionError("invalid bootstrap execution host was accepted")
+
+    for invalid_name in (None, "", "name with spaces", "name/with/slash"):
+        try:
+            identity.build_bootstrap_receipt(
+                identity=sandbox_identity,
+                sshd_identity=sshd_identity,
+                source_state="private_root_empty",
+                execution_host="github_codespaces",
+                codespace_name=invalid_name,
+            )
+        except identity.SandboxIdentityError as exc:
+            assert "Codespace identity" in str(exc)
+        else:  # pragma: no cover - explicit fail branch
+            raise AssertionError("invalid bootstrap Codespace name was accepted")
 
 
 def test_package_content_fingerprint_detects_drift_without_importing_site(
