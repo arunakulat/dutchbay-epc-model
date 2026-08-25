@@ -116,7 +116,8 @@ attestation, exercises `gh codespace cp`, stops and resumes the Codespace,
 re-attests after the post-start marker changes, emits a `HOLD`-side receipt and
 deletes that exact no-P03 candidate. This is pre-merge infrastructure evidence
 only; it is not the protected-main environment and cannot execute or close P02
-or P03.
+or P03. Copy calls use remote expansion only for repository-owned, fixed
+absolute destination paths; no user-provided remote expression is expanded.
 
 After this configuration is protected-merged to current `main`, create a
 creator-private Codespace attached to the public source repository:

@@ -63,7 +63,7 @@ run_transport_smoke() {
   transport_probe_pending="true"
   trap cleanup_transport_probe EXIT
 
-  gh codespace cp -c "$transport_codespace_name" \
+  gh codespace cp --expand -c "$transport_codespace_name" \
     ".devcontainer/devcontainer.json" \
     "remote:$REMOTE_SMOKE_PATH"
   gh codespace ssh -c "$transport_codespace_name" "bash -se" \
@@ -178,7 +178,7 @@ REMOTE_PREFLIGHT
 run_transport_smoke "$codespace_name"
 
 verify_codespace_identity "$codespace_name"
-gh codespace cp --recursive -c "$codespace_name" \
+gh codespace cp --expand --recursive -c "$codespace_name" \
   "$resolved_source_root/original" \
   "$resolved_source_root/converted" \
   "$resolved_source_root/SOURCE_ARCHIVE_MANIFEST.v2.sha256" \

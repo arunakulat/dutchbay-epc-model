@@ -183,7 +183,7 @@ REMOTE_VERIFY
 }
 
 run_copy_smoke() {
-  gh codespace cp -c "$codespace_name" \
+  gh codespace cp --expand -c "$codespace_name" \
     ".devcontainer/devcontainer.json" \
     "remote:$REMOTE_SMOKE_PATH"
   gh codespace ssh -c "$codespace_name" "bash -se" <<'REMOTE_COPY'

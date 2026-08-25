@@ -493,7 +493,7 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
     assert 'test "$(git rev-parse HEAD)" = "$expected_sha"' in candidate
     assert 'test -z "$(git status --porcelain=v1)"' in candidate
     assert 'test -z "$(find "$source_root" -mindepth 1 -print -quit)"' in candidate
-    assert "gh codespace cp" in candidate
+    assert "gh codespace cp --expand" in candidate
     assert "gh codespace stop" in candidate
     assert '"$(codespace_identity | jq -r .state)" = "Shutdown"' in candidate
     assert 'before_marker=$(gh codespace ssh -c "$codespace_name"' in candidate
@@ -662,6 +662,9 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert 'main|"")' in upload
     assert 'test -z "$(git status --porcelain)"' in upload
     assert "REMOTE_TRANSPORT_SMOKE" in upload
+    assert upload.count("gh codespace cp --expand") == 2
+    assert "remote:$REMOTE_SMOKE_PATH" in upload
+    assert '"remote:$REMOTE_SOURCE_ROOT/"' in upload
     assert 'cmp -- "$repo_root/.devcontainer/devcontainer.json"' in upload
     assert "REMOTE_TRANSPORT_CLEANUP" in upload
     assert "trap cleanup_transport_probe EXIT" in upload
