@@ -176,6 +176,17 @@ inputs/*.zip
 # AI coding-agent scratch / journal files (e.g. Jules "Palette" persona)
 .Jules/
 
+# Claude Code agent worktrees: when a subagent runs with worktree isolation the
+# harness creates a full nested checkout here and registers it in `git worktree
+# list`. It is scaffolding, not project content, and committing it would embed a
+# second checkout inside the repository. The harness removes it when the agent's
+# lock is released. Anchored (the pattern contains a slash, so it is relative to
+# the repository root) and directory-only, so it cannot behave like the
+# unanchored `lib/` rule that silently swallowed committed files until #1040.
+# NB `.claude/hooks/` and `.claude/settings.json` stay tracked — this rule names
+# the worktrees subdirectory only, never `.claude/` as a whole.
+.claude/worktrees/
+
 # ERA5 retrieval (issue #177): NEVER commit credentials or downloaded data
 .cdsapirc
 **/cds_credentials*.yaml
