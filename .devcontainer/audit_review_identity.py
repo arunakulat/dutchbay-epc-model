@@ -337,10 +337,12 @@ def _positive_ssh_mpint(value: bytes) -> int:
 
 def _validated_ssh_public_key_blob(value: str) -> bytes:
     """Decode one allowed OpenSSH public key and validate its wire structure."""
-    parts = value.split()
-    if len(parts) != 2 or parts[0] not in EXPECTED_SSH_HOST_KEY_ALGORITHMS:
+    if "\n" in value or "\r" in value:
         raise SandboxIdentityError("SSH host public-key identity is malformed")
-    algorithm, encoded = parts
+    parts = value.split(maxsplit=2)
+    if len(parts) < 2 or parts[0] not in EXPECTED_SSH_HOST_KEY_ALGORITHMS:
+        raise SandboxIdentityError("SSH host public-key identity is malformed")
+    algorithm, encoded = parts[:2]
     try:
         key_blob = base64.b64decode(
             encoded + "=" * (-len(encoded) % 4),

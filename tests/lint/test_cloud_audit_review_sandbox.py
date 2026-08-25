@@ -911,6 +911,22 @@ def test_sshd_policy_content_and_host_identity_fail_closed(tmp_path: Path) -> No
     )
     assert equivalent == first
 
+    commented_material = list(arguments["host_public_key_material"])
+    commented_material[1] = f"{commented_material[1]} runtime-generated-host-key"
+    commented = identity.build_sshd_transport_identity(
+        **{**arguments, "host_public_key_material": commented_material}
+    )
+    assert commented == first
+
+    try:
+        identity._validated_ssh_public_key_blob(
+            f"{VALID_SSH_HOST_PUBLIC_KEYS[1]}\n{VALID_SSH_HOST_PUBLIC_KEYS[2]}"
+        )
+    except identity.SandboxIdentityError as exc:
+        assert "public-key identity" in str(exc)
+    else:  # pragma: no cover - explicit fail branch
+        raise AssertionError("multiline SSH public-key material was accepted")
+
     wrong_environment = effective.replace(
         "DUTCHBAY_VENV=/workspaces/.dutchbay-audit-review-venv",
         "DUTCHBAY_VENV=/tmp/untrusted",
