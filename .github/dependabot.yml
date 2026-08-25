@@ -57,8 +57,14 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "pandas-stubs"
         update-types: ["version-update:semver-major"]
+      # numpy is capped <2.5 by pandapower (pandapower 3.5.4 requires numpy<2.5,>=1.26), and
+      # 2.4->2.5 is a semver-MINOR bump, so a major-only rule could never catch it. #1066/#1169
+      # post-mortem: the weekly numerics group proposed numpy 2.4.6->2.5.2 -> ResolutionImpossible
+      # against pandapower. Block minors too so numpy stays within the grid stack's ceiling
+      # (2.4.x patches stay welcome). Lift only in lockstep with a pandapower release that raises
+      # it. The engine-numerics major cap is unchanged and still applies (pandas 3.0 = #593).
       - dependency-name: "numpy"
-        update-types: ["version-update:semver-major"]
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
       - dependency-name: "scipy"
         update-types: ["version-update:semver-major"]
       - dependency-name: "scipy-stubs"
@@ -108,12 +114,13 @@ updates:
       # Lift only in lockstep with a hydra-core/omegaconf upgrade (mirrors constraints.txt).
       - dependency-name: "antlr4-python3-runtime"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
-      # pandapower is EXACT-pinned to ==3.3.0 in the pyproject [grid] extra: pandapower
-      # 3.3.3 and 3.4.0 both declare scipy<1.17, conflicting with the canon-critical
-      # scipy==1.17.1 (a [grid] install would ResolutionImpossible or force-downgrade
-      # scipy, our core numerics). #978 bumped it to 3.5.4 blindly. Freeze ALL bot bumps
-      # (even patches cap scipy); lift only in a deliberate grid dolphin that first
-      # verifies the target pandapower's scipy requirement.
+      # pandapower is range-pinned ">=3.5,<4" in the pyproject [grid] extra and the lock
+      # carries 3.5.4 against scipy 1.18.1 (the Python 3.12 rebaseline; this rationale
+      # previously described the retired 3.3.0 / scipy 1.17.1 state and was corrected in
+      # #1174). Every pandapower release constrains BOTH scipy and numpy -- 3.5.4 declares
+      # numpy<2.5, which is what blocks #1169 -- so even a patch bump can move a ceiling
+      # the core numerics sit under. Freeze ALL bot bumps; lift only in a deliberate grid
+      # dolphin that first verifies the target release's scipy AND numpy requirements.
       - dependency-name: "pandapower"
         update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
       # pyarrow is capped <25 by streamlit (streamlit 1.60.0 requires pyarrow<25,>=7.0), so a
@@ -132,6 +139,38 @@ updates:
       # majors so it stays within optype's ceiling (patches within 20251206 stay welcome). Lift
       # only in lockstep with an optype[numpy] release that raises the ceiling.
       - dependency-name: "numpy-typing-compat"
+        update-types: ["version-update:semver-major"]
+      # magika is capped ~=0.6.1 by markitdown -- EVERY published markitdown release, 0.1.2
+      # through the current latest 0.1.7, declares it -- so magika 1.x cannot enter the lock at
+      # any markitdown version. #1064/#1167: the weekly ingestion group proposed magika
+      # 0.6.3->1.0.3 alongside markitdown 0.1.7, a group internally contradictory at pip install
+      # (markitdown 0.1.7 requires magika~=0.6.1). "~=0.6.1" admits only 0.6.x, so a 0.7 MINOR
+      # breaches it too; block majors and minors (0.6.x patches stay welcome). Lift only with a
+      # markitdown release that raises the cap.
+      - dependency-name: "magika"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # openmdao is EXACT-series pinned ==3.39.* by topfarm (topfarm 2.6.2), so ANY move off
+      # 3.39.x is unresolvable while topfarm is in the lock -- and topfarm cannot simply be
+      # dropped: requirements.txt records that without it all 9 tests/wind/test_layout_optimizer.py
+      # cases SKIP on every CI run. #1067: the weekly micrositing group proposed 3.39.0->3.45.0,
+      # a semver-MINOR bump, so a major-only rule would not have caught it. Block majors and
+      # minors (3.39.x patches stay welcome). Lift only in lockstep with a topfarm release that
+      # accepts a newer openmdao.
+      - dependency-name: "openmdao"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # websockets is capped <17 by streamlit (streamlit 1.62.0 requires websockets<17,>=12.0.0).
+      # #1068/#1166: the api-runtime group proposed 16.1.1->17.0.1 -> ResolutionImpossible. That
+      # is a semver-MAJOR bump and 16.x minors remain inside the ceiling, so majors alone are
+      # blocked here. Lift only with a streamlit release that raises it.
+      - dependency-name: "websockets"
+        update-types: ["version-update:semver-major"]
+      # starlette is capped <2 by streamlit (streamlit 1.62.0 requires starlette<2,>=0.46.0).
+      # No post-mortem yet -- recorded pre-emptively because the same group already produced an
+      # unmergeable starlette bump once (#1068, blocked by the THEN-current streamlit 1.61.1
+      # cap of <1.4.0, which #1128 lifted by moving streamlit and starlette in lockstep). 1.x
+      # minors stay inside the ceiling, so only majors are blocked. Lift only with a streamlit
+      # release that raises it.
+      - dependency-name: "starlette"
         update-types: ["version-update:semver-major"]
 
   # GitHub Actions: keeps the workflow action pins current (the repo had checkout@v3/@v4,
