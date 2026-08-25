@@ -195,7 +195,7 @@ odfpy==1.4.1
 omegaconf==2.3.1
 onnxruntime==1.29.0
 opendssdirect.py==0.9.4
-openmdao==3.39.0
+openmdao==3.45.0
 openpyxl==3.1.5
 optiwindnet==0.3.0
 optype==0.18.0
