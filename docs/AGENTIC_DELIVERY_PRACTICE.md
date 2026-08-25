@@ -331,10 +331,17 @@ which fail a pull request whose receipts table is absent, empty, or carries a si
 Result cell. A declared `not run — <reason>` **passes**: declaring a gap is the whole
 point, and a reviewer can then judge it. Bot authors are exempt.
 
-**Known enforcement limit, stated rather than papered over:** promoting this job to a
-*required* status check is a repository-ruleset setting and remains the owner's decision.
-Until that is done the rule is enforced by a visible failing check plus review, not by a
-merge block — which is weaker than `TEST-05` and should not be described otherwise.
+**Enforcement:** this job is a *required* status check on `main` (enabled per #1139), so
+the rule fails closed at the merge boundary as `TEST-05` does — a pull request without
+receipts cannot merge. The ruleset matches the job's rendered name, pinned by
+`tests/lint/test_pr_receipts_policy.py` so a rename cannot silently stop it reporting.
+
+**The limit that remains, stated rather than papered over:** the gate checks that a Result
+cell *says* something, not that it is *true*. It cannot re-run a command or confirm a
+figure, so a table of plausible but stale numbers passes — #1128 did exactly that, carrying
+two figures measured before its own merge. Green therefore means "nothing was left silent",
+never "the checks were verified", and the reviewer still reads the table. Making it required
+raises the floor; it does not raise the ceiling.
 
 The rule also codifies the negative-control practice used when building §5.2: a guard
 nobody has watched fail is itself an unverified claim.
