@@ -111,7 +111,7 @@ git-lfs==1.6
 h11==0.16.0
 h2==4.4.1
 h5netcdf==1.8.1
-hiredis==3.4.0
+hiredis==3.4.1
 hpack==4.2.0
 httpcore==1.0.9
 httptools==0.8.0
