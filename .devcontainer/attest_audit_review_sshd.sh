@@ -18,7 +18,8 @@ fail() {
   "controlled SSH policy is unavailable or unsafe"
 
 effective_config=$(
-  /usr/bin/sudo --non-interactive /usr/sbin/sshd -T
+  /usr/bin/sudo --non-interactive /usr/sbin/sshd -T \
+    -C 'user=vscode,host=localhost,addr=127.0.0.1,laddr=127.0.0.1,lport=2222'
 )
 package_inventory=$(
   /usr/bin/dpkg-query --show \

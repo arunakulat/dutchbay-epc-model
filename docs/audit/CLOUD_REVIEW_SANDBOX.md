@@ -46,11 +46,26 @@ installed SSH transport package/architecture/status/version inventory, every
 package-owned transport path and mode, the locked Feature entrypoint, the
 controlled PAM and drop-in configuration, the
 allowlist-validated effective SSH policy, and the host public-key fingerprints.
+The attestor resolves that policy for the actual `vscode`/loopback connection,
+including applicable `Match` rules, and requires the intended
+`authorized_keys` file while rejecting key commands, trusted user CAs,
+principal commands, user environment files, forced commands and chroots.
 The same drop-in sets the four fixed, non-secret review environment values that
 raw `gh codespace ssh` sessions require (`DUTCHBAY_VENV`,
 `DUTCHBAY_P03_SOURCE_ROOT`, `PYTHONPATH` and `PATH`); the attestor binds their
 effective `SetEnv` population, so the SSH review surface cannot silently lose or
 redirect the governed runtime.
+
+The GitHub control-plane identity check plus the authenticated Codespaces
+tunnel is the operational endpoint-identity boundary for `gh codespace ssh` and
+`gh codespace cp`. GitHub CLI connects the inner SSH client to a loopback tunnel
+and disables client-side host authentication for that loopback endpoint. The
+recorded host-key fingerprints therefore prove the daemon key-pair population
+and provide post-connection continuity/attestation; they are not described as
+a second client-side endpoint pin. The Actions lifecycle additionally exercises
+a direct loopback SSH connection with a strict, ephemeral `known_hosts` pin to
+falsify daemon authentication and key-pair defects, but that local-Docker check
+does not substitute for the authenticated real-Codespaces candidate proof.
 Package selection at initial image build remains a disclosed Debian-repository
 trust boundary; a changed identity requires recreation and a new receipt. SSH
 runs on port 2222 for the explicit `vscode` remote user, requires the
@@ -83,6 +98,25 @@ review-result dolphins have merged and their exact-head evidence has been
 retained in the controlled pack.
 
 ## Creation and structural preflight
+
+Before merge, prove the exact topic-branch SHA in a disposable, P03-empty real
+Codespace:
+
+```bash
+scripts/prove_1110_candidate_codespace.sh \
+  codex/1110-cloud-sandbox-runtime-fix \
+  "$(git rev-parse HEAD)"
+```
+
+The candidate control accepts only a valid `codex/*` branch and full expected
+SHA that exactly matches the remote branch. It creates a uniquely named
+24-hour Codespace, verifies API repository/ref identity, exact remote HEAD, a
+clean checkout, fixed environment, empty private-source root and SSH
+attestation, exercises `gh codespace cp`, stops and resumes the Codespace,
+re-attests after the post-start marker changes, emits a `HOLD`-side receipt and
+deletes that exact no-P03 candidate. This is pre-merge infrastructure evidence
+only; it is not the protected-main environment and cannot execute or close P02
+or P03.
 
 After this configuration is protected-merged to current `main`, create a
 creator-private Codespace attached to the public source repository:
@@ -209,6 +243,12 @@ inputs and the live environment must reproduce those markers. Any dependency,
 bootstrap, identity-contract, devcontainer, base-image, SSH or
 environment-content drift fails before ingress and requires deletion/recreation
 of the disposable Codespace.
+
+Receipts distinguish `github_codespaces` from
+`github_actions_devcontainer_emulation` and bind the corresponding network
+boundary. The Actions emulation must never claim the creator-private
+Codespaces boundary; neither execution-host mode authorizes completion or
+changes the release status from `HOLD`.
 
 Re-run `scripts/verify_1110_cloud_review_sandbox.sh`. It must independently hash
 all 74 retained objects before semantic review begins. Then follow issue #1162

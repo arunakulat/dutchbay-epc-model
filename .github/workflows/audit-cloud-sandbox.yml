@@ -75,7 +75,10 @@ jobs:
             --workspace-folder "$GITHUB_WORKSPACE" \
             --frozen-lockfile \
             --remote-env CODESPACES=true \
-            --remote-env CODESPACE_NAME=dutchbay-ci-audit-review
+            --remote-env CODESPACE_NAME=dutchbay-ci-audit-review \
+            --remote-env DUTCHBAY_SANDBOX_EXECUTION_HOST=github_actions_devcontainer_emulation
+
+          test -z "$(git status --porcelain=v1)"
 
           mapfile -t container_ids < <(
             docker ps -aq \
@@ -87,6 +90,10 @@ jobs:
             exit 1
           fi
           printf 'container_id=%s\n' "${container_ids[0]}" >> "$GITHUB_OUTPUT"
+          docker exec --user vscode \
+            --workdir /workspaces/dutchbay-epc-model \
+            "${container_ids[0]}" \
+            bash -ceu 'test -z "$(git status --porcelain=v1)"'
 
       - name: Require authenticated SSH, attestation, and restart recovery
         if: steps.scope.outputs.relevant == 'true'
@@ -151,13 +158,19 @@ jobs:
             --expect-existing-container \
             --frozen-lockfile \
             --remote-env CODESPACES=true \
-            --remote-env CODESPACE_NAME=dutchbay-ci-audit-review
+            --remote-env CODESPACE_NAME=dutchbay-ci-audit-review \
+            --remote-env DUTCHBAY_SANDBOX_EXECUTION_HOST=github_actions_devcontainer_emulation
+          test -z "$(git status --porcelain=v1)"
           mapfile -t resumed_ids < <(
             docker ps -aq \
               --filter "label=devcontainer.local_folder=$GITHUB_WORKSPACE"
           )
           test "${#resumed_ids[@]}" -eq 1
           test "${resumed_ids[0]}" = "$CONTAINER_ID"
+          docker exec --user vscode \
+            --workdir /workspaces/dutchbay-epc-model \
+            "$CONTAINER_ID" \
+            bash -ceu 'test -z "$(git status --porcelain=v1)"'
 
           after_resume_marker=$(docker exec "$CONTAINER_ID" \
             stat -c '%i:%y' /run/dutchbay-sshd-runtime.ready)

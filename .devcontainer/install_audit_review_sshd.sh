@@ -50,6 +50,15 @@ GSSAPIAuthentication no
 KerberosAuthentication no
 PubkeyAuthentication yes
 AuthenticationMethods publickey
+AuthorizedKeysFile .ssh/authorized_keys
+AuthorizedKeysCommand none
+AuthorizedPrincipalsFile none
+AuthorizedPrincipalsCommand none
+TrustedUserCAKeys none
+StrictModes yes
+PermitUserEnvironment no
+ForceCommand none
+ChrootDirectory none
 PermitEmptyPasswords no
 GatewayPorts no
 UsePAM yes

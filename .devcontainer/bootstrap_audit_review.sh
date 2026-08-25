@@ -20,6 +20,7 @@ readonly SSHD_MARKER="$VENV_ROOT/.dutchbay-sshd-identity.sha256"
 readonly REQUIRED_PIP_VERSION="26.2.1"
 readonly REQUIRED_SETUPTOOLS_VERSION="84.0.0"
 readonly REQUIRED_WHEEL_VERSION="0.48.0"
+readonly EXECUTION_HOST="${DUTCHBAY_SANDBOX_EXECUTION_HOST:-}"
 
 fail() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -35,6 +36,10 @@ package_content_fingerprint() {
 [ "${CODESPACES:-}" = "true" ] || fail \
   "the independent audit sandbox must be built inside a GitHub Codespace"
 [ -n "${CODESPACE_NAME:-}" ] || fail "CODESPACE_NAME is missing"
+case "$EXECUTION_HOST" in
+  github_codespaces|github_actions_devcontainer_emulation) ;;
+  *) fail "sandbox execution-host provenance is missing or unsupported" ;;
+esac
 /usr/local/sbin/dutchbay-sshd-start.sh --start
 "$CONTAINER_PYTHON" -S /usr/local/lib/dutchbay/sshd_readiness.py \
   30 "$SSHD_RUNTIME_MARKER" \
@@ -171,6 +176,7 @@ SANDBOX_PACKAGE_MARKER="$PACKAGE_MARKER" \
 SANDBOX_VENV_ROOT="$VENV_ROOT" \
 SANDBOX_CONTAINER_PYTHON="$CONTAINER_PYTHON" \
 SANDBOX_SSHD_IDENTITY_JSON="$sshd_identity_json" \
+SANDBOX_EXECUTION_HOST="$EXECUTION_HOST" \
 PYTHONPATH="$PWD/.devcontainer" "$CONTAINER_PYTHON" -S - <<'PY'
 from __future__ import annotations
 
@@ -196,6 +202,7 @@ print(
             identity=identity,
             sshd_identity=sshd_identity,
             source_state=os.environ["SANDBOX_SOURCE_STATE"],
+            execution_host=os.environ["SANDBOX_EXECUTION_HOST"],
         ),
         sort_keys=True,
     )

@@ -14,6 +14,7 @@
   "postCreateCommand": "bash .devcontainer/bootstrap_audit_review.sh",
   "postStartCommand": "bash .devcontainer/start_audit_review_sshd.sh --start",
   "remoteEnv": {
+    "DUTCHBAY_SANDBOX_EXECUTION_HOST": "github_codespaces",
     "DUTCHBAY_VENV": "/workspaces/.dutchbay-audit-review-venv",
     "DUTCHBAY_P03_SOURCE_ROOT": "/workspaces/.dutchbay-private/p03/sources",
     "PATH": "/workspaces/.dutchbay-audit-review-venv/bin:${containerEnv:PATH}",

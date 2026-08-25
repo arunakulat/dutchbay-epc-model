@@ -29,6 +29,7 @@ BOOTSTRAP = REPO_ROOT / ".devcontainer" / "bootstrap_audit_review.sh"
 IDENTITY = REPO_ROOT / ".devcontainer" / "audit_review_identity.py"
 VERIFY = REPO_ROOT / "scripts" / "verify_1110_cloud_review_sandbox.sh"
 CREATE_CODESPACE = REPO_ROOT / "scripts" / "create_1110_cloud_review_codespace.sh"
+CANDIDATE_CODESPACE = REPO_ROOT / "scripts" / "prove_1110_candidate_codespace.sh"
 UPLOAD = REPO_ROOT / "scripts" / "upload_1110_p03_sources_to_codespace.sh"
 DOC = REPO_ROOT / "docs" / "audit" / "CLOUD_REVIEW_SANDBOX.md"
 IMAGE_SMOKE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "audit-cloud-sandbox.yml"
@@ -46,7 +47,15 @@ REQUIRED_SSHD_EFFECTIVE_POLICY = {
     "allowstreamlocalforwarding": "no",
     "allowtcpforwarding": "no",
     "authenticationmethods": "publickey",
+    "authorizedkeyscommand": "none",
+    "authorizedkeyscommanduser": "none",
+    "authorizedkeysfile": ".ssh/authorized_keys",
+    "authorizedprincipalscommand": "none",
+    "authorizedprincipalscommanduser": "none",
+    "authorizedprincipalsfile": "none",
+    "chrootdirectory": "none",
     "disableforwarding": "yes",
+    "forcecommand": "none",
     "gatewayports": "no",
     "gssapiauthentication": "no",
     "hostbasedauthentication": "no",
@@ -58,6 +67,9 @@ REQUIRED_SSHD_EFFECTIVE_POLICY = {
     "permittunnel": "no",
     "port": "2222",
     "pubkeyauthentication": "yes",
+    "permituserenvironment": "no",
+    "strictmodes": "yes",
+    "trustedusercakeys": "none",
     "usepam": "yes",
     "x11forwarding": "no",
 }
@@ -83,7 +95,13 @@ REQUIRED_SSHD_INSTALLER_DIRECTIVES = {
     "AllowStreamLocalForwarding no",
     "AllowTcpForwarding no",
     "AuthenticationMethods publickey",
+    "AuthorizedKeysCommand none",
+    "AuthorizedKeysFile .ssh/authorized_keys",
+    "AuthorizedPrincipalsCommand none",
+    "AuthorizedPrincipalsFile none",
+    "ChrootDirectory none",
     "DisableForwarding yes",
+    "ForceCommand none",
     "GatewayPorts no",
     "GSSAPIAuthentication no",
     "HostbasedAuthentication no",
@@ -93,7 +111,10 @@ REQUIRED_SSHD_INSTALLER_DIRECTIVES = {
     "PermitEmptyPasswords no",
     "PermitRootLogin no",
     "PermitTunnel no",
+    "PermitUserEnvironment no",
     "PubkeyAuthentication yes",
+    "StrictModes yes",
+    "TrustedUserCAKeys none",
     "UsePAM yes",
     "X11Forwarding no",
     REQUIRED_SSHD_SETENV_DIRECTIVE,
@@ -128,6 +149,9 @@ INDEPENDENT_DEPENDENCY_INPUT_RELATIVES = (
     "requirements.txt",
     "pyproject.toml",
     "constraints.txt",
+    "check_venv.sh",
+    "dutchbay_bootstrap_rules.py",
+    "go_with_the_flow_rules_v3_0_clean.csv",
     ".devcontainer/devcontainer.json",
     ".devcontainer/devcontainer-lock.json",
     ".devcontainer/Dockerfile",
@@ -138,6 +162,7 @@ INDEPENDENT_DEPENDENCY_INPUT_RELATIVES = (
     ".devcontainer/bootstrap_audit_review.sh",
     ".devcontainer/audit_review_identity.py",
     "scripts/create_1110_cloud_review_codespace.sh",
+    "scripts/prove_1110_candidate_codespace.sh",
 )
 INDEPENDENT_CONTROLLED_INPUT_RELATIVES = (
     "docs/audit/2026-08-controlled-successor/PUBLICATION_MANIFEST.sha256",
@@ -158,6 +183,7 @@ INDEPENDENT_CONTROLLED_INPUT_RELATIVES = (
     "scripts/upload_1110_p03_sources_to_codespace.sh",
     "scripts/verify_1110_cloud_review_sandbox.sh",
     "scripts/create_1110_cloud_review_codespace.sh",
+    "scripts/prove_1110_candidate_codespace.sh",
     ".devcontainer/devcontainer.json",
     ".devcontainer/devcontainer-lock.json",
     ".devcontainer/Dockerfile",
@@ -330,6 +356,7 @@ def test_devcontainer_is_digest_pinned_private_and_portless() -> None:
         "bash .devcontainer/start_audit_review_sshd.sh --start"
     )
     assert payload["remoteEnv"] == {
+        "DUTCHBAY_SANDBOX_EXECUTION_HOST": "github_codespaces",
         "DUTCHBAY_VENV": SANDBOX_VENV,
         "DUTCHBAY_P03_SOURCE_ROOT": PRIVATE_SOURCE_ROOT,
         "PATH": f"{SANDBOX_VENV}/bin:${{containerEnv:PATH}}",
@@ -380,6 +407,10 @@ def test_repository_owned_ssh_transport_is_narrow_and_base_pinned() -> None:
     assert "/run/dutchbay-sshd-runtime.ready" in start
     attestor = SSHD_ATTESTOR.read_text(encoding="utf-8")
     assert "build_sshd_transport_identity" in attestor
+    assert "/usr/sbin/sshd -T" in attestor
+    assert (
+        "-C 'user=vscode,host=localhost,addr=127.0.0.1,laddr=127.0.0.1,lport=2222'"
+    ) in attestor
     assert 'Path("/usr/local/share/ssh-init.sh")' in attestor
     assert '/usr/bin/ssh-keygen -y -f "$key"' in attestor
     assert '[ "${derived%% *}" = "$expected_algorithm" ]' in attestor
@@ -417,6 +448,14 @@ def test_ci_builds_and_boots_exact_audit_review_image() -> None:
     assert "--frozen-lockfile" in workflow
     assert "--remote-env CODESPACES=true" in workflow
     assert "--remote-env CODESPACE_NAME=dutchbay-ci-audit-review" in workflow
+    assert (
+        workflow.count(
+            "--remote-env DUTCHBAY_SANDBOX_EXECUTION_HOST="
+            "github_actions_devcontainer_emulation"
+        )
+        == 2
+    )
+    assert workflow.count('test -z "$(git status --porcelain=v1)"') == 4
     assert "label=devcontainer.local_folder=$GITHUB_WORKSPACE" in workflow
     assert "docker exec --user vscode" in workflow
     assert "--workdir /workspaces/dutchbay-epc-model" in workflow
@@ -442,6 +481,53 @@ def test_ci_builds_and_boots_exact_audit_review_image() -> None:
     assert 'docker logs "$CONTAINER_ID"' in workflow
     assert "if: failure()" in workflow
     assert PATH_CLASSIFIER.stat().st_mode & 0o111
+
+
+def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> None:
+    """The pre-merge proof must remain separate from protected-main review."""
+    candidate = CANDIDATE_CODESPACE.read_text(encoding="utf-8")
+
+    assert '[[ "$CANDIDATE_BRANCH" =~ ^codex/' in candidate
+    assert '[[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]' in candidate
+    assert 'git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH"' in candidate
+    assert 'test "$(git rev-parse HEAD)" = "$expected_sha"' in candidate
+    assert 'test -z "$(git status --porcelain=v1)"' in candidate
+    assert 'test -z "$(find "$source_root" -mindepth 1 -print -quit)"' in candidate
+    assert "gh codespace cp" in candidate
+    assert "gh codespace stop" in candidate
+    assert '"$(codespace_identity | jq -r .state)" = "Shutdown"' in candidate
+    assert 'before_marker=$(gh codespace ssh -c "$codespace_name"' in candidate
+    assert 'after_marker=$(gh codespace ssh -c "$codespace_name"' in candidate
+    assert candidate.count("verify_remote_candidate") == 3
+    assert "bash .devcontainer/attest_audit_review_sshd.sh" in candidate
+    assert "--retention-period 24h" in candidate
+    assert 'gh codespace delete -c "$codespace_name" --force' in candidate
+    assert 'release_status: "HOLD"' in candidate
+    assert "DUTCHBAY_P03_CLOUD_INGRESS_AUTHORIZED" not in candidate
+    assert CANDIDATE_CODESPACE.stat().st_mode & 0o111
+
+
+def test_candidate_codespace_control_rejects_non_allowlisted_identity() -> None:
+    """Invalid candidate identity must fail before any GitHub mutation."""
+    invalid_branch = subprocess.run(
+        (str(CANDIDATE_CODESPACE), "main", "a" * 40),
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert invalid_branch.returncode == 2
+    assert "allowlisted codex/* branch" in invalid_branch.stderr
+
+    invalid_sha = subprocess.run(
+        (str(CANDIDATE_CODESPACE), "codex/probe", "abc"),
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert invalid_sha.returncode == 2
+    assert "full SHA-1" in invalid_sha.stderr
 
 
 def test_cloud_sandbox_path_classifier_fails_closed(tmp_path: Path) -> None:
@@ -498,9 +584,22 @@ def test_cloud_sandbox_path_classifier_fails_closed(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert result.stdout.strip() == "true"
 
+    dependency_base = deletion
+    for index, relative in enumerate(INDEPENDENT_DEPENDENCY_INPUT_RELATIVES):
+        dependency_path = tmp_path / relative
+        dependency_path.parent.mkdir(parents=True, exist_ok=True)
+        dependency_path.write_text(f"dependency-{index}\n", encoding="utf-8")
+        git("add", relative)
+        git("commit", "-qm", f"dependency {index}")
+        dependency_head = git("rev-parse", "HEAD")
+        result = classify(dependency_base, dependency_head)
+        assert result.returncode == 0
+        assert result.stdout.strip() == "true", relative
+        dependency_base = dependency_head
+
     git("commit", "--allow-empty", "-qm", "empty")
     empty = git("rev-parse", "HEAD")
-    result = classify(deletion, empty)
+    result = classify(dependency_base, empty)
     assert result.returncode == 0
     assert result.stdout.strip() == "true"
 
@@ -517,7 +616,10 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     verify = VERIFY.read_text(encoding="utf-8")
     upload = UPLOAD.read_text(encoding="utf-8")
     create_codespace = CREATE_CODESPACE.read_text(encoding="utf-8")
-    combined = bootstrap + identity + verify + upload + create_codespace
+    candidate_codespace = CANDIDATE_CODESPACE.read_text(encoding="utf-8")
+    combined = (
+        bootstrap + identity + verify + upload + create_codespace + candidate_codespace
+    )
 
     assert PRIVATE_SOURCE_ROOT in combined
     assert SANDBOX_VENV in combined
@@ -941,6 +1043,43 @@ def test_sshd_policy_content_and_host_identity_fail_closed(tmp_path: Path) -> No
     else:  # pragma: no cover - explicit fail branch
         raise AssertionError("redirected SSH session environment was accepted")
 
+    unsafe_effective_values = {
+        "authorizedkeyscommand none": "authorizedkeyscommand /tmp/accept-any-key",
+        "authorizedkeyscommanduser none": "authorizedkeyscommanduser root",
+        "authorizedkeysfile .ssh/authorized_keys": "authorizedkeysfile /tmp/keys",
+        "authorizedprincipalscommand none": (
+            "authorizedprincipalscommand /tmp/accept-principal"
+        ),
+        "authorizedprincipalscommanduser none": (
+            "authorizedprincipalscommanduser root"
+        ),
+        "authorizedprincipalsfile none": "authorizedprincipalsfile /tmp/principals",
+        "chrootdirectory none": "chrootdirectory /tmp/untrusted",
+        "forcecommand none": "forcecommand /tmp/untrusted-command",
+        "permituserenvironment no": "permituserenvironment yes",
+        "strictmodes yes": "strictmodes no",
+        "trustedusercakeys none": "trustedusercakeys /tmp/untrusted-ca.pub",
+    }
+    for safe_value, unsafe_value in unsafe_effective_values.items():
+        try:
+            identity.validate_sshd_effective_config(
+                effective.replace(safe_value, unsafe_value)
+            )
+        except identity.SandboxIdentityError as exc:
+            assert "effective SSH policy" in str(exc)
+        else:  # pragma: no cover - explicit fail branch
+            raise AssertionError(f"unsafe SSH policy was accepted: {unsafe_value}")
+
+    resolved_match_override = effective.replace(
+        "passwordauthentication no", "passwordauthentication yes"
+    )
+    try:
+        identity.validate_sshd_effective_config(resolved_match_override)
+    except identity.SandboxIdentityError as exc:
+        assert "effective SSH policy" in str(exc)
+    else:  # pragma: no cover - explicit fail branch
+        raise AssertionError("resolved Match User override was accepted")
+
     executable.write_bytes(b"binary-v2")
     second = identity.build_sshd_transport_identity(**arguments)
     assert (
@@ -1145,11 +1284,13 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
         identity=sandbox_identity,
         sshd_identity=sshd_identity,
         source_state="private_root_empty",
+        execution_host="github_codespaces",
     )
     verification = identity.build_verification_receipt(
         identity=sandbox_identity,
         sshd_identity=sshd_identity,
         source_state="private_root_empty_p03_not_executed",
+        execution_host="github_codespaces",
     )
     common_keys = (
         set(sandbox_identity)
@@ -1167,6 +1308,10 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
     assert set(bootstrap) == common_keys | {"python"}
     assert bootstrap["schema"] == "dutchbay.audit_review_sandbox_bootstrap.v3"
     assert bootstrap["status"] == "PASS"
+    assert bootstrap["environment"] == "github_codespaces"
+    assert bootstrap["network_boundary"] == (
+        "creator_private_codespace_outbound_egress_available"
+    )
     assert bootstrap["completion_authorized"] is False
     assert bootstrap["release_status"] == "HOLD"
     assert set(verification) == common_keys | {
@@ -1176,11 +1321,26 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
     }
     assert verification["schema"] == "dutchbay.audit_review_sandbox_receipt.v3"
     assert verification["status"] == "PASS"
+    assert verification["environment"] == "github_codespaces"
+    assert verification["network_boundary"] == (
+        "creator_private_codespace_outbound_egress_available"
+    )
     assert verification["sshd_process"] == "running"
     assert verification["p02_structural_controls"] == "passed"
     assert verification["semantic_review_completed"] is False
     assert verification["completion_authorized"] is False
     assert verification["release_status"] == "HOLD"
+
+    hosted_bootstrap = identity.build_bootstrap_receipt(
+        identity=sandbox_identity,
+        sshd_identity=sshd_identity,
+        source_state="private_root_empty",
+        execution_host="github_actions_devcontainer_emulation",
+    )
+    assert hosted_bootstrap["environment"] == ("github_actions_devcontainer_emulation")
+    assert hosted_bootstrap["network_boundary"] == (
+        "github_actions_hosted_runner_outbound_egress_available"
+    )
 
     missing = dict(sshd_identity)
     missing.pop("sshd_transport_content_sha256")
@@ -1191,6 +1351,7 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
                 identity=sandbox_identity,
                 sshd_identity=invalid,
                 source_state="private_root_empty_p03_not_executed",
+                execution_host="github_codespaces",
             )
         except identity.SandboxIdentityError as exc:
             assert "receipt fields" in str(exc)
@@ -1215,6 +1376,7 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
                 identity=invalid_identity,
                 sshd_identity=sshd_identity,
                 source_state="private_root_empty",
+                execution_host="github_codespaces",
             )
         except identity.SandboxIdentityError as exc:
             assert "controlled-input" in str(exc)
@@ -1239,6 +1401,7 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
                 identity=sandbox_identity,
                 sshd_identity=invalid_sshd,
                 source_state="private_root_empty_p03_not_executed",
+                execution_host="github_codespaces",
             )
         except identity.SandboxIdentityError as exc:
             assert expected_error in str(exc)
@@ -1252,6 +1415,7 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
             identity=sandbox_identity,
             sshd_identity=stale_self_digest,
             source_state="private_root_empty_p03_not_executed",
+            execution_host="github_codespaces",
         )
     except identity.SandboxIdentityError as exc:
         assert "self-digest" in str(exc)
@@ -1264,6 +1428,7 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
                 identity=sandbox_identity,
                 sshd_identity=sshd_identity,
                 source_state=invalid_state,
+                execution_host="github_codespaces",
             )
         except identity.SandboxIdentityError as exc:
             assert "source state" in str(exc)
@@ -1274,11 +1439,25 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
                 identity=sandbox_identity,
                 sshd_identity=sshd_identity,
                 source_state=invalid_state,
+                execution_host="github_codespaces",
             )
         except identity.SandboxIdentityError as exc:
             assert "source state" in str(exc)
         else:  # pragma: no cover - explicit fail branch
             raise AssertionError("invalid verification source state was accepted")
+
+    for invalid_host in (None, "", "ambiguous_host"):
+        try:
+            identity.build_bootstrap_receipt(
+                identity=sandbox_identity,
+                sshd_identity=sshd_identity,
+                source_state="private_root_empty",
+                execution_host=invalid_host,
+            )
+        except identity.SandboxIdentityError as exc:
+            assert "execution-host provenance" in str(exc)
+        else:  # pragma: no cover - explicit fail branch
+            raise AssertionError("invalid bootstrap execution host was accepted")
 
 
 def test_package_content_fingerprint_detects_drift_without_importing_site(

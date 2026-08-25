@@ -125,6 +125,7 @@ print(
             identity=identity,
             sshd_identity=sshd_identity,
             source_state=os.environ["SANDBOX_SOURCE_STATE"],
+            execution_host="github_codespaces",
         ),
         sort_keys=True,
     )

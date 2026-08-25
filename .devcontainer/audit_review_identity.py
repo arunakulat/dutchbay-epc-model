@@ -38,7 +38,15 @@ EXPECTED_SSHD_EFFECTIVE_VALUES = {
     "allowstreamlocalforwarding": "no",
     "allowtcpforwarding": "no",
     "authenticationmethods": "publickey",
+    "authorizedkeyscommand": "none",
+    "authorizedkeyscommanduser": "none",
+    "authorizedkeysfile": ".ssh/authorized_keys",
+    "authorizedprincipalscommand": "none",
+    "authorizedprincipalscommanduser": "none",
+    "authorizedprincipalsfile": "none",
+    "chrootdirectory": "none",
     "disableforwarding": "yes",
+    "forcecommand": "none",
     "gatewayports": "no",
     "gssapiauthentication": "no",
     "hostbasedauthentication": "no",
@@ -50,6 +58,9 @@ EXPECTED_SSHD_EFFECTIVE_VALUES = {
     "permittunnel": "no",
     "port": "2222",
     "pubkeyauthentication": "yes",
+    "permituserenvironment": "no",
+    "strictmodes": "yes",
+    "trustedusercakeys": "none",
     "usepam": "yes",
     "x11forwarding": "no",
 }
@@ -83,6 +94,12 @@ VERIFICATION_SOURCE_STATES = {
     "private_root_empty_p03_not_executed",
     "private_root_populated_p03_structural_verification_passed",
 }
+EXECUTION_HOST_NETWORK_BOUNDARIES = {
+    "github_codespaces": "creator_private_codespace_outbound_egress_available",
+    "github_actions_devcontainer_emulation": (
+        "github_actions_hosted_runner_outbound_egress_available"
+    ),
+}
 HEX_64 = re.compile(r"[0-9a-f]{64}\Z")
 SSH_FINGERPRINT = re.compile(r"SHA256:[A-Za-z0-9+/]{43}\Z")
 P256_PRIME = 0xFFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF
@@ -92,6 +109,9 @@ DEPENDENCY_INPUT_RELATIVES = (
     "requirements.txt",
     "pyproject.toml",
     "constraints.txt",
+    "check_venv.sh",
+    "dutchbay_bootstrap_rules.py",
+    "go_with_the_flow_rules_v3_0_clean.csv",
     ".devcontainer/devcontainer.json",
     ".devcontainer/devcontainer-lock.json",
     ".devcontainer/Dockerfile",
@@ -102,6 +122,7 @@ DEPENDENCY_INPUT_RELATIVES = (
     ".devcontainer/bootstrap_audit_review.sh",
     ".devcontainer/audit_review_identity.py",
     "scripts/create_1110_cloud_review_codespace.sh",
+    "scripts/prove_1110_candidate_codespace.sh",
 )
 
 CONTROLLED_INPUT_RELATIVES = (
@@ -123,6 +144,7 @@ CONTROLLED_INPUT_RELATIVES = (
     "scripts/upload_1110_p03_sources_to_codespace.sh",
     "scripts/verify_1110_cloud_review_sandbox.sh",
     "scripts/create_1110_cloud_review_codespace.sh",
+    "scripts/prove_1110_candidate_codespace.sh",
     ".devcontainer/devcontainer.json",
     ".devcontainer/devcontainer-lock.json",
     ".devcontainer/Dockerfile",
@@ -760,20 +782,27 @@ def build_bootstrap_receipt(
     identity: dict[str, object],
     sshd_identity: dict[str, object],
     source_state: str,
+    execution_host: str,
 ) -> dict[str, object]:
     """Build the exact v3 bootstrap receipt on the release-HOLD side."""
     _validate_receipt_inputs(identity, sshd_identity)
     if source_state not in BOOTSTRAP_SOURCE_STATES:
         raise SandboxIdentityError("bootstrap P03 source state differs from schema")
+    try:
+        network_boundary = EXECUTION_HOST_NETWORK_BOUNDARIES[execution_host]
+    except KeyError as exc:
+        raise SandboxIdentityError(
+            "bootstrap execution-host provenance differs from schema"
+        ) from exc
     return {
         "schema": BOOTSTRAP_RECEIPT_SCHEMA,
         "status": "PASS",
-        "environment": "github_codespaces",
+        "environment": execution_host,
         "python": "3.12",
         **identity,
         **sshd_identity,
         "p03_source_state": source_state,
-        "network_boundary": "creator_private_codespace_outbound_egress_available",
+        "network_boundary": network_boundary,
         "completion_authorized": False,
         "release_status": "HOLD",
     }
@@ -784,21 +813,28 @@ def build_verification_receipt(
     identity: dict[str, object],
     sshd_identity: dict[str, object],
     source_state: str,
+    execution_host: str,
 ) -> dict[str, object]:
     """Build the exact v3 structural-verification receipt without semantic closure."""
     _validate_receipt_inputs(identity, sshd_identity)
     if source_state not in VERIFICATION_SOURCE_STATES:
         raise SandboxIdentityError("verification P03 source state differs from schema")
+    try:
+        network_boundary = EXECUTION_HOST_NETWORK_BOUNDARIES[execution_host]
+    except KeyError as exc:
+        raise SandboxIdentityError(
+            "verification execution-host provenance differs from schema"
+        ) from exc
     return {
         "schema": VERIFICATION_RECEIPT_SCHEMA,
         "status": "PASS",
-        "environment": "github_codespaces",
+        "environment": execution_host,
         **identity,
         **sshd_identity,
         "sshd_process": "running",
         "p02_structural_controls": "passed",
         "p03_source_state": source_state,
-        "network_boundary": "creator_private_codespace_outbound_egress_available",
+        "network_boundary": network_boundary,
         "semantic_review_completed": False,
         "completion_authorized": False,
         "release_status": "HOLD",
