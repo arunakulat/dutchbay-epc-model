@@ -93,7 +93,6 @@ REQUIRED_SSHD_INSTALLER_DIRECTIVES = {
     "PermitEmptyPasswords no",
     "PermitRootLogin no",
     "PermitTunnel no",
-    "Port 2222",
     "PubkeyAuthentication yes",
     "UsePAM yes",
     "X11Forwarding no",
@@ -356,6 +355,8 @@ def test_repository_owned_ssh_transport_is_narrow_and_base_pinned() -> None:
     assert "lsof openssh-client openssh-server" in installer
     for directive in REQUIRED_SSHD_INSTALLER_DIRECTIVES:
         assert directive in installer
+    assert "\nPort 2222\n" not in installer
+    assert "official sshd Feature owns the single Port 2222 directive" in installer
     assert "yarn" not in installer.lower()
     assert installer.index("/usr/sbin/sshd -t") < installer.index(
         "-name 'ssh_host_*_key*' -delete"

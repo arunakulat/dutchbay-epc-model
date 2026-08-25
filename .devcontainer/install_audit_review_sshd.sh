@@ -42,7 +42,6 @@ sed -i \
   /etc/pam.d/sshd
 
 cat > "$SSHD_DROP_IN" <<'EOF'
-Port 2222
 PermitRootLogin no
 PasswordAuthentication no
 KbdInteractiveAuthentication no
@@ -64,6 +63,10 @@ AllowGroups ssh
 SetEnv DUTCHBAY_VENV=/workspaces/.dutchbay-audit-review-venv DUTCHBAY_P03_SOURCE_ROOT=/workspaces/.dutchbay-private/p03/sources PYTHONPATH=/workspaces/dutchbay-epc-model PATH=/workspaces/.dutchbay-audit-review-venv/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin
 EOF
 chmod 0644 "$SSHD_DROP_IN"
+
+# The digest-locked official sshd Feature owns the single Port 2222 directive
+# in the main configuration after this image layer. Repeating it here would
+# create two effective listeners and must be rejected by the identity control.
 
 ssh-keygen -A
 /usr/sbin/sshd -t
