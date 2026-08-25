@@ -607,6 +607,54 @@ def test_candidate_codespace_control_rejects_non_allowlisted_identity() -> None:
     assert "full SHA-1" in invalid_sha.stderr
 
 
+def test_candidate_watchdog_reaps_signal_resistant_group_on_interrupt(
+    tmp_path: Path,
+) -> None:
+    """SIGINT must reap the detached lifecycle child before shell cleanup."""
+    candidate = CANDIDATE_CODESPACE.read_text(encoding="utf-8")
+    start = candidate.index('"$GOVERNED_PYTHON" -S -c \'\n') + len(
+        '"$GOVERNED_PYTHON" -S -c \'\n'
+    )
+    end = candidate.index('\n\' "$timeout_seconds" "$@"', start)
+    watchdog = candidate[start:end]
+    child_pid_file = tmp_path / "child.pid"
+    child_script = (
+        f'trap "" TERM; (trap "" TERM; sleep 30) & echo $! > {child_pid_file!s}; wait'
+    )
+    process = subprocess.Popen(
+        (
+            sys.executable,
+            "-S",
+            "-c",
+            watchdog,
+            "30",
+            "/bin/bash",
+            "-c",
+            child_script,
+        ),
+        start_new_session=True,
+    )
+    for _ in range(100):
+        if child_pid_file.exists():
+            break
+        time.sleep(0.02)
+    assert child_pid_file.exists()
+    child_pid = int(child_pid_file.read_text(encoding="ascii"))
+    os.kill(process.pid, signal.SIGINT)
+    assert process.wait(timeout=5) == 130
+    child_alive = True
+    for _ in range(100):
+        try:
+            os.kill(child_pid, 0)
+        except ProcessLookupError:
+            child_alive = False
+            break
+        time.sleep(0.02)
+    if child_alive:  # pragma: no cover - cleanup before explicit failure
+        os.kill(child_pid, signal.SIGKILL)
+    assert not child_alive
+
+
 def test_candidate_recovers_ambiguous_creation_before_exit(tmp_path: Path) -> None:
     """Delayed ambiguous creation must recover and delete the per-run candidate."""
     tool_root = tmp_path / "bin"

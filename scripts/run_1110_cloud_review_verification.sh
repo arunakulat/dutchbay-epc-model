@@ -28,22 +28,41 @@ import subprocess
 import sys
 
 process = subprocess.Popen(sys.argv[2:], start_new_session=True)
-try:
-    return_code = process.wait(timeout=float(sys.argv[1]))
-except subprocess.TimeoutExpired:
+
+
+def stop_process_group() -> None:
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
-        pass
+        return
     try:
         process.wait(timeout=1.0)
     except subprocess.TimeoutExpired:
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
+            return
+        try:
+            process.wait(timeout=1.0)
+        except subprocess.TimeoutExpired:
             pass
-        process.wait(timeout=1.0)
+
+
+def controlled_signal(signum: int, _frame: object) -> None:
+    raise SystemExit(128 + signum)
+
+
+for handled_signal in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
+    signal.signal(handled_signal, controlled_signal)
+
+try:
+    return_code = process.wait(timeout=float(sys.argv[1]))
+except subprocess.TimeoutExpired:
+    stop_process_group()
     raise SystemExit(124)
+except BaseException:
+    stop_process_group()
+    raise
 raise SystemExit(return_code)
 ' "$timeout_seconds" "$@"
 }

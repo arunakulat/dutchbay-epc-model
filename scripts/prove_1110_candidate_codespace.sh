@@ -50,25 +50,41 @@ import sys
 
 timeout = float(sys.argv[1])
 process = subprocess.Popen(sys.argv[2:], start_new_session=True)
-try:
-    return_code = process.wait(timeout=timeout)
-except subprocess.TimeoutExpired:
+
+
+def stop_process_group() -> None:
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
-        pass
+        return
     try:
         process.wait(timeout=1.0)
     except subprocess.TimeoutExpired:
         try:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
-            pass
+            return
         try:
             process.wait(timeout=1.0)
         except subprocess.TimeoutExpired:
             pass
+
+
+def controlled_signal(signum: int, _frame: object) -> None:
+    raise SystemExit(128 + signum)
+
+
+for handled_signal in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
+    signal.signal(handled_signal, controlled_signal)
+
+try:
+    return_code = process.wait(timeout=timeout)
+except subprocess.TimeoutExpired:
+    stop_process_group()
     raise SystemExit(124)
+except BaseException:
+    stop_process_group()
+    raise
 raise SystemExit(return_code)
 ' "$timeout_seconds" "$@"
 }
@@ -418,6 +434,14 @@ def stop_process_group(process: subprocess.Popen[bytes]) -> None:
         pass
 
 
+def controlled_signal(signum: int, _frame: object) -> None:
+    raise SystemExit(128 + signum)
+
+
+for handled_signal in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
+    signal.signal(handled_signal, controlled_signal)
+
+
 with open(os.devnull, "wb") as sink:
     while (remaining := deadline - time.monotonic()) > 0:
         process = subprocess.Popen(
@@ -432,6 +456,9 @@ with open(os.devnull, "wb") as sink:
         except subprocess.TimeoutExpired:
             stop_process_group(process)
             return_code = 124
+        except BaseException:
+            stop_process_group(process)
+            raise
         if return_code == 0:
             raise SystemExit(0)
         remaining = deadline - time.monotonic()
