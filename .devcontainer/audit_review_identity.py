@@ -124,6 +124,7 @@ DEPENDENCY_INPUT_RELATIVES = (
     ".devcontainer/bootstrap_audit_review.sh",
     ".devcontainer/audit_review_identity.py",
     "scripts/create_1110_cloud_review_codespace.sh",
+    "scripts/run_1110_cloud_review_verification.sh",
     "scripts/prove_1110_candidate_codespace.sh",
 )
 
@@ -146,6 +147,7 @@ CONTROLLED_INPUT_RELATIVES = (
     "scripts/upload_1110_p03_sources_to_codespace.sh",
     "scripts/verify_1110_cloud_review_sandbox.sh",
     "scripts/create_1110_cloud_review_codespace.sh",
+    "scripts/run_1110_cloud_review_verification.sh",
     "scripts/prove_1110_candidate_codespace.sh",
     ".devcontainer/devcontainer.json",
     ".devcontainer/devcontainer-lock.json",
@@ -893,6 +895,7 @@ def build_verification_receipt(
     sshd_identity: dict[str, object],
     source_state: str,
     execution_host: str,
+    codespace_name: str,
 ) -> dict[str, object]:
     """Build the exact v3 structural-verification receipt without semantic closure."""
     _validate_receipt_inputs(identity, sshd_identity)
@@ -904,10 +907,16 @@ def build_verification_receipt(
         raise SandboxIdentityError(
             "verification execution-host provenance differs from schema"
         ) from exc
+    if (
+        not isinstance(codespace_name, str)
+        or CODESPACE_NAME.fullmatch(codespace_name) is None
+    ):
+        raise SandboxIdentityError("verification Codespace identity is malformed")
     return {
         "schema": VERIFICATION_RECEIPT_SCHEMA,
         "status": "PASS",
         "environment": execution_host,
+        "codespace_name": codespace_name,
         **identity,
         **sshd_identity,
         "sshd_process": "running",

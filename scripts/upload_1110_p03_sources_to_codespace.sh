@@ -196,8 +196,9 @@ smoke_probe=$(find "$smoke_root" -mindepth 1 -print -quit) || exit 2
 test -z "$smoke_probe"
 export DUTCHBAY_VENV="/workspaces/.dutchbay-audit-review-venv"
 export DUTCHBAY_P03_SOURCE_ROOT="$source_root"
+export DUTCHBAY_EXPECTED_CODESPACE_NAME="$expected_codespace_name"
 export PYTHONPATH="$repo_root"
-scripts/verify_1110_cloud_review_sandbox.sh
+scripts/verify_1110_cloud_review_sandbox.sh >&2
 REMOTE_PREFLIGHT
 
 # Prove both SSH and copy transport with a non-sensitive, controlled file before
@@ -214,29 +215,8 @@ gh codespace cp --expand --recursive -c "$codespace_name" \
   "$resolved_source_root/IEC_CATALOGUE_QUERY_LOG.json" \
   "remote:$REMOTE_SOURCE_ROOT/"
 
-# Re-run the exact controlled verifier remotely. It both verifies the transferred
-# population and emits the hash-bound, HOLD-side sandbox identity receipt.
-gh codespace ssh -c "$codespace_name" \
-  "bash -se -- $codespace_name" <<'REMOTE_VERIFY'
-set -euo pipefail
-readonly expected_codespace_name=$1
-readonly repo_root="/workspaces/dutchbay-epc-model"
-readonly bootstrap_receipt="/workspaces/.dutchbay-private/bootstrap-receipt.json"
-cd "$repo_root"
-test "$CODESPACES" = true
-/usr/local/bin/python3.12 -S - \
-  "$bootstrap_receipt" "$expected_codespace_name" <<'PY'
-import json
-import sys
-
-with open(sys.argv[1], encoding="utf-8") as stream:
-    receipt = json.load(stream)
-if receipt.get("codespace_name") != sys.argv[2]:
-    raise SystemExit("bootstrap Codespace identity differs")
-PY
-export DUTCHBAY_VENV="/workspaces/.dutchbay-audit-review-venv"
-export DUTCHBAY_P03_SOURCE_ROOT="/workspaces/.dutchbay-private/p03/sources"
-export PYTHONPATH="$repo_root"
-scripts/verify_1110_cloud_review_sandbox.sh
-REMOTE_VERIFY
+# Re-run through the same API-authenticated outer envelope. Its nested receipt
+# now binds the transferred population while every completion/release field
+# remains fail-closed.
+scripts/run_1110_cloud_review_verification.sh
 fi

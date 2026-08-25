@@ -43,7 +43,7 @@ fi
 relevant=false
 while IFS= read -r -d '' changed_path; do
   case "$changed_path" in
-    .devcontainer/*|.dockerignore|.github/workflows/audit-cloud-sandbox.yml|requirements.txt|constraints.txt|pyproject.toml|check_venv.sh|dutchbay_bootstrap_rules.py|go_with_the_flow_rules_v3_0_clean.csv|scripts/classify_1110_cloud_sandbox_paths.sh|scripts/create_1110_cloud_review_codespace.sh|scripts/prove_1110_candidate_codespace.sh|scripts/upload_1110_p03_sources_to_codespace.sh|scripts/verify_1110_cloud_review_sandbox.sh|tests/lint/test_cloud_audit_review_sandbox.py)
+    .devcontainer/*|.dockerignore|.github/workflows/audit-cloud-sandbox.yml|requirements.txt|constraints.txt|pyproject.toml|check_venv.sh|dutchbay_bootstrap_rules.py|go_with_the_flow_rules_v3_0_clean.csv|scripts/classify_1110_cloud_sandbox_paths.sh|scripts/create_1110_cloud_review_codespace.sh|scripts/run_1110_cloud_review_verification.sh|scripts/prove_1110_candidate_codespace.sh|scripts/upload_1110_p03_sources_to_codespace.sh|scripts/verify_1110_cloud_review_sandbox.sh|tests/lint/test_cloud_audit_review_sandbox.py)
       relevant=true
       break
       ;;

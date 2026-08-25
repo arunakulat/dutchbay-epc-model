@@ -24,8 +24,11 @@ fail() {
 release_create_lock() {
   local exit_status=$?
   if [ "$create_lock_held" = "true" ]; then
-    rmdir -- "$CREATE_LOCK" || printf '%s\n' \
-      "ERROR: create lock cleanup failed: $CREATE_LOCK" >&2
+    if ! rmdir -- "$CREATE_LOCK"; then
+      printf '%s\n' \
+        "ERROR: create lock cleanup failed: $CREATE_LOCK" >&2
+      return 2
+    fi
   fi
   return "$exit_status"
 }
@@ -144,6 +147,10 @@ then
   )
   [ "$final_count" -eq 1 ] && [ "$final_name" = "$codespace_name" ] || fail \
     "post-create Codespace identity/collision check failed; inspect or delete: $codespace_name"
+  rmdir -- "$CREATE_LOCK" || fail \
+    "create lock release failed; inspect or delete: $codespace_name"
+  create_lock_held="false"
+  trap - EXIT
   printf '%s\n' "$codespace_name"
   exit 0
 fi

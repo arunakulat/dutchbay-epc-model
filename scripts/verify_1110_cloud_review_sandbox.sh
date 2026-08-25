@@ -4,6 +4,7 @@
 # is an environment receipt, not an independent semantic-review decision.
 
 set -euo pipefail
+export PYTHONDONTWRITEBYTECODE=1
 
 readonly VENV_ROOT="/workspaces/.dutchbay-audit-review-venv"
 readonly CONTAINER_PYTHON="/usr/local/bin/python3.12"
@@ -13,14 +14,25 @@ readonly DEPENDENCY_MARKER="$VENV_ROOT/.dutchbay-inputs.sha256"
 readonly IMAGE_MARKER="$VENV_ROOT/.dutchbay-image.sha256"
 readonly PACKAGE_MARKER="$VENV_ROOT/.dutchbay-environment-content.sha256"
 readonly SSHD_MARKER="$VENV_ROOT/.dutchbay-sshd-identity.sha256"
+readonly EXPECTED_CODESPACE_NAME="${DUTCHBAY_EXPECTED_CODESPACE_NAME:-}"
 
 fail() {
   printf 'ERROR: %s\n' "$*" >&2
   exit 2
 }
 
+bytecode_probe=$(find .devcontainer \
+  \( -type d -name __pycache__ \
+    -o -type f \( -name '*.pyc' -o -name '*.pyo' \) \) \
+  -print -quit) || fail "repository bytecode population could not be determined"
+[ -z "$bytecode_probe" ] || fail \
+  "repository bytecode is executable untracked input; delete and recreate the Codespace"
+
 [ "${CODESPACES:-}" = "true" ] || fail \
   "this control must run inside the governed GitHub Codespace"
+case "$EXPECTED_CODESPACE_NAME" in
+  ''|*[!A-Za-z0-9_-]*) fail "expected Codespace identity is missing or malformed" ;;
+esac
 [ "${DUTCHBAY_VENV:-}" = "$VENV_ROOT" ] || fail \
   "DUTCHBAY_VENV must select the sandbox environment"
 [ "${DUTCHBAY_P03_SOURCE_ROOT:-}" = "$SOURCE_ROOT" ] || fail \
@@ -42,7 +54,8 @@ fail() {
 [ "$(realpath -e "$SOURCE_ROOT")" = "$SOURCE_ROOT" ] || fail \
   "private P03 source root resolved outside its fixed path"
 execution_host=$(
-  "$CONTAINER_PYTHON" -S - "$BOOTSTRAP_RECEIPT" <<'PY'
+  "$CONTAINER_PYTHON" -S - \
+    "$BOOTSTRAP_RECEIPT" "$EXPECTED_CODESPACE_NAME" <<'PY'
 from __future__ import annotations
 
 import json
@@ -56,6 +69,7 @@ expected = {
     "schema": "dutchbay.audit_review_sandbox_bootstrap.v3",
     "status": "PASS",
     "environment": "github_codespaces",
+    "codespace_name": sys.argv[2],
     "network_boundary": "creator_private_codespace_outbound_egress_available",
     "completion_authorized": False,
     "release_status": "HOLD",
@@ -124,11 +138,11 @@ PY
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" \
   "$VENV_ROOT/bin/python" -m pytest -p no:cacheprovider \
   tests/lint/test_audit_findings_current_state_overlay.py \
-  tests/lint/test_audit_primary_source_control.py -q
+  tests/lint/test_audit_primary_source_control.py -q >&2
 
 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" \
   "$VENV_ROOT/bin/python" \
-  docs/audit/2026-08-controlled-successor/scripts/validate_published_pack.py
+  docs/audit/2026-08-controlled-successor/scripts/validate_published_pack.py >&2
 
 source_probe=$(find "$SOURCE_ROOT" -mindepth 1 -print -quit) || fail \
   "P03 source-root population could not be determined"
@@ -136,7 +150,7 @@ source_state="private_root_empty_p03_not_executed"
 if [ -n "$source_probe" ]; then
   DUTCHBAY_P03_SOURCE_ROOT="$SOURCE_ROOT" PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH="$PWD" "$VENV_ROOT/bin/python" \
-    scripts/verify_p03_primary_sources.py
+    scripts/verify_p03_primary_sources.py >&2
   source_state="private_root_populated_p03_structural_verification_passed"
 fi
 
@@ -153,6 +167,7 @@ SANDBOX_VENV_ROOT="$VENV_ROOT" \
 SANDBOX_CONTAINER_PYTHON="$CONTAINER_PYTHON" \
 SANDBOX_SSHD_IDENTITY_JSON="$sshd_identity_json" \
 SANDBOX_EXECUTION_HOST="$execution_host" \
+SANDBOX_CODESPACE_NAME="$EXPECTED_CODESPACE_NAME" \
 PYTHONPATH="$PWD/.devcontainer" "$CONTAINER_PYTHON" -S - <<'PY'
 from __future__ import annotations
 
@@ -179,6 +194,7 @@ print(
             sshd_identity=sshd_identity,
             source_state=os.environ["SANDBOX_SOURCE_STATE"],
             execution_host=os.environ["SANDBOX_EXECUTION_HOST"],
+            codespace_name=os.environ["SANDBOX_CODESPACE_NAME"],
         ),
         sort_keys=True,
     )

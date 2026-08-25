@@ -143,23 +143,26 @@ all-page identity check prevents two local creators from silently succeeding;
 cross-host creation remains outside that lock and therefore fails loud if the
 post-create population is not exactly the one immutable name returned here.
 
-Run the structural preflight inside the Codespace before reviewing P02:
+Run the structural preflight from the synchronized local protected-main
+checkout before reviewing P02. The wrapper authenticates the exact Codespace
+through GitHub's API, passes that name through an SSH session, compares it with
+the platform name captured by bootstrap, updates the remote checkout to exact
+`origin/main`, and wraps the nested structural receipt in an outer API-bound
+envelope. Internally it runs `git switch --detach origin/main` and requires
+`HEAD == origin/main` before any structural control executes:
 
 ```bash
 set -euo pipefail
-test "$(git branch --show-current)" = "main"
-test -z "$(git status --porcelain)"
-git fetch --prune origin
-git switch --detach origin/main
-test "$(git rev-parse HEAD)" = "$(git rev-parse refs/remotes/origin/main)"
-scripts/verify_1110_cloud_review_sandbox.sh
+test "$DUTCHBAY_1110_REVIEW_CODESPACE_NAME" != ""
+scripts/run_1110_cloud_review_verification.sh
 ```
 
-The final JSON line must state `status=PASS`, `release_status=HOLD`, and
-`completion_authorized=false`. Before the private corpus is copied, P03 must be
-reported as not executed. The receipt binds the controlled publication manifest,
-so later P02/P03 result artifacts are transitively bound through their manifest
-entries without changing the reusable dependency environment.
+The outer JSON must state `status=PASS`, `release_status=HOLD`, and
+`completion_authorized=false`, and its exact name/SHA must equal the nested
+receipt. Before the private corpus is copied, P03 must be reported as not
+executed. The receipt binds the controlled publication manifest, so later
+P02/P03 result artifacts are transitively bound through their manifest entries
+without changing the reusable dependency environment.
 
 ## P02 independent review
 
@@ -281,6 +284,12 @@ prevents transport availability from racing ahead of dependency installation,
 environment attestation or receipt binding while preserving accurate failure
 diagnostics. The disposable proof also allows a separately bounded five-minute
 GitHub shutdown transition before exercising restart recovery.
+Every GitHub lifecycle operation runs under a process-group watchdog, and API
+status is accepted only when both the command and response schema succeed.
+Transient discovery failures retry within a finite recovery budget. If exact
+absence or safe deletion cannot be established, the proof emits no PASS and
+retains `/tmp/dutchbay-1110-candidate-codespace.lock/UNRESOLVED` with the
+non-secret recovery identity instead of releasing ownership ambiguously.
 
 The bootstrap commit identifies environment construction, not an immutable
 review checkout. Reusing the same governed Codespace after a P02 result merge is
@@ -289,7 +298,8 @@ the later verification receipt binds the new clean exact `origin/main` commit.
 The disposable pre-merge candidate is different: its outer control requires the
 bootstrap commit itself to equal the exact topic-branch SHA.
 
-Re-run `scripts/verify_1110_cloud_review_sandbox.sh`. It must independently hash
+Re-run `scripts/run_1110_cloud_review_verification.sh` from the synchronized
+local protected-main checkout. It must independently hash
 all 74 retained objects before semantic review begins. Then follow issue #1162
 and review all 42 claims, all source locations, limitations, evidence-status
 boundaries and publication/redistribution rights. PSR-0009 remains analyst

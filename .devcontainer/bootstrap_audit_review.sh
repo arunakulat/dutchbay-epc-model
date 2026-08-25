@@ -5,6 +5,7 @@
 # source object, credential or raw runtime log is written into the repository.
 
 set -euo pipefail
+export PYTHONDONTWRITEBYTECODE=1
 
 readonly VENV_ROOT="/workspaces/.dutchbay-audit-review-venv"
 readonly CONTAINER_PYTHON="/usr/local/bin/python3.12"
@@ -38,6 +39,16 @@ fail() {
   exit 2
 }
 
+reject_repository_bytecode() {
+  local bytecode_probe
+  bytecode_probe=$(find .devcontainer \
+    \( -type d -name __pycache__ \
+      -o -type f \( -name '*.pyc' -o -name '*.pyo' \) \) \
+    -print -quit) || fail "repository bytecode population could not be determined"
+  [ -z "$bytecode_probe" ] || fail \
+    "repository bytecode is executable untracked input; recreate the Codespace"
+}
+
 package_content_fingerprint() {
   PYTHONPATH="$PWD/.devcontainer" "$CONTAINER_PYTHON" -S -c \
     'import sys; from pathlib import Path; from audit_review_identity import installed_environment_content_sha256; print(installed_environment_content_sha256(Path(sys.argv[1]), Path(sys.argv[2])))' \
@@ -57,6 +68,7 @@ esac
   || fail "SSH transport did not become ready before the audit bootstrap"
 [ -f "requirements.txt" ] && [ -f "pyproject.toml" ] || fail \
   "run the bootstrap from the DutchBay repository root"
+reject_repository_bytecode
 [ -x "$CONTAINER_PYTHON" ] && [ ! -L "$CONTAINER_PYTHON" ] || fail \
   "digest-pinned container Python is unavailable"
 [ "$(realpath -e "$CONTAINER_PYTHON")" = "$CONTAINER_PYTHON" ] || fail \

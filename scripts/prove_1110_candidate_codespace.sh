@@ -13,6 +13,10 @@ readonly SSH_READY_COMMAND="/usr/local/bin/python3.12 -S /usr/local/lib/dutchbay
 readonly BOOTSTRAP_READY_COMMAND="test -f /workspaces/.dutchbay-private/bootstrap-receipt.json"
 readonly CREATE_LOCK="/tmp/dutchbay-1110-candidate-codespace.lock"
 readonly POLL_SECONDS=5
+readonly API_COMMAND_TIMEOUT_SECONDS=30
+readonly API_IDENTITY_RECOVERY_TIMEOUT_SECONDS=120
+readonly REMOTE_COMMAND_TIMEOUT_SECONDS=120
+readonly CREATE_COMMAND_TIMEOUT_SECONDS=300
 readonly TRANSPORT_TIMEOUT_SECONDS=300
 readonly BOOTSTRAP_TIMEOUT_SECONDS=900
 readonly SHUTDOWN_TIMEOUT_SECONDS=300
@@ -35,24 +39,116 @@ fail() {
   exit 2
 }
 
+bounded_command() {
+  local timeout_seconds=$1
+  shift
+  "$GOVERNED_PYTHON" -S -c '
+import os
+import signal
+import subprocess
+import sys
+
+timeout = float(sys.argv[1])
+process = subprocess.Popen(sys.argv[2:], start_new_session=True)
+try:
+    return_code = process.wait(timeout=timeout)
+except subprocess.TimeoutExpired:
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    try:
+        process.wait(timeout=1.0)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        try:
+            process.wait(timeout=1.0)
+        except subprocess.TimeoutExpired:
+            pass
+    raise SystemExit(124)
+raise SystemExit(return_code)
+' "$timeout_seconds" "$@"
+}
+
 list_codespaces() {
-  gh api --paginate --slurp \
+  local timeout_seconds=${1:-$API_COMMAND_TIMEOUT_SECONDS}
+  bounded_command "$timeout_seconds" \
+    gh api --paginate --slurp \
     -H "Accept: application/vnd.github+json" \
     -H "X-GitHub-Api-Version: 2022-11-28" \
     "/user/codespaces?per_page=100"
 }
 
 codespace_identity() {
-  gh api \
+  local timeout_seconds=${1:-$API_COMMAND_TIMEOUT_SECONDS}
+  bounded_command "$timeout_seconds" \
+    gh api \
     -H "Accept: application/vnd.github+json" \
     -H "X-GitHub-Api-Version: 2022-11-28" \
     "/user/codespaces/$codespace_name"
 }
 
+wait_for_candidate_state() {
+  local expected_state=$1
+  local timeout_seconds=$2
+  local deadline=$((SECONDS + timeout_seconds))
+  local identity_json
+  local remaining_seconds
+  local state
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    remaining_seconds=$((deadline - SECONDS))
+    if identity_json=$(bounded_command "$remaining_seconds" \
+      gh api \
+        -H "Accept: application/vnd.github+json" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        "/user/codespaces/$codespace_name"); then
+      state=$(jq -er '.state | select(type == "string" and length > 0)' \
+        <<< "$identity_json") || return 2
+      [ "$state" = "$expected_state" ] && return 0
+    fi
+    [ "$SECONDS" -lt "$deadline" ] || break
+    remaining_seconds=$((deadline - SECONDS))
+    if [ "$remaining_seconds" -lt "$POLL_SECONDS" ]; then
+      sleep "$remaining_seconds"
+    else
+      sleep "$POLL_SECONDS"
+    fi
+  done
+  return 1
+}
+
+wait_for_api_identity_match() {
+  local branch=$1
+  local identity_status
+  local remaining_seconds
+  local deadline=$((SECONDS + API_IDENTITY_RECOVERY_TIMEOUT_SECONDS))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    remaining_seconds=$((deadline - SECONDS))
+    if api_identity_matches "$branch" "$remaining_seconds"; then
+      return 0
+    else
+      identity_status=$?
+    fi
+    [ "$identity_status" -eq 2 ] || return 1
+    [ "$SECONDS" -lt "$deadline" ] || break
+    remaining_seconds=$((deadline - SECONDS))
+    if [ "$remaining_seconds" -lt "$POLL_SECONDS" ]; then
+      sleep "$remaining_seconds"
+    else
+      sleep "$POLL_SECONDS"
+    fi
+  done
+  return 2
+}
+
 api_identity_matches() {
   local branch=$1
+  local timeout_seconds=${2:-$API_COMMAND_TIMEOUT_SECONDS}
   local identity_json
-  identity_json=$(codespace_identity) || return 2
+  identity_json=$(codespace_identity "$timeout_seconds") || return 2
   jq -e \
     --arg name "$codespace_name" \
     --arg display "$display_name" \
@@ -68,7 +164,7 @@ api_identity_matches() {
 verify_api_identity() {
   local branch=$1
   local identity_status
-  if api_identity_matches "$branch"; then
+  if wait_for_api_identity_match "$branch"; then
     return 0
   else
     identity_status=$?
@@ -80,8 +176,9 @@ verify_api_identity() {
 }
 
 candidate_is_absent() {
+  local timeout_seconds=${1:-$API_COMMAND_TIMEOUT_SECONDS}
   local codespaces_json
-  codespaces_json=$(list_codespaces) || return 2
+  codespaces_json=$(list_codespaces "$timeout_seconds") || return 2
   jq -e \
     'type == "array"
       and length > 0
@@ -95,38 +192,48 @@ candidate_is_absent() {
 wait_for_candidate_absence() {
   local absence_status
   local deletion_deadline=$((SECONDS + DELETION_TIMEOUT_SECONDS))
+  local remaining_seconds
   while [ "$SECONDS" -lt "$deletion_deadline" ]; do
-    if candidate_is_absent; then
+    remaining_seconds=$((deletion_deadline - SECONDS))
+    if candidate_is_absent "$remaining_seconds"; then
       return 0
     else
       absence_status=$?
     fi
-    [ "$absence_status" -eq 1 ] || return 2
-    sleep "$POLL_SECONDS"
+    case "$absence_status" in
+      1|2) ;;
+      *) return 2 ;;
+    esac
+    [ "$SECONDS" -lt "$deletion_deadline" ] || break
+    remaining_seconds=$((deletion_deadline - SECONDS))
+    if [ "$remaining_seconds" -lt "$POLL_SECONDS" ]; then
+      sleep "$remaining_seconds"
+    else
+      sleep "$POLL_SECONDS"
+    fi
   done
-  if candidate_is_absent; then
-    return 0
-  else
-    absence_status=$?
-  fi
-  [ "$absence_status" -eq 1 ] || return 2
-  return 1
+  case "$absence_status" in
+    1) return 1 ;;
+    *) return 2 ;;
+  esac
 }
 
 delete_candidate_and_confirm_absent() {
   local branch=$1
   verify_api_identity "$branch"
-  gh codespace delete -c "$codespace_name" --force
+  bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS" \
+    gh codespace delete -c "$codespace_name" --force
   wait_for_candidate_absence || fail \
     "exact candidate Codespace deletion was not API-confirmed"
   codespace_created="false"
 }
 
 recover_unique_pending_candidate_once() {
+  local timeout_seconds=${1:-$API_COMMAND_TIMEOUT_SECONDS}
   local codespaces_json
   local matching_count
   local recovered_name
-  codespaces_json=$(list_codespaces) || return 2
+  codespaces_json=$(list_codespaces "$timeout_seconds") || return 3
   jq -e \
     'type == "array"
       and length > 0
@@ -165,28 +272,39 @@ recover_unique_pending_candidate_once() {
 }
 
 recover_pending_candidate_boundedly() {
+  local remaining_seconds
   local recovery_status
   local recovery_deadline=$((SECONDS + AMBIGUOUS_CREATE_RECOVERY_TIMEOUT_SECONDS))
   while [ "$SECONDS" -lt "$recovery_deadline" ]; do
-    if recover_unique_pending_candidate_once; then
+    remaining_seconds=$((recovery_deadline - SECONDS))
+    if recover_unique_pending_candidate_once "$remaining_seconds"; then
       return 0
     else
       recovery_status=$?
     fi
-    [ "$recovery_status" -eq 1 ] || return 2
-    sleep "$POLL_SECONDS"
+    case "$recovery_status" in
+      1|3) ;;
+      *) return 2 ;;
+    esac
+    [ "$SECONDS" -lt "$recovery_deadline" ] || break
+    remaining_seconds=$((recovery_deadline - SECONDS))
+    if [ "$remaining_seconds" -lt "$POLL_SECONDS" ]; then
+      sleep "$remaining_seconds"
+    else
+      sleep "$POLL_SECONDS"
+    fi
   done
-  if recover_unique_pending_candidate_once; then
-    return 0
-  else
-    recovery_status=$?
-  fi
-  [ "$recovery_status" -eq 1 ] || return 2
-  return 1
+  case "$recovery_status" in
+    1) return 1 ;;
+    3) return 3 ;;
+    *) return 2 ;;
+  esac
 }
 
 cleanup() {
   local exit_status=$?
+  local cleanup_resolved="true"
+  local identity_status
   local recovery_status
   trap - EXIT
   if [ "$creation_pending" = "true" ]; then
@@ -194,37 +312,63 @@ cleanup() {
       :
     else
       recovery_status=$?
-      if [ "$recovery_status" -eq 2 ]; then
-        printf 'ERROR: ambiguous candidate creation could not be recovered safely\n' \
-          >&2
-        exit_status=2
-      fi
-      creation_pending="false"
+      case "$recovery_status" in
+        1) creation_pending="false" ;;
+        2)
+          printf 'ERROR: ambiguous candidate creation could not be recovered safely\n' \
+            >&2
+          cleanup_resolved="false"
+          exit_status=2
+          ;;
+        *)
+          printf 'ERROR: candidate creation recovery API remained unavailable\n' \
+            >&2
+          cleanup_resolved="false"
+          exit_status=2
+          ;;
+      esac
     fi
   fi
   if [ "$codespace_created" = "true" ]; then
     if [ -n "$codespace_name" ] \
       && [[ "$codespace_name" =~ ^[A-Za-z0-9_-]+$ ]]; then
-      if ! api_identity_matches "$candidate_branch"; then
-        printf 'ERROR: refusing candidate deletion because API identity differs: %s\n' \
+      if wait_for_api_identity_match "$candidate_branch"; then
+        identity_status=0
+      else
+        identity_status=$?
+      fi
+      if [ "$identity_status" -ne 0 ]; then
+        printf 'ERROR: refusing candidate deletion because API identity was not confirmed: %s\n' \
           "$codespace_name" >&2
+        cleanup_resolved="false"
         exit_status=2
-      elif ! gh codespace delete -c "$codespace_name" --force; then
+      elif ! bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS" \
+        gh codespace delete -c "$codespace_name" --force; then
         printf 'ERROR: exact candidate Codespace deletion failed: %s\n' \
           "$codespace_name" >&2
+        cleanup_resolved="false"
         exit_status=2
       elif ! wait_for_candidate_absence; then
         printf 'ERROR: exact candidate Codespace absence was not confirmed: %s\n' \
           "$codespace_name" >&2
+        cleanup_resolved="false"
         exit_status=2
       fi
     else
       printf 'ERROR: candidate Codespace name was unsafe for deletion\n' >&2
+      cleanup_resolved="false"
       exit_status=2
     fi
   fi
   if [ "$create_lock_held" = "true" ]; then
-    if ! rmdir -- "$CREATE_LOCK"; then
+    if [ "$cleanup_resolved" != "true" ]; then
+      umask 077
+      printf 'display_name=%s\nbranch=%s\nsha=%s\ncodespace_name=%s\n' \
+        "$display_name" "$candidate_branch" "${EXPECTED_SHA:-}" \
+        "$codespace_name" > "$CREATE_LOCK/UNRESOLVED" || true
+      printf 'ERROR: retaining candidate recovery lock: %s\n' \
+        "$CREATE_LOCK" >&2
+    elif ! rmdir -- "$CREATE_LOCK"; then
       printf 'ERROR: candidate create-lock cleanup failed: %s\n' \
         "$CREATE_LOCK" >&2
       exit_status=2
@@ -308,7 +452,8 @@ wait_for_bootstrap() {
 verify_remote_candidate() {
   local branch=$1
   local expected_sha=$2
-  gh codespace ssh -c "$codespace_name" \
+  bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS" \
+    gh codespace ssh -c "$codespace_name" \
     "bash -se -- $branch $expected_sha $codespace_name" <<'REMOTE_VERIFY'
 set -Eeuo pipefail
 remote_error() {
@@ -387,10 +532,12 @@ REMOTE_VERIFY
 }
 
 run_copy_smoke() {
-  gh codespace cp --expand -c "$codespace_name" \
+  bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS" \
+    gh codespace cp --expand -c "$codespace_name" \
     ".devcontainer/devcontainer.json" \
     "remote:$REMOTE_SMOKE_PATH"
-  gh codespace ssh -c "$codespace_name" "bash -se" <<'REMOTE_COPY'
+  bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS" \
+    gh codespace ssh -c "$codespace_name" "bash -se" <<'REMOTE_COPY'
 set -Eeuo pipefail
 remote_copy_error() {
   local exit_status=$?
@@ -430,7 +577,8 @@ checkout_status=$(git status --porcelain=v1) || fail \
 [ -z "$checkout_status" ] || fail \
   "local candidate checkout must be clean"
 
-remote_sha=$(git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH" \
+remote_sha=$(bounded_command "$API_COMMAND_TIMEOUT_SECONDS" \
+  git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH" \
   | awk 'NR == 1 {print $1}')
 [ "$remote_sha" = "$EXPECTED_SHA" ] || fail \
   "remote candidate branch does not equal the expected SHA"
@@ -456,7 +604,8 @@ mkdir -- "$CREATE_LOCK" || fail \
 create_lock_held="true"
 
 creation_pending="true"
-codespace_name=$(gh codespace create \
+codespace_name=$(bounded_command "$CREATE_COMMAND_TIMEOUT_SECONDS" \
+  gh codespace create \
   -R "$REPOSITORY" \
   -b "$CANDIDATE_BRANCH" \
   -d "$display_name" \
@@ -475,22 +624,20 @@ wait_for_bootstrap || fail \
   "candidate Codespace bootstrap receipt did not become ready"
 verify_remote_candidate "$CANDIDATE_BRANCH" "$EXPECTED_SHA"
 run_copy_smoke
-before_marker=$(gh codespace ssh -c "$codespace_name" \
+before_marker=$(bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS" \
+  gh codespace ssh -c "$codespace_name" \
   "stat -c '%i:%y' /run/dutchbay-sshd-runtime.ready")
 
-gh codespace stop -c "$codespace_name"
-shutdown_deadline=$((SECONDS + SHUTDOWN_TIMEOUT_SECONDS))
-while [ "$SECONDS" -lt "$shutdown_deadline" ]; do
-  [ "$(codespace_identity | jq -r .state)" = "Shutdown" ] && break
-  sleep "$POLL_SECONDS"
-done
-[ "$(codespace_identity | jq -r .state)" = "Shutdown" ] || fail \
+bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS" \
+  gh codespace stop -c "$codespace_name"
+wait_for_candidate_state "Shutdown" "$SHUTDOWN_TIMEOUT_SECONDS" || fail \
   "candidate Codespace did not reach Shutdown boundedly"
 
 wait_for_transport || fail "candidate Codespace did not resume through SSH"
 verify_api_identity "$CANDIDATE_BRANCH"
 verify_remote_candidate "$CANDIDATE_BRANCH" "$EXPECTED_SHA"
-after_marker=$(gh codespace ssh -c "$codespace_name" \
+after_marker=$(bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS" \
+  gh codespace ssh -c "$codespace_name" \
   "stat -c '%i:%y' /run/dutchbay-sshd-runtime.ready")
 [ "$before_marker" != "$after_marker" ] || fail \
   "candidate Codespace post-start marker was not refreshed"

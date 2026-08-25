@@ -29,6 +29,7 @@ BOOTSTRAP = REPO_ROOT / ".devcontainer" / "bootstrap_audit_review.sh"
 IDENTITY = REPO_ROOT / ".devcontainer" / "audit_review_identity.py"
 VERIFY = REPO_ROOT / "scripts" / "verify_1110_cloud_review_sandbox.sh"
 CREATE_CODESPACE = REPO_ROOT / "scripts" / "create_1110_cloud_review_codespace.sh"
+CLOUD_VERIFY = REPO_ROOT / "scripts" / "run_1110_cloud_review_verification.sh"
 CANDIDATE_CODESPACE = REPO_ROOT / "scripts" / "prove_1110_candidate_codespace.sh"
 UPLOAD = REPO_ROOT / "scripts" / "upload_1110_p03_sources_to_codespace.sh"
 DOC = REPO_ROOT / "docs" / "audit" / "CLOUD_REVIEW_SANDBOX.md"
@@ -162,6 +163,7 @@ INDEPENDENT_DEPENDENCY_INPUT_RELATIVES = (
     ".devcontainer/bootstrap_audit_review.sh",
     ".devcontainer/audit_review_identity.py",
     "scripts/create_1110_cloud_review_codespace.sh",
+    "scripts/run_1110_cloud_review_verification.sh",
     "scripts/prove_1110_candidate_codespace.sh",
 )
 INDEPENDENT_CONTROLLED_INPUT_RELATIVES = (
@@ -183,6 +185,7 @@ INDEPENDENT_CONTROLLED_INPUT_RELATIVES = (
     "scripts/upload_1110_p03_sources_to_codespace.sh",
     "scripts/verify_1110_cloud_review_sandbox.sh",
     "scripts/create_1110_cloud_review_codespace.sh",
+    "scripts/run_1110_cloud_review_verification.sh",
     "scripts/prove_1110_candidate_codespace.sh",
     ".devcontainer/devcontainer.json",
     ".devcontainer/devcontainer-lock.json",
@@ -534,10 +537,19 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
         '"$BOOTSTRAP_READY_COMMAND"'
     ) in candidate
     assert "candidate Codespace bootstrap receipt did not become ready" in candidate
+    assert "bounded_command()" in candidate
+    assert "wait_for_candidate_state" in candidate
+    assert '"$(codespace_identity | jq -r .state)"' not in candidate
+    assert "1|3) ;;" in candidate
+    assert '"$CREATE_LOCK/UNRESOLVED"' in candidate
     assert "gh codespace stop" in candidate
-    assert '"$(codespace_identity | jq -r .state)" = "Shutdown"' in candidate
-    assert 'before_marker=$(gh codespace ssh -c "$codespace_name"' in candidate
-    assert 'after_marker=$(gh codespace ssh -c "$codespace_name"' in candidate
+    assert 'wait_for_candidate_state "Shutdown"' in candidate
+    assert 'before_marker=$(bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS"' in (
+        candidate
+    )
+    assert 'after_marker=$(bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS"' in (
+        candidate
+    )
     assert candidate.count("verify_remote_candidate") == 3
     assert "bash .devcontainer/attest_audit_review_sshd.sh" in candidate
     assert "--retention-period 24h" in candidate
@@ -553,9 +565,11 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
     assert 'display_name="DB1110-${EXPECTED_SHA:0:12}-$run_nonce"' in candidate
     assert "secrets.token_hex(8)" in candidate
     assert '[ "${#display_name}" -le 48 ]' in candidate
-    assert "codespaces_json=$(list_codespaces) || return 2" in candidate
-    assert 'api_identity_matches "$candidate_branch"' in candidate
-    create_position = candidate.index("codespace_name=$(gh codespace create")
+    assert 'codespaces_json=$(list_codespaces "$timeout_seconds") || return 2' in (
+        candidate
+    )
+    assert 'wait_for_api_identity_match "$candidate_branch"' in candidate
+    create_position = candidate.index("codespace_name=$(bounded_command")
     assert candidate.index(
         'verify_api_identity "$CANDIDATE_BRANCH"', create_position
     ) < candidate.index('codespace_created="true"', create_position)
@@ -630,6 +644,8 @@ case "$1 $2" in
       visibility=$((visibility + 1))
       printf '%s\\n' "$visibility" > "$STUB_VISIBILITY"
       if [ "$visibility" -eq 1 ]; then
+        exit 75
+      elif [ "$visibility" -eq 2 ]; then
         printf '[{"codespaces":[]}]\\n'
       else
         display=$(cat "$STUB_STATE")
@@ -691,7 +707,7 @@ esac
         assert result.returncode == 2
         assert expected_error in result.stderr
         assert not state_path.exists()
-        assert visibility_path.read_text(encoding="utf-8").strip() == "2"
+        assert visibility_path.read_text(encoding="utf-8").strip() == "3"
         assert not lock_path.exists()
     calls = call_log.read_text(encoding="utf-8")
     assert calls.count("codespace delete -c candidate123 --force") == 2
@@ -817,9 +833,16 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     verify = VERIFY.read_text(encoding="utf-8")
     upload = UPLOAD.read_text(encoding="utf-8")
     create_codespace = CREATE_CODESPACE.read_text(encoding="utf-8")
+    cloud_verify = CLOUD_VERIFY.read_text(encoding="utf-8")
     candidate_codespace = CANDIDATE_CODESPACE.read_text(encoding="utf-8")
     combined = (
-        bootstrap + identity + verify + upload + create_codespace + candidate_codespace
+        bootstrap
+        + identity
+        + verify
+        + upload
+        + create_codespace
+        + cloud_verify
+        + candidate_codespace
     )
 
     assert PRIVATE_SOURCE_ROOT in combined
@@ -876,6 +899,13 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert "delete and recreate it before retrying" in upload
     assert "DUTCHBAY_P03_CLOUD_INGRESS_AUTHORIZED" in upload
     assert "DUTCHBAY_1110_REVIEW_CODESPACE_NAME" in upload
+    assert "DUTCHBAY_1110_REVIEW_CODESPACE_NAME" in cloud_verify
+    assert '"/user/codespaces/$CODESPACE_NAME"' in cloud_verify
+    assert ".repository.full_name == $repository" in cloud_verify
+    assert '.git_status.ref == "main"' in cloud_verify
+    assert 'receipt.get("codespace_name") != sys.argv[2]' in cloud_verify
+    assert "scripts/verify_1110_cloud_review_sandbox.sh" in cloud_verify
+    assert 'schema: "dutchbay.audit_review_outer_verification.v1"' in cloud_verify
     assert 'receipt.get("codespace_name") != sys.argv[2]' in upload
     assert 'test "$CODESPACE_NAME" = "$expected_codespace_name"' not in upload
     assert "gh codespace list" not in upload
@@ -890,6 +920,11 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
         create_codespace
     )
     assert "trap release_create_lock EXIT" in create_codespace
+    assert 'rmdir -- "$CREATE_LOCK" || fail' in create_codespace
+    assert 'create_lock_held="false"' in create_codespace
+    assert create_codespace.index('rmdir -- "$CREATE_LOCK" || fail') < (
+        create_codespace.index("printf '%s\\n' \"$codespace_name\"")
+    )
     assert "post-create Codespace identity/collision check failed" in create_codespace
     assert "readonly MAX_TRANSPORT_TIMEOUT_SECONDS=300" in create_codespace
     assert "readonly POLL_SECONDS=5" in create_codespace
@@ -912,6 +947,12 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert '"$CONTAINER_PYTHON" -S' in verify
     assert 'PYTHONPATH="$PWD/.devcontainer" python3.12' not in combined
     assert 'SANDBOX_CODESPACE_NAME="$CODESPACE_NAME"' in bootstrap
+    assert 'DUTCHBAY_EXPECTED_CODESPACE_NAME="$expected_codespace_name"' in upload
+    assert "repository bytecode is executable untracked input" in bootstrap
+    assert "repository bytecode is executable untracked input" in verify
+    assert "repository bytecode is executable untracked input" in (
+        SSHD_ATTESTOR.read_text(encoding="utf-8")
+    )
     assert "PYTHONDONTWRITEBYTECODE=1" in bootstrap
     assert "PYTHONDONTWRITEBYTECODE=1" in verify
     assert '"installed_environment_content_sha256"' in identity
@@ -948,6 +989,7 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert VERIFY.stat().st_mode & 0o111
     assert UPLOAD.stat().st_mode & 0o111
     assert CREATE_CODESPACE.stat().st_mode & 0o111
+    assert CLOUD_VERIFY.stat().st_mode & 0o111
 
 
 def test_sshd_readiness_waits_for_banner_and_rejects_process_only(
@@ -1582,6 +1624,7 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
         sshd_identity=sshd_identity,
         source_state="private_root_empty_p03_not_executed",
         execution_host="github_codespaces",
+        codespace_name="dutchbay-review-test",
     )
     common_keys = (
         set(sandbox_identity)
@@ -1590,13 +1633,14 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
             "schema",
             "status",
             "environment",
+            "codespace_name",
             "p03_source_state",
             "network_boundary",
             "completion_authorized",
             "release_status",
         }
     )
-    assert set(bootstrap) == common_keys | {"python", "codespace_name"}
+    assert set(bootstrap) == common_keys | {"python"}
     assert bootstrap["schema"] == "dutchbay.audit_review_sandbox_bootstrap.v3"
     assert bootstrap["status"] == "PASS"
     assert bootstrap["environment"] == "github_codespaces"
@@ -1614,6 +1658,7 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
     assert verification["schema"] == "dutchbay.audit_review_sandbox_receipt.v3"
     assert verification["status"] == "PASS"
     assert verification["environment"] == "github_codespaces"
+    assert verification["codespace_name"] == "dutchbay-review-test"
     assert verification["network_boundary"] == (
         "creator_private_codespace_outbound_egress_available"
     )
@@ -1645,6 +1690,7 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
                 sshd_identity=invalid,
                 source_state="private_root_empty_p03_not_executed",
                 execution_host="github_codespaces",
+                codespace_name="dutchbay-review-test",
             )
         except identity.SandboxIdentityError as exc:
             assert "receipt fields" in str(exc)
@@ -1696,6 +1742,7 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
                 sshd_identity=invalid_sshd,
                 source_state="private_root_empty_p03_not_executed",
                 execution_host="github_codespaces",
+                codespace_name="dutchbay-review-test",
             )
         except identity.SandboxIdentityError as exc:
             assert expected_error in str(exc)
@@ -1710,6 +1757,7 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
             sshd_identity=stale_self_digest,
             source_state="private_root_empty_p03_not_executed",
             execution_host="github_codespaces",
+            codespace_name="dutchbay-review-test",
         )
     except identity.SandboxIdentityError as exc:
         assert "self-digest" in str(exc)
@@ -1735,6 +1783,7 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
                 sshd_identity=sshd_identity,
                 source_state=invalid_state,
                 execution_host="github_codespaces",
+                codespace_name="dutchbay-review-test",
             )
         except identity.SandboxIdentityError as exc:
             assert "source state" in str(exc)
@@ -1768,6 +1817,18 @@ def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
             assert "Codespace identity" in str(exc)
         else:  # pragma: no cover - explicit fail branch
             raise AssertionError("invalid bootstrap Codespace name was accepted")
+        try:
+            identity.build_verification_receipt(
+                identity=sandbox_identity,
+                sshd_identity=sshd_identity,
+                source_state="private_root_empty_p03_not_executed",
+                execution_host="github_codespaces",
+                codespace_name=invalid_name,
+            )
+        except identity.SandboxIdentityError as exc:
+            assert "Codespace identity" in str(exc)
+        else:  # pragma: no cover - explicit fail branch
+            raise AssertionError("invalid verification Codespace name was accepted")
 
 
 def test_package_content_fingerprint_detects_drift_without_importing_site(

@@ -3,6 +3,7 @@
 # Emit a path-free JSON identity for the installed and effective SSH surface.
 
 set -euo pipefail
+export PYTHONDONTWRITEBYTECODE=1
 
 readonly CONTAINER_PYTHON="/usr/local/bin/python3.12"
 readonly SSHD_MAIN_CONFIG="/etc/ssh/sshd_config"
@@ -12,6 +13,13 @@ fail() {
   printf 'ERROR: %s\n' "$*" >&2
   exit 2
 }
+
+bytecode_probe=$(find .devcontainer \
+  \( -type d -name __pycache__ \
+    -o -type f \( -name '*.pyc' -o -name '*.pyo' \) \) \
+  -print -quit) || fail "repository bytecode population could not be determined"
+[ -z "$bytecode_probe" ] || fail \
+  "repository bytecode is executable untracked input; recreate the Codespace"
 
 [ -x "$CONTAINER_PYTHON" ] && [ ! -L "$CONTAINER_PYTHON" ] || fail \
   "digest-pinned container Python is unavailable"
