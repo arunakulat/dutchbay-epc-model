@@ -279,7 +279,8 @@ transport deadline, then waits separately for the atomically published
 bootstrap receipt under a bounded first-install deadline. The two-stage check
 prevents transport availability from racing ahead of dependency installation,
 environment attestation or receipt binding while preserving accurate failure
-diagnostics.
+diagnostics. The disposable proof also allows a separately bounded five-minute
+GitHub shutdown transition before exercising restart recovery.
 
 The bootstrap commit identifies environment construction, not an immutable
 review checkout. Reusing the same governed Codespace after a P02 result merge is

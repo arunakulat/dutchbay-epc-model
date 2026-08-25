@@ -520,6 +520,7 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
     assert "gh codespace cp --expand" in candidate
     assert "readonly TRANSPORT_TIMEOUT_SECONDS=300" in candidate
     assert "readonly BOOTSTRAP_TIMEOUT_SECONDS=900" in candidate
+    assert "readonly SHUTDOWN_TIMEOUT_SECONDS=300" in candidate
     assert "sshd_readiness.py 5 /run/dutchbay-sshd-runtime.ready" in candidate
     assert (
         'readonly BOOTSTRAP_READY_COMMAND="test -f '
