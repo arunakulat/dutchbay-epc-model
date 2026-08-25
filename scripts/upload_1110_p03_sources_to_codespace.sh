@@ -151,12 +151,16 @@ verify_codespace_identity "$codespace_name"
 # Currency and destination checks happen before ingress while network access is
 # still required. No fetch or package installation occurs after retained data is
 # copied. The fixed destination must exist, be real, and be empty.
-gh codespace ssh -c "$codespace_name" "bash -se" <<'REMOTE_PREFLIGHT'
+gh codespace ssh -c "$codespace_name" \
+  "bash -se -- $codespace_name" <<'REMOTE_PREFLIGHT'
 set -euo pipefail
+readonly expected_codespace_name=$1
 readonly repo_root="/workspaces/dutchbay-epc-model"
 readonly source_root="/workspaces/.dutchbay-private/p03/sources"
 readonly smoke_root="/workspaces/.dutchbay-private/transport-smoke"
 cd "$repo_root"
+test "$CODESPACES" = true
+test "$CODESPACE_NAME" = "$expected_codespace_name"
 checkout_branch=$(git branch --show-current) || exit 2
 case "$checkout_branch" in
   main|"") ;;
@@ -202,10 +206,14 @@ gh codespace cp --expand --recursive -c "$codespace_name" \
 
 # Re-run the exact controlled verifier remotely. It both verifies the transferred
 # population and emits the hash-bound, HOLD-side sandbox identity receipt.
-gh codespace ssh -c "$codespace_name" "bash -se" <<'REMOTE_VERIFY'
+gh codespace ssh -c "$codespace_name" \
+  "bash -se -- $codespace_name" <<'REMOTE_VERIFY'
 set -euo pipefail
+readonly expected_codespace_name=$1
 readonly repo_root="/workspaces/dutchbay-epc-model"
 cd "$repo_root"
+test "$CODESPACES" = true
+test "$CODESPACE_NAME" = "$expected_codespace_name"
 export DUTCHBAY_VENV="/workspaces/.dutchbay-audit-review-venv"
 export DUTCHBAY_P03_SOURCE_ROOT="/workspaces/.dutchbay-private/p03/sources"
 export PYTHONPATH="$repo_root"

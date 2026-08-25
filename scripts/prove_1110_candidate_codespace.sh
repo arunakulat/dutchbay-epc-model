@@ -15,6 +15,7 @@ readonly POLL_SECONDS=5
 readonly TRANSPORT_TIMEOUT_SECONDS=300
 readonly SHUTDOWN_TIMEOUT_SECONDS=120
 readonly DELETION_TIMEOUT_SECONDS=120
+readonly AMBIGUOUS_CREATE_RECOVERY_TIMEOUT_SECONDS=120
 readonly REMOTE_REPO="/workspaces/dutchbay-epc-model"
 readonly REMOTE_SOURCE_ROOT="/workspaces/.dutchbay-private/p03/sources"
 readonly REMOTE_SMOKE_ROOT="/workspaces/.dutchbay-private/transport-smoke"
@@ -25,6 +26,7 @@ create_lock_held="false"
 codespace_created="false"
 creation_pending="false"
 candidate_branch=""
+run_nonce=""
 
 fail() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -45,10 +47,10 @@ codespace_identity() {
     "/user/codespaces/$codespace_name"
 }
 
-verify_api_identity() {
+api_identity_matches() {
   local branch=$1
   local identity_json
-  identity_json=$(codespace_identity)
+  identity_json=$(codespace_identity) || return 2
   jq -e \
     --arg name "$codespace_name" \
     --arg display "$display_name" \
@@ -58,27 +60,55 @@ verify_api_identity() {
       and .display_name == $display
       and .repository.full_name == $repository
       and .git_status.ref == $branch' \
-    <<< "$identity_json" >/dev/null \
-    || fail "candidate Codespace API identity differs"
+    <<< "$identity_json" >/dev/null || return 1
+}
+
+verify_api_identity() {
+  local branch=$1
+  local identity_status
+  if api_identity_matches "$branch"; then
+    return 0
+  else
+    identity_status=$?
+  fi
+  if [ "$identity_status" -eq 2 ]; then
+    fail "candidate Codespace API identity could not be determined"
+  fi
+  fail "candidate Codespace API identity differs"
 }
 
 candidate_is_absent() {
   local codespaces_json
-  codespaces_json=$(list_codespaces)
+  codespaces_json=$(list_codespaces) || return 2
+  jq -e \
+    'type == "array"
+      and length > 0
+      and all(.[]; type == "object" and (.codespaces | type == "array"))' \
+    <<< "$codespaces_json" >/dev/null || return 2
   jq -e --arg name "$codespace_name" \
     '[.[].codespaces[] | select(.name == $name)] | length == 0' \
     <<< "$codespaces_json" >/dev/null
 }
 
 wait_for_candidate_absence() {
+  local absence_status
   local deletion_deadline=$((SECONDS + DELETION_TIMEOUT_SECONDS))
   while [ "$SECONDS" -lt "$deletion_deadline" ]; do
     if candidate_is_absent; then
       return 0
+    else
+      absence_status=$?
     fi
+    [ "$absence_status" -eq 1 ] || return 2
     sleep "$POLL_SECONDS"
   done
-  candidate_is_absent
+  if candidate_is_absent; then
+    return 0
+  else
+    absence_status=$?
+  fi
+  [ "$absence_status" -eq 1 ] || return 2
+  return 1
 }
 
 delete_candidate_and_confirm_absent() {
@@ -90,11 +120,16 @@ delete_candidate_and_confirm_absent() {
   codespace_created="false"
 }
 
-recover_unique_pending_candidate() {
+recover_unique_pending_candidate_once() {
   local codespaces_json
   local matching_count
   local recovered_name
   codespaces_json=$(list_codespaces) || return 2
+  jq -e \
+    'type == "array"
+      and length > 0
+      and all(.[]; type == "object" and (.codespaces | type == "array"))' \
+    <<< "$codespaces_json" >/dev/null || return 2
   matching_count=$(
     jq --arg display "$display_name" \
       --arg repository "$REPOSITORY" \
@@ -127,12 +162,33 @@ recover_unique_pending_candidate() {
   creation_pending="false"
 }
 
+recover_pending_candidate_boundedly() {
+  local recovery_status
+  local recovery_deadline=$((SECONDS + AMBIGUOUS_CREATE_RECOVERY_TIMEOUT_SECONDS))
+  while [ "$SECONDS" -lt "$recovery_deadline" ]; do
+    if recover_unique_pending_candidate_once; then
+      return 0
+    else
+      recovery_status=$?
+    fi
+    [ "$recovery_status" -eq 1 ] || return 2
+    sleep "$POLL_SECONDS"
+  done
+  if recover_unique_pending_candidate_once; then
+    return 0
+  else
+    recovery_status=$?
+  fi
+  [ "$recovery_status" -eq 1 ] || return 2
+  return 1
+}
+
 cleanup() {
   local exit_status=$?
   local recovery_status
   trap - EXIT
   if [ "$creation_pending" = "true" ]; then
-    if recover_unique_pending_candidate; then
+    if recover_pending_candidate_boundedly; then
       :
     else
       recovery_status=$?
@@ -147,7 +203,11 @@ cleanup() {
   if [ "$codespace_created" = "true" ]; then
     if [ -n "$codespace_name" ] \
       && [[ "$codespace_name" =~ ^[A-Za-z0-9_-]+$ ]]; then
-      if ! gh codespace delete -c "$codespace_name" --force; then
+      if ! api_identity_matches "$candidate_branch"; then
+        printf 'ERROR: refusing candidate deletion because API identity differs: %s\n' \
+          "$codespace_name" >&2
+        exit_status=2
+      elif ! gh codespace delete -c "$codespace_name" --force; then
         printf 'ERROR: exact candidate Codespace deletion failed: %s\n' \
           "$codespace_name" >&2
         exit_status=2
@@ -237,7 +297,7 @@ verify_remote_candidate() {
   local branch=$1
   local expected_sha=$2
   gh codespace ssh -c "$codespace_name" \
-    "bash -se -- $branch $expected_sha" <<'REMOTE_VERIFY'
+    "bash -se -- $branch $expected_sha $codespace_name" <<'REMOTE_VERIFY'
 set -Eeuo pipefail
 remote_error() {
   local exit_status=$?
@@ -247,6 +307,7 @@ remote_error() {
 trap 'remote_error "$LINENO"' ERR
 readonly expected_branch=$1
 readonly expected_sha=$2
+readonly expected_codespace_name=$3
 readonly repo_root="/workspaces/dutchbay-epc-model"
 readonly source_root="/workspaces/.dutchbay-private/p03/sources"
 readonly smoke_root="/workspaces/.dutchbay-private/transport-smoke"
@@ -254,6 +315,7 @@ readonly bootstrap_receipt="/workspaces/.dutchbay-private/bootstrap-receipt.json
 cd "$repo_root"
 test "$(id -un)" = vscode
 test "$CODESPACES" = true
+test "$CODESPACE_NAME" = "$expected_codespace_name"
 test "$DUTCHBAY_VENV" = /workspaces/.dutchbay-audit-review-venv
 test "$DUTCHBAY_P03_SOURCE_ROOT" = "$source_root"
 test "$PYTHONPATH" = "$repo_root"
@@ -360,7 +422,13 @@ remote_sha=$(git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH" \
 [ "$remote_sha" = "$EXPECTED_SHA" ] || fail \
   "remote candidate branch does not equal the expected SHA"
 
-display_name="DB1110-$EXPECTED_SHA"
+run_nonce=$(
+  "$GOVERNED_PYTHON" -S -c \
+    'import secrets; print(secrets.token_hex(8))'
+) || fail "candidate run nonce could not be generated"
+[[ "$run_nonce" =~ ^[0-9a-f]{16}$ ]] || fail \
+  "candidate run nonce is malformed"
+display_name="DB1110-${EXPECTED_SHA:0:12}-$run_nonce"
 [ "${#display_name}" -le 48 ] || fail \
   "candidate display name exceeds the GitHub Codespaces limit"
 existing_json=$(list_codespaces)
@@ -385,9 +453,9 @@ codespace_name=$(gh codespace create \
   --retention-period 24h)
 [[ "$codespace_name" =~ ^[A-Za-z0-9_-]+$ ]] \
   || fail "created candidate Codespace name is malformed"
+verify_api_identity "$CANDIDATE_BRANCH"
 codespace_created="true"
 creation_pending="false"
-verify_api_identity "$CANDIDATE_BRANCH"
 
 wait_for_transport || fail "candidate Codespace SSH transport did not become ready"
 verify_remote_candidate "$CANDIDATE_BRANCH" "$EXPECTED_SHA"
@@ -420,12 +488,16 @@ trap - EXIT
 
 jq -n \
   --arg codespace_name "$completed_codespace_name" \
+  --arg display_name "$display_name" \
+  --arg run_nonce "$run_nonce" \
   --arg branch "$CANDIDATE_BRANCH" \
   --arg sha "$EXPECTED_SHA" \
   '{
     schema: "dutchbay.audit_review_candidate_codespace.v1",
     status: "PASS",
     candidate_codespace_name: $codespace_name,
+    candidate_display_name: $display_name,
+    candidate_run_nonce: $run_nonce,
     candidate_branch: $branch,
     candidate_sha: $sha,
     api_identity: "matched",

@@ -41,7 +41,7 @@ fail() {
 [ ! -L "$SOURCE_ROOT" ] || fail "private P03 source root must not be a symlink"
 [ "$(realpath -e "$SOURCE_ROOT")" = "$SOURCE_ROOT" ] || fail \
   "private P03 source root resolved outside its fixed path"
-bootstrap_provenance=$(
+execution_host=$(
   "$CONTAINER_PYTHON" -S - "$BOOTSTRAP_RECEIPT" <<'PY'
 from __future__ import annotations
 
@@ -68,12 +68,9 @@ if not isinstance(git_commit, str) or len(git_commit) != 40 or any(
     value not in "0123456789abcdef" for value in git_commit
 ):
     raise SystemExit("bootstrap receipt Git identity is malformed")
-print(f"{receipt['environment']} {git_commit}")
+print(receipt["environment"])
 PY
 )
-read -r execution_host bootstrap_commit extra_provenance <<< "$bootstrap_provenance"
-[ -z "${extra_provenance:-}" ] || fail \
-  "sandbox bootstrap provenance field population differs"
 [ "$execution_host" = "github_codespaces" ] || fail \
   "protected review receipt is not bound to a real GitHub Codespace"
 [ -f "$DEPENDENCY_MARKER" ] || fail "sandbox dependency marker is unavailable"
@@ -109,8 +106,6 @@ origin_main=$(git rev-parse refs/remotes/origin/main) || fail \
   "fetched origin/main commit could not be determined"
 [ "$checkout_head" = "$origin_main" ] || fail \
   "sandbox checkout must equal the fetched origin/main before review preflight"
-[ "$bootstrap_commit" = "$checkout_head" ] || fail \
-  "sandbox bootstrap receipt does not bind the current protected-main commit"
 
 PYTHONPATH="$PWD/.devcontainer" "$CONTAINER_PYTHON" -S - <<PY
 from pathlib import Path

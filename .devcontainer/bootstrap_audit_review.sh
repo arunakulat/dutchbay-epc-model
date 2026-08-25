@@ -21,7 +21,17 @@ readonly SSHD_MARKER="$VENV_ROOT/.dutchbay-sshd-identity.sha256"
 readonly REQUIRED_PIP_VERSION="26.2.1"
 readonly REQUIRED_SETUPTOOLS_VERSION="84.0.0"
 readonly REQUIRED_WHEEL_VERSION="0.48.0"
-readonly EXECUTION_HOST="${DUTCHBAY_SANDBOX_EXECUTION_HOST:-github_codespaces}"
+execution_host_input="${DUTCHBAY_SANDBOX_EXECUTION_HOST:-}"
+if [ -n "$execution_host_input" ]; then
+  EXECUTION_HOST=$execution_host_input
+elif [ "${CODESPACES:-}" = "true" ] && [ -n "${CODESPACE_NAME:-}" ]; then
+  EXECUTION_HOST="github_codespaces"
+else
+  printf '%s\n' \
+    "ERROR: sandbox execution-host provenance is missing" >&2
+  exit 2
+fi
+readonly EXECUTION_HOST
 
 fail() {
   printf 'ERROR: %s\n' "$*" >&2

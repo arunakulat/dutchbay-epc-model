@@ -5,6 +5,7 @@
 set -euo pipefail
 
 readonly CONTAINER_PYTHON="/usr/local/bin/python3.12"
+readonly SSHD_MAIN_CONFIG="/etc/ssh/sshd_config"
 readonly SSHD_DROP_IN="/etc/ssh/sshd_config.d/00-dutchbay-audit-review.conf"
 
 fail() {
@@ -14,6 +15,8 @@ fail() {
 
 [ -x "$CONTAINER_PYTHON" ] && [ ! -L "$CONTAINER_PYTHON" ] || fail \
   "digest-pinned container Python is unavailable"
+[ -f "$SSHD_MAIN_CONFIG" ] && [ ! -L "$SSHD_MAIN_CONFIG" ] || fail \
+  "SSH main configuration is unavailable or unsafe"
 [ -f "$SSHD_DROP_IN" ] && [ ! -L "$SSHD_DROP_IN" ] || fail \
   "controlled SSH policy is unavailable or unsafe"
 [ "$#" -eq 1 ] || fail "expected --construction or --session"
@@ -62,7 +65,7 @@ package_paths=$(
     | LC_ALL=C /usr/bin/sort --unique
 )
 
-sshd_configuration_paths="/etc/ssh/sshd_config"
+sshd_configuration_paths="$SSHD_MAIN_CONFIG"
 shopt -s nullglob
 sshd_drop_in_population=(/etc/ssh/sshd_config.d/*)
 for path in "${sshd_drop_in_population[@]}"; do
@@ -126,7 +129,17 @@ import json
 import os
 from pathlib import Path
 
-from audit_review_identity import build_sshd_transport_identity
+from audit_review_identity import (
+    build_sshd_transport_identity,
+    validate_sshd_include_graph,
+)
+
+configuration_paths = [
+    Path(value)
+    for value in os.environ["SSHD_CONFIGURATION_PATHS"].splitlines()
+    if value
+]
+validate_sshd_include_graph(configuration_paths[0], configuration_paths[1:])
 
 identity = build_sshd_transport_identity(
     effective_config=os.environ["SSHD_EFFECTIVE_CONFIG"],
@@ -138,11 +151,7 @@ identity = build_sshd_transport_identity(
     ],
     extra_paths=[
         Path("/etc/pam.d/sshd"),
-        *[
-            Path(value)
-            for value in os.environ["SSHD_CONFIGURATION_PATHS"].splitlines()
-            if value
-        ],
+        *configuration_paths,
         Path("/usr/local/share/ssh-init.sh"),
         Path("/usr/local/sbin/dutchbay-sshd-start.sh"),
         Path("/usr/local/lib/dutchbay/sshd_readiness.py"),

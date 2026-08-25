@@ -129,9 +129,10 @@ jobs:
           set -euo pipefail
 
           exercise_authenticated_transport() {
-            docker exec --user vscode \
-              --workdir /workspaces/dutchbay-epc-model \
-              "$CONTAINER_ID" bash -ceu '
+            session_identity=$(
+              docker exec --user vscode \
+                --workdir /workspaces/dutchbay-epc-model \
+                "$CONTAINER_ID" bash -ceu '
                 probe_root=$(mktemp -d /tmp/dutchbay-ssh-probe.XXXXXX)
                 cleanup_probe() {
                   unlink -- /home/vscode/.ssh/authorized_keys 2>/dev/null || true
@@ -168,18 +169,23 @@ jobs:
                     case ":${PATH:-}:" in
                       *:/workspaces/.dutchbay-audit-review-venv/bin:*) ;;
                       *) exit 2 ;;
-                    esac'"'"'
-                session_identity=$(
-                  bash .devcontainer/attest_audit_review_sshd.sh --session
-                )
-                session_digest=$(
-                  SSHD_IDENTITY_JSON="$session_identity" \
-                    /usr/local/bin/python3.12 -S -c \
-                    '"'"'import json, os; print(json.loads(os.environ["SSHD_IDENTITY_JSON"])["sshd_identity_sha256"])'"'"'
-                )
-                test "$(tr -d "\r\n" < /workspaces/.dutchbay-audit-review-venv/.dutchbay-sshd-identity.sha256)" = \
-                  "$session_digest"
+                    esac &&
+                    cd /workspaces/dutchbay-epc-model &&
+                    bash .devcontainer/attest_audit_review_sshd.sh --session'"'"'
               '
+            )
+            session_digest=$(
+              jq -er '.sshd_identity_sha256
+                | strings
+                | select(test("^[0-9a-f]{64}$"))' <<< "$session_identity"
+            )
+            marker_digest=$(
+              docker exec "$CONTAINER_ID" bash -ceu '
+                tr -d "\r\n" \
+                  < /workspaces/.dutchbay-audit-review-venv/.dutchbay-sshd-identity.sha256
+              '
+            )
+            test "$marker_digest" = "$session_digest"
           }
 
           exercise_authenticated_transport
@@ -245,13 +251,14 @@ jobs:
           if [ -n "$CONTAINER_ID" ]; then
             docker logs "$CONTAINER_ID" || true
           else
+            fallback_ids=$(
+              docker ps -aq \
+                --filter "label=devcontainer.local_folder=$GITHUB_WORKSPACE"
+            ) || exit 2
             while IFS= read -r fallback_id; do
               [ -n "$fallback_id" ] || continue
               docker logs "$fallback_id" || true
-            done < <(
-              docker ps -aq \
-                --filter "label=devcontainer.local_folder=$GITHUB_WORKSPACE"
-            )
+            done <<< "$fallback_ids"
           fi
 
       - name: Remove the exact Dev Container
@@ -263,11 +270,17 @@ jobs:
           if [ -n "$CONTAINER_ID" ]; then
             docker rm --force "$CONTAINER_ID"
           else
+            fallback_ids=$(
+              docker ps -aq \
+                --filter "label=devcontainer.local_folder=$GITHUB_WORKSPACE"
+            ) || exit 2
             while IFS= read -r fallback_id; do
               [ -n "$fallback_id" ] || continue
               docker rm --force "$fallback_id"
-            done < <(
-              docker ps -aq \
-                --filter "label=devcontainer.local_folder=$GITHUB_WORKSPACE"
-            )
+            done <<< "$fallback_ids"
           fi
+          remaining_ids=$(
+            docker ps -aq \
+              --filter "label=devcontainer.local_folder=$GITHUB_WORKSPACE"
+          ) || exit 2
+          test -z "$remaining_ids"

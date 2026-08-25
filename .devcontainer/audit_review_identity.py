@@ -313,6 +313,39 @@ def validate_sshd_effective_config(config_text: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def validate_sshd_include_graph(
+    main_config: Path,
+    drop_in_population: list[Path],
+    *,
+    expected_include_pattern: str = "/etc/ssh/sshd_config.d/*.conf",
+) -> None:
+    """Require one closed, regular-file OpenSSH Include graph."""
+    paths = [main_config, *drop_in_population]
+    if len(set(paths)) != len(paths):
+        raise SandboxIdentityError("SSH configuration population is duplicated")
+    for path in paths:
+        if not path.is_file() or path.is_symlink():
+            raise SandboxIdentityError("SSH configuration population is unsafe")
+
+    def include_arguments(path: Path) -> list[list[str]]:
+        directives: list[list[str]] = []
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.partition("#")[0].strip()
+            parts = line.split()
+            if parts and parts[0].lower() == "include":
+                directives.append(parts[1:])
+        return directives
+
+    if include_arguments(main_config) != [[expected_include_pattern]]:
+        raise SandboxIdentityError("SSH main configuration Include graph differs")
+    if any(include_arguments(path) for path in drop_in_population):
+        raise SandboxIdentityError("nested SSH configuration Include is unsupported")
+    resolved = sorted(main_config.parent.joinpath("sshd_config.d").glob("*.conf"))
+    configured = sorted(path for path in drop_in_population if path.suffix == ".conf")
+    if configured != resolved:
+        raise SandboxIdentityError("SSH drop-in Include population differs")
+
+
 def build_sshd_session_connection_context(
     ssh_connection: str,
     ssh_client: str,

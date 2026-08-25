@@ -255,6 +255,13 @@ boundary. The Actions emulation must never claim the creator-private
 Codespaces boundary; neither execution-host mode authorizes completion or
 changes the release status from `HOLD`.
 
+The in-container host field is a provenance label, not independent proof of a
+GitHub resource: the `vscode` owner can replace its own private receipt. Real
+Codespaces evidence is authoritative only through the outer governed controls,
+which authenticate with GitHub, verify exact name/repository/ref, pass that
+name into the SSH child, and require it to equal the platform `CODESPACE_NAME`.
+The hosted oracle supplies and asserts its separate explicit Actions label.
+
 The bootstrap writes that provenance atomically to the fixed owner-only path
 `/workspaces/.dutchbay-private/bootstrap-receipt.json`. Hosted CI asserts the
 Actions host, network boundary and exact candidate SHA from that receipt. The
@@ -262,11 +269,19 @@ protected verifier and disposable real-Codespaces proof require the Codespaces
 host and creator-private boundary from the same receipt. A disposable proof
 emits PASS only after the exact named Codespace is deleted, its absence is
 confirmed through the Codespaces API, and the local creation lock is released.
-Its 47-character `DB1110-<full SHA>` display name retains the complete commit
-identity while remaining below GitHub Codespaces' 48-character limit.
+Its `DB1110-<12-SHA>-<16-hex nonce>` display name is unique to one local run
+while remaining below GitHub Codespaces' 48-character limit; the full SHA is
+still verified independently through the remote ref and checkout controls.
 Initial readiness requires both the repository-owned SSH marker and the
 atomically published bootstrap receipt, so transport availability cannot race
 ahead of dependency installation, environment attestation or receipt binding.
+
+The bootstrap commit identifies environment construction, not an immutable
+review checkout. Reusing the same governed Codespace after a P02 result merge is
+allowed only when the live dependency and environment markers still reproduce;
+the later verification receipt binds the new clean exact `origin/main` commit.
+The disposable pre-merge candidate is different: its outer control requires the
+bootstrap commit itself to equal the exact topic-branch SHA.
 
 Re-run `scripts/verify_1110_cloud_review_sandbox.sh`. It must independently hash
 all 74 retained objects before semantic review begins. Then follow issue #1162

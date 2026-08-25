@@ -409,6 +409,8 @@ def test_repository_owned_ssh_transport_is_narrow_and_base_pinned() -> None:
     assert "/usr/sbin/sshd -T" in attestor
     assert '-C "$connection_context"' in attestor
     assert "build_sshd_session_connection_context" in attestor
+    assert "validate_sshd_include_graph" in attestor
+    assert '[ -f "$SSHD_MAIN_CONFIG" ] && [ ! -L "$SSHD_MAIN_CONFIG" ]' in (attestor)
     assert '"${SSH_CONNECTION:-}"' in attestor
     assert '"${SSH_CLIENT:-}"' in attestor
     assert "--construction" in attestor
@@ -483,6 +485,11 @@ def test_ci_builds_and_boots_exact_audit_review_image() -> None:
     assert 'test "${DUTCHBAY_P03_SOURCE_ROOT:-}" = ' in workflow
     assert 'test "${PYTHONPATH:-}" = ' in workflow
     assert "bash .devcontainer/attest_audit_review_sshd.sh" in workflow
+    assert "session_identity=$(\n              docker exec" in workflow
+    assert "session_digest=$(\n              jq -er" in workflow
+    assert "remaining_ids=$(" in workflow
+    assert 'test -z "$remaining_ids"' in workflow
+    assert "done < <(\n              docker ps -aq" not in workflow
     assert workflow.count("\n          exercise_authenticated_transport\n") == 2
     assert workflow.count("bash .devcontainer/start_audit_review_sshd.sh --start") == 2
     assert "before_marker" in workflow
@@ -528,9 +535,17 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
     assert '"git_commit": sys.argv[2]' in candidate
     assert 'delete_candidate_and_confirm_absent "$CANDIDATE_BRANCH"' in candidate
     assert 'creation_pending="true"' in candidate
-    assert "recover_unique_pending_candidate" in candidate
-    assert 'display_name="DB1110-$EXPECTED_SHA"' in candidate
+    assert "recover_pending_candidate_boundedly" in candidate
+    assert "recover_unique_pending_candidate_once" in candidate
+    assert 'display_name="DB1110-${EXPECTED_SHA:0:12}-$run_nonce"' in candidate
+    assert "secrets.token_hex(8)" in candidate
     assert '[ "${#display_name}" -le 48 ]' in candidate
+    assert "codespaces_json=$(list_codespaces) || return 2" in candidate
+    assert 'api_identity_matches "$candidate_branch"' in candidate
+    create_position = candidate.index("codespace_name=$(gh codespace create")
+    assert candidate.index(
+        'verify_api_identity "$CANDIDATE_BRANCH"', create_position
+    ) < candidate.index('codespace_created="true"', create_position)
     assert candidate.index(
         'delete_candidate_and_confirm_absent "$CANDIDATE_BRANCH"'
     ) < candidate.index("jq -n")
@@ -566,9 +581,10 @@ def test_candidate_codespace_control_rejects_non_allowlisted_identity() -> None:
 
 
 def test_candidate_recovers_ambiguous_creation_before_exit(tmp_path: Path) -> None:
-    """Malformed create output must discover and delete only the exact candidate."""
+    """Delayed ambiguous creation must recover and delete the per-run candidate."""
     tool_root = tmp_path / "bin"
     state_path = tmp_path / "created"
+    visibility_path = tmp_path / "visibility"
     call_log = tmp_path / "calls.log"
     tool_root.mkdir()
     sha = "a" * 40
@@ -594,14 +610,35 @@ printf '%s\\n' "$*" >> "$STUB_CALL_LOG"
 case "$1 $2" in
   "api --paginate")
     if [ -e "$STUB_STATE" ]; then
-      printf '[{"codespaces":[{"name":"candidate123","display_name":"DB1110-%s","repository":{"full_name":"arunakulat/dutchbay-epc-model"},"git_status":{"ref":"%s"}}]}]\\n' "$STUB_SHA" "$STUB_BRANCH"
+      visibility=0
+      if [ -e "$STUB_VISIBILITY" ]; then
+        visibility=$(cat "$STUB_VISIBILITY")
+      fi
+      visibility=$((visibility + 1))
+      printf '%s\\n' "$visibility" > "$STUB_VISIBILITY"
+      if [ "$visibility" -eq 1 ]; then
+        printf '[{"codespaces":[]}]\\n'
+      else
+        display=$(cat "$STUB_STATE")
+        printf '[{"codespaces":[{"name":"candidate123","display_name":"%s","repository":{"full_name":"arunakulat/dutchbay-epc-model"},"git_status":{"ref":"%s"}}]}]\\n' "$display" "$STUB_BRANCH"
+      fi
     else
       printf '[{"codespaces":[]}]\\n'
     fi
     ;;
+  "api -H")
+    display=$(cat "$STUB_STATE")
+    printf '{"name":"candidate123","display_name":"%s","repository":{"full_name":"arunakulat/dutchbay-epc-model"},"git_status":{"ref":"%s"}}\\n' "$display" "$STUB_BRANCH"
+    ;;
   "codespace create")
-    : > "$STUB_STATE"
-    printf 'malformed/name\\n'
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = "-d" ]; then
+        printf '%s\\n' "$2" > "$STUB_STATE"
+        break
+      fi
+      shift
+    done
+    printf '%s\\n' "$STUB_CREATE_OUTPUT"
     ;;
   "codespace delete")
     rm -- "$STUB_STATE"
@@ -615,30 +652,37 @@ esac
     gh_stub.chmod(0o755)
     lock_path = Path("/tmp/dutchbay-1110-candidate-codespace.lock")
     assert not lock_path.exists()
-    environment = {
+    base_environment = {
         **os.environ,
         "PATH": f"{tool_root}:/usr/bin:/bin",
         "DUTCHBAY_VENV": "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv",
         "STUB_SHA": sha,
         "STUB_BRANCH": branch,
         "STUB_STATE": str(state_path),
+        "STUB_VISIBILITY": str(visibility_path),
         "STUB_CALL_LOG": str(call_log),
     }
-    result = subprocess.run(
-        (str(CANDIDATE_CODESPACE), branch, sha),
-        cwd=REPO_ROOT,
-        env=environment,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 2
-    assert "created candidate Codespace name is malformed" in result.stderr
-    assert "codespace delete -c candidate123 --force" in call_log.read_text(
-        encoding="utf-8"
-    )
-    assert not state_path.exists()
-    assert not lock_path.exists()
+    for create_output, expected_error in (
+        ("malformed/name", "created candidate Codespace name is malformed"),
+        ("protected999", "candidate Codespace API identity differs"),
+    ):
+        visibility_path.unlink(missing_ok=True)
+        result = subprocess.run(
+            (str(CANDIDATE_CODESPACE), branch, sha),
+            cwd=REPO_ROOT,
+            env={**base_environment, "STUB_CREATE_OUTPUT": create_output},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 2
+        assert expected_error in result.stderr
+        assert not state_path.exists()
+        assert visibility_path.read_text(encoding="utf-8").strip() == "2"
+        assert not lock_path.exists()
+    calls = call_log.read_text(encoding="utf-8")
+    assert calls.count("codespace delete -c candidate123 --force") == 2
+    assert "codespace delete -c protected999 --force" not in calls
 
 
 def test_shell_population_and_status_probes_fail_closed(tmp_path: Path) -> None:
@@ -769,6 +813,8 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert SANDBOX_VENV in combined
     assert "CODESPACES" in combined
     assert '"$(id -un)" = "vscode"' in bootstrap
+    assert "DUTCHBAY_SANDBOX_EXECUTION_HOST:-github_codespaces" not in bootstrap
+    assert 'EXECUTION_HOST="github_codespaces"' in bootstrap
     assert "-d -m 0755 -o vscode -g vscode /workspaces" in bootstrap
     assert '"vscode:vscode:755"' in bootstrap
     assert bootstrap.index("-d -m 0755 -o vscode -g vscode /workspaces") < (
@@ -817,6 +863,7 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert "delete and recreate it before retrying" in upload
     assert "DUTCHBAY_P03_CLOUD_INGRESS_AUTHORIZED" in upload
     assert "DUTCHBAY_1110_REVIEW_CODESPACE_NAME" in upload
+    assert 'test "$CODESPACE_NAME" = "$expected_codespace_name"' in upload
     assert "gh codespace list" not in upload
     assert upload.count('verify_codespace_identity "$codespace_name"') == 2
     assert '"/user/codespaces/$codespace_name"' in upload
@@ -1386,6 +1433,54 @@ def test_authenticated_ssh_connection_context_is_exact_and_fail_closed() -> None
             pass
         else:  # pragma: no cover - explicit fail branch
             raise AssertionError(f"unsafe SSH tuple was accepted: {connection!r}")
+
+
+def test_sshd_include_graph_is_closed_regular_and_complete(tmp_path: Path) -> None:
+    """The SSH content identity must cover one closed Include population."""
+    identity = _load_identity_contract()
+    ssh_root = tmp_path / "etc" / "ssh"
+    drop_in_root = ssh_root / "sshd_config.d"
+    drop_in_root.mkdir(parents=True)
+    main = ssh_root / "sshd_config"
+    controlled = drop_in_root / "00-dutchbay-audit-review.conf"
+    package_owned = drop_in_root / "200-feature.conf"
+    main.write_text("Include /etc/ssh/sshd_config.d/*.conf\n", encoding="utf-8")
+    controlled.write_text("PasswordAuthentication no\n", encoding="utf-8")
+    package_owned.write_text("Port 2222\n", encoding="utf-8")
+
+    local_pattern = f"{drop_in_root}/*.conf"
+    main.write_text(f"Include {local_pattern}\n", encoding="utf-8")
+    identity.validate_sshd_include_graph(
+        main,
+        [controlled, package_owned],
+        expected_include_pattern=local_pattern,
+    )
+    controlled.write_text("Include /tmp/alternate.conf\n", encoding="utf-8")
+    try:
+        identity.validate_sshd_include_graph(
+            main,
+            [controlled, package_owned],
+            expected_include_pattern=local_pattern,
+        )
+    except identity.SandboxIdentityError as exc:
+        assert "nested" in str(exc)
+    else:  # pragma: no cover - explicit fail branch
+        raise AssertionError("nested SSH Include was accepted")
+    controlled.write_text("PasswordAuthentication no\n", encoding="utf-8")
+    target = tmp_path / "aliased-main"
+    target.write_text(main.read_text(encoding="utf-8"), encoding="utf-8")
+    main.unlink()
+    main.symlink_to(target)
+    try:
+        identity.validate_sshd_include_graph(
+            main,
+            [controlled, package_owned],
+            expected_include_pattern=local_pattern,
+        )
+    except identity.SandboxIdentityError as exc:
+        assert "unsafe" in str(exc)
+    else:  # pragma: no cover - explicit fail branch
+        raise AssertionError("symlinked SSH main configuration was accepted")
 
 
 def test_base_image_policy_cannot_drift_from_reported_digest(tmp_path: Path) -> None:
