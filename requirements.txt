@@ -162,7 +162,7 @@ magika==0.6.3
 makefun==1.16.0
 markdown-it-py==4.2.0
 markdownify==1.2.3
-markitdown==0.1.6
+markitdown==0.1.7
 MarkupSafe==3.0.3
 matplotlib-inline==0.2.2
 matplotlib==3.11.1
@@ -244,7 +244,7 @@ pyDOE3==1.6.2
 pydyf==0.12.1
 Pygments==2.21.0
 PyJWT==2.13.0
-pymupdf==1.28.0
+pymupdf==1.28.2
 pyogrio==0.13.0
 pyomo==6.10.1
 pyparsing==3.3.2
