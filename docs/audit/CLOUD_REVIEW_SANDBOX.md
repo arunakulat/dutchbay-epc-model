@@ -272,9 +272,12 @@ confirmed through the Codespaces API, and the local creation lock is released.
 Its `DB1110-<12-SHA>-<16-hex nonce>` display name is unique to one local run
 while remaining below GitHub Codespaces' 48-character limit; the full SHA is
 still verified independently through the remote ref and checkout controls.
-Initial readiness requires both the repository-owned SSH marker and the
-atomically published bootstrap receipt, so transport availability cannot race
-ahead of dependency installation, environment attestation or receipt binding.
+Initial readiness first proves the repository-owned SSH marker under a bounded
+transport deadline, then waits separately for the atomically published
+bootstrap receipt under a bounded first-install deadline. The two-stage check
+prevents transport availability from racing ahead of dependency installation,
+environment attestation or receipt binding while preserving accurate failure
+diagnostics.
 
 The bootstrap commit identifies environment construction, not an immutable
 review checkout. Reusing the same governed Codespace after a P02 result merge is

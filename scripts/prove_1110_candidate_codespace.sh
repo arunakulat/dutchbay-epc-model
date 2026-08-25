@@ -9,10 +9,12 @@ set -euo pipefail
 readonly REPOSITORY="arunakulat/dutchbay-epc-model"
 readonly GOVERNED_VENV="${DUTCHBAY_VENV:-/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv}"
 readonly GOVERNED_PYTHON="$GOVERNED_VENV/bin/python"
-readonly READY_COMMAND="/usr/local/bin/python3.12 -S /usr/local/lib/dutchbay/sshd_readiness.py 5 /run/dutchbay-sshd-runtime.ready && test -f /workspaces/.dutchbay-private/bootstrap-receipt.json"
+readonly SSH_READY_COMMAND="/usr/local/bin/python3.12 -S /usr/local/lib/dutchbay/sshd_readiness.py 5 /run/dutchbay-sshd-runtime.ready"
+readonly BOOTSTRAP_READY_COMMAND="test -f /workspaces/.dutchbay-private/bootstrap-receipt.json"
 readonly CREATE_LOCK="/tmp/dutchbay-1110-candidate-codespace.lock"
 readonly POLL_SECONDS=5
 readonly TRANSPORT_TIMEOUT_SECONDS=300
+readonly BOOTSTRAP_TIMEOUT_SECONDS=900
 readonly SHUTDOWN_TIMEOUT_SECONDS=120
 readonly DELETION_TIMEOUT_SECONDS=120
 readonly AMBIGUOUS_CREATE_RECOVERY_TIMEOUT_SECONDS=120
@@ -232,10 +234,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-wait_for_transport() {
+wait_for_remote_command() {
+  local timeout_seconds=$1
+  local remote_command=$2
   "$GOVERNED_PYTHON" - \
-    "$TRANSPORT_TIMEOUT_SECONDS" "$POLL_SECONDS" \
-    "$codespace_name" "$READY_COMMAND" <<'PY'
+    "$timeout_seconds" "$POLL_SECONDS" \
+    "$codespace_name" "$remote_command" <<'PY'
 from __future__ import annotations
 
 import os
@@ -291,6 +295,14 @@ with open(os.devnull, "wb") as sink:
             time.sleep(min(poll_seconds, remaining))
 raise SystemExit(124)
 PY
+}
+
+wait_for_transport() {
+  wait_for_remote_command "$TRANSPORT_TIMEOUT_SECONDS" "$SSH_READY_COMMAND"
+}
+
+wait_for_bootstrap() {
+  wait_for_remote_command "$BOOTSTRAP_TIMEOUT_SECONDS" "$BOOTSTRAP_READY_COMMAND"
 }
 
 verify_remote_candidate() {
@@ -458,6 +470,8 @@ codespace_created="true"
 creation_pending="false"
 
 wait_for_transport || fail "candidate Codespace SSH transport did not become ready"
+wait_for_bootstrap || fail \
+  "candidate Codespace bootstrap receipt did not become ready"
 verify_remote_candidate "$CANDIDATE_BRANCH" "$EXPECTED_SHA"
 run_copy_smoke
 before_marker=$(gh codespace ssh -c "$codespace_name" \
