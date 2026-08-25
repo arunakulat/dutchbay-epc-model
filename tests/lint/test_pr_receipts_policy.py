@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CHECKER = REPO_ROOT / "scripts" / "ci" / "check_pr_receipts.py"
@@ -95,6 +96,39 @@ def test_the_template_ships_a_parsable_receipts_table() -> None:
     assert found is not None, "PR template has no parsable Check/Result table"
     rows, _ = found
     assert rows, "the PR template's receipts table has no rows"
+
+
+# The exact status-check name a branch ruleset must reference to make VERIFY-01a
+# required check. GitHub matches a required check by the job's RENDERED NAME, not by the
+# workflow name ("PR Receipts"), so this literal -- not that one -- is the load-bearing
+# string.
+REQUIRED_CHECK_NAME = "Verification receipts (VERIFY-01)"
+
+
+def test_receipts_job_name_is_pinned_for_the_branch_ruleset() -> None:
+    """Renaming the job must fail here, not silently brick merges to `main`.
+
+    Once `main`'s ruleset lists this job as a REQUIRED status check, the ruleset stores
+    the name as a plain string. Renaming the job then means the required check never
+    reports: every pull request blocks indefinitely, and only someone with admin access
+    can unstick it by editing the ruleset. Nothing else in the suite pins this string, so
+    without this test the rename is silent at review time and only detected in production.
+
+    This asserts the CONTRACT, not the mechanism -- if the name must genuinely change,
+    update this constant and the ruleset in the same change, deliberately.
+    """
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    jobs = workflow["jobs"]
+    names = {job.get("name") for job in jobs.values()}
+
+    assert REQUIRED_CHECK_NAME in names, (
+        f"no job in pr-receipts.yml is named {REQUIRED_CHECK_NAME!r}; found {sorted(n for n in names if n)}. "
+        "If a ruleset already requires that check, this rename blocks every merge to main."
+    )
+
+    # The workflow name is NOT the check name. Requiring "PR Receipts" in a ruleset
+    # matches nothing and enforces nothing -- silently. Pin them as distinct.
+    assert workflow["name"] != REQUIRED_CHECK_NAME
 
 
 def test_workflow_passes_the_body_through_the_environment() -> None:

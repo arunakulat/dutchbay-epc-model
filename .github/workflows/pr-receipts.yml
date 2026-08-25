@@ -6,7 +6,13 @@
 #
 # This is a cheap, self-contained job (no dependency install, no test run). It is not a
 # substitute for the real gates — CI remains the merge authority for whether the checks
-# themselves passed. Promoting this job to a *required* status check is a repository-ruleset
+# themselves passed.
+#
+# LIMIT, stated so nobody mistakes green for verified: this job checks that every Result
+# cell SAYS something. It cannot re-run a command or confirm a figure, so a table carrying
+# plausible but stale numbers passes. Green here means "nothing was left silent" — the
+# reviewer still has to read the table. Disclosure is what it enforces, and silence is the
+# failure that cannot be caught downstream. Promoting this job to a *required* status check is a repository-ruleset
 # setting and remains an explicit owner decision.
 name: PR Receipts
 
