@@ -238,7 +238,13 @@ verify_remote_candidate() {
   local expected_sha=$2
   gh codespace ssh -c "$codespace_name" \
     "bash -se -- $branch $expected_sha" <<'REMOTE_VERIFY'
-set -euo pipefail
+set -Eeuo pipefail
+remote_error() {
+  local exit_status=$?
+  printf 'ERROR: remote candidate invariant failed at line %s\n' "$1" >&2
+  exit "$exit_status"
+}
+trap 'remote_error "$LINENO"' ERR
 readonly expected_branch=$1
 readonly expected_sha=$2
 readonly repo_root="/workspaces/dutchbay-epc-model"
@@ -310,7 +316,13 @@ run_copy_smoke() {
     ".devcontainer/devcontainer.json" \
     "remote:$REMOTE_SMOKE_PATH"
   gh codespace ssh -c "$codespace_name" "bash -se" <<'REMOTE_COPY'
-set -euo pipefail
+set -Eeuo pipefail
+remote_copy_error() {
+  local exit_status=$?
+  printf 'ERROR: remote copy invariant failed at line %s\n' "$1" >&2
+  exit "$exit_status"
+}
+trap 'remote_copy_error "$LINENO"' ERR
 readonly repo_file="/workspaces/dutchbay-epc-model/.devcontainer/devcontainer.json"
 readonly smoke_path="/workspaces/.dutchbay-private/transport-smoke/candidate-devcontainer.json"
 test -f "$smoke_path"
