@@ -732,7 +732,7 @@ esac
     base_environment = {
         **os.environ,
         "PATH": f"{tool_root}:/usr/bin:/bin",
-        "DUTCHBAY_VENV": "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv",
+        "DUTCHBAY_VENV": str(Path(sys.executable).parents[1]),
         "STUB_SHA": sha,
         "STUB_BRANCH": branch,
         "STUB_STATE": str(state_path),
