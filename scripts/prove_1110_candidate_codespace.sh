@@ -9,7 +9,7 @@ set -euo pipefail
 readonly REPOSITORY="arunakulat/dutchbay-epc-model"
 readonly GOVERNED_VENV="${DUTCHBAY_VENV:-/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv}"
 readonly GOVERNED_PYTHON="$GOVERNED_VENV/bin/python"
-readonly READY_COMMAND="/usr/local/bin/python3.12 -S /usr/local/lib/dutchbay/sshd_readiness.py 5 /run/dutchbay-sshd-runtime.ready"
+readonly READY_COMMAND="/usr/local/bin/python3.12 -S /usr/local/lib/dutchbay/sshd_readiness.py 5 /run/dutchbay-sshd-runtime.ready && test -f /workspaces/.dutchbay-private/bootstrap-receipt.json"
 readonly CREATE_LOCK="/tmp/dutchbay-1110-candidate-codespace.lock"
 readonly POLL_SECONDS=5
 readonly TRANSPORT_TIMEOUT_SECONDS=300

@@ -511,6 +511,10 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
     assert 'test -z "$(git status' not in candidate
     assert 'test -z "$(find ' not in candidate
     assert "gh codespace cp --expand" in candidate
+    assert (
+        "sshd_readiness.py 5 /run/dutchbay-sshd-runtime.ready && test -f "
+        "/workspaces/.dutchbay-private/bootstrap-receipt.json"
+    ) in candidate
     assert "gh codespace stop" in candidate
     assert '"$(codespace_identity | jq -r .state)" = "Shutdown"' in candidate
     assert 'before_marker=$(gh codespace ssh -c "$codespace_name"' in candidate

@@ -264,6 +264,9 @@ emits PASS only after the exact named Codespace is deleted, its absence is
 confirmed through the Codespaces API, and the local creation lock is released.
 Its 47-character `DB1110-<full SHA>` display name retains the complete commit
 identity while remaining below GitHub Codespaces' 48-character limit.
+Initial readiness requires both the repository-owned SSH marker and the
+atomically published bootstrap receipt, so transport availability cannot race
+ahead of dependency installation, environment attestation or receipt binding.
 
 Re-run `scripts/verify_1110_cloud_review_sandbox.sh`. It must independently hash
 all 74 retained objects before semantic review begins. Then follow issue #1162
