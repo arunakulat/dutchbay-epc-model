@@ -1,0 +1,88 @@
+schema_version: dutchbay.f5_02_internal_decision_record.v1
+document_control:
+  document_id: DUTCHBAY-F5-02-INTERNAL-DECISION-v1
+  project: DutchBay wind project
+  confidentiality: confidential_internal_governed_record
+  prepared_date: null
+  lender_return_document_id: null
+  lender_return_sha256: null
+  evidence_cutoff: null
+  related_finding: P2-F5-02
+  related_issue: 1110
+  release_status: HOLD
+  canonical_model_input_authorized: false
+
+reingress_receipt:
+  received_timestamp: null
+  evidence_custodian: null
+  private_immutable_original_reference: null
+  original_sha256: null
+  confidentiality_classification: confidential_lender_and_transaction_team
+  strict_yaml_validation_passed: false
+  schema_validation_passed: false
+  requirement_completeness_passed: false
+  evidence_hash_validation_passed: false
+  conflict_review_passed: false
+
+independent_review:
+  reviewer_name: null
+  reviewer_organization: null
+  independence_from_authoring_execution_and_expectations: null
+  conflicts_of_interest: []
+  review_scope: null
+  fixed_specification_id: null
+  fixed_specification_sha256: null
+  exact_rerun_command: null
+  rerun_result_sha256: null
+  counterexamples_attempted:
+    - option_a_true_lkr_native
+    - option_b_hard_currency
+    - hybrid_or_dual_currency
+    - unit_or_scale_error
+    - double_conversion
+    - withholding_tax
+    - reserve_currency
+  findings: []
+  unresolved_rebuttals: []
+  disposition: not_reviewed
+  signature_reference: null
+  signed_date: null
+
+legal_tax_and_authorized_dealer_conclusions:
+  sri_lankan_legal_conclusion_evidence_id: null
+  tax_conclusion_evidence_id: null
+  authorized_dealer_conclusion_evidence_id: null
+  unresolved_qualifications: []
+
+treatment_decision:
+  selected_treatment: null
+  allowed_values:
+    - option_a_true_lkr_native
+    - option_b_hard_currency
+    - hybrid_or_dual_currency
+  controlling_clause_citation_ids: []
+  ambiguity_resolution: null
+  per_facility_native_currency_contracts: []
+  limitations: []
+
+approval:
+  model_owner:
+    name: null
+    decision: not_reviewed
+    signature_reference: null
+    date: null
+  release_authority:
+    name: null
+    decision: HOLD
+    signature_reference: null
+    date: null
+
+protected_controls:
+  f5_01_and_f5_02_separate: true
+  canonical_binding_status: blocked
+  canonical_model_input_authorized: false
+  board_lender_release_status: HOLD
+  capability_d1_to_d3_default_off_allowed: true
+  canonical_binding_d4_allowed: false
+  rebaseline_and_external_regeneration_d5_allowed: false
+  blocker: authenticated evidence, independent review, and governed approval are incomplete

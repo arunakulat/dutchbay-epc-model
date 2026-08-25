@@ -9,9 +9,28 @@ The authoritative live remediation queue and eventual release decision are track
 ## What is included
 
 - controlled corrigendum v1.0.1;
+- additive 2026-08-24 errata control for fixed GWTF rule-count instructions;
 - 111-row findings register with audited-commit anchors, evidence links, dependencies and implementation state;
 - 42-row claim-level source register;
+- deterministic population-exact P03 primary-source review plan covering all 42 claim
+  rows and all 74 retained source objects, plus a path-free same-implementer source-byte
+  preflight; P03 remains pending independent semantic and publication-rights review;
 - 72-pointer architecture register and active adjudication overlay;
+- immutable 56-row pre-execution architecture examination plan plus deterministic
+  JSON/CSV ledger descendants; all 56 rows remain pending, unreviewed and
+  HOLD-blocking;
+- immutable 23-row issue #1110 remediation/release plan plus deterministic JSON/CSV
+  ledger descendants, sourced from a byte-frozen OPEN issue snapshot; all 23 gates
+  remain unchecked, pending, unreviewed, closure-disabled and HOLD-blocking;
+- repository-safe P01 clean-room recovery descriptor and fail-closed materializer;
+  the implementation is a published candidate while independent review and the P01
+  programme gate remain pending;
+- additive 111-row P02 current-main findings overlay and deterministic builder; five
+  findings have positively evidenced implementation delivery but remain independently
+  unreviewed, F5-02 remains separately blocked on authenticated external evidence, and
+  the other 105 rows are explicitly not reassessed against the pinned current-main
+  cutoff; a hash-bound full-history implementer self-check keeps depth-1 CI portable
+  without masquerading as independent ancestry review;
 - 34-row reproduction register plus concise machine-readable reproduction records;
 - four independent refuter reports and the P3 register patch map;
 - semantic-closure and structural-validation records;
@@ -21,13 +40,29 @@ The latest controlled validation represented here reports:
 
 - 111 findings, 299 audited-commit anchors, 367 evidence links and 187 typed dependencies;
 - 42 source records and 74 externally retained source-manifest objects;
+- P03 implementer preflight: 74/74 retained objects and 50,938,825 bytes hash-verified,
+  two separately governed artifact routes verified, zero independent semantic reviews,
+  zero publication-rights reviews, completion unauthorized and release `HOLD`;
 - 72 architecture pointers: 2 confirmed, 13 partially confirmed, 1 not a defect, 5 deferred and 51 not examined;
+- 56 architecture examinations planned in 15 dependency-aware batches: 56 pending,
+  zero independently reviewed and zero result-hashed;
+- 23 issue #1110 gates planned in 11 dependency-ordered stages: 23 pending, zero
+  independently reviewed, zero completion-hashed and zero closure-authorized;
+- 111 additive current-state rows: five implementation-delivered/review-pending, one
+  F5-02 external-evidence-blocked, 105 not reassessed or examined, zero independently
+  reviewed and 111 HOLD-blocking;
 - 34 reproduction controls: 18 completed, 11 required-not-run and 5 unavailable;
 - structural status `PASS`, release status `HOLD`.
 
 ## What is intentionally excluded
 
 Third-party PDFs, publisher text conversions, rendered source-page images, temporary render trees and the 10,000-trial lossless Monte Carlo array are not republished in Git. The source register and `source-controls/SOURCE_ARCHIVE_MANIFEST.v2.sha256` retain their identities, URLs, access dates, hashes and limitations. Governed source copies remain in the separately retained evidence archive.
+
+The P03 verifier selects that separately retained archive only from the
+`DUTCHBAY_P03_SOURCE_ROOT` environment variable and emits no local path in its receipt.
+Successful byte verification proves retained-object identity and structural linkage only;
+it does not establish semantic support, publication rights, transaction evidence,
+bankability, independent review or release approval.
 
 This exclusion is a publication and repository-size boundary, not a claim that the omitted evidence does not matter. The private/full-archive validator must still pass before any release decision.
 
@@ -41,7 +76,21 @@ From the repository root:
 python docs/audit/2026-08-controlled-successor/scripts/validate_published_pack.py
 ```
 
-The validator checks the publication manifest, JSON parsing, exact register populations, audited-commit identity, F5-01/F5-02 separation language, and HOLD controls. It does not replace independent semantic review.
+The validator checks the publication manifest, JSON parsing, exact register populations,
+audited-commit identity, F5-01/F5-02 separation language, the deterministic 56-row
+architecture-examination descendants, the frozen OPEN issue source and deterministic
+23-row programme-gate descendants, the P01 recovery descriptor, the deterministic
+111-row P02 additive overlay, the deterministic 42-row/74-object P03 review plan, the
+path-free P03 implementer self-check and their HOLD controls. It
+rejects a missing/extra
+pointer or gate, duplicate JSON member, path escape, owner/reviewer-role conflict,
+dependency-order bypass, result-state field in an immutable plan, premature closure,
+descendant drift, audited/current evidence-period laundering, false implementation
+evidence, F5-01/F5-02 evidence sharing, or any v1 row presented as examined or
+completed. For P03 it also rejects evidence-status escalation, analyst-judgment
+laundering, source/CSV/manifest population drift, stale tested-snapshot hashes, false
+independence and premature completion. It does not execute the planned independent
+semantic or publication-rights reviews and cannot replace them.
 
 ## Release boundary
 

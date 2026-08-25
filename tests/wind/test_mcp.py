@@ -15,7 +15,12 @@ import pytest
 
 from wind_resource.mcp import (
     BANKABLE_MIN_CONCURRENT,
+    CAMPAIGN_BELOW_DISCLOSURE_FLOOR,
+    CAMPAIGN_BELOW_IEC_BANKABLE,
+    CAMPAIGN_IEC_BANKABLE,
     DEFAULT_MIN_CONCURRENT,
+    IEC_BANKABLE_MIN_CONCURRENT,
+    LENDER_DISCLOSURE_MIN_CONCURRENT,
     MCP_METHODS,
     MCPResult,
     linear_regression_transfer,
@@ -128,10 +133,10 @@ def test_hard_floor_tier_not_bypassed_by_override() -> None:
 
 
 def test_hard_floor_boundary_lands_in_bankability_tier() -> None:
-    # n = 24 clears the hard floor but is far below bankable -> the bankability error,
-    # not the statistical-floor error, is what the caller sees.
+    # n = 24 clears the hard statistical floor but is far below the lender-disclosure
+    # floor -> that error, not the statistical-floor error, is what the caller sees.
     mast, ref_c, ref_lt = _pair_of_size(DEFAULT_MIN_CONCURRENT)
-    with pytest.raises(ValueError, match="bankable minimum"):
+    with pytest.raises(ValueError, match="lender-disclosure floor"):
         run_mcp(mast, ref_c, ref_lt)
 
 
@@ -142,13 +147,27 @@ def test_sub_bankable_boundary_raises_without_override() -> None:
         run_mcp(mast, ref_c, ref_lt)
 
 
-def test_bankable_boundary_runs_clean(caplog: pytest.LogCaptureFixture) -> None:
-    # n = 2880: exactly at the threshold -> clean, no bankability disclosure logged.
-    mast, ref_c, ref_lt = _pair_of_size(BANKABLE_MIN_CONCURRENT)
+def test_disclosure_floor_boundary_clears_the_gate_but_is_not_bankable(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """n = 2880 exactly: passes without an opt-out, but is NOT clean.
+
+    This test previously asserted the opposite - that the ~4-month boundary logged no
+    disclosure at all - and was named ``test_bankable_boundary_runs_clean``. That encoded
+    the overclaim #961 identifies: 2880 samples is a third of the >= 12 concurrent months
+    MEASNET v3.1 / IEC 61400-15-1:2025 require, so silence there told the caller the
+    estimate was bankable when it is only showable. The gate itself is unchanged - no
+    opt-out is needed at this boundary - but the shortfall is now recorded and logged.
+    """
+    mast, ref_c, ref_lt = _pair_of_size(LENDER_DISCLOSURE_MIN_CONCURRENT)
     with caplog.at_level(logging.WARNING, logger="wind_resource.mcp"):
-        res = run_mcp(mast, ref_c, ref_lt)
-    assert res.n_concurrent == BANKABLE_MIN_CONCURRENT
-    assert not [r for r in caplog.records if "bankable" in r.getMessage()]
+        res = run_mcp(mast, ref_c, ref_lt)  # still no allow_below_bankable required
+    assert res.n_concurrent == LENDER_DISCLOSURE_MIN_CONCURRENT
+    assert res.campaign_adequacy == CAMPAIGN_BELOW_IEC_BANKABLE
+    assert res.concurrent_shortfall_to_iec_bankable == (
+        IEC_BANKABLE_MIN_CONCURRENT - LENDER_DISCLOSURE_MIN_CONCURRENT
+    )
+    assert [r for r in caplog.records if "NOT bankable" in r.getMessage()]
 
 
 def test_sub_bankable_override_runs_with_logged_disclosure(
@@ -311,3 +330,68 @@ def test_all_methods_are_runnable() -> None:
     mast, ref_c, ref_lt = _synthetic_pair()
     for method in MCP_METHODS:
         assert run_mcp(mast, ref_c, ref_lt, method=method).method == method
+
+
+# --- campaign adequacy against the standards (#961) -------------------------------------
+#
+# The ~4-month constant was named BANKABLE_MIN_CONCURRENT while its own docstring conceded
+# a bankable campaign needs >= 12 months, so the name overclaimed by 3x. These pin the
+# corrected naming and, more importantly, the band that used to be SILENT: a campaign that
+# clears the disclosure floor but falls short of the standards now says so on the result.
+
+
+def test_deprecated_alias_still_resolves_to_the_disclosure_floor() -> None:
+    assert BANKABLE_MIN_CONCURRENT == LENDER_DISCLOSURE_MIN_CONCURRENT == 2880
+
+
+def test_iec_bankable_threshold_is_twelve_months_of_hourly_data() -> None:
+    assert IEC_BANKABLE_MIN_CONCURRENT == 8760
+    # The whole point: the disclosure floor is NOT the bankability threshold.
+    assert LENDER_DISCLOSURE_MIN_CONCURRENT < IEC_BANKABLE_MIN_CONCURRENT
+
+
+def test_full_twelve_month_campaign_is_recorded_iec_bankable() -> None:
+    mast, ref_c, ref_lt = _pair_of_size(IEC_BANKABLE_MIN_CONCURRENT)
+    res = run_mcp(mast, ref_c, ref_lt)
+    assert res.campaign_adequacy == CAMPAIGN_IEC_BANKABLE
+    assert res.concurrent_shortfall_to_iec_bankable == 0
+    assert res.as_dict()["campaign_adequacy"] == CAMPAIGN_IEC_BANKABLE
+
+
+def test_above_floor_but_short_of_iec_is_recorded_not_silent(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The regression this dolphin exists for.
+
+    A campaign at the ~4-month floor previously emitted an estimate with NO record that it
+    was a third of the span the standards require - it cleared the only gate there was and
+    said nothing. It must now both warn and carry the shortfall on the result.
+    """
+    n = LENDER_DISCLOSURE_MIN_CONCURRENT + 120
+    mast, ref_c, ref_lt = _pair_of_size(n)
+    with caplog.at_level(logging.WARNING, logger="wind_resource.mcp"):
+        res = run_mcp(mast, ref_c, ref_lt)  # no opt-out needed: it clears the floor
+    assert res.campaign_adequacy == CAMPAIGN_BELOW_IEC_BANKABLE
+    assert res.concurrent_shortfall_to_iec_bankable == IEC_BANKABLE_MIN_CONCURRENT - n
+    disclosures = [r.getMessage() for r in caplog.records]
+    assert any(str(IEC_BANKABLE_MIN_CONCURRENT) in d for d in disclosures)
+    assert any("NOT bankable" in d for d in disclosures)
+
+
+def test_below_floor_records_the_worst_tier_when_opted_out() -> None:
+    n = LENDER_DISCLOSURE_MIN_CONCURRENT - 1
+    mast, ref_c, ref_lt = _pair_of_size(n)
+    res = run_mcp(mast, ref_c, ref_lt, allow_below_bankable=True)
+    assert res.campaign_adequacy == CAMPAIGN_BELOW_DISCLOSURE_FLOOR
+    assert res.concurrent_shortfall_to_iec_bankable == IEC_BANKABLE_MIN_CONCURRENT - n
+
+
+def test_sub_floor_error_names_the_iec_requirement_too() -> None:
+    """Fail-loud text must not leave the reader thinking the floor is bankability."""
+    mast, ref_c, ref_lt = _pair_of_size(LENDER_DISCLOSURE_MIN_CONCURRENT - 1)
+    with pytest.raises(ValueError) as excinfo:
+        run_mcp(mast, ref_c, ref_lt)
+    message = str(excinfo.value)
+    assert str(LENDER_DISCLOSURE_MIN_CONCURRENT) in message
+    assert str(IEC_BANKABLE_MIN_CONCURRENT) in message
+    assert "would not make the estimate bankable" in message

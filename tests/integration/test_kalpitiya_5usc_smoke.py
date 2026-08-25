@@ -15,11 +15,16 @@ equity IRR -12.23%, project NPV -$135.48M (post 2% P50 AEP haircut).
 
 from __future__ import annotations
 
+import copy
 import json
+import math
 from pathlib import Path
+from typing import Any, Mapping
 
 import pytest
+import yaml
 
+from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
 
@@ -30,10 +35,98 @@ EXPECTED_KPIS = (
     REPO_ROOT / "tests" / "fixtures" / "finance" / "kalpitiya_5usc_expected_kpis.json"
 )
 
+# ``min_dscr`` is excluded because the debt sizer solves to its covenant target.
+# Every other value KPI pinned by the fixture must remain responsive.
+RESPONSIVE_KPIS = (
+    "project_irr",
+    "equity_irr",
+    "project_npv",
+    "avg_dscr",
+    "llcr",
+    "plcr",
+)
+MIN_RELATIVE_MOVE = 1e-4
+DRIVERS = (
+    ("tariff +10%", {"tariff.lkr_per_kwh": 18.359}),
+    ("opex +10%", {"opex.usd_per_year": 3_861_000.0}),
+)
+FINANCIAL_TARGETS = {
+    "project_irr": ("project_irr", 1.0, 0.005),
+    "equity_irr": ("equity_irr", 1.0, 0.005),
+    "project_npv_m_usd": ("project_npv", 1e-6, 0.5),
+    "min_dscr": ("min_dscr", 1.0, 0.02),
+    "avg_dscr": ("avg_dscr", 1.0, 0.02),
+    "llcr": ("llcr", 1.0, 0.02),
+    "plcr": ("plcr", 1.0, 0.02),
+}
+
 
 @pytest.fixture(scope="module")
 def cfg() -> dict:
     return load_scenario_config(str(SCENARIO))
+
+
+@pytest.fixture(scope="module")
+def raw_config() -> dict[str, Any]:
+    """Return the unvalidated YAML mapping for canonical-gateway perturbations."""
+    loaded: dict[str, Any] = yaml.safe_load(SCENARIO.read_text(encoding="utf-8"))
+    return loaded
+
+
+def _evaluate_kpis(
+    config: Mapping[str, Any], overrides: Mapping[str, float]
+) -> dict[str, Any]:
+    """Evaluate one in-memory case through the canonical gateway."""
+    result = evaluate_with_overrides(
+        config_path=None,
+        raw_config=copy.deepcopy(dict(config)),
+        overrides=dict(overrides),
+    )
+    return dict(result.get("kpis", result))
+
+
+def _assert_kpis_respond(
+    base_kpis: Mapping[str, Any], shocked_kpis: Mapping[str, Any], label: str
+) -> None:
+    """Fail with an actionable list when any fixture value remains frozen."""
+    unmoved = []
+    for key in RESPONSIVE_KPIS:
+        base, shocked = float(base_kpis[key]), float(shocked_kpis[key])
+        if not math.isfinite(base) or not math.isfinite(shocked):
+            unmoved.append(f"{key}: non-finite value {base!r} -> {shocked!r}")
+            continue
+        relative = abs(shocked - base) / max(abs(base), 1e-6)
+        if relative <= MIN_RELATIVE_MOVE:
+            unmoved.append(f"{key}: {base!r} -> {shocked!r} (rel {relative:.3e})")
+    assert not unmoved, (
+        f"{label} left fixture KPIs unresponsive — the vector may be returned rather "
+        "than computed: " + "; ".join(unmoved)
+    )
+
+
+@pytest.fixture(scope="module")
+def gateway_kpis(raw_config: dict[str, Any]) -> dict[str, Any]:
+    """Return the unperturbed vector from the canonical evaluation gateway."""
+    return _evaluate_kpis(raw_config, {})
+
+
+@pytest.fixture(scope="module")
+def path_kpis() -> dict[str, Any]:
+    """Return the authored-path vector for direct raw-gateway reconciliation."""
+    result = evaluate_with_overrides(
+        config_path=SCENARIO,
+        raw_config=None,
+        overrides={},
+    )
+    return dict(result.get("kpis", result))
+
+
+def _assert_matches_fixture(kpis: Mapping[str, Any]) -> None:
+    """Assert that every financial target remains bound to a live KPI."""
+    expected = json.loads(EXPECTED_KPIS.read_text())
+    for fixture_key, (kpi_key, scale, tolerance) in FINANCIAL_TARGETS.items():
+        actual = float(kpis[kpi_key]) * scale
+        assert actual == pytest.approx(float(expected[fixture_key]), abs=tolerance)
 
 
 def test_tariff_is_5usc_fixed_in_lkr(cfg: dict) -> None:
@@ -146,15 +239,68 @@ def test_expected_results_match_live_engine(cfg: dict) -> None:
     inputs), asserted here to lock the split."""
     from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
-    er = json.loads(EXPECTED_KPIS.read_text())
     kpis = run_v14_pipeline(config=str(SCENARIO))["kpis"]
-    assert kpis["project_irr"] == pytest.approx(float(er["project_irr"]), abs=0.005)
-    assert kpis["equity_irr"] == pytest.approx(float(er["equity_irr"]), abs=0.005)
-    assert kpis["project_npv"] / 1e6 == pytest.approx(
-        float(er["project_npv_m_usd"]), abs=0.5
-    )
-    assert kpis["min_dscr"] == pytest.approx(float(er["min_dscr"]), abs=0.02)
+    _assert_matches_fixture(kpis)
     # The AEP runtime inputs stay in the scenario; the financial oracle does not.
     scen_er = cfg["expected_results"]
     assert "net_aep_p50_gwh" in scen_er and "net_aep_p90_gwh" in scen_er
     assert "project_irr" not in scen_er and "min_dscr" not in scen_er
+
+
+def test_gateway_base_reconciles_with_the_pinned_fixture(
+    gateway_kpis: dict[str, Any],
+) -> None:
+    """The responsiveness baseline must be the same vector the fixture pins."""
+    _assert_matches_fixture(gateway_kpis)
+
+
+def test_raw_gateway_base_matches_authored_path_exactly(
+    gateway_kpis: dict[str, Any], path_kpis: dict[str, Any]
+) -> None:
+    """The perturbation baseline must equal the authored-path financial vector."""
+    for kpi_key, _, _ in FINANCIAL_TARGETS.values():
+        assert float(gateway_kpis[kpi_key]) == pytest.approx(
+            float(path_kpis[kpi_key]), rel=0.0, abs=1e-12
+        )
+
+
+@pytest.mark.parametrize("label,overrides", DRIVERS, ids=[item[0] for item in DRIVERS])
+def test_kalpitiya_fixture_kpis_respond_to_economic_drivers(
+    raw_config: dict[str, Any],
+    gateway_kpis: dict[str, Any],
+    label: str,
+    overrides: dict[str, float],
+) -> None:
+    """TEST-01: every non-solved fixture KPI responds to a real driver."""
+    shocked = _evaluate_kpis(raw_config, overrides)
+    _assert_kpis_respond(gateway_kpis, shocked, label)
+    financing = raw_config["Financing_Terms"]
+    target_dscr = float(financing["target_dscr"])
+    assert financing["debt_sizing"] == "dual_dscr"
+    assert target_dscr == pytest.approx(1.30, abs=1e-12)
+    for kpis in (gateway_kpis, shocked):
+        assert kpis["min_dscr"] == pytest.approx(target_dscr, abs=1e-9)
+        assert kpis["min_dscr_period"] == pytest.approx(target_dscr, abs=1e-9)
+    assert float(shocked["max_debt_usd"]) != pytest.approx(
+        float(gateway_kpis["max_debt_usd"]), rel=MIN_RELATIVE_MOVE
+    )
+
+
+def test_kalpitiya_responsiveness_guard_rejects_frozen_output(
+    gateway_kpis: dict[str, Any],
+) -> None:
+    """VERIFY-01 negative control: a frozen-output stub must trip the guard."""
+    with pytest.raises(AssertionError, match="returned rather than computed"):
+        _assert_kpis_respond(gateway_kpis, dict(gateway_kpis), "frozen-output stub")
+
+
+@pytest.mark.parametrize("bad_value", [math.nan, math.inf], ids=["nan", "infinity"])
+def test_kalpitiya_responsiveness_guard_rejects_non_finite_output(
+    gateway_kpis: dict[str, Any], bad_value: float
+) -> None:
+    """VERIFY-01 negative control: non-finite KPIs cannot count as movement."""
+    corrupted = dict(gateway_kpis)
+    for key in RESPONSIVE_KPIS:
+        corrupted[key] = bad_value
+    with pytest.raises(AssertionError, match="non-finite value"):
+        _assert_kpis_respond(gateway_kpis, corrupted, "non-finite stub")

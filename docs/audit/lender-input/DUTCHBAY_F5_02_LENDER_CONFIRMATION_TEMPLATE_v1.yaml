@@ -1,0 +1,944 @@
+schema_version: dutchbay.f5_02_lender_confirmation.v1
+document_control:
+  document_id: DUTCHBAY-F5-02-LENDER-CONFIRMATION-v1
+  project: DutchBay wind project
+  purpose: transaction_evidence_questionnaire_only
+  confidentiality: confidential_lender_and_transaction_team
+  release_status: HOLD
+  canonical_model_input_authorized: false
+  prepared_date: "2026-08-24"
+  evidence_cutoff: null
+  supersedes: null
+  related_finding: P2-F5-02
+  related_issue: 1110
+  requirements_register:
+    title: F5-02 Transaction-Evidence, Legal-Currency and Repayment Requirements Register
+    evidence_cutoff: "2026-08-18"
+    sha256: 7f3199867ae6aaae2e7365b0cb15fe7ca81b3348060e9ac443622fbc231a9416
+    requirement_count: 53
+  instructions:
+    - Duplicate the facility template for every facility and tranche; do not combine unlike tranches.
+    - Use only unknown, provisional, confirmed, not_applicable, or conflicted as field status.
+    - Confirmed and not_applicable require authenticated evidence IDs plus exact clause and page references.
+    - Provisional must identify its non-binding source and expiry or confirmation condition.
+    - Conflicted must identify every conflicting source and the required resolution owner.
+    - Unknown is a valid disclosure and must never be replaced by an analyst default.
+    - Do not infer currency from a lender class, tranche name, account location, tariff, or reporting currency.
+    - This file is not a scenario YAML and must not be ingested as canonical model configuration.
+    - Do not alter repository_owned_controls; the inbound validator rejects any change.
+    - Completed returns and cited evidence are confidential and must never be committed to the public repository.
+    - Complete document_control.evidence_cutoff before any closure-candidate review.
+    - F5-01 and F5-02 remain separate; do not combine or net their financial effects.
+
+field_status_protocol:
+  allowed:
+    - unknown
+    - provisional
+    - confirmed
+    - not_applicable
+    - conflicted
+  confirmed_requires:
+    - evidence_id
+    - exact_clause
+    - exact_page
+    - respondent_authority
+  not_applicable_requires:
+    - evidence_id
+    - exact_clause
+    - exact_page
+    - reason
+  prohibited:
+    - inferred_from_model_label
+    - inferred_from_lender_nationality
+    - inferred_from_tariff_currency
+    - inferred_from_reporting_currency
+    - analyst_default_promoted_to_fact
+    - synthetic_term_sheet_promoted_to_transaction_evidence
+
+response_contract:
+  requirement_record_required_fields:
+    - requirement_id
+    - status
+    - value
+    - evidence_refs
+    - claim_citation_ids
+    - comment
+  evidence_refs: list_of_evidence_catalog_ids
+  claim_citation_ids: list_of_claim_citation_ids
+  field_level_citation_required_fields:
+    - citation_id
+    - requirement_id
+    - facility_id
+    - evidence_id
+    - exact_page
+    - exact_section
+    - exact_clause
+    - extracted_value_or_text
+    - respondent_name
+    - respondent_role
+    - respondent_authority_reference
+    - not_applicable_reason
+  date_format: quoted_yyyy_mm_dd_string
+  currency_format: iso_4217_alpha_3
+  currency_code_list:
+    maintenance_agency: SIX Financial Information AG
+    list: ISO-4217 List One Current Currency and Funds
+    source_url: https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml
+    cutoff: "2026-08-24"
+    retained_source_sha256: 838dfb991648cf36df939edd5fe3811737962b75a32252847d239cedd1e291c9
+    prohibited_non_transactional_codes:
+      - XTS
+      - XXX
+  monetary_value_format:
+    amount_decimal_string: null
+    currency: null
+    unit_scale: base_units
+  rate_value_formats:
+    rate_pct_decimal_string: null
+    margin_bps_decimal_string: null
+  confirmed_evidence_eligibility:
+    execution_status:
+      - executed_and_effective
+      - signed_and_current
+      - certified_current
+      - official_current
+      - authenticated_current
+    evidence_tier:
+      - tier_1
+      - tier_2
+      - tier_3
+      - tier_4
+      - tier_5
+      - tier_6
+      - tier_7
+    source_form:
+      - verified_executed_original
+      - authenticated_data_room_copy
+      - certified_true_copy
+      - official_publication_verified
+      - issuer_confirmation
+    authentication_method:
+      - signature_and_effectiveness_verified
+      - custodian_hash_and_original_verified
+      - certified_copy_verified
+      - official_source_verified
+      - issuer_direct_confirmation
+    reviewer_independence:
+      - independent
+    review_disposition:
+      - accepted
+      - accepted_with_qualifications
+  closure_candidate_requires_private_ingress_manifest: true
+  prohibition: Do not enter bare unlabeled monetary amounts or rates.
+
+privacy_and_return_handling:
+  completed_return_public_commit_allowed: false
+  completed_return_storage: private_access_controlled_evidence_store_only
+  public_repository_retention: blank_template_validator_and_redacted_receipt_only
+  validator_private_path_transport: environment_only_not_hydra_override
+  generated_hydra_logs_and_config_allowed: false
+  blank_private_ingress_manifest_template_public_commit_allowed: true
+  completed_private_ingress_manifest_public_commit_allowed: false
+  permitted_public_receipt_fields:
+    - document_id
+    - custodian_role
+    - receipt_timestamp
+    - confidentiality_classification
+    - sha256
+
+repository_owned_controls:
+  edit_allowed_by_lender_or_transaction_team: false
+  canonical_binding_status: blocked
+  board_lender_release_status: HOLD
+  canonical_model_input_authorized: false
+  canonical_binding_d4_allowed: false
+  rebaseline_and_external_regeneration_d5_allowed: false
+  internal_decision_record_required: true
+  blocker: authenticated transaction evidence and governed approval are absent
+
+submission:
+  submission_id: null
+  prepared_by:
+    name: null
+    organization: null
+    role: null
+    email: null
+  respondent_authority:
+    authority_type: null
+    authority_reference: null
+    authority_evidence_id: null
+  submission_date: null
+  scope_of_confirmation: null
+  qualifications_and_limitations: []
+
+evidence_catalog:
+  - evidence_id: null
+    exact_title: null
+    document_type: null
+    issuer_or_parties: []
+    execution_status: null
+    version: null
+    effective_date: null
+    expiry_date: null
+    amendment_and_waiver_status: null
+    governing_law_relevance: null
+    retained_path_or_stable_url: null
+    acquisition_date: null
+    sha256: null
+    confidentiality: null
+    evidence_tier: null
+    source_form: null
+    authentication_method: null
+    controlling_original_evidence_id: null
+    authenticated_by: null
+    authentication_date: null
+    reviewed_by: null
+    reviewer_independence: null
+    review_scope: null
+    review_date: null
+    review_disposition: null
+    supersedes_evidence_ids: []
+    superseded_by_evidence_ids: []
+    limitations: []
+
+claim_citations:
+  - citation_id: null
+    requirement_id: null
+    facility_id: null
+    evidence_id: null
+    exact_page: null
+    exact_section: null
+    exact_clause: null
+    extracted_value_or_text: null
+    respondent_name: null
+    respondent_role: null
+    respondent_authority_reference: null
+    not_applicable_reason: null
+
+transaction:
+  transaction_name: DutchBay wind project financing
+  borrower:
+    requirement_id: F502-EV-001
+    status: unknown
+    value:
+      exact_legal_name: null
+      incorporation_number: null
+      jurisdiction: null
+      tax_residence: null
+      project_spv_role: null
+    evidence_refs: []
+    claim_citation_ids: []
+    comment: null
+  lender_agent_and_trustee_parties:
+    requirement_id: F502-EV-002
+    status: unknown
+    value:
+      - party_id: null
+        exact_legal_name: null
+        jurisdiction: null
+        tax_residence: null
+        regulatory_status: null
+        transaction_role: null
+    evidence_refs: []
+    claim_citation_ids: []
+    comment: null
+  authority_and_effectiveness:
+    requirement_id: F502-EV-003
+    status: unknown
+    value:
+      borrower_board_approval: null
+      lender_approval: null
+      signatory_authority: null
+      conditions_to_effectiveness: null
+      effectiveness_date: null
+    evidence_refs: []
+    claim_citation_ids: []
+    comment: null
+  governing_law_and_precedence:
+    requirement_id: F502-EV-005
+    status: unknown
+    value:
+      governing_law: null
+      jurisdiction: null
+      order_of_precedence: null
+      effective_amendments_and_waivers: []
+    evidence_refs: []
+    claim_citation_ids: []
+    comment: null
+  model_reporting_basis:
+    requirement_id: F502-EV-020
+    status: unknown
+    value:
+      reporting_currency: null
+      translation_rule: null
+      distinction_from_legal_currency_confirmed: null
+    evidence_refs: []
+    claim_citation_ids: []
+    comment: null
+
+facilities:
+  - facility_id: null
+    instruction: Duplicate this complete item for every facility and tranche.
+    facility_and_model_mapping:
+      requirement_id: F502-EV-004
+      status: unknown
+      value:
+        legal_facility_id: null
+        legal_tranche_id: null
+        model_tranche_id: null
+        display_name: null
+        lender_class: null
+      evidence_refs: []
+      claim_citation_ids: []
+      comment: null
+
+    currency_definition_and_conversion:
+      commitment_currency:
+        requirement_id: F502-EV-010
+        status: unknown
+        value: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      drawdown_and_alternate_currencies:
+        requirement_id: F502-EV-011
+        status: unknown
+        value:
+          drawdown_currency: null
+          permitted_alternate_currencies: []
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      principal_accounting_currency:
+        requirement_id: F502-EV-012
+        status: unknown
+        value: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      interest_payment_currency:
+        requirement_id: F502-EV-013
+        status: unknown
+        value: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      principal_repayment_currency:
+        requirement_id: F502-EV-014
+        status: unknown
+        value: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      fee_default_interest_indemnity_and_break_cost_currencies:
+        requirement_id: F502-EV-015
+        status: unknown
+        value:
+          fee_currency: null
+          default_interest_currency: null
+          indemnity_currency: null
+          break_cost_currency: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      account_payment_judgment_and_indemnity_currencies:
+        requirement_id: F502-EV-016
+        status: unknown
+        value:
+          currency_of_account: null
+          currency_of_payment: null
+          judgment_currency: null
+          currency_indemnity_mechanics: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      redenomination_conversion_dual_currency_and_indexation:
+        requirement_id: F502-EV-017
+        status: unknown
+        value:
+          redenomination: null
+          conversion_option: null
+          dual_currency: null
+          indexation: null
+          notice_and_election_mechanics: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      contractual_fx_rule:
+        requirement_id: F502-EV-018
+        status: unknown
+        value:
+          source: null
+          quotation_convention: null
+          fixing_date_and_time: null
+          publication: null
+          fallback: null
+          spread: null
+          rounding: null
+          conversion_agent: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      actual_drawdown_fx_and_native_amounts:
+        requirement_id: F502-EV-019
+        status: unknown
+        value:
+          - utilization_id: null
+            utilization_date: null
+            commitment_currency: null
+            commitment_currency_amount_decimal_string: null
+            commitment_currency_unit_scale: base_units
+            contractual_fx_source: null
+            contractual_fx_fixing: null
+            contractual_fx_fixing_datetime: null
+            native_principal_currency: null
+            native_principal_amount_decimal_string: null
+            native_principal_unit_scale: base_units
+            utilization_request_evidence_id: null
+            agent_statement_evidence_id: null
+            funds_flow_evidence_id: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+
+    amount_availability_and_drawdown:
+      native_limits_reallocations_and_caps:
+        requirement_id: F502-EV-025
+        status: unknown
+        value:
+          commitment_amount_decimal_string: null
+          commitment_currency: null
+          commitment_unit_scale: base_units
+          tranche_limit_amount_decimal_string: null
+          tranche_limit_currency: null
+          tranche_limit_unit_scale: base_units
+          reallocation_rights: null
+          caps:
+            - cap_id: null
+              amount_decimal_string: null
+              currency: null
+              unit_scale: base_units
+              condition: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      availability_and_utilization_terms:
+        requirement_id: F502-EV-026
+        status: unknown
+        value:
+          availability_start: null
+          availability_end: null
+          longstop: null
+          utilization_notice_period: null
+          minimum_draw_amount_decimal_string: null
+          minimum_draw_currency: null
+          minimum_draw_unit_scale: base_units
+          maximum_draw_amount_decimal_string: null
+          maximum_draw_currency: null
+          maximum_draw_unit_scale: base_units
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      conditions_precedent_to_draw:
+        requirement_id: F502-EV-027
+        status: unknown
+        value:
+          conditions: []
+          equity_first_or_pro_rata_rule: null
+          satisfaction_record: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      sources_and_uses_eligibility:
+        requirement_id: F502-EV-028
+        status: unknown
+        value:
+          eligible_uses: []
+          excluded_uses: []
+          allocation_rule: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      construction_interest_and_compounding:
+        requirement_id: F502-EV-029
+        status: unknown
+        value:
+          interest_capitalized: null
+          compounding_frequency: null
+          native_currency_basis: null
+          capitalization_end_date: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      commitment_upfront_agency_and_other_fees:
+        requirement_id: F502-EV-030
+        status: unknown
+        value:
+          undrawn_commitment_fee_terms:
+            rate_pct_decimal_string: null
+            amount_decimal_string: null
+            currency: null
+            unit_scale: base_units
+            accrual_and_payment_rule: null
+          upfront_fee_terms:
+            rate_pct_decimal_string: null
+            amount_decimal_string: null
+            currency: null
+            unit_scale: base_units
+            payment_date: null
+          agency_fee_terms:
+            amount_decimal_string: null
+            currency: null
+            unit_scale: base_units
+            frequency_and_payment_dates: null
+          other_fees:
+            - fee_id: null
+              fee_type: null
+              rate_pct_decimal_string: null
+              amount_decimal_string: null
+              currency: null
+              unit_scale: base_units
+              accrual_and_payment_rule: null
+          capitalized_or_cash_treatment: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+
+    pricing_and_accrual:
+      rate_basis_benchmark_margin_and_coupon:
+        requirement_id: F502-EV-035
+        status: unknown
+        value:
+          rate_type: null
+          benchmark: null
+          margin_bps_decimal_string: null
+          all_in_rate_pct_decimal_string: null
+          coupon_currency: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      resets_fallbacks_floors_and_caps:
+        requirement_id: F502-EV-036
+        status: unknown
+        value:
+          reset_dates: []
+          observation_or_lockout: null
+          benchmark_fallback: null
+          floor_rate_pct_decimal_string: null
+          cap_rate_pct_decimal_string: null
+          negative_rate_treatment: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      day_count_payment_calendar_and_rounding:
+        requirement_id: F502-EV-037
+        status: unknown
+        value:
+          day_count: null
+          payment_frequency: null
+          business_day_convention: null
+          calendars: []
+          rounding: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      default_interest_and_overdue_amounts:
+        requirement_id: F502-EV-038
+        status: unknown
+        value:
+          default_interest_rate_pct_decimal_string: null
+          capitalization: null
+          pik_or_cash_pay: null
+          overdue_amount_treatment: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      documentary_meaning_of_13_39_percent:
+        requirement_id: F502-EV-039
+        status: unknown
+        value:
+          classification: null
+          lender_quoted_lkr_coupon_pct_decimal_string: null
+          usd_equivalent_synthetic_rate_pct_decimal_string: null
+          parity_estimate_pct_decimal_string: null
+          other: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      pricing_effective_date_and_expiry:
+        requirement_id: F502-EV-040
+        status: unknown
+        value:
+          effective_date: null
+          validity_or_expiry: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+
+    repayment_prepayment_and_priority:
+      first_payment_grace_and_maturity:
+        requirement_id: F502-EV-045
+        status: unknown
+        value:
+          first_payment_date: null
+          grace_or_interest_only_period: null
+          final_maturity: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      amortization_method:
+        requirement_id: F502-EV-046
+        status: unknown
+        value: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      contractual_installments_or_sculpting_algorithm:
+        requirement_id: F502-EV-047
+        status: unknown
+        value:
+          native_currency_installments:
+            - installment_id: null
+              due_date: null
+              amount_decimal_string: null
+              currency: null
+              unit_scale: base_units
+          sculpting_algorithm: null
+          target_coverage: null
+          rounding: null
+          residual_rule: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      balloon:
+        requirement_id: F502-EV-048
+        status: unknown
+        value:
+          amount_or_cap_decimal_string: null
+          currency: null
+          unit_scale: base_units
+          due_date: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      mandatory_prepayment_and_cash_sweep:
+        requirement_id: F502-EV-049
+        status: unknown
+        value:
+          mandatory_prepayments:
+            - prepayment_id: null
+              trigger: null
+              amount_or_formula: null
+              currency: null
+              unit_scale: base_units
+              allocation_rule: null
+          cash_sweep: null
+          proceeds_allocation: null
+          cancellation_mechanics: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      voluntary_prepayment:
+        requirement_id: F502-EV-050
+        status: unknown
+        value:
+          notice: null
+          premium_rate_pct_decimal_string: null
+          premium_amount_decimal_string: null
+          premium_currency: null
+          premium_unit_scale: base_units
+          break_costs: null
+          currency_conversion_consequences: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      waterfall_intertranche_priority_and_voting:
+        requirement_id: F502-EV-051
+        status: unknown
+        value:
+          payment_waterfall: null
+          intertranche_allocation: null
+          ranking: null
+          subordination: null
+          voting: null
+          standstill: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      payment_dates_revenue_settlement_and_cure:
+        requirement_id: F502-EV-052
+        status: unknown
+        value:
+          payment_dates: []
+          revenue_settlement_alignment: null
+          cure_periods: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+
+    accounts_regulatory_and_remittance:
+      borrower_and_lender_residence:
+        requirement_id: F502-EV-060
+        status: unknown
+        value:
+          borrower_residence: null
+          lender_residence: null
+          foreign_exchange_act_treatment: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      authorized_dealer_and_ecba:
+        requirement_id: F502-EV-061
+        status: unknown
+        value:
+          authorized_dealer: null
+          ecba_required: null
+          account_designation: null
+          account_currency: null
+          controlled_account_reference: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      dfe_cbsl_permissions_and_approvals:
+        requirement_id: F502-EV-062
+        status: unknown
+        value:
+          permission_direction_exemption_or_approval: null
+          expiry: null
+          conditions: []
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      tenor_and_external_borrowing_eligibility:
+        requirement_id: F502-EV-063
+        status: unknown
+        value:
+          tenor: null
+          structure: null
+          eligibility_confirmation: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      repatriation_convertibility_and_transfer:
+        requirement_id: F502-EV-064
+        status: unknown
+        value:
+          repatriation: null
+          convertibility: null
+          transfer: null
+          blocked_currency_allocation: null
+          payment_delay_allocation: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      regulatory_reporting_pack:
+        requirement_id: F502-EV-065
+        status: unknown
+        value:
+          reports_and_filings: []
+          documentary_requirements: []
+          closing_checklist_mapping: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+
+    revenue_hedging_and_reserves:
+      executed_ppa_currency_and_settlement:
+        requirement_id: F502-EV-070
+        status: unknown
+        value:
+          tariff_currency: null
+          invoicing_currency: null
+          payment_currency: null
+          indexation: null
+          fx_true_up: null
+          settlement_lag: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      offtaker_payment_and_convertibility_support:
+        requirement_id: F502-EV-071
+        status: unknown
+        value:
+          payment_support: null
+          escrow: null
+          convertibility_support: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      executed_hedges:
+        requirement_id: F502-EV-072
+        status: unknown
+        value:
+          - instrument_id: null
+            instrument_type: null
+            linked_facility_or_exposure_id: null
+            governing_agreement_evidence_id: null
+            pay_currency: null
+            pay_amount_decimal_string: null
+            receive_currency: null
+            receive_amount_decimal_string: null
+            unit_scale: base_units
+            trade_date: null
+            effective_date: null
+            maturity_date: null
+            rate_or_fixing_terms: null
+            margin_and_collateral: null
+            termination_terms: null
+            evidence_refs: []
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      hedge_cashflow_priority:
+        requirement_id: F502-EV-073
+        status: unknown
+        value:
+          coverage_classification: null
+          waterfall_priority: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      dsra:
+        requirement_id: F502-EV-074
+        status: unknown
+        value:
+          currency: null
+          target_months: null
+          sizing_basis: null
+          permitted_investments: null
+          fx_revaluation: null
+          top_up: null
+          release: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      other_reserves_and_liquidity:
+        requirement_id: F502-EV-075
+        status: unknown
+        value:
+          - reserve_or_facility_id: null
+            reserve_or_facility_type: null
+            currency: null
+            target_or_limit_amount_decimal_string: null
+            unit_scale: base_units
+            sizing_basis: null
+            funding_and_top_up_rule: null
+            permitted_investments: null
+            release_or_draw_conditions: null
+            account_or_instrument_reference: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+
+    tax_accounting_security_and_remedies:
+      lender_tax_residence_and_beneficial_ownership:
+        requirement_id: F502-EV-080
+        status: unknown
+        value:
+          tax_residence: null
+          beneficial_owner: null
+          treaty_eligibility: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      withholding_grossup_and_tax_indemnity:
+        requirement_id: F502-EV-081
+        status: unknown
+        value:
+          withholding_rate_pct_decimal_string: null
+          treaty_relief: null
+          gross_up: null
+          tax_indemnity: null
+          excluded_taxes: []
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      deductibility_and_related_party_status:
+        requirement_id: F502-EV-082
+        status: unknown
+        value:
+          interest_deductibility: null
+          thin_cap_or_earnings_stripping: null
+          related_party_status: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      functional_currency_and_fx_accounting:
+        requirement_id: F502-EV-083
+        status: unknown
+        value:
+          functional_currency: null
+          accounting_currency: null
+          fx_gain_loss_treatment: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+      security_guarantees_insurance_and_remedies:
+        requirement_id: F502-EV-084
+        status: unknown
+        value:
+          security_package: []
+          security_currency: null
+          guarantees: []
+          political_risk_or_convertibility_cover: []
+          claim_payment_currency: null
+          events_of_default: []
+          acceleration_and_enforcement: null
+          cure_and_remedies: null
+        evidence_refs: []
+        claim_citation_ids: []
+        comment: null
+
+conflicts_and_open_items:
+  - conflict_id: null
+    requirement_ids: []
+    facility_ids: []
+    evidence_ids: []
+    description: null
+    order_of_precedence_analysis: null
+    resolution_text: null
+    resolution_evidence_ids: []
+    resolution_citation_ids: []
+    resolution_owner: null
+    target_resolution_date: null
+    status: open
+
+confirmations:
+  no_inference_confirmation: false
+  all_facilities_and_tranches_listed: false
+  all_confirmed_fields_have_clause_and_page_evidence: false
+  all_not_applicable_fields_have_clause_and_page_evidence: false
+  all_conflicts_are_disclosed: false
+  synthetic_material_excluded_from_transaction_facts: false
+  f5_01_and_f5_02_kept_separate: false
+
+signoff:
+  borrower_authorized_representative:
+    name: null
+    role: null
+    signature_evidence_id: null
+    date: null
+  facility_agent_or_lender_representative:
+    name: null
+    organization: null
+    role: null
+    signature_evidence_id: null
+    date: null
+  sri_lankan_legal_counsel:
+    name: null
+    firm: null
+    scope_of_confirmation: null
+    opinion_evidence_id: null
+    date: null
+  tax_adviser:
+    name: null
+    firm: null
+    scope_of_confirmation: null
+    opinion_evidence_id: null
+    date: null
+  authorized_dealer:
+    name: null
+    institution: null
+    scope_of_confirmation: null
+    confirmation_evidence_id: null
+    date: null

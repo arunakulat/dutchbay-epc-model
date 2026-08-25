@@ -1,0 +1,40 @@
+{
+  "claim_records_semantically_reviewed": 0,
+  "claim_records_structurally_verified": 42,
+  "completion_authorized": false,
+  "csv_sha256": "eb40b182debefb45a0492d5eb0052f035b972204f99336a5302ba2d5d3e2ab8d",
+  "gate_id": "P03",
+  "gate_status": "pending_independent_review",
+  "governed_repository_exceptions_verified": 2,
+  "independence_satisfied": false,
+  "limitations": [
+    "All source bytes and structural links passed implementer preflight; semantic support and publication rights remain unreviewed.",
+    "No local source-root path is recorded in this receipt.",
+    "This receipt cannot satisfy the independent P03 reviewer requirement or lift HOLD."
+  ],
+  "parent_governed_query_log_bytes": 2691,
+  "parent_governed_query_log_sha256": "6a7b24b58e952f684267ed21b46470951b11a28cdcf281850175ded70ab602dc",
+  "publication_rights_reviews_completed": 0,
+  "release_status": "HOLD",
+  "review_kind": "implementer_self_check",
+  "schema_version": "dutchbay.p03_primary_source_verification_receipt.v1",
+  "source_manifest_objects": 74,
+  "source_manifest_objects_verified": 74,
+  "source_manifest_sha256": "d1f376941576cd000c3162009dc30a4c21ce64bd2cee18da4801fb7cabf491bb",
+  "source_manifest_unique_digests": 70,
+  "source_payload_bytes_verified": 50938825,
+  "source_register_sha256": "4c8cc05648abd31f5123c80de09a65b60f60bb57cb12e8ed6fad309498a6df96",
+  "source_root_recorded": false,
+  "source_root_selection": "DUTCHBAY_P03_SOURCE_ROOT_environment_only",
+  "status": "PASS",
+  "tested_snapshot": {
+    "conf/p03_primary_sources.yaml": "858c6f92daaa2322110446a125c374ba009022ab2ec2bf85bc4a16b21c7ddc70",
+    "docs/audit/2026-08-controlled-successor/registers/primary_source_review_plan.v1.json": "01d324d31918100e0db4a05671b84f9f7792ed165f97258a985eee5566d6c661",
+    "docs/audit/2026-08-controlled-successor/scripts/build_primary_source_review_plan.py": "d086c355e50311af6c117150cad4acae6a3e10d5fcce8fff9afbe475a254b1bc",
+    "docs/audit/2026-08-controlled-successor/scripts/validate_published_pack.py": "8ba9c6e8141c262106b13437e10989b6b4f7453ea35f83c1fd5d2ffa91c24439",
+    "scripts/verify_p03_primary_sources.py": "0c0cb840bfeb2d5e0f0752d181ca4f5ac5b0ac661c2e77c6e50e2cf656772000",
+    "tests/lint/test_audit_evidence_pack.py": "1c2181bc27e607227f32c846778fdbab08c52ad133ebabeb58a7bcb5f4524f41",
+    "tests/lint/test_audit_primary_source_control.py": "db014be2ae917b8e83abc7aea1ce7a065c83db85b876e47620eb92ce72cc9394"
+  },
+  "verified_content_set_sha256": "434b5fac35c726ec64338db2b20da9a1eceef4f05908dbe0d4969461263e9918"
+}
