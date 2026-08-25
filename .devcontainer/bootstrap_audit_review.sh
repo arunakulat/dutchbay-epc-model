@@ -9,6 +9,7 @@ set -euo pipefail
 readonly VENV_ROOT="/workspaces/.dutchbay-audit-review-venv"
 readonly CONTAINER_PYTHON="/usr/local/bin/python3.12"
 readonly PRIVATE_ROOT="/workspaces/.dutchbay-private"
+readonly BOOTSTRAP_RECEIPT_PATH="$PRIVATE_ROOT/bootstrap-receipt.json"
 readonly P03_ROOT="$PRIVATE_ROOT/p03"
 readonly SOURCE_ROOT="$P03_ROOT/sources"
 readonly TRANSPORT_ROOT="$PRIVATE_ROOT/transport-smoke"
@@ -20,7 +21,7 @@ readonly SSHD_MARKER="$VENV_ROOT/.dutchbay-sshd-identity.sha256"
 readonly REQUIRED_PIP_VERSION="26.2.1"
 readonly REQUIRED_SETUPTOOLS_VERSION="84.0.0"
 readonly REQUIRED_WHEEL_VERSION="0.48.0"
-readonly EXECUTION_HOST="${DUTCHBAY_SANDBOX_EXECUTION_HOST:-}"
+readonly EXECUTION_HOST="${DUTCHBAY_SANDBOX_EXECUTION_HOST:-github_codespaces}"
 
 fail() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -57,6 +58,9 @@ esac
   "unexpected sandbox environment target"
 [ "$PRIVATE_ROOT" = "/workspaces/.dutchbay-private" ] || fail \
   "unexpected private-source target"
+[ "$BOOTSTRAP_RECEIPT_PATH" = \
+  "/workspaces/.dutchbay-private/bootstrap-receipt.json" ] || fail \
+  "unexpected bootstrap-receipt target"
 [ "$P03_ROOT" = "/workspaces/.dutchbay-private/p03" ] || fail \
   "unexpected P03 private-root target"
 [ "$SOURCE_ROOT" = "/workspaces/.dutchbay-private/p03/sources" ] || fail \
@@ -70,6 +74,8 @@ esac
 [ "$(/usr/bin/stat -c '%U:%G:%a' /workspaces)" = "vscode:vscode:755" ] || fail \
   "the fixed workspace parent ownership differs"
 [ ! -L "$PRIVATE_ROOT" ] || fail "private-source root must not be a symlink"
+[ ! -L "$BOOTSTRAP_RECEIPT_PATH" ] || fail \
+  "bootstrap receipt must not be a symlink"
 [ ! -L "$P03_ROOT" ] || fail "P03 private root must not be a symlink"
 [ ! -L "$SOURCE_ROOT" ] || fail "P03 source root must not be a symlink"
 [ ! -L "$TRANSPORT_ROOT" ] || fail "transport-smoke root must not be a symlink"
@@ -86,7 +92,7 @@ install -d -m 0700 \
   "transport-smoke root resolved outside its fixed path"
 
 bash .devcontainer/start_audit_review_sshd.sh --prepare-only
-sshd_identity_json=$(bash .devcontainer/attest_audit_review_sshd.sh)
+sshd_identity_json=$(bash .devcontainer/attest_audit_review_sshd.sh --construction)
 sshd_identity_digest=$(
   SANDBOX_SSHD_IDENTITY_JSON="$sshd_identity_json" \
     "$CONTAINER_PYTHON" -S -c \
@@ -160,8 +166,10 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
   PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" \
   "$VENV_ROOT/bin/python" dutchbay_bootstrap_rules.py
 
+source_probe=$(find "$SOURCE_ROOT" -mindepth 1 -print -quit) || fail \
+  "P03 source-root population could not be determined"
 source_state="private_root_empty"
-if find "$SOURCE_ROOT" -mindepth 1 -print -quit | grep -q .; then
+if [ -n "$source_probe" ]; then
   source_state="private_root_populated"
 fi
 
@@ -169,6 +177,22 @@ package_content_digest=$(package_content_fingerprint)
 [ "$(tr -d '\r\n' < "$PACKAGE_MARKER")" = "$package_content_digest" ] || fail \
   "installed environment content changed during bootstrap; recreate the Codespace"
 
+receipt_tmp=""
+cleanup_receipt_tmp() {
+  local exit_status=$?
+  trap - EXIT
+  if [ -n "$receipt_tmp" ] && [ -f "$receipt_tmp" ] \
+    && [ ! -L "$receipt_tmp" ]; then
+    if ! unlink -- "$receipt_tmp"; then
+      printf 'ERROR: bootstrap receipt temporary-file cleanup failed\n' >&2
+      exit_status=2
+    fi
+  fi
+  exit "$exit_status"
+}
+trap cleanup_receipt_tmp EXIT
+
+receipt_tmp=$(mktemp "$PRIVATE_ROOT/.bootstrap-receipt.XXXXXX")
 SANDBOX_SOURCE_STATE="$source_state" \
 SANDBOX_DEPENDENCY_MARKER="$MARKER" \
 SANDBOX_IMAGE_MARKER="$IMAGE_MARKER" \
@@ -177,7 +201,8 @@ SANDBOX_VENV_ROOT="$VENV_ROOT" \
 SANDBOX_CONTAINER_PYTHON="$CONTAINER_PYTHON" \
 SANDBOX_SSHD_IDENTITY_JSON="$sshd_identity_json" \
 SANDBOX_EXECUTION_HOST="$EXECUTION_HOST" \
-PYTHONPATH="$PWD/.devcontainer" "$CONTAINER_PYTHON" -S - <<'PY'
+PYTHONPATH="$PWD/.devcontainer" "$CONTAINER_PYTHON" -S - <<'PY' \
+  > "$receipt_tmp"
 from __future__ import annotations
 
 import json
@@ -208,3 +233,13 @@ print(
     )
 )
 PY
+chmod 0400 "$receipt_tmp"
+mv --no-target-directory -- "$receipt_tmp" "$BOOTSTRAP_RECEIPT_PATH"
+receipt_tmp=""
+trap - EXIT
+[ "$(realpath -e "$BOOTSTRAP_RECEIPT_PATH")" = \
+  "$BOOTSTRAP_RECEIPT_PATH" ] || fail \
+  "bootstrap receipt resolved outside its fixed path"
+[ "$(stat -c '%U:%G:%a' "$BOOTSTRAP_RECEIPT_PATH")" = \
+  "vscode:vscode:400" ] || fail "bootstrap receipt ownership or mode differs"
+cat -- "$BOOTSTRAP_RECEIPT_PATH"

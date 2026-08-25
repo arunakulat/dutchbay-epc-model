@@ -68,6 +68,8 @@ jobs:
       - name: Build and start the exact Dev Container lifecycle
         if: steps.scope.outputs.relevant == 'true'
         id: up
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
 
@@ -78,7 +80,8 @@ jobs:
             --remote-env CODESPACE_NAME=dutchbay-ci-audit-review \
             --remote-env DUTCHBAY_SANDBOX_EXECUTION_HOST=github_actions_devcontainer_emulation
 
-          test -z "$(git status --porcelain=v1)"
+          checkout_status=$(git status --porcelain=v1) || exit 2
+          test -z "$checkout_status"
 
           mapfile -t container_ids < <(
             docker ps -aq \
@@ -93,7 +96,30 @@ jobs:
           docker exec --user vscode \
             --workdir /workspaces/dutchbay-epc-model \
             "${container_ids[0]}" \
-            bash -ceu 'test -z "$(git status --porcelain=v1)"'
+            bash -ceu '
+              checkout_status=$(git status --porcelain=v1) || exit 2
+              test -z "$checkout_status"
+            '
+          docker exec --user vscode \
+            --workdir /workspaces/dutchbay-epc-model \
+            "${container_ids[0]}" \
+            /usr/local/bin/python3.12 -S -c '
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              receipt = json.load(stream)
+          expected = {
+              "schema": "dutchbay.audit_review_sandbox_bootstrap.v3",
+              "status": "PASS",
+              "environment": "github_actions_devcontainer_emulation",
+              "network_boundary": "github_actions_hosted_runner_outbound_egress_available",
+              "git_commit": sys.argv[2],
+              "completion_authorized": False,
+              "release_status": "HOLD",
+          }
+          for key, value in expected.items():
+              if receipt.get(key) != value:
+                  raise SystemExit(f"bootstrap receipt field differs: {key}")
+          ' /workspaces/.dutchbay-private/bootstrap-receipt.json "$EXPECTED_SHA"
 
       - name: Require authenticated SSH, attestation, and restart recovery
         if: steps.scope.outputs.relevant == 'true'
@@ -143,7 +169,16 @@ jobs:
                       *:/workspaces/.dutchbay-audit-review-venv/bin:*) ;;
                       *) exit 2 ;;
                     esac'"'"'
-                bash .devcontainer/attest_audit_review_sshd.sh >/dev/null
+                session_identity=$(
+                  bash .devcontainer/attest_audit_review_sshd.sh --session
+                )
+                session_digest=$(
+                  SSHD_IDENTITY_JSON="$session_identity" \
+                    /usr/local/bin/python3.12 -S -c \
+                    '"'"'import json, os; print(json.loads(os.environ["SSHD_IDENTITY_JSON"])["sshd_identity_sha256"])'"'"'
+                )
+                test "$(tr -d "\r\n" < /workspaces/.dutchbay-audit-review-venv/.dutchbay-sshd-identity.sha256)" = \
+                  "$session_digest"
               '
           }
 
@@ -160,7 +195,8 @@ jobs:
             --remote-env CODESPACES=true \
             --remote-env CODESPACE_NAME=dutchbay-ci-audit-review \
             --remote-env DUTCHBAY_SANDBOX_EXECUTION_HOST=github_actions_devcontainer_emulation
-          test -z "$(git status --porcelain=v1)"
+          checkout_status=$(git status --porcelain=v1) || exit 2
+          test -z "$checkout_status"
           mapfile -t resumed_ids < <(
             docker ps -aq \
               --filter "label=devcontainer.local_folder=$GITHUB_WORKSPACE"
@@ -170,7 +206,10 @@ jobs:
           docker exec --user vscode \
             --workdir /workspaces/dutchbay-epc-model \
             "$CONTAINER_ID" \
-            bash -ceu 'test -z "$(git status --porcelain=v1)"'
+            bash -ceu '
+              checkout_status=$(git status --porcelain=v1) || exit 2
+              test -z "$checkout_status"
+            '
 
           after_resume_marker=$(docker exec "$CONTAINER_ID" \
             stat -c '%i:%y' /run/dutchbay-sshd-runtime.ready)

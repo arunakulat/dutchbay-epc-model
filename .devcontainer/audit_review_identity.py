@@ -6,6 +6,7 @@ import base64
 import binascii
 import hashlib
 import importlib.metadata
+import ipaddress
 import json
 import os
 import re
@@ -310,6 +311,43 @@ def validate_sshd_effective_config(config_text: str) -> str:
     ):
         raise SandboxIdentityError("effective SSH session environment differs")
     return "\n".join(lines) + "\n"
+
+
+def build_sshd_session_connection_context(
+    ssh_connection: str,
+    ssh_client: str,
+) -> str:
+    """Validate one authenticated Codespaces tunnel tuple for ``sshd -T -C``."""
+    connection_parts = ssh_connection.split()
+    client_parts = ssh_client.split()
+    if len(connection_parts) != 4 or len(client_parts) != 3:
+        raise SandboxIdentityError("authenticated SSH connection context is malformed")
+    client_address, client_port_text, server_address, server_port_text = (
+        connection_parts
+    )
+    if client_parts != [client_address, client_port_text, server_port_text]:
+        raise SandboxIdentityError("SSH_CONNECTION and SSH_CLIENT differ")
+    try:
+        client = ipaddress.ip_address(client_address)
+        server = ipaddress.ip_address(server_address)
+        client_port = int(client_port_text)
+        server_port = int(server_port_text)
+    except ValueError as exc:
+        raise SandboxIdentityError(
+            "authenticated SSH connection context is malformed"
+        ) from exc
+    if not client.is_loopback or not server.is_loopback:
+        raise SandboxIdentityError(
+            "authenticated SSH connection is outside the approved tunnel model"
+        )
+    if not 1 <= client_port <= 65535 or server_port != 2222:
+        raise SandboxIdentityError(
+            "authenticated SSH connection ports differ from the approved tunnel model"
+        )
+    return (
+        "user=vscode,host=localhost,"
+        f"addr={client.compressed},laddr={server.compressed},lport={server_port}"
+    )
 
 
 def _validate_ssh_transport_package_inventory(inventory: list[str]) -> None:

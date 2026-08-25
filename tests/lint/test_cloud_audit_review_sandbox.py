@@ -356,7 +356,6 @@ def test_devcontainer_is_digest_pinned_private_and_portless() -> None:
         "bash .devcontainer/start_audit_review_sshd.sh --start"
     )
     assert payload["remoteEnv"] == {
-        "DUTCHBAY_SANDBOX_EXECUTION_HOST": "github_codespaces",
         "DUTCHBAY_VENV": SANDBOX_VENV,
         "DUTCHBAY_P03_SOURCE_ROOT": PRIVATE_SOURCE_ROOT,
         "PATH": f"{SANDBOX_VENV}/bin:${{containerEnv:PATH}}",
@@ -408,9 +407,15 @@ def test_repository_owned_ssh_transport_is_narrow_and_base_pinned() -> None:
     attestor = SSHD_ATTESTOR.read_text(encoding="utf-8")
     assert "build_sshd_transport_identity" in attestor
     assert "/usr/sbin/sshd -T" in attestor
-    assert (
-        "-C 'user=vscode,host=localhost,addr=127.0.0.1,laddr=127.0.0.1,lport=2222'"
-    ) in attestor
+    assert '-C "$connection_context"' in attestor
+    assert "build_sshd_session_connection_context" in attestor
+    assert '"${SSH_CONNECTION:-}"' in attestor
+    assert '"${SSH_CLIENT:-}"' in attestor
+    assert "--construction" in attestor
+    assert "--session" in attestor
+    assert "sshd_drop_in_population=(/etc/ssh/sshd_config.d/*)" in attestor
+    assert 'Path("/etc/ssh/sshd_config")' not in attestor
+    assert "SSHD_CONFIGURATION_PATHS" in attestor
     assert 'Path("/usr/local/share/ssh-init.sh")' in attestor
     assert '/usr/bin/ssh-keygen -y -f "$key"' in attestor
     assert '[ "${derived%% *}" = "$expected_algorithm" ]' in attestor
@@ -455,7 +460,14 @@ def test_ci_builds_and_boots_exact_audit_review_image() -> None:
         )
         == 2
     )
-    assert workflow.count('test -z "$(git status --porcelain=v1)"') == 4
+    assert workflow.count("checkout_status=$(git status --porcelain=v1)") == 4
+    assert 'test -z "$(git status' not in workflow
+    assert "bootstrap-receipt.json" in workflow
+    assert '"environment": "github_actions_devcontainer_emulation"' in workflow
+    assert (
+        '"network_boundary": "github_actions_hosted_runner_outbound_egress_available"'
+    ) in workflow
+    assert '"git_commit": sys.argv[2]' in workflow
     assert "label=devcontainer.local_folder=$GITHUB_WORKSPACE" in workflow
     assert "docker exec --user vscode" in workflow
     assert "--workdir /workspaces/dutchbay-epc-model" in workflow
@@ -490,9 +502,14 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
     assert '[[ "$CANDIDATE_BRANCH" =~ ^codex/' in candidate
     assert '[[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]' in candidate
     assert 'git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH"' in candidate
-    assert 'test "$(git rev-parse HEAD)" = "$expected_sha"' in candidate
-    assert 'test -z "$(git status --porcelain=v1)"' in candidate
-    assert 'test -z "$(find "$source_root" -mindepth 1 -print -quit)"' in candidate
+    assert "checkout_head=$(git rev-parse HEAD) || exit 2" in candidate
+    assert 'test "$checkout_head" = "$expected_sha"' in candidate
+    assert "checkout_status=$(git status --porcelain=v1) ||" in candidate
+    assert 'source_probe=$(find "$source_root" -mindepth 1 -print -quit) ||' in (
+        candidate
+    )
+    assert 'test -z "$(git status' not in candidate
+    assert 'test -z "$(find ' not in candidate
     assert "gh codespace cp --expand" in candidate
     assert "gh codespace stop" in candidate
     assert '"$(codespace_identity | jq -r .state)" = "Shutdown"' in candidate
@@ -502,6 +519,19 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
     assert "bash .devcontainer/attest_audit_review_sshd.sh" in candidate
     assert "--retention-period 24h" in candidate
     assert 'gh codespace delete -c "$codespace_name" --force' in candidate
+    assert 'readonly bootstrap_receipt="/workspaces/.dutchbay-private/' in candidate
+    assert '"environment": "github_codespaces"' in candidate
+    assert '"git_commit": sys.argv[2]' in candidate
+    assert 'delete_candidate_and_confirm_absent "$CANDIDATE_BRANCH"' in candidate
+    assert 'creation_pending="true"' in candidate
+    assert "recover_unique_pending_candidate" in candidate
+    assert 'display_name="DutchBay 1110 candidate $EXPECTED_SHA"' in candidate
+    assert candidate.index(
+        'delete_candidate_and_confirm_absent "$CANDIDATE_BRANCH"'
+    ) < candidate.index("jq -n")
+    assert candidate.index("trap - EXIT") < candidate.index("jq -n")
+    assert 'deletion: "confirmed_absent_via_codespaces_api"' in candidate
+    assert "candidate_codespace_name: $codespace_name" in candidate
     assert 'release_status: "HOLD"' in candidate
     assert "DUTCHBAY_P03_CLOUD_INGRESS_AUTHORIZED" not in candidate
     assert CANDIDATE_CODESPACE.stat().st_mode & 0o111
@@ -528,6 +558,115 @@ def test_candidate_codespace_control_rejects_non_allowlisted_identity() -> None:
     )
     assert invalid_sha.returncode == 2
     assert "full SHA-1" in invalid_sha.stderr
+
+
+def test_candidate_recovers_ambiguous_creation_before_exit(tmp_path: Path) -> None:
+    """Malformed create output must discover and delete only the exact candidate."""
+    tool_root = tmp_path / "bin"
+    state_path = tmp_path / "created"
+    call_log = tmp_path / "calls.log"
+    tool_root.mkdir()
+    sha = "a" * 40
+    branch = "codex/ambiguous-create-control"
+    git_stub = tool_root / "git"
+    git_stub.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  check-ref-format) exit 0 ;;
+  status) exit 0 ;;
+  ls-remote) printf '%s\\trefs/heads/%s\\n' "$STUB_SHA" "$STUB_BRANCH" ;;
+  *) exit 91 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    gh_stub = tool_root / "gh"
+    gh_stub.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "$STUB_CALL_LOG"
+case "$1 $2" in
+  "api --paginate")
+    if [ -e "$STUB_STATE" ]; then
+      printf '[{"codespaces":[{"name":"candidate123","display_name":"DutchBay 1110 candidate %s","repository":{"full_name":"arunakulat/dutchbay-epc-model"},"git_status":{"ref":"%s"}}]}]\\n' "$STUB_SHA" "$STUB_BRANCH"
+    else
+      printf '[{"codespaces":[]}]\\n'
+    fi
+    ;;
+  "codespace create")
+    : > "$STUB_STATE"
+    printf 'malformed/name\\n'
+    ;;
+  "codespace delete")
+    rm -- "$STUB_STATE"
+    ;;
+  *) exit 92 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    git_stub.chmod(0o755)
+    gh_stub.chmod(0o755)
+    lock_path = Path("/tmp/dutchbay-1110-candidate-codespace.lock")
+    assert not lock_path.exists()
+    environment = {
+        **os.environ,
+        "PATH": f"{tool_root}:/usr/bin:/bin",
+        "DUTCHBAY_VENV": "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv",
+        "STUB_SHA": sha,
+        "STUB_BRANCH": branch,
+        "STUB_STATE": str(state_path),
+        "STUB_CALL_LOG": str(call_log),
+    }
+    result = subprocess.run(
+        (str(CANDIDATE_CODESPACE), branch, sha),
+        cwd=REPO_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "created candidate Codespace name is malformed" in result.stderr
+    assert "codespace delete -c candidate123 --force" in call_log.read_text(
+        encoding="utf-8"
+    )
+    assert not state_path.exists()
+    assert not lock_path.exists()
+
+
+def test_shell_population_and_status_probes_fail_closed(tmp_path: Path) -> None:
+    """A silent command error must not become an empty or clean result."""
+    tool_root = tmp_path / "bin"
+    tool_root.mkdir()
+    for name in ("find", "git"):
+        stub = tool_root / name
+        stub.write_text("#!/usr/bin/env bash\nexit 61\n", encoding="utf-8")
+        stub.chmod(0o755)
+    environment = {**os.environ, "PATH": f"{tool_root}:/usr/bin:/bin"}
+    for fragment in (
+        "source_probe=$(find /tmp -mindepth 1 -print -quit) || exit 2; "
+        'test -z "$source_probe"',
+        "checkout_status=$(git status --porcelain=v1) || exit 2; "
+        'test -z "$checkout_status"',
+    ):
+        result = subprocess.run(
+            ("/bin/bash", "-euo", "pipefail", "-c", fragment),
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 2
+
+    governed = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (BOOTSTRAP, VERIFY, CANDIDATE_CODESPACE, UPLOAD)
+    )
+    assert 'test -z "$(git status' not in governed
+    assert 'test -z "$(find ' not in governed
+    assert 'if find "$SOURCE_ROOT"' not in governed
 
 
 def test_cloud_sandbox_path_classifier_fails_closed(tmp_path: Path) -> None:
@@ -660,7 +799,8 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert "git merge --ff-only origin/main" not in upload
     assert "git switch --detach origin/main" in upload
     assert 'main|"")' in upload
-    assert 'test -z "$(git status --porcelain)"' in upload
+    assert "checkout_status=$(git status --porcelain=v1) ||" in upload
+    assert 'test -z "$(git status' not in upload
     assert "REMOTE_TRANSPORT_SMOKE" in upload
     assert upload.count("gh codespace cp --expand") == 2
     assert "remote:$REMOTE_SMOKE_PATH" in upload
@@ -1209,6 +1349,38 @@ def test_sshd_policy_content_and_host_identity_fail_closed(tmp_path: Path) -> No
             assert key in str(exc)
         else:  # pragma: no cover - explicit fail branch
             raise AssertionError(f"unsafe effective SSH value was accepted: {key}")
+
+
+def test_authenticated_ssh_connection_context_is_exact_and_fail_closed() -> None:
+    """Session attestation must use the real, approved tunnel connection tuple."""
+    identity = _load_identity_contract()
+    assert identity.build_sshd_session_connection_context(
+        "127.0.0.1 49152 127.0.0.1 2222",
+        "127.0.0.1 49152 2222",
+    ) == ("user=vscode,host=localhost,addr=127.0.0.1,laddr=127.0.0.1,lport=2222")
+    assert (
+        identity.build_sshd_session_connection_context(
+            "::1 49153 ::1 2222",
+            "::1 49153 2222",
+        )
+        == "user=vscode,host=localhost,addr=::1,laddr=::1,lport=2222"
+    )
+
+    rejected = (
+        ("", ""),
+        ("127.0.0.1 1 127.0.0.1", "127.0.0.1 1 2222"),
+        ("127.0.0.1 49152 127.0.0.1 2222", "127.0.0.1 49153 2222"),
+        ("10.0.0.1 49152 127.0.0.1 2222", "10.0.0.1 49152 2222"),
+        ("127.0.0.1 49152 10.0.0.2 2222", "127.0.0.1 49152 2222"),
+        ("127.0.0.1 49152 127.0.0.1 22", "127.0.0.1 49152 22"),
+    )
+    for connection, client in rejected:
+        try:
+            identity.build_sshd_session_connection_context(connection, client)
+        except identity.SandboxIdentityError:
+            pass
+        else:  # pragma: no cover - explicit fail branch
+            raise AssertionError(f"unsafe SSH tuple was accepted: {connection!r}")
 
 
 def test_base_image_policy_cannot_drift_from_reported_digest(tmp_path: Path) -> None:

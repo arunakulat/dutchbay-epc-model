@@ -16,10 +16,39 @@ fail() {
   "digest-pinned container Python is unavailable"
 [ -f "$SSHD_DROP_IN" ] && [ ! -L "$SSHD_DROP_IN" ] || fail \
   "controlled SSH policy is unavailable or unsafe"
+[ "$#" -eq 1 ] || fail "expected --construction or --session"
+
+case "$1" in
+  --construction)
+    connection_context='user=vscode,host=localhost,addr=127.0.0.1,laddr=127.0.0.1,lport=2222'
+    ;;
+  --session)
+    [ -n "${SSH_CONNECTION:-}" ] && [ -n "${SSH_CLIENT:-}" ] || fail \
+      "authenticated SSH connection context is unavailable"
+    connection_context=$(
+      SSH_CONNECTION_VALUE="$SSH_CONNECTION" SSH_CLIENT_VALUE="$SSH_CLIENT" \
+        PYTHONPATH="$PWD/.devcontainer" "$CONTAINER_PYTHON" -S - <<'PY'
+from __future__ import annotations
+
+import os
+
+from audit_review_identity import build_sshd_session_connection_context
+
+print(
+    build_sshd_session_connection_context(
+        os.environ["SSH_CONNECTION_VALUE"],
+        os.environ["SSH_CLIENT_VALUE"],
+    )
+)
+PY
+    ) || fail "authenticated SSH connection context is unsupported"
+    ;;
+  *) fail "expected --construction or --session" ;;
+esac
 
 effective_config=$(
   /usr/bin/sudo --non-interactive /usr/sbin/sshd -T \
-    -C 'user=vscode,host=localhost,addr=127.0.0.1,laddr=127.0.0.1,lport=2222'
+    -C "$connection_context"
 )
 package_inventory=$(
   /usr/bin/dpkg-query --show \
@@ -32,6 +61,20 @@ package_paths=$(
     lsof openssh-client openssh-server openssh-sftp-server \
     | LC_ALL=C /usr/bin/sort --unique
 )
+
+sshd_configuration_paths="/etc/ssh/sshd_config"
+shopt -s nullglob
+sshd_drop_in_population=(/etc/ssh/sshd_config.d/*)
+for path in "${sshd_drop_in_population[@]}"; do
+  [ -f "$path" ] && [ ! -L "$path" ] || fail \
+    "runtime SSH configuration population is unsafe"
+  case "${path##*/}" in
+    *[!A-Za-z0-9_.-]*) fail "runtime SSH configuration filename is unsafe" ;;
+  esac
+  sshd_configuration_paths+=$'\n'"$path"
+done
+printf '%s\n' "$sshd_configuration_paths" | grep -Fxq "$SSHD_DROP_IN" || fail \
+  "controlled SSH policy is absent from the runtime population"
 
 expected_host_private_keys=(
   /etc/ssh/ssh_host_ecdsa_key
@@ -73,6 +116,7 @@ done
 SSHD_EFFECTIVE_CONFIG="$effective_config" \
 SSHD_PACKAGE_INVENTORY="$package_inventory" \
 SSHD_PACKAGE_PATHS="$package_paths" \
+SSHD_CONFIGURATION_PATHS="$sshd_configuration_paths" \
 SSHD_HOST_PUBLIC_KEY_MATERIAL="$host_public_key_material" \
 SSHD_HOST_PUBLIC_KEY_SIDECARS="$host_public_key_sidecars" \
 PYTHONPATH="$PWD/.devcontainer" "$CONTAINER_PYTHON" -S - <<'PY'
@@ -94,7 +138,11 @@ identity = build_sshd_transport_identity(
     ],
     extra_paths=[
         Path("/etc/pam.d/sshd"),
-        Path("/etc/ssh/sshd_config.d/00-dutchbay-audit-review.conf"),
+        *[
+            Path(value)
+            for value in os.environ["SSHD_CONFIGURATION_PATHS"].splitlines()
+            if value
+        ],
         Path("/usr/local/share/ssh-init.sh"),
         Path("/usr/local/sbin/dutchbay-sshd-start.sh"),
         Path("/usr/local/lib/dutchbay/sshd_readiness.py"),

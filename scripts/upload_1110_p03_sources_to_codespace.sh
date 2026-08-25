@@ -117,12 +117,20 @@ venv_root=${DUTCHBAY_VENV:-}
 [ -x "$venv_root/bin/python" ] || fail "governed Python is unavailable"
 command -v gh >/dev/null 2>&1 || fail "GitHub CLI is unavailable"
 command -v jq >/dev/null 2>&1 || fail "jq is unavailable"
-[ "$(git branch --show-current)" = "main" ] || fail \
+checkout_branch=$(git branch --show-current) || fail \
+  "local P03 ingress branch could not be determined"
+[ "$checkout_branch" = "main" ] || fail \
   "local P03 ingress checkout must be protected main"
-[ -z "$(git status --porcelain)" ] || fail \
+checkout_status=$(git status --porcelain=v1) || fail \
+  "local P03 ingress checkout status could not be determined"
+[ -z "$checkout_status" ] || fail \
   "local P03 ingress checkout must be clean"
 git fetch --prune origin
-[ "$(git rev-parse HEAD)" = "$(git rev-parse refs/remotes/origin/main)" ] || fail \
+checkout_head=$(git rev-parse HEAD) || fail \
+  "local P03 ingress commit could not be determined"
+origin_main=$(git rev-parse refs/remotes/origin/main) || fail \
+  "fetched origin/main commit could not be determined"
+[ "$checkout_head" = "$origin_main" ] || fail \
   "local P03 ingress checkout is stale; synchronize main before retrying"
 DUTCHBAY_VENV="$venv_root" ./check_venv.sh --no-bootstrap
 
@@ -149,23 +157,29 @@ readonly repo_root="/workspaces/dutchbay-epc-model"
 readonly source_root="/workspaces/.dutchbay-private/p03/sources"
 readonly smoke_root="/workspaces/.dutchbay-private/transport-smoke"
 cd "$repo_root"
-case "$(git branch --show-current)" in
+checkout_branch=$(git branch --show-current) || exit 2
+case "$checkout_branch" in
   main|"") ;;
   *) exit 2 ;;
 esac
-test -z "$(git status --porcelain)"
+checkout_status=$(git status --porcelain=v1) || exit 2
+test -z "$checkout_status"
 git fetch --prune origin
 git switch --detach origin/main
-test "$(git rev-parse HEAD)" = "$(git rev-parse refs/remotes/origin/main)"
+checkout_head=$(git rev-parse HEAD) || exit 2
+origin_main=$(git rev-parse refs/remotes/origin/main) || exit 2
+test "$checkout_head" = "$origin_main"
 test -d "$source_root"
 test ! -L "$source_root"
 test "$(realpath -e "$source_root")" = "$source_root"
-test -z "$(find "$source_root" -mindepth 1 -print -quit)"
+source_probe=$(find "$source_root" -mindepth 1 -print -quit) || exit 2
+test -z "$source_probe"
 test -d "$smoke_root"
 test ! -L "$smoke_root"
 test "$(realpath -e "$smoke_root")" = "$smoke_root"
 test "$(stat -c '%a' "$smoke_root")" = "700"
-test -z "$(find "$smoke_root" -mindepth 1 -print -quit)"
+smoke_probe=$(find "$smoke_root" -mindepth 1 -print -quit) || exit 2
+test -z "$smoke_probe"
 export DUTCHBAY_VENV="/workspaces/.dutchbay-audit-review-venv"
 export DUTCHBAY_P03_SOURCE_ROOT="$source_root"
 export PYTHONPATH="$repo_root"

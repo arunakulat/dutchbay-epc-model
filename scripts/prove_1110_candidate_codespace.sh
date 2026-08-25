@@ -14,15 +14,17 @@ readonly CREATE_LOCK="/tmp/dutchbay-1110-candidate-codespace.lock"
 readonly POLL_SECONDS=5
 readonly TRANSPORT_TIMEOUT_SECONDS=300
 readonly SHUTDOWN_TIMEOUT_SECONDS=120
+readonly DELETION_TIMEOUT_SECONDS=120
 readonly REMOTE_REPO="/workspaces/dutchbay-epc-model"
 readonly REMOTE_SOURCE_ROOT="/workspaces/.dutchbay-private/p03/sources"
 readonly REMOTE_SMOKE_ROOT="/workspaces/.dutchbay-private/transport-smoke"
 readonly REMOTE_SMOKE_PATH="$REMOTE_SMOKE_ROOT/candidate-devcontainer.json"
-
 codespace_name=""
 display_name=""
 create_lock_held="false"
 codespace_created="false"
+creation_pending="false"
+candidate_branch=""
 
 fail() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -60,14 +62,97 @@ verify_api_identity() {
     || fail "candidate Codespace API identity differs"
 }
 
+candidate_is_absent() {
+  local codespaces_json
+  codespaces_json=$(list_codespaces)
+  jq -e --arg name "$codespace_name" \
+    '[.[].codespaces[] | select(.name == $name)] | length == 0' \
+    <<< "$codespaces_json" >/dev/null
+}
+
+wait_for_candidate_absence() {
+  local deletion_deadline=$((SECONDS + DELETION_TIMEOUT_SECONDS))
+  while [ "$SECONDS" -lt "$deletion_deadline" ]; do
+    if candidate_is_absent; then
+      return 0
+    fi
+    sleep "$POLL_SECONDS"
+  done
+  candidate_is_absent
+}
+
+delete_candidate_and_confirm_absent() {
+  local branch=$1
+  verify_api_identity "$branch"
+  gh codespace delete -c "$codespace_name" --force
+  wait_for_candidate_absence || fail \
+    "exact candidate Codespace deletion was not API-confirmed"
+  codespace_created="false"
+}
+
+recover_unique_pending_candidate() {
+  local codespaces_json
+  local matching_count
+  local recovered_name
+  codespaces_json=$(list_codespaces) || return 2
+  matching_count=$(
+    jq --arg display "$display_name" \
+      --arg repository "$REPOSITORY" \
+      --arg branch "$candidate_branch" \
+      '[.[].codespaces[]
+        | select(.display_name == $display
+          and .repository.full_name == $repository
+          and .git_status.ref == $branch)] | length' \
+      <<< "$codespaces_json"
+  ) || return 2
+  case "$matching_count" in
+    0) return 1 ;;
+    1) ;;
+    *) return 2 ;;
+  esac
+  recovered_name=$(
+    jq -r --arg display "$display_name" \
+      --arg repository "$REPOSITORY" \
+      --arg branch "$candidate_branch" \
+      '.[].codespaces[]
+        | select(.display_name == $display
+          and .repository.full_name == $repository
+          and .git_status.ref == $branch)
+        | .name' \
+      <<< "$codespaces_json"
+  ) || return 2
+  [[ "$recovered_name" =~ ^[A-Za-z0-9_-]+$ ]] || return 2
+  codespace_name=$recovered_name
+  codespace_created="true"
+  creation_pending="false"
+}
+
 cleanup() {
   local exit_status=$?
+  local recovery_status
   trap - EXIT
+  if [ "$creation_pending" = "true" ]; then
+    if recover_unique_pending_candidate; then
+      :
+    else
+      recovery_status=$?
+      if [ "$recovery_status" -eq 2 ]; then
+        printf 'ERROR: ambiguous candidate creation could not be recovered safely\n' \
+          >&2
+        exit_status=2
+      fi
+      creation_pending="false"
+    fi
+  fi
   if [ "$codespace_created" = "true" ]; then
     if [ -n "$codespace_name" ] \
       && [[ "$codespace_name" =~ ^[A-Za-z0-9_-]+$ ]]; then
       if ! gh codespace delete -c "$codespace_name" --force; then
         printf 'ERROR: exact candidate Codespace deletion failed: %s\n' \
+          "$codespace_name" >&2
+        exit_status=2
+      elif ! wait_for_candidate_absence; then
+        printf 'ERROR: exact candidate Codespace absence was not confirmed: %s\n' \
           "$codespace_name" >&2
         exit_status=2
       fi
@@ -159,26 +244,64 @@ readonly expected_sha=$2
 readonly repo_root="/workspaces/dutchbay-epc-model"
 readonly source_root="/workspaces/.dutchbay-private/p03/sources"
 readonly smoke_root="/workspaces/.dutchbay-private/transport-smoke"
+readonly bootstrap_receipt="/workspaces/.dutchbay-private/bootstrap-receipt.json"
 cd "$repo_root"
 test "$(id -un)" = vscode
 test "$CODESPACES" = true
 test "$DUTCHBAY_VENV" = /workspaces/.dutchbay-audit-review-venv
 test "$DUTCHBAY_P03_SOURCE_ROOT" = "$source_root"
 test "$PYTHONPATH" = "$repo_root"
-test "$(git branch --show-current)" = "$expected_branch"
-test "$(git rev-parse HEAD)" = "$expected_sha"
-test -z "$(git status --porcelain=v1)"
+checkout_branch=$(git branch --show-current) || exit 2
+test "$checkout_branch" = "$expected_branch"
+checkout_head=$(git rev-parse HEAD) || exit 2
+test "$checkout_head" = "$expected_sha"
+checkout_status=$(git status --porcelain=v1) || exit 2
+test -z "$checkout_status"
 test -d "$source_root"
 test ! -L "$source_root"
 test "$(realpath -e "$source_root")" = "$source_root"
-test -z "$(find "$source_root" -mindepth 1 -print -quit)"
+source_probe=$(find "$source_root" -mindepth 1 -print -quit) || exit 2
+test -z "$source_probe"
 test -d "$smoke_root"
 test ! -L "$smoke_root"
 test "$(realpath -e "$smoke_root")" = "$smoke_root"
-test -z "$(find "$smoke_root" -mindepth 1 -print -quit)"
+smoke_probe=$(find "$smoke_root" -mindepth 1 -print -quit) || exit 2
+test -z "$smoke_probe"
+test -f "$bootstrap_receipt"
+test ! -L "$bootstrap_receipt"
+test "$(realpath -e "$bootstrap_receipt")" = "$bootstrap_receipt"
+test "$(stat -c '%U:%G:%a' "$bootstrap_receipt")" = vscode:vscode:400
+/usr/local/bin/python3.12 -S - "$bootstrap_receipt" "$expected_sha" <<'PY'
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+with Path(sys.argv[1]).open(encoding="utf-8") as stream:
+    receipt = json.load(stream)
+expected = {
+    "schema": "dutchbay.audit_review_sandbox_bootstrap.v3",
+    "status": "PASS",
+    "environment": "github_codespaces",
+    "network_boundary": "creator_private_codespace_outbound_egress_available",
+    "git_commit": sys.argv[2],
+    "completion_authorized": False,
+    "release_status": "HOLD",
+}
+for key, value in expected.items():
+    if receipt.get(key) != value:
+        raise SystemExit(f"bootstrap receipt field differs: {key}")
+PY
 /usr/local/bin/python3.12 -S /usr/local/lib/dutchbay/sshd_readiness.py \
   5 /run/dutchbay-sshd-runtime.ready
-bash .devcontainer/attest_audit_review_sshd.sh >/dev/null
+session_sshd_identity=$(bash .devcontainer/attest_audit_review_sshd.sh --session)
+session_sshd_digest=$(
+  SSHD_IDENTITY_JSON="$session_sshd_identity" /usr/local/bin/python3.12 -S -c \
+    'import json, os; print(json.loads(os.environ["SSHD_IDENTITY_JSON"])["sshd_identity_sha256"])'
+)
+test "$(tr -d '\r\n' < /workspaces/.dutchbay-audit-review-venv/.dutchbay-sshd-identity.sha256)" = \
+  "$session_sshd_digest"
 REMOTE_VERIFY
 }
 
@@ -201,6 +324,7 @@ REMOTE_COPY
 [ "$#" -eq 2 ] || fail "expected CANDIDATE_BRANCH and EXPECTED_SHA"
 readonly CANDIDATE_BRANCH=$1
 readonly EXPECTED_SHA=$2
+candidate_branch=$CANDIDATE_BRANCH
 [[ "$CANDIDATE_BRANCH" =~ ^codex/[A-Za-z0-9._/-]+$ ]] \
   || fail "candidate branch must be an allowlisted codex/* branch"
 git check-ref-format --branch "$CANDIDATE_BRANCH" >/dev/null \
@@ -214,7 +338,9 @@ command -v jq >/dev/null || fail "jq is unavailable"
   "candidate proof must start from the governed local host"
 [ -f ".devcontainer/devcontainer.json" ] || fail \
   "run candidate proof from the DutchBay repository root"
-[ -z "$(git status --porcelain=v1)" ] || fail \
+checkout_status=$(git status --porcelain=v1) || fail \
+  "local candidate checkout status could not be determined"
+[ -z "$checkout_status" ] || fail \
   "local candidate checkout must be clean"
 
 remote_sha=$(git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH" \
@@ -222,7 +348,7 @@ remote_sha=$(git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH" \
 [ "$remote_sha" = "$EXPECTED_SHA" ] || fail \
   "remote candidate branch does not equal the expected SHA"
 
-display_name="DutchBay 1110 candidate ${EXPECTED_SHA:0:12}"
+display_name="DutchBay 1110 candidate $EXPECTED_SHA"
 existing_json=$(list_codespaces)
 existing_count=$(jq --arg display "$display_name" --arg repository "$REPOSITORY" \
   '[.[].codespaces[] | select(.display_name == $display and .repository.full_name == $repository)] | length' \
@@ -234,6 +360,7 @@ mkdir -- "$CREATE_LOCK" || fail \
   "another local #1110 candidate Codespace proof is active or left a stale lock"
 create_lock_held="true"
 
+creation_pending="true"
 codespace_name=$(gh codespace create \
   -R "$REPOSITORY" \
   -b "$CANDIDATE_BRANCH" \
@@ -245,9 +372,10 @@ codespace_name=$(gh codespace create \
 [[ "$codespace_name" =~ ^[A-Za-z0-9_-]+$ ]] \
   || fail "created candidate Codespace name is malformed"
 codespace_created="true"
+creation_pending="false"
+verify_api_identity "$CANDIDATE_BRANCH"
 
 wait_for_transport || fail "candidate Codespace SSH transport did not become ready"
-verify_api_identity "$CANDIDATE_BRANCH"
 verify_remote_candidate "$CANDIDATE_BRANCH" "$EXPECTED_SHA"
 run_copy_smoke
 before_marker=$(gh codespace ssh -c "$codespace_name" \
@@ -270,12 +398,20 @@ after_marker=$(gh codespace ssh -c "$codespace_name" \
 [ "$before_marker" != "$after_marker" ] || fail \
   "candidate Codespace post-start marker was not refreshed"
 
+readonly completed_codespace_name=$codespace_name
+delete_candidate_and_confirm_absent "$CANDIDATE_BRANCH"
+rmdir -- "$CREATE_LOCK"
+create_lock_held="false"
+trap - EXIT
+
 jq -n \
+  --arg codespace_name "$completed_codespace_name" \
   --arg branch "$CANDIDATE_BRANCH" \
   --arg sha "$EXPECTED_SHA" \
   '{
     schema: "dutchbay.audit_review_candidate_codespace.v1",
     status: "PASS",
+    candidate_codespace_name: $codespace_name,
     candidate_branch: $branch,
     candidate_sha: $sha,
     api_identity: "matched",
@@ -285,6 +421,8 @@ jq -n \
     copy_transport: "passed",
     stop_resume_recovery: "passed",
     ssh_attestation: "passed_before_and_after_resume",
+    deletion: "confirmed_absent_via_codespaces_api",
+    create_lock: "released_before_receipt",
     completion_authorized: false,
     release_status: "HOLD"
   }'

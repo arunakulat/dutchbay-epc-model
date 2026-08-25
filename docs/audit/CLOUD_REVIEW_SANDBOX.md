@@ -229,7 +229,11 @@ sandbox-creation commit.
 The bootstrap markers bind the initial dependency inputs, configured base-image
 digest, full SSH transport identity and installed environment-content
 fingerprint. The SSH identity includes the installed file surface, PAM policy,
-effective configuration and Codespace-unique host public keys. The Python
+complete runtime main/drop-in configuration population, effective configuration
+and Codespace-unique host public keys. Construction attestation uses the fixed
+loopback model; every authenticated SSH control then derives and validates the
+actual `SSH_CONNECTION`/`SSH_CLIENT` tuple and requires its session-specific
+identity digest to equal the construction marker. The Python
 environment fingerprint covers
 `pyvenv.cfg`, every regular file and symlink under the venv `bin/` launch
 surface, and all site-packages content. The three Python launchers must resolve
@@ -250,6 +254,14 @@ Receipts distinguish `github_codespaces` from
 boundary. The Actions emulation must never claim the creator-private
 Codespaces boundary; neither execution-host mode authorizes completion or
 changes the release status from `HOLD`.
+
+The bootstrap writes that provenance atomically to the fixed owner-only path
+`/workspaces/.dutchbay-private/bootstrap-receipt.json`. Hosted CI asserts the
+Actions host, network boundary and exact candidate SHA from that receipt. The
+protected verifier and disposable real-Codespaces proof require the Codespaces
+host and creator-private boundary from the same receipt. A disposable proof
+emits PASS only after the exact named Codespace is deleted, its absence is
+confirmed through the Codespaces API, and the local creation lock is released.
 
 Re-run `scripts/verify_1110_cloud_review_sandbox.sh`. It must independently hash
 all 74 retained objects before semantic review begins. Then follow issue #1162
