@@ -318,6 +318,7 @@ def test_devcontainer_is_digest_pinned_private_and_portless() -> None:
             }
         }
     }
+    assert not DEVCONTAINER_LOCK.read_bytes().endswith(b"\n")
     assert payload["overrideCommand"] is True
     assert payload["init"] is True
     assert payload["containerUser"] == "root"
