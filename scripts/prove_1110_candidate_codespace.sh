@@ -348,7 +348,9 @@ remote_sha=$(git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH" \
 [ "$remote_sha" = "$EXPECTED_SHA" ] || fail \
   "remote candidate branch does not equal the expected SHA"
 
-display_name="DutchBay 1110 candidate $EXPECTED_SHA"
+display_name="DB1110-$EXPECTED_SHA"
+[ "${#display_name}" -le 48 ] || fail \
+  "candidate display name exceeds the GitHub Codespaces limit"
 existing_json=$(list_codespaces)
 existing_count=$(jq --arg display "$display_name" --arg repository "$REPOSITORY" \
   '[.[].codespaces[] | select(.display_name == $display and .repository.full_name == $repository)] | length' \

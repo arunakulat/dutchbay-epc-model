@@ -262,6 +262,8 @@ protected verifier and disposable real-Codespaces proof require the Codespaces
 host and creator-private boundary from the same receipt. A disposable proof
 emits PASS only after the exact named Codespace is deleted, its absence is
 confirmed through the Codespaces API, and the local creation lock is released.
+Its 47-character `DB1110-<full SHA>` display name retains the complete commit
+identity while remaining below GitHub Codespaces' 48-character limit.
 
 Re-run `scripts/verify_1110_cloud_review_sandbox.sh`. It must independently hash
 all 74 retained objects before semantic review begins. Then follow issue #1162

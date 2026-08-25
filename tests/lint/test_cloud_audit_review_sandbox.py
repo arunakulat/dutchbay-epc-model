@@ -525,7 +525,8 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
     assert 'delete_candidate_and_confirm_absent "$CANDIDATE_BRANCH"' in candidate
     assert 'creation_pending="true"' in candidate
     assert "recover_unique_pending_candidate" in candidate
-    assert 'display_name="DutchBay 1110 candidate $EXPECTED_SHA"' in candidate
+    assert 'display_name="DB1110-$EXPECTED_SHA"' in candidate
+    assert '[ "${#display_name}" -le 48 ]' in candidate
     assert candidate.index(
         'delete_candidate_and_confirm_absent "$CANDIDATE_BRANCH"'
     ) < candidate.index("jq -n")
@@ -589,7 +590,7 @@ printf '%s\\n' "$*" >> "$STUB_CALL_LOG"
 case "$1 $2" in
   "api --paginate")
     if [ -e "$STUB_STATE" ]; then
-      printf '[{"codespaces":[{"name":"candidate123","display_name":"DutchBay 1110 candidate %s","repository":{"full_name":"arunakulat/dutchbay-epc-model"},"git_status":{"ref":"%s"}}]}]\\n' "$STUB_SHA" "$STUB_BRANCH"
+      printf '[{"codespaces":[{"name":"candidate123","display_name":"DB1110-%s","repository":{"full_name":"arunakulat/dutchbay-epc-model"},"git_status":{"ref":"%s"}}]}]\\n' "$STUB_SHA" "$STUB_BRANCH"
     else
       printf '[{"codespaces":[]}]\\n'
     fi
