@@ -65,8 +65,6 @@ for key in "${host_private_keys[@]}"; do
   esac
   [ "${derived%% *}" = "$expected_algorithm" ] || fail \
     "runtime SSH host-key filename/algorithm differs"
-  [ "$derived" = "$sidecar" ] || fail \
-    "runtime SSH host private/public key pair differs"
   host_public_key_material+="${host_public_key_material:+$'\n'}$derived"
   host_public_key_sidecars+="${host_public_key_sidecars:+$'\n'}$sidecar"
 done

@@ -380,7 +380,6 @@ def test_repository_owned_ssh_transport_is_narrow_and_base_pinned() -> None:
     assert "build_sshd_transport_identity" in attestor
     assert 'Path("/usr/local/share/ssh-init.sh")' in attestor
     assert '/usr/bin/ssh-keygen -y -f "$key"' in attestor
-    assert '[ "$derived" = "$sidecar" ]' in attestor
     assert '[ "${derived%% *}" = "$expected_algorithm" ]' in attestor
     assert SSHD_INSTALLER.stat().st_mode & 0o111
 
@@ -903,6 +902,13 @@ def test_sshd_policy_content_and_host_identity_fail_closed(tmp_path: Path) -> No
     assert first["sshd_effective_config_sha256"]
     assert first["sshd_transport_content_sha256"]
     assert first["sshd_host_public_key_fingerprints"] == (VALID_SSH_HOST_FINGERPRINTS)
+
+    equivalent_sidecars = list(arguments["host_public_key_sidecars"])
+    equivalent_sidecars[0] = equivalent_sidecars[0].rstrip("=")
+    equivalent = identity.build_sshd_transport_identity(
+        **{**arguments, "host_public_key_sidecars": equivalent_sidecars}
+    )
+    assert equivalent == first
 
     wrong_environment = effective.replace(
         "DUTCHBAY_VENV=/workspaces/.dutchbay-audit-review-venv",

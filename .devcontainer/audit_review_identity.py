@@ -408,19 +408,17 @@ def build_sshd_transport_identity(
     )
     _validate_ssh_transport_package_inventory(inventory)
 
-    if (
-        len(host_public_key_material) != 3
-        or len(host_public_key_sidecars) != 3
-        or any(
-            derived != sidecar
-            for derived, sidecar in zip(
-                host_public_key_material,
-                host_public_key_sidecars,
-                strict=True,
-            )
-        )
-    ):
+    if len(host_public_key_material) != 3 or len(host_public_key_sidecars) != 3:
         raise SandboxIdentityError("SSH host private/public key population differs")
+    for derived, sidecar in zip(
+        host_public_key_material,
+        host_public_key_sidecars,
+        strict=True,
+    ):
+        if _validated_ssh_public_key_blob(derived) != _validated_ssh_public_key_blob(
+            sidecar
+        ):
+            raise SandboxIdentityError("SSH host private/public key population differs")
     derived_public_keys = sorted(set(host_public_key_material))
     if len(derived_public_keys) != 3:
         raise SandboxIdentityError("SSH host private/public key population differs")
