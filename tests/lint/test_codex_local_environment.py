@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+import subprocess
 import tomllib
 from pathlib import Path
 
@@ -113,6 +115,65 @@ def test_envrc_activation_reuses_the_shared_contract_without_provisioning() -> N
         assert helper in envrc
     for prohibited in (".venv311", "~/.venvs", "./setup_venv.sh", "pip install"):
         assert prohibited not in envrc
+
+
+def _emitted_path_line() -> str:
+    """The PATH export the hook appends to CLAUDE_ENV_FILE, with a venv substituted."""
+
+    hook = SESSION_HOOK.read_text(encoding="utf-8")
+    match = re.search(
+        r"printf '(case \":\$PATH:\".*?esac)\\n' \"\$VENV\" \"\$VENV\"", hook
+    )
+    assert match is not None, "the hook no longer emits a recognisable PATH export"
+    return match.group(1).replace("%s", "/tmp/probe-venv")
+
+
+def _path_after_sourcing(line: str, times: int) -> str:
+    """Source `line` `times` times in one shell and return the resulting PATH."""
+
+    script = (
+        "export PATH=/usr/bin:/bin\n" + (line + "\n") * times + 'printf "%s" "$PATH"'
+    )
+    return subprocess.run(
+        ["bash", "-c", script], capture_output=True, text=True, check=True
+    ).stdout
+
+
+def test_session_hook_path_export_is_idempotent() -> None:
+    """Re-sourcing the env file must not grow PATH by one entry per session.
+
+    CLAUDE_ENV_FILE is APPENDED to on every session start and re-sourced by every
+    shell, so an unconditional prepend accumulates a duplicate per resume. PATH was
+    observed carrying 18 copies of .venv/bin (32 entries, 15 unique) before the
+    guard. Harmless -- first match wins -- but unbounded, and the hook is documented
+    as idempotent.
+    """
+
+    line = _emitted_path_line()
+    entries = _path_after_sourcing(line, 5).split(":")
+
+    assert entries.count("/tmp/probe-venv/bin") == 1
+
+
+def test_session_hook_path_export_still_prepends_when_absent() -> None:
+    """The negative control: a guard that never fires would also look idempotent.
+
+    Without this, `case ... esac` collapsing to a no-op would pass the test above
+    while silently breaking the resolution the export exists to provide -- every
+    tool would fall back to whatever the image ships rather than the pinned venv.
+    """
+
+    line = _emitted_path_line()
+    entries = _path_after_sourcing(line, 1).split(":")
+
+    assert entries[0] == "/tmp/probe-venv/bin"
+
+    # And the unguarded form it replaced must genuinely accumulate, or this whole
+    # guard is defending against nothing.
+    unguarded = 'export PATH="/tmp/probe-venv/bin:$PATH"'
+    assert (
+        _path_after_sourcing(unguarded, 5).split(":").count("/tmp/probe-venv/bin") == 5
+    )
 
 
 def test_bootstrap_rejects_the_retired_python311_venv_name() -> None:

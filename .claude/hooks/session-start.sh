@@ -134,7 +134,13 @@ esac
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   {
     echo "export VIRTUAL_ENV=\"$VENV\""
-    echo "export PATH=\"$VENV/bin:\$PATH\""
+    # Prepend only when absent. This file is APPENDED to on every session start
+    # and re-sourced by every shell, so an unconditional prepend accumulates one
+    # duplicate per resume -- PATH was observed carrying 18 copies of .venv/bin
+    # (32 entries, 15 unique) before this guard. First match wins either way, so
+    # the duplicates were harmless but unbounded. The manifest-hash stamp above
+    # makes the INSTALL idempotent; it never guarded this export.
+    printf 'case ":$PATH:" in *":%s/bin:"*) ;; *) export PATH="%s/bin:$PATH" ;; esac\n' "$VENV" "$VENV"
   } >> "$CLAUDE_ENV_FILE"
 fi
 
