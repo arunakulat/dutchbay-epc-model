@@ -28,9 +28,9 @@ requests==2.34.2
 # Document-ingestion output and hook behaviour are reproducibility surfaces. Hold
 # the versions migrated from the retired 3.11 environment until a dedicated upgrade
 # dolphin revalidates conversion, extraction, rendering, hooks, audit, and the suite.
-markitdown==0.1.6
+markitdown==0.1.7
 pdfplumber==0.11.10
-pymupdf==1.28.0
+pymupdf==1.28.2
 pre-commit==4.6.2
 # Retained report/jobs capabilities are production and audit surfaces. These exact
 # versions were migrated from the retiring 3.11 environment and cleared together
