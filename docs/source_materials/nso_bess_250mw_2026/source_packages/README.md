@@ -12,6 +12,7 @@ session can verify that a re-supplied copy is the same artifact without the arti
 | Package | Manifest | Received | Files | Analysis |
 |---|---|---|---|---|
 | NSO 250 MW checklist dossier | [`NSO250MW_checklist_2026-08-21.MANIFEST.sha256`](NSO250MW_checklist_2026-08-21.MANIFEST.sha256) | 21 Aug 2026 | 72 (58 unique) | [`../reviews/NSO250MW_Checklist_Package_Ingress_Evaluation_2026-08-21.md`](../reviews/NSO250MW_Checklist_Package_Ingress_Evaluation_2026-08-21.md) |
+| OEM supply tranche — withheld groups | [`NSO250MW_oem_supply_2026-08-27.MANIFEST.sha256`](NSO250MW_oem_supply_2026-08-27.MANIFEST.sha256) | 27 Aug 2026 | 25 (14 certificates + 11 binaries) | Not yet evaluated |
 
 ## Why the NSO 250 MW checklist package is manifest-only
 
@@ -50,3 +51,29 @@ The unpacked package, the MarkItDown/OCR extracts and the conversion logs are he
 ```
 
 Extracts never supersede the received original.
+
+
+## OEM supply tranche, 27 August 2026 — what is committed and what is not
+
+The tranche delivered **50 unique files**. They split three ways:
+
+| Group | Count | Disposition |
+|---|---|---|
+| Envision-authored product, commercial and compliance documentation, plus the superseding design calculation | 25 | **Committed** under `../oem/envision/`, with MarkItDown extracts |
+| Certification-body certificates and test reports | 14 | **Manifest only.** Withheld on the same basis as the 21 August dossier — certification-body and IECEE CB scheme copyright. Their derived text extracts are withheld with them |
+| Compiled model binaries (`.dll`, `.obj`, `.lib`, `.pscx`, `.dyr`) | 11 | **Manifest only, publish never** |
+
+One further file, `Technical_Requirement_Lakdhanavi_v1.xlsx`, is neither Envision-authored nor a
+tender document; it is held at `../third_party/` with its handling question recorded rather than
+resolved. See that directory's README.
+
+**This split follows the existing 21 August policy rather than a fresh decision.** If the project
+owner holds authorisation covering the certification-body material, the 14 certificates can be
+committed on instruction — the files are in hand and hashed, so committing them later is a
+one-step change. The compiled binaries remain publish-never regardless of authorisation.
+
+### Local location of the withheld material
+
+The withheld files are in the session working set at
+`scratchpad/batch2/raw/` (certificates) and `scratchpad/batch2/raw_binaries/` (binaries).
+That location is ephemeral — if the material is needed after this session it must be re-supplied.

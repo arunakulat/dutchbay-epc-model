@@ -1,0 +1,36 @@
+# NSO 250 MW — OEM supply tranche received 27 August 2026.
+# MANIFEST ONLY. The files below are NOT committed to this public repository.
+#
+#   Group A — certification-body certificates and test reports (14 files).
+#     Withheld on the same basis as the 21 August dossier: certification-body and IECEE CB
+#     scheme copyright. Their derived text extracts are withheld with them.
+#   Group B — compiled model binaries (11 files), .dll / .obj / .lib / .pscx / .dyr.
+#     Envision's compiled PCS/PPC control code. PUBLISH NEVER, per source_packages/README.md
+#     and tests/fixtures/grid/envision_enpcs01_gridcode.yaml.
+#
+# Recorded so a future session can verify a re-supplied copy without the artifact being public.
+# GROUP-A  234e9313e91826d431d1601c32ac3ad8e04e8a5308abd86ce777aa054480fdfb  17c_CERT_IEC_62619_2022_CELL_HC-L755A.pdf
+# GROUP-A  0262d472c8e4086fe5ed291ff98f6a9cb4e8150dd1223579b39748dd6a7c460f  21_CERT_IEC_63056_2020_EN_62477-1_2022_RACK.pdf
+# GROUP-A  fee792a50cb38cf6c2b546d96b81027f0f70803d86a5e6f7773fafa69551f571  26_REPORT_UL_9540A_2019_CELL_HC-L755A.pdf
+# GROUP-A  1de664d3c8f0eb8a69a6a03a26f680dee57c43c285f59b30a63adc1d00e1c512  27_CERT_UL_1973_2022_CELL_HC-L755A.pdf
+# GROUP-A  05dc77529eb38424bb6c899d6ab68624e93d4b06f64916a9ded3a198fcc710d5  28_UN38.3.pdf
+# GROUP-A  487dc75a07ef808d5cb54c1e70f76f0d34cedabdedace0202d61a9ffa62f0254  29_CERT_ENPCS2520_IEC_61000.pdf
+# GROUP-A  0760b4ee98c4a1edbebb4de882bfda679d803fad805dd47af40f5881d6428d6d  30_CERT_ENPCS2520_IEC_61683.pdf
+# GROUP-A  aa25d39577daab9799bf2967b85b2abaae3658fcb8b141a2fb78c2b7a4b6f5a7  31_CERT_ENPCS2520_IEC_62909-1.pdf
+# GROUP-A  f42e72f0c27c71dd346057a74820996b2b5fbb0264d01a88d805ca4619a0a94c  32_CERT_ENPCS2520_IEC_62477.pdf
+# GROUP-A  55742a1d30c539380d83f01fe2ca882fd361ce4764dafa9ab93cda88645ea282  33-34_CERT_ENPCS2520_IEC_62109-1_and_2.pdf
+# GROUP-A  9ffb6128e7d37b0684bf9076055583914ac2e79f274ccddfcf4839a34910bf95  35_REPORT_ENPCS2520_IEC_60529.pdf
+# GROUP-A  5fe38f8f1dbc5424b921b4412e980bb6e8a5af233b79c198f208c50180fd5121  36_COVER_ENPCS2520_IEC_60068-2-30_78.pdf
+# GROUP-A  53a6a71b1a756282254938fd54865dda7b57dd7f4b8e21b769c964f51201b7f7  37_COVER_ENPCS2520_IEEE_519.pdf
+# GROUP-A  2d5757d19bee786404c800cfd0a16cad2eb1f424597dfde4026ab43af3ec6e40  38_COVER_ENPCS2520_EN_50530.pdf
+# GROUP-B  c93333f3755632629523250be5178da46d0e9d63b3f90f1f0db694b0a90b4dbe  Blackbox_PQVCmdInput_F1.obj
+# GROUP-B  15fd1031c59520482cdb509c64e4bdd28df0283b5c4c044deaf8f754fdae517b  Blackbox_UniversPPC_F1.obj
+# GROUP-B  abe4a84e78d376377028b7f6db963495d38bd5483c49d118b1ea6a33dd96b59b  Blackbox_UniversPPC_if15.lib
+# GROUP-B  b442967a5ed6d919b7f637e67aec3206810c6f66c79a699eb5efd6db56dee06f  Blackbox_VoltageSourseSet_F1.obj
+# GROUP-B  a5b368b2117461b97a0fd2fee8fb7aa1adfb5ca1bef76eba7f742eae71d0b4de  ENPPC_260415_PSSE_V35.dll
+# GROUP-B  e4a87ab114829f3a95c007868da6c81bd8ac756e588e331ef355796433cfecff  ENVSG01_20260327_PSSE_V35.dll
+# GROUP-B  cb528e42b8cd42f57631bcff957561c057c2ce53a0359905856af42556be6774  ENVSG_PPC_2520_260416_LKA.dyr
+# GROUP-B  e81b971ddb5c1d990bf673b86cf9cce989bb32fe1348f6e835689429aaa9cddd  FortranInterface_F1.obj
+# GROUP-B  b46c757368619f3f8e112b27c9486944a2e9f9f31fa2052bae741884754579b4  MY_VST_PCS_F2.obj
+# GROUP-B  4117e2972bdfa19117e21b4b52e6267fd897d0109c495acb60343756389d0b44  PCS2520x4_UPPC_x64_260605aBB.pscx
+# GROUP-B  96701f6d49e124f560d553ab118ff6c3411f62d894ff8c7413d2d4e0610498e6  PCSControllerInterface.dll

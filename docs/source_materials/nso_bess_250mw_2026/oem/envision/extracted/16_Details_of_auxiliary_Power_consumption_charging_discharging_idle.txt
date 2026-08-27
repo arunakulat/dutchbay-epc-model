@@ -1,0 +1,2 @@
+charge/ discharge: 160kW
+standby: 58kW
