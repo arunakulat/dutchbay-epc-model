@@ -1,0 +1,824 @@
+
+===== PAGE 01 =====
+Clarifications for the Request of Proposal (RFP)
+Tender Name: Establishment of 250MW/1000MWh Standalone Battery Energy Storage System
+from 10MW/40MWh AC Capacity Projects on Build, Own and Operate (BOO)
+Basis with 15 Year Operational Period
+Tender No. : TR/REP&PM/ICB/2026/001/C
+1) | Reference: Bidding Documents - Eligibility and
+Technical Proposal Requirements
+a) a Bidder is permitted to propose more than
+one BESS, PCS, or EMS supplier within a
+single bid for the project;
+b) If multiple suppliers are permitted, whether is PISase fblet to em 25 er adden Ol
+any limit on the number of suppliers per
+equipment category, and what technical or
+contractual conditions (e.g., interoperability,
+single-point warranty responsibility, common
+EMS integration) would apply.
+2) | Reference: Volume 3, Appendix 01, Clause 1
+the Contracted Capacity stated in Volume 3, Yes. The Contracted Capacity specified in Volume 3,
+< : Appendix 01, Clause 1 shall be the Declared Capacity
+Appendix 01, Clause | can be revised or amended . . .
+. offered by the successful Bidder in Section 1 of Volume II
+to reflect the actual Declared Capacity offered by : — . 3
+‘ (Bid Submission Form). At the time of execution of the
+the successful Bidder . .
+: . Contract, the Contracted Capacity will be amended, where
+(1e, up to IIMW), rather than being fixed at applicable, to reflect the successful Bidder's Declared
+10 MW, and if so, the mechanism by which this Fi acit ,
+revision would be reflected in the Contract. pactly:
+3) | Reference: General Tender Requirements - Grid
+Compliance Monitoring
+a) The precise technical scope and functionalities
+expected of the grid monitoring system (e.g.,
+real-time monitoring of voltage, frequency,
+active/reactive power, harmonics, and other | Please refer Addendum 01
+grid parameters);
+b) Any specific standards, certification, or type-
+test requirements applicable to the grid
+compliance monitoring equipment.
+4) Reference: Interconnection/ Civil | Works a\Please refer Addendum 0
+Requirements
+a) whose scope of work is it to design and _ he
+construct the gantry near the GSS - ie, p) Standard — TBE -61G004- Class A
+Page 1 of 15
+
+===== PAGE 02 =====
+whether this falls within the Employer's scope
+or the Bidder/Contractor's scope;
+b) In the event that the construction of the gantry
+falls within the Bidder's scope, whether the
+| land required for the construction of the gantry
+near the GSS will be provided by the Employer,
+or whether the Bidder is required to procure
+such land.
+5) | RTE is affected by temperature, the number of
+cispalshes, adie ihe moraine at Mispatches. ‘us The RTE requirement shall be assessed on a monthly basis.
+time, the measurement point has been moved . . : :
+. gs . Accordingly, if the measured RTE during a particular
+inside the GSS. Ifthe RTE indicator is not met 5 . a
+: : .__ | month is below the specified minimum RTE, the shortfall
+on a monthly basis but is met on an annual basis, . . ‘
+. . shall not be carried forward or reconciled against the RTE
+can the unmet portion be returned in the same ; :
+wig. eda : achieved in subsequent months or at the end of the year.
+way as the availability mechanism?
+6) | Requiring BESS projects to connect through
+dedicated 33 kV lines to the GSS, instead of
+allowing connection to existing lines or feeders
+where feasible, will unnecessarily increase | Please refer Addendum 01
+CAPEX due to reduced flexibility. This would
+result in higher capacity charges and ultimately
+impose a greater cost on the public
+7) | Can NSO confirm that VAT, SSCL and other
+indirect taxes that may be imposed should also Please refer item 13 of Addendum 01
+be excluded from the capacity charge for
+storage projects?
+8) | The project timelines proposed in the RFP do
+not adequately account for the time required to
+obtain Bonded Warehousing approval, which
+typically takes 6 to 8 weeks. In addition, the | Please refer Addendum 01
+Bonded Warehouse application can only be
+submitted after Financial Close. Therefore the
+COD as it stands is not realistic.
+9) | Obtaining CEA approval within one month
+from the ESA date ie ovelly atnhinious, We believe 2 months from the Letter of Award would be
+We therefore request extending this timeline to : ;
+: . : sufficient to obtain the CEA approval.
+approximately two months while keeping the
+other milestones unchanged.
+10) What happens i CEA. Gppioval cannot If a need arises for change of land, it will be allowed, but a
+obtained? Will NSO allow the developer to look time extension will not be allowed
+for alternative land and extend the COD date? ;
+11)} A Grid Interconnection Confirmation Letter
+should not be required at proposal submission.
+The Point of Interconnection will be established | Please refer to Addendum No. 01. If the Bidder selects
+at the GSS premises by splitting the existing | Option 2 under Section 11 of Volume II, submission of the
+feeder through a gantry arrangement to provide | Grid Interconnection Confirmation Letter is mandatory
+a dedicated circuit for the BESS Facility. The | and shall form part of the Bid.
+Developer shall bear all losses and auxiliary
+consumption within the dedicated MV
+Page 2 of 15
+
+===== PAGE 03 =====
+interconnection system between the BESS
+Facility and the revenue metering point at the
+GSS.
+
+| 12)) Grid forming is listed as a mandatory
+requirement. Please clarify whether these Was
+standalone projects can practically have grid-
+forming capability .
+
+13) Please clarify whether SSCL is charged at the The applicability of the SSCL to the importation of capital
+point of import for capital goods imported goods under the Bonded Warehousing Scheme shall be
+under the Bonded Warehousing scheme governed by the prevailing laws and regulations in effect at
+
+; the time of importation.
+
+14)| A key constraint in the RFP is the requirement
+rer re 4 aden ine. Ae GSS acatonal a Please refer Addendum No. 01, further, if developer
+metering eublele. as iusiallatian withia, the chooses to draw 33kV interconnection line up to the GSS
+GSS is not perited, Plesse clarity whe will the cost of construction, finding land, cost of way leaves
+provide this land and what procedure will etc. will have to be borne by the developer.
+apply if suitable land is unavailable.
+
+15)} As developers can only place orders with
+suppliers after Financial Closure and there will
+be a lead time of 3-4 months, the COD date of
+May is not realistic. We therefore request that Please feret Addendum Na ©]
+the COD be extended to at least 9 months from
+date of Financial Close.
+
+16)| The mechanism to adjust the CCR due to
+rae teAaey aot N ioned 1. The terms and conditions of the Energy Storage
+within 1 month of the LOA due to the need to Agr amtaat Wiese) Steal) et oS anoned celtowins its
+change the terms of the ESA; 2) proponents can issuance of the Letter of Award, in accordance with Clause
+only get financial close after the ESA signing and 7-1 of Volume I. . ‘fied |
+by the time proponents order the components and 2. No. The reference date P2 shall remain as specified in
+make wayarent, it could be 3 monte. fiom the the Request for Proposals (RFP) and will not be changed to
+ESA signing. Can the date P2 be the date of LC the date of Letter of Credit (LC) settlement.
+settlements instead?
+
+17)| If the LOA is not issued within 150 days
+following the Closing Date, the proponent may
+face significant cost increases which make the
+project unviable. Note that in section 2.8.2.2 | Please refer to the provisions relating to the Bid Validity
+Financial Resources, the RFP even contemplates | Period in the Request for Proposals (RFP). If the Letter of
+a situation where the bid evaluation process and | Award (LOA) is not issued within the initial 150-day Bid
+decision for the award may take more than | year | Validity Period, Bidders are under no obligation to extend
+from the date of bid submission. Therefore, can | the validity of their Bids. Accordingly, a Bidder may
+the NSO incorporate a provision that allows the | decline to extend the Bid Validity Period without any
+project proponent to withdraw its bid without any | penalty, and the Bid Security shall not be forfeited.
+penalty ifthe LOA is not issued within 150 days
+or to adjust the CCR due to the cost increase
+arising from the delay?
+
+18) thay cae kipnitione con ee ee Provided that the Project Proponent submits all documents
+the project unviable. Therefore, can the NSO and fulfills all requirements stipulated in the RFP for
+incorporate a provision that allows the project execution Of the Energy Supply Agreenient (ESA) within
+
+Page 3 of 15
+
+===== PAGE 04 =====
+proponent to withdraw its bid without penalty if | the prescribed timeframe, the ESA signing appointment
+the ESA is not signed within 1 month of the ESA | will be arranged accordingly without unnecessary delay.
+or to adjust the CCR due to the cost increase | Therefore, any withdrawal of the bid shall be subject to the
+arising from the delay? applicable provisions and penalties specified in the RFP.
+19)| What if there are changes in taxes and other
+revision oer e an adie can there es No provision will be made for adjustment of the CCR or for
+proponents to withdraw their bids without any withdrawal of a Bid without penalty due to changes in taxes
+or other regulations after the Closing Date,
+penalty because such changes may render the
+project unviable?
+a If a bidder is the lowest-ranked bidder for two Yes. A common gr id interconnection line may be used,
+. ; ; subject to compliance with the applicable technical
+projects at the selected GSS using a single land : +e f
+plat, eat the developer use: one line for both requirements and obtaining the necessary approvals from
+2 the EDL
+projects?
+21)| The RFP requires installation of a Grid
+Code Compliance Monitoring System
+with features including real-time
+measurement, power quality monitoring,
+and fault ride-through monitoring. We
+seek clarification on:
+1. Will NSO specify the make and model of the
+monitoring equipment, or willthe Project 1. No
+Company be permitted to 2. Developer
+propose equipment that meets the functional 3. Yes
+requirements?
+2. Who will be responsible for the ongoing
+maintenance and calibration of this system?
+3. Will the data from this system be used for
+billing and verification?
+22) §0dB needs to be clarified whether it refers to
+the noise of the equipment or the noise of the
+site, and what standards should be followed for | [he 80 dB noise limit shall be demonstrated to comply
+the noise measurement points, or is it sufficient | With the manufacturer’s equipment test reports.
+to only provide the equipment report?
+23); In Annex A, 05.11 / 05.12 states that the level
+of harmonic voltage should be in accordance with
+the requirements of Section 3.17.2.5 Grid
+Connection Code. However, Section 3.17.2.5 .
+mentions that the different frequency multiples Project developer shall measure the background v oltage
+and voltage distortion rates within the project distortion at the specified connection point during the
+should be agreed upon in the project. However, harmonic voltage measurement stage.
+the current tender document does not specify the
+background voltage distortion rate of the grid.
+How should this be handled?
+Page 40f 15
+
+===== PAGE 05 =====
+24)| In Annex A, 05.13 states that 0.3 times the BESS
+rated power in reactive power must be provided
+at —— oes Hie tied pre’ Mere Teter i: the The reactive power capability requirement shall be +0.3
+bid capacity power specified in the tender? A times the rated active power of the BESS
+05.02 also mentions providing +3Mvar reactive P ,
+
+power. Which one should be followed?
+
+25)) In Annex A, are all the tests mentioned in 05.24
+required to be conducted on-site? Ifnot which Please refer to Annex I for the Commissioning Test
+ones need to be conducted on-site, and which Schedule
+ones can be completed through other methods?
+
+26); In Annex D, what is the specific definition of The "Number of Remaining Round Trip Cycles per Year at
+the measurement indicator "Number of Boundary" refers to the remaining available equivalent full
+Remaining round trip cycles per year at round-trip cycles of the BESS, measured at the Point of
+Boundary"? Interconnection (Boundary), after accounting for the cycles
+
+already utilized during the relevant Contract Year. This
+parameter shall be determined based on the methodology
+specified in the Request for Proposals (RFP).
+
+27)| In Annex D, it is mentioned that SCADA reports
+PPC signals to NSCC according to the IEC 104
+communication protocol. If the PPC itself
+supports the IEC 104 protocol for direct | Yes
+communication with NSCC, is a gateway still
+required?
+
+28)| InAnnex A, 03.02 mentions three levels of access
+permission. What are these three levels, and what | This will be communicated during implementation stage as
+is the scope of permission for each level? How are | stipulated in A 03.02
+they provided?
+
+29)| In Annex A, 04 mentions that the frequency range
+for steady-state operation is 49.5Hz to 50.5Hz,
+with the maximum and minimum operating
+frequencies being 53Hz and 47Hz, respectively.
+
+However, in A 05.04, the frequency range for | The Project Proponents shall comply with the requirements
+steady-state operation is 47-52Hz, with the | specified in Clause A 05.04 of Annex A.
+
+maximum and mm|Imum frequencies being 55Hz
+
+and 45Hz, respectively. Which one should be
+
+taken as the standard?
+
+30)} section 7.1 in Volume I states that "Following the
+issuance and acceptance of the Letter of Award, no
+qualifications, reservations, proposed amendments,
+deviations, or modifications to the terms and Yes
+conditions of the ESA shall be entertained." Does
+this mean that the ESA template in the current
+bidding document is the final version?
+
+Page 5o0f 15
+
+===== PAGE 06 =====
+31)| If frequency regulation or voltage regulation occurs
+when the equipment is in standby mode and is not
+scheduled by the power grid, energy loss will be | Yes
+caused. Will this part be considered in the RTE?
+
+32)) In Appendix A. hen i ts menHOn ed iat the The plant should have the capability to operate in both P and
+active power is prioritized by default in the case of Le des. NSO will specify the mode based on
+high or low voltage. Does this mean that when the @ proay a lh haga Pg . .
+
+. . . .¢ | system requirements. If Q priority mode is activated, active
+power grid performs active power scheduling, if . .
+Hoh or low volt ceurs. the power erid stil] | POWer output might change based on the reactive power
+gh o oltage occurs, p g
+needs to perform scheduling based on the preset Sipul
+active power?
+
+33)| Please clarify the specific definition and expected
+control effect of the following control functions
+in A.05.22(a)ili: h. Normal and emergency
+blocking command; i. Ramp blocking command;
+
+J. Remedial sala Solenies ee aud SetuneS Detailed testing instructions will be provided at the
+k. Active power flow direction command, if |. .
+: ‘ implementation stage.
+applicable; 1. Fast active power reversal
+command, if applicable; m. Redundancy
+reductions and auxiliary power single source
+status; n. Other project-specific set-points and
+commands, as specified by NSO.
+
+34)} Please confirm the frequency of the records of grid
+support services that need to be provided to the
+NSO as specified in A.05.22(a)v. What is the
+frequency of the records? What is the form of the Please refer Addendum 01
+records (for example, IP phone or email)?
+
+35)| The three simulation models are mentioned in
+A.05.23(b). Do we need to provide all the three | It is compulsory to provide PSSE and PSCAD models.
+simulation models?
+
+36)| According to section 1.2 of Volume I, the Annex
+NB/CID documents must be complied with.
+
+However, Annex B does not contain any section
+
+describing energy storage. Is the owner of the
+
+energy storage plant subject to the management | There is no Annex NB/CID specified in the RFP.
+requirements related to the role of TRANSMISSION
+
+LICENSEE or Users, or is there a separate set of
+
+management requirements?
+
+37)| Ifthe TRANSMISSION LICENSEE is involved, it is
+mentioned that the black start function can be
+provided as required. Is the black start function | No
+mandatory in this project? If yes, what is the scope of
+the black start function?
+
+38)| It needs to be clarified whether the BESS is
+considered as a generating unit. If it is, the reactive | Please refer A 05.13 of Annex A
+power provided within the power factor range
+
+Page 6 of 15
+
+===== PAGE 07 =====
+| conflicts with that specified in Annex A. Which one Po
+should be followed?
+39)} Section 3.17.6.3 in Annex B mentions that the
+PPM needs to be equipped with TFR. Is this | the TFR requirement is already covered under Clause
+clause applicable to this project? Ifyes, are there | A.05.22 of Annex A. Accordingly, the requirements
+any requirements for the TFR specifications, such | specified under Clause A.05.22 of Annex A shall be
+as sampling precision, measurement period, and | complied with, including the applicable requirements for
+fault recording length? TFR specifications, measurement, sampling, and fault
+recording.
+Therefore, the Proponent shall provide and configure the
+TFR in accordance with the requirements specified under
+Clause A.05.22 of Annex A.
+40)| Due to factors such as the accuracy of the
+electricity meter, environmental conditions, and
+human operation, there may be errors in the final
+performance test. Should we consider adding
+relevant clauses regarding test errors during the | No
+performance acceptance process, for example, an
+error within 1% can be considered as meeting the
+standard?
+41) Proposal Security Beneficiary Adress
+Kindly confirm the name and address of the
+ReccuTbiaryensidinassae to be inserted in the Eroposil Proposal security shall be addressed to CEO of NSO.
+Security. Please provide the exact wording to be
+used in these documents to ensure compliance with
+the tender requirements.
+42) i. Whether a Bidder is permitted to
+propose more than one BESS, PCS, or
+EMS supplier within a single bid for the
+project; and
+li. If multiple suppliers are permitted,
+whether there is any limit on the Bless veter addendian ne Ol
+number of suppliers per equipment
+category, and what technical or
+contractual conditions (e.g.,
+interoperability, single-point warranty
+responsibility, common EMS
+integration) would apply.
+43) 3.2 of VOLUME 1: Instruction to project 1. Accordingly, the ownership and maintenance of the
+proponents -Transmission line transmission line shall be the responsibility of the
+1. Could you clarify ownership and Distribution Licensee.
+responsibility of the
+maintenance of the transmission line. 2. EDL, as the Distribution Licensee, shall be responsible
+for identifying and marking the required wayleaves for the
+Page 7 of 15
+
+===== PAGE 08 =====
+2. Please clarify whether the Employer will | Medium Voltage (MV) line. The Developer shall be
+facilitate the obtaining of wayleave responsible for obtaining the necessary approvals and
+consents and all other necessary approvals clearances for the MV line route, including making all
+required for the construction of the applicable payments and completing any required
+transmission line. If so, kindly specify the arrangements for clearing the route, at its own cost.
+extent of the Employer's responsibilities EDL shall issue the necessary letters to the relevant
+and the approvals that will be facilitated. authorities, landowners, and other parties requesting
+approval for the construction and drawing of the Medium
+Voltage line along the identified route.
+44) Clause No. 1.3.1 states,
+"Agreement to lease" (at least for 17 years)
+in favour of the Project Proponent, attested
+by a Notary Public, reserved for a period of
+at —_e 6 mounating titra EH elosiig iis of It shall be attested by a Notary Public. Although registration
+submission of proposals, with the certified . .
+: of the Deed (Agreement to Lease) is not mandatory, it must
+copies of the Deed of the land and the ta duis onreered bara Merusr Public
+survey plan (clearly indicating the extent to © Culy 3 y "y ;
+be utilized for the plant).
+We trust that certification of the Deed and
+the Survey Plan by a Notary Public
+satisfies this requirement. Please confirm.
+45)| We understand that bidding based on a "Letter of Intent
+to enter into a Joint Venture" is permissible. In this
+regard, please clarify the following:
+i. Whether the purchase of the tender | Yes
+document by one intended JV partner is -
+fficient; - Yes P : :
+i Whether an "Agreement to Lease" ill. Not mandatary. The Bid Security may be submitted
+‘ mS . in the name of the Lead Partner of the Joint Venture.
+executed in favour of one intended JV
+partner is sufficient; and
+iil Whether it is mandatory for the Bid Bond to
+be
+submitted in the name of the intended JV.
+46)| As per the tender document, Six (6) of the Grid Substations | Please refer to Clause 1.3 of the RFP, which states:
+(GSS) can each accommodate two (2) nos. of 10 MW/40 MWh| "Project Proponents shall purchase RFPs separately for
+systems. Please clarify whether the purchase of one (1) tender | each and every proposal they intend to submit for each Grid
+document is sufficient for a bidder to submit bids for both 10 | Substation."
+MW/40 MWh systems at such a GSS Accordingly, a separate RFP must be purchased for each
+proposal submitted under a Grid Substation.
+47)| During the pre-bid meeting, it was clarified that the successful
+bidder/developer shall be responsible for obtaining the Bonded
+Warehouse Facility. _ a .
+. . . . Obtaining the bonded warehouse facility is the
+The approval process, including the required documentation and ar :
+regulatory clearances , typically takes approximately two responsibility px the Bidder. However, please refer to
+months , Addendum No. 1, under which the Scheduled Commercial
+i, . ; Operation Date (SCOD) has been extended by two (2)
+Also, it will take additional time to get other regulatory montis,
+approvals
+Therefore, we kindly request that the scheduled commissioning
+date be extended by three (3) months. This extension would
+Page 8 of 15
+
+===== PAGE 09 =====
+_ adequately account for the time required to obtain the necessary
+approvals without impacting on the project implementation
+schedule .
+
+48)| Kindly confirm whether the Bonded Warehouse Facility can be | The Bonded Warehouse Facility is applicable only to
+availed for all imported Balance of Plant (BOP) equipment , | imported equipment that forms part of the Battery Energy
+including transmiss ion line materials, accessories, and other | Storage System (BESS) facility. Transmission line
+ancillary equipment required for the project. materials, accessories, and other equipment required for the
+
+external grid interconnection works are outside the BESS
+facility and, therefore, are not eligible for the Bonded
+Warehouse Facility.
+
+49)| Kindly clarify what would be considered as "Other financial | Such resources may include, but are not limited to, readily
+
+resources", available and unpledged long-term deposits, loans
+receivable, and other liquid financial resources, provided
+that such resources can be demonstrated to be available to
+the Bidder for meeting the financial requirements of the
+Contract.
+The Bidder shall submit appropriate documentary evidence
+to substantiate the availability and adequacy of such
+financial resources.
+
+50)| Volume 1 requires distribution frames/patch panel terminating
+48 cores; Volume III requires 16 cores. Both specify 2 cables of | It shall be 16 cores.
+
+8 single mode cores.
+
+51)) Please confirm 1) whether and HVAC load is drawn through the | (a) Auxiliary and HVAC loads that are directly associated
+Main Meter (therefore captured within RTE) or through a| With the operation of the BESS Facility shall be supplied
+separate retail-tariff supply; and through the BESS electrical system and shall be accounted
+b)whether auxiliary load sits inside or outside the RTE for in the RTE calculation.
+ealeniation. (b) General site loads that are not directly related to the
+
+operation of the BESS, such as CCTV, security systems,
+general lighting, and other similar facility loads, shall not
+be included in the RTE calculation.
+
+The RTE calculation shall therefore account only for the
+energy consumed by auxiliary systems and equipment
+directly required for the operation of the BESS Facility, in
+accordance with the specified RTE measurement and
+calculation methodology
+
+52)} Article 3.2 lists events of issued document does not termination
+consequences-payment or buy-out formula GOSL political force | No separate termination compensation or buy-out formula
+majeure, force majeure. is prescribed for termination arising from (a) NSO default,
+Please issue the termination provisions including the (6) palities POISE Mojeure aliibutable tothe Govemnent
+
+of Sri Lanka, or (c) prolonged natural force majeure, other
+a) NSO default . aebr ; .
+~ than the rights and obligations expressly provided in the
+b)  Political/FM amd ESA.
+c) Prolonged FM
+
+53) By Contract Year 15, the Minimum Dispatchable Storage | For Contract Year 15, the applicable minimum ADSC shall
+Capacity (DSC) is expected to reduce to approximately 68% of | be determined in accordance with the degradation
+the Contracted Storage Capacity (CSC), equivalent to | requirements specified in the ESA. The resulting ADSC,
+approximately 2.7 hours at the Contracted Power Capacity | rather than a fixed four-hour discharge duration, shall
+(CPC). Please confirm: constitute the applicable energy limit for Dispatch
+(a) whether, in any Contract Year, NSO’s Dispatch Instructions Instructions.
+
+Eg: Assume:
+Page 9o0f 15
+
+===== PAGE 10 =====
+will be limited to the prevailing Available Dispatchable Storage e Contracted Power Capacity (CPC) = 10 MW
+Capacity (ADSC), and therefore NSO will not issue a continuous e Contracted Storage Capacity (CSC) = 40 MWh
+four-hour discharge instruction at CPC where the prevailing e Minimum Dispatchable Storage Capacity (DSC) in
+ADSC is less than four times the CPC; Year 15 = 68% x 40 MWh = 27.2 MWh
+
+(b) how Dispatch Availability will be determined when the e Therefore, the Year-15 ADSC corresponds to 2.72
+ADSC is expressed in MWh rather than as a fixed duration, hours at 10 MW, not four hours.
+
+particularly where a Dispatch Instruction would require energy e A15-minute dispatch at 10 MW requires 2.5 MWh.
+exceeding the prevailing ADSC or the available State of Charge;
+
+and
+
+(c) whether any resulting shortfall in such circumstances will be
+
+excluded from the Company’s Dispatch Availability
+
+performance assessment.
+
+A worked example illustrating the calculation of Dispatch
+
+Availability for Contract Year 15 would be appreciated.
+
+54)} Please confirm an aggregate cap on liquidated damages per e There is no aggregate cap on liquidated damages
+Contract Year and over the full 15 year Term, and confirm either per Contract Year or over the full 15-year
+whether the round trip efficiency damage falls inside or outside Term.
+those caps. Please also confirm an overall limitation of the e The applicable cap on liquidated damages is
+Company’s liability under the Agreement and a mutual monthly, as specified in Clause 2 of Appendix A of
+exclusion of indirect and consequential loss. Volume III.
+
+e The Round Trip Efficiency (RTE) liquidated
+damages, if applicable, are subject to the relevant
+monthly liquidated-damages provisions/cap in
+Clause 2.
+
+e However, capacity charge deductions for failure to
+achieve the required 97% availability are not
+liquidated damages and therefore do not fall within
+the monthly LD cap.
+
+e Consequently, if the BESS fails to meet the 97%
+availability requirement, the capacity charge
+payable for that month may be reduced, potentially
+down to LKR 0, depending on the extent of
+unavailability.
+
+55)| Please state whether a minimum State of Charge reserve, and
+charging and discharging power headroom, must be maintained | (a) No. Any power or energy reserved for such services
+continuously for frequency response, synthetic inertia,| shall mot be treated as available for the purposes of
+oscillation damping and AGC ; and if so their required | Capacity Availability and Contracted Storage Capacity.
+magnitude. Please confirm that (a) any reserved power and | (b) No. Energy exchanged in providing such services shall
+energy is nonetheless treated as available for Capacity | mot be excluded from the 400 Full Equivalent Cycle
+Availability and Contracted Storage Capacity purposes, and (b) | allowance or from the Round Trip Efficiency (RTE)
+energy exchanged in providing these services is excluded from | calculation.
+the 400 Full Equivalent Cycle allowance and from the round-trip
+efficiency calculation.
+
+56)| Please confirm whether "Financial Closure" at this milestone | Financial Closure shall mean that the financing required for
+means executed facility agreements and satisfied conditions | the Project has been approved by the relevant lender(s).
+precedent, or a committed term sheet or letter of intent. If the | A committed term sheet or letter of intent shall not, by itself,
+former, please extend the period to not less than six months from | constitute Financial Closure. Further financial closure
+ESA signing. and confirm that NSO will provide the Direct | should be achieved within 3 months from the execution of
+Agreemen t, terminat ion compensation regime and payment | the ESA.
+
+Page 10 of 15
+
+===== PAGE 11 =====
+security that lenders will require. As drafted, this milestone is
+achievable only on a balance sheet-funded basis, which narrows
+the bidder field and raises the price. loan should be approved.
+
+57)| Please specify the documents accepted as evidence of financial | Other Financial Resources refers to financial resources
+resources beyond audited working capital: whether bank | available to the Bidder for financing its current contractual
+certificates or reference letters, undrawn committed credit lines, | Commitments and the subject Contract, other than the
+sponsor support or shareholder undertakings, parent company | Working Capital stated under Item | and the Credit Line
+guarantees, or letters of intent from lenders are acceptable, and | Stated under Item 2.
+in each case the required I form, addressee, currency and date of | Such resources may include, but are not limited to:
+issue relative to the closing date. e Long-term deposits / fixed deposits, provided that
+
+such deposits are available for use and have not
+already been included in the Bidder’s declared
+Working Capital; and
+
+e Amounts receivable by the Bidder from financial
+institutions under loans or other financing
+arrangements, provided that such amounts are
+sufficiently certain and supported by appropriate
+contractual or documentary evidence.
+
+The Bidder shall submit appropriate documentary evidence
+to substantiate the availability and value of such financial
+resources. Such resources shall be available for use and
+shall not be otherwise committed, pledged, encumbered,
+or earmarked for other obligations.
+
+58)) Manufacturer qualification requires | GWh of installed battery a) Cumulative global installed volume achieved
+modules/cells, | GW of installed inverter products. and two during the relevant qualification period, rather
+projects using the same PPC product family, each "within the than an annual volume.
+last three (3) years b) Should be installed/commissioned volume,
+Please confirm: (a) whether the thresholds are cumulative global because the requirement says “installed.” ;
+installed volume or annual;(b) whether shipped/contracted c) A manufacturer-issued declaration on official
+volume counts or only commissioned volume; (c) whether letterhead can be accepted as evidence, provided it
+manufacturer self-certification on letterhead is acceptable clearly identifies the ; product, installed
+evidence; (d) the acceptable form of the Expression of Interest. quantity/capacity, Project(s), location,
+and whether an OEM's standard letter format is acceptable; and commissioning/installation date and relevant
+(e) whether the qualifications at cl.2.7.3 may be satisfied by a manufacturer. NSO may reserve the right to
+named subcontractor or by a consortium member, rather than by request supporting evidence. _
+the Project Proponent itself. d) An OEM's standard Expression of Interest/letter
+
+format should be acceptable, provided it contains
+all information required by the RFP and is duly
+signed by an authorized representative of the
+manufacturer.
+
+e) The qualification should be satisfied based on the
+manufacturer/component supplier's experience,
+and therefore need not be experience of the Project
+Proponent itself.
+
+59)} The PCS AC-side current must operate continuously at 110% of
+rated current, sustain 120% for 2 minutes, and "preferably"
+
+0,
+Sopaut Tite Seca ; ; Please comply with A.05.02 of Annex A
+Please confirm whether 110% continuous is a firm requirement
+(it effectively mandates a 10% PCS oversize on top of the
+reactive requirement), and whether the 150% I 10 s capability is
+Page 11 of 15
+ier
+
+===== PAGE 12 =====
+_ mandatory or preferred. Please
+confirm the ambient temperature at which these ratings are to be
+demonstrated .
+60)| he RFP distinguishes equipment manufacturers and | A battery manufacturer, PCS/PPC manufacturer, equipment
+| subcontracto rs from the Project Proponent, and permits a | Supplier, EPC contractor or other technical partner may
+manufacturer, supplier or technical partner to support the participate in supporting the bid without being a member
+proposal through an | Of the Project Proponent/Joint Venture consortium,
+Ex pression of Interest or as a subcontractor .| Provided that such entity is identified as a manufacturer,
+However, where such an entity becomes a member of the Joint | Supplier, technical partner or subcontractor in accordance
+Venture J consortium , cl.2.8.2.2 and the FIN forms appear to | With the RFP and provides the required Expression of
+require every partner to demonstrate at least 25% of the Rs.600 | Interest or subcontractor commitment, as applicable.
+million financial-resources requirement, regardless of whether | However, where such an entity is included as a formal
+that member has only a technical , manufacturing or supp ly role | Member of the Joint Venture/consortium, it shall be
+and provides little or no equity.Please confirm whether a battery, | Considered a consortium member for the purposes of Clause
+PCS or PPC manufacturer, equipment supplier, EPC contractor | 2-8.2.2 and shall comply with the applicable financial-
+or other technical partner may participate in the bid without | resources requirement, including the minimum 25%
+demonstrating financial resources where it is: (a) a named | Share of the required Rs. 600 million, irrespective of the
+manufacturer J supplier or subcontractor but | Nature or extent of its technical, manufacturing, supply or
+not a member of the Project Proponent; or | EPC role.
+(b) a non-equity or minority technical member of a Joint Ventu | Accordingly, where a technical or manufacturing partner is
+re [ consortium . If every formal member must satisfy the 25% | not intended to satisfy the financial-resources requirement,
+requirement. please confirm the permitted it shall be structured as a manufacturer, supplier,
+structure for including a technical partner without subjecting it| technical partner or subcontractor of the Project
+to the financial resources test, and identify which entity or | Proponent/consortium, and shall not be included as a
+entities must complete Forms FIN-1 to FIN-4. formal member of the Joint Venture/consortium.
+The FIN-1 to FIN-4 forms shall be completed by each
+formal member of the Project Proponent/Joint
+Venture/consortium, as required by the RFP.
+61)| where 2 BESS projects are connected to the same gss and both | It should function as a common hardware platform
+projects are awareded to the same bidder, would it be acceptable | providing two independent project-level control
+to utilize a single PPC and common communication | functions.
+infrastructure for both plants provided that the system is capble | Failure of the common PPC must not result in an
+of independently controlling monitoring and communicating | uncontrolled or unsafe condition for either BESS.
+with each BESS plant in accordance with the applicable Appropriate redundancy/failover arrangements should
+technical and operational requirements. therefore be provided.
+A common PPC must not cause one project's operating
+constraints or dispatch instructions to affect the other
+project.
+The communication interface with NSO/NSCC should
+; allow the two projects to be addressed and controlled as two
+independent BESS facilities, even though the underlying
+PPC hardware is common.
+62)| Most BESS suppliers have recently upgraded their BESS | Yes. Where the exact proposed BESS package is a newly
+packages to more economical, higher-capacity solutions, such as | introduced product and the relevant international
+6.25MWh systems in 20-ft containers. These new packages | certifications are still under certification, the bidder may
+generally utilize cells, racks, and other major components from | submit, at the technical proposal stage, the currently
+the same product families that were used in their earlier certified | available valid certifications for the applicable cells,
+platforms. However, due to the lengthy certification process an | racks, major components and/or established product
+limited availability of certification bodies, the international | family, together with documentary evidence demonstrating
+certifications for some of these newly introduced BESS | the relationship and technical equivalence between the
+Page 12 of 15
+
+===== PAGE 13 =====
+packages are still in progress. certified components/product family and the proposed
+In such cases, would it be acceptable to submit the technical | BESS package.
+proposal with the currently available certificates for the relevant
+cell, rack and or product family with the required certifications
+for the exact proposed BESS package to be submitted at a later
+stage prior to signing the ESA.
+63)| The RFP requires the installation of a firewall at the Grid
+Substation and refers to an "appropriate firewall/network
+iia Ee BESS Ein ait Sale resulted ciel val A separate firewall is required at the BESS facility with
+already be installed at the Grid Substation, please clarify suirable manasanent austen
+whether a separate firewall is also mandatory at the BESS s y ,
+facility. or whether a suitable managed
+network switch at the BESS end will be acceptable
+64)) The present RFP requires the PCS AC-side current to sustain
+120% of the rated current for at least two minutes. However,
+during the previous tender process, this requirement was
+ised from two minutes t inute,
+PUIG OMEN amunures 10 one minute Please comply with A.05.02 of Annex A
+Accordingly, we kindly request that the requirement be
+amended to allow the PCS to sustain 120% of the rated current
+for at least one minute
+65)| The Capacity Charge Rate is variously expressed as LKR/MW, | LKR/MW/month
+LKR/MW /month and LKR/kWh . Please confirm the correct | Clause 2.8.1 of Volume I should be corrected as : ;
+unit for quotation, evaluation and monthly payment. Capacity Charge Rate proposed by the Project
+Proponent = Y LKR/MW/month
+Applicable Capacity Charge Rate: 0.15xY +
+(0.85xYxP2/P1) LKR/MWh/month
+66) Please confirm that the capacity payment during Contract Year No. The reference to Contract Year | in the table refers to
+Iwill be calculated using an ADSC/MDSC factor of 1.0, since the end of the first Contract Year and does not imply
+no Year 0 ADSC or MDSC exists . during the 1* year.
+During Contract Year 1, the applicable Contract Storage
+Capacity shall be the capacity declared by the Bidder in
+Section 1 of Volume II at the bidding stage. The same
+declared Contract Storage Capacity is required to be
+achieved and demonstrated during commissioning.
+67)| Please confirm the ownership, operation and maintenance
+responsibility for the dedicated MV interconnection line after
+commissioning. Volume | refers to ownership/maintenance by | EDL
+EDL, while Volume Ill assigns maintenance responsibility to
+the Company .
+68)| Please confirm that delays attributable to GSS access, feeder
+outages, NSO/DL approvals or works within the GSS will Please eeferolause 4.9 ofthe BSA
+result in an extension of the COD without forfeiture or
+damages.
+6) saltetiee , roposals please contin whether ne nt ” The financial resource requirement of LKR 600 million
+million financial- resource requirement applies separately to hall 1 tely t h er
+each project and how cumulative eligibility will be calculated. shalt Bpply Separately to each projec
+Page 13 of 15
+
+===== PAGE 14 =====
+Accordingly, where a Bidder submits proposals for multiple
+projects, the required financial resources shall be calculated
+cumulatively based on the number of projects for which
+proposals are submitted. For example:
+e 1 project: LKR 600 million
+e 2 projects: LKR 1,200 million
+70)) Please sentir whether sit proposal eeauices.a completely Each proposal shall constitute a complete and separate
+separate submission , Proposal Security and RFP purchase, Aor . .
+. submission and_ shall independently satisfy all
+while common corporate and OEM documents may be cross requirements of the RFP.
+referenced?
+71)| Please clearly define the physical and contractual scope
+boundary between the developer, NSO and the relevant DL for
+the complete grid-interconnection facilities, from the BESS Please refer Tri-partite agreement
+facility up to and including the Point of Interconnection at the
+Grid Substation.
+72)| Please clearly identify the Termination Point, Metering Point,
+Grid Point and Point of Interconnection ina single approved Please refer the addeadun ae]
+drawing and specify the ownership and responsibility boundary
+applicable at each point.
+73)| a) Clause 2.7.3 of Volume I and Section 10 of Volume II a) Clause 2.7.3 of Volume I and Section 10 of Volume II
+require the project proponent to nominate the require the Project Proponent to nominate the
+manufacturers of the battery modules and cells, the manufacturers of the battery modules/cells,
+inverters and PPC and to submit their experience records PCS/inverters, PPC and other major equipment, together
+and Expressions of Interest with the proposal. The with the relevant experience records and Expressions of
+proposal is therefore bound, as submitted. to a single Interest.
+nominated supplier for each item. As clarified under Addendum No. 1, a bidder may submit
+b) We respectfully request that NSO permit the successful proposals based on up . to two alternative
+Project Proponent to change a nominated supplier after manufacturers/complete solutions. However, each
+award, provided that the replacement equipement fully proposal shall constitute a complete and technically
+complies with the specifications and qualification criteria integrated BESS solution, including the _ battery
+set out in the RFP and that NSO’s prior written approval modules/ cells, P CS/ inverters, PPC, transformer and
+is obtained. other applicable major equipment, as proposed by the
+respective manufacturers.
+The two proposals shall be considered as separate and
+complete solutions. The bidder shall not be permitted,
+during detailed design, construction or implementation,
+to combine or interchange major equipment between the
+two submitted solutions, such as using the battery system
+from one proposed solution together with the
+PCS/inverter or PPC from the other proposed solution.
+Any equipment supplied for the project shall therefore
+be consistent with one of the complete solutions
+submitted with the proposal and shall comply with the
+applicable technical requirements and approved design.
+b) No
+% As per isa ES i Ini unnenstins No. The Company will continue to be entitled to the
+interconnection facilities shall be constructed by the Company applicable Capacity Charge in accordance with the ESA.
+and handed over to the distribution licensee upon Accordinely. th lability of the int ti
+Le, . . ; ysgs gly, the unavailability of the interconnection
+commissioning, following which the interconnection facilities cilities shall aot bs considered 16 vesule fa a loss af
+shall be operated and maintained by the DL.
+Page 14 of 15
+
+===== PAGE 15 =====
+In this regard, will Company be entitled to compensation for revenue to the Company for which additional
+any loss of availability, energy delivery or associated revenue compensation is payable.
+resulting from the unavailability outage or failure of the
+interconnection facilities after they have been handed over to
+and are under the operation and maintenance responsibility of
+the DL.
+75)) At locations where the available network capacity permits the
+connection of two (02) 10 MW/40 MWh BESS projects (i.e., a Due to network constraints, only one BESS project can
+total capacity of 20 MW), would it be permissible for both be connected to a single 33 kV feeder. Accordingly,
+projects to utilize a common grid interconnection line, and, in where two prospective projects are located such that
+such circumstances, would the same bidder be permitted to their nearest feasible point of connection is the same 33
+develop both projects using the same grid interconnection kV feeder, it is technically not feasible to accommodate
+arrangement, subject to the approval of the relevant Distribution both projects through the same feeder.
+Licensee?
+76)| Would it be possible for a prospective bidder to obtain or lease The Board of Investment (BOI) has provided a Letter of
+suitable land from the Board of Investment (BOI) for confirmation that 80 perches of land within the
+establishing the proposed BESS project, with the intention of Horana Export Processing Zone (HEPZ) may be
+connecting the project to the Horana Grid Substation (GSS)? allocated for the proposed BESS project to the successful
+bidder, subject to the prevailing land lease terms
+applicable to HEPZ at the time of signing the lease
+agreement.
+Prospective bidders may contact the BOI directly for
+further information regarding the availability, allocation,
+lease terms and other conditions applicable to the said
+land.
+Page 15 of 15

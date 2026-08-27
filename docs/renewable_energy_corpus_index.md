@@ -118,6 +118,29 @@ repository by manifest only — the package carries independent test-house and c
 third-party operator letterheads, compiled model binaries and personal data, and is not covered by
 the existing publication authorization; see `source_packages/README.md`)*
 
+**NSO 250 MW controlling documents — Addendum 01, Annex A and the clarification register
+(ingressed 27 August 2026)** — the Employer-issued documents that *qualify and override* the RFP
+volumes, at `docs/source_materials/nso_bess_250mw_2026/rfp/`: **Addendum No. 01** (7 Aug 2026,
+23 items — revised milestone schedule and a **4 September 2026** closing date, wholly replaced
+Vol I clause 3.2 with two Grid Point options, Grid Interconnection Confirmation Letter and PCA3
+registration added as disqualifying items, **two technical proposals now permitted**, revised Model
+ESA and Tripartite Agreement as attachments); **Annex A Functional & Performance Requirement**
+(27 pp — grid-forming and grid-following requirements, SCR floors of **1.0 GFM / 1.2 GFL**, inertia
+and AGC/AVC parameters, and the simulation-model obligations); and the **76-item clarification
+register** (21 Aug 2026, an image-only scan carrying no text layer, transcribed by page-image
+reading after MarkItDown returned empty and tesseract scrambled the two-column table). Evaluated in
+`docs/source_materials/nso_bess_250mw_2026/reviews/NSO250MW_Addendum01_AnnexA_Clarifications_Ingress_Evaluation_2026-08-27.md`
+— **three corrections** to the 21 August review (Annex A A.05.17(i) *requires* the dual-mode
+grid-forming behaviour the earlier review told the bidder to delete, so that instruction is
+withdrawn; the SCR 1/3/5/10 sweep is **not** a bid-stage requirement where both PSS(R)E and PSCAD
+models are submitted, becoming instead a post-award obligation with the Performance Security at
+risk; and the closing date is 4 September, with the clarification window closed since 25 August),
+plus ten new findings — chiefly that the RTE guarantee is now **worse than zero-headroom** (a
+measurement-tolerance clause refused outright, auxiliary and HVAC load confirmed inside the RTE
+basis, and standby-regulation and ancillary-service energy both added to it with no annual
+reconciliation), and that there is **no aggregate cap on liquidated damages** while the capacity
+charge can fall to **LKR 0** in a month missing 97 % availability, outside that cap.
+
 **Internal CEB BESS technical notes** (`desktop clean up`): internal merged/technical system-analysis BESS notes (10 MW–40 MWh, 10×16) — ~3 files (private/internal).
 
 ---

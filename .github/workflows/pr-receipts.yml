@@ -6,8 +6,16 @@
 #
 # This is a cheap, self-contained job (no dependency install, no test run). It is not a
 # substitute for the real gates — CI remains the merge authority for whether the checks
-# themselves passed. Promoting this job to a *required* status check is a repository-ruleset
-# setting and remains an explicit owner decision.
+# themselves passed.
+#
+# LIMIT, stated so nobody mistakes green for verified: this job checks that every Result
+# cell SAYS something. It cannot re-run a command or confirm a figure, so a table carrying
+# plausible but stale numbers passes. Green here means "nothing was left silent" — the
+# reviewer still has to read the table. Disclosure is what it enforces, and silence is the
+# failure that cannot be caught downstream. This job IS a *required* status check on main (#1139), so it fails
+# closed: a pull request without receipts cannot merge. The ruleset matches the job's RENDERED NAME below, which
+# test_receipts_job_name_is_pinned_for_the_branch_ruleset pins -- renaming it here without updating the ruleset
+# would stop the required check reporting and block every merge to main.
 name: PR Receipts
 
 on:

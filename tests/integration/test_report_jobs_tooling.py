@@ -17,7 +17,7 @@ def test_governed_report_jobs_versions_are_installed() -> None:
     assert version("weasyprint") == "69.0"
     assert version("arq") == "0.28.0"
     assert version("brotli") == "1.2.0"
-    assert version("hiredis") == "3.4.0"
+    assert version("hiredis") == "3.4.1"
     assert version("zopfli") == "0.4.3"
 
 

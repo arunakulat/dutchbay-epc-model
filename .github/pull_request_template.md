@@ -13,6 +13,9 @@ Paste the command **and its result** for each check. A check you did not run is
 `required-not-run` convention of `docs/audit/2026-08-controlled-successor/`: an
 unverified item is stated, not omitted.
 
+The automated check reads these cells for **presence, not truth** — it cannot re-run your
+commands, so stale or wrong numbers pass it. Paste what the command actually printed.
+
 | Check | Command run | Result |
 |---|---|---|
 | Focused tests | `pytest -p no:cacheprovider <paths> -q` | *e.g.* `12 passed in 3.1s` |

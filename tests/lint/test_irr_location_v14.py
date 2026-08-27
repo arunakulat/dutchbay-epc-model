@@ -58,7 +58,11 @@ BANNED_NAMES = {"irr", "xirr", "npv"}
 
 # Directory names skipped entirely: caches, VCS, the quarantined legacy tree, and
 # packaging artifacts. Legacy code is isolated by policy and not part of the live model.
+# ".claude" covers agent worktrees: a Claude Code subagent running with worktree
+# isolation leaves a full nested checkout under .claude/worktrees/, whose copy of
+# finance/irr.py would otherwise be reported here as an out-of-home R7 violation.
 SKIP_DIR_NAMES = {
+    ".claude",
     ".git",
     ".venv",
     "__pycache__",
