@@ -29,6 +29,29 @@ conflicts with a source file, the source file governs.
 
 ---
 
+> ## ⚠ Partly superseded — read before acting on this document
+>
+> The **Addendum 01 / Annex A / clarification-register ingress of 27 August 2026**
+> ([`NSO250MW_Addendum01_AnnexA_Clarifications_Ingress_Evaluation_2026-08-27.md`](NSO250MW_Addendum01_AnnexA_Clarifications_Ingress_Evaluation_2026-08-27.md))
+> corrects three items below against the controlling Employer documents:
+>
+> 1. **Punch-list item 4 is WITHDRAWN. Do not delete the "seamless GFL/GFM transition" language.**
+>    Annex A **A.05.17(i)** *requires* the BESS to "support both grid-following and grid-forming
+>    control modes, enabling online switching between the two". Acting on item 4 would delete
+>    evidence of compliance with a mandatory clause. See correction **C-1**.
+> 2. **Tier 1 item 2 (the SCR 1/3/5/10 sweep) is not a bid-stage requirement** where both PSS(R)E and
+>    PSCAD models are submitted — Annex A **A.05.23(d)** states the minimum as models **or** test
+>    results. It becomes a post-award obligation due within one month of ESA execution, with the
+>    Performance Security at risk. See correction **C-2**.
+> 3. **The closing date is 4 September 2026**, per Addendum 01 item 01 — not 2 September. The
+>    **clarification window closed on 25 August 2026**, so the Tier 1 and Tier 2 actions below that
+>    are addressed to *NSO* can no longer be asked.
+>
+> Findings F-2 through F-15 otherwise stand, and the RTE exposure at F-2 is materially **worse** than
+> recorded here. The revised punch list is in §5 of the 27 August evaluation.
+
+---
+
 ## 1. What the package is
 
 This is the **supplier evidence dossier** assembled against the NSO 250 MW / 1000 MWh standalone
