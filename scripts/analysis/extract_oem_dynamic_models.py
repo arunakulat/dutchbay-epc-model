@@ -70,7 +70,9 @@ def parse_dyr(path: Path) -> list[DyrRecord]:
     """
     text = path.read_text(errors="replace")
     if "'" not in text:
-        raise ModelExtractionError(f"{path.name}: no quoted model name found; not a .dyr?")
+        raise ModelExtractionError(
+            f"{path.name}: no quoted model name found; not a .dyr?"
+        )
     records: list[DyrRecord] = []
     for chunk in text.split("/"):
         quoted = re.findall(r"'([^']+)'", chunk)
@@ -79,11 +81,12 @@ def parse_dyr(path: Path) -> list[DyrRecord]:
         lead = chunk.strip().split()
         bus = lead[0] if lead and lead[0].lstrip("-").isdigit() else "?"
         nums = tuple(
-            float(n)
-            for n in re.findall(r"(?<![\w.])-?\d+\.\d+(?![\w.])", chunk)
+            float(n) for n in re.findall(r"(?<![\w.])-?\d+\.\d+(?![\w.])", chunk)
         )
         records.append(
-            DyrRecord(bus=bus, kind=quoted[0].strip(), model=quoted[1].strip(), numbers=nums)
+            DyrRecord(
+                bus=bus, kind=quoted[0].strip(), model=quoted[1].strip(), numbers=nums
+            )
         )
     if not records:
         raise ModelExtractionError(f"{path.name}: parsed zero records")
@@ -145,9 +148,11 @@ def parse_pscx(path: Path) -> PscxProject:
     text = path.read_text(errors="replace")
     head = re.search(r"<project\s+([^>]*)>", text)
     if not head:
-        raise ModelExtractionError(f"{path.name}: no <project> element; not a PSCAD 5 project?")
+        raise ModelExtractionError(
+            f"{path.name}: no <project> element; not a PSCAD 5 project?"
+        )
     attrs = dict(re.findall(r'(\w+)="([^"]*)"', head.group(1)))
-    settings = dict(re.findall(r'<param name="([^"]+)" value="([^"]*)"', text[: 4000]))
+    settings = dict(re.findall(r'<param name="([^"]+)" value="([^"]*)"', text[:4000]))
     defs = tuple(dict.fromkeys(re.findall(r'<Definition[^>]*\bname="([^"]+)"', text)))
     return PscxProject(
         name=attrs.get("name", "?"),
@@ -158,7 +163,9 @@ def parse_pscx(path: Path) -> PscxProject:
     )
 
 
-def find_definition_params(path: Path, definition: str, window: int = 12000) -> dict[str, str]:
+def find_definition_params(
+    path: Path, definition: str, window: int = 12000
+) -> dict[str, str]:
     """Return parameter name/value pairs appearing inside one Definition block."""
     text = path.read_text(errors="replace")
     m = re.search(r'<Definition[^>]*\bname="%s"' % re.escape(definition), text)
@@ -192,12 +199,16 @@ def compiled_strings(path: Path, minimum: int = 6, limit: int = 4000) -> list[st
 def _report_dyr(path: Path) -> None:
     print(f"\n=== PSS(R)E dynamics record: {path.name} ===")
     for rec in parse_dyr(path):
-        print(f"  bus {rec.bus:>4}  {rec.kind:<8} {rec.model:<14} values={len(rec.numbers)}")
+        print(
+            f"  bus {rec.bus:>4}  {rec.kind:<8} {rec.model:<14} values={len(rec.numbers)}"
+        )
         if rec.base_kw:
             print(f"      machine base (first value >= 1000): {rec.base_kw:,.1f}")
         fs = frequency_stages(rec)
         if fs:
-            print("      frequency stages (Hz, s) — heuristic, confirm against the model guide:")
+            print(
+                "      frequency stages (Hz, s) — heuristic, confirm against the model guide:"
+            )
             for f, t in fs:
                 print(f"        {f:8.3f} Hz  for {t:10.4f} s")
         rt = ride_through_points(rec)
@@ -224,12 +235,20 @@ def _report_compiled(path: Path) -> None:
     interesting = [
         s
         for s in strings
-        if re.search(r"(\.f90|\.for|\.f\b|Envision|PCS|PPC|GFM|GFL|VSG|\.dll|Fortran|EMTDC|PSSE)", s, re.I)
+        if re.search(
+            r"(\.f90|\.for|\.f\b|Envision|PCS|PPC|GFM|GFL|VSG|\.dll|Fortran|EMTDC|PSSE)",
+            s,
+            re.I,
+        )
     ]
-    print(f"  printable strings: {len(strings):,}; of engineering interest: {len(interesting)}")
+    print(
+        f"  printable strings: {len(strings):,}; of engineering interest: {len(interesting)}"
+    )
     for s in interesting[:18]:
         print(f"    {s[:110]}")
-    print("  NOTE: the control law itself is compiled and is NOT recoverable from this file.")
+    print(
+        "  NOTE: the control law itself is compiled and is NOT recoverable from this file."
+    )
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
