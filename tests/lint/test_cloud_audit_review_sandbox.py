@@ -539,6 +539,9 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
     ) in candidate
     assert "candidate Codespace bootstrap receipt did not become ready" in candidate
     assert "bounded_command()" in candidate
+    assert "lifecycle child could not be signalled" in candidate
+    assert "remote probe child could not be signalled" in candidate
+    assert candidate.count("except PermissionError:") >= 4
     assert "wait_for_candidate_state" in candidate
     assert '"$(codespace_identity | jq -r .state)"' not in candidate
     assert "1|3) ;;" in candidate
@@ -654,6 +657,46 @@ def test_candidate_watchdog_reaps_signal_resistant_group_on_interrupt(
     if child_alive:  # pragma: no cover - cleanup before explicit failure
         os.kill(child_pid, signal.SIGKILL)
     assert not child_alive
+
+
+def test_candidate_watchdog_falls_back_when_group_signal_is_denied(
+    tmp_path: Path,
+) -> None:
+    """An owned child must still be reaped when group signalling returns EPERM."""
+    candidate = CANDIDATE_CODESPACE.read_text(encoding="utf-8")
+    start = candidate.index('"$GOVERNED_PYTHON" -S -c \'\n') + len(
+        '"$GOVERNED_PYTHON" -S -c \'\n'
+    )
+    end = candidate.index('\n\' "$timeout_seconds" "$@"', start)
+    watchdog = candidate[start:end]
+    forced_permission_error = watchdog.replace(
+        "        os.killpg(process.pid, signal_number)",
+        "        if signal_number:\n"
+        "            raise PermissionError\n"
+        "        os.killpg(process.pid, signal_number)",
+    )
+    assert forced_permission_error != watchdog
+    child_pid_file = tmp_path / "permission-child.pid"
+    child_script = f"echo $$ > {child_pid_file!s}; exec sleep 30"
+    result = subprocess.run(
+        (
+            sys.executable,
+            "-S",
+            "-c",
+            forced_permission_error,
+            "0.1",
+            "/bin/bash",
+            "-c",
+            child_script,
+        ),
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+    assert result.returncode == 124
+    child_pid = int(child_pid_file.read_text(encoding="ascii"))
+    assert not _process_is_alive(child_pid)
 
 
 def test_candidate_recovers_ambiguous_creation_before_exit(tmp_path: Path) -> None:

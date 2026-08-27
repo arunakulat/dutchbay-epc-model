@@ -47,27 +47,57 @@ import os
 import signal
 import subprocess
 import sys
+import time
 
 timeout = float(sys.argv[1])
 process = subprocess.Popen(sys.argv[2:], start_new_session=True)
 
 
-def stop_process_group() -> None:
+def process_group_is_absent() -> bool:
     try:
-        os.killpg(process.pid, signal.SIGTERM)
+        os.killpg(process.pid, 0)
+    except ProcessLookupError:
+        return True
+    except PermissionError:
+        return False
+    return False
+
+
+def signal_process_group(signal_number: int) -> None:
+    try:
+        os.killpg(process.pid, signal_number)
     except ProcessLookupError:
         return
+    except PermissionError:
+        if process.poll() is not None and process_group_is_absent():
+            return
+        if process.poll() is not None:
+            raise RuntimeError("lifecycle process group could not be signalled")
+        try:
+            process.send_signal(signal_number)
+        except ProcessLookupError:
+            return
+        except PermissionError as exc:
+            raise RuntimeError(
+                "lifecycle child could not be signalled"
+            ) from exc
+
+
+def stop_process_group() -> None:
+    signal_process_group(signal.SIGTERM)
     try:
         process.wait(timeout=1.0)
     except subprocess.TimeoutExpired:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            return
+        signal_process_group(signal.SIGKILL)
         try:
             process.wait(timeout=1.0)
         except subprocess.TimeoutExpired:
-            pass
+            raise RuntimeError("lifecycle child could not be reaped")
+    deadline = time.monotonic() + 1.0
+    while not process_group_is_absent() and time.monotonic() < deadline:
+        time.sleep(0.02)
+    if not process_group_is_absent():
+        raise RuntimeError("lifecycle process group could not be reaped")
 
 
 def controlled_signal(signum: int, _frame: object) -> None:
@@ -415,23 +445,54 @@ deadline = time.monotonic() + timeout - cleanup_budget
 command = ["gh", "codespace", "ssh", "-c", sys.argv[3], sys.argv[4]]
 
 
+def process_group_is_absent(process: subprocess.Popen[bytes]) -> bool:
+    try:
+        os.killpg(process.pid, 0)
+    except ProcessLookupError:
+        return True
+    except PermissionError:
+        return False
+    return False
+
+
+def signal_process_group(
+    process: subprocess.Popen[bytes], signal_number: int
+) -> None:
+    try:
+        os.killpg(process.pid, signal_number)
+    except ProcessLookupError:
+        return
+    except PermissionError:
+        if process.poll() is not None and process_group_is_absent(process):
+            return
+        if process.poll() is not None:
+            raise RuntimeError("remote probe process group could not be signalled")
+        try:
+            process.send_signal(signal_number)
+        except ProcessLookupError:
+            return
+        except PermissionError as exc:
+            raise RuntimeError(
+                "remote probe child could not be signalled"
+            ) from exc
+
+
 def stop_process_group(process: subprocess.Popen[bytes]) -> None:
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
+    signal_process_group(process, signal.SIGTERM)
     try:
         process.wait(timeout=cleanup_budget / 2)
     except subprocess.TimeoutExpired:
         pass
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        return
+    signal_process_group(process, signal.SIGKILL)
     try:
         process.wait(timeout=cleanup_budget / 2)
     except subprocess.TimeoutExpired:
-        pass
+        raise RuntimeError("remote probe child could not be reaped")
+    deadline = time.monotonic() + cleanup_budget
+    while not process_group_is_absent(process) and time.monotonic() < deadline:
+        time.sleep(0.02)
+    if not process_group_is_absent(process):
+        raise RuntimeError("remote probe process group could not be reaped")
 
 
 def controlled_signal(signum: int, _frame: object) -> None:
