@@ -8,6 +8,7 @@ import importlib.util
 import json
 import os
 import py_compile
+import shutil
 import signal
 import socket
 import subprocess
@@ -555,6 +556,33 @@ def test_sshd_readiness_waits_for_banner_and_rejects_process_only(
         process_only.close()
 
 
+def _process_is_alive(pid: int) -> bool:
+    """Report whether ``pid`` is a live process rather than an unreaped zombie.
+
+    ``os.kill(pid, 0)`` succeeds for a zombie, because the PID stays in the
+    process table until the parent reaps it. A watchdog that correctly SIGKILLs
+    an orphan therefore still looks like a failure wherever PID 1 does not reap
+    promptly -- which is the case in many containers. Read the state field from
+    ``/proc`` so a killed-but-unreaped process counts as dead, and fall back to
+    the signal probe where ``/proc`` is unavailable.
+    """
+    try:
+        stat = Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
+    except OSError:
+        try:
+            os.kill(pid, 0)
+        except (ProcessLookupError, PermissionError):
+            return False
+        return True
+    # The comm field is parenthesised and may itself contain spaces or
+    # parentheses, so the state code is the first field after the final ")".
+    _, _, after_comm = stat.rpartition(")")
+    fields = after_comm.split()
+    if not fields:
+        return False
+    return fields[0] != "Z"
+
+
 def test_codespace_creation_watchdog_bounds_a_hung_ssh_probe(
     tmp_path: Path,
 ) -> None:
@@ -600,9 +628,7 @@ esac
     child_pid = int(child_pid_file.read_text(encoding="ascii"))
     child_alive = True
     for _ in range(20):
-        try:
-            os.kill(child_pid, 0)
-        except ProcessLookupError:
+        if not _process_is_alive(child_pid):
             child_alive = False
             break
         time.sleep(0.05)
@@ -826,13 +852,17 @@ def test_sshd_policy_content_and_host_identity_fail_closed(tmp_path: Path) -> No
     ):
         public_key_path = tmp_path / f"{name}.pub"
         public_key_path.write_text(f"{invalid_key}\n", encoding="ascii")
-        independent = subprocess.run(
-            ("ssh-keygen", "-E", "sha256", "-lf", str(public_key_path)),
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        assert independent.returncode != 0
+        # ssh-keygen is an independent oracle corroborating the repository's own
+        # rejection; it ships in the sandbox image but is not guaranteed on the
+        # machine running this lint suite. Its absence must not fail the control.
+        if shutil.which("ssh-keygen") is not None:
+            independent = subprocess.run(
+                ("ssh-keygen", "-E", "sha256", "-lf", str(public_key_path)),
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            assert independent.returncode != 0
         try:
             identity._validated_ssh_public_key_blob(invalid_key)
         except identity.SandboxIdentityError as exc:
