@@ -1,36 +1,67 @@
 # NSO 250 MW — OEM supply tranche received 27 August 2026.
-# MANIFEST ONLY. The files below are NOT committed to this public repository.
 #
-#   Group A — certification-body certificates and test reports (14 files).
-#     Withheld on the same basis as the 21 August dossier: certification-body and IECEE CB
-#     scheme copyright. Their derived text extracts are withheld with them.
-#   Group B — compiled model binaries (11 files), .dll / .obj / .lib / .pscx / .dyr.
-#     Envision's compiled PCS/PPC control code. PUBLISH NEVER, per source_packages/README.md
-#     and tests/fixtures/grid/envision_enpcs01_gridcode.yaml.
+# COMMITTED IN FULL. Every file below is tracked in this repository.
 #
-# Recorded so a future session can verify a re-supplied copy without the artifact being public.
-# GROUP-A  234e9313e91826d431d1601c32ac3ad8e04e8a5308abd86ce777aa054480fdfb  17c_CERT_IEC_62619_2022_CELL_HC-L755A.pdf
-# GROUP-A  0262d472c8e4086fe5ed291ff98f6a9cb4e8150dd1223579b39748dd6a7c460f  21_CERT_IEC_63056_2020_EN_62477-1_2022_RACK.pdf
-# GROUP-A  fee792a50cb38cf6c2b546d96b81027f0f70803d86a5e6f7773fafa69551f571  26_REPORT_UL_9540A_2019_CELL_HC-L755A.pdf
-# GROUP-A  1de664d3c8f0eb8a69a6a03a26f680dee57c43c285f59b30a63adc1d00e1c512  27_CERT_UL_1973_2022_CELL_HC-L755A.pdf
-# GROUP-A  05dc77529eb38424bb6c899d6ab68624e93d4b06f64916a9ded3a198fcc710d5  28_UN38.3.pdf
-# GROUP-A  487dc75a07ef808d5cb54c1e70f76f0d34cedabdedace0202d61a9ffa62f0254  29_CERT_ENPCS2520_IEC_61000.pdf
-# GROUP-A  0760b4ee98c4a1edbebb4de882bfda679d803fad805dd47af40f5881d6428d6d  30_CERT_ENPCS2520_IEC_61683.pdf
-# GROUP-A  aa25d39577daab9799bf2967b85b2abaae3658fcb8b141a2fb78c2b7a4b6f5a7  31_CERT_ENPCS2520_IEC_62909-1.pdf
-# GROUP-A  f42e72f0c27c71dd346057a74820996b2b5fbb0264d01a88d805ca4619a0a94c  32_CERT_ENPCS2520_IEC_62477.pdf
-# GROUP-A  55742a1d30c539380d83f01fe2ca882fd361ce4764dafa9ab93cda88645ea282  33-34_CERT_ENPCS2520_IEC_62109-1_and_2.pdf
-# GROUP-A  9ffb6128e7d37b0684bf9076055583914ac2e79f274ccddfcf4839a34910bf95  35_REPORT_ENPCS2520_IEC_60529.pdf
-# GROUP-A  5fe38f8f1dbc5424b921b4412e980bb6e8a5af233b79c198f208c50180fd5121  36_COVER_ENPCS2520_IEC_60068-2-30_78.pdf
-# GROUP-A  53a6a71b1a756282254938fd54865dda7b57dd7f4b8e21b769c964f51201b7f7  37_COVER_ENPCS2520_IEEE_519.pdf
-# GROUP-A  2d5757d19bee786404c800cfd0a16cad2eb1f424597dfde4026ab43af3ec6e40  38_COVER_ENPCS2520_EN_50530.pdf
-# GROUP-B  c93333f3755632629523250be5178da46d0e9d63b3f90f1f0db694b0a90b4dbe  Blackbox_PQVCmdInput_F1.obj
-# GROUP-B  15fd1031c59520482cdb509c64e4bdd28df0283b5c4c044deaf8f754fdae517b  Blackbox_UniversPPC_F1.obj
-# GROUP-B  abe4a84e78d376377028b7f6db963495d38bd5483c49d118b1ea6a33dd96b59b  Blackbox_UniversPPC_if15.lib
-# GROUP-B  b442967a5ed6d919b7f637e67aec3206810c6f66c79a699eb5efd6db56dee06f  Blackbox_VoltageSourseSet_F1.obj
-# GROUP-B  a5b368b2117461b97a0fd2fee8fb7aa1adfb5ca1bef76eba7f742eae71d0b4de  ENPPC_260415_PSSE_V35.dll
-# GROUP-B  e4a87ab114829f3a95c007868da6c81bd8ac756e588e331ef355796433cfecff  ENVSG01_20260327_PSSE_V35.dll
-# GROUP-B  cb528e42b8cd42f57631bcff957561c057c2ce53a0359905856af42556be6774  ENVSG_PPC_2520_260416_LKA.dyr
-# GROUP-B  e81b971ddb5c1d990bf673b86cf9cce989bb32fe1348f6e835689429aaa9cddd  FortranInterface_F1.obj
-# GROUP-B  b46c757368619f3f8e112b27c9486944a2e9f9f31fa2052bae741884754579b4  MY_VST_PCS_F2.obj
-# GROUP-B  4117e2972bdfa19117e21b4b52e6267fd897d0109c495acb60343756389d0b44  PCS2520x4_UPPC_x64_260605aBB.pscx
-# GROUP-B  96701f6d49e124f560d553ab118ff6c3411f62d894ff8c7413d2d4e0610498e6  PCSControllerInterface.dll
+# The certification-body certificates (Group A) and the compiled Envision model binaries
+# (Group B) were held outside the repository until 27 August 2026. They are now committed on
+# the explicit written authority of the project owner, who directs that the copyright and
+# publish-never restrictions previously applied be overridden because this material forms part
+# of the bid submitted to NSO. That authority is recorded in the commit message.
+#
+# Personal data present, established by inspection rather than assumed — four individuals named
+# in professional capacity on the certificate faces, with no contact details of any kind:
+#   David Piecuch  UL Mark Certification Program Manager   27_CERT_UL_1973_2022_CELL_HC-L755A.pdf
+#   Thomas Wilson  UL Solutions CB certificate signatory   17c_CERT_IEC_62619_2022_CELL_HC-L755A.pdf
+#   Jiajun Zhang   Project Engineer, "tested by"           37_COVER_ENPCS2520_IEEE_519.pdf
+#   Allen Hu       Authorizer, "authorized by"             37_COVER_ENPCS2520_IEEE_519.pdf
+# These are the certifying officers whose names appear on any copy of these certificates,
+# including the copies NSO would obtain from the certification bodies directly.
+#
+# Verify from this directory:  sha256sum -c NSO250MW_oem_supply_2026-08-27.MANIFEST.sha256
+#
+# Group A — certification-body certificates and test reports (14 files).
+234e9313e91826d431d1601c32ac3ad8e04e8a5308abd86ce777aa054480fdfb  ../oem/envision/compliance_evidence/certificates/17c_CERT_IEC_62619_2022_CELL_HC-L755A.pdf
+0262d472c8e4086fe5ed291ff98f6a9cb4e8150dd1223579b39748dd6a7c460f  ../oem/envision/compliance_evidence/certificates/21_CERT_IEC_63056_2020_EN_62477-1_2022_RACK.pdf
+fee792a50cb38cf6c2b546d96b81027f0f70803d86a5e6f7773fafa69551f571  ../oem/envision/compliance_evidence/certificates/26_REPORT_UL_9540A_2019_CELL_HC-L755A.pdf
+1de664d3c8f0eb8a69a6a03a26f680dee57c43c285f59b30a63adc1d00e1c512  ../oem/envision/compliance_evidence/certificates/27_CERT_UL_1973_2022_CELL_HC-L755A.pdf
+05dc77529eb38424bb6c899d6ab68624e93d4b06f64916a9ded3a198fcc710d5  ../oem/envision/compliance_evidence/certificates/28_UN38.3.pdf
+487dc75a07ef808d5cb54c1e70f76f0d34cedabdedace0202d61a9ffa62f0254  ../oem/envision/compliance_evidence/certificates/29_CERT_ENPCS2520_IEC_61000.pdf
+0760b4ee98c4a1edbebb4de882bfda679d803fad805dd47af40f5881d6428d6d  ../oem/envision/compliance_evidence/certificates/30_CERT_ENPCS2520_IEC_61683.pdf
+aa25d39577daab9799bf2967b85b2abaae3658fcb8b141a2fb78c2b7a4b6f5a7  ../oem/envision/compliance_evidence/certificates/31_CERT_ENPCS2520_IEC_62909-1.pdf
+f42e72f0c27c71dd346057a74820996b2b5fbb0264d01a88d805ca4619a0a94c  ../oem/envision/compliance_evidence/certificates/32_CERT_ENPCS2520_IEC_62477.pdf
+55742a1d30c539380d83f01fe2ca882fd361ce4764dafa9ab93cda88645ea282  ../oem/envision/compliance_evidence/certificates/33-34_CERT_ENPCS2520_IEC_62109-1_and_2.pdf
+9ffb6128e7d37b0684bf9076055583914ac2e79f274ccddfcf4839a34910bf95  ../oem/envision/compliance_evidence/certificates/35_REPORT_ENPCS2520_IEC_60529.pdf
+5fe38f8f1dbc5424b921b4412e980bb6e8a5af233b79c198f208c50180fd5121  ../oem/envision/compliance_evidence/certificates/36_COVER_ENPCS2520_IEC_60068-2-30_78.pdf
+53a6a71b1a756282254938fd54865dda7b57dd7f4b8e21b769c964f51201b7f7  ../oem/envision/compliance_evidence/certificates/37_COVER_ENPCS2520_IEEE_519.pdf
+2d5757d19bee786404c800cfd0a16cad2eb1f424597dfde4026ab43af3ec6e40  ../oem/envision/compliance_evidence/certificates/38_COVER_ENPCS2520_EN_50530.pdf
+#
+# Group B — Envision compiled dynamic-model deliverables (11 files).
+#   .dll / .obj / .lib are compiled; the control law in them is not recoverable and no attempt
+#   is made to recover it. The .dyr and .pscx are text and are read by
+#   scripts/analysis/extract_oem_dynamic_models.py.
+c93333f3755632629523250be5178da46d0e9d63b3f90f1f0db694b0a90b4dbe  ../oem/envision/dynamic_models/Blackbox_PQVCmdInput_F1.obj
+15fd1031c59520482cdb509c64e4bdd28df0283b5c4c044deaf8f754fdae517b  ../oem/envision/dynamic_models/Blackbox_UniversPPC_F1.obj
+abe4a84e78d376377028b7f6db963495d38bd5483c49d118b1ea6a33dd96b59b  ../oem/envision/dynamic_models/Blackbox_UniversPPC_if15.lib
+b442967a5ed6d919b7f637e67aec3206810c6f66c79a699eb5efd6db56dee06f  ../oem/envision/dynamic_models/Blackbox_VoltageSourseSet_F1.obj
+a5b368b2117461b97a0fd2fee8fb7aa1adfb5ca1bef76eba7f742eae71d0b4de  ../oem/envision/dynamic_models/ENPPC_260415_PSSE_V35.dll
+e4a87ab114829f3a95c007868da6c81bd8ac756e588e331ef355796433cfecff  ../oem/envision/dynamic_models/ENVSG01_20260327_PSSE_V35.dll
+cb528e42b8cd42f57631bcff957561c057c2ce53a0359905856af42556be6774  ../oem/envision/dynamic_models/ENVSG_PPC_2520_260416_LKA.dyr
+e81b971ddb5c1d990bf673b86cf9cce989bb32fe1348f6e835689429aaa9cddd  ../oem/envision/dynamic_models/FortranInterface_F1.obj
+b46c757368619f3f8e112b27c9486944a2e9f9f31fa2052bae741884754579b4  ../oem/envision/dynamic_models/MY_VST_PCS_F2.obj
+4117e2972bdfa19117e21b4b52e6267fd897d0109c495acb60343756389d0b44  ../oem/envision/dynamic_models/PCS2520x4_UPPC_x64_260605aBB.pscx
+96701f6d49e124f560d553ab118ff6c3411f62d894ff8c7413d2d4e0610498e6  ../oem/envision/dynamic_models/PCSControllerInterface.dll
+#
+# Group A derived text extracts (13 of 14; see the register README for the two gaps).
+0a9c40c5287dc80ee0cf92f5d3c24882f0a283d93990ed971a7204feeda2b5be  ../oem/envision/extracted/17c_CERT_IEC_62619_2022_CELL_HC-L755A.markitdown.md
+01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b  ../oem/envision/extracted/21_CERT_IEC_63056_2020_EN_62477-1_2022_RACK.markitdown.md
+cfd914ad2fb0b66a9df2381fb8b56717addea095047f9721422447d6cf3685dd  ../oem/envision/extracted/26_REPORT_UL_9540A_2019_CELL_HC-L755A.markitdown.md
+2f4fdde9770ce8b16f84a78e01e86fca097c5dff8cf9758391f269105221aa65  ../oem/envision/extracted/27_CERT_UL_1973_2022_CELL_HC-L755A.markitdown.md
+8b51f58766a283b8828df7d02e75dd753d106a0c54bd9123219c4ec369cf14d4  ../oem/envision/extracted/28_UN38.3.markitdown.md
+a21a2e429bd5e0be6027c6c61473b6ca7e16395655380bcceb9a41753909d176  ../oem/envision/extracted/29_CERT_ENPCS2520_IEC_61000.markitdown.md
+a3dc1355cdc568d1e25e3237dbe0248bcb8cb450a6f61319d7acecab00567089  ../oem/envision/extracted/30_CERT_ENPCS2520_IEC_61683.markitdown.md
+b4f4f1841edd03f39d20a8df821743c92e0ac458a21bdc68621d4da2156afb91  ../oem/envision/extracted/31_CERT_ENPCS2520_IEC_62909-1.markitdown.md
+514e9f03250b1e6ebc849efc63b37fd361a84c833b4f80be3d8bfb6b5037793a  ../oem/envision/extracted/32_CERT_ENPCS2520_IEC_62477.markitdown.md
+e3dd7aa2d2f56dcb051191d4d9d3ae2c62ef85990fd664a5ea81b744422df5d0  ../oem/envision/extracted/33-34_CERT_ENPCS2520_IEC_62109-1_and_2.markitdown.md
+650dc8694a33c609dc0a82ddaa9202c815cde7d5b0d553c57b489e54f6f40025  ../oem/envision/extracted/35_REPORT_ENPCS2520_IEC_60529.markitdown.md
+51c7f421b598ce7f0912310d2ebfb465c83f0e6d699b9949cf177626a0cdfdd6  ../oem/envision/extracted/37_COVER_ENPCS2520_IEEE_519.markitdown.md
+7071b29aac590885b062d88deade786feb63214f5146f7adda89ac510ecfd9db  ../oem/envision/extracted/38_COVER_ENPCS2520_EN_50530.markitdown.md

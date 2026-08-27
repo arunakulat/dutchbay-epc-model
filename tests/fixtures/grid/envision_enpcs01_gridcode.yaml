@@ -1,9 +1,18 @@
 # Redacted grid-code parameter fixture for the Envision ENPCS01 GFL PCS.
 #
 # REFERENCED, NEVER EXECUTED. This file carries ONLY the grid-code CONstants parsed
-# from the OEM dynamic model. The proprietary OEM binaries (.dyr / .dll / .pfd) are
-# NOT committed to this repository and are not required to run any test — the grid
-# study (D1, analytics.grid.*) consumes these redacted values as reference data only.
+# from the OEM dynamic model. The ENPCS01 binaries this fixture was derived from
+# (.dyr / .dll / .pfd) are NOT committed and are not required to run any test — the
+# grid study (D1, analytics.grid.*) consumes these redacted values as reference data
+# only.
+#
+# Scope note, 27 August 2026: a LATER and DIFFERENT model set — the ENPCS2520 / VSG
+# series (ENVSG01, ENPPC, PCSControllerInterface, ENVSG_PPC_2520_260416_LKA.dyr,
+# PCS2520x4_UPPC_x64_260605aBB.pscx) — IS now committed, at
+# docs/source_materials/nso_bess_250mw_2026/oem/envision/dynamic_models/, on the
+# project owner's explicit authority. That does not change the handling of the
+# ENPCS01 set above, and none of it is executed by any test either. See
+# docs/source_materials/nso_bess_250mw_2026/source_packages/README.md.
 #
 # Units: rating in kW; per-unit (pu) on machine base unless noted; frequency in Hz;
 # time thresholds in seconds. Trip tables are ordered (setpoint @ clearing-time) pairs.

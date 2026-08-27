@@ -12,7 +12,7 @@ session can verify that a re-supplied copy is the same artifact without the arti
 | Package | Manifest | Received | Files | Analysis |
 |---|---|---|---|---|
 | NSO 250 MW checklist dossier | [`NSO250MW_checklist_2026-08-21.MANIFEST.sha256`](NSO250MW_checklist_2026-08-21.MANIFEST.sha256) | 21 Aug 2026 | 72 (58 unique) | [`../reviews/NSO250MW_Checklist_Package_Ingress_Evaluation_2026-08-21.md`](../reviews/NSO250MW_Checklist_Package_Ingress_Evaluation_2026-08-21.md) |
-| OEM supply tranche — withheld groups | [`NSO250MW_oem_supply_2026-08-27.MANIFEST.sha256`](NSO250MW_oem_supply_2026-08-27.MANIFEST.sha256) | 27 Aug 2026 | 25 (14 certificates + 11 binaries) | Not yet evaluated |
+| OEM supply tranche — **now committed in full** | [`NSO250MW_oem_supply_2026-08-27.MANIFEST.sha256`](NSO250MW_oem_supply_2026-08-27.MANIFEST.sha256) | 27 Aug 2026 | 25 (14 certificates + 11 binaries), plus 13 derived extracts | [`../reviews/NSO250MW_Addendum01_AnnexA_Clarifications_Ingress_Evaluation_2026-08-27.md`](../reviews/NSO250MW_Addendum01_AnnexA_Clarifications_Ingress_Evaluation_2026-08-27.md) |
 
 ## Why the NSO 250 MW checklist package is manifest-only
 
@@ -53,27 +53,67 @@ The unpacked package, the MarkItDown/OCR extracts and the conversion logs are he
 Extracts never supersede the received original.
 
 
-## OEM supply tranche, 27 August 2026 — what is committed and what is not
+## OEM supply tranche, 27 August 2026 — committed in full
 
-The tranche delivered **50 unique files**. They split three ways:
+The tranche delivered **50 unique files**. All of them are now tracked in this repository.
 
-| Group | Count | Disposition |
+| Group | Count | Location |
 |---|---|---|
-| Envision-authored product, commercial and compliance documentation, plus the superseding design calculation | 25 | **Committed** under `../oem/envision/`, with MarkItDown extracts |
-| Certification-body certificates and test reports | 14 | **Manifest only.** Withheld on the same basis as the 21 August dossier — certification-body and IECEE CB scheme copyright. Their derived text extracts are withheld with them |
-| Compiled model binaries (`.dll`, `.obj`, `.lib`, `.pscx`, `.dyr`) | 11 | **Manifest only, publish never** |
+| Envision-authored product, commercial and compliance documentation, plus the superseding design calculation | 25 | `../oem/envision/` |
+| Certification-body certificates and test reports | 14 | `../oem/envision/compliance_evidence/certificates/` |
+| Compiled model deliverables (`.dll`, `.obj`, `.lib`, `.pscx`, `.dyr`) | 11 | `../oem/envision/dynamic_models/` |
 
 One further file, `Technical_Requirement_Lakdhanavi_v1.xlsx`, is neither Envision-authored nor a
 tender document; it is held at `../third_party/` with its handling question recorded rather than
 resolved. See that directory's README.
 
-**This split follows the existing 21 August policy rather than a fresh decision.** If the project
-owner holds authorisation covering the certification-body material, the 14 certificates can be
-committed on instruction — the files are in hand and hashed, so committing them later is a
-one-step change. The compiled binaries remain publish-never regardless of authorisation.
+### This reverses the position stated above, on recorded authority
 
-### Local location of the withheld material
+The two right-hand groups were previously **manifest only**, and the text of this file said the
+compiled binaries were *publish-never regardless of authorisation*. That was the analyst position,
+not the owner's. On 27 August 2026 the project owner directed, in writing and as project owner,
+that the copyright and publish-never restrictions be overridden because the material forms part of
+the bid submitted to NSO, and that all of it — expressly including personal data — be committed.
 
-The withheld files are in the session working set at
-`scratchpad/batch2/raw/` (certificates) and `scratchpad/batch2/raw_binaries/` (binaries).
-That location is ephemeral — if the material is needed after this session it must be re-supplied.
+The reversal is recorded rather than quietly applied, so that anyone reading this file later can
+see that the restriction existed, who lifted it, and on what stated basis.
+
+**This repository is public.** Committing here is publication, not storage. The distinction drawn
+earlier in this file — that a *private* repository is ordinary use of material the bidder received,
+whereas publication is a separate question — is the distinction the owner's direction overrides.
+
+### Personal data, established by inspection
+
+Four individuals are named, all in professional capacity on the face of the certificates, none with
+any contact detail:
+
+| Name | Capacity | Document |
+|---|---|---|
+| David Piecuch | UL Mark Certification Program Manager | `27_CERT_UL_1973_2022_CELL_HC-L755A.pdf` |
+| Thomas Wilson | UL Solutions CB certificate signatory | `17c_CERT_IEC_62619_2022_CELL_HC-L755A.pdf` |
+| Jiajun Zhang | Project Engineer, "tested by" | `37_COVER_ENPCS2520_IEEE_519.pdf` |
+| Allen Hu | Authorizer, "authorized by" | `37_COVER_ENPCS2520_IEEE_519.pdf` |
+
+These are the certifying officers whose names appear on any copy of these certificates, including
+copies obtained from the certification bodies directly. The earlier README entry warning of "named
+individuals' signatures" referred to an **overseas system-operator contingency-reserve test record**
+in the *21 August* dossier, which is a different document and is not in this tranche.
+
+### Derived text extracts
+
+Thirteen of the fourteen certificates have MarkItDown/OCR extracts at `../oem/envision/extracted/`.
+Two gaps, stated rather than papered over:
+
+* `36_COVER_ENPCS2520_IEC_60068-2-30_78.pdf` — no extract; conversion produced nothing.
+* `21_CERT_IEC_63056_2020_EN_62477-1_2022_RACK.pdf` — extract is empty; the PDF is an image-only
+  scan and was not OCR'd successfully.
+
+Both source PDFs are committed, so the gap is in the discovery aid, not in the corpus.
+
+### Compiled binaries — what can and cannot be read from them
+
+`.dll`, `.obj` and `.lib` are compiled. `scripts/analysis/extract_oem_dynamic_models.py` recovers
+symbol and path metadata from them and is explicit that **the control law itself is not recoverable
+and no attempt is made to recover it**. The `.dyr` and `.pscx` are text and are read in full by the
+same tool. Committing the binaries makes them archivable and hash-verifiable; it does not make them
+executable in this repository's CI, which has neither PSS(R)E, PSCAD nor an Intel Fortran compiler.
