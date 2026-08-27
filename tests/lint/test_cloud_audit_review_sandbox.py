@@ -556,7 +556,6 @@ def test_sshd_readiness_waits_for_banner_and_rejects_process_only(
         process_only.close()
 
 
-
 def _process_is_alive(pid: int) -> bool:
     """Report whether ``pid`` is a live process rather than an unreaped zombie.
 
