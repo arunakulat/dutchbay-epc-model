@@ -73,6 +73,7 @@ subsequent addenda remain outstanding** — Annex B (Grid Connection Code requir
 | 11 MW / 44 MWh and checklist ingress evaluation | `reviews/Envision_11MW_44MWh_and_Functional_Checklist_Ingress_Evaluation_2026-08-06.md` | Source QA, complete normalized performance curve, checklist status analysis, comparison and closure requirements |
 | NSO 250 MW checklist dossier ingress evaluation | `reviews/NSO250MW_Checklist_Package_Ingress_Evaluation_2026-08-21.md` | Full evaluation of the 21 August dossier: 15 findings, evidence-register movement, recovered technical reference data, recommended actions and handling classification |
 | **Addendum 01 / Annex A / clarifications ingress evaluation** | `reviews/NSO250MW_Addendum01_AnnexA_Clarifications_Ingress_Evaluation_2026-08-27.md` | Evaluation of the three controlling documents: **three corrections** to the 21 August review (the dual-mode grid-forming instruction is withdrawn; the SCR sweep is not a bid-stage requirement; the closing date is 4 September), ten new findings, revised evidence register and revised pre-submission punch list |
+| **Tender evidence gap dossier, 27 Aug 2026** | `reviews/NSO250MW_Tender_Gap_Dossier_2026-08-27.pdf` | **OEM query pack** — 21 gaps (5 critical, 6 high, 7 medium, 2 low, 1 informational) written to be sent to Envision as-is. Each gap carries the controlling clause, what the pack contains, why that does not close it, the question to put to the OEM, and the objective closure test. Rendered through the DutchBay Presentation Layer from the register at `registers/build_gap_dossier_2026-08-27.py` |
 
 These reviews are derived analysis, not controlling tender or OEM documents. When a review
 conflicts with a source file, the source file governs. The detailed gap statement and the 6 August
@@ -100,6 +101,22 @@ PSS(R)E model, model guides, single-line diagram, fire-safety package, capacity-
 or the test report mentioned in the checklist were supplied. The evidence register in
 `oem/envision/compliance_evidence/README.md` tracks declarations separately from underlying
 artifacts and does not represent an unsupported checkbox as received evidence.
+
+## Derived registers
+
+`registers/build_gap_dossier_2026-08-27.py` is the gap register that instantiates the
+vendor-neutral emitter at `app/reports/tender_gap_dossier_emit.py`. The emitter hard-codes no
+tender, OEM, bidder or finding; the register supplies all of it, and **inherits the classification
+of the evidence it describes**. Re-render with:
+
+```
+PYTHONPATH=. python docs/source_materials/nso_bess_250mw_2026/registers/build_gap_dossier_2026-08-27.py out.pdf
+```
+
+Two gaps in that register are marked **UNVERIFIED** (B2, the `.dyr` protection envelope; B3, the
+reactive figure at a declared 11 MW). Both state their basis in their own text. They are findings
+to check against the delivered artifacts, not established facts, and must not be put to the OEM
+as though they were.
 
 ## Integrity and update procedure
 
