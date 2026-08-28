@@ -10,6 +10,8 @@ readonly DISPLAY_NAME="DutchBay 1110 independent review"
 readonly READY_COMMAND="/usr/local/bin/python3.12 -S /usr/local/lib/dutchbay/sshd_readiness.py 5 /run/dutchbay-sshd-runtime.ready"
 readonly POLL_SECONDS=5
 readonly MAX_TRANSPORT_TIMEOUT_SECONDS=300
+# A cold authenticated tunnel can complete just after 10 seconds.
+readonly REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS=30
 readonly TRANSPORT_TIMEOUT_SECONDS="${DUTCHBAY_CODESPACE_TRANSPORT_TIMEOUT_SECONDS:-300}"
 readonly GOVERNED_VENV="${DUTCHBAY_VENV:-/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv}"
 readonly GOVERNED_PYTHON="$GOVERNED_VENV/bin/python"
@@ -77,6 +79,7 @@ esac
 
 if "$GOVERNED_PYTHON" - \
   "$TRANSPORT_TIMEOUT_SECONDS" "$POLL_SECONDS" \
+  "$REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS" \
   "$codespace_name" "$READY_COMMAND" <<'PY'
 from __future__ import annotations
 
@@ -88,9 +91,10 @@ import time
 
 timeout = float(sys.argv[1])
 poll_seconds = float(sys.argv[2])
+attempt_timeout_seconds = float(sys.argv[3])
 cleanup_budget = min(1.0, timeout * 0.25)
 deadline = time.monotonic() + timeout - cleanup_budget
-command = ["gh", "codespace", "ssh", "-c", sys.argv[3], sys.argv[4]]
+command = ["gh", "codespace", "ssh", "-c", sys.argv[4], sys.argv[5]]
 
 
 def stop_process_group(process: subprocess.Popen[bytes]) -> None:
@@ -122,7 +126,9 @@ with open(os.devnull, "wb") as sink:
             start_new_session=True,
         )
         try:
-            return_code = process.wait(timeout=min(10.0, remaining))
+            return_code = process.wait(
+                timeout=min(attempt_timeout_seconds, remaining)
+            )
         except subprocess.TimeoutExpired:
             stop_process_group(process)
             return_code = 124

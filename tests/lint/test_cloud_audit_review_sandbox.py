@@ -525,6 +525,9 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
     assert "readonly TRANSPORT_TIMEOUT_SECONDS=300" in candidate
     assert "readonly BOOTSTRAP_TIMEOUT_SECONDS=900" in candidate
     assert "readonly SHUTDOWN_TIMEOUT_SECONDS=300" in candidate
+    assert "readonly REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS=30" in candidate
+    assert "timeout=min(attempt_timeout_seconds, remaining)" in candidate
+    assert "min(10.0, remaining)" not in candidate
     assert "sshd_readiness.py 5 /run/dutchbay-sshd-runtime.ready" in candidate
     assert (
         'readonly BOOTSTRAP_READY_COMMAND="test -f '
@@ -1019,13 +1022,15 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     )
     assert "post-create Codespace identity/collision check failed" in create_codespace
     assert "readonly MAX_TRANSPORT_TIMEOUT_SECONDS=300" in create_codespace
+    assert "readonly REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS=30" in create_codespace
     assert "readonly POLL_SECONDS=5" in create_codespace
     assert "start_new_session=True" in create_codespace
     assert "os.killpg" in create_codespace
     assert "deadline = time.monotonic() + timeout - cleanup_budget" in (
         create_codespace
     )
-    assert "process.wait(timeout=min(10.0, remaining))" in create_codespace
+    assert "timeout=min(attempt_timeout_seconds, remaining)" in create_codespace
+    assert "min(10.0, remaining)" not in create_codespace
     assert "sshd_readiness.py 5" in create_codespace
     assert '["gh", "codespace", "ssh"' in create_codespace
     document = DOC.read_text(encoding="utf-8")

@@ -16,6 +16,8 @@ readonly POLL_SECONDS=5
 readonly API_COMMAND_TIMEOUT_SECONDS=30
 readonly API_IDENTITY_RECOVERY_TIMEOUT_SECONDS=120
 readonly REMOTE_COMMAND_TIMEOUT_SECONDS=120
+# A cold authenticated tunnel can complete just after 10 seconds.
+readonly REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS=30
 readonly CREATE_COMMAND_TIMEOUT_SECONDS=300
 readonly TRANSPORT_TIMEOUT_SECONDS=300
 readonly BOOTSTRAP_TIMEOUT_SECONDS=900
@@ -429,6 +431,7 @@ wait_for_remote_command() {
   local remote_command=$2
   "$GOVERNED_PYTHON" - \
     "$timeout_seconds" "$POLL_SECONDS" \
+    "$REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS" \
     "$codespace_name" "$remote_command" <<'PY'
 from __future__ import annotations
 
@@ -440,9 +443,10 @@ import time
 
 timeout = float(sys.argv[1])
 poll_seconds = float(sys.argv[2])
+attempt_timeout_seconds = float(sys.argv[3])
 cleanup_budget = min(1.0, timeout * 0.25)
 deadline = time.monotonic() + timeout - cleanup_budget
-command = ["gh", "codespace", "ssh", "-c", sys.argv[3], sys.argv[4]]
+command = ["gh", "codespace", "ssh", "-c", sys.argv[4], sys.argv[5]]
 
 
 def process_group_is_absent(process: subprocess.Popen[bytes]) -> bool:
@@ -513,7 +517,9 @@ with open(os.devnull, "wb") as sink:
             start_new_session=True,
         )
         try:
-            return_code = process.wait(timeout=min(10.0, remaining))
+            return_code = process.wait(
+                timeout=min(attempt_timeout_seconds, remaining)
+            )
         except subprocess.TimeoutExpired:
             stop_process_group(process)
             return_code = 124
