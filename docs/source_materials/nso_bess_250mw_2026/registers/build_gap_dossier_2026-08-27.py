@@ -131,6 +131,25 @@ SOURCES: tuple[SourceDocument, ...] = (
         "compiled control code, personal data). Findings against this package are carried "
         "forward from the 21 August ingress evaluation, which read the originals.",
     ),
+    SourceDocument(
+        label="Envision Product Warranty Policy V1.0",
+        role="OEM commercial terms — the warranty actually offered",
+        sha256="2ac08c42431b9c1d8a60e066710de95724f9b4fcc7ec3c9409c6a5e527c8c9cf",
+        extraction="markitdown",
+        document_date="undated; version 1.0, marked Confidential",
+        note="5 pp. Table 1 sets ONE warranty period for every listed item. Carries no "
+        "document number and no signature block.",
+    ),
+    SourceDocument(
+        label="Envision LTSA Solution — service scope matrix",
+        role="OEM commercial offer — draft scope matrix, unpriced",
+        sha256="53a51d5c3c9cf91763f01b35086bb1bf2e97ba4357a0265d7b26223547be4123",
+        extraction="ooxml",
+        document_date="undated; BESS tab labelled '100225-Draft'",
+        note="Two tabs. The first, 'WTG-1228ver', is a WIND TURBINE service catalogue and "
+        "is not about this project. The BESS tab is a scope matrix only: no prices, no "
+        "guarantee levels, no term, no signature.",
+    ),
 )
 
 EVIDENCE: tuple[EvidenceLine, ...] = (
@@ -681,6 +700,84 @@ GAPS: tuple[GapItem, ...] = (
             "Volume I §3.1(p) and Annex A make failure against the technical requirements a "
             "stated ground for rejection of the technical proposal, and NSO refused relief on "
             "this exact clause twice."
+        ),
+    ),
+    GapItem(
+        gap_id="A7",
+        title="The OEM availability guarantee stops at year 2 of a 15-year obligation, and the "
+        "instrument that would extend it is an unpriced draft",
+        severity="CRITICAL",
+        clause="Volume III Appendix A Clause 2; clarifications 52 and 54; gap A4 question 2",
+        requirement=(
+            "Gap A4 records that availability deductions sit OUTSIDE the monthly LD cap, have "
+            "no floor, and can take the capacity charge to LKR 0, with no aggregate cap over "
+            "the 15-year Term. A4's second question asks for the answer to that exposure: a "
+            "back-to-back availability warranty with defined response times, remote diagnostics "
+            "and an OEM-caused liquidated-damages indemnity. Volume I clause 7.1 and "
+            "clarification 30 confirm the ESA is final and unamendable after the Letter of "
+            "Award, so the instrument has to exist before award, not after."
+        ),
+        supplied=(
+            "Two documents supplied 27 August 2026 answer this and had not previously been "
+            "held. (1) Product Warranty Policy V1.0: Table 1 sets a SINGLE period of 'two years "
+            "from date of first time installation or commissioning; or delivery term and "
+            "conditions in the supply contract; whichever occurs earlier' across every listed "
+            "item — battery pack, BMS at all levels, HVAC, rack protection, fire detection and "
+            "suppression, cables and consumables, battery container combiner panel, PCS, "
+            "step-up transformer, RMU, electrical cabinets, and EMS/SCADA including the "
+            "unit-level local controller. The client bears the cost of removing the defective "
+            "product and re-installing the repaired one. Liability per product is capped at "
+            "the product price and all consequential loss is excluded. (2) LTSA Solution: a "
+            "service scope matrix whose 'Performance guarantee' block offers Availability, RTE "
+            "and Usable capacity."
+        ),
+        why_insufficient=(
+            "The LTSA does offer the guarantees — but read the columns. It sets out two "
+            "structures: 'Full Scope year 0-15', and a split of 'warranty Period year 0-2' plus "
+            "'year 3-15'. Under the split, the Availability guarantee is marked '-', which the "
+            "sheet's own legend defines as 'Not applicable, or not included'. RTE and usable "
+            "capacity continue to year 15; AVAILABILITY DOES NOT. So in the default structure "
+            "the availability guarantee expires at year 2 and the Project Company carries the "
+            "uncapped, unfloored 97 % availability exposure alone for thirteen further years — "
+            "precisely the exposure A4 identifies. Only 'Full Scope' covers availability to "
+            "year 15, and the sheet carries NO price for it, no guarantee level (no availability "
+            "percentage, no RTE percentage, no capacity retention figure), no term, no response "
+            "times, no LD indemnity and no signature. Its BESS tab is labelled '100225-Draft', "
+            "and the workbook's other tab is a WIND TURBINE service catalogue, so the BESS "
+            "sheet is a draft appended to a wind-service document. Nothing here is capable of "
+            "being made back-to-back with the ESA. Separately, the two-year warranty is short "
+            "against the tender's own frame: A2 puts the duty at roughly 6,000 equivalent full "
+            "cycles over the term, so 13 of the 15 years of degradation, augmentation and "
+            "component replacement fall outside any product warranty at all, and the client "
+            "pays removal and re-installation even within the two years."
+        ),
+        question=(
+            "1. Please state whether Envision will provide an availability guarantee running "
+            "the full 15 years, and at what level — the LTSA marks availability as not included "
+            "for years 3-15 outside Full Scope. "
+            "2. Please price Full Scope 0-15 and state its guaranteed availability percentage, "
+            "RTE percentage, usable-capacity retention, response times and the liquidated "
+            "damages payable by Envision for missing them. "
+            "3. Please confirm whether the two-year Table 1 warranty is Envision's final "
+            "position for the PCS, transformer, RMU and EMS, and if an extension is available, "
+            "for how long and at what price. "
+            "4. Please state who bears removal and re-installation cost under an extended "
+            "warranty, given Table 1 places it on the client. "
+            "5. Please issue the LTSA as a signed, priced, project-specific document with the "
+            "wind-turbine tab removed — the sheet supplied is marked Draft and is not capable "
+            "of being made back-to-back with the ESA."
+        ),
+        closure_test=(
+            "A signed, priced, project-specific LTSA running to year 15 with a stated "
+            "availability guarantee, defined response times and OEM liquidated damages that "
+            "respond to the uncapped and unfloored structure clarification 54 describes; plus a "
+            "written warranty position for the balance of plant beyond two years."
+        ),
+        tier="critical path",
+        consequence=(
+            "This is the answer to gap A4's second question and it does not close it. Without a "
+            "15-year availability instrument the Project Company absorbs an exposure that has no "
+            "monthly floor and no term cap, and the ESA cannot be amended after award to fix it."
         ),
     ),
     GapItem(
