@@ -10,16 +10,16 @@ cloud-sandbox, issue and continuation state.
 ## 1. Exact live cutoff
 
 **Protected main:**
-`3a3529a0b45ffabdeb6e72b0157118c903b37d13`.
+`14e7091fa3a3a5a028b1f8968ca619380c32f2fc`.
 
-**Open cloud-sandbox PR:**
+**Protected-merged cloud-sandbox PR:**
 [#1165](https://github.com/arunakulat/dutchbay-epc-model/pull/1165),
 `codex/1110-cloud-sandbox-runtime-fix` at exact head
-`5599ff6a31644fdbfb5e689cba163b6c01d64d6b`, based on the protected-main
-commit above. It is open, non-draft, `MERGEABLE/CLEAN`, clean locally and on the
-remote branch, and zero commits behind `origin/main`. It has **not** been merged;
-the standing instruction requires an explicit user `go` before any merge to
-protected `main`.
+`5599ff6a31644fdbfb5e689cba163b6c01d64d6b`, squash-merged as
+`14e7091fa3a3a5a028b1f8968ca619380c32f2fc` on 2026-08-28. The reviewed topic
+tree and protected merge tree were independently compared with `git diff
+--exit-code` and are identical. Protected `main` was then fast-forwarded and
+verified clean and synchronized at the merge commit.
 
 **Cloud-sandbox worktree:**
 `/Users/aruna/Downloads/dutchbay-wt-1110-cloud-sandbox-runtime-fix`.
@@ -29,14 +29,17 @@ protected `main`.
 - worktree:
   `/Users/aruna/Downloads/dutchbay-wt-persist-1110-cloud-sandbox-5599`;
 - branch: `codex/persist-1110-cloud-sandbox-5599`;
-- base: exact `origin/main` at `3a3529a0b45ffabdeb6e72b0157118c903b37d13`.
+- delivery PR:
+  [#1182](https://github.com/arunakulat/dutchbay-epc-model/pull/1182);
+- base after rebase: exact `origin/main` at
+  `14e7091fa3a3a5a028b1f8968ca619380c32f2fc`.
 
 At this cutoff, `git worktree list` contains only protected main, the #1165
 worktree and this PERSIST worktree. The open-PR path scan found no other PR
-touching `AGENTS.md` or a `SESSION_HANDOVER_*` path. Other open PRs are #1176,
-#1178 and draft #1181. Re-run all ownership, worktree, lock, process, open-PR and
-branch-currency checks before every mutation boundary; this snapshot is not a
-permanent lock.
+touching `AGENTS.md` or a `SESSION_HANDOVER_*` path. Apart from this PERSIST PR,
+other open PRs are #1176, #1178 and draft #1181. Re-run all ownership, worktree,
+lock, process, open-PR and branch-currency checks before every mutation boundary;
+this snapshot is not a permanent lock.
 
 The data volume had approximately 14 GiB free (93% used) immediately before this
 worktree was created. Do not create another full worktree without rechecking
@@ -55,11 +58,11 @@ GWTF population is a stale capture-time count and must not be used as current
 state. No checkout-local, temporary, Python 3.11 or system replacement
 environment was created.
 
-## 3. PR #1165 exact-head evidence
+## 3. PR #1165 protected-merge evidence
 
-The current PR repairs the #1110 GitHub Codespaces SSH lifecycle and publishes a
+The merged PR repairs the #1110 GitHub Codespaces SSH lifecycle and publishes a
 fail-closed, P03-empty execution environment. It is infrastructure and structural
-evidence only.
+evidence only. Its protected merge did not alter the release decision.
 
 At exact head `5599ff6a31644fdbfb5e689cba163b6c01d64d6b`:
 
@@ -71,7 +74,8 @@ At exact head `5599ff6a31644fdbfb5e689cba163b6c01d64d6b`:
 - all four active branch-protection-required contexts passed: `Test Summary`,
   `fastlane`, `smoke` and `Verification receipts (VERIFY-01)`;
 - the visible `build and boot audit review image` job passed, but it is advisory
-  under the live ruleset. Promoting it is a separate repository-owner decision;
+  under the live ruleset. The promote-or-retain-advisory owner decision is now
+  tracked by [#1183](https://github.com/arunakulat/dutchbay-epc-model/issues/1183);
 - two narrow read-only code-review lenses were clean after their real findings
   were folded. They are code review, not formal P01/P02/P03 audit independence.
 
@@ -152,20 +156,24 @@ not supply F5-02 evidence or bankable wind-resource evidence.
 
 ## 5. Controlled continuation sequence
 
-1. **Do not merge without explicit user authorization.** Before any authorized
-   #1165 merge, fetch `origin/main`, prove the exact topic head and remote branch
-   still match, prove zero-behind currency and clean worktree/index, re-query all
-   required and aggregate checks, and preserve the final receipt links.
-2. If an explicit `go` is received, merge #1165 through the normal protected
-   workflow without administrative bypass. Independently verify the squash merge
-   on `origin/main`, compare the reviewed and merged trees, then retire the
-   #1165 worktree/branch only after proving no owner and no unique WIP.
-3. Protect-deliver this separate PERSIST dolphin through its own PR. Do not fold
-   it into #1165 and do not rewrite predecessor handovers.
-4. After #1165 is protected-merged, create the protected-main reusable review
-   Codespace with `scripts/create_1110_cloud_review_codespace.sh`. Treat an
-   `UNRESOLVED` lock as a stop condition requiring exact API/process
-   reconciliation; never delete an uncertain resource by guess.
+1. PR #1165 is protected-merged as `14e7091fa3a3a5a028b1f8968ca619380c32f2fc`;
+   its reviewed and merged trees are identical. Preserve its receipts and do not
+   reinterpret this infrastructure delivery as an audit-gate decision.
+2. The user authorized PR #1182 to merge only on terminal-green CI. Before that
+   merge, prove the rebased topic head and remote branch match, prove zero-behind
+   currency and clean worktree/index, re-query all required and aggregate checks,
+   and preserve the review receipt. Merge without administrative bypass and
+   independently verify the protected merge tree before retirement.
+3. After verified delivery of #1182, retire only the two merged task
+   worktrees/branches. Preserve every branch with an open PR, predecessor
+   handovers, PR comments, CI URLs and controlled evidence receipt.
+4. Issue #1161 owns the independent P02 review that requires creation of the
+   protected-main reusable Codespace with
+   `scripts/create_1110_cloud_review_codespace.sh`; issue #1162 governs its
+   later P03 reuse. Create it only when the authorized independent P02 reviewer
+   is ready to execute. Treat an `UNRESOLVED` lock as a stop condition requiring
+   exact API/process reconciliation; never delete an uncertain resource by
+   guess.
 5. Execute #1158, then #1159, then record #1160 as separate additive dolphins
    with genuinely independent reviewer identity and exact result hashes. Same-
    implementer reruns and code-review agents cannot authorize these gates.
@@ -183,11 +191,13 @@ not supply F5-02 evidence or bankable wind-resource evidence.
 
 ## 6. Deletion and retention boundary
 
-Do not remove the #1165 worktree or branch while its PR is open. Do not delete a
-Codespace or lifecycle lock merely because a note says it is stale: re-query the
-exact API identity, process group, lock metadata and owner first. Preserve PR
-comments, check URLs, candidate receipts, controller hashes and predecessor
-handovers as evidence.
+PR #1165 is merged, but its worktree and branch may be removed only after proving
+the protected merge tree equals the reviewed head, the worktree/index is clean,
+no unique WIP or unresolved review thread remains, and every residual obligation
+is represented by an open GitHub issue. Do not delete a Codespace or lifecycle
+lock merely because a note says it is stale: re-query the exact API identity,
+process group, lock metadata and owner first. Preserve PR comments, check URLs,
+candidate receipts, controller hashes and predecessor handovers as evidence.
 
 This PERSIST worktree may be retired only after its own reviewed PR is protected-
 delivered and its merged tree is verified. Local user-history branches and
