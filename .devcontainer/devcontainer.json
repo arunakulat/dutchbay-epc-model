@@ -4,7 +4,10 @@
     "dockerfile": "Dockerfile",
     "context": ".."
   },
-  "overrideCommand": false,
+  "features": {
+    "ghcr.io/devcontainers/features/sshd:1.1.0": {}
+  },
+  "overrideCommand": true,
   "init": true,
   "containerUser": "root",
   "remoteUser": "vscode",

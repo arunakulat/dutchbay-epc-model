@@ -24,42 +24,71 @@ The environment applies the current GWTF rules and the canonical frameworks:
 
 ## Isolation and private-data controls
 
-The container is built from a base image pinned by digest and declares no
-repository-configured Dev Container Features or feature lock. The base image
-itself carries embedded Dev Container Feature metadata for `common-utils`,
-`git`, `node` and `python`; those inherited contents are transitively bound by
-the base-image digest and disclosed separately in the sandbox receipt.
+The container is built from a base image pinned by digest and declares one
+repository-configured Dev Container Feature: `sshd` 1.1.0, locked to its exact
+OCI digest. That Feature supplies the Codespaces-supported SSH entrypoint
+integration. The base image itself carries separate embedded Dev Container
+Feature metadata for `common-utils`, `git`, `node` and `python`; those inherited
+contents are transitively bound by the base-image digest and disclosed
+separately in the sandbox receipt.
 
 GitHub CLI SSH and copy require a running SSH server for a custom image. A
-checked-in Dockerfile therefore installs `openssh-client` and `openssh-server`
-directly from the pinned base image's Debian-only package source. It does
-not consult the unrelated Yarn source that broke the upstream create-time SSH
-Feature. Host private keys are removed in the same image-build layer and are
+checked-in Dockerfile therefore installs `lsof`, `openssh-client` and
+`openssh-server` directly from the pinned base image's Debian-only package
+source. All packages probed by the locked Feature are already installed before
+Feature composition, so its package guard does not invoke the unrelated Yarn
+source that broke the original create-time build. Host private keys are removed
+in the same image-build layer and are
 generated uniquely when the Codespace container is created; only public-key
 fingerprints derived from those private keys enter the receipt, and each derived
 public key must match its `.pub` sidecar. The reusable identity binds the exact
-installed OpenSSH package/architecture/status/version inventory, every package-owned
-transport path and mode, the controlled PAM and drop-in configuration, the
+installed SSH transport package/architecture/status/version inventory, every
+package-owned transport path and mode, the locked Feature entrypoint, the
+controlled PAM and drop-in configuration, the
 allowlist-validated effective SSH policy, and the host public-key fingerprints.
+The attestor resolves that policy for the actual `vscode`/loopback connection,
+including applicable `Match` rules, and requires the intended
+`authorized_keys` file while rejecting key commands, trusted user CAs,
+principal commands, user environment files, forced commands and chroots.
+The same drop-in sets the four fixed, non-secret review environment values that
+raw `gh codespace ssh` sessions require (`DUTCHBAY_VENV`,
+`DUTCHBAY_P03_SOURCE_ROOT`, `PYTHONPATH` and `PATH`); the attestor binds their
+effective `SetEnv` population, so the SSH review surface cannot silently lose or
+redirect the governed runtime.
+
+The GitHub control-plane identity check plus the authenticated Codespaces
+tunnel is the operational endpoint-identity boundary for `gh codespace ssh` and
+`gh codespace cp`. GitHub CLI connects the inner SSH client to a loopback tunnel
+and disables client-side host authentication for that loopback endpoint. The
+recorded host-key fingerprints therefore prove the daemon key-pair population
+and provide post-connection continuity/attestation; they are not described as
+a second client-side endpoint pin. The Actions lifecycle additionally exercises
+a direct loopback SSH connection with a strict, ephemeral `known_hosts` pin to
+falsify daemon authentication and key-pair defects, but that local-Docker check
+does not substitute for the authenticated real-Codespaces candidate proof.
 Package selection at initial image build remains a disclosed Debian-repository
 trust boundary; a changed identity requires recreation and a new receipt. SSH
 runs on port 2222 for the explicit `vscode` remote user, requires the
 `publickey` authentication method, denies root, every alternative authentication
 method and every forwarding class, and is not a publicly forwarded application
-port. A root container entrypoint generates the keys and starts the daemon while
-the creation wrapper waits outside the Codespace; the post-start control uses the
-same root-owned lock as an idempotent validation/restart fallback. The
-entrypoint writes a runtime-only pre-lifecycle marker atomically after a bounded
-loop receives the expected
-`SSH-2.0-OpenSSH_` banner on `127.0.0.1:2222`. The post-create bootstrap waits
-for both that exact marker and the same listener-specific banner; disabling,
-bypassing or merely delaying the image entrypoint therefore cannot silently pass
-setup or create a scheduling race. The Python environment is rebuilt from the
+port. The locked Feature's root entrypoint starts the daemon through the
+Codespaces-supported integration. The post-create bootstrap and post-start
+lifecycle both invoke the same repository-owned, root-reexecuted and serialized
+start control as fail-closed validation/restart paths. The start control writes a
+runtime-only marker atomically only after a bounded loop receives the expected
+`SSH-2.0-OpenSSH_` banner on `127.0.0.1:2222`. The post-create bootstrap starts
+the control before audit setup, then requires both that exact marker and the same
+listener-specific banner. A Codespaces lifecycle that delays the Feature
+entrypoint therefore takes the explicit lifecycle-recovery path, while a real
+start or banner failure still fails setup closed. The Python environment is rebuilt from the
 repository's exact `requirements.txt`, `constraints.txt` and
 `pyproject.toml` inputs at `/workspaces/.dutchbay-audit-review-venv`, outside the
 checkout. The retained P03 corpus is copied only to
 `/workspaces/.dutchbay-private/p03/sources`, also outside the checkout and with
-owner-only directory permissions.
+owner-only directory permissions. The post-create bootstrap uses non-interactive
+sudo only to assign the fixed `/workspaces` parent to `vscode`, immediately
+asserts the exact owner/group/mode, and then materializes those two
+out-of-checkout roots as the non-root reviewer user.
 
 Do not commit, publish, upload as an Actions artifact, or copy retained source
 objects back into the repository. Do not expose a source path, source name,
@@ -69,6 +98,30 @@ review-result dolphins have merged and their exact-head evidence has been
 retained in the controlled pack.
 
 ## Creation and structural preflight
+
+As a reviewer-controlled prerequisite before merge, prove the exact topic-branch
+SHA in a disposable, P03-empty real Codespace:
+
+```bash
+scripts/prove_1110_candidate_codespace.sh \
+  codex/1110-cloud-sandbox-runtime-fix \
+  "$(git rev-parse HEAD)"
+```
+
+The candidate control accepts only a valid `codex/*` branch and full expected
+SHA that exactly matches the remote branch. It creates a uniquely named
+24-hour Codespace, verifies API repository/ref identity, exact remote HEAD, a
+clean checkout, fixed environment, empty private-source root and SSH
+attestation, exercises `gh codespace cp`, stops and resumes the Codespace,
+re-attests after the post-start marker changes, emits a `HOLD`-side receipt and
+deletes that exact no-P03 candidate. This is pre-merge infrastructure evidence
+only; it is not the protected-main environment and cannot execute or close P02
+or P03. Copy calls use remote expansion only for repository-owned, fixed
+absolute destination paths; no user-provided remote expression is expanded.
+The hosted `build and boot audit review image` job is a visible advisory check,
+not one of the active branch-protection-required contexts. Promoting it to a
+required context remains a separate repository-owner ruleset decision; until
+then, this prerequisite is enforced by review rather than GitHub merge blocking.
 
 After this configuration is protected-merged to current `main`, create a
 creator-private Codespace attached to the public source repository:
@@ -81,7 +134,7 @@ export DUTCHBAY_1110_REVIEW_CODESPACE_NAME
 ```
 
 The wrapper deliberately omits `gh codespace create -s`: that option can request
-SSH status before a custom image entrypoint finishes. It first rejects a
+SSH status before the locked Feature lifecycle settles. It first rejects a
 same-display-name collision, creates the protected-`main` Codespace, then retries
 the exact SSH banner/marker probe for at most five minutes. It prints the unique
 Codespace name only after transport is ready, or fails with the unresolved name
@@ -94,23 +147,26 @@ all-page identity check prevents two local creators from silently succeeding;
 cross-host creation remains outside that lock and therefore fails loud if the
 post-create population is not exactly the one immutable name returned here.
 
-Run the structural preflight inside the Codespace before reviewing P02:
+Run the structural preflight from the synchronized local protected-main
+checkout before reviewing P02. The wrapper authenticates the exact Codespace
+through GitHub's API, passes that name through an SSH session, compares it with
+the platform name captured by bootstrap, updates the remote checkout to exact
+`origin/main`, and wraps the nested structural receipt in an outer API-bound
+envelope. Internally it runs `git switch --detach origin/main` and requires
+`HEAD == origin/main` before any structural control executes:
 
 ```bash
 set -euo pipefail
-test "$(git branch --show-current)" = "main"
-test -z "$(git status --porcelain)"
-git fetch --prune origin
-git switch --detach origin/main
-test "$(git rev-parse HEAD)" = "$(git rev-parse refs/remotes/origin/main)"
-scripts/verify_1110_cloud_review_sandbox.sh
+test "$DUTCHBAY_1110_REVIEW_CODESPACE_NAME" != ""
+scripts/run_1110_cloud_review_verification.sh
 ```
 
-The final JSON line must state `status=PASS`, `release_status=HOLD`, and
-`completion_authorized=false`. Before the private corpus is copied, P03 must be
-reported as not executed. The receipt binds the controlled publication manifest,
-so later P02/P03 result artifacts are transitively bound through their manifest
-entries without changing the reusable dependency environment.
+The outer JSON must state `status=PASS`, `release_status=HOLD`, and
+`completion_authorized=false`, and its exact name/SHA must equal the nested
+receipt. Before the private corpus is copied, P03 must be reported as not
+executed. The receipt binds the controlled publication manifest, so later
+P02/P03 result artifacts are transitively bound through their manifest entries
+without changing the reusable dependency environment.
 
 ## P02 independent review
 
@@ -180,23 +236,74 @@ sandbox-creation commit.
 The bootstrap markers bind the initial dependency inputs, configured base-image
 digest, full SSH transport identity and installed environment-content
 fingerprint. The SSH identity includes the installed file surface, PAM policy,
-effective configuration and Codespace-unique host public keys. The Python
+complete runtime main/drop-in configuration population, effective configuration
+and Codespace-unique host public keys. Construction attestation uses the fixed
+loopback model; every authenticated SSH control then derives and validates the
+actual `SSH_CONNECTION`/`SSH_CLIENT` tuple and requires its session-specific
+identity digest to equal the construction marker. The Python
 environment fingerprint covers
 `pyvenv.cfg`, every regular file and symlink under the venv `bin/` launch
 surface, and all site-packages content. The three Python launchers must resolve
 to `/usr/local/bin/python3.12` from the digest-pinned image; that absolute
 interpreter performs every pre-attestation check regardless of `PATH`. The
-dependency identity includes the Dockerfile, repository-owned SSH installer,
-pre-lifecycle entrypoint, runtime host-key/start control and transport attestor.
-The receipt distinguishes an empty
-`repository_configured_devcontainer_features` list from the four inherited
+dependency identity includes the Dev Container Feature lock, Dockerfile,
+repository-owned SSH installer, runtime host-key/start control and transport
+attestor. The receipt distinguishes the one digest-resolved
+`repository_configured_devcontainer_features` entry from the four inherited
 `base_image_embedded_feature_metadata` entries. Before transfer, current-main
 inputs and the live environment must reproduce those markers. Any dependency,
 bootstrap, identity-contract, devcontainer, base-image, SSH or
 environment-content drift fails before ingress and requires deletion/recreation
 of the disposable Codespace.
 
-Re-run `scripts/verify_1110_cloud_review_sandbox.sh`. It must independently hash
+Receipts distinguish `github_codespaces` from
+`github_actions_devcontainer_emulation` and bind the corresponding network
+boundary. The Actions emulation must never claim the creator-private
+Codespaces boundary; neither execution-host mode authorizes completion or
+changes the release status from `HOLD`.
+
+The in-container host field is a provenance label, not independent proof of a
+GitHub resource: the `vscode` owner can replace its own private receipt. Real
+Codespaces evidence is authoritative only through the outer governed controls,
+which authenticate with GitHub, verify exact name/repository/ref, pass that
+name into the SSH child, and require it to equal the platform `CODESPACE_NAME`
+captured in the atomic bootstrap receipt. GitHub's non-interactive SSH shell is
+not assumed to re-export that platform variable.
+The hosted oracle supplies and asserts its separate explicit Actions label.
+
+The bootstrap writes that provenance atomically to the fixed owner-only path
+`/workspaces/.dutchbay-private/bootstrap-receipt.json`. Hosted CI asserts the
+Actions host, network boundary and exact candidate SHA from that receipt. The
+protected verifier and disposable real-Codespaces proof require the Codespaces
+host and creator-private boundary from the same receipt. A disposable proof
+emits PASS only after the exact named Codespace is deleted, its absence is
+confirmed through the Codespaces API, and the local creation lock is released.
+Its `DB1110-<12-SHA>-<16-hex nonce>` display name is unique to one local run
+while remaining below GitHub Codespaces' 48-character limit; the full SHA is
+still verified independently through the remote ref and checkout controls.
+Initial readiness first proves the repository-owned SSH marker under a bounded
+transport deadline, then waits separately for the atomically published
+bootstrap receipt under a bounded first-install deadline. The two-stage check
+prevents transport availability from racing ahead of dependency installation,
+environment attestation or receipt binding while preserving accurate failure
+diagnostics. The disposable proof also allows a separately bounded five-minute
+GitHub shutdown transition before exercising restart recovery.
+Every GitHub lifecycle operation runs under a process-group watchdog, and API
+status is accepted only when both the command and response schema succeed.
+Transient discovery failures retry within a finite recovery budget. If exact
+absence or safe deletion cannot be established, the proof emits no PASS and
+retains `/tmp/dutchbay-1110-candidate-codespace.lock/UNRESOLVED` with the
+non-secret recovery identity instead of releasing ownership ambiguously.
+
+The bootstrap commit identifies environment construction, not an immutable
+review checkout. Reusing the same governed Codespace after a P02 result merge is
+allowed only when the live dependency and environment markers still reproduce;
+the later verification receipt binds the new clean exact `origin/main` commit.
+The disposable pre-merge candidate is different: its outer control requires the
+bootstrap commit itself to equal the exact topic-branch SHA.
+
+Re-run `scripts/run_1110_cloud_review_verification.sh` from the synchronized
+local protected-main checkout. It must independently hash
 all 74 retained objects before semantic review begins. Then follow issue #1162
 and review all 42 claims, all source locations, limitations, evidence-status
 boundaries and publication/redistribution rights. PSR-0009 remains analyst

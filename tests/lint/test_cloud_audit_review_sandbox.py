@@ -23,7 +23,6 @@ DEVCONTAINER = REPO_ROOT / ".devcontainer" / "devcontainer.json"
 DEVCONTAINER_LOCK = REPO_ROOT / ".devcontainer" / "devcontainer-lock.json"
 DOCKERFILE = REPO_ROOT / ".devcontainer" / "Dockerfile"
 SSHD_INSTALLER = REPO_ROOT / ".devcontainer" / "install_audit_review_sshd.sh"
-SSHD_ENTRYPOINT = REPO_ROOT / ".devcontainer" / "ssh_entrypoint.sh"
 SSHD_START = REPO_ROOT / ".devcontainer" / "start_audit_review_sshd.sh"
 SSHD_ATTESTOR = REPO_ROOT / ".devcontainer" / "attest_audit_review_sshd.sh"
 SSHD_READINESS = REPO_ROOT / ".devcontainer" / "sshd_readiness.py"
@@ -31,8 +30,12 @@ BOOTSTRAP = REPO_ROOT / ".devcontainer" / "bootstrap_audit_review.sh"
 IDENTITY = REPO_ROOT / ".devcontainer" / "audit_review_identity.py"
 VERIFY = REPO_ROOT / "scripts" / "verify_1110_cloud_review_sandbox.sh"
 CREATE_CODESPACE = REPO_ROOT / "scripts" / "create_1110_cloud_review_codespace.sh"
+CLOUD_VERIFY = REPO_ROOT / "scripts" / "run_1110_cloud_review_verification.sh"
+CANDIDATE_CODESPACE = REPO_ROOT / "scripts" / "prove_1110_candidate_codespace.sh"
 UPLOAD = REPO_ROOT / "scripts" / "upload_1110_p03_sources_to_codespace.sh"
 DOC = REPO_ROOT / "docs" / "audit" / "CLOUD_REVIEW_SANDBOX.md"
+IMAGE_SMOKE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "audit-cloud-sandbox.yml"
+PATH_CLASSIFIER = REPO_ROOT / "scripts" / "classify_1110_cloud_sandbox_paths.sh"
 
 EXPECTED_IMAGE = (
     "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm@"
@@ -46,7 +49,15 @@ REQUIRED_SSHD_EFFECTIVE_POLICY = {
     "allowstreamlocalforwarding": "no",
     "allowtcpforwarding": "no",
     "authenticationmethods": "publickey",
+    "authorizedkeyscommand": "none",
+    "authorizedkeyscommanduser": "none",
+    "authorizedkeysfile": ".ssh/authorized_keys",
+    "authorizedprincipalscommand": "none",
+    "authorizedprincipalscommanduser": "none",
+    "authorizedprincipalsfile": "none",
+    "chrootdirectory": "none",
     "disableforwarding": "yes",
+    "forcecommand": "none",
     "gatewayports": "no",
     "gssapiauthentication": "no",
     "hostbasedauthentication": "no",
@@ -58,16 +69,41 @@ REQUIRED_SSHD_EFFECTIVE_POLICY = {
     "permittunnel": "no",
     "port": "2222",
     "pubkeyauthentication": "yes",
+    "permituserenvironment": "no",
+    "strictmodes": "yes",
+    "trustedusercakeys": "none",
     "usepam": "yes",
     "x11forwarding": "no",
 }
+REQUIRED_SSHD_SETENV_POLICY = {
+    "DUTCHBAY_P03_SOURCE_ROOT=/workspaces/.dutchbay-private/p03/sources",
+    "DUTCHBAY_VENV=/workspaces/.dutchbay-audit-review-venv",
+    (
+        "PATH=/workspaces/.dutchbay-audit-review-venv/bin:/usr/local/bin:"
+        "/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"
+    ),
+    "PYTHONPATH=/workspaces/dutchbay-epc-model",
+}
+REQUIRED_SSHD_SETENV_DIRECTIVE = (
+    "SetEnv DUTCHBAY_VENV=/workspaces/.dutchbay-audit-review-venv "
+    "DUTCHBAY_P03_SOURCE_ROOT=/workspaces/.dutchbay-private/p03/sources "
+    "PYTHONPATH=/workspaces/dutchbay-epc-model "
+    "PATH=/workspaces/.dutchbay-audit-review-venv/bin:/usr/local/bin:"
+    "/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"
+)
 REQUIRED_SSHD_INSTALLER_DIRECTIVES = {
     "AllowAgentForwarding no",
     "AllowGroups ssh",
     "AllowStreamLocalForwarding no",
     "AllowTcpForwarding no",
     "AuthenticationMethods publickey",
+    "AuthorizedKeysCommand none",
+    "AuthorizedKeysFile .ssh/authorized_keys",
+    "AuthorizedPrincipalsCommand none",
+    "AuthorizedPrincipalsFile none",
+    "ChrootDirectory none",
     "DisableForwarding yes",
+    "ForceCommand none",
     "GatewayPorts no",
     "GSSAPIAuthentication no",
     "HostbasedAuthentication no",
@@ -77,10 +113,13 @@ REQUIRED_SSHD_INSTALLER_DIRECTIVES = {
     "PermitEmptyPasswords no",
     "PermitRootLogin no",
     "PermitTunnel no",
-    "Port 2222",
+    "PermitUserEnvironment no",
     "PubkeyAuthentication yes",
+    "StrictModes yes",
+    "TrustedUserCAKeys none",
     "UsePAM yes",
     "X11Forwarding no",
+    REQUIRED_SSHD_SETENV_DIRECTIVE,
 }
 VALID_SSH_HOST_PUBLIC_KEYS = [
     (
@@ -112,16 +151,21 @@ INDEPENDENT_DEPENDENCY_INPUT_RELATIVES = (
     "requirements.txt",
     "pyproject.toml",
     "constraints.txt",
+    "check_venv.sh",
+    "dutchbay_bootstrap_rules.py",
+    "go_with_the_flow_rules_v3_0_clean.csv",
     ".devcontainer/devcontainer.json",
+    ".devcontainer/devcontainer-lock.json",
     ".devcontainer/Dockerfile",
     ".devcontainer/install_audit_review_sshd.sh",
-    ".devcontainer/ssh_entrypoint.sh",
     ".devcontainer/start_audit_review_sshd.sh",
     ".devcontainer/attest_audit_review_sshd.sh",
     ".devcontainer/sshd_readiness.py",
     ".devcontainer/bootstrap_audit_review.sh",
     ".devcontainer/audit_review_identity.py",
     "scripts/create_1110_cloud_review_codespace.sh",
+    "scripts/run_1110_cloud_review_verification.sh",
+    "scripts/prove_1110_candidate_codespace.sh",
 )
 INDEPENDENT_CONTROLLED_INPUT_RELATIVES = (
     "docs/audit/2026-08-controlled-successor/PUBLICATION_MANIFEST.sha256",
@@ -142,10 +186,12 @@ INDEPENDENT_CONTROLLED_INPUT_RELATIVES = (
     "scripts/upload_1110_p03_sources_to_codespace.sh",
     "scripts/verify_1110_cloud_review_sandbox.sh",
     "scripts/create_1110_cloud_review_codespace.sh",
+    "scripts/run_1110_cloud_review_verification.sh",
+    "scripts/prove_1110_candidate_codespace.sh",
     ".devcontainer/devcontainer.json",
+    ".devcontainer/devcontainer-lock.json",
     ".devcontainer/Dockerfile",
     ".devcontainer/install_audit_review_sshd.sh",
-    ".devcontainer/ssh_entrypoint.sh",
     ".devcontainer/start_audit_review_sshd.sh",
     ".devcontainer/attest_audit_review_sshd.sh",
     ".devcontainer/sshd_readiness.py",
@@ -197,6 +243,26 @@ def _load_sshd_readiness() -> ModuleType:
     return module
 
 
+def _bounded_watchdog(path: Path) -> str:
+    """Extract a shell wrapper's embedded one-command watchdog."""
+    source = path.read_text(encoding="utf-8")
+    start_marker = '"$GOVERNED_PYTHON" -S -c \'\n'
+    end_marker = '\n\' "$timeout_seconds" "$PROCESS_CLEANUP_TIMEOUT_SECONDS" "$@"'
+    start = source.index(start_marker) + len(start_marker)
+    end = source.index(end_marker, start)
+    return source[start:end]
+
+
+def _create_transport_watchdog() -> str:
+    """Extract the persistent Codespace creator's transport watchdog."""
+    source = CREATE_CODESPACE.read_text(encoding="utf-8")
+    invocation = source.index('if "$GOVERNED_PYTHON" - ')
+    start_marker = "from __future__ import annotations\n"
+    start = source.index(start_marker, invocation)
+    end = source.index("\nPY\nthen", start)
+    return source[start:end]
+
+
 def _ssh_wire_string(value: bytes) -> bytes:
     return len(value).to_bytes(4, "big") + value
 
@@ -234,7 +300,10 @@ def _sample_sandbox_identity(controlled_paths: tuple[str, ...]) -> dict[str, obj
         "devcontainer_base_image_digest": (
             "sha256:7876580dc67fd460fd962f004cbeb480027e9bbc0657096f1087db11f9eaff39"
         ),
-        "repository_configured_devcontainer_features": [],
+        "repository_configured_devcontainer_features": [
+            "ghcr.io/devcontainers/features/sshd@"
+            "sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee"
+        ],
         "base_image_embedded_feature_metadata": [
             "ghcr.io/devcontainers/features/common-utils:2",
             "ghcr.io/devcontainers/features/git:1",
@@ -261,7 +330,8 @@ def _with_sshd_self_digest(payload: dict[str, object]) -> dict[str, object]:
 
 def _sample_sshd_identity() -> dict[str, object]:
     payload: dict[str, object] = {
-        "openssh_packages": [
+        "ssh_transport_packages": [
+            "lsof|amd64|install ok installed|4.95.0",
             "openssh-client|amd64|install ok installed|1:9.2p1",
             "openssh-server|amd64|install ok installed|1:9.2p1",
             "openssh-sftp-server|amd64|install ok installed|1:9.2p1",
@@ -283,9 +353,23 @@ def test_devcontainer_is_digest_pinned_private_and_portless() -> None:
 
     assert payload["build"] == {"dockerfile": "Dockerfile", "context": ".."}
     assert "image" not in payload
-    assert "features" not in payload
-    assert not DEVCONTAINER_LOCK.exists()
-    assert payload["overrideCommand"] is False
+    assert payload["features"] == {"ghcr.io/devcontainers/features/sshd:1.1.0": {}}
+    assert json.loads(DEVCONTAINER_LOCK.read_text(encoding="utf-8")) == {
+        "features": {
+            "ghcr.io/devcontainers/features/sshd:1.1.0": {
+                "version": "1.1.0",
+                "resolved": (
+                    "ghcr.io/devcontainers/features/sshd@"
+                    "sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee"
+                ),
+                "integrity": (
+                    "sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee"
+                ),
+            }
+        }
+    }
+    assert not DEVCONTAINER_LOCK.read_bytes().endswith(b"\n")
+    assert payload["overrideCommand"] is True
     assert payload["init"] is True
     assert payload["containerUser"] == "root"
     assert payload["remoteUser"] == "vscode"
@@ -314,40 +398,1077 @@ def test_repository_owned_ssh_transport_is_narrow_and_base_pinned() -> None:
     assert dockerfile.splitlines()[0] == f"FROM {EXPECTED_IMAGE}"
     assert dockerfile.count("FROM ") == 1
     assert "install_audit_review_sshd.sh" in dockerfile
-    assert "dutchbay-ssh-entrypoint.sh" in dockerfile
     assert "sshd_readiness.py" in dockerfile
-    assert 'ENTRYPOINT ["/usr/local/sbin/dutchbay-ssh-entrypoint.sh"]' in dockerfile
-    assert 'CMD ["/usr/bin/sleep", "infinity"]' in dockerfile
+    assert "ENTRYPOINT" not in dockerfile
+    assert "CMD" not in dockerfile
     assert "Dir::Etc::sourcelist=$DEBIAN_SOURCES" in installer
     assert "Dir::Etc::sourceparts=-" in installer
-    assert "openssh-client openssh-server" in installer
-    assert "lsof" not in installer
+    assert "lsof openssh-client openssh-server" in installer
     for directive in REQUIRED_SSHD_INSTALLER_DIRECTIVES:
         assert directive in installer
+    assert "\nPort 2222\n" not in installer
+    assert "official sshd Feature owns the single Port 2222 directive" in installer
     assert "yarn" not in installer.lower()
     assert installer.index("/usr/sbin/sshd -t") < installer.index(
         "-name 'ssh_host_*_key*' -delete"
     )
     start = SSHD_START.read_text(encoding="utf-8")
     assert "/usr/bin/ssh-keygen -A" in start
-    assert "/usr/bin/flock --exclusive 9" in start
+    assert '/usr/bin/flock --exclusive --wait "$LOCK_WAIT_SECONDS" 9' in start
+    assert start.count("/usr/bin/timeout --signal=TERM --kill-after=2") == 3
     assert "exec 9>/run/dutchbay-sshd-start.lock" in start
-    entrypoint = SSHD_ENTRYPOINT.read_text(encoding="utf-8")
-    assert "/usr/local/sbin/dutchbay-sshd-start.sh --start" in entrypoint
-    assert entrypoint.index("/usr/local/sbin/dutchbay-sshd-start.sh --start") < (
-        entrypoint.index("/usr/local/lib/dutchbay/sshd_readiness.py 15")
+    assert start.index('/usr/bin/unlink -- "$SSHD_READY_MARKER"') < start.index(
+        "/usr/bin/ssh-keygen -A"
     )
-    assert entrypoint.index("/usr/local/lib/dutchbay/sshd_readiness.py 15") < (
-        entrypoint.index("sshd_started_before_post_create")
+    assert start.index("/etc/init.d/ssh start") < start.index(
+        "/usr/local/lib/dutchbay/sshd_readiness.py 15"
     )
-    assert "sshd_started_before_post_create" in entrypoint
-    assert 'exec "$@"' in entrypoint
+    assert start.index("/usr/local/lib/dutchbay/sshd_readiness.py 15") < (
+        start.index("marker_tmp=$(")
+    )
+    assert 'SSHD_READY_VALUE="sshd_ready_before_audit_bootstrap"' in start
+    assert "/run/dutchbay-sshd-runtime.ready" in start
     attestor = SSHD_ATTESTOR.read_text(encoding="utf-8")
     assert "build_sshd_transport_identity" in attestor
+    assert "/usr/sbin/sshd -T" in attestor
+    assert '-C "$connection_context"' in attestor
+    assert "build_sshd_session_connection_context" in attestor
+    assert "validate_sshd_include_graph" in attestor
+    assert '[ -f "$SSHD_MAIN_CONFIG" ] && [ ! -L "$SSHD_MAIN_CONFIG" ]' in (attestor)
+    assert '"${SSH_CONNECTION:-}"' in attestor
+    assert '"${SSH_CLIENT:-}"' in attestor
+    assert "--construction" in attestor
+    assert "--session" in attestor
+    assert "sshd_drop_in_population=(/etc/ssh/sshd_config.d/*)" in attestor
+    assert 'Path("/etc/ssh/sshd_config")' not in attestor
+    assert "SSHD_CONFIGURATION_PATHS" in attestor
+    assert 'Path("/usr/local/share/ssh-init.sh")' in attestor
     assert '/usr/bin/ssh-keygen -y -f "$key"' in attestor
-    assert '[ "$derived" = "$sidecar" ]' in attestor
     assert '[ "${derived%% *}" = "$expected_algorithm" ]' in attestor
     assert SSHD_INSTALLER.stat().st_mode & 0o111
+
+
+def test_ci_builds_and_boots_exact_audit_review_image() -> None:
+    """The visible review prerequisite exercises the locked container lifecycle."""
+    workflow = IMAGE_SMOKE_WORKFLOW.read_text(encoding="utf-8")
+    classifier = PATH_CLASSIFIER.read_text(encoding="utf-8")
+
+    assert "pull_request:\n    paths:" not in workflow
+    assert "permissions:\n  contents: read" in workflow
+    assert "persist-credentials: false" in workflow
+    assert "pull_request.head.sha || github.sha" in workflow
+    assert 'test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"' in workflow
+    assert "Exact candidate head: `%s`" in workflow
+    assert "scripts/classify_1110_cloud_sandbox_paths.sh" in workflow
+    assert "git diff --name-only -z --diff-filter=ACDMRT" in classifier
+    assert ".devcontainer/*|.dockerignore" in classifier
+    assert "done < <(git diff" not in classifier
+    assert '"$BASE_SHA" "$HEAD_SHA" > "$changed_paths"' in classifier
+    assert "base commit is unavailable" in classifier
+    assert "head commit is unavailable" in classifier
+    assert 'if [ ! -s "$changed_paths" ]' in classifier
+    assert "relevant=%s" in workflow
+    assert "@devcontainers/cli@0.88.0" in workflow
+    assert "sha512-sMkruPy/icfov20mdQh2EjFYZogxvMEZptDEvg5/" in workflow
+    assert "npm view @devcontainers/cli@0.88.0 dist.integrity" in workflow
+    assert 'test "$(devcontainer --version)" = "0.88.0"' in workflow
+    assert "devcontainer up" in workflow
+    assert workflow.count("devcontainer up") == 2
+    assert '--workspace-folder "$GITHUB_WORKSPACE"' in workflow
+    assert "--expect-existing-container" in workflow
+    assert "--frozen-lockfile" in workflow
+    assert "--remote-env CODESPACES=true" in workflow
+    assert "--remote-env CODESPACE_NAME=dutchbay-ci-audit-review" in workflow
+    assert (
+        workflow.count(
+            "--remote-env DUTCHBAY_SANDBOX_EXECUTION_HOST="
+            "github_actions_devcontainer_emulation"
+        )
+        == 2
+    )
+    assert workflow.count("checkout_status=$(git status --porcelain=v1)") == 4
+    assert 'test -z "$(git status' not in workflow
+    assert "bootstrap-receipt.json" in workflow
+    assert '"environment": "github_actions_devcontainer_emulation"' in workflow
+    assert (
+        '"network_boundary": "github_actions_hosted_runner_outbound_egress_available"'
+    ) in workflow
+    assert '"git_commit": sys.argv[2]' in workflow
+    assert "label=devcontainer.local_folder=$GITHUB_WORKSPACE" in workflow
+    assert "docker exec --user vscode" in workflow
+    assert "--workdir /workspaces/dutchbay-epc-model" in workflow
+    assert "/usr/local/lib/dutchbay/sshd_readiness.py" in workflow
+    assert "/run/dutchbay-sshd-runtime.ready" in workflow
+    assert "ssh-keygen -q -t ed25519" in workflow
+    assert "/home/vscode/.ssh/authorized_keys" in workflow
+    assert "IdentitiesOnly=yes" in workflow
+    assert "StrictHostKeyChecking=yes" in workflow
+    assert 'UserKnownHostsFile="$probe_root/known_hosts"' in workflow
+    assert "vscode@127.0.0.1" in workflow
+    assert 'test "${DUTCHBAY_VENV:-}" = ' in workflow
+    assert 'test "${DUTCHBAY_P03_SOURCE_ROOT:-}" = ' in workflow
+    assert 'test "${PYTHONPATH:-}" = ' in workflow
+    assert "bash .devcontainer/attest_audit_review_sshd.sh" in workflow
+    assert "session_identity=$(\n              docker exec" in workflow
+    assert "session_digest=$(\n              jq -er" in workflow
+    assert "remaining_ids=$(" in workflow
+    assert 'test -z "$remaining_ids"' in workflow
+    assert "done < <(\n              docker ps -aq" not in workflow
+    assert workflow.count("\n          exercise_authenticated_transport\n") == 2
+    assert workflow.count("bash .devcontainer/start_audit_review_sshd.sh --start") == 2
+    assert "before_marker" in workflow
+    assert "after_resume_marker" in workflow
+    assert 'docker stop "$CONTAINER_ID"' in workflow
+    assert 'docker start "$CONTAINER_ID"' not in workflow
+    assert 'test "${resumed_ids[0]}" = "$CONTAINER_ID"' in workflow
+    assert 'docker logs "$CONTAINER_ID"' in workflow
+    assert "if: failure()" in workflow
+    assert PATH_CLASSIFIER.stat().st_mode & 0o111
+
+
+def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> None:
+    """The pre-merge proof must remain separate from protected-main review."""
+    candidate = CANDIDATE_CODESPACE.read_text(encoding="utf-8")
+
+    assert '[[ "$CANDIDATE_BRANCH" =~ ^codex/' in candidate
+    assert '[[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]' in candidate
+    assert 'git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH"' in candidate
+    assert '[ "$local_branch" = "$CANDIDATE_BRANCH" ]' in candidate
+    assert '[ "$local_head" = "$EXPECTED_SHA" ]' in candidate
+    assert "controller_script_sha256" in candidate
+    assert "local_controller:" in candidate
+    assert "checkout_head=$(git rev-parse HEAD) || exit 2" in candidate
+    assert 'test "$checkout_head" = "$expected_sha"' in candidate
+    assert "checkout_status=$(git status --porcelain=v1) ||" in candidate
+    assert 'source_probe=$(find "$source_root" -mindepth 1 -print -quit) ||' in (
+        candidate
+    )
+    assert 'test -z "$(git status' not in candidate
+    assert 'test -z "$(find ' not in candidate
+    assert "gh codespace cp --expand" in candidate
+    assert "readonly TRANSPORT_TIMEOUT_SECONDS=300" in candidate
+    assert "readonly BOOTSTRAP_TIMEOUT_SECONDS=900" in candidate
+    assert "readonly SHUTDOWN_TIMEOUT_SECONDS=300" in candidate
+    assert "readonly REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS=30" in candidate
+    assert "readonly PROCESS_CLEANUP_TIMEOUT_SECONDS=2" in candidate
+    assert 'readonly LOCAL_CLEANUP_MARKER="$CREATE_LOCK/' in candidate
+    assert 'mark_local_cleanup_unresolved "$command_status" "bounded_command"' in (
+        candidate
+    )
+    assert 'mark_local_cleanup_unresolved "$command_status" "remote_probe"' in (
+        candidate
+    )
+    assert "timeout=min(attempt_timeout_seconds, remaining)" in candidate
+    assert "min(10.0, remaining)" not in candidate
+    assert "sshd_readiness.py 5 /run/dutchbay-sshd-runtime.ready" in candidate
+    assert (
+        'readonly BOOTSTRAP_READY_COMMAND="test -f '
+        '/workspaces/.dutchbay-private/bootstrap-receipt.json"'
+    ) in candidate
+    assert (
+        'wait_for_remote_command "$TRANSPORT_TIMEOUT_SECONDS" "$SSH_READY_COMMAND"'
+    ) in candidate
+    assert (
+        'wait_for_remote_command "$BOOTSTRAP_TIMEOUT_SECONDS" '
+        '"$BOOTSTRAP_READY_COMMAND"'
+    ) in candidate
+    assert "candidate Codespace bootstrap receipt did not become ready" in candidate
+    assert "bounded_command()" in candidate
+    assert "lifecycle child could not be signalled" in candidate
+    assert "remote probe child could not be signalled" in candidate
+    assert candidate.count("except PermissionError:") >= 4
+    assert "wait_for_candidate_state" in candidate
+    assert '"$(codespace_identity | jq -r .state)"' not in candidate
+    assert "1|3) ;;" in candidate
+    assert '"$CREATE_LOCK/UNRESOLVED"' in candidate
+    assert '[ -f "$LOCAL_CLEANUP_MARKER" ]' in candidate
+    assert "gh codespace stop" in candidate
+    assert 'wait_for_candidate_state "Shutdown"' in candidate
+    assert 'before_marker=$(bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS"' in (
+        candidate
+    )
+    assert 'after_marker=$(bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS"' in (
+        candidate
+    )
+    assert candidate.count("verify_remote_candidate") == 3
+    assert "bash .devcontainer/attest_audit_review_sshd.sh" in candidate
+    assert "--retention-period 24h" in candidate
+    assert 'gh codespace delete -c "$codespace_name" --force' in candidate
+    assert 'readonly bootstrap_receipt="/workspaces/.dutchbay-private/' in candidate
+    assert '"environment": "github_codespaces"' in candidate
+    assert '"codespace_name": sys.argv[3]' in candidate
+    assert '"git_commit": sys.argv[2]' in candidate
+    assert 'delete_candidate_and_confirm_absent "$CANDIDATE_BRANCH"' in candidate
+    assert 'creation_pending="true"' in candidate
+    assert "recover_pending_candidate_boundedly" in candidate
+    assert "recover_unique_pending_candidate_once" in candidate
+    assert '1) creation_pending="false"' not in candidate
+    assert "candidate creation remained ambiguous after recovery deadline" in candidate
+    assert candidate.index("if candidate_is_absent; then") < candidate.index(
+        'wait_for_api_identity_match "$candidate_branch"'
+    )
+    assert 'display_name="DB1110-${EXPECTED_SHA:0:12}-$run_nonce"' in candidate
+    assert "secrets.token_hex(8)" in candidate
+    assert '[ "${#display_name}" -le 48 ]' in candidate
+    assert 'codespaces_json=$(list_codespaces "$timeout_seconds") || return 2' in (
+        candidate
+    )
+    assert 'wait_for_api_identity_match "$candidate_branch"' in candidate
+    create_position = candidate.index("codespace_name=$(bounded_command")
+    assert candidate.index(
+        'verify_api_identity "$CANDIDATE_BRANCH"', create_position
+    ) < candidate.index('codespace_created="true"', create_position)
+    assert candidate.index(
+        'delete_candidate_and_confirm_absent "$CANDIDATE_BRANCH"'
+    ) < candidate.index("jq -n")
+    assert candidate.index("trap - EXIT") < candidate.index("jq -n")
+    assert 'deletion: "confirmed_absent_via_codespaces_api"' in candidate
+    assert "candidate_codespace_name: $codespace_name" in candidate
+    assert 'release_status: "HOLD"' in candidate
+    assert "DUTCHBAY_P03_CLOUD_INGRESS_AUTHORIZED" not in candidate
+    assert CANDIDATE_CODESPACE.stat().st_mode & 0o111
+
+
+def test_candidate_codespace_control_rejects_non_allowlisted_identity() -> None:
+    """Invalid candidate identity must fail before any GitHub mutation."""
+    invalid_branch = subprocess.run(
+        (str(CANDIDATE_CODESPACE), "main", "a" * 40),
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert invalid_branch.returncode == 2
+    assert "allowlisted codex/* branch" in invalid_branch.stderr
+
+    invalid_sha = subprocess.run(
+        (str(CANDIDATE_CODESPACE), "codex/probe", "abc"),
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert invalid_sha.returncode == 2
+    assert "full SHA-1" in invalid_sha.stderr
+
+
+def test_candidate_rejects_mismatched_local_controller_before_github(
+    tmp_path: Path,
+) -> None:
+    """A receipt must not be produced by a different local branch or head."""
+    tool_root = tmp_path / "bin"
+    tool_root.mkdir()
+    github_marker = tmp_path / "gh-called"
+    git_stub = tool_root / "git"
+    git_stub.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  check-ref-format) exit 0 ;;
+  status) exit 0 ;;
+  branch) printf '%s\\n' "$STUB_LOCAL_BRANCH" ;;
+  rev-parse) printf '%s\\n' "$STUB_LOCAL_HEAD" ;;
+  *) exit 91 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    gh_stub = tool_root / "gh"
+    gh_stub.write_text(
+        f"#!/usr/bin/env bash\nprintf called > {github_marker!s}\nexit 99\n",
+        encoding="utf-8",
+    )
+    git_stub.chmod(0o755)
+    gh_stub.chmod(0o755)
+    branch = "codex/local-controller-control"
+    sha = "a" * 40
+    lock_path = Path("/tmp/dutchbay-1110-candidate-codespace.lock")
+    assert not lock_path.exists()
+    for local_branch, local_head, expected_error in (
+        ("codex/other", sha, "local controller branch"),
+        (branch, "b" * 40, "local controller head"),
+    ):
+        result = subprocess.run(
+            (str(CANDIDATE_CODESPACE), branch, sha),
+            cwd=REPO_ROOT,
+            env={
+                **os.environ,
+                "PATH": f"{tool_root}:{os.environ['PATH']}",
+                "DUTCHBAY_VENV": str(Path(sys.executable).parents[1]),
+                "STUB_LOCAL_BRANCH": local_branch,
+                "STUB_LOCAL_HEAD": local_head,
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 2
+        assert expected_error in result.stderr
+        assert not github_marker.exists()
+        assert not lock_path.exists()
+
+
+def test_candidate_watchdog_reaps_signal_resistant_group_on_interrupt(
+    tmp_path: Path,
+) -> None:
+    """SIGINT must reap the detached lifecycle child before shell cleanup."""
+    watchdog = _bounded_watchdog(CANDIDATE_CODESPACE)
+    child_pid_file = tmp_path / "child.pid"
+    child_script = (
+        f'trap "" TERM; (trap "" TERM; sleep 30) & echo $! > {child_pid_file!s}; wait'
+    )
+    process = subprocess.Popen(
+        (
+            sys.executable,
+            "-S",
+            "-c",
+            watchdog,
+            "30",
+            "2",
+            "/bin/bash",
+            "-c",
+            child_script,
+        ),
+        start_new_session=True,
+    )
+    for _ in range(100):
+        if child_pid_file.exists():
+            break
+        time.sleep(0.02)
+    assert child_pid_file.exists()
+    child_pid = int(child_pid_file.read_text(encoding="ascii"))
+    os.kill(process.pid, signal.SIGINT)
+    assert process.wait(timeout=5) == 130
+    child_alive = True
+    for _ in range(100):
+        try:
+            os.kill(child_pid, 0)
+        except ProcessLookupError:
+            child_alive = False
+            break
+        time.sleep(0.02)
+    if child_alive:  # pragma: no cover - cleanup before explicit failure
+        os.kill(child_pid, signal.SIGKILL)
+    assert not child_alive
+
+
+def test_bounded_watchdogs_fall_back_when_group_signal_is_denied(
+    tmp_path: Path,
+) -> None:
+    """Owned children must be reaped when group signalling returns EPERM."""
+    for index, path in enumerate((CANDIDATE_CODESPACE, CREATE_CODESPACE, CLOUD_VERIFY)):
+        watchdog = _bounded_watchdog(path)
+        forced_permission_error = watchdog.replace(
+            "        os.killpg(process.pid, signal_number)",
+            "        if signal_number:\n"
+            "            raise PermissionError\n"
+            "        os.killpg(process.pid, signal_number)",
+        )
+        assert forced_permission_error != watchdog
+        child_pid_file = tmp_path / f"permission-child-{index}.pid"
+        child_script = f"echo $$ > {child_pid_file!s}; exec sleep 30"
+        result = subprocess.run(
+            (
+                sys.executable,
+                "-S",
+                "-c",
+                forced_permission_error,
+                "1",
+                "0.5",
+                "/bin/bash",
+                "-c",
+                child_script,
+            ),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        assert result.returncode == 124
+        child_pid = int(child_pid_file.read_text(encoding="ascii"))
+        assert not _process_is_alive(child_pid)
+
+
+def test_bounded_watchdogs_kill_descendant_after_leader_exits(
+    tmp_path: Path,
+) -> None:
+    """A TERM-resistant descendant must get group SIGKILL after its leader exits."""
+    for index, path in enumerate((CANDIDATE_CODESPACE, CREATE_CODESPACE, CLOUD_VERIFY)):
+        child_pid_file = tmp_path / f"descendant-{index}.pid"
+        child_script = (
+            "trap 'exit 0' TERM; "
+            f"(trap '' TERM; sleep 30) & echo $! > {child_pid_file!s}; wait"
+        )
+        result = subprocess.run(
+            (
+                sys.executable,
+                "-S",
+                "-c",
+                _bounded_watchdog(path),
+                "1",
+                "0.5",
+                "/bin/bash",
+                "-c",
+                child_script,
+            ),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        assert result.returncode == 124
+        child_pid = int(child_pid_file.read_text(encoding="ascii"))
+        for _ in range(100):
+            if not _process_is_alive(child_pid):
+                break
+            time.sleep(0.02)
+        assert not _process_is_alive(child_pid)
+
+
+def test_create_transport_watchdog_reaps_on_interrupt_and_eperm(
+    tmp_path: Path,
+) -> None:
+    """The persistent creator must clean its detached probe on hostile exits."""
+    child_pid_file = tmp_path / "create-child.pid"
+    child_script = (
+        "trap 'exit 0' TERM; "
+        f"(trap '' TERM; sleep 30) & echo $! > {child_pid_file!s}; wait"
+    )
+    watchdog = _create_transport_watchdog().replace(
+        'command = ["gh", "codespace", "ssh", "-c", sys.argv[5], sys.argv[6]]',
+        'command = ["/bin/bash", "-c", sys.argv[5]]',
+    )
+    assert 'command = ["/bin/bash", "-c", sys.argv[5]]' in watchdog
+    process = subprocess.Popen(
+        (
+            sys.executable,
+            "-S",
+            "-c",
+            watchdog,
+            "30",
+            "0.1",
+            "30",
+            "2",
+            child_script,
+            "unused",
+        ),
+        start_new_session=True,
+    )
+    child_pid: int | None = None
+    try:
+        for _ in range(250):
+            if child_pid_file.exists():
+                break
+            time.sleep(0.02)
+        assert child_pid_file.exists()
+        child_pid = int(child_pid_file.read_text(encoding="ascii"))
+        os.kill(process.pid, signal.SIGINT)
+        assert process.wait(timeout=5) == 130
+        for _ in range(100):
+            if not _process_is_alive(child_pid):
+                break
+            time.sleep(0.02)
+        assert not _process_is_alive(child_pid)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+        if child_pid is not None and _process_is_alive(child_pid):
+            os.kill(child_pid, signal.SIGKILL)
+
+    child_pid_file.unlink()
+    forced_permission_error = watchdog.replace(
+        "        os.killpg(process.pid, signal_number)",
+        "        if signal_number:\n"
+        "            raise PermissionError\n"
+        "        os.killpg(process.pid, signal_number)",
+    )
+    assert forced_permission_error != watchdog
+    child_script = f"echo $$ > {child_pid_file!s}; exec sleep 30"
+    result = subprocess.run(
+        (
+            sys.executable,
+            "-S",
+            "-c",
+            forced_permission_error,
+            "1",
+            "0.1",
+            "1",
+            "0.5",
+            child_script,
+            "unused",
+        ),
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+    assert result.returncode == 124
+    child_pid = int(child_pid_file.read_text(encoding="ascii"))
+    assert not _process_is_alive(child_pid)
+
+
+def test_create_codespace_reaps_interrupted_create_and_retains_lock(
+    tmp_path: Path,
+) -> None:
+    """An interrupted mutating create must be reaped and recovery-owned."""
+    tool_root = tmp_path / "bin"
+    tool_root.mkdir()
+    lock_path = tmp_path / "create.lock"
+    state_path = tmp_path / "created"
+    child_pid_path = tmp_path / "create-child.pid"
+    creator_copy = tmp_path / "create-codespace"
+    creator_source = CREATE_CODESPACE.read_text(encoding="utf-8")
+    creator_source = creator_source.replace(
+        'readonly CREATE_LOCK="/tmp/dutchbay-1110-codespace-create.lock"',
+        f'readonly CREATE_LOCK="{lock_path!s}"',
+    ).replace(
+        "readonly AMBIGUOUS_CREATE_RECOVERY_TIMEOUT_SECONDS=120",
+        "readonly AMBIGUOUS_CREATE_RECOVERY_TIMEOUT_SECONDS=1",
+    )
+    creator_copy.write_text(creator_source, encoding="utf-8")
+    creator_copy.chmod(0o755)
+    gh_stub = tool_root / "gh"
+    gh_stub.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+case "$1 $2" in
+  "api --paginate")
+    if [ -e "$STUB_STATE" ]; then
+      printf '%s\n' '[{"codespaces":[{"name":"review123","display_name":"DutchBay 1110 independent review","repository":{"full_name":"arunakulat/dutchbay-epc-model"},"git_status":{"ref":"main"}}]}]'
+    else
+      printf '%s\n' '[{"codespaces":[]}]'
+    fi
+    ;;
+  "codespace create")
+    : > "$STUB_STATE"
+    echo $$ > "$STUB_CHILD_PID"
+    trap '' HUP INT TERM
+    sleep 30
+    ;;
+  *) exit 92 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    gh_stub.chmod(0o755)
+    process = subprocess.Popen(
+        (str(creator_copy),),
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{tool_root}:{os.environ['PATH']}",
+            "DUTCHBAY_VENV": str(Path(sys.executable).parents[1]),
+            "STUB_STATE": str(state_path),
+            "STUB_CHILD_PID": str(child_pid_path),
+        },
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    child_pid: int | None = None
+    try:
+        for _ in range(250):
+            if child_pid_path.exists():
+                break
+            time.sleep(0.02)
+        assert child_pid_path.exists()
+        child_pid = int(child_pid_path.read_text(encoding="ascii"))
+        os.killpg(process.pid, signal.SIGINT)
+        _, stderr = process.communicate(timeout=10)
+        assert process.returncode != 0
+        assert not _process_is_alive(child_pid)
+        assert "retaining unresolved create lock" in stderr
+        unresolved = (lock_path / "UNRESOLVED").read_text(encoding="utf-8")
+        assert "codespace_name=review123" in unresolved
+        assert "creation_recovered_after_interrupted_command" in unresolved
+    finally:
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=5)
+        if child_pid is not None and _process_is_alive(child_pid):
+            os.kill(child_pid, signal.SIGKILL)
+        if lock_path.exists():
+            for child in lock_path.iterdir():
+                child.unlink()
+            lock_path.rmdir()
+
+
+def test_candidate_recovers_ambiguous_creation_before_exit(tmp_path: Path) -> None:
+    """Delayed ambiguous creation must recover and delete the per-run candidate."""
+    tool_root = tmp_path / "bin"
+    state_path = tmp_path / "created"
+    visibility_path = tmp_path / "visibility"
+    call_log = tmp_path / "calls.log"
+    tool_root.mkdir()
+    sha = "a" * 40
+    branch = "codex/ambiguous-create-control"
+    git_stub = tool_root / "git"
+    git_stub.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  check-ref-format) exit 0 ;;
+  status) exit 0 ;;
+  branch) printf '%s\\n' "$STUB_BRANCH" ;;
+  rev-parse) printf '%s\\n' "$STUB_SHA" ;;
+  ls-remote) printf '%s\\trefs/heads/%s\\n' "$STUB_SHA" "$STUB_BRANCH" ;;
+  *) exit 91 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    gh_stub = tool_root / "gh"
+    gh_stub.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "$STUB_CALL_LOG"
+case "$1 $2" in
+  "api --paginate")
+    if [ -e "$STUB_STATE" ]; then
+      visibility=0
+      if [ -e "$STUB_VISIBILITY" ]; then
+        visibility=$(cat "$STUB_VISIBILITY")
+      fi
+      visibility=$((visibility + 1))
+      printf '%s\\n' "$visibility" > "$STUB_VISIBILITY"
+      if [ "$visibility" -eq 1 ]; then
+        exit 75
+      elif [ "$visibility" -eq 2 ]; then
+        printf '[{"codespaces":[]}]\\n'
+      else
+        display=$(cat "$STUB_STATE")
+        printf '[{"codespaces":[{"name":"candidate123","display_name":"%s","repository":{"full_name":"arunakulat/dutchbay-epc-model"},"git_status":{"ref":"%s"}}]}]\\n' "$display" "$STUB_BRANCH"
+      fi
+    else
+      printf '[{"codespaces":[]}]\\n'
+    fi
+    ;;
+  "api -H")
+    display=$(cat "$STUB_STATE")
+    printf '{"name":"candidate123","display_name":"%s","repository":{"full_name":"arunakulat/dutchbay-epc-model"},"git_status":{"ref":"%s"}}\\n' "$display" "$STUB_BRANCH"
+    ;;
+  "codespace create")
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = "-d" ]; then
+        printf '%s\\n' "$2" > "$STUB_STATE"
+        break
+      fi
+      shift
+    done
+    printf '%s\\n' "$STUB_CREATE_OUTPUT"
+    ;;
+  "codespace delete")
+    rm -- "$STUB_STATE"
+    exit "${STUB_DELETE_EXIT:-0}"
+    ;;
+  *) exit 92 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    git_stub.chmod(0o755)
+    gh_stub.chmod(0o755)
+    lock_path = Path("/tmp/dutchbay-1110-candidate-codespace.lock")
+    assert not lock_path.exists()
+    base_environment = {
+        **os.environ,
+        "PATH": f"{tool_root}:/usr/bin:/bin",
+        "DUTCHBAY_VENV": str(Path(sys.executable).parents[1]),
+        "STUB_SHA": sha,
+        "STUB_BRANCH": branch,
+        "STUB_STATE": str(state_path),
+        "STUB_VISIBILITY": str(visibility_path),
+        "STUB_CALL_LOG": str(call_log),
+    }
+    for create_output, expected_error, delete_exit in (
+        ("malformed/name", "created candidate Codespace name is malformed", "124"),
+        ("protected999", "candidate Codespace API identity differs", "0"),
+    ):
+        visibility_path.unlink(missing_ok=True)
+        result = subprocess.run(
+            (str(CANDIDATE_CODESPACE), branch, sha),
+            cwd=REPO_ROOT,
+            env={
+                **base_environment,
+                "STUB_CREATE_OUTPUT": create_output,
+                "STUB_DELETE_EXIT": delete_exit,
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 2
+        assert expected_error in result.stderr
+        assert not state_path.exists()
+        assert visibility_path.read_text(encoding="utf-8").strip() == "4"
+        assert not lock_path.exists()
+    calls = call_log.read_text(encoding="utf-8")
+    assert calls.count("codespace delete -c candidate123 --force") == 2
+    assert "codespace delete -c protected999 --force" not in calls
+
+
+def test_candidate_retains_lock_when_ambiguous_creation_stays_invisible(
+    tmp_path: Path,
+) -> None:
+    """Bounded API non-observation must not be promoted to proved non-creation."""
+    tool_root = tmp_path / "bin"
+    tool_root.mkdir()
+    lock_path = tmp_path / "candidate.lock"
+    call_log = tmp_path / "calls.log"
+    branch = "codex/invisible-create-control"
+    sha = "a" * 40
+    candidate_copy = tmp_path / "candidate-proof"
+    candidate_source = CANDIDATE_CODESPACE.read_text(encoding="utf-8")
+    candidate_source = candidate_source.replace(
+        'readonly CREATE_LOCK="/tmp/dutchbay-1110-candidate-codespace.lock"',
+        f'readonly CREATE_LOCK="{lock_path!s}"',
+    ).replace(
+        "readonly AMBIGUOUS_CREATE_RECOVERY_TIMEOUT_SECONDS=120",
+        "readonly AMBIGUOUS_CREATE_RECOVERY_TIMEOUT_SECONDS=1",
+    )
+    candidate_copy.write_text(candidate_source, encoding="utf-8")
+    candidate_copy.chmod(0o755)
+    git_stub = tool_root / "git"
+    git_stub.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  check-ref-format|status) exit 0 ;;
+  branch) printf '%s\\n' "$STUB_BRANCH" ;;
+  rev-parse) printf '%s\\n' "$STUB_SHA" ;;
+  ls-remote) printf '%s\\trefs/heads/%s\\n' "$STUB_SHA" "$STUB_BRANCH" ;;
+  *) exit 91 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    gh_stub = tool_root / "gh"
+    gh_stub.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "$STUB_CALL_LOG"
+case "$1 $2" in
+  "api --paginate") printf '%s\\n' '[{"codespaces":[]}]' ;;
+  "codespace create") printf '%s\\n' 'malformed/name' ;;
+  *) exit 92 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    git_stub.chmod(0o755)
+    gh_stub.chmod(0o755)
+    result = subprocess.run(
+        (str(candidate_copy), branch, sha),
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{tool_root}:{os.environ['PATH']}",
+            "DUTCHBAY_VENV": str(Path(sys.executable).parents[1]),
+            "STUB_BRANCH": branch,
+            "STUB_SHA": sha,
+            "STUB_CALL_LOG": str(call_log),
+        },
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    try:
+        assert result.returncode == 2
+        assert "candidate creation remained ambiguous" in result.stderr
+        assert "retaining candidate recovery lock" in result.stderr
+        assert (lock_path / "UNRESOLVED").is_file()
+        assert "codespace create" in call_log.read_text(encoding="utf-8")
+    finally:
+        if lock_path.exists():
+            (lock_path / "UNRESOLVED").unlink(missing_ok=True)
+            lock_path.rmdir()
+
+
+def test_candidate_status_125_remains_unresolved_after_remote_absence(
+    tmp_path: Path,
+) -> None:
+    """API absence must not erase unproved local helper cleanup."""
+    tool_root = tmp_path / "bin"
+    tool_root.mkdir()
+    lock_path = tmp_path / "candidate.lock"
+    state_path = tmp_path / "created"
+    state_path.write_text("present", encoding="ascii")
+    harness = tmp_path / "candidate-delete-harness"
+    candidate_source = CANDIDATE_CODESPACE.read_text(encoding="utf-8")
+    candidate_source = candidate_source.replace(
+        'readonly CREATE_LOCK="/tmp/dutchbay-1110-candidate-codespace.lock"',
+        f'readonly CREATE_LOCK="{lock_path!s}"',
+    )
+    function_prefix = candidate_source.split('[ "$#" -eq 2 ]', maxsplit=1)[0]
+    harness_source = "".join(
+        (
+            function_prefix,
+            f"""
+candidate_branch="codex/status-125-control"
+display_name="DB1110-status-125"
+codespace_name="candidate123"
+create_lock_held="true"
+codespace_created="true"
+mkdir -- "{lock_path!s}"
+trap cleanup EXIT
+delete_candidate_and_confirm_absent "$candidate_branch"
+""",
+        )
+    )
+    harness.write_text(
+        harness_source,
+        encoding="utf-8",
+    )
+    harness.chmod(0o755)
+    gh_stub = tool_root / "gh"
+    gh_stub.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+case "$1 $2" in
+  "api -H")
+    printf '%s\n' '{"name":"candidate123","display_name":"DB1110-status-125","repository":{"full_name":"arunakulat/dutchbay-epc-model"},"git_status":{"ref":"codex/status-125-control"}}'
+    ;;
+  "api --paginate")
+    if [ -e "$STUB_STATE" ]; then
+      printf '%s\n' '[{"codespaces":[{"name":"candidate123"}]}]'
+    else
+      printf '%s\n' '[{"codespaces":[]}]'
+    fi
+    ;;
+  "codespace delete")
+    rm -- "$STUB_STATE"
+    exit 125
+    ;;
+  *) exit 92 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    gh_stub.chmod(0o755)
+    result = subprocess.run(
+        (str(harness),),
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{tool_root}:{os.environ['PATH']}",
+            "DUTCHBAY_VENV": str(Path(sys.executable).parents[1]),
+            "STUB_STATE": str(state_path),
+        },
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    try:
+        assert result.returncode == 125
+        assert not state_path.exists()
+        assert "retaining unresolved local lifecycle-cleanup state" in result.stderr
+        assert "retaining candidate recovery lock" in result.stderr
+        assert (lock_path / "LOCAL_CLEANUP_UNRESOLVED").is_file()
+        assert (lock_path / "UNRESOLVED").is_file()
+    finally:
+        if lock_path.exists():
+            for child in lock_path.iterdir():
+                child.unlink()
+            lock_path.rmdir()
+
+
+def test_candidate_preserves_status_125_from_state_and_transport_helpers(
+    tmp_path: Path,
+) -> None:
+    """Polling and transport helpers must preserve unresolved-cleanup status."""
+    candidate_source = CANDIDATE_CODESPACE.read_text(encoding="utf-8")
+    function_prefix = candidate_source.split('[ "$#" -eq 2 ]', maxsplit=1)[0]
+
+    state_harness = tmp_path / "candidate-state-harness"
+    state_harness_source = "".join(
+        (
+            function_prefix,
+            """
+bounded_command() { return 125; }
+codespace_name="candidate123"
+if wait_for_candidate_state "Shutdown" 1; then
+  exit 99
+else
+  exit $?
+fi
+""",
+        )
+    )
+    state_harness.write_text(
+        state_harness_source,
+        encoding="utf-8",
+    )
+    state_harness.chmod(0o755)
+    state_result = subprocess.run(
+        (str(state_harness),),
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+    assert state_result.returncode == 125
+
+    lock_path = tmp_path / "transport.lock"
+    transport_source = candidate_source.replace(
+        'readonly CREATE_LOCK="/tmp/dutchbay-1110-candidate-codespace.lock"',
+        f'readonly CREATE_LOCK="{lock_path!s}"',
+    )
+    transport_prefix = transport_source.split('[ "$#" -eq 2 ]', maxsplit=1)[0]
+    fake_venv = tmp_path / "venv"
+    fake_python = fake_venv / "bin" / "python"
+    fake_python.parent.mkdir(parents=True)
+    fake_python.write_text("#!/usr/bin/env bash\nexit 125\n", encoding="utf-8")
+    fake_python.chmod(0o755)
+    transport_harness = tmp_path / "candidate-transport-harness"
+    transport_harness_source = "".join(
+        (
+            transport_prefix,
+            f"""
+mkdir -- "{lock_path!s}"
+codespace_name="candidate123"
+wait_for_remote_command 1 "true"
+""",
+        )
+    )
+    transport_harness.write_text(
+        transport_harness_source,
+        encoding="utf-8",
+    )
+    transport_harness.chmod(0o755)
+    transport_result = subprocess.run(
+        (str(transport_harness),),
+        cwd=REPO_ROOT,
+        env={**os.environ, "DUTCHBAY_VENV": str(fake_venv)},
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+    try:
+        assert transport_result.returncode == 125
+        assert (lock_path / "LOCAL_CLEANUP_UNRESOLVED").is_file()
+    finally:
+        if lock_path.exists():
+            for child in lock_path.iterdir():
+                child.unlink()
+            lock_path.rmdir()
+
+
+def test_shell_population_and_status_probes_fail_closed(tmp_path: Path) -> None:
+    """A silent command error must not become an empty or clean result."""
+    tool_root = tmp_path / "bin"
+    tool_root.mkdir()
+    for name in ("find", "git"):
+        stub = tool_root / name
+        stub.write_text("#!/usr/bin/env bash\nexit 61\n", encoding="utf-8")
+        stub.chmod(0o755)
+    environment = {**os.environ, "PATH": f"{tool_root}:/usr/bin:/bin"}
+    for fragment in (
+        "source_probe=$(find /tmp -mindepth 1 -print -quit) || exit 2; "
+        'test -z "$source_probe"',
+        "checkout_status=$(git status --porcelain=v1) || exit 2; "
+        'test -z "$checkout_status"',
+    ):
+        result = subprocess.run(
+            ("/bin/bash", "-euo", "pipefail", "-c", fragment),
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 2
+
+    governed = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (BOOTSTRAP, VERIFY, CANDIDATE_CODESPACE, UPLOAD)
+    )
+    assert 'test -z "$(git status' not in governed
+    assert 'test -z "$(find ' not in governed
+    assert 'if find "$SOURCE_ROOT"' not in governed
+
+
+def test_cloud_sandbox_path_classifier_fails_closed(tmp_path: Path) -> None:
+    """Invalid, deleted and empty diffs must never bypass the heavy gate."""
+
+    def git(*arguments: str) -> str:
+        return subprocess.run(
+            ("git", *arguments),
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    def classify(base: str, head: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            (str(PATH_CLASSIFIER), base, head),
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    git("init", "-q")
+    git("config", "user.name", "DutchBay CI")
+    git("config", "user.email", "ci@example.invalid")
+    (tmp_path / "unrelated.txt").write_text("base\n", encoding="utf-8")
+    git("add", "unrelated.txt")
+    git("commit", "-qm", "base")
+    base = git("rev-parse", "HEAD")
+
+    (tmp_path / "unrelated.txt").write_text("head\n", encoding="utf-8")
+    git("commit", "-qam", "unrelated")
+    unrelated = git("rev-parse", "HEAD")
+    result = classify(base, unrelated)
+    assert result.returncode == 0
+    assert result.stdout.strip() == "false"
+
+    relevant_path = tmp_path / ".devcontainer" / "probe"
+    relevant_path.parent.mkdir()
+    relevant_path.write_text("probe\n", encoding="utf-8")
+    git("add", ".devcontainer/probe")
+    git("commit", "-qm", "relevant")
+    relevant = git("rev-parse", "HEAD")
+    result = classify(unrelated, relevant)
+    assert result.returncode == 0
+    assert result.stdout.strip() == "true"
+
+    relevant_path.unlink()
+    git("add", "-u")
+    git("commit", "-qm", "delete relevant")
+    deletion = git("rev-parse", "HEAD")
+    result = classify(relevant, deletion)
+    assert result.returncode == 0
+    assert result.stdout.strip() == "true"
+
+    dependency_base = deletion
+    for index, relative in enumerate(INDEPENDENT_DEPENDENCY_INPUT_RELATIVES):
+        dependency_path = tmp_path / relative
+        dependency_path.parent.mkdir(parents=True, exist_ok=True)
+        dependency_path.write_text(f"dependency-{index}\n", encoding="utf-8")
+        git("add", relative)
+        git("commit", "-qm", f"dependency {index}")
+        dependency_head = git("rev-parse", "HEAD")
+        result = classify(dependency_base, dependency_head)
+        assert result.returncode == 0
+        assert result.stdout.strip() == "true", relative
+        dependency_base = dependency_head
+
+    git("commit", "--allow-empty", "-qm", "empty")
+    empty = git("rev-parse", "HEAD")
+    result = classify(dependency_base, empty)
+    assert result.returncode == 0
+    assert result.stdout.strip() == "true"
+
+    result = classify(base, "f" * 40)
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "head commit is unavailable" in result.stderr
 
 
 def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
@@ -357,24 +1478,45 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     verify = VERIFY.read_text(encoding="utf-8")
     upload = UPLOAD.read_text(encoding="utf-8")
     create_codespace = CREATE_CODESPACE.read_text(encoding="utf-8")
-    combined = bootstrap + identity + verify + upload + create_codespace
+    cloud_verify = CLOUD_VERIFY.read_text(encoding="utf-8")
+    candidate_codespace = CANDIDATE_CODESPACE.read_text(encoding="utf-8")
+    combined = (
+        bootstrap
+        + identity
+        + verify
+        + upload
+        + create_codespace
+        + cloud_verify
+        + candidate_codespace
+    )
 
     assert PRIVATE_SOURCE_ROOT in combined
     assert SANDBOX_VENV in combined
     assert "CODESPACES" in combined
+    assert '"$(id -un)" = "vscode"' in bootstrap
+    assert "DUTCHBAY_SANDBOX_EXECUTION_HOST:-github_codespaces" not in bootstrap
+    assert 'EXECUTION_HOST="github_codespaces"' in bootstrap
+    assert "-d -m 0755 -o vscode -g vscode /workspaces" in bootstrap
+    assert '"vscode:vscode:755"' in bootstrap
+    assert bootstrap.index("-d -m 0755 -o vscode -g vscode /workspaces") < (
+        bootstrap.index('install -d -m 0700 \\\n  "$PRIVATE_ROOT"')
+    )
     assert ".devcontainer/devcontainer.json" in identity
+    assert ".devcontainer/devcontainer-lock.json" in identity
     assert ".devcontainer/Dockerfile" in identity
     assert ".devcontainer/install_audit_review_sshd.sh" in identity
-    assert ".devcontainer/ssh_entrypoint.sh" in identity
     assert ".devcontainer/start_audit_review_sshd.sh" in identity
     assert ".devcontainer/attest_audit_review_sshd.sh" in identity
     assert ".devcontainer/bootstrap_audit_review.sh" in identity
     assert 'realpath -e "$SOURCE_ROOT"' in combined
     assert "private P03 source root must not be a symlink" in combined
-    assert "SSH transport did not become ready before the post-create lifecycle" in (
+    assert "SSH transport did not become ready before the audit bootstrap" in (
         bootstrap
     )
-    assert "/run/dutchbay-sshd-pre-lifecycle.ready" in bootstrap
+    assert bootstrap.index(
+        "/usr/local/sbin/dutchbay-sshd-start.sh --start"
+    ) < bootstrap.index("/usr/local/lib/dutchbay/sshd_readiness.py")
+    assert "/run/dutchbay-sshd-runtime.ready" in bootstrap
     assert "/usr/local/lib/dutchbay/sshd_readiness.py" in bootstrap
     assert "/usr/local/lib/dutchbay/sshd_readiness.py" in verify
     assert '"completion_authorized": False' in identity
@@ -389,8 +1531,12 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert "git merge --ff-only origin/main" not in upload
     assert "git switch --detach origin/main" in upload
     assert 'main|"")' in upload
-    assert 'test -z "$(git status --porcelain)"' in upload
+    assert "checkout_status=$(git status --porcelain=v1) ||" in upload
+    assert 'test -z "$(git status' not in upload
     assert "REMOTE_TRANSPORT_SMOKE" in upload
+    assert upload.count("gh codespace cp --expand") == 2
+    assert "remote:$REMOTE_SMOKE_PATH" in upload
+    assert '"remote:$REMOTE_SOURCE_ROOT/"' in upload
     assert 'cmp -- "$repo_root/.devcontainer/devcontainer.json"' in upload
     assert "REMOTE_TRANSPORT_CLEANUP" in upload
     assert "trap cleanup_transport_probe EXIT" in upload
@@ -398,6 +1544,15 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert "delete and recreate it before retrying" in upload
     assert "DUTCHBAY_P03_CLOUD_INGRESS_AUTHORIZED" in upload
     assert "DUTCHBAY_1110_REVIEW_CODESPACE_NAME" in upload
+    assert "DUTCHBAY_1110_REVIEW_CODESPACE_NAME" in cloud_verify
+    assert '"/user/codespaces/$CODESPACE_NAME"' in cloud_verify
+    assert ".repository.full_name == $repository" in cloud_verify
+    assert '.git_status.ref == "main"' in cloud_verify
+    assert 'receipt.get("codespace_name") != sys.argv[2]' in cloud_verify
+    assert "scripts/verify_1110_cloud_review_sandbox.sh" in cloud_verify
+    assert 'schema: "dutchbay.audit_review_outer_verification.v1"' in cloud_verify
+    assert 'receipt.get("codespace_name") != sys.argv[2]' in upload
+    assert 'test "$CODESPACE_NAME" = "$expected_codespace_name"' not in upload
     assert "gh codespace list" not in upload
     assert upload.count('verify_codespace_identity "$codespace_name"') == 2
     assert '"/user/codespaces/$codespace_name"' in upload
@@ -410,18 +1565,47 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
         create_codespace
     )
     assert "trap release_create_lock EXIT" in create_codespace
-    assert "post-create Codespace identity/collision check failed" in create_codespace
+    assert 'rmdir -- "$CREATE_LOCK" || fail' in create_codespace
+    assert 'create_lock_held="false"' in create_codespace
+    assert create_codespace.index('rmdir -- "$CREATE_LOCK" || fail') < (
+        create_codespace.index("printf '%s\\n' \"$codespace_name\"")
+    )
+    assert "post-create Codespace identity check failed" in create_codespace
+    assert 'readonly EXPECTED_REF="main"' in create_codespace
+    assert "readonly API_COMMAND_TIMEOUT_SECONDS=30" in create_codespace
+    assert "readonly CREATE_COMMAND_TIMEOUT_SECONDS=300" in create_codespace
+    assert "readonly AMBIGUOUS_CREATE_RECOVERY_TIMEOUT_SECONDS=120" in (
+        create_codespace
+    )
+    assert 'create_output=$(bounded_command "$CREATE_COMMAND_TIMEOUT_SECONDS"' in (
+        create_codespace
+    )
+    assert 'creation_pending="true"' in create_codespace
+    assert "recover_pending_review_codespace_boundedly" in create_codespace
+    assert "recover_unique_review_codespace_once" in create_codespace
+    assert ".git_status.ref == $ref" in create_codespace
+    assert '"$CREATE_LOCK/UNRESOLVED"' in create_codespace
+    assert '"$LOCAL_CLEANUP_MARKER"' in create_codespace
     assert "readonly MAX_TRANSPORT_TIMEOUT_SECONDS=300" in create_codespace
+    assert "readonly PROCESS_CLEANUP_TIMEOUT_SECONDS=2" in create_codespace
+    assert "readonly REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS=30" in create_codespace
     assert "readonly POLL_SECONDS=5" in create_codespace
     assert "start_new_session=True" in create_codespace
     assert "os.killpg" in create_codespace
-    assert "deadline = time.monotonic() + timeout - cleanup_budget" in (
-        create_codespace
-    )
-    assert "process.wait(timeout=min(10.0, remaining))" in create_codespace
+    assert "overall_deadline = time.monotonic() + timeout" in create_codespace
+    assert "attempt_deadline = overall_deadline - cleanup_budget" in create_codespace
+    assert "timeout=min(attempt_timeout_seconds, remaining)" in create_codespace
+    assert "min(10.0, remaining)" not in create_codespace
+    assert "transport probe process group could not be reaped" in create_codespace
+    assert 'create_lock_held="unresolved"' in create_codespace
+    assert "readonly PROCESS_CLEANUP_TIMEOUT_SECONDS=2" in cloud_verify
+    assert "verification process group could not be reaped" in cloud_verify
+    assert "except PermissionError:" in cloud_verify
     assert "sshd_readiness.py 5" in create_codespace
     assert '["gh", "codespace", "ssh"' in create_codespace
     document = DOC.read_text(encoding="utf-8")
+    assert "visible advisory check" in document
+    assert "separate repository-owner ruleset decision" in document
     assignment = 'DUTCHBAY_1110_REVIEW_CODESPACE_NAME="$('
     assert assignment in document
     assert f"export {assignment}" not in document
@@ -431,6 +1615,13 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert '"$CONTAINER_PYTHON" -S' in bootstrap
     assert '"$CONTAINER_PYTHON" -S' in verify
     assert 'PYTHONPATH="$PWD/.devcontainer" python3.12' not in combined
+    assert 'SANDBOX_CODESPACE_NAME="$CODESPACE_NAME"' in bootstrap
+    assert 'DUTCHBAY_EXPECTED_CODESPACE_NAME="$expected_codespace_name"' in upload
+    assert "repository bytecode is executable untracked input" in bootstrap
+    assert "repository bytecode is executable untracked input" in verify
+    assert "repository bytecode is executable untracked input" in (
+        SSHD_ATTESTOR.read_text(encoding="utf-8")
+    )
     assert "PYTHONDONTWRITEBYTECODE=1" in bootstrap
     assert "PYTHONDONTWRITEBYTECODE=1" in verify
     assert '"installed_environment_content_sha256"' in identity
@@ -447,7 +1638,7 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
         "devcontainer_base_image_digest",
         "repository_configured_devcontainer_features",
         "base_image_embedded_feature_metadata",
-        "openssh_packages",
+        "ssh_transport_packages",
         "sshd_effective_config_sha256",
         "sshd_transport_content_sha256",
         "sshd_host_public_key_fingerprints",
@@ -462,12 +1653,12 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert "actions/upload-artifact" not in combined
     assert "forwardPorts" not in combined
     assert BOOTSTRAP.stat().st_mode & 0o111
-    assert SSHD_ENTRYPOINT.stat().st_mode & 0o111
     assert SSHD_START.stat().st_mode & 0o111
     assert SSHD_ATTESTOR.stat().st_mode & 0o111
     assert VERIFY.stat().st_mode & 0o111
     assert UPLOAD.stat().st_mode & 0o111
     assert CREATE_CODESPACE.stat().st_mode & 0o111
+    assert CLOUD_VERIFY.stat().st_mode & 0o111
 
 
 def test_sshd_readiness_waits_for_banner_and_rejects_process_only(
@@ -589,12 +1780,32 @@ def test_codespace_creation_watchdog_bounds_a_hung_ssh_probe(
     """The create wrapper must kill a hung transport probe at one deadline."""
     fake_gh = tmp_path / "gh"
     child_pid_file = tmp_path / "child.pid"
+    state_file = tmp_path / "created"
+    lock_path = tmp_path / "create.lock"
+    creator_copy = tmp_path / "create-codespace"
+    creator_copy.write_text(
+        CREATE_CODESPACE.read_text(encoding="utf-8").replace(
+            'readonly CREATE_LOCK="/tmp/dutchbay-1110-codespace-create.lock"',
+            f'readonly CREATE_LOCK="{lock_path!s}"',
+        ),
+        encoding="utf-8",
+    )
+    creator_copy.chmod(0o755)
     fake_gh.write_text(
         """#!/usr/bin/env bash
 set -euo pipefail
 case "${1:-}:${2:-}" in
-  api:*) printf '%s\\n' '[{"codespaces":[]}]' ;;
-  codespace:create) printf '%s\\n' 'mock-codespace' ;;
+  api:*)
+    if [ -e "$DUTCHBAY_TEST_STATE_FILE" ]; then
+      printf '%s\\n' '[{"codespaces":[{"name":"mock-codespace","display_name":"DutchBay 1110 independent review","repository":{"full_name":"arunakulat/dutchbay-epc-model"},"git_status":{"ref":"main"}}]}]'
+    else
+      printf '%s\\n' '[{"codespaces":[]}]'
+    fi
+    ;;
+  codespace:create)
+    : > "$DUTCHBAY_TEST_STATE_FILE"
+    printf '%s\\n' 'mock-codespace'
+    ;;
   codespace:ssh)
     trap 'exit 0' TERM
     python3 -c 'import os, signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); open(os.environ["DUTCHBAY_TEST_CHILD_PID_FILE"], "w", encoding="ascii").write(str(os.getpid())); time.sleep(10)' &
@@ -608,7 +1819,7 @@ esac
     fake_gh.chmod(0o755)
     started = time.monotonic()
     result = subprocess.run(
-        (str(CREATE_CODESPACE),),
+        (str(creator_copy),),
         cwd=REPO_ROOT,
         env={
             **os.environ,
@@ -616,25 +1827,33 @@ esac
             "DUTCHBAY_VENV": str(Path(sys.executable).parents[1]),
             "DUTCHBAY_CODESPACE_TRANSPORT_TIMEOUT_SECONDS": "1",
             "DUTCHBAY_TEST_CHILD_PID_FILE": str(child_pid_file),
+            "DUTCHBAY_TEST_STATE_FILE": str(state_file),
         },
         capture_output=True,
         text=True,
         timeout=5,
     )
-    elapsed = time.monotonic() - started
-    assert result.returncode == 2
-    assert 0.5 <= elapsed < 4.0
-    assert "inspect or delete: mock-codespace" in result.stderr
-    child_pid = int(child_pid_file.read_text(encoding="ascii"))
-    child_alive = True
-    for _ in range(20):
-        if not _process_is_alive(child_pid):
-            child_alive = False
-            break
-        time.sleep(0.05)
-    if child_alive:  # pragma: no cover - cleanup before explicit failure
-        os.kill(child_pid, signal.SIGKILL)
-    assert not child_alive
+    child_pid: int | None = None
+    try:
+        elapsed = time.monotonic() - started
+        assert result.returncode == 2
+        assert 0.5 <= elapsed < 4.0
+        assert "inspect or delete: mock-codespace" in result.stderr
+        assert "retaining unresolved create lock" in result.stderr
+        assert (lock_path / "UNRESOLVED").is_file()
+        child_pid = int(child_pid_file.read_text(encoding="ascii"))
+        for _ in range(20):
+            if not _process_is_alive(child_pid):
+                break
+            time.sleep(0.05)
+        assert not _process_is_alive(child_pid)
+    finally:
+        if child_pid is not None and _process_is_alive(child_pid):
+            os.kill(child_pid, signal.SIGKILL)
+        if lock_path.exists():
+            for child in lock_path.iterdir():
+                child.unlink()
+            lock_path.rmdir()
 
 
 def test_identity_contract_binds_ingress_and_rejects_stale_markers(
@@ -668,7 +1887,10 @@ def test_identity_contract_binds_ingress_and_rejects_stale_markers(
     )
     assert receipt["dependency_input_sha256"] == dependency_digest
     assert receipt["devcontainer_base_image_digest"] == image_digest
-    assert receipt["repository_configured_devcontainer_features"] == []
+    assert receipt["repository_configured_devcontainer_features"] == [
+        "ghcr.io/devcontainers/features/sshd@"
+        "sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee"
+    ]
     assert receipt["base_image_embedded_feature_metadata"] == [
         "ghcr.io/devcontainers/features/common-utils:2",
         "ghcr.io/devcontainers/features/git:1",
@@ -723,11 +1945,19 @@ def test_sshd_policy_content_and_host_identity_fail_closed(tmp_path: Path) -> No
     """The attestor must reject policy drift and bind every transport byte."""
     identity = _load_identity_contract()
     assert identity.EXPECTED_SSHD_EFFECTIVE_VALUES == REQUIRED_SSHD_EFFECTIVE_POLICY
+    assert identity.EXPECTED_SSHD_SETENV_VALUES == REQUIRED_SSHD_SETENV_POLICY
     effective = "\n".join(
-        f"{key} {value}" for key, value in REQUIRED_SSHD_EFFECTIVE_POLICY.items()
+        [
+            *(
+                f"{key} {value}"
+                for key, value in REQUIRED_SSHD_EFFECTIVE_POLICY.items()
+            ),
+            f"setenv {' '.join(sorted(REQUIRED_SSHD_SETENV_POLICY))}",
+        ]
     )
     package_inventory = "\n".join(
         (
+            "lsof|amd64|install ok installed|4.95.0",
             "openssh-client|amd64|install ok installed|1:9.2p1",
             "openssh-server|amd64|install ok installed|1:9.2p1",
             "openssh-sftp-server|amd64|install ok installed|1:9.2p1",
@@ -750,6 +1980,79 @@ def test_sshd_policy_content_and_host_identity_fail_closed(tmp_path: Path) -> No
     assert first["sshd_effective_config_sha256"]
     assert first["sshd_transport_content_sha256"]
     assert first["sshd_host_public_key_fingerprints"] == (VALID_SSH_HOST_FINGERPRINTS)
+
+    equivalent_sidecars = list(arguments["host_public_key_sidecars"])
+    equivalent_sidecars[0] = equivalent_sidecars[0].rstrip("=")
+    equivalent = identity.build_sshd_transport_identity(
+        **{**arguments, "host_public_key_sidecars": equivalent_sidecars}
+    )
+    assert equivalent == first
+
+    commented_material = list(arguments["host_public_key_material"])
+    commented_material[1] = f"{commented_material[1]} runtime-generated-host-key"
+    commented = identity.build_sshd_transport_identity(
+        **{**arguments, "host_public_key_material": commented_material}
+    )
+    assert commented == first
+
+    try:
+        identity._validated_ssh_public_key_blob(
+            f"{VALID_SSH_HOST_PUBLIC_KEYS[1]}\n{VALID_SSH_HOST_PUBLIC_KEYS[2]}"
+        )
+    except identity.SandboxIdentityError as exc:
+        assert "public-key identity" in str(exc)
+    else:  # pragma: no cover - explicit fail branch
+        raise AssertionError("multiline SSH public-key material was accepted")
+
+    wrong_environment = effective.replace(
+        "DUTCHBAY_VENV=/workspaces/.dutchbay-audit-review-venv",
+        "DUTCHBAY_VENV=/tmp/untrusted",
+    )
+    try:
+        identity.build_sshd_transport_identity(
+            **{**arguments, "effective_config": wrong_environment}
+        )
+    except identity.SandboxIdentityError as exc:
+        assert "session environment" in str(exc)
+    else:  # pragma: no cover - explicit fail branch
+        raise AssertionError("redirected SSH session environment was accepted")
+
+    unsafe_effective_values = {
+        "authorizedkeyscommand none": "authorizedkeyscommand /tmp/accept-any-key",
+        "authorizedkeyscommanduser none": "authorizedkeyscommanduser root",
+        "authorizedkeysfile .ssh/authorized_keys": "authorizedkeysfile /tmp/keys",
+        "authorizedprincipalscommand none": (
+            "authorizedprincipalscommand /tmp/accept-principal"
+        ),
+        "authorizedprincipalscommanduser none": (
+            "authorizedprincipalscommanduser root"
+        ),
+        "authorizedprincipalsfile none": "authorizedprincipalsfile /tmp/principals",
+        "chrootdirectory none": "chrootdirectory /tmp/untrusted",
+        "forcecommand none": "forcecommand /tmp/untrusted-command",
+        "permituserenvironment no": "permituserenvironment yes",
+        "strictmodes yes": "strictmodes no",
+        "trustedusercakeys none": "trustedusercakeys /tmp/untrusted-ca.pub",
+    }
+    for safe_value, unsafe_value in unsafe_effective_values.items():
+        try:
+            identity.validate_sshd_effective_config(
+                effective.replace(safe_value, unsafe_value)
+            )
+        except identity.SandboxIdentityError as exc:
+            assert "effective SSH policy" in str(exc)
+        else:  # pragma: no cover - explicit fail branch
+            raise AssertionError(f"unsafe SSH policy was accepted: {unsafe_value}")
+
+    resolved_match_override = effective.replace(
+        "passwordauthentication no", "passwordauthentication yes"
+    )
+    try:
+        identity.validate_sshd_effective_config(resolved_match_override)
+    except identity.SandboxIdentityError as exc:
+        assert "effective SSH policy" in str(exc)
+    else:  # pragma: no cover - explicit fail branch
+        raise AssertionError("resolved Match User override was accepted")
 
     executable.write_bytes(b"binary-v2")
     second = identity.build_sshd_transport_identity(**arguments)
@@ -883,6 +2186,86 @@ def test_sshd_policy_content_and_host_identity_fail_closed(tmp_path: Path) -> No
             raise AssertionError(f"unsafe effective SSH value was accepted: {key}")
 
 
+def test_authenticated_ssh_connection_context_is_exact_and_fail_closed() -> None:
+    """Session attestation must use the real, approved tunnel connection tuple."""
+    identity = _load_identity_contract()
+    assert identity.build_sshd_session_connection_context(
+        "127.0.0.1 49152 127.0.0.1 2222",
+        "127.0.0.1 49152 2222",
+    ) == ("user=vscode,host=localhost,addr=127.0.0.1,laddr=127.0.0.1,lport=2222")
+    assert (
+        identity.build_sshd_session_connection_context(
+            "::1 49153 ::1 2222",
+            "::1 49153 2222",
+        )
+        == "user=vscode,host=localhost,addr=::1,laddr=::1,lport=2222"
+    )
+
+    rejected = (
+        ("", ""),
+        ("127.0.0.1 1 127.0.0.1", "127.0.0.1 1 2222"),
+        ("127.0.0.1 49152 127.0.0.1 2222", "127.0.0.1 49153 2222"),
+        ("10.0.0.1 49152 127.0.0.1 2222", "10.0.0.1 49152 2222"),
+        ("127.0.0.1 49152 10.0.0.2 2222", "127.0.0.1 49152 2222"),
+        ("127.0.0.1 49152 127.0.0.1 22", "127.0.0.1 49152 22"),
+    )
+    for connection, client in rejected:
+        try:
+            identity.build_sshd_session_connection_context(connection, client)
+        except identity.SandboxIdentityError:
+            pass
+        else:  # pragma: no cover - explicit fail branch
+            raise AssertionError(f"unsafe SSH tuple was accepted: {connection!r}")
+
+
+def test_sshd_include_graph_is_closed_regular_and_complete(tmp_path: Path) -> None:
+    """The SSH content identity must cover one closed Include population."""
+    identity = _load_identity_contract()
+    ssh_root = tmp_path / "etc" / "ssh"
+    drop_in_root = ssh_root / "sshd_config.d"
+    drop_in_root.mkdir(parents=True)
+    main = ssh_root / "sshd_config"
+    controlled = drop_in_root / "00-dutchbay-audit-review.conf"
+    package_owned = drop_in_root / "200-feature.conf"
+    main.write_text("Include /etc/ssh/sshd_config.d/*.conf\n", encoding="utf-8")
+    controlled.write_text("PasswordAuthentication no\n", encoding="utf-8")
+    package_owned.write_text("Port 2222\n", encoding="utf-8")
+
+    local_pattern = f"{drop_in_root}/*.conf"
+    main.write_text(f"Include {local_pattern}\n", encoding="utf-8")
+    identity.validate_sshd_include_graph(
+        main,
+        [controlled, package_owned],
+        expected_include_pattern=local_pattern,
+    )
+    controlled.write_text("Include /tmp/alternate.conf\n", encoding="utf-8")
+    try:
+        identity.validate_sshd_include_graph(
+            main,
+            [controlled, package_owned],
+            expected_include_pattern=local_pattern,
+        )
+    except identity.SandboxIdentityError as exc:
+        assert "nested" in str(exc)
+    else:  # pragma: no cover - explicit fail branch
+        raise AssertionError("nested SSH Include was accepted")
+    controlled.write_text("PasswordAuthentication no\n", encoding="utf-8")
+    target = tmp_path / "aliased-main"
+    target.write_text(main.read_text(encoding="utf-8"), encoding="utf-8")
+    main.unlink()
+    main.symlink_to(target)
+    try:
+        identity.validate_sshd_include_graph(
+            main,
+            [controlled, package_owned],
+            expected_include_pattern=local_pattern,
+        )
+    except identity.SandboxIdentityError as exc:
+        assert "unsafe" in str(exc)
+    else:  # pragma: no cover - explicit fail branch
+        raise AssertionError("symlinked SSH main configuration was accepted")
+
+
 def test_base_image_policy_cannot_drift_from_reported_digest(tmp_path: Path) -> None:
     """One FROM reference must select both its digest and metadata policy."""
     identity = _load_identity_contract()
@@ -890,26 +2273,42 @@ def test_base_image_policy_cannot_drift_from_reported_digest(tmp_path: Path) -> 
     devcontainer_dir.mkdir()
     config = {
         "build": {"dockerfile": "Dockerfile", "context": ".."},
-        "overrideCommand": True,
+        "features": {identity.EXPECTED_REPOSITORY_FEATURE: {}},
+        "overrideCommand": False,
         "init": True,
         "containerUser": "root",
         "remoteUser": "vscode",
         "postStartCommand": "bash .devcontainer/start_audit_review_sshd.sh --start",
     }
     config_path = devcontainer_dir / "devcontainer.json"
+    lock_path = devcontainer_dir / "devcontainer-lock.json"
     dockerfile_path = devcontainer_dir / "Dockerfile"
     config_path.write_text(json.dumps(config), encoding="utf-8")
+    lock_path.write_text(
+        json.dumps(
+            {
+                "features": {
+                    identity.EXPECTED_REPOSITORY_FEATURE: {
+                        "version": "1.1.0",
+                        "resolved": identity.EXPECTED_REPOSITORY_FEATURE_RESOLVED,
+                        "integrity": identity.EXPECTED_REPOSITORY_FEATURE_DIGEST,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
     dockerfile_path.write_text(
         f"FROM {identity.EXPECTED_BASE_IMAGE}\n", encoding="utf-8"
     )
     try:
         identity.configured_base_image_digest(tmp_path)
     except identity.SandboxIdentityError as exc:
-        assert "entrypoint" in str(exc)
+        assert "keepalive" in str(exc)
     else:  # pragma: no cover - explicit fail branch
-        raise AssertionError("disabled devcontainer image entrypoint was accepted")
+        raise AssertionError("disabled devcontainer keepalive was accepted")
 
-    config["overrideCommand"] = False
+    config["overrideCommand"] = True
     config_path.write_text(json.dumps(config), encoding="utf-8")
     replacement = "mcr.microsoft.com/devcontainers/python:test@" + f"sha256:{'b' * 64}"
     dockerfile_path.write_text(f"FROM {replacement}\n", encoding="utf-8")
@@ -925,8 +2324,8 @@ def test_base_image_policy_cannot_drift_from_reported_digest(tmp_path: Path) -> 
         identity.EXPECTED_BASE_IMAGE = original
 
 
-def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
-    """Bootstrap and verification receipts must each preserve their v2 contract."""
+def test_v3_receipt_builders_enforce_exact_independent_schemas() -> None:
+    """Bootstrap and verification receipts must each preserve their v3 contract."""
     identity = _load_identity_contract()
     assert identity.DEPENDENCY_INPUT_RELATIVES == (
         INDEPENDENT_DEPENDENCY_INPUT_RELATIVES
@@ -943,11 +2342,15 @@ def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
         identity=sandbox_identity,
         sshd_identity=sshd_identity,
         source_state="private_root_empty",
+        execution_host="github_codespaces",
+        codespace_name="dutchbay-review-test",
     )
     verification = identity.build_verification_receipt(
         identity=sandbox_identity,
         sshd_identity=sshd_identity,
         source_state="private_root_empty_p03_not_executed",
+        execution_host="github_codespaces",
+        codespace_name="dutchbay-review-test",
     )
     common_keys = (
         set(sandbox_identity)
@@ -956,6 +2359,7 @@ def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
             "schema",
             "status",
             "environment",
+            "codespace_name",
             "p03_source_state",
             "network_boundary",
             "completion_authorized",
@@ -963,8 +2367,13 @@ def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
         }
     )
     assert set(bootstrap) == common_keys | {"python"}
-    assert bootstrap["schema"] == "dutchbay.audit_review_sandbox_bootstrap.v2"
+    assert bootstrap["schema"] == "dutchbay.audit_review_sandbox_bootstrap.v3"
     assert bootstrap["status"] == "PASS"
+    assert bootstrap["environment"] == "github_codespaces"
+    assert bootstrap["codespace_name"] == "dutchbay-review-test"
+    assert bootstrap["network_boundary"] == (
+        "creator_private_codespace_outbound_egress_available"
+    )
     assert bootstrap["completion_authorized"] is False
     assert bootstrap["release_status"] == "HOLD"
     assert set(verification) == common_keys | {
@@ -972,13 +2381,30 @@ def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
         "p02_structural_controls",
         "semantic_review_completed",
     }
-    assert verification["schema"] == "dutchbay.audit_review_sandbox_receipt.v2"
+    assert verification["schema"] == "dutchbay.audit_review_sandbox_receipt.v3"
     assert verification["status"] == "PASS"
+    assert verification["environment"] == "github_codespaces"
+    assert verification["codespace_name"] == "dutchbay-review-test"
+    assert verification["network_boundary"] == (
+        "creator_private_codespace_outbound_egress_available"
+    )
     assert verification["sshd_process"] == "running"
     assert verification["p02_structural_controls"] == "passed"
     assert verification["semantic_review_completed"] is False
     assert verification["completion_authorized"] is False
     assert verification["release_status"] == "HOLD"
+
+    hosted_bootstrap = identity.build_bootstrap_receipt(
+        identity=sandbox_identity,
+        sshd_identity=sshd_identity,
+        source_state="private_root_empty",
+        execution_host="github_actions_devcontainer_emulation",
+        codespace_name="dutchbay-ci-audit-review",
+    )
+    assert hosted_bootstrap["environment"] == ("github_actions_devcontainer_emulation")
+    assert hosted_bootstrap["network_boundary"] == (
+        "github_actions_hosted_runner_outbound_egress_available"
+    )
 
     missing = dict(sshd_identity)
     missing.pop("sshd_transport_content_sha256")
@@ -989,6 +2415,8 @@ def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
                 identity=sandbox_identity,
                 sshd_identity=invalid,
                 source_state="private_root_empty_p03_not_executed",
+                execution_host="github_codespaces",
+                codespace_name="dutchbay-review-test",
             )
         except identity.SandboxIdentityError as exc:
             assert "receipt fields" in str(exc)
@@ -1013,6 +2441,8 @@ def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
                 identity=invalid_identity,
                 sshd_identity=sshd_identity,
                 source_state="private_root_empty",
+                execution_host="github_codespaces",
+                codespace_name="dutchbay-review-test",
             )
         except identity.SandboxIdentityError as exc:
             assert "controlled-input" in str(exc)
@@ -1020,8 +2450,8 @@ def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
             raise AssertionError("invalid controlled-input population was accepted")
 
     bad_status = dict(sshd_identity)
-    bad_status["openssh_packages"] = list(sshd_identity["openssh_packages"])
-    bad_status["openssh_packages"][0] = "openssh-client|amd64|BROKEN|1:9.2p1"
+    bad_status["ssh_transport_packages"] = list(sshd_identity["ssh_transport_packages"])
+    bad_status["ssh_transport_packages"][0] = "lsof|amd64|BROKEN|4.95.0"
     bad_status = _with_sshd_self_digest(bad_status)
     duplicate_fingerprints = dict(sshd_identity)
     duplicate_fingerprints["sshd_host_public_key_fingerprints"] = [
@@ -1029,7 +2459,7 @@ def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
     ] * 3
     duplicate_fingerprints = _with_sshd_self_digest(duplicate_fingerprints)
     for invalid_sshd, expected_error in (
-        (bad_status, "OpenSSH package inventory"),
+        (bad_status, "SSH transport package inventory"),
         (duplicate_fingerprints, "SSH identity populations"),
     ):
         try:
@@ -1037,6 +2467,8 @@ def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
                 identity=sandbox_identity,
                 sshd_identity=invalid_sshd,
                 source_state="private_root_empty_p03_not_executed",
+                execution_host="github_codespaces",
+                codespace_name="dutchbay-review-test",
             )
         except identity.SandboxIdentityError as exc:
             assert expected_error in str(exc)
@@ -1050,6 +2482,8 @@ def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
             identity=sandbox_identity,
             sshd_identity=stale_self_digest,
             source_state="private_root_empty_p03_not_executed",
+            execution_host="github_codespaces",
+            codespace_name="dutchbay-review-test",
         )
     except identity.SandboxIdentityError as exc:
         assert "self-digest" in str(exc)
@@ -1062,6 +2496,8 @@ def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
                 identity=sandbox_identity,
                 sshd_identity=sshd_identity,
                 source_state=invalid_state,
+                execution_host="github_codespaces",
+                codespace_name="dutchbay-review-test",
             )
         except identity.SandboxIdentityError as exc:
             assert "source state" in str(exc)
@@ -1072,11 +2508,53 @@ def test_v2_receipt_builders_enforce_exact_independent_schemas() -> None:
                 identity=sandbox_identity,
                 sshd_identity=sshd_identity,
                 source_state=invalid_state,
+                execution_host="github_codespaces",
+                codespace_name="dutchbay-review-test",
             )
         except identity.SandboxIdentityError as exc:
             assert "source state" in str(exc)
         else:  # pragma: no cover - explicit fail branch
             raise AssertionError("invalid verification source state was accepted")
+
+    for invalid_host in (None, "", "ambiguous_host"):
+        try:
+            identity.build_bootstrap_receipt(
+                identity=sandbox_identity,
+                sshd_identity=sshd_identity,
+                source_state="private_root_empty",
+                execution_host=invalid_host,
+                codespace_name="dutchbay-review-test",
+            )
+        except identity.SandboxIdentityError as exc:
+            assert "execution-host provenance" in str(exc)
+        else:  # pragma: no cover - explicit fail branch
+            raise AssertionError("invalid bootstrap execution host was accepted")
+
+    for invalid_name in (None, "", "name with spaces", "name/with/slash"):
+        try:
+            identity.build_bootstrap_receipt(
+                identity=sandbox_identity,
+                sshd_identity=sshd_identity,
+                source_state="private_root_empty",
+                execution_host="github_codespaces",
+                codespace_name=invalid_name,
+            )
+        except identity.SandboxIdentityError as exc:
+            assert "Codespace identity" in str(exc)
+        else:  # pragma: no cover - explicit fail branch
+            raise AssertionError("invalid bootstrap Codespace name was accepted")
+        try:
+            identity.build_verification_receipt(
+                identity=sandbox_identity,
+                sshd_identity=sshd_identity,
+                source_state="private_root_empty_p03_not_executed",
+                execution_host="github_codespaces",
+                codespace_name=invalid_name,
+            )
+        except identity.SandboxIdentityError as exc:
+            assert "Codespace identity" in str(exc)
+        else:  # pragma: no cover - explicit fail branch
+            raise AssertionError("invalid verification Codespace name was accepted")
 
 
 def test_package_content_fingerprint_detects_drift_without_importing_site(
@@ -1170,10 +2648,10 @@ def test_absolute_attestor_rejects_shadowed_venv_launcher(tmp_path: Path) -> Non
     assert not sentinel.exists()
 
 
-def test_identity_rejects_any_executable_feature_or_feature_lock(
+def test_identity_rejects_unlocked_or_extra_repository_features(
     tmp_path: Path,
 ) -> None:
-    """The sandbox must reject every repository-configured Feature add-on."""
+    """Only the exact digest-locked SSH integration Feature is permitted."""
     identity = _load_identity_contract()
     config = json.loads(DEVCONTAINER.read_text(encoding="utf-8"))
     devcontainer_dir = tmp_path / ".devcontainer"
@@ -1181,21 +2659,29 @@ def test_identity_rejects_any_executable_feature_or_feature_lock(
     config_path = devcontainer_dir / "devcontainer.json"
     lock_path = devcontainer_dir / "devcontainer-lock.json"
 
+    original_lock = DEVCONTAINER_LOCK.read_text(encoding="utf-8")
     added_feature = json.loads(json.dumps(config))
-    added_feature["features"] = {"ghcr.io/example/extra:1": {}}
-    invalid_cases = ((added_feature, False), (config, True))
-    for candidate_config, add_lock in invalid_cases:
+    added_feature["features"]["ghcr.io/example/extra:1"] = {}
+    wrong_lock = json.loads(original_lock)
+    wrong_feature = wrong_lock["features"][identity.EXPECTED_REPOSITORY_FEATURE]
+    wrong_feature["integrity"] = f"sha256:{'0' * 64}"
+    invalid_cases = (
+        (added_feature, original_lock),
+        (config, None),
+        (config, json.dumps(wrong_lock)),
+    )
+    for candidate_config, lock_content in invalid_cases:
         config_path.write_text(json.dumps(candidate_config), encoding="utf-8")
         if lock_path.exists():
             lock_path.unlink()
-        if add_lock:
-            lock_path.write_text('{"features": {}}\n', encoding="utf-8")
+        if lock_content is not None:
+            lock_path.write_text(lock_content, encoding="utf-8")
         try:
             identity.configured_base_image_digest(tmp_path)
         except identity.SandboxIdentityError as exc:
-            assert "feature" in str(exc)
+            assert "feature" in str(exc).lower()
         else:  # pragma: no cover - explicit fail branch
-            raise AssertionError("executable devcontainer add-on was accepted")
+            raise AssertionError("unlocked or extra devcontainer Feature was accepted")
 
 
 def test_private_source_root_satisfies_the_merged_p03_scope_contract(
@@ -1346,8 +2832,9 @@ def test_runbook_requires_population_exact_additive_results() -> None:
         "HEAD == origin/main",
         "git switch --detach origin/main",
         "clean detached exact-main state",
-        "no repository-configured Dev Container Features",
-        "base image itself carries embedded Dev Container Feature metadata",
+        "declares one repository-configured Dev Container Feature",
+        "locked to its exact OCI digest",
+        "The base image itself carries separate embedded Dev Container Feature metadata",
         "Debian-only package source",
         "Host private keys are removed in the same image-build layer",
         "allowlist-validated effective SSH policy",

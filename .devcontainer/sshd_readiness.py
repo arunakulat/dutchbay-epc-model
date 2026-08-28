@@ -7,7 +7,7 @@ import sys
 import time
 from pathlib import Path
 
-EXPECTED_MARKER = "sshd_started_before_post_create"
+EXPECTED_MARKER = "sshd_ready_before_audit_bootstrap"
 EXPECTED_BANNER_PREFIX = b"SSH-2.0-OpenSSH_"
 MAX_IDENTIFICATION_LINE_BYTES = 255
 
@@ -17,7 +17,7 @@ class SshdReadinessError(RuntimeError):
 
 
 def _marker_is_ready(marker_path: Path | None) -> bool:
-    """Return whether the runtime-only pre-lifecycle marker is exact and safe."""
+    """Return whether the runtime-only SSH marker is exact and safe."""
     if marker_path is None:
         return True
     try:
@@ -44,7 +44,7 @@ def wait_for_sshd(
     last_error = "listener unavailable"
     while time.monotonic() < deadline:
         if not _marker_is_ready(marker_path):
-            last_error = "pre-lifecycle marker unavailable"
+            last_error = "SSH runtime marker unavailable"
             time.sleep(0.05)
             continue
         try:
@@ -86,7 +86,7 @@ def main() -> int:
     """Run the fixed Codespaces listener check without a general CLI surface."""
     if len(sys.argv) not in {2, 3}:
         raise SshdReadinessError(
-            "expected timeout seconds and optional pre-lifecycle marker"
+            "expected timeout seconds and optional SSH runtime marker"
         )
     try:
         timeout_seconds = float(sys.argv[1])

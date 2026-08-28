@@ -1,0 +1,287 @@
+name: audit-cloud-sandbox
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke:
+    name: build and boot audit review image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Bind checkout to the immutable event head
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          printf 'Exact candidate head: `%s`\n' "$EXPECTED_SHA" \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Classify audit-sandbox paths
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          relevant=false
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            relevant=true
+          else
+            relevant=$(
+              scripts/classify_1110_cloud_sandbox_paths.sh \
+                "$BASE_SHA" "$HEAD_SHA"
+            )
+          fi
+          printf 'relevant=%s\n' "$relevant" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node for the locked Dev Container CLI
+        if: steps.scope.outputs.relevant == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install the locked Dev Container CLI
+        if: steps.scope.outputs.relevant == 'true'
+        run: |
+          set -euo pipefail
+          readonly expected_cli_integrity='sha512-sMkruPy/icfov20mdQh2EjFYZogxvMEZptDEvg5/eMBIUOr2xr+8wlsI7nvDR6EJxoBjqoasXqgRGbiMqbaJ1w=='
+          test "$(npm view @devcontainers/cli@0.88.0 dist.integrity)" = \
+            "$expected_cli_integrity"
+          npm install --global --ignore-scripts @devcontainers/cli@0.88.0
+          test "$(devcontainer --version)" = "0.88.0"
+
+      - name: Build and start the exact Dev Container lifecycle
+        if: steps.scope.outputs.relevant == 'true'
+        id: up
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+
+          devcontainer up \
+            --workspace-folder "$GITHUB_WORKSPACE" \
+            --frozen-lockfile \
+            --remote-env CODESPACES=true \
+            --remote-env CODESPACE_NAME=dutchbay-ci-audit-review \
+            --remote-env DUTCHBAY_SANDBOX_EXECUTION_HOST=github_actions_devcontainer_emulation
+
+          checkout_status=$(git status --porcelain=v1) || exit 2
+          test -z "$checkout_status"
+
+          mapfile -t container_ids < <(
+            docker ps -aq \
+              --filter "label=devcontainer.local_folder=$GITHUB_WORKSPACE"
+          )
+          if [ "${#container_ids[@]}" -ne 1 ]; then
+            printf '%s\n' \
+              "::error::Expected one exact Dev Container; found ${#container_ids[@]}."
+            exit 1
+          fi
+          printf 'container_id=%s\n' "${container_ids[0]}" >> "$GITHUB_OUTPUT"
+          docker exec --user vscode \
+            --workdir /workspaces/dutchbay-epc-model \
+            "${container_ids[0]}" \
+            bash -ceu '
+              checkout_status=$(git status --porcelain=v1) || exit 2
+              test -z "$checkout_status"
+            '
+          docker exec --user vscode \
+            --workdir /workspaces/dutchbay-epc-model \
+            "${container_ids[0]}" \
+            /usr/local/bin/python3.12 -S -c '
+          import json, sys
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              receipt = json.load(stream)
+          expected = {
+              "schema": "dutchbay.audit_review_sandbox_bootstrap.v3",
+              "status": "PASS",
+              "environment": "github_actions_devcontainer_emulation",
+              "codespace_name": "dutchbay-ci-audit-review",
+              "network_boundary": "github_actions_hosted_runner_outbound_egress_available",
+              "git_commit": sys.argv[2],
+              "completion_authorized": False,
+              "release_status": "HOLD",
+          }
+          for key, value in expected.items():
+              if receipt.get(key) != value:
+                  raise SystemExit(f"bootstrap receipt field differs: {key}")
+          ' /workspaces/.dutchbay-private/bootstrap-receipt.json "$EXPECTED_SHA"
+
+      - name: Require authenticated SSH, attestation, and restart recovery
+        if: steps.scope.outputs.relevant == 'true'
+        env:
+          CONTAINER_ID: ${{ steps.up.outputs.container_id }}
+        run: |
+          set -euo pipefail
+
+          exercise_authenticated_transport() {
+            session_identity=$(
+              docker exec --user vscode \
+                --workdir /workspaces/dutchbay-epc-model \
+                "$CONTAINER_ID" bash -ceu '
+                probe_root=$(mktemp -d /tmp/dutchbay-ssh-probe.XXXXXX)
+                cleanup_probe() {
+                  unlink -- /home/vscode/.ssh/authorized_keys 2>/dev/null || true
+                  unlink -- "$probe_root/client" 2>/dev/null || true
+                  unlink -- "$probe_root/client.pub" 2>/dev/null || true
+                  unlink -- "$probe_root/known_hosts" 2>/dev/null || true
+                  rmdir -- "$probe_root" 2>/dev/null || true
+                }
+                trap cleanup_probe EXIT
+
+                ssh-keygen -q -t ed25519 -N "" -f "$probe_root/client"
+                install -d -m 0700 /home/vscode/.ssh
+                install -m 0600 "$probe_root/client.pub" \
+                  /home/vscode/.ssh/authorized_keys
+                read -r host_algorithm host_key _ < \
+                  /etc/ssh/ssh_host_ed25519_key.pub
+                printf "[127.0.0.1]:2222 %s %s\n" \
+                  "$host_algorithm" "$host_key" > "$probe_root/known_hosts"
+                chmod 0600 "$probe_root/known_hosts"
+
+                ssh -i "$probe_root/client" -p 2222 \
+                  -o BatchMode=yes \
+                  -o IdentitiesOnly=yes \
+                  -o PasswordAuthentication=no \
+                  -o KbdInteractiveAuthentication=no \
+                  -o StrictHostKeyChecking=yes \
+                  -o UserKnownHostsFile="$probe_root/known_hosts" \
+                vscode@127.0.0.1 \
+                  '"'"'test "$(id -un)" = vscode &&
+                    test "$(id -u)" -ne 0 &&
+                    test "${DUTCHBAY_VENV:-}" = /workspaces/.dutchbay-audit-review-venv &&
+                    test "${DUTCHBAY_P03_SOURCE_ROOT:-}" = /workspaces/.dutchbay-private/p03/sources &&
+                    test "${PYTHONPATH:-}" = /workspaces/dutchbay-epc-model &&
+                    case ":${PATH:-}:" in
+                      *:/workspaces/.dutchbay-audit-review-venv/bin:*) ;;
+                      *) exit 2 ;;
+                    esac &&
+                    cd /workspaces/dutchbay-epc-model &&
+                    bash .devcontainer/attest_audit_review_sshd.sh --session'"'"'
+              '
+            )
+            session_digest=$(
+              jq -er '.sshd_identity_sha256
+                | strings
+                | select(test("^[0-9a-f]{64}$"))' <<< "$session_identity"
+            )
+            marker_digest=$(
+              docker exec "$CONTAINER_ID" bash -ceu '
+                tr -d "\r\n" \
+                  < /workspaces/.dutchbay-audit-review-venv/.dutchbay-sshd-identity.sha256
+              '
+            )
+            test "$marker_digest" = "$session_digest"
+          }
+
+          exercise_authenticated_transport
+
+          before_marker=$(docker exec "$CONTAINER_ID" \
+            stat -c '%i:%y' /run/dutchbay-sshd-runtime.ready)
+          docker stop "$CONTAINER_ID"
+
+          devcontainer up \
+            --workspace-folder "$GITHUB_WORKSPACE" \
+            --expect-existing-container \
+            --frozen-lockfile \
+            --remote-env CODESPACES=true \
+            --remote-env CODESPACE_NAME=dutchbay-ci-audit-review \
+            --remote-env DUTCHBAY_SANDBOX_EXECUTION_HOST=github_actions_devcontainer_emulation
+          checkout_status=$(git status --porcelain=v1) || exit 2
+          test -z "$checkout_status"
+          mapfile -t resumed_ids < <(
+            docker ps -aq \
+              --filter "label=devcontainer.local_folder=$GITHUB_WORKSPACE"
+          )
+          test "${#resumed_ids[@]}" -eq 1
+          test "${resumed_ids[0]}" = "$CONTAINER_ID"
+          docker exec --user vscode \
+            --workdir /workspaces/dutchbay-epc-model \
+            "$CONTAINER_ID" \
+            bash -ceu '
+              checkout_status=$(git status --porcelain=v1) || exit 2
+              test -z "$checkout_status"
+            '
+
+          after_resume_marker=$(docker exec "$CONTAINER_ID" \
+            stat -c '%i:%y' /run/dutchbay-sshd-runtime.ready)
+          test "$before_marker" != "$after_resume_marker"
+
+          docker exec --user vscode \
+            --workdir /workspaces/dutchbay-epc-model \
+            "$CONTAINER_ID" \
+            bash .devcontainer/start_audit_review_sshd.sh --start &
+          first_start_pid=$!
+          docker exec --user vscode \
+            --workdir /workspaces/dutchbay-epc-model \
+            "$CONTAINER_ID" \
+            bash .devcontainer/start_audit_review_sshd.sh --start &
+          second_start_pid=$!
+          wait "$first_start_pid"
+          wait "$second_start_pid"
+
+          docker exec --user vscode \
+            --workdir /workspaces/dutchbay-epc-model \
+            "$CONTAINER_ID" \
+            /usr/local/bin/python3.12 -S \
+            /usr/local/lib/dutchbay/sshd_readiness.py \
+            15 /run/dutchbay-sshd-runtime.ready
+          exercise_authenticated_transport
+
+      - name: Show container output on failure
+        if: failure() && steps.scope.outputs.relevant == 'true'
+        env:
+          CONTAINER_ID: ${{ steps.up.outputs.container_id }}
+        run: |
+          set -euo pipefail
+          if [ -n "$CONTAINER_ID" ]; then
+            docker logs "$CONTAINER_ID" || true
+          else
+            fallback_ids=$(
+              docker ps -aq \
+                --filter "label=devcontainer.local_folder=$GITHUB_WORKSPACE"
+            ) || exit 2
+            while IFS= read -r fallback_id; do
+              [ -n "$fallback_id" ] || continue
+              docker logs "$fallback_id" || true
+            done <<< "$fallback_ids"
+          fi
+
+      - name: Remove the exact Dev Container
+        if: always() && steps.scope.outputs.relevant == 'true'
+        env:
+          CONTAINER_ID: ${{ steps.up.outputs.container_id }}
+        run: |
+          set -euo pipefail
+          if [ -n "$CONTAINER_ID" ]; then
+            docker rm --force "$CONTAINER_ID"
+          else
+            fallback_ids=$(
+              docker ps -aq \
+                --filter "label=devcontainer.local_folder=$GITHUB_WORKSPACE"
+            ) || exit 2
+            while IFS= read -r fallback_id; do
+              [ -n "$fallback_id" ] || continue
+              docker rm --force "$fallback_id"
+            done <<< "$fallback_ids"
+          fi
+          remaining_ids=$(
+            docker ps -aq \
+              --filter "label=devcontainer.local_folder=$GITHUB_WORKSPACE"
+          ) || exit 2
+          test -z "$remaining_ids"
