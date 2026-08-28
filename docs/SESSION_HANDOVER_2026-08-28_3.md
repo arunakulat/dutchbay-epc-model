@@ -141,12 +141,13 @@ No GitHub Codespace exists for this repository. The candidate/create locks are
 absent, and no matching cloud-review helper is known to survive. Re-query those
 facts before any future deletion or cloud execution.
 
-This successor is authored on
-`codex/session-handover-bootstrap-2026-08-28`. After its protected PR is
-terminal green and verified merged, remove that clean worktree and its local
-and remote topic refs, prune metadata, and prove the primary checkout is clean
-and synchronized. Do not remove an open-PR branch or either preserved unique
-local branch.
+This successor is delivered through
+[#1185](https://github.com/arunakulat/dutchbay-epc-model/pull/1185) on branch
+`codex/session-handover-bootstrap-2026-08-28`. After that protected PR is
+terminal green and verified merged, remove the clean worktree and its local and
+remote topic refs, prune metadata, and prove the primary checkout is clean and
+synchronized. Do not remove an open-PR branch or either preserved unique local
+branch.
 
 ## 4. Remaining governed queue
 
