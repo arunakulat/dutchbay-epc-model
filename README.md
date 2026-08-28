@@ -228,6 +228,9 @@ Install `[grid]` under the constraints file to protect the core numeric pins:
   [primary-source ledger](docs/FEASIBILITY_REPORT_CONTRACT_SOURCES.md) — normative output,
   assurance, provenance and cross-delivery target (implementation conformance is explicitly
   incomplete)
+- [Global Feasibility Report Master Template v1](docs/GLOBAL_FEASIBILITY_REPORT_MASTER_TEMPLATE.md)
+  — prose-first, controlled authoring architecture for the exact 20-section global report
+  skeleton; contains no project facts or assurance claim
 - [Deployment Runbook](docs/deploy/DEPLOY.md) — Docker Compose and Fly.io
 - [Architecture](docs/PIPELINE_ARCHITECTURE.md) — pipeline and technical design
 - [Analytics Integration](docs/ANALYTICS_INTEGRATION.md) — analytics module details
