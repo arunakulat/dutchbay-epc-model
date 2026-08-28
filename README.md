@@ -224,6 +224,10 @@ Install `[grid]` under the constraints file to protect the core numeric pins:
 
 - [Development Guide](docs/DEVELOPMENT.md) — setup, gates, workflow, governance
 - [Module Reference](docs/MODULE_REFERENCE.md) — per-module purpose, reasoning, and grounding
+- [Global Feasibility Report Contract v1](docs/FEASIBILITY_REPORT_CONTRACT.md) and its
+  [primary-source ledger](docs/FEASIBILITY_REPORT_CONTRACT_SOURCES.md) — normative output,
+  assurance, provenance and cross-delivery target (implementation conformance is explicitly
+  incomplete)
 - [Deployment Runbook](docs/deploy/DEPLOY.md) — Docker Compose and Fly.io
 - [Architecture](docs/PIPELINE_ARCHITECTURE.md) — pipeline and technical design
 - [Analytics Integration](docs/ANALYTICS_INTEGRATION.md) — analytics module details
