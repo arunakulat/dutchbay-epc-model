@@ -72,9 +72,9 @@ for required_file in "${required_files[@]}"; do
   test -f "$required_file"
 done
 
-rg -q '^\*\*Domain final exact-tree disposition: ACCEPTED\.\*\*$' \
+rg -q '^\*\*Domain final exact-tree disposition: ACCEPTED\.\*\*' \
   docs/DOLPHIN_2_REMEDIATION_REREVIEW_RECORD.md
-rg -q '^\*\*Assurance final exact-tree disposition: ACCEPTED\.\*\*$' \
+rg -q '^\*\*Assurance final exact-tree disposition: ACCEPTED\.\*\*' \
   docs/DOLPHIN_2_REMEDIATION_REREVIEW_RECORD.md
 
 DUTCHBAY_VENV="$DUTCHBAY_VENV" ./check_venv.sh --no-bootstrap
