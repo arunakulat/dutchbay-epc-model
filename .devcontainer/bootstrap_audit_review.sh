@@ -5,14 +5,16 @@
 # source object, credential or raw runtime log is written into the repository.
 
 set -euo pipefail
+export PYTHONDONTWRITEBYTECODE=1
 
 readonly VENV_ROOT="/workspaces/.dutchbay-audit-review-venv"
 readonly CONTAINER_PYTHON="/usr/local/bin/python3.12"
 readonly PRIVATE_ROOT="/workspaces/.dutchbay-private"
+readonly BOOTSTRAP_RECEIPT_PATH="$PRIVATE_ROOT/bootstrap-receipt.json"
 readonly P03_ROOT="$PRIVATE_ROOT/p03"
 readonly SOURCE_ROOT="$P03_ROOT/sources"
 readonly TRANSPORT_ROOT="$PRIVATE_ROOT/transport-smoke"
-readonly PRE_LIFECYCLE_SSHD_MARKER="/run/dutchbay-sshd-pre-lifecycle.ready"
+readonly SSHD_RUNTIME_MARKER="/run/dutchbay-sshd-runtime.ready"
 readonly MARKER="$VENV_ROOT/.dutchbay-inputs.sha256"
 readonly IMAGE_MARKER="$VENV_ROOT/.dutchbay-image.sha256"
 readonly PACKAGE_MARKER="$VENV_ROOT/.dutchbay-environment-content.sha256"
@@ -20,10 +22,31 @@ readonly SSHD_MARKER="$VENV_ROOT/.dutchbay-sshd-identity.sha256"
 readonly REQUIRED_PIP_VERSION="26.2.1"
 readonly REQUIRED_SETUPTOOLS_VERSION="84.0.0"
 readonly REQUIRED_WHEEL_VERSION="0.48.0"
+execution_host_input="${DUTCHBAY_SANDBOX_EXECUTION_HOST:-}"
+if [ -n "$execution_host_input" ]; then
+  EXECUTION_HOST=$execution_host_input
+elif [ "${CODESPACES:-}" = "true" ] && [ -n "${CODESPACE_NAME:-}" ]; then
+  EXECUTION_HOST="github_codespaces"
+else
+  printf '%s\n' \
+    "ERROR: sandbox execution-host provenance is missing" >&2
+  exit 2
+fi
+readonly EXECUTION_HOST
 
 fail() {
   printf 'ERROR: %s\n' "$*" >&2
   exit 2
+}
+
+reject_repository_bytecode() {
+  local bytecode_probe
+  bytecode_probe=$(find .devcontainer \
+    \( -type d -name __pycache__ \
+      -o -type f \( -name '*.pyc' -o -name '*.pyo' \) \) \
+    -print -quit) || fail "repository bytecode population could not be determined"
+  [ -z "$bytecode_probe" ] || fail \
+    "repository bytecode is executable untracked input; recreate the Codespace"
 }
 
 package_content_fingerprint() {
@@ -35,11 +58,17 @@ package_content_fingerprint() {
 [ "${CODESPACES:-}" = "true" ] || fail \
   "the independent audit sandbox must be built inside a GitHub Codespace"
 [ -n "${CODESPACE_NAME:-}" ] || fail "CODESPACE_NAME is missing"
+case "$EXECUTION_HOST" in
+  github_codespaces|github_actions_devcontainer_emulation) ;;
+  *) fail "sandbox execution-host provenance is missing or unsupported" ;;
+esac
+/usr/local/sbin/dutchbay-sshd-start.sh --start
 "$CONTAINER_PYTHON" -S /usr/local/lib/dutchbay/sshd_readiness.py \
-  30 "$PRE_LIFECYCLE_SSHD_MARKER" \
-  || fail "SSH transport did not become ready before the post-create lifecycle"
+  30 "$SSHD_RUNTIME_MARKER" \
+  || fail "SSH transport did not become ready before the audit bootstrap"
 [ -f "requirements.txt" ] && [ -f "pyproject.toml" ] || fail \
   "run the bootstrap from the DutchBay repository root"
+reject_repository_bytecode
 [ -x "$CONTAINER_PYTHON" ] && [ ! -L "$CONTAINER_PYTHON" ] || fail \
   "digest-pinned container Python is unavailable"
 [ "$(realpath -e "$CONTAINER_PYTHON")" = "$CONTAINER_PYTHON" ] || fail \
@@ -51,13 +80,24 @@ package_content_fingerprint() {
   "unexpected sandbox environment target"
 [ "$PRIVATE_ROOT" = "/workspaces/.dutchbay-private" ] || fail \
   "unexpected private-source target"
+[ "$BOOTSTRAP_RECEIPT_PATH" = \
+  "/workspaces/.dutchbay-private/bootstrap-receipt.json" ] || fail \
+  "unexpected bootstrap-receipt target"
 [ "$P03_ROOT" = "/workspaces/.dutchbay-private/p03" ] || fail \
   "unexpected P03 private-root target"
 [ "$SOURCE_ROOT" = "/workspaces/.dutchbay-private/p03/sources" ] || fail \
   "unexpected P03 source-root target"
 [ "$TRANSPORT_ROOT" = "/workspaces/.dutchbay-private/transport-smoke" ] || fail \
   "unexpected transport-smoke target"
+[ "$(id -un)" = "vscode" ] || fail \
+  "the audit bootstrap must run as the non-root vscode user"
+/usr/bin/sudo --non-interactive /usr/bin/install \
+  -d -m 0755 -o vscode -g vscode /workspaces
+[ "$(/usr/bin/stat -c '%U:%G:%a' /workspaces)" = "vscode:vscode:755" ] || fail \
+  "the fixed workspace parent ownership differs"
 [ ! -L "$PRIVATE_ROOT" ] || fail "private-source root must not be a symlink"
+[ ! -L "$BOOTSTRAP_RECEIPT_PATH" ] || fail \
+  "bootstrap receipt must not be a symlink"
 [ ! -L "$P03_ROOT" ] || fail "P03 private root must not be a symlink"
 [ ! -L "$SOURCE_ROOT" ] || fail "P03 source root must not be a symlink"
 [ ! -L "$TRANSPORT_ROOT" ] || fail "transport-smoke root must not be a symlink"
@@ -74,7 +114,7 @@ install -d -m 0700 \
   "transport-smoke root resolved outside its fixed path"
 
 bash .devcontainer/start_audit_review_sshd.sh --prepare-only
-sshd_identity_json=$(bash .devcontainer/attest_audit_review_sshd.sh)
+sshd_identity_json=$(bash .devcontainer/attest_audit_review_sshd.sh --construction)
 sshd_identity_digest=$(
   SANDBOX_SSHD_IDENTITY_JSON="$sshd_identity_json" \
     "$CONTAINER_PYTHON" -S -c \
@@ -148,8 +188,10 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
   PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" \
   "$VENV_ROOT/bin/python" dutchbay_bootstrap_rules.py
 
+source_probe=$(find "$SOURCE_ROOT" -mindepth 1 -print -quit) || fail \
+  "P03 source-root population could not be determined"
 source_state="private_root_empty"
-if find "$SOURCE_ROOT" -mindepth 1 -print -quit | grep -q .; then
+if [ -n "$source_probe" ]; then
   source_state="private_root_populated"
 fi
 
@@ -157,6 +199,22 @@ package_content_digest=$(package_content_fingerprint)
 [ "$(tr -d '\r\n' < "$PACKAGE_MARKER")" = "$package_content_digest" ] || fail \
   "installed environment content changed during bootstrap; recreate the Codespace"
 
+receipt_tmp=""
+cleanup_receipt_tmp() {
+  local exit_status=$?
+  trap - EXIT
+  if [ -n "$receipt_tmp" ] && [ -f "$receipt_tmp" ] \
+    && [ ! -L "$receipt_tmp" ]; then
+    if ! unlink -- "$receipt_tmp"; then
+      printf 'ERROR: bootstrap receipt temporary-file cleanup failed\n' >&2
+      exit_status=2
+    fi
+  fi
+  exit "$exit_status"
+}
+trap cleanup_receipt_tmp EXIT
+
+receipt_tmp=$(mktemp "$PRIVATE_ROOT/.bootstrap-receipt.XXXXXX")
 SANDBOX_SOURCE_STATE="$source_state" \
 SANDBOX_DEPENDENCY_MARKER="$MARKER" \
 SANDBOX_IMAGE_MARKER="$IMAGE_MARKER" \
@@ -164,7 +222,10 @@ SANDBOX_PACKAGE_MARKER="$PACKAGE_MARKER" \
 SANDBOX_VENV_ROOT="$VENV_ROOT" \
 SANDBOX_CONTAINER_PYTHON="$CONTAINER_PYTHON" \
 SANDBOX_SSHD_IDENTITY_JSON="$sshd_identity_json" \
-PYTHONPATH="$PWD/.devcontainer" "$CONTAINER_PYTHON" -S - <<'PY'
+SANDBOX_EXECUTION_HOST="$EXECUTION_HOST" \
+SANDBOX_CODESPACE_NAME="$CODESPACE_NAME" \
+PYTHONPATH="$PWD/.devcontainer" "$CONTAINER_PYTHON" -S - <<'PY' \
+  > "$receipt_tmp"
 from __future__ import annotations
 
 import json
@@ -189,8 +250,20 @@ print(
             identity=identity,
             sshd_identity=sshd_identity,
             source_state=os.environ["SANDBOX_SOURCE_STATE"],
+            execution_host=os.environ["SANDBOX_EXECUTION_HOST"],
+            codespace_name=os.environ["SANDBOX_CODESPACE_NAME"],
         ),
         sort_keys=True,
     )
 )
 PY
+chmod 0400 "$receipt_tmp"
+mv --no-target-directory -- "$receipt_tmp" "$BOOTSTRAP_RECEIPT_PATH"
+receipt_tmp=""
+trap - EXIT
+[ "$(realpath -e "$BOOTSTRAP_RECEIPT_PATH")" = \
+  "$BOOTSTRAP_RECEIPT_PATH" ] || fail \
+  "bootstrap receipt resolved outside its fixed path"
+[ "$(stat -c '%U:%G:%a' "$BOOTSTRAP_RECEIPT_PATH")" = \
+  "vscode:vscode:400" ] || fail "bootstrap receipt ownership or mode differs"
+cat -- "$BOOTSTRAP_RECEIPT_PATH"

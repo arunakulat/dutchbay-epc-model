@@ -6,6 +6,7 @@ import base64
 import binascii
 import hashlib
 import importlib.metadata
+import ipaddress
 import json
 import os
 import re
@@ -15,6 +16,14 @@ from pathlib import Path
 EXPECTED_BASE_IMAGE = (
     "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm@"
     "sha256:7876580dc67fd460fd962f004cbeb480027e9bbc0657096f1087db11f9eaff39"
+)
+EXPECTED_REPOSITORY_FEATURE = "ghcr.io/devcontainers/features/sshd:1.1.0"
+EXPECTED_REPOSITORY_FEATURE_RESOLVED = (
+    "ghcr.io/devcontainers/features/sshd@"
+    "sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee"
+)
+EXPECTED_REPOSITORY_FEATURE_DIGEST = (
+    "sha256:f5251b8e4325f68f7280973c6cd65daff414449c66f240621502d4e8e74eb7ee"
 )
 BASE_IMAGE_EMBEDDED_FEATURE_METADATA_BY_DIGEST = {
     "sha256:7876580dc67fd460fd962f004cbeb480027e9bbc0657096f1087db11f9eaff39": (
@@ -30,7 +39,15 @@ EXPECTED_SSHD_EFFECTIVE_VALUES = {
     "allowstreamlocalforwarding": "no",
     "allowtcpforwarding": "no",
     "authenticationmethods": "publickey",
+    "authorizedkeyscommand": "none",
+    "authorizedkeyscommanduser": "none",
+    "authorizedkeysfile": ".ssh/authorized_keys",
+    "authorizedprincipalscommand": "none",
+    "authorizedprincipalscommanduser": "none",
+    "authorizedprincipalsfile": "none",
+    "chrootdirectory": "none",
     "disableforwarding": "yes",
+    "forcecommand": "none",
     "gatewayports": "no",
     "gssapiauthentication": "no",
     "hostbasedauthentication": "no",
@@ -42,10 +59,23 @@ EXPECTED_SSHD_EFFECTIVE_VALUES = {
     "permittunnel": "no",
     "port": "2222",
     "pubkeyauthentication": "yes",
+    "permituserenvironment": "no",
+    "strictmodes": "yes",
+    "trustedusercakeys": "none",
     "usepam": "yes",
     "x11forwarding": "no",
 }
-EXPECTED_OPENSSH_PACKAGES = {
+EXPECTED_SSHD_SETENV_VALUES = {
+    "DUTCHBAY_P03_SOURCE_ROOT=/workspaces/.dutchbay-private/p03/sources",
+    "DUTCHBAY_VENV=/workspaces/.dutchbay-audit-review-venv",
+    (
+        "PATH=/workspaces/.dutchbay-audit-review-venv/bin:/usr/local/bin:"
+        "/usr/local/sbin:/usr/bin:/usr/sbin:/bin:/sbin"
+    ),
+    "PYTHONPATH=/workspaces/dutchbay-epc-model",
+}
+EXPECTED_SSH_TRANSPORT_PACKAGES = {
+    "lsof",
     "openssh-client",
     "openssh-server",
     "openssh-sftp-server",
@@ -55,8 +85,8 @@ EXPECTED_SSH_HOST_KEY_ALGORITHMS = {
     "ssh-ed25519",
     "ssh-rsa",
 }
-BOOTSTRAP_RECEIPT_SCHEMA = "dutchbay.audit_review_sandbox_bootstrap.v2"
-VERIFICATION_RECEIPT_SCHEMA = "dutchbay.audit_review_sandbox_receipt.v2"
+BOOTSTRAP_RECEIPT_SCHEMA = "dutchbay.audit_review_sandbox_bootstrap.v3"
+VERIFICATION_RECEIPT_SCHEMA = "dutchbay.audit_review_sandbox_receipt.v3"
 BOOTSTRAP_SOURCE_STATES = {
     "private_root_empty",
     "private_root_populated",
@@ -65,8 +95,15 @@ VERIFICATION_SOURCE_STATES = {
     "private_root_empty_p03_not_executed",
     "private_root_populated_p03_structural_verification_passed",
 }
+EXECUTION_HOST_NETWORK_BOUNDARIES = {
+    "github_codespaces": "creator_private_codespace_outbound_egress_available",
+    "github_actions_devcontainer_emulation": (
+        "github_actions_hosted_runner_outbound_egress_available"
+    ),
+}
 HEX_64 = re.compile(r"[0-9a-f]{64}\Z")
 SSH_FINGERPRINT = re.compile(r"SHA256:[A-Za-z0-9+/]{43}\Z")
+CODESPACE_NAME = re.compile(r"[A-Za-z0-9_-]+\Z")
 P256_PRIME = 0xFFFFFFFF00000001000000000000000000000000FFFFFFFFFFFFFFFFFFFFFFFF
 P256_B = 0x5AC635D8AA3A93E7B3EBBD55769886BC651D06B0CC53B0F63BCE3C3E27D2604B
 
@@ -74,16 +111,21 @@ DEPENDENCY_INPUT_RELATIVES = (
     "requirements.txt",
     "pyproject.toml",
     "constraints.txt",
+    "check_venv.sh",
+    "dutchbay_bootstrap_rules.py",
+    "go_with_the_flow_rules_v3_0_clean.csv",
     ".devcontainer/devcontainer.json",
+    ".devcontainer/devcontainer-lock.json",
     ".devcontainer/Dockerfile",
     ".devcontainer/install_audit_review_sshd.sh",
-    ".devcontainer/ssh_entrypoint.sh",
     ".devcontainer/start_audit_review_sshd.sh",
     ".devcontainer/attest_audit_review_sshd.sh",
     ".devcontainer/sshd_readiness.py",
     ".devcontainer/bootstrap_audit_review.sh",
     ".devcontainer/audit_review_identity.py",
     "scripts/create_1110_cloud_review_codespace.sh",
+    "scripts/run_1110_cloud_review_verification.sh",
+    "scripts/prove_1110_candidate_codespace.sh",
 )
 
 CONTROLLED_INPUT_RELATIVES = (
@@ -105,10 +147,12 @@ CONTROLLED_INPUT_RELATIVES = (
     "scripts/upload_1110_p03_sources_to_codespace.sh",
     "scripts/verify_1110_cloud_review_sandbox.sh",
     "scripts/create_1110_cloud_review_codespace.sh",
+    "scripts/run_1110_cloud_review_verification.sh",
+    "scripts/prove_1110_candidate_codespace.sh",
     ".devcontainer/devcontainer.json",
+    ".devcontainer/devcontainer-lock.json",
     ".devcontainer/Dockerfile",
     ".devcontainer/install_audit_review_sshd.sh",
-    ".devcontainer/ssh_entrypoint.sh",
     ".devcontainer/start_audit_review_sshd.sh",
     ".devcontainer/attest_audit_review_sshd.sh",
     ".devcontainer/sshd_readiness.py",
@@ -154,8 +198,8 @@ def configured_base_image_digest(repo_root: Path) -> str:
     expected_build = {"dockerfile": "Dockerfile", "context": ".."}
     if payload.get("build") != expected_build or "image" in payload:
         raise SandboxIdentityError("devcontainer build differs from policy")
-    if payload.get("overrideCommand") is not False:
-        raise SandboxIdentityError("devcontainer image entrypoint must be preserved")
+    if payload.get("overrideCommand") is not True:
+        raise SandboxIdentityError("devcontainer keepalive command must be enabled")
     if payload.get("init") is not True:
         raise SandboxIdentityError("devcontainer init/reaper must be enabled")
     if payload.get("containerUser") != "root" or payload.get("remoteUser") != "vscode":
@@ -164,13 +208,24 @@ def configured_base_image_digest(repo_root: Path) -> str:
         "bash .devcontainer/start_audit_review_sshd.sh --start"
     ):
         raise SandboxIdentityError("devcontainer SSH lifecycle differs from policy")
-    if "features" in payload:
-        raise SandboxIdentityError(
-            "repository-configured devcontainer features are not permitted"
-        )
+    expected_features = {EXPECTED_REPOSITORY_FEATURE: {}}
+    if payload.get("features") != expected_features:
+        raise SandboxIdentityError("repository SSH Feature differs from policy")
     lock_path = repo_root / ".devcontainer" / "devcontainer-lock.json"
-    if lock_path.exists() or lock_path.is_symlink():
-        raise SandboxIdentityError("devcontainer feature lock must be absent")
+    if not lock_path.is_file() or lock_path.is_symlink():
+        raise SandboxIdentityError("devcontainer Feature lock is unavailable or unsafe")
+    lock_payload = json.loads(lock_path.read_text(encoding="utf-8"))
+    expected_lock = {
+        "features": {
+            EXPECTED_REPOSITORY_FEATURE: {
+                "version": "1.1.0",
+                "resolved": EXPECTED_REPOSITORY_FEATURE_RESOLVED,
+                "integrity": EXPECTED_REPOSITORY_FEATURE_DIGEST,
+            }
+        }
+    }
+    if lock_payload != expected_lock:
+        raise SandboxIdentityError("devcontainer SSH Feature lock differs from policy")
     dockerfile = repo_root / ".devcontainer" / "Dockerfile"
     if not dockerfile.is_file() or dockerfile.is_symlink():
         raise SandboxIdentityError("devcontainer Dockerfile is unavailable or unsafe")
@@ -243,22 +298,100 @@ def validate_sshd_effective_config(config_text: str) -> str:
         key, separator, value = line.partition(" ")
         if not separator:
             raise SandboxIdentityError("effective SSH configuration is malformed")
-        if key in EXPECTED_SSHD_EFFECTIVE_VALUES:
+        if key in EXPECTED_SSHD_EFFECTIVE_VALUES or key == "setenv":
             values.setdefault(key, []).append(value.strip())
     for key, expected in EXPECTED_SSHD_EFFECTIVE_VALUES.items():
         if values.get(key) != [expected]:
             raise SandboxIdentityError(
                 f"effective SSH policy differs for {key}: expected {expected}"
             )
+    setenv_values = [
+        assignment for value in values.get("setenv", []) for assignment in value.split()
+    ]
+    if (
+        len(setenv_values) != len(EXPECTED_SSHD_SETENV_VALUES)
+        or set(setenv_values) != EXPECTED_SSHD_SETENV_VALUES
+    ):
+        raise SandboxIdentityError("effective SSH session environment differs")
     return "\n".join(lines) + "\n"
 
 
-def _validate_openssh_package_inventory(inventory: list[str]) -> None:
-    """Require one exact installed record for every governed OpenSSH package."""
-    if len(inventory) != len(EXPECTED_OPENSSH_PACKAGES) or len(set(inventory)) != len(
-        inventory
-    ):
-        raise SandboxIdentityError("OpenSSH package inventory is malformed")
+def validate_sshd_include_graph(
+    main_config: Path,
+    drop_in_population: list[Path],
+    *,
+    expected_include_pattern: str = "/etc/ssh/sshd_config.d/*.conf",
+) -> None:
+    """Require one closed, regular-file OpenSSH Include graph."""
+    paths = [main_config, *drop_in_population]
+    if len(set(paths)) != len(paths):
+        raise SandboxIdentityError("SSH configuration population is duplicated")
+    for path in paths:
+        if not path.is_file() or path.is_symlink():
+            raise SandboxIdentityError("SSH configuration population is unsafe")
+
+    def include_arguments(path: Path) -> list[list[str]]:
+        directives: list[list[str]] = []
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.partition("#")[0].strip()
+            parts = line.split()
+            if parts and parts[0].lower() == "include":
+                directives.append(parts[1:])
+        return directives
+
+    if include_arguments(main_config) != [[expected_include_pattern]]:
+        raise SandboxIdentityError("SSH main configuration Include graph differs")
+    if any(include_arguments(path) for path in drop_in_population):
+        raise SandboxIdentityError("nested SSH configuration Include is unsupported")
+    resolved = sorted(main_config.parent.joinpath("sshd_config.d").glob("*.conf"))
+    configured = sorted(path for path in drop_in_population if path.suffix == ".conf")
+    if configured != resolved:
+        raise SandboxIdentityError("SSH drop-in Include population differs")
+
+
+def build_sshd_session_connection_context(
+    ssh_connection: str,
+    ssh_client: str,
+) -> str:
+    """Validate one authenticated Codespaces tunnel tuple for ``sshd -T -C``."""
+    connection_parts = ssh_connection.split()
+    client_parts = ssh_client.split()
+    if len(connection_parts) != 4 or len(client_parts) != 3:
+        raise SandboxIdentityError("authenticated SSH connection context is malformed")
+    client_address, client_port_text, server_address, server_port_text = (
+        connection_parts
+    )
+    if client_parts != [client_address, client_port_text, server_port_text]:
+        raise SandboxIdentityError("SSH_CONNECTION and SSH_CLIENT differ")
+    try:
+        client = ipaddress.ip_address(client_address)
+        server = ipaddress.ip_address(server_address)
+        client_port = int(client_port_text)
+        server_port = int(server_port_text)
+    except ValueError as exc:
+        raise SandboxIdentityError(
+            "authenticated SSH connection context is malformed"
+        ) from exc
+    if not client.is_loopback or not server.is_loopback:
+        raise SandboxIdentityError(
+            "authenticated SSH connection is outside the approved tunnel model"
+        )
+    if not 1 <= client_port <= 65535 or server_port != 2222:
+        raise SandboxIdentityError(
+            "authenticated SSH connection ports differ from the approved tunnel model"
+        )
+    return (
+        "user=vscode,host=localhost,"
+        f"addr={client.compressed},laddr={server.compressed},lport={server_port}"
+    )
+
+
+def _validate_ssh_transport_package_inventory(inventory: list[str]) -> None:
+    """Require one exact installed record for every SSH transport package."""
+    if len(inventory) != len(EXPECTED_SSH_TRANSPORT_PACKAGES) or len(
+        set(inventory)
+    ) != len(inventory):
+        raise SandboxIdentityError("SSH transport package inventory is malformed")
     package_names: set[str] = set()
     for line in inventory:
         parts = line.split("|", 3)
@@ -270,10 +403,10 @@ def _validate_openssh_package_inventory(inventory: list[str]) -> None:
             or not parts[3]
             or parts[0] in package_names
         ):
-            raise SandboxIdentityError("OpenSSH package inventory is malformed")
+            raise SandboxIdentityError("SSH transport package inventory is malformed")
         package_names.add(parts[0])
-    if package_names != EXPECTED_OPENSSH_PACKAGES:
-        raise SandboxIdentityError("OpenSSH package inventory is incomplete")
+    if package_names != EXPECTED_SSH_TRANSPORT_PACKAGES:
+        raise SandboxIdentityError("SSH transport package inventory is incomplete")
 
 
 def _read_ssh_wire_string(blob: bytes, offset: int) -> tuple[bytes, int]:
@@ -300,10 +433,12 @@ def _positive_ssh_mpint(value: bytes) -> int:
 
 def _validated_ssh_public_key_blob(value: str) -> bytes:
     """Decode one allowed OpenSSH public key and validate its wire structure."""
-    parts = value.split()
-    if len(parts) != 2 or parts[0] not in EXPECTED_SSH_HOST_KEY_ALGORITHMS:
+    if "\n" in value or "\r" in value:
         raise SandboxIdentityError("SSH host public-key identity is malformed")
-    algorithm, encoded = parts
+    parts = value.split(maxsplit=2)
+    if len(parts) < 2 or parts[0] not in EXPECTED_SSH_HOST_KEY_ALGORITHMS:
+        raise SandboxIdentityError("SSH host public-key identity is malformed")
+    algorithm, encoded = parts[:2]
     try:
         key_blob = base64.b64decode(
             encoded + "=" * (-len(encoded) % 4),
@@ -369,21 +504,19 @@ def build_sshd_transport_identity(
     inventory = sorted(
         line.strip() for line in package_inventory.splitlines() if line.strip()
     )
-    _validate_openssh_package_inventory(inventory)
+    _validate_ssh_transport_package_inventory(inventory)
 
-    if (
-        len(host_public_key_material) != 3
-        or len(host_public_key_sidecars) != 3
-        or any(
-            derived != sidecar
-            for derived, sidecar in zip(
-                host_public_key_material,
-                host_public_key_sidecars,
-                strict=True,
-            )
-        )
-    ):
+    if len(host_public_key_material) != 3 or len(host_public_key_sidecars) != 3:
         raise SandboxIdentityError("SSH host private/public key population differs")
+    for derived, sidecar in zip(
+        host_public_key_material,
+        host_public_key_sidecars,
+        strict=True,
+    ):
+        if _validated_ssh_public_key_blob(derived) != _validated_ssh_public_key_blob(
+            sidecar
+        ):
+            raise SandboxIdentityError("SSH host private/public key population differs")
     derived_public_keys = sorted(set(host_public_key_material))
     if len(derived_public_keys) != 3:
         raise SandboxIdentityError("SSH host private/public key population differs")
@@ -404,7 +537,7 @@ def build_sshd_transport_identity(
         raise SandboxIdentityError("SSH host public-key identity is malformed")
 
     payload: dict[str, object] = {
-        "openssh_packages": inventory,
+        "ssh_transport_packages": inventory,
         "sshd_effective_config_sha256": hashlib.sha256(
             normalized_config.encode("utf-8")
         ).hexdigest(),
@@ -592,7 +725,9 @@ def build_identity(
         "git_commit": _git(repo_root, "rev-parse", "HEAD"),
         "git_tree": _git(repo_root, "rev-parse", "HEAD^{tree}"),
         "devcontainer_base_image_digest": current_image,
-        "repository_configured_devcontainer_features": [],
+        "repository_configured_devcontainer_features": [
+            EXPECTED_REPOSITORY_FEATURE_RESOLVED
+        ],
         "base_image_embedded_feature_metadata": list(
             BASE_IMAGE_EMBEDDED_FEATURE_METADATA_BY_DIGEST[current_image]
         ),
@@ -625,7 +760,7 @@ def _validate_receipt_inputs(
     if set(identity) != expected_identity_keys:
         raise SandboxIdentityError("sandbox identity receipt fields differ from schema")
     expected_sshd_keys = {
-        "openssh_packages",
+        "ssh_transport_packages",
         "sshd_effective_config_sha256",
         "sshd_transport_content_sha256",
         "sshd_host_public_key_fingerprints",
@@ -667,8 +802,12 @@ def _validate_receipt_inputs(
         or HEX_64.fullmatch(base_digest.removeprefix("sha256:")) is None
     ):
         raise SandboxIdentityError("base-image identity is malformed")
-    if identity["repository_configured_devcontainer_features"] != []:
-        raise SandboxIdentityError("repository-configured Feature surface is not empty")
+    if identity["repository_configured_devcontainer_features"] != [
+        EXPECTED_REPOSITORY_FEATURE_RESOLVED
+    ]:
+        raise SandboxIdentityError(
+            "repository-configured Feature identity is malformed"
+        )
     embedded = identity["base_image_embedded_feature_metadata"]
     expected_embedded = BASE_IMAGE_EMBEDDED_FEATURE_METADATA_BY_DIGEST.get(base_digest)
     if (
@@ -690,7 +829,7 @@ def _validate_receipt_inputs(
         )
     ):
         raise SandboxIdentityError("controlled-input identity is malformed")
-    packages = sshd_identity["openssh_packages"]
+    packages = sshd_identity["ssh_transport_packages"]
     fingerprints = sshd_identity["sshd_host_public_key_fingerprints"]
     if (
         not isinstance(packages, list)
@@ -704,7 +843,7 @@ def _validate_receipt_inputs(
         )
     ):
         raise SandboxIdentityError("SSH identity populations are malformed")
-    _validate_openssh_package_inventory(packages)
+    _validate_ssh_transport_package_inventory(packages)
     canonical_sshd = dict(sshd_identity)
     recorded_sshd_digest = canonical_sshd.pop("sshd_identity_sha256")
     canonical = json.dumps(canonical_sshd, sort_keys=True, separators=(",", ":"))
@@ -717,20 +856,34 @@ def build_bootstrap_receipt(
     identity: dict[str, object],
     sshd_identity: dict[str, object],
     source_state: str,
+    execution_host: str,
+    codespace_name: str,
 ) -> dict[str, object]:
-    """Build the exact v2 bootstrap receipt on the release-HOLD side."""
+    """Build the exact v3 bootstrap receipt on the release-HOLD side."""
     _validate_receipt_inputs(identity, sshd_identity)
     if source_state not in BOOTSTRAP_SOURCE_STATES:
         raise SandboxIdentityError("bootstrap P03 source state differs from schema")
+    try:
+        network_boundary = EXECUTION_HOST_NETWORK_BOUNDARIES[execution_host]
+    except KeyError as exc:
+        raise SandboxIdentityError(
+            "bootstrap execution-host provenance differs from schema"
+        ) from exc
+    if (
+        not isinstance(codespace_name, str)
+        or CODESPACE_NAME.fullmatch(codespace_name) is None
+    ):
+        raise SandboxIdentityError("bootstrap Codespace identity is malformed")
     return {
         "schema": BOOTSTRAP_RECEIPT_SCHEMA,
         "status": "PASS",
-        "environment": "github_codespaces",
+        "environment": execution_host,
+        "codespace_name": codespace_name,
         "python": "3.12",
         **identity,
         **sshd_identity,
         "p03_source_state": source_state,
-        "network_boundary": "creator_private_codespace_outbound_egress_available",
+        "network_boundary": network_boundary,
         "completion_authorized": False,
         "release_status": "HOLD",
     }
@@ -741,21 +894,35 @@ def build_verification_receipt(
     identity: dict[str, object],
     sshd_identity: dict[str, object],
     source_state: str,
+    execution_host: str,
+    codespace_name: str,
 ) -> dict[str, object]:
-    """Build the exact v2 structural-verification receipt without semantic closure."""
+    """Build the exact v3 structural-verification receipt without semantic closure."""
     _validate_receipt_inputs(identity, sshd_identity)
     if source_state not in VERIFICATION_SOURCE_STATES:
         raise SandboxIdentityError("verification P03 source state differs from schema")
+    try:
+        network_boundary = EXECUTION_HOST_NETWORK_BOUNDARIES[execution_host]
+    except KeyError as exc:
+        raise SandboxIdentityError(
+            "verification execution-host provenance differs from schema"
+        ) from exc
+    if (
+        not isinstance(codespace_name, str)
+        or CODESPACE_NAME.fullmatch(codespace_name) is None
+    ):
+        raise SandboxIdentityError("verification Codespace identity is malformed")
     return {
         "schema": VERIFICATION_RECEIPT_SCHEMA,
         "status": "PASS",
-        "environment": "github_codespaces",
+        "environment": execution_host,
+        "codespace_name": codespace_name,
         **identity,
         **sshd_identity,
         "sshd_process": "running",
         "p02_structural_controls": "passed",
         "p03_source_state": source_state,
-        "network_boundary": "creator_private_codespace_outbound_egress_available",
+        "network_boundary": network_boundary,
         "semantic_review_completed": False,
         "completion_authorized": False,
         "release_status": "HOLD",
