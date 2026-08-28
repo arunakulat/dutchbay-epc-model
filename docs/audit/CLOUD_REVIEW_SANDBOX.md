@@ -99,8 +99,8 @@ retained in the controlled pack.
 
 ## Creation and structural preflight
 
-Before merge, prove the exact topic-branch SHA in a disposable, P03-empty real
-Codespace:
+As a reviewer-controlled prerequisite before merge, prove the exact topic-branch
+SHA in a disposable, P03-empty real Codespace:
 
 ```bash
 scripts/prove_1110_candidate_codespace.sh \
@@ -118,6 +118,10 @@ deletes that exact no-P03 candidate. This is pre-merge infrastructure evidence
 only; it is not the protected-main environment and cannot execute or close P02
 or P03. Copy calls use remote expansion only for repository-owned, fixed
 absolute destination paths; no user-provided remote expression is expanded.
+The hosted `build and boot audit review image` job is a visible advisory check,
+not one of the active branch-protection-required contexts. Promoting it to a
+required context remains a separate repository-owner ruleset decision; until
+then, this prerequisite is enforced by review rather than GitHub merge blocking.
 
 After this configuration is protected-merged to current `main`, create a
 creator-private Codespace attached to the public source repository:

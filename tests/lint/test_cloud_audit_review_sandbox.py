@@ -449,7 +449,7 @@ def test_repository_owned_ssh_transport_is_narrow_and_base_pinned() -> None:
 
 
 def test_ci_builds_and_boots_exact_audit_review_image() -> None:
-    """The merge gate must exercise the locked Dev Container lifecycle."""
+    """The visible review prerequisite exercises the locked container lifecycle."""
     workflow = IMAGE_SMOKE_WORKFLOW.read_text(encoding="utf-8")
     classifier = PATH_CLASSIFIER.read_text(encoding="utf-8")
 
@@ -551,6 +551,13 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
     assert "readonly SHUTDOWN_TIMEOUT_SECONDS=300" in candidate
     assert "readonly REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS=30" in candidate
     assert "readonly PROCESS_CLEANUP_TIMEOUT_SECONDS=2" in candidate
+    assert 'readonly LOCAL_CLEANUP_MARKER="$CREATE_LOCK/' in candidate
+    assert 'mark_local_cleanup_unresolved "$command_status" "bounded_command"' in (
+        candidate
+    )
+    assert 'mark_local_cleanup_unresolved "$command_status" "remote_probe"' in (
+        candidate
+    )
     assert "timeout=min(attempt_timeout_seconds, remaining)" in candidate
     assert "min(10.0, remaining)" not in candidate
     assert "sshd_readiness.py 5 /run/dutchbay-sshd-runtime.ready" in candidate
@@ -574,6 +581,7 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
     assert '"$(codespace_identity | jq -r .state)"' not in candidate
     assert "1|3) ;;" in candidate
     assert '"$CREATE_LOCK/UNRESOLVED"' in candidate
+    assert '[ -f "$LOCAL_CLEANUP_MARKER" ]' in candidate
     assert "gh codespace stop" in candidate
     assert 'wait_for_candidate_state "Shutdown"' in candidate
     assert 'before_marker=$(bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS"' in (
@@ -748,7 +756,7 @@ def test_bounded_watchdogs_fall_back_when_group_signal_is_denied(
     tmp_path: Path,
 ) -> None:
     """Owned children must be reaped when group signalling returns EPERM."""
-    for index, path in enumerate((CANDIDATE_CODESPACE, CLOUD_VERIFY)):
+    for index, path in enumerate((CANDIDATE_CODESPACE, CREATE_CODESPACE, CLOUD_VERIFY)):
         watchdog = _bounded_watchdog(path)
         forced_permission_error = watchdog.replace(
             "        os.killpg(process.pid, signal_number)",
@@ -785,7 +793,7 @@ def test_bounded_watchdogs_kill_descendant_after_leader_exits(
     tmp_path: Path,
 ) -> None:
     """A TERM-resistant descendant must get group SIGKILL after its leader exits."""
-    for index, path in enumerate((CANDIDATE_CODESPACE, CLOUD_VERIFY)):
+    for index, path in enumerate((CANDIDATE_CODESPACE, CREATE_CODESPACE, CLOUD_VERIFY)):
         child_pid_file = tmp_path / f"descendant-{index}.pid"
         child_script = (
             "trap 'exit 0' TERM; "
@@ -898,6 +906,93 @@ def test_create_transport_watchdog_reaps_on_interrupt_and_eperm(
     assert result.returncode == 124
     child_pid = int(child_pid_file.read_text(encoding="ascii"))
     assert not _process_is_alive(child_pid)
+
+
+def test_create_codespace_reaps_interrupted_create_and_retains_lock(
+    tmp_path: Path,
+) -> None:
+    """An interrupted mutating create must be reaped and recovery-owned."""
+    tool_root = tmp_path / "bin"
+    tool_root.mkdir()
+    lock_path = tmp_path / "create.lock"
+    state_path = tmp_path / "created"
+    child_pid_path = tmp_path / "create-child.pid"
+    creator_copy = tmp_path / "create-codespace"
+    creator_source = CREATE_CODESPACE.read_text(encoding="utf-8")
+    creator_source = creator_source.replace(
+        'readonly CREATE_LOCK="/tmp/dutchbay-1110-codespace-create.lock"',
+        f'readonly CREATE_LOCK="{lock_path!s}"',
+    ).replace(
+        "readonly AMBIGUOUS_CREATE_RECOVERY_TIMEOUT_SECONDS=120",
+        "readonly AMBIGUOUS_CREATE_RECOVERY_TIMEOUT_SECONDS=1",
+    )
+    creator_copy.write_text(creator_source, encoding="utf-8")
+    creator_copy.chmod(0o755)
+    gh_stub = tool_root / "gh"
+    gh_stub.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+case "$1 $2" in
+  "api --paginate")
+    if [ -e "$STUB_STATE" ]; then
+      printf '%s\n' '[{"codespaces":[{"name":"review123","display_name":"DutchBay 1110 independent review","repository":{"full_name":"arunakulat/dutchbay-epc-model"},"git_status":{"ref":"main"}}]}]'
+    else
+      printf '%s\n' '[{"codespaces":[]}]'
+    fi
+    ;;
+  "codespace create")
+    : > "$STUB_STATE"
+    echo $$ > "$STUB_CHILD_PID"
+    trap '' HUP INT TERM
+    sleep 30
+    ;;
+  *) exit 92 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    gh_stub.chmod(0o755)
+    process = subprocess.Popen(
+        (str(creator_copy),),
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{tool_root}:{os.environ['PATH']}",
+            "DUTCHBAY_VENV": str(Path(sys.executable).parents[1]),
+            "STUB_STATE": str(state_path),
+            "STUB_CHILD_PID": str(child_pid_path),
+        },
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    child_pid: int | None = None
+    try:
+        for _ in range(250):
+            if child_pid_path.exists():
+                break
+            time.sleep(0.02)
+        assert child_pid_path.exists()
+        child_pid = int(child_pid_path.read_text(encoding="ascii"))
+        os.killpg(process.pid, signal.SIGINT)
+        _, stderr = process.communicate(timeout=10)
+        assert process.returncode != 0
+        assert not _process_is_alive(child_pid)
+        assert "retaining unresolved create lock" in stderr
+        unresolved = (lock_path / "UNRESOLVED").read_text(encoding="utf-8")
+        assert "codespace_name=review123" in unresolved
+        assert "creation_recovered_after_interrupted_command" in unresolved
+    finally:
+        if process.poll() is None:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=5)
+        if child_pid is not None and _process_is_alive(child_pid):
+            os.kill(child_pid, signal.SIGKILL)
+        if lock_path.exists():
+            for child in lock_path.iterdir():
+                child.unlink()
+            lock_path.rmdir()
 
 
 def test_candidate_recovers_ambiguous_creation_before_exit(tmp_path: Path) -> None:
@@ -1089,6 +1184,178 @@ esac
     finally:
         if lock_path.exists():
             (lock_path / "UNRESOLVED").unlink(missing_ok=True)
+            lock_path.rmdir()
+
+
+def test_candidate_status_125_remains_unresolved_after_remote_absence(
+    tmp_path: Path,
+) -> None:
+    """API absence must not erase unproved local helper cleanup."""
+    tool_root = tmp_path / "bin"
+    tool_root.mkdir()
+    lock_path = tmp_path / "candidate.lock"
+    state_path = tmp_path / "created"
+    state_path.write_text("present", encoding="ascii")
+    harness = tmp_path / "candidate-delete-harness"
+    candidate_source = CANDIDATE_CODESPACE.read_text(encoding="utf-8")
+    candidate_source = candidate_source.replace(
+        'readonly CREATE_LOCK="/tmp/dutchbay-1110-candidate-codespace.lock"',
+        f'readonly CREATE_LOCK="{lock_path!s}"',
+    )
+    function_prefix = candidate_source.split('[ "$#" -eq 2 ]', maxsplit=1)[0]
+    harness_source = "".join(
+        (
+            function_prefix,
+            f"""
+candidate_branch="codex/status-125-control"
+display_name="DB1110-status-125"
+codespace_name="candidate123"
+create_lock_held="true"
+codespace_created="true"
+mkdir -- "{lock_path!s}"
+trap cleanup EXIT
+delete_candidate_and_confirm_absent "$candidate_branch"
+""",
+        )
+    )
+    harness.write_text(
+        harness_source,
+        encoding="utf-8",
+    )
+    harness.chmod(0o755)
+    gh_stub = tool_root / "gh"
+    gh_stub.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+case "$1 $2" in
+  "api -H")
+    printf '%s\n' '{"name":"candidate123","display_name":"DB1110-status-125","repository":{"full_name":"arunakulat/dutchbay-epc-model"},"git_status":{"ref":"codex/status-125-control"}}'
+    ;;
+  "api --paginate")
+    if [ -e "$STUB_STATE" ]; then
+      printf '%s\n' '[{"codespaces":[{"name":"candidate123"}]}]'
+    else
+      printf '%s\n' '[{"codespaces":[]}]'
+    fi
+    ;;
+  "codespace delete")
+    rm -- "$STUB_STATE"
+    exit 125
+    ;;
+  *) exit 92 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    gh_stub.chmod(0o755)
+    result = subprocess.run(
+        (str(harness),),
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{tool_root}:{os.environ['PATH']}",
+            "DUTCHBAY_VENV": str(Path(sys.executable).parents[1]),
+            "STUB_STATE": str(state_path),
+        },
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    try:
+        assert result.returncode == 125
+        assert not state_path.exists()
+        assert "retaining unresolved local lifecycle-cleanup state" in result.stderr
+        assert "retaining candidate recovery lock" in result.stderr
+        assert (lock_path / "LOCAL_CLEANUP_UNRESOLVED").is_file()
+        assert (lock_path / "UNRESOLVED").is_file()
+    finally:
+        if lock_path.exists():
+            for child in lock_path.iterdir():
+                child.unlink()
+            lock_path.rmdir()
+
+
+def test_candidate_preserves_status_125_from_state_and_transport_helpers(
+    tmp_path: Path,
+) -> None:
+    """Polling and transport helpers must preserve unresolved-cleanup status."""
+    candidate_source = CANDIDATE_CODESPACE.read_text(encoding="utf-8")
+    function_prefix = candidate_source.split('[ "$#" -eq 2 ]', maxsplit=1)[0]
+
+    state_harness = tmp_path / "candidate-state-harness"
+    state_harness_source = "".join(
+        (
+            function_prefix,
+            """
+bounded_command() { return 125; }
+codespace_name="candidate123"
+if wait_for_candidate_state "Shutdown" 1; then
+  exit 99
+else
+  exit $?
+fi
+""",
+        )
+    )
+    state_harness.write_text(
+        state_harness_source,
+        encoding="utf-8",
+    )
+    state_harness.chmod(0o755)
+    state_result = subprocess.run(
+        (str(state_harness),),
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+    assert state_result.returncode == 125
+
+    lock_path = tmp_path / "transport.lock"
+    transport_source = candidate_source.replace(
+        'readonly CREATE_LOCK="/tmp/dutchbay-1110-candidate-codespace.lock"',
+        f'readonly CREATE_LOCK="{lock_path!s}"',
+    )
+    transport_prefix = transport_source.split('[ "$#" -eq 2 ]', maxsplit=1)[0]
+    fake_venv = tmp_path / "venv"
+    fake_python = fake_venv / "bin" / "python"
+    fake_python.parent.mkdir(parents=True)
+    fake_python.write_text("#!/usr/bin/env bash\nexit 125\n", encoding="utf-8")
+    fake_python.chmod(0o755)
+    transport_harness = tmp_path / "candidate-transport-harness"
+    transport_harness_source = "".join(
+        (
+            transport_prefix,
+            f"""
+mkdir -- "{lock_path!s}"
+codespace_name="candidate123"
+wait_for_remote_command 1 "true"
+""",
+        )
+    )
+    transport_harness.write_text(
+        transport_harness_source,
+        encoding="utf-8",
+    )
+    transport_harness.chmod(0o755)
+    transport_result = subprocess.run(
+        (str(transport_harness),),
+        cwd=REPO_ROOT,
+        env={**os.environ, "DUTCHBAY_VENV": str(fake_venv)},
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+    try:
+        assert transport_result.returncode == 125
+        assert (lock_path / "LOCAL_CLEANUP_UNRESOLVED").is_file()
+    finally:
+        if lock_path.exists():
+            for child in lock_path.iterdir():
+                child.unlink()
             lock_path.rmdir()
 
 
@@ -1303,7 +1570,22 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert create_codespace.index('rmdir -- "$CREATE_LOCK" || fail') < (
         create_codespace.index("printf '%s\\n' \"$codespace_name\"")
     )
-    assert "post-create Codespace identity/collision check failed" in create_codespace
+    assert "post-create Codespace identity check failed" in create_codespace
+    assert 'readonly EXPECTED_REF="main"' in create_codespace
+    assert "readonly API_COMMAND_TIMEOUT_SECONDS=30" in create_codespace
+    assert "readonly CREATE_COMMAND_TIMEOUT_SECONDS=300" in create_codespace
+    assert "readonly AMBIGUOUS_CREATE_RECOVERY_TIMEOUT_SECONDS=120" in (
+        create_codespace
+    )
+    assert 'create_output=$(bounded_command "$CREATE_COMMAND_TIMEOUT_SECONDS"' in (
+        create_codespace
+    )
+    assert 'creation_pending="true"' in create_codespace
+    assert "recover_pending_review_codespace_boundedly" in create_codespace
+    assert "recover_unique_review_codespace_once" in create_codespace
+    assert ".git_status.ref == $ref" in create_codespace
+    assert '"$CREATE_LOCK/UNRESOLVED"' in create_codespace
+    assert '"$LOCAL_CLEANUP_MARKER"' in create_codespace
     assert "readonly MAX_TRANSPORT_TIMEOUT_SECONDS=300" in create_codespace
     assert "readonly PROCESS_CLEANUP_TIMEOUT_SECONDS=2" in create_codespace
     assert "readonly REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS=30" in create_codespace
@@ -1322,6 +1604,8 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     assert "sshd_readiness.py 5" in create_codespace
     assert '["gh", "codespace", "ssh"' in create_codespace
     document = DOC.read_text(encoding="utf-8")
+    assert "visible advisory check" in document
+    assert "separate repository-owner ruleset decision" in document
     assignment = 'DUTCHBAY_1110_REVIEW_CODESPACE_NAME="$('
     assert assignment in document
     assert f"export {assignment}" not in document
@@ -1496,12 +1780,32 @@ def test_codespace_creation_watchdog_bounds_a_hung_ssh_probe(
     """The create wrapper must kill a hung transport probe at one deadline."""
     fake_gh = tmp_path / "gh"
     child_pid_file = tmp_path / "child.pid"
+    state_file = tmp_path / "created"
+    lock_path = tmp_path / "create.lock"
+    creator_copy = tmp_path / "create-codespace"
+    creator_copy.write_text(
+        CREATE_CODESPACE.read_text(encoding="utf-8").replace(
+            'readonly CREATE_LOCK="/tmp/dutchbay-1110-codespace-create.lock"',
+            f'readonly CREATE_LOCK="{lock_path!s}"',
+        ),
+        encoding="utf-8",
+    )
+    creator_copy.chmod(0o755)
     fake_gh.write_text(
         """#!/usr/bin/env bash
 set -euo pipefail
 case "${1:-}:${2:-}" in
-  api:*) printf '%s\\n' '[{"codespaces":[]}]' ;;
-  codespace:create) printf '%s\\n' 'mock-codespace' ;;
+  api:*)
+    if [ -e "$DUTCHBAY_TEST_STATE_FILE" ]; then
+      printf '%s\\n' '[{"codespaces":[{"name":"mock-codespace","display_name":"DutchBay 1110 independent review","repository":{"full_name":"arunakulat/dutchbay-epc-model"},"git_status":{"ref":"main"}}]}]'
+    else
+      printf '%s\\n' '[{"codespaces":[]}]'
+    fi
+    ;;
+  codespace:create)
+    : > "$DUTCHBAY_TEST_STATE_FILE"
+    printf '%s\\n' 'mock-codespace'
+    ;;
   codespace:ssh)
     trap 'exit 0' TERM
     python3 -c 'import os, signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); open(os.environ["DUTCHBAY_TEST_CHILD_PID_FILE"], "w", encoding="ascii").write(str(os.getpid())); time.sleep(10)' &
@@ -1515,7 +1819,7 @@ esac
     fake_gh.chmod(0o755)
     started = time.monotonic()
     result = subprocess.run(
-        (str(CREATE_CODESPACE),),
+        (str(creator_copy),),
         cwd=REPO_ROOT,
         env={
             **os.environ,
@@ -1523,25 +1827,33 @@ esac
             "DUTCHBAY_VENV": str(Path(sys.executable).parents[1]),
             "DUTCHBAY_CODESPACE_TRANSPORT_TIMEOUT_SECONDS": "1",
             "DUTCHBAY_TEST_CHILD_PID_FILE": str(child_pid_file),
+            "DUTCHBAY_TEST_STATE_FILE": str(state_file),
         },
         capture_output=True,
         text=True,
         timeout=5,
     )
-    elapsed = time.monotonic() - started
-    assert result.returncode == 2
-    assert 0.5 <= elapsed < 4.0
-    assert "inspect or delete: mock-codespace" in result.stderr
-    child_pid = int(child_pid_file.read_text(encoding="ascii"))
-    child_alive = True
-    for _ in range(20):
-        if not _process_is_alive(child_pid):
-            child_alive = False
-            break
-        time.sleep(0.05)
-    if child_alive:  # pragma: no cover - cleanup before explicit failure
-        os.kill(child_pid, signal.SIGKILL)
-    assert not child_alive
+    child_pid: int | None = None
+    try:
+        elapsed = time.monotonic() - started
+        assert result.returncode == 2
+        assert 0.5 <= elapsed < 4.0
+        assert "inspect or delete: mock-codespace" in result.stderr
+        assert "retaining unresolved create lock" in result.stderr
+        assert (lock_path / "UNRESOLVED").is_file()
+        child_pid = int(child_pid_file.read_text(encoding="ascii"))
+        for _ in range(20):
+            if not _process_is_alive(child_pid):
+                break
+            time.sleep(0.05)
+        assert not _process_is_alive(child_pid)
+    finally:
+        if child_pid is not None and _process_is_alive(child_pid):
+            os.kill(child_pid, signal.SIGKILL)
+        if lock_path.exists():
+            for child in lock_path.iterdir():
+                child.unlink()
+            lock_path.rmdir()
 
 
 def test_identity_contract_binds_ingress_and_rejects_stale_markers(

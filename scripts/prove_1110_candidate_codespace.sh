@@ -12,6 +12,7 @@ readonly GOVERNED_PYTHON="$GOVERNED_VENV/bin/python"
 readonly SSH_READY_COMMAND="/usr/local/bin/python3.12 -S /usr/local/lib/dutchbay/sshd_readiness.py 5 /run/dutchbay-sshd-runtime.ready"
 readonly BOOTSTRAP_READY_COMMAND="test -f /workspaces/.dutchbay-private/bootstrap-receipt.json"
 readonly CREATE_LOCK="/tmp/dutchbay-1110-candidate-codespace.lock"
+readonly LOCAL_CLEANUP_MARKER="$CREATE_LOCK/LOCAL_CLEANUP_UNRESOLVED"
 readonly POLL_SECONDS=5
 readonly API_COMMAND_TIMEOUT_SECONDS=30
 readonly API_IDENTITY_RECOVERY_TIMEOUT_SECONDS=120
@@ -42,10 +43,20 @@ fail() {
   exit 2
 }
 
+mark_local_cleanup_unresolved() {
+  local status=$1
+  local reason=$2
+  if [ "$status" -eq 125 ] && [ -d "$CREATE_LOCK" ]; then
+    umask 077
+    printf 'reason=%s\n' "$reason" > "$LOCAL_CLEANUP_MARKER" || true
+  fi
+}
+
 bounded_command() {
   local timeout_seconds=$1
+  local command_status
   shift
-  "$GOVERNED_PYTHON" -S -c '
+  if "$GOVERNED_PYTHON" -S -c '
 import os
 import signal
 import subprocess
@@ -153,7 +164,13 @@ if not process_group_is_absent():
         print(f"ERROR: lifecycle cleanup unresolved: {exc}", file=sys.stderr)
         raise SystemExit(125) from exc
 raise SystemExit(return_code)
-' "$timeout_seconds" "$PROCESS_CLEANUP_TIMEOUT_SECONDS" "$@"
+' "$timeout_seconds" "$PROCESS_CLEANUP_TIMEOUT_SECONDS" "$@"; then
+    return 0
+  else
+    command_status=$?
+  fi
+  mark_local_cleanup_unresolved "$command_status" "bounded_command"
+  return "$command_status"
 }
 
 list_codespaces() {
@@ -179,6 +196,7 @@ wait_for_candidate_state() {
   local timeout_seconds=$2
   local deadline=$((SECONDS + timeout_seconds))
   local identity_json
+  local identity_status
   local remaining_seconds
   local state
   while [ "$SECONDS" -lt "$deadline" ]; do
@@ -191,6 +209,9 @@ wait_for_candidate_state() {
       state=$(jq -er '.state | select(type == "string" and length > 0)' \
         <<< "$identity_json") || return 2
       [ "$state" = "$expected_state" ] && return 0
+    else
+      identity_status=$?
+      [ "$identity_status" -eq 125 ] && return 125
     fi
     [ "$SECONDS" -lt "$deadline" ] || break
     remaining_seconds=$((deadline - SECONDS))
@@ -215,6 +236,7 @@ wait_for_api_identity_match() {
     else
       identity_status=$?
     fi
+    [ "$identity_status" -eq 125 ] && return 125
     [ "$identity_status" -eq 2 ] || return 1
     [ "$SECONDS" -lt "$deadline" ] || break
     remaining_seconds=$((deadline - SECONDS))
@@ -231,7 +253,14 @@ api_identity_matches() {
   local branch=$1
   local timeout_seconds=${2:-$API_COMMAND_TIMEOUT_SECONDS}
   local identity_json
-  identity_json=$(codespace_identity "$timeout_seconds") || return 2
+  local identity_status
+  if identity_json=$(codespace_identity "$timeout_seconds"); then
+    :
+  else
+    identity_status=$?
+    [ "$identity_status" -eq 125 ] && return 125
+    return 2
+  fi
   jq -e \
     --arg name "$codespace_name" \
     --arg display "$display_name" \
@@ -303,14 +332,19 @@ wait_for_candidate_absence() {
 
 delete_candidate_and_confirm_absent() {
   local branch=$1
+  local delete_status
   verify_api_identity "$branch"
-  if ! bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS" \
+  if bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS" \
     gh codespace delete -c "$codespace_name" --force; then
+    :
+  else
+    delete_status=$?
     if candidate_is_absent; then
       codespace_created="false"
+      [ "$delete_status" -eq 125 ] && return 125
       return 0
     fi
-    return 1
+    return "$delete_status"
   fi
   wait_for_candidate_absence || fail \
     "exact candidate Codespace deletion was not API-confirmed"
@@ -394,10 +428,11 @@ cleanup() {
   local exit_status=$?
   local absence_status
   local cleanup_resolved="true"
+  local delete_status
   local identity_status
   local recovery_status
   trap - EXIT
-  if [ "$exit_status" -eq 125 ]; then
+  if [ "$exit_status" -eq 125 ] || [ -f "$LOCAL_CLEANUP_MARKER" ]; then
     printf 'ERROR: a local lifecycle helper could not prove cleanup\n' >&2
     cleanup_resolved="false"
   fi
@@ -453,8 +488,16 @@ cleanup() {
           "$codespace_name" >&2
         cleanup_resolved="false"
         exit_status=2
-      elif ! bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS" \
+      elif bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS" \
         gh codespace delete -c "$codespace_name" --force; then
+        if ! wait_for_candidate_absence; then
+          printf 'ERROR: exact candidate Codespace absence was not confirmed: %s\n' \
+            "$codespace_name" >&2
+          cleanup_resolved="false"
+          exit_status=2
+        fi
+      else
+        delete_status=$?
         if candidate_is_absent; then
           codespace_created="false"
         else
@@ -463,16 +506,24 @@ cleanup() {
           cleanup_resolved="false"
           exit_status=2
         fi
-      elif ! wait_for_candidate_absence; then
-        printf 'ERROR: exact candidate Codespace absence was not confirmed: %s\n' \
-          "$codespace_name" >&2
-        cleanup_resolved="false"
-        exit_status=2
+        if [ "$delete_status" -eq 125 ]; then
+          printf 'ERROR: candidate deletion helper cleanup was not proved: %s\n' \
+            "$codespace_name" >&2
+          cleanup_resolved="false"
+          exit_status=125
+        fi
       fi
     elif [ "$codespace_created" = "true" ]; then
       printf 'ERROR: candidate Codespace name was unsafe for deletion\n' >&2
       cleanup_resolved="false"
       exit_status=2
+    fi
+  fi
+  if [ -f "$LOCAL_CLEANUP_MARKER" ]; then
+    printf 'ERROR: retaining unresolved local lifecycle-cleanup state\n' >&2
+    cleanup_resolved="false"
+    if [ "$exit_status" -eq 0 ]; then
+      exit_status=125
     fi
   fi
   if [ "$create_lock_held" = "true" ]; then
@@ -496,7 +547,8 @@ trap cleanup EXIT
 wait_for_remote_command() {
   local timeout_seconds=$1
   local remote_command=$2
-  "$GOVERNED_PYTHON" - \
+  local command_status
+  if "$GOVERNED_PYTHON" - \
     "$timeout_seconds" "$POLL_SECONDS" \
     "$REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS" \
     "$PROCESS_CLEANUP_TIMEOUT_SECONDS" \
@@ -641,6 +693,13 @@ with open(os.devnull, "wb") as sink:
             time.sleep(min(poll_seconds, remaining))
 raise SystemExit(124)
 PY
+  then
+    return 0
+  else
+    command_status=$?
+  fi
+  mark_local_cleanup_unresolved "$command_status" "remote_probe"
+  return "$command_status"
 }
 
 wait_for_transport() {
@@ -858,6 +917,8 @@ after_marker=$(bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS" \
   "stat -c '%i:%y' /run/dutchbay-sshd-runtime.ready")
 [ "$before_marker" != "$after_marker" ] || fail \
   "candidate Codespace post-start marker was not refreshed"
+[ ! -f "$LOCAL_CLEANUP_MARKER" ] || fail \
+  "a local lifecycle helper left unresolved cleanup state"
 
 readonly completed_codespace_name=$codespace_name
 delete_candidate_and_confirm_absent "$CANDIDATE_BRANCH"
