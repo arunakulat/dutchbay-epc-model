@@ -16,6 +16,7 @@ readonly POLL_SECONDS=5
 readonly API_COMMAND_TIMEOUT_SECONDS=30
 readonly API_IDENTITY_RECOVERY_TIMEOUT_SECONDS=120
 readonly REMOTE_COMMAND_TIMEOUT_SECONDS=120
+readonly PROCESS_CLEANUP_TIMEOUT_SECONDS=2
 # A cold authenticated tunnel can complete just after 10 seconds.
 readonly REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS=30
 readonly CREATE_COMMAND_TIMEOUT_SECONDS=300
@@ -52,7 +53,10 @@ import sys
 import time
 
 timeout = float(sys.argv[1])
-process = subprocess.Popen(sys.argv[2:], start_new_session=True)
+cleanup_budget = min(float(sys.argv[2]), timeout * 0.25)
+overall_deadline = time.monotonic() + timeout
+command_deadline = overall_deadline - cleanup_budget
+process = subprocess.Popen(sys.argv[3:], start_new_session=True)
 
 
 def process_group_is_absent() -> bool:
@@ -85,20 +89,35 @@ def signal_process_group(signal_number: int) -> None:
             ) from exc
 
 
+def wait_for_process_group_absence(deadline: float) -> bool:
+    while not process_group_is_absent():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0.0:
+            return False
+        time.sleep(min(0.02, remaining))
+    return True
+
+
 def stop_process_group() -> None:
+    cleanup_deadline = min(
+        overall_deadline,
+        time.monotonic() + cleanup_budget,
+    )
+    term_deadline = min(
+        cleanup_deadline,
+        time.monotonic() + cleanup_budget / 2,
+    )
     signal_process_group(signal.SIGTERM)
-    try:
-        process.wait(timeout=1.0)
-    except subprocess.TimeoutExpired:
+    if not wait_for_process_group_absence(term_deadline):
         signal_process_group(signal.SIGKILL)
-        try:
-            process.wait(timeout=1.0)
-        except subprocess.TimeoutExpired:
-            raise RuntimeError("lifecycle child could not be reaped")
-    deadline = time.monotonic() + 1.0
-    while not process_group_is_absent() and time.monotonic() < deadline:
-        time.sleep(0.02)
-    if not process_group_is_absent():
+    remaining = cleanup_deadline - time.monotonic()
+    if remaining <= 0.0:
+        raise RuntimeError("lifecycle child cleanup deadline expired")
+    try:
+        process.wait(timeout=remaining)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("lifecycle child could not be reaped") from exc
+    if not wait_for_process_group_absence(cleanup_deadline):
         raise RuntimeError("lifecycle process group could not be reaped")
 
 
@@ -110,15 +129,31 @@ for handled_signal in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
     signal.signal(handled_signal, controlled_signal)
 
 try:
-    return_code = process.wait(timeout=timeout)
+    return_code = process.wait(
+        timeout=max(0.0, command_deadline - time.monotonic())
+    )
 except subprocess.TimeoutExpired:
-    stop_process_group()
+    try:
+        stop_process_group()
+    except RuntimeError as exc:
+        print(f"ERROR: lifecycle cleanup unresolved: {exc}", file=sys.stderr)
+        raise SystemExit(125) from exc
     raise SystemExit(124)
 except BaseException:
-    stop_process_group()
+    try:
+        stop_process_group()
+    except RuntimeError as exc:
+        print(f"ERROR: lifecycle cleanup unresolved: {exc}", file=sys.stderr)
+        raise SystemExit(125) from exc
     raise
+if not process_group_is_absent():
+    try:
+        stop_process_group()
+    except RuntimeError as exc:
+        print(f"ERROR: lifecycle cleanup unresolved: {exc}", file=sys.stderr)
+        raise SystemExit(125) from exc
 raise SystemExit(return_code)
-' "$timeout_seconds" "$@"
+' "$timeout_seconds" "$PROCESS_CLEANUP_TIMEOUT_SECONDS" "$@"
 }
 
 list_codespaces() {
@@ -269,8 +304,14 @@ wait_for_candidate_absence() {
 delete_candidate_and_confirm_absent() {
   local branch=$1
   verify_api_identity "$branch"
-  bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS" \
-    gh codespace delete -c "$codespace_name" --force
+  if ! bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS" \
+    gh codespace delete -c "$codespace_name" --force; then
+    if candidate_is_absent; then
+      codespace_created="false"
+      return 0
+    fi
+    return 1
+  fi
   wait_for_candidate_absence || fail \
     "exact candidate Codespace deletion was not API-confirmed"
   codespace_created="false"
@@ -351,17 +392,27 @@ recover_pending_candidate_boundedly() {
 
 cleanup() {
   local exit_status=$?
+  local absence_status
   local cleanup_resolved="true"
   local identity_status
   local recovery_status
   trap - EXIT
+  if [ "$exit_status" -eq 125 ]; then
+    printf 'ERROR: a local lifecycle helper could not prove cleanup\n' >&2
+    cleanup_resolved="false"
+  fi
   if [ "$creation_pending" = "true" ]; then
     if recover_pending_candidate_boundedly; then
       :
     else
       recovery_status=$?
       case "$recovery_status" in
-        1) creation_pending="false" ;;
+        1)
+          printf 'ERROR: candidate creation remained ambiguous after recovery deadline\n' \
+            >&2
+          cleanup_resolved="false"
+          exit_status=2
+          ;;
         2)
           printf 'ERROR: ambiguous candidate creation could not be recovered safely\n' \
             >&2
@@ -378,7 +429,19 @@ cleanup() {
     fi
   fi
   if [ "$codespace_created" = "true" ]; then
-    if [ -n "$codespace_name" ] \
+    if candidate_is_absent; then
+      codespace_created="false"
+    else
+      absence_status=$?
+    fi
+    if [ "$codespace_created" = "true" ] \
+      && [ "$absence_status" -eq 2 ]; then
+      printf 'ERROR: candidate absence could not be determined safely: %s\n' \
+        "$codespace_name" >&2
+      cleanup_resolved="false"
+      exit_status=2
+    elif [ "$codespace_created" = "true" ] \
+      && [ -n "$codespace_name" ] \
       && [[ "$codespace_name" =~ ^[A-Za-z0-9_-]+$ ]]; then
       if wait_for_api_identity_match "$candidate_branch"; then
         identity_status=0
@@ -392,17 +455,21 @@ cleanup() {
         exit_status=2
       elif ! bounded_command "$REMOTE_COMMAND_TIMEOUT_SECONDS" \
         gh codespace delete -c "$codespace_name" --force; then
-        printf 'ERROR: exact candidate Codespace deletion failed: %s\n' \
-          "$codespace_name" >&2
-        cleanup_resolved="false"
-        exit_status=2
+        if candidate_is_absent; then
+          codespace_created="false"
+        else
+          printf 'ERROR: exact candidate Codespace deletion failed: %s\n' \
+            "$codespace_name" >&2
+          cleanup_resolved="false"
+          exit_status=2
+        fi
       elif ! wait_for_candidate_absence; then
         printf 'ERROR: exact candidate Codespace absence was not confirmed: %s\n' \
           "$codespace_name" >&2
         cleanup_resolved="false"
         exit_status=2
       fi
-    else
+    elif [ "$codespace_created" = "true" ]; then
       printf 'ERROR: candidate Codespace name was unsafe for deletion\n' >&2
       cleanup_resolved="false"
       exit_status=2
@@ -432,6 +499,7 @@ wait_for_remote_command() {
   "$GOVERNED_PYTHON" - \
     "$timeout_seconds" "$POLL_SECONDS" \
     "$REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS" \
+    "$PROCESS_CLEANUP_TIMEOUT_SECONDS" \
     "$codespace_name" "$remote_command" <<'PY'
 from __future__ import annotations
 
@@ -444,9 +512,10 @@ import time
 timeout = float(sys.argv[1])
 poll_seconds = float(sys.argv[2])
 attempt_timeout_seconds = float(sys.argv[3])
-cleanup_budget = min(1.0, timeout * 0.25)
-deadline = time.monotonic() + timeout - cleanup_budget
-command = ["gh", "codespace", "ssh", "-c", sys.argv[4], sys.argv[5]]
+cleanup_budget = min(float(sys.argv[4]), timeout * 0.25)
+overall_deadline = time.monotonic() + timeout
+attempt_deadline = overall_deadline - cleanup_budget
+command = ["gh", "codespace", "ssh", "-c", sys.argv[5], sys.argv[6]]
 
 
 def process_group_is_absent(process: subprocess.Popen[bytes]) -> bool:
@@ -481,21 +550,37 @@ def signal_process_group(
             ) from exc
 
 
+def wait_for_process_group_absence(
+    process: subprocess.Popen[bytes], deadline: float
+) -> bool:
+    while not process_group_is_absent(process):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0.0:
+            return False
+        time.sleep(min(0.02, remaining))
+    return True
+
+
 def stop_process_group(process: subprocess.Popen[bytes]) -> None:
+    cleanup_deadline = min(
+        overall_deadline,
+        time.monotonic() + cleanup_budget,
+    )
+    term_deadline = min(
+        cleanup_deadline,
+        time.monotonic() + cleanup_budget / 2,
+    )
     signal_process_group(process, signal.SIGTERM)
+    if not wait_for_process_group_absence(process, term_deadline):
+        signal_process_group(process, signal.SIGKILL)
+    remaining = cleanup_deadline - time.monotonic()
+    if remaining <= 0.0:
+        raise RuntimeError("remote probe child cleanup deadline expired")
     try:
-        process.wait(timeout=cleanup_budget / 2)
-    except subprocess.TimeoutExpired:
-        pass
-    signal_process_group(process, signal.SIGKILL)
-    try:
-        process.wait(timeout=cleanup_budget / 2)
-    except subprocess.TimeoutExpired:
-        raise RuntimeError("remote probe child could not be reaped")
-    deadline = time.monotonic() + cleanup_budget
-    while not process_group_is_absent(process) and time.monotonic() < deadline:
-        time.sleep(0.02)
-    if not process_group_is_absent(process):
+        process.wait(timeout=remaining)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("remote probe child could not be reaped") from exc
+    if not wait_for_process_group_absence(process, cleanup_deadline):
         raise RuntimeError("remote probe process group could not be reaped")
 
 
@@ -508,7 +593,7 @@ for handled_signal in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
 
 
 with open(os.devnull, "wb") as sink:
-    while (remaining := deadline - time.monotonic()) > 0:
+    while (remaining := attempt_deadline - time.monotonic()) > 0:
         process = subprocess.Popen(
             command,
             stdin=subprocess.DEVNULL,
@@ -521,14 +606,37 @@ with open(os.devnull, "wb") as sink:
                 timeout=min(attempt_timeout_seconds, remaining)
             )
         except subprocess.TimeoutExpired:
-            stop_process_group(process)
+            try:
+                stop_process_group(process)
+            except RuntimeError as exc:
+                print(
+                    f"ERROR: remote probe cleanup unresolved: {exc}",
+                    file=sys.stderr,
+                )
+                raise SystemExit(125) from exc
             return_code = 124
         except BaseException:
-            stop_process_group(process)
+            try:
+                stop_process_group(process)
+            except RuntimeError as exc:
+                print(
+                    f"ERROR: remote probe cleanup unresolved: {exc}",
+                    file=sys.stderr,
+                )
+                raise SystemExit(125) from exc
             raise
+        if not process_group_is_absent(process):
+            try:
+                stop_process_group(process)
+            except RuntimeError as exc:
+                print(
+                    f"ERROR: remote probe cleanup unresolved: {exc}",
+                    file=sys.stderr,
+                )
+                raise SystemExit(125) from exc
         if return_code == 0:
             raise SystemExit(0)
-        remaining = deadline - time.monotonic()
+        remaining = attempt_deadline - time.monotonic()
         if remaining > 0:
             time.sleep(min(poll_seconds, remaining))
 raise SystemExit(124)
@@ -670,6 +778,25 @@ checkout_status=$(git status --porcelain=v1) || fail \
   "local candidate checkout status could not be determined"
 [ -z "$checkout_status" ] || fail \
   "local candidate checkout must be clean"
+local_branch=$(git branch --show-current) || fail \
+  "local candidate branch could not be determined"
+[ "$local_branch" = "$CANDIDATE_BRANCH" ] || fail \
+  "local controller branch does not equal the candidate branch"
+local_head=$(git rev-parse HEAD) || fail \
+  "local candidate head could not be determined"
+[ "$local_head" = "$EXPECTED_SHA" ] || fail \
+  "local controller head does not equal the expected SHA"
+controller_script_sha256=$(
+  "$GOVERNED_PYTHON" -S -c \
+    'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' \
+    "$0"
+) || fail "local controller digest could not be determined"
+[[ "$controller_script_sha256" =~ ^[0-9a-f]{64}$ ]] || fail \
+  "local controller digest is malformed"
+
+mkdir -- "$CREATE_LOCK" || fail \
+  "another local #1110 candidate Codespace proof is active or left a stale lock"
+create_lock_held="true"
 
 remote_sha=$(bounded_command "$API_COMMAND_TIMEOUT_SECONDS" \
   git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH" \
@@ -692,10 +819,6 @@ existing_count=$(jq --arg display "$display_name" --arg repository "$REPOSITORY"
   <<< "$existing_json")
 [ "$existing_count" -eq 0 ] || fail \
   "a candidate Codespace with the exact display name already exists"
-
-mkdir -- "$CREATE_LOCK" || fail \
-  "another local #1110 candidate Codespace proof is active or left a stale lock"
-create_lock_held="true"
 
 creation_pending="true"
 codespace_name=$(bounded_command "$CREATE_COMMAND_TIMEOUT_SECONDS" \
@@ -748,6 +871,7 @@ jq -n \
   --arg run_nonce "$run_nonce" \
   --arg branch "$CANDIDATE_BRANCH" \
   --arg sha "$EXPECTED_SHA" \
+  --arg controller_sha256 "$controller_script_sha256" \
   '{
     schema: "dutchbay.audit_review_candidate_codespace.v1",
     status: "PASS",
@@ -756,6 +880,11 @@ jq -n \
     candidate_run_nonce: $run_nonce,
     candidate_branch: $branch,
     candidate_sha: $sha,
+    local_controller: {
+      branch: $branch,
+      head: $sha,
+      script_sha256: $controller_sha256
+    },
     api_identity: "matched",
     checkout: "clean_exact_head",
     p03_source_state: "private_root_empty_p03_not_executed",

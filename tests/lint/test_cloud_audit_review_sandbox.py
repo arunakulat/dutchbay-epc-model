@@ -243,6 +243,26 @@ def _load_sshd_readiness() -> ModuleType:
     return module
 
 
+def _bounded_watchdog(path: Path) -> str:
+    """Extract a shell wrapper's embedded one-command watchdog."""
+    source = path.read_text(encoding="utf-8")
+    start_marker = '"$GOVERNED_PYTHON" -S -c \'\n'
+    end_marker = '\n\' "$timeout_seconds" "$PROCESS_CLEANUP_TIMEOUT_SECONDS" "$@"'
+    start = source.index(start_marker) + len(start_marker)
+    end = source.index(end_marker, start)
+    return source[start:end]
+
+
+def _create_transport_watchdog() -> str:
+    """Extract the persistent Codespace creator's transport watchdog."""
+    source = CREATE_CODESPACE.read_text(encoding="utf-8")
+    invocation = source.index('if "$GOVERNED_PYTHON" - ')
+    start_marker = "from __future__ import annotations\n"
+    start = source.index(start_marker, invocation)
+    end = source.index("\nPY\nthen", start)
+    return source[start:end]
+
+
 def _ssh_wire_string(value: bytes) -> bytes:
     return len(value).to_bytes(4, "big") + value
 
@@ -513,6 +533,10 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
     assert '[[ "$CANDIDATE_BRANCH" =~ ^codex/' in candidate
     assert '[[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]' in candidate
     assert 'git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH"' in candidate
+    assert '[ "$local_branch" = "$CANDIDATE_BRANCH" ]' in candidate
+    assert '[ "$local_head" = "$EXPECTED_SHA" ]' in candidate
+    assert "controller_script_sha256" in candidate
+    assert "local_controller:" in candidate
     assert "checkout_head=$(git rev-parse HEAD) || exit 2" in candidate
     assert 'test "$checkout_head" = "$expected_sha"' in candidate
     assert "checkout_status=$(git status --porcelain=v1) ||" in candidate
@@ -526,6 +550,7 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
     assert "readonly BOOTSTRAP_TIMEOUT_SECONDS=900" in candidate
     assert "readonly SHUTDOWN_TIMEOUT_SECONDS=300" in candidate
     assert "readonly REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS=30" in candidate
+    assert "readonly PROCESS_CLEANUP_TIMEOUT_SECONDS=2" in candidate
     assert "timeout=min(attempt_timeout_seconds, remaining)" in candidate
     assert "min(10.0, remaining)" not in candidate
     assert "sshd_readiness.py 5 /run/dutchbay-sshd-runtime.ready" in candidate
@@ -569,6 +594,11 @@ def test_candidate_codespace_control_is_exact_head_empty_and_disposable() -> Non
     assert 'creation_pending="true"' in candidate
     assert "recover_pending_candidate_boundedly" in candidate
     assert "recover_unique_pending_candidate_once" in candidate
+    assert '1) creation_pending="false"' not in candidate
+    assert "candidate creation remained ambiguous after recovery deadline" in candidate
+    assert candidate.index("if candidate_is_absent; then") < candidate.index(
+        'wait_for_api_identity_match "$candidate_branch"'
+    )
     assert 'display_name="DB1110-${EXPECTED_SHA:0:12}-$run_nonce"' in candidate
     assert "secrets.token_hex(8)" in candidate
     assert '[ "${#display_name}" -le 48 ]' in candidate
@@ -614,16 +644,67 @@ def test_candidate_codespace_control_rejects_non_allowlisted_identity() -> None:
     assert "full SHA-1" in invalid_sha.stderr
 
 
+def test_candidate_rejects_mismatched_local_controller_before_github(
+    tmp_path: Path,
+) -> None:
+    """A receipt must not be produced by a different local branch or head."""
+    tool_root = tmp_path / "bin"
+    tool_root.mkdir()
+    github_marker = tmp_path / "gh-called"
+    git_stub = tool_root / "git"
+    git_stub.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  check-ref-format) exit 0 ;;
+  status) exit 0 ;;
+  branch) printf '%s\\n' "$STUB_LOCAL_BRANCH" ;;
+  rev-parse) printf '%s\\n' "$STUB_LOCAL_HEAD" ;;
+  *) exit 91 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    gh_stub = tool_root / "gh"
+    gh_stub.write_text(
+        f"#!/usr/bin/env bash\nprintf called > {github_marker!s}\nexit 99\n",
+        encoding="utf-8",
+    )
+    git_stub.chmod(0o755)
+    gh_stub.chmod(0o755)
+    branch = "codex/local-controller-control"
+    sha = "a" * 40
+    lock_path = Path("/tmp/dutchbay-1110-candidate-codespace.lock")
+    assert not lock_path.exists()
+    for local_branch, local_head, expected_error in (
+        ("codex/other", sha, "local controller branch"),
+        (branch, "b" * 40, "local controller head"),
+    ):
+        result = subprocess.run(
+            (str(CANDIDATE_CODESPACE), branch, sha),
+            cwd=REPO_ROOT,
+            env={
+                **os.environ,
+                "PATH": f"{tool_root}:{os.environ['PATH']}",
+                "DUTCHBAY_VENV": str(Path(sys.executable).parents[1]),
+                "STUB_LOCAL_BRANCH": local_branch,
+                "STUB_LOCAL_HEAD": local_head,
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 2
+        assert expected_error in result.stderr
+        assert not github_marker.exists()
+        assert not lock_path.exists()
+
+
 def test_candidate_watchdog_reaps_signal_resistant_group_on_interrupt(
     tmp_path: Path,
 ) -> None:
     """SIGINT must reap the detached lifecycle child before shell cleanup."""
-    candidate = CANDIDATE_CODESPACE.read_text(encoding="utf-8")
-    start = candidate.index('"$GOVERNED_PYTHON" -S -c \'\n') + len(
-        '"$GOVERNED_PYTHON" -S -c \'\n'
-    )
-    end = candidate.index('\n\' "$timeout_seconds" "$@"', start)
-    watchdog = candidate[start:end]
+    watchdog = _bounded_watchdog(CANDIDATE_CODESPACE)
     child_pid_file = tmp_path / "child.pid"
     child_script = (
         f'trap "" TERM; (trap "" TERM; sleep 30) & echo $! > {child_pid_file!s}; wait'
@@ -635,6 +716,7 @@ def test_candidate_watchdog_reaps_signal_resistant_group_on_interrupt(
             "-c",
             watchdog,
             "30",
+            "2",
             "/bin/bash",
             "-c",
             child_script,
@@ -662,16 +744,131 @@ def test_candidate_watchdog_reaps_signal_resistant_group_on_interrupt(
     assert not child_alive
 
 
-def test_candidate_watchdog_falls_back_when_group_signal_is_denied(
+def test_bounded_watchdogs_fall_back_when_group_signal_is_denied(
     tmp_path: Path,
 ) -> None:
-    """An owned child must still be reaped when group signalling returns EPERM."""
-    candidate = CANDIDATE_CODESPACE.read_text(encoding="utf-8")
-    start = candidate.index('"$GOVERNED_PYTHON" -S -c \'\n') + len(
-        '"$GOVERNED_PYTHON" -S -c \'\n'
+    """Owned children must be reaped when group signalling returns EPERM."""
+    for index, path in enumerate((CANDIDATE_CODESPACE, CLOUD_VERIFY)):
+        watchdog = _bounded_watchdog(path)
+        forced_permission_error = watchdog.replace(
+            "        os.killpg(process.pid, signal_number)",
+            "        if signal_number:\n"
+            "            raise PermissionError\n"
+            "        os.killpg(process.pid, signal_number)",
+        )
+        assert forced_permission_error != watchdog
+        child_pid_file = tmp_path / f"permission-child-{index}.pid"
+        child_script = f"echo $$ > {child_pid_file!s}; exec sleep 30"
+        result = subprocess.run(
+            (
+                sys.executable,
+                "-S",
+                "-c",
+                forced_permission_error,
+                "1",
+                "0.5",
+                "/bin/bash",
+                "-c",
+                child_script,
+            ),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        assert result.returncode == 124
+        child_pid = int(child_pid_file.read_text(encoding="ascii"))
+        assert not _process_is_alive(child_pid)
+
+
+def test_bounded_watchdogs_kill_descendant_after_leader_exits(
+    tmp_path: Path,
+) -> None:
+    """A TERM-resistant descendant must get group SIGKILL after its leader exits."""
+    for index, path in enumerate((CANDIDATE_CODESPACE, CLOUD_VERIFY)):
+        child_pid_file = tmp_path / f"descendant-{index}.pid"
+        child_script = (
+            "trap 'exit 0' TERM; "
+            f"(trap '' TERM; sleep 30) & echo $! > {child_pid_file!s}; wait"
+        )
+        result = subprocess.run(
+            (
+                sys.executable,
+                "-S",
+                "-c",
+                _bounded_watchdog(path),
+                "1",
+                "0.5",
+                "/bin/bash",
+                "-c",
+                child_script,
+            ),
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        assert result.returncode == 124
+        child_pid = int(child_pid_file.read_text(encoding="ascii"))
+        for _ in range(100):
+            if not _process_is_alive(child_pid):
+                break
+            time.sleep(0.02)
+        assert not _process_is_alive(child_pid)
+
+
+def test_create_transport_watchdog_reaps_on_interrupt_and_eperm(
+    tmp_path: Path,
+) -> None:
+    """The persistent creator must clean its detached probe on hostile exits."""
+    child_pid_file = tmp_path / "create-child.pid"
+    child_script = (
+        "trap 'exit 0' TERM; "
+        f"(trap '' TERM; sleep 30) & echo $! > {child_pid_file!s}; wait"
     )
-    end = candidate.index('\n\' "$timeout_seconds" "$@"', start)
-    watchdog = candidate[start:end]
+    watchdog = _create_transport_watchdog().replace(
+        'command = ["gh", "codespace", "ssh", "-c", sys.argv[5], sys.argv[6]]',
+        'command = ["/bin/bash", "-c", sys.argv[5]]',
+    )
+    assert 'command = ["/bin/bash", "-c", sys.argv[5]]' in watchdog
+    process = subprocess.Popen(
+        (
+            sys.executable,
+            "-S",
+            "-c",
+            watchdog,
+            "30",
+            "0.1",
+            "30",
+            "2",
+            child_script,
+            "unused",
+        ),
+        start_new_session=True,
+    )
+    child_pid: int | None = None
+    try:
+        for _ in range(250):
+            if child_pid_file.exists():
+                break
+            time.sleep(0.02)
+        assert child_pid_file.exists()
+        child_pid = int(child_pid_file.read_text(encoding="ascii"))
+        os.kill(process.pid, signal.SIGINT)
+        assert process.wait(timeout=5) == 130
+        for _ in range(100):
+            if not _process_is_alive(child_pid):
+                break
+            time.sleep(0.02)
+        assert not _process_is_alive(child_pid)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+        if child_pid is not None and _process_is_alive(child_pid):
+            os.kill(child_pid, signal.SIGKILL)
+
+    child_pid_file.unlink()
     forced_permission_error = watchdog.replace(
         "        os.killpg(process.pid, signal_number)",
         "        if signal_number:\n"
@@ -679,7 +876,6 @@ def test_candidate_watchdog_falls_back_when_group_signal_is_denied(
         "        os.killpg(process.pid, signal_number)",
     )
     assert forced_permission_error != watchdog
-    child_pid_file = tmp_path / "permission-child.pid"
     child_script = f"echo $$ > {child_pid_file!s}; exec sleep 30"
     result = subprocess.run(
         (
@@ -687,10 +883,12 @@ def test_candidate_watchdog_falls_back_when_group_signal_is_denied(
             "-S",
             "-c",
             forced_permission_error,
+            "1",
             "0.1",
-            "/bin/bash",
-            "-c",
+            "1",
+            "0.5",
             child_script,
+            "unused",
         ),
         capture_output=True,
         text=True,
@@ -718,6 +916,8 @@ set -euo pipefail
 case "$1" in
   check-ref-format) exit 0 ;;
   status) exit 0 ;;
+  branch) printf '%s\\n' "$STUB_BRANCH" ;;
+  rev-parse) printf '%s\\n' "$STUB_SHA" ;;
   ls-remote) printf '%s\\trefs/heads/%s\\n' "$STUB_SHA" "$STUB_BRANCH" ;;
   *) exit 91 ;;
 esac
@@ -766,6 +966,7 @@ case "$1 $2" in
     ;;
   "codespace delete")
     rm -- "$STUB_STATE"
+    exit "${STUB_DELETE_EXIT:-0}"
     ;;
   *) exit 92 ;;
 esac
@@ -786,15 +987,19 @@ esac
         "STUB_VISIBILITY": str(visibility_path),
         "STUB_CALL_LOG": str(call_log),
     }
-    for create_output, expected_error in (
-        ("malformed/name", "created candidate Codespace name is malformed"),
-        ("protected999", "candidate Codespace API identity differs"),
+    for create_output, expected_error, delete_exit in (
+        ("malformed/name", "created candidate Codespace name is malformed", "124"),
+        ("protected999", "candidate Codespace API identity differs", "0"),
     ):
         visibility_path.unlink(missing_ok=True)
         result = subprocess.run(
             (str(CANDIDATE_CODESPACE), branch, sha),
             cwd=REPO_ROOT,
-            env={**base_environment, "STUB_CREATE_OUTPUT": create_output},
+            env={
+                **base_environment,
+                "STUB_CREATE_OUTPUT": create_output,
+                "STUB_DELETE_EXIT": delete_exit,
+            },
             capture_output=True,
             text=True,
             check=False,
@@ -802,11 +1007,89 @@ esac
         assert result.returncode == 2
         assert expected_error in result.stderr
         assert not state_path.exists()
-        assert visibility_path.read_text(encoding="utf-8").strip() == "3"
+        assert visibility_path.read_text(encoding="utf-8").strip() == "4"
         assert not lock_path.exists()
     calls = call_log.read_text(encoding="utf-8")
     assert calls.count("codespace delete -c candidate123 --force") == 2
     assert "codespace delete -c protected999 --force" not in calls
+
+
+def test_candidate_retains_lock_when_ambiguous_creation_stays_invisible(
+    tmp_path: Path,
+) -> None:
+    """Bounded API non-observation must not be promoted to proved non-creation."""
+    tool_root = tmp_path / "bin"
+    tool_root.mkdir()
+    lock_path = tmp_path / "candidate.lock"
+    call_log = tmp_path / "calls.log"
+    branch = "codex/invisible-create-control"
+    sha = "a" * 40
+    candidate_copy = tmp_path / "candidate-proof"
+    candidate_source = CANDIDATE_CODESPACE.read_text(encoding="utf-8")
+    candidate_source = candidate_source.replace(
+        'readonly CREATE_LOCK="/tmp/dutchbay-1110-candidate-codespace.lock"',
+        f'readonly CREATE_LOCK="{lock_path!s}"',
+    ).replace(
+        "readonly AMBIGUOUS_CREATE_RECOVERY_TIMEOUT_SECONDS=120",
+        "readonly AMBIGUOUS_CREATE_RECOVERY_TIMEOUT_SECONDS=1",
+    )
+    candidate_copy.write_text(candidate_source, encoding="utf-8")
+    candidate_copy.chmod(0o755)
+    git_stub = tool_root / "git"
+    git_stub.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  check-ref-format|status) exit 0 ;;
+  branch) printf '%s\\n' "$STUB_BRANCH" ;;
+  rev-parse) printf '%s\\n' "$STUB_SHA" ;;
+  ls-remote) printf '%s\\trefs/heads/%s\\n' "$STUB_SHA" "$STUB_BRANCH" ;;
+  *) exit 91 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    gh_stub = tool_root / "gh"
+    gh_stub.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >> "$STUB_CALL_LOG"
+case "$1 $2" in
+  "api --paginate") printf '%s\\n' '[{"codespaces":[]}]' ;;
+  "codespace create") printf '%s\\n' 'malformed/name' ;;
+  *) exit 92 ;;
+esac
+""",
+        encoding="utf-8",
+    )
+    git_stub.chmod(0o755)
+    gh_stub.chmod(0o755)
+    result = subprocess.run(
+        (str(candidate_copy), branch, sha),
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{tool_root}:{os.environ['PATH']}",
+            "DUTCHBAY_VENV": str(Path(sys.executable).parents[1]),
+            "STUB_BRANCH": branch,
+            "STUB_SHA": sha,
+            "STUB_CALL_LOG": str(call_log),
+        },
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    try:
+        assert result.returncode == 2
+        assert "candidate creation remained ambiguous" in result.stderr
+        assert "retaining candidate recovery lock" in result.stderr
+        assert (lock_path / "UNRESOLVED").is_file()
+        assert "codespace create" in call_log.read_text(encoding="utf-8")
+    finally:
+        if lock_path.exists():
+            (lock_path / "UNRESOLVED").unlink(missing_ok=True)
+            lock_path.rmdir()
 
 
 def test_shell_population_and_status_probes_fail_closed(tmp_path: Path) -> None:
@@ -1022,15 +1305,20 @@ def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
     )
     assert "post-create Codespace identity/collision check failed" in create_codespace
     assert "readonly MAX_TRANSPORT_TIMEOUT_SECONDS=300" in create_codespace
+    assert "readonly PROCESS_CLEANUP_TIMEOUT_SECONDS=2" in create_codespace
     assert "readonly REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS=30" in create_codespace
     assert "readonly POLL_SECONDS=5" in create_codespace
     assert "start_new_session=True" in create_codespace
     assert "os.killpg" in create_codespace
-    assert "deadline = time.monotonic() + timeout - cleanup_budget" in (
-        create_codespace
-    )
+    assert "overall_deadline = time.monotonic() + timeout" in create_codespace
+    assert "attempt_deadline = overall_deadline - cleanup_budget" in create_codespace
     assert "timeout=min(attempt_timeout_seconds, remaining)" in create_codespace
     assert "min(10.0, remaining)" not in create_codespace
+    assert "transport probe process group could not be reaped" in create_codespace
+    assert 'create_lock_held="unresolved"' in create_codespace
+    assert "readonly PROCESS_CLEANUP_TIMEOUT_SECONDS=2" in cloud_verify
+    assert "verification process group could not be reaped" in cloud_verify
+    assert "except PermissionError:" in cloud_verify
     assert "sshd_readiness.py 5" in create_codespace
     assert '["gh", "codespace", "ssh"' in create_codespace
     document = DOC.read_text(encoding="utf-8")

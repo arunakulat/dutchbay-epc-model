@@ -12,6 +12,7 @@ readonly GOVERNED_PYTHON="$GOVERNED_VENV/bin/python"
 readonly CODESPACE_NAME="${DUTCHBAY_1110_REVIEW_CODESPACE_NAME:-}"
 readonly API_TIMEOUT_SECONDS=30
 readonly REMOTE_TIMEOUT_SECONDS=1800
+readonly PROCESS_CLEANUP_TIMEOUT_SECONDS=2
 
 fail() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -26,26 +27,75 @@ import os
 import signal
 import subprocess
 import sys
+import time
 
-process = subprocess.Popen(sys.argv[2:], start_new_session=True)
+timeout = float(sys.argv[1])
+cleanup_budget = min(float(sys.argv[2]), timeout * 0.25)
+overall_deadline = time.monotonic() + timeout
+command_deadline = overall_deadline - cleanup_budget
+process = subprocess.Popen(sys.argv[3:], start_new_session=True)
+
+
+def process_group_is_absent() -> bool:
+    try:
+        os.killpg(process.pid, 0)
+    except ProcessLookupError:
+        return True
+    except PermissionError:
+        return False
+    return False
+
+
+def signal_process_group(signal_number: int) -> None:
+    try:
+        os.killpg(process.pid, signal_number)
+    except ProcessLookupError:
+        return
+    except PermissionError:
+        if process.poll() is not None and process_group_is_absent():
+            return
+        if process.poll() is not None:
+            raise RuntimeError("verification process group could not be signalled")
+        try:
+            process.send_signal(signal_number)
+        except ProcessLookupError:
+            return
+        except PermissionError as exc:
+            raise RuntimeError(
+                "verification child could not be signalled"
+            ) from exc
+
+
+def wait_for_process_group_absence(deadline: float) -> bool:
+    while not process_group_is_absent():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0.0:
+            return False
+        time.sleep(min(0.02, remaining))
+    return True
 
 
 def stop_process_group() -> None:
+    cleanup_deadline = min(
+        overall_deadline,
+        time.monotonic() + cleanup_budget,
+    )
+    term_deadline = min(
+        cleanup_deadline,
+        time.monotonic() + cleanup_budget / 2,
+    )
+    signal_process_group(signal.SIGTERM)
+    if not wait_for_process_group_absence(term_deadline):
+        signal_process_group(signal.SIGKILL)
+    remaining = cleanup_deadline - time.monotonic()
+    if remaining <= 0.0:
+        raise RuntimeError("verification child cleanup deadline expired")
     try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
-    try:
-        process.wait(timeout=1.0)
-    except subprocess.TimeoutExpired:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            return
-        try:
-            process.wait(timeout=1.0)
-        except subprocess.TimeoutExpired:
-            pass
+        process.wait(timeout=remaining)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("verification child could not be reaped") from exc
+    if not wait_for_process_group_absence(cleanup_deadline):
+        raise RuntimeError("verification process group could not be reaped")
 
 
 def controlled_signal(signum: int, _frame: object) -> None:
@@ -56,15 +106,31 @@ for handled_signal in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
     signal.signal(handled_signal, controlled_signal)
 
 try:
-    return_code = process.wait(timeout=float(sys.argv[1]))
+    return_code = process.wait(
+        timeout=max(0.0, command_deadline - time.monotonic())
+    )
 except subprocess.TimeoutExpired:
-    stop_process_group()
+    try:
+        stop_process_group()
+    except RuntimeError as exc:
+        print(f"ERROR: verification cleanup unresolved: {exc}", file=sys.stderr)
+        raise SystemExit(125) from exc
     raise SystemExit(124)
 except BaseException:
-    stop_process_group()
+    try:
+        stop_process_group()
+    except RuntimeError as exc:
+        print(f"ERROR: verification cleanup unresolved: {exc}", file=sys.stderr)
+        raise SystemExit(125) from exc
     raise
+if not process_group_is_absent():
+    try:
+        stop_process_group()
+    except RuntimeError as exc:
+        print(f"ERROR: verification cleanup unresolved: {exc}", file=sys.stderr)
+        raise SystemExit(125) from exc
 raise SystemExit(return_code)
-' "$timeout_seconds" "$@"
+' "$timeout_seconds" "$PROCESS_CLEANUP_TIMEOUT_SECONDS" "$@"
 }
 
 codespace_identity() {

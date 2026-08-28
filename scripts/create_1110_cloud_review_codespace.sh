@@ -10,6 +10,7 @@ readonly DISPLAY_NAME="DutchBay 1110 independent review"
 readonly READY_COMMAND="/usr/local/bin/python3.12 -S /usr/local/lib/dutchbay/sshd_readiness.py 5 /run/dutchbay-sshd-runtime.ready"
 readonly POLL_SECONDS=5
 readonly MAX_TRANSPORT_TIMEOUT_SECONDS=300
+readonly PROCESS_CLEANUP_TIMEOUT_SECONDS=2
 # A cold authenticated tunnel can complete just after 10 seconds.
 readonly REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS=30
 readonly TRANSPORT_TIMEOUT_SECONDS="${DUTCHBAY_CODESPACE_TRANSPORT_TIMEOUT_SECONDS:-300}"
@@ -17,6 +18,7 @@ readonly GOVERNED_VENV="${DUTCHBAY_VENV:-/Users/aruna/Downloads/Dutchbay_EPC_Mod
 readonly GOVERNED_PYTHON="$GOVERNED_VENV/bin/python"
 readonly CREATE_LOCK="/tmp/dutchbay-1110-codespace-create.lock"
 create_lock_held="false"
+codespace_name=""
 
 fail() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -31,6 +33,12 @@ release_create_lock() {
         "ERROR: create lock cleanup failed: $CREATE_LOCK" >&2
       return 2
     fi
+  elif [ "$create_lock_held" = "unresolved" ]; then
+    umask 077
+    printf 'codespace_name=%s\nreason=local_helper_cleanup_unresolved\n' \
+      "$codespace_name" > "$CREATE_LOCK/UNRESOLVED" || true
+    printf '%s\n' \
+      "ERROR: retaining unresolved create lock: $CREATE_LOCK" >&2
   fi
   return "$exit_status"
 }
@@ -80,6 +88,7 @@ esac
 if "$GOVERNED_PYTHON" - \
   "$TRANSPORT_TIMEOUT_SECONDS" "$POLL_SECONDS" \
   "$REMOTE_PROBE_ATTEMPT_TIMEOUT_SECONDS" \
+  "$PROCESS_CLEANUP_TIMEOUT_SECONDS" \
   "$codespace_name" "$READY_COMMAND" <<'PY'
 from __future__ import annotations
 
@@ -92,32 +101,88 @@ import time
 timeout = float(sys.argv[1])
 poll_seconds = float(sys.argv[2])
 attempt_timeout_seconds = float(sys.argv[3])
-cleanup_budget = min(1.0, timeout * 0.25)
-deadline = time.monotonic() + timeout - cleanup_budget
-command = ["gh", "codespace", "ssh", "-c", sys.argv[4], sys.argv[5]]
+cleanup_budget = min(float(sys.argv[4]), timeout * 0.25)
+overall_deadline = time.monotonic() + timeout
+attempt_deadline = overall_deadline - cleanup_budget
+command = ["gh", "codespace", "ssh", "-c", sys.argv[5], sys.argv[6]]
+
+
+def process_group_is_absent(process: subprocess.Popen[bytes]) -> bool:
+    try:
+        os.killpg(process.pid, 0)
+    except ProcessLookupError:
+        return True
+    except PermissionError:
+        return False
+    return False
+
+
+def signal_process_group(
+    process: subprocess.Popen[bytes], signal_number: int
+) -> None:
+    try:
+        os.killpg(process.pid, signal_number)
+    except ProcessLookupError:
+        return
+    except PermissionError:
+        if process.poll() is not None and process_group_is_absent(process):
+            return
+        if process.poll() is not None:
+            raise RuntimeError("transport probe process group could not be signalled")
+        try:
+            process.send_signal(signal_number)
+        except ProcessLookupError:
+            return
+        except PermissionError as exc:
+            raise RuntimeError(
+                "transport probe child could not be signalled"
+            ) from exc
+
+
+def wait_for_process_group_absence(
+    process: subprocess.Popen[bytes], deadline: float
+) -> bool:
+    while not process_group_is_absent(process):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0.0:
+            return False
+        time.sleep(min(0.02, remaining))
+    return True
 
 
 def stop_process_group(process: subprocess.Popen[bytes]) -> None:
+    cleanup_deadline = min(
+        overall_deadline,
+        time.monotonic() + cleanup_budget,
+    )
+    term_deadline = min(
+        cleanup_deadline,
+        time.monotonic() + cleanup_budget / 2,
+    )
+    signal_process_group(process, signal.SIGTERM)
+    if not wait_for_process_group_absence(process, term_deadline):
+        signal_process_group(process, signal.SIGKILL)
+    remaining = cleanup_deadline - time.monotonic()
+    if remaining <= 0.0:
+        raise RuntimeError("transport probe child cleanup deadline expired")
     try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return
-    try:
-        process.wait(timeout=cleanup_budget / 2)
-    except subprocess.TimeoutExpired:
-        pass
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        return
-    try:
-        process.wait(timeout=cleanup_budget / 2)
-    except subprocess.TimeoutExpired:
-        pass
+        process.wait(timeout=remaining)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("transport probe child could not be reaped") from exc
+    if not wait_for_process_group_absence(process, cleanup_deadline):
+        raise RuntimeError("transport probe process group could not be reaped")
+
+
+def controlled_signal(signum: int, _frame: object) -> None:
+    raise SystemExit(128 + signum)
+
+
+for handled_signal in (signal.SIGHUP, signal.SIGINT, signal.SIGTERM):
+    signal.signal(handled_signal, controlled_signal)
 
 
 with open(os.devnull, "wb") as sink:
-    while (remaining := deadline - time.monotonic()) > 0:
+    while (remaining := attempt_deadline - time.monotonic()) > 0:
         process = subprocess.Popen(
             command,
             stdin=subprocess.DEVNULL,
@@ -130,11 +195,37 @@ with open(os.devnull, "wb") as sink:
                 timeout=min(attempt_timeout_seconds, remaining)
             )
         except subprocess.TimeoutExpired:
-            stop_process_group(process)
+            try:
+                stop_process_group(process)
+            except RuntimeError as exc:
+                print(
+                    f"ERROR: transport probe cleanup unresolved: {exc}",
+                    file=sys.stderr,
+                )
+                raise SystemExit(125) from exc
             return_code = 124
+        except BaseException:
+            try:
+                stop_process_group(process)
+            except RuntimeError as exc:
+                print(
+                    f"ERROR: transport probe cleanup unresolved: {exc}",
+                    file=sys.stderr,
+                )
+                raise SystemExit(125) from exc
+            raise
+        if not process_group_is_absent(process):
+            try:
+                stop_process_group(process)
+            except RuntimeError as exc:
+                print(
+                    f"ERROR: transport probe cleanup unresolved: {exc}",
+                    file=sys.stderr,
+                )
+                raise SystemExit(125) from exc
         if return_code == 0:
             raise SystemExit(0)
-        remaining = deadline - time.monotonic()
+        remaining = attempt_deadline - time.monotonic()
         if remaining > 0:
             time.sleep(min(poll_seconds, remaining))
 raise SystemExit(124)
@@ -159,6 +250,12 @@ then
   trap - EXIT
   printf '%s\n' "$codespace_name"
   exit 0
+else
+  probe_status=$?
 fi
 
+if [ "$probe_status" -eq 125 ]; then
+  create_lock_held="unresolved"
+  fail "Codespace transport helper cleanup was not proved; inspect lock and candidate: $codespace_name"
+fi
 fail "Codespace transport did not become ready; inspect or delete: $codespace_name"
