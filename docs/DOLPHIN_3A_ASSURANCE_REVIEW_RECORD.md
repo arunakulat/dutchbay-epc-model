@@ -1,12 +1,15 @@
 # Dolphin 3A independent assurance review record
 
-**Record status:** blocking exact-head assurance checkpoint under PERSIST-01
+**Record status:** predecessor veto plus recovered exact-head successor rereview; controlling
+**ASSURANCE REJECTED** under PERSIST-01
 
 **Reviewed pushed head:** `722845742f7123af3d637373c1996a82e357347a`
 
 **Reviewed production/test candidate:** `2a3831542a3160f6d02cb2f592c4487981647f19`
 
 **Reviewed base/live main:** `782c9588ef2685fcf0608d48f7745493aaa15b78`
+
+**Recovered successor head:** `836502a607fbce479f8e0412e2c63cb8659fafcd`
 
 **Pull request:** `#1191`, open and draft at the reviewed head
 
@@ -265,3 +268,185 @@ assurance rejection, and a documentation-only commit cannot clear it.
 PR `#1191` must remain draft and must not merge while this **ASSURANCE REJECTED** disposition is
 controlling. Issue `#1110` and every project, evidence, audit, lender, Board, grade, F5, package and
 release state remain unchanged and on `HOLD`.
+
+## 9. Restart recovery and successor exact-head binding
+
+The local macOS host restarted after the bounded ASR worker candidate had been committed and pushed.
+The recovered reviewer did not infer continuity from chat state. It reran the handover bootstrap,
+verified governed Python 3.12.13, passed `check_venv.sh --no-bootstrap`, and reloaded all 72 active
+GWTF rules from the canonical CSV before examining the successor.
+
+A read-only fetch and independent live-remote queries established:
+
+```text
+local HEAD:                              836502a607fbce479f8e0412e2c63cb8659fafcd
+local upstream topic:                    836502a607fbce479f8e0412e2c63cb8659fafcd
+live remote topic:                       836502a607fbce479f8e0412e2c63cb8659fafcd
+PR #1191 head:                           836502a607fbce479f8e0412e2c63cb8659fafcd
+local/live origin/main and PR base:      782c9588ef2685fcf0608d48f7745493aaa15b78
+topic relation to origin/main:           0 behind; 16 ahead; main is an ancestor
+protected primary main:                  clean; 0 behind; 0 ahead of origin/main
+PR state:                                OPEN; DRAFT; MERGEABLE; CLEAN
+```
+
+The exact successor candidate fingerprints before this documentation-only append were:
+
+```text
+04f5f110f419e57e21b8583285a9a994a9bc29b65b2998d1b92e1d514db8533a  analytics/feasibility_report_contract/project_case.py
+291a823d75338b4d5360525d35bed60f7851ddabd4f16c30d816368fb4eb7bf9  analytics/feasibility_report_contract/__init__.py
+99c40b6a66d28f170519fdfa830e24ecbb6fe5e34e73bede24b056c0d5a79d15  tests/contracts/test_project_case_contract.py
+6e736691da24b0fb3a29f0303ebd3533e46f8e5637b5a310cfea91e8ec9aa027  changelog.d/project-case-v1.added.md
+38d2831175bcf7d7567afb190fc32a2822da9a739c0454ff205127ca6828b9aa  docs/DOLPHIN_3A_ASSURANCE_REVIEW_RECORD.md
+6e48509e8e7d7a14e095e552d64ce46f22c4a1fc3f73a4e6d95beb495bb5a9e0  docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md
+779331e7dbe61d127ce2876b7e811f1108a6d774cccb251fdfdf6a33b9ddd96e  docs/SESSION_HANDOVER_2026-08-29_2.md
+```
+
+Exact-head GitHub CI had recovered to eighteen successful jobs, three expected skips, and no failed
+or pending job. All four required checks passed. Issue `#1110` remained `OPEN`, with 0 checked and
+23 unchecked controls and its explicit Board/lender `HOLD` unchanged. Green CI and mergeability are
+delivery evidence only; neither can supersede the independent contract finding below.
+
+## 10. Successor disposition for D3A-ASR-01
+
+**D3A-ASR-01 ACCEPTED at the successor.** The repair uses one exact, non-normalizing ASCII stable-
+identifier type. Its runtime validator and validation- and serialization-mode Draft 2020-12 schemas
+share the same absolute-end grammar and the 1-160 character bound. It does not strip identity before
+reciprocal asset, link, allocation, binding or provenance checks.
+
+An independent full-root matrix exercised all thirteen identifier roles: project, case, asset, link,
+cost, allocation, jurisdiction binding, technology binding, source, assumption, missing input,
+price basis and conversion. It covered leading and trailing space, tab, LF, CR, CRLF, U+2028,
+U+2029, non-ASCII letters and digits, the exact 160/161-character boundary, normalized Python mode,
+and the former normalization-created asset reciprocity counterexample.
+
+```text
+independent runtime/Draft checks:              455
+mismatches:                                      0
+Python-mode padded identity:              refused
+hostile asset normalization/reciprocity:   refused
+```
+
+This acceptance closes only D3A-ASR-01. It does not grant adapter, release or grade authority.
+
+## 11. Successor disposition for D3A-ASR-02
+
+**D3A-ASR-02 ACCEPTED at the successor.** D3A now uses a local exact ASCII SemVer grammar, leaving
+the inherited D2 vocabulary unchanged. Core and numeric prerelease identifiers reject leading
+zeroes; prerelease and build grammar is complete; the pattern uses neither Unicode-dependent `\d`
+nor `$`; and the same pattern appears in both binding fields and both generated schema modes.
+
+The independent matrix used ten valid release/prerelease/build forms and twenty invalid Unicode-
+digit, leading-zero, empty-component, whitespace and terminal-line-separator forms against both
+binding registers. Runtime and Draft 2020-12 agreed. The extracted generated pattern was also run by
+an actual Node/ECMAScript `RegExp` implementation.
+
+```text
+independent runtime/Draft checks:               90
+ECMAScript matrix:                 10 valid / 20 invalid
+runtime/Draft/ECMAScript mismatches:             0
+shared D2 SemanticVersion change:             none
+```
+
+This acceptance closes only D3A-ASR-02.
+
+## 12. D3A-ASR-03 successor false rejection and schema truth
+
+**D3A-ASR-03 REMAINS OPEN; the successor is rejected.** The bounded repair correctly refuses the
+original `USD`, `km`, `item` and `MWh` non-power examples at runtime and continues to accept `MW`,
+`MWac` and `MVA`. It nevertheless treats `electrical_collection` as if it could only be stated on
+an AC/apparent grid basis. That is too narrow for the global solar boundary already represented by
+D3A generation capacity, where DC capacity explicitly uses `MWdc` or `MWp`.
+
+Independent full-root probes used a solar-generation plus storage case, an explicit DC generation
+basis, a valid dedicated one-user collection topology, reciprocal links and complete provenance.
+Both a resolved collection value and an explicit missing-input record at `/assets/2/capacity` were
+tested for each DC unit:
+
+```text
+role                       state       unit   runtime result
+electrical_collection      resolved    MWdc   REJECT - false rejection
+electrical_collection      missing     MWdc   REJECT - false rejection
+electrical_collection      resolved    MWp    REJECT - false rejection
+electrical_collection      missing     MWp    REJECT - false rejection
+grid_interconnection       resolved    MWdc   REJECT - intended
+grid_interconnection       missing     MWdc   REJECT - intended
+grid_interconnection       resolved    MWp    REJECT - intended
+grid_interconnection       missing     MWp    REJECT - intended
+```
+
+The grid results preserve the correct AC/apparent point-of-interconnection rule. The collection
+results prevent an otherwise valid solar project from crossing the supposedly global v1 contract.
+The existing focused tests do not expose this because their electrical-collection positives contain
+only `MW`, `MWac` and `MVA`.
+
+The role-dependent unit rule is a Pydantic field validator and is not encoded in the generated
+Draft schema. Draft 2020-12 accepted all eight DC-unit probes and also accepts the original
+electrical-collection `USD` payload that runtime now refuses. That does not by itself require D3A to
+duplicate every semantic root invariant in JSON Schema, but it makes the handover claim that the
+electrical-collection counterexample is refused by an applicable generated schema false. The next
+checkpoint must either encode that conditional schema behavior or state candidly that role/unit
+dimension is runtime-only and that a web adapter must invoke the domain validator.
+
+Required bounded remediation:
+
+1. admit the electrical power-capacity units needed by v1 collection systems, at minimum `MW`,
+   `MWac`, `MWdc`, `MWp` and `MVA`, for resolved and explicit-missing values;
+2. keep `grid_interconnection` at `MW`, `MWac` or `MVA`, including resolved and missing controls;
+3. preserve rejection of non-power dimensions and the open units for the three non-electrical
+   infrastructure roles;
+4. add full-root solar positives for resolved and missing `MWdc` and `MWp`, plus grid negatives for
+   both DC units; and
+5. correct the changelog and handover, including the runtime-versus-Draft boundary.
+
+If a future version needs technology- or electrical-basis-specific collection semantics, it should
+add that typed basis explicitly rather than infer it from a free technology identifier.
+
+## 13. Recovered successor gate receipt
+
+The false rejection is not a general regression. The exact pushed successor independently passed:
+
+```text
+ProjectCase focused gate:                       297 passed; one pre-existing warning
+Complete tests/contracts gate:                  623 passed; one pre-existing warning
+Inherited D2 import/taxonomy gate:               386 passed; one pre-existing warning
+In-memory D2 plus ProjectCase coverage:          595 passed; 95.99% package total
+ProjectCase module coverage:                     95.48%
+Targeted FX/topology/provenance replay:            55 passed
+ASR-01 independent matrix:                       455 checks; 0 mismatches
+ASR-02 runtime/Draft checks:                      90 checks; 0 mismatches
+ASR-02 Node/ECMAScript matrix:                    30 cases; 0 mismatches
+Solar collection/grid resolved-missing matrix:     8 cases; 4 intended / 4 false rejects
+Ruff check and format:                           passed
+Black check:                                     passed
+isort check:                                     passed
+mypy --no-incremental:                           passed
+in-memory compile and AST direct-import scan:    passed
+validation/serialization Draft schemas:          valid; 47 definitions each
+frozen object and extra-field refusal:            passed
+public exports:                                   63; all 59 ProjectCase exports present
+`connected_to` runtime/schema absence:            passed
+D3A excluded execution-surface diff:              empty
+git diff --check and pre-document status:          passed; clean
+exact-head GitHub jobs:                           18 successful; 3 expected skipped
+exact-head required GitHub checks:                4/4 passed
+```
+
+The warning is the pre-existing Hypothesis `norecursedirs` warning. Coverage ran entirely in memory
+with no `.coverage` artifact. The production module's direct imports remain limited to the standard
+library, Pydantic and `.vocabulary`; no finance, evaluation, app, API, persistence, orchestration,
+grade, release or Sri Lankan fallback surface changed. The accepted R1-R10 FX, topology,
+provenance, Decimal/count and authority boundaries remain intact.
+
+## 14. Controlling recovered assurance disposition
+
+**ASSURANCE REJECTED** for exact pushed head
+`836502a607fbce479f8e0412e2c63cb8659fafcd`.
+
+D3A-ASR-01 and D3A-ASR-02 are accepted and must not be reopened without new evidence. The sole
+remaining production blocker is the bounded D3A-ASR-03 electrical-collection false rejection;
+truthful runtime/schema wording is part of that same remediation. A green exact-head CI run does
+not close it.
+
+PR `#1191` must remain draft. No merge, grade, lender, Board, statutory, report-package, release,
+deployment or `HOLD` authority follows from this review. Issue `#1110` remains `OPEN` and its
+Board/lender circulation state remains `HOLD`.

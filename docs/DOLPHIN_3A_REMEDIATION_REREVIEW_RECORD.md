@@ -906,3 +906,94 @@ This **DOMAIN ACCEPTED** disposition establishes only D3A contract-domain suffic
 assurance, external audit, lender or Board acceptance, achieved-grade authority, release or
 deployment authorization, permission to merge before separate exact-head assurance and delivery
 controls complete, or authority to lift any project, evidence, F5, package, or release `HOLD`.
+
+## 32. Seventh exact-head domain disposition before restart
+
+The bounded D3A-ASR-01 through -03 successor was committed and pushed as
+`836502a607fbce479f8e0412e2c63cb8659fafcd`. Before the local macOS restart, the independent domain
+reviewer bound local `HEAD`, local upstream, the live remote topic and PR `#1191` to that exact SHA.
+The local/live main and PR base were
+`782c9588ef2685fcf0608d48f7745493aaa15b78`, which was an ancestor of the topic; the topic was zero
+behind and sixteen commits ahead. The worktree and index were clean.
+
+The exact candidate fingerprints were:
+
+```text
+04f5f110f419e57e21b8583285a9a994a9bc29b65b2998d1b92e1d514db8533a  analytics/feasibility_report_contract/project_case.py
+291a823d75338b4d5360525d35bed60f7851ddabd4f16c30d816368fb4eb7bf9  analytics/feasibility_report_contract/__init__.py
+99c40b6a66d28f170519fdfa830e24ecbb6fe5e34e73bede24b056c0d5a79d15  tests/contracts/test_project_case_contract.py
+6e736691da24b0fb3a29f0303ebd3533e46f8e5637b5a310cfea91e8ec9aa027  changelog.d/project-case-v1.added.md
+38d2831175bcf7d7567afb190fc32a2822da9a739c0454ff205127ca6828b9aa  docs/DOLPHIN_3A_ASSURANCE_REVIEW_RECORD.md
+6e48509e8e7d7a14e095e552d64ce46f22c4a1fc3f73a4e6d95beb495bb5a9e0  docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md
+779331e7dbe61d127ce2876b7e811f1108a6d774cccb251fdfdf6a33b9ddd96e  docs/SESSION_HANDOVER_2026-08-29_2.md
+```
+
+**DOMAIN REJECTED.** One blocker remained. `electrical_collection` permitted only `MW`, `MWac` and
+`MVA`, so an otherwise valid solar DC collection system was falsely refused when its capacity was
+declared in `MWdc`. The false rejection occurred for both a resolved value and an explicit missing-
+input value in full-root, dedicated, one-user, reciprocally closed cases. Changing only the
+collection unit to `MWac` or `MVA` made the same cases accept.
+
+## 33. Seventh-review matrices and accepted ASR repairs
+
+The independent 100-state role/unit/state matrix produced exactly two mismatches: the resolved and
+explicit-missing solar `electrical_collection` cases in `MWdc`. All other expected collection,
+grid-interconnection and non-electrical-role outcomes agreed with the candidate.
+
+The domain reviewer separately accepted both other assurance repairs:
+
+```text
+D3A-ASR-01 identifier cases:                  5,225; 0 mismatches
+identifier-bearing schema fields:                45 per schema mode
+ASR-01 runtime/Draft/Node agreement:          passed
+D3A-ASR-02 semantic-version cases:           81,660; 0 mismatches
+ASR-02 runtime/Draft/Node agreement:           passed
+shared Dolphin 2 SemanticVersion:             unchanged
+role/unit/state matrix:                          100 cases; 2 mismatches
+exposed DOM/R1-R10 replay:                        84 passed
+ProjectCase focused gate:                        297 passed
+complete tests/contracts gate:                   623 passed
+inherited D2 gate:                               386 passed
+independent topology matrix:                      30 cases; 0 mismatches
+static/schema/import/exclusion gates:            passed
+```
+
+The ASR-01 repair therefore closed exact identifier normalization and runtime/schema portability.
+The ASR-02 repair closed portable exact SemVer while leaving the shared D2 vocabulary untouched.
+The domain veto did not reopen those accepted classes or any accepted original/R1-R10 arithmetic,
+FX, topology, provenance, Decimal/count, import-direction, exclusion or authority boundary.
+
+At the last pre-restart observation, exact-head CI reported fifteen successful jobs, one pending
+Coverage Gate, three expected skips and no failed job. Restart recovery later established the final
+exact-head result as eighteen successful jobs, three expected skips, no pending or failed job and
+all four required checks passed. That later green result does not alter **DOMAIN REJECTED**.
+
+## 34. Bounded domain remediation
+
+The exact domain requirement was:
+
+1. accept `MW`, `MWac`, `MWdc` and `MVA` for `electrical_collection`, for both resolved and
+   explicit-missing capacity;
+2. keep `grid_interconnection` unchanged at `MW`, `MWac` or `MVA`;
+3. add full-root solar resolved/missing controls;
+4. retain rejection of non-power units for both electrical roles and open units for access-road,
+   operations-facility and other shared-facility roles; and
+5. make the changelog and handover state the implemented boundary exactly.
+
+The recovered independent assurance review extends the global solar control to `MWp`, which the
+same D3A generation contract already recognizes alongside `MWdc`, and identifies that the role/unit
+rule is runtime-only: Draft 2020-12 accepts both the valid DC collection cases and the original
+invalid `USD` counterexample. That schema-versus-runtime fact must be recorded candidly or encoded
+as a conditional schema rule; it does not supersede the exact pre-restart domain receipt.
+
+## 35. Controlling seventh-review boundary
+
+The exact successor remains **DOMAIN REJECTED** at
+`836502a607fbce479f8e0412e2c63cb8659fafcd`. D3A-ASR-01 and D3A-ASR-02 are accepted. The one bounded
+domain blocker is the D3A-ASR-03 solar electrical-collection false rejection; the recovered separate
+assurance review independently reaches **ASSURANCE REJECTED** on that same class and adds `MWp` plus
+the runtime/schema truth correction.
+
+PR `#1191` must remain draft and must not merge while either exact-head veto controls. This record
+does not grant professional, statutory, lender, Board, grade, release or deployment authority and
+does not alter issue `#1110` or any project, evidence, audit, F5, package or release `HOLD`.

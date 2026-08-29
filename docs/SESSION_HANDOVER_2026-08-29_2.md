@@ -1,4 +1,4 @@
-# Session handover - 2026-08-29, successor 16
+# Session handover - 2026-08-29, successor 17
 
 Durable PERSIST-01 successor to
 [`docs/SESSION_HANDOVER_2026-08-29.md`](SESSION_HANDOVER_2026-08-29.md). The predecessor remains
@@ -30,25 +30,25 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
   dutchbay_bootstrap_rules.py
 ```
 
-This record captures the sixth exact-head D3A domain review, the subsequent exact-head assurance
-review, and the bounded uncommitted D3A-ASR-01 through -03 worker handback. The independent domain
-disposition remains **DOMAIN ACCEPTED** only for predecessor production/test candidate
-`2a3831542a3160f6d02cb2f592c4487981647f19`: R10 dedicated-versus-shared electrical topology is
-closed, and R8-R9 and every earlier repair class remain accepted. The pushed documentation head
-`c45154b49963182447913d02968b533cfc38f05a` records **ASSURANCE REJECTED** because its
-unchanged production candidate admits silent stable-identifier normalization, non-portable/loose
-semantic-version tokens, and a non-electrical capacity unit for `electrical_collection`. The exact
-findings and bounded repair gate are in
-[`docs/DOLPHIN_3A_ASSURANCE_REVIEW_RECORD.md`](DOLPHIN_3A_ASSURANCE_REVIEW_RECORD.md).
+This record captures the sixth D3A domain acceptance, the first assurance veto, the bounded repair
+commit, the pre-restart seventh domain review, and the recovered independent assurance rereview.
+The current pushed production/test head is
+`836502a607fbce479f8e0412e2c63cb8659fafcd`. D3A-ASR-01 exact identifiers and D3A-ASR-02 portable
+SemVer are independently accepted. Both the domain and assurance reviews nevertheless return
+**REJECTED** because the D3A-ASR-03 repair falsely refuses valid solar DC
+`electrical_collection` capacity: the domain review proved resolved and explicit-missing `MWdc`
+false rejects, and the recovered assurance review independently proved the same for `MWdc` and
+`MWp`. `grid_interconnection` correctly remains limited to AC/apparent units.
 
-Current Git status and live refs are authoritative. At this worker handback, local `HEAD` and the
-upstream topic were `c45154b49963182447913d02968b533cfc38f05a`, and the dedicated
-worktree contained only the bounded uncommitted production, export, test, changelog and handover
-repair described below. Never reset, stash or clean away that work. The worker did not stage,
-commit, push, edit the pull request, merge, or otherwise mutate GitHub. The three demonstrated
-counterexamples are locally closed, but **ASSURANCE REJECTED remains controlling** until a fresh
-exact-head domain delta confirmation and independent assurance review accept a later authorized
-checkpoint. Exact-head CI, current-branch, protected-PR and continuing `HOLD` controls still apply.
+Current Git status and live refs are authoritative. At restart recovery, local `HEAD`, the upstream
+topic, the live remote topic and PR `#1191` all identified `836502a607fbce479f8e0412e2c63cb8659fafcd`.
+Local/live `origin/main`, the protected primary checkout and the PR base all identified
+`782c9588ef2685fcf0608d48f7745493aaa15b78`; main was clean and the topic was zero behind and
+sixteen commits ahead. Exact-head CI was fully green, but the PR remained open and draft. This
+successor introduces only the authorized three-document PERSIST-01 review record; it does not alter
+production, tests, exports, changelog, Git refs, GitHub, issue `#1110`, release state or a `HOLD`.
+Never reset, stash or clean away this documentation checkpoint. The exact vetoes and bounded repair
+gate are in the two D3A review records.
 
 ## 2. Base and ingress receipt
 
@@ -103,11 +103,23 @@ worktree clean at that exact local/upstream topic head, fetched unchanged live `
 history rewrite was required. Governed Python 3.12.13, `check_venv.sh --no-bootstrap`, and the
 canonical 72-rule GWTF bootstrap passed again with this worktree first on `PYTHONPATH` before the
 worker read the complete assurance record and current handover.
+The bounded ASR repair was committed and pushed as
+`836502a607fbce479f8e0412e2c63cb8659fafcd`. Its production, export, focused test, changelog and
+handover fingerprints are recorded in both review records. Before the restart, a seventh domain
+review accepted ASR-01 and ASR-02 but returned **DOMAIN REJECTED** on the `MWdc` collection false
+rejection. After restart, a separate senior Python/Pydantic and web/API assurance reviewer rebound
+all refs to the same exact SHA, reran the governed bootstrap and gates, accepted ASR-01 and ASR-02,
+and returned **ASSURANCE REJECTED** because both `MWdc` and `MWp` solar collection units are falsely
+refused for resolved and missing capacity. It also proved that the role/unit validator is not
+encoded in Draft 2020-12, so prior wording that the electrical counterexample was schema-refused was
+false. The primary main checkout and `origin/main` remained exactly synchronized; no topic merge was
+required.
 Sections 19-23 of `docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md` preserve the fourth review;
 sections 24-27 preserve the fifth veto, and sections 28-31 contain the controlling sixth
-**DOMAIN ACCEPTED** disposition for the unchanged production/test candidate. The separate assurance
-disposition is recorded in `docs/DOLPHIN_3A_ASSURANCE_REVIEW_RECORD.md` and now controls delivery.
-Neither domain acceptance nor green CI grants merge, grade, lender, release, or `HOLD` authority.
+**DOMAIN ACCEPTED** predecessor disposition. Sections 32-35 preserve the exact seventh
+**DOMAIN REJECTED** successor review. Sections 9-14 of the assurance record preserve the recovered
+**ASSURANCE REJECTED** disposition. Neither predecessor acceptance nor green CI grants merge,
+grade, lender, release, or `HOLD` authority.
 
 ## 3. Dolphin 3A implementation checkpoint
 
@@ -118,12 +130,12 @@ The Dolphin 3A change set consists of:
 - `tests/contracts/test_project_case_contract.py` - fictional JSON-native fixture plus hostile
   contract controls;
 - `changelog.d/project-case-v1.added.md` - concise additive release note; and
-- this handover successor.
+- the independent review records and this handover successor.
 
-The current bounded worker diff changes the pure production module, additive package export,
-focused contract tests, release note and this handover only. It does not modify the immutable
-`docs/DOLPHIN_3A_ASSURANCE_REVIEW_RECORD.md`; that exact adverse review remains the predecessor
-disposition until an independent reviewer examines an authorized successor head.
+The pushed head contains the bounded production, export, focused-test, release-note and handover
+repair. The current uncommitted diff is documentation-only: the controlling parent authorized
+updates to the assurance record, remediation rereview record and this handover after the recovered
+exact-head dispositions were final. No code or test is being changed by this PERSIST checkpoint.
 
 `ProjectCase` v1 is intentionally a single-site contract. It declares project, case, binding,
 asset, topology, line, allocation, price-basis, source, assumption and missing-input identifiers.
@@ -180,10 +192,12 @@ is the exact decimal string. This removes the runtime/schema ambiguity for JSON 
 `1e0` rather than treating numerically equivalent token spellings as lexically identical inputs.
 
 Resolved generation, storage and shared-infrastructure capacity must be positive, so zero cannot
-silently encode an unknown value; a missing capacity uses the explicit missing state. Every
-`grid_interconnection` and `electrical_collection` resolved or missing capacity declares `MW`,
-`MWac`, or `MVA`; access-road, operations-facility and other non-electrical shared roles retain the
-open `UnitToken` boundary required by their heterogeneous dimensions. Every
+silently encode an unknown value; a missing capacity uses the explicit missing state. At exact
+`836502a`, every `grid_interconnection` and `electrical_collection` resolved or missing capacity is
+restricted to `MW`, `MWac`, or `MVA`. That rule is correct for the grid interconnection but is the
+controlling false rejection for a solar electrical collection declared in `MWdc` or `MWp`.
+Access-road, operations-facility and other non-electrical shared roles retain the open `UnitToken`
+boundary required by their heterogeneous dimensions. Every
 one-missing count/unit/total generation proposition and power/energy/duration BESS proposition must
 have an exact bounded 1e-36-grid completion within the 1e-9 engineering tolerance. Two-or-more
 missing states are retained only where the validator constructs a bounded completion. Generation,
@@ -246,10 +260,12 @@ disputed boundary is not an assertion that it is surveyed or contractual.
 The contract is designed as a transport-neutral basis for a later JSON, form, Pydantic or FastAPI
 adapter. Its explicit union discriminators, strict extra-field refusal, frozen object graph,
 JSON-representable scalars and generated Draft 2020-12 schemas passed independent replay. The
-bounded ASR worker repair now refuses the exact identifier, pack-version and electrical-collection
-counterexamples in runtime and the applicable generated schemas. It is still not independently
-assurance-cleared for that future web boundary: the predecessor **ASSURANCE REJECTED** disposition
-continues until fresh exact-head review accepts the successor. No transport adapter was added.
+identifier and pack-version repairs now agree across runtime, Draft and an actual ECMAScript
+implementation. The role-dependent electrical-capacity rule is runtime-only: Draft 2020-12 accepts
+the original electrical-collection `USD` counterexample as well as the valid `MWdc` and `MWp`
+collection cases that runtime falsely refuses. A future adapter must invoke domain validation and
+must not claim schema-only acceptance is sufficient. The successor is not assurance-cleared for
+the future web boundary, and no transport adapter was added.
 
 The contract is not itself a FastAPI request model. Its strict domain types accept the JSON-native
 fixture through `ProjectCase.model_validate_json()`, while direct Python-mode validation of an
@@ -344,7 +360,7 @@ Independent assurance disposition:               ASSURANCE REJECTED
 Blocking findings:                                D3A-ASR-01, D3A-ASR-02, D3A-ASR-03
 ```
 
-The bounded ASR-01 through -03 worker then obtained this uncommitted pre-checkpoint receipt:
+The bounded ASR-01 through -03 worker obtained this pre-commit receipt:
 
 ```text
 Worker base/local upstream topic:                c45154b49963182447913d02968b533cfc38f05a
@@ -361,14 +377,44 @@ Ruff/Ruff Format/Black/isort/mypy/compile:          passed
 AST import/context and excluded surfaces:          passed
 Tracked diff whitespace; untracked-file gate:      passed; no untracked files
 Worker Git/GitHub mutation:                        none
-Independent successor disposition:                 not yet performed
+Independent successor disposition at that point:    not yet performed
 Controlling predecessor disposition:               ASSURANCE REJECTED
 ```
 
-The assurance rejection is bounded to exact identifier syntax, pack-version grammar and the
-electrical-collection capacity dimension. It does not reopen the accepted R1-R10 arithmetic,
-topology, provenance or Decimal/count transport repairs. Conversely, the green gates and prior
-domain acceptance do not independently approve the repaired successor tree.
+The committed successor and restart recovery then produced:
+
+```text
+Exact pushed/reviewed head:                     836502a607fbce479f8e0412e2c63cb8659fafcd
+Exact local/live main and PR base:              782c9588ef2685fcf0608d48f7745493aaa15b78
+Topic relation to main:                         0 behind; 16 ahead
+ProjectCase focused gate:                       297 passed; one pre-existing warning
+Complete tests/contracts gate:                  623 passed; one pre-existing warning
+Inherited D2 import/taxonomy gate:               386 passed; one pre-existing warning
+In-memory D2 plus ProjectCase coverage:          595 passed; 95.99% package total
+ProjectCase module coverage:                     95.48%
+Targeted FX/topology/provenance replay:            55 passed
+Domain ASR-01 matrix:                           5,225 cases; 0 mismatches
+Domain ASR-02 matrix:                          81,660 cases; 0 mismatches
+Domain role/unit/state matrix:                    100 cases; 2 MWdc false rejects
+Assurance ASR-01 matrix:                          455 checks; 0 mismatches
+Assurance ASR-02 runtime/Draft checks:             90 checks; 0 mismatches
+Assurance Node/ECMAScript matrix:                  30 cases; 0 mismatches
+Assurance solar collection/grid matrix:             8 cases; 4 collection false rejects
+Validation/serialization Draft schemas:           valid; 47 definitions each
+Public exports:                                    63; all 59 ProjectCase exports present
+Ruff/Ruff Format/Black/isort/mypy/compile:        passed
+AST imports, excluded surfaces and diff checks:   passed
+Exact-head GitHub CI:                             18 successful; 3 expected skipped; 0 failed/pending
+Exact-head required checks:                       4/4 passed
+Seventh independent domain disposition:          DOMAIN REJECTED
+Recovered independent assurance disposition:     ASSURANCE REJECTED
+```
+
+The current rejection is bounded only to the ASR-03 electrical-collection capacity dimension and
+truthful runtime/schema wording. ASR-01 exact identifiers and ASR-02 portable SemVer are accepted.
+The veto does not reopen the accepted R1-R10 arithmetic, topology, provenance or Decimal/count
+transport repairs. Conversely, green gates and predecessor domain acceptance do not approve the
+rejected successor tree.
 
 The ASR-focused additions cover canonical and hostile exact identifier forms for project, case,
 asset, link, cost, allocation, both binding kinds, source, assumption, missing-input, price-basis
@@ -376,8 +422,11 @@ and conversion IDs against runtime and both generated schemas; Python non-normal
 normalization-created asset reciprocity counterexample are explicit. The SemVer matrix covers
 release, prerelease and build positives plus Unicode digits, leading-zero core/numeric prerelease,
 empty/double components, whitespace and terminal line separators through runtime, Draft 2020-12 and
-ECMAScript. The collection matrix rejects `USD`, `km`, `item` and `MWh`, accepts `MW`, `MWac` and
-`MVA`, and retains open units for all three non-electrical roles under a valid dedicated topology.
+ECMAScript. The in-tree collection matrix rejects `USD`, `km`, `item` and `MWh`, accepts `MW`,
+`MWac` and `MVA`, and retains open units for all three non-electrical roles under a valid dedicated
+topology. It lacks solar DC positives. Independent full-root cases prove that both resolved and
+missing `MWdc`/`MWp` electrical collection are falsely refused while the same DC units remain
+correctly refused for `grid_interconnection`.
 
 The eight R10 focused cases reject the reviewed shared POI and shared electrical-collection paths
 under `dedicated_separate`, plus wind use and BESS charging through the same POI. They accept the
@@ -489,38 +538,40 @@ The bounded R8 exact JSON/count representation, R9 one-rate shared-conversion in
 dedicated electrical-path closure are committed, pushed, and independently accepted at exact
 `2a3831542a3160f6d02cb2f592c4487981647f19`. The sixth **DOMAIN ACCEPTED** disposition is the
 domain result for that production/test tree and does not reopen any earlier accepted repair class.
-The separate review has now completed against pushed head
-`722845742f7123af3d637373c1996a82e357347a`, and its record is pushed at
-`c45154b49963182447913d02968b533cfc38f05a`, with **ASSURANCE REJECTED**. PR `#1191` must remain
-draft and must not merge while that adverse disposition controls.
+The first assurance veto is preserved at pushed documentation commit
+`c45154b49963182447913d02968b533cfc38f05a`. Its bounded repair is pushed at exact
+`836502a607fbce479f8e0412e2c63cb8659fafcd`. The seventh domain review and recovered assurance
+review both reject that successor on the remaining D3A-ASR-03 false rejection. ASR-01 and ASR-02
+are accepted and should not be reopened without new evidence.
 
-The uncommitted bounded worker candidate now contains only:
+The next candidate is one bounded repair:
 
-1. exact non-normalizing ASCII stable identifiers with runtime/Draft absolute-end parity;
-2. exact portable ASCII SemVer for D3A pack bindings, without leading-zero numeric identifiers;
-3. an electrical capacity dimension for `electrical_collection` while preserving the deliberately
-   open non-electrical shared-facility roles; and
-4. tests and truthful changelog/handover wording required to prove those three repairs.
+1. retain exact non-normalizing ASCII stable identifiers and portable D3A-local SemVer unchanged;
+2. accept `MW`, `MWac`, `MWdc`, `MWp` and `MVA` for resolved and explicit-missing
+   `electrical_collection` capacity;
+3. retain `grid_interconnection` at `MW`, `MWac` or `MVA` and reject `MWdc`/`MWp` there;
+4. preserve non-power rejection for both electrical roles, open non-electrical units, R1-R10,
+   direct imports, exclusions and authority separations; and
+5. add full-root resolved/missing solar controls and make changelog/handover runtime-versus-schema
+   wording exact.
 
-The observed receipt in section 5 proves that the worker repair preserves the domain-accepted
-R1-R10 behavior, Decimal/count sole-string transport, deterministic output, direct import direction,
-exclusions and authority boundaries across the required local gates. Because it changes production
-types, the existing exact `2a383154` domain receipt is predecessor evidence rather than acceptance
-of the uncommitted tree. Only under the controlling parent's authority, inspect and checkpoint this
-five-file diff, then obtain a fresh exact-head domain delta confirmation and a fresh independent
-assurance disposition before delivery can resume.
+The generated Draft schema does not currently encode the role/unit conditional. Either add a
+truthful conditional schema rule or state explicitly that this semantic dimension is runtime-only
+and that a future web/API adapter must invoke `ProjectCase` validation. Do not claim Draft alone
+refuses the original `USD` counterexample.
 
-Current Git identity and cleanliness must be read live; this durable receipt describes the
-pre-checkpoint worker handback and does not assert that the repair remains uncommitted after the
-controlling parent acts. The worker must not stage, commit, push, edit the pull request, merge, or
-mutate GitHub. A commit or green CI run alone would not clear the assurance rejection.
+Current Git identity and cleanliness must be read live. At this PERSIST writer handback, the pushed
+production/test head remains `836502a607fbce479f8e0412e2c63cb8659fafcd`; only the three authorized
+review/handover documents are modified and uncommitted. The documentation writer did not stage,
+commit, push, edit the PR, merge, mutate issue `#1110`, or alter a `HOLD`.
 
 Before any later authorized Git or GitHub action, fetch and compare live `origin/main`, the remote
 topic and PR head; reconcile only with explicit authority. Repeat that synchronization at
 each major checkpoint because another committer can advance `main`; never reset, stash, clean,
-overwrite, or absorb unrelated work into the D3A-authored diff. A later delivery sequence must still
-use the protected pull request, prove the exact reviewed head current and mergeable, wait for all
-required CI, and preserve all `HOLD` states after merge.
+overwrite, or absorb unrelated work into the D3A-authored diff. After the bounded repair, obtain a
+fresh exact-head domain delta disposition and separate assurance disposition. Only if both accept,
+make the protected PR ready, prove the exact reviewed head current and mergeable, and wait for all
+required CI before the already authorized merge. Preserve all `HOLD` states after merge.
 
 Domain acceptance remains contract-scope evidence only. It is not professional or statutory
 engineering assurance, external audit, lender or Board acceptance, achieved-grade authority,
