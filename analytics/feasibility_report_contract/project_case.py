@@ -5,16 +5,15 @@ delivery adapters.  It models project identity, jurisdiction and technology supp
 asset-instance topology, cost inputs, and material-value provenance without importing
 finance, evaluation, application, API, persistence, or rendering code.
 
-``contract_supported`` and ``contract_reviewed`` describe only whether a versioned
-input contract is available and has received contract-scope review.  They are not
-engineering assurance, statutory approval, report grade, lender acceptance, package
-release, or permission to lift any ``HOLD``.
+``declared`` records only that the caller has declared a versioned contract binding.
+It is not a review claim, engineering assurance, statutory approval, report grade,
+lender acceptance, package release, or permission to lift any ``HOLD``.
 """
 
 from __future__ import annotations
 
-import math
 from datetime import date
+from decimal import Decimal, ROUND_HALF_EVEN
 from enum import Enum
 from typing import Annotated, Iterable, Literal, Union
 
@@ -41,18 +40,19 @@ StableIdentifier = Annotated[
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
     ),
 ]
-FiniteNumber = Annotated[float, Field(allow_inf_nan=False)]
+FiniteDecimal = Annotated[Decimal, Field(allow_inf_nan=False)]
+MinorUnitPlaces = Annotated[int, Field(ge=0, le=6)]
+QuotePrecision = Annotated[int, Field(ge=1, le=18)]
 
-_RECONCILIATION_REL_TOL = 1e-9
-_RECONCILIATION_ABS_TOL = 1e-9
+_ENGINEERING_ABS_TOL = Decimal("0.000000001")
+_SHARE_ABS_TOL = Decimal("0.000000000001")
 
 
 class ContractSupportStatus(str, Enum):
-    """Availability of a versioned input contract, not project assurance."""
+    """Caller-declared binding state, not contract review or project assurance."""
 
     UNSUPPORTED = "unsupported"
-    CONTRACT_SUPPORTED = "contract_supported"
-    CONTRACT_REVIEWED = "contract_reviewed"
+    DECLARED = "declared"
 
 
 class JurisdictionSubject(str, Enum):
@@ -82,6 +82,57 @@ class TopologyKind(str, Enum):
     SINGLE_TECHNOLOGY = "single_technology"
     HYBRID = "hybrid"
     STORAGE_ONLY = "storage_only"
+
+
+class InterconnectionArrangement(str, Enum):
+    """Whether technology assets use one common or dedicated electrical path."""
+
+    COMMON_SHARED = "common_shared"
+    DEDICATED_SEPARATE = "dedicated_separate"
+
+
+class InfrastructureRole(str, Enum):
+    """Governed physical role of one shared-infrastructure asset."""
+
+    GRID_INTERCONNECTION = "grid_interconnection"
+    ELECTRICAL_COLLECTION = "electrical_collection"
+    ACCESS_ROAD = "access_road"
+    OPERATIONS_FACILITY = "operations_facility"
+    OTHER_SHARED_FACILITY = "other_shared_facility"
+
+
+class ElectricalBasis(str, Enum):
+    """Electrical side on which generation capacity is stated."""
+
+    AC = "ac"
+    DC = "dc"
+    NOT_APPLICABLE = "not_applicable"
+
+
+class GenerationCapacityBasis(str, Enum):
+    """Physical or commercial basis of a generation capacity proposition."""
+
+    NAMEPLATE = "nameplate"
+    USABLE = "usable"
+    GROSS = "gross"
+    NET = "net"
+    EXPORT = "export"
+
+
+class StorageElectricalBasis(str, Enum):
+    """Electrical side on which a storage capacity proposition is stated."""
+
+    AC = "ac"
+    DC = "dc"
+
+
+class StorageCapacityBasis(str, Enum):
+    """Physical or usable basis of a storage capacity proposition."""
+
+    NAMEPLATE = "nameplate"
+    USABLE = "usable"
+    GROSS = "gross"
+    NET = "net"
 
 
 class AssetLinkKind(str, Enum):
@@ -121,6 +172,9 @@ class BoundaryStatus(str, Enum):
     INDICATIVE = "indicative"
     CONTRACTUAL = "contractual"
     SURVEYED = "surveyed"
+    REGISTERED = "registered"
+    DERIVED = "derived"
+    DISPUTED = "disputed"
 
 
 class CaseSource(StrictFrozenModel):
@@ -189,10 +243,10 @@ ValueBinding = Annotated[
 
 
 class ResolvedValue(StrictFrozenModel):
-    """Finite material value with an explicit unit and provenance binding."""
+    """Precision-preserving material value with unit and provenance binding."""
 
     state: Literal["resolved"] = "resolved"
-    value: FiniteNumber
+    value: FiniteDecimal
     unit: UnitToken
     bindings: tuple[ValueBinding, ...]
 
@@ -318,12 +372,16 @@ class AggregateGenerationCapacity(StrictFrozenModel):
     """Aggregate capacity for a non-unitized generation asset."""
 
     kind: Literal["aggregate"] = "aggregate"
-    total_capacity_mw: MaterialValue
+    electrical_basis: ElectricalBasis
+    capacity_basis: GenerationCapacityBasis
+    total_power_capacity: MaterialValue
 
     @model_validator(mode="after")
-    def _capacity_is_positive_mw(self) -> AggregateGenerationCapacity:
-        _require_positive_material_unit(
-            self.total_capacity_mw, "MW", "total_capacity_mw"
+    def _capacity_is_positive_and_compatible(self) -> AggregateGenerationCapacity:
+        _require_generation_capacity_unit(
+            self.total_power_capacity,
+            self.electrical_basis,
+            "total_power_capacity",
         )
         return self
 
@@ -332,28 +390,52 @@ class UnitizedGenerationCapacity(StrictFrozenModel):
     """Unit count/rating and reconciled aggregate generation capacity."""
 
     kind: Literal["unitized"] = "unitized"
+    electrical_basis: ElectricalBasis
+    capacity_basis: GenerationCapacityBasis
     unit_count: MaterialCount
-    unit_capacity_mw: MaterialValue
-    total_capacity_mw: MaterialValue
+    unit_power_capacity: MaterialValue
+    total_power_capacity: MaterialValue
 
     @model_validator(mode="after")
     def _unit_capacity_reconciles(self) -> UnitizedGenerationCapacity:
-        _require_positive_material_unit(self.unit_capacity_mw, "MW", "unit_capacity_mw")
-        _require_positive_material_unit(
-            self.total_capacity_mw, "MW", "total_capacity_mw"
+        _require_generation_capacity_unit(
+            self.unit_power_capacity,
+            self.electrical_basis,
+            "unit_power_capacity",
+        )
+        _require_generation_capacity_unit(
+            self.total_power_capacity,
+            self.electrical_basis,
+            "total_power_capacity",
         )
         if isinstance(self.unit_count, MissingValue):
             if self.unit_count.unit != "count":
                 raise ValueError("unit_count requires unit count")
+            if isinstance(self.unit_power_capacity, ResolvedValue) and isinstance(
+                self.total_power_capacity, ResolvedValue
+            ):
+                inferred_count = (
+                    self.total_power_capacity.value / self.unit_power_capacity.value
+                )
+                nearest_count = inferred_count.to_integral_value(
+                    rounding=ROUND_HALF_EVEN
+                )
+                if nearest_count <= 0 or not _engineering_close(
+                    self.total_power_capacity.value,
+                    nearest_count * self.unit_power_capacity.value,
+                ):
+                    raise ValueError(
+                        "missing unit_count cannot reconcile resolved total/unit capacity"
+                    )
             return self
-        if isinstance(self.unit_capacity_mw, MissingValue) or isinstance(
-            self.total_capacity_mw, MissingValue
+        if isinstance(self.unit_power_capacity, MissingValue) or isinstance(
+            self.total_power_capacity, MissingValue
         ):
             return self
-        expected = self.unit_count.value * self.unit_capacity_mw.value
-        if not _close(self.total_capacity_mw.value, expected):
+        expected = Decimal(self.unit_count.value) * self.unit_power_capacity.value
+        if not _engineering_close(self.total_power_capacity.value, expected):
             raise ValueError(
-                "total_capacity_mw must equal unit_count * unit_capacity_mw"
+                "total_power_capacity must equal unit_count * unit_power_capacity"
             )
         return self
 
@@ -383,6 +465,82 @@ class GenerationAsset(StrictFrozenModel):
         return self
 
 
+class AssetChargingSource(StrictFrozenModel):
+    """Charging source represented by a physical generation or grid asset."""
+
+    kind: Literal["asset"] = "asset"
+    asset_id: StableIdentifier
+
+
+class GovernedChargingSource(StrictFrozenModel):
+    """Non-asset charging source represented by a governed case source."""
+
+    kind: Literal["governed_source"] = "governed_source"
+    source_id: StableIdentifier
+
+
+class MissingChargingSource(StrictFrozenModel):
+    """Explicitly unresolved charging source bound to a missing-input record."""
+
+    kind: Literal["missing"] = "missing"
+    missing_input_id: StableIdentifier
+
+
+StorageChargingSource = Annotated[
+    Union[AssetChargingSource, GovernedChargingSource, MissingChargingSource],
+    Field(discriminator="kind"),
+]
+
+
+class StoragePowerCapacity(StrictFrozenModel):
+    """Storage power with explicit electrical and physical basis."""
+
+    value: MaterialValue
+    electrical_basis: StorageElectricalBasis
+    capacity_basis: StorageCapacityBasis
+
+    @model_validator(mode="after")
+    def _power_dimension_is_compatible(self) -> StoragePowerCapacity:
+        allowed_units = (
+            {"MW", "MWac"}
+            if self.electrical_basis is StorageElectricalBasis.AC
+            else {"MW", "MWdc"}
+        )
+        _require_positive_material_units(self.value, allowed_units, "storage power")
+        return self
+
+
+class StorageEnergyCapacity(StrictFrozenModel):
+    """Storage energy with explicit electrical and physical basis."""
+
+    value: MaterialValue
+    electrical_basis: StorageElectricalBasis
+    capacity_basis: StorageCapacityBasis
+
+    @model_validator(mode="after")
+    def _energy_dimension_is_compatible(self) -> StorageEnergyCapacity:
+        allowed_units = (
+            {"MWh", "MWhac"}
+            if self.electrical_basis is StorageElectricalBasis.AC
+            else {"MWh", "MWhdc"}
+        )
+        _require_positive_material_units(self.value, allowed_units, "storage energy")
+        return self
+
+
+class StorageDuration(StrictFrozenModel):
+    """Storage duration explicitly tied to the same electrical/capacity basis."""
+
+    value: MaterialValue
+    electrical_basis: StorageElectricalBasis
+    capacity_basis: StorageCapacityBasis
+
+    @model_validator(mode="after")
+    def _duration_dimension_is_compatible(self) -> StorageDuration:
+        _require_positive_material_unit(self.value, "hour", "storage duration")
+        return self
+
+
 class StorageAsset(StrictFrozenModel):
     """One storage asset with mutually consistent power, energy, and duration."""
 
@@ -392,28 +550,41 @@ class StorageAsset(StrictFrozenModel):
     technology_id: StableIdentifier
     technology_binding_id: StableIdentifier
     jurisdiction_codes: tuple[JurisdictionCode, ...]
-    power_mw: MaterialValue
-    energy_mwh: MaterialValue
-    duration_hours: MaterialValue
+    power_capacity: StoragePowerCapacity
+    energy_capacity: StorageEnergyCapacity
+    duration: StorageDuration
+    charging_source: StorageChargingSource
 
     @model_validator(mode="after")
     def _storage_capacity_reconciles(self) -> StorageAsset:
         _require_nonempty_unique(self.jurisdiction_codes, "storage jurisdiction_codes")
-        _require_positive_material_unit(self.power_mw, "MW", "power_mw")
-        _require_positive_material_unit(self.energy_mwh, "MWh", "energy_mwh")
-        _require_positive_material_unit(self.duration_hours, "hour", "duration_hours")
-        if any(
-            isinstance(item, MissingValue)
-            for item in (self.power_mw, self.energy_mwh, self.duration_hours)
-        ):
+        capacity_bases = {
+            self.power_capacity.capacity_basis,
+            self.energy_capacity.capacity_basis,
+            self.duration.capacity_basis,
+        }
+        electrical_bases = {
+            self.power_capacity.electrical_basis,
+            self.energy_capacity.electrical_basis,
+            self.duration.electrical_basis,
+        }
+        if len(capacity_bases) != 1 or len(electrical_bases) != 1:
+            raise ValueError(
+                "storage power, energy, and duration require compatible bases"
+            )
+        values = (
+            self.power_capacity.value,
+            self.energy_capacity.value,
+            self.duration.value,
+        )
+        if any(isinstance(item, MissingValue) for item in values):
             return self
-        assert isinstance(self.power_mw, ResolvedValue)
-        assert isinstance(self.energy_mwh, ResolvedValue)
-        assert isinstance(self.duration_hours, ResolvedValue)
-        if not _close(
-            self.energy_mwh.value, self.power_mw.value * self.duration_hours.value
-        ):
-            raise ValueError("energy_mwh must equal power_mw * duration_hours")
+        power, energy, duration = values
+        assert isinstance(power, ResolvedValue)
+        assert isinstance(energy, ResolvedValue)
+        assert isinstance(duration, ResolvedValue)
+        if not _engineering_close(energy.value, power.value * duration.value):
+            raise ValueError("storage energy must equal power * duration on one basis")
         return self
 
 
@@ -423,7 +594,7 @@ class SharedInfrastructureAsset(StrictFrozenModel):
     kind: Literal["shared_infrastructure"] = "shared_infrastructure"
     asset_id: StableIdentifier
     name: NonEmptyText
-    infrastructure_type: StableIdentifier
+    infrastructure_role: InfrastructureRole
     jurisdiction_codes: tuple[JurisdictionCode, ...]
     capacity: MaterialValue
 
@@ -433,6 +604,13 @@ class SharedInfrastructureAsset(StrictFrozenModel):
             self.jurisdiction_codes, "shared infrastructure jurisdiction_codes"
         )
         _require_positive_material(self.capacity, "shared infrastructure capacity")
+        if (
+            self.infrastructure_role is InfrastructureRole.GRID_INTERCONNECTION
+            and self.capacity.unit not in {"MW", "MWac", "MVA"}
+        ):
+            raise ValueError(
+                "grid interconnection capacity requires MW, MWac, or MVA unit"
+            )
         return self
 
 
@@ -462,7 +640,8 @@ class ProjectTopology(StrictFrozenModel):
 
     topology_id: StableIdentifier
     kind: TopologyKind
-    shared_interconnection_asset_id: StableIdentifier | None
+    interconnection_arrangement: InterconnectionArrangement
+    common_interconnection_asset_id: StableIdentifier | None
     links: tuple[AssetLink, ...]
 
 
@@ -474,6 +653,12 @@ class PriceBasis(StrictFrozenModel):
     price_level: NonEmptyText
     nominality: PriceNominality
     reporting_currency: CurrencyCode
+    bindings: tuple[ValueBinding, ...]
+
+    @model_validator(mode="after")
+    def _basis_is_provenanced(self) -> PriceBasis:
+        _require_unique_bindings(self.bindings, "price basis")
+        return self
 
 
 class CurrencyConversion(StrictFrozenModel):
@@ -483,6 +668,7 @@ class CurrencyConversion(StrictFrozenModel):
     from_currency: CurrencyCode
     to_currency: CurrencyCode
     rate: MaterialValue
+    quote_precision: QuotePrecision
     valuation_date: date
     price_basis_id: StableIdentifier
 
@@ -495,6 +681,12 @@ class CurrencyConversion(StrictFrozenModel):
             f"{self.to_currency}/{self.from_currency}",
             "currency conversion rate",
         )
+        if isinstance(self.rate, ResolvedValue):
+            _require_decimal_scale(
+                self.rate.value,
+                self.quote_precision,
+                "currency conversion rate",
+            )
         return self
 
 
@@ -503,8 +695,10 @@ class MonetaryAmount(StrictFrozenModel):
 
     native_amount: MaterialValue
     native_currency: CurrencyCode
+    native_minor_unit_places: MinorUnitPlaces
     reporting_amount: MaterialValue
     reporting_currency: CurrencyCode
+    reporting_minor_unit_places: MinorUnitPlaces
     conversion_id: StableIdentifier | None = None
 
     @model_validator(mode="after")
@@ -515,13 +709,29 @@ class MonetaryAmount(StrictFrozenModel):
         _require_nonnegative_material_unit(
             self.reporting_amount, self.reporting_currency, "reporting_amount"
         )
+        if isinstance(self.native_amount, ResolvedValue):
+            _require_decimal_scale(
+                self.native_amount.value,
+                self.native_minor_unit_places,
+                "native_amount",
+            )
+        if isinstance(self.reporting_amount, ResolvedValue):
+            _require_decimal_scale(
+                self.reporting_amount.value,
+                self.reporting_minor_unit_places,
+                "reporting_amount",
+            )
         if self.native_currency == self.reporting_currency:
             if self.conversion_id is not None:
                 raise ValueError("same-currency amount must not name a conversion")
+            if self.native_minor_unit_places != self.reporting_minor_unit_places:
+                raise ValueError(
+                    "same-currency native/reporting minor-unit places must match"
+                )
             if (
                 isinstance(self.native_amount, ResolvedValue)
                 and isinstance(self.reporting_amount, ResolvedValue)
-                and not _close(self.native_amount.value, self.reporting_amount.value)
+                and self.native_amount.value != self.reporting_amount.value
             ):
                 raise ValueError("same-currency native/reporting amounts must match")
         elif self.conversion_id is None:
@@ -551,9 +761,10 @@ class _CostLineBase(StrictFrozenModel):
             isinstance(self.amount.native_amount, ResolvedValue)
             and isinstance(self.quantity, ResolvedValue)
             and isinstance(self.unit_rate_native, ResolvedValue)
-            and not _close(
-                self.amount.native_amount.value,
+            and self.amount.native_amount.value
+            != _round_money(
                 self.quantity.value * self.unit_rate_native.value,
+                self.amount.native_minor_unit_places,
             )
         ):
             raise ValueError("native amount must equal quantity * unit_rate_native")
@@ -598,7 +809,9 @@ class CostAllocation(StrictFrozenModel):
     def _share_is_fraction(self) -> CostAllocation:
         if self.share.unit != "fraction":
             raise ValueError("allocation share requires fraction unit")
-        if isinstance(self.share, ResolvedValue) and not 0 < self.share.value <= 1:
+        if isinstance(self.share, ResolvedValue) and not (
+            Decimal(0) < self.share.value <= Decimal(1)
+        ):
             raise ValueError("allocation share requires fraction unit and range (0, 1]")
         return self
 
@@ -659,10 +872,18 @@ class CostSchedule(StrictFrozenModel):
                 for item in typed_selected
                 if isinstance(item.share, ResolvedValue)
             )
-            if len(resolved_shares) == len(typed_selected) and not _close(
-                sum(item.value for item in resolved_shares), 1.0
-            ):
-                raise ValueError(f"cost line {line.line_id} allocations must sum to 1")
+            resolved_sum = sum(
+                (item.value for item in resolved_shares), start=Decimal(0)
+            )
+            if len(resolved_shares) == len(typed_selected):
+                if not _share_close(resolved_sum, Decimal(1)):
+                    raise ValueError(
+                        f"cost line {line.line_id} allocations must sum to 1"
+                    )
+            elif resolved_sum >= Decimal(1):
+                raise ValueError(
+                    f"cost line {line.line_id} missing allocation share is infeasible"
+                )
 
             conversion_id = line.amount.conversion_id
             if conversion_id is not None:
@@ -683,9 +904,10 @@ class CostSchedule(StrictFrozenModel):
                     isinstance(line.amount.native_amount, ResolvedValue)
                     and isinstance(line.amount.reporting_amount, ResolvedValue)
                     and isinstance(conversion.rate, ResolvedValue)
-                    and not _close(
-                        line.amount.reporting_amount.value,
+                    and line.amount.reporting_amount.value
+                    != _round_money(
                         line.amount.native_amount.value * conversion.rate.value,
+                        line.amount.reporting_minor_unit_places,
                     )
                 ):
                     raise ValueError("cost line reporting amount does not reconcile")
@@ -723,8 +945,8 @@ class ProjectCase(StrictFrozenModel):
     persistence, calculation, report-grade, review, or release policy.
     """
 
-    schema_id: Literal["dutchbay.project_case.v1"] = PROJECT_CASE_SCHEMA_ID
-    contract_version: Literal["1.0.0"] = PROJECT_CASE_CONTRACT_VERSION
+    schema_id: Literal["dutchbay.project_case.v1"]
+    contract_version: Literal["1.0.0"]
     identity: ProjectIdentity
     location: ProjectLocation
     jurisdiction_bindings: tuple[JurisdictionBinding, ...]
@@ -778,6 +1000,13 @@ class ProjectCase(StrictFrozenModel):
             )
 
         jurisdictions = {item.binding_id: item for item in self.jurisdiction_bindings}
+        site_bindings = tuple(
+            item
+            for item in self.jurisdiction_bindings
+            if item.subject is JurisdictionSubject.SITE
+        )
+        if len(site_bindings) != 1:
+            raise ValueError("ProjectCase v1 requires exactly one site jurisdiction")
         site_binding = jurisdictions.get(self.location.site_jurisdiction_binding_id)
         if (
             site_binding is None
@@ -797,20 +1026,15 @@ class ProjectCase(StrictFrozenModel):
         technology_bindings = {
             item.binding_id: item for item in self.technology_bindings
         }
-        site_jurisdictions = {
-            item.jurisdiction_code
-            for item in self.jurisdiction_bindings
-            if item.subject is JurisdictionSubject.SITE
-        }
         used_technology_bindings: set[str] = set()
         active_technologies: set[str] = set()
         generation_assets = 0
         storage_assets = 0
         shared_assets: set[str] = set()
         for asset in self.assets:
-            if not set(asset.jurisdiction_codes) <= site_jurisdictions:
+            if asset.jurisdiction_codes != (self.location.site_jurisdiction_code,):
                 raise ValueError(
-                    f"asset {asset.asset_id} has an unbound site jurisdiction"
+                    f"asset {asset.asset_id} must belong to the single ProjectCase v1 site"
                 )
             if isinstance(asset, SharedInfrastructureAsset):
                 shared_assets.add(asset.asset_id)
@@ -844,17 +1068,9 @@ class ProjectCase(StrictFrozenModel):
         if self.topology.kind is not expected_topology:
             raise ValueError("topology kind does not match asset composition")
 
-        shared_interconnection = self.topology.shared_interconnection_asset_id
-        if (
-            shared_interconnection is not None
-            and shared_interconnection not in shared_assets
-        ):
-            raise ValueError("shared_interconnection_asset_id must name a shared asset")
-        if self.topology.kind is TopologyKind.HYBRID and shared_interconnection is None:
-            raise ValueError("hybrid topology requires shared interconnection asset")
-
         used_shared_assets: set[str] = set()
-        linked_nonshared_assets: set[str] = set()
+        common_path_users: set[str] = set()
+        charges_from_links: dict[str, AssetLink] = {}
         link_keys: set[tuple[AssetLinkKind, str, str]] = set()
         for link in self.topology.links:
             if link.from_asset_id not in assets or link.to_asset_id not in assets:
@@ -875,23 +1091,86 @@ class ProjectCase(StrictFrozenModel):
                         "uses_shared_infrastructure must point from technology asset to shared asset"
                     )
                 used_shared_assets.add(target.asset_id)
-                linked_nonshared_assets.add(source.asset_id)
+                if target.asset_id == self.topology.common_interconnection_asset_id:
+                    common_path_users.add(source.asset_id)
             elif link.kind is AssetLinkKind.CHARGES_FROM:
-                if not isinstance(source, StorageAsset) or isinstance(
-                    target, StorageAsset
+                if not isinstance(source, StorageAsset) or not (
+                    isinstance(target, GenerationAsset)
+                    or (
+                        isinstance(target, SharedInfrastructureAsset)
+                        and target.infrastructure_role
+                        is InfrastructureRole.GRID_INTERCONNECTION
+                    )
                 ):
                     raise ValueError(
-                        "charges_from must point from storage to generation/shared asset"
+                        "charges_from must point from storage to generation/grid-interconnection asset"
                     )
+                if source.asset_id in charges_from_links:
+                    raise ValueError("storage asset has multiple charges_from links")
+                charges_from_links[source.asset_id] = link
         if shared_assets != used_shared_assets:
             raise ValueError(
                 "shared infrastructure has missing reciprocal topology use"
             )
-        if self.topology.kind is TopologyKind.HYBRID:
-            nonshared_assets = set(assets) - shared_assets
-            if nonshared_assets != linked_nonshared_assets:
+
+        common_interconnection = self.topology.common_interconnection_asset_id
+        if (
+            self.topology.interconnection_arrangement
+            is InterconnectionArrangement.COMMON_SHARED
+        ):
+            common_asset = (
+                assets.get(common_interconnection)
+                if common_interconnection is not None
+                else None
+            )
+            if not isinstance(common_asset, SharedInfrastructureAsset) or (
+                common_asset.infrastructure_role
+                is not InfrastructureRole.GRID_INTERCONNECTION
+            ):
                 raise ValueError(
-                    "hybrid assets must explicitly use shared infrastructure"
+                    "common interconnection must name a grid-interconnection asset"
+                )
+            technology_asset_ids = {
+                item.asset_id
+                for item in self.assets
+                if not isinstance(item, SharedInfrastructureAsset)
+            }
+            if common_path_users != technology_asset_ids:
+                raise ValueError(
+                    "every technology asset must use the declared common interconnection"
+                )
+        elif common_interconnection is not None:
+            raise ValueError(
+                "dedicated interconnection arrangement cannot declare a common path"
+            )
+
+        for asset in self.assets:
+            if not isinstance(asset, StorageAsset):
+                continue
+            charging_source = asset.charging_source
+            charge_link = charges_from_links.get(asset.asset_id)
+            if isinstance(charging_source, AssetChargingSource):
+                charging_target = assets.get(charging_source.asset_id)
+                if not (
+                    isinstance(charging_target, GenerationAsset)
+                    or (
+                        isinstance(charging_target, SharedInfrastructureAsset)
+                        and charging_target.infrastructure_role
+                        is InfrastructureRole.GRID_INTERCONNECTION
+                    )
+                ):
+                    raise ValueError(
+                        f"storage {asset.asset_id} has invalid asset charging source"
+                    )
+                if charge_link is None or (
+                    charge_link.to_asset_id != charging_source.asset_id
+                ):
+                    raise ValueError(
+                        f"storage {asset.asset_id} charging source/link reciprocity is broken"
+                    )
+            elif charge_link is not None:
+                raise ValueError(
+                    f"storage {asset.asset_id} non-asset charging disposition cannot have charges_from link"
                 )
 
     def _validate_cost_asset_bindings(self) -> None:
@@ -957,6 +1236,54 @@ class ProjectCase(StrictFrozenModel):
                 required_technologies=set(),
                 field_path="/location/boundary_binding",
             )
+        for basis_index, basis in enumerate(self.costs.price_bases):
+            field_path = f"/costs/price_bases/{basis_index}"
+            required_jurisdictions, required_technologies = self._scope_for_field_path(
+                field_path
+            )
+            for binding in basis.bindings:
+                _resolve_binding(
+                    binding,
+                    sources,
+                    assumptions,
+                    used_sources,
+                    used_assumptions,
+                    required_jurisdictions=required_jurisdictions,
+                    required_technologies=required_technologies,
+                    field_path=field_path,
+                )
+        for asset_index, asset in enumerate(self.assets):
+            if not isinstance(asset, StorageAsset):
+                continue
+            field_path = f"/assets/{asset_index}/charging_source"
+            charging_source = asset.charging_source
+            if isinstance(charging_source, GovernedChargingSource):
+                _resolve_binding(
+                    SourceReference(reference_id=charging_source.source_id),
+                    sources,
+                    assumptions,
+                    used_sources,
+                    used_assumptions,
+                    required_jurisdictions=set(asset.jurisdiction_codes),
+                    required_technologies={asset.technology_id},
+                    field_path=field_path,
+                )
+            elif isinstance(charging_source, MissingChargingSource):
+                missing_record = missing.get(charging_source.missing_input_id)
+                if missing_record is None:
+                    raise ValueError(
+                        "storage charging source has dangling missing_input_id "
+                        f"{charging_source.missing_input_id}"
+                    )
+                if (
+                    missing_record.field_path != field_path
+                    or missing_record.expected_unit != "charging_source"
+                ):
+                    raise ValueError(
+                        "missing charging source field_path/expected_unit does not match "
+                        f"{field_path}"
+                    )
+                used_missing.add(charging_source.missing_input_id)
         for field_path, value in _walk_material_values(self):
             if isinstance(value, MissingValue):
                 missing_record = missing.get(value.missing_input_id)
@@ -1042,19 +1369,67 @@ class ProjectCase(StrictFrozenModel):
                     if not isinstance(asset, SharedInfrastructureAsset)
                 },
             )
+        if len(parts) > 3 and parts[1:3] == ["costs", "price_bases"]:
+            basis = self.costs.price_bases[int(parts[3])]
+            selected_lines = tuple(
+                line
+                for line in self.costs.lines
+                if line.price_basis_id == basis.price_basis_id
+            )
+            allocation_ids = {
+                allocation_id
+                for line in selected_lines
+                for allocation_id in line.allocation_ids
+            }
+            asset_ids = {
+                item.asset_id
+                for item in self.costs.allocations
+                if item.allocation_id in allocation_ids
+            }
+            selected_assets = tuple(
+                item for item in self.assets if item.asset_id in asset_ids
+            )
+            return (
+                {
+                    code
+                    for asset in selected_assets
+                    for code in asset.jurisdiction_codes
+                },
+                {
+                    asset.technology_id
+                    for asset in selected_assets
+                    if not isinstance(asset, SharedInfrastructureAsset)
+                },
+            )
         return (
             {item.jurisdiction_code for item in self.jurisdiction_bindings},
             {item.technology_id for item in self.technology_bindings},
         )
 
 
-def _close(left: float, right: float) -> bool:
-    return math.isclose(
-        left,
-        right,
-        rel_tol=_RECONCILIATION_REL_TOL,
-        abs_tol=_RECONCILIATION_ABS_TOL,
-    )
+def _engineering_close(left: Decimal, right: Decimal) -> bool:
+    return abs(left - right) <= _ENGINEERING_ABS_TOL
+
+
+def _share_close(left: Decimal, right: Decimal) -> bool:
+    return abs(left - right) <= _SHARE_ABS_TOL
+
+
+def _round_money(value: Decimal, minor_unit_places: int) -> Decimal:
+    quantum = Decimal(1).scaleb(-minor_unit_places)
+    return value.quantize(quantum, rounding=ROUND_HALF_EVEN)
+
+
+def _require_decimal_scale(
+    value: Decimal, maximum_places: int, field_name: str
+) -> None:
+    exponent = value.as_tuple().exponent
+    assert isinstance(exponent, int)
+    places = max(0, -exponent)
+    if places > maximum_places:
+        raise ValueError(
+            f"{field_name} exceeds declared decimal precision {maximum_places}"
+        )
 
 
 def _require_positive(value: ResolvedValue, field_name: str) -> None:
@@ -1073,6 +1448,28 @@ def _require_positive_material_unit(
     if value.unit != expected_unit:
         raise ValueError(f"{field_name} requires unit {expected_unit}")
     _require_positive_material(value, field_name)
+
+
+def _require_positive_material_units(
+    value: MaterialValue, expected_units: set[str], field_name: str
+) -> None:
+    if value.unit not in expected_units:
+        units = ", ".join(sorted(expected_units))
+        raise ValueError(f"{field_name} requires one of units: {units}")
+    _require_positive_material(value, field_name)
+
+
+def _require_generation_capacity_unit(
+    value: MaterialValue,
+    electrical_basis: ElectricalBasis,
+    field_name: str,
+) -> None:
+    expected_units = {
+        ElectricalBasis.AC: {"MWac"},
+        ElectricalBasis.DC: {"MWdc", "MWp"},
+        ElectricalBasis.NOT_APPLICABLE: {"MW"},
+    }[electrical_basis]
+    _require_positive_material_units(value, expected_units, field_name)
 
 
 def _require_nonnegative_material_unit(
@@ -1096,6 +1493,16 @@ def _require_unique_ids(values: Iterable[str], field_name: str) -> None:
     materialized = tuple(values)
     if len(set(materialized)) != len(materialized):
         raise ValueError(f"duplicate {field_name}")
+
+
+def _require_unique_bindings(
+    bindings: tuple[ValueBinding, ...], field_name: str
+) -> None:
+    if not bindings:
+        raise ValueError(f"{field_name} requires source/assumption binding")
+    keys = {(item.kind, item.reference_id) for item in bindings}
+    if len(keys) != len(bindings):
+        raise ValueError(f"{field_name} has duplicate bindings")
 
 
 def _walk_material_values(
@@ -1159,6 +1566,7 @@ __all__ = [
     "PROJECT_CASE_CONTRACT_VERSION",
     "PROJECT_CASE_SCHEMA_ID",
     "AggregateGenerationCapacity",
+    "AssetChargingSource",
     "AssetLink",
     "AssetLinkKind",
     "AssumptionReference",
@@ -1173,13 +1581,19 @@ __all__ = [
     "CostReconciliationStatus",
     "CostSchedule",
     "CurrencyConversion",
+    "ElectricalBasis",
     "GenerationAsset",
     "GenerationCapacity",
+    "GenerationCapacityBasis",
+    "GovernedChargingSource",
+    "InfrastructureRole",
+    "InterconnectionArrangement",
     "JurisdictionBinding",
     "JurisdictionSubject",
     "MaterialCount",
     "MaterialValue",
     "MissingInputRecord",
+    "MissingChargingSource",
     "MissingValue",
     "MonetaryAmount",
     "OpexCostLine",
@@ -1196,6 +1610,12 @@ __all__ = [
     "SourceReference",
     "StableIdentifier",
     "StorageAsset",
+    "StorageCapacityBasis",
+    "StorageChargingSource",
+    "StorageDuration",
+    "StorageElectricalBasis",
+    "StorageEnergyCapacity",
+    "StoragePowerCapacity",
     "TechnologyAssetClass",
     "TechnologyBinding",
     "TopologyKind",

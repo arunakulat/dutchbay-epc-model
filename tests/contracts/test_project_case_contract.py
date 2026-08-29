@@ -26,7 +26,7 @@ PROJECT_CASE_MODULE = (
 
 
 def _resolved(
-    value: float,
+    value: str | int | float,
     unit: str,
     *,
     kind: str = "source",
@@ -84,7 +84,7 @@ def _case_payload() -> dict[str, Any]:
                 "binding_id": "jurisdiction:fic:site",
                 "jurisdiction_code": "FIC",
                 "subject": "site",
-                "support_status": "contract_supported",
+                "support_status": "declared",
                 "contract_pack_id": "contract-pack:fic-site",
                 "contract_pack_version": "1.0.0",
             }
@@ -94,7 +94,7 @@ def _case_payload() -> dict[str, Any]:
                 "binding_id": "technology:wind:generation",
                 "technology_id": "wind",
                 "asset_class": "generation",
-                "support_status": "contract_reviewed",
+                "support_status": "declared",
                 "contract_pack_id": "contract-pack:wind-generation",
                 "contract_pack_version": "1.0.0",
             },
@@ -102,7 +102,7 @@ def _case_payload() -> dict[str, Any]:
                 "binding_id": "technology:bess:storage",
                 "technology_id": "bess",
                 "asset_class": "storage",
-                "support_status": "contract_supported",
+                "support_status": "declared",
                 "contract_pack_id": "contract-pack:bess-storage",
                 "contract_pack_version": "1.0.0",
             },
@@ -117,9 +117,11 @@ def _case_payload() -> dict[str, Any]:
                 "jurisdiction_codes": ["FIC"],
                 "capacity": {
                     "kind": "unitized",
+                    "electrical_basis": "not_applicable",
+                    "capacity_basis": "nameplate",
                     "unit_count": _resolved_count(2),
-                    "unit_capacity_mw": _resolved(5.0, "MW"),
-                    "total_capacity_mw": _resolved(10.0, "MW"),
+                    "unit_power_capacity": _resolved(5.0, "MW"),
+                    "total_power_capacity": _resolved(10.0, "MW"),
                 },
             },
             {
@@ -129,15 +131,31 @@ def _case_payload() -> dict[str, Any]:
                 "technology_id": "bess",
                 "technology_binding_id": "technology:bess:storage",
                 "jurisdiction_codes": ["FIC"],
-                "power_mw": _resolved(2.5, "MW"),
-                "energy_mwh": _resolved(10.0, "MWh"),
-                "duration_hours": _resolved(4.0, "hour"),
+                "power_capacity": {
+                    "value": _resolved(2.5, "MW"),
+                    "electrical_basis": "ac",
+                    "capacity_basis": "usable",
+                },
+                "energy_capacity": {
+                    "value": _resolved(10.0, "MWh"),
+                    "electrical_basis": "ac",
+                    "capacity_basis": "usable",
+                },
+                "duration": {
+                    "value": _resolved(4.0, "hour"),
+                    "electrical_basis": "ac",
+                    "capacity_basis": "usable",
+                },
+                "charging_source": {
+                    "kind": "asset",
+                    "asset_id": "asset:wind-block-01",
+                },
             },
             {
                 "kind": "shared_infrastructure",
                 "asset_id": "asset:poi-01",
                 "name": "Shared point of interconnection",
-                "infrastructure_type": "grid-interconnection",
+                "infrastructure_role": "grid_interconnection",
                 "jurisdiction_codes": ["FIC"],
                 "capacity": _resolved(10.0, "MW"),
             },
@@ -145,7 +163,8 @@ def _case_payload() -> dict[str, Any]:
         "topology": {
             "topology_id": "topology:fictional-hybrid",
             "kind": "hybrid",
-            "shared_interconnection_asset_id": "asset:poi-01",
+            "interconnection_arrangement": "common_shared",
+            "common_interconnection_asset_id": "asset:poi-01",
             "links": [
                 {
                     "link_id": "link:wind-to-poi",
@@ -177,6 +196,12 @@ def _case_payload() -> dict[str, Any]:
                     "price_level": "Real 2026-08-29 terms",
                     "nominality": "real",
                     "reporting_currency": "USD",
+                    "bindings": [
+                        {
+                            "kind": "source",
+                            "reference_id": "source:project-basis",
+                        }
+                    ],
                 }
             ],
             "currency_conversions": [
@@ -185,6 +210,7 @@ def _case_payload() -> dict[str, Any]:
                     "from_currency": "LKR",
                     "to_currency": "USD",
                     "rate": _resolved(0.0025, "USD/LKR"),
+                    "quote_precision": 6,
                     "valuation_date": "2026-08-29",
                     "price_basis_id": "price-basis:2026-real-usd",
                 }
@@ -199,8 +225,10 @@ def _case_payload() -> dict[str, Any]:
                     "amount": {
                         "native_amount": _resolved(10_000_000.0, "USD"),
                         "native_currency": "USD",
+                        "native_minor_unit_places": 2,
                         "reporting_amount": _resolved(10_000_000.0, "USD"),
                         "reporting_currency": "USD",
+                        "reporting_minor_unit_places": 2,
                         "conversion_id": None,
                     },
                     "price_basis_id": "price-basis:2026-real-usd",
@@ -219,8 +247,10 @@ def _case_payload() -> dict[str, Any]:
                     "amount": {
                         "native_amount": _resolved(400_000_000.0, "LKR"),
                         "native_currency": "LKR",
+                        "native_minor_unit_places": 2,
                         "reporting_amount": _resolved(1_000_000.0, "USD"),
                         "reporting_currency": "USD",
+                        "reporting_minor_unit_places": 2,
                         "conversion_id": "fx:lkr-to-usd:2026-08-29",
                     },
                     "price_basis_id": "price-basis:2026-real-usd",
@@ -298,12 +328,35 @@ def test_project_case_json_schema_round_trip_and_stable_shape() -> None:
     assert payload["costs"]["lines"][0]["cost_kind"] == "capex"
     assert payload["costs"]["lines"][1]["cost_kind"] == "opex"
     assert payload["costs"]["reconciliation_status"] == "complete"
-    assert isinstance(payload["assets"][1]["power_mw"]["value"], float)
+    assert payload["assets"][1]["power_capacity"]["value"]["value"] == "2.5"
     assert ProjectCase.model_validate_json(case.model_dump_json()) == case
 
     schema = ProjectCase.model_json_schema()
     jsonschema.Draft202012Validator.check_schema(schema)
     jsonschema.Draft202012Validator(schema).validate(payload)
+    assert {"schema_id", "contract_version"} <= set(schema["required"])
+
+
+@pytest.mark.parametrize("field", ["schema_id", "contract_version"])
+def test_schema_identity_and_version_are_mandatory(field: str) -> None:
+    payload = _case_payload()
+    del payload[field]
+    error = _error(payload, "Field required")
+    assert error.errors()[0]["loc"] == (field,)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("schema_id", "dutchbay.project_case.v2"),
+        ("contract_version", "2.0.0"),
+    ],
+)
+def test_unknown_or_future_schema_version_is_rejected(field: str, value: str) -> None:
+    payload = _case_payload()
+    payload[field] = value
+    error = _error(payload, "literal_error")
+    assert error.errors()[0]["loc"] == (field,)
 
 
 def test_json_native_python_payload_requires_transport_normalization() -> None:
@@ -320,13 +373,23 @@ def test_json_native_python_payload_requires_transport_normalization() -> None:
 def test_contract_support_status_is_not_assurance_or_release_vocabulary() -> None:
     assert {item.value for item in ContractSupportStatus} == {
         "unsupported",
-        "contract_supported",
-        "contract_reviewed",
+        "declared",
     }
     fields = ProjectCase.model_fields
     assert "achieved_grade" not in fields
     assert "release_status" not in fields
     assert "run_mode" not in fields
+    assert "contract_reviewed" not in PROJECT_CASE_MODULE.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("status", ["registered", "derived", "disputed"])
+def test_complete_boundary_states_are_explicit(status: str) -> None:
+    payload = _case_payload()
+    payload["location"]["boundary_status"] = status
+    case = _validate(payload)
+    assert case.location.boundary_status.value == status
+    if status == "disputed":
+        assert case.location.boundary_status.value not in {"surveyed", "contractual"}
 
 
 def test_project_case_is_deeply_immutable() -> None:
@@ -344,8 +407,9 @@ def test_project_and_case_identity_axes_must_be_distinct() -> None:
 
 def test_resolved_values_and_counts_refuse_duplicate_bindings() -> None:
     payload = _case_payload()
-    duplicate = copy.deepcopy(payload["assets"][1]["power_mw"]["bindings"][0])
-    payload["assets"][1]["power_mw"]["bindings"].append(duplicate)
+    power_value = payload["assets"][1]["power_capacity"]["value"]
+    duplicate = copy.deepcopy(power_value["bindings"][0])
+    power_value["bindings"].append(duplicate)
     _error(payload, "resolved material value has duplicate bindings")
 
     payload = _case_payload()
@@ -470,7 +534,7 @@ def test_ambiguous_or_unreferenced_technology_binding_fails_closed() -> None:
             "binding_id": "technology:solar:generation",
             "technology_id": "solar",
             "asset_class": "generation",
-            "support_status": "contract_supported",
+            "support_status": "declared",
             "contract_pack_id": "contract-pack:solar-generation",
             "contract_pack_version": "1.0.0",
         }
@@ -492,6 +556,91 @@ def test_dangling_topology_reference_fails_closed() -> None:
     _error(payload, "dangling asset reference")
 
 
+def test_every_storage_asset_requires_charging_source_disposition() -> None:
+    payload = _case_payload()
+    del payload["assets"][1]["charging_source"]
+    error = _error(payload, "Field required")
+    assert error.errors()[0]["loc"][:4] == (
+        "assets",
+        1,
+        "storage",
+        "charging_source",
+    )
+
+
+def test_storage_asset_source_requires_reciprocal_charges_from_link() -> None:
+    payload = _case_payload()
+    payload["topology"]["links"] = [
+        item for item in payload["topology"]["links"] if item["kind"] != "charges_from"
+    ]
+    _error(payload, "charging source/link reciprocity is broken")
+
+
+def test_common_interconnection_requires_grid_role() -> None:
+    payload = _case_payload()
+    payload["assets"][2]["infrastructure_role"] = "access_road"
+    _error(payload, "common interconnection must name a grid-interconnection asset")
+
+
+def test_dedicated_hybrid_without_shared_facility_is_valid() -> None:
+    payload = _case_payload()
+    payload["assets"] = payload["assets"][:2]
+    payload["topology"].update(
+        {
+            "interconnection_arrangement": "dedicated_separate",
+            "common_interconnection_asset_id": None,
+            "links": [
+                item
+                for item in payload["topology"]["links"]
+                if item["kind"] == "charges_from"
+            ],
+        }
+    )
+    case = _validate(payload)
+    assert case.topology.interconnection_arrangement.value == "dedicated_separate"
+    assert case.topology.common_interconnection_asset_id is None
+
+
+def test_missing_charging_source_is_explicit_and_reciprocal() -> None:
+    payload = _case_payload()
+    payload["assets"][1]["charging_source"] = {
+        "kind": "missing",
+        "missing_input_id": "missing:bess-charging-source",
+    }
+    payload["topology"]["links"] = [
+        item for item in payload["topology"]["links"] if item["kind"] != "charges_from"
+    ]
+    payload["missing_inputs"] = [
+        {
+            "missing_input_id": "missing:bess-charging-source",
+            "field_path": "/assets/1/charging_source",
+            "expected_unit": "charging_source",
+            "reason": "The charging supply has not been nominated.",
+            "consequence": "Storage charging topology is unresolved.",
+            "remedy": "Declare the governed charging supply.",
+        }
+    ]
+    case = _validate(payload)
+    storage = case.assets[1]
+    assert storage.kind == "storage"
+    assert storage.charging_source.kind == "missing"
+
+
+def test_governed_non_asset_charging_source_is_explicit() -> None:
+    payload = _case_payload()
+    payload["assets"][1]["charging_source"] = {
+        "kind": "governed_source",
+        "source_id": "source:project-basis",
+    }
+    payload["topology"]["links"] = [
+        item for item in payload["topology"]["links"] if item["kind"] != "charges_from"
+    ]
+    case = _validate(payload)
+    storage = case.assets[1]
+    assert storage.kind == "storage"
+    assert storage.charging_source.kind == "governed_source"
+
+
 @pytest.mark.parametrize(
     ("mutate", "pattern"),
     [
@@ -501,15 +650,15 @@ def test_dangling_topology_reference_fails_closed() -> None:
         ),
         (
             lambda value: value["topology"].update(
-                {"shared_interconnection_asset_id": "asset:wind-block-01"}
+                {"common_interconnection_asset_id": "asset:wind-block-01"}
             ),
-            "must name a shared asset",
+            "must name a grid-interconnection asset",
         ),
         (
             lambda value: value["topology"].update(
-                {"shared_interconnection_asset_id": None}
+                {"common_interconnection_asset_id": None}
             ),
-            "hybrid topology requires shared interconnection",
+            "common interconnection must name a grid-interconnection asset",
         ),
     ],
 )
@@ -560,7 +709,7 @@ def test_hybrid_requires_every_asset_to_use_shared_infrastructure() -> None:
         for item in payload["topology"]["links"]
         if item["link_id"] != "link:bess-to-poi"
     ]
-    _error(payload, "hybrid assets must explicitly use shared")
+    _error(payload, "every technology asset must use the declared common")
 
 
 def test_shared_infrastructure_requires_reciprocal_topology_use() -> None:
@@ -582,7 +731,23 @@ def test_dangling_cost_allocation_asset_fails_closed() -> None:
 def test_asset_jurisdiction_must_have_a_site_binding() -> None:
     payload = _case_payload()
     payload["assets"][1]["jurisdiction_codes"] = ["LKA"]
-    _error(payload, "asset asset:bess-01 has an unbound site jurisdiction")
+    _error(payload, "asset asset:bess-01 must belong to the single ProjectCase v1 site")
+
+
+def test_second_physical_site_cannot_exist_without_site_geometry() -> None:
+    payload = _case_payload()
+    payload["jurisdiction_bindings"].append(
+        {
+            "binding_id": "jurisdiction:lka:site",
+            "jurisdiction_code": "LKA",
+            "subject": "site",
+            "support_status": "declared",
+            "contract_pack_id": "contract-pack:lka-site",
+            "contract_pack_version": "1.0.0",
+        }
+    )
+    payload["assets"][1]["jurisdiction_codes"] = ["LKA"]
+    _error(payload, "ProjectCase v1 requires exactly one site jurisdiction")
 
 
 @pytest.mark.parametrize("second_share", [0.1, 0.3])
@@ -596,6 +761,51 @@ def test_zero_share_allocation_is_rejected_as_degenerate() -> None:
     payload = _case_payload()
     payload["costs"]["allocations"][1]["share"] = _resolved(0.0, "fraction")
     _error(payload, r"range \(0, 1\]")
+
+
+def test_partial_allocation_must_have_a_feasible_positive_remainder() -> None:
+    payload = _case_payload()
+    payload["costs"]["allocations"][0]["share"] = _resolved(1, "fraction")
+    payload["costs"]["allocations"][1]["share"] = {
+        "state": "missing",
+        "unit": "fraction",
+        "missing_input_id": "missing:capex-bess-share",
+    }
+    payload["costs"]["reconciliation_status"] = "incomplete_missing_input"
+    payload["missing_inputs"] = [
+        {
+            "missing_input_id": "missing:capex-bess-share",
+            "field_path": "/costs/allocations/1/share",
+            "expected_unit": "fraction",
+            "reason": "The BESS allocation is not confirmed.",
+            "consequence": "CAPEX allocation is incomplete.",
+            "remedy": "Supply a positive BESS allocation.",
+        }
+    ]
+    _error(payload, "missing allocation share is infeasible")
+
+
+def test_partial_allocation_with_positive_remainder_is_valid() -> None:
+    payload = _case_payload()
+    payload["costs"]["allocations"][1]["share"] = {
+        "state": "missing",
+        "unit": "fraction",
+        "missing_input_id": "missing:capex-bess-share",
+    }
+    payload["costs"]["reconciliation_status"] = "incomplete_missing_input"
+    payload["missing_inputs"] = [
+        {
+            "missing_input_id": "missing:capex-bess-share",
+            "field_path": "/costs/allocations/1/share",
+            "expected_unit": "fraction",
+            "reason": "The BESS allocation is not confirmed.",
+            "consequence": "CAPEX allocation is incomplete.",
+            "remedy": "Supply a positive BESS allocation not exceeding 0.2.",
+        }
+    ]
+    assert _validate(payload).costs.reconciliation_status.value == (
+        "incomplete_missing_input"
+    )
 
 
 def test_cost_line_and_allocation_must_be_reciprocal() -> None:
@@ -633,6 +843,37 @@ def test_cost_line_requires_explicit_price_basis() -> None:
     payload = _case_payload()
     payload["costs"]["lines"][0]["price_basis_id"] = "price-basis:missing"
     _error(payload, "dangling price_basis_id")
+
+
+def test_price_basis_requires_exact_provenance_binding() -> None:
+    payload = _case_payload()
+    payload["costs"]["price_bases"][0].update(
+        {
+            "valuation_date": "2099-12-31",
+            "price_level": "Arbitrary future nominal basis",
+            "nominality": "nominal",
+            "bindings": [],
+        }
+    )
+    payload["costs"]["currency_conversions"][0]["valuation_date"] = "2099-12-31"
+    _error(payload, "price basis requires source/assumption binding")
+
+
+def test_price_basis_binding_must_cover_allocated_cost_scope() -> None:
+    payload = _case_payload()
+    payload["sources"].append(
+        {
+            "source_id": "source:wind-price-basis",
+            "title": "Wind-only cost basis",
+            "locator": "fixture:wind-only-price-basis",
+            "jurisdiction_codes": ["FIC"],
+            "technology_ids": ["wind"],
+        }
+    )
+    payload["costs"]["price_bases"][0]["bindings"] = [
+        {"kind": "source", "reference_id": "source:wind-price-basis"}
+    ]
+    _error(payload, r"wrong scope for /costs/price_bases/0")
 
 
 def test_cost_registers_and_reporting_basis_are_closed() -> None:
@@ -714,6 +955,38 @@ def test_currency_and_amount_arithmetic_fail_closed() -> None:
     _error(payload, r"native amount must equal quantity \* unit_rate_native")
 
 
+def test_decimal_identity_is_preserved_beyond_binary_float_range() -> None:
+    payload = _case_payload()
+    exact_integer = 9_007_199_254_740_993
+    payload["assets"][2]["capacity"] = _resolved(exact_integer, "MW")
+    case = _validate(payload)
+    shared = case.assets[2]
+    assert shared.kind == "shared_infrastructure"
+    assert shared.capacity.state == "resolved"
+    assert str(shared.capacity.value) == str(exact_integer)
+    dumped = case.model_dump(mode="json")
+    assert dumped["assets"][2]["capacity"]["value"] == str(exact_integer)
+
+
+def test_large_money_gap_is_not_hidden_by_relative_tolerance() -> None:
+    payload = _case_payload()
+    line = payload["costs"]["lines"][0]
+    line["quantity"] = _resolved(1, "item")
+    line["unit_rate_native"] = _resolved(1_000_000_000_000, "USD/item")
+    declared = _resolved(999_999_999_001, "USD")
+    line["amount"]["native_amount"] = declared
+    line["amount"]["reporting_amount"] = copy.deepcopy(declared)
+    _error(payload, r"native amount must equal quantity \* unit_rate_native")
+
+
+def test_fx_rate_cannot_exceed_declared_quote_precision() -> None:
+    payload = _case_payload()
+    payload["costs"]["currency_conversions"][0]["rate"] = _resolved(
+        "0.0025001", "USD/LKR"
+    )
+    _error(payload, "currency conversion rate exceeds declared decimal precision 6")
+
+
 def test_opex_periodicity_and_allocation_units_are_explicit() -> None:
     payload = _case_payload()
     payload["costs"]["lines"][1]["periodicity"] = "one_time"
@@ -735,16 +1008,16 @@ def test_currency_conversion_must_reconcile_reporting_amount() -> None:
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("power_mw", -2.5),
-        ("energy_mwh", float("nan")),
-        ("duration_hours", float("inf")),
+        ("power_capacity", -2.5),
+        ("energy_capacity", float("nan")),
+        ("duration", float("inf")),
     ],
 )
 def test_storage_rejects_negative_or_non_finite_numbers(
     field: str, value: float
 ) -> None:
     payload = _case_payload()
-    payload["assets"][1][field]["value"] = value
+    payload["assets"][1][field]["value"]["value"] = value
     _error(payload, "finite_number|positive")
 
 
@@ -759,17 +1032,78 @@ def test_shared_capacity_zero_cannot_stand_for_missing() -> None:
     )
 
 
+def test_solar_pv_dc_nameplate_capacity_is_preserved() -> None:
+    payload = _case_payload()
+    payload["technology_bindings"][0].update(
+        {
+            "binding_id": "technology:solar-pv:generation",
+            "technology_id": "solar-pv",
+            "contract_pack_id": "contract-pack:solar-pv-generation",
+        }
+    )
+    payload["assets"][0].update(
+        {
+            "asset_id": "asset:solar-block-01",
+            "name": "Solar PV block 01",
+            "technology_id": "solar-pv",
+            "technology_binding_id": "technology:solar-pv:generation",
+            "capacity": {
+                "kind": "aggregate",
+                "electrical_basis": "dc",
+                "capacity_basis": "nameplate",
+                "total_power_capacity": _resolved(100, "MWdc"),
+            },
+        }
+    )
+    payload["assets"][1]["charging_source"]["asset_id"] = "asset:solar-block-01"
+    for link in payload["topology"]["links"]:
+        if link["from_asset_id"] == "asset:wind-block-01":
+            link["from_asset_id"] = "asset:solar-block-01"
+        if link["to_asset_id"] == "asset:wind-block-01":
+            link["to_asset_id"] = "asset:solar-block-01"
+    for allocation in payload["costs"]["allocations"]:
+        if allocation["asset_id"] == "asset:wind-block-01":
+            allocation["asset_id"] = "asset:solar-block-01"
+    payload["sources"][0]["technology_ids"] = ["solar-pv", "bess"]
+    case = _validate(payload)
+    generation = case.assets[0]
+    assert generation.kind == "generation"
+    assert generation.capacity.electrical_basis.value == "dc"
+    assert generation.capacity.total_power_capacity.unit == "MWdc"
+
+
+def test_generation_electrical_basis_and_unit_must_be_compatible() -> None:
+    payload = _case_payload()
+    payload["assets"][0]["capacity"]["electrical_basis"] = "dc"
+    _error(payload, "requires one of units: MWdc, MWp")
+
+
+@pytest.mark.parametrize(
+    ("field", "basis_field", "basis_value"),
+    [
+        ("energy_capacity", "capacity_basis", "nameplate"),
+        ("energy_capacity", "electrical_basis", "dc"),
+    ],
+)
+def test_storage_power_energy_duration_bases_must_match(
+    field: str, basis_field: str, basis_value: str
+) -> None:
+    payload = _case_payload()
+    payload["assets"][1][field][basis_field] = basis_value
+    _error(payload, "storage power, energy, and duration require compatible bases")
+
+
 def test_bess_power_energy_duration_must_reconcile() -> None:
     payload = _case_payload()
-    payload["assets"][1]["duration_hours"] = _resolved(3.0, "hour")
-    error = _error(payload, "energy_mwh must equal power_mw")
+    payload["assets"][1]["duration"]["value"] = _resolved(3.0, "hour")
+    error = _error(payload, r"storage energy must equal power \* duration")
     assert error.errors()[0]["loc"][:3] == ("assets", 1, "storage")
 
 
 def test_unitized_generation_count_capacity_must_reconcile() -> None:
     payload = _case_payload()
-    payload["assets"][0]["capacity"]["total_capacity_mw"] = _resolved(11.0, "MW")
-    error = _error(payload, r"unit_count \* unit_capacity_mw")
+    payload["assets"][0]["capacity"]["total_power_capacity"] = _resolved(11.0, "MW")
+    error = _error(payload, r"unit_count \* unit_power_capacity")
     assert error.errors()[0]["loc"][:5] == (
         "assets",
         0,
@@ -783,7 +1117,9 @@ def test_aggregate_generation_capacity_is_an_explicit_discriminator() -> None:
     payload = _case_payload()
     payload["assets"][0]["capacity"] = {
         "kind": "aggregate",
-        "total_capacity_mw": _resolved(10.0, "MW"),
+        "electrical_basis": "not_applicable",
+        "capacity_basis": "nameplate",
+        "total_power_capacity": _resolved(10.0, "MW"),
     }
     case = _validate(payload)
     generation = case.assets[0]
@@ -793,7 +1129,7 @@ def test_aggregate_generation_capacity_is_an_explicit_discriminator() -> None:
 
 def test_missing_unit_rating_defers_generation_arithmetic() -> None:
     payload = _case_payload()
-    payload["assets"][0]["capacity"]["unit_capacity_mw"] = {
+    payload["assets"][0]["capacity"]["unit_power_capacity"] = {
         "state": "missing",
         "unit": "MW",
         "missing_input_id": "missing:wind-unit-rating",
@@ -801,7 +1137,7 @@ def test_missing_unit_rating_defers_generation_arithmetic() -> None:
     payload["missing_inputs"] = [
         {
             "missing_input_id": "missing:wind-unit-rating",
-            "field_path": "/assets/0/capacity/unit_capacity_mw",
+            "field_path": "/assets/0/capacity/unit_power_capacity",
             "expected_unit": "MW",
             "reason": "The turbine model is not selected.",
             "consequence": "Unitized generation arithmetic is incomplete.",
@@ -826,19 +1162,21 @@ def test_resolved_unit_count_requires_provenance_binding() -> None:
 
 def test_material_value_without_provenance_binding_fails_closed() -> None:
     payload = _case_payload()
-    payload["assets"][1]["power_mw"]["bindings"] = []
+    payload["assets"][1]["power_capacity"]["value"]["bindings"] = []
     _error(payload, "requires source/assumption binding")
 
 
 def test_material_value_with_dangling_source_binding_fails_closed() -> None:
     payload = _case_payload()
-    payload["assets"][1]["power_mw"]["bindings"][0]["reference_id"] = "source:missing"
+    payload["assets"][1]["power_capacity"]["value"]["bindings"][0]["reference_id"] = (
+        "source:missing"
+    )
     _error(payload, "dangling source reference")
 
 
 def test_dangling_assumption_and_unreferenced_source_fail_closed() -> None:
     payload = _case_payload()
-    payload["assets"][1]["power_mw"]["bindings"] = [
+    payload["assets"][1]["power_capacity"]["value"]["bindings"] = [
         {"kind": "assumption", "reference_id": "assumption:missing"}
     ]
     _error(payload, "dangling assumption reference")
@@ -944,9 +1282,30 @@ def test_missing_unit_count_is_reciprocal_and_defers_capacity_arithmetic() -> No
     assert generation.capacity.unit_count.state == "missing"
 
 
+def test_missing_unit_count_must_admit_an_integer_solution() -> None:
+    payload = _case_payload()
+    payload["assets"][0]["capacity"]["unit_count"] = {
+        "state": "missing",
+        "unit": "count",
+        "missing_input_id": "missing:wind-unit-count",
+    }
+    payload["assets"][0]["capacity"]["total_power_capacity"] = _resolved(11, "MW")
+    payload["missing_inputs"] = [
+        {
+            "missing_input_id": "missing:wind-unit-count",
+            "field_path": "/assets/0/capacity/unit_count",
+            "expected_unit": "count",
+            "reason": "Final turbine count has not been selected.",
+            "consequence": "Unitized capacity arithmetic is incomplete.",
+            "remedy": "Provide a positive integer count reconciling 11 MW / 5 MW.",
+        }
+    ]
+    _error(payload, "missing unit_count cannot reconcile resolved total/unit capacity")
+
+
 def test_missing_bess_duration_defers_only_capacity_arithmetic() -> None:
     payload = _case_payload()
-    payload["assets"][1]["duration_hours"] = {
+    payload["assets"][1]["duration"]["value"] = {
         "state": "missing",
         "unit": "hour",
         "missing_input_id": "missing:bess-duration",
@@ -954,7 +1313,7 @@ def test_missing_bess_duration_defers_only_capacity_arithmetic() -> None:
     payload["missing_inputs"] = [
         {
             "missing_input_id": "missing:bess-duration",
-            "field_path": "/assets/1/duration_hours",
+            "field_path": "/assets/1/duration/value",
             "expected_unit": "hour",
             "reason": "The selected dispatch duration is not confirmed.",
             "consequence": "BESS capacity reconciliation is incomplete.",
@@ -964,7 +1323,7 @@ def test_missing_bess_duration_defers_only_capacity_arithmetic() -> None:
     case = _validate(payload)
     storage = case.assets[1]
     assert storage.kind == "storage"
-    assert storage.duration_hours.state == "missing"
+    assert storage.duration.value.state == "missing"
 
 
 def test_missing_cost_requires_incomplete_reconciliation_status() -> None:
@@ -1000,7 +1359,7 @@ def test_incomplete_cost_status_without_missing_value_is_rejected() -> None:
 def test_source_cannot_cross_technology_scope() -> None:
     payload = _case_payload()
     payload["sources"][0]["technology_ids"] = ["wind"]
-    _error(payload, r"wrong scope for /assets/1/power_mw")
+    _error(payload, r"wrong scope for /costs/price_bases/0")
 
 
 def test_source_cannot_cross_jurisdiction_scope() -> None:
@@ -1009,14 +1368,14 @@ def test_source_cannot_cross_jurisdiction_scope() -> None:
         {
             "binding_id": "jurisdiction:lka:site",
             "jurisdiction_code": "LKA",
-            "subject": "site",
-            "support_status": "contract_supported",
+            "subject": "corporate",
+            "support_status": "declared",
             "contract_pack_id": "contract-pack:lka-site",
             "contract_pack_version": "1.0.0",
         }
     )
-    payload["assets"][1]["jurisdiction_codes"] = ["FIC", "LKA"]
-    _error(payload, r"wrong scope for /assets/1/power_mw")
+    payload["sources"][0]["jurisdiction_codes"] = ["LKA"]
+    _error(payload, r"wrong scope for /location/boundary_binding")
 
 
 def test_assumption_cannot_cross_technology_scope() -> None:
@@ -1031,10 +1390,10 @@ def test_assumption_cannot_cross_technology_scope() -> None:
             "technology_ids": ["wind"],
         }
     ]
-    payload["assets"][1]["power_mw"]["bindings"] = [
+    payload["assets"][1]["power_capacity"]["value"]["bindings"] = [
         {"kind": "assumption", "reference_id": "assumption:wind-only"}
     ]
-    _error(payload, r"wrong scope for /assets/1/power_mw")
+    _error(payload, r"wrong scope for /assets/1/power_capacity/value")
 
 
 def test_assumption_cannot_cross_jurisdiction_scope() -> None:
@@ -1043,27 +1402,26 @@ def test_assumption_cannot_cross_jurisdiction_scope() -> None:
         {
             "binding_id": "jurisdiction:lka:site",
             "jurisdiction_code": "LKA",
-            "subject": "site",
-            "support_status": "contract_supported",
+            "subject": "corporate",
+            "support_status": "declared",
             "contract_pack_id": "contract-pack:lka-site",
             "contract_pack_version": "1.0.0",
         }
     )
-    payload["assets"][1]["jurisdiction_codes"] = ["FIC", "LKA"]
     payload["assumptions"] = [
         {
             "assumption_id": "assumption:fic-bess-only",
             "statement": "Fictionland-only BESS assumption.",
             "basis": "Fictional BESS fixture.",
             "replacement_action": "Replace with multi-jurisdiction evidence.",
-            "jurisdiction_codes": ["FIC"],
+            "jurisdiction_codes": ["LKA"],
             "technology_ids": ["bess"],
         }
     ]
-    payload["assets"][1]["power_mw"]["bindings"] = [
+    payload["assets"][1]["power_capacity"]["value"]["bindings"] = [
         {"kind": "assumption", "reference_id": "assumption:fic-bess-only"}
     ]
-    _error(payload, r"wrong scope for /assets/1/power_mw")
+    _error(payload, r"wrong scope for /assets/1/power_capacity/value")
 
 
 @pytest.mark.parametrize(
