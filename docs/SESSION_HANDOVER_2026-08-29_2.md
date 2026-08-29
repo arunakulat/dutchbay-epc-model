@@ -31,24 +31,27 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
 ```
 
 This record captures the sixth D3A domain acceptance, the first assurance veto, the bounded repair
-commit, the pre-restart seventh domain review, and the recovered independent assurance rereview.
-The current pushed production/test head is
+commit, the pre-restart seventh domain review, the recovered independent assurance rereview, and
+the bounded post-restart ASR-03 worker candidate. The clean persisted topic head is
+`59f1f37d7c7cf3fcc1c1d10c63d26799c7c34c45`; its production/test predecessor is
 `836502a607fbce479f8e0412e2c63cb8659fafcd`. D3A-ASR-01 exact identifiers and D3A-ASR-02 portable
-SemVer are independently accepted. Both the domain and assurance reviews nevertheless return
-**REJECTED** because the D3A-ASR-03 repair falsely refuses valid solar DC
-`electrical_collection` capacity: the domain review proved resolved and explicit-missing `MWdc`
-false rejects, and the recovered assurance review independently proved the same for `MWdc` and
-`MWp`. `grid_interconnection` correctly remains limited to AC/apparent units.
+SemVer are independently accepted. Both reviews reject the persisted production tree because its
+D3A-ASR-03 repair falsely refuses valid resolved and explicit-missing solar DC
+`electrical_collection` capacity in `MWdc` and `MWp`. The current uncommitted worker candidate
+admits those two collection units while retaining the `grid_interconnection` AC/apparent-unit
+boundary; it has no independent successor disposition yet.
 
 Current Git status and live refs are authoritative. At restart recovery, local `HEAD`, the upstream
 topic, the live remote topic and PR `#1191` all identified `836502a607fbce479f8e0412e2c63cb8659fafcd`.
 Local/live `origin/main`, the protected primary checkout and the PR base all identified
 `782c9588ef2685fcf0608d48f7745493aaa15b78`; main was clean and the topic was zero behind and
-sixteen commits ahead. Exact-head CI was fully green, but the PR remained open and draft. This
-successor introduces only the authorized three-document PERSIST-01 review record; it does not alter
-production, tests, exports, changelog, Git refs, GitHub, issue `#1110`, release state or a `HOLD`.
-Never reset, stash or clean away this documentation checkpoint. The exact vetoes and bounded repair
-gate are in the two D3A review records.
+sixteen commits ahead. Exact-head CI was fully green, but the PR remained open and draft. Commit
+`59f1f37d7c7cf3fcc1c1d10c63d26799c7c34c45` then introduced only the authorized three-document
+PERSIST-01 review record; it did not alter production, tests, exports, changelog, GitHub, issue
+`#1110`, release state or a `HOLD`. Never reset, stash or clean away this documentation checkpoint.
+The exact vetoes and bounded repair gate are in the two D3A review records. The later uncommitted
+ASR-03 worker diff changes only the ProjectCase production validator, its focused tests, the
+changelog fragment, and this handover.
 
 ## 2. Base and ingress receipt
 
@@ -114,6 +117,11 @@ refused for resolved and missing capacity. It also proved that the role/unit val
 encoded in Draft 2020-12, so prior wording that the electrical counterexample was schema-refused was
 false. The primary main checkout and `origin/main` remained exactly synchronized; no topic merge was
 required.
+The three-document restart-recovery checkpoint was committed and pushed as
+`59f1f37d7c7cf3fcc1c1d10c63d26799c7c34c45`. A later read-only fetch found `origin/main` unchanged
+at `782c9588ef2685fcf0608d48f7745493aaa15b78`, already an ancestor of that topic head; the topic
+was zero behind and seventeen commits ahead, so no merge or history rewrite was needed before the
+bounded ASR-03 worker resumed.
 Sections 19-23 of `docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md` preserve the fourth review;
 sections 24-27 preserve the fifth veto, and sections 28-31 contain the controlling sixth
 **DOMAIN ACCEPTED** predecessor disposition. Sections 32-35 preserve the exact seventh
@@ -132,10 +140,12 @@ The Dolphin 3A change set consists of:
 - `changelog.d/project-case-v1.added.md` - concise additive release note; and
 - the independent review records and this handover successor.
 
-The pushed head contains the bounded production, export, focused-test, release-note and handover
-repair. The current uncommitted diff is documentation-only: the controlling parent authorized
-updates to the assurance record, remediation rereview record and this handover after the recovered
-exact-head dispositions were final. No code or test is being changed by this PERSIST checkpoint.
+The persisted predecessor contains the bounded ASR-01 through -03 production, export,
+focused-test, release-note and handover repair plus the later three-document veto checkpoint. The
+current uncommitted diff is the narrower ASR-03 successor: one runtime admissible-unit change, its
+full-root focused controls, a truthful changelog correction, and this handover. The independent
+review records remain unchanged. No export, schema customization, adapter, Git ref, GitHub, issue,
+release or `HOLD` state is changed by the worker candidate.
 
 `ProjectCase` v1 is intentionally a single-site contract. It declares project, case, binding,
 asset, topology, line, allocation, price-basis, source, assumption and missing-input identifiers.
@@ -194,8 +204,10 @@ is the exact decimal string. This removes the runtime/schema ambiguity for JSON 
 Resolved generation, storage and shared-infrastructure capacity must be positive, so zero cannot
 silently encode an unknown value; a missing capacity uses the explicit missing state. At exact
 `836502a`, every `grid_interconnection` and `electrical_collection` resolved or missing capacity is
-restricted to `MW`, `MWac`, or `MVA`. That rule is correct for the grid interconnection but is the
-controlling false rejection for a solar electrical collection declared in `MWdc` or `MWp`.
+restricted to `MW`, `MWac`, or `MVA`. That persisted rule is correct for the grid interconnection
+but is the controlling false rejection for a solar electrical collection declared in `MWdc` or
+`MWp`. The bounded worker candidate changes only `electrical_collection` to accept `MW`, `MWac`,
+`MWdc`, `MWp`, or `MVA`; `grid_interconnection` remains `MW`, `MWac`, or `MVA`.
 Access-road, operations-facility and other non-electrical shared roles retain the open `UnitToken`
 boundary required by their heterogeneous dimensions. Every
 one-missing count/unit/total generation proposition and power/energy/duration BESS proposition must
@@ -261,11 +273,13 @@ The contract is designed as a transport-neutral basis for a later JSON, form, Py
 adapter. Its explicit union discriminators, strict extra-field refusal, frozen object graph,
 JSON-representable scalars and generated Draft 2020-12 schemas passed independent replay. The
 identifier and pack-version repairs now agree across runtime, Draft and an actual ECMAScript
-implementation. The role-dependent electrical-capacity rule is runtime-only: Draft 2020-12 accepts
-the original electrical-collection `USD` counterexample as well as the valid `MWdc` and `MWp`
-collection cases that runtime falsely refuses. A future adapter must invoke domain validation and
-must not claim schema-only acceptance is sufficient. The successor is not assurance-cleared for
-the future web boundary, and no transport adapter was added.
+implementation. The role-dependent electrical-capacity rule is runtime semantic validation only.
+The generated Draft 2020-12 schemas are structural and accept the original electrical-collection
+`USD` counterexample as well as valid `MWdc` and `MWp` collection cases. The bounded worker
+candidate corrects the runtime false rejects without adding conditional schema machinery. A future
+adapter must invoke domain validation and must not claim schema-only acceptance is sufficient. The
+worker candidate is not independently domain- or assurance-cleared for the future web boundary,
+and no transport adapter was added.
 
 The contract is not itself a FastAPI request model. Its strict domain types accept the JSON-native
 fixture through `ProjectCase.model_validate_json()`, while direct Python-mode validation of an
@@ -410,11 +424,44 @@ Seventh independent domain disposition:          DOMAIN REJECTED
 Recovered independent assurance disposition:     ASSURANCE REJECTED
 ```
 
-The current rejection is bounded only to the ASR-03 electrical-collection capacity dimension and
-truthful runtime/schema wording. ASR-01 exact identifiers and ASR-02 portable SemVer are accepted.
+The controlling persisted rejection is bounded only to the ASR-03 electrical-collection capacity
+dimension and truthful runtime/schema wording. ASR-01 exact identifiers and ASR-02 portable SemVer
+are accepted.
 The veto does not reopen the accepted R1-R10 arithmetic, topology, provenance or Decimal/count
 transport repairs. Conversely, green gates and predecessor domain acceptance do not approve the
 rejected successor tree.
+
+The current uncommitted ASR-03 worker candidate produced this local receipt against persisted head
+`59f1f37d7c7cf3fcc1c1d10c63d26799c7c34c45` and unchanged main
+`782c9588ef2685fcf0608d48f7745493aaa15b78`:
+
+```text
+Targeted solar/electrical-role matrix:            38 passed
+ProjectCase focused gate:                        330 passed; one pre-existing warning
+Complete tests/contracts gate:                   656 passed; one pre-existing warning
+Inherited D2 import/taxonomy gate:                386 passed; one pre-existing warning
+D2 plus ProjectCase coverage:                    628 passed; 96.02% package total
+ProjectCase module coverage:                      95.57%
+Ruff/Ruff Format/Black/isort/mypy/compile:        passed
+Validation/serialization Draft schemas:           valid; 47 definitions each
+Public exports / ProjectCase exports:               63 / 59
+ASR-02 Node/ECMAScript matrix:                     10 valid / 20 invalid; passed
+AST imports, production fallback scan:            passed
+Cumulative changed-file/exclusion gate:            passed; exact eight-file D3A set
+Tracked diff whitespace and untracked-file gate:   passed; no untracked files
+Worker Git/GitHub/issue/HOLD mutation:              none
+Independent successor disposition:                 not yet performed
+```
+
+The full-root worker controls use a solar-PV generation asset with explicit DC/nameplate capacity,
+a BESS charging reciprocally from that generation asset, a dedicated arrangement, and exactly one
+user of the electrical facility. Resolved and explicit-missing `MWdc`/`MWp` collection cases
+accept; the matching grid-interconnection cases reject; nearby `MW`/`MWac`/`MVA` states accept for
+both electrical roles; non-power units reject for both electrical roles; and resolved/missing
+access-road, operations-facility and other-facility units remain open. Missing capacity is closed
+by the exact `/assets/2/capacity` record with a matching expected unit. A separate control proves
+that both generated Draft schemas structurally accept the runtime-invalid `USD` case, preserving
+the candid web boundary rather than manufacturing conditional schema behavior.
 
 The ASR-focused additions cover canonical and hostile exact identifier forms for project, case,
 asset, link, cost, allocation, both binding kinds, source, assumption, missing-input, price-basis
@@ -544,7 +591,7 @@ The first assurance veto is preserved at pushed documentation commit
 review both reject that successor on the remaining D3A-ASR-03 false rejection. ASR-01 and ASR-02
 are accepted and should not be reopened without new evidence.
 
-The next candidate is one bounded repair:
+The current uncommitted worker candidate implements one bounded repair:
 
 1. retain exact non-normalizing ASCII stable identifiers and portable D3A-local SemVer unchanged;
 2. accept `MW`, `MWac`, `MWdc`, `MWp` and `MVA` for resolved and explicit-missing
@@ -555,21 +602,24 @@ The next candidate is one bounded repair:
 5. add full-root resolved/missing solar controls and make changelog/handover runtime-versus-schema
    wording exact.
 
-The generated Draft schema does not currently encode the role/unit conditional. Either add a
-truthful conditional schema rule or state explicitly that this semantic dimension is runtime-only
-and that a future web/API adapter must invoke `ProjectCase` validation. Do not claim Draft alone
-refuses the original `USD` counterexample.
+The generated Draft schemas do not encode the role/unit conditional. The changelog, web boundary,
+and worker controls now state and prove that this semantic dimension is runtime-only and that a
+future web/API adapter must invoke `ProjectCase` validation. Draft alone still accepts the original
+`USD` counterexample; no conditional schema machinery was added.
 
-Current Git identity and cleanliness must be read live. At this PERSIST writer handback, the pushed
-production/test head remains `836502a607fbce479f8e0412e2c63cb8659fafcd`; only the three authorized
-review/handover documents are modified and uncommitted. The documentation writer did not stage,
-commit, push, edit the PR, merge, mutate issue `#1110`, or alter a `HOLD`.
+Current Git identity and cleanliness must be read live. At this PERSIST writer handback, persisted
+local/upstream topic head is `59f1f37d7c7cf3fcc1c1d10c63d26799c7c34c45`; its production/test
+predecessor remains `836502a607fbce479f8e0412e2c63cb8659fafcd`. Exactly four files are modified
+and uncommitted: the ProjectCase module, its focused test, the changelog fragment, and this
+handover. There are no untracked files. The worker did not stage, commit, push, edit the PR, merge,
+mutate issue `#1110`, or alter a `HOLD`.
 
 Before any later authorized Git or GitHub action, fetch and compare live `origin/main`, the remote
 topic and PR head; reconcile only with explicit authority. Repeat that synchronization at
 each major checkpoint because another committer can advance `main`; never reset, stash, clean,
-overwrite, or absorb unrelated work into the D3A-authored diff. After the bounded repair, obtain a
-fresh exact-head domain delta disposition and separate assurance disposition. Only if both accept,
+overwrite, or absorb unrelated work into the D3A-authored diff. After the worker candidate is
+checkpointed under the controlling delivery authority, obtain a fresh exact-head domain delta
+disposition and separate assurance disposition. Only if both accept,
 make the protected PR ready, prove the exact reviewed head current and mergeable, and wait for all
 required CI before the already authorized merge. Preserve all `HOLD` states after merge.
 

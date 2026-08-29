@@ -873,10 +873,13 @@ class SharedInfrastructureAsset(StrictFrozenModel):
         if role is InfrastructureRole.ELECTRICAL_COLLECTION and capacity.unit not in {
             "MW",
             "MWac",
+            "MWdc",
+            "MWp",
             "MVA",
         }:
             raise ValueError(
-                "electrical collection capacity requires MW, MWac, or MVA unit"
+                "electrical collection capacity requires MW, MWac, MWdc, MWp, "
+                "or MVA unit"
             )
         return capacity
 

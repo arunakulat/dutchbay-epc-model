@@ -538,7 +538,10 @@ def _identifier_role_payload(
 
 
 def _dedicated_single_user_shared_asset_payload(
-    infrastructure_role: str, capacity_unit: str
+    infrastructure_role: str,
+    capacity_unit: str,
+    *,
+    capacity_state: str = "resolved",
 ) -> dict[str, Any]:
     payload = _case_payload()
     payload["topology"]["interconnection_arrangement"] = "dedicated_separate"
@@ -548,7 +551,94 @@ def _dedicated_single_user_shared_asset_payload(
         payload["topology"]["links"][2],
     ]
     payload["assets"][2]["infrastructure_role"] = infrastructure_role
-    payload["assets"][2]["capacity"] = _resolved("10", capacity_unit)
+    if capacity_state == "resolved":
+        payload["assets"][2]["capacity"] = _resolved("10", capacity_unit)
+    else:
+        assert capacity_state == "missing"
+        missing_id = "missing:shared-infrastructure-capacity"
+        payload["assets"][2]["capacity"] = _missing_value(missing_id, capacity_unit)
+        payload["missing_inputs"].append(
+            _missing_record(missing_id, "/assets/2/capacity", capacity_unit)
+        )
+    return payload
+
+
+def _solar_pv_payload() -> dict[str, Any]:
+    payload = _case_payload()
+    payload["technology_bindings"][0].update(
+        {
+            "binding_id": "technology:solar-pv:generation",
+            "technology_id": "solar-pv",
+            "contract_pack_id": "contract-pack:solar-pv-generation",
+        }
+    )
+    payload["assets"][0].update(
+        {
+            "asset_id": "asset:solar-block-01",
+            "name": "Solar PV block 01",
+            "technology_id": "solar-pv",
+            "technology_binding_id": "technology:solar-pv:generation",
+            "capacity": {
+                "kind": "aggregate",
+                "electrical_basis": "dc",
+                "capacity_basis": "nameplate",
+                "total_power_capacity": _resolved(100, "MWdc"),
+            },
+        }
+    )
+    payload["assets"][1]["charging_source"]["asset_id"] = "asset:solar-block-01"
+    for link in payload["topology"]["links"]:
+        if link["link_id"] == "link:wind-to-poi":
+            link["link_id"] = "link:solar-pv-to-poi"
+        elif link["link_id"] == "link:bess-charges-from-wind":
+            link["link_id"] = "link:bess-charges-from-solar-pv"
+        if link["from_asset_id"] == "asset:wind-block-01":
+            link["from_asset_id"] = "asset:solar-block-01"
+        if link["to_asset_id"] == "asset:wind-block-01":
+            link["to_asset_id"] = "asset:solar-block-01"
+    allocation_ids: dict[str, str] = {}
+    for allocation in payload["costs"]["allocations"]:
+        if allocation["asset_id"] != "asset:wind-block-01":
+            continue
+        old_id = allocation["allocation_id"]
+        new_id = old_id.replace(":wind", ":solar-pv")
+        allocation_ids[old_id] = new_id
+        allocation["allocation_id"] = new_id
+        allocation["asset_id"] = "asset:solar-block-01"
+    for line in payload["costs"]["lines"]:
+        line["allocation_ids"] = [
+            allocation_ids.get(allocation_id, allocation_id)
+            for allocation_id in line["allocation_ids"]
+        ]
+    payload["sources"][0]["technology_ids"] = ["solar-pv", "bess"]
+    return payload
+
+
+def _dedicated_solar_pv_shared_asset_payload(
+    infrastructure_role: str,
+    capacity_unit: str,
+    *,
+    capacity_state: str,
+) -> dict[str, Any]:
+    payload = _solar_pv_payload()
+    payload["topology"]["interconnection_arrangement"] = "dedicated_separate"
+    payload["topology"]["common_interconnection_asset_id"] = None
+    payload["topology"]["links"] = [
+        payload["topology"]["links"][0],
+        payload["topology"]["links"][2],
+    ]
+    shared_asset = payload["assets"][2]
+    shared_asset["name"] = "Dedicated solar PV electrical facility"
+    shared_asset["infrastructure_role"] = infrastructure_role
+    if capacity_state == "resolved":
+        shared_asset["capacity"] = _resolved("100", capacity_unit)
+    else:
+        assert capacity_state == "missing"
+        missing_id = "missing:solar-pv-electrical-facility-capacity"
+        shared_asset["capacity"] = _missing_value(missing_id, capacity_unit)
+        payload["missing_inputs"].append(
+            _missing_record(missing_id, "/assets/2/capacity", capacity_unit)
+        )
     return payload
 
 
@@ -1070,16 +1160,21 @@ def test_dedicated_hybrid_preserves_shared_nonelectrical_facility(
     assert case.topology.interconnection_arrangement.value == "dedicated_separate"
 
 
+@pytest.mark.parametrize(
+    "infrastructure_role", ["grid_interconnection", "electrical_collection"]
+)
 @pytest.mark.parametrize("capacity_unit", ["USD", "km", "item", "MWh"])
-def test_electrical_collection_rejects_nonelectrical_capacity_unit(
+@pytest.mark.parametrize("capacity_state", ["resolved", "missing"])
+def test_electrical_roles_reject_nonelectrical_capacity_unit(
+    infrastructure_role: str,
     capacity_unit: str,
+    capacity_state: str,
 ) -> None:
     payload = _dedicated_single_user_shared_asset_payload(
-        "electrical_collection", capacity_unit
+        infrastructure_role, capacity_unit, capacity_state=capacity_state
     )
-    error = _error(
-        payload, "electrical collection capacity requires MW, MWac, or MVA unit"
-    )
+    role_label = infrastructure_role.replace("_", " ")
+    error = _error(payload, rf"{role_label} capacity requires")
     assert error.errors()[0]["loc"] == (
         "assets",
         2,
@@ -1088,18 +1183,93 @@ def test_electrical_collection_rejects_nonelectrical_capacity_unit(
     )
 
 
+@pytest.mark.parametrize(
+    "infrastructure_role", ["grid_interconnection", "electrical_collection"]
+)
 @pytest.mark.parametrize("capacity_unit", ["MW", "MWac", "MVA"])
-def test_electrical_collection_accepts_electrical_capacity_unit(
+@pytest.mark.parametrize("capacity_state", ["resolved", "missing"])
+def test_electrical_roles_accept_ac_or_apparent_capacity_unit(
+    infrastructure_role: str,
     capacity_unit: str,
+    capacity_state: str,
 ) -> None:
     case = _validate(
-        _dedicated_single_user_shared_asset_payload(
-            "electrical_collection", capacity_unit
+        _dedicated_solar_pv_shared_asset_payload(
+            infrastructure_role, capacity_unit, capacity_state=capacity_state
         )
     )
     shared = case.assets[2]
     assert shared.kind == "shared_infrastructure"
     assert shared.capacity.unit == capacity_unit
+    assert shared.capacity.state == capacity_state
+
+
+@pytest.mark.parametrize("capacity_unit", ["MWdc", "MWp"])
+@pytest.mark.parametrize("capacity_state", ["resolved", "missing"])
+def test_dedicated_solar_collection_accepts_dc_capacity_unit(
+    capacity_unit: str,
+    capacity_state: str,
+) -> None:
+    payload = _dedicated_solar_pv_shared_asset_payload(
+        "electrical_collection",
+        capacity_unit,
+        capacity_state=capacity_state,
+    )
+    case = _validate(payload)
+    generation = case.assets[0]
+    shared = case.assets[2]
+    assert generation.kind == "generation"
+    assert generation.technology_id == "solar-pv"
+    assert (
+        generation.capacity.electrical_basis is project_case_contract.ElectricalBasis.DC
+    )
+    assert shared.kind == "shared_infrastructure"
+    assert shared.infrastructure_role is (
+        project_case_contract.InfrastructureRole.ELECTRICAL_COLLECTION
+    )
+    assert shared.capacity.unit == capacity_unit
+    assert shared.capacity.state == capacity_state
+    assert case.topology.interconnection_arrangement is (
+        project_case_contract.InterconnectionArrangement.DEDICATED_SEPARATE
+    )
+    facility_users = {
+        link.from_asset_id
+        for link in case.topology.links
+        if link.kind is project_case_contract.AssetLinkKind.USES_SHARED_INFRASTRUCTURE
+        and link.to_asset_id == shared.asset_id
+    }
+    assert facility_users == {generation.asset_id}
+    if capacity_state == "missing":
+        assert isinstance(shared.capacity, project_case_contract.MissingValue)
+        missing = case.missing_inputs[0]
+        assert missing.missing_input_id == shared.capacity.missing_input_id
+        assert missing.field_path == "/assets/2/capacity"
+        assert missing.expected_unit == capacity_unit
+
+
+@pytest.mark.parametrize("capacity_unit", ["MWdc", "MWp"])
+@pytest.mark.parametrize("capacity_state", ["resolved", "missing"])
+def test_dedicated_solar_grid_interconnection_rejects_dc_capacity_unit(
+    capacity_unit: str,
+    capacity_state: str,
+) -> None:
+    payload = _dedicated_solar_pv_shared_asset_payload(
+        "grid_interconnection",
+        capacity_unit,
+        capacity_state=capacity_state,
+    )
+    _error(payload, "grid interconnection capacity requires MW, MWac, or MVA unit")
+
+
+def test_electrical_role_unit_rule_is_runtime_semantic_not_structural_schema() -> None:
+    payload = _dedicated_solar_pv_shared_asset_payload(
+        "electrical_collection", "USD", capacity_state="resolved"
+    )
+    _error(payload, "electrical collection capacity requires")
+    for mode in ("validation", "serialization"):
+        schema = ProjectCase.model_json_schema(mode=mode)
+        jsonschema.Draft202012Validator.check_schema(schema)
+        jsonschema.Draft202012Validator(schema).validate(payload)
 
 
 @pytest.mark.parametrize(
@@ -1110,15 +1280,21 @@ def test_electrical_collection_accepts_electrical_capacity_unit(
         ("other_shared_facility", "USD"),
     ],
 )
+@pytest.mark.parametrize("capacity_state", ["resolved", "missing"])
 def test_nonelectrical_shared_roles_retain_open_capacity_units(
-    infrastructure_role: str, capacity_unit: str
+    infrastructure_role: str,
+    capacity_unit: str,
+    capacity_state: str,
 ) -> None:
     case = _validate(
-        _dedicated_single_user_shared_asset_payload(infrastructure_role, capacity_unit)
+        _dedicated_single_user_shared_asset_payload(
+            infrastructure_role, capacity_unit, capacity_state=capacity_state
+        )
     )
     shared = case.assets[2]
     assert shared.kind == "shared_infrastructure"
     assert shared.capacity.unit == capacity_unit
+    assert shared.capacity.state == capacity_state
 
 
 def test_dedicated_hybrid_accepts_distinct_single_user_electrical_facilities() -> None:
@@ -2733,39 +2909,7 @@ def test_shared_capacity_zero_cannot_stand_for_missing() -> None:
 
 
 def test_solar_pv_dc_nameplate_capacity_is_preserved() -> None:
-    payload = _case_payload()
-    payload["technology_bindings"][0].update(
-        {
-            "binding_id": "technology:solar-pv:generation",
-            "technology_id": "solar-pv",
-            "contract_pack_id": "contract-pack:solar-pv-generation",
-        }
-    )
-    payload["assets"][0].update(
-        {
-            "asset_id": "asset:solar-block-01",
-            "name": "Solar PV block 01",
-            "technology_id": "solar-pv",
-            "technology_binding_id": "technology:solar-pv:generation",
-            "capacity": {
-                "kind": "aggregate",
-                "electrical_basis": "dc",
-                "capacity_basis": "nameplate",
-                "total_power_capacity": _resolved(100, "MWdc"),
-            },
-        }
-    )
-    payload["assets"][1]["charging_source"]["asset_id"] = "asset:solar-block-01"
-    for link in payload["topology"]["links"]:
-        if link["from_asset_id"] == "asset:wind-block-01":
-            link["from_asset_id"] = "asset:solar-block-01"
-        if link["to_asset_id"] == "asset:wind-block-01":
-            link["to_asset_id"] = "asset:solar-block-01"
-    for allocation in payload["costs"]["allocations"]:
-        if allocation["asset_id"] == "asset:wind-block-01":
-            allocation["asset_id"] = "asset:solar-block-01"
-    payload["sources"][0]["technology_ids"] = ["solar-pv", "bess"]
-    case = _validate(payload)
+    case = _validate(_solar_pv_payload())
     generation = case.assets[0]
     assert generation.kind == "generation"
     assert generation.capacity.electrical_basis.value == "dc"
