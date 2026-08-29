@@ -1,7 +1,7 @@
 # Dolphin 3A remediation rereview record
 
-**Record status:** second and third independent domain vetoes under PERSIST-01
-**Exact reviewed candidate:** `6e6f07ad9f757af91b155d4776d54d617ccce7ba`
+**Record status:** second through fifth independent domain vetoes under PERSIST-01
+**Latest exact reviewed candidate:** `b0020ece4e864cc2cf589bae40f82edd5c30320d`
 **Exact reviewed base/live main:** `782c9588ef2685fcf0608d48f7745493aaa15b78`
 **Pull request:** `#1191`, open and draft at the reviewed head
 **Review role:** renewable-project domain specialist
@@ -611,3 +611,164 @@ After implementation, rerun the focused hostile, inherited D2, complete contract
 Ruff Format, Black, isort, mypy, schema/runtime parity, import-direction, exclusion, and diff gates.
 Commit and push a new exact head, then obtain another independent domain disposition. Separate
 assurance review remains blocked until exact-head domain acceptance.
+
+## 24. Fifth exact-head domain disposition
+
+The bounded R8-R9 successor was committed and pushed as
+`b0020ece4e864cc2cf589bae40f82edd5c30320d`. The fifth independent review verified a clean
+worktree and index, with local `HEAD`, the local remote-tracking topic ref, the live remote topic
+ref, and PR `#1191` all at that exact SHA. Local and live `origin/main` and the PR base were
+`782c9588ef2685fcf0608d48f7745493aaa15b78`; the topic was eleven commits ahead and zero behind,
+and the base remained its ancestor. The PR was open, draft, mergeable, and reported a clean merge
+state. All applicable exact-head CI jobs and all four required checks passed; Grid Study, Report
+Qualification, and Stochastic Qualification were the expected changed-path/scheduled skips. The
+reviewer made no file, index, Git-ref, GitHub, PR, issue, audit-ledger, release-state, or `HOLD`
+mutation during that immutable read-only review.
+
+The exact candidate-tree fingerprints before this documentation-only PERSIST append were:
+
+```text
+52d1fa1f33272d4e448e14ef4fdbcfafcd0a27223495512cd246b2bc80a26b38  analytics/feasibility_report_contract/project_case.py
+c47038ff13e6135a9f8fe33c57ef0aacc424d8eab233e6f880c5d796b7ba8f5d  analytics/feasibility_report_contract/__init__.py
+3120e205f9c19ddb5e5323b0a12543eea9f74a82e0fda7dd0dfba3e81f1a81e9  tests/contracts/test_project_case_contract.py
+48a3c164be65af001466b11d50614c449d3c79ad2eb48288df0e9d4c1f3929d5  changelog.d/project-case-v1.added.md
+d3968bc1428224160f8638c43c365304ab0904c23c61103e2cb08a0e6474b133  docs/DOLPHIN_3A_INDEPENDENT_REVIEW_RECORD.md
+46d2115b5f8112dd4c9340621e513c20290557311df2d4b0dc59226f466ba343  docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md
+3247009c40cc906fb833014c833be9361180a4e2996012645d8e2c73c24d3607  docs/SESSION_HANDOVER_2026-08-29_2.md
+```
+
+The re-ingressed normative-chain fingerprints were:
+
+```text
+2029b57d53b279e1163889b5b707cc3ff3248095f1ea0de9904b40a780dab09e  docs/GLOBAL_FEASIBILITY_REPORT_MASTER_TEMPLATE.md
+e4585e3ba0c38c7cf8bcd59bfc70ee92b745ccc22564f94e20b91d3dad5cecfb  docs/FEASIBILITY_REPORT_CONTRACT.md
+22594abf994b90883cf3272ab6bac9029e6a7aeb2e43a1d2fb6d55f0f4b8d276  docs/FEASIBILITY_REPORT_CONTRACT_SOURCES.md
+5a3edbb49798890dee3f78bcd9f71afd4f32fc67d78f6e2f87b675ff8ff50ffc  docs/DOLPHIN_2_MACHINE_CONTRACT_CHARTER.md
+69827eb77903f3efbc5f88bf3bd8dceef42219529839d9ca67de6b720f1395d1  docs/DOLPHIN_2_INDEPENDENT_REVIEW_RECORD.md
+b9e5d9e38137438db59406db82bce668513af629049017ddc6950baf4d498c2b  docs/DOLPHIN_2_REMEDIATION_REREVIEW_RECORD.md
+25933beb47609efc976bbf754810bd4c761bf2f330daa99a35adab22e73d535a  docs/SESSION_HANDOVER_2026-08-29.md
+```
+
+**DOMAIN REJECTED.** The fifth review independently accepted the original `D3A-DOM-01` through
+`-09` and R1-R9 repair classes, then found one new blocking topology defect, R10. Green tests and CI
+do not supersede that counterexample. This disposition is contract-domain evidence only; it grants
+no professional, statutory, engineering, audit, lender, Board, achieved-grade, release, deployment,
+or `HOLD` authority.
+
+## 25. D3A-DOM-R10 - dedicated topology admits a shared electrical path
+
+`InterconnectionArrangement.DEDICATED_SEPARATE` declares that technology assets use dedicated
+electrical paths (`project_case.py:219-223`). The validator, however, adds a technology asset to
+`common_path_users` only when a `uses_shared_infrastructure` target equals
+`common_interconnection_asset_id` (`project_case.py:1327-1336`). Its dedicated branch then checks
+only that this optional common identifier is null (`project_case.py:1383-1386`). It never reconciles
+the dedicated declaration against the complete electrical shared-facility relationship graph.
+
+The independent mutation of the canonical wind-plus-BESS fixture was:
+
+```text
+interconnection_arrangement:        dedicated_separate
+common_interconnection_asset_id:    null
+wind -> shared POI link:             uses_shared_infrastructure
+BESS -> same shared POI link:        uses_shared_infrastructure
+shared-facility role:                grid_interconnection
+result:                              ACCEPTED
+```
+
+Changing only the shared-facility role to `electrical_collection` was also accepted. That is a
+shared electrical path under a declaration of dedicated separation. Changing the role to
+`access_road` remained accepted, which is correct: dedicated electrical paths must not prohibit
+shared non-electrical facilities. The existing dedicated positive test
+(`tests/contracts/test_project_case_contract.py:785-801`) removes the shared facility entirely and
+therefore cannot detect this false acceptance. R10 reopens the substantive false-common-electrical-
+path class of the original D3A-DOM-01 even though its narrower named-common-asset replay passes.
+
+Required bounded remediation:
+
+1. reconcile `interconnection_arrangement` against every electrical shared-facility relationship,
+   not only the optional `common_interconnection_asset_id`;
+2. under `dedicated_separate`, reject a `grid_interconnection` or `electrical_collection` facility
+   used by or materially connected to more than one technology asset, unless a future typed model
+   represents genuinely distinct circuits or paths;
+3. include material `connected_to` electrical links in that invariant, or prohibit that generic link
+   form where it would create an untyped escape;
+4. preserve valid shared non-electrical facilities such as access roads and operations facilities;
+5. add the exact shared-POI and shared-electrical-collection negatives, a dedicated no-electrical-
+   sharing positive, and a dedicated shared-access-road positive; and
+6. narrow the changelog and handover only after the production invariant and hostile tests exist.
+
+## 26. Fifth-review accepted boundaries and independent receipt
+
+R8 is accepted at this exact candidate. The sole JSON scalar representation is the anchored Decimal
+or count string, runtime and Draft 2020-12 refuse raw numeric tokens, native Decimal serialization is
+deterministic, and absolute-end handling agrees for LF, CR, CRLF, U+2028, and U+2029 cases. R9 is
+also accepted: one missing FX rate is intersected across every consumer, including report-domain
+bounds when a reporting amount is missing. Independent controls rejected disjoint schedules and
+accepted common-rate, inferable-native, zero-native/zero-report, mixed-precision, and three-consumer
+schedules; zero-native/non-zero-report and forced-rate missing-report overflow cases rejected.
+
+The fifth review replayed all original and R1-R9 negative/positive classes. Its independent exact
+oracles reported:
+
+```text
+Decimal runtime/schema strings:              1,524 cases; 0 mismatches
+resolved-count runtime/schema strings:        1,016 cases; 0 mismatches
+raw JSON numeric-token controls:                  9 cases; all refused
+hostile-context native Decimal round trips:      18 cases; 0 mismatches
+two-consumer shared-FX schedules:               120 cases; 0 oracle mismatches
+shared-FX grid intervals:                     1,488 cases; 0 oracle mismatches
+missing-factor feasibility:                 12,096 cases; 0 oracle mismatches
+half-even tie controls:                          20 cases; 0 failures
+generation/BESS nonempty missing masks:        7/7 each; feasible witnesses accepted
+```
+
+The 32-state single-line cost/native/FX/reporting matrix admitted 23 witness-bearing states and
+refused nine deliberately fail-closed underdetermined states consistently with the surfaced v1
+policy. No raw Decimal exception escaped. The exact command/gate receipt was:
+
+```text
+Python:                                      3.12.13
+Governed venv check:                         PASS; active worktree selected
+GWTF bootstrap:                              72 active rules
+ProjectCase focused gate:                    233 passed
+Selected original and R1-R9 replay:          113 passed
+Inherited D2 focused gate:                   386 passed
+Complete tests/contracts gate:               559 passed
+Ruff check and format:                       PASS
+Black check:                                 PASS
+isort check:                                 PASS
+mypy --no-incremental:                       PASS
+in-memory compile:                           PASS
+Draft 2020-12 schema check:                  PASS
+Public exports/schema definitions:           62 / 47
+AST forbidden direct imports:                none
+production LKA/Sri Lanka scan:               no matches
+D3A excluded execution-surface diff:         empty
+git diff --check:                            PASS
+required exact-head GitHub checks:           4/4 PASS
+all applicable exact-head CI jobs:           PASS
+final reviewed worktree/index:               clean
+```
+
+The direct D3A module remains transport-neutral and free of finance, evaluation, app, API,
+persistence, renderer, engine, grade, and release imports. Importing through the parent
+`analytics` package still loads pre-existing eager finance/evaluation imports; that is a future
+package/web-topology note, not this veto. Raw JSON can enter through `model_validate_json()`, while
+an already parsed web dictionary still needs an explicit normalizing adapter and request-size
+controls. D3A continues to defer a multi-site physical-asset case, not every additional non-site
+jurisdiction subject. No Sri Lankan fallback, FastAPI route, adapter, orchestration, finance,
+canonical whole-document hashing, package assembly, grade/review aggregation, issue-state, release,
+or protected-`HOLD` surface changed.
+
+## 27. Fifth-remediation boundary
+
+The next candidate is limited to R10 dedicated-versus-shared electrical topology closure, its
+hostile positive/negative tests, and truthful changelog/handover wording. It must preserve R8/R9,
+all prior accepted classes, shared non-electrical infrastructure, the single-site physical-asset
+boundary, direct import purity, exclusions, and every assurance and `HOLD` separation.
+
+After implementation, rerun the focused hostile, original/R1-R10 replay, inherited D2, complete
+contract, coverage, Ruff, Ruff Format, Black, isort, mypy, schema/runtime parity, import-direction,
+exclusion, and diff gates. Commit and push a new exact head only under the controlling delivery
+authority, then obtain another independent domain disposition. Separate assurance review remains
+blocked until exact-head domain acceptance.
