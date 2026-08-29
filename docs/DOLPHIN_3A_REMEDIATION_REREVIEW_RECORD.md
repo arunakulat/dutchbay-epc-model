@@ -440,3 +440,174 @@ After implementation, rerun the full focused, selected hostile, inherited D2, co
 coverage, Ruff, Ruff Format, Black, isort, mypy, schema/runtime-boundary, import-direction, and diff
 gates. Commit and push a new exact head, then obtain another independent domain disposition before
 dispatching assurance review.
+
+## 19. Fourth exact-head domain disposition
+
+The bounded R5-R7, exact-allocation, and deterministic Decimal-serialization successor was
+committed and pushed as `c47aa8ffc1ff658b03216dbba93680d1eff2618d`. The fourth independent
+review verified a clean worktree and index, with local `HEAD`, the local remote-tracking topic ref,
+the live remote topic ref, and PR `#1191` all at that exact SHA. Local and live `origin/main` and
+the PR base were `782c9588ef2685fcf0608d48f7745493aaa15b78`; the topic was nine commits
+ahead and zero behind. The PR remained open and draft. Required checks and the wider six-shard test,
+coverage, quality, security, fastlane, and smoke run were green. The reviewer made no file, Git,
+GitHub, issue, release-state, or `HOLD` mutation.
+
+The fourth reviewed fingerprints were:
+
+```text
+40c3b506b30e042f5d8b72ebc01b7a5dbbbd44a9c71e87e9009cad641f77ad76  analytics/feasibility_report_contract/project_case.py
+c47038ff13e6135a9f8fe33c57ef0aacc424d8eab233e6f880c5d796b7ba8f5d  analytics/feasibility_report_contract/__init__.py
+0287ffbc394ea869aa2f491a78b7fe49d7ba5faf0933d1d7a7589a75132e8ad0  tests/contracts/test_project_case_contract.py
+4302baae6546d18b173c3c2d24e61cb4a1ebd7b478e46963df199e280dc8f01e  changelog.d/project-case-v1.added.md
+d3968bc1428224160f8638c43c365304ab0904c23c61103e2cb08a0e6474b133  docs/DOLPHIN_3A_INDEPENDENT_REVIEW_RECORD.md
+0868bd67fb4ca25b8822ea3c4fa4f2698813c4260d5f1747a6f738e320878e39  docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md
+bf403fbc19b20d20f5573e203f6455d93999406b23253877b16960a29de15949  docs/SESSION_HANDOVER_2026-08-29_2.md
+```
+
+**DOMAIN REJECTED.** The fourth review independently accepted the repaired original
+`D3A-DOM-01` through `-09` and R1-R7 boundaries, then found two new blocking shared-boundary
+classes: R8 JSON-number/schema precision and R9 a shared missing FX variable receiving inconsistent
+per-line witnesses. Green tests and CI did not override the counterexamples. This remains a D3A
+input-contract disposition only and grants no professional, statutory, engineering, lender, Board,
+grade, release, deployment, or `HOLD` authority.
+
+## 20. D3A-DOM-R8 — JSON-number ingress is not precision preserving or schema equivalent
+
+The candidate's exact plain-string Decimal path and Python-Decimal-to-plain-JSON serializer work,
+but `FiniteDecimal` also advertises and accepts a JSON numeric branch. Standard JSON parsing turns
+non-integral tokens into binary floats before `_validate_finite_decimal` converts them with
+`Decimal(str(raw_value))`. The generated Draft 2020-12 schema likewise expresses the magnitude and
+`multipleOf: 1e-36` controls with binary floats. That branch cannot preserve the submitted Decimal
+identity or agree reliably with runtime.
+
+Independent full-ProjectCase probes showed:
+
+```text
+raw JSON number                               runtime result                  Draft 2020-12 result
+3e-36                                        ACCEPT Decimal('3E-36')         REJECT
+6.9999999999999999999999999999999999999e-36 ACCEPT changed to Decimal('7E-36') ACCEPT
+7.0000000000000000000000000000000000001e-36 ACCEPT changed to Decimal('7E-36') ACCEPT
+1.23456789012345678901234567890123456        ACCEPT changed to 17 digits     ACCEPT changed float
+1.0000000000000000000000000000000000001      ACCEPT changed to Decimal('1.0') ACCEPT changed float
+1000000000000000000000000000000000000        REJECT 37 integer digits        ACCEPT
+```
+
+The exact `10^36` schema acceptance comes from the Python float `1e36` being slightly larger than
+the exact integer. The `multipleOf` branch also falsely rejected valid quanta including `3e-36`,
+`6e-36`, and `9e-36`. Adjacent sub-grid tokens collapsed to the same admitted float. Changing only
+the magnitude literals would not repair identity loss or quantum mismatch.
+
+The generated count schema has a related strictness seam: Draft 2020-12 treats JSON `1.0` and
+`1e0` as integers, while strict `ResolvedCount` runtime rejects them. Exact 36-digit and 37-digit
+integer-token boundaries otherwise behaved correctly.
+
+Required bounded remediation:
+
+- make the anchored plain-ASCII Decimal string the sole JSON representation for every
+  `FiniteDecimal`, while retaining native `Decimal` in normalized Python mode and the deterministic
+  plain-string serializer;
+- reject raw JSON floating-number tokens instead of silently changing them;
+- explicitly align `ResolvedCount` runtime, serializer, and generated schema for integral JSON
+  forms; a string-only count representation is the fail-closed option if exact lexical parity is
+  required;
+- add full-ProjectCase runtime/schema tests for valid grid values, adjacent sub-grid values,
+  exact `+/-10^36`, high-precision identity, Decimal dump/re-ingress, and `1`, `1.0`, and `1e0`
+  count forms; and
+- narrow the changelog and handover to the representation actually proved.
+
+## 21. D3A-DOM-R9 — a shared missing FX rate receives inconsistent per-line witnesses
+
+`CurrencyConversion.rate` is one shared graph variable, but the candidate called
+`_reconcile_partial_conversion` independently for every consuming cost line. When the rate was
+missing, each call proved that its own line had some witness; it did not prove that one common rate
+completed all consumers.
+
+The independent accepted-invalid schedule used one missing six-place `USD/LKR` conversion and two
+otherwise valid OPEX lines. Both had quantity `1 year`, native unit rate `100 LKR/year`, and native
+amount `100.00 LKR`. Their reporting amounts were respectively `1.00 USD` and `2.00 USD`.
+
+```text
+line 1 permitted quote grid: 0.009950 through 0.010050 inclusive
+line 2 permitted quote grid: 0.019950 through 0.020050 inclusive
+result:                       ACCEPTED incomplete_missing_input
+```
+
+The intervals are disjoint, so no one value can complete the shared conversion. An
+inferable-native variant failed the same way. A second false acceptance combined one line with
+native amount `10^36 - 1` and missing reporting amount with another line forcing the common rate
+near `2`; that rate makes the first eventual reporting amount approximately `2 * 10^36`, outside
+the material domain. The candidate imposed no rate-dependent bound for a missing report. Controls
+with a common rate accepted, zero-native/zero-report accepted, and zero-native/nonzero-report
+rejected.
+
+Required bounded remediation for each missing conversion rate:
+
+1. identify every consuming line;
+2. derive each line's exact allowed positive quote-grid interval or set from its effective native
+   amount, reporting state, minor units, half-even rounding, quote precision, and numeric bounds;
+3. include representable-output bounds when reporting is missing;
+4. intersect every consumer constraint with the positive, in-domain rate grid; and
+5. accept only when one common rate witness remains.
+
+The documented v1 refusal must remain when a resolved reporting target has both effective native
+amount and FX unresolved. Sampled witnesses remain prohibited. Tests must include disjoint/common
+two-line cases, missing-report overflow and feasible controls, inferable-native variants,
+zero-native controls, mixed minor/quote precision, and at least one three-consumer intersection.
+
+## 22. Fourth-review accepted boundaries and gate receipt
+
+The fourth rejection does not reopen the earlier repairs. Independent replay accepted every
+positive and rejected every negative original D3A-DOM-01 through -09 pair. All seven nonempty
+generation missing masks and all seven BESS missing masks accepted feasible witnesses; every
+one-missing impossible generation/storage boundary rejected, with six nearby positives accepted.
+Exact complete and partial allocation boundaries matched policy under hostile Decimal contexts.
+
+The 32-state single-line quantity/rate/native/FX/reporting missing matrix produced 29 accepted
+witness-bearing states and exactly the three documented both-effective-native-and-FX-unresolved
+refusals. Independent exact oracles reported:
+
+```text
+_missing_factor_solution_exists: 9,680 cases; 0 mismatches
+native grid interval solver:     2,293,128 cases; 0 mismatches
+```
+
+The exact Python Decimal -> ProjectCase -> plain JSON -> Draft 2020-12 -> ProjectCase round trip
+passed for positive exponents, positive/negative zero, and 36-place signed zero. Hostile ambient
+Decimal precision, rounding, and traps did not affect generation, BESS, money, FX, or half-even
+results. The direct module import remained pure, contextual provenance remained allocation scoped,
+and production contained no Sri Lankan fallback.
+
+The fourth review's command receipt was:
+
+```text
+ProjectCase focused gate:                 185 passed; one pre-existing warning
+Inherited D2 focused gate:                386 passed; one pre-existing warning
+Complete tests/contracts gate:            511 passed; one pre-existing warning
+Ruff check and format:                    PASS
+Black check:                              PASS
+isort check:                              PASS
+mypy --no-incremental:                    PASS
+in-memory compile:                        PASS
+Draft 2020-12 schema structure check:     PASS
+Public exports/schema definitions:        62 / 47
+git diff --check:                         PASS
+AST forbidden direct imports:             none
+production LKA/Sri Lanka scan:            no matches
+D3A excluded execution-surface diff:      empty
+required exact-head GitHub checks:         PASS
+```
+
+The warning was the pre-existing Hypothesis `norecursedirs` warning. Schema structural validity is
+not semantic parity; R8 is precisely why `check_schema()` and green CI were insufficient.
+
+## 23. Fourth-remediation boundary
+
+The next candidate is limited to R8 exact JSON scalar representation and R9 shared missing-FX
+intersection. It must also correct the current changelog and handover claims. It does not authorize
+FastAPI/routes, adapter implementation, orchestration, finance changes, grade/release policy,
+canonical whole-document hashing, multi-site support, issue state, or any `HOLD` change.
+
+After implementation, rerun the focused hostile, inherited D2, complete contract, coverage, Ruff,
+Ruff Format, Black, isort, mypy, schema/runtime parity, import-direction, exclusion, and diff gates.
+Commit and push a new exact head, then obtain another independent domain disposition. Separate
+assurance review remains blocked until exact-head domain acceptance.

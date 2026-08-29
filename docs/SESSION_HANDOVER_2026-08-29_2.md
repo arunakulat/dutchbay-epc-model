@@ -1,4 +1,4 @@
-# Session handover - 2026-08-29, successor 9
+# Session handover - 2026-08-29, successor 10
 
 Durable PERSIST-01 successor to
 [`docs/SESSION_HANDOVER_2026-08-29.md`](SESSION_HANDOVER_2026-08-29.md). The predecessor remains
@@ -30,9 +30,10 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
   dutchbay_bootstrap_rules.py
 ```
 
-This record captures the bounded R5-R7 and exact-allocation successor at its checkpoint boundary.
-The third independent review disposition remains **DOMAIN REJECTED** until an independent reviewer
-accepts the exact successor identified by current Git refs and file hashes. Current Git status and
+This record captures the fourth exact-head D3A domain veto and its bounded R8-R9 successor boundary.
+The fourth independent review disposition is **DOMAIN REJECTED** at
+`c47aa8ffc1ff658b03216dbba93680d1eff2618d`; it remains controlling until an independent reviewer
+accepts a later exact successor identified by live Git refs and file hashes. Current Git status and
 live refs are authoritative. Never reset, stash or clean away the D3A worktree; keep it first on
 `PYTHONPATH`.
 The implementation worker is not authorized to stage, commit, push, edit the pull request, merge,
@@ -63,10 +64,12 @@ record. The first remediation of D3A-DOM-01 through D3A-DOM-09 was committed as 
 dual-formatter correction was committed as `6e6f07a`. The exact second domain veto was recorded at
 `c7db8f7c7cfee86f69bd43de280335f816508131`. Bounded R1-R4 were committed as
 `de897d0aff7daa1caaf7797ce5556cdd040c8627`; the third domain veto was then recorded at
-`47fd2638b3d947c5e52d41fd5670514944d0030f`. The successor represented by this checkpoint
-implements only bounded R5-R7 and the exact-allocation decision from sections 12-18 of
-`docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md`; neither this handover nor green local gates
-supersedes the third veto.
+`47fd2638b3d947c5e52d41fd5670514944d0030f`. Bounded R5-R7, exact allocation, and deterministic
+Decimal serialization were committed as `c47aa8ffc1ff658b03216dbba93680d1eff2618d` and passed the
+required and wider GitHub checks. The fourth independent review nevertheless rejected that exact
+candidate on R8 JSON-number/schema precision and R9 shared missing-FX consistency. Sections 19-23
+of `docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md` are the controlling durable review record;
+neither green tests nor CI supersedes the veto.
 
 ## 3. Dolphin 3A implementation checkpoint
 
@@ -101,15 +104,20 @@ cannot silently retain a common shared path. Reciprocal links distinguish `uses_
 typed infrastructure roles, preventing an access road or operations facility from masquerading as
 the electrical interconnection.
 
-Material numeric fields use one strict, finite, schema-visible Decimal domain: at most 72 total
-digits, 36 digits before the decimal point and 36 decimal places. The authoritative validator uses
+Material numeric fields intend one strict, finite Decimal domain: at most 72 total digits, 36 digits
+before the decimal point and 36 decimal places. The Python-native and plain-string paths use
 `Decimal.as_tuple()` and exact lexical checks rather than Pydantic `max_digits` or
-`decimal_places`; its result is independent of ambient precision and rounding. JSON strings use
-plain ASCII decimal notation only and the generated Draft 2020-12 schema carries the same fully
-anchored 36-integer/36-fraction pattern. Exact-scale zero is accepted through 36 places and refused
-beyond 36; exponent-form JSON strings are refused rather than silently canonicalized. Strict
-Python mode continues to require a domain-native `Decimal`, whose tuple is checked by the same
-numeric rule. Material counts are positive and limited to 36 digits.
+`decimal_places`; those paths are independent of ambient precision and rounding. The anchored
+plain-ASCII JSON string grammar correctly accepts exact-scale zero through 36 places and refuses
+exponent strings and excessive scale. Strict Python mode requires a domain-native `Decimal`.
+
+The rejected `c47aa8f` candidate also advertises and accepts raw JSON numeric Decimals. That path is
+not exact: standard JSON parsing rounds non-integral tokens through a binary float before Decimal
+validation, while Draft 2020-12 float `multipleOf` and magnitude controls disagree with runtime.
+Valid `3e-36` is schema-rejected, adjacent sub-grid values can collapse to an accepted value, and
+exact `10^36` is schema-accepted while runtime rejects it. `ResolvedCount` also rejects JSON
+`1.0`/`1e0` although Draft 2020-12 treats them as integers. R8 must make the exact representation
+authoritative and align count runtime/schema semantics before any successor can be accepted.
 
 Resolved generation, storage and shared-infrastructure capacity must be positive, so zero cannot
 silently encode an unknown value; a missing capacity uses the explicit missing state. Every
@@ -137,6 +145,13 @@ mathematical completion exists. Sampled interior witnesses are never treated as 
 factor cannot hide a non-zero product, and inferred native amounts cannot conflict with
 same-currency reporting amounts. Cost status `complete` or `incomplete_missing_input` must match
 the actual graph.
+
+The rejected candidate still validates a missing shared `CurrencyConversion.rate` independently
+for each consuming line. Two lines can therefore pass with disjoint hypothetical quote-grid
+witnesses, and a missing reporting amount can hide that a rate forced elsewhere would overflow the
+numeric domain. R9 must derive every consuming line's exact quote-grid constraint, including
+missing-report output bounds, and accept only when their intersection contains one common positive
+in-domain rate.
 
 A cost line's `PriceBasis` must carry source or assumption bindings whose scope covers the line's
 jurisdiction and technology. A currency conversion rate's evidence scope is derived only from the
@@ -182,16 +197,16 @@ JSON-mode dumps emit every Decimal as a deterministic plain-ASCII string using a
 fixed notation. Fractional scale is preserved where present; accepted positive exponents are
 expanded to plain integer notation, positive/negative zero retain their sign, and a 36-place zero
 retains its 36-place scale. Those outputs can be ingressed again and satisfy the generated Draft
-2020-12 validation schema. The schema exposes the numeric magnitude and 1e-36 number quantum, a
-fully anchored plain-string pattern, and 36-digit material-count limits. Runtime/schema ingress
-equivalence is proved for exact 72/36 plain strings and hostile 37/73/100/500-place,
-excessive-zero-scale, exponent, Unicode-digit and whitespace strings under hostile Decimal
-contexts. Python-mode string refusal remains the explicit transport-normalization seam: the
-generated schema governs JSON ingress, not unnormalized Python dictionaries. A future web adapter
-must still impose request-size and transport resource controls before domain validation; D3A adds
-no adapter or endpoint policy. D3A defines no canonical whole-document JSON byte representation or
-hashing policy. Array indexes in missing-input paths identify the exact submitted v1 document; a
-later editing adapter must rewrite such paths if it reorders arrays before validation.
+2020-12 validation schema. Runtime/schema ingress equivalence is proved for the anchored plain
+string branch, including exact 72/36 values and hostile 37/73/100/500-place, excessive-zero-scale,
+exponent, Unicode-digit and whitespace strings under hostile Decimal contexts. It is not proved for
+the rejected JSON-number branch; R8 requires removing or genuinely replacing that branch and
+aligning count representation. Python-mode string refusal remains the explicit
+transport-normalization seam. A future web adapter must still impose request-size and transport
+resource controls before domain validation; D3A adds no adapter or endpoint policy. D3A defines no
+canonical whole-document JSON byte representation or hashing policy. Array indexes in
+missing-input paths identify the exact submitted v1 document; a later editing adapter must rewrite
+such paths if it reorders arrays before validation.
 
 No FastAPI route, Pydantic transport adapter, UI/form, ORM, persistence, authentication,
 deployment, renderer, canonical document serialization/signing policy, engine call, finance
@@ -216,6 +231,7 @@ isort check:                         passed
 mypy --no-incremental:               passed
 py_compile/import/schema/export:      passed; 62 exports, 47 schema definitions
 AST forbidden production import scan: passed
+Fourth independent domain disposition: DOMAIN REJECTED (R8 and R9)
 ```
 
 The 58 additional focused cases include the exact R5 rejected USD 1 and accepted USD 2 chains;
@@ -292,11 +308,13 @@ git status --short --branch
 
 ## 7. Rereview and delivery boundary
 
-The controlling task's next action is to checkpoint and push this exact bounded successor under the
-user's sequential delivery authorization, then hand its immutable SHA, hashes and test receipt to
-another independent domain rereview. The implementation worker itself must not stage, commit, push,
-edit the pull request, merge, or mutate GitHub. The existing **DOMAIN REJECTED** disposition remains
-controlling until the reviewer issues an exact-tree successor disposition.
+The controlling task's next action is limited to R8 exact JSON/count representation and R9 one-rate
+shared-conversion intersection, as specified in sections 19-23 of the durable rereview record. The
+implementation worker itself must not stage, commit, push, edit the pull request, merge, or mutate
+GitHub. After bounded implementation and full local gates, the controlling parent must checkpoint
+and push a new immutable SHA, then obtain another independent domain disposition. The existing
+**DOMAIN REJECTED** disposition remains controlling; separate assurance review is blocked until
+domain acceptance.
 
 Before any later authorized Git or GitHub action, fetch and compare live `origin/main`, reconcile
 only with explicit authority, and rerun the applicable gates against the resulting exact tree. Never
