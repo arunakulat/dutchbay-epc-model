@@ -1,0 +1,27 @@
+- Add the immutable, transport-neutral `ProjectCase` v1 input contract with a truthful
+  single-site boundary; declared jurisdiction and technology bindings; typed shared or
+  dedicated electrical topology and storage charging sources; AC/DC and usable/nameplate
+  capacity bases; a schema-visible 72-digit/36-decimal numeric domain with
+  ambient-context-independent ingress and arithmetic; exact bounded-completion validation for
+  partially missing generation, storage, cost, and FX equations; exact allocation closure; and
+  allocation-derived source/assumption/missing-input provenance for numeric, price-basis, and
+  currency-conversion propositions. Anchored plain-ASCII strings are the sole JSON representation
+  for material Decimals and counts; normalized Python-native Decimal and integer inputs emit those
+  same deterministic strings. Every cost line that consumes a missing currency-conversion rate
+  constrains one shared positive quote-grid variable, including exact half-even reporting targets
+  and missing-report domain bounds, and the schedule requires one common witness. A cost/FX chain
+  with an underdetermined native amount and missing reporting amount fails closed instead of relying
+  on sampled or independent per-line witnesses. Dedicated electrical arrangements reject a
+  grid-interconnection or electrical-collection facility used or materially connected to multiple
+  technology assets while preserving shared non-electrical facilities and distinct one-user
+  electrical paths; the untyped `connected_to` relationship is not part of the v1 link vocabulary.
+  Stable identifiers are now exact, non-normalizing 1-160 character ASCII tokens whose runtime and
+  Draft 2020-12 grammars share an absolute-end assertion. Jurisdiction and technology contract-pack
+  versions use a D3A-local portable ASCII SemVer grammar without leading-zero core or numeric
+  prerelease components, leaving the inherited Dolphin 2 vocabulary unchanged. Resolved
+  Runtime semantic validation now admits `MW`, `MWac`, `MWdc`, `MWp`, or `MVA` for
+  `electrical_collection` capacity, while `grid_interconnection` remains limited to `MW`, `MWac`,
+  or `MVA` and non-electrical shared-infrastructure roles retain their deliberately open unit
+  boundary. The generated Draft 2020-12 schema is structural and does not encode this role/unit
+  conditional; schema-only acceptance is therefore insufficient and a future web/API adapter must
+  invoke `ProjectCase` domain validation.
