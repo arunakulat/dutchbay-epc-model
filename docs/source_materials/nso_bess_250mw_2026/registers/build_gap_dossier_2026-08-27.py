@@ -131,6 +131,25 @@ SOURCES: tuple[SourceDocument, ...] = (
         "compiled control code, personal data). Findings against this package are carried "
         "forward from the 21 August ingress evaluation, which read the originals.",
     ),
+    SourceDocument(
+        label="Envision Product Warranty Policy V1.0",
+        role="OEM commercial terms — the warranty actually offered",
+        sha256="2ac08c42431b9c1d8a60e066710de95724f9b4fcc7ec3c9409c6a5e527c8c9cf",
+        extraction="markitdown",
+        document_date="undated; version 1.0, marked Confidential",
+        note="5 pp. Table 1 sets ONE warranty period for every listed item. Carries no "
+        "document number and no signature block.",
+    ),
+    SourceDocument(
+        label="Envision LTSA Solution — service scope matrix",
+        role="OEM commercial offer — draft scope matrix, unpriced",
+        sha256="53a51d5c3c9cf91763f01b35086bb1bf2e97ba4357a0265d7b26223547be4123",
+        extraction="ooxml",
+        document_date="undated; BESS tab labelled '100225-Draft'",
+        note="Two tabs. The first, 'WTG-1228ver', is a WIND TURBINE service catalogue and "
+        "is not about this project. The BESS tab is a scope matrix only: no prices, no "
+        "guarantee levels, no term, no signature.",
+    ),
 )
 
 EVIDENCE: tuple[EvidenceLine, ...] = (
@@ -563,18 +582,30 @@ GAPS: tuple[GapItem, ...] = (
             "operation across 47-52 Hz and ride-through to the A.05.04 extremes."
         ),
         tier="document",
-        verified=False,
         consequence=(
-            "UNVERIFIED: the 47.5 / 51.5 Hz figures are carried forward from the 21 August "
-            "ingress evaluation of the dossier, whose binaries are held outside the repository. "
-            "They have not been re-read from the .dyr file for this register and must be "
-            "confirmed against the delivered model before being put to the OEM as fact."
+            "VERIFIED 27 August 2026 from primary source, and the non-compliance is wider than "
+            "first recorded. The delivered .dyr sets CON(J+65) onward to 47.5 Hz / 1800 s and "
+            "46.9 Hz / 0.04 s (three stages), and 51.5 Hz / 1800 s and 52.1 Hz / 0.04 s (three "
+            "stages); the PSS(R)E UDM manual V1.4a confirms CON(J+65)-CON(J+100) are the "
+            "frequency and voltage protection thresholds and that they TRIP the PCS. The "
+            "ENPCS2520 specification Table 3 states the same behaviour in words: between 47 and "
+            "47.5 Hz a CHARGING PCS must switch to discharging within 0.2 s or SEPARATE FROM THE "
+            "GRID within 0.2 s, and a discharging PCS operates only 30 minutes (= the 1800 s in "
+            "the .dyr); between 51.5 and 52 Hz the same applies in reverse. Annex A A.05.04 "
+            "requires CONTINUOUS steady-state operation across 47-52 Hz. So the plant as "
+            "delivered separates, or is time-limited to 30 minutes, inside the band where the "
+            "tender requires continuous operation, and trips in 0.04 s below 46.9 Hz where "
+            "A.05.04 requires 10 s ride-through to 45 Hz. MITIGATION, stated by the supplier's "
+            "own specification: 'The PCS software parameters can be adjusted to the local grid "
+            "code frequency protection requirements.' This is therefore a SETTINGS defect with a "
+            "vendor-stated remedy, not a hardware limit — but the settings as shipped are "
+            "non-compliant and the model submitted with the bid carries them."
         ),
     ),
     GapItem(
         gap_id="B3",
-        title="Reactive capability may be marginally short if 11 MW is declared",
-        severity="HIGH",
+        title="Reactive capability at a declared 11 MW — CHECKED AND CLEARED",
+        severity="INFORMATIONAL",
         clause="Annex A A.05.13; clarifications 2, 24 and 66",
         requirement=(
             "Clarification 24: 'The reactive power capability requirement shall be +/-0.3 times "
@@ -589,29 +620,164 @@ GAPS: tuple[GapItem, ...] = (
             "factor +/-0.95."
         ),
         why_insufficient=(
-            "At a declared 10 MW the requirement is +/-3.0 Mvar and +/-3.29 Mvar passes "
-            "comfortably. At a declared 11 MW the requirement becomes +/-3.3 Mvar, and "
-            "+/-3.29 Mvar would fall marginally short. Since the 11 MW / 44 MWh variant carries "
-            "more RTE headroom than the 10 MW case — which gap A2 makes valuable — the reactive "
-            "figure is the constraint that decides whether the 11 MW declaration is available."
+            "NO LONGER A GAP. This item was raised on the arithmetic that +/-3.29 Mvar — the "
+            "figure in the 10 MW design calculation — would fall marginally short of the "
+            "+/-3.3 Mvar that clarification 24 implies at a declared 11 MW. It was marked "
+            "UNVERIFIED because the 11 MW design calculation's own reactive figure had not been "
+            "read. It has now been read: the 11 MW / 44 MWh design calculation states "
+            "**Q required = +/-3.62 Mvar** at power factor +/-0.95. Against +/-3.3 Mvar that "
+            "complies with roughly 10 % margin, and against the +/-3.0 Mvar required at a "
+            "declared 10 MW it is comfortable. The concern does not hold and is withdrawn."
         ),
         question=(
-            "Please state the guaranteed reactive capability at the PCC for the 11 MW / 44 MWh "
-            "configuration, across the full voltage range 0.9-1.1 pu, both charge and discharge, "
-            "at minimum and maximum SOC, at beginning and end of life, and at 45 degrees C. If "
-            "it is +/-3.3 Mvar or better, please confirm it explicitly against clarification 24."
+            "No question to the OEM arises. Retained in the register as a closed item so the "
+            "earlier concern is visibly resolved rather than silently dropped. For completeness "
+            "Envision may still be asked for the four-quadrant P-Q chart across 0.9-1.1 pu, both "
+            "charge and discharge, at minimum and maximum SOC, BoL and EoL, and at 45 degrees C."
+        ),
+        closure_test="Closed — +/-3.62 Mvar stated in the 11 MW design calculation exceeds the requirement.",
+        tier="document",
+        consequence=(
+            "Removes the only constraint identified against declaring an 11 MW capacity, and so "
+            "strengthens the oversizing option: 11 MW / 44 MWh hardware declared at 10 MW carries "
+            "+/-3.62 Mvar against +/-3.0 Mvar required."
+        ),
+    ),
+    GapItem(
+        gap_id="A6",
+        title="The PCS cannot meet the Annex A overload ratings at site ambient — from the supplier's own specification",
+        severity="CRITICAL",
+        clause="Annex A A.05.02(a); clarifications 59 and 64",
+        requirement=(
+            "Annex A A.05.02(a): the PCS AC-side current 'shall be capable of operating "
+            "continuously at 110% of the rated current, sustain 120% of the rated current for "
+            ">=2 minutes, and preferably support short-term overloads of 150%'. Clarification 59 "
+            "asked whether 110 % continuous is a firm requirement and at what ambient; "
+            "clarification 64 asked for the 120 % duration to be cut from two minutes to one. "
+            "Both were answered 'Please comply with A.05.02 of Annex A'. No relief was given."
+        ),
+        supplied=(
+            "The ENPCS2520 Technical Specification V1.0, supplied 27 August 2026 and not "
+            "previously held, states the overload capacity as: 110 % for 10 minutes at "
+            "45 degrees C; 110 % continuous at 40 degrees C; 120 % for 1 minute at 35 degrees C. "
+            "Rated current 2109 A. No 150 % rating is stated anywhere in the document."
+        ),
+        why_insufficient=(
+            "Read against the requirement, at the tender's own site envelope of +45 degrees C: "
+            "(1) 110 % is available for TEN MINUTES, not continuously — continuous 110 % is "
+            "offered only at 40 degrees C, five degrees below the site design condition; "
+            "(2) 120 % is offered for ONE minute and only at 35 degrees C, against a requirement "
+            "of at least TWO minutes — and the bidder asked for precisely that relief at "
+            "clarification 64 and was refused; (3) the 'preferably 150 %' capability is not "
+            "evidenced at any temperature. Unlike the frequency settings at gap B2, the "
+            "specification attaches NO note that these figures are adjustable — they are thermal "
+            "ratings of the hardware, not software settings. This is the first gap in the "
+            "register established directly from the supplier's own product specification rather "
+            "than from an absence of evidence, and it is a stated ground for technical rejection "
+            "under a clause NSO has twice declined to relax."
+        ),
+        question=(
+            "1. Please confirm the ENPCS2520 AC-side current capability specifically at "
+            "+45 degrees C ambient: continuous rating, the duration available at 110 %, and the "
+            "duration available at 120 %. "
+            "2. Annex A requires 110 % continuous and 120 % for at least two minutes. The "
+            "specification offers 110 % continuous only at 40 degrees C and 120 % for one minute "
+            "at 35 degrees C. Please state plainly whether the ENPCS2520 can meet A.05.02(a) at "
+            "site ambient, and if not, what can. "
+            "3. If a de-rated deployment, forced-cooling option or a higher-rated converter is "
+            "required to meet the clause, please identify it now — this is a sizing decision, "
+            "not a datasheet correction, and it interacts with the export-limiter design. "
+            "4. Please state the 150 % short-term capability and its duration, or confirm there "
+            "is none."
         ),
         closure_test=(
-            "A four-quadrant P-Q capability chart at the PCC for the offered configuration at "
-            "the declared capacity, showing at least +/-0.3 x rated active power throughout."
+            "A written statement of AC-side current capability at +45 degrees C showing 110 % "
+            "continuous and 120 % for at least two minutes at that ambient, or an identified "
+            "alternative configuration that does."
         ),
-        tier="document",
-        verified=False,
+        tier="critical path",
         consequence=(
-            "UNVERIFIED: the +/-3.29 Mvar figure is stated in the 10 MW design calculation. The "
-            "11 MW design calculation's reactive figure has NOT been read for this register. "
-            "The shortfall is therefore a flagged arithmetic risk to check, not an established "
-            "finding."
+            "Volume I §3.1(p) and Annex A make failure against the technical requirements a "
+            "stated ground for rejection of the technical proposal, and NSO refused relief on "
+            "this exact clause twice."
+        ),
+    ),
+    GapItem(
+        gap_id="A7",
+        title="The OEM availability guarantee stops at year 2 of a 15-year obligation, and the "
+        "instrument that would extend it is an unpriced draft",
+        severity="CRITICAL",
+        clause="Volume III Appendix A Clause 2; clarifications 52 and 54; gap A4 question 2",
+        requirement=(
+            "Gap A4 records that availability deductions sit OUTSIDE the monthly LD cap, have "
+            "no floor, and can take the capacity charge to LKR 0, with no aggregate cap over "
+            "the 15-year Term. A4's second question asks for the answer to that exposure: a "
+            "back-to-back availability warranty with defined response times, remote diagnostics "
+            "and an OEM-caused liquidated-damages indemnity. Volume I clause 7.1 and "
+            "clarification 30 confirm the ESA is final and unamendable after the Letter of "
+            "Award, so the instrument has to exist before award, not after."
+        ),
+        supplied=(
+            "Two documents supplied 27 August 2026 answer this and had not previously been "
+            "held. (1) Product Warranty Policy V1.0: Table 1 sets a SINGLE period of 'two years "
+            "from date of first time installation or commissioning; or delivery term and "
+            "conditions in the supply contract; whichever occurs earlier' across every listed "
+            "item — battery pack, BMS at all levels, HVAC, rack protection, fire detection and "
+            "suppression, cables and consumables, battery container combiner panel, PCS, "
+            "step-up transformer, RMU, electrical cabinets, and EMS/SCADA including the "
+            "unit-level local controller. The client bears the cost of removing the defective "
+            "product and re-installing the repaired one. Liability per product is capped at "
+            "the product price and all consequential loss is excluded. (2) LTSA Solution: a "
+            "service scope matrix whose 'Performance guarantee' block offers Availability, RTE "
+            "and Usable capacity."
+        ),
+        why_insufficient=(
+            "The LTSA does offer the guarantees — but read the columns. It sets out two "
+            "structures: 'Full Scope year 0-15', and a split of 'warranty Period year 0-2' plus "
+            "'year 3-15'. Under the split, the Availability guarantee is marked '-', which the "
+            "sheet's own legend defines as 'Not applicable, or not included'. RTE and usable "
+            "capacity continue to year 15; AVAILABILITY DOES NOT. So in the default structure "
+            "the availability guarantee expires at year 2 and the Project Company carries the "
+            "uncapped, unfloored 97 % availability exposure alone for thirteen further years — "
+            "precisely the exposure A4 identifies. Only 'Full Scope' covers availability to "
+            "year 15, and the sheet carries NO price for it, no guarantee level (no availability "
+            "percentage, no RTE percentage, no capacity retention figure), no term, no response "
+            "times, no LD indemnity and no signature. Its BESS tab is labelled '100225-Draft', "
+            "and the workbook's other tab is a WIND TURBINE service catalogue, so the BESS "
+            "sheet is a draft appended to a wind-service document. Nothing here is capable of "
+            "being made back-to-back with the ESA. Separately, the two-year warranty is short "
+            "against the tender's own frame: A2 puts the duty at roughly 6,000 equivalent full "
+            "cycles over the term, so 13 of the 15 years of degradation, augmentation and "
+            "component replacement fall outside any product warranty at all, and the client "
+            "pays removal and re-installation even within the two years."
+        ),
+        question=(
+            "1. Please state whether Envision will provide an availability guarantee running "
+            "the full 15 years, and at what level — the LTSA marks availability as not included "
+            "for years 3-15 outside Full Scope. "
+            "2. Please price Full Scope 0-15 and state its guaranteed availability percentage, "
+            "RTE percentage, usable-capacity retention, response times and the liquidated "
+            "damages payable by Envision for missing them. "
+            "3. Please confirm whether the two-year Table 1 warranty is Envision's final "
+            "position for the PCS, transformer, RMU and EMS, and if an extension is available, "
+            "for how long and at what price. "
+            "4. Please state who bears removal and re-installation cost under an extended "
+            "warranty, given Table 1 places it on the client. "
+            "5. Please issue the LTSA as a signed, priced, project-specific document with the "
+            "wind-turbine tab removed — the sheet supplied is marked Draft and is not capable "
+            "of being made back-to-back with the ESA."
+        ),
+        closure_test=(
+            "A signed, priced, project-specific LTSA running to year 15 with a stated "
+            "availability guarantee, defined response times and OEM liquidated damages that "
+            "respond to the uncapped and unfloored structure clarification 54 describes; plus a "
+            "written warranty position for the balance of plant beyond two years."
+        ),
+        tier="critical path",
+        consequence=(
+            "This is the answer to gap A4's second question and it does not close it. Without a "
+            "15-year availability instrument the Project Company absorbs an exposure that has no "
+            "monthly floor and no term cap, and the ESA cannot be amended after award to fix it."
         ),
     ),
     GapItem(
