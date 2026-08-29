@@ -165,6 +165,7 @@ Existing D2 focused gate:            386 passed
 D2 plus ProjectCase coverage gate:    405 passed; 96.62% package total
 ProjectCase module coverage:          97.36%
 Ruff check and format:               passed
+Black check:                         passed
 mypy on new module and test:          passed
 py_compile/import/schema/export:      passed; 62 exports, 47 schema definitions
 Forbidden production import scan:     passed
@@ -211,6 +212,10 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" \
   analytics/feasibility_report_contract/__init__.py \
   tests/contracts/test_project_case_contract.py
 "$DUTCHBAY_VENV/bin/ruff" format --check \
+  analytics/feasibility_report_contract/project_case.py \
+  analytics/feasibility_report_contract/__init__.py \
+  tests/contracts/test_project_case_contract.py
+"$DUTCHBAY_VENV/bin/black" --check \
   analytics/feasibility_report_contract/project_case.py \
   analytics/feasibility_report_contract/__init__.py \
   tests/contracts/test_project_case_contract.py

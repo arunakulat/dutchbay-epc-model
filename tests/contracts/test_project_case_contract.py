@@ -1168,9 +1168,8 @@ def test_material_value_without_provenance_binding_fails_closed() -> None:
 
 def test_material_value_with_dangling_source_binding_fails_closed() -> None:
     payload = _case_payload()
-    payload["assets"][1]["power_capacity"]["value"]["bindings"][0]["reference_id"] = (
-        "source:missing"
-    )
+    power_value = payload["assets"][1]["power_capacity"]["value"]
+    power_value["bindings"][0]["reference_id"] = "source:missing"
     _error(payload, "dangling source reference")
 
 
