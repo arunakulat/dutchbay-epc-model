@@ -70,12 +70,14 @@ dmypy.json
 *.xlsm
 *.docx
 
-# Source-material spreadsheets are corpus EVIDENCE, not build output. The ignore rules above are
-# aimed at generated workbooks; received tender and OEM spreadsheets must be tracked with their
-# SHA-256 in MANIFEST.sha256 like every other source. Negated explicitly so this is a recorded
-# decision rather than a `git add -f` that leaves no trace.
+# Source-material spreadsheets and documents are corpus EVIDENCE, not build output. The ignore
+# rules above are aimed at generated workbooks and reports; received tender and OEM spreadsheets,
+# and the issued draft documents held beside them, must be tracked with their SHA-256 in
+# MANIFEST.sha256 like every other source. Negated explicitly so this is a recorded decision
+# rather than a `git add -f` that leaves no trace.
 !docs/source_materials/**/*.xlsx
 !docs/source_materials/**/*.xlsm
+!docs/source_materials/**/*.docx
 DutchBay_EPC_*.zip
 DutchBay_EPC_*.json
 manifest_*.txt
