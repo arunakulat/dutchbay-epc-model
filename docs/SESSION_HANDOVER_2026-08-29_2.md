@@ -1,4 +1,4 @@
-# Session handover - 2026-08-29, successor 12
+# Session handover - 2026-08-29, successor 13
 
 Durable PERSIST-01 successor to
 [`docs/SESSION_HANDOVER_2026-08-29.md`](SESSION_HANDOVER_2026-08-29.md). The predecessor remains
@@ -30,7 +30,8 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
   dutchbay_bootstrap_rules.py
 ```
 
-This record captures the fifth exact-head D3A domain veto and its bounded R10 repair boundary. The
+This record captures the fifth exact-head D3A domain veto and the bounded R10 pre-checkpoint worker
+handback based on it. The
 fifth independent review disposition is **DOMAIN REJECTED** at
 `b0020ece4e864cc2cf589bae40f82edd5c30320d`; it remains controlling until an independent reviewer
 accepts a later exact successor identified by live Git refs and file hashes. R8 and R9 are accepted
@@ -73,10 +74,13 @@ review record was committed as `debc4875628a8f597f21de5a9cc7aefa3d18779c`. Bound
 then committed and pushed as `b0020ece4e864cc2cf589bae40f82edd5c30320d`. The fifth independent
 review accepted R8-R9 and every earlier repair class, but rejected that exact candidate on R10: a
 `dedicated_separate` topology can still retain one electrical shared facility used by both wind and
-BESS. Live refs and status are authoritative after any later authorized parent checkpoint. Sections
-19-23 of `docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md` preserve the fourth review; sections 24-27
-are the controlling fifth review. The fifth veto remains controlling until an independent reviewer
-accepts a later exact committed head; neither green tests nor green CI supersede it.
+BESS. That fifth review record was committed and pushed as
+`50a32a2343b5c7941c29fe00cba695e2c13ce1c8`; it was the clean base of the bounded R10 worker
+handback. Live refs and status are authoritative after any later authorized parent checkpoint.
+Sections 19-23 of `docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md` preserve the fourth review;
+sections 24-27 are the controlling fifth review. The fifth veto remains controlling until an
+independent reviewer accepts a later exact committed head; neither green tests nor green CI
+supersede it.
 
 ## 3. Dolphin 3A implementation checkpoint
 
@@ -106,14 +110,16 @@ discriminated charging source: another asset, a governed source record, or an ex
 record.
 
 Hybrid topology declares either `common_shared` or `dedicated_separate` interconnection. A common
-path must be a typed `grid_interconnection` asset used by every technology asset. The contract
-intends a dedicated case not to retain a common shared electrical path, but the fifth review found
-that the `b0020ec` validator enforces this only for the named common-interconnection identifier: it
-still accepts wind and BESS using the same `grid_interconnection` or `electrical_collection` shared
-asset when that identifier is null. This is blocking R10. Reciprocal links distinguish
-`uses_shared` from `charges_from`, and storage charging declarations must agree with those links.
-Shared assets retain typed infrastructure roles; shared non-electrical facilities such as an access
-road remain valid under a dedicated electrical arrangement.
+path must be a typed `grid_interconnection` asset used by every technology asset. The R10 successor
+reconciles every `uses_shared_infrastructure` relationship under a dedicated arrangement: a
+`grid_interconnection` or `electrical_collection` facility cannot have more than one technology-
+asset user. Distinct electrical facilities with one user each remain valid, as do shared
+non-electrical access-road, operations-facility and other shared-facility roles. Reciprocal links
+distinguish infrastructure use from `charges_from`; storage charging declarations must agree with
+their charging links. A direct storage-to-generation `charges_from` link remains charging semantics,
+but a storage link to a shared grid-interconnection is a material electrical connection and counts
+that storage asset in the dedicated-facility user invariant. The untyped `connected_to` relationship
+has been removed from the v1 enum and generated schema rather than retained as an unvalidated escape.
 
 Material numeric fields intend one strict, finite Decimal domain: at most 72 total digits, 36 digits
 before the decimal point and 36 decimal places. The Python-native and plain-string paths use
@@ -233,23 +239,34 @@ paths are untouched.
 
 ## 5. Verification receipt
 
-The exact `b0020ec` R8-R9 remediation and inherited gates pass:
+The bounded R10 pre-checkpoint worker handback and inherited gates pass:
 
 ```text
-ProjectCase hostile/JSON/schema gate: 233 passed
-Complete tests/contracts gate:        559 passed
+ProjectCase hostile/JSON/schema gate: 241 passed
+Explicit R8-R10 selected gate:         78 passed
+Complete tests/contracts gate:        567 passed
 Existing D2 focused gate:            386 passed
-D2 plus ProjectCase coverage gate:    531 passed; 95.91% package total
-ProjectCase module coverage:          95.26%
+D2 plus ProjectCase coverage gate:    539 passed; 95.92% package total
+ProjectCase module coverage:          95.29%
 Ruff check and format:               passed
 Black check:                         passed
 isort check:                         passed
 mypy --no-incremental:               passed
 py_compile/import/schema/export:      passed; 62 exports, 47 schema definitions
 AST forbidden production import scan: passed
-Exact-head applicable CI/required:     passed; 4/4 required checks
+Prior `b0020ec` applicable CI/required: passed; 4/4 required checks
 Fifth independent domain disposition:  DOMAIN REJECTED (R10; R8-R9 accepted)
 ```
+
+The eight R10 focused cases reject the reviewed shared POI and shared electrical-collection paths
+under `dedicated_separate`, plus wind use and BESS charging through the same POI. They accept the
+existing no-shared case, shared access-road and operations facilities, distinct one-user electrical
+facilities, direct storage-to-generation charging, and BESS use/charging through its own distinct
+grid facility. A full-root runtime and Draft 2020-12 control proves that `connected_to` is absent
+from the `AssetLinkKind` schema and refused at the exact link-kind field.
+The fifth review's 113-case replay is an external independent harness rather than a named repository
+selector; the 241-case focused gate covers all in-tree original/R1-R10 controls, and the additional
+78-case selection explicitly replays the in-tree R8-R10 representation, FX and topology controls.
 
 The 48 R8-R9 additional focused cases prove sole-string Decimal/count JSON ingress, deterministic
 full-model dump/re-ingress, hostile runtime/Draft parity, exact 36/37-digit count boundaries, the
@@ -344,13 +361,10 @@ git status --short --branch
 ## 7. Rereview and delivery boundary
 
 The bounded R8 exact JSON/count representation and R9 one-rate shared-conversion intersection are
-committed, pushed, and independently accepted at exact `b0020ec`. That candidate remains
-**DOMAIN REJECTED** solely because dedicated topology admits a shared electrical path. The next
-writer action is limited to R10: reconcile `dedicated_separate` against all shared
-`grid_interconnection` and `electrical_collection` relationships, close any material generic
-`connected_to` escape, preserve valid shared non-electrical facilities, add hostile positive and
-negative tests, and make the changelog and handover truthful. It must not reopen R8-R9 or any earlier
-accepted repair class.
+committed, pushed, and independently accepted at exact `b0020ec`. The bounded R10 topology closure
+is implemented and locally proved in the pre-checkpoint worker handback described here; it does not
+reopen R8-R9 or any earlier accepted repair class. The fifth **DOMAIN REJECTED** disposition remains
+controlling until an independent reviewer accepts a later exact committed successor.
 
 Current Git identity and cleanliness must be read live; this durable receipt does not assert that
 the documentation diff remains uncommitted after the controlling parent acts. The implementation

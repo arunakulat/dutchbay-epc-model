@@ -270,7 +270,6 @@ class StorageCapacityBasis(str, Enum):
 class AssetLinkKind(str, Enum):
     """Supported directed relationship between project asset instances."""
 
-    CONNECTED_TO = "connected_to"
     USES_SHARED_INFRASTRUCTURE = "uses_shared_infrastructure"
     CHARGES_FROM = "charges_from"
 
@@ -1311,6 +1310,7 @@ class ProjectCase(StrictFrozenModel):
 
         used_shared_assets: set[str] = set()
         common_path_users: set[str] = set()
+        shared_asset_users: dict[str, set[str]] = {}
         charges_from_links: dict[str, AssetLink] = {}
         link_keys: set[tuple[AssetLinkKind, str, str]] = set()
         for link in self.topology.links:
@@ -1332,6 +1332,9 @@ class ProjectCase(StrictFrozenModel):
                         "uses_shared_infrastructure must point from technology asset to shared asset"
                     )
                 used_shared_assets.add(target.asset_id)
+                shared_asset_users.setdefault(target.asset_id, set()).add(
+                    source.asset_id
+                )
                 if target.asset_id == self.topology.common_interconnection_asset_id:
                     common_path_users.add(source.asset_id)
             elif link.kind is AssetLinkKind.CHARGES_FROM:
@@ -1349,6 +1352,10 @@ class ProjectCase(StrictFrozenModel):
                 if source.asset_id in charges_from_links:
                     raise ValueError("storage asset has multiple charges_from links")
                 charges_from_links[source.asset_id] = link
+                if isinstance(target, SharedInfrastructureAsset):
+                    shared_asset_users.setdefault(target.asset_id, set()).add(
+                        source.asset_id
+                    )
         if shared_assets != used_shared_assets:
             raise ValueError(
                 "shared infrastructure has missing reciprocal topology use"
@@ -1380,10 +1387,26 @@ class ProjectCase(StrictFrozenModel):
                 raise ValueError(
                     "every technology asset must use the declared common interconnection"
                 )
-        elif common_interconnection is not None:
-            raise ValueError(
-                "dedicated interconnection arrangement cannot declare a common path"
-            )
+        else:
+            if common_interconnection is not None:
+                raise ValueError(
+                    "dedicated interconnection arrangement cannot declare a common path"
+                )
+            electrical_roles = {
+                InfrastructureRole.GRID_INTERCONNECTION,
+                InfrastructureRole.ELECTRICAL_COLLECTION,
+            }
+            for shared_asset_id, user_ids in shared_asset_users.items():
+                shared_asset = assets[shared_asset_id]
+                assert isinstance(shared_asset, SharedInfrastructureAsset)
+                if (
+                    shared_asset.infrastructure_role in electrical_roles
+                    and len(user_ids) > 1
+                ):
+                    raise ValueError(
+                        "dedicated interconnection arrangement cannot share an "
+                        f"electrical facility across technology assets: {shared_asset_id}"
+                    )
 
         for asset in self.assets:
             if not isinstance(asset, StorageAsset):

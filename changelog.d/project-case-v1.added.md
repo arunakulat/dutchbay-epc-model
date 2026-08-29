@@ -11,4 +11,7 @@
   constrains one shared positive quote-grid variable, including exact half-even reporting targets
   and missing-report domain bounds, and the schedule requires one common witness. A cost/FX chain
   with an underdetermined native amount and missing reporting amount fails closed instead of relying
-  on sampled or independent per-line witnesses.
+  on sampled or independent per-line witnesses. Dedicated electrical arrangements reject a
+  grid-interconnection or electrical-collection facility used or materially connected to multiple
+  technology assets while preserving shared non-electrical facilities and distinct one-user
+  electrical paths; the untyped `connected_to` relationship is not part of the v1 link vocabulary.

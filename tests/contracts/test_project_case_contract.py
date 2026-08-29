@@ -782,6 +782,124 @@ def test_common_interconnection_requires_grid_role() -> None:
     _error(payload, "common interconnection must name a grid-interconnection asset")
 
 
+@pytest.mark.parametrize(
+    "infrastructure_role", ["grid_interconnection", "electrical_collection"]
+)
+def test_dedicated_hybrid_rejects_shared_electrical_facility(
+    infrastructure_role: str,
+) -> None:
+    payload = _case_payload()
+    payload["topology"]["interconnection_arrangement"] = "dedicated_separate"
+    payload["topology"]["common_interconnection_asset_id"] = None
+    payload["assets"][2]["infrastructure_role"] = infrastructure_role
+    _error(payload, "cannot share an electrical facility across technology assets")
+
+
+@pytest.mark.parametrize(
+    ("infrastructure_role", "capacity_unit"),
+    [("access_road", "km"), ("operations_facility", "item")],
+)
+def test_dedicated_hybrid_preserves_shared_nonelectrical_facility(
+    infrastructure_role: str, capacity_unit: str
+) -> None:
+    payload = _case_payload()
+    payload["topology"]["interconnection_arrangement"] = "dedicated_separate"
+    payload["topology"]["common_interconnection_asset_id"] = None
+    shared_asset = payload["assets"][2]
+    shared_asset["infrastructure_role"] = infrastructure_role
+    shared_asset["capacity"] = _resolved("1", capacity_unit)
+    case = _validate(payload)
+    assert case.topology.interconnection_arrangement.value == "dedicated_separate"
+
+
+def test_dedicated_hybrid_accepts_distinct_single_user_electrical_facilities() -> None:
+    payload = _case_payload()
+    payload["topology"]["interconnection_arrangement"] = "dedicated_separate"
+    payload["topology"]["common_interconnection_asset_id"] = None
+    collection_asset = copy.deepcopy(payload["assets"][2])
+    collection_asset.update(
+        {
+            "asset_id": "asset:collection:bess-01",
+            "name": "Dedicated BESS electrical collection",
+            "infrastructure_role": "electrical_collection",
+        }
+    )
+    payload["assets"].append(collection_asset)
+    payload["topology"]["links"][1]["to_asset_id"] = collection_asset["asset_id"]
+
+    case = _validate(payload)
+    shared_links = [
+        link
+        for link in case.topology.links
+        if link.kind.value == "uses_shared_infrastructure"
+    ]
+    assert {link.to_asset_id for link in shared_links} == {
+        "asset:poi-01",
+        "asset:collection:bess-01",
+    }
+
+
+def test_dedicated_rejects_shared_grid_charging_connection() -> None:
+    payload = _case_payload()
+    payload["topology"]["interconnection_arrangement"] = "dedicated_separate"
+    payload["topology"]["common_interconnection_asset_id"] = None
+    payload["topology"]["links"] = [
+        payload["topology"]["links"][0],
+        {
+            "link_id": "link:bess-charges-from-poi",
+            "kind": "charges_from",
+            "from_asset_id": "asset:bess-01",
+            "to_asset_id": "asset:poi-01",
+        },
+    ]
+    payload["assets"][1]["charging_source"] = {
+        "kind": "asset",
+        "asset_id": "asset:poi-01",
+    }
+    _error(payload, "cannot share an electrical facility across technology assets")
+
+
+def test_dedicated_storage_can_charge_from_its_own_grid_facility() -> None:
+    payload = _case_payload()
+    payload["topology"]["interconnection_arrangement"] = "dedicated_separate"
+    payload["topology"]["common_interconnection_asset_id"] = None
+    storage_grid_asset = copy.deepcopy(payload["assets"][2])
+    storage_grid_asset.update(
+        {
+            "asset_id": "asset:grid:bess-01",
+            "name": "Dedicated BESS grid facility",
+        }
+    )
+    payload["assets"].append(storage_grid_asset)
+    payload["topology"]["links"][1]["to_asset_id"] = storage_grid_asset["asset_id"]
+    payload["topology"]["links"][2]["to_asset_id"] = storage_grid_asset["asset_id"]
+    payload["assets"][1]["charging_source"] = {
+        "kind": "asset",
+        "asset_id": storage_grid_asset["asset_id"],
+    }
+
+    case = _validate(payload)
+    storage_links = [
+        link for link in case.topology.links if link.from_asset_id == "asset:bess-01"
+    ]
+    assert {link.to_asset_id for link in storage_links} == {"asset:grid:bess-01"}
+
+
+def test_connected_to_is_rejected_by_runtime_and_generated_schema() -> None:
+    payload = _case_payload()
+    payload["topology"]["links"][0]["kind"] = "connected_to"
+    error = _error(payload, "uses_shared_infrastructure|charges_from")
+    assert error.errors()[0]["loc"] == ("topology", "links", 0, "kind")
+
+    schema = ProjectCase.model_json_schema()
+    assert schema["$defs"]["AssetLinkKind"]["enum"] == [
+        "uses_shared_infrastructure",
+        "charges_from",
+    ]
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.Draft202012Validator(schema).validate(payload)
+
+
 def test_dedicated_hybrid_without_shared_facility_is_valid() -> None:
     payload = _case_payload()
     payload["assets"] = payload["assets"][:2]
@@ -799,6 +917,7 @@ def test_dedicated_hybrid_without_shared_facility_is_valid() -> None:
     case = _validate(payload)
     assert case.topology.interconnection_arrangement.value == "dedicated_separate"
     assert case.topology.common_interconnection_asset_id is None
+    assert [link.kind.value for link in case.topology.links] == ["charges_from"]
 
 
 def test_missing_charging_source_is_explicit_and_reciprocal() -> None:
