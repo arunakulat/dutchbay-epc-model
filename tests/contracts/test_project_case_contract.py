@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import copy
 import json
+from decimal import ROUND_UP, localcontext
 from pathlib import Path
 from typing import Any, Callable
 
@@ -51,6 +52,27 @@ def _resolved_count(
         "value": value,
         "unit": "count",
         "bindings": [{"kind": kind, "reference_id": reference_id}],
+    }
+
+
+def _missing_value(missing_input_id: str, unit: str) -> dict[str, Any]:
+    return {
+        "state": "missing",
+        "unit": unit,
+        "missing_input_id": missing_input_id,
+    }
+
+
+def _missing_record(
+    missing_input_id: str, field_path: str, expected_unit: str
+) -> dict[str, Any]:
+    return {
+        "missing_input_id": missing_input_id,
+        "field_path": field_path,
+        "expected_unit": expected_unit,
+        "reason": "The bounded rereview fixture omits this input.",
+        "consequence": "The affected arithmetic remains incomplete.",
+        "remedy": "Supply a value in the declared ProjectCase numeric domain.",
     }
 
 
@@ -335,6 +357,13 @@ def test_project_case_json_schema_round_trip_and_stable_shape() -> None:
     jsonschema.Draft202012Validator.check_schema(schema)
     jsonschema.Draft202012Validator(schema).validate(payload)
     assert {"schema_id", "contract_version"} <= set(schema["required"])
+    decimal_schema = schema["$defs"]["ResolvedValue"]["properties"]["value"]
+    assert decimal_schema["multipleOf"] == 1e-36
+    assert decimal_schema["anyOf"][0]["exclusiveMinimum"] == -1e36
+    assert decimal_schema["anyOf"][0]["exclusiveMaximum"] == 1e36
+    assert r"\d{0,36}" in decimal_schema["anyOf"][1]["pattern"]
+    count_schema = schema["$defs"]["ResolvedCount"]["properties"]["value"]
+    assert count_schema["maximum"] == (10**36) - 1
 
 
 @pytest.mark.parametrize("field", ["schema_id", "contract_version"])
@@ -955,6 +984,129 @@ def test_currency_and_amount_arithmetic_fail_closed() -> None:
     _error(payload, r"native amount must equal quantity \* unit_rate_native")
 
 
+def test_missing_positive_quantity_cannot_hide_zero_rate_contradiction() -> None:
+    payload = _case_payload()
+    line = payload["costs"]["lines"][0]
+    line["quantity"] = _missing_value("missing:capex-quantity", "item")
+    line["unit_rate_native"] = _resolved(0, "USD/item")
+    line["amount"]["native_amount"] = _resolved("1.00", "USD")
+    line["amount"]["reporting_amount"] = _resolved("1.00", "USD")
+    payload["costs"]["reconciliation_status"] = "incomplete_missing_input"
+    payload["missing_inputs"] = [
+        _missing_record("missing:capex-quantity", "/costs/lines/0/quantity", "item")
+    ]
+    _error(payload, "zero factor cannot yield non-zero amount")
+
+
+def test_missing_positive_quantity_is_accepted_when_product_is_feasible() -> None:
+    payload = _case_payload()
+    line = payload["costs"]["lines"][0]
+    line["quantity"] = _missing_value("missing:capex-quantity", "item")
+    line["unit_rate_native"] = _resolved("2.00", "USD/item")
+    line["amount"]["native_amount"] = _resolved("1.00", "USD")
+    line["amount"]["reporting_amount"] = _resolved("1.00", "USD")
+    payload["costs"]["reconciliation_status"] = "incomplete_missing_input"
+    payload["missing_inputs"] = [
+        _missing_record("missing:capex-quantity", "/costs/lines/0/quantity", "item")
+    ]
+    assert _validate(payload).costs.reconciliation_status.value == (
+        "incomplete_missing_input"
+    )
+
+
+def test_missing_nonnegative_unit_rate_is_accepted_when_product_is_feasible() -> None:
+    payload = _case_payload()
+    line = payload["costs"]["lines"][0]
+    line["quantity"] = _resolved(2, "item")
+    line["unit_rate_native"] = _missing_value("missing:capex-unit-rate", "USD/item")
+    line["amount"]["native_amount"] = _resolved("4.00", "USD")
+    line["amount"]["reporting_amount"] = _resolved("4.00", "USD")
+    payload["costs"]["reconciliation_status"] = "incomplete_missing_input"
+    payload["missing_inputs"] = [
+        _missing_record(
+            "missing:capex-unit-rate",
+            "/costs/lines/0/unit_rate_native",
+            "USD/item",
+        )
+    ]
+    assert _validate(payload).costs.reconciliation_status.value == (
+        "incomplete_missing_input"
+    )
+
+
+def test_missing_native_amount_cannot_conflict_with_same_currency_inference() -> None:
+    payload = _case_payload()
+    line = payload["costs"]["lines"][0]
+    line["quantity"] = _resolved(1, "item")
+    line["unit_rate_native"] = _resolved("2.00", "USD/item")
+    line["amount"]["native_amount"] = _missing_value("missing:capex-native", "USD")
+    line["amount"]["reporting_amount"] = _resolved("1.00", "USD")
+    payload["costs"]["reconciliation_status"] = "incomplete_missing_input"
+    payload["missing_inputs"] = [
+        _missing_record(
+            "missing:capex-native",
+            "/costs/lines/0/amount/native_amount",
+            "USD",
+        )
+    ]
+    _error(payload, r"native amount must equal quantity \* unit_rate_native")
+
+
+def test_missing_native_amount_is_accepted_when_equalities_are_feasible() -> None:
+    payload = _case_payload()
+    line = payload["costs"]["lines"][0]
+    line["quantity"] = _resolved(1, "item")
+    line["unit_rate_native"] = _resolved("2.00", "USD/item")
+    line["amount"]["native_amount"] = _missing_value("missing:capex-native", "USD")
+    line["amount"]["reporting_amount"] = _resolved("2.00", "USD")
+    payload["costs"]["reconciliation_status"] = "incomplete_missing_input"
+    payload["missing_inputs"] = [
+        _missing_record(
+            "missing:capex-native",
+            "/costs/lines/0/amount/native_amount",
+            "USD",
+        )
+    ]
+    assert _validate(payload).costs.reconciliation_status.value == (
+        "incomplete_missing_input"
+    )
+
+
+def test_missing_positive_fx_rate_cannot_map_zero_to_nonzero() -> None:
+    payload = _case_payload()
+    line = payload["costs"]["lines"][1]
+    line["quantity"] = _resolved(1, "year")
+    line["unit_rate_native"] = _resolved(0, "LKR/year")
+    line["amount"]["native_amount"] = _resolved("0.00", "LKR")
+    line["amount"]["reporting_amount"] = _resolved("1.00", "USD")
+    payload["costs"]["currency_conversions"][0]["rate"] = _missing_value(
+        "missing:fx-rate", "USD/LKR"
+    )
+    payload["costs"]["reconciliation_status"] = "incomplete_missing_input"
+    payload["missing_inputs"] = [
+        _missing_record(
+            "missing:fx-rate", "/costs/currency_conversions/0/rate", "USD/LKR"
+        )
+    ]
+    _error(payload, "no feasible positive missing FX rate")
+
+
+def test_missing_positive_fx_rate_is_accepted_for_nonzero_amounts() -> None:
+    payload = _case_payload()
+    payload["costs"]["currency_conversions"][0]["rate"] = _missing_value(
+        "missing:fx-rate", "USD/LKR"
+    )
+    payload["costs"]["reconciliation_status"] = "incomplete_missing_input"
+    payload["missing_inputs"] = [
+        _missing_record(
+            "missing:fx-rate", "/costs/currency_conversions/0/rate", "USD/LKR"
+        )
+    ]
+    assert _validate(payload).costs.reconciliation_status.value == (
+        "incomplete_missing_input"
+    )
+
+
 def test_decimal_identity_is_preserved_beyond_binary_float_range() -> None:
     payload = _case_payload()
     exact_integer = 9_007_199_254_740_993
@@ -966,6 +1118,134 @@ def test_decimal_identity_is_preserved_beyond_binary_float_range() -> None:
     assert str(shared.capacity.value) == str(exact_integer)
     dumped = case.model_dump(mode="json")
     assert dumped["assets"][2]["capacity"]["value"] == str(exact_integer)
+
+
+def test_high_precision_generation_is_independent_of_ambient_context() -> None:
+    payload = _case_payload()
+    exact_count = 10_000_000_000_000_000_000_000_000_001
+    capacity = payload["assets"][0]["capacity"]
+    capacity["unit_count"] = _resolved_count(exact_count)
+    capacity["unit_power_capacity"] = _resolved(1, "MW")
+    capacity["total_power_capacity"] = _resolved(str(exact_count), "MW")
+    with localcontext() as context:
+        context.prec = 6
+        case = _validate(payload)
+    dumped = case.model_dump(mode="json")
+    assert dumped["assets"][0]["capacity"]["kind"] == "unitized"
+    assert dumped["assets"][0]["capacity"]["unit_count"]["value"] == exact_count
+
+
+def test_high_precision_bess_is_independent_of_ambient_context() -> None:
+    payload = _case_payload()
+    basis_value = "100000000000000.00000000000001"
+    exact_product = "10000000000000000000000000002.0000000000000000000000000001"
+    storage = payload["assets"][1]
+    storage["power_capacity"]["value"] = _resolved(basis_value, "MW")
+    storage["duration"]["value"] = _resolved(basis_value, "hour")
+    storage["energy_capacity"]["value"] = _resolved(exact_product, "MWh")
+    with localcontext() as context:
+        context.prec = 6
+        case = _validate(payload)
+    dumped = case.model_dump(mode="json")
+    assert dumped["assets"][1]["kind"] == "storage"
+    assert dumped["assets"][1]["energy_capacity"]["value"]["value"] == exact_product
+
+
+def test_high_precision_money_is_independent_of_ambient_context() -> None:
+    payload = _case_payload()
+    exact_amount = "1234567890123456789012345678.90"
+    line = payload["costs"]["lines"][0]
+    line["quantity"] = _resolved(1, "item")
+    line["unit_rate_native"] = _resolved(exact_amount, "USD/item")
+    line["amount"]["native_amount"] = _resolved(exact_amount, "USD")
+    line["amount"]["reporting_amount"] = _resolved(exact_amount, "USD")
+    with localcontext() as context:
+        context.prec = 6
+        case = _validate(payload)
+    dumped = case.model_dump(mode="json")
+    assert dumped["costs"]["lines"][0]["amount"]["native_amount"]["value"] == (
+        exact_amount
+    )
+
+
+def test_high_precision_fx_is_independent_of_ambient_context() -> None:
+    payload = _case_payload()
+    native_amount = "1234567890123456789012345678.90"
+    reporting_amount = "1234567890123456790246913569.02"
+    line = payload["costs"]["lines"][1]
+    line["quantity"] = _resolved(1, "year")
+    line["unit_rate_native"] = _resolved(native_amount, "LKR/year")
+    line["amount"]["native_amount"] = _resolved(native_amount, "LKR")
+    line["amount"]["reporting_amount"] = _resolved(reporting_amount, "USD")
+    conversion = payload["costs"]["currency_conversions"][0]
+    conversion["rate"] = _resolved("1.000000000000000001", "USD/LKR")
+    conversion["quote_precision"] = 18
+    with localcontext() as context:
+        context.prec = 6
+        case = _validate(payload)
+    dumped = case.model_dump(mode="json")
+    assert dumped["costs"]["lines"][1]["amount"]["reporting_amount"]["value"] == (
+        reporting_amount
+    )
+
+
+@pytest.mark.parametrize(
+    ("unit_rate", "amount"), [("1.005", "1.00"), ("1.015", "1.02")]
+)
+def test_money_rounding_is_explicit_half_even(unit_rate: str, amount: str) -> None:
+    payload = _case_payload()
+    line = payload["costs"]["lines"][0]
+    line["quantity"] = _resolved(1, "item")
+    line["unit_rate_native"] = _resolved(unit_rate, "USD/item")
+    line["amount"]["native_amount"] = _resolved(amount, "USD")
+    line["amount"]["reporting_amount"] = _resolved(amount, "USD")
+    with localcontext() as context:
+        context.prec = 3
+        context.rounding = ROUND_UP
+        assert _validate(payload).costs.lines[0].line_id == "cost:capex:plant"
+
+
+def test_money_rejects_non_half_even_tie_result() -> None:
+    payload = _case_payload()
+    line = payload["costs"]["lines"][0]
+    line["quantity"] = _resolved(1, "item")
+    line["unit_rate_native"] = _resolved("1.005", "USD/item")
+    line["amount"]["native_amount"] = _resolved("1.01", "USD")
+    line["amount"]["reporting_amount"] = _resolved("1.01", "USD")
+    _error(payload, r"native amount must equal quantity \* unit_rate_native")
+
+
+def test_numeric_domain_rejects_excess_integer_digits_as_validation_error() -> None:
+    payload = _case_payload()
+    payload["assets"][2]["capacity"] = _resolved("1e36", "MW")
+    error = _error(payload, "less_than|decimal_whole_digits")
+    assert error.errors()[0]["type"] in {"less_than", "decimal_whole_digits"}
+
+
+def test_numeric_domain_rejects_excess_decimal_places_as_validation_error() -> None:
+    payload = _case_payload()
+    payload["assets"][2]["capacity"] = _resolved("1e-37", "MW")
+    error = _error(payload, "decimal_max_places|multiple_of")
+    assert error.errors()[0]["type"] in {"decimal_max_places", "multiple_of"}
+
+
+def test_material_count_domain_rejects_a_37_digit_count() -> None:
+    payload = _case_payload()
+    payload["assets"][0]["capacity"]["unit_count"] = _resolved_count(10**36)
+    error = _error(payload, "less_than_equal")
+    assert error.errors()[0]["type"] == "less_than_equal"
+
+
+def test_out_of_domain_intermediate_is_a_controlled_validation_error() -> None:
+    payload = _case_payload()
+    maximum_scale_operand = "100000000000000000000000000000000000"
+    line = payload["costs"]["lines"][0]
+    line["quantity"] = _resolved(maximum_scale_operand, "item")
+    line["unit_rate_native"] = _resolved(maximum_scale_operand, "USD/item")
+    line["amount"]["native_amount"] = _resolved(maximum_scale_operand, "USD")
+    line["amount"]["reporting_amount"] = _resolved(maximum_scale_operand, "USD")
+    error = _error(payload, "inferred value .* exceeds the ProjectCase numeric domain")
+    assert error.errors()[0]["type"] == "value_error"
 
 
 def test_large_money_gap_is_not_hidden_by_relative_tolerance() -> None:
@@ -1003,6 +1283,54 @@ def test_currency_conversion_must_reconcile_reporting_amount() -> None:
         999_999.0, "USD"
     )
     _error(payload, "reporting amount does not reconcile")
+
+
+def test_wind_only_fx_source_is_valid_in_wind_bess_case() -> None:
+    payload = _case_payload()
+    opex_line = payload["costs"]["lines"][1]
+    opex_line["allocation_ids"] = ["allocation:opex:wind"]
+    payload["costs"]["allocations"][2]["share"] = _resolved(1, "fraction")
+    del payload["costs"]["allocations"][3]
+    payload["sources"].append(
+        {
+            "source_id": "source:wind-fx",
+            "title": "Wind-only fictional FX source",
+            "locator": "fixture:wind-only-fx",
+            "jurisdiction_codes": ["FIC"],
+            "technology_ids": ["wind"],
+        }
+    )
+    payload["costs"]["currency_conversions"][0]["rate"] = _resolved(
+        "0.0025", "USD/LKR", reference_id="source:wind-fx"
+    )
+    assert _validate(payload).costs.currency_conversions[0].conversion_id == (
+        "fx:lkr-to-usd:2026-08-29"
+    )
+
+
+def test_bess_only_source_cannot_support_wind_only_fx_conversion() -> None:
+    payload = _case_payload()
+    opex_line = payload["costs"]["lines"][1]
+    opex_line["allocation_ids"] = ["allocation:opex:wind"]
+    payload["costs"]["allocations"][2]["share"] = _resolved(1, "fraction")
+    del payload["costs"]["allocations"][3]
+    payload["sources"].append(
+        {
+            "source_id": "source:bess-fx",
+            "title": "BESS-only fictional FX source",
+            "locator": "fixture:bess-only-fx",
+            "jurisdiction_codes": ["FIC"],
+            "technology_ids": ["bess"],
+        }
+    )
+    payload["costs"]["currency_conversions"][0]["rate"] = _resolved(
+        "0.0025", "USD/LKR", reference_id="source:bess-fx"
+    )
+    _error(
+        payload,
+        r"source source:bess-fx has wrong scope for "
+        r"/costs/currency_conversions/0/rate",
+    )
 
 
 @pytest.mark.parametrize(

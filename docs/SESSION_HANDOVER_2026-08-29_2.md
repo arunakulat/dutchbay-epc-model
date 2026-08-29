@@ -30,14 +30,14 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
   dutchbay_bootstrap_rules.py
 ```
 
-This record was updated while the Dolphin 3A remediation patch was intentionally uncommitted. The
-independent review disposition remains **DOMAIN REJECTED** until an independent reviewer accepts
-the exact remediated tree. Current Git status and live refs are authoritative. Never reset, stash
-or clean away the D3A worktree; keep it first on `PYTHONPATH`. The isolated implementation worker
-was not authorized to stage, commit, push, edit the pull request, merge, or otherwise mutate
-GitHub. The parent task does carry the user's explicit authorization to proceed sequentially
-through checkpointing, independent reviews, required CI and merge. That authority does not permit
-bypassing the independent rereview, exact-head CI, current-branch or continuing `HOLD` controls.
+This record captures the bounded R1-R4 successor at its checkpoint boundary. The second independent
+review disposition remains **DOMAIN REJECTED** until an independent reviewer accepts the exact
+successor identified by current Git refs and file hashes. Current Git status and live refs are
+authoritative. Never reset, stash or clean away the D3A worktree; keep it first on `PYTHONPATH`.
+The implementation worker is not authorized to stage, commit, push, edit the pull request, merge,
+or otherwise mutate GitHub; the controlling parent task holds the user's sequential delivery
+authority. Do not bypass another independent domain rereview, exact-head CI, current-branch or
+continuing `HOLD` controls.
 
 ## 2. Base and ingress receipt
 
@@ -57,9 +57,13 @@ passed 386 tests at the new base.
 The first D3A candidate was committed as `efba1e79c1ce400fed13e6fd90a9d31be5a77bbd`.
 Commit `44f64a2` merged live `origin/main` `782c9588ef2685fcf0608d48f7745493aaa15b78`
 into the topic branch without rewriting history. Commit
-`adb0e7c29bae8e2ce26bf71dbf5b59cf94d25dba` then added the independent domain-review record.
-The present uncommitted successor remediates every D3A-DOM-01 through D3A-DOM-09 finding in that
-record; neither this handover nor green local gates supersedes its veto.
+`adb0e7c29bae8e2ce26bf71dbf5b59cf94d25dba` then added the first independent domain-review
+record. The first remediation of D3A-DOM-01 through D3A-DOM-09 was committed as `ce10721`; the
+dual-formatter correction was committed as `6e6f07a`. The exact second domain veto was recorded at
+current pushed head `c7db8f7c7cfee86f69bd43de280335f816508131`. The successor represented by
+this checkpoint implements only bounded R1-R4 from
+`docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md`; neither this handover nor green local gates
+supersedes that veto.
 
 ## 3. Dolphin 3A implementation checkpoint
 
@@ -94,22 +98,30 @@ cannot silently retain a common shared path. Reciprocal links distinguish `uses_
 typed infrastructure roles, preventing an access road or operations facility from masquerading as
 the electrical interconnection.
 
-Material numeric fields use strict, finite, precision-preserving `Decimal` semantics and explicit
-units. Resolved generation, storage and shared-infrastructure capacity must be positive, so zero
-cannot silently encode an unknown value; a missing capacity uses the explicit missing state. A
-resolved unit count is a positive integer with unit `count` and the same provenance rule as
-capacity and costs. Generation and BESS arithmetic reconciles only on compatible declared bases;
-it is deferred where an operand is an explicit `MissingValue`, but still must be arithmetically
-feasible. Engineering reconciliation and allocation closure use separate absolute tolerances.
+Material numeric fields use a strict, finite, schema-visible Decimal domain: at most 72 total
+digits, 36 digits before the decimal point and 36 decimal places. Material counts are positive and
+limited to 36 digits. Resolved generation, storage and shared-infrastructure capacity must be
+positive, so zero cannot silently encode an unknown value; a missing capacity uses the explicit
+missing state. Generation, BESS, allocation, cost and FX arithmetic never uses the ambient Decimal
+context. Exact rational comparison governs engineering/share tolerances, while multiplication and
+quantization use explicit contexts sized above the largest permitted exact product. A Decimal
+operation failure becomes a controlled Pydantic validation error rather than escaping as a raw
+Decimal exception.
 
 Money declares native and reporting minor-unit precision. Cost multiplication and FX conversion
-use exact Decimal arithmetic with explicit half-even rounding; FX rates must fit their declared
-quote precision. A cost line's `PriceBasis` must itself carry source or assumption bindings whose
-scope covers the line's jurisdiction and technology. Cost status `complete` or
-`incomplete_missing_input` must match the actual graph. Resolved allocation shares are positive;
-complete shares sum to one, while a partial allocation with explicit missing shares must leave a
-strictly positive remainder. Allocation, price-basis and currency-conversion registers are closed
-and reciprocal.
+use exact bounded-domain Decimal arithmetic with explicit half-even rounding; FX rates must fit
+their declared quote precision. Partially missing quantity/rate/amount, same-currency, and FX
+equations are accepted only when the remaining bounded domain contains a solution. In particular,
+a zero factor cannot hide a non-zero product and inferred native amounts cannot conflict with
+same-currency reporting amounts. Cost status `complete` or `incomplete_missing_input` must match
+the actual graph.
+
+A cost line's `PriceBasis` must carry source or assumption bindings whose scope covers the line's
+jurisdiction and technology. A currency conversion rate's evidence scope is derived only from the
+cost lines that name the conversion and from those lines' allocations and assets; it does not
+inherit unrelated project technologies. Resolved allocation shares are positive; complete shares
+sum to one, while a partial allocation with explicit missing shares must leave a strictly positive
+remainder. Allocation, price-basis and currency-conversion registers are closed and reciprocal.
 
 Every missing value must name a unique `MissingInputRecord` whose `field_path` is the exact
 JSON-pointer-shaped path in the submitted document and whose `expected_unit` equals the missing
@@ -143,10 +155,12 @@ path for that mapping.
 
 The mandatory evolution boundary is `schema_id = dutchbay.project_case.v1` and
 `contract_version = 1.0.0`; neither field has a default, and unknown or future values fail closed.
-JSON-mode dumps retain Decimal values as precision-preserving strings. D3A defines no canonical JSON
-byte representation or hashing policy. Array indexes in missing-input paths identify the exact
-submitted v1 document; a later editing adapter must rewrite such paths if it reorders arrays before
-validation.
+JSON-mode dumps retain Decimal values as precision-preserving strings. The generated schema exposes
+the numeric magnitude, 36-place quantum/pattern, and 36-digit material-count limits. A future web
+adapter must still impose request-size and transport resource controls before domain validation;
+D3A adds no adapter or endpoint policy. D3A defines no canonical JSON byte representation or
+hashing policy. Array indexes in missing-input paths identify the exact submitted v1 document; a
+later editing adapter must rewrite such paths if it reorders arrays before validation.
 
 No FastAPI route, Pydantic transport adapter, UI/form, ORM, persistence, authentication,
 deployment, renderer, serialization/signing policy, engine call, finance mathematics,
@@ -159,17 +173,25 @@ paths are untouched.
 The current remediation and inherited gates pass:
 
 ```text
-ProjectCase hostile/JSON/schema gate: 107 passed
-Complete tests/contracts gate:        433 passed
+ProjectCase hostile/JSON/schema gate: 127 passed
+Complete tests/contracts gate:        453 passed
 Existing D2 focused gate:            386 passed
-D2 plus ProjectCase coverage gate:    405 passed; 96.62% package total
-ProjectCase module coverage:          97.36%
+D2 plus ProjectCase coverage gate:    425 passed; 96.13% package total
+ProjectCase module coverage:          95.80%
 Ruff check and format:               passed
 Black check:                         passed
-mypy on new module and test:          passed
+isort check:                         passed
+mypy --no-incremental:               passed
 py_compile/import/schema/export:      passed; 62 exports, 47 schema definitions
-Forbidden production import scan:     passed
+AST forbidden production import scan: passed
 ```
+
+The 20 added focused controls include every R1 accepted-invalid counterexample and its feasible
+counterpart, missing unit-rate feasibility, the rereview's exact high-precision generation/BESS/
+money propositions, a high-precision FX proposition, low-precision and non-half-even ambient
+contexts, explicit half-even ties, three input-bound errors, a controlled out-of-domain
+intermediate, and positive wind-only versus negative BESS-only evidence for a wind-only conversion
+in a wind-plus-BESS case.
 
 The only pytest warning is the pre-existing Hypothesis warning that repository `norecursedirs`
 suppresses `.hypothesis` collection. On this macOS environment, use the filesystem coverage target
@@ -219,7 +241,11 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" \
   analytics/feasibility_report_contract/project_case.py \
   analytics/feasibility_report_contract/__init__.py \
   tests/contracts/test_project_case_contract.py
-PYTHONPATH="$PWD" "$DUTCHBAY_VENV/bin/mypy" \
+"$DUTCHBAY_VENV/bin/isort" --check-only \
+  analytics/feasibility_report_contract/project_case.py \
+  analytics/feasibility_report_contract/__init__.py \
+  tests/contracts/test_project_case_contract.py
+PYTHONPATH="$PWD" "$DUTCHBAY_VENV/bin/mypy" --no-incremental \
   analytics/feasibility_report_contract/project_case.py \
   tests/contracts/test_project_case_contract.py
 PYTHONPATH="$PWD" "$DUTCHBAY_VENV/bin/python" -m py_compile \
@@ -232,11 +258,10 @@ git status --short --branch
 
 ## 7. Rereview and delivery boundary
 
-Under the user's explicit sequential-delivery authorization, the parent task's next action is to
-reconcile live `origin/main`, replay the root gates, commit and push exactly the five-file
-remediation, and hand that immutable candidate to the independent domain reviewer with its file
-hashes and test receipt. The implementation worker itself must not stage, commit, push, edit the
-pull request, merge, or mutate GitHub. The existing **DOMAIN REJECTED** disposition remains
+The controlling task's next action is to checkpoint and push this exact bounded successor under the
+user's sequential delivery authorization, then hand its immutable SHA, hashes and test receipt to
+another independent domain rereview. The implementation worker itself must not stage, commit, push,
+edit the pull request, merge, or mutate GitHub. The existing **DOMAIN REJECTED** disposition remains
 controlling until the reviewer issues an exact-tree successor disposition.
 
 Before any later authorized Git or GitHub action, fetch and compare live `origin/main`, reconcile

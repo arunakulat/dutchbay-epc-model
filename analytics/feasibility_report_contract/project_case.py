@@ -8,13 +8,19 @@ finance, evaluation, application, API, persistence, or rendering code.
 ``declared`` records only that the caller has declared a versioned contract binding.
 It is not a review claim, engineering assurance, statutory approval, report grade,
 lender acceptance, package release, or permission to lift any ``HOLD``.
+
+Material decimals admit at most 72 total digits and 36 decimal places (therefore
+at most 36 integer digits); material counts admit at most 36 digits.  Arithmetic
+uses explicit precision-sized contexts or exact rational comparison, never the
+process-global Decimal context.
 """
 
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal, ROUND_HALF_EVEN
+from decimal import ROUND_HALF_EVEN, Context, Decimal, DecimalException
 from enum import Enum
+from fractions import Fraction
 from typing import Annotated, Iterable, Literal, Union
 
 from pydantic import Field, PositiveInt, StringConstraints, model_validator
@@ -40,7 +46,26 @@ StableIdentifier = Annotated[
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
     ),
 ]
-FiniteDecimal = Annotated[Decimal, Field(allow_inf_nan=False)]
+_MAX_SIGNIFICANT_DIGITS = 72
+_MAX_DECIMAL_PLACES = 36
+_MAX_INTEGER_DIGITS = _MAX_SIGNIFICANT_DIGITS - _MAX_DECIMAL_PLACES
+_MAX_MATERIAL_COUNT = (10**_MAX_INTEGER_DIGITS) - 1
+_ARITHMETIC_PRECISION = (_MAX_SIGNIFICANT_DIGITS * 2) + 8
+_MIN_DECIMAL_VALUE = Decimal("-1e36")
+_MAX_DECIMAL_VALUE = Decimal("1e36")
+
+FiniteDecimal = Annotated[
+    Decimal,
+    Field(
+        allow_inf_nan=False,
+        max_digits=_MAX_SIGNIFICANT_DIGITS,
+        decimal_places=_MAX_DECIMAL_PLACES,
+        gt=_MIN_DECIMAL_VALUE,
+        lt=_MAX_DECIMAL_VALUE,
+        json_schema_extra={"multipleOf": 1e-36},
+    ),
+]
+MaterialPositiveInt = Annotated[int, Field(strict=True, gt=0, le=_MAX_MATERIAL_COUNT)]
 MinorUnitPlaces = Annotated[int, Field(ge=0, le=6)]
 QuotePrecision = Annotated[int, Field(ge=1, le=18)]
 
@@ -267,7 +292,7 @@ class ResolvedCount(StrictFrozenModel):
     """Positive integral count with an explicit provenance binding."""
 
     state: Literal["resolved"] = "resolved"
-    value: PositiveInt
+    value: MaterialPositiveInt
     unit: Literal["count"] = "count"
     bindings: tuple[ValueBinding, ...]
 
@@ -414,15 +439,19 @@ class UnitizedGenerationCapacity(StrictFrozenModel):
             if isinstance(self.unit_power_capacity, ResolvedValue) and isinstance(
                 self.total_power_capacity, ResolvedValue
             ):
-                inferred_count = (
-                    self.total_power_capacity.value / self.unit_power_capacity.value
+                inferred_count = Fraction(self.total_power_capacity.value) / Fraction(
+                    self.unit_power_capacity.value
                 )
-                nearest_count = inferred_count.to_integral_value(
-                    rounding=ROUND_HALF_EVEN
-                )
+                nearest_count = round(inferred_count)
+                if nearest_count > _MAX_MATERIAL_COUNT:
+                    raise ValueError(
+                        "missing unit_count exceeds the ProjectCase numeric domain"
+                    )
                 if nearest_count <= 0 or not _engineering_close(
                     self.total_power_capacity.value,
-                    nearest_count * self.unit_power_capacity.value,
+                    _multiply_exact(
+                        Decimal(nearest_count), self.unit_power_capacity.value
+                    ),
                 ):
                     raise ValueError(
                         "missing unit_count cannot reconcile resolved total/unit capacity"
@@ -432,7 +461,9 @@ class UnitizedGenerationCapacity(StrictFrozenModel):
             self.total_power_capacity, MissingValue
         ):
             return self
-        expected = Decimal(self.unit_count.value) * self.unit_power_capacity.value
+        expected = _multiply_exact(
+            Decimal(self.unit_count.value), self.unit_power_capacity.value
+        )
         if not _engineering_close(self.total_power_capacity.value, expected):
             raise ValueError(
                 "total_power_capacity must equal unit_count * unit_power_capacity"
@@ -583,7 +614,9 @@ class StorageAsset(StrictFrozenModel):
         assert isinstance(power, ResolvedValue)
         assert isinstance(energy, ResolvedValue)
         assert isinstance(duration, ResolvedValue)
-        if not _engineering_close(energy.value, power.value * duration.value):
+        if not _engineering_close(
+            energy.value, _multiply_exact(power.value, duration.value)
+        ):
             raise ValueError("storage energy must equal power * duration on one basis")
         return self
 
@@ -757,17 +790,38 @@ class _CostLineBase(StrictFrozenModel):
         _require_nonnegative_material_unit(
             self.unit_rate_native, expected_rate_unit, "unit_rate_native"
         )
+        native_target = (
+            self.amount.native_amount.value
+            if isinstance(self.amount.native_amount, ResolvedValue)
+            else None
+        )
         if (
-            isinstance(self.amount.native_amount, ResolvedValue)
-            and isinstance(self.quantity, ResolvedValue)
-            and isinstance(self.unit_rate_native, ResolvedValue)
-            and self.amount.native_amount.value
-            != _round_money(
-                self.quantity.value * self.unit_rate_native.value,
-                self.amount.native_minor_unit_places,
-            )
+            native_target is None
+            and self.amount.native_currency == self.amount.reporting_currency
+            and isinstance(self.amount.reporting_amount, ResolvedValue)
         ):
-            raise ValueError("native amount must equal quantity * unit_rate_native")
+            native_target = self.amount.reporting_amount.value
+        inferred_native = _reconcile_partial_product(
+            self.quantity,
+            self.unit_rate_native,
+            native_target,
+            target_minor_unit_places=self.amount.native_minor_unit_places,
+            left_must_be_positive=True,
+            right_must_be_positive=False,
+            equation_name="native amount must equal quantity * unit_rate_native",
+        )
+        effective_native = (
+            native_target if native_target is not None else inferred_native
+        )
+        if (
+            self.amount.native_currency == self.amount.reporting_currency
+            and isinstance(self.amount.reporting_amount, ResolvedValue)
+            and effective_native is not None
+            and effective_native != self.amount.reporting_amount.value
+        ):
+            raise ValueError(
+                "same-currency reporting amount conflicts with inferred native amount"
+            )
         _require_nonempty_unique(self.allocation_ids, "cost allocation_ids")
         return self
 
@@ -873,14 +927,14 @@ class CostSchedule(StrictFrozenModel):
                 if isinstance(item.share, ResolvedValue)
             )
             resolved_sum = sum(
-                (item.value for item in resolved_shares), start=Decimal(0)
+                (Fraction(item.value) for item in resolved_shares), start=Fraction(0)
             )
             if len(resolved_shares) == len(typed_selected):
-                if not _share_close(resolved_sum, Decimal(1)):
+                if not _share_close(resolved_sum, Fraction(1)):
                     raise ValueError(
                         f"cost line {line.line_id} allocations must sum to 1"
                     )
-            elif resolved_sum >= Decimal(1):
+            elif resolved_sum >= Fraction(1):
                 raise ValueError(
                     f"cost line {line.line_id} missing allocation share is infeasible"
                 )
@@ -900,17 +954,7 @@ class CostSchedule(StrictFrozenModel):
                     or conversion.valuation_date != basis.valuation_date
                 ):
                     raise ValueError("cost line conversion scope/basis mismatch")
-                if (
-                    isinstance(line.amount.native_amount, ResolvedValue)
-                    and isinstance(line.amount.reporting_amount, ResolvedValue)
-                    and isinstance(conversion.rate, ResolvedValue)
-                    and line.amount.reporting_amount.value
-                    != _round_money(
-                        line.amount.native_amount.value * conversion.rate.value,
-                        line.amount.reporting_minor_unit_places,
-                    )
-                ):
-                    raise ValueError("cost line reporting amount does not reconcile")
+                _reconcile_partial_conversion(line, conversion)
 
         allocation_ids = {
             allocation_id
@@ -1348,27 +1392,15 @@ class ProjectCase(StrictFrozenModel):
             return set(asset.jurisdiction_codes), technologies
         if len(parts) > 3 and parts[1:3] == ["costs", "lines"]:
             line = self.costs.lines[int(parts[3])]
-            allocation_ids = set(line.allocation_ids)
-            asset_ids = {
-                item.asset_id
-                for item in self.costs.allocations
-                if item.allocation_id in allocation_ids
-            }
-            selected_assets = tuple(
-                item for item in self.assets if item.asset_id in asset_ids
+            return self._scope_for_cost_lines((line,))
+        if len(parts) > 3 and parts[1:3] == ["costs", "currency_conversions"]:
+            conversion = self.costs.currency_conversions[int(parts[3])]
+            selected_lines = tuple(
+                line
+                for line in self.costs.lines
+                if line.amount.conversion_id == conversion.conversion_id
             )
-            return (
-                {
-                    code
-                    for asset in selected_assets
-                    for code in asset.jurisdiction_codes
-                },
-                {
-                    asset.technology_id
-                    for asset in selected_assets
-                    if not isinstance(asset, SharedInfrastructureAsset)
-                },
-            )
+            return self._scope_for_cost_lines(selected_lines)
         if len(parts) > 3 and parts[1:3] == ["costs", "price_bases"]:
             basis = self.costs.price_bases[int(parts[3])]
             selected_lines = tuple(
@@ -1376,48 +1408,246 @@ class ProjectCase(StrictFrozenModel):
                 for line in self.costs.lines
                 if line.price_basis_id == basis.price_basis_id
             )
-            allocation_ids = {
-                allocation_id
-                for line in selected_lines
-                for allocation_id in line.allocation_ids
-            }
-            asset_ids = {
-                item.asset_id
-                for item in self.costs.allocations
-                if item.allocation_id in allocation_ids
-            }
-            selected_assets = tuple(
-                item for item in self.assets if item.asset_id in asset_ids
-            )
-            return (
-                {
-                    code
-                    for asset in selected_assets
-                    for code in asset.jurisdiction_codes
-                },
-                {
-                    asset.technology_id
-                    for asset in selected_assets
-                    if not isinstance(asset, SharedInfrastructureAsset)
-                },
-            )
+            return self._scope_for_cost_lines(selected_lines)
         return (
             {item.jurisdiction_code for item in self.jurisdiction_bindings},
             {item.technology_id for item in self.technology_bindings},
         )
 
+    def _scope_for_cost_lines(
+        self, selected_lines: tuple[CostLine, ...]
+    ) -> tuple[set[str], set[str]]:
+        """Return asset-derived scope for exact consuming cost lines."""
+        allocation_ids = {
+            allocation_id
+            for line in selected_lines
+            for allocation_id in line.allocation_ids
+        }
+        asset_ids = {
+            item.asset_id
+            for item in self.costs.allocations
+            if item.allocation_id in allocation_ids
+        }
+        selected_assets = tuple(
+            item for item in self.assets if item.asset_id in asset_ids
+        )
+        return (
+            {code for asset in selected_assets for code in asset.jurisdiction_codes},
+            {
+                asset.technology_id
+                for asset in selected_assets
+                if not isinstance(asset, SharedInfrastructureAsset)
+            },
+        )
+
+
+def _reconcile_partial_product(
+    left: MaterialValue,
+    right: MaterialValue,
+    target: Decimal | None,
+    *,
+    target_minor_unit_places: int,
+    left_must_be_positive: bool,
+    right_must_be_positive: bool,
+    equation_name: str,
+) -> Decimal | None:
+    """Validate a rounded product and return its inferable target, if any."""
+    left_value = left.value if isinstance(left, ResolvedValue) else None
+    right_value = right.value if isinstance(right, ResolvedValue) else None
+    if left_value is not None and right_value is not None:
+        inferred = _round_money(
+            _multiply_exact(left_value, right_value), target_minor_unit_places
+        )
+        _require_decimal_in_domain(inferred, f"inferred value for {equation_name}")
+        if target is not None and inferred != target:
+            raise ValueError(equation_name)
+        return inferred
+
+    if left_value == 0 or right_value == 0:
+        inferred = Decimal(0)
+        if target is not None and target != inferred:
+            raise ValueError(
+                f"{equation_name}; zero factor cannot yield non-zero amount"
+            )
+        return inferred
+    if target is None:
+        return None
+    if left_value is not None and not _missing_factor_solution_exists(
+        left_value,
+        target,
+        target_minor_unit_places=target_minor_unit_places,
+        factor_decimal_places=_MAX_DECIMAL_PLACES,
+        factor_must_be_positive=right_must_be_positive,
+    ):
+        raise ValueError(f"{equation_name}; missing factor has no feasible value")
+    if right_value is not None and not _missing_factor_solution_exists(
+        right_value,
+        target,
+        target_minor_unit_places=target_minor_unit_places,
+        factor_decimal_places=_MAX_DECIMAL_PLACES,
+        factor_must_be_positive=left_must_be_positive,
+    ):
+        raise ValueError(f"{equation_name}; missing factor has no feasible value")
+    return target
+
+
+def _reconcile_partial_conversion(
+    line: CostLine, conversion: CurrencyConversion
+) -> None:
+    """Validate every inferable native-rate-reporting conversion constraint."""
+    native_value = (
+        line.amount.native_amount.value
+        if isinstance(line.amount.native_amount, ResolvedValue)
+        else _reconcile_partial_product(
+            line.quantity,
+            line.unit_rate_native,
+            None,
+            target_minor_unit_places=line.amount.native_minor_unit_places,
+            left_must_be_positive=True,
+            right_must_be_positive=False,
+            equation_name="native amount must equal quantity * unit_rate_native",
+        )
+    )
+    reporting_value = (
+        line.amount.reporting_amount.value
+        if isinstance(line.amount.reporting_amount, ResolvedValue)
+        else None
+    )
+    rate_value = (
+        conversion.rate.value if isinstance(conversion.rate, ResolvedValue) else None
+    )
+    if native_value is not None and rate_value is not None:
+        inferred = _round_money(
+            _multiply_exact(native_value, rate_value),
+            line.amount.reporting_minor_unit_places,
+        )
+        _require_decimal_in_domain(inferred, "inferred reporting amount")
+        if reporting_value is not None and inferred != reporting_value:
+            raise ValueError("cost line reporting amount does not reconcile")
+        return
+    if reporting_value is None:
+        return
+    if native_value is not None and not _missing_factor_solution_exists(
+        native_value,
+        reporting_value,
+        target_minor_unit_places=line.amount.reporting_minor_unit_places,
+        factor_decimal_places=conversion.quote_precision,
+        factor_must_be_positive=True,
+    ):
+        raise ValueError(
+            "cost line reporting amount has no feasible positive missing FX rate"
+        )
+    if rate_value is not None and not _missing_factor_solution_exists(
+        rate_value,
+        reporting_value,
+        target_minor_unit_places=line.amount.reporting_minor_unit_places,
+        factor_decimal_places=_MAX_DECIMAL_PLACES,
+        factor_must_be_positive=False,
+    ):
+        raise ValueError(
+            "cost line reporting amount has no feasible missing native amount"
+        )
+
+
+def _missing_factor_solution_exists(
+    other_factor: Decimal,
+    target: Decimal,
+    *,
+    target_minor_unit_places: int,
+    factor_decimal_places: int,
+    factor_must_be_positive: bool,
+) -> bool:
+    """Return whether one bounded Decimal factor can satisfy a rounded product."""
+    if other_factor == 0:
+        return target == 0
+    ratio = Fraction(target) / Fraction(other_factor)
+    scale = 10**factor_decimal_places
+    scaled_ratio = ratio * scale
+    floor_value = scaled_ratio.numerator // scaled_ratio.denominator
+    candidate_integers = {floor_value + offset for offset in (-2, -1, 0, 1, 2, 3)}
+    candidate_integers.update({0, 1})
+    maximum_scaled = (10 ** (_MAX_INTEGER_DIGITS + factor_decimal_places)) - 1
+    for candidate_integer in candidate_integers:
+        if candidate_integer < 0 or candidate_integer > maximum_scaled:
+            continue
+        if factor_must_be_positive and candidate_integer == 0:
+            continue
+        candidate = _decimal_from_scaled_integer(
+            candidate_integer, factor_decimal_places
+        )
+        if not _decimal_is_in_domain(candidate):
+            continue
+        if (
+            _round_money(
+                _multiply_exact(other_factor, candidate), target_minor_unit_places
+            )
+            == target
+        ):
+            return True
+    return False
+
+
+def _decimal_from_scaled_integer(value: int, decimal_places: int) -> Decimal:
+    if value == 0:
+        return Decimal(0)
+    digits = tuple(int(character) for character in str(value))
+    return Decimal((0, digits, -decimal_places))
+
+
+def _decimal_is_in_domain(value: Decimal) -> bool:
+    if not value.is_finite():
+        return False
+    _, raw_digits, raw_exponent = value.as_tuple()
+    assert isinstance(raw_exponent, int)
+    digits = list(raw_digits)
+    exponent = raw_exponent
+    while len(digits) > 1 and digits[-1] == 0:
+        digits.pop()
+        exponent += 1
+    if not any(digits):
+        return True
+    integer_digits = max(len(digits) + exponent, 0)
+    decimal_places = max(-exponent, 0)
+    total_digits = integer_digits + decimal_places
+    return (
+        integer_digits <= _MAX_INTEGER_DIGITS
+        and decimal_places <= _MAX_DECIMAL_PLACES
+        and total_digits <= _MAX_SIGNIFICANT_DIGITS
+    )
+
+
+def _require_decimal_in_domain(value: Decimal, field_name: str) -> None:
+    if not _decimal_is_in_domain(value):
+        raise ValueError(
+            f"{field_name} exceeds the ProjectCase numeric domain "
+            f"({_MAX_SIGNIFICANT_DIGITS} digits, "
+            f"{_MAX_DECIMAL_PLACES} decimal places)"
+        )
+
+
+def _multiply_exact(left: Decimal, right: Decimal) -> Decimal:
+    try:
+        context = Context(prec=_ARITHMETIC_PRECISION, rounding=ROUND_HALF_EVEN)
+        return context.multiply(left, right)
+    except DecimalException as exc:
+        raise ValueError("ProjectCase Decimal multiplication failed") from exc
+
 
 def _engineering_close(left: Decimal, right: Decimal) -> bool:
-    return abs(left - right) <= _ENGINEERING_ABS_TOL
+    return abs(Fraction(left) - Fraction(right)) <= Fraction(_ENGINEERING_ABS_TOL)
 
 
-def _share_close(left: Decimal, right: Decimal) -> bool:
-    return abs(left - right) <= _SHARE_ABS_TOL
+def _share_close(left: Fraction, right: Fraction) -> bool:
+    return abs(left - right) <= Fraction(_SHARE_ABS_TOL)
 
 
 def _round_money(value: Decimal, minor_unit_places: int) -> Decimal:
-    quantum = Decimal(1).scaleb(-minor_unit_places)
-    return value.quantize(quantum, rounding=ROUND_HALF_EVEN)
+    quantum = Decimal((0, (1,), -minor_unit_places))
+    try:
+        context = Context(prec=_ARITHMETIC_PRECISION, rounding=ROUND_HALF_EVEN)
+        return context.quantize(value, quantum)
+    except DecimalException as exc:
+        raise ValueError("ProjectCase money quantization failed") from exc
 
 
 def _require_decimal_scale(
