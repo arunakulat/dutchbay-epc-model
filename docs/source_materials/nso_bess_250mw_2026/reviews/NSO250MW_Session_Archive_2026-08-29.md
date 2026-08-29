@@ -118,11 +118,22 @@ Thomas Wilson, Jiajun Zhang, Allen Hu.
   silently. Two such defects were found and repaired by hand in this thread; a test would have
   caught both.
 
-## 7. Not archived here
+## 7. The draft proposal — committed on instruction
 
-The Envision technical proposal generator (`build_envision_proposal.py`, its Word renderer
-`make_docx.js`, and the rendered v0.1-v0.3 drafts) was produced in this thread but is **not**
-committed. It contains the bidder's own draft proposal text, which is a different disclosure
-category from OEM documentation, and the tender had not closed at time of archival. It is
-therefore lost with the working container unless separately preserved. Raise with the project
-owner if the proposal needs to be reproducible.
+An earlier revision of this record said the Envision proposal generator was **not** archived,
+because it holds the bidder's own draft proposal text — a different disclosure category from OEM
+documentation — on a public repository, before the tender closed. That distinction was put to the
+project owner, who instructed that it be committed. It now lives at `../proposal/`, with its build
+chain and handling recorded in that directory's README.
+
+Committing it closed a defect rather than merely copying files in: `make_docx.js` consumed a
+`proposal.json` that **nothing produced**, so the Word issue had no reproducible source. The
+generator now exports that model itself, without the PDF render-provenance lines, which describe
+how the PDF was rasterised and would read in a Word file as claims about a document they do not
+describe.
+
+Verified against the delivered `v0.3` draft: 474 text runs, 82 red gap-fill runs, **zero differing
+runs — exact text match**.
+
+The generator is at the v0.3 state. v0.1 and v0.2 are retained as delivered and are not rebuildable
+from it.
