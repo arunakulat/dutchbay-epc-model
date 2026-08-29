@@ -15,3 +15,9 @@
   grid-interconnection or electrical-collection facility used or materially connected to multiple
   technology assets while preserving shared non-electrical facilities and distinct one-user
   electrical paths; the untyped `connected_to` relationship is not part of the v1 link vocabulary.
+  Stable identifiers are now exact, non-normalizing 1-160 character ASCII tokens whose runtime and
+  Draft 2020-12 grammars share an absolute-end assertion. Jurisdiction and technology contract-pack
+  versions use a D3A-local portable ASCII SemVer grammar without leading-zero core or numeric
+  prerelease components, leaving the inherited Dolphin 2 vocabulary unchanged. Resolved
+  `electrical_collection` capacity now requires `MW`, `MWac`, or `MVA`, while non-electrical shared
+  infrastructure roles retain their deliberately open unit boundary.

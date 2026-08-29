@@ -481,6 +481,77 @@ def _case_payload() -> dict[str, Any]:
     }
 
 
+def _identifier_role_payload(
+    role: str,
+) -> tuple[dict[str, Any], dict[str, Any], str, str]:
+    payload = _case_payload()
+    if role == "project":
+        target, field = payload["identity"], "project_id"
+    elif role == "case":
+        target, field = payload["identity"], "case_id"
+    elif role == "asset":
+        target, field = payload["assets"][0], "asset_id"
+    elif role == "link":
+        target, field = payload["topology"]["links"][0], "link_id"
+    elif role == "cost":
+        target, field = payload["costs"]["lines"][0], "line_id"
+    elif role == "allocation":
+        target, field = payload["costs"]["allocations"][0], "allocation_id"
+    elif role == "jurisdiction_binding":
+        target, field = payload["jurisdiction_bindings"][0], "binding_id"
+    elif role == "technology_binding":
+        target, field = payload["technology_bindings"][0], "binding_id"
+    elif role == "source":
+        target, field = payload["sources"][0], "source_id"
+    elif role == "assumption":
+        assumption_id = "assumption:identifier-probe"
+        payload["assumptions"].append(
+            {
+                "assumption_id": assumption_id,
+                "statement": "Identifier lexical assurance probe.",
+                "basis": "Fictional fixture mutation.",
+                "replacement_action": "Replace with exact source evidence.",
+                "jurisdiction_codes": ["FIC"],
+                "technology_ids": ["wind"],
+            }
+        )
+        payload["assets"][0]["capacity"]["unit_power_capacity"]["bindings"] = [
+            {"kind": "assumption", "reference_id": assumption_id}
+        ]
+        target, field = payload["assumptions"][0], "assumption_id"
+    elif role == "missing_input":
+        missing_id = "missing:identifier-probe"
+        payload["assets"][2]["capacity"] = _missing_value(missing_id, "MW")
+        payload["missing_inputs"].append(
+            _missing_record(missing_id, "/assets/2/capacity", "MW")
+        )
+        target, field = payload["missing_inputs"][0], "missing_input_id"
+    elif role == "price_basis":
+        target, field = payload["costs"]["price_bases"][0], "price_basis_id"
+    elif role == "conversion":
+        target, field = payload["costs"]["currency_conversions"][0], "conversion_id"
+    else:
+        raise AssertionError(f"unknown identifier role: {role}")
+    canonical = target[field]
+    assert isinstance(canonical, str)
+    return payload, target, field, canonical
+
+
+def _dedicated_single_user_shared_asset_payload(
+    infrastructure_role: str, capacity_unit: str
+) -> dict[str, Any]:
+    payload = _case_payload()
+    payload["topology"]["interconnection_arrangement"] = "dedicated_separate"
+    payload["topology"]["common_interconnection_asset_id"] = None
+    payload["topology"]["links"] = [
+        payload["topology"]["links"][0],
+        payload["topology"]["links"][2],
+    ]
+    payload["assets"][2]["infrastructure_role"] = infrastructure_role
+    payload["assets"][2]["capacity"] = _resolved("10", capacity_unit)
+    return payload
+
+
 def _validate(payload: dict[str, Any]) -> ProjectCase:
     """Validate raw JSON at the strict domain-ingress seam."""
     return ProjectCase.model_validate_json(json.dumps(payload, allow_nan=True))
@@ -535,6 +606,193 @@ def test_project_case_json_schema_round_trip_and_stable_shape() -> None:
         "title": "Value",
         "type": "string",
     }
+
+
+@pytest.mark.parametrize(
+    "identifier_role",
+    [
+        "project",
+        "case",
+        "asset",
+        "link",
+        "cost",
+        "allocation",
+        "jurisdiction_binding",
+        "technology_binding",
+        "source",
+        "assumption",
+        "missing_input",
+        "price_basis",
+        "conversion",
+    ],
+)
+def test_stable_identifier_is_exact_ascii_in_runtime_and_both_schemas(
+    identifier_role: str,
+) -> None:
+    validation_schema = jsonschema.Draft202012Validator(
+        ProjectCase.model_json_schema(mode="validation")
+    )
+    serialization_schema = jsonschema.Draft202012Validator(
+        ProjectCase.model_json_schema(mode="serialization")
+    )
+    canonical_payload, _, _, canonical = _identifier_role_payload(identifier_role)
+    canonical_case = _validate(canonical_payload)
+    validation_schema.validate(canonical_payload)
+    serialization_schema.validate(canonical_case.model_dump(mode="json"))
+    hostile_values = (
+        f" {canonical}",
+        f"{canonical} ",
+        f"\t{canonical}",
+        f"{canonical}\t",
+        f"\n{canonical}",
+        f"{canonical}\n",
+        f"\r{canonical}",
+        f"{canonical}\r",
+        f"\r\n{canonical}",
+        f"{canonical}\r\n",
+        f"\u2028{canonical}",
+        f"{canonical}\u2028",
+        f"\u2029{canonical}",
+        f"{canonical}\u2029",
+        f"{canonical}é",
+        f"{canonical}١",
+    )
+    for hostile in hostile_values:
+        payload, target, field, _ = _identifier_role_payload(identifier_role)
+        target[field] = hostile
+        with pytest.raises(ValidationError, match="stable identifier requires"):
+            ProjectCase.model_validate_json(json.dumps(payload))
+        with pytest.raises(jsonschema.ValidationError):
+            validation_schema.validate(payload)
+        with pytest.raises(jsonschema.ValidationError):
+            serialization_schema.validate(payload)
+
+
+def test_stable_identifier_python_mode_never_normalizes_input() -> None:
+    native_payload = _validate(_case_payload()).model_dump(mode="python")
+    canonical = native_payload["identity"]["project_id"]
+    for hostile in (
+        f" {canonical}",
+        f"{canonical} ",
+        f"\t{canonical}",
+        f"{canonical}\t",
+        f"\n{canonical}",
+        f"{canonical}\n",
+        f"\r{canonical}",
+        f"{canonical}\r",
+        f"\r\n{canonical}",
+        f"{canonical}\r\n",
+        f"\u2028{canonical}",
+        f"{canonical}\u2028",
+        f"\u2029{canonical}",
+        f"{canonical}\u2029",
+    ):
+        payload = copy.deepcopy(native_payload)
+        payload["identity"]["project_id"] = hostile
+        with pytest.raises(ValidationError, match="stable identifier requires"):
+            ProjectCase.model_validate(payload)
+
+
+def test_hostile_asset_identifier_cannot_gain_reciprocity_by_normalization() -> None:
+    payload = _case_payload()
+    canonical_asset_id = payload["assets"][0]["asset_id"]
+    payload["assets"][0]["asset_id"] = f" {canonical_asset_id} "
+    error = _error(payload, "stable identifier requires")
+    assert error.errors()[0]["loc"] == ("assets", 0, "generation", "asset_id")
+    assert payload["topology"]["links"][0]["from_asset_id"] == canonical_asset_id
+    assert payload["costs"]["allocations"][0]["asset_id"] == canonical_asset_id
+
+
+@pytest.mark.parametrize(
+    "version",
+    [
+        "0.0.0",
+        "1.2.3",
+        "10.20.30",
+        "1.0.0-alpha",
+        "1.0.0-alpha.1",
+        "1.0.0-0.3.7",
+        "1.0.0-x.7.z.92",
+        "1.0.0+20130313144700",
+        "1.0.0-beta+exp.sha.5114f85",
+        "1.0.0-0A+001",
+    ],
+)
+def test_contract_pack_semver_accepts_portable_valid_forms(version: str) -> None:
+    payload = _case_payload()
+    payload["jurisdiction_bindings"][0]["contract_pack_version"] = version
+    payload["technology_bindings"][0]["contract_pack_version"] = version
+    case = ProjectCase.model_validate_json(json.dumps(payload))
+    assert case.jurisdiction_bindings[0].contract_pack_version == version
+    assert case.technology_bindings[0].contract_pack_version == version
+    jsonschema.Draft202012Validator(
+        ProjectCase.model_json_schema(mode="validation")
+    ).validate(payload)
+    jsonschema.Draft202012Validator(
+        ProjectCase.model_json_schema(mode="serialization")
+    ).validate(case.model_dump(mode="json"))
+
+
+@pytest.mark.parametrize(
+    "version",
+    [
+        "١.٠.٠",
+        "01.0.0",
+        "1.01.0",
+        "1.0.01",
+        "1.0.0-01",
+        "1.0.0-00",
+        "1.0.0-",
+        "1.0.0-alpha..1",
+        "1.0.0+",
+        "1.0.0+build..1",
+        "1.0.0_alpha",
+        "v1.0.0",
+        " 1.0.0",
+        "1.0.0 ",
+        "1.0.0\t",
+        "1.0.0\n",
+        "1.0.0\r",
+        "1.0.0\r\n",
+        "1.0.0\u2028",
+        "1.0.0\u2029",
+    ],
+)
+def test_contract_pack_semver_rejects_nonportable_or_malformed_forms(
+    version: str,
+) -> None:
+    validation_schema = jsonschema.Draft202012Validator(
+        ProjectCase.model_json_schema(mode="validation")
+    )
+    serialization_schema = jsonschema.Draft202012Validator(
+        ProjectCase.model_json_schema(mode="serialization")
+    )
+    for register_name in ("jurisdiction_bindings", "technology_bindings"):
+        payload = _case_payload()
+        payload[register_name][0]["contract_pack_version"] = version
+        with pytest.raises(ValidationError, match="exact ASCII SemVer"):
+            ProjectCase.model_validate_json(json.dumps(payload))
+        with pytest.raises(jsonschema.ValidationError):
+            validation_schema.validate(payload)
+        with pytest.raises(jsonschema.ValidationError):
+            serialization_schema.validate(payload)
+
+
+def test_contract_pack_semver_schema_uses_one_ecmascript_portable_pattern() -> None:
+    validation_schema = ProjectCase.model_json_schema(mode="validation")
+    serialization_schema = ProjectCase.model_json_schema(mode="serialization")
+    patterns = {
+        schema["$defs"][binding]["properties"]["contract_pack_version"]["pattern"]
+        for schema in (validation_schema, serialization_schema)
+        for binding in ("JurisdictionBinding", "TechnologyBinding")
+    }
+    assert len(patterns) == 1
+    pattern = patterns.pop()
+    assert "\\d" not in pattern
+    assert "$" not in pattern
+    assert "\\z" not in pattern
+    assert "(?<" not in pattern
+    assert pattern.endswith(r"(?![\s\S])")
 
 
 @pytest.mark.parametrize("field", ["schema_id", "contract_version"])
@@ -655,7 +913,7 @@ def test_duplicate_ids_fail_closed(
 def test_blank_or_unstable_asset_ids_are_rejected(invalid_id: str) -> None:
     payload = _case_payload()
     payload["assets"][0]["asset_id"] = invalid_id
-    error = _error(payload, "string_pattern_mismatch|string_too_short")
+    error = _error(payload, "stable identifier requires")
     assert error.errors()[0]["loc"][:2] == ("assets", 0)
 
 
@@ -810,6 +1068,57 @@ def test_dedicated_hybrid_preserves_shared_nonelectrical_facility(
     shared_asset["capacity"] = _resolved("1", capacity_unit)
     case = _validate(payload)
     assert case.topology.interconnection_arrangement.value == "dedicated_separate"
+
+
+@pytest.mark.parametrize("capacity_unit", ["USD", "km", "item", "MWh"])
+def test_electrical_collection_rejects_nonelectrical_capacity_unit(
+    capacity_unit: str,
+) -> None:
+    payload = _dedicated_single_user_shared_asset_payload(
+        "electrical_collection", capacity_unit
+    )
+    error = _error(
+        payload, "electrical collection capacity requires MW, MWac, or MVA unit"
+    )
+    assert error.errors()[0]["loc"] == (
+        "assets",
+        2,
+        "shared_infrastructure",
+        "capacity",
+    )
+
+
+@pytest.mark.parametrize("capacity_unit", ["MW", "MWac", "MVA"])
+def test_electrical_collection_accepts_electrical_capacity_unit(
+    capacity_unit: str,
+) -> None:
+    case = _validate(
+        _dedicated_single_user_shared_asset_payload(
+            "electrical_collection", capacity_unit
+        )
+    )
+    shared = case.assets[2]
+    assert shared.kind == "shared_infrastructure"
+    assert shared.capacity.unit == capacity_unit
+
+
+@pytest.mark.parametrize(
+    ("infrastructure_role", "capacity_unit"),
+    [
+        ("access_road", "km"),
+        ("operations_facility", "item"),
+        ("other_shared_facility", "USD"),
+    ],
+)
+def test_nonelectrical_shared_roles_retain_open_capacity_units(
+    infrastructure_role: str, capacity_unit: str
+) -> None:
+    case = _validate(
+        _dedicated_single_user_shared_asset_payload(infrastructure_role, capacity_unit)
+    )
+    shared = case.assets[2]
+    assert shared.kind == "shared_infrastructure"
+    assert shared.capacity.unit == capacity_unit
 
 
 def test_dedicated_hybrid_accepts_distinct_single_user_electrical_facilities() -> None:

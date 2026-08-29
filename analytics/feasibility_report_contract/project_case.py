@@ -30,11 +30,11 @@ from pydantic import (
     Field,
     PlainSerializer,
     PositiveInt,
-    StringConstraints,
     ValidationInfo,
     ValidatorFunctionWrapHandler,
     WithJsonSchema,
     WrapValidator,
+    field_validator,
     model_validator,
 )
 
@@ -42,7 +42,6 @@ from .vocabulary import (
     CurrencyCode,
     JurisdictionCode,
     NonEmptyText,
-    SemanticVersion,
     StrictFrozenModel,
     UnitToken,
 )
@@ -50,14 +49,65 @@ from .vocabulary import (
 PROJECT_CASE_SCHEMA_ID: Literal["dutchbay.project_case.v1"] = "dutchbay.project_case.v1"
 PROJECT_CASE_CONTRACT_VERSION: Literal["1.0.0"] = "1.0.0"
 
+_STABLE_IDENTIFIER_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:/-]*(?![\s\S])"
+_STABLE_IDENTIFIER_JSON_SCHEMA: dict[str, Any] = {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 160,
+    "pattern": _STABLE_IDENTIFIER_PATTERN,
+}
+_SEMVER_NUMERIC_IDENTIFIER = r"(?:0|[1-9][0-9]*)"
+_SEMVER_PRERELEASE_IDENTIFIER = r"(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
+_PROJECT_CASE_SEMVER_PATTERN = (
+    rf"^{_SEMVER_NUMERIC_IDENTIFIER}\."
+    rf"{_SEMVER_NUMERIC_IDENTIFIER}\."
+    rf"{_SEMVER_NUMERIC_IDENTIFIER}"
+    rf"(?:-{_SEMVER_PRERELEASE_IDENTIFIER}"
+    rf"(?:\.{_SEMVER_PRERELEASE_IDENTIFIER})*)?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+    r"(?![\s\S])"
+)
+_PROJECT_CASE_SEMVER_JSON_SCHEMA: dict[str, Any] = {
+    "type": "string",
+    "minLength": 5,
+    "pattern": _PROJECT_CASE_SEMVER_PATTERN,
+}
+
+
+def _validate_stable_identifier(
+    raw_value: Any,
+    handler: ValidatorFunctionWrapHandler,
+) -> str:
+    """Validate one exact ASCII identity token without normalization."""
+    value = cast(str, handler(raw_value))
+    if len(value) > 160 or re.fullmatch(_STABLE_IDENTIFIER_PATTERN, value) is None:
+        raise ValueError(
+            "stable identifier requires 1-160 exact ASCII letters, digits, "
+            "dot, underscore, colon, slash, or hyphen"
+        )
+    return value
+
+
+def _validate_project_case_semver(
+    raw_value: Any,
+    handler: ValidatorFunctionWrapHandler,
+) -> str:
+    """Validate one exact portable SemVer token without normalization."""
+    value = cast(str, handler(raw_value))
+    if re.fullmatch(_PROJECT_CASE_SEMVER_PATTERN, value) is None:
+        raise ValueError("contract pack version requires exact ASCII SemVer")
+    return value
+
+
 StableIdentifier = Annotated[
     str,
-    StringConstraints(
-        strip_whitespace=True,
-        min_length=1,
-        max_length=160,
-        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
-    ),
+    WrapValidator(_validate_stable_identifier),
+    WithJsonSchema(_STABLE_IDENTIFIER_JSON_SCHEMA),
+]
+ProjectCaseSemanticVersion = Annotated[
+    str,
+    WrapValidator(_validate_project_case_semver),
+    WithJsonSchema(_PROJECT_CASE_SEMVER_JSON_SCHEMA),
 ]
 _MAX_SIGNIFICANT_DIGITS = 72
 _MAX_DECIMAL_PLACES = 36
@@ -455,7 +505,7 @@ class JurisdictionBinding(StrictFrozenModel):
     subject: JurisdictionSubject
     support_status: ContractSupportStatus
     contract_pack_id: StableIdentifier
-    contract_pack_version: SemanticVersion
+    contract_pack_version: ProjectCaseSemanticVersion
 
 
 class TechnologyBinding(StrictFrozenModel):
@@ -466,7 +516,7 @@ class TechnologyBinding(StrictFrozenModel):
     asset_class: TechnologyAssetClass
     support_status: ContractSupportStatus
     contract_pack_id: StableIdentifier
-    contract_pack_version: SemanticVersion
+    contract_pack_version: ProjectCaseSemanticVersion
 
 
 class ProjectLocation(StrictFrozenModel):
@@ -806,19 +856,36 @@ class SharedInfrastructureAsset(StrictFrozenModel):
     jurisdiction_codes: tuple[JurisdictionCode, ...]
     capacity: MaterialValue
 
+    @field_validator("capacity")
+    @classmethod
+    def _capacity_dimension_matches_role(
+        cls, capacity: MaterialValue, info: ValidationInfo
+    ) -> MaterialValue:
+        role = info.data.get("infrastructure_role")
+        if role is InfrastructureRole.GRID_INTERCONNECTION and capacity.unit not in {
+            "MW",
+            "MWac",
+            "MVA",
+        }:
+            raise ValueError(
+                "grid interconnection capacity requires MW, MWac, or MVA unit"
+            )
+        if role is InfrastructureRole.ELECTRICAL_COLLECTION and capacity.unit not in {
+            "MW",
+            "MWac",
+            "MVA",
+        }:
+            raise ValueError(
+                "electrical collection capacity requires MW, MWac, or MVA unit"
+            )
+        return capacity
+
     @model_validator(mode="after")
     def _has_jurisdiction(self) -> SharedInfrastructureAsset:
         _require_nonempty_unique(
             self.jurisdiction_codes, "shared infrastructure jurisdiction_codes"
         )
         _require_positive_material(self.capacity, "shared infrastructure capacity")
-        if (
-            self.infrastructure_role is InfrastructureRole.GRID_INTERCONNECTION
-            and self.capacity.unit not in {"MW", "MWac", "MVA"}
-        ):
-            raise ValueError(
-                "grid interconnection capacity requires MW, MWac, or MVA unit"
-            )
         return self
 
 
@@ -2329,6 +2396,7 @@ __all__ = [
     "PriceNominality",
     "ProjectAsset",
     "ProjectCase",
+    "ProjectCaseSemanticVersion",
     "ProjectIdentity",
     "ProjectLocation",
     "ProjectTopology",
