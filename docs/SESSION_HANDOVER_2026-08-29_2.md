@@ -1,4 +1,4 @@
-# Session handover - 2026-08-29, successor 10
+# Session handover - 2026-08-29, successor 11
 
 Durable PERSIST-01 successor to
 [`docs/SESSION_HANDOVER_2026-08-29.md`](SESSION_HANDOVER_2026-08-29.md). The predecessor remains
@@ -30,7 +30,8 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
   dutchbay_bootstrap_rules.py
 ```
 
-This record captures the fourth exact-head D3A domain veto and its bounded R8-R9 successor boundary.
+This record captures the fourth exact-head D3A domain veto and the bounded R8-R9 pre-checkpoint
+writer handback based on it.
 The fourth independent review disposition is **DOMAIN REJECTED** at
 `c47aa8ffc1ff658b03216dbba93680d1eff2618d`; it remains controlling until an independent reviewer
 accepts a later exact successor identified by live Git refs and file hashes. Current Git status and
@@ -67,9 +68,13 @@ dual-formatter correction was committed as `6e6f07a`. The exact second domain ve
 `47fd2638b3d947c5e52d41fd5670514944d0030f`. Bounded R5-R7, exact allocation, and deterministic
 Decimal serialization were committed as `c47aa8ffc1ff658b03216dbba93680d1eff2618d` and passed the
 required and wider GitHub checks. The fourth independent review nevertheless rejected that exact
-candidate on R8 JSON-number/schema precision and R9 shared missing-FX consistency. Sections 19-23
-of `docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md` are the controlling durable review record;
-neither green tests nor CI supersedes the veto.
+candidate on R8 JSON-number/schema precision and R9 shared missing-FX consistency. Its durable
+review record was committed as `debc4875628a8f597f21de5a9cc7aefa3d18779c`; that clean pushed
+head was the base at the pre-checkpoint writer handback described here. Live refs and status are
+authoritative after any later authorized parent checkpoint. Sections 19-23 of
+`docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md` are the controlling durable review record. The
+fourth veto remains controlling until an independent reviewer accepts a later exact committed head;
+neither this working-tree proof nor green tests supersede it.
 
 ## 3. Dolphin 3A implementation checkpoint
 
@@ -111,13 +116,14 @@ before the decimal point and 36 decimal places. The Python-native and plain-stri
 plain-ASCII JSON string grammar correctly accepts exact-scale zero through 36 places and refuses
 exponent strings and excessive scale. Strict Python mode requires a domain-native `Decimal`.
 
-The rejected `c47aa8f` candidate also advertises and accepts raw JSON numeric Decimals. That path is
-not exact: standard JSON parsing rounds non-integral tokens through a binary float before Decimal
-validation, while Draft 2020-12 float `multipleOf` and magnitude controls disagree with runtime.
-Valid `3e-36` is schema-rejected, adjacent sub-grid values can collapse to an accepted value, and
-exact `10^36` is schema-accepted while runtime rejects it. `ResolvedCount` also rejects JSON
-`1.0`/`1e0` although Draft 2020-12 treats them as integers. R8 must make the exact representation
-authoritative and align count runtime/schema semantics before any successor can be accepted.
+The R8 successor removes the rejected JSON-number branch. Anchored plain-ASCII strings are now the
+sole JSON representation for every `FiniteDecimal`; raw JSON integer or floating tokens are refused
+before coercion, and the generated Draft 2020-12 schema exposes only the same anchored grammar.
+Normalized Python mode still requires a native `Decimal`, and JSON serialization emits deterministic
+plain notation. `ResolvedCount` likewise uses a positive unsigned no-leading-zero string of at most
+36 digits in JSON, while normalized Python mode requires a native positive `int`; JSON serialization
+is the exact decimal string. This removes the runtime/schema ambiguity for JSON `1`, `1.0`, and
+`1e0` rather than treating numerically equivalent token spellings as lexically identical inputs.
 
 Resolved generation, storage and shared-infrastructure capacity must be positive, so zero cannot
 silently encode an unknown value; a missing capacity uses the explicit missing state. Every
@@ -138,20 +144,22 @@ quantity/rate output set. This rejects the reviewed USD 1/native-scale-0/FX-2 co
 accepts the nearby USD 2 completion. Where quantity and rate make native amount inferable, a
 missing FX rate still uses the previously verified exact single-equation predicate.
 
-ProjectCase v1 intentionally does not admit a connected cost chain where both the effective native
-amount and FX rate remain unresolved. It refuses that state as an admissibility rule because D3A
-does not contain a complete two-variable existential proof; the refusal is not a claim that no
-mathematical completion exists. Sampled interior witnesses are never treated as proof. A zero
-factor cannot hide a non-zero product, and inferred native amounts cannot conflict with
-same-currency reporting amounts. Cost status `complete` or `incomplete_missing_input` must match
-the actual graph.
+For a resolved reporting target, ProjectCase v1 intentionally does not admit a connected cost chain
+where both the effective native amount and FX rate remain unresolved. When reporting is missing, v1
+requires the effective native amount to be resolved or exactly inferable whether FX is resolved or
+missing. Those are fail-closed admissibility rules because D3A does not contain a complete
+two-variable existential proof; neither is a claim that no mathematical completion exists. Sampled
+interior witnesses are never treated as proof. A zero factor cannot hide a non-zero product, and
+inferred native amounts cannot conflict with same-currency reporting amounts. Cost status
+`complete` or `incomplete_missing_input` must match the actual graph.
 
-The rejected candidate still validates a missing shared `CurrencyConversion.rate` independently
-for each consuming line. Two lines can therefore pass with disjoint hypothetical quote-grid
-witnesses, and a missing reporting amount can hide that a rate forced elsewhere would overflow the
-numeric domain. R9 must derive every consuming line's exact quote-grid constraint, including
-missing-report output bounds, and accept only when their intersection contains one common positive
-in-domain rate.
+The R9 successor treats each missing `CurrencyConversion.rate` as one schedule-level graph
+variable. Every consuming line derives an exact inclusive interval on the shared positive integer
+quote grid. A resolved or inferable native amount plus a resolved report uses the exact monotone
+half-even output interval; a missing report contributes the maximum rate whose rounded output
+remains inside its declared reporting minor-unit and 72/36 numeric domain. The schedule intersects
+all consumer intervals and accepts only if one common rate remains. No sampled witness or
+production brute force is used.
 
 A cost line's `PriceBasis` must carry source or assumption bindings whose scope covers the line's
 jurisdiction and technology. A currency conversion rate's evidence scope is derived only from the
@@ -193,15 +201,17 @@ path for that mapping.
 
 The mandatory evolution boundary is `schema_id = dutchbay.project_case.v1` and
 `contract_version = 1.0.0`; neither field has a default, and unknown or future values fail closed.
-JSON-mode dumps emit every Decimal as a deterministic plain-ASCII string using ambient-independent
-fixed notation. Fractional scale is preserved where present; accepted positive exponents are
-expanded to plain integer notation, positive/negative zero retain their sign, and a 36-place zero
-retains its 36-place scale. Those outputs can be ingressed again and satisfy the generated Draft
-2020-12 validation schema. Runtime/schema ingress equivalence is proved for the anchored plain
-string branch, including exact 72/36 values and hostile 37/73/100/500-place, excessive-zero-scale,
-exponent, Unicode-digit and whitespace strings under hostile Decimal contexts. It is not proved for
-the rejected JSON-number branch; R8 requires removing or genuinely replacing that branch and
-aligning count representation. Python-mode string refusal remains the explicit
+JSON-mode dumps emit every Decimal and resolved count as a deterministic plain-ASCII string using
+ambient-independent fixed or integer notation. Decimal fractional scale is preserved where present;
+accepted positive exponents are expanded to plain integer notation, positive/negative zero retain
+their sign, and a 36-place zero retains its 36-place scale. Those outputs can be ingressed again and
+satisfy the generated Draft 2020-12 validation schema. Runtime/schema ingress equivalence is proved
+for the sole anchored Decimal and count string representations, including exact 72/36 Decimal and
+36-digit count values; raw JSON numeric tokens; hostile 37/73/100/500-place, excessive-zero-scale,
+exponent, Unicode-digit, whitespace and terminal LF/CR/CRLF/U+2028/U+2029 strings; and `1`, `1.0`,
+`1e0`, signed, zero and leading-zero count forms under hostile Decimal contexts. Both generated
+patterns use an absolute-end assertion rather than `$`, so Draft 2020-12 cannot accept a terminal
+line break that runtime `re.fullmatch` refuses. Python-mode string refusal remains the explicit
 transport-normalization seam. A future web adapter must still impose request-size and transport
 resource controls before domain validation; D3A adds no adapter or endpoint policy. D3A defines no
 canonical whole-document JSON byte representation or hashing policy. Array indexes in
@@ -220,11 +230,11 @@ paths are untouched.
 The current remediation and inherited gates pass:
 
 ```text
-ProjectCase hostile/JSON/schema gate: 185 passed
-Complete tests/contracts gate:        511 passed
+ProjectCase hostile/JSON/schema gate: 233 passed
+Complete tests/contracts gate:        559 passed
 Existing D2 focused gate:            386 passed
-D2 plus ProjectCase coverage gate:    483 passed; 95.88% package total
-ProjectCase module coverage:          95.17%
+D2 plus ProjectCase coverage gate:    531 passed; 95.91% package total
+ProjectCase module coverage:          95.26%
 Ruff check and format:               passed
 Black check:                         passed
 isort check:                         passed
@@ -234,7 +244,17 @@ AST forbidden production import scan: passed
 Fourth independent domain disposition: DOMAIN REJECTED (R8 and R9)
 ```
 
-The 58 additional focused cases include the exact R5 rejected USD 1 and accepted USD 2 chains;
+The 48 R8-R9 additional focused cases prove sole-string Decimal/count JSON ingress, deterministic
+full-model dump/re-ingress, hostile runtime/Draft parity, exact 36/37-digit count boundaries, the
+reviewed disjoint `9950..10050` and `19950..20050` shared-rate intervals, common-rate controls,
+inferable-native variants, missing-report overflow and nearby feasible controls, zero-native
+controls, mixed minor/quote precision, three consumers, and the consistent fail-closed
+underdetermined-native/missing-report rule for resolved and missing FX. Their independent bounded
+`Fraction`/half-even oracle does not call the production rounding or interval helper when deriving
+expected witnesses.
+
+The preceding 58 additional focused cases include the exact R5 rejected USD 1 and accepted USD 2
+chains;
 missing quantity, rate, native-amount and FX combinations; the explicit two-unbound admissibility
 refusal; all four reviewed R6 negatives and nearby positives; constructive multi-missing capacity
 cases; exact complete and partial allocation closure; and R7 runtime/schema probes over exact and
@@ -308,13 +328,14 @@ git status --short --branch
 
 ## 7. Rereview and delivery boundary
 
-The controlling task's next action is limited to R8 exact JSON/count representation and R9 one-rate
-shared-conversion intersection, as specified in sections 19-23 of the durable rereview record. The
-implementation worker itself must not stage, commit, push, edit the pull request, merge, or mutate
-GitHub. After bounded implementation and full local gates, the controlling parent must checkpoint
-and push a new immutable SHA, then obtain another independent domain disposition. The existing
-**DOMAIN REJECTED** disposition remains controlling; separate assurance review is blocked until
-domain acceptance.
+The bounded R8 exact JSON/count representation and R9 one-rate shared-conversion intersection were
+implemented and locally proved in the pre-checkpoint writer handback described here. Current Git
+identity and cleanliness must be read live; this durable receipt does not assert that the diff
+remains uncommitted after the controlling parent acts. The implementation worker itself must not
+stage, commit, push, edit the pull request, merge, or mutate GitHub. The controlling parent must
+inspect the exact diff, checkpoint and push a new immutable SHA only under its delivery authority,
+then obtain another independent domain disposition. The existing **DOMAIN REJECTED** disposition
+remains controlling; separate assurance review is blocked until domain acceptance.
 
 Before any later authorized Git or GitHub action, fetch and compare live `origin/main`, reconcile
 only with explicit authority, and rerun the applicable gates against the resulting exact tree. Never

@@ -12,7 +12,9 @@ lender acceptance, package release, or permission to lift any ``HOLD``.
 Material decimals admit at most 72 total digits and 36 decimal places (therefore
 at most 36 integer digits); material counts admit at most 36 digits.  Arithmetic
 uses explicit precision-sized contexts or exact rational comparison, never the
-process-global Decimal context.
+process-global Decimal context. JSON ingress uses exact plain-ASCII strings for
+both material decimals and counts; normalized Python ingress uses native Decimal
+and int values.
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ from datetime import date
 from decimal import ROUND_HALF_EVEN, Context, Decimal, DecimalException
 from enum import Enum
 from fractions import Fraction
-from typing import Annotated, Any, Iterable, Literal, Union
+from typing import Annotated, Any, Iterable, Literal, Union, cast
 
 from pydantic import (
     Field,
@@ -64,22 +66,21 @@ _MAX_MATERIAL_COUNT = (10**_MAX_INTEGER_DIGITS) - 1
 _ARITHMETIC_PRECISION = (_MAX_SIGNIFICANT_DIGITS * 2) + 8
 _DECIMAL_GRID_SCALE = 10**_MAX_DECIMAL_PLACES
 _MAX_DECIMAL_GRID_INTEGER = (10**_MAX_SIGNIFICANT_DIGITS) - 1
-_DECIMAL_STRING_PATTERN = r"^[+-]?(?:(?:[0-9]{1,36})(?:\.[0-9]{1,36})?|\.[0-9]{1,36})$"
+_DECIMAL_STRING_PATTERN = (
+    r"^[+-]?(?:(?:[0-9]{1,36})(?:\.[0-9]{1,36})?|\.[0-9]{1,36})(?![\s\S])"
+)
 _FINITE_DECIMAL_JSON_SCHEMA: dict[str, Any] = {
-    "anyOf": [
-        {
-            "type": "number",
-            "exclusiveMinimum": -1e36,
-            "exclusiveMaximum": 1e36,
-            "multipleOf": 1e-36,
-        },
-        {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 74,
-            "pattern": _DECIMAL_STRING_PATTERN,
-        },
-    ]
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 74,
+    "pattern": _DECIMAL_STRING_PATTERN,
+}
+_MATERIAL_COUNT_STRING_PATTERN = r"^[1-9][0-9]{0,35}(?![\s\S])"
+_MATERIAL_COUNT_JSON_SCHEMA: dict[str, Any] = {
+    "type": "string",
+    "minLength": 1,
+    "maxLength": 36,
+    "pattern": _MATERIAL_COUNT_STRING_PATTERN,
 }
 
 
@@ -108,23 +109,17 @@ def _validate_finite_decimal(
     info: ValidationInfo,
 ) -> Decimal:
     """Parse and validate one Decimal without ambient-context normalization."""
-    if (
-        isinstance(raw_value, str)
-        and re.fullmatch(_DECIMAL_STRING_PATTERN, raw_value) is None
-    ):
-        raise ValueError(
-            "Decimal string requires plain notation with at most "
-            "36 integer and 36 fractional digits"
-        )
     if info.mode == "json":
-        if isinstance(raw_value, bool):
-            raise ValueError("boolean is not a ProjectCase Decimal")
-        if isinstance(raw_value, (str, int)):
-            value = Decimal(raw_value)
-        elif isinstance(raw_value, float):
-            value = Decimal(str(raw_value))
-        else:
-            value = handler(raw_value)
+        if not isinstance(raw_value, str):
+            raise ValueError(
+                "ProjectCase JSON Decimal requires an exact plain-ASCII string"
+            )
+        if re.fullmatch(_DECIMAL_STRING_PATTERN, raw_value) is None:
+            raise ValueError(
+                "Decimal string requires plain notation with at most "
+                "36 integer and 36 fractional digits"
+            )
+        value = Decimal(raw_value)
     else:
         value = handler(raw_value)
     if not isinstance(value, Decimal) or not _decimal_is_in_domain(value):
@@ -140,13 +135,45 @@ def _serialize_finite_decimal(value: Decimal) -> str:
     return format(value, "f")
 
 
+def _validate_material_positive_int(
+    raw_value: Any,
+    handler: ValidatorFunctionWrapHandler,
+    info: ValidationInfo,
+) -> int:
+    """Validate a native count or its exact positive JSON string form."""
+    if info.mode == "json":
+        if (
+            not isinstance(raw_value, str)
+            or re.fullmatch(_MATERIAL_COUNT_STRING_PATTERN, raw_value) is None
+        ):
+            raise ValueError(
+                "ProjectCase JSON count requires a positive unsigned decimal string "
+                "with at most 36 digits and no leading zeros"
+            )
+        return cast(int, handler(int(raw_value)))
+    return cast(int, handler(raw_value))
+
+
+def _serialize_material_positive_int(value: int) -> str:
+    """Emit one accepted material count as an exact JSON string."""
+    return str(value)
+
+
 FiniteDecimal = Annotated[
     Decimal,
     WrapValidator(_validate_finite_decimal),
     PlainSerializer(_serialize_finite_decimal, return_type=str, when_used="json"),
     WithJsonSchema(_FINITE_DECIMAL_JSON_SCHEMA, mode="validation"),
 ]
-MaterialPositiveInt = Annotated[int, Field(strict=True, gt=0, le=_MAX_MATERIAL_COUNT)]
+MaterialPositiveInt = Annotated[
+    int,
+    Field(strict=True, gt=0, le=_MAX_MATERIAL_COUNT),
+    WrapValidator(_validate_material_positive_int),
+    PlainSerializer(
+        _serialize_material_positive_int, return_type=str, when_used="json"
+    ),
+    WithJsonSchema(_MATERIAL_COUNT_JSON_SCHEMA, mode="validation"),
+]
 MinorUnitPlaces = Annotated[int, Field(ge=0, le=6)]
 QuotePrecision = Annotated[int, Field(ge=1, le=18)]
 
@@ -1111,7 +1138,20 @@ class CostSchedule(StrictFrozenModel):
                     or conversion.valuation_date != basis.valuation_date
                 ):
                     raise ValueError("cost line conversion scope/basis mismatch")
-                _reconcile_partial_conversion(line, conversion)
+                if isinstance(conversion.rate, ResolvedValue):
+                    _reconcile_partial_conversion(line, conversion)
+
+        for conversion in self.currency_conversions:
+            if conversion.conversion_id not in used_conversions or isinstance(
+                conversion.rate, ResolvedValue
+            ):
+                continue
+            consuming_lines = tuple(
+                line
+                for line in self.lines
+                if line.amount.conversion_id == conversion.conversion_id
+            )
+            _reconcile_shared_missing_conversion(consuming_lines, conversion)
 
         allocation_ids = {
             allocation_id
@@ -1870,32 +1910,113 @@ def _reconcile_partial_product(
     return target
 
 
-def _reconcile_partial_conversion(
-    line: CostLine, conversion: CurrencyConversion
-) -> None:
-    """Validate every inferable native-rate-reporting conversion constraint."""
-    native_value = (
-        line.amount.native_amount.value
-        if isinstance(line.amount.native_amount, ResolvedValue)
-        else _reconcile_partial_product(
-            line.quantity,
-            line.unit_rate_native,
-            None,
-            target_minor_unit_places=line.amount.native_minor_unit_places,
-            left_must_be_positive=True,
-            right_must_be_positive=False,
-            equation_name="native amount must equal quantity * unit_rate_native",
-        )
+def _effective_native_amount(line: CostLine) -> Decimal | None:
+    """Return a declared or exactly inferable native amount for one cost line."""
+    if isinstance(line.amount.native_amount, ResolvedValue):
+        return line.amount.native_amount.value
+    return _reconcile_partial_product(
+        line.quantity,
+        line.unit_rate_native,
+        None,
+        target_minor_unit_places=line.amount.native_minor_unit_places,
+        left_must_be_positive=True,
+        right_must_be_positive=False,
+        equation_name="native amount must equal quantity * unit_rate_native",
     )
+
+
+def _missing_conversion_rate_interval(
+    line: CostLine, conversion: CurrencyConversion
+) -> tuple[int, int]:
+    """Derive one consumer's exact inclusive interval on a missing FX rate grid."""
+    native_value = _effective_native_amount(line)
     reporting_value = (
         line.amount.reporting_amount.value
         if isinstance(line.amount.reporting_amount, ResolvedValue)
         else None
     )
-    rate_value = (
-        conversion.rate.value if isinstance(conversion.rate, ResolvedValue) else None
+    if native_value is None:
+        if reporting_value is None:
+            raise ValueError(
+                "connected cost/FX chain requires an inferable native amount "
+                "when reporting amount is missing"
+            )
+        raise ValueError(
+            "connected cost/FX chain requires a resolved FX rate or an inferable "
+            "native amount"
+        )
+
+    quote_precision = conversion.quote_precision
+    maximum_rate = (10 ** (_MAX_INTEGER_DIGITS + quote_precision)) - 1
+    if reporting_value is not None:
+        reporting_integer = _decimal_to_grid_integer(
+            reporting_value, line.amount.reporting_minor_unit_places
+        )
+        interval = _grid_input_interval_for_exact_output(
+            reporting_integer,
+            minimum_input=1,
+            maximum_input=maximum_rate,
+            input_decimal_places=quote_precision,
+            factor=native_value,
+            output_decimal_places=line.amount.reporting_minor_unit_places,
+        )
+        if interval is None:
+            raise ValueError(
+                f"cost line {line.line_id} reporting amount has no feasible "
+                "positive missing FX rate"
+            )
+        return interval
+
+    maximum_reporting = (
+        10 ** (_MAX_INTEGER_DIGITS + line.amount.reporting_minor_unit_places)
+    ) - 1
+    first_overflowing_rate = _first_grid_input_with_output_at_least(
+        maximum_reporting + 1,
+        minimum_input=1,
+        maximum_input=maximum_rate,
+        input_decimal_places=quote_precision,
+        factor=native_value,
+        output_decimal_places=line.amount.reporting_minor_unit_places,
     )
-    if native_value is not None and rate_value is not None:
+    maximum_feasible_rate = min(maximum_rate, first_overflowing_rate - 1)
+    if maximum_feasible_rate < 1:
+        raise ValueError(
+            f"cost line {line.line_id} has no positive missing FX rate whose "
+            "reporting amount is in the ProjectCase numeric domain"
+        )
+    return 1, maximum_feasible_rate
+
+
+def _reconcile_shared_missing_conversion(
+    lines: tuple[CostLine, ...], conversion: CurrencyConversion
+) -> None:
+    """Require one common positive quote-grid witness for a missing FX rate."""
+    minimum_rate = 1
+    maximum_rate = (10 ** (_MAX_INTEGER_DIGITS + conversion.quote_precision)) - 1
+    for line in lines:
+        line_minimum, line_maximum = _missing_conversion_rate_interval(line, conversion)
+        minimum_rate = max(minimum_rate, line_minimum)
+        maximum_rate = min(maximum_rate, line_maximum)
+        if minimum_rate > maximum_rate:
+            raise ValueError(
+                f"currency conversion {conversion.conversion_id} has no common "
+                "positive missing FX rate for all consuming cost lines"
+            )
+
+
+def _reconcile_partial_conversion(
+    line: CostLine, conversion: CurrencyConversion
+) -> None:
+    """Validate every inferable constraint for one resolved FX rate."""
+    native_value = _effective_native_amount(line)
+    reporting_value = (
+        line.amount.reporting_amount.value
+        if isinstance(line.amount.reporting_amount, ResolvedValue)
+        else None
+    )
+    assert isinstance(conversion.rate, ResolvedValue)
+    rate_value = conversion.rate.value
+    if native_value is not None:
         inferred = _round_money(
             _multiply_exact(native_value, rate_value),
             line.amount.reporting_minor_unit_places,
@@ -1905,43 +2026,28 @@ def _reconcile_partial_conversion(
             raise ValueError("cost line reporting amount does not reconcile")
         return
     if reporting_value is None:
-        return
-    if native_value is not None:
-        if not _missing_factor_solution_exists(
-            native_value,
-            reporting_value,
-            target_minor_unit_places=line.amount.reporting_minor_unit_places,
-            factor_decimal_places=conversion.quote_precision,
-            factor_must_be_positive=True,
-        ):
-            raise ValueError(
-                "cost line reporting amount has no feasible positive missing FX rate"
-            )
-        return
-    if rate_value is not None:
-        reporting_integer = _decimal_to_grid_integer(
-            reporting_value, line.amount.reporting_minor_unit_places
+        raise ValueError(
+            "connected cost/FX chain requires an inferable native amount when "
+            "reporting amount is missing"
         )
-        maximum_native = (
-            10 ** (_MAX_INTEGER_DIGITS + line.amount.native_minor_unit_places)
-        ) - 1
-        native_interval = _grid_input_interval_for_exact_output(
-            reporting_integer,
-            minimum_input=0,
-            maximum_input=maximum_native,
-            input_decimal_places=line.amount.native_minor_unit_places,
-            factor=rate_value,
-            output_decimal_places=line.amount.reporting_minor_unit_places,
-        )
-        if native_interval is None or not _cost_can_produce_native_interval(
-            line, *native_interval
-        ):
-            raise ValueError("connected cost/FX chain has no joint bounded completion")
-        return
-    raise ValueError(
-        "connected cost/FX chain requires a resolved FX rate or an inferable "
-        "native amount"
+    reporting_integer = _decimal_to_grid_integer(
+        reporting_value, line.amount.reporting_minor_unit_places
     )
+    maximum_native = (
+        10 ** (_MAX_INTEGER_DIGITS + line.amount.native_minor_unit_places)
+    ) - 1
+    native_interval = _grid_input_interval_for_exact_output(
+        reporting_integer,
+        minimum_input=0,
+        maximum_input=maximum_native,
+        input_decimal_places=line.amount.native_minor_unit_places,
+        factor=rate_value,
+        output_decimal_places=line.amount.reporting_minor_unit_places,
+    )
+    if native_interval is None or not _cost_can_produce_native_interval(
+        line, *native_interval
+    ):
+        raise ValueError("connected cost/FX chain has no joint bounded completion")
 
 
 def _missing_factor_solution_exists(

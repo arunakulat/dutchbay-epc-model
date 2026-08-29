@@ -6,6 +6,7 @@ import ast
 import copy
 import json
 from decimal import ROUND_DOWN, ROUND_UP, Decimal, localcontext
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable
 
@@ -39,7 +40,7 @@ def _resolved(
 ) -> dict[str, Any]:
     return {
         "state": "resolved",
-        "value": value,
+        "value": str(value),
         "unit": unit,
         "bindings": [{"kind": kind, "reference_id": reference_id}],
     }
@@ -53,7 +54,7 @@ def _resolved_count(
 ) -> dict[str, Any]:
     return {
         "state": "resolved",
-        "value": value,
+        "value": str(value),
         "unit": "count",
         "bindings": [{"kind": kind, "reference_id": reference_id}],
     }
@@ -142,6 +143,97 @@ def _configure_missing_opex_chain(
     else:
         conversion["rate"] = _resolved(fx_rate, "USD/LKR")
     payload["costs"]["reconciliation_status"] = "incomplete_missing_input"
+
+
+def _make_conversion_rate_missing(
+    payload: dict[str, Any], *, quote_precision: int
+) -> None:
+    conversion = payload["costs"]["currency_conversions"][0]
+    conversion["quote_precision"] = quote_precision
+    _bind_missing(
+        payload,
+        conversion,
+        "rate",
+        "missing:fx-rate",
+        "USD/LKR",
+        "/costs/currency_conversions/0/rate",
+    )
+    payload["costs"]["reconciliation_status"] = "incomplete_missing_input"
+
+
+def _configure_fx_consumer(
+    payload: dict[str, Any],
+    line_index: int,
+    *,
+    native_amount: str,
+    reporting_amount: str | None,
+    native_minor_unit_places: int,
+    reporting_minor_unit_places: int,
+    infer_native: bool = False,
+) -> None:
+    line = payload["costs"]["lines"][line_index]
+    line["quantity"] = _resolved("1", "year")
+    line["unit_rate_native"] = _resolved(native_amount, "LKR/year")
+    line["amount"]["native_minor_unit_places"] = native_minor_unit_places
+    if infer_native:
+        _bind_missing(
+            payload,
+            line["amount"],
+            "native_amount",
+            f"missing:native:{line_index}",
+            "LKR",
+            f"/costs/lines/{line_index}/amount/native_amount",
+        )
+    else:
+        line["amount"]["native_amount"] = _resolved(native_amount, "LKR")
+    line["amount"]["reporting_minor_unit_places"] = reporting_minor_unit_places
+    if reporting_amount is None:
+        _bind_missing(
+            payload,
+            line["amount"],
+            "reporting_amount",
+            f"missing:reporting:{line_index}",
+            "USD",
+            f"/costs/lines/{line_index}/amount/reporting_amount",
+        )
+    else:
+        line["amount"]["reporting_amount"] = _resolved(reporting_amount, "USD")
+
+
+def _append_fx_consumer(
+    payload: dict[str, Any],
+    *,
+    suffix: str,
+    native_amount: str,
+    reporting_amount: str | None,
+    native_minor_unit_places: int,
+    reporting_minor_unit_places: int,
+    infer_native: bool = False,
+) -> None:
+    line_index = len(payload["costs"]["lines"])
+    line = copy.deepcopy(payload["costs"]["lines"][1])
+    line["line_id"] = f"cost:opex:{suffix}"
+    line["description"] = f"FX consumer {suffix}"
+    allocation_id = f"allocation:opex:{suffix}:wind"
+    line["allocation_ids"] = [allocation_id]
+    payload["costs"]["lines"].append(line)
+    payload["costs"]["allocations"].append(
+        {
+            "allocation_id": allocation_id,
+            "cost_line_id": line["line_id"],
+            "asset_id": "asset:wind-block-01",
+            "share": _resolved("1", "fraction"),
+        }
+    )
+    _configure_fx_consumer(
+        payload,
+        line_index,
+        native_amount=native_amount,
+        reporting_amount=reporting_amount,
+        native_minor_unit_places=native_minor_unit_places,
+        reporting_minor_unit_places=reporting_minor_unit_places,
+        infer_native=infer_native,
+    )
 
 
 def _case_payload() -> dict[str, Any]:
@@ -411,7 +503,7 @@ def test_project_case_json_schema_round_trip_and_stable_shape() -> None:
     assert payload["assets"][0]["capacity"]["kind"] == "unitized"
     assert payload["assets"][0]["capacity"]["unit_count"] == {
         "state": "resolved",
-        "value": 2,
+        "value": "2",
         "unit": "count",
         "bindings": [{"kind": "source", "reference_id": "source:project-basis"}],
     }
@@ -426,14 +518,23 @@ def test_project_case_json_schema_round_trip_and_stable_shape() -> None:
     jsonschema.Draft202012Validator(schema).validate(payload)
     assert {"schema_id", "contract_version"} <= set(schema["required"])
     decimal_schema = schema["$defs"]["ResolvedValue"]["properties"]["value"]
-    assert decimal_schema["anyOf"][0]["exclusiveMinimum"] == -1e36
-    assert decimal_schema["anyOf"][0]["exclusiveMaximum"] == 1e36
-    assert decimal_schema["anyOf"][0]["multipleOf"] == 1e-36
-    assert decimal_schema["anyOf"][1]["pattern"] == (
-        r"^[+-]?(?:(?:[0-9]{1,36})(?:\.[0-9]{1,36})?|\.[0-9]{1,36})$"
-    )
+    assert decimal_schema == {
+        "maxLength": 74,
+        "minLength": 1,
+        "pattern": (
+            r"^[+-]?(?:(?:[0-9]{1,36})(?:\.[0-9]{1,36})?|\.[0-9]{1,36})" r"(?![\s\S])"
+        ),
+        "title": "Value",
+        "type": "string",
+    }
     count_schema = schema["$defs"]["ResolvedCount"]["properties"]["value"]
-    assert count_schema["maximum"] == (10**36) - 1
+    assert count_schema == {
+        "maxLength": 36,
+        "minLength": 1,
+        "pattern": r"^[1-9][0-9]{0,35}(?![\s\S])",
+        "title": "Value",
+        "type": "string",
+    }
 
 
 @pytest.mark.parametrize("field", ["schema_id", "contract_version"])
@@ -587,12 +688,12 @@ def test_non_lka_case_cannot_receive_sri_lankan_source_scope() -> None:
 @pytest.mark.parametrize(
     ("field", "value", "pattern"),
     [
-        ("latitude_degrees", 91.0, "latitude_degrees requires degree unit"),
-        ("longitude_degrees", 181.0, "longitude_degrees requires degree unit"),
+        ("latitude_degrees", "91.0", "latitude_degrees requires degree unit"),
+        ("longitude_degrees", "181.0", "longitude_degrees requires degree unit"),
     ],
 )
 def test_coordinates_have_explicit_global_bounds(
-    field: str, value: float, pattern: str
+    field: str, value: str, pattern: str
 ) -> None:
     payload = _case_payload()
     payload["location"][field]["value"] = value
@@ -1231,6 +1332,284 @@ def test_missing_positive_fx_rate_is_accepted_for_nonzero_amounts() -> None:
     )
 
 
+def test_shared_missing_fx_rate_rejects_disjoint_consumer_intervals() -> None:
+    maximum_rate = (10 ** (36 + 6)) - 1
+    assert project_case_contract._grid_input_interval_for_exact_output(
+        100,
+        minimum_input=1,
+        maximum_input=maximum_rate,
+        input_decimal_places=6,
+        factor=Decimal("100.00"),
+        output_decimal_places=2,
+    ) == (9950, 10050)
+    assert project_case_contract._grid_input_interval_for_exact_output(
+        200,
+        minimum_input=1,
+        maximum_input=maximum_rate,
+        input_decimal_places=6,
+        factor=Decimal("100.00"),
+        output_decimal_places=2,
+    ) == (19950, 20050)
+
+    payload = _case_payload()
+    _make_conversion_rate_missing(payload, quote_precision=6)
+    _configure_fx_consumer(
+        payload,
+        1,
+        native_amount="100.00",
+        reporting_amount="1.00",
+        native_minor_unit_places=2,
+        reporting_minor_unit_places=2,
+    )
+    _append_fx_consumer(
+        payload,
+        suffix="disjoint",
+        native_amount="100.00",
+        reporting_amount="2.00",
+        native_minor_unit_places=2,
+        reporting_minor_unit_places=2,
+    )
+    _error(payload, "has no common positive missing FX rate")
+
+
+def test_shared_missing_fx_rate_accepts_one_common_consumer_witness() -> None:
+    payload = _case_payload()
+    _make_conversion_rate_missing(payload, quote_precision=6)
+    _configure_fx_consumer(
+        payload,
+        1,
+        native_amount="100.00",
+        reporting_amount="1.00",
+        native_minor_unit_places=2,
+        reporting_minor_unit_places=2,
+    )
+    _append_fx_consumer(
+        payload,
+        suffix="common",
+        native_amount="100.00",
+        reporting_amount="1.00",
+        native_minor_unit_places=2,
+        reporting_minor_unit_places=2,
+    )
+    assert _validate(payload).costs.reconciliation_status.value == (
+        "incomplete_missing_input"
+    )
+
+
+def test_shared_missing_fx_rate_uses_inferable_native_amounts() -> None:
+    payload = _case_payload()
+    _make_conversion_rate_missing(payload, quote_precision=6)
+    _configure_fx_consumer(
+        payload,
+        1,
+        native_amount="100.00",
+        reporting_amount="1.00",
+        native_minor_unit_places=2,
+        reporting_minor_unit_places=2,
+    )
+    _append_fx_consumer(
+        payload,
+        suffix="inferable-disjoint",
+        native_amount="100.00",
+        reporting_amount="2.00",
+        native_minor_unit_places=2,
+        reporting_minor_unit_places=2,
+        infer_native=True,
+    )
+    _error(payload, "has no common positive missing FX rate")
+
+
+@pytest.mark.parametrize("forced_reporting", ["1", "2"])
+def test_shared_missing_fx_rate_enforces_missing_report_output_domain(
+    forced_reporting: str,
+) -> None:
+    payload = _case_payload()
+    _make_conversion_rate_missing(payload, quote_precision=1)
+    _configure_fx_consumer(
+        payload,
+        1,
+        native_amount="1",
+        reporting_amount=forced_reporting,
+        native_minor_unit_places=0,
+        reporting_minor_unit_places=0,
+    )
+    _append_fx_consumer(
+        payload,
+        suffix="maximum-native-missing-report",
+        native_amount=MAX_PROJECT_INTEGER,
+        reporting_amount=None,
+        native_minor_unit_places=0,
+        reporting_minor_unit_places=0,
+    )
+    if forced_reporting == "1":
+        assert _validate(payload).costs.reconciliation_status.value == (
+            "incomplete_missing_input"
+        )
+    else:
+        _error(payload, "has no common positive missing FX rate")
+
+
+def test_shared_missing_fx_rate_accepts_zero_native_zero_report_constraint() -> None:
+    payload = _case_payload()
+    _make_conversion_rate_missing(payload, quote_precision=4)
+    _configure_fx_consumer(
+        payload,
+        1,
+        native_amount="100.00",
+        reporting_amount="1.00",
+        native_minor_unit_places=2,
+        reporting_minor_unit_places=2,
+    )
+    _append_fx_consumer(
+        payload,
+        suffix="zero",
+        native_amount="0.00",
+        reporting_amount="0.00",
+        native_minor_unit_places=2,
+        reporting_minor_unit_places=2,
+    )
+    assert _validate(payload).costs.reconciliation_status.value == (
+        "incomplete_missing_input"
+    )
+
+
+def test_three_consumers_with_different_money_precision_share_one_fx_rate() -> None:
+    payload = _case_payload()
+    _make_conversion_rate_missing(payload, quote_precision=4)
+    _configure_fx_consumer(
+        payload,
+        1,
+        native_amount="100.00",
+        reporting_amount="1.00",
+        native_minor_unit_places=2,
+        reporting_minor_unit_places=2,
+    )
+    _append_fx_consumer(
+        payload,
+        suffix="three-decimal-report",
+        native_amount="1.000",
+        reporting_amount="0.010",
+        native_minor_unit_places=3,
+        reporting_minor_unit_places=3,
+    )
+    _append_fx_consumer(
+        payload,
+        suffix="one-decimal-report",
+        native_amount="10",
+        reporting_amount="0.1",
+        native_minor_unit_places=0,
+        reporting_minor_unit_places=1,
+    )
+    assert _validate(payload).costs.reconciliation_status.value == (
+        "incomplete_missing_input"
+    )
+
+
+@pytest.mark.parametrize("missing_fx", [False, True])
+def test_underdetermined_native_and_missing_report_fail_closed(
+    missing_fx: bool,
+) -> None:
+    payload = _case_payload()
+    if missing_fx:
+        _make_conversion_rate_missing(payload, quote_precision=6)
+    line = payload["costs"]["lines"][1]
+    _bind_missing(
+        payload,
+        line,
+        "quantity",
+        "missing:underdetermined-quantity",
+        "year",
+        "/costs/lines/1/quantity",
+    )
+    _bind_missing(
+        payload,
+        line,
+        "unit_rate_native",
+        "missing:underdetermined-rate",
+        "LKR/year",
+        "/costs/lines/1/unit_rate_native",
+    )
+    _bind_missing(
+        payload,
+        line["amount"],
+        "native_amount",
+        "missing:underdetermined-native",
+        "LKR",
+        "/costs/lines/1/amount/native_amount",
+    )
+    _bind_missing(
+        payload,
+        line["amount"],
+        "reporting_amount",
+        "missing:underdetermined-reporting",
+        "USD",
+        "/costs/lines/1/amount/reporting_amount",
+    )
+    payload["costs"]["reconciliation_status"] = "incomplete_missing_input"
+    _error(
+        payload, "requires an inferable native amount when reporting amount is missing"
+    )
+
+
+@pytest.mark.parametrize(
+    ("native", "reporting", "reporting_places", "quote_places"),
+    [
+        ("1", "1", 0, 1),
+        ("2", "1", 0, 1),
+        ("100", "1.00", 2, 4),
+        ("3.5", "0.04", 2, 3),
+    ],
+)
+def test_missing_fx_interval_matches_independent_bounded_oracle(
+    native: str,
+    reporting: str,
+    reporting_places: int,
+    quote_places: int,
+) -> None:
+    payload = _case_payload()
+    _make_conversion_rate_missing(payload, quote_precision=quote_places)
+    native_exponent = Decimal(native).as_tuple().exponent
+    assert isinstance(native_exponent, int)
+    _configure_fx_consumer(
+        payload,
+        1,
+        native_amount=native,
+        reporting_amount=reporting,
+        native_minor_unit_places=min(2, max(0, -native_exponent)),
+        reporting_minor_unit_places=reporting_places,
+    )
+    case = _validate(payload)
+    line = case.costs.lines[1]
+    conversion = case.costs.currency_conversions[0]
+    actual_interval = project_case_contract._missing_conversion_rate_interval(
+        line, conversion
+    )
+    target = int(Fraction(Decimal(reporting)) * (10**reporting_places))
+    witnesses: list[int] = []
+    for quote_integer in range(1, 501):
+        exact_output = (
+            Fraction(Decimal(native))
+            * Fraction(quote_integer, 10**quote_places)
+            * (10**reporting_places)
+        )
+        quotient, remainder = divmod(exact_output.numerator, exact_output.denominator)
+        if remainder * 2 < exact_output.denominator:
+            rounded = quotient
+        elif remainder * 2 > exact_output.denominator:
+            rounded = quotient + 1
+        else:
+            rounded = quotient if quotient % 2 == 0 else quotient + 1
+        if rounded == target:
+            witnesses.append(quote_integer)
+
+    actual_bounded = [
+        value
+        for value in range(1, 501)
+        if actual_interval[0] <= value <= actual_interval[1]
+    ]
+    assert actual_bounded == witnesses
+
+
 @pytest.mark.parametrize("missing_operand", ["unit_rate_native", "quantity"])
 def test_joint_cost_fx_chain_rejects_incompatible_native_grid(
     missing_operand: str,
@@ -1354,7 +1733,7 @@ def test_high_precision_generation_is_independent_of_ambient_context() -> None:
         case = _validate(payload)
     dumped = case.model_dump(mode="json")
     assert dumped["assets"][0]["capacity"]["kind"] == "unitized"
-    assert dumped["assets"][0]["capacity"]["unit_count"]["value"] == exact_count
+    assert dumped["assets"][0]["capacity"]["unit_count"]["value"] == str(exact_count)
 
 
 def test_high_precision_bess_is_independent_of_ambient_context() -> None:
@@ -1468,6 +1847,11 @@ def test_numeric_domain_rejects_excess_decimal_places_as_validation_error() -> N
         ("1e-3", True),
         ("١.٢", True),
         (" 1.25", True),
+        ("1\n", False),
+        ("1\r", False),
+        ("1\r\n", False),
+        ("1\u2028", False),
+        ("1\u2029", False),
     ],
 )
 def test_decimal_string_runtime_and_schema_reject_the_same_hostile_inputs(
@@ -1529,7 +1913,7 @@ def test_boolean_is_not_a_decimal_in_runtime_or_schema() -> None:
     validator = jsonschema.Draft202012Validator(schema)
     payload = _validate(_case_payload()).model_dump(mode="json")
     payload["location"]["latitude_degrees"]["value"] = True
-    with pytest.raises(ValidationError, match="boolean is not"):
+    with pytest.raises(ValidationError, match="requires an exact plain-ASCII string"):
         ProjectCase.model_validate_json(json.dumps(payload))
     with pytest.raises(jsonschema.ValidationError):
         validator.validate(payload)
@@ -1540,10 +1924,147 @@ def test_sub_grid_json_number_is_rejected_by_runtime_and_schema() -> None:
     validator = jsonschema.Draft202012Validator(schema)
     payload = _validate(_case_payload()).model_dump(mode="json")
     payload["location"]["latitude_degrees"]["value"] = 1e-37
-    with pytest.raises(ValidationError, match="numeric domain"):
+    with pytest.raises(ValidationError, match="requires an exact plain-ASCII string"):
         ProjectCase.model_validate_json(json.dumps(payload))
     with pytest.raises(jsonschema.ValidationError):
         validator.validate(payload)
+
+
+@pytest.mark.parametrize(
+    "raw_token",
+    [
+        "3e-36",
+        "6.9999999999999999999999999999999999999e-36",
+        "7.0000000000000000000000000000000000001e-36",
+        "1.23456789012345678901234567890123456",
+        "1.0000000000000000000000000000000000001",
+        "1000000000000000000000000000000000000",
+        "-1000000000000000000000000000000000000",
+        ("9" * 36) + "." + ("9" * 36),
+    ],
+)
+def test_raw_json_decimal_tokens_are_rejected_without_identity_loss(
+    raw_token: str,
+) -> None:
+    marker = "__raw_decimal_token__"
+    payload = _case_payload()
+    payload["location"]["latitude_degrees"]["value"] = marker
+    raw_json = json.dumps(payload).replace(json.dumps(marker), raw_token, 1)
+    parsed_payload = json.loads(raw_json)
+
+    for precision, rounding in ((3, ROUND_DOWN), (100, ROUND_UP)):
+        with localcontext() as context:
+            context.prec = precision
+            context.rounding = rounding
+            with pytest.raises(
+                ValidationError, match="requires an exact plain-ASCII string"
+            ):
+                ProjectCase.model_validate_json(raw_json)
+            with pytest.raises(jsonschema.ValidationError):
+                jsonschema.Draft202012Validator(
+                    ProjectCase.model_json_schema()
+                ).validate(parsed_payload)
+
+
+@pytest.mark.parametrize(
+    "raw_token",
+    [
+        "1",
+        "1.0",
+        "1e0",
+        "999999999999999999999999999999999999",
+        "1000000000000000000000000000000000000",
+    ],
+)
+def test_raw_json_count_tokens_are_rejected_by_runtime_and_schema(
+    raw_token: str,
+) -> None:
+    marker = "__raw_count_token__"
+    payload = _case_payload()
+    payload["assets"][0]["capacity"]["unit_count"]["value"] = marker
+    raw_json = json.dumps(payload).replace(json.dumps(marker), raw_token, 1)
+    parsed_payload = json.loads(raw_json)
+    with pytest.raises(ValidationError, match="JSON count requires"):
+        ProjectCase.model_validate_json(raw_json)
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.Draft202012Validator(ProjectCase.model_json_schema()).validate(
+            parsed_payload
+        )
+
+
+@pytest.mark.parametrize(
+    ("value", "accepted"),
+    [
+        ("1", True),
+        ("999999999999999999999999999999999999", True),
+        ("0", False),
+        ("-1", False),
+        ("+1", False),
+        ("01", False),
+        ("1.0", False),
+        ("1e0", False),
+        ("1000000000000000000000000000000000000", False),
+        (" 1", False),
+        ("١", False),
+        ("1\n", False),
+        ("1\r", False),
+        ("1\r\n", False),
+        ("1\u2028", False),
+        ("1\u2029", False),
+    ],
+)
+def test_json_count_string_runtime_and_schema_are_lexically_equivalent(
+    value: str, accepted: bool
+) -> None:
+    payload = _case_payload()
+    capacity = payload["assets"][0]["capacity"]
+    capacity["unit_count"]["value"] = value
+    if accepted:
+        capacity["unit_power_capacity"] = _resolved("1", "MW")
+        capacity["total_power_capacity"] = _resolved(value, "MW")
+
+    schema_validator = jsonschema.Draft202012Validator(ProjectCase.model_json_schema())
+    if accepted:
+        case = ProjectCase.model_validate_json(json.dumps(payload))
+        schema_validator.validate(payload)
+        generation = case.assets[0]
+        assert generation.kind == "generation"
+        assert generation.capacity.kind == "unitized"
+        assert generation.capacity.unit_count.state == "resolved"
+        assert generation.capacity.unit_count.value == int(value)
+        assert (
+            case.model_dump(mode="json")["assets"][0]["capacity"]["unit_count"]["value"]
+            == value
+        )
+    else:
+        with pytest.raises(ValidationError, match="JSON count requires"):
+            ProjectCase.model_validate_json(json.dumps(payload))
+        with pytest.raises(jsonschema.ValidationError):
+            schema_validator.validate(payload)
+
+
+def test_native_count_serializes_to_exact_json_string_and_reingresses() -> None:
+    native_payload = _validate(_case_payload()).model_dump(mode="python")
+    count = native_payload["assets"][0]["capacity"]["unit_count"]
+    assert count["value"] == 2
+
+    for precision, rounding in ((3, ROUND_UP), (100, ROUND_DOWN)):
+        with localcontext() as context:
+            context.prec = precision
+            context.rounding = rounding
+            case = ProjectCase.model_validate(native_payload)
+            dumped = case.model_dump(mode="json")
+            assert dumped["assets"][0]["capacity"]["unit_count"]["value"] == "2"
+            jsonschema.Draft202012Validator(ProjectCase.model_json_schema()).validate(
+                dumped
+            )
+            assert ProjectCase.model_validate_json(case.model_dump_json()) == case
+
+    for invalid in ("2", 2.0, True):
+        hostile = copy.deepcopy(native_payload)
+        hostile["assets"][0]["capacity"]["unit_count"]["value"] = invalid
+        with pytest.raises(ValidationError):
+            ProjectCase.model_validate(hostile)
 
 
 @pytest.mark.parametrize(
@@ -1657,8 +2178,8 @@ def test_python_mode_refuses_json_strings_until_a_transport_adapter_normalizes_t
 def test_material_count_domain_rejects_a_37_digit_count() -> None:
     payload = _case_payload()
     payload["assets"][0]["capacity"]["unit_count"] = _resolved_count(10**36)
-    error = _error(payload, "less_than_equal")
-    assert error.errors()[0]["type"] == "less_than_equal"
+    error = _error(payload, "at most 36 digits")
+    assert error.errors()[0]["type"] == "value_error"
 
 
 def test_out_of_domain_intermediate_is_a_controlled_validation_error() -> None:
@@ -1761,17 +2282,15 @@ def test_bess_only_source_cannot_support_wind_only_fx_conversion() -> None:
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("power_capacity", -2.5),
-        ("energy_capacity", float("nan")),
-        ("duration", float("inf")),
+        ("power_capacity", "-2.5"),
+        ("energy_capacity", "nan"),
+        ("duration", "inf"),
     ],
 )
-def test_storage_rejects_negative_or_non_finite_numbers(
-    field: str, value: float
-) -> None:
+def test_storage_rejects_negative_or_non_finite_numbers(field: str, value: str) -> None:
     payload = _case_payload()
     payload["assets"][1][field]["value"]["value"] = value
-    _error(payload, "numeric domain|positive")
+    _error(payload, "plain notation|positive")
 
 
 def test_shared_capacity_zero_cannot_stand_for_missing() -> None:
@@ -1900,11 +2419,11 @@ def test_missing_unit_rating_defers_generation_arithmetic() -> None:
     assert _validate(payload).missing_inputs[0].expected_unit == "MW"
 
 
-@pytest.mark.parametrize("value", [0, -1, 2.5])
-def test_resolved_unit_count_requires_positive_integer(value: float) -> None:
+@pytest.mark.parametrize("value", ["0", "-1", "2.5"])
+def test_resolved_unit_count_requires_positive_integer(value: str) -> None:
     payload = _case_payload()
     payload["assets"][0]["capacity"]["unit_count"]["value"] = value
-    _error(payload, "greater_than|int_type")
+    _error(payload, "positive unsigned decimal string")
 
 
 def test_resolved_unit_count_requires_provenance_binding() -> None:
