@@ -1,4 +1,4 @@
-# Session handover - 2026-08-29, successor 13
+# Session handover - 2026-08-29, successor 14
 
 Durable PERSIST-01 successor to
 [`docs/SESSION_HANDOVER_2026-08-29.md`](SESSION_HANDOVER_2026-08-29.md). The predecessor remains
@@ -30,17 +30,16 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
   dutchbay_bootstrap_rules.py
 ```
 
-This record captures the fifth exact-head D3A domain veto and the bounded R10 pre-checkpoint worker
-handback based on it. The
-fifth independent review disposition is **DOMAIN REJECTED** at
-`b0020ece4e864cc2cf589bae40f82edd5c30320d`; it remains controlling until an independent reviewer
-accepts a later exact successor identified by live Git refs and file hashes. R8 and R9 are accepted
-at that exact candidate; R10 dedicated-versus-shared electrical topology is the only new blocking
-class. Current Git status and live refs are authoritative. Never reset, stash or clean away the D3A
-worktree; keep it first on `PYTHONPATH`.
-The implementation worker is not authorized to stage, commit, push, edit the pull request, merge,
-or otherwise mutate GitHub; the controlling parent task holds the user's sequential delivery
-authority. Do not bypass another independent domain rereview, exact-head CI, current-branch or
+This record captures the sixth exact-head D3A domain review. The independent disposition is
+**DOMAIN ACCEPTED** at `2a3831542a3160f6d02cb2f592c4487981647f19`: R10 dedicated-versus-shared
+electrical topology is closed, and R8-R9 and every earlier repair class remain accepted. The fifth
+**DOMAIN REJECTED** disposition at `b0020ece4e864cc2cf589bae40f82edd5c30320d` remains preserved as
+history but is no longer the current domain disposition. Separate exact-head assurance is now the
+next review boundary. Current Git status and live refs are authoritative. Never reset, stash or
+clean away the D3A worktree; keep it first on `PYTHONPATH`.
+The documentation worker is not authorized to stage, commit, push, edit the pull request, merge, or
+otherwise mutate GitHub; the controlling parent task holds the user's sequential delivery
+authority. Do not bypass separate assurance, exact-head CI, current-branch, protected-PR, or
 continuing `HOLD` controls.
 
 ## 2. Base and ingress receipt
@@ -76,11 +75,15 @@ review accepted R8-R9 and every earlier repair class, but rejected that exact ca
 `dedicated_separate` topology can still retain one electrical shared facility used by both wind and
 BESS. That fifth review record was committed and pushed as
 `50a32a2343b5c7941c29fe00cba695e2c13ce1c8`; it was the clean base of the bounded R10 worker
-handback. Live refs and status are authoritative after any later authorized parent checkpoint.
+handback. The bounded R10 implementation was committed and pushed as
+`2a3831542a3160f6d02cb2f592c4487981647f19`. The sixth independent review accepted that exact head
+after two independent topology matrices returned zero mismatches and every original/R1-R9 repair
+class remained accepted. Live refs and status are authoritative after any later authorized parent
+checkpoint.
 Sections 19-23 of `docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md` preserve the fourth review;
-sections 24-27 are the controlling fifth review. The fifth veto remains controlling until an
-independent reviewer accepts a later exact committed head; neither green tests nor green CI
-supersede it.
+sections 24-27 preserve the fifth veto, and sections 28-31 contain the controlling sixth
+**DOMAIN ACCEPTED** disposition. Separate assurance remains required; neither domain acceptance nor
+green CI grants merge, grade, lender, release, or `HOLD` authority.
 
 ## 3. Dolphin 3A implementation checkpoint
 
@@ -239,23 +242,28 @@ paths are untouched.
 
 ## 5. Verification receipt
 
-The bounded R10 pre-checkpoint worker handback and inherited gates pass:
+The bounded R10 worker handback and sixth independent review gates pass:
 
 ```text
-ProjectCase hostile/JSON/schema gate: 241 passed
-Explicit R8-R10 selected gate:         78 passed
-Complete tests/contracts gate:        567 passed
-Existing D2 focused gate:            386 passed
-D2 plus ProjectCase coverage gate:    539 passed; 95.92% package total
-ProjectCase module coverage:          95.29%
-Ruff check and format:               passed
-Black check:                         passed
-isort check:                         passed
-mypy --no-incremental:               passed
-py_compile/import/schema/export:      passed; 62 exports, 47 schema definitions
-AST forbidden production import scan: passed
-Prior `b0020ec` applicable CI/required: passed; 4/4 required checks
-Fifth independent domain disposition:  DOMAIN REJECTED (R10; R8-R9 accepted)
+Exact sixth-reviewed candidate:                2a3831542a3160f6d02cb2f592c4487981647f19
+ProjectCase hostile/JSON/schema gate:          241 passed
+Selected original and R1-R10 replay:           132 passed
+Complete tests/contracts gate:                 567 passed
+Existing D2 focused gate:                      386 passed
+Prior worker D2 plus ProjectCase coverage:     539 passed; 95.92% package total
+Prior worker ProjectCase module coverage:      95.29%
+Independent R10 hand-constructed matrix:        35 cases; 0 mismatches
+Independent R10 arrangement/role/user matrix:   48 cases; 0 mismatches
+Independent R9 schedule oracle:                  6 cases; 0 mismatches
+Ruff check and format:                         passed
+Black check:                                   passed
+isort check:                                   passed
+mypy --no-incremental:                         passed
+in-memory compile/import/schema/export:        passed; 62 exports, 47 definitions
+AST forbidden production import scan:         passed
+Exact-head GitHub CI:                          18 successful; 3 expected skipped; 0 failed/pending
+Exact-head required checks:                    4/4 passed
+Sixth independent domain disposition:         DOMAIN ACCEPTED
 ```
 
 The eight R10 focused cases reject the reviewed shared POI and shared electrical-collection paths
@@ -264,9 +272,11 @@ existing no-shared case, shared access-road and operations facilities, distinct 
 facilities, direct storage-to-generation charging, and BESS use/charging through its own distinct
 grid facility. A full-root runtime and Draft 2020-12 control proves that `connected_to` is absent
 from the `AssetLinkKind` schema and refused at the exact link-kind field.
-The fifth review's 113-case replay is an external independent harness rather than a named repository
-selector; the 241-case focused gate covers all in-tree original/R1-R10 controls, and the additional
-78-case selection explicitly replays the in-tree R8-R10 representation, FX and topology controls.
+The sixth review added independent 35-case and 48-case topology oracles spanning both arrangements,
+all five shared-facility roles, same and distinct facilities, two and three technology assets,
+shared-grid and generation charging, and malformed duplicate/dangling/self/reversed link graphs; both
+returned zero mismatches. Its 132-case replay is an external independent selection rather than a
+named repository selector. The 241-case focused gate covers all in-tree original/R1-R10 controls.
 
 The 48 R8-R9 additional focused cases prove sole-string Decimal/count JSON ingress, deterministic
 full-model dump/re-ingress, hostile runtime/Draft parity, exact 36/37-digit count boundaries, the
@@ -282,8 +292,10 @@ The fifth review independently replayed the original D3A-DOM-01 through -09 and 
 mismatches across 1,524 Decimal runtime/schema strings, 1,016 count strings, 120 shared-FX
 schedules, 1,488 shared-rate grid intervals, 12,096 missing-factor cases, and 18 hostile-context
 native Decimal round trips; all nine raw JSON numeric-token controls were refused and all 20
-half-even ties behaved correctly. The exact R10 evidence, production/test line references, hashes,
-and exclusions are in sections 24-27 of the remediation rereview record.
+half-even ties behaved correctly. The sixth review replayed those classes in proportion to risk,
+including the full R8 root round trip and a six-schedule independent R9 oracle, without a regression.
+The accepted exact refs, hashes, CI, topology evidence, exclusions, and authority boundary are in
+sections 28-31 of the remediation rereview record.
 
 The preceding 58 additional focused cases include the exact R5 rejected USD 1 and accepted USD 2
 chains;
@@ -360,19 +372,19 @@ git status --short --branch
 
 ## 7. Rereview and delivery boundary
 
-The bounded R8 exact JSON/count representation and R9 one-rate shared-conversion intersection are
-committed, pushed, and independently accepted at exact `b0020ec`. The bounded R10 topology closure
-is implemented and locally proved in the pre-checkpoint worker handback described here; it does not
-reopen R8-R9 or any earlier accepted repair class. The fifth **DOMAIN REJECTED** disposition remains
-controlling until an independent reviewer accepts a later exact committed successor.
+The bounded R8 exact JSON/count representation, R9 one-rate shared-conversion intersection, and R10
+dedicated electrical-path closure are committed, pushed, and independently accepted at exact
+`2a3831542a3160f6d02cb2f592c4487981647f19`. The sixth **DOMAIN ACCEPTED** disposition is the
+current domain result. It does not reopen any earlier accepted repair class. Separate independent
+assurance is the next required review boundary.
 
 Current Git identity and cleanliness must be read live; this durable receipt does not assert that
 the documentation diff remains uncommitted after the controlling parent acts. The implementation
-worker itself must not stage, commit, push, edit the pull request, merge, or mutate GitHub. The
-controlling parent must inspect the exact diff, checkpoint and push a new immutable SHA only under
-its delivery authority, then obtain another independent domain disposition. The fifth
-**DOMAIN REJECTED** disposition remains controlling; separate assurance review is blocked until
-domain acceptance.
+and documentation workers must not stage, commit, push, edit the pull request, merge, or mutate
+GitHub. The controlling parent must inspect this PERSIST-only diff, checkpoint and push it only under
+the user's delivery authority, then dispatch separate assurance against the resulting immutable
+head. Any later production, export, test, or changelog change invalidates this sixth domain receipt
+and requires a new exact-head domain review.
 
 Before any later authorized Git or GitHub action, fetch and compare live `origin/main`, reconcile
 only with explicit authority, and rerun the applicable gates against the resulting exact tree. Never
@@ -380,5 +392,8 @@ reset, stash, clean, overwrite, or absorb unrelated work into the D3A-authored d
 sequence must still use a protected pull request, exact-head independent review and required CI,
 prove the topic branch current and mergeable, and preserve all `HOLD` states after merge.
 
-Completion of D3A remains contract-scope evidence only. Issue #1110 and all live project, evidence,
-audit, lender, Board and release states remain unchanged and on `HOLD`.
+Domain acceptance remains contract-scope evidence only. It is not professional or statutory
+engineering assurance, external audit, lender or Board acceptance, achieved-grade authority,
+release or deployment authorization, or permission to merge before separate assurance and delivery
+controls complete. The future adapter duties in section 4 remain exclusions. Issue #1110 and all
+live project, evidence, audit, lender, Board and release states remain unchanged and on `HOLD`.

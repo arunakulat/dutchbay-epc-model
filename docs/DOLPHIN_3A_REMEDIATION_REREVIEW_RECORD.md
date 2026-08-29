@@ -1,7 +1,8 @@
 # Dolphin 3A remediation rereview record
 
-**Record status:** second through fifth independent domain vetoes under PERSIST-01
-**Latest exact reviewed candidate:** `b0020ece4e864cc2cf589bae40f82edd5c30320d`
+**Record status:** second through fifth independent domain vetoes and sixth independent domain
+acceptance under PERSIST-01
+**Latest exact reviewed candidate:** `2a3831542a3160f6d02cb2f592c4487981647f19`
 **Exact reviewed base/live main:** `782c9588ef2685fcf0608d48f7745493aaa15b78`
 **Pull request:** `#1191`, open and draft at the reviewed head
 **Review role:** renewable-project domain specialist
@@ -772,3 +773,136 @@ contract, coverage, Ruff, Ruff Format, Black, isort, mypy, schema/runtime parity
 exclusion, and diff gates. Commit and push a new exact head only under the controlling delivery
 authority, then obtain another independent domain disposition. Separate assurance review remains
 blocked until exact-head domain acceptance.
+
+## 28. Sixth exact-head domain disposition
+
+The bounded R10 successor was committed and pushed as
+`2a3831542a3160f6d02cb2f592c4487981647f19`. The sixth independent reviewer verified that local
+`HEAD`, the local remote-tracking topic ref, the live remote topic ref, and PR `#1191` all identified
+that exact SHA. Local and live `origin/main` and the PR base were
+`782c9588ef2685fcf0608d48f7745493aaa15b78`; the base was an ancestor, and the topic was thirteen
+commits ahead and zero behind. The PR was open, draft, mergeable, and reported a clean merge state.
+The worktree and index were clean before and after review. The reviewer made no file, index, Git-ref,
+GitHub, PR, issue, audit-ledger, release-state, or `HOLD` mutation.
+
+The exact candidate-tree fingerprints before this documentation-only PERSIST append were:
+
+```text
+1e9d6fefaf1697710068d9d4886ffaa29a10f00e4d0b658aada268503d19534f  analytics/feasibility_report_contract/project_case.py
+c47038ff13e6135a9f8fe33c57ef0aacc424d8eab233e6f880c5d796b7ba8f5d  analytics/feasibility_report_contract/__init__.py
+86827cd5a29c708b73f027c31c27b7f0a5492f86aae8e222977874efbd8d105e  tests/contracts/test_project_case_contract.py
+2868899396d7f0cbd5cb2b8cc2d1ce282698623676edda3001a7f93e087a84e2  changelog.d/project-case-v1.added.md
+d3968bc1428224160f8638c43c365304ab0904c23c61103e2cb08a0e6474b133  docs/DOLPHIN_3A_INDEPENDENT_REVIEW_RECORD.md
+553d5645280ef19985ff74dbf1a7d732edf04b0b19b13af02c1ed4faae7c5d0e  docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md
+cc2378e738a22465355ee76bdd6d68d0b876f256fc4a15047c2d46bfb2c3c119  docs/SESSION_HANDOVER_2026-08-29_2.md
+```
+
+The re-ingressed normative-chain fingerprints remained:
+
+```text
+2029b57d53b279e1163889b5b707cc3ff3248095f1ea0de9904b40a780dab09e  docs/GLOBAL_FEASIBILITY_REPORT_MASTER_TEMPLATE.md
+e4585e3ba0c38c7cf8bcd59bfc70ee92b745ccc22564f94e20b91d3dad5cecfb  docs/FEASIBILITY_REPORT_CONTRACT.md
+22594abf994b90883cf3272ab6bac9029e6a7aeb2e43a1d2fb6d55f0f4b8d276  docs/FEASIBILITY_REPORT_CONTRACT_SOURCES.md
+5a3edbb49798890dee3f78bcd9f71afd4f32fc67d78f6e2f87b675ff8ff50ffc  docs/DOLPHIN_2_MACHINE_CONTRACT_CHARTER.md
+69827eb77903f3efbc5f88bf3bd8dceef42219529839d9ca67de6b720f1395d1  docs/DOLPHIN_2_INDEPENDENT_REVIEW_RECORD.md
+b9e5d9e38137438db59406db82bce668513af629049017ddc6950baf4d498c2b  docs/DOLPHIN_2_REMEDIATION_REREVIEW_RECORD.md
+25933beb47609efc976bbf754810bd4c761bf2f330daa99a35adab22e73d535a  docs/SESSION_HANDOVER_2026-08-29.md
+```
+
+Exact-head GitHub Actions run `33246388975` completed successfully with eighteen successful jobs,
+three expected changed-path/scheduled skips (Grid Study, Report Qualification, and Stochastic
+Qualification), and no pending or failed job. All four required checks passed: Test Summary,
+Verification receipts, fastlane, and smoke.
+
+**DOMAIN ACCEPTED.** At this exact SHA, the sixth independent review found no blocking, high,
+medium, or low D3A contract-domain defect. The former R10 false acceptance is closed, and the
+original `D3A-DOM-01` through `-09` and R1-R9 repair classes remain accepted. Green tests and CI were
+supporting evidence, not substitutes for the independent domain probes below.
+
+## 29. R10 independent topology closure
+
+The successor removes `connected_to` from `AssetLinkKind` and the generated schema. It derives
+facility users from every `uses_shared_infrastructure` link and from storage `charges_from` links to
+a typed shared grid. Under `dedicated_separate`, a `grid_interconnection` or
+`electrical_collection` facility used or materially connected by more than one technology asset now
+fails closed. Distinct one-user electrical facilities remain valid. Shared non-electrical
+The `access_road`, `operations_facility`, and `other_shared_facility` roles remain valid.
+
+Two independently constructed graph oracles, separate from the writer tests, agreed with the
+contract in every case:
+
+```text
+hand-constructed topology matrix:       35 cases; 13 accepted; 22 rejected; 0 mismatches
+arrangement/role/user-set matrix:        48 cases; 16 accepted; 32 rejected; 0 mismatches
+```
+
+Together they covered both arrangements; all five shared-facility roles; two and three technology
+assets; same and distinct facilities; one-user and multi-user electrical paths;
+`uses_shared_infrastructure`; storage charging from a shared grid or generation asset; common-mode
+path completeness; shared-grid charging as a material dedicated-path user; duplicate identifiers
+and edges; dangling, self, reversed, wrong-target, and multiple-charging links; unused shared
+assets; and unknown link or role vocabulary. Runtime and the independently checked Draft 2020-12
+schema both refuse `connected_to`. The exact former R10 shared POI and shared electrical-collection
+counterexamples reject, while dedicated distinct facilities, direct storage-to-generation charging,
+and shared non-electrical facilities accept.
+
+## 30. Original and R1-R9 regression receipt
+
+The sixth review replayed the original `D3A-DOM-01` through `-09` and R1-R10 negative/positive
+classes in proportion to risk. R8 canonical dump, Draft 2020-12 validation, runtime re-ingress, sole
+string representation, raw-number refusal, positive-exponent expansion, and signed/scaled-zero
+controls passed. An independent R9 six-schedule oracle produced zero mismatches across disjoint,
+common, zero, inferable-native, feasible missing-report, and missing-report-overflow schedules.
+
+```text
+Python:                                      3.12.13
+Governed venv check:                         PASS; active worktree selected
+GWTF bootstrap:                              72 active rules
+Selected original and R1-R10 replay:         132 passed; one pre-existing warning
+ProjectCase focused gate:                    241 passed; one pre-existing warning
+Inherited D2 focused/import/taxonomy gate:   386 passed; one pre-existing warning
+Complete tests/contracts gate:               567 passed; one pre-existing warning
+Ruff check and format:                       PASS
+Black check:                                 PASS
+isort check:                                 PASS
+mypy --no-incremental:                       PASS
+in-memory compile:                           PASS
+Draft 2020-12 schema check:                  PASS
+Public exports/schema definitions:           62 / 47
+AST forbidden direct imports:                none
+production LKA/Sri Lanka/connected_to scan:  no unintended matches
+D3A excluded execution-surface diff:         empty
+git diff --check:                            PASS
+required exact-head GitHub checks:           4/4 PASS
+exact-head GitHub jobs:                      18 successful; 3 expected skipped; 0 failed/pending
+final reviewed worktree/index:               clean
+```
+
+The warning was the pre-existing Hypothesis `norecursedirs` collection warning. The read-only
+reviewer did not create a local coverage artifact; the exact-head GitHub Coverage Gate passed. The
+direct D3A module retains its transport-neutral import boundary, all 62 public exports remain
+available, its generated schema has 47 definitions, and no finance, evaluation, app, API,
+persistence, renderer, engine, grade, release, Sri Lankan fallback, or protected-`HOLD` behavior was
+introduced.
+
+## 31. Findings, evolution notes, and authority boundary
+
+There are no blocking, high, medium, or low D3A defects at the exact sixth-review candidate.
+
+The following are non-blocking evolution notes, not D3A defects:
+
+- importing through the parent `analytics` package still executes its pre-existing eager finance
+  and evaluation imports, although the D3A module's direct import graph remains pure;
+- a future web adapter must retain raw JSON or normalize already parsed dictionaries, impose request
+  size and transport resource controls, and map validation errors to stable transport responses;
+- v1 intentionally models a dedicated typed electrical facility as having at most one technology
+  user; a future explicit circuit/path grouping may broaden that vocabulary without weakening v1;
+  and
+- the current PERSIST record must be checkpointed before separate assurance review so the accepted
+  exact head and its limits survive restart.
+
+This **DOMAIN ACCEPTED** disposition establishes only D3A contract-domain sufficiency at
+`2a3831542a3160f6d02cb2f592c4487981647f19`. It is not professional or statutory engineering
+assurance, external audit, lender or Board acceptance, achieved-grade authority, release or
+deployment authorization, permission to merge before separate exact-head assurance and delivery
+controls complete, or authority to lift any project, evidence, F5, package, or release `HOLD`.
