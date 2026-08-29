@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 import copy
 import json
-from decimal import ROUND_UP, localcontext
+from decimal import ROUND_DOWN, ROUND_UP, Decimal, localcontext
 from pathlib import Path
 from typing import Any, Callable
 
@@ -18,12 +18,16 @@ from analytics.feasibility_report_contract import (
     PROJECT_CASE_SCHEMA_ID,
     ContractSupportStatus,
     ProjectCase,
+    ResolvedValue,
 )
+from analytics.feasibility_report_contract import project_case as project_case_contract
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_CASE_MODULE = (
     REPO_ROOT / "analytics" / "feasibility_report_contract" / "project_case.py"
 )
+MIN_PROJECT_DECIMAL = "0." + ("0" * 35) + "1"
+MAX_PROJECT_INTEGER = str((10**36) - 1)
 
 
 def _resolved(
@@ -74,6 +78,70 @@ def _missing_record(
         "consequence": "The affected arithmetic remains incomplete.",
         "remedy": "Supply a value in the declared ProjectCase numeric domain.",
     }
+
+
+def _bind_missing(
+    payload: dict[str, Any],
+    target: dict[str, Any],
+    field: str,
+    missing_input_id: str,
+    unit: str,
+    field_path: str,
+) -> None:
+    target[field] = _missing_value(missing_input_id, unit)
+    payload["missing_inputs"].append(
+        _missing_record(missing_input_id, field_path, unit)
+    )
+
+
+def _configure_missing_opex_chain(
+    payload: dict[str, Any],
+    *,
+    missing_operands: tuple[str, ...],
+    reporting_amount: int,
+    fx_rate: int | None,
+) -> None:
+    line = payload["costs"]["lines"][1]
+    line["quantity"] = _resolved(1, "year")
+    line["unit_rate_native"] = _resolved(1, "LKR/year")
+    operand_units = {"quantity": "year", "unit_rate_native": "LKR/year"}
+    for field in missing_operands:
+        _bind_missing(
+            payload,
+            line,
+            field,
+            f"missing:opex-{field}",
+            operand_units[field],
+            f"/costs/lines/1/{field}",
+        )
+    line["amount"].update(
+        {
+            "native_minor_unit_places": 0,
+            "reporting_amount": _resolved(reporting_amount, "USD"),
+            "reporting_minor_unit_places": 0,
+        }
+    )
+    _bind_missing(
+        payload,
+        line["amount"],
+        "native_amount",
+        "missing:opex-native",
+        "LKR",
+        "/costs/lines/1/amount/native_amount",
+    )
+    conversion = payload["costs"]["currency_conversions"][0]
+    if fx_rate is None:
+        _bind_missing(
+            payload,
+            conversion,
+            "rate",
+            "missing:fx-rate",
+            "USD/LKR",
+            "/costs/currency_conversions/0/rate",
+        )
+    else:
+        conversion["rate"] = _resolved(fx_rate, "USD/LKR")
+    payload["costs"]["reconciliation_status"] = "incomplete_missing_input"
 
 
 def _case_payload() -> dict[str, Any]:
@@ -358,10 +426,12 @@ def test_project_case_json_schema_round_trip_and_stable_shape() -> None:
     jsonschema.Draft202012Validator(schema).validate(payload)
     assert {"schema_id", "contract_version"} <= set(schema["required"])
     decimal_schema = schema["$defs"]["ResolvedValue"]["properties"]["value"]
-    assert decimal_schema["multipleOf"] == 1e-36
     assert decimal_schema["anyOf"][0]["exclusiveMinimum"] == -1e36
     assert decimal_schema["anyOf"][0]["exclusiveMaximum"] == 1e36
-    assert r"\d{0,36}" in decimal_schema["anyOf"][1]["pattern"]
+    assert decimal_schema["anyOf"][0]["multipleOf"] == 1e-36
+    assert decimal_schema["anyOf"][1]["pattern"] == (
+        r"^[+-]?(?:(?:[0-9]{1,36})(?:\.[0-9]{1,36})?|\.[0-9]{1,36})$"
+    )
     count_schema = schema["$defs"]["ResolvedCount"]["properties"]["value"]
     assert count_schema["maximum"] == (10**36) - 1
 
@@ -783,7 +853,7 @@ def test_second_physical_site_cannot_exist_without_site_geometry() -> None:
 def test_under_or_over_allocation_fails_closed(second_share: float) -> None:
     payload = _case_payload()
     payload["costs"]["allocations"][1]["share"] = _resolved(second_share, "fraction")
-    _error(payload, "allocations must sum to 1")
+    _error(payload, "allocations must sum exactly to 1")
 
 
 def test_zero_share_allocation_is_rejected_as_degenerate() -> None:
@@ -835,6 +905,60 @@ def test_partial_allocation_with_positive_remainder_is_valid() -> None:
     assert _validate(payload).costs.reconciliation_status.value == (
         "incomplete_missing_input"
     )
+
+
+def test_complete_allocation_requires_exact_rational_closure() -> None:
+    payload = _case_payload()
+    payload["costs"]["allocations"][0]["share"] = _resolved(1, "fraction")
+    payload["costs"]["allocations"][1]["share"] = _resolved(
+        "0." + ("0" * 35) + "1", "fraction"
+    )
+    _error(payload, "allocations must sum exactly to 1")
+
+
+@pytest.mark.parametrize(
+    ("resolved_share", "accepted"),
+    [
+        ("0." + ("9" * 36), False),
+        ("0." + ("9" * 35) + "8", True),
+    ],
+)
+def test_partial_allocation_remainder_uses_exact_grid_feasibility(
+    resolved_share: str, accepted: bool
+) -> None:
+    payload = _case_payload()
+    allocations = payload["costs"]["allocations"]
+    line = payload["costs"]["lines"][0]
+    allocations[0]["share"] = _resolved(resolved_share, "fraction")
+    allocations[1]["share"] = _missing_value("missing:capex-bess-share", "fraction")
+    allocations.append(
+        {
+            "allocation_id": "allocation:capex:shared",
+            "cost_line_id": "cost:capex:plant",
+            "asset_id": "asset:poi-01",
+            "share": _missing_value("missing:capex-shared-share", "fraction"),
+        }
+    )
+    line["allocation_ids"].append("allocation:capex:shared")
+    payload["costs"]["reconciliation_status"] = "incomplete_missing_input"
+    payload["missing_inputs"] = [
+        _missing_record(
+            "missing:capex-bess-share",
+            "/costs/allocations/1/share",
+            "fraction",
+        ),
+        _missing_record(
+            "missing:capex-shared-share",
+            "/costs/allocations/4/share",
+            "fraction",
+        ),
+    ]
+    if accepted:
+        assert _validate(payload).costs.reconciliation_status.value == (
+            "incomplete_missing_input"
+        )
+    else:
+        _error(payload, "missing allocation share is infeasible")
 
 
 def test_cost_line_and_allocation_must_be_reciprocal() -> None:
@@ -1107,6 +1231,104 @@ def test_missing_positive_fx_rate_is_accepted_for_nonzero_amounts() -> None:
     )
 
 
+@pytest.mark.parametrize("missing_operand", ["unit_rate_native", "quantity"])
+def test_joint_cost_fx_chain_rejects_incompatible_native_grid(
+    missing_operand: str,
+) -> None:
+    payload = _case_payload()
+    _configure_missing_opex_chain(
+        payload,
+        missing_operands=(missing_operand,),
+        reporting_amount=1,
+        fx_rate=2,
+    )
+    _error(payload, "connected cost/FX chain has no joint bounded completion")
+
+
+@pytest.mark.parametrize("missing_operand", ["unit_rate_native", "quantity"])
+def test_joint_cost_fx_chain_accepts_nearby_native_grid_solution(
+    missing_operand: str,
+) -> None:
+    payload = _case_payload()
+    _configure_missing_opex_chain(
+        payload,
+        missing_operands=(missing_operand,),
+        reporting_amount=2,
+        fx_rate=2,
+    )
+    assert _validate(payload).costs.reconciliation_status.value == (
+        "incomplete_missing_input"
+    )
+
+
+def test_joint_cost_fx_chain_accepts_two_missing_product_operands() -> None:
+    payload = _case_payload()
+    _configure_missing_opex_chain(
+        payload,
+        missing_operands=("quantity", "unit_rate_native"),
+        reporting_amount=2,
+        fx_rate=2,
+    )
+    assert _validate(payload).costs.reconciliation_status.value == (
+        "incomplete_missing_input"
+    )
+
+
+def test_native_grid_interval_solver_matches_an_independent_bounded_oracle() -> None:
+    checked = 0
+    for factor in map(Decimal, ("0.5", "1", "1.5", "2")):
+        for input_places in range(2):
+            for output_places in range(2):
+                outputs = {
+                    value: project_case_contract._rounded_linear_grid_output(
+                        value,
+                        input_decimal_places=input_places,
+                        factor=factor,
+                        output_decimal_places=output_places,
+                    )
+                    for value in range(21)
+                }
+                for target in range(max(outputs.values()) + 2):
+                    witnesses = [
+                        value for value, output in outputs.items() if output == target
+                    ]
+                    expected = (witnesses[0], witnesses[-1]) if witnesses else None
+                    actual = (
+                        project_case_contract._grid_input_interval_for_exact_output(
+                            target,
+                            minimum_input=0,
+                            maximum_input=20,
+                            input_decimal_places=input_places,
+                            factor=factor,
+                            output_decimal_places=output_places,
+                        )
+                    )
+                    assert actual == expected
+                    checked += 1
+    assert checked == 1242
+
+
+def test_inferable_native_amount_can_join_a_missing_fx_rate() -> None:
+    payload = _case_payload()
+    _configure_missing_opex_chain(
+        payload, missing_operands=(), reporting_amount=1, fx_rate=None
+    )
+    assert _validate(payload).costs.reconciliation_status.value == (
+        "incomplete_missing_input"
+    )
+
+
+def test_unbound_native_and_fx_chain_fails_closed_without_sampling() -> None:
+    payload = _case_payload()
+    _configure_missing_opex_chain(
+        payload,
+        missing_operands=("unit_rate_native",),
+        reporting_amount=1,
+        fx_rate=None,
+    )
+    _error(payload, "requires a resolved FX rate or an inferable native amount")
+
+
 def test_decimal_identity_is_preserved_beyond_binary_float_range() -> None:
     payload = _case_payload()
     exact_integer = 9_007_199_254_740_993
@@ -1218,15 +1440,218 @@ def test_money_rejects_non_half_even_tie_result() -> None:
 def test_numeric_domain_rejects_excess_integer_digits_as_validation_error() -> None:
     payload = _case_payload()
     payload["assets"][2]["capacity"] = _resolved("1e36", "MW")
-    error = _error(payload, "less_than|decimal_whole_digits")
-    assert error.errors()[0]["type"] in {"less_than", "decimal_whole_digits"}
+    error = _error(payload, "plain notation")
+    assert error.errors()[0]["type"] == "value_error"
 
 
 def test_numeric_domain_rejects_excess_decimal_places_as_validation_error() -> None:
     payload = _case_payload()
     payload["assets"][2]["capacity"] = _resolved("1e-37", "MW")
-    error = _error(payload, "decimal_max_places|multiple_of")
-    assert error.errors()[0]["type"] in {"decimal_max_places", "multiple_of"}
+    error = _error(payload, "plain notation")
+    assert error.errors()[0]["type"] == "value_error"
+
+
+@pytest.mark.parametrize(
+    ("value", "use_shared_capacity"),
+    [
+        (("9" * 37), True),
+        (("9" * 36) + "." + ("9" * 37), True),
+        ("0." + ("9" * 37), False),
+        ("0." + ("9" * 73), False),
+        ("0." + ("9" * 100), False),
+        ("0." + ("9" * 500), False),
+        ("0." + ("0" * 37), False),
+        ("0." + ("0" * 500), False),
+        ("0e-37", False),
+        ("0e-1000000", False),
+        ("-0e-999999", False),
+        ("1e-3", True),
+        ("١.٢", True),
+        (" 1.25", True),
+    ],
+)
+def test_decimal_string_runtime_and_schema_reject_the_same_hostile_inputs(
+    value: str, use_shared_capacity: bool
+) -> None:
+    schema = ProjectCase.model_json_schema()
+    validator = jsonschema.Draft202012Validator(schema)
+    payload = _validate(_case_payload()).model_dump(mode="json")
+    if use_shared_capacity:
+        payload["assets"][2]["capacity"]["value"] = value
+    else:
+        payload["location"]["latitude_degrees"]["value"] = value
+
+    for precision, rounding in (
+        (3, ROUND_DOWN),
+        (28, ROUND_UP),
+        (100, ROUND_DOWN),
+    ):
+        with localcontext() as context:
+            context.prec = precision
+            context.rounding = rounding
+            with pytest.raises(ValidationError):
+                ProjectCase.model_validate_json(json.dumps(payload))
+            with pytest.raises(jsonschema.ValidationError):
+                validator.validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("value", "use_shared_capacity"),
+    [
+        (("9" * 36) + "." + ("9" * 36), True),
+        ("0." + ("0" * 36), False),
+        ("." + ("1" * 36), True),
+    ],
+)
+def test_decimal_string_runtime_and_schema_accept_exact_boundaries(
+    value: str, use_shared_capacity: bool
+) -> None:
+    schema = ProjectCase.model_json_schema()
+    validator = jsonschema.Draft202012Validator(schema)
+    payload = _validate(_case_payload()).model_dump(mode="json")
+    if use_shared_capacity:
+        payload["assets"][2]["capacity"]["value"] = value
+    else:
+        payload["location"]["latitude_degrees"]["value"] = value
+
+    for precision, rounding in ((3, ROUND_UP), (28, ROUND_DOWN), (100, ROUND_UP)):
+        with localcontext() as context:
+            context.prec = precision
+            context.rounding = rounding
+            assert ProjectCase.model_validate_json(json.dumps(payload)).schema_id == (
+                PROJECT_CASE_SCHEMA_ID
+            )
+            validator.validate(payload)
+
+
+def test_boolean_is_not_a_decimal_in_runtime_or_schema() -> None:
+    schema = ProjectCase.model_json_schema()
+    validator = jsonschema.Draft202012Validator(schema)
+    payload = _validate(_case_payload()).model_dump(mode="json")
+    payload["location"]["latitude_degrees"]["value"] = True
+    with pytest.raises(ValidationError, match="boolean is not"):
+        ProjectCase.model_validate_json(json.dumps(payload))
+    with pytest.raises(jsonschema.ValidationError):
+        validator.validate(payload)
+
+
+def test_sub_grid_json_number_is_rejected_by_runtime_and_schema() -> None:
+    schema = ProjectCase.model_json_schema()
+    validator = jsonschema.Draft202012Validator(schema)
+    payload = _validate(_case_payload()).model_dump(mode="json")
+    payload["location"]["latitude_degrees"]["value"] = 1e-37
+    with pytest.raises(ValidationError, match="numeric domain"):
+        ProjectCase.model_validate_json(json.dumps(payload))
+    with pytest.raises(jsonschema.ValidationError):
+        validator.validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("value", "use_shared_capacity", "accepted"),
+    [
+        (Decimal(("9" * 36) + "." + ("9" * 36)), True, True),
+        (Decimal("0." + ("0" * 36)), False, True),
+        (Decimal("0E-36"), False, True),
+        (Decimal("1E-3"), True, True),
+        (Decimal("9" * 37), True, False),
+        (Decimal("0." + ("9" * 37)), False, False),
+        (Decimal("0E-37"), False, False),
+        (Decimal("0E-1000000"), False, False),
+    ],
+)
+def test_python_decimal_mode_uses_the_same_tuple_domain_without_context(
+    value: Decimal, use_shared_capacity: bool, accepted: bool
+) -> None:
+    payload = _validate(_case_payload()).model_dump(mode="python")
+    if use_shared_capacity:
+        payload["assets"][2]["capacity"]["value"] = value
+    else:
+        payload["location"]["latitude_degrees"]["value"] = value
+
+    for precision, rounding in ((3, ROUND_DOWN), (100, ROUND_UP)):
+        with localcontext() as context:
+            context.prec = precision
+            context.rounding = rounding
+            if accepted:
+                assert ProjectCase.model_validate(payload).schema_id == (
+                    PROJECT_CASE_SCHEMA_ID
+                )
+            else:
+                with pytest.raises(ValidationError, match="numeric domain"):
+                    ProjectCase.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("value", "serialized", "use_shared_capacity"),
+    [
+        (Decimal("0E+36"), "0", False),
+        (Decimal("-0E+36"), "-0", False),
+        (Decimal("1E+3"), "1000", True),
+        (Decimal("0E-36"), "0." + ("0" * 36), False),
+    ],
+)
+def test_python_decimal_serializes_to_schema_valid_plain_json(
+    value: Decimal, serialized: str, use_shared_capacity: bool
+) -> None:
+    case_schema = jsonschema.Draft202012Validator(ProjectCase.model_json_schema())
+    value_schema = jsonschema.Draft202012Validator(ResolvedValue.model_json_schema())
+    native_payload = _validate(_case_payload()).model_dump(mode="python")
+    if use_shared_capacity:
+        native_payload["assets"][2]["capacity"]["value"] = value
+    else:
+        native_payload["location"]["latitude_degrees"]["value"] = value
+    resolved_payload = _validate(_case_payload()).location.latitude_degrees.model_dump(
+        mode="python"
+    )
+    resolved_payload["value"] = value
+
+    for precision, rounding in ((3, ROUND_UP), (100, ROUND_DOWN)):
+        with localcontext() as context:
+            context.prec = precision
+            context.rounding = rounding
+            case = ProjectCase.model_validate(native_payload)
+            dumped = case.model_dump(mode="json")
+            if use_shared_capacity:
+                assert dumped["assets"][2]["capacity"]["value"] == serialized
+            else:
+                assert dumped["location"]["latitude_degrees"]["value"] == serialized
+            assert "e" not in serialized.lower()
+            case_schema.validate(dumped)
+            round_trip = ProjectCase.model_validate_json(case.model_dump_json())
+            assert round_trip == case
+
+            resolved = ResolvedValue.model_validate(resolved_payload)
+            resolved_dump = resolved.model_dump(mode="json")
+            assert resolved_dump["value"] == serialized
+            value_schema.validate(resolved_dump)
+            resolved_round_trip = ResolvedValue.model_validate_json(
+                resolved.model_dump_json()
+            )
+            assert resolved_round_trip.value == value
+            if value.is_zero():
+                assert (
+                    resolved_round_trip.value.as_tuple().sign == value.as_tuple().sign
+                )
+            if value.as_tuple().exponent == -36:
+                assert resolved_round_trip.value.as_tuple().exponent == -36
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "1.25",
+        "1e-3",
+        "0." + ("0" * 36),
+        "0e-37",
+    ],
+)
+def test_python_mode_refuses_json_strings_until_a_transport_adapter_normalizes_them(
+    value: str,
+) -> None:
+    payload = _validate(_case_payload()).model_dump(mode="python")
+    payload["location"]["latitude_degrees"]["value"] = value
+    with pytest.raises(ValidationError, match="Decimal"):
+        ProjectCase.model_validate(payload)
 
 
 def test_material_count_domain_rejects_a_37_digit_count() -> None:
@@ -1346,7 +1771,7 @@ def test_storage_rejects_negative_or_non_finite_numbers(
 ) -> None:
     payload = _case_payload()
     payload["assets"][1][field]["value"]["value"] = value
-    _error(payload, "finite_number|positive")
+    _error(payload, "numeric domain|positive")
 
 
 def test_shared_capacity_zero_cannot_stand_for_missing() -> None:
@@ -1651,6 +2076,144 @@ def test_missing_bess_duration_defers_only_capacity_arithmetic() -> None:
     storage = case.assets[1]
     assert storage.kind == "storage"
     assert storage.duration.value.state == "missing"
+
+
+@pytest.mark.parametrize("unit_power", [MAX_PROJECT_INTEGER, MIN_PROJECT_DECIMAL])
+def test_missing_generation_total_requires_bounded_product(unit_power: str) -> None:
+    payload = _case_payload()
+    capacity = payload["assets"][0]["capacity"]
+    capacity["unit_count"] = _resolved_count((10**36) - 1)
+    capacity["unit_power_capacity"] = _resolved(unit_power, "MW")
+    _bind_missing(
+        payload,
+        capacity,
+        "total_power_capacity",
+        "missing:wind-total",
+        "MW",
+        "/assets/0/capacity/total_power_capacity",
+    )
+    if unit_power == MIN_PROJECT_DECIMAL:
+        assert _validate(payload).assets[0].kind == "generation"
+    else:
+        _error(payload, "missing total_power_capacity has no bounded grid completion")
+
+
+@pytest.mark.parametrize("total_power", [MIN_PROJECT_DECIMAL, "1"])
+def test_missing_generation_unit_rating_requires_grid_solution(
+    total_power: str,
+) -> None:
+    payload = _case_payload()
+    capacity = payload["assets"][0]["capacity"]
+    capacity["unit_count"] = _resolved_count((10**36) - 1)
+    capacity["total_power_capacity"] = _resolved(total_power, "MW")
+    _bind_missing(
+        payload,
+        capacity,
+        "unit_power_capacity",
+        "missing:wind-unit-rating",
+        "MW",
+        "/assets/0/capacity/unit_power_capacity",
+    )
+    if total_power == "1":
+        assert _validate(payload).assets[0].kind == "generation"
+    else:
+        _error(payload, "missing unit_power_capacity has no bounded grid completion")
+
+
+@pytest.mark.parametrize("duration", [MAX_PROJECT_INTEGER, MIN_PROJECT_DECIMAL])
+def test_missing_storage_energy_requires_bounded_product(duration: str) -> None:
+    payload = _case_payload()
+    storage = payload["assets"][1]
+    storage["power_capacity"]["value"] = _resolved(MAX_PROJECT_INTEGER, "MW")
+    storage["duration"]["value"] = _resolved(duration, "hour")
+    _bind_missing(
+        payload,
+        storage["energy_capacity"],
+        "value",
+        "missing:bess-energy",
+        "MWh",
+        "/assets/1/energy_capacity/value",
+    )
+    if duration == MIN_PROJECT_DECIMAL:
+        assert _validate(payload).assets[1].kind == "storage"
+    else:
+        _error(payload, "missing storage energy has no bounded grid completion")
+
+
+@pytest.mark.parametrize("energy", [MIN_PROJECT_DECIMAL, "1"])
+def test_missing_storage_power_requires_grid_solution(energy: str) -> None:
+    payload = _case_payload()
+    storage = payload["assets"][1]
+    storage["energy_capacity"]["value"] = _resolved(energy, "MWh")
+    storage["duration"]["value"] = _resolved(MAX_PROJECT_INTEGER, "hour")
+    _bind_missing(
+        payload,
+        storage["power_capacity"],
+        "value",
+        "missing:bess-power",
+        "MW",
+        "/assets/1/power_capacity/value",
+    )
+    if energy == "1":
+        assert _validate(payload).assets[1].kind == "storage"
+    else:
+        _error(payload, "missing storage power has no bounded grid completion")
+
+
+@pytest.mark.parametrize("energy", [MIN_PROJECT_DECIMAL, "1"])
+def test_missing_storage_duration_requires_grid_solution(energy: str) -> None:
+    payload = _case_payload()
+    storage = payload["assets"][1]
+    storage["power_capacity"]["value"] = _resolved(MAX_PROJECT_INTEGER, "MW")
+    storage["energy_capacity"]["value"] = _resolved(energy, "MWh")
+    _bind_missing(
+        payload,
+        storage["duration"],
+        "value",
+        "missing:bess-duration",
+        "hour",
+        "/assets/1/duration/value",
+    )
+    if energy == "1":
+        assert _validate(payload).assets[1].kind == "storage"
+    else:
+        _error(payload, "missing storage duration has no bounded grid completion")
+
+
+def test_two_missing_generation_values_require_a_constructive_completion() -> None:
+    payload = _case_payload()
+    capacity = payload["assets"][0]["capacity"]
+    capacity["unit_count"] = _resolved_count((10**36) - 1)
+    capacity["unit_power_capacity"] = _missing_value("missing:wind-unit-rating", "MW")
+    capacity["total_power_capacity"] = _missing_value("missing:wind-total", "MW")
+    payload["missing_inputs"] = [
+        _missing_record(
+            "missing:wind-unit-rating",
+            "/assets/0/capacity/unit_power_capacity",
+            "MW",
+        ),
+        _missing_record(
+            "missing:wind-total",
+            "/assets/0/capacity/total_power_capacity",
+            "MW",
+        ),
+    ]
+    assert _validate(payload).assets[0].kind == "generation"
+
+
+def test_two_missing_storage_values_require_a_constructive_completion() -> None:
+    payload = _case_payload()
+    storage = payload["assets"][1]
+    storage["power_capacity"]["value"] = _resolved(str((10**36) - 1), "MW")
+    storage["energy_capacity"]["value"] = _missing_value("missing:bess-energy", "MWh")
+    storage["duration"]["value"] = _missing_value("missing:bess-duration", "hour")
+    payload["missing_inputs"] = [
+        _missing_record(
+            "missing:bess-energy", "/assets/1/energy_capacity/value", "MWh"
+        ),
+        _missing_record("missing:bess-duration", "/assets/1/duration/value", "hour"),
+    ]
+    assert _validate(payload).assets[1].kind == "storage"
 
 
 def test_missing_cost_requires_incomplete_reconciliation_status() -> None:

@@ -1,4 +1,4 @@
-# Session handover - 2026-08-29, successor 8
+# Session handover - 2026-08-29, successor 9
 
 Durable PERSIST-01 successor to
 [`docs/SESSION_HANDOVER_2026-08-29.md`](SESSION_HANDOVER_2026-08-29.md). The predecessor remains
@@ -30,10 +30,11 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
   dutchbay_bootstrap_rules.py
 ```
 
-This record captures the bounded R1-R4 successor at its checkpoint boundary. The second independent
-review disposition remains **DOMAIN REJECTED** until an independent reviewer accepts the exact
-successor identified by current Git refs and file hashes. Current Git status and live refs are
-authoritative. Never reset, stash or clean away the D3A worktree; keep it first on `PYTHONPATH`.
+This record captures the bounded R5-R7 and exact-allocation successor at its checkpoint boundary.
+The third independent review disposition remains **DOMAIN REJECTED** until an independent reviewer
+accepts the exact successor identified by current Git refs and file hashes. Current Git status and
+live refs are authoritative. Never reset, stash or clean away the D3A worktree; keep it first on
+`PYTHONPATH`.
 The implementation worker is not authorized to stage, commit, push, edit the pull request, merge,
 or otherwise mutate GitHub; the controlling parent task holds the user's sequential delivery
 authority. Do not bypass another independent domain rereview, exact-head CI, current-branch or
@@ -60,10 +61,12 @@ into the topic branch without rewriting history. Commit
 `adb0e7c29bae8e2ce26bf71dbf5b59cf94d25dba` then added the first independent domain-review
 record. The first remediation of D3A-DOM-01 through D3A-DOM-09 was committed as `ce10721`; the
 dual-formatter correction was committed as `6e6f07a`. The exact second domain veto was recorded at
-current pushed head `c7db8f7c7cfee86f69bd43de280335f816508131`. The successor represented by
-this checkpoint implements only bounded R1-R4 from
+`c7db8f7c7cfee86f69bd43de280335f816508131`. Bounded R1-R4 were committed as
+`de897d0aff7daa1caaf7797ce5556cdd040c8627`; the third domain veto was then recorded at
+`47fd2638b3d947c5e52d41fd5670514944d0030f`. The successor represented by this checkpoint
+implements only bounded R5-R7 and the exact-allocation decision from sections 12-18 of
 `docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md`; neither this handover nor green local gates
-supersedes that veto.
+supersedes the third veto.
 
 ## 3. Dolphin 3A implementation checkpoint
 
@@ -98,21 +101,40 @@ cannot silently retain a common shared path. Reciprocal links distinguish `uses_
 typed infrastructure roles, preventing an access road or operations facility from masquerading as
 the electrical interconnection.
 
-Material numeric fields use a strict, finite, schema-visible Decimal domain: at most 72 total
-digits, 36 digits before the decimal point and 36 decimal places. Material counts are positive and
-limited to 36 digits. Resolved generation, storage and shared-infrastructure capacity must be
-positive, so zero cannot silently encode an unknown value; a missing capacity uses the explicit
-missing state. Generation, BESS, allocation, cost and FX arithmetic never uses the ambient Decimal
-context. Exact rational comparison governs engineering/share tolerances, while multiplication and
-quantization use explicit contexts sized above the largest permitted exact product. A Decimal
-operation failure becomes a controlled Pydantic validation error rather than escaping as a raw
-Decimal exception.
+Material numeric fields use one strict, finite, schema-visible Decimal domain: at most 72 total
+digits, 36 digits before the decimal point and 36 decimal places. The authoritative validator uses
+`Decimal.as_tuple()` and exact lexical checks rather than Pydantic `max_digits` or
+`decimal_places`; its result is independent of ambient precision and rounding. JSON strings use
+plain ASCII decimal notation only and the generated Draft 2020-12 schema carries the same fully
+anchored 36-integer/36-fraction pattern. Exact-scale zero is accepted through 36 places and refused
+beyond 36; exponent-form JSON strings are refused rather than silently canonicalized. Strict
+Python mode continues to require a domain-native `Decimal`, whose tuple is checked by the same
+numeric rule. Material counts are positive and limited to 36 digits.
+
+Resolved generation, storage and shared-infrastructure capacity must be positive, so zero cannot
+silently encode an unknown value; a missing capacity uses the explicit missing state. Every
+one-missing count/unit/total generation proposition and power/energy/duration BESS proposition must
+have an exact bounded 1e-36-grid completion within the 1e-9 engineering tolerance. Two-or-more
+missing states are retained only where the validator constructs a bounded completion. Generation,
+BESS, allocation, cost and FX arithmetic never uses the ambient Decimal context. Exact rational
+comparison governs engineering and allocation predicates, while multiplication and quantization
+use explicit contexts sized above the largest permitted exact product. A Decimal operation failure
+becomes a controlled Pydantic validation error rather than escaping as a raw Decimal exception.
 
 Money declares native and reporting minor-unit precision. Cost multiplication and FX conversion
 use exact bounded-domain Decimal arithmetic with explicit half-even rounding; FX rates must fit
-their declared quote precision. Partially missing quantity/rate/amount, same-currency, and FX
-equations are accepted only when the remaining bounded domain contains a solution. In particular,
-a zero factor cannot hide a non-zero product and inferred native amounts cannot conflict with
+their declared quote precision. When FX is resolved and native amount plus a product operand is
+missing, the validator derives the complete native minor-unit interval that maps to the declared
+reporting amount by monotone binary search, then intersects that interval with the exact
+quantity/rate output set. This rejects the reviewed USD 1/native-scale-0/FX-2 contradiction and
+accepts the nearby USD 2 completion. Where quantity and rate make native amount inferable, a
+missing FX rate still uses the previously verified exact single-equation predicate.
+
+ProjectCase v1 intentionally does not admit a connected cost chain where both the effective native
+amount and FX rate remain unresolved. It refuses that state as an admissibility rule because D3A
+does not contain a complete two-variable existential proof; the refusal is not a claim that no
+mathematical completion exists. Sampled interior witnesses are never treated as proof. A zero
+factor cannot hide a non-zero product, and inferred native amounts cannot conflict with
 same-currency reporting amounts. Cost status `complete` or `incomplete_missing_input` must match
 the actual graph.
 
@@ -120,8 +142,9 @@ A cost line's `PriceBasis` must carry source or assumption bindings whose scope 
 jurisdiction and technology. A currency conversion rate's evidence scope is derived only from the
 cost lines that name the conversion and from those lines' allocations and assets; it does not
 inherit unrelated project technologies. Resolved allocation shares are positive; complete shares
-sum to one, while a partial allocation with explicit missing shares must leave a strictly positive
-remainder. Allocation, price-basis and currency-conversion registers are closed and reciprocal.
+sum to exactly one as a rational value. A partial allocation remainder must lie on the 1e-36 share
+grid and be at least one positive grid quantum for every missing share. Allocation, price-basis and
+currency-conversion registers are closed and reciprocal.
 
 Every missing value must name a unique `MissingInputRecord` whose `field_path` is the exact
 JSON-pointer-shaped path in the submitted document and whose `expected_unit` equals the missing
@@ -155,16 +178,25 @@ path for that mapping.
 
 The mandatory evolution boundary is `schema_id = dutchbay.project_case.v1` and
 `contract_version = 1.0.0`; neither field has a default, and unknown or future values fail closed.
-JSON-mode dumps retain Decimal values as precision-preserving strings. The generated schema exposes
-the numeric magnitude, 36-place quantum/pattern, and 36-digit material-count limits. A future web
-adapter must still impose request-size and transport resource controls before domain validation;
-D3A adds no adapter or endpoint policy. D3A defines no canonical JSON byte representation or
+JSON-mode dumps emit every Decimal as a deterministic plain-ASCII string using ambient-independent
+fixed notation. Fractional scale is preserved where present; accepted positive exponents are
+expanded to plain integer notation, positive/negative zero retain their sign, and a 36-place zero
+retains its 36-place scale. Those outputs can be ingressed again and satisfy the generated Draft
+2020-12 validation schema. The schema exposes the numeric magnitude and 1e-36 number quantum, a
+fully anchored plain-string pattern, and 36-digit material-count limits. Runtime/schema ingress
+equivalence is proved for exact 72/36 plain strings and hostile 37/73/100/500-place,
+excessive-zero-scale, exponent, Unicode-digit and whitespace strings under hostile Decimal
+contexts. Python-mode string refusal remains the explicit transport-normalization seam: the
+generated schema governs JSON ingress, not unnormalized Python dictionaries. A future web adapter
+must still impose request-size and transport resource controls before domain validation; D3A adds
+no adapter or endpoint policy. D3A defines no canonical whole-document JSON byte representation or
 hashing policy. Array indexes in missing-input paths identify the exact submitted v1 document; a
 later editing adapter must rewrite such paths if it reorders arrays before validation.
 
 No FastAPI route, Pydantic transport adapter, UI/form, ORM, persistence, authentication,
-deployment, renderer, serialization/signing policy, engine call, finance mathematics,
-`evaluate_with_overrides`, ProjectCase-to-v14 mapping, 20-section package assembly, grade/review
+deployment, renderer, canonical document serialization/signing policy, engine call, finance
+mathematics, `evaluate_with_overrides`, ProjectCase-to-v14 mapping, 20-section package assembly,
+grade/review
 aggregation, KPI change or release decision is present. `analytics.contracts_v14`, finance and KPI
 paths are untouched.
 
@@ -173,11 +205,11 @@ paths are untouched.
 The current remediation and inherited gates pass:
 
 ```text
-ProjectCase hostile/JSON/schema gate: 127 passed
-Complete tests/contracts gate:        453 passed
+ProjectCase hostile/JSON/schema gate: 185 passed
+Complete tests/contracts gate:        511 passed
 Existing D2 focused gate:            386 passed
-D2 plus ProjectCase coverage gate:    425 passed; 96.13% package total
-ProjectCase module coverage:          95.80%
+D2 plus ProjectCase coverage gate:    483 passed; 95.88% package total
+ProjectCase module coverage:          95.17%
 Ruff check and format:               passed
 Black check:                         passed
 isort check:                         passed
@@ -186,12 +218,14 @@ py_compile/import/schema/export:      passed; 62 exports, 47 schema definitions
 AST forbidden production import scan: passed
 ```
 
-The 20 added focused controls include every R1 accepted-invalid counterexample and its feasible
-counterpart, missing unit-rate feasibility, the rereview's exact high-precision generation/BESS/
-money propositions, a high-precision FX proposition, low-precision and non-half-even ambient
-contexts, explicit half-even ties, three input-bound errors, a controlled out-of-domain
-intermediate, and positive wind-only versus negative BESS-only evidence for a wind-only conversion
-in a wind-plus-BESS case.
+The 58 additional focused cases include the exact R5 rejected USD 1 and accepted USD 2 chains;
+missing quantity, rate, native-amount and FX combinations; the explicit two-unbound admissibility
+refusal; all four reviewed R6 negatives and nearby positives; constructive multi-missing capacity
+cases; exact complete and partial allocation closure; and R7 runtime/schema probes over exact and
+hostile strings, numbers and Python-native Decimals under multiple ambient contexts. Twenty-three
+R7 cases use the independent Draft 2020-12 `jsonschema` implementation as the schema oracle. A
+compact independent enumeration also checks 1,242 bounded native-grid target intervals against the
+analytic monotone solver.
 
 The only pytest warning is the pre-existing Hypothesis warning that repository `norecursedirs`
 suppresses `.hypothesis` collection. On this macOS environment, use the filesystem coverage target

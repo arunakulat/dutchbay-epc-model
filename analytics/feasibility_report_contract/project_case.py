@@ -17,13 +17,24 @@ process-global Decimal context.
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from decimal import ROUND_HALF_EVEN, Context, Decimal, DecimalException
 from enum import Enum
 from fractions import Fraction
-from typing import Annotated, Iterable, Literal, Union
+from typing import Annotated, Any, Iterable, Literal, Union
 
-from pydantic import Field, PositiveInt, StringConstraints, model_validator
+from pydantic import (
+    Field,
+    PlainSerializer,
+    PositiveInt,
+    StringConstraints,
+    ValidationInfo,
+    ValidatorFunctionWrapHandler,
+    WithJsonSchema,
+    WrapValidator,
+    model_validator,
+)
 
 from .vocabulary import (
     CurrencyCode,
@@ -51,26 +62,95 @@ _MAX_DECIMAL_PLACES = 36
 _MAX_INTEGER_DIGITS = _MAX_SIGNIFICANT_DIGITS - _MAX_DECIMAL_PLACES
 _MAX_MATERIAL_COUNT = (10**_MAX_INTEGER_DIGITS) - 1
 _ARITHMETIC_PRECISION = (_MAX_SIGNIFICANT_DIGITS * 2) + 8
-_MIN_DECIMAL_VALUE = Decimal("-1e36")
-_MAX_DECIMAL_VALUE = Decimal("1e36")
+_DECIMAL_GRID_SCALE = 10**_MAX_DECIMAL_PLACES
+_MAX_DECIMAL_GRID_INTEGER = (10**_MAX_SIGNIFICANT_DIGITS) - 1
+_DECIMAL_STRING_PATTERN = r"^[+-]?(?:(?:[0-9]{1,36})(?:\.[0-9]{1,36})?|\.[0-9]{1,36})$"
+_FINITE_DECIMAL_JSON_SCHEMA: dict[str, Any] = {
+    "anyOf": [
+        {
+            "type": "number",
+            "exclusiveMinimum": -1e36,
+            "exclusiveMaximum": 1e36,
+            "multipleOf": 1e-36,
+        },
+        {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 74,
+            "pattern": _DECIMAL_STRING_PATTERN,
+        },
+    ]
+}
+
+
+def _decimal_is_in_domain(value: Decimal) -> bool:
+    """Return whether one Decimal preserves the declared lexical-scale domain."""
+    if not value.is_finite():
+        return False
+    _, digits, exponent = value.as_tuple()
+    assert isinstance(exponent, int)
+    if exponent < -_MAX_DECIMAL_PLACES:
+        return False
+    if value.is_zero():
+        return exponent <= _MAX_INTEGER_DIGITS
+    integer_digits = max(len(digits) + exponent, 0)
+    decimal_places = max(-exponent, 0)
+    return (
+        integer_digits <= _MAX_INTEGER_DIGITS
+        and decimal_places <= _MAX_DECIMAL_PLACES
+        and integer_digits + decimal_places <= _MAX_SIGNIFICANT_DIGITS
+    )
+
+
+def _validate_finite_decimal(
+    raw_value: Any,
+    handler: ValidatorFunctionWrapHandler,
+    info: ValidationInfo,
+) -> Decimal:
+    """Parse and validate one Decimal without ambient-context normalization."""
+    if (
+        isinstance(raw_value, str)
+        and re.fullmatch(_DECIMAL_STRING_PATTERN, raw_value) is None
+    ):
+        raise ValueError(
+            "Decimal string requires plain notation with at most "
+            "36 integer and 36 fractional digits"
+        )
+    if info.mode == "json":
+        if isinstance(raw_value, bool):
+            raise ValueError("boolean is not a ProjectCase Decimal")
+        if isinstance(raw_value, (str, int)):
+            value = Decimal(raw_value)
+        elif isinstance(raw_value, float):
+            value = Decimal(str(raw_value))
+        else:
+            value = handler(raw_value)
+    else:
+        value = handler(raw_value)
+    if not isinstance(value, Decimal) or not _decimal_is_in_domain(value):
+        raise ValueError(
+            "Decimal exceeds the ProjectCase numeric domain "
+            "(72 total digits, 36 integer digits, 36 decimal places)"
+        )
+    return value
+
+
+def _serialize_finite_decimal(value: Decimal) -> str:
+    """Emit one accepted Decimal in deterministic plain ASCII notation."""
+    return format(value, "f")
+
 
 FiniteDecimal = Annotated[
     Decimal,
-    Field(
-        allow_inf_nan=False,
-        max_digits=_MAX_SIGNIFICANT_DIGITS,
-        decimal_places=_MAX_DECIMAL_PLACES,
-        gt=_MIN_DECIMAL_VALUE,
-        lt=_MAX_DECIMAL_VALUE,
-        json_schema_extra={"multipleOf": 1e-36},
-    ),
+    WrapValidator(_validate_finite_decimal),
+    PlainSerializer(_serialize_finite_decimal, return_type=str, when_used="json"),
+    WithJsonSchema(_FINITE_DECIMAL_JSON_SCHEMA, mode="validation"),
 ]
 MaterialPositiveInt = Annotated[int, Field(strict=True, gt=0, le=_MAX_MATERIAL_COUNT)]
 MinorUnitPlaces = Annotated[int, Field(ge=0, le=6)]
 QuotePrecision = Annotated[int, Field(ge=1, le=18)]
 
 _ENGINEERING_ABS_TOL = Decimal("0.000000001")
-_SHARE_ABS_TOL = Decimal("0.000000000001")
 
 
 class ContractSupportStatus(str, Enum):
@@ -433,34 +513,67 @@ class UnitizedGenerationCapacity(StrictFrozenModel):
             self.electrical_basis,
             "total_power_capacity",
         )
-        if isinstance(self.unit_count, MissingValue):
-            if self.unit_count.unit != "count":
-                raise ValueError("unit_count requires unit count")
-            if isinstance(self.unit_power_capacity, ResolvedValue) and isinstance(
-                self.total_power_capacity, ResolvedValue
+        if (
+            isinstance(self.unit_count, MissingValue)
+            and self.unit_count.unit != "count"
+        ):
+            raise ValueError("unit_count requires unit count")
+        missing_count = sum(
+            isinstance(item, MissingValue)
+            for item in (
+                self.unit_count,
+                self.unit_power_capacity,
+                self.total_power_capacity,
+            )
+        )
+        if missing_count >= 2:
+            if not _multi_missing_generation_completion_exists(
+                self.unit_count,
+                self.unit_power_capacity,
+                self.total_power_capacity,
             ):
-                inferred_count = Fraction(self.total_power_capacity.value) / Fraction(
-                    self.unit_power_capacity.value
+                raise ValueError(
+                    "generation capacity has no bounded completion for missing inputs"
                 )
-                nearest_count = round(inferred_count)
-                if nearest_count > _MAX_MATERIAL_COUNT:
-                    raise ValueError(
-                        "missing unit_count exceeds the ProjectCase numeric domain"
-                    )
-                if nearest_count <= 0 or not _engineering_close(
-                    self.total_power_capacity.value,
-                    _multiply_exact(
-                        Decimal(nearest_count), self.unit_power_capacity.value
-                    ),
+            return self
+        if missing_count == 1:
+            tolerance = Fraction(_ENGINEERING_ABS_TOL)
+            if isinstance(self.unit_count, MissingValue):
+                assert isinstance(self.unit_power_capacity, ResolvedValue)
+                assert isinstance(self.total_power_capacity, ResolvedValue)
+                unit = Fraction(self.unit_power_capacity.value)
+                if not _positive_integer_grid_intersects(
+                    Fraction(self.total_power_capacity.value) / unit,
+                    tolerance / unit,
                 ):
                     raise ValueError(
                         "missing unit_count cannot reconcile resolved total/unit capacity"
                     )
+            elif isinstance(self.unit_power_capacity, MissingValue):
+                assert isinstance(self.unit_count, ResolvedCount)
+                assert isinstance(self.total_power_capacity, ResolvedValue)
+                count = Fraction(self.unit_count.value)
+                if not _positive_decimal_grid_intersects(
+                    Fraction(self.total_power_capacity.value) / count,
+                    tolerance / count,
+                ):
+                    raise ValueError(
+                        "missing unit_power_capacity has no bounded grid completion"
+                    )
+            else:
+                assert isinstance(self.unit_count, ResolvedCount)
+                assert isinstance(self.unit_power_capacity, ResolvedValue)
+                target = Fraction(self.unit_count.value) * Fraction(
+                    self.unit_power_capacity.value
+                )
+                if not _positive_decimal_grid_intersects(target, tolerance):
+                    raise ValueError(
+                        "missing total_power_capacity has no bounded grid completion"
+                    )
             return self
-        if isinstance(self.unit_power_capacity, MissingValue) or isinstance(
-            self.total_power_capacity, MissingValue
-        ):
-            return self
+        assert isinstance(self.unit_count, ResolvedCount)
+        assert isinstance(self.unit_power_capacity, ResolvedValue)
+        assert isinstance(self.total_power_capacity, ResolvedValue)
         expected = _multiply_exact(
             Decimal(self.unit_count.value), self.unit_power_capacity.value
         )
@@ -603,14 +716,50 @@ class StorageAsset(StrictFrozenModel):
             raise ValueError(
                 "storage power, energy, and duration require compatible bases"
             )
-        values = (
-            self.power_capacity.value,
-            self.energy_capacity.value,
-            self.duration.value,
+        power = self.power_capacity.value
+        energy = self.energy_capacity.value
+        duration = self.duration.value
+        missing_count = sum(
+            isinstance(item, MissingValue) for item in (power, energy, duration)
         )
-        if any(isinstance(item, MissingValue) for item in values):
+        if missing_count >= 2:
+            if not _multi_missing_storage_completion_exists(power, energy, duration):
+                raise ValueError(
+                    "storage capacity has no bounded completion for missing inputs"
+                )
             return self
-        power, energy, duration = values
+        if missing_count == 1:
+            tolerance = Fraction(_ENGINEERING_ABS_TOL)
+            if isinstance(power, MissingValue):
+                assert isinstance(energy, ResolvedValue)
+                assert isinstance(duration, ResolvedValue)
+                duration_value = Fraction(duration.value)
+                feasible = _positive_decimal_grid_intersects(
+                    Fraction(energy.value) / duration_value,
+                    tolerance / duration_value,
+                )
+                field_name = "power"
+            elif isinstance(energy, MissingValue):
+                assert isinstance(power, ResolvedValue)
+                assert isinstance(duration, ResolvedValue)
+                feasible = _positive_decimal_grid_intersects(
+                    Fraction(power.value) * Fraction(duration.value), tolerance
+                )
+                field_name = "energy"
+            else:
+                assert isinstance(power, ResolvedValue)
+                assert isinstance(energy, ResolvedValue)
+                power_value = Fraction(power.value)
+                feasible = _positive_decimal_grid_intersects(
+                    Fraction(energy.value) / power_value,
+                    tolerance / power_value,
+                )
+                field_name = "duration"
+            if not feasible:
+                raise ValueError(
+                    f"missing storage {field_name} has no bounded grid completion"
+                )
+            return self
         assert isinstance(power, ResolvedValue)
         assert isinstance(energy, ResolvedValue)
         assert isinstance(duration, ResolvedValue)
@@ -930,14 +1079,22 @@ class CostSchedule(StrictFrozenModel):
                 (Fraction(item.value) for item in resolved_shares), start=Fraction(0)
             )
             if len(resolved_shares) == len(typed_selected):
-                if not _share_close(resolved_sum, Fraction(1)):
+                if resolved_sum != Fraction(1):
                     raise ValueError(
-                        f"cost line {line.line_id} allocations must sum to 1"
+                        f"cost line {line.line_id} allocations must sum exactly to 1"
                     )
-            elif resolved_sum >= Fraction(1):
-                raise ValueError(
-                    f"cost line {line.line_id} missing allocation share is infeasible"
-                )
+            else:
+                missing_share_count = len(typed_selected) - len(resolved_shares)
+                unresolved_remainder = Fraction(1) - resolved_sum
+                minimum_remainder = Fraction(missing_share_count, _DECIMAL_GRID_SCALE)
+                scaled_remainder = unresolved_remainder * _DECIMAL_GRID_SCALE
+                if (
+                    unresolved_remainder < minimum_remainder
+                    or scaled_remainder.denominator != 1
+                ):
+                    raise ValueError(
+                        f"cost line {line.line_id} missing allocation share is infeasible"
+                    )
 
             conversion_id = line.amount.conversion_id
             if conversion_id is not None:
@@ -1441,6 +1598,228 @@ class ProjectCase(StrictFrozenModel):
         )
 
 
+def _ceil_fraction(value: Fraction) -> int:
+    return -((-value.numerator) // value.denominator)
+
+
+def _positive_decimal_grid_intersects(target: Fraction, tolerance: Fraction) -> bool:
+    """Return whether the bounded positive 1e-36 grid meets an exact interval."""
+    lower = (target - tolerance) * _DECIMAL_GRID_SCALE
+    upper = (target + tolerance) * _DECIMAL_GRID_SCALE
+    minimum = max(1, _ceil_fraction(lower))
+    maximum = min(
+        _MAX_DECIMAL_GRID_INTEGER,
+        upper.numerator // upper.denominator,
+    )
+    return bool(minimum <= maximum)
+
+
+def _positive_integer_grid_intersects(target: Fraction, tolerance: Fraction) -> bool:
+    """Return whether the bounded positive count grid meets an exact interval."""
+    lower = target - tolerance
+    upper = target + tolerance
+    minimum = max(1, _ceil_fraction(lower))
+    maximum = min(_MAX_MATERIAL_COUNT, upper.numerator // upper.denominator)
+    return bool(minimum <= maximum)
+
+
+def _multi_missing_generation_completion_exists(
+    count: MaterialCount,
+    unit_power: MaterialValue,
+    total_power: MaterialValue,
+) -> bool:
+    """Constructively prove a bounded completion with at least two missing fields."""
+    tolerance = Fraction(_ENGINEERING_ABS_TOL)
+    if isinstance(count, ResolvedCount):
+        target = Fraction(count.value, _DECIMAL_GRID_SCALE)
+        return _positive_decimal_grid_intersects(target, tolerance)
+    if isinstance(unit_power, ResolvedValue):
+        return _positive_decimal_grid_intersects(Fraction(unit_power.value), tolerance)
+    if isinstance(total_power, ResolvedValue):
+        return _positive_decimal_grid_intersects(Fraction(total_power.value), tolerance)
+    return True
+
+
+def _multi_missing_storage_completion_exists(
+    power: MaterialValue,
+    energy: MaterialValue,
+    duration: MaterialValue,
+) -> bool:
+    """Constructively prove a bounded completion with at least two missing fields."""
+    tolerance = Fraction(_ENGINEERING_ABS_TOL)
+    if isinstance(power, ResolvedValue):
+        target = Fraction(power.value) / _DECIMAL_GRID_SCALE
+        return _positive_decimal_grid_intersects(target, tolerance)
+    if isinstance(duration, ResolvedValue):
+        target = Fraction(duration.value) / _DECIMAL_GRID_SCALE
+        return _positive_decimal_grid_intersects(target, tolerance)
+    if isinstance(energy, ResolvedValue):
+        return _positive_decimal_grid_intersects(Fraction(energy.value), tolerance)
+    return True
+
+
+def _round_half_even_fraction_to_integer(value: Fraction) -> int:
+    """Round an exact nonnegative rational to an integer with ties to even."""
+    quotient, remainder = divmod(value.numerator, value.denominator)
+    doubled = remainder * 2
+    if doubled < value.denominator:
+        return quotient
+    if doubled > value.denominator:
+        return quotient + 1
+    return quotient if quotient % 2 == 0 else quotient + 1
+
+
+def _decimal_to_grid_integer(value: Decimal, decimal_places: int) -> int:
+    scaled = Fraction(value) * (10**decimal_places)
+    if scaled.denominator != 1:
+        raise ValueError(
+            f"value does not lie on the declared {decimal_places}-place grid"
+        )
+    return int(scaled.numerator)
+
+
+def _rounded_linear_grid_output(
+    input_integer: int,
+    *,
+    input_decimal_places: int,
+    factor: Decimal,
+    output_decimal_places: int,
+) -> int:
+    exact = (
+        Fraction(input_integer, 10**input_decimal_places)
+        * Fraction(factor)
+        * (10**output_decimal_places)
+    )
+    return _round_half_even_fraction_to_integer(exact)
+
+
+def _first_grid_input_with_output_at_least(
+    output_target: int,
+    *,
+    minimum_input: int,
+    maximum_input: int,
+    input_decimal_places: int,
+    factor: Decimal,
+    output_decimal_places: int,
+) -> int:
+    lower = minimum_input
+    upper = maximum_input + 1
+    while lower < upper:
+        midpoint = (lower + upper) // 2
+        output = _rounded_linear_grid_output(
+            midpoint,
+            input_decimal_places=input_decimal_places,
+            factor=factor,
+            output_decimal_places=output_decimal_places,
+        )
+        if output < output_target:
+            lower = midpoint + 1
+        else:
+            upper = midpoint
+    return lower
+
+
+def _grid_input_interval_for_exact_output(
+    output_target: int,
+    *,
+    minimum_input: int,
+    maximum_input: int,
+    input_decimal_places: int,
+    factor: Decimal,
+    output_decimal_places: int,
+) -> tuple[int, int] | None:
+    first = _first_grid_input_with_output_at_least(
+        output_target,
+        minimum_input=minimum_input,
+        maximum_input=maximum_input,
+        input_decimal_places=input_decimal_places,
+        factor=factor,
+        output_decimal_places=output_decimal_places,
+    )
+    if first > maximum_input:
+        return None
+    if (
+        _rounded_linear_grid_output(
+            first,
+            input_decimal_places=input_decimal_places,
+            factor=factor,
+            output_decimal_places=output_decimal_places,
+        )
+        != output_target
+    ):
+        return None
+    after_last = _first_grid_input_with_output_at_least(
+        output_target + 1,
+        minimum_input=first,
+        maximum_input=maximum_input,
+        input_decimal_places=input_decimal_places,
+        factor=factor,
+        output_decimal_places=output_decimal_places,
+    )
+    return first, min(maximum_input, after_last - 1)
+
+
+def _linear_grid_maps_into_output_interval(
+    *,
+    factor: Decimal,
+    input_must_be_positive: bool,
+    input_decimal_places: int,
+    output_decimal_places: int,
+    minimum_output: int,
+    maximum_output: int,
+) -> bool:
+    minimum_input = 1 if input_must_be_positive else 0
+    first = _first_grid_input_with_output_at_least(
+        minimum_output,
+        minimum_input=minimum_input,
+        maximum_input=_MAX_DECIMAL_GRID_INTEGER,
+        input_decimal_places=input_decimal_places,
+        factor=factor,
+        output_decimal_places=output_decimal_places,
+    )
+    return first <= _MAX_DECIMAL_GRID_INTEGER and (
+        _rounded_linear_grid_output(
+            first,
+            input_decimal_places=input_decimal_places,
+            factor=factor,
+            output_decimal_places=output_decimal_places,
+        )
+        <= maximum_output
+    )
+
+
+def _cost_can_produce_native_interval(
+    line: CostLine, minimum_native: int, maximum_native: int
+) -> bool:
+    quantity = line.quantity
+    rate = line.unit_rate_native
+    places = line.amount.native_minor_unit_places
+    if isinstance(quantity, ResolvedValue) and isinstance(rate, ResolvedValue):
+        output = _decimal_to_grid_integer(
+            _round_money(_multiply_exact(quantity.value, rate.value), places), places
+        )
+        return minimum_native <= output <= maximum_native
+    if isinstance(quantity, ResolvedValue):
+        return _linear_grid_maps_into_output_interval(
+            factor=quantity.value,
+            input_must_be_positive=False,
+            input_decimal_places=_MAX_DECIMAL_PLACES,
+            output_decimal_places=places,
+            minimum_output=minimum_native,
+            maximum_output=maximum_native,
+        )
+    if isinstance(rate, ResolvedValue):
+        return _linear_grid_maps_into_output_interval(
+            factor=rate.value,
+            input_must_be_positive=True,
+            input_decimal_places=_MAX_DECIMAL_PLACES,
+            output_decimal_places=places,
+            minimum_output=minimum_native,
+            maximum_output=maximum_native,
+        )
+    return minimum_native <= maximum_native
+
+
 def _reconcile_partial_product(
     left: MaterialValue,
     right: MaterialValue,
@@ -1527,26 +1906,42 @@ def _reconcile_partial_conversion(
         return
     if reporting_value is None:
         return
-    if native_value is not None and not _missing_factor_solution_exists(
-        native_value,
-        reporting_value,
-        target_minor_unit_places=line.amount.reporting_minor_unit_places,
-        factor_decimal_places=conversion.quote_precision,
-        factor_must_be_positive=True,
-    ):
-        raise ValueError(
-            "cost line reporting amount has no feasible positive missing FX rate"
+    if native_value is not None:
+        if not _missing_factor_solution_exists(
+            native_value,
+            reporting_value,
+            target_minor_unit_places=line.amount.reporting_minor_unit_places,
+            factor_decimal_places=conversion.quote_precision,
+            factor_must_be_positive=True,
+        ):
+            raise ValueError(
+                "cost line reporting amount has no feasible positive missing FX rate"
+            )
+        return
+    if rate_value is not None:
+        reporting_integer = _decimal_to_grid_integer(
+            reporting_value, line.amount.reporting_minor_unit_places
         )
-    if rate_value is not None and not _missing_factor_solution_exists(
-        rate_value,
-        reporting_value,
-        target_minor_unit_places=line.amount.reporting_minor_unit_places,
-        factor_decimal_places=_MAX_DECIMAL_PLACES,
-        factor_must_be_positive=False,
-    ):
-        raise ValueError(
-            "cost line reporting amount has no feasible missing native amount"
+        maximum_native = (
+            10 ** (_MAX_INTEGER_DIGITS + line.amount.native_minor_unit_places)
+        ) - 1
+        native_interval = _grid_input_interval_for_exact_output(
+            reporting_integer,
+            minimum_input=0,
+            maximum_input=maximum_native,
+            input_decimal_places=line.amount.native_minor_unit_places,
+            factor=rate_value,
+            output_decimal_places=line.amount.reporting_minor_unit_places,
         )
+        if native_interval is None or not _cost_can_produce_native_interval(
+            line, *native_interval
+        ):
+            raise ValueError("connected cost/FX chain has no joint bounded completion")
+        return
+    raise ValueError(
+        "connected cost/FX chain requires a resolved FX rate or an inferable "
+        "native amount"
+    )
 
 
 def _missing_factor_solution_exists(
@@ -1594,28 +1989,6 @@ def _decimal_from_scaled_integer(value: int, decimal_places: int) -> Decimal:
     return Decimal((0, digits, -decimal_places))
 
 
-def _decimal_is_in_domain(value: Decimal) -> bool:
-    if not value.is_finite():
-        return False
-    _, raw_digits, raw_exponent = value.as_tuple()
-    assert isinstance(raw_exponent, int)
-    digits = list(raw_digits)
-    exponent = raw_exponent
-    while len(digits) > 1 and digits[-1] == 0:
-        digits.pop()
-        exponent += 1
-    if not any(digits):
-        return True
-    integer_digits = max(len(digits) + exponent, 0)
-    decimal_places = max(-exponent, 0)
-    total_digits = integer_digits + decimal_places
-    return (
-        integer_digits <= _MAX_INTEGER_DIGITS
-        and decimal_places <= _MAX_DECIMAL_PLACES
-        and total_digits <= _MAX_SIGNIFICANT_DIGITS
-    )
-
-
 def _require_decimal_in_domain(value: Decimal, field_name: str) -> None:
     if not _decimal_is_in_domain(value):
         raise ValueError(
@@ -1635,10 +2008,6 @@ def _multiply_exact(left: Decimal, right: Decimal) -> Decimal:
 
 def _engineering_close(left: Decimal, right: Decimal) -> bool:
     return abs(Fraction(left) - Fraction(right)) <= Fraction(_ENGINEERING_ABS_TOL)
-
-
-def _share_close(left: Fraction, right: Fraction) -> bool:
-    return abs(left - right) <= Fraction(_SHARE_ABS_TOL)
 
 
 def _round_money(value: Decimal, minor_unit_places: int) -> Decimal:
