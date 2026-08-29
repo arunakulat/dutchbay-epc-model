@@ -1,8 +1,8 @@
 # Dolphin 3A remediation rereview record
 
-**Record status:** second through fifth independent domain vetoes and sixth independent domain
-acceptance under PERSIST-01
-**Latest exact reviewed candidate:** `2a3831542a3160f6d02cb2f592c4487981647f19`
+**Record status:** second through fifth independent domain vetoes, sixth independent domain
+acceptance, seventh successor veto, and final exact-head domain acceptance under PERSIST-01
+**Latest exact reviewed candidate:** `77db342342e5ef62c922ac328d73a0b2e3e407d3`
 **Exact reviewed base/live main:** `782c9588ef2685fcf0608d48f7745493aaa15b78`
 **Pull request:** `#1191`, open and draft at the reviewed head
 **Review role:** renewable-project domain specialist
@@ -997,3 +997,130 @@ the runtime/schema truth correction.
 PR `#1191` must remain draft and must not merge while either exact-head veto controls. This record
 does not grant professional, statutory, lender, Board, grade, release or deployment authority and
 does not alter issue `#1110` or any project, evidence, audit, F5, package or release `HOLD`.
+
+## 36. Final exact-head domain binding
+
+The bounded ASR-03 repair was committed and pushed as
+`77db342342e5ef62c922ac328d73a0b2e3e407d3`. The final independent domain reviewer ingressed the
+first review, every veto and remediation in this record, the complete assurance record, and the
+current handover before reviewing the exact pushed tree. A fresh read-only fetch found no movement
+of main or the topic and established:
+
+```text
+local HEAD:                              77db342342e5ef62c922ac328d73a0b2e3e407d3
+local upstream topic:                    77db342342e5ef62c922ac328d73a0b2e3e407d3
+live remote topic:                       77db342342e5ef62c922ac328d73a0b2e3e407d3
+PR #1191 head:                           77db342342e5ef62c922ac328d73a0b2e3e407d3
+local/live origin/main and PR base:      782c9588ef2685fcf0608d48f7745493aaa15b78
+topic relation to origin/main:           0 behind; 18 ahead; main is an ancestor
+worktree, index and untracked set:       clean
+PR state:                                OPEN; DRAFT; MERGEABLE; CLEAN
+exact-head GitHub jobs:                  18 successful; 3 expected skipped; 0 failed/pending
+exact-head required GitHub checks:       4/4 passed
+```
+
+The three expected changed-path or scheduled skips were Grid Study, Report Qualification, and
+Stochastic Qualification. Test Summary, Verification receipts (`VERIFY-01`), fastlane, and smoke
+were all green. CI and mergeability remain delivery evidence; the independent domain disposition
+below is bound to the exact tree, not inferred from those signals.
+
+The accepted exact-head fingerprints before this documentation-only append were:
+
+```text
+6d1ea97befe758a3c9f34bb74eee84b65b3650f621ac6f379f3c0dbeafcd6e7e  analytics/feasibility_report_contract/project_case.py
+291a823d75338b4d5360525d35bed60f7851ddabd4f16c30d816368fb4eb7bf9  analytics/feasibility_report_contract/__init__.py
+ca4ee993f6ea7077a26410b41de7e6a057319e6de8b4c8bec8bef04af5fb5d1b  tests/contracts/test_project_case_contract.py
+8cfac7f0b98d740a17e5e9f9dd562a63becfb00cc7dcbd18d634a6bd2412dd92  changelog.d/project-case-v1.added.md
+d3968bc1428224160f8638c43c365304ab0904c23c61103e2cb08a0e6474b133  docs/DOLPHIN_3A_INDEPENDENT_REVIEW_RECORD.md
+b0ff7444ecb118f02f1d38e23369f4224082baee542454a0108a39aa56ed020c  docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md
+82b30d2b34f00287b637a57fc209fdf07360a80003cccfc0ae0ff4b1f1c1d558  docs/DOLPHIN_3A_ASSURANCE_REVIEW_RECORD.md
+a9596bbc9ab809617ece96c08e28b2dd7c3b89f5f8165b366a53d85f4d0f9cb0  docs/SESSION_HANDOVER_2026-08-29_2.md
+```
+
+## 37. Final D3A-ASR-03 domain closure
+
+**DOMAIN ACCEPTED** at exact pushed SHA
+`77db342342e5ef62c922ac328d73a0b2e3e407d3`. No blocking, high, medium, or low D3A
+contract-domain defect remained in the final candidate.
+
+An independent wind/solar role-unit-state matrix exercised 180 full-root cases: 140 intended
+acceptances, 40 intended refusals, and zero mismatches. Resolved and explicit-missing
+`electrical_collection` capacity accepted `MW`, `MWac`, `MWdc`, `MWp`, and `MVA`.
+`grid_interconnection` accepted `MW`, `MWac`, and `MVA` while refusing `MWdc` and `MWp`. Both
+electrical roles refused `USD`, `km`, `item`, and `MWh`; `access_road`,
+`operations_facility`, and `other_shared_facility` retained their deliberately open unit boundary.
+
+The solar controls used a valid DC/nameplate solar-generation asset, BESS charging directly and
+reciprocally from that asset, `dedicated_separate` topology, and exactly one technology user of the
+electrical facility. Missing collection capacity closed through the exact `/assets/2/capacity`
+record with the matching identifier and expected unit. Independently mutated wrong-path,
+wrong-unit, missing-record, and unreferenced-record states were all refused.
+
+Both validation- and serialization-mode Draft 2020-12 schemas remained structurally valid. Both
+accepted valid `MWdc` collection structurally, and both also structurally accepted the runtime-
+invalid collection-`USD` and grid-`MWdc` examples. `ProjectCase` runtime accepted only the
+semantically valid collection example. The changelog and handover therefore state the boundary
+truthfully: role-dependent electrical capacity is runtime semantic validation, schema-only
+acceptance is insufficient, and a future web/API adapter must invoke `ProjectCase` validation.
+
+D3A-ASR-01 and D3A-ASR-02 also remained accepted. The independent exact stable-identifier lexical
+matrix covered 30,951 cases with 3,283 intended acceptances and zero runtime, Draft, or ECMAScript
+mismatch. Its full-root replay covered all 13 identifier roles through 585 runtime and schema
+checks with zero mismatch. The portable SemVer matrix covered 83,006 cases with 2,500 intended
+acceptances and zero runtime, Draft 2020-12, or actual Node/ECMAScript mismatch. Each generated
+schema retained 45 propagated stable-identifier patterns, two local SemVer patterns, and 47
+definitions. The shared Dolphin 2 `SemanticVersion` remained unchanged.
+
+## 38. Final independent domain gate receipt
+
+The reviewer independently obtained:
+
+```text
+ASR-03 focused electrical-role selector:       43 passed
+selected exposed original DOM/R1-R10 replay:  138 passed
+ProjectCase focused gate:                     330 passed
+complete tests/contracts gate:                656 passed
+inherited Dolphin 2 gate:                     386 passed
+D2 plus ProjectCase coverage gate:            628 passed; 96.02% package total
+ProjectCase module coverage:                  95.57%
+validation/serialization Draft schemas:       valid; 47 definitions each
+public package / ProjectCase exports:          63 / 59
+Ruff check and format:                        passed
+Black check:                                  passed
+isort check:                                  passed
+mypy --no-incremental:                        passed
+in-memory compilation:                       passed
+AST direct imports and context:               passed
+packaging inclusion:                         passed
+exact cumulative changed-file set:            passed; eight D3A files
+excluded execution and authority surfaces:    empty
+production jurisdiction-fallback scan:        passed; no Sri Lankan/LKA fallback
+`connected_to` absence:                       passed
+git diff --check:                             passed
+final pre-record worktree/index/untracked:     clean
+```
+
+The production module's direct imports remain limited to the standard library, Pydantic, and
+`.vocabulary`; no finance, evaluation, app, API, persistence, renderer, engine, grade, release, or
+other execution surface entered the D3A contract.
+
+## 39. Controlling final domain boundary
+
+The final production/test candidate is **DOMAIN ACCEPTED** only at exact pushed SHA
+`77db342342e5ef62c922ac328d73a0b2e3e407d3`. This disposition closes the seventh-review ASR-03
+veto without erasing any historical veto, remediation, or accepted limitation in this record. It
+does not implement or approve a web adapter, endpoint, request normalization, transport error
+mapping, resource policy, OpenAPI surface, orchestration, finance behavior, report assembly, grade,
+release, or deployment.
+
+Issue `#1110` remains `OPEN`, with 0 checked and 23 unchecked controls and its retained `HOLD`
+language unchanged. This acceptance is not professional or statutory engineering assurance,
+external audit, lender or Board acceptance, achieved-grade authority, package approval, release or
+deployment authorization, or authority to lift any project, evidence, F5, package, or release
+`HOLD`.
+
+This PERSIST-01 append changes documentation and therefore cannot itself inherit the exact-SHA
+acceptance above. After the three authorized records are checkpointed as one documentation-only
+commit, both independent reviewers must verify the new exact head, unchanged production/export/
+test/changelog fingerprints, truthful documentation delta, current main ancestry, and green CI
+before PR readiness.

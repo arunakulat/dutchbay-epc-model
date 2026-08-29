@@ -1,15 +1,17 @@
 # Dolphin 3A independent assurance review record
 
-**Record status:** predecessor veto plus recovered exact-head successor rereview; controlling
-**ASSURANCE REJECTED** under PERSIST-01
+**Record status:** predecessor and recovered-successor vetoes plus final exact-head
+**ASSURANCE ACCEPTED** disposition under PERSIST-01
 
-**Reviewed pushed head:** `722845742f7123af3d637373c1996a82e357347a`
+**Predecessor reviewed pushed head:** `722845742f7123af3d637373c1996a82e357347a`
 
-**Reviewed production/test candidate:** `2a3831542a3160f6d02cb2f592c4487981647f19`
+**Predecessor reviewed production/test candidate:** `2a3831542a3160f6d02cb2f592c4487981647f19`
 
 **Reviewed base/live main:** `782c9588ef2685fcf0608d48f7745493aaa15b78`
 
 **Recovered successor head:** `836502a607fbce479f8e0412e2c63cb8659fafcd`
+
+**Final accepted pushed head:** `77db342342e5ef62c922ac328d73a0b2e3e407d3`
 
 **Pull request:** `#1191`, open and draft at the reviewed head
 
@@ -450,3 +452,128 @@ not close it.
 PR `#1191` must remain draft. No merge, grade, lender, Board, statutory, report-package, release,
 deployment or `HOLD` authority follows from this review. Issue `#1110` remains `OPEN` and its
 Board/lender circulation state remains `HOLD`.
+
+## 15. Final exact-head assurance binding
+
+The bounded D3A-ASR-03 repair was committed and pushed as
+`77db342342e5ef62c922ac328d73a0b2e3e407d3`. A separate senior Python/Pydantic and web/API
+assurance reviewer ingressed this complete record, both domain review records, and the current
+handover before independently reviewing the exact pushed tree. A fresh read-only fetch established:
+
+```text
+local HEAD:                              77db342342e5ef62c922ac328d73a0b2e3e407d3
+local upstream topic:                    77db342342e5ef62c922ac328d73a0b2e3e407d3
+live remote topic:                       77db342342e5ef62c922ac328d73a0b2e3e407d3
+PR #1191 head:                           77db342342e5ef62c922ac328d73a0b2e3e407d3
+local/live origin/main and PR base:      782c9588ef2685fcf0608d48f7745493aaa15b78
+topic relation to origin/main:           0 behind; 18 ahead; main is an ancestor
+worktree, index and untracked set:       clean
+PR state:                                OPEN; DRAFT; MERGEABLE; CLEAN
+exact-head GitHub jobs:                  18 successful; 3 expected skipped; 0 failed/pending
+exact-head required GitHub checks:       4/4 passed
+```
+
+The expected skips were Grid Study, Report Qualification, and Stochastic Qualification. Test
+Summary, Verification receipts (`VERIFY-01`), fastlane, and smoke all passed. The reviewer made no
+file, index, commit, push, PR, issue, release-state, or `HOLD` mutation.
+
+The accepted exact-head fingerprints before this documentation-only append were:
+
+```text
+6d1ea97befe758a3c9f34bb74eee84b65b3650f621ac6f379f3c0dbeafcd6e7e  analytics/feasibility_report_contract/project_case.py
+291a823d75338b4d5360525d35bed60f7851ddabd4f16c30d816368fb4eb7bf9  analytics/feasibility_report_contract/__init__.py
+ca4ee993f6ea7077a26410b41de7e6a057319e6de8b4c8bec8bef04af5fb5d1b  tests/contracts/test_project_case_contract.py
+8cfac7f0b98d740a17e5e9f9dd562a63becfb00cc7dcbd18d634a6bd2412dd92  changelog.d/project-case-v1.added.md
+d3968bc1428224160f8638c43c365304ab0904c23c61103e2cb08a0e6474b133  docs/DOLPHIN_3A_INDEPENDENT_REVIEW_RECORD.md
+b0ff7444ecb118f02f1d38e23369f4224082baee542454a0108a39aa56ed020c  docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md
+82b30d2b34f00287b637a57fc209fdf07360a80003cccfc0ae0ff4b1f1c1d558  docs/DOLPHIN_3A_ASSURANCE_REVIEW_RECORD.md
+a9596bbc9ab809617ece96c08e28b2dd7c3b89f5f8165b366a53d85f4d0f9cb0  docs/SESSION_HANDOVER_2026-08-29_2.md
+```
+
+## 16. Final D3A assurance closure
+
+**ASSURANCE ACCEPTED** at exact pushed SHA
+`77db342342e5ef62c922ac328d73a0b2e3e407d3`. No blocking, high, medium, or low D3A assurance
+finding remained at that exact SHA.
+
+D3A-ASR-01 remained closed. The reviewer exercised all 13 stable-identifier roles against 16
+hostile forms: runtime refused all 208 and each generated Draft schema mode refused all 208. The
+160-character boundary accepted, 161 characters refused, and Python-mode input was never
+normalized.
+
+D3A-ASR-02 remained closed. Sixty full-root runtime checks, 120 Draft checks, and 30 actual
+Node/ECMAScript checks completed with zero mismatch. The inherited Dolphin 2 `SemanticVersion`
+type remained unchanged.
+
+D3A-ASR-03 closed. An independent 90-case role/unit/state matrix produced 70 intended acceptances,
+20 intended refusals, and zero mismatches:
+
+- resolved and explicit-missing `electrical_collection` accepted `MW`, `MWac`, `MWdc`, `MWp`, and
+  `MVA`;
+- `grid_interconnection` accepted `MW`, `MWac`, and `MVA`, while refusing `MWdc` and `MWp`;
+- both electrical roles refused `USD`, `km`, `item`, and `MWh`;
+- access-road, operations-facility, and other shared-facility roles retained their open unit
+  boundary; and
+- missing collection capacity closed through `/assets/2/capacity` with the matching identifier and
+  expected unit.
+
+Both Draft schemas structurally accepted all 90 role/unit/state cases. This independently confirms
+the documented boundary: the conditional is runtime semantic validation and schema-only acceptance
+is insufficient. A future web/API adapter must invoke `ProjectCase` domain validation.
+
+Frozen object graphs, strict extra-field refusal, union discriminators, mandatory exact schema and
+contract versions, sole-string Decimal/count JSON transport, native Decimal/integer normalized
+Python mode, deterministic serialization under hostile Decimal contexts, and dump/schema/re-ingress
+all passed. Validation- and serialization-mode Draft schemas were structurally valid and retained
+47 definitions each.
+
+## 17. Final independent assurance gate receipt
+
+The reviewer independently obtained:
+
+```text
+targeted ASR, FX, topology and provenance:     130 passed
+ProjectCase focused gate:                     330 passed
+complete tests/contracts gate:                656 passed
+inherited Dolphin 2 gate:                     386 passed
+D2 plus ProjectCase coverage gate:            628 passed; 96.02% package total
+ProjectCase module coverage:                  95.57%
+validation/serialization Draft schemas:       valid; 47 definitions each
+public package exports:                       63
+Ruff check and format:                        passed
+Black check:                                  passed
+isort check:                                  passed
+mypy --no-incremental:                        passed
+compilation and import direction:             passed
+packaging inclusion:                         passed
+exact cumulative changed-file set:            passed; eight D3A files
+excluded execution and authority surfaces:    empty
+production jurisdiction-fallback scan:        passed; no Sri Lankan/LKA fallback
+`connected_to` absence:                       passed
+git diff --check:                             passed
+final pre-record worktree/index/untracked:     clean
+```
+
+The contract remains a pure domain surface. Direct production imports are limited to the standard
+library, Pydantic, and `.vocabulary`; no finance, evaluation, app, API, persistence, renderer,
+engine, grade, release, or other execution dependency entered D3A.
+
+## 18. Controlling final assurance boundary
+
+The final production/test candidate is **ASSURANCE ACCEPTED** only at exact pushed SHA
+`77db342342e5ef62c922ac328d73a0b2e3e407d3`. This disposition closes D3A-ASR-01 through -03 while
+preserving the predecessor vetoes and evidence in sections 1-14.
+
+Future web-adapter responsibilities remain explicit exclusions: duplicate-key refusal, parsed-
+request normalization, structured transport-error mapping, request and collection limits,
+serialization-schema publication, resource/indexing policy, and lightweight package topology. D3A
+does not implement an endpoint or adapter. The acceptance is not professional or statutory
+engineering assurance, external audit, lender or Board acceptance, achieved-grade authority,
+package approval, release or deployment authorization, or `HOLD`-lifting authority.
+
+Issue `#1110` remains `OPEN`, with 0 checked and 23 unchecked controls and its retained `HOLD`
+language intact. This PERSIST-01 append changes documentation and therefore cannot itself inherit
+the exact-SHA acceptance above. After the three authorized records are checkpointed as one
+documentation-only commit, both independent reviewers must verify the new exact head, unchanged
+production/export/test/changelog fingerprints, truthful documentation delta, current main
+ancestry, and green CI before PR readiness.
