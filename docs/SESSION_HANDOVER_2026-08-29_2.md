@@ -1,4 +1,4 @@
-# Session handover - 2026-08-29, successor 14
+# Session handover - 2026-08-29, successor 15
 
 Durable PERSIST-01 successor to
 [`docs/SESSION_HANDOVER_2026-08-29.md`](SESSION_HANDOVER_2026-08-29.md). The predecessor remains
@@ -30,17 +30,23 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
   dutchbay_bootstrap_rules.py
 ```
 
-This record captures the sixth exact-head D3A domain review. The independent disposition is
-**DOMAIN ACCEPTED** at `2a3831542a3160f6d02cb2f592c4487981647f19`: R10 dedicated-versus-shared
-electrical topology is closed, and R8-R9 and every earlier repair class remain accepted. The fifth
-**DOMAIN REJECTED** disposition at `b0020ece4e864cc2cf589bae40f82edd5c30320d` remains preserved as
-history but is no longer the current domain disposition. Separate exact-head assurance is now the
-next review boundary. Current Git status and live refs are authoritative. Never reset, stash or
-clean away the D3A worktree; keep it first on `PYTHONPATH`.
-The documentation worker is not authorized to stage, commit, push, edit the pull request, merge, or
-otherwise mutate GitHub; the controlling parent task holds the user's sequential delivery
-authority. Do not bypass separate assurance, exact-head CI, current-branch, protected-PR, or
-continuing `HOLD` controls.
+This record captures the sixth exact-head D3A domain review and the subsequent exact-head assurance
+review. The independent domain disposition remains **DOMAIN ACCEPTED** for production/test candidate
+`2a3831542a3160f6d02cb2f592c4487981647f19`: R10 dedicated-versus-shared electrical topology is
+closed, and R8-R9 and every earlier repair class remain accepted. The pushed documentation head
+`722845742f7123af3d637373c1996a82e357347a` has now received **ASSURANCE REJECTED** because its
+unchanged production candidate admits silent stable-identifier normalization, non-portable/loose
+semantic-version tokens, and a non-electrical capacity unit for `electrical_collection`. The exact
+findings and bounded repair gate are in
+[`docs/DOLPHIN_3A_ASSURANCE_REVIEW_RECORD.md`](DOLPHIN_3A_ASSURANCE_REVIEW_RECORD.md).
+
+Current Git status and live refs are authoritative. The worktree intentionally contains only the
+uncommitted assurance record and this PERSIST-01 handover amendment after the review. Never reset,
+stash or clean away that documentation or the D3A worktree; keep the worktree first on
+`PYTHONPATH`. The assurance reviewer is not authorized to stage, commit, push, edit the pull
+request, merge, or otherwise mutate GitHub; the controlling parent task holds the user's sequential
+delivery authority. Do not bypass the three assurance repairs, fresh exact-head review, exact-head
+CI, current-branch, protected-PR, or continuing `HOLD` controls.
 
 ## 2. Base and ingress receipt
 
@@ -78,12 +84,20 @@ BESS. That fifth review record was committed and pushed as
 handback. The bounded R10 implementation was committed and pushed as
 `2a3831542a3160f6d02cb2f592c4487981647f19`. The sixth independent review accepted that exact head
 after two independent topology matrices returned zero mismatches and every original/R1-R9 repair
-class remained accepted. Live refs and status are authoritative after any later authorized parent
-checkpoint.
+class remained accepted. Its documentation-only checkpoint was committed and pushed as
+`722845742f7123af3d637373c1996a82e357347a`; the production, export, test and changelog files were
+unchanged from `2a3831542a3160f6d02cb2f592c4487981647f19`. A separate independent assurance replay
+bound local `HEAD`, upstream, live topic and PR head to `722845742f7123af3d637373c1996a82e357347a`
+and verified that live main/base `782c9588ef2685fcf0608d48f7745493aaa15b78` remained its ancestor.
+That replay returned **ASSURANCE REJECTED** on D3A-ASR-01 through -03. Exact-head GitHub CI was fully
+green at 18 successful, 3 expected skipped and 0 failed or pending; this is supplementary evidence,
+not a substitute for the adverse assurance result. Live refs and status are authoritative after
+any later authorized parent checkpoint.
 Sections 19-23 of `docs/DOLPHIN_3A_REMEDIATION_REREVIEW_RECORD.md` preserve the fourth review;
 sections 24-27 preserve the fifth veto, and sections 28-31 contain the controlling sixth
-**DOMAIN ACCEPTED** disposition. Separate assurance remains required; neither domain acceptance nor
-green CI grants merge, grade, lender, release, or `HOLD` authority.
+**DOMAIN ACCEPTED** disposition for the unchanged production/test candidate. The separate assurance
+disposition is recorded in `docs/DOLPHIN_3A_ASSURANCE_REVIEW_RECORD.md` and now controls delivery.
+Neither domain acceptance nor green CI grants merge, grade, lender, release, or `HOLD` authority.
 
 ## 3. Dolphin 3A implementation checkpoint
 
@@ -96,13 +110,19 @@ The Dolphin 3A change set consists of:
 - `changelog.d/project-case-v1.added.md` - concise additive release note; and
 - this handover successor.
 
-`ProjectCase` v1 is intentionally a truthful single-site contract. It uses stable project, case,
-binding, asset, topology, line, allocation, price-basis, source, assumption and missing-input
-identifiers. Project and case IDs are separate identity axes and must not be equal. Technology type
-and physical asset identity are separate. Exactly one `site` jurisdiction must match the location
-and every physical asset. Additional non-site subject jurisdictions can remain separately scoped;
-a multi-site physical-asset case is deferred to a future version rather than misrepresented through
-one location.
+The current PERSIST-01-only documentation append also adds
+`docs/DOLPHIN_3A_ASSURANCE_REVIEW_RECORD.md`. It changes no reviewed production, export, test or
+changelog file and is not itself a remediation of the assurance findings.
+
+`ProjectCase` v1 is intentionally a single-site contract. It declares project, case, binding,
+asset, topology, line, allocation, price-basis, source, assumption and missing-input identifiers
+that are intended to be stable. D3A-ASR-01 establishes that their current validator strips boundary
+whitespace before matching, so their lexical stability and runtime/schema agreement are not yet
+assurance-cleared. Project and case IDs are separate identity axes and must not be equal. Technology
+type and physical asset identity are separate. Exactly one `site` jurisdiction must match the
+location and every physical asset. Additional non-site subject jurisdictions can remain separately
+scoped; a multi-site physical-asset case is deferred to a future version rather than misrepresented
+through one location.
 
 The object graph contains mandatory schema and contract versions, explicit location/site-
 jurisdiction binding, versioned jurisdiction and technology contract declarations, discriminated
@@ -201,18 +221,23 @@ disputed boundary is not an assertion that it is surveyed or contractual.
 
 ## 4. Web and evolution boundary
 
-The contract is suitable for a later JSON, form, Pydantic or FastAPI adapter because it exposes
-stable field names and identifiers, explicit union discriminators, JSON-representable scalars,
-strict extra-field refusal, immutable collections, generated Draft 2020-12 JSON Schema, and
-predictable Pydantic error locations. It is not itself a FastAPI request model. Its strict domain
-types accept the JSON-native fixture through `ProjectCase.model_validate_json()`, while direct
-Python-mode validation of an already parsed dictionary correctly refuses lists, enum strings and
-date strings that have not been normalized to domain-native tuples, enums and dates. A future
-transport adapter must therefore either retain the raw request JSON and call
-`model_validate_json()`, or explicitly normalize parsed request values before domain validation;
-it must then map the resulting `ValidationError` locations and messages to transport field errors.
-Cross-record missing and provenance errors include the exact JSON-pointer-shaped material field
-path for that mapping.
+The contract is designed as a transport-neutral basis for a later JSON, form, Pydantic or FastAPI
+adapter. Its explicit union discriminators, strict extra-field refusal, frozen object graph,
+JSON-representable scalars and generated Draft 2020-12 schemas passed independent replay. It is not
+yet assurance-cleared for that future web boundary: D3A-ASR-01 found silent stable-identifier
+normalization and runtime/schema divergence; D3A-ASR-02 found a non-portable, looser-than-SemVer
+pack-version grammar; and D3A-ASR-03 found that `electrical_collection` admits a currency capacity
+unit. The first two are directly web/evolution material, while the third is a typed domain defect.
+
+The contract is not itself a FastAPI request model. Its strict domain types accept the JSON-native
+fixture through `ProjectCase.model_validate_json()`, while direct Python-mode validation of an
+already parsed dictionary correctly refuses lists, enum strings and date strings that have not been
+normalized to domain-native tuples, enums and dates. A future transport adapter must therefore
+either retain the raw request JSON and call `model_validate_json()`, or explicitly normalize parsed
+request values before domain validation; it must then map the resulting `ValidationError`
+locations and messages to versioned transport field errors. Cross-record missing and provenance
+errors currently have root location `()` and include the exact JSON-pointer-shaped material field
+path in the message; clients must not be required to parse that prose.
 
 The mandatory evolution boundary is `schema_id = dutchbay.project_case.v1` and
 `contract_version = 1.0.0`; neither field has a default, and unknown or future values fail closed.
@@ -232,6 +257,13 @@ resource controls before domain validation; D3A adds no adapter or endpoint poli
 canonical whole-document JSON byte representation or hashing policy. Array indexes in
 missing-input paths identify the exact submitted v1 document; a later editing adapter must rewrite
 such paths if it reorders arrays before validation.
+
+A future raw-body adapter must also reject duplicate JSON keys before Pydantic's last-value-wins
+parser, preserve the strict runtime treatment of small integer controls even though Draft 2020-12
+considers a numeric token such as `1.0` an integer, publish the exact Decimal/count patterns if it
+uses the looser serialization-mode schema, and impose measured body/collection bounds before the
+potentially quadratic provenance-scope checks. These are candid adapter exclusions, not claims that
+D3A already supplies request normalization, error mapping, resource policy or OpenAPI behavior.
 
 No FastAPI route, Pydantic transport adapter, UI/form, ORM, persistence, authentication,
 deployment, renderer, canonical document serialization/signing policy, engine call, finance
@@ -261,10 +293,39 @@ isort check:                                   passed
 mypy --no-incremental:                         passed
 in-memory compile/import/schema/export:        passed; 62 exports, 47 definitions
 AST forbidden production import scan:         passed
-Exact-head GitHub CI:                          18 successful; 3 expected skipped; 0 failed/pending
-Exact-head required checks:                    4/4 passed
+Pushed docs-head CI (`7228457`):               18 successful; 3 expected skipped; 0 failed/pending
+Pushed docs-head required checks:              4/4 passed
 Sixth independent domain disposition:         DOMAIN ACCEPTED
 ```
+
+The subsequent assurance reviewer independently obtained this exact-head receipt:
+
+```text
+Assurance-reviewed pushed head:                722845742f7123af3d637373c1996a82e357347a
+Unchanged production/test candidate:           2a3831542a3160f6d02cb2f592c4487981647f19
+Reviewed live main/base:                       782c9588ef2685fcf0608d48f7745493aaa15b78
+ProjectCase focused gate:                      241 passed; one pre-existing warning
+Complete tests/contracts gate:                 567 passed; one pre-existing warning
+Inherited D2 import/taxonomy gate:              386 passed; one pre-existing warning
+Independent shared-FX brute-force oracle:       288 schedules; 0 mismatches
+Independent arrangement/role/user matrix:        30 cases; 0 mismatches
+R10 / `connected_to` runtime/schema probe:        passed; relationship absent/refused
+Decimal/count full-root lexical matrix:          14 cases; 0 mismatches
+Validation/serialization Draft schemas:          valid; 47 definitions each
+Canonical dump against both schemas:             passed
+Public exports:                                  62; all 58 ProjectCase exports present
+Ruff/Ruff Format/Black/isort/mypy/compile:        passed
+D3A excluded execution-surface diff:              empty
+Exact-head GitHub CI:                             18 successful; 3 expected skipped; 0 failed/pending
+Exact-head required checks:                       4/4 passed
+Independent assurance disposition:               ASSURANCE REJECTED
+Blocking findings:                                D3A-ASR-01, D3A-ASR-02, D3A-ASR-03
+```
+
+The assurance rejection is bounded to exact identifier syntax, pack-version grammar and the
+electrical-collection capacity dimension. It does not reopen the accepted R1-R10 arithmetic,
+topology, provenance or Decimal/count transport repairs. Conversely, the green gates and prior
+domain acceptance do not resolve the three newly demonstrated counterexamples.
 
 The eight R10 focused cases reject the reviewed shared POI and shared electrical-collection paths
 under `dedicated_separate`, plus wind use and BESS charging through the same POI. They accept the
@@ -375,25 +436,43 @@ git status --short --branch
 The bounded R8 exact JSON/count representation, R9 one-rate shared-conversion intersection, and R10
 dedicated electrical-path closure are committed, pushed, and independently accepted at exact
 `2a3831542a3160f6d02cb2f592c4487981647f19`. The sixth **DOMAIN ACCEPTED** disposition is the
-current domain result. It does not reopen any earlier accepted repair class. Separate independent
-assurance is the next required review boundary.
+domain result for that production/test tree and does not reopen any earlier accepted repair class.
+The separate review has now completed against pushed head
+`722845742f7123af3d637373c1996a82e357347a` with **ASSURANCE REJECTED**. PR `#1191` must remain
+draft and must not merge while D3A-ASR-01 through -03 control.
+
+The next bounded production candidate is limited to:
+
+1. exact non-normalizing ASCII stable identifiers with runtime/Draft absolute-end parity;
+2. exact portable ASCII SemVer for D3A pack bindings, without leading-zero numeric identifiers;
+3. an electrical capacity dimension for `electrical_collection` while preserving the deliberately
+   open non-electrical shared-facility roles; and
+4. tests and truthful changelog/handover wording required to prove those three repairs.
+
+The repair must preserve all domain-accepted R1-R10 behavior, Decimal/count sole-string transport,
+deterministic output, direct import direction, exclusions and authority boundaries. It must replay
+focused, complete contracts, inherited D2, coverage, static, validation/serialization schema,
+cross-runtime lexical, import/exclusion and diff gates. Because the repair changes production types,
+the existing exact `2a383154` domain receipt becomes predecessor evidence rather than acceptance of
+the new tree: obtain a fresh exact-head domain delta confirmation and then a fresh independent
+assurance disposition before delivery can resume.
 
 Current Git identity and cleanliness must be read live; this durable receipt does not assert that
-the documentation diff remains uncommitted after the controlling parent acts. The implementation
-and documentation workers must not stage, commit, push, edit the pull request, merge, or mutate
-GitHub. The controlling parent must inspect this PERSIST-only diff, checkpoint and push it only under
-the user's delivery authority, then dispatch separate assurance against the resulting immutable
-head. Any later production, export, test, or changelog change invalidates this sixth domain receipt
-and requires a new exact-head domain review.
+the documentation diff remains uncommitted after the controlling parent acts. The assurance
+reviewer must not stage, commit, push, edit the pull request, merge, or mutate GitHub. The controlling
+parent must inspect this two-document PERSIST-only append and may checkpoint it only under the
+user's delivery authority before assigning the bounded remediator. A documentation-only checkpoint
+does not clear the assurance rejection.
 
-Before any later authorized Git or GitHub action, fetch and compare live `origin/main`, reconcile
-only with explicit authority, and rerun the applicable gates against the resulting exact tree. Never
-reset, stash, clean, overwrite, or absorb unrelated work into the D3A-authored diff. A later delivery
-sequence must still use a protected pull request, exact-head independent review and required CI,
-prove the topic branch current and mergeable, and preserve all `HOLD` states after merge.
+Before any later authorized Git or GitHub action, fetch and compare live `origin/main`, the remote
+topic and PR head; reconcile only with explicit authority. Repeat that synchronization at
+each major checkpoint because another committer can advance `main`; never reset, stash, clean,
+overwrite, or absorb unrelated work into the D3A-authored diff. A later delivery sequence must still
+use the protected pull request, prove the exact reviewed head current and mergeable, wait for all
+required CI, and preserve all `HOLD` states after merge.
 
 Domain acceptance remains contract-scope evidence only. It is not professional or statutory
 engineering assurance, external audit, lender or Board acceptance, achieved-grade authority,
-release or deployment authorization, or permission to merge before separate assurance and delivery
-controls complete. The future adapter duties in section 4 remain exclusions. Issue #1110 and all
-live project, evidence, audit, lender, Board and release states remain unchanged and on `HOLD`.
+release or deployment authorization, or permission to merge before assurance and delivery controls
+complete. The future adapter duties in section 4 remain exclusions. Issue #1110 and all live
+project, evidence, audit, lender, Board and release states remain unchanged and on `HOLD`.
