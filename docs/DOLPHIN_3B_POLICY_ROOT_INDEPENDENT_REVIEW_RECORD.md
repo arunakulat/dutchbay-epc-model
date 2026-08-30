@@ -818,3 +818,77 @@ The protected-base-to-candidate binary diff SHA-256 was
 
 Candidate `8658052…` must remain unmerged. Both VETOs control delivery. No result changes grade,
 evidence, lender, Board, release, deployment, issue or `HOLD` authority.
+
+## 14. Successor review — trusted-type membership still uses rich equality
+
+**Controlling disposition:** VETO
+
+**Reviewed implementation:** `e1e3c01a0d11694d51130f5d5d115008c971500a`
+
+**Reviewed tree:** `4006f1d0787d68da0695ffe48e78e90dba494210`
+
+Both independent reviewers issued `VETO`. They proved that Section 13's dictionary-subclass defect
+is closed and accepted the complete inherited domain-semantic, error-order, schema and successful
+wire corpus. They then found one remaining caller-dispatch path: tuple membership is used to decide
+whether the exact child type is one of the eight trusted compatibility-assertion model classes.
+Tuple membership performs rich equality, not identity-only comparison.
+
+### 14.1 Minimal type-membership failure
+
+An otherwise opaque malformed child can have a class whose metaclass defines equality behavior.
+The raw-key extractor obtains that class safely with `type()`, but testing whether it is `in` the
+trusted type tuple calls the untrusted equality behavior. A raised caller exception consequently
+escapes at both standalone-policy and containing-request roots before the bounded child-error
+projection runs. The existing `CompatibilityAssertion` validator normally refuses the same child;
+the escape is introduced only by the wrapper's membership test.
+
+There is no false accept. The VETO is for executing caller code and escaping the bounded validation
+surface. A trusted type allowlist must use object identity, never caller-defined equality or hash.
+
+### 14.2 Accepted evidence preserved
+
+- exact built-in dictionaries and exact compatibility models retain canonical ordering;
+- raising and stateful dictionary subclasses are opaque, their overridden `get()` methods are not
+  called, and repeated complete policy/request receipts are stable;
+- the Section 12 scalar and earlier duplicate/distinct-ID ordering defects remain closed;
+- all 28 admissible and 107 impossible subject/domain pairs behave correctly at all four roots;
+- all 17 predecessor negative families and seven constructive positive families behave correctly;
+- D3A shared-binding topology and the candid stricter D3B-v1 limitation remain distinct;
+- successful schemas, wire shape and exact authored assertion order remain unchanged; and
+- semantic ownership, external route layering and excluded imports remain intact.
+
+The focused D3B, complete-contract, D3A and D2 suites passed `296`, `952`, `330` and `298` tests.
+Governed Python `3.12.13`, 73 active rules, import/changelog, format, lint, typing, compilation,
+schema, excluded-surface and diff checks passed. Green gates do not override the dual VETO.
+
+### 14.3 Required bounded correction
+
+The next successor must compare the actual child type with every trusted model type using explicit
+object identity only. It must not use tuple/set membership, equality or hashing. A durable control
+must prove that a child class's equality hook is never invoked at either public root and that
+repeated validation yields the same bounded receipt. All dictionary-subclass, scalar,
+duplicate/distinct-ID, matrix, schema and successful authored-order controls remain mandatory.
+
+### 14.4 Exact review receipt
+
+At review close, local `HEAD`, upstream, live remote topic and draft-PR head were all `e1e3c01…`;
+the tree was `4006f1d0787d68da0695ffe48e78e90dba494210`; protected/live `origin/main` and the
+PR base were `9e1c6fae6220551754c23535caeaa86b37422230`; the topic was zero behind and fifteen
+commits ahead; and the worktree was clean. The PR remained open and draft. No issue or `HOLD` state
+changed.
+
+Candidate fingerprints:
+
+| File | SHA-256 |
+|---|---|
+| `analytics/feasibility_report_contract/assessment_scope.py` | `c3169a6475ae01fb790a8cc04e82a814d976f486dafb106a05e56aea69f8d8f4` |
+| `tests/contracts/test_assessment_scope_contract.py` | `2c8ed82916da081e84be6a7040085d750bdb9cfc6cbdc69a2adc6602e2a77bc9` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_REMEDIATION_RECORD.md` | `4d29aea049ac7c0801b2204869abc3bf46b5e9449b360172960542dfbc525223` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_INDEPENDENT_REVIEW_RECORD.md` | `de4e2b3813b010ad52fd1c026e3a7c22d152a978a78fd4269399258f7ce99df1` |
+| `changelog.d/d3b-policy-basis-coherence.fixed.md` | `e7e40d315bcfcbcb4734cd22ad3c26eb4746d32f1f8f0b65ee62377ef2fcd4d6` |
+
+The protected-base-to-candidate binary diff SHA-256 was
+`8b8c7ce3974ead8f1593ad6e959fba762c2305ed199781a387ae33c96d1bec82`.
+
+Candidate `e1e3c01…` must remain unmerged. Both VETOs control delivery. No result changes grade,
+evidence, lender, Board, release, deployment, issue or `HOLD` authority.
