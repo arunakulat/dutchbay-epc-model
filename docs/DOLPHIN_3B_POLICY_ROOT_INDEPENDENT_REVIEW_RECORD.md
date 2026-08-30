@@ -292,3 +292,119 @@ D3A shape belongs in a separate design dolphin.
 Candidate `f6412fc…` must remain unmerged. The correction creates another exact SHA and requires new
 domain and assurance dispositions. This VETO changes no grade, release, deployment, lender, Board,
 issue or `HOLD` state.
+
+## 9. Successor review — jurisdiction subject/domain admissibility remains open
+
+**Controlling disposition:** VETO
+
+**Reviewed implementation:** `d164781354904386e81622af28462f6121fd5f1c`
+
+**Reviewed tree:** `9a03f56daa765a848623ea6d476dd73757f0f1bd`
+
+The independent assurance reviewer accepted this exact candidate after replaying the preserved
+technology, jurisdiction-identity, capacity, route, cost/price, ordering, schema and regression
+controls. The independent domain reviewer verified those same corrections, then constructed a new
+standalone false accept against the module's closed jurisdiction subject/domain matrix. The domain
+VETO controls: one acceptance within its tested scope cannot override a constructive semantic
+counterexample outside that scope.
+
+### 9.1 What `d164781…` closed
+
+Both prior inverse aliases now refuse at the standalone policy first and the containing request
+second:
+
+- two jurisdiction binding IDs cannot claim one exact `(jurisdiction_code, subject)` identity; and
+- two technology binding IDs cannot claim one `(technology_id, asset_class)` identity.
+
+Distinct wind and solar identities in the same `generation` asset class remain valid, as does one
+jurisdiction binding routed consistently through multiple admissible authored domains. Assertion
+reordering retained the same first-error family. The D3B-v1 one-physical-asset-per-technology-
+binding restriction is also correctly disclosed as a fail-closed limitation which is stricter than
+valid D3A topology, not as a D3A invariant.
+
+### 9.2 Blocking domain finding
+
+`JurisdictionSubjectAssertion` carries both `subject` and `base_domain`, but accepted pairs which
+the same module's immutable `_DOMAIN_ALLOWED_SUBJECTS` matrix and
+`_DOMAINS_WITHOUT_JURISDICTION_ROUTE` set declare impossible. The containing request later refused
+only because no valid base could retain such a route.
+
+The domain reviewer exercised these exact mutations:
+
+| Mutation | Standalone assertion | Standalone policy | Request |
+|---|---|---|---|
+| `tax` subject targeting `project_resource` | accepted | accepted | refused: no retained authority route |
+| `site` subject targeting `tax_statutory` | accepted | accepted | refused: no retained authority route |
+| `site` subject targeting project-global `run_posture` | accepted | accepted | refused: no retained authority route |
+| `tax` subject targeting project-global `scenario_identity` | accepted | accepted | refused: no retained authority route |
+
+These are not merely absent routes in the selected base. A matching `site -> tax_statutory` base
+route was independently refused with `jurisdiction subject site cannot govern tax_statutory`; a
+matching `site -> run_posture` route was refused because `run_posture` routes must be
+project-global. No valid `BaseScenarioIdentity` can therefore satisfy the standalone policies that
+were accepted.
+
+All operands needed for the static decision already exist at the assertion root. CESSPIT requires
+the refusal there; CCCDIR requires reuse of the existing closed matrix; CASPER requires the public
+standalone contract to fail predictably. `EvaluationRequest` should continue to own only the
+external question of whether an intrinsically valid assertion's exact authority route is retained
+by the selected base.
+
+### 9.3 Independent assurance acceptance preserved
+
+The assurance reviewer found no blocking defect within its probe set and issued an explicit
+`ACCEPT` bound only to `d164781…`. That review independently obtained:
+
+- `153` focused D3B-0, `809` complete-contract, `330` D3A and `298` D2 passing tests;
+- stable first-error families across 32 permutations per hostile family and 16 hash seeds;
+- passing Draft 2020-12, strict/frozen, JSON round-trip, export, import, Ruff, format, mypy and
+  excluded-surface controls; and
+- green exact-head required receipts, fastlane and smoke checks.
+
+It also replayed 21 named policy-graph negatives at both roots and independently proved the
+explicit D3B-v1 shared-binding limitation. This is valid evidence for those controls, but it did not
+exercise the subject/domain admissibility matrix and expressly did not replace the domain
+disposition.
+
+### 9.4 Exact review receipt
+
+At review freeze:
+
+- local `HEAD`, remote topic and draft-PR head were
+  `d164781354904386e81622af28462f6121fd5f1c`;
+- local and live protected `main` were
+  `9e1c6fae6220551754c23535caeaa86b37422230`;
+- the candidate was zero commits behind and five commits ahead of that base;
+- the worktree and index remained clean throughout both reviews;
+- the PR was open, draft, mergeable and blocked; and
+- issue `#1110` and its Board/lender/release `HOLD` were unchanged.
+
+Candidate fingerprints:
+
+| File | SHA-256 |
+|---|---|
+| `analytics/feasibility_report_contract/assessment_scope.py` | `61cc2cc5c647207bf373b1ba377c230bf11aa02ce2182b6f26ead6dcb05e9e6f` |
+| `tests/contracts/test_assessment_scope_contract.py` | `37f4ee05466e01483cdcc8637dcfac8b1ae9467ee4d59d5670270c07304b2fc9` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_REMEDIATION_RECORD.md` | `6813018b3371f38b8696efb4b0c08938269e5bb54459c92329a8dbc6bffc59e4` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_INDEPENDENT_REVIEW_RECORD.md` | `00d0eaa9c4af7b08861398beb9be97d00d21ae2273769b6de5b42816b1a37364` |
+| `changelog.d/d3b-policy-basis-coherence.fixed.md` | `b01facecba02a177b68bebe135fee7d3647c261d67e8af7221c0c0407832b3c6` |
+
+The exact base-to-candidate binary diff SHA-256 was
+`a8ee7447dc07d8a3da0d844a82e319e363660a66dba610b965f58775e741a63f`.
+
+### 9.5 Required bounded correction
+
+The next successor must centralize one static subject/domain admissibility helper and call it from:
+
+1. `JurisdictionSubjectAssertion`, the lowest root owning both operands; and
+2. the existing `BaseScenarioIdentity` authority-route validation.
+
+It must reject every project-global-domain target and every pair excluded from the complete closed
+matrix. Durable tests must parameterize the full matrix and validate, in order, the standalone
+assertion, standalone policy and containing request. Valid site/project-resource,
+site/project-location, tax/tax-statutory and same-binding/multiple-admissible-domain positives must
+remain accepted.
+
+Candidate `d164781…` must remain unmerged. Neither the VETO, the assurance acceptance, the green CI
+checks nor a later correction confers grade, evidence sufficiency, audit, lender, Board, release,
+deployment or `HOLD` authority.
