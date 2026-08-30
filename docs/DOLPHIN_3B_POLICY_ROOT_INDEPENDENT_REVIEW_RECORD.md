@@ -179,3 +179,116 @@ ordering.
 Neither reviewer changed a file, Git ref, PR, issue, grade, release state or `HOLD`. This record does
 not reopen D3A, implement live ProjectCase/config comparison, touch evaluation or finance, assemble
 D2/D3C, or confer any lender, Board, release, deployment or issue `#1110` authority.
+
+## 8. Successor review — inverse semantic aliases remain open
+
+**Disposition:** VETO
+
+**Reviewed successor:** `f6412fc2bfe271644ca262b731681faba751551f`
+
+**Successor tree:** `356d30f6d50c3d1136d4cd253913579e643529c3`
+
+Both independent reviewers verified that this successor closed every preserved `b2854c0…`
+counterexample, moved the complete previously known policy-only rules to one helper, canonicalized
+validation order and removed their duplicate outer-request implementations. Both reviewers then
+independently constructed two inverse-identity aliases that the standalone policy still accepted.
+Those false accepts keep the same public-root ownership defect open, so conventional green tests
+and CI cannot authorize merge.
+
+### 8.1 Jurisdiction semantic-identity alias
+
+Starting from the accepted fixture, the reviewers copied the site-jurisdiction assertion and gave
+the copy a new assertion ID, a new `jurisdiction_binding_id` and a distinct valid authored domain,
+while retaining the same `(jurisdiction_code, subject)` identity `(FIC, site)`.
+
+Observed result:
+
+| Root | Result |
+|---|---|
+| Standalone `V14BindingPolicy` | **accepted** |
+| Containing `EvaluationRequest` | refused: assertion did not match an exact scoped/base subject |
+| Analogous `AssessmentScope` | refused: duplicate jurisdiction subject scope |
+| Analogous D3A `ProjectCase` | refused: ambiguous duplicate jurisdiction subject binding |
+
+The successor correctly enforced one identity for each repeated binding ID, but omitted the inverse
+rule: one semantic `(jurisdiction_code, subject)` identity must map to one binding ID. The existing
+positive remains valid and must be retained: one binding ID may route consistently through multiple
+authored domains.
+
+### 8.2 Technology semantic-identity alias
+
+The reviewers added a complete second wind group with a new physical asset ID, binding ID,
+technology key and coherent capacity route, but reused the same semantic identity
+`(technology_id=wind, asset_class=generation)`.
+
+Observed result:
+
+| Root | Result |
+|---|---|
+| Standalone `V14BindingPolicy` | **accepted** |
+| Containing `EvaluationRequest` | refused: assertion did not match an exact scoped/base technology |
+| Analogous `AssessmentScope` | refused: duplicate technology scope |
+| Analogous D3A `ProjectCase` binding register | refused: ambiguous duplicate technology contract binding |
+
+The successor required unique physical asset IDs and unique binding IDs but omitted the inverse
+semantic rule: one `(technology_id, asset_class)` identity must map to one binding ID.
+
+### 8.3 Exact successor receipt
+
+At review close:
+
+- local `HEAD`, remote topic and PR head were
+  `f6412fc2bfe271644ca262b731681faba751551f`;
+- protected `main` and the PR base were
+  `9e1c6fae6220551754c23535caeaa86b37422230`;
+- the worktree was clean and the PR remained open, draft, mergeable and blocked; and
+- issue `#1110` remained `OPEN` with its `HOLD` unchanged.
+
+Successor fingerprints:
+
+| File | SHA-256 |
+|---|---|
+| `analytics/feasibility_report_contract/assessment_scope.py` | `b8c767ac2439b87d810fe91afc7b8b3c3bee40c9c8e742ff1cdd4c05c1842b8e` |
+| `tests/contracts/test_assessment_scope_contract.py` | `5ef2ebac6d41d454f6b7e42d6a25bc02e92de10bcfb14450995b76640d24fea6` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_REMEDIATION_RECORD.md` | `55483b48252e9281bfe0c2825cad11819015b9e68f07fc51c56daada75659776` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_INDEPENDENT_REVIEW_RECORD.md` | `b72426b165ddee12bdd0494ea6df8a489959acecd540ffcbc8f1387a7975e1fc` |
+| `changelog.d/d3b-policy-basis-coherence.fixed.md` | `530f738285d7aa20581fb22e2ea2095d27cd34854cf03f1ced25ba8772036773` |
+
+Independent checks included governed Python `3.12.13`, all `73` active GWTF rules, `150` focused
+D3B-0 tests, `330` D3A tests, `298` D2 tests, `806` complete contract tests, both schema modes,
+strict/frozen/round-trip controls, ordering across shuffled inputs and multiple hash seeds, Ruff,
+formatting, mypy, import/boundary checks and an empty excluded-surface diff. Every preserved first
+VETO negative refused at both roots; wind, solar, hybrid, storage-only, coherent nameplate and
+consistent cross-domain-jurisdiction positives accepted. The two inverse aliases control the VETO
+regardless.
+
+### 8.4 Required one-to-one mapping correction
+
+The next successor must add the reverse sides of the binding maps in the same canonical policy-root
+helper:
+
+1. `(jurisdiction_code, subject) -> jurisdiction_binding_id`, allowing repeated routes only when
+   both semantic identity and binding ID remain identical; and
+2. `(technology_id, asset_class) -> technology_binding_id`, rejecting a second binding ID for the
+   same semantic technology identity.
+
+The new negative controls must validate the standalone policy first and the request second. The
+consistent same-binding/multiple-domain jurisdiction positive and distinct technology identities
+must remain accepted. Reordering the assertion tuple must not change the first error.
+
+### 8.5 Explicit D3B-v1 multi-asset limitation
+
+The domain reviewer separately proved that D3A may contain multiple physical assets which reuse one
+registered technology binding. The successor's unique `technology_binding_id` rule is therefore a
+stricter D3B-v1 execution-policy limitation, not a general D3A invariant. The current authored-target
+model cannot safely express multiple physical assets under one binding without a larger aggregation
+and target-ownership design.
+
+The bounded v1 position is fail-closed: one policy-owned physical asset per technology binding, and
+D3B-1 must refuse a live ProjectCase that reuses one binding across multiple physical assets. This
+limitation must be stated rather than attributed to D3A or silently widened. Supporting the broader
+D3A shape belongs in a separate design dolphin.
+
+Candidate `f6412fc…` must remain unmerged. The correction creates another exact SHA and requires new
+domain and assurance dispositions. This VETO changes no grade, release, deployment, lender, Board,
+issue or `HOLD` state.
