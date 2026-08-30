@@ -387,3 +387,61 @@ mypy emitted only its pre-existing unused-configuration-section warning. These l
 not self-acceptance. A new immutable SHA still requires fresh independent domain and assurance
 dispositions, current protected-main ancestry, a conflict-free PR and exact-head required CI before
 `MERGE-01` can apply.
+
+## 12. Non-dispatching raw-key successor correction
+
+Independent review of `865805284332300920ad6c2114624ced7ca23069` proved that Section 12's
+scalar error-input leak was closed, but both reviewers found a new strict-Python boundary defect.
+The raw ordering helper accepted dictionary subclasses through `isinstance(..., dict)` and then
+called their overridable `get()` method. A raising implementation escaped the bounded validation
+surface; a stateful implementation changed public error order across repeated validation of the
+same object. The exact dual VETO and counterexamples are preserved in the independent review record.
+
+The bounded successor performs no caller-dispatched operation while deriving a raw key:
+
+- only exact built-in dictionaries expose raw category, assertion ID and kind;
+- those fields are read through the built-in `dict.get` descriptor;
+- only the eight exact compatibility-assertion model classes expose their already-validated fields,
+  read from the model's built-in field dictionary without dynamic attribute access;
+- dictionary subclasses, other mappings and other Python objects are opaque to raw ordering and
+  proceed to the existing `CompatibilityAssertion` validator; and
+- only exact built-in strings and the exact material-category enum contribute key tokens.
+
+The wrapper therefore does not call caller-controlled `get`, iteration, indexing, attribute access,
+string conversion or representation. The existing bounded child-error projection sanitizes the
+resulting refusal. JSON-decoded built-in dictionaries and every successful accepted model retain
+their prior declared ordering and exact authored wire order.
+
+The durable hostile-Python control uses one raising and one stateful dictionary subclass. It
+validates the same exact objects twice at standalone policy and containing request roots, requires
+identical complete URL-enabled error, string and JSON receipts, and proves that neither overridden
+`get()` method was called. All scalar, duplicate-ID, distinct-ID, strictness, ownership, matrix and
+successful authored-order controls remain mandatory.
+
+This correction changes only raw diagnostic-key extraction. It does not change accepted domain
+semantics, ProjectCase topology, evaluation, finance, application, grade, release or `HOLD`
+authority. It remains a local successor until all governed gates and fresh exact-SHA independent
+reviews pass.
+
+### 12.1 Local successor receipt
+
+| Control | Result |
+|---|---|
+| Complete D3B-0 assessment-scope contract | `296 passed` |
+| Complete contract suite | `952 passed` |
+| D3A ProjectCase predecessor regression | `330 passed` |
+| D2 machine-contract predecessor regression | `298 passed` |
+| Contract-package branch coverage | `94.66%` total; modified assessment-scope module `96.94%` |
+| Raising/stateful subclass repeated-validation complete-error controls | passed at both public roots |
+| Existing scalar, duplicate-ID, distinct-ID and authored-order controls | passed |
+| Ruff check and format check | passed |
+| Black and isort checks | passed |
+| Mypy `--no-incremental` on the assessment-scope export surface | passed |
+| Both Draft 2020-12 schema modes, strict/frozen ingress and public exports | passed in the focused suite |
+| Import/changelog tests and in-memory compilation | `17 passed`; compilation passed |
+| Forbidden-import/excluded-surface controls and `git diff --check` | passed |
+
+The test suites emitted only the repository's pre-existing Hypothesis `norecursedirs` warning;
+mypy emitted only its pre-existing unused-configuration-section warning. This remains a local
+receipt, not self-acceptance. A new immutable SHA requires fresh independent domain and assurance
+dispositions, current protected-main ancestry, a conflict-free PR and exact-head required CI.

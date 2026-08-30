@@ -4,7 +4,7 @@
   jurisdiction subject/domain admissibility, route completeness and cost/price identity before they
   can be masked by a containing `EvaluationRequest`. Child failures, including duplicate-ID key
   collisions, are validated in a canonical category/identity/outcome order; invalid-child errors
-  expose a bounded stable input token rather than caller-ordered raw input or context. Successful
-  authored-order serialization is unchanged. D3B v1 explicitly fails closed when multiple physical
-  assets reuse one technology binding; supporting that valid D3A topology requires a later
-  allocation design.
+  expose a bounded stable input token rather than caller-ordered raw input or context, and raw
+  ordering never dispatches to methods on Python dictionary subclasses. Successful authored-order
+  serialization is unchanged. D3B v1 explicitly fails closed when multiple physical assets reuse
+  one technology binding; supporting that valid D3A topology requires a later allocation design.

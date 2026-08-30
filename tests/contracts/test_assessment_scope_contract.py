@@ -2501,6 +2501,69 @@ print(json.dumps(outcomes, sort_keys=True))
             assert mode_root_receipts == [mode_root_receipts[0]] * 2
 
 
+def test_policy_raw_key_extraction_does_not_dispatch_dict_subclasses() -> None:
+    class RaisingGetDict(dict[str, object]):
+        get_calls = 0
+
+        def get(self, key: object, default: object = None) -> object:
+            self.get_calls += 1
+            raise RuntimeError("overridden get must not execute")
+
+    class StatefulGetDict(dict[str, object]):
+        get_calls = 0
+
+        def get(self, key: object, default: object = None) -> object:
+            self.get_calls += 1
+            if key == "category":
+                return "identity" if self.get_calls % 2 else "price_basis"
+            return dict.get(self, key, default)
+
+    for hostile_child in (
+        RaisingGetDict(
+            {
+                "kind": "unknown_hostile_assertion",
+                "category": "identity",
+                "assertion_id": "assertion:hostile-child",
+            }
+        ),
+        StatefulGetDict(
+            {
+                "kind": "unknown_hostile_assertion",
+                "category": "identity",
+                "assertion_id": "assertion:hostile-child",
+            }
+        ),
+    ):
+        payload = _validate(_request_payload()).model_dump()
+        payload["binding_policy"]["assertions"] = (
+            hostile_child,
+            {
+                "kind": "unknown_regular_assertion",
+                "category": "location",
+                "assertion_id": "assertion:regular-child",
+            },
+        )
+
+        for root in ("policy", "request"):
+            receipts: list[dict[str, object]] = []
+            for _ in range(2):
+                with pytest.raises(ValidationError) as exc_info:
+                    if root == "policy":
+                        V14BindingPolicy.model_validate(payload["binding_policy"])
+                    else:
+                        EvaluationRequest.model_validate(payload)
+                receipts.append(
+                    {
+                        "errors": exc_info.value.errors(),
+                        "text": str(exc_info.value),
+                        "json": exc_info.value.json(),
+                    }
+                )
+            assert receipts[0] == receipts[1]
+
+        assert hostile_child.get_calls == 0
+
+
 def test_policy_canonical_child_validator_preserves_python_strictness() -> None:
     policy = _validate_policy(_request_payload())
     normalized = policy.model_dump()

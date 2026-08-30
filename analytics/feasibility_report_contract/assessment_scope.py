@@ -1143,6 +1143,16 @@ CompatibilityAssertion = Annotated[
     ],
     Field(discriminator="kind"),
 ]
+_COMPATIBILITY_ASSERTION_MODEL_TYPES = (
+    ScenarioIdentityAssertion,
+    LocationAssertion,
+    JurisdictionSubjectAssertion,
+    TechnologyBindingAssertion,
+    GenerationCapacityAssertion,
+    StorageCapacityAssertion,
+    CostCompatibilityAssertion,
+    PriceBasisAssertion,
+)
 _COMPATIBILITY_ASSERTION_ADAPTER: TypeAdapter[CompatibilityAssertion] = TypeAdapter(
     CompatibilityAssertion
 )
@@ -1152,27 +1162,28 @@ def _raw_policy_assertion_sort_key(
     raw_assertion: Any,
 ) -> tuple[int, str, str, str]:
     """Return the policy's canonical child-validation key for raw input."""
-    if isinstance(raw_assertion, dict):
-        raw_category = raw_assertion.get("category")
-        raw_assertion_id = raw_assertion.get("assertion_id")
-        raw_kind = raw_assertion.get("kind")
-    elif isinstance(raw_assertion, StrictFrozenModel):
-        raw_category = getattr(raw_assertion, "category", None)
-        raw_assertion_id = getattr(raw_assertion, "assertion_id", None)
-        raw_kind = getattr(raw_assertion, "kind", None)
+    if type(raw_assertion) is dict:
+        raw_category = dict.get(raw_assertion, "category")
+        raw_assertion_id = dict.get(raw_assertion, "assertion_id")
+        raw_kind = dict.get(raw_assertion, "kind")
+    elif type(raw_assertion) in _COMPATIBILITY_ASSERTION_MODEL_TYPES:
+        raw_fields = object.__getattribute__(raw_assertion, "__dict__")
+        raw_category = dict.get(raw_fields, "category")
+        raw_assertion_id = dict.get(raw_fields, "assertion_id")
+        raw_kind = dict.get(raw_fields, "kind")
     else:
         raw_category = None
         raw_assertion_id = None
         raw_kind = None
 
-    if isinstance(raw_category, ProjectCaseMaterialCategory):
+    if type(raw_category) is ProjectCaseMaterialCategory:
         category_token = raw_category.value
-    elif isinstance(raw_category, str):
+    elif type(raw_category) is str:
         category_token = raw_category
     else:
         category_token = ""
-    assertion_id_token = raw_assertion_id if isinstance(raw_assertion_id, str) else ""
-    kind_token = raw_kind if isinstance(raw_kind, str) else ""
+    assertion_id_token = raw_assertion_id if type(raw_assertion_id) is str else ""
+    kind_token = raw_kind if type(raw_kind) is str else ""
     return (
         _PROJECT_CASE_MATERIAL_CATEGORY_ORDER.get(
             category_token,
