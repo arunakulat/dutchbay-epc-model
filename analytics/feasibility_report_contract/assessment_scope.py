@@ -1339,12 +1339,20 @@ def _require_internal_policy_graph(policy: V14BindingPolicy) -> None:
     technology_by_asset = {item.asset_id: item for item in technology_assertions}
     if len(technology_by_asset) != len(technology_assertions):
         raise ValueError("technology assertions must use unique ProjectCase asset IDs")
+    technology_by_binding = {
+        item.technology_binding_id: item for item in technology_assertions
+    }
+    if len(technology_by_binding) != len(technology_assertions):
+        raise ValueError(
+            "D3B v1 requires one policy-owned physical asset per technology binding ID"
+        )
     _require_unique(
-        (item.technology_binding_id for item in technology_assertions),
-        "technology assertion binding ID",
+        ((item.technology_id, item.asset_class) for item in technology_assertions),
+        "technology assertion scope",
     )
 
     jurisdiction_identity_by_binding: dict[str, tuple[str, JurisdictionSubject]] = {}
+    jurisdiction_binding_by_identity: dict[tuple[str, JurisdictionSubject], str] = {}
     generation_by_asset: dict[str, list[GenerationCapacityAssertion]] = {}
     storage_by_asset: dict[str, list[StorageCapacityAssertion]] = {}
     cost_assertions: list[CostCompatibilityAssertion] = []
@@ -1360,6 +1368,15 @@ def _require_internal_policy_graph(policy: V14BindingPolicy) -> None:
             if prior_identity != identity:
                 raise ValueError(
                     "jurisdiction assertions for one binding ID must share exact "
+                    "jurisdiction code and subject"
+                )
+            prior_binding = jurisdiction_binding_by_identity.setdefault(
+                identity,
+                assertion.jurisdiction_binding_id,
+            )
+            if prior_binding != assertion.jurisdiction_binding_id:
+                raise ValueError(
+                    "jurisdiction assertions must use one binding ID per exact "
                     "jurisdiction code and subject"
                 )
         elif isinstance(assertion, GenerationCapacityAssertion):

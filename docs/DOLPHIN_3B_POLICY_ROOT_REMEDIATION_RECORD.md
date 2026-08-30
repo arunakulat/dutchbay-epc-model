@@ -111,6 +111,8 @@ The successor candidate invokes one policy-internal graph control from `V14Bindi
 canonical category/assertion order and sorted physical-asset order it now:
 
 - requires unique technology physical owners and binding IDs;
+- requires a one-to-one identity in both directions: one exact technology ID/class pair per
+  technology binding ID, and one exact jurisdiction code/subject pair per jurisdiction binding ID;
 - requires every generation/storage capacity assertion to name the same-asset technology owner,
   class, authored kind and technology-level config key;
 - retains one electrical/capacity basis tuple per physical asset;
@@ -129,6 +131,13 @@ that reordering one simultaneous generation/storage conflict cannot change its f
 Consistent cross-domain jurisdiction routing, wind-only, solar DC, hybrid and storage-only positives
 remain accepted.
 
+D3B v1 deliberately permits only one policy-owned physical asset per technology binding ID. D3A's
+structural contract can validly reuse one technology binding across multiple physical assets; D3B
+does not reinterpret that predecessor rule. Instead, this first execution slice fails closed until a
+later design explicitly authors allocation and result-lineage semantics for shared bindings. A live
+ProjectCase requiring that topology is therefore outside D3B v1, not silently collapsed to one
+asset.
+
 This successor is not self-accepted. It requires a new immutable commit, fresh independent domain
 and assurance review against that exact SHA, exact-head required CI, current protected-main ancestry
 and a conflict-free PR before `MERGE-01` can apply. No finding in either review, and no later green
@@ -142,11 +151,11 @@ worktree first on `PYTHONPATH`:
 
 | Control | Result |
 |---|---|
-| Complete D3B-0 assessment-scope contract | `150 passed` |
-| Complete contract suite | `806 passed` |
+| Complete D3B-0 assessment-scope contract | `153 passed` |
+| Complete contract suite | `809 passed` |
 | D3A ProjectCase predecessor regression | `330 passed` |
 | D2 machine-contract predecessor regression | `298 passed` |
-| Contract-package branch coverage | `94.54%` total; modified assessment-scope module `96.64%` |
+| Contract-package branch coverage | `94.55%` total; modified assessment-scope module `96.67%` |
 | Ruff check and format check | passed |
 | Black and isort checks | passed |
 | Mypy `--no-incremental` on the assessment-scope export surface | passed |

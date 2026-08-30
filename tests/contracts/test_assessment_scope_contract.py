@@ -584,6 +584,63 @@ def _replace_wind_with_solar_dc(payload: dict[str, Any], *, unit: str = "MWdc") 
     )
 
 
+def _add_solar_technology(payload: dict[str, Any]) -> None:
+    """Add one completely routed solar technology to a wind request fixture."""
+    payload["scope"]["technology_scope"].append(
+        {
+            "technology_binding_id": "technology-binding:solar",
+            "technology_id": "solar_pv",
+            "asset_class": "generation",
+        }
+    )
+    payload["base_scenario"]["technology_authorities"].append(
+        {
+            "base_config_key": "solar",
+            "technology_binding_id": "technology-binding:solar",
+            "technology_id": "solar_pv",
+            "asset_class": "generation",
+            "authored_technology_kind": "solar_pv",
+            "authority_source_id": "source:fictionland-solar-basis",
+        }
+    )
+    for domain in ("project_resource", "technology_resource"):
+        _domain_disposition(payload, domain)["authority_routes"].append(
+            {
+                "authority_source_id": "source:fictionland-solar-basis",
+                "jurisdiction_binding_id": "jurisdiction-binding:site",
+                "technology_binding_id": "technology-binding:solar",
+            }
+        )
+    payload["binding_policy"]["assertions"].extend(
+        [
+            {
+                "kind": "technology_binding_assertion",
+                "assertion_id": "assertion:solar-technology",
+                "category": "technology_binding",
+                "asset_id": "asset:solar-01",
+                "technology_binding_id": "technology-binding:solar",
+                "technology_id": "solar_pv",
+                "asset_class": "generation",
+                "authored_technology_kind": "solar_pv",
+                "base_config_key": "solar",
+            },
+            {
+                "kind": "generation_capacity_assertion",
+                "assertion_id": "assertion:solar-capacity",
+                "category": "generation_capacity",
+                "asset_id": "asset:solar-01",
+                "base_config_key": "solar",
+                "project_case_selector": "total_power_capacity",
+                "base_selector": "solar_resource_dc_capacity_mw",
+                "expected_unit": "MWdc",
+                "electrical_basis": "dc",
+                "capacity_basis": "nameplate",
+                "authored_technology_kind": "solar_pv",
+            },
+        ]
+    )
+
+
 def _draft_validators() -> tuple[Any, Any]:
     validation_schema = EvaluationRequest.model_json_schema(mode="validation")
     serialization_schema = EvaluationRequest.model_json_schema(mode="serialization")
@@ -1742,8 +1799,38 @@ def test_policy_technology_assertions_have_unique_binding_ids() -> None:
     technology = _assertion(payload, "assertion:bess-technology")
     technology["technology_binding_id"] = "technology-binding:wind"
     _assert_policy_and_request_reject(
-        payload, "duplicate technology assertion binding ID"
+        payload, "one policy-owned physical asset per technology binding ID"
     )
+
+
+def test_policy_technology_identity_has_one_binding_id() -> None:
+    payload = _request_payload()
+    _add_solar_technology(payload)
+    _assertion(payload, "assertion:solar-technology")["technology_id"] = "wind"
+
+    for assertions in (
+        payload["binding_policy"]["assertions"],
+        list(reversed(payload["binding_policy"]["assertions"])),
+    ):
+        candidate = copy.deepcopy(payload)
+        candidate["binding_policy"]["assertions"] = assertions
+        _assert_policy_and_request_reject(
+            candidate, "duplicate technology assertion scope"
+        )
+
+
+def test_policy_distinct_generation_technology_identities_are_valid() -> None:
+    payload = _request_payload()
+    _add_solar_technology(payload)
+
+    policy = _validate_policy(payload)
+    request = _validate(payload)
+
+    assert request.binding_policy == policy
+    assert {
+        (item.technology_id, item.asset_class.value)
+        for item in request.scope.technology_scope
+    } == {("solar_pv", "generation"), ("wind", "generation")}
 
 
 def test_policy_storage_routes_are_complete() -> None:
@@ -1775,6 +1862,30 @@ def test_policy_repeated_jurisdiction_binding_keeps_one_identity() -> None:
     _assert_policy_and_request_reject(
         payload, "share exact jurisdiction code and subject"
     )
+
+
+def test_policy_jurisdiction_identity_has_one_binding_id() -> None:
+    payload = _request_payload()
+    aliased_route = copy.deepcopy(_assertion(payload, "assertion:site-jurisdiction"))
+    aliased_route.update(
+        {
+            "assertion_id": "assertion:site-jurisdiction-alias",
+            "jurisdiction_binding_id": "jurisdiction-binding:site-alias",
+            "base_domain": "project_identity_location",
+        }
+    )
+    payload["binding_policy"]["assertions"].append(aliased_route)
+
+    for assertions in (
+        payload["binding_policy"]["assertions"],
+        list(reversed(payload["binding_policy"]["assertions"])),
+    ):
+        candidate = copy.deepcopy(payload)
+        candidate["binding_policy"]["assertions"] = assertions
+        _assert_policy_and_request_reject(
+            candidate,
+            "one binding ID per exact jurisdiction code and subject",
+        )
 
 
 @pytest.mark.parametrize(
