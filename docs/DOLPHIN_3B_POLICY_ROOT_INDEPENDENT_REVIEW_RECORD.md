@@ -722,3 +722,99 @@ The protected-base-to-candidate binary diff SHA-256 was
 Candidate `d1d86028…` must remain unmerged. Domain acceptance remains valid for the semantic scope
 it covered; assurance VETO remains controlling for delivery. Neither result changes grade,
 evidence, lender, Board, release, deployment, issue or `HOLD` authority.
+
+## 13. Successor review — raw-key extraction dispatches to caller code
+
+**Controlling disposition:** VETO
+
+**Reviewed implementation:** `865805284332300920ad6c2114624ced7ca23069`
+
+**Reviewed tree:** `594c2e9c3f11f6c6a92fee8f3848754c62041387`
+
+Both independent reviewers issued `VETO`. They accepted the inherited domain-semantic corpus and
+proved that Section 12's raw-input ordering leak is closed. They then independently found that the
+raw declared-key extractor invokes overridable `dict.get()` methods before the bounded child-error
+projection can run. A strict-Python dictionary subclass can therefore execute caller behavior
+inside the collection wrapper.
+
+### 13.1 Minimal dispatch failures
+
+Two bounded counterexamples control:
+
+1. A dictionary subclass whose `get()` raises causes its exception to escape at both the standalone
+   policy and containing-request roots. The same malformed child is normally refused by
+   `CompatibilityAssertion`; the unbounded exception is introduced only by the wrapper's later
+   raw-key extraction.
+2. A stateful dictionary subclass returns different category values on successive `get()` calls.
+   Revalidating the same exact Python object changes which of two malformed children is reported
+   first at both public roots.
+
+There is no false accept, but the public validation boundary promises bounded `ValidationError`
+refusal and deterministic diagnostics. An escaped caller exception and a repeated-validation order
+change each independently violate that boundary. Catching only the demonstrated exception would
+not close equivalent dispatch through another overridden mapping method.
+
+### 13.2 Accepted evidence preserved
+
+The VETO does not reopen the bounded error projection or domain model:
+
+- `[1, 2]` and `[2, 1]` now produce identical complete public errors within every JSON/Python and
+  policy/request combination, including URL-enabled and URL-disabled structured errors, string and
+  JSON forms, across fresh hash-seed processes;
+- the bounded errors carry the constant `<invalid compatibility assertion>` input and omit raw
+  child context;
+- all 28 admissible and all 107 impossible subject/domain pairs behave correctly at assertion,
+  base, policy and request roots with no false accept;
+- the complete predecessor negative corpus and seven constructive positive policy families pass;
+- 75 valid assertion orders preserve exact authored storage, serialization, schemas and wire shape;
+- distinct-ID and duplicate-ID invalid receipts remain canonical across order, mode and root;
+- D3A shared-binding topology remains valid while D3B-v1 continues to fail closed under its
+  documented stricter execution limitation; and
+- semantic ownership, external route layering and import boundaries remain unchanged.
+
+The focused D3B, complete-contract, D3A and D2 suites passed `295`, `951`, `330` and `298` tests.
+Governed Python `3.12.13`, 73 active rules, format, lint, typing, compilation, schema, public import,
+excluded-surface and diff gates all passed. These receipts do not override either VETO.
+
+The custom-error projection intentionally no longer exposes Pydantic's standard documentation URL
+for nested child errors. Assurance recorded this as a secondary metadata observation, not a
+controlling defect; the stable type, message and canonical location remain preserved.
+
+### 13.3 Required bounded correction
+
+The next successor must perform no caller-dispatched mapping operation while building a raw sort
+key. It must extract category, assertion ID and kind only from exact built-in dictionaries using
+non-overridable access. Dictionary subclasses and other mapping-like Python objects must be treated
+as opaque for raw ordering and allowed to reach the existing child validator, whose bounded error
+is then sanitized. The extractor must not call caller-controlled `get`, iteration, indexing or
+`repr`.
+
+Durable controls must prove that a raising dictionary subclass cannot escape as an arbitrary
+exception and that a stateful subclass cannot change the complete receipt across repeated
+validation of the same object, at both policy and request roots. Section 12 scalar controls,
+duplicate-ID and distinct-ID order/hash controls, successful authored-order round trips,
+strictness, ownership and the complete domain matrix remain mandatory.
+
+### 13.4 Exact review receipt
+
+At review close, local `HEAD`, upstream, live remote topic and draft-PR head were all `8658052…`;
+the tree was `594c2e9c3f11f6c6a92fee8f3848754c62041387`; protected/live `origin/main` and the
+PR base were `9e1c6fae6220551754c23535caeaa86b37422230`; the topic was zero behind and thirteen
+commits ahead; and the worktree was clean. The PR remained open and draft. Issue `#1110` remained
+`OPEN`; its `HOLD` was unchanged.
+
+Candidate fingerprints:
+
+| File | SHA-256 |
+|---|---|
+| `analytics/feasibility_report_contract/assessment_scope.py` | `74485d4f2e704387aa8e1b8d036692f99ce8bd218bc40c2723fb9429060b4435` |
+| `tests/contracts/test_assessment_scope_contract.py` | `3631d35c74f4d3dbbcb6f38fe1f82979be58767adc9044543c71e6e45256d1ea` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_REMEDIATION_RECORD.md` | `6f3e88f61789e46920cc2097bef15ba6e0dc830a9ed258be9d6ddf260c07ddba` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_INDEPENDENT_REVIEW_RECORD.md` | `c96e33a30eb7cf1cb8797afd0edacff93828a40c2c4c9aa7848dba287f005678` |
+| `changelog.d/d3b-policy-basis-coherence.fixed.md` | `02af83813a317d0d8407231151a624c3f927e1861c4e73b3d24cd462529ad8d1` |
+
+The protected-base-to-candidate binary diff SHA-256 was
+`b79d339c3ea661ab6b3af11fd667c6d0e8ea9bf1717541a922ec0e6e7b69a439`.
+
+Candidate `8658052…` must remain unmerged. Both VETOs control delivery. No result changes grade,
+evidence, lender, Board, release, deployment, issue or `HOLD` authority.
