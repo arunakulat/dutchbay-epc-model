@@ -124,9 +124,9 @@ instead of an implicit conversion.
 | Identity and version | Mandatory `schema_id = dutchbay.section_result_facade.v1` and `contract_version = 1.0.0` with no defaults; unknown or future values fail closed, exactly as D3A does | D1 §5, §12.2 |
 | Section binding | `section_id` validated against the taxonomy SSOT, plus exact `report_id`/`run_id`/`case_id` binding to the D3A `ProjectCase` and the D2 report identity | D1 §8, §9.3, §12.1(1) |
 | Disposition | One discriminated `SectionResultDisposition` reusing the D2 `CapabilityOutcome` vocabulary verbatim. A non-`executed` disposition **may carry no values at all** — refusing values is the point | D1 §3.2, §6.1, §9.1 |
-| Carried value | `CarriedValue` binding one `CanonicalValue` to its declared unit, declared precision, `OutputClass`, producing contract and version, and the upstream field path it came from | D1 §5, §10.1, §10.2 |
+| Carried value | `CarriedValue` binding one `CanonicalValue` to its declared unit, declared precision, `OutputClass`, producing contract and version, and the upstream field path it came from. The `CanonicalValue.value` is the **full unrounded** lexical value; `precision` is declared metadata and never truncates it | D1 §5, §10.1, §10.2 |
 | Value provenance | Every `CarriedValue` names the exact upstream contract type and attribute path (e.g. `contracts_v14.ScenarioResult.project_irr`), never a free-text label | D1 §10.1, §10.2 |
-| Absent versus defaulted | A discriminated `ValueAbsence` variant — `not_computed`, `upstream_none`, `upstream_default`, `not_representable` — carried **instead of** a value, never alongside one | D1 §6.1, §8.2 |
+| Absent versus defaulted | A discriminated `ValueAbsence` variant — `not_computed`, `upstream_none`, `upstream_default`, `not_representable` — carried **instead of** a value, never alongside one. Each variant additionally carries the D1 §6.1 quartet: the exact missing item, affected claims, consequence and remedy. A bare reason tag is a generic `None` by another name and is invalid | D1 §6.1, §8.2 |
 | Unrecognized upstream keys | Unknown mapping keys are carried explicitly as `UnrecognizedUpstreamKey` records or refused; they are never silently dropped | D1 §9.2, §12.1 |
 | No authority | The facade carries no grade, review, release or achieved-grade field. It cannot express them, so it cannot infer them | D1 §4, §7, §10.6, §12.1(8),(17) |
 | Strict shape | Frozen Pydantic v2, extra-field refusal, stable discriminators, Draft 2020-12 generated schemas, transport-neutral | D1 §9.2, §12.1, §12.2 |
@@ -167,8 +167,14 @@ control before the increment can be accepted.
 4. **Non-finite floats.** `CanonicalValue` requires a finite decimal; v14 floats may be NaN or ±Inf.
    These map to a `failed` or `degraded` disposition with a stated reason — never to a value, and
    never to a substituted zero.
-5. **Silent key drift.** `kpis`, `debt_result` and `metadata` are unenumerated. A key that appears,
-   disappears or is renamed upstream must surface, not vanish.
+5. **Silent key drift, and a loss that happens before the facade sees anything.** `kpis`,
+   `debt_result` and `metadata` are unenumerated, so a key that appears, disappears or is renamed
+   upstream must surface rather than vanish. Worse, the gateway **already drops keys silently**:
+   `evaluate_with_overrides(return_full_result=False)` — the parameter's default — returns
+   `normalize_kpi_dict(raw_kpis)`, which `float()`-coerces every entry and `continue`s past any
+   failure with only a `logger.debug`. A KPI that became `"N/A"` upstream is therefore already
+   gone before any facade code runs, and its absence is indistinguishable from never having been
+   emitted. D3C must consume `return_full_result=True` for this reason (section 10).
 6. **Section misattribution.** A value must not be attributed to a section that did not produce it.
    Section binding is declared per upstream field and reviewed, not inferred from name similarity.
 7. **Authority leakage.** No grade, review, release, assurance or bankability meaning may be
@@ -211,21 +217,116 @@ ships with the demonstration that it fires:
 - **an independent oracle** — a fixture derived from a real recorded v14 run rather than from the
   facade's own construction — proves the contract can carry a genuine result without loss.
 
-## 9. Open questions for the specialists
+## 9. Resolved design questions
 
-Answers change the contract, so they are asked before implementation rather than assumed:
+An earlier revision of this charter posed five questions as open. Research against DBAY-FRC-001,
+the D2 validator and the engine **resolved all five**, and showed that four of them were
+**mis-posed** — they offered choices the controlling contract does not leave open, and in two cases
+every option on offer was wrong. Each resolution below is recorded with the evidence that settles
+it, so a reviewer can overturn it on evidence rather than preference. What remains for the
+specialists (section 9.6) is domain data, not design choice.
 
-1. **Precision policy.** Should declared precision be per-field (reviewed, static) or per-value-type
-   (uniform, e.g. all ratios to 6 decimal places)? Static per-field is more honest and more work.
-2. **Value-carrying scope.** Should a `SectionResult` carry values directly, or only
-   `OutputReference` identities with the values living in the D2 `OutputRegister`? The second is
-   more normalized but makes the facade useless standalone.
-3. **Unrecognized keys.** Refuse the whole result, or carry the keys explicitly and let the package
-   validator decide? Refusing is safer; carrying survives benign upstream additions.
-4. **Annual rows.** `annual_rows: list[dict[str, Any]]` is a per-year table, not a scalar. Does D3B
-   type it now, defer it to D3C, or exclude time series from v1 entirely?
-5. **Sections without v14 outputs.** Sections 3, 7, 8, 9, 18 and 19 have no engine output at all.
-   Do they get a `SectionResult` with `not_applicable`/`intentionally_deferred`, or no record?
+### 9.1 Precision — carry unrounded, declare per field
+
+*Posed as per-field versus per-type rounding. Both options were illegal.* D1 §5 states: "Canonical
+numbers MUST carry units and sufficient unrounded precision. **Display rounding belongs to an
+adapter policy and MUST NOT alter the canonical value.**" The canonical value is therefore never
+rounded by the facade, and the question is only what `precision` *declares*.
+
+It must be declared **per field**, and the repository's own canonical KPI vector proves a uniform
+per-type rule destructive. From `tests/_canon.py`, whose docstring instructs "keep them at full
+precision":
+
+| Canonical KPI | Value | A uniform rule breaks it |
+|---|---|---|
+| `LENDER_PROJECT_IRR` | `-0.001166233356501311` | 2 dp → `-0.00`; even 6 dp loses the fourth significant figure of a near-zero IRR |
+| `LENDER_PROJECT_NPV` | `-91810995.06051566` | 6 dp reports a USD figure to sub-microcent noise |
+| `LENDER_MIN_DSCR` | `1.3` | a covenant threshold, meaningful to 2 dp, not a measurement |
+
+One rule cannot serve a vector spanning `1e-3` to `1e8` that mixes ratios, currency and covenant
+thresholds. **The policy text binds to `DerivationRecord.precision_policy`**, which already exists
+in D2 as a mandatory `NonEmptyText` field — D3B must not invent a parallel mechanism. D1 §10.4
+requires every delivery to preserve "precision policy" for each exposed fact, so it is a
+first-class carried fact rather than an implementation note.
+
+### 9.2 Value-carrying — a pre-package projection, values stored once
+
+*Posed as values-directly versus identities-only. It is a false dichotomy.* D2 is already
+normalized and reciprocal: `SectionRecord.output_references` holds output **IDs**, the
+`OutputReference` records live in `output_register`, and each record carries `section_ids` back.
+`FeasibilityReportPackage` validates both directions.
+
+A section-level facade object carrying values directly would create a **second canonical home for
+the same fact**, which is the shape D1 §10.4 forbids when it says an adapter "MUST NOT become a
+second canonical financial model or calculate a competing headline value". So the facade is a
+**pre-package projection**: it carries the `OutputReference`-shaped records themselves — which is
+what makes it useful standalone — plus a section-level disposition that references them by ID.
+D3C then splits one projection into its `SectionRecord` and its register entries with no value
+duplicated anywhere.
+
+### 9.3 Unrecognized keys — the question is moot as posed
+
+*Posed as refuse-versus-carry at the facade.* The loss happens **upstream of the facade entirely**,
+so neither option is reachable. `normalize_kpi_dict` `float()`-coerces every KPI and skips failures
+with a `logger.debug`; `evaluate_with_overrides` runs it on the `return_full_result=False` path,
+which is the parameter's default. A KPI that became a string upstream has already vanished.
+
+Three consequences follow, and they are requirements rather than preferences:
+
+1. **D3C consumes `return_full_result=True`**, never the normalized dict, so the facade sees the
+   raw payload rather than a pre-filtered one.
+2. The facade carries a **declared expected-key set per section**. A declared key absent from the
+   payload is an absence carrying the D1 §6.1 quartet; an undeclared key present in the payload is
+   surfaced as `UnrecognizedUpstreamKey`. Neither is dropped.
+3. Refusing the whole result is rejected: it would make any benign upstream addition a hard
+   failure, and D1 §6.1 already demands the finer-grained answer.
+
+### 9.4 Annual rows — carry as a digest-bound artifact output, do not type it
+
+*Posed as type-now, defer, or exclude. Excluding is not available* — D1 §14 requires "annual/periodic
+revenue, cost, tax, cash-flow and funding statements" as minimum report meaning. But typing a
+per-year schema into the contract duplicates a mechanism D2 already has: `OutputReference.value` is
+**optional** while `locator` is **required**, so a table-shaped output is expressed as `locator`
+plus `digest` with `value=None`, bound to an `ArtifactRecord` carrying format, MIME type, producer,
+`content_digest` and confidentiality.
+
+v1 therefore carries `annual_rows` as a digest-bound artifact output. Typing per-row semantics is
+revisited only when a consumer needs to reason about individual rows inside the contract, which no
+current D1 clause requires.
+
+### 9.5 Engine-less sections — a category error, not a choice
+
+*Posed as `not_applicable`, `intentionally_deferred`, or no record. All three are wrong.*
+
+"No record" is refused twice over: D1 §8 states "Every report carries a record for every
+identifier", and the D2 validator enforces `sections` containing *exactly* the taxonomy SSOT IDs in
+resolver order. Silent omission is impossible by construction.
+
+`not_applicable` is worse than wrong — it is contract-violating. Per D1 §8, sections 18 and 19 are
+**"Always applicable"**, section 8 is "ordinarily material", section 9 is "applicable unless a
+documented scope rule establishes otherwise", and sections 3 and 7 are applicable to any physical
+project. D1 §6.1 adds that `not_applicable` "cannot be inferred from missing data" and requires an
+explicit project-scope rationale and approval basis, and D1 §17 makes the doctrine explicit: "Not
+running an available analysis is `intentionally_deferred`, not inapplicability."
+
+The underlying mistake is a category error. **A capability disposition is not a section
+applicability.** D1 §3.2 scopes dispositions to *capabilities*, each of which "MUST identify its
+owning contract, applicable sections, activation predicate, execution result and disposition". A
+narrative section has no engine capability, so it gets **no capability disposition at all** — not a
+`not_applicable` one. The facade covers all twenty sections, and for the engine-less six it emits
+an empty capability set, leaving applicability to the human and pack authority where D1 puts it.
+
+### 9.6 What remains genuinely open
+
+Only two items need a specialist ruling rather than a contract reading:
+
+1. **The per-field precision table itself.** Section 9.1 settles that it is per-field and unrounded;
+   the domain specialist must supply the actual meaningful precision for each carried KPI. That is a
+   domain judgement no amount of code reading produces.
+2. **The unit table for `float` fields.** Hazard 3 in section 6 forbids parsing field names at
+   runtime, so the
+   static field-to-unit binding needs domain sign-off — particularly where a name is silent about
+   its unit (`min_dscr`, `project_irr`) or where nominal/real basis matters.
 
 ## 10. Forward sightline: Dolphin 3C
 
@@ -235,7 +336,10 @@ Outside D3B implementation scope, recorded so the increment boundary is legible:
    `analytics.evaluation_v14.evaluate_with_overrides()`, preserving the existing engine and import
    direction with no big-bang rewrite. D3C proves absent, unsupported, failed, degraded and executed
    mappings with negative controls, and is where the declared unit and precision tables become
-   executable and where a drifted upstream field path must fail loudly.
+   executable and where a drifted upstream field path must fail loudly. Per section 9.3 it **must
+   call the gateway with `return_full_result=True`**: the default path returns
+   `normalize_kpi_dict(...)`, which has already discarded every non-numeric KPI before the mapping
+   can see it.
 2. **Golden Path 1** — DutchBay/Sri Lanka produces a complete report from one governed package
    through every required delivery mode.
 3. **Golden Path 2** — a second real jurisdiction and project validate that the jurisdiction and
