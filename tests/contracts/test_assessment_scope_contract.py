@@ -22,10 +22,13 @@ import analytics.feasibility_report_contract.assessment_scope as assessment_scop
 from analytics.feasibility_report_contract import (
     AssessmentScope,
     AuthoredScenarioValidationReceipt,
+    BaseConfigDomain,
     BaseScenarioIdentity,
     CostCompatibilityAssertion,
     EvaluationRequest,
     GenerationCapacityAssertion,
+    JurisdictionSubject,
+    JurisdictionSubjectAssertion,
     ProjectCaseMaterialCategory,
     ProjectCaseMaterialDisposition,
     ProjectCaseReference,
@@ -44,6 +47,75 @@ from analytics.run_manifest import config_sha256
 
 _ROOT = Path(__file__).resolve().parents[2]
 _MODULE = _ROOT / "analytics/feasibility_report_contract/assessment_scope.py"
+
+_EXPECTED_DOMAINS_WITHOUT_JURISDICTION_ROUTE = frozenset(
+    {
+        BaseConfigDomain.SCENARIO_IDENTITY,
+        BaseConfigDomain.RUN_POSTURE,
+    }
+)
+_EXPECTED_DOMAIN_ALLOWED_SUBJECTS = {
+    BaseConfigDomain.PROJECT_IDENTITY_LOCATION: frozenset({JurisdictionSubject.SITE}),
+    BaseConfigDomain.PROJECT_RESOURCE: frozenset({JurisdictionSubject.SITE}),
+    BaseConfigDomain.PROJECT_LIFECYCLE_TIMELINE: frozenset(
+        {
+            JurisdictionSubject.SITE,
+            JurisdictionSubject.PERMIT,
+            JurisdictionSubject.CONTRACT,
+        }
+    ),
+    BaseConfigDomain.TECHNOLOGY_RESOURCE: frozenset(
+        {JurisdictionSubject.SITE, JurisdictionSubject.SUPPLY}
+    ),
+    BaseConfigDomain.REVENUE_TARIFF: frozenset(
+        {JurisdictionSubject.CONTRACT, JurisdictionSubject.GRID}
+    ),
+    BaseConfigDomain.CAPEX: frozenset(
+        {
+            JurisdictionSubject.SITE,
+            JurisdictionSubject.CONTRACT,
+            JurisdictionSubject.ACCOUNTING,
+            JurisdictionSubject.SUPPLY,
+        }
+    ),
+    BaseConfigDomain.OPEX: frozenset(
+        {
+            JurisdictionSubject.SITE,
+            JurisdictionSubject.CONTRACT,
+            JurisdictionSubject.ACCOUNTING,
+            JurisdictionSubject.SUPPLY,
+        }
+    ),
+    BaseConfigDomain.TAX_STATUTORY: frozenset(
+        {JurisdictionSubject.TAX, JurisdictionSubject.CORPORATE}
+    ),
+    BaseConfigDomain.FX: frozenset(
+        {
+            JurisdictionSubject.FINANCING,
+            JurisdictionSubject.ACCOUNTING,
+            JurisdictionSubject.CONTRACT,
+            JurisdictionSubject.CORPORATE,
+        }
+    ),
+    BaseConfigDomain.GRID: frozenset({JurisdictionSubject.GRID}),
+    BaseConfigDomain.ACCOUNTING: frozenset(
+        {JurisdictionSubject.ACCOUNTING, JurisdictionSubject.CORPORATE}
+    ),
+    BaseConfigDomain.FINANCING_DEBT: frozenset({JurisdictionSubject.FINANCING}),
+    BaseConfigDomain.WACC: frozenset({JurisdictionSubject.FINANCING}),
+}
+_ALLOWED_JURISDICTION_SUBJECT_DOMAIN_CASES = tuple(
+    (subject, domain)
+    for domain, subjects in _EXPECTED_DOMAIN_ALLOWED_SUBJECTS.items()
+    for subject in sorted(subjects, key=lambda item: item.value)
+)
+_INVALID_JURISDICTION_SUBJECT_DOMAIN_CASES = tuple(
+    (subject, domain)
+    for domain in BaseConfigDomain
+    for subject in JurisdictionSubject
+    if domain in _EXPECTED_DOMAINS_WITHOUT_JURISDICTION_ROUTE
+    or subject not in _EXPECTED_DOMAIN_ALLOWED_SUBJECTS.get(domain, frozenset())
+)
 
 
 def _project_case_reference() -> dict[str, Any]:
@@ -1189,6 +1261,49 @@ def test_standalone_base_domain_routes_are_closed_and_subject_typed() -> None:
         BaseScenarioIdentity.model_validate_json(json.dumps(payload["base_scenario"]))
 
 
+@pytest.mark.parametrize(
+    ("subject", "domain"),
+    _ALLOWED_JURISDICTION_SUBJECT_DOMAIN_CASES,
+    ids=lambda value: value.value,
+)
+def test_jurisdiction_assertion_accepts_every_admissible_subject_domain_pair(
+    subject: JurisdictionSubject,
+    domain: BaseConfigDomain,
+) -> None:
+    assertion = copy.deepcopy(
+        _assertion(_request_payload(), "assertion:site-jurisdiction")
+    )
+    assertion.update({"subject": subject.value, "base_domain": domain.value})
+
+    validated = JurisdictionSubjectAssertion.model_validate_json(json.dumps(assertion))
+
+    assert validated.subject is subject
+    assert validated.base_domain is domain
+
+
+@pytest.mark.parametrize(
+    ("subject", "domain"),
+    _INVALID_JURISDICTION_SUBJECT_DOMAIN_CASES,
+    ids=lambda value: value.value,
+)
+def test_jurisdiction_assertion_refuses_every_impossible_subject_domain_pair(
+    subject: JurisdictionSubject,
+    domain: BaseConfigDomain,
+) -> None:
+    payload = _request_payload()
+    assertion = _assertion(payload, "assertion:site-jurisdiction")
+    assertion.update({"subject": subject.value, "base_domain": domain.value})
+    message = (
+        f"{domain.value} authority routes must be project-global"
+        if domain in _EXPECTED_DOMAINS_WITHOUT_JURISDICTION_ROUTE
+        else f"jurisdiction subject {subject.value} cannot govern {domain.value}"
+    )
+
+    with pytest.raises(ValidationError, match=message):
+        JurisdictionSubjectAssertion.model_validate_json(json.dumps(assertion))
+    _assert_policy_and_request_reject(payload, message)
+
+
 def test_assertions_require_their_corresponding_retained_authored_domains() -> None:
     for domain, message in (
         ("scenario_identity", "retained authored identity"),
@@ -1230,7 +1345,8 @@ def test_request_cross_binds_scope_base_authority_and_policy_axes() -> None:
         _validate(payload)
 
     payload = _request_payload()
-    _assertion(payload, "assertion:tax-jurisdiction")["base_domain"] = "run_posture"
+    site_jurisdiction = _assertion(payload, "assertion:site-jurisdiction")
+    site_jurisdiction["base_domain"] = "project_lifecycle_timeline"
     with pytest.raises(ValidationError, match="retained authority route"):
         _validate(payload)
 
@@ -1636,6 +1752,8 @@ def test_contract_schema_and_semantic_policy_globals_are_immutable() -> None:
     without_jurisdiction = module_globals["_DOMAINS_WITHOUT_JURISDICTION_ROUTE"]
     allowed_subjects = module_globals["_DOMAIN_ALLOWED_SUBJECTS"]
     assert isinstance(without_jurisdiction, frozenset)
+    assert without_jurisdiction == _EXPECTED_DOMAINS_WITHOUT_JURISDICTION_ROUTE
+    assert dict(allowed_subjects) == _EXPECTED_DOMAIN_ALLOWED_SUBJECTS
     with pytest.raises(AttributeError):
         without_jurisdiction.add("other")
     with pytest.raises(TypeError):

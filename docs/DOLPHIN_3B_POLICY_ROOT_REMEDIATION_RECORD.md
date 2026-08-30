@@ -165,3 +165,53 @@ worktree first on `PYTHONPATH`:
 The complete suite emitted only the repository's pre-existing Hypothesis `norecursedirs` warning.
 These are local controls on a moving implementation tree. They do not replace the required fresh
 independent dispositions, the immutable candidate rebind or exact-head GitHub checks.
+
+## 8. Jurisdiction subject/domain successor correction
+
+Independent review of `d164781354904386e81622af28462f6121fd5f1c` produced a split disposition.
+Assurance accepted every replayed prior counterexample and the new one-to-one binding controls. The
+domain reviewer then proved that a standalone jurisdiction assertion could still pair a subject
+with an intrinsically impossible authored domain and be refused only by the containing request.
+Both exact dispositions and the four constructive probes are preserved in the independent review
+record; the domain VETO controls.
+
+The bounded successor centralizes one static jurisdiction subject/domain admissibility helper and
+reuses it at both owners:
+
+- `JurisdictionSubjectAssertion` now refuses project-global domains and every subject/domain pair
+  excluded by the immutable authored-domain matrix; and
+- `BaseScenarioIdentity` calls the same helper when validating the subject authority selected by a
+  retained domain route.
+
+The containing request still owns the genuinely external question: whether an intrinsically valid
+assertion's exact binding/domain authority route is retained by the selected base. Its durable
+outer-route negative now uses the valid `site -> project_lifecycle_timeline` pair against an absent
+domain, so lower validation does not mask that external control.
+
+The test oracle independently enumerates the closed contract matrix: all `28` admissible pairs
+accept at the standalone assertion root, while all `107` impossible pairs refuse at the standalone
+assertion, standalone policy and containing request. The production immutable maps must equal that
+independent expected matrix exactly. Existing site/project-resource, site/project-location,
+tax/tax-statutory and consistent same-binding/multiple-domain positives remain valid.
+
+### 8.1 Local successor receipt
+
+| Control | Result |
+|---|---|
+| Complete D3B-0 assessment-scope contract | `288 passed` |
+| Complete contract suite | `944 passed` |
+| D3A ProjectCase predecessor regression | `330 passed` |
+| D2 machine-contract predecessor regression | `298 passed` |
+| Contract-package branch coverage | `94.56%` total; modified assessment-scope module `96.70%` |
+| Ruff check and format check | passed |
+| Black and isort checks | passed |
+| Mypy `--no-incremental` on the assessment-scope export surface | passed |
+| Both Draft 2020-12 schema modes, strict/frozen ingress and public exports | passed in the focused suite |
+| Canonical governance bootstrap | `73` rules; `73` active |
+| Forbidden-import/excluded-surface controls and `git diff --check` | passed |
+
+The test suites emitted only the repository's pre-existing Hypothesis `norecursedirs` warning;
+mypy emitted only its pre-existing unused-configuration-section warning. These local receipts are
+not self-acceptance. A new immutable implementation SHA still requires fresh independent domain and
+assurance dispositions, current protected-main ancestry, a conflict-free PR and exact-head required
+CI before `MERGE-01` can apply.

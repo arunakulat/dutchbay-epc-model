@@ -453,6 +453,19 @@ _DOMAIN_ALLOWED_SUBJECTS = MappingProxyType(
 )
 
 
+def _require_jurisdiction_subject_can_govern_domain(
+    subject: JurisdictionSubject,
+    domain: BaseConfigDomain,
+) -> None:
+    """Require one jurisdiction subject to be admissible for an authored domain."""
+    if domain in _DOMAINS_WITHOUT_JURISDICTION_ROUTE:
+        raise ValueError(f"{domain.value} authority routes must be project-global")
+    if subject not in _DOMAIN_ALLOWED_SUBJECTS[domain]:
+        raise ValueError(
+            f"jurisdiction subject {subject.value} cannot govern {domain.value}"
+        )
+
+
 class ProjectCaseReference(StrictFrozenModel):
     """Exact identity and contract revision of one ProjectCase."""
 
@@ -802,14 +815,10 @@ class BaseScenarioIdentity(StrictFrozenModel):
                     raise ValueError(
                         "base domain route has a dangling jurisdiction binding"
                     )
-                if (
-                    subject_authority.subject
-                    not in _DOMAIN_ALLOWED_SUBJECTS[disposition.domain]
-                ):
-                    raise ValueError(
-                        f"jurisdiction subject {subject_authority.subject.value} "
-                        f"cannot govern {disposition.domain.value}"
-                    )
+                _require_jurisdiction_subject_can_govern_domain(
+                    subject_authority.subject,
+                    disposition.domain,
+                )
                 routed_subjects.add(jurisdiction_binding_id)
 
                 route_authority_sources = {
@@ -879,6 +888,14 @@ class JurisdictionSubjectAssertion(StrictFrozenModel):
     jurisdiction_code: AssessmentJurisdictionCode
     subject: JurisdictionSubject
     base_domain: BaseConfigDomain
+
+    @model_validator(mode="after")
+    def _subject_can_govern_domain(self) -> JurisdictionSubjectAssertion:
+        _require_jurisdiction_subject_can_govern_domain(
+            self.subject,
+            self.base_domain,
+        )
+        return self
 
 
 class TechnologyBindingAssertion(StrictFrozenModel):
