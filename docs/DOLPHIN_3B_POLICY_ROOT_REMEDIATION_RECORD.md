@@ -446,6 +446,66 @@ mypy emitted only its pre-existing unused-configuration-section warning. This re
 receipt, not self-acceptance. A new immutable SHA requires fresh independent domain and assurance
 dispositions, current protected-main ancestry, a conflict-free PR and exact-head required CI.
 
+## 15. Exact-instance state and non-dispatching outcome-key successor correction
+
+Independent context-clean review of `0b92cdf447bfe52a50d413f2c84589308004d6eb` proved that the
+Section 14 successor closes its named collection and model-subclass cases, then found a residual
+exact-instance path. Pydantic's public unvalidated copy/update operation can retain the exact trusted
+model class while adding instance state that shadows `model_dump_json`. The adapter returns that
+same instance, so an exact-type check alone cannot make later dynamic method lookup safe. Both
+reviewers reproduced the caller exception at both public roots; the exact dual VETO and green
+supporting receipts are preserved in the independent review record.
+
+The bounded successor closes the accepted-model path before ordering or serialization:
+
+- every exact trusted model type has one explicit tuple of its declared field names;
+- declared fields are extracted only from the exact built-in instance dictionary using built-in
+  dictionary operations;
+- missing, replaced or additional instance state receives one bounded
+  `compatibility_assertion_state` child error with the stable invalid-child input token;
+- a clean exact model instance is converted to a fresh declared-field dictionary and revalidated by
+  the existing `CompatibilityAssertion` adapter, so unvalidated field updates cannot bypass the
+  contract; and
+- the successful outcome key calls the Pydantic serializer owned by the exact trusted model class,
+  never an instance-resolved method.
+
+A durable exact-class control adds an instance-level serializer shadow without changing declared
+fields. It validates twice at standalone policy and containing request roots, requires identical
+complete structured/text/JSON bounded receipts, requires the stable input token, and requires zero
+hook calls. The existing exact-model Python-ingress positive proves that clean model children remain
+accepted and equal after revalidation. Every prior collection, subclass, dictionary, class-equality,
+scalar, duplicate/distinct-ID, strictness, ownership, matrix, schema and authored-order control
+remains mandatory.
+
+This is a Python validation-boundary correction only. It changes no accepted domain semantic,
+ProjectCase topology, evaluator, finance, application, web/API, grade, release or `HOLD` authority.
+It remains a local successor until governed gates and fresh exact-SHA reviews pass.
+
+### 15.1 Local successor receipt
+
+| Control | Result |
+|---|---|
+| Complete D3B-0 assessment-scope contract | `300 passed` |
+| Complete contract suite | `956 passed` |
+| D3A ProjectCase predecessor regression | `330 passed` |
+| D2 machine-contract predecessor regression | `298 passed` |
+| Contract-package branch coverage | `94.69%` total; modified assessment-scope module `96.90%` |
+| Exact-class instance serializer-shadow negative control | passed twice at both public roots with zero hooks |
+| Exact-model declared-field reconstruction and revalidation positive | passed |
+| Existing collection, subclass, dictionary, class-equality, scalar, duplicate-ID, distinct-ID and authored-order controls | passed |
+| Ruff check and format check | passed |
+| Black and isort checks | passed |
+| Mypy `--no-incremental` on the assessment-scope export surface | passed |
+| Both Draft 2020-12 schema modes, strict/frozen ingress and public exports | passed in the focused suite |
+| Import/changelog/cold-import controls and in-memory compilation | `35 passed`; compilation passed |
+| Forbidden-import/excluded-surface controls and `git diff --check` | passed |
+
+The test suites emitted only the repository's pre-existing Hypothesis `norecursedirs` warning;
+mypy emitted only its pre-existing unused-configuration-section warning. The coverage receipt was
+collected in memory and created no workspace data file. This is not self-acceptance. The frozen
+successor still requires fresh independent exact-SHA domain and assurance dispositions, current
+protected-main ancestry, a conflict-free PR and exact-head required CI before delivery.
+
 ## 14. Exact collection and exact child-model successor correction
 
 Independent context-clean review of `b035ae0a920f447e3316882b0f5744112532dd51` accepted the

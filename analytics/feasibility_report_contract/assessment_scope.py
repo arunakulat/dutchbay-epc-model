@@ -1165,6 +1165,120 @@ def _is_exact_compatibility_assertion_model_type(candidate: type[Any]) -> bool:
     )
 
 
+def _exact_compatibility_assertion_field_names(
+    candidate: type[Any],
+) -> tuple[str, ...] | None:
+    """Return declared field names for one exact trusted compatibility model."""
+    if candidate is ScenarioIdentityAssertion:
+        return (
+            "kind",
+            "assertion_id",
+            "category",
+            "project_case_selector",
+            "base_selector",
+        )
+    if candidate is LocationAssertion:
+        return (
+            "kind",
+            "assertion_id",
+            "category",
+            "project_case_selector",
+            "base_selector",
+        )
+    if candidate is JurisdictionSubjectAssertion:
+        return (
+            "kind",
+            "assertion_id",
+            "category",
+            "jurisdiction_binding_id",
+            "jurisdiction_code",
+            "subject",
+            "base_domain",
+        )
+    if candidate is TechnologyBindingAssertion:
+        return (
+            "kind",
+            "assertion_id",
+            "category",
+            "asset_id",
+            "technology_binding_id",
+            "technology_id",
+            "asset_class",
+            "authored_technology_kind",
+            "base_config_key",
+        )
+    if candidate is GenerationCapacityAssertion:
+        return (
+            "kind",
+            "assertion_id",
+            "category",
+            "asset_id",
+            "base_config_key",
+            "project_case_selector",
+            "base_selector",
+            "expected_unit",
+            "electrical_basis",
+            "capacity_basis",
+            "authored_technology_kind",
+        )
+    if candidate is StorageCapacityAssertion:
+        return (
+            "kind",
+            "assertion_id",
+            "category",
+            "asset_id",
+            "base_config_key",
+            "project_case_selector",
+            "base_selector",
+            "expected_unit",
+            "electrical_basis",
+            "capacity_basis",
+            "authored_technology_kind",
+        )
+    if candidate is CostCompatibilityAssertion:
+        return (
+            "kind",
+            "assertion_id",
+            "category",
+            "included_line_ids",
+            "price_basis_id",
+            "reporting_currency",
+            "periodicity",
+            "base_selector",
+        )
+    if candidate is PriceBasisAssertion:
+        return (
+            "kind",
+            "assertion_id",
+            "category",
+            "price_basis_id",
+            "valuation_date",
+            "reporting_currency",
+            "nominality",
+        )
+    return None
+
+
+def _exact_compatibility_assertion_payload(
+    raw_assertion: Any,
+) -> tuple[dict[str, Any] | None, bool]:
+    """Return declared fields and whether an exact model has non-field state."""
+    field_names = _exact_compatibility_assertion_field_names(type(raw_assertion))
+    if field_names is None:
+        return None, False
+
+    raw_fields = object.__getattribute__(raw_assertion, "__dict__")
+    if type(raw_fields) is not dict or len(raw_fields) != len(field_names):
+        return None, True
+    for raw_field_name in dict.keys(raw_fields):
+        if type(raw_field_name) is not str or raw_field_name not in field_names:
+            return None, True
+    return (
+        {field_name: dict.get(raw_fields, field_name) for field_name in field_names},
+        False,
+    )
+
+
 def _raw_policy_assertion_sort_key(
     raw_assertion: Any,
 ) -> tuple[int, str, str, str]:
@@ -1218,7 +1332,42 @@ def _child_validation_outcome_sort_key(
 ) -> tuple[int, str]:
     """Return a total observable outcome key without using caller position."""
     if validated_child is not None:
-        return (1, validated_child.model_dump_json())
+        child_type = type(validated_child)
+        if child_type is ScenarioIdentityAssertion:
+            serialized = ScenarioIdentityAssertion.__pydantic_serializer__.to_json(
+                validated_child
+            )
+        elif child_type is LocationAssertion:
+            serialized = LocationAssertion.__pydantic_serializer__.to_json(
+                validated_child
+            )
+        elif child_type is JurisdictionSubjectAssertion:
+            serialized = JurisdictionSubjectAssertion.__pydantic_serializer__.to_json(
+                validated_child
+            )
+        elif child_type is TechnologyBindingAssertion:
+            serialized = TechnologyBindingAssertion.__pydantic_serializer__.to_json(
+                validated_child
+            )
+        elif child_type is GenerationCapacityAssertion:
+            serialized = GenerationCapacityAssertion.__pydantic_serializer__.to_json(
+                validated_child
+            )
+        elif child_type is StorageCapacityAssertion:
+            serialized = StorageCapacityAssertion.__pydantic_serializer__.to_json(
+                validated_child
+            )
+        elif child_type is CostCompatibilityAssertion:
+            serialized = CostCompatibilityAssertion.__pydantic_serializer__.to_json(
+                validated_child
+            )
+        elif child_type is PriceBasisAssertion:
+            serialized = PriceBasisAssertion.__pydantic_serializer__.to_json(
+                validated_child
+            )
+        else:  # pragma: no cover - guarded by the exact-type child check
+            raise TypeError("validated compatibility assertion type is not trusted")
+        return (1, bytes.decode(serialized))
     return (
         0,
         json.dumps(
@@ -1247,6 +1396,16 @@ def _non_exact_model_child_error() -> dict[str, Any]:
         "type": "compatibility_assertion_type",
         "loc": (),
         "msg": "Input should be an exact compatibility assertion model or dictionary",
+        "input": _INVALID_COMPATIBILITY_ASSERTION_INPUT,
+    }
+
+
+def _non_field_model_state_child_error() -> dict[str, Any]:
+    """Return a bounded error for non-field state on an exact model instance."""
+    return {
+        "type": "compatibility_assertion_state",
+        "loc": (),
+        "msg": "Input should not contain non-field compatibility assertion state",
         "input": _INVALID_COMPATIBILITY_ASSERTION_INPUT,
     }
 
@@ -1347,19 +1506,33 @@ class V14BindingPolicy(StrictFrozenModel):
         for authored_index, raw_assertion in enumerate(raw_assertions):
             validated_child: CompatibilityAssertion | None = None
             child_errors: tuple[dict[str, Any], ...] = ()
+            child_input = raw_assertion
+            if info.mode == "python":
+                exact_payload, has_non_field_state = (
+                    _exact_compatibility_assertion_payload(raw_assertion)
+                )
+                if has_non_field_state:
+                    child_errors = (_non_field_model_state_child_error(),)
+                elif exact_payload is not None:
+                    child_input = exact_payload
             try:
-                if info.mode == "json":
+                if child_errors:
+                    pass
+                elif info.mode == "json":
                     validated_child = _COMPATIBILITY_ASSERTION_ADAPTER.validate_json(
                         json.dumps(raw_assertion),
                         context=info.context,
                     )
                 else:
                     validated_child = _COMPATIBILITY_ASSERTION_ADAPTER.validate_python(
-                        raw_assertion,
+                        child_input,
                         context=info.context,
                     )
-                if not _is_exact_compatibility_assertion_model_type(
-                    type(validated_child)
+                if (
+                    validated_child is not None
+                    and not _is_exact_compatibility_assertion_model_type(
+                        type(validated_child)
+                    )
                 ):
                     child_errors = (_non_exact_model_child_error(),)
                     validated_child = None

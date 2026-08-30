@@ -2715,6 +2715,58 @@ def test_policy_model_subclass_is_bounded_before_outcome_serialization() -> None
     assert dump_calls == []
 
 
+def test_policy_exact_model_non_field_state_is_bounded_before_serialization() -> None:
+    dump_calls: list[bool] = []
+
+    def raising_dump_json() -> str:
+        dump_calls.append(True)
+        raise RuntimeError("instance serializer shadow must not execute")
+
+    policy = _validate_policy(_request_payload())
+    scenario_assertion = next(
+        assertion
+        for assertion in policy.assertions
+        if type(assertion) is assessment_scope_contract.ScenarioIdentityAssertion
+    )
+    shadowed_child = scenario_assertion.model_copy(
+        update={"model_dump_json": raising_dump_json}
+    )
+    assert type(shadowed_child) is assessment_scope_contract.ScenarioIdentityAssertion
+
+    assertions = tuple(
+        shadowed_child if assertion is scenario_assertion else assertion
+        for assertion in policy.assertions
+    )
+    payload = _validate(_request_payload()).model_dump()
+    payload["binding_policy"]["assertions"] = assertions
+
+    for root in ("policy", "request"):
+        receipts: list[dict[str, object]] = []
+        for _ in range(2):
+            with pytest.raises(ValidationError) as exc_info:
+                if root == "policy":
+                    V14BindingPolicy.model_validate(payload["binding_policy"])
+                else:
+                    EvaluationRequest.model_validate(payload)
+            errors = exc_info.value.errors()
+            receipts.append(
+                {
+                    "errors": errors,
+                    "text": str(exc_info.value),
+                    "json": exc_info.value.json(),
+                }
+            )
+            assert {error["type"] for error in errors} == {
+                "compatibility_assertion_state"
+            }
+            assert {error["input"] for error in errors} == {
+                "<invalid compatibility assertion>"
+            }
+        assert receipts[0] == receipts[1]
+
+    assert dump_calls == []
+
+
 def test_policy_canonical_child_validator_preserves_python_strictness() -> None:
     policy = _validate_policy(_request_payload())
     normalized = policy.model_dump()

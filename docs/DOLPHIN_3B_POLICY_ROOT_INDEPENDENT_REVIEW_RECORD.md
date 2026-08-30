@@ -982,3 +982,94 @@ The protected-base-to-candidate binary diff SHA-256 was
 
 Candidate `b035ae0…` must remain unmerged. Both VETOs control delivery. No result changes grade,
 evidence, lender, Board, release, deployment, issue or `HOLD` authority.
+
+## 16. Successor review — exact trusted instance can still dispatch serialization
+
+**Controlling disposition:** VETO
+
+**Reviewed implementation:** `0b92cdf447bfe52a50d413f2c84589308004d6eb`
+
+**Reviewed tree:** `795d74af2f10578710d7915087bad2662d12ed2e`
+
+Fresh context-clean domain and assurance reviewers independently issued `VETO`. They proved that
+the Section 15 correction closes exact collection shape, dynamic-class collection input,
+tuple-subclass iteration and trusted-model-subclass serialization. They then found that exact
+runtime model identity alone does not make dynamic instance-method lookup non-dispatching.
+
+### 16.1 Remaining exact-instance dispatch
+
+The successful-child outcome key still calls `validated_child.model_dump_json()` dynamically.
+Pydantic's public unvalidated model-copy/update path can produce an exact
+`ScenarioIdentityAssertion` instance with unchanged declared fields and an instance attribute that
+shadows `model_dump_json`. The discriminated child adapter returns that same exact object, so the
+identity-only trusted-type check passes. The later outcome-key call then executes the caller value.
+
+Each reviewer reproduced raw caller `RuntimeError` escape twice at the standalone
+`V14BindingPolicy` root and twice at the containing `EvaluationRequest` root. The hook ran on every
+attempt and no bounded `ValidationError` existed from which to construct stable structured, text or
+JSON receipts. This is the same accepted-model serialization defect class preserved in Section 15;
+the subclass instance named there is closed, but exact-class instance state still reaches dynamic
+serialization.
+
+### 16.2 Accepted evidence preserved
+
+- exact JSON lists and exact Python tuples validate while non-exact collection shapes receive
+  bounded constant-input errors without caller class or iterator hooks;
+- a trusted-model subclass is refused before its overridden serializer can execute;
+- dictionary subclasses remain opaque, class rich-equality hooks remain unused, and scalar raw
+  input/context remain absent from bounded errors;
+- duplicate-ID, distinct-ID and fully tied malformed-child receipts remain deterministic across
+  root, mode, order and fresh hash-seed processes;
+- all 28 admissible and 107 impossible jurisdiction subject/domain cells retain correct behavior at
+  assertion, base, policy and request roots;
+- external-route layering, ownership, capacity/basis, technology, jurisdiction, cost/price and
+  successful authored-order semantics remain correct;
+- D3A's valid shared-technology topology remains distinct from D3B-v1's documented narrower
+  physical-owner limitation; and
+- the D3A, D2, schema, strictness, frozen, public-export and excluded-surface boundaries remain
+  unchanged.
+
+The focused D3B, complete-contract, D3A and D2 suites passed `299`, `955`, `330` and `298` tests.
+Package/module branch coverage was `94.67%`/`96.96%`. Governed Python `3.12.13`, 73 active rules,
+both Draft 2020-12 modes, Ruff, Black, isort, mypy without incremental cache, compilation,
+import/changelog, cold-import, forbidden-import, excluded-surface and diff checks passed. The full
+exact-head GitHub rollup completed with nineteen successful jobs, three governed skips and no
+failure or pending job. Green gates do not override the dual VETO.
+
+### 16.3 Required bounded correction
+
+The next successor must normalize or revalidate exact model-instance children through
+non-dispatching declared-field extraction and derive the successful-child outcome key without any
+instance-resolved method call. Non-field instance state cannot participate in acceptance,
+serialization or ordering.
+
+A durable control must use an exact trusted model carrying an instance-level serializer shadow,
+validate it twice at both public roots, require zero hook calls, require bounded constant-input
+`ValidationError` receipts, and compare the complete structured, text and JSON forms. The accepted
+exact-model Python ingress and successful authored order must remain unchanged, together with every
+Section 1–15 control.
+
+### 16.4 Exact review receipt
+
+At review close, local `HEAD`, upstream, live topic, pull ref and draft-PR head were all
+`0b92cdf…`; the tree was `795d74af2f10578710d7915087bad2662d12ed2e`; protected/live
+`origin/main` and the PR base were `9e1c6fae6220551754c23535caeaa86b37422230`; the topic was
+zero behind and nineteen commits ahead; and the worktree was clean. The PR was open, draft,
+mergeable and clean. All four required checks and the complete exact-head rollup were green. Issue
+`#1110` remained `OPEN`; no `HOLD` changed.
+
+Candidate fingerprints:
+
+| File | SHA-256 |
+|---|---|
+| `analytics/feasibility_report_contract/assessment_scope.py` | `b5da1ff33482ea36b5c8435143d14d887c2f2a481ada02e246faa37911b8cc35` |
+| `tests/contracts/test_assessment_scope_contract.py` | `dcb0d57c38762596489723f456c31d899e5c96c38d472c59735d40d74de613fa` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_REMEDIATION_RECORD.md` | `602c948d102678f70ffc7d6a177bebcbc782e80d7a89fafe05304794c4098584` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_INDEPENDENT_REVIEW_RECORD.md` | `403ec1168459d69e1295d0bcf15863a487e49843705037439a1f84cec3302964` |
+| `changelog.d/d3b-policy-basis-coherence.fixed.md` | `23e7f2de4c4be142d5c657d20350bb353c76a2de39a8d03064121bccd356c6a4` |
+
+The protected-base-to-candidate binary diff SHA-256 was
+`77e35d7a39307102d37288b6e73504557e15f2d16a72c5f9b55dc31d287a46d4`.
+
+Candidate `0b92cdf…` must remain unmerged. Both VETOs control delivery. No result changes grade,
+evidence, lender, Board, release, deployment, issue or `HOLD` authority.
