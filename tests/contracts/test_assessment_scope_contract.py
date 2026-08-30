@@ -433,6 +433,15 @@ def _validate_policy(payload: dict[str, Any]) -> V14BindingPolicy:
     return V14BindingPolicy.model_validate_json(json.dumps(payload["binding_policy"]))
 
 
+def _assert_policy_and_request_reject(
+    payload: dict[str, Any],
+    match: str,
+) -> None:
+    for validate in (_validate_policy, _validate):
+        with pytest.raises(ValidationError, match=match):
+            validate(payload)
+
+
 def _assertion(payload: dict[str, Any], assertion_id: str) -> dict[str, Any]:
     return next(
         item
@@ -1198,8 +1207,7 @@ def test_scope_elements_require_exact_assertion_and_authority_coverage() -> None
         for item in payload["binding_policy"]["assertions"]
         if item["assertion_id"] != "assertion:wind-capacity"
     ]
-    with pytest.raises(ValidationError, match="per-technology capacity route"):
-        _validate(payload)
+    _assert_policy_and_request_reject(payload, "per-technology capacity route")
 
     payload = _request_payload()
     payload["scope"]["technology_scope"].append(
@@ -1233,7 +1241,9 @@ def test_scope_elements_require_exact_assertion_and_authority_coverage() -> None
 def test_hybrid_and_storage_only_request_graphs_are_element_complete() -> None:
     hybrid = _request_payload()
     _add_storage_technology(hybrid)
+    hybrid_policy = _validate_policy(hybrid)
     request = _validate(hybrid)
+    assert request.binding_policy == hybrid_policy
     assert {item.asset_class.value for item in request.scope.technology_scope} == {
         "generation",
         "storage",
@@ -1262,7 +1272,9 @@ def test_hybrid_and_storage_only_request_graphs_are_element_complete() -> None:
     )
     generation_disposition["disposition"] = "explicitly_out_of_v1"
     generation_disposition["action"] = "exclude_from_v1_no_fallback"
+    storage_policy = _validate_policy(storage_only)
     request = _validate(storage_only)
+    assert request.binding_policy == storage_policy
     assert [item.asset_class.value for item in request.scope.technology_scope] == [
         "storage"
     ]
@@ -1668,12 +1680,157 @@ def test_solar_technology_cannot_target_wind_turbine_fields(
         _validate(payload)
 
 
-def test_capacity_and_technology_assertions_share_exact_authored_kind() -> None:
+def test_policy_and_base_authority_share_exact_authored_kind() -> None:
     payload = _request_payload()
-    technology = _assertion(payload, "assertion:wind-technology")
-    technology["authored_technology_kind"] = "solar_pv"
+    payload["base_scenario"]["technology_authorities"][0][
+        "authored_technology_kind"
+    ] = "generic_generation"
     with pytest.raises(ValidationError, match="exact base technology authority"):
         _validate(payload)
+
+
+def test_policy_requires_a_same_asset_generation_technology_owner() -> None:
+    payload = _request_payload()
+    _assertion(payload, "assertion:wind-technology")["asset_id"] = "asset:other"
+    _assert_policy_and_request_reject(payload, "matching generation asset technology")
+
+
+def test_policy_requires_a_same_asset_storage_technology_owner() -> None:
+    payload = _request_payload()
+    _add_storage_technology(payload)
+    payload["binding_policy"]["assertions"] = [
+        item
+        for item in payload["binding_policy"]["assertions"]
+        if item["assertion_id"] != "assertion:bess-technology"
+    ]
+    _assert_policy_and_request_reject(payload, "matching storage asset technology")
+
+
+def test_policy_capacity_and_technology_keys_match() -> None:
+    payload = _request_payload()
+    _assertion(payload, "assertion:wind-capacity")["base_config_key"] = "wind-other"
+    _assert_policy_and_request_reject(payload, "same base config key")
+
+
+def test_policy_storage_and_technology_keys_match() -> None:
+    payload = _request_payload()
+    _add_storage_technology(payload)
+    _assertion(payload, "assertion:bess-energy")["base_config_key"] = "bess-other"
+    _assert_policy_and_request_reject(payload, "same base config key")
+
+
+def test_policy_capacity_and_technology_kinds_match() -> None:
+    payload = _request_payload()
+    technology = _assertion(payload, "assertion:wind-technology")
+    technology["authored_technology_kind"] = "generic_generation"
+    payload["base_scenario"]["technology_authorities"][0][
+        "authored_technology_kind"
+    ] = "generic_generation"
+    _assert_policy_and_request_reject(payload, "same authored technology kind")
+
+
+def test_policy_technology_assertions_have_unique_physical_owners() -> None:
+    payload = _request_payload()
+    _add_storage_technology(payload)
+    _assertion(payload, "assertion:bess-technology")["asset_id"] = "asset:wind-01"
+    _assert_policy_and_request_reject(payload, "unique ProjectCase asset IDs")
+
+
+def test_policy_technology_assertions_have_unique_binding_ids() -> None:
+    payload = _request_payload()
+    _add_storage_technology(payload)
+    technology = _assertion(payload, "assertion:bess-technology")
+    technology["technology_binding_id"] = "technology-binding:wind"
+    _assert_policy_and_request_reject(
+        payload, "duplicate technology assertion binding ID"
+    )
+
+
+def test_policy_storage_routes_are_complete() -> None:
+    payload = _request_payload()
+    _add_storage_technology(payload)
+    payload["binding_policy"]["assertions"] = [
+        item
+        for item in payload["binding_policy"]["assertions"]
+        if item["assertion_id"] != "assertion:bess-energy"
+    ]
+    _assert_policy_and_request_reject(payload, "power, energy, and duration routes")
+
+
+def test_policy_repeated_jurisdiction_binding_keeps_one_identity() -> None:
+    payload = _request_payload()
+    second_route = copy.deepcopy(_assertion(payload, "assertion:site-jurisdiction"))
+    second_route.update(
+        {
+            "assertion_id": "assertion:site-location-jurisdiction",
+            "base_domain": "project_identity_location",
+        }
+    )
+    payload["binding_policy"]["assertions"].append(second_route)
+    policy = _validate_policy(payload)
+    request = _validate(payload)
+    assert request.binding_policy == policy
+
+    second_route["jurisdiction_code"] = "ALT"
+    _assert_policy_and_request_reject(
+        payload, "share exact jurisdiction code and subject"
+    )
+
+
+@pytest.mark.parametrize(
+    ("assertion_id", "field", "value"),
+    [
+        ("assertion:opex", "price_basis_id", "price-basis:other"),
+        ("assertion:price-basis", "reporting_currency", "EUR"),
+    ],
+)
+def test_policy_costs_and_price_assertion_share_price_identity(
+    assertion_id: str,
+    field: str,
+    value: str,
+) -> None:
+    payload = _request_payload()
+    _assertion(payload, assertion_id)[field] = value
+    _assert_policy_and_request_reject(
+        payload, "share price basis and reporting currency"
+    )
+
+
+def test_policy_requires_exactly_one_price_assertion() -> None:
+    payload = _request_payload()
+    payload["binding_policy"]["assertions"] = [
+        item
+        for item in payload["binding_policy"]["assertions"]
+        if item["assertion_id"] != "assertion:price-basis"
+    ]
+    price_disposition = next(
+        item
+        for item in payload["binding_policy"]["material_dispositions"]
+        if item["category"] == "price_basis"
+    )
+    price_disposition["disposition"] = "explicitly_out_of_v1"
+    price_disposition["action"] = "exclude_from_v1_no_fallback"
+    _assert_policy_and_request_reject(payload, "exactly one price-basis assertion")
+
+
+def test_policy_basis_first_error_is_independent_of_assertion_order() -> None:
+    original = _request_payload()
+    _assertion(original, "assertion:wind-capacity")["capacity_basis"] = "gross"
+    _add_storage_technology(original)
+    _assertion(original, "assertion:bess-energy")["capacity_basis"] = "gross"
+    reordered = copy.deepcopy(original)
+    reordered["binding_policy"]["assertions"].sort(
+        key=lambda item: item["category"] != "storage_capacity"
+    )
+
+    for validate in (_validate_policy, _validate):
+        messages: list[str] = []
+        for payload in (original, reordered):
+            with pytest.raises(ValidationError) as exc_info:
+                validate(payload)
+            messages.append(exc_info.value.errors()[0]["msg"])
+        assert messages[0] == messages[1]
+        assert "generation capacity assertions" in messages[0]
 
 
 @pytest.mark.parametrize(
@@ -1695,6 +1852,17 @@ def test_generation_assertions_for_one_asset_share_one_basis(
             match="one ProjectCase asset must share electrical and capacity bases",
         ):
             validate(payload)
+
+
+def test_generation_assertions_for_one_asset_share_one_electrical_basis() -> None:
+    payload = _request_payload()
+    capacity = _assertion(payload, "assertion:wind-capacity")
+    capacity["electrical_basis"] = "ac"
+    capacity["expected_unit"] = "MWac"
+    _assert_policy_and_request_reject(
+        payload,
+        "one ProjectCase asset must share electrical and capacity bases",
+    )
 
 
 def test_unitized_generation_assertions_cannot_change_the_asset_basis() -> None:

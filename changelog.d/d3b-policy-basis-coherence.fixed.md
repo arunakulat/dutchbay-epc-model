@@ -1,3 +1,4 @@
-- Enforce each ProjectCase asset's single electrical/capacity basis directly in the public,
-  versioned `V14BindingPolicy` root. Standalone policies now refuse the same contradictory
-  generation and storage assertions already refused when nested in `EvaluationRequest`.
+- Close the complete internally visible compatibility-assertion graph directly in the public,
+  versioned `V14BindingPolicy` root. Standalone policies now refuse contradictory technology
+  ownership, capacity basis/key/kind, route completeness, jurisdiction identity and cost/price
+  identity before they can be masked by a containing `EvaluationRequest`.

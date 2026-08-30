@@ -1170,15 +1170,9 @@ class V14BindingPolicy(StrictFrozenModel):
         route_pairs: set[tuple[tuple[object, ...], tuple[object, ...]]] = set()
         target_routes: set[tuple[object, ...]] = set()
         cost_line_ids: set[str] = set()
-        generation_basis_by_asset: dict[
-            str, tuple[ElectricalBasis, GenerationCapacityBasis]
-        ] = {}
-        storage_basis_by_asset: dict[
-            str, tuple[StorageElectricalBasis, StorageCapacityBasis]
-        ] = {}
         source_route: tuple[object, ...]
         target_route: tuple[object, ...]
-        for assertion in self.assertions:
+        for assertion in _ordered_policy_assertions(self.assertions):
             if isinstance(assertion, ScenarioIdentityAssertion):
                 source_route = (assertion.category, assertion.project_case_selector)
                 target_route = (assertion.category, assertion.base_selector)
@@ -1200,19 +1194,6 @@ class V14BindingPolicy(StrictFrozenModel):
                 source_route = (assertion.category, assertion.asset_id)
                 target_route = (assertion.category, assertion.base_config_key)
             elif isinstance(assertion, GenerationCapacityAssertion):
-                generation_basis = (
-                    assertion.electrical_basis,
-                    assertion.capacity_basis,
-                )
-                prior_generation_basis = generation_basis_by_asset.setdefault(
-                    assertion.asset_id,
-                    generation_basis,
-                )
-                if prior_generation_basis != generation_basis:
-                    raise ValueError(
-                        "generation capacity assertions for one ProjectCase asset must "
-                        "share electrical and capacity bases"
-                    )
                 source_route = (
                     assertion.category,
                     assertion.asset_id,
@@ -1224,19 +1205,6 @@ class V14BindingPolicy(StrictFrozenModel):
                     assertion.base_selector,
                 )
             elif isinstance(assertion, StorageCapacityAssertion):
-                storage_basis = (
-                    assertion.electrical_basis,
-                    assertion.capacity_basis,
-                )
-                prior_storage_basis = storage_basis_by_asset.setdefault(
-                    assertion.asset_id,
-                    storage_basis,
-                )
-                if prior_storage_basis != storage_basis:
-                    raise ValueError(
-                        "storage capacity assertions for one ProjectCase asset must "
-                        "share electrical and capacity bases"
-                    )
                 source_route = (
                     assertion.category,
                     assertion.asset_id,
@@ -1295,6 +1263,7 @@ class V14BindingPolicy(StrictFrozenModel):
                     "compatibility assertions and material dispositions must agree for "
                     f"{category.value}"
                 )
+        _require_internal_policy_graph(self)
         return self
 
 
@@ -1346,6 +1315,166 @@ def _require_validation_modules(modules: tuple[ValidationModule, ...]) -> None:
     required = {ValidationModule.CASHFLOW, ValidationModule.DEBT}
     if not required.issubset(set(modules)):
         raise ValueError("validation modules must include cashflow and debt")
+
+
+def _ordered_policy_assertions(
+    assertions: tuple[CompatibilityAssertion, ...],
+) -> tuple[CompatibilityAssertion, ...]:
+    """Return a canonical validation order without changing authored tuple order."""
+    categories = tuple(ProjectCaseMaterialCategory)
+    return tuple(
+        sorted(
+            assertions,
+            key=lambda item: (categories.index(item.category), item.assertion_id),
+        )
+    )
+
+
+def _require_internal_policy_graph(policy: V14BindingPolicy) -> None:
+    """Close every relationship whose operands live inside one binding policy."""
+    assertions = _ordered_policy_assertions(policy.assertions)
+    technology_assertions = tuple(
+        item for item in assertions if isinstance(item, TechnologyBindingAssertion)
+    )
+    technology_by_asset = {item.asset_id: item for item in technology_assertions}
+    if len(technology_by_asset) != len(technology_assertions):
+        raise ValueError("technology assertions must use unique ProjectCase asset IDs")
+    _require_unique(
+        (item.technology_binding_id for item in technology_assertions),
+        "technology assertion binding ID",
+    )
+
+    jurisdiction_identity_by_binding: dict[str, tuple[str, JurisdictionSubject]] = {}
+    generation_by_asset: dict[str, list[GenerationCapacityAssertion]] = {}
+    storage_by_asset: dict[str, list[StorageCapacityAssertion]] = {}
+    cost_assertions: list[CostCompatibilityAssertion] = []
+    price_assertions: list[PriceBasisAssertion] = []
+
+    for assertion in assertions:
+        if isinstance(assertion, JurisdictionSubjectAssertion):
+            identity = (assertion.jurisdiction_code, assertion.subject)
+            prior_identity = jurisdiction_identity_by_binding.setdefault(
+                assertion.jurisdiction_binding_id,
+                identity,
+            )
+            if prior_identity != identity:
+                raise ValueError(
+                    "jurisdiction assertions for one binding ID must share exact "
+                    "jurisdiction code and subject"
+                )
+        elif isinstance(assertion, GenerationCapacityAssertion):
+            generation_by_asset.setdefault(assertion.asset_id, []).append(assertion)
+        elif isinstance(assertion, StorageCapacityAssertion):
+            storage_by_asset.setdefault(assertion.asset_id, []).append(assertion)
+        elif isinstance(assertion, CostCompatibilityAssertion):
+            cost_assertions.append(assertion)
+        elif isinstance(assertion, PriceBasisAssertion):
+            price_assertions.append(assertion)
+
+    for asset_id in sorted(generation_by_asset):
+        technology = technology_by_asset.get(asset_id)
+        if technology is None or (
+            technology.asset_class is not TechnologyAssetClass.GENERATION
+        ):
+            raise ValueError(
+                "generation capacity assertion requires a matching generation asset "
+                "technology assertion"
+            )
+        generation_assertions = generation_by_asset[asset_id]
+        for assertion in generation_assertions:
+            if (
+                assertion.authored_technology_kind
+                is not technology.authored_technology_kind
+            ):
+                raise ValueError(
+                    "generation capacity and technology assertions must use the same "
+                    "authored technology kind"
+                )
+            if (
+                assertion.base_config_key is not None
+                and assertion.base_config_key != technology.base_config_key
+            ):
+                raise ValueError(
+                    "generation capacity and technology assertions must use the same "
+                    "base config key"
+                )
+        generation_bases = {
+            (item.electrical_basis, item.capacity_basis)
+            for item in generation_assertions
+        }
+        if len(generation_bases) != 1:
+            raise ValueError(
+                "generation capacity assertions for one ProjectCase asset must share "
+                "electrical and capacity bases"
+            )
+
+    for asset_id in sorted(storage_by_asset):
+        technology = technology_by_asset.get(asset_id)
+        if technology is None or (
+            technology.asset_class is not TechnologyAssetClass.STORAGE
+        ):
+            raise ValueError(
+                "storage capacity assertion requires a matching storage asset "
+                "technology assertion"
+            )
+        storage_assertions = storage_by_asset[asset_id]
+        for assertion in storage_assertions:
+            if (
+                assertion.authored_technology_kind
+                is not technology.authored_technology_kind
+            ):
+                raise ValueError(
+                    "storage capacity and technology assertions must use the same "
+                    "authored technology kind"
+                )
+            if assertion.base_config_key != technology.base_config_key:
+                raise ValueError(
+                    "storage capacity and technology assertions must use the same base "
+                    "config key"
+                )
+        storage_bases = {
+            (item.electrical_basis, item.capacity_basis) for item in storage_assertions
+        }
+        if len(storage_bases) != 1:
+            raise ValueError(
+                "storage capacity assertions for one ProjectCase asset must share "
+                "electrical and capacity bases"
+            )
+
+    for technology in technology_assertions:
+        if technology.asset_class is TechnologyAssetClass.GENERATION:
+            has_technology_route = any(
+                item.base_config_key is not None
+                for item in generation_by_asset.get(technology.asset_id, ())
+            )
+            if not has_technology_route:
+                raise ValueError(
+                    "generation compatibility requires one per-technology capacity route"
+                )
+        else:
+            selectors = {
+                item.base_selector
+                for item in storage_by_asset.get(technology.asset_id, ())
+            }
+            if selectors != set(V14StorageCapacitySelector):
+                raise ValueError(
+                    "storage compatibility requires power, energy, and duration routes"
+                )
+
+    if len(price_assertions) != 1:
+        raise ValueError(
+            "v14 binding policy requires exactly one price-basis assertion"
+        )
+    price_assertion = price_assertions[0]
+    for cost_assertion in cost_assertions:
+        if (
+            cost_assertion.price_basis_id != price_assertion.price_basis_id
+            or cost_assertion.reporting_currency != price_assertion.reporting_currency
+        ):
+            raise ValueError(
+                "cost and price-basis assertions must share price basis and reporting "
+                "currency"
+            )
 
 
 def _require_internal_request_graph(request: EvaluationRequest) -> None:
@@ -1402,20 +1531,7 @@ def _require_internal_request_graph(request: EvaluationRequest) -> None:
 
     jurisdiction_assertions: set[str] = set()
     technology_assertions: set[str] = set()
-    technology_assertion_records = tuple(
-        assertion
-        for assertion in request.binding_policy.assertions
-        if isinstance(assertion, TechnologyBindingAssertion)
-    )
-    technology_assertion_by_asset = {
-        assertion.asset_id: assertion for assertion in technology_assertion_records
-    }
-    if len(technology_assertion_by_asset) != len(technology_assertion_records):
-        raise ValueError("technology assertions must use unique ProjectCase asset IDs")
-    generation_bindings: set[str] = set()
-    storage_selectors_by_binding: dict[str, set[V14StorageCapacitySelector]] = {}
-    price_assertion_count = 0
-    for assertion in request.binding_policy.assertions:
+    for assertion in _ordered_policy_assertions(request.binding_policy.assertions):
         if isinstance(assertion, ScenarioIdentityAssertion):
             if BaseConfigDomain.SCENARIO_IDENTITY not in retained_domains:
                 raise ValueError(
@@ -1476,29 +1592,7 @@ def _require_internal_request_graph(request: EvaluationRequest) -> None:
                 )
             technology_assertions.add(assertion.technology_binding_id)
         elif isinstance(assertion, GenerationCapacityAssertion):
-            technology_assertion = technology_assertion_by_asset.get(assertion.asset_id)
-            if technology_assertion is None or (
-                technology_assertion.asset_class is not TechnologyAssetClass.GENERATION
-            ):
-                raise ValueError(
-                    "generation capacity assertion requires a matching generation asset "
-                    "technology assertion"
-                )
-            if (
-                assertion.authored_technology_kind
-                is not technology_assertion.authored_technology_kind
-            ):
-                raise ValueError(
-                    "generation capacity and technology assertions must use the same "
-                    "authored technology kind"
-                )
             if assertion.base_config_key is not None:
-                if assertion.base_config_key != technology_assertion.base_config_key:
-                    raise ValueError(
-                        "generation capacity and technology assertions must use the same "
-                        "base config key"
-                    )
-                generation_bindings.add(technology_assertion.technology_binding_id)
                 required_domain = BaseConfigDomain.TECHNOLOGY_RESOURCE
             else:
                 required_domain = BaseConfigDomain.PROJECT_RESOURCE
@@ -1508,35 +1602,11 @@ def _require_internal_request_graph(request: EvaluationRequest) -> None:
                     "resource domain"
                 )
         elif isinstance(assertion, StorageCapacityAssertion):
-            technology_assertion = technology_assertion_by_asset.get(assertion.asset_id)
-            if technology_assertion is None or (
-                technology_assertion.asset_class is not TechnologyAssetClass.STORAGE
-            ):
-                raise ValueError(
-                    "storage capacity assertion requires a matching storage asset "
-                    "technology assertion"
-                )
-            if (
-                assertion.authored_technology_kind
-                is not technology_assertion.authored_technology_kind
-            ):
-                raise ValueError(
-                    "storage capacity and technology assertions must use the same "
-                    "authored technology kind"
-                )
-            if assertion.base_config_key != technology_assertion.base_config_key:
-                raise ValueError(
-                    "storage capacity and technology assertions must use the same base "
-                    "config key"
-                )
             if BaseConfigDomain.TECHNOLOGY_RESOURCE not in retained_domains:
                 raise ValueError(
                     "storage capacity assertion requires retained authored "
                     "technology resources"
                 )
-            storage_selectors_by_binding.setdefault(
-                technology_assertion.technology_binding_id, set()
-            ).add(assertion.base_selector)
         elif isinstance(assertion, CostCompatibilityAssertion):
             required_domain = {
                 ProjectCaseMaterialCategory.CAPEX: BaseConfigDomain.CAPEX,
@@ -1554,7 +1624,6 @@ def _require_internal_request_graph(request: EvaluationRequest) -> None:
                     "cost assertions must match scope price basis and reporting currency"
                 )
         elif isinstance(assertion, PriceBasisAssertion):
-            price_assertion_count += 1
             if (
                 assertion.price_basis_id != request.scope.price_basis_id
                 or assertion.valuation_date != request.scope.valuation_date
@@ -1572,32 +1641,6 @@ def _require_internal_request_graph(request: EvaluationRequest) -> None:
     if technology_assertions != set(scope_technologies):
         raise ValueError(
             "compatibility assertions must cover every scoped technology binding"
-        )
-    generation_scope = {
-        binding_id
-        for binding_id, (_, asset_class) in scope_technologies.items()
-        if asset_class is TechnologyAssetClass.GENERATION
-    }
-    if generation_scope and generation_bindings != generation_scope:
-        raise ValueError(
-            "generation compatibility requires one per-technology capacity route"
-        )
-    storage_scope = {
-        binding_id
-        for binding_id, (_, asset_class) in scope_technologies.items()
-        if asset_class is TechnologyAssetClass.STORAGE
-    }
-    required_storage_selectors = set(V14StorageCapacitySelector)
-    for binding_id in storage_scope:
-        if storage_selectors_by_binding.get(binding_id, set()) != (
-            required_storage_selectors
-        ):
-            raise ValueError(
-                "storage compatibility requires power, energy, and duration routes"
-            )
-    if price_assertion_count != 1:
-        raise ValueError(
-            "evaluation request requires exactly one price-basis assertion"
         )
 
 

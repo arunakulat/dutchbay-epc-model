@@ -1,6 +1,6 @@
 # Dolphin 3B-0 standalone-policy basis-coherence remediation record
 
-**Status:** implementation candidate; independent domain and assurance dispositions pending
+**Status:** successor implementation candidate; fresh domain and assurance dispositions pending
 
 **Base:** protected `main` at `9e1c6fae6220551754c23535caeaa86b37422230`
 
@@ -75,11 +75,11 @@ The pull request may merge under `MERGE-01` only when those dispositions are dur
 current and conflict-free, and every required exact-head CI check is successful. That delivery
 authority cannot lift issue `#1110`, whose Board/lender/release `HOLD` remains outside this change.
 
-## 5. Local pre-review receipt
+## 5. First-candidate local pre-review receipt
 
-The implementation candidate was tested from the governed Python 3.12 environment with the active
-worktree first on `PYTHONPATH`. No finance, application, API or D2 implementation file differs from
-the protected-main base.
+Candidate `b2854c0530e4c58413896ac306a41bd624f6d559` was tested from the governed Python
+3.12 environment with the active worktree first on `PYTHONPATH`. No finance, application, API or D2
+implementation file differed from the protected-main base.
 
 | Control | Result |
 |---|---|
@@ -95,5 +95,64 @@ the protected-main base.
 | Draft 2020-12 validation and serialization schemas | valid |
 | In-memory compilation, forbidden-import AST scan and `git diff --check` | passed |
 
-These are local implementation controls, not independent acceptance and not a substitute for the
-exact-head required GitHub checks.
+These were local implementation controls, not independent acceptance and not a substitute for the
+exact-head required GitHub checks. Both independent reviewers later vetoed this candidate; see
+`DOLPHIN_3B_POLICY_ROOT_INDEPENDENT_REVIEW_RECORD.md`.
+
+## 6. Veto and complete-graph successor
+
+The independent reviews bound to `b2854c0…` proved that moving only the basis maps did not close the
+public-root ownership defect. Nine additional contradictions wholly visible inside the policy tuple
+could still be accepted standalone and refused only by the containing request. The immutable VETO,
+exact fingerprints and counterexamples are preserved in the independent review record rather than
+rewritten here.
+
+The successor candidate invokes one policy-internal graph control from `V14BindingPolicy`. In a
+canonical category/assertion order and sorted physical-asset order it now:
+
+- requires unique technology physical owners and binding IDs;
+- requires every generation/storage capacity assertion to name the same-asset technology owner,
+  class, authored kind and technology-level config key;
+- retains one electrical/capacity basis tuple per physical asset;
+- requires every generation technology to have a technology capacity route and every storage
+  technology to carry exact power, energy and duration routes;
+- allows one jurisdiction binding to route across authored domains only while its jurisdiction code
+  and subject remain identical;
+- requires exactly one price-basis assertion and reconciles every cost assertion's price-basis and
+  reporting-currency identities to it; and
+- removes the duplicate policy-owned checks from the outer request graph, which retains only
+  scope/base/domain/authority comparisons.
+
+The durable successor tests validate every migrated negative at the standalone policy first and the
+containing request second. They add the assurance review's isolated electrical-basis case and prove
+that reordering one simultaneous generation/storage conflict cannot change its first-error family.
+Consistent cross-domain jurisdiction routing, wind-only, solar DC, hybrid and storage-only positives
+remain accepted.
+
+This successor is not self-accepted. It requires a new immutable commit, fresh independent domain
+and assurance review against that exact SHA, exact-head required CI, current protected-main ancestry
+and a conflict-free PR before `MERGE-01` can apply. No finding in either review, and no later green
+check or merge, can lift issue `#1110` or confer grade, lender, Board, release or deployment
+authority.
+
+## 7. Successor local pre-review receipt
+
+The uncommitted successor tree was tested from the governed Python 3.12 environment with the active
+worktree first on `PYTHONPATH`:
+
+| Control | Result |
+|---|---|
+| Complete D3B-0 assessment-scope contract | `150 passed` |
+| Complete contract suite | `806 passed` |
+| D3A ProjectCase predecessor regression | `330 passed` |
+| D2 machine-contract predecessor regression | `298 passed` |
+| Contract-package branch coverage | `94.54%` total; modified assessment-scope module `96.64%` |
+| Ruff check and format check | passed |
+| Black and isort checks | passed |
+| Mypy `--no-incremental` on the assessment-scope export surface | passed |
+| Both Draft 2020-12 schema modes, strict/frozen ingress and public exports | passed in the focused suite |
+| Forbidden-import/excluded-surface controls and `git diff --check` | passed |
+
+The complete suite emitted only the repository's pre-existing Hypothesis `norecursedirs` warning.
+These are local controls on a moving implementation tree. They do not replace the required fresh
+independent dispositions, the immutable candidate rebind or exact-head GitHub checks.
