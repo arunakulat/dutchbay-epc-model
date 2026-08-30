@@ -445,3 +445,51 @@ The test suites emitted only the repository's pre-existing Hypothesis `norecurse
 mypy emitted only its pre-existing unused-configuration-section warning. This remains a local
 receipt, not self-acceptance. A new immutable SHA requires fresh independent domain and assurance
 dispositions, current protected-main ancestry, a conflict-free PR and exact-head required CI.
+
+## 13. Identity-only trusted-model successor correction
+
+Independent review of `e1e3c01a0d11694d51130f5d5d115008c971500a` proved that Section 13's
+dictionary-subclass dispatch defect was closed, but both reviewers found a remaining caller hook.
+The exact child type was tested for membership in a tuple of trusted model classes; tuple membership
+uses rich equality. A malformed child class could therefore execute metaclass equality and escape a
+caller exception before bounded validation. The exact dual VETO is preserved in the independent
+review record.
+
+The bounded successor removes the trusted-type collection entirely. It compares the value returned
+by built-in `type()` with each of the eight exact compatibility-assertion classes using an explicit
+`is` chain. No membership, equality or hash operation participates. Exact built-in dictionaries
+retain their non-dispatching field extraction; every untrusted class remains opaque and proceeds to
+the existing child validator and bounded error projection.
+
+A durable control supplies an opaque child whose class equality would raise if called. The same
+exact object is validated twice at standalone policy and containing request roots; the complete
+URL-enabled error, string and JSON receipts must match and the equality-call ledger must remain
+empty. All dictionary-subclass, scalar, duplicate/distinct-ID, strictness, ownership, matrix,
+schema and successful authored-order controls remain mandatory.
+
+This correction changes only the identity test for trusted validated models. It changes no accepted
+domain semantic, ProjectCase topology, evaluation, finance, application, grade, release or `HOLD`
+authority. It remains a local successor until governed gates and fresh exact-SHA reviews pass.
+
+### 13.1 Local successor receipt
+
+| Control | Result |
+|---|---|
+| Complete D3B-0 assessment-scope contract | `297 passed` |
+| Complete contract suite | `953 passed` |
+| D3A ProjectCase predecessor regression | `330 passed` |
+| D2 machine-contract predecessor regression | `298 passed` |
+| Contract-package branch coverage | `94.66%` total; modified assessment-scope module `96.94%` |
+| Trusted-class metaclass equality negative control | passed at both public roots |
+| Existing dictionary-subclass, scalar, duplicate-ID, distinct-ID and authored-order controls | passed |
+| Ruff check and format check | passed |
+| Black and isort checks | passed |
+| Mypy `--no-incremental` on the assessment-scope export surface | passed |
+| Both Draft 2020-12 schema modes, strict/frozen ingress and public exports | passed in the focused suite |
+| Import/changelog tests and in-memory compilation | `17 passed`; compilation passed |
+| Forbidden-import/excluded-surface controls and `git diff --check` | passed |
+
+The test suites emitted only the repository's pre-existing Hypothesis `norecursedirs` warning;
+mypy emitted only its pre-existing unused-configuration-section warning. This is not
+self-acceptance. A new immutable SHA still requires fresh independent domain and assurance
+dispositions, current protected-main ancestry, a conflict-free PR and exact-head required CI.

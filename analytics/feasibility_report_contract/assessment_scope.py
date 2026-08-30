@@ -1143,16 +1143,6 @@ CompatibilityAssertion = Annotated[
     ],
     Field(discriminator="kind"),
 ]
-_COMPATIBILITY_ASSERTION_MODEL_TYPES = (
-    ScenarioIdentityAssertion,
-    LocationAssertion,
-    JurisdictionSubjectAssertion,
-    TechnologyBindingAssertion,
-    GenerationCapacityAssertion,
-    StorageCapacityAssertion,
-    CostCompatibilityAssertion,
-    PriceBasisAssertion,
-)
 _COMPATIBILITY_ASSERTION_ADAPTER: TypeAdapter[CompatibilityAssertion] = TypeAdapter(
     CompatibilityAssertion
 )
@@ -1162,11 +1152,21 @@ def _raw_policy_assertion_sort_key(
     raw_assertion: Any,
 ) -> tuple[int, str, str, str]:
     """Return the policy's canonical child-validation key for raw input."""
-    if type(raw_assertion) is dict:
+    raw_assertion_type = type(raw_assertion)
+    if raw_assertion_type is dict:
         raw_category = dict.get(raw_assertion, "category")
         raw_assertion_id = dict.get(raw_assertion, "assertion_id")
         raw_kind = dict.get(raw_assertion, "kind")
-    elif type(raw_assertion) in _COMPATIBILITY_ASSERTION_MODEL_TYPES:
+    elif (
+        raw_assertion_type is ScenarioIdentityAssertion
+        or raw_assertion_type is LocationAssertion
+        or raw_assertion_type is JurisdictionSubjectAssertion
+        or raw_assertion_type is TechnologyBindingAssertion
+        or raw_assertion_type is GenerationCapacityAssertion
+        or raw_assertion_type is StorageCapacityAssertion
+        or raw_assertion_type is CostCompatibilityAssertion
+        or raw_assertion_type is PriceBasisAssertion
+    ):
         raw_fields = object.__getattribute__(raw_assertion, "__dict__")
         raw_category = dict.get(raw_fields, "category")
         raw_assertion_id = dict.get(raw_fields, "assertion_id")

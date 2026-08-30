@@ -2564,6 +2564,61 @@ def test_policy_raw_key_extraction_does_not_dispatch_dict_subclasses() -> None:
         assert hostile_child.get_calls == 0
 
 
+def test_policy_raw_key_type_allowlist_uses_identity_only() -> None:
+    equality_calls: list[object] = []
+    trusted_types = (
+        assessment_scope_contract.ScenarioIdentityAssertion,
+        assessment_scope_contract.LocationAssertion,
+        JurisdictionSubjectAssertion,
+        assessment_scope_contract.TechnologyBindingAssertion,
+        GenerationCapacityAssertion,
+        StorageCapacityAssertion,
+        CostCompatibilityAssertion,
+        assessment_scope_contract.PriceBasisAssertion,
+    )
+
+    class RaisingEqualityMeta(type):
+        def __eq__(cls, other: object) -> bool:
+            if any(other is trusted_type for trusted_type in trusted_types):
+                equality_calls.append(other)
+                raise RuntimeError("trusted-class equality must not execute")
+            return cls is other
+
+        __hash__ = type.__hash__
+
+    class OpaqueChild(metaclass=RaisingEqualityMeta):
+        pass
+
+    payload = _validate(_request_payload()).model_dump()
+    payload["binding_policy"]["assertions"] = (
+        OpaqueChild(),
+        {
+            "kind": "unknown_regular_assertion",
+            "category": "location",
+            "assertion_id": "assertion:regular-child",
+        },
+    )
+
+    for root in ("policy", "request"):
+        receipts: list[dict[str, object]] = []
+        for _ in range(2):
+            with pytest.raises(ValidationError) as exc_info:
+                if root == "policy":
+                    V14BindingPolicy.model_validate(payload["binding_policy"])
+                else:
+                    EvaluationRequest.model_validate(payload)
+            receipts.append(
+                {
+                    "errors": exc_info.value.errors(),
+                    "text": str(exc_info.value),
+                    "json": exc_info.value.json(),
+                }
+            )
+        assert receipts[0] == receipts[1]
+
+    assert equality_calls == []
+
+
 def test_policy_canonical_child_validator_preserves_python_strictness() -> None:
     policy = _validate_policy(_request_payload())
     normalized = policy.model_dump()
