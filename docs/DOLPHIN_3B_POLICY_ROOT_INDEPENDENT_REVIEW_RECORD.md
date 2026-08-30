@@ -892,3 +892,93 @@ The protected-base-to-candidate binary diff SHA-256 was
 
 Candidate `e1e3c01…` must remain unmerged. Both VETOs control delivery. No result changes grade,
 evidence, lender, Board, release, deployment, issue or `HOLD` authority.
+
+## 15. Successor review — raw collection and accepted subclass dispatch remain
+
+**Controlling disposition:** VETO
+
+**Reviewed implementation:** `b035ae0a920f447e3316882b0f5744112532dd51`
+
+**Reviewed tree:** `6ec5d6a3e80a073e8662a850f66ba52453ad3dfe`
+
+Two fresh context-clean independent reviewers issued `VETO`. They proved that Section 14's
+identity-only trusted-type correction is sound and accepted every preserved semantic, diagnostic,
+schema and successful-wire control. They then identified remaining caller-dispatch paths at the raw
+collection boundary and after the child adapter accepts a trusted-model subclass.
+
+### 15.1 Remaining dispatch paths
+
+Three related cases control:
+
+1. The collection wrapper tests raw collection shape with `isinstance`. A noncollection object's
+   dynamic class behavior can therefore raise before the strict tuple handler receives it. Direct
+   strict Pydantic tuple validation refuses the same value with a bounded `ValidationError` and no
+   hook call.
+2. A tuple subclass passes the wrapper's `isinstance` check and is then iterated by the wrapper. An
+   overridden iterator can execute and escape at both public roots.
+3. The discriminated child adapter can return a subclass instance of a trusted compatibility model.
+   The outcome sorter then calls its dynamically dispatched `model_dump_json()` method. An
+   overridden method can execute and escape at both public roots.
+
+There is no false accept. These are bounded-error and caller-code-execution defects introduced by
+the wrapper around otherwise strict validation. The exact child-type `is` chain itself calls no
+class equality and remains accepted.
+
+### 15.2 Accepted evidence preserved
+
+- the Section 14 equality ledger remains empty and repeated policy/request receipts are stable;
+- dictionary subclasses remain opaque and their overridden `get()` methods are not called;
+- scalar, duplicate-ID and distinct-ID complete diagnostic receipts remain canonical;
+- all 28 admissible and 107 impossible subject/domain pairs behave correctly at assertion, base,
+  policy and request roots;
+- all inherited negative and constructive positive policy families behave correctly;
+- D3A shared-binding topology remains valid and distinct from D3B-v1's documented limitation;
+- successful validation/serialization schemas, wire shape and exact authored order remain intact;
+- semantic ownership, external-route layering and import boundaries remain unchanged; and
+- exact-head required CI and all six test shards were green.
+
+The focused D3B, complete-contract, D3A and D2 suites passed `297`, `953`, `330` and `298` tests.
+Package/module branch coverage was `94.66%`/`96.94%`. Governed Python `3.12.13`, 73 active rules,
+format, lint, typing, import/changelog, compilation, excluded-surface and diff checks passed. Green
+gates do not override the dual VETO.
+
+### 15.3 Required bounded correction
+
+The next successor must decide raw collection shape using built-in `type()` and exact object
+identity only. Exact JSON lists and exact Python tuples may enter canonical child processing; every
+other value must receive one constant-input bounded collection error without caller-dispatched
+class, iteration, indexing or representation behavior.
+
+After child delegation, only exact instances of the eight trusted compatibility model classes may
+be treated as successful children or serialized for an outcome key. A model subclass returned by
+the adapter must be converted to a bounded invalid-child receipt before any overridable model method
+is invoked.
+
+Durable controls must cover a dynamic-class noncollection, a tuple subclass with an overridden
+iterator, and a trusted-model subclass with an overridden serialization method at both public roots,
+with repeated complete structured/text/JSON receipt equality and zero hook calls. All Sections
+1–14 controls remain mandatory.
+
+### 15.4 Exact review receipt
+
+At review close, local `HEAD`, upstream, live remote topic, pull ref and draft-PR head were all
+`b035ae0…`; the tree was `6ec5d6a3e80a073e8662a850f66ba52453ad3dfe`; protected/live
+`origin/main` and the PR base were `9e1c6fae6220551754c23535caeaa86b37422230`; the topic was
+zero behind and seventeen commits ahead; and the worktree was clean. The PR was open, draft,
+mergeable and clean. Issue `#1110` remained `OPEN`; no `HOLD` changed.
+
+Candidate fingerprints:
+
+| File | SHA-256 |
+|---|---|
+| `analytics/feasibility_report_contract/assessment_scope.py` | `e0bbfa22e989b35df31cf1961bfae5d82b7261d0e50997a14ff3910ce4ec622a` |
+| `tests/contracts/test_assessment_scope_contract.py` | `254cb3a3407be1ced48d8457b9dd930a82a2ffa3c5a9c283d9e47cbf5feb9ddf` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_REMEDIATION_RECORD.md` | `7483086ba7cf7c6cd4d61d444195460e88cc266a083f8b4bd8647760731080fb` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_INDEPENDENT_REVIEW_RECORD.md` | `c770dd14d5e63102832b3bf506492d4ffdac8fec361fe02b7dd265a90f00f63c` |
+| `changelog.d/d3b-policy-basis-coherence.fixed.md` | `2ca24dfe26048cad468a6d3661c6febd91c5f0155ccb0d71b82cdc29674e70aa` |
+
+The protected-base-to-candidate binary diff SHA-256 was
+`34146ac17d943229c6001e80963616dafe265b5c3e09732e4411871661b6bfff`.
+
+Candidate `b035ae0…` must remain unmerged. Both VETOs control delivery. No result changes grade,
+evidence, lender, Board, release, deployment, issue or `HOLD` authority.
