@@ -2215,7 +2215,7 @@ print(json.dumps(outcomes, sort_keys=True))
 def test_policy_duplicate_id_child_errors_use_total_outcome_order() -> None:
     json_payload = _request_payload()
     python_payload = _validate(_request_payload()).model_dump()
-    receipts: dict[str, list[tuple[tuple[str, tuple[object, ...], str], ...]]] = {
+    receipts: dict[str, list[tuple[dict[str, Any], ...]]] = {
         "policy": [],
         "request": [],
     }
@@ -2266,20 +2266,20 @@ def test_policy_duplicate_id_child_errors_use_total_outcome_order() -> None:
                         V14BindingPolicy.model_validate(payload["binding_policy"])
                     else:
                         EvaluationRequest.model_validate(payload)
-                receipts[root].append(
-                    tuple(
-                        (error["type"], tuple(error["loc"]), error["msg"])
-                        for error in exc_info.value.errors(include_url=False)
-                    )
-                )
+                errors = tuple(exc_info.value.errors(include_url=False))
+                assert {error["input"] for error in errors} == {
+                    "<invalid compatibility assertion>"
+                }
+                assert all("ctx" not in error for error in errors)
+                receipts[root].append(errors)
 
     assert receipts["policy"] == [receipts["policy"][0]] * 4
     assert receipts["request"] == [receipts["request"][0]] * 4
-    assert [issue[1] for issue in receipts["policy"][0]] == [
+    assert [tuple(issue["loc"]) for issue in receipts["policy"][0]] == [
         ("assertions", 2, "jurisdiction_subject_assertion"),
         ("assertions", 3, "jurisdiction_subject_assertion"),
     ]
-    assert [issue[2] for issue in receipts["policy"][0]] == [
+    assert [issue["msg"] for issue in receipts["policy"][0]] == [
         "Value error, jurisdiction subject site cannot govern tax_statutory",
         "Value error, jurisdiction subject tax cannot govern project_resource",
     ]
@@ -2350,10 +2350,7 @@ for mode, source in (("json", json_source), ("python", python_source)):
                 else:
                     EvaluationRequest.model_validate(payload)
             except ValidationError as exc:
-                errors = [
-                    {"type": issue["type"], "loc": issue["loc"], "msg": issue["msg"]}
-                    for issue in exc.errors(include_url=False)
-                ]
+                errors = exc.errors(include_url=False)
                 outcomes.append({"mode": mode, "root": root, "errors": errors})
             else:
                 raise SystemExit("invalid duplicate-ID children accepted")
@@ -2381,6 +2378,127 @@ print(json.dumps(outcomes, sort_keys=True))
     for root in ("policy", "request"):
         root_receipts = [item["errors"] for item in outcomes if item["root"] == root]
         assert root_receipts == [root_receipts[0]] * 4
+
+
+def test_policy_fully_tied_child_errors_have_bounded_public_surface() -> None:
+    json_source = _request_payload()
+    python_source = _validate(_request_payload()).model_dump()
+    receipts: dict[tuple[str, str], list[dict[str, object]]] = {}
+
+    for mode, source in (("json", json_source), ("python", python_source)):
+        for scalar_children in ((1, 2), (2, 1)):
+            payload = copy.deepcopy(source)
+            payload["binding_policy"]["assertions"] = (
+                list(scalar_children) if mode == "json" else scalar_children
+            )
+            for root in ("policy", "request"):
+                with pytest.raises(ValidationError) as exc_info:
+                    if (mode, root) == ("json", "policy"):
+                        V14BindingPolicy.model_validate_json(
+                            json.dumps(payload["binding_policy"])
+                        )
+                    elif (mode, root) == ("json", "request"):
+                        EvaluationRequest.model_validate_json(json.dumps(payload))
+                    elif root == "policy":
+                        V14BindingPolicy.model_validate(payload["binding_policy"])
+                    else:
+                        EvaluationRequest.model_validate(payload)
+
+                errors = exc_info.value.errors(include_url=False)
+                receipts.setdefault((mode, root), []).append(
+                    {
+                        "errors": errors,
+                        "text": str(exc_info.value),
+                        "json": exc_info.value.json(include_url=False),
+                    }
+                )
+                assert {error["input"] for error in errors} == {
+                    "<invalid compatibility assertion>"
+                }
+                assert all("ctx" not in error for error in errors)
+
+    for mode in ("json", "python"):
+        for root in ("policy", "request"):
+            mode_root_receipts = receipts[(mode, root)]
+            assert mode_root_receipts == [mode_root_receipts[0]] * 2
+
+
+def test_policy_fully_tied_child_errors_are_hash_seed_stable() -> None:
+    script = """
+import copy
+import json
+import sys
+from pydantic import ValidationError
+from analytics.feasibility_report_contract import EvaluationRequest, V14BindingPolicy
+
+json_source = json.loads(sys.stdin.read())
+python_source = EvaluationRequest.model_validate_json(
+    json.dumps(json_source)
+).model_dump()
+outcomes = []
+for mode, source in (("json", json_source), ("python", python_source)):
+    for scalar_children in ((1, 2), (2, 1)):
+        payload = copy.deepcopy(source)
+        payload["binding_policy"]["assertions"] = (
+            list(scalar_children) if mode == "json" else scalar_children
+        )
+        for root in ("policy", "request"):
+            try:
+                if (mode, root) == ("json", "policy"):
+                    V14BindingPolicy.model_validate_json(
+                        json.dumps(payload["binding_policy"])
+                    )
+                elif (mode, root) == ("json", "request"):
+                    EvaluationRequest.model_validate_json(json.dumps(payload))
+                elif root == "policy":
+                    V14BindingPolicy.model_validate(payload["binding_policy"])
+                else:
+                    EvaluationRequest.model_validate(payload)
+            except ValidationError as exc:
+                outcomes.append(
+                    {
+                        "mode": mode,
+                        "root": root,
+                        "errors": exc.errors(include_url=False),
+                        "text": str(exc),
+                        "json": json.loads(exc.json(include_url=False)),
+                    }
+                )
+            else:
+                raise SystemExit("invalid scalar children accepted")
+print(json.dumps(outcomes, sort_keys=True))
+"""
+    receipts: set[str] = set()
+    for seed in range(8):
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=_ROOT,
+            env={
+                **dict(__import__("os").environ),
+                "PYTHONHASHSEED": str(seed),
+                "PYTHONPATH": str(_ROOT),
+            },
+            input=json.dumps(_request_payload()),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        receipts.add(completed.stdout.strip().splitlines()[-1])
+
+    assert len(receipts) == 1
+    outcomes = json.loads(receipts.pop())
+    for mode in ("json", "python"):
+        for root in ("policy", "request"):
+            mode_root_receipts = [
+                {
+                    "errors": item["errors"],
+                    "text": item["text"],
+                    "json": item["json"],
+                }
+                for item in outcomes
+                if item["mode"] == mode and item["root"] == root
+            ]
+            assert mode_root_receipts == [mode_root_receipts[0]] * 2
 
 
 def test_policy_canonical_child_validator_preserves_python_strictness() -> None:

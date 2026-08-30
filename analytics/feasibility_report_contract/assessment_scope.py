@@ -36,7 +36,7 @@ from pydantic import (
     model_validator,
 )
 from pydantic.json_schema import JsonSchemaValue
-from pydantic_core import CoreSchema
+from pydantic_core import CoreSchema, PydanticCustomError
 
 from analytics.run_modes import RunMode
 
@@ -88,6 +88,7 @@ _ASSESSMENT_JURISDICTION_CODE_PATTERN = r"^[A-Z0-9][A-Z0-9_-]{1,31}(?![\s\S])"
 _ASSESSMENT_CURRENCY_CODE_PATTERN = r"^[A-Z]{3}(?![\s\S])"
 _BINDING_UNIT_TOKEN_PATTERN = r"^[A-Za-z0-9%][A-Za-z0-9%._/*^()\-]{0,63}(?![\s\S])"
 _STABLE_IDENTIFIER_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:/-]*(?![\s\S])"
+_INVALID_COMPATIBILITY_ASSERTION_INPUT = "<invalid compatibility assertion>"
 _SEMVER_NUMERIC_IDENTIFIER = r"(?:0|[1-9][0-9]*)"
 _SEMVER_PRERELEASE_IDENTIFIER = r"(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
 _PROJECT_CASE_SEMVER_PATTERN = (
@@ -1209,6 +1210,18 @@ def _child_validation_outcome_sort_key(
     )
 
 
+def _bounded_child_line_error(
+    error: dict[str, Any],
+    canonical_index: int,
+) -> dict[str, Any]:
+    """Return one deterministic child error without raw input or context."""
+    return {
+        "type": PydanticCustomError(str(error["type"]), str(error["msg"])),
+        "loc": (canonical_index, *error["loc"]),
+        "input": _INVALID_COMPATIBILITY_ASSERTION_INPUT,
+    }
+
+
 @dataclass(frozen=True, slots=True)
 class _PolicyAssertionValidationBundle:
     """One independently validated child plus canonical ordering metadata."""
@@ -1329,9 +1342,9 @@ class V14BindingPolicy(StrictFrozenModel):
         canonical_errors: list[Any] = []
         for canonical_index, bundle in enumerate(canonical_bundles):
             for error in bundle.child_errors:
-                line_error = dict(error)
-                line_error["loc"] = (canonical_index, *error["loc"])
-                canonical_errors.append(line_error)
+                canonical_errors.append(
+                    _bounded_child_line_error(error, canonical_index)
+                )
         if canonical_errors:
             raise ValidationError.from_exception_data(
                 "V14BindingPolicy.assertions",

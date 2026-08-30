@@ -324,3 +324,66 @@ implementation receipt, not self-acceptance. A new immutable SHA requires fresh 
 assurance review, current protected-main ancestry, a conflict-free PR and exact-head required CI.
 No outcome can lift issue `#1110` or confer grade, evidence, lender, Board, release or deployment
 authority.
+
+## 11. Bounded emitted-child-error successor correction
+
+Independent review of `d1d86028da255f92052a53bdbecef740bd44c3a5` accepted the bounded
+domain semantics but found another assurance defect. The candidate ordered invalid children by a
+declared category/identity key plus error type, inner location and message. Two scalar children
+`[1, 2]` and `[2, 1]` collide on both keys, while the reconstructed Pydantic errors retained each
+raw child as public `input`. Exchanging the children therefore exchanged the complete public error
+objects even though both payloads refused. The exact domain ACCEPT, controlling assurance VETO and
+counterexample are preserved in the independent review record.
+
+The bounded successor makes fully tied diagnostic bundles observably identical:
+
+- child validation and semantic ordering remain delegated to `CompatibilityAssertion`;
+- the declared key and bounded type/location/message outcome signature remain unchanged;
+- each reconstructed invalid-child error uses a `PydanticCustomError` carrying the original stable
+  error type and message;
+- the public raw child and potentially identity-bearing error context are omitted and replaced by
+  the constant input token `<invalid compatibility assertion>`;
+- canonical collection locations remain assigned after semantic sorting; and
+- authored position remains solely the restoration address for completely successful validation.
+
+The correction deliberately does not sort on `repr(input)`: hostile Python objects can be
+unbounded, stateful, identity-bearing or cyclic. It also does not duplicate the jurisdiction matrix
+or change any successful wire payload.
+
+Durable controls compare `[1, 2]` with `[2, 1]` at standalone policy and containing request roots,
+in JSON and normalized strict-Python modes. They require equality of the complete default
+`errors(include_url=False)` payload, `str(exc)` and `exc.json(include_url=False)`, assert the bounded
+input token and absence of raw `ctx`, and repeat the complete receipt in eight fresh hash-seed
+processes. The duplicate-ID, distinct-ID, successful authored-order, strictness, ownership and
+matrix controls remain mandatory.
+
+This changes only the bounded child-error projection. It does not change accepted domain semantics,
+ProjectCase topology, evaluation, finance, application, grade, release or `HOLD` authority. This is
+a local successor design until the implementation passes the governed gates and receives fresh
+independent review on one immutable SHA.
+
+### 11.1 Local successor receipt
+
+| Control | Result |
+|---|---|
+| Complete D3B-0 assessment-scope contract | `295 passed` |
+| Complete contract suite | `951 passed` |
+| D3A ProjectCase predecessor regression | `330 passed` |
+| D2 machine-contract predecessor regression | `298 passed` |
+| Contract-package branch coverage | `94.65%` total; modified assessment-scope module `96.93%` |
+| Scalar both-order/both-root/JSON/Python complete public-error controls | passed |
+| Eight-process scalar hash-seed complete public-error control | passed |
+| Duplicate-ID full-error, distinct-ID permutation and authored-order controls | passed |
+| Ruff check and format check | passed |
+| Black and isort checks | passed |
+| Mypy `--no-incremental` on the assessment-scope export surface | passed |
+| Both Draft 2020-12 schema modes, strict/frozen ingress and public exports | passed in the focused suite |
+| Import/changelog tests and in-memory compilation | `17 passed`; compilation passed |
+| Forbidden-import/excluded-surface controls and `git diff --check` | passed |
+| Governed environment and canonical bootstrap | Python `3.12.13`; `73` of `73` rules active |
+
+The test suites emitted only the repository's pre-existing Hypothesis `norecursedirs` warning;
+mypy emitted only its pre-existing unused-configuration-section warning. These local receipts are
+not self-acceptance. A new immutable SHA still requires fresh independent domain and assurance
+dispositions, current protected-main ancestry, a conflict-free PR and exact-head required CI before
+`MERGE-01` can apply.
