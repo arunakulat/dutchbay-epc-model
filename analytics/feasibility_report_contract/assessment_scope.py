@@ -1170,6 +1170,12 @@ class V14BindingPolicy(StrictFrozenModel):
         route_pairs: set[tuple[tuple[object, ...], tuple[object, ...]]] = set()
         target_routes: set[tuple[object, ...]] = set()
         cost_line_ids: set[str] = set()
+        generation_basis_by_asset: dict[
+            str, tuple[ElectricalBasis, GenerationCapacityBasis]
+        ] = {}
+        storage_basis_by_asset: dict[
+            str, tuple[StorageElectricalBasis, StorageCapacityBasis]
+        ] = {}
         source_route: tuple[object, ...]
         target_route: tuple[object, ...]
         for assertion in self.assertions:
@@ -1194,6 +1200,19 @@ class V14BindingPolicy(StrictFrozenModel):
                 source_route = (assertion.category, assertion.asset_id)
                 target_route = (assertion.category, assertion.base_config_key)
             elif isinstance(assertion, GenerationCapacityAssertion):
+                generation_basis = (
+                    assertion.electrical_basis,
+                    assertion.capacity_basis,
+                )
+                prior_generation_basis = generation_basis_by_asset.setdefault(
+                    assertion.asset_id,
+                    generation_basis,
+                )
+                if prior_generation_basis != generation_basis:
+                    raise ValueError(
+                        "generation capacity assertions for one ProjectCase asset must "
+                        "share electrical and capacity bases"
+                    )
                 source_route = (
                     assertion.category,
                     assertion.asset_id,
@@ -1205,6 +1224,19 @@ class V14BindingPolicy(StrictFrozenModel):
                     assertion.base_selector,
                 )
             elif isinstance(assertion, StorageCapacityAssertion):
+                storage_basis = (
+                    assertion.electrical_basis,
+                    assertion.capacity_basis,
+                )
+                prior_storage_basis = storage_basis_by_asset.setdefault(
+                    assertion.asset_id,
+                    storage_basis,
+                )
+                if prior_storage_basis != storage_basis:
+                    raise ValueError(
+                        "storage capacity assertions for one ProjectCase asset must "
+                        "share electrical and capacity bases"
+                    )
                 source_route = (
                     assertion.category,
                     assertion.asset_id,
@@ -1381,13 +1413,7 @@ def _require_internal_request_graph(request: EvaluationRequest) -> None:
     if len(technology_assertion_by_asset) != len(technology_assertion_records):
         raise ValueError("technology assertions must use unique ProjectCase asset IDs")
     generation_bindings: set[str] = set()
-    generation_basis_by_asset: dict[
-        str, tuple[ElectricalBasis, GenerationCapacityBasis]
-    ] = {}
     storage_selectors_by_binding: dict[str, set[V14StorageCapacitySelector]] = {}
-    storage_basis_by_asset: dict[
-        str, tuple[StorageElectricalBasis, StorageCapacityBasis]
-    ] = {}
     price_assertion_count = 0
     for assertion in request.binding_policy.assertions:
         if isinstance(assertion, ScenarioIdentityAssertion):
@@ -1466,19 +1492,6 @@ def _require_internal_request_graph(request: EvaluationRequest) -> None:
                     "generation capacity and technology assertions must use the same "
                     "authored technology kind"
                 )
-            generation_basis = (
-                assertion.electrical_basis,
-                assertion.capacity_basis,
-            )
-            prior_generation_basis = generation_basis_by_asset.setdefault(
-                assertion.asset_id,
-                generation_basis,
-            )
-            if prior_generation_basis != generation_basis:
-                raise ValueError(
-                    "generation capacity assertions for one ProjectCase asset must "
-                    "share electrical and capacity bases"
-                )
             if assertion.base_config_key is not None:
                 if assertion.base_config_key != technology_assertion.base_config_key:
                     raise ValueError(
@@ -1510,19 +1523,6 @@ def _require_internal_request_graph(request: EvaluationRequest) -> None:
                 raise ValueError(
                     "storage capacity and technology assertions must use the same "
                     "authored technology kind"
-                )
-            storage_basis = (
-                assertion.electrical_basis,
-                assertion.capacity_basis,
-            )
-            prior_storage_basis = storage_basis_by_asset.setdefault(
-                assertion.asset_id,
-                storage_basis,
-            )
-            if prior_storage_basis != storage_basis:
-                raise ValueError(
-                    "storage capacity assertions for one ProjectCase asset must share "
-                    "electrical and capacity bases"
                 )
             if assertion.base_config_key != technology_assertion.base_config_key:
                 raise ValueError(

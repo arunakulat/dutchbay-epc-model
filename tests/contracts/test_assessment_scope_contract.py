@@ -429,6 +429,10 @@ def _validate(payload: dict[str, Any]) -> EvaluationRequest:
     return EvaluationRequest.model_validate_json(json.dumps(payload))
 
 
+def _validate_policy(payload: dict[str, Any]) -> V14BindingPolicy:
+    return V14BindingPolicy.model_validate_json(json.dumps(payload["binding_policy"]))
+
+
 def _assertion(payload: dict[str, Any], assertion_id: str) -> dict[str, Any]:
     return next(
         item
@@ -1685,11 +1689,12 @@ def test_generation_assertions_for_one_asset_share_one_basis(
 ) -> None:
     payload = _request_payload()
     _assertion(payload, assertion_id)["capacity_basis"] = capacity_basis
-    with pytest.raises(
-        ValidationError,
-        match="one ProjectCase asset must share electrical and capacity bases",
-    ):
-        _validate(payload)
+    for validate in (_validate_policy, _validate):
+        with pytest.raises(
+            ValidationError,
+            match="one ProjectCase asset must share electrical and capacity bases",
+        ):
+            validate(payload)
 
 
 def test_unitized_generation_assertions_cannot_change_the_asset_basis() -> None:
@@ -1709,11 +1714,12 @@ def test_unitized_generation_assertions_cannot_change_the_asset_basis() -> None:
             "authored_technology_kind": "wind_turbine",
         }
     )
-    with pytest.raises(
-        ValidationError,
-        match="one ProjectCase asset must share electrical and capacity bases",
-    ):
-        _validate(payload)
+    for validate in (_validate_policy, _validate):
+        with pytest.raises(
+            ValidationError,
+            match="one ProjectCase asset must share electrical and capacity bases",
+        ):
+            validate(payload)
 
 
 def test_all_unitized_generation_routes_accept_one_common_nameplate_basis() -> None:
@@ -1752,7 +1758,9 @@ def test_all_unitized_generation_routes_accept_one_common_nameplate_basis() -> N
             )
         ]
     )
+    policy = _validate_policy(payload)
     request = _validate(payload)
+    assert request.binding_policy == policy
     generation_assertions = tuple(
         assertion
         for assertion in request.binding_policy.assertions
@@ -1768,11 +1776,12 @@ def test_storage_assertions_for_one_asset_share_one_basis() -> None:
     payload = _request_payload()
     _add_storage_technology(payload)
     _assertion(payload, "assertion:bess-energy")["capacity_basis"] = "gross"
-    with pytest.raises(
-        ValidationError,
-        match="one ProjectCase asset must share electrical and capacity bases",
-    ):
-        _validate(payload)
+    for validate in (_validate_policy, _validate):
+        with pytest.raises(
+            ValidationError,
+            match="one ProjectCase asset must share electrical and capacity bases",
+        ):
+            validate(payload)
 
 
 def test_resolved_config_digest_is_the_public_v14_digest_and_moves_on_drift() -> None:
