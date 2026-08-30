@@ -1,0 +1,1 @@
+- Record the remote-session close-out in a PERSIST-01 successor: six protected merges, the MERGE-01 standing authorization, the Dolphin 3B/3C naming reconciliation, the D3B execution charter ingress and its verification receipts, and an executable bootstrap for resuming in the governed local environment.
