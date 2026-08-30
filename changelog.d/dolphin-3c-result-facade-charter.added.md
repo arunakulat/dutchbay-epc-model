@@ -1,0 +1,1 @@
+- Add the Dolphin 3C result-facade charter: the proposed design for typed per-section result and disposition contracts carrying v14 outputs into the Dolphin 2 package, for independent domain and assurance review before implementation. It covers the outbound half of DBAY-FRC-001 12.3(2); the inbound `ProjectCase`-to-gateway binding is Dolphin 3B.
