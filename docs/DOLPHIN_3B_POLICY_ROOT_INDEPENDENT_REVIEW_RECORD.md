@@ -408,3 +408,103 @@ remain accepted.
 Candidate `d164781…` must remain unmerged. Neither the VETO, the assurance acceptance, the green CI
 checks nor a later correction confers grade, evidence sufficiency, audit, lender, Board, release,
 deployment or `HOLD` authority.
+
+## 10. Successor review — child-validation order bypasses canonical policy order
+
+**Controlling disposition:** VETO
+
+**Reviewed implementation:** `d7eb1358f767e9101f83f3c2ffded08e5e9b41ce`
+
+**Reviewed tree:** `79041c0cafefad8970dcc46cafdc9dd4a88c5095`
+
+The independent domain reviewer issued `ACCEPT`: an independently hardcoded 15-by-9 oracle proved
+that all 28 admissible jurisdiction subject/domain pairs accepted at assertion, base, policy and
+fully reconciled request roots, while all 107 impossible pairs refused at all four roots. Every
+prior VETO counterexample and required positive was also replayed successfully.
+
+The independent assurance reviewer accepted the matrix and ownership correction, then found a
+canonical-error regression. Because Pydantic validates discriminated-union children in caller tuple
+order, two invalid `JurisdictionSubjectAssertion` children fail before the policy's canonical sorter
+can run. The assurance VETO controls.
+
+### 10.1 Minimal simultaneous-error counterexample
+
+Starting from the accepted request, the assurance reviewer made only these two changes:
+
+```text
+assertion:site-jurisdiction.base_domain = tax_statutory
+assertion:tax-jurisdiction.base_domain  = project_resource
+```
+
+Both relations are intrinsically impossible. The complete error set was stable, but first error and
+location followed caller order:
+
+| Assertion tuple | First standalone-policy error |
+|---|---|
+| authored | `assertions[2]: jurisdiction subject site cannot govern tax_statutory` |
+| reversed | `assertions[6]: jurisdiction subject tax cannot govern project_resource` |
+
+The containing request showed the same reversal below `binding_policy.assertions`. Across 32
+shuffles the first message had two possible values; one exact payload remained stable across 16
+hash seeds. This is caller-order dependence, not hash nondeterminism.
+
+The earlier successor correctly canonicalized policy-graph errors by material-category declaration
+order and assertion ID. The new assertion-level validator necessarily runs before that after-model
+graph helper, so the 107 single-defect matrix tests could not expose the simultaneous-child case.
+
+### 10.2 Accepted evidence preserved
+
+The VETO does not reopen the subject/domain matrix or its ownership:
+
+- the shared static helper remains the single semantic implementation;
+- `JurisdictionSubjectAssertion` is the lowest public owner of its two operands;
+- `BaseScenarioIdentity` reuses the helper for selected authority routes;
+- every project-global and matrix-excluded pair refuses at all requested roots;
+- valid-but-unretained `site -> project_lifecycle_timeline` remains accepted by assertion/policy and
+  refused only by the request's external route-existence check;
+- the inverse binding corrections and all prior basis/ownership/route/cost-price negatives remain
+  closed; and
+- the D3B-v1 shared-technology-binding limitation remains explicit and accurately distinguished
+  from valid D3A topology.
+
+The domain review obtained `163` targeted, `288` focused, `944` complete-contract, `330` D3A and
+`298` D2 passing tests. The assurance review independently confirmed the same complete gates,
+`94.56%` package coverage, `96.70%` modified-module coverage, both Draft schemas, strict/frozen and
+round-trip controls, static/type/import/excluded-surface gates, and green exact-head required CI.
+
+### 10.3 Required bounded correction
+
+The next successor must retain the standalone assertion validator and must not reimplement the
+subject/domain matrix in a raw parent preflight. Instead, collection-level validation must delegate
+each child to the existing compatibility-assertion type in canonical
+`(ProjectCaseMaterialCategory declaration order, assertion_id)` order, while successful validation
+must preserve and serialize the original authored assertion tuple unchanged.
+
+Durable controls must exercise authored, reversed, rotated and shuffled versions of the two-error
+payload at both policy and request roots, repeat under multiple hash seeds, and assert one stable
+first message/location family. A valid policy must prove exact authored-order round trip.
+
+### 10.4 Exact review receipt
+
+At review close, local `HEAD`, remote topic and draft-PR head were all `d7eb135…`; local/live
+protected `main` and the PR base were `9e1c6fae6220551754c23535caeaa86b37422230`;
+the topic was zero behind and seven commits ahead; the worktree was clean; the PR was open, draft,
+mergeable and blocked; and required receipts, fastlane and smoke checks were green. Issue `#1110`
+and its `HOLD` were unchanged.
+
+Candidate fingerprints:
+
+| File | SHA-256 |
+|---|---|
+| `analytics/feasibility_report_contract/assessment_scope.py` | `496ac4c0d867bc47600ed256f730aca3a45bfceff5c61d0aa4b94fedf465f7fa` |
+| `tests/contracts/test_assessment_scope_contract.py` | `b5734ff8681177310f3b4b03d8de65a87c881aa49bdbcfbd78dae8f6ba5071b4` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_REMEDIATION_RECORD.md` | `897c92c61d76050e1a4192ec2a864307b28d6898d42aa7d2b398ba4c31590527` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_INDEPENDENT_REVIEW_RECORD.md` | `d77109a76e1820e5beeea4be7debaede7daba99fbf1ecac56ab1fbc21c220a67` |
+| `changelog.d/d3b-policy-basis-coherence.fixed.md` | `f6dca926ce325c05eae03883f31c54175880af373253fd9b201ab7337405e7cf` |
+
+The protected-base-to-candidate binary diff SHA-256 was
+`0067df8900eff23914e76fa1e4b6d392d48e5c2146164dd65afaa22805cbf197`.
+
+Candidate `d7eb135…` must remain unmerged. The domain acceptance remains valid for the matrix and
+ownership probes it covered; the assurance VETO remains controlling for delivery. Neither
+disposition changes grade, evidence, lender, Board, release, deployment, issue or `HOLD` authority.
