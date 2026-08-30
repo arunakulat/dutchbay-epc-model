@@ -1,0 +1,1 @@
+- Ingress the Dolphin 3B assessment and v14-binding execution charter verbatim from the D3B worktree, restoring the cross-reference the Dolphin 3C charter previously had to leave unlinked. Its pinned ruleset SHA, framework expansions, delegation target and stated import direction were each verified against this repository.
