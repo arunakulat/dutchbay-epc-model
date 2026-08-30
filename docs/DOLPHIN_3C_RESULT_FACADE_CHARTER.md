@@ -411,9 +411,22 @@ consumes exactly one accepted D3B execution outcome and does not rerun the engin
 
 ## 11. Independent review disposition
 
-**Not yet reviewed.** No domain or assurance disposition exists for this charter. Until both are
-recorded against an exact tree, this design is a proposal only, and nothing in it establishes
-contract sufficiency, domain sufficiency, achieved grade, package approval or release authority.
+**ACCEPTED, subject to four required amendments**, recorded in
+[`DOLPHIN_3C_CONTRACTS_DISPOSITION_RECORD.md`](DOLPHIN_3C_CONTRACTS_DISPOSITION_RECORD.md) against
+this charter at SHA-256 `031eeb8e1619d1e301f25c5a9e8cdb908adc5e7d34e24c686abd95061c59f74e`.
+
+Three amendments bind before implementation begins — declared precision must be required on every
+carried numeric (`D3C-DOM-01`), the engine-less sections must be enumerated and the
+always-applicable citation corrected from two sections to five (`D3C-DOM-02`), and the independent
+oracle must be a `return_full_result=True` capture rather than the existing `*_expected_kpis.json`
+fixtures, which sit downstream of the section 6 hazard 5 loss (`D3C-ASR-01`). A fourth,
+`D3C-ASR-02`, is a separate dolphin against `analytics/evaluation_v14.py`.
+
+The disposition **unblocks D3C's remaining scope**, which section 10 gates on acceptance of these
+contracts. Two limitations carry forward: the amendments bind the implementation, and the
+disposition was produced by one agent applying the domain and assurance lenses separately, which is
+weaker than the two independent reviewers section 3 requires. It establishes no achieved grade,
+package approval, release, lender or Board authority.
 
 Issue [#1110](https://github.com/arunakulat/dutchbay-epc-model/issues/1110) remains `OPEN` with 0 of
 23 controls checked, and every Board, lender, audit and release `HOLD` remains in force. This
