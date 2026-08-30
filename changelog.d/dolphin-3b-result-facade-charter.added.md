@@ -1,0 +1,1 @@
+- Add the Dolphin 3B result-facade charter: the proposed design for typed per-section result and disposition contracts carrying v14 outputs into the Dolphin 2 package, for independent domain and assurance review before implementation.
