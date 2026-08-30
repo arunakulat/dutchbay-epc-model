@@ -508,3 +508,112 @@ The protected-base-to-candidate binary diff SHA-256 was
 Candidate `d7eb135…` must remain unmerged. The domain acceptance remains valid for the matrix and
 ownership probes it covered; the assurance VETO remains controlling for delivery. Neither
 disposition changes grade, evidence, lender, Board, release, deployment, issue or `HOLD` authority.
+
+## 11. Successor review — duplicate assertion IDs collide on the canonical key
+
+**Controlling disposition:** VETO
+
+**Reviewed implementation:** `2b97743db4459116f5ae118a95ce09c4528dcfe3`
+
+**Reviewed tree:** `35216e4172f23c8285cd692e56b59f5bc85d6943`
+
+The independent domain reviewer issued `ACCEPT` for the bounded semantic scope. A hardcoded oracle
+proved all 28 admissible and 107 impossible jurisdiction subject/domain pairs at the assertion,
+base, policy and request roots; 75 distinct valid and invalid caller orders preserved the accepted
+matrix, external route boundary, successful wire order and byte-stable round trip. No earlier
+policy-ownership counterexample reopened.
+
+The independent assurance reviewer proved that the correction closed Section 10's named
+distinct-ID counterexample across 76 orders, JSON and normalized Python modes, both public roots,
+ten hash-seed processes and 152 valid round trips. The reviewer then found a narrower collision in
+the canonical raw key. The assurance VETO controls.
+
+### 11.1 Minimal canonical-key collision
+
+Starting from the accepted fixture, the reviewer made only three content changes:
+
+```text
+site.base_domain = tax_statutory
+tax.base_domain = project_resource
+tax.assertion_id = site.assertion_id
+```
+
+Exchanging only the two jurisdiction children changed the complete error order:
+
+| Caller order | Canonical index 2 | Canonical index 3 |
+|---|---|---|
+| site, tax | `site cannot govern tax_statutory` | `tax cannot govern project_resource` |
+| tax, site | `tax cannot govern project_resource` | `site cannot govern tax_statutory` |
+
+The containing request showed the same reversal below `binding_policy.assertions`. JSON and
+normalized strict-Python ingress reproduced it at both roots, and eight independent hash-seed
+processes proved that each caller order was internally stable but the two orders were unequal.
+
+The collection key was `(material-category declaration order, assertion_id, kind,
+authored_index)`. Once category, ID and kind collide, authored index is still the caller's position.
+The later unique-`assertion_id` check cannot be treated as a precondition because child semantic
+validation fails before the after-model policy validator runs. Both payloads refuse, but the first
+message and its claimed canonical index remain caller-controlled.
+
+### 11.2 Accepted evidence preserved
+
+This VETO does not reopen the complete matrix, semantic ownership or the original correction:
+
+- `JurisdictionSubjectAssertion` remains the lowest public owner of its subject/domain relation;
+- the collection validator delegates through the existing discriminated `CompatibilityAssertion`
+  type in JSON and Python modes and does not duplicate the matrix;
+- all prior basis, inverse-identity, route-completeness, class/key/kind, cost/price and external-route
+  controls remain closed;
+- strict Python list/non-collection/malformed-child refusals remain intact;
+- successful policies preserve exact authored tuple and serialization order; and
+- D3B's shared-technology-binding restriction remains accurately described as a v1 execution
+  limitation, not a D3A invariant.
+
+The domain review obtained `166` targeted, `291` focused, `947` complete-contract, `330` D3A and
+`298` D2 passing tests. Both reviews confirmed the governed environment, 73 active rules, schema,
+round-trip, import, static, formatting, typing, excluded-surface and diff controls. Assurance
+confirmed `94.63%` package branch coverage and `96.88%` modified-module coverage. Required receipts,
+fastlane and smoke checks passed on the exact reviewed head, but neither CI nor the domain ACCEPT
+overrides the assurance VETO.
+
+### 11.3 Required bounded correction
+
+The next successor must make child diagnostic ordering total when the declared category, assertion
+ID and kind collide. Authored index may remain only as the restoration address after successful
+validation; it must not be the semantic error-order tie-breaker.
+
+The correction must continue to validate each child through `CompatibilityAssertion`. A bounded
+implementation may collect independent child outcomes, then sort the bundles by the declared key
+plus a deterministic validation-outcome signature: validated children can use their deterministic
+serialized model representation, while invalid children can use a bounded tuple of error type,
+inner location and message. It must not duplicate the subject/domain matrix.
+
+Durable controls must retain the distinct-ID permutation/hash-seed corpus and add this duplicate-ID
+simultaneous-defect case in both orders, at both public roots, in JSON and normalized Python modes,
+with complete error-set equality across multiple fresh hash-seed processes. Successful authored
+order and strict ingress behavior must remain unchanged.
+
+### 11.4 Exact review receipt
+
+At review close, local `HEAD`, upstream, live remote topic and draft-PR head were all `2b97743…`;
+the tree was `35216e4172f23c8285cd692e56b59f5bc85d6943`; protected/live `origin/main` and the
+PR base were `9e1c6fae6220551754c23535caeaa86b37422230`; the topic was zero behind and nine
+commits ahead; the worktree was clean; and the PR was open, draft, mergeable and blocked. Issue
+`#1110` and its `HOLD` were unchanged.
+
+Candidate fingerprints:
+
+| File | SHA-256 |
+|---|---|
+| `analytics/feasibility_report_contract/assessment_scope.py` | `cd231135d4b818e5e70aa787ef2021531d316f11abdf2dc1ee3e2f84edfd928b` |
+| `tests/contracts/test_assessment_scope_contract.py` | `ad452f5faf383d1a492ea5afa14064741063f39ec185e9dd1a36993e43222cf1` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_REMEDIATION_RECORD.md` | `dec143e5355c70210bda3a4a4e07fbfa9355588a24d0fa50ab0b7cda34408a78` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_INDEPENDENT_REVIEW_RECORD.md` | `d1b762c6cafe65368e0e80e4dc974781f598bc44eda7208df35ad5562804a241` |
+| `changelog.d/d3b-policy-basis-coherence.fixed.md` | `bbf6aa2bfa16de7cb220d0a2909264e43dc8fb3506577e966a56d39e69dcbfa6` |
+
+The protected-base-to-candidate binary diff SHA-256 was
+`c10472a76e89069230c467aa666add68746e626a448b9a050deecb0d41884028`.
+
+Candidate `2b97743…` must remain unmerged. Domain acceptance remains valid for its bounded semantic
+scope; assurance VETO remains controlling for delivery. Neither result changes grade, evidence,
+lender, Board, release, deployment, issue or `HOLD` authority.
