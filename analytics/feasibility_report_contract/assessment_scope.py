@@ -1149,8 +1149,7 @@ _COMPATIBILITY_ASSERTION_ADAPTER: TypeAdapter[CompatibilityAssertion] = TypeAdap
 
 def _raw_policy_assertion_sort_key(
     raw_assertion: Any,
-    authored_index: int,
-) -> tuple[int, str, str, int]:
+) -> tuple[int, str, str, str]:
     """Return the policy's canonical child-validation key for raw input."""
     if isinstance(raw_assertion, dict):
         raw_category = raw_assertion.get("category")
@@ -1178,10 +1177,47 @@ def _raw_policy_assertion_sort_key(
             category_token,
             len(_PROJECT_CASE_MATERIAL_CATEGORY_ORDER),
         ),
+        category_token,
         assertion_id_token,
         kind_token,
-        authored_index,
     )
+
+
+def _child_error_sort_key(error: dict[str, Any]) -> tuple[str, str, str]:
+    """Return a bounded deterministic signature for one child error."""
+    return (
+        str(error["type"]),
+        json.dumps(error["loc"], ensure_ascii=False, separators=(",", ":")),
+        str(error["msg"]),
+    )
+
+
+def _child_validation_outcome_sort_key(
+    validated_child: CompatibilityAssertion | None,
+    child_errors: tuple[dict[str, Any], ...],
+) -> tuple[int, str]:
+    """Return a total observable outcome key without using caller position."""
+    if validated_child is not None:
+        return (1, validated_child.model_dump_json())
+    return (
+        0,
+        json.dumps(
+            tuple(_child_error_sort_key(error) for error in child_errors),
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _PolicyAssertionValidationBundle:
+    """One independently validated child plus canonical ordering metadata."""
+
+    authored_index: int
+    declared_sort_key: tuple[int, str, str, str]
+    outcome_sort_key: tuple[int, str]
+    validated_child: CompatibilityAssertion | None
+    child_errors: tuple[dict[str, Any], ...]
 
 
 class ProjectCaseMaterialDisposition(StrictFrozenModel):
@@ -1246,16 +1282,10 @@ class V14BindingPolicy(StrictFrozenModel):
         if info.mode == "python" and not isinstance(raw_assertions, tuple):
             return cast(tuple[CompatibilityAssertion, ...], handler(raw_assertions))
 
-        indexed_assertions = tuple(enumerate(raw_assertions))
-        canonical_inputs = tuple(
-            sorted(
-                indexed_assertions,
-                key=lambda item: _raw_policy_assertion_sort_key(item[1], item[0]),
-            )
-        )
-        child_errors: list[Any] = []
-        validated_children: list[CompatibilityAssertion] = []
-        for canonical_index, (_, raw_assertion) in enumerate(canonical_inputs):
+        bundles: list[_PolicyAssertionValidationBundle] = []
+        for authored_index, raw_assertion in enumerate(raw_assertions):
+            validated_child: CompatibilityAssertion | None = None
+            child_errors: tuple[dict[str, Any], ...] = ()
             try:
                 if info.mode == "json":
                     validated_child = _COMPATIBILITY_ASSERTION_ADAPTER.validate_json(
@@ -1268,30 +1298,54 @@ class V14BindingPolicy(StrictFrozenModel):
                         context=info.context,
                     )
             except ValidationError as exc:
-                for error in exc.errors(include_url=False):
-                    line_error = dict(error)
-                    line_error["loc"] = (canonical_index, *error["loc"])
-                    child_errors.append(line_error)
-            else:
-                validated_children.append(validated_child)
-        if child_errors:
-            raise ValidationError.from_exception_data(
-                "V14BindingPolicy.assertions",
-                child_errors,
+                child_errors = tuple(
+                    sorted(
+                        (dict(error) for error in exc.errors(include_url=False)),
+                        key=_child_error_sort_key,
+                    )
+                )
+            bundles.append(
+                _PolicyAssertionValidationBundle(
+                    authored_index=authored_index,
+                    declared_sort_key=_raw_policy_assertion_sort_key(raw_assertion),
+                    outcome_sort_key=_child_validation_outcome_sort_key(
+                        validated_child,
+                        child_errors,
+                    ),
+                    validated_child=validated_child,
+                    child_errors=child_errors,
+                )
             )
 
-        validated = cast(
+        canonical_bundles = tuple(
+            sorted(
+                bundles,
+                key=lambda bundle: (
+                    bundle.declared_sort_key,
+                    bundle.outcome_sort_key,
+                ),
+            )
+        )
+        canonical_errors: list[Any] = []
+        for canonical_index, bundle in enumerate(canonical_bundles):
+            for error in bundle.child_errors:
+                line_error = dict(error)
+                line_error["loc"] = (canonical_index, *error["loc"])
+                canonical_errors.append(line_error)
+        if canonical_errors:
+            raise ValidationError.from_exception_data(
+                "V14BindingPolicy.assertions",
+                canonical_errors,
+            )
+
+        authored_children = tuple(
+            cast(CompatibilityAssertion, bundle.validated_child)
+            for bundle in sorted(bundles, key=lambda bundle: bundle.authored_index)
+        )
+        return cast(
             tuple[CompatibilityAssertion, ...],
-            handler(tuple(validated_children)),
+            handler(authored_children),
         )
-        authored_order = sorted(
-            (
-                (authored_index, validated[canonical_index])
-                for canonical_index, (authored_index, _) in enumerate(canonical_inputs)
-            ),
-            key=lambda item: item[0],
-        )
-        return tuple(assertion for _, assertion in authored_order)
 
     @model_validator(mode="after")
     def _policy_covers_every_material_category(self) -> V14BindingPolicy:

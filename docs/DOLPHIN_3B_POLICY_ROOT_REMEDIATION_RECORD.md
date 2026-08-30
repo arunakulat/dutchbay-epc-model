@@ -268,3 +268,59 @@ authored serialization order, ProjectCase semantics, evaluation, finance, applic
 release or `HOLD` authority. The successor remains a local implementation receipt until a new
 immutable SHA receives fresh independent domain and assurance dispositions and exact-head required
 CI is green.
+
+## 10. Total child-outcome-order successor correction
+
+Independent review of `2b97743db4459116f5ae118a95ce09c4528dcfe3` produced another split
+disposition. Domain review accepted the complete matrix, ownership boundary, successful wire order
+and D3A limitation. Assurance then proved that two child-invalid jurisdiction assertions which also
+reuse one `assertion_id` collide on `(category, assertion_id, kind)`. The candidate used authored
+index as its last key, so exchanging those children exchanged the first error even though both
+payloads refused. The exact domain ACCEPT, controlling assurance VETO and three-field
+counterexample are preserved in the independent review record.
+
+The bounded successor now treats authored position only as a successful-order restoration address:
+
+- every raw child is independently delegated to the existing discriminated
+  `CompatibilityAssertion` type in the caller's JSON or Python validation mode;
+- one immutable bundle retains the authored address, declared category/ID/kind key, validated child
+  or complete error tuple, and a deterministic validation-outcome signature;
+- invalid-child errors are internally ordered by type, inner location and message;
+- all bundles are ordered by declared identity plus outcome signature before canonical collection
+  indexes are assigned; and
+- only an error-free authored bundle sequence is passed back through the collection handler, so
+  successful policy storage and serialization preserve exact caller order.
+
+The subject/domain matrix remains solely in the standalone semantic helper. The collection
+validator does not inspect subjects or domains and does not reproduce their admissibility policy.
+
+The durable duplicate-ID control exchanges the two child-invalid assertions and compares the
+complete type/location/message error sequence at standalone policy and containing request roots, in
+JSON and normalized strict-Python modes. Both orders now produce site/tax-statutory at canonical
+index 2 followed by tax/project-resource at canonical index 3. Eight fresh hash-seed processes
+produce one complete receipt. The distinct-ID authored/reversed/rotated/shuffled corpus, valid
+authored-order round trips and strict list/non-collection/malformed-child refusals remain unchanged.
+
+### 10.1 Local successor receipt
+
+| Control | Result |
+|---|---|
+| Complete D3B-0 assessment-scope contract | `293 passed` |
+| Complete contract suite | `949 passed` |
+| D3A ProjectCase predecessor regression | `330 passed` |
+| D2 machine-contract predecessor regression | `298 passed` |
+| Contract-package branch coverage | `94.65%` total; modified assessment-scope module `96.93%` |
+| Duplicate-ID both-order/both-root/JSON/Python/eight-hash-seed complete-error controls | passed |
+| Existing distinct-ID permutation/hash-seed and successful authored-order controls | passed |
+| Ruff check and format check | passed |
+| Black and isort checks | passed |
+| Mypy `--no-incremental` on the assessment-scope export surface | passed |
+| Both Draft 2020-12 schema modes, strict/frozen ingress and public exports | passed in the focused suite |
+| Forbidden-import/excluded-surface controls, in-memory compilation and `git diff --check` | passed |
+
+The test suites emitted only the repository's pre-existing Hypothesis `norecursedirs` warning;
+mypy emitted only its pre-existing unused-configuration-section warning. This remains a local
+implementation receipt, not self-acceptance. A new immutable SHA requires fresh domain and
+assurance review, current protected-main ancestry, a conflict-free PR and exact-head required CI.
+No outcome can lift issue `#1110` or confer grade, evidence, lender, Board, release or deployment
+authority.
