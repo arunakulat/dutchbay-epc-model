@@ -215,3 +215,56 @@ mypy emitted only its pre-existing unused-configuration-section warning. These l
 not self-acceptance. A new immutable implementation SHA still requires fresh independent domain and
 assurance dispositions, current protected-main ancestry, a conflict-free PR and exact-head required
 CI before `MERGE-01` can apply.
+
+## 9. Canonical child-validation-order successor correction
+
+Independent review of `d7eb1358f767e9101f83f3c2ffded08e5e9b41ce` accepted the complete
+jurisdiction subject/domain matrix and its lowest-owner placement, then found a distinct assurance
+defect. Two intrinsically impossible jurisdiction children were validated in caller tuple order
+before the policy's after-model canonical graph traversal could run. Reversing the authored tuple
+therefore reversed the first error and its index. The exact controlling VETO and counterexample are
+preserved in the independent review record.
+
+The bounded successor keeps `JurisdictionSubjectAssertion` as the standalone semantic owner and
+does not duplicate its matrix in a raw parent preflight. Instead, the `assertions` collection wrap
+validator:
+
+- orders raw children by immutable `ProjectCaseMaterialCategory` declaration order and exact
+  `assertion_id`;
+- delegates every child to the existing discriminated `CompatibilityAssertion` type in the
+  caller's JSON or Python validation mode;
+- aggregates the complete child error set with canonical collection indexes; and
+- after successful validation only, restores the exact authored assertion tuple before the policy
+  graph runs and before serialization.
+
+Consequently, authored, reversed, rotated and deterministically shuffled versions of the
+simultaneous site/tax counterexample now produce one first message and location family at both the
+standalone policy and containing-request roots. Eight separate `PYTHONHASHSEED` processes produce
+the same receipt. Valid versions of all four orders retain their exact assertion-ID sequence through
+both roots and JSON serialization. Additional controls prove that normalized Python tuples and
+already-validated children remain accepted while raw Python lists, non-collections, malformed child
+categories and scalar children remain refused under the existing strict contract.
+
+### 9.1 Local successor receipt
+
+| Control | Result |
+|---|---|
+| Complete D3B-0 assessment-scope contract | `291 passed` |
+| Complete contract suite | `947 passed` |
+| D3A ProjectCase predecessor regression | `330 passed` |
+| D2 machine-contract predecessor regression | `298 passed` |
+| Contract-package branch coverage | `94.63%` total; modified assessment-scope module `96.88%` |
+| Authored/reversed/rotated/shuffled and eight-hash-seed error controls | passed at policy and request roots |
+| Ruff check and format check | passed |
+| Black and isort checks | passed |
+| Mypy `--no-incremental` on the assessment-scope export surface | passed |
+| Both Draft 2020-12 schema modes, strict/frozen ingress and public exports | passed in the focused suite |
+| Forbidden-import/excluded-surface controls, in-memory compilation and `git diff --check` | passed |
+
+The test suites emitted only the repository's pre-existing Hypothesis `norecursedirs` warning;
+mypy emitted only its pre-existing unused-configuration-section warning. This correction changes
+validation order only: it does not change the accepted subject/domain matrix, accepted wire shape,
+authored serialization order, ProjectCase semantics, evaluation, finance, application, grade,
+release or `HOLD` authority. The successor remains a local implementation receipt until a new
+immutable SHA receives fresh independent domain and assurance dispositions and exact-head required
+CI is green.

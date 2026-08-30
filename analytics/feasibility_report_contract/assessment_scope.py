@@ -14,6 +14,7 @@ scope-owned canonical ``run.mode`` token, under the exact policy declared below.
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from dataclasses import dataclass
@@ -26,8 +27,12 @@ from pydantic import (
     Field,
     GetJsonSchemaHandler,
     PositiveInt,
+    TypeAdapter,
+    ValidationError,
+    ValidationInfo,
     ValidatorFunctionWrapHandler,
     WrapValidator,
+    field_validator,
     model_validator,
 )
 from pydantic.json_schema import JsonSchemaValue
@@ -303,6 +308,14 @@ class ProjectCaseMaterialCategory(str, Enum):
     SOURCE_PROVENANCE = "source_provenance"
     ASSUMPTION_PROVENANCE = "assumption_provenance"
     MISSING_INPUT = "missing_input"
+
+
+_PROJECT_CASE_MATERIAL_CATEGORY_ORDER = MappingProxyType(
+    {
+        category.value: position
+        for position, category in enumerate(ProjectCaseMaterialCategory)
+    }
+)
 
 
 class MaterialDispositionKind(str, Enum):
@@ -1129,6 +1142,46 @@ CompatibilityAssertion = Annotated[
     ],
     Field(discriminator="kind"),
 ]
+_COMPATIBILITY_ASSERTION_ADAPTER: TypeAdapter[CompatibilityAssertion] = TypeAdapter(
+    CompatibilityAssertion
+)
+
+
+def _raw_policy_assertion_sort_key(
+    raw_assertion: Any,
+    authored_index: int,
+) -> tuple[int, str, str, int]:
+    """Return the policy's canonical child-validation key for raw input."""
+    if isinstance(raw_assertion, dict):
+        raw_category = raw_assertion.get("category")
+        raw_assertion_id = raw_assertion.get("assertion_id")
+        raw_kind = raw_assertion.get("kind")
+    elif isinstance(raw_assertion, StrictFrozenModel):
+        raw_category = getattr(raw_assertion, "category", None)
+        raw_assertion_id = getattr(raw_assertion, "assertion_id", None)
+        raw_kind = getattr(raw_assertion, "kind", None)
+    else:
+        raw_category = None
+        raw_assertion_id = None
+        raw_kind = None
+
+    if isinstance(raw_category, ProjectCaseMaterialCategory):
+        category_token = raw_category.value
+    elif isinstance(raw_category, str):
+        category_token = raw_category
+    else:
+        category_token = ""
+    assertion_id_token = raw_assertion_id if isinstance(raw_assertion_id, str) else ""
+    kind_token = raw_kind if isinstance(raw_kind, str) else ""
+    return (
+        _PROJECT_CASE_MATERIAL_CATEGORY_ORDER.get(
+            category_token,
+            len(_PROJECT_CASE_MATERIAL_CATEGORY_ORDER),
+        ),
+        assertion_id_token,
+        kind_token,
+        authored_index,
+    )
 
 
 class ProjectCaseMaterialDisposition(StrictFrozenModel):
@@ -1178,6 +1231,67 @@ class V14BindingPolicy(StrictFrozenModel):
     assertions: tuple[CompatibilityAssertion, ...]
     material_dispositions: tuple[ProjectCaseMaterialDisposition, ...]
     run_mode_policy: RunModeBindingPolicy
+
+    @field_validator("assertions", mode="wrap")
+    @classmethod
+    def _assertion_children_use_canonical_validation_order(
+        cls,
+        raw_assertions: Any,
+        handler: ValidatorFunctionWrapHandler,
+        info: ValidationInfo,
+    ) -> tuple[CompatibilityAssertion, ...]:
+        """Validate children canonically while preserving authored tuple order."""
+        if not isinstance(raw_assertions, (list, tuple)):
+            return cast(tuple[CompatibilityAssertion, ...], handler(raw_assertions))
+        if info.mode == "python" and not isinstance(raw_assertions, tuple):
+            return cast(tuple[CompatibilityAssertion, ...], handler(raw_assertions))
+
+        indexed_assertions = tuple(enumerate(raw_assertions))
+        canonical_inputs = tuple(
+            sorted(
+                indexed_assertions,
+                key=lambda item: _raw_policy_assertion_sort_key(item[1], item[0]),
+            )
+        )
+        child_errors: list[Any] = []
+        validated_children: list[CompatibilityAssertion] = []
+        for canonical_index, (_, raw_assertion) in enumerate(canonical_inputs):
+            try:
+                if info.mode == "json":
+                    validated_child = _COMPATIBILITY_ASSERTION_ADAPTER.validate_json(
+                        json.dumps(raw_assertion),
+                        context=info.context,
+                    )
+                else:
+                    validated_child = _COMPATIBILITY_ASSERTION_ADAPTER.validate_python(
+                        raw_assertion,
+                        context=info.context,
+                    )
+            except ValidationError as exc:
+                for error in exc.errors(include_url=False):
+                    line_error = dict(error)
+                    line_error["loc"] = (canonical_index, *error["loc"])
+                    child_errors.append(line_error)
+            else:
+                validated_children.append(validated_child)
+        if child_errors:
+            raise ValidationError.from_exception_data(
+                "V14BindingPolicy.assertions",
+                child_errors,
+            )
+
+        validated = cast(
+            tuple[CompatibilityAssertion, ...],
+            handler(tuple(validated_children)),
+        )
+        authored_order = sorted(
+            (
+                (authored_index, validated[canonical_index])
+                for canonical_index, (authored_index, _) in enumerate(canonical_inputs)
+            ),
+            key=lambda item: item[0],
+        )
+        return tuple(assertion for _, assertion in authored_order)
 
     @model_validator(mode="after")
     def _policy_covers_every_material_category(self) -> V14BindingPolicy:

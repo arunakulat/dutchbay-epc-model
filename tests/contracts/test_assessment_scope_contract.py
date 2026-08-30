@@ -6,6 +6,7 @@ import ast
 import copy
 import json
 import math
+import random
 import subprocess
 import sys
 from datetime import date
@@ -1751,13 +1752,20 @@ def test_contract_schema_and_semantic_policy_globals_are_immutable() -> None:
     module_globals = vars(assessment_scope_contract)
     without_jurisdiction = module_globals["_DOMAINS_WITHOUT_JURISDICTION_ROUTE"]
     allowed_subjects = module_globals["_DOMAIN_ALLOWED_SUBJECTS"]
+    category_order = module_globals["_PROJECT_CASE_MATERIAL_CATEGORY_ORDER"]
     assert isinstance(without_jurisdiction, frozenset)
     assert without_jurisdiction == _EXPECTED_DOMAINS_WITHOUT_JURISDICTION_ROUTE
     assert dict(allowed_subjects) == _EXPECTED_DOMAIN_ALLOWED_SUBJECTS
+    assert dict(category_order) == {
+        category.value: position
+        for position, category in enumerate(ProjectCaseMaterialCategory)
+    }
     with pytest.raises(AttributeError):
         without_jurisdiction.add("other")
     with pytest.raises(TypeError):
         allowed_subjects[next(iter(allowed_subjects))] = frozenset()
+    with pytest.raises(TypeError):
+        category_order[ProjectCaseMaterialCategory.IDENTITY.value] = 99
     assert not any(
         name.endswith("_JSON_SCHEMA") and isinstance(value, dict)
         for name, value in module_globals.items()
@@ -2060,6 +2068,178 @@ def test_policy_basis_first_error_is_independent_of_assertion_order() -> None:
             messages.append(exc_info.value.errors()[0]["msg"])
         assert messages[0] == messages[1]
         assert "generation capacity assertions" in messages[0]
+
+
+def test_policy_child_errors_are_canonical_and_authored_order_round_trips() -> None:
+    source = _request_payload()
+    authored = source["binding_policy"]["assertions"]
+    shuffled = copy.deepcopy(authored)
+    random.Random(20260830).shuffle(shuffled)
+    variants = (
+        copy.deepcopy(authored),
+        list(reversed(copy.deepcopy(authored))),
+        copy.deepcopy(authored[4:] + authored[:4]),
+        shuffled,
+    )
+
+    expected_locations = {
+        _validate_policy: (
+            "assertions",
+            2,
+            "jurisdiction_subject_assertion",
+        ),
+        _validate: (
+            "binding_policy",
+            "assertions",
+            2,
+            "jurisdiction_subject_assertion",
+        ),
+    }
+    for validate, expected_location in expected_locations.items():
+        first_issues: list[tuple[tuple[object, ...], str]] = []
+        for assertions in variants:
+            payload = _request_payload()
+            payload["binding_policy"]["assertions"] = copy.deepcopy(assertions)
+            site_assertion = _assertion(payload, "assertion:site-jurisdiction")
+            tax_assertion = _assertion(payload, "assertion:tax-jurisdiction")
+            site_assertion["base_domain"] = "tax_statutory"
+            tax_assertion["base_domain"] = "project_resource"
+            with pytest.raises(ValidationError) as exc_info:
+                validate(payload)
+            issue = exc_info.value.errors(include_url=False)[0]
+            first_issues.append((tuple(issue["loc"]), issue["msg"]))
+
+        assert len(set(first_issues)) == 1
+        location, message = first_issues[0]
+        assert location == expected_location
+        assert message == (
+            "Value error, jurisdiction subject site cannot govern tax_statutory"
+        )
+
+    for assertions in variants:
+        payload = _request_payload()
+        payload["binding_policy"]["assertions"] = copy.deepcopy(assertions)
+        expected_ids = tuple(item["assertion_id"] for item in assertions)
+        policy = _validate_policy(payload)
+        request = _validate(payload)
+        for validated_policy in (policy, request.binding_policy):
+            assert (
+                tuple(item.assertion_id for item in validated_policy.assertions)
+                == expected_ids
+            )
+            dumped = validated_policy.model_dump(mode="json")
+            assert tuple(item["assertion_id"] for item in dumped["assertions"]) == (
+                expected_ids
+            )
+
+
+def test_policy_child_error_order_is_stable_across_hash_seeds() -> None:
+    source = _request_payload()
+    authored = source["binding_policy"]["assertions"]
+    shuffled = copy.deepcopy(authored)
+    random.Random(20260830).shuffle(shuffled)
+    variants = (
+        copy.deepcopy(authored),
+        list(reversed(copy.deepcopy(authored))),
+        copy.deepcopy(authored[4:] + authored[:4]),
+        shuffled,
+    )
+    payloads: list[dict[str, Any]] = []
+    for assertions in variants:
+        payload = _request_payload()
+        payload["binding_policy"]["assertions"] = copy.deepcopy(assertions)
+        site_assertion = _assertion(payload, "assertion:site-jurisdiction")
+        tax_assertion = _assertion(payload, "assertion:tax-jurisdiction")
+        site_assertion["base_domain"] = "tax_statutory"
+        tax_assertion["base_domain"] = "project_resource"
+        payloads.append(payload)
+
+    script = """
+import json
+import sys
+from pydantic import ValidationError
+from analytics.feasibility_report_contract import EvaluationRequest, V14BindingPolicy
+
+payloads = json.loads(sys.stdin.read())
+outcomes = []
+for payload in payloads:
+    for root in ("policy", "request"):
+        try:
+            if root == "policy":
+                V14BindingPolicy.model_validate_json(json.dumps(payload["binding_policy"]))
+            else:
+                EvaluationRequest.model_validate_json(json.dumps(payload))
+        except ValidationError as exc:
+            issue = exc.errors(include_url=False)[0]
+            outcomes.append({"root": root, "loc": issue["loc"], "msg": issue["msg"]})
+        else:
+            raise SystemExit("invalid child assertions accepted")
+print(json.dumps(outcomes, sort_keys=True))
+"""
+    receipts: set[str] = set()
+    for seed in range(8):
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=_ROOT,
+            env={
+                **dict(__import__("os").environ),
+                "PYTHONHASHSEED": str(seed),
+                "PYTHONPATH": str(_ROOT),
+            },
+            input=json.dumps(payloads),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        receipts.add(completed.stdout.strip().splitlines()[-1])
+
+    assert len(receipts) == 1
+    issues = json.loads(receipts.pop())
+    policy_issues = [item for item in issues if item["root"] == "policy"]
+    request_issues = [item for item in issues if item["root"] == "request"]
+    assert policy_issues == [policy_issues[0]] * len(variants)
+    assert request_issues == [request_issues[0]] * len(variants)
+    assert policy_issues[0]["loc"] == [
+        "assertions",
+        2,
+        "jurisdiction_subject_assertion",
+    ]
+    assert request_issues[0]["loc"] == [
+        "binding_policy",
+        "assertions",
+        2,
+        "jurisdiction_subject_assertion",
+    ]
+
+
+def test_policy_canonical_child_validator_preserves_python_strictness() -> None:
+    policy = _validate_policy(_request_payload())
+    normalized = policy.model_dump()
+    assert V14BindingPolicy.model_validate(normalized) == policy
+
+    model_children = copy.deepcopy(normalized)
+    model_children["assertions"] = policy.assertions
+    assert V14BindingPolicy.model_validate(model_children) == policy
+
+    list_children = copy.deepcopy(normalized)
+    list_children["assertions"] = list(policy.assertions)
+    with pytest.raises(ValidationError, match="valid tuple"):
+        V14BindingPolicy.model_validate(list_children)
+
+    non_collection = copy.deepcopy(normalized)
+    non_collection["assertions"] = 1
+    with pytest.raises(ValidationError):
+        V14BindingPolicy.model_validate(non_collection)
+
+    malformed_child = copy.deepcopy(normalized)
+    malformed_child["assertions"][0]["category"] = 1
+    with pytest.raises(ValidationError):
+        V14BindingPolicy.model_validate(malformed_child)
+
+    scalar_child = copy.deepcopy(normalized)
+    scalar_child["assertions"] = (1, *policy.assertions)
+    with pytest.raises(ValidationError):
+        V14BindingPolicy.model_validate(scalar_child)
 
 
 @pytest.mark.parametrize(
