@@ -1,0 +1,1 @@
+- Resolve all five Dolphin 3C result-facade design questions against DBAY-FRC-001, the Dolphin 2 validator and the v14 gateway, and record the evidence in the charter; four were mis-posed, and the research surfaced a new hazard — the gateway's default path silently discards non-numeric KPIs before any facade can observe them.
