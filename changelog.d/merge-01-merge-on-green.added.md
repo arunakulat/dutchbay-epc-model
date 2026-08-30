@@ -1,0 +1,1 @@
+- Add `MERGE-01` to the canonical GWTF ruleset: merging a pull request is standing-authorized once every required check is green on the exact current head, with no per-PR go-ahead, and `AGENTS.md` updated to match.

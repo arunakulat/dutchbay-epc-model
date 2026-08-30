@@ -19,8 +19,8 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
 
 When historical sprint instructions conflict with current governance, follow the newer
 current workflow, especially `WORKTREE-01`, `GOV-02`, `R23`, `R25`, `DELIVERY-01`,
-`DATA-01`, `PERSIST-01`, and `THREAD-01`. Never restore a retired sprint integration branch or a
-nonexistent ruleset filename.
+`DATA-01`, `PERSIST-01`, `THREAD-01`, and `MERGE-01`. Never restore a retired sprint integration
+branch or a nonexistent ruleset filename.
 
 ## Session continuity
 
@@ -90,10 +90,17 @@ one, because the next session acts on it.
   branch and PR. Split broad initiatives into sequential green PRs.
 - Never commit or push directly to a protected branch. Merge only through a PR after all
   required CI checks pass and the branch is current.
+- Follow `MERGE-01`: merging a green PR is standing-authorized, so do not hold a finished PR
+  waiting for a per-PR go-ahead and do not ask whether to merge. Green means every *required*
+  check reports success on the exact current head with no failed, pending or unreported required
+  check and no conflict; a skipped advisory job is neither a blocker nor a substitute. Red,
+  unreported or conflicted means drive it back to green first. Merging on green is delivery
+  authority only: it lifts no `HOLD` and confers no grade, release, audit, lender or Board
+  authority.
 - Do not use `git stash` for cross-branch peeking because the stash namespace is shared
   across worktrees.
-- Stage only files belonging to the task. Commit, push, and open or merge PRs only when
-  authorized by the user or clearly required by the requested delivery workflow.
+- Stage only files belonging to the task. Commit, push and open PRs when the requested delivery
+  workflow calls for it; merging is standing-authorized on green under `MERGE-01`.
 - Checkpoint long-running results and coherent work to durable storage early. Do not
   leave load-bearing results only in chat context.
 
