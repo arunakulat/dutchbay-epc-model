@@ -21,7 +21,7 @@ That normative clause spans a seam with two halves, and the Dolphin 3 programme 
 
 | Increment | Direction | Charter |
 |---|---|---|
-| **D3B-0** | `ProjectCase` → assessment intent and authored-scenario binding | `DOLPHIN_3B_EXECUTION_CHARTER.md` *(pending)* |
+| **D3B-0** | `ProjectCase` → assessment intent and authored-scenario binding | [`DOLPHIN_3B_EXECUTION_CHARTER.md`](DOLPHIN_3B_EXECUTION_CHARTER.md) |
 | **D3B-1** | one preflighted call to `evaluate_with_overrides` | same |
 | **D3C** | v14 result → Dolphin 2 package records | **this document** |
 
