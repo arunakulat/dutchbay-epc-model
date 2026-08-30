@@ -185,15 +185,55 @@ change requested in D3B-0.
    serialization-mode agreement on the hostile lexical matrix. Not run in this review. The
    `_ExactStringJsonSchema` hook exists and carries explicit `minLength`/`maxLength`/`pattern`, but
    the two-mode agreement itself was not exercised.
-2. **Cross-runtime ECMAScript regex agreement.** Section 5.1 requires an actual ECMAScript
-   implementation to agree with Python on the lexical matrix. Not run — no JavaScript runtime was
-   exercised. This one carries real risk: `(?![\s\S])` behaves identically in ECMAScript, but
-   ECMAScript `RegExp` without the `u` flag operates on UTF-16 code units, so the astral-plane
-   4,096-code-point bound verified in section 2.4 is the probe most likely to diverge across
-   runtimes. It should be executed before any consumer validates these schemas in a browser or Node.
-3. **The second reviewer.** Charter section 8 specifies two independent reviewers. This record is
+2. **The second reviewer.** Charter section 8 specifies two independent reviewers. This record is
    one. The commit-then-review ordering the charter specifies was also inverted by necessity, since
    the tree was committed to stop an active `PERSIST-01` loss rather than after a no-blocker.
+
+   The owner settled the general policy on 2026-08-30: **two independent reviewers for complex
+   scripts, one is sufficient for documentation and comparable low-risk work.** D3B-0 is complex
+   code and therefore sits in the two-reviewer class; it was merged as `#1198` on the owner's
+   explicit instruction with this single review on record. A second independent pass over the
+   contract remains outstanding and is the one open assurance item against this slice.
+
+## 5A. Cross-runtime ECMAScript agreement — EXECUTED, and it found the divergence
+
+This gate was declared "not run" when this record was first written, and was named as the item most
+likely to diverge. It has since been **executed** against Node `v25.2.1`, comparing Python
+`re.fullmatch` verdicts with ECMAScript `RegExp.prototype.test` over the same matrix.
+
+| Result | Finding |
+|---|---|
+| Pattern compilation | **0 of 6 patterns fail to compile** in ECMAScript — no Python-only regex construct is used |
+| Lexical matrix | **44 of 44 cases agree**, Python and ECMAScript, including every trailing-newline, leading/trailing-space, embedded-newline, homoglyph and blank case |
+| `(?![\s\S])` | behaves **identically** in both runtimes — the absolute-end anchor is portable |
+
+**The predicted divergence is real, and it is precisely localized.** It is not in the `pattern`
+layer, which agrees completely; it is in `maxLength`:
+
+```
+python code points        : 4096
+JS String.length (UTF-16) : 8192      <-- 4096 astral characters
+JS [...str].length (cp)   : 4096
+declared maxLength        : 4096
+```
+
+A JavaScript validator implementing `maxLength` as `str.length` counts **UTF-16 code units**, sees
+`8192 > 4096`, and rejects a value Python accepts. A code-point-correct implementation
+(`[...str].length`) agrees with Python exactly. JSON Schema defines `maxLength` in code points, so
+the code-point reading is the correct one and the naive reading is the bug.
+
+**The divergence direction matters and is favourable.** A naive JS validator **rejects a valid
+value** — it fails closed, conservatively. It does not accept anything Python would refuse, so no
+invalid payload can enter through this gap. The consequence is a false rejection of legitimate
+astral-plane text, not a contract bypass.
+
+**What this means for consumers:** any browser or Node validator for these schemas must count code
+points for `maxLength`. Mainstream JSON Schema validators generally do; a hand-rolled `str.length`
+check does not. D3C and any web/API layer should carry a test for this specific case rather than
+assume it.
+
+Two items from section 5 remain outstanding: the Draft 2020-12 dual-mode agreement, and the second
+independent reviewer.
 
 ## 6. Independent command receipt
 
@@ -240,6 +280,24 @@ done
 # 19469c89864258fba06e434f0751896da1409823ad1ae93b6381683c7df6ceae at every seed
 ```
 
+The cross-runtime ECMAScript gate (section 5A), run against `node v25.2.1`. Python emits each
+pattern with its `re.fullmatch` verdict over the shared matrix; Node re-tests the same pairs with
+`new RegExp(pattern).test(sample)` and reports any disagreement:
+
+```
+node v25.2.1
+patterns that fail to compile in ECMAScript: 0
+lexical matrix: 44 agree, 0 diverge
+
+astral maxLength check (JSON Schema maxLength counts CODE POINTS):
+   python code points        : 4096
+   JS String.length (UTF-16) : 8192
+   JS [...str].length (cp)   : 4096
+   declared maxLength        : 4096
+   naive JS 'str.length <= maxLength' would REJECT a Python-valid value: true
+   codepoint-correct JS check agrees with Python: true
+```
+
 The excluded-surface negative control, which is what attributes the eager load to
 `analytics/__init__.py` rather than to D3B:
 
@@ -263,6 +321,14 @@ diagnostics, and it is verified by negative controls in both directions. The lex
 the `$` trailing-newline trap that this class of contract usually falls into. The solar DC binding is
 implemented more strictly than the charter claims.
 
+The cross-runtime gate has since been executed (section 5A) and **confirms the pattern layer is
+fully portable** — 44 of 44 matrix cases agree with ECMAScript and all six patterns compile there.
+The one divergence it surfaced is in `maxLength` code-point counting, sits in a downstream JS
+validator rather than in this contract, and fails **closed**. It does not disturb this disposition.
+
 The two observations in section 4 are non-blocking and neither warrants holding delivery. What is
-**not** discharged is section 5: this is one reviewer, not two, and two charter gates were not
-executed. Whether that satisfies the charter is the owner's call, not this record's.
+**not** discharged is section 5: the Draft 2020-12 dual-mode agreement was not exercised, and this
+is one reviewer where the charter specifies two. Under the owner's 2026-08-30 policy — two reviewers
+for complex scripts, one for documentation — D3B-0 is in the two-reviewer class, so **a second
+independent pass remains outstanding**. `#1198` was merged on the owner's explicit instruction with
+that gap known and stated.
