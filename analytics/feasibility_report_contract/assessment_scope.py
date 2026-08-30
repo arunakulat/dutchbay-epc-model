@@ -89,6 +89,9 @@ _ASSESSMENT_CURRENCY_CODE_PATTERN = r"^[A-Z]{3}(?![\s\S])"
 _BINDING_UNIT_TOKEN_PATTERN = r"^[A-Za-z0-9%][A-Za-z0-9%._/*^()\-]{0,63}(?![\s\S])"
 _STABLE_IDENTIFIER_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:/-]*(?![\s\S])"
 _INVALID_COMPATIBILITY_ASSERTION_INPUT = "<invalid compatibility assertion>"
+_INVALID_COMPATIBILITY_ASSERTION_COLLECTION_INPUT = (
+    "<invalid compatibility assertion collection>"
+)
 _SEMVER_NUMERIC_IDENTIFIER = r"(?:0|[1-9][0-9]*)"
 _SEMVER_PRERELEASE_IDENTIFIER = r"(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
 _PROJECT_CASE_SEMVER_PATTERN = (
@@ -1148,6 +1151,20 @@ _COMPATIBILITY_ASSERTION_ADAPTER: TypeAdapter[CompatibilityAssertion] = TypeAdap
 )
 
 
+def _is_exact_compatibility_assertion_model_type(candidate: type[Any]) -> bool:
+    """Return whether a type is one exact trusted compatibility model."""
+    return (
+        candidate is ScenarioIdentityAssertion
+        or candidate is LocationAssertion
+        or candidate is JurisdictionSubjectAssertion
+        or candidate is TechnologyBindingAssertion
+        or candidate is GenerationCapacityAssertion
+        or candidate is StorageCapacityAssertion
+        or candidate is CostCompatibilityAssertion
+        or candidate is PriceBasisAssertion
+    )
+
+
 def _raw_policy_assertion_sort_key(
     raw_assertion: Any,
 ) -> tuple[int, str, str, str]:
@@ -1157,16 +1174,7 @@ def _raw_policy_assertion_sort_key(
         raw_category = dict.get(raw_assertion, "category")
         raw_assertion_id = dict.get(raw_assertion, "assertion_id")
         raw_kind = dict.get(raw_assertion, "kind")
-    elif (
-        raw_assertion_type is ScenarioIdentityAssertion
-        or raw_assertion_type is LocationAssertion
-        or raw_assertion_type is JurisdictionSubjectAssertion
-        or raw_assertion_type is TechnologyBindingAssertion
-        or raw_assertion_type is GenerationCapacityAssertion
-        or raw_assertion_type is StorageCapacityAssertion
-        or raw_assertion_type is CostCompatibilityAssertion
-        or raw_assertion_type is PriceBasisAssertion
-    ):
+    elif _is_exact_compatibility_assertion_model_type(raw_assertion_type):
         raw_fields = object.__getattribute__(raw_assertion, "__dict__")
         raw_category = dict.get(raw_fields, "category")
         raw_assertion_id = dict.get(raw_fields, "assertion_id")
@@ -1231,6 +1239,36 @@ def _bounded_child_line_error(
         "loc": (canonical_index, *error["loc"]),
         "input": _INVALID_COMPATIBILITY_ASSERTION_INPUT,
     }
+
+
+def _non_exact_model_child_error() -> dict[str, Any]:
+    """Return a bounded error for an accepted non-exact model subclass."""
+    return {
+        "type": "compatibility_assertion_type",
+        "loc": (),
+        "msg": "Input should be an exact compatibility assertion model or dictionary",
+        "input": _INVALID_COMPATIBILITY_ASSERTION_INPUT,
+    }
+
+
+def _bounded_assertion_collection_error(mode: str) -> ValidationError:
+    """Return a constant-input error for a non-exact assertion collection."""
+    error_type = "list_type" if mode == "json" else "tuple_type"
+    message = (
+        "Input should be a valid array"
+        if mode == "json"
+        else "Input should be a valid tuple"
+    )
+    return ValidationError.from_exception_data(
+        "V14BindingPolicy.assertions",
+        [
+            {
+                "type": PydanticCustomError(error_type, message),
+                "loc": (),
+                "input": _INVALID_COMPATIBILITY_ASSERTION_COLLECTION_INPUT,
+            }
+        ],
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1301,10 +1339,9 @@ class V14BindingPolicy(StrictFrozenModel):
         info: ValidationInfo,
     ) -> tuple[CompatibilityAssertion, ...]:
         """Validate children canonically while preserving authored tuple order."""
-        if not isinstance(raw_assertions, (list, tuple)):
-            return cast(tuple[CompatibilityAssertion, ...], handler(raw_assertions))
-        if info.mode == "python" and not isinstance(raw_assertions, tuple):
-            return cast(tuple[CompatibilityAssertion, ...], handler(raw_assertions))
+        expected_collection_type = list if info.mode == "json" else tuple
+        if type(raw_assertions) is not expected_collection_type:
+            raise _bounded_assertion_collection_error(info.mode)
 
         bundles: list[_PolicyAssertionValidationBundle] = []
         for authored_index, raw_assertion in enumerate(raw_assertions):
@@ -1321,6 +1358,11 @@ class V14BindingPolicy(StrictFrozenModel):
                         raw_assertion,
                         context=info.context,
                     )
+                if not _is_exact_compatibility_assertion_model_type(
+                    type(validated_child)
+                ):
+                    child_errors = (_non_exact_model_child_error(),)
+                    validated_child = None
             except ValidationError as exc:
                 child_errors = tuple(
                     sorted(

@@ -2619,6 +2619,102 @@ def test_policy_raw_key_type_allowlist_uses_identity_only() -> None:
     assert equality_calls == []
 
 
+def test_policy_collection_shape_is_exact_and_non_dispatching() -> None:
+    class DynamicClassObject:
+        class_calls = 0
+
+        @property
+        def __class__(self) -> type[object]:
+            self.class_calls += 1
+            raise RuntimeError("dynamic class must not execute")
+
+    class RaisingIterationTuple(tuple[object, ...]):
+        iteration_calls = 0
+
+        def __iter__(self) -> Any:
+            self.iteration_calls += 1
+            raise RuntimeError("overridden iterator must not execute")
+
+    for invalid_collection in (
+        DynamicClassObject(),
+        RaisingIterationTuple((1, 2)),
+    ):
+        payload = _validate(_request_payload()).model_dump()
+        payload["binding_policy"]["assertions"] = invalid_collection
+
+        for root in ("policy", "request"):
+            receipts: list[dict[str, object]] = []
+            for _ in range(2):
+                with pytest.raises(ValidationError) as exc_info:
+                    if root == "policy":
+                        V14BindingPolicy.model_validate(payload["binding_policy"])
+                    else:
+                        EvaluationRequest.model_validate(payload)
+                receipts.append(
+                    {
+                        "errors": exc_info.value.errors(),
+                        "text": str(exc_info.value),
+                        "json": exc_info.value.json(),
+                    }
+                )
+                assert {error["input"] for error in exc_info.value.errors()} == {
+                    "<invalid compatibility assertion collection>"
+                }
+            assert receipts[0] == receipts[1]
+
+        if type(invalid_collection) is DynamicClassObject:
+            assert invalid_collection.class_calls == 0
+        else:
+            assert invalid_collection.iteration_calls == 0
+
+
+def test_policy_model_subclass_is_bounded_before_outcome_serialization() -> None:
+    dump_calls: list[bool] = []
+
+    class RaisingDumpAssertion(assessment_scope_contract.ScenarioIdentityAssertion):
+        def model_dump_json(self, *args: object, **kwargs: object) -> str:
+            dump_calls.append(True)
+            raise RuntimeError("overridden serialization must not execute")
+
+    policy = _validate_policy(_request_payload())
+    scenario_assertion = next(
+        assertion
+        for assertion in policy.assertions
+        if type(assertion) is assessment_scope_contract.ScenarioIdentityAssertion
+    )
+    subclass_child = RaisingDumpAssertion.model_validate(
+        scenario_assertion.model_dump()
+    )
+    payload = _validate(_request_payload()).model_dump()
+    payload["binding_policy"]["assertions"] = (
+        subclass_child,
+        *policy.assertions[1:],
+    )
+
+    for root in ("policy", "request"):
+        receipts: list[dict[str, object]] = []
+        for _ in range(2):
+            with pytest.raises(ValidationError) as exc_info:
+                if root == "policy":
+                    V14BindingPolicy.model_validate(payload["binding_policy"])
+                else:
+                    EvaluationRequest.model_validate(payload)
+            errors = exc_info.value.errors(include_url=False)
+            receipts.append(
+                {
+                    "errors": errors,
+                    "text": str(exc_info.value),
+                    "json": exc_info.value.json(),
+                }
+            )
+            assert any(
+                error["type"] == "compatibility_assertion_type" for error in errors
+            )
+        assert receipts[0] == receipts[1]
+
+    assert dump_calls == []
+
+
 def test_policy_canonical_child_validator_preserves_python_strictness() -> None:
     policy = _validate_policy(_request_payload())
     normalized = policy.model_dump()

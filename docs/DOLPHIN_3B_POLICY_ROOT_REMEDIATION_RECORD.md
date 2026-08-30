@@ -446,6 +446,62 @@ mypy emitted only its pre-existing unused-configuration-section warning. This re
 receipt, not self-acceptance. A new immutable SHA requires fresh independent domain and assurance
 dispositions, current protected-main ancestry, a conflict-free PR and exact-head required CI.
 
+## 14. Exact collection and exact child-model successor correction
+
+Independent context-clean review of `b035ae0a920f447e3316882b0f5744112532dd51` accepted the
+identity-only child-type correction and preserved semantic corpus, then found residual caller
+dispatch at the collection root, tuple-subclass iteration and accepted model-subclass serialization.
+The exact dual VETO and receipts are preserved in the independent review record.
+
+The bounded successor closes the wrapper before any caller-controlled operation:
+
+- the raw collection is classified only with built-in `type()` and exact identity;
+- JSON mode accepts only an exact built-in list and Python mode only an exact built-in tuple;
+- every other collection value immediately receives one constant-input `list_type` or `tuple_type`
+  `ValidationError`, without class lookup, iteration, indexing or representation;
+- child validation remains delegated to `CompatibilityAssertion`;
+- after delegation, only an exact instance of one of the eight trusted model classes can be treated
+  as successful or serialized for the deterministic outcome key; and
+- an accepted model subclass is converted to a bounded `compatibility_assertion_type` child error
+  before any overridable model method is called.
+
+Durable controls validate a dynamic-class noncollection, a tuple subclass with an overridden
+iterator, and a trusted-model subclass with overridden outcome serialization twice at standalone
+policy and containing request roots. Complete structured/text/JSON receipts must be stable, raw
+inputs must be constant tokens, and all caller-hook ledgers must remain empty. Every prior
+dictionary-subclass, class-equality, scalar, duplicate/distinct-ID, strictness, ownership, matrix,
+schema and successful authored-order control remains mandatory.
+
+This is a validation-boundary correction only. It changes no accepted domain semantic, ProjectCase
+topology, evaluation, finance, application, grade, release or `HOLD` authority. It remains a local
+successor until governed gates and fresh exact-SHA reviews pass.
+
+### 14.1 Local successor receipt
+
+| Control | Result |
+|---|---|
+| Complete D3B-0 assessment-scope contract | `299 passed` |
+| Complete contract suite | `955 passed` |
+| D3A ProjectCase predecessor regression | `330 passed` |
+| D2 machine-contract predecessor regression | `298 passed` |
+| Contract-package branch coverage | `94.67%` total; modified assessment-scope module `96.96%` |
+| Dynamic-class collection-root negative control | passed twice at both public roots with zero hooks |
+| Tuple-subclass iterator negative control | passed twice at both public roots with zero hooks |
+| Accepted model-subclass serialization negative control | passed twice at both public roots with zero hooks |
+| Existing dictionary-subclass, class-equality, scalar, duplicate-ID, distinct-ID and authored-order controls | passed |
+| Ruff check and format check | passed |
+| Black and isort checks | passed |
+| Mypy `--no-incremental` on the assessment-scope export surface | passed |
+| Both Draft 2020-12 schema modes, strict/frozen ingress and public exports | passed in the focused suite |
+| Import/changelog tests and in-memory compilation | `17 passed`; compilation passed |
+| Forbidden-import/excluded-surface controls and `git diff --check` | passed |
+
+The test suites emitted only the repository's pre-existing Hypothesis `norecursedirs` warning;
+mypy emitted only its pre-existing unused-configuration-section warning. This is not
+self-acceptance. The frozen successor still requires fresh independent exact-SHA domain and
+assurance dispositions, current protected-main ancestry, a conflict-free PR and exact-head required
+CI before delivery.
+
 ## 13. Identity-only trusted-model successor correction
 
 Independent review of `e1e3c01a0d11694d51130f5d5d115008c971500a` proved that Section 13's
