@@ -1,7 +1,7 @@
 # Dolphin 3C-1a result-only projection implementation record
 
-**Status:** corrected replacement candidate; full local verification complete; exact-SHA review
-pending; no D2 package assembly or HOLD movement
+**Status:** second correction in progress after two exact-SHA rejections; broad verification and
+fresh exact-SHA review pending; no D2 package assembly or HOLD movement
 
 **Protected base:** `e40c13a2fbd4bd974078c4d1dd32e4b1e7ebdf3f` (`origin/main`, PR `#1208` merge)
 
@@ -66,7 +66,7 @@ tuple remained empty and its outcome was `success`. D3C-1a preserves the returne
 always carries the warning-channel limitation; an empty tuple never proves that no upstream warning
 occurred.
 
-## 3. Rejected first candidate and correction
+## 3. Rejected candidates and corrections
 
 The first exact candidate, commit `432061b9aa3b4b0aab958dbabcdf0e4719e9f9b7`, was independently
 **rejected** by both domain and assurance challengers. The branch was not pushed and no PR was
@@ -80,8 +80,22 @@ opened. Their convergent blockers were:
 - import-time taxonomy filesystem I/O; and
 - missing persisted schema, cold-import, no-I/O and real hash-seed traversal controls.
 
-The replacement preserves that rejection as evidence and corrects only the chartered result-only
-boundary. No D3C-1b, D3C-2 or D3D concern was pulled into this branch.
+The first replacement preserved that rejection as evidence and corrected only the chartered
+result-only boundary. It was frozen at
+`7fe0b2c6b00f645d148866856c0b70c8583d28a2`, independently reviewed by the same two challengers,
+and **rejected** before push or PR. The remaining blockers were:
+
+- engine-manifest substitutions that D3B's gateway would refuse;
+- whole-origin refusal of a D3B-valid empty DSCR series;
+- accidental 512-item facade limits below D3B's warning/receipt bounds;
+- an unbounded ProjectCase revision integer;
+- insertion-order-dependent hostile mapping-key failure selection; and
+- eager mapping-item allocation before an entry-count bound.
+
+The second correction remains inside D3C-1a. It adds a checksum-bound import-safe engine-identity
+leaf; aligns warning, FX-reason and receipt limits to D3B; makes empty DSCR a route-predicate
+absence; and fails deterministically before oversized mapping allocation. No D3C-1b, D3C-2 or D3D
+concern was pulled into this branch.
 
 ## 4. Recruitment, leases and recovery
 
@@ -97,15 +111,20 @@ Recruitment followed the separation-of-duties and lease rules:
 - that lease was revoked and acknowledged; and
 - the coordinator invoked the documented stalled-writer takeover exception as sole writer.
 
+After the first replacement was rejected, both challengers remained read-only and the coordinator
+opened the same sole-writer takeover lease for the narrow second correction. No challenger or
+revoked writer received a write lease.
+
 No two writers held a live lease concurrently. The first draft remains recoverable: exact bytes
 SHA-256 `2af8fee946e29ccd904f39d288cd05b1fb1a147fd258bb9d26238f251a17d667`, Git blob
 `16bc7ae293063ba5804b13ba8af73c52f1f13010`, annotated recovery tag
 `recovery/d3c1a-contract-draft-2af8fee` (tag object
 `f5fdcb7425a25867b5d6c9bc4903794605e9dd5f`).
 
-Assurance's no-filesystem-I/O blocker required one additional pure leaf,
-`taxonomy_identity.py`. It is a generated identity projection, not a competing authored SSOT: its
-canonical YAML path, exact source SHA-256 and ordered section IDs are bound by committed tests.
+Assurance's no-filesystem-I/O blockers required two pure generated identity leaves:
+`taxonomy_identity.py` and `engine_identity.py`. They are projections, not competing authored
+SSOTs: tests bind their exact paths, source SHA-256 values, ordered section IDs, engine version and
+manifest schema version back to the taxonomy YAML, `VERSION` and `analytics/run_manifest.py`.
 
 ## 5. Contract and translation controls
 
@@ -131,8 +150,11 @@ signature has one parameter and imports no evaluator, finance, application, API,
 persistence, network or filesystem surface.
 
 Before any scalar route is inspected, the adapter independently detaches and validates the exact
-frozen graph with depth/container/scalar/text occurrence bounds and cycle refusal. Its comparator
-distinguishes scalar types, mapping-key types and IEEE-754 bytes, including zero sign. It rechecks:
+frozen graph with depth/container/entry/scalar/text occurrence bounds and cycle refusal. Mapping
+size is checked before its bounded item snapshot, and hostile key failures use a deterministic
+priority independent of insertion order and hash seed. Envelope and manifest integers are bounded
+to 4096 bits. Its comparator distinguishes scalar types, mapping-key types and IEEE-754 bytes,
+including zero sign. It rechecks:
 
 - exactly one gateway call and the closed validation-module vocabulary;
 - exact success/degraded outcome, top-warning and structured-FX coherence;
@@ -140,7 +162,8 @@ distinguishes scalar types, mapping-key types and IEEE-754 bytes, including zero
 - complete top/nested annual-row, KPI and debt graphs;
 - ScenarioResult config against the evaluated-config digest;
 - KPI/ScenarioResult/debt reciprocal mirrors; and
-- exact manifest identity and evaluated digest.
+- all-string manifest keys, exact import-safe current engine/schema identities, and the evaluated
+  digest.
 
 It imports none of D3B's private comparator or private gateway validator. Every numeric projection
 receipt is revalidated and projected in order with unique assertion identity.
@@ -164,6 +187,9 @@ FX statistics distinguish absent, upstream `None`, wrong-type and present-but-co
 states. Present finite values remain `not_representable` until D3C-1b supplies the exact directed
 ProjectCase conversion, request price basis, timeline and source/date binding.
 
+An exact empty upstream `dscr_series` remains a valid D3B origin. It makes the DSCR routes
+`not_computed`; it does not invalidate unrelated carried observations or the whole projection.
+
 ### 5.4 Total path dispositions and pure taxonomy binding
 
 The old expected-key allowlist was replaced by an immutable path-disposition catalogue. Every
@@ -176,16 +202,18 @@ String, integer, boolean and binary64 key identities are distinct; binary64 keys
 bytes. More than 512 unknowns, unsupported key types or resource-bound violations fail with a
 bounded code and pointer.
 
-The contract/translator performs no filesystem I/O. The import-safe taxonomy identity leaf carries
-the generated ordered IDs and source SHA; tests bind both back to
-`config/feasibility_sections.yaml`. Runtime metrics, metadata, annual columns, schedules and the FX
-curve remain explicitly opaque/artifact-only. Finite `annual_rows[*].cfads_usd` is checked only as a
-predicate for the already-computed total; it is never summed.
+The contract/translator performs no filesystem I/O. Import-safe taxonomy and engine identity
+leaves carry generated values and source hashes; tests bind them back to
+`config/feasibility_sections.yaml`, `VERSION` and `analytics/run_manifest.py`. Runtime metrics,
+metadata, annual columns, schedules and the FX curve remain explicitly opaque/artifact-only.
+Finite `annual_rows[*].cfads_usd` is checked only as a predicate for the already-computed total; it
+is never summed.
 
 ## 6. Verification evidence
 
-The corrected focused suite contains 112 tests and covers all three changed implementation modules
-at **100% line and branch coverage** (951 statements and 416 branches). Persistent controls include:
+The second-correction focused suite contains 120 tests and covers all four changed implementation
+modules at **100% line and branch coverage** (999 statements and 430 branches). Persistent controls
+include:
 
 - one genuine public gateway reached through D3B and then projected without a second call;
 - an evaluator spy and import-direction control proving no D3C gateway/finance invocation;
@@ -195,6 +223,11 @@ at **100% line and branch coverage** (951 statements and 416 branches). Persiste
 - both Draft 2020-12 schema modes, canonical JSON validation, round trip and fresh-schema isolation;
 - the complete gateway/module/status/path/mode/config/duplicate/warning/FX/receipt hostile matrix;
 - taxonomy checksum parity, fresh-process no-I/O import/call and three cold-import orders;
+- engine-version and manifest-schema source/hash parity without runtime source reads;
+- D3B-valid empty DSCR, 513-warning and 513-receipt positive oracles;
+- 4096-bit revision boundaries across origin, Python, JSON and serialization;
+- pre-allocation oversized-mapping refusal; and
+- insertion-order- and real-hash-seed-stable hostile key-failure receipts;
 - total static and observed path-disposition parity; and
 - hash-seed-stable real unknown traversal and first origin failure.
 
@@ -208,20 +241,20 @@ The pre-change `tests/contracts` baseline was `1200 passed, 1 warning`. Replacem
 
 | Gate | Replacement candidate result |
 |---|---:|
-| Focused D3C-1a hostile/oracle suite | `112 passed` |
-| Focused changed-module line/branch coverage | `100.00%` (`951` statements, `416` branches) |
+| Focused D3C-1a hostile/oracle suite | `120 passed` |
+| Focused changed-module line/branch coverage | `100.00%` (`999` statements, `430` branches) |
 | Ruff / Black / isort / Bandit | pass |
-| Narrow mypy over three implementation modules | `Success: no issues found` |
-| Complete `tests/contracts` gate | `1312 passed, 1 inherited warning` |
-| Full governed ordinary suite | `7333 passed, 18 skipped, 23 warnings` in `722.75s` |
-| Full governed coverage floor | `95.31%` (`32537` statements, `1527` missed; `>=95%` required) |
+| Narrow mypy over four implementation modules | `Success: no issues found` |
+| Complete `tests/contracts` gate | `1320 passed, 1 inherited warning` |
+| Full governed ordinary suite | pending second-correction run |
+| Full governed coverage floor | pending second-correction run (`>=95%` required) |
 
-The full governed suite and coverage receipt ran twice against corrected code commit
+The historical full governed suite and coverage receipt ran twice against now-rejected code commit
 `a2d681883e5a62d4af638a0b033e0364f4d083b6`; the first pass's summary stream was lost when its PTY
 closed, but its completed coverage database independently reported `95.31%`. The controlled rerun
-returned exit zero with the exact counts above and deleted its temporary diagnostic capture and
-coverage database after emitting the concise receipt. The later receipt-only documentation commit
-changes no source or test blob; focused and contract gates are rerun at that final review SHA.
+returned exit zero with `7333 passed, 18 skipped, 23 warnings` and `95.31%` coverage (`32537`
+statements, `1527` missed), then deleted its temporary diagnostic capture and coverage database.
+That historical receipt is rejection evidence, not verification of the second correction.
 
 Inherited warnings/skips are not D3C success evidence. Exact-head CI remains merge authority and is
 recorded in the PR rather than predicted here.

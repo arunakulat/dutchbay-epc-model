@@ -27,6 +27,10 @@ from pydantic import (
     model_validator,
 )
 
+from .engine_identity import (
+    ENGINE_VERSION_IDENTITY,
+    MANIFEST_SCHEMA_VERSION_IDENTITY,
+)
 from .taxonomy_identity import FEASIBILITY_SECTION_IDS
 from .vocabulary import StrictFrozenModel
 
@@ -37,9 +41,12 @@ RESULT_FACADE_SOURCE_CONTRACT: Final = "analytics.contracts_v14.D3BExecutionSucc
 RESULT_FACADE_WARNING_LIMITATION_CODE: Final = "upstream_warning_channel_not_exhaustive"
 
 _MAX_RECORDS = 512
+_MAX_NUMERIC_PROJECTION_RECEIPTS = 1_024
+_MAX_WARNINGS = 100_000
+_MAX_REVISION_BITS = 4_096
 _MAX_PATH_PARTS = 16
 _MAX_TEXT = 4_096
-_MAX_WARNING_TEXT = 65_536
+_MAX_WARNING_TEXT = 1_000_000
 _STABLE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}\Z")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}\Z")
 _GIT_COMMIT_RE = re.compile(r"^[0-9a-f]{7,64}\Z")
@@ -1231,7 +1238,7 @@ class FxIntegrationProjection(StrictFrozenModel):
     warning: ExactWarningText | None
     degraded: Annotated[bool, Strict()]
     degraded_reasons: Annotated[
-        tuple[ExactWarningText, ...], Field(max_length=_MAX_RECORDS)
+        tuple[ExactWarningText, ...], Field(max_length=_MAX_WARNINGS)
     ]
 
     @field_validator("degraded_reasons", mode="before")
@@ -1265,6 +1272,28 @@ class EngineManifestProjection(StrictFrozenModel):
     seed: Annotated[int, Strict()] | None
     validation_mode: Literal["strict"]
     manifest_schema_version: ExactText
+
+    @field_validator("seed", mode="before")
+    @classmethod
+    def _seed_is_exact_and_bounded(cls, value: object) -> object:
+        if value is not None and (
+            type(value) is not int or value.bit_length() > _MAX_REVISION_BITS
+        ):
+            raise ValueError(
+                "manifest seed must be an exact integer of at most 4096 bits"
+            )
+        return value
+
+    @model_validator(mode="after")
+    def _engine_identity_is_current(self) -> "EngineManifestProjection":
+        if (
+            self.engine_version != ENGINE_VERSION_IDENTITY
+            or self.manifest_schema_version != MANIFEST_SCHEMA_VERSION_IDENTITY
+        ):
+            raise ValueError(
+                "engine manifest version differs from the import-safe current identity"
+            )
+        return self
 
 
 class ProjectionLimitation(StrictFrozenModel):
@@ -1310,10 +1339,11 @@ class D3CResultProjection(StrictFrozenModel):
     ]
     origin_invariants: OriginInvariantProjection
     numeric_projection_receipts: Annotated[
-        tuple[NumericProjectionReceiptProjection, ...], Field(max_length=_MAX_RECORDS)
+        tuple[NumericProjectionReceiptProjection, ...],
+        Field(max_length=_MAX_NUMERIC_PROJECTION_RECEIPTS),
     ]
-    gateway_warnings: Annotated[tuple[str, ...], Field(max_length=_MAX_RECORDS)]
-    returned_warnings: Annotated[tuple[str, ...], Field(max_length=_MAX_RECORDS)]
+    gateway_warnings: Annotated[tuple[str, ...], Field(max_length=_MAX_WARNINGS)]
+    returned_warnings: Annotated[tuple[str, ...], Field(max_length=_MAX_WARNINGS)]
     fx_degraded: Annotated[bool, Strict()]
     fx_integration: FxIntegrationProjection
     engine_manifest: EngineManifestProjection
@@ -1336,6 +1366,20 @@ class D3CResultProjection(StrictFrozenModel):
     limitations: Annotated[
         tuple[ProjectionLimitation, ...], Field(min_length=1, max_length=1)
     ]
+
+    @field_validator("project_case_revision", mode="before")
+    @classmethod
+    def _revision_is_exact_and_bounded(cls, value: object) -> object:
+        if (
+            type(value) is not int
+            or value <= 0
+            or value.bit_length() > _MAX_REVISION_BITS
+        ):
+            raise ValueError(
+                "ProjectCase revision must be a positive exact integer of at most "
+                "4096 bits"
+            )
+        return value
 
     @field_validator("gateway_warnings", "returned_warnings", mode="before")
     @classmethod

@@ -26,6 +26,10 @@ from analytics.feasibility_report_contract.assessment_scope import (
     ValidationModule,
     resolved_config_sha256,
 )
+from analytics.feasibility_report_contract.engine_identity import (
+    ENGINE_VERSION_IDENTITY,
+    MANIFEST_SCHEMA_VERSION_IDENTITY,
+)
 from analytics.feasibility_report_contract.result_facade import (
     D3C_ARTIFACT_ONLY_PATHS,
     D3C_INSPECTED_LAYER_KEYS,
@@ -131,44 +135,52 @@ def _detach_frozen_occurrences(
             raise _origin_error(
                 "origin_cycle", "/full_result", "result contains a mapping cycle"
             )
+        next_container_count = totals[0] + 1
+        try:
+            entry_count = len(value)
+        except RuntimeError as exc:  # pragma: no cover - concurrent backing mutation
+            raise _origin_error(
+                "origin_changed", "/full_result", "result changed during detachment"
+            ) from exc
+        if (
+            next_container_count > _MAX_RESULT_CONTAINERS
+            or entry_count > _MAX_RESULT_SCALARS
+        ):
+            raise _origin_error(
+                "origin_volume_exceeded",
+                "/full_result",
+                "result mapping exceeds bounded container/entry volume",
+            )
         try:
             items = tuple(value.items())
         except RuntimeError as exc:  # pragma: no cover - concurrent backing mutation
             raise _origin_error(
                 "origin_changed", "/full_result", "result changed during detachment"
             ) from exc
+        if len(items) != entry_count:  # pragma: no cover - concurrent mutation
+            raise _origin_error(
+                "origin_changed", "/full_result", "result changed during detachment"
+            )
+        key_faults: list[str] = []
         for key, _ in items:
             if type(key) is str:
                 totals[2] += len(key)
             elif type(key) is int:
                 if key.bit_length() > 4096:
-                    raise _origin_error(
-                        "origin_key_invalid",
-                        "/full_result",
-                        "integer mapping key exceeds 4096 bits",
-                    )
+                    key_faults.append("integer mapping key exceeds 4096 bits")
             elif type(key) is float:
                 if not math.isfinite(key):
-                    raise _origin_error(
-                        "origin_key_invalid",
-                        "/full_result",
-                        "mapping key is not finite binary64",
-                    )
+                    key_faults.append("mapping key is not finite binary64")
             else:
-                raise _origin_error(
-                    "origin_key_invalid",
-                    "/full_result",
-                    "mapping key has an unsupported exact type",
-                )
-        totals[0] += 1
-        if (
-            totals[0] > _MAX_RESULT_CONTAINERS
-            or totals[2] > _MAX_RESULT_TEXT_CODEPOINTS
-        ):
+                key_faults.append("mapping key has an unsupported exact type")
+        if key_faults:
+            raise _origin_error("origin_key_invalid", "/full_result", min(key_faults))
+        totals[0] = next_container_count
+        if totals[2] > _MAX_RESULT_TEXT_CODEPOINTS:
             raise _origin_error(
                 "origin_volume_exceeded",
                 "/full_result",
-                "result exceeds bounded container/text volume",
+                "result exceeds bounded text volume",
             )
         backing: dict[Any, Any] = {}
         ancestors.add(marker)
@@ -867,6 +879,12 @@ def _manifest_projection(manifest: Mapping[Any, Any]) -> EngineManifestProjectio
         raise ResultProjectionError(
             "manifest_not_frozen", "/run_manifest", "expected an exact mapping proxy"
         )
+    if any(type(key) is not str for key in manifest):
+        raise ResultProjectionError(
+            "manifest_key_invalid",
+            "/run_manifest",
+            "every engine-manifest key must be an exact string",
+        )
 
     def required(name: str) -> object:
         value = manifest.get(name, _MISSING)
@@ -878,18 +896,33 @@ def _manifest_projection(manifest: Mapping[Any, Any]) -> EngineManifestProjectio
             )
         return value
 
+    if (
+        required("engine_version") != ENGINE_VERSION_IDENTITY
+        or required("manifest_schema_version") != MANIFEST_SCHEMA_VERSION_IDENTITY
+    ):
+        raise ResultProjectionError(
+            "manifest_identity_invalid",
+            "/run_manifest",
+            "engine version or manifest schema differs from the current identity",
+        )
+
+    config_sha256 = required("config_sha256")
+    engine_version = required("engine_version")
+    git_sha = required("git_sha")
+    generated_at = required("generated_at")
+    seed = required("seed")
+    validation_mode = required("validation_mode")
+    manifest_schema_version = required("manifest_schema_version")
     try:
         return EngineManifestProjection(
-            config_sha256=cast(str, required("config_sha256")),
-            engine_version=cast(str, required("engine_version")),
-            git_sha=cast(str, required("git_sha")),
-            generated_at=cast(str, required("generated_at")),
-            seed=cast(int | None, required("seed")),
-            validation_mode=cast(Literal["strict"], required("validation_mode")),
-            manifest_schema_version=cast(str, required("manifest_schema_version")),
+            config_sha256=cast(str, config_sha256),
+            engine_version=cast(str, engine_version),
+            git_sha=cast(str, git_sha),
+            generated_at=cast(str, generated_at),
+            seed=cast(int | None, seed),
+            validation_mode=cast(Literal["strict"], validation_mode),
+            manifest_schema_version=cast(str, manifest_schema_version),
         )
-    except ResultProjectionError:
-        raise
     except (TypeError, ValueError) as exc:
         raise ResultProjectionError(
             "manifest_field_invalid",
@@ -935,11 +968,12 @@ def _validate_origin(result: D3BExecutionSuccess) -> _ValidatedOrigin:
     if (
         type(result.project_case_revision) is not int
         or result.project_case_revision <= 0
+        or result.project_case_revision.bit_length() > 4096
     ):
         raise _origin_error(
             "origin_envelope_invalid",
             "/project_case_revision",
-            "ProjectCase revision must be a positive exact integer",
+            "ProjectCase revision must be a positive exact integer of at most 4096 bits",
         )
     for name in (
         "project_case_sha256",
@@ -1061,7 +1095,6 @@ def _validate_origin(result: D3BExecutionSuccess) -> _ValidatedOrigin:
         or not scenario["debt_result"]
         or not scenario["kpis"]
         or not scenario["metadata"]
-        or not scenario["dscr_series"]
         or any(
             type(item) is not float or not math.isfinite(item)
             for item in scenario["dscr_series"]

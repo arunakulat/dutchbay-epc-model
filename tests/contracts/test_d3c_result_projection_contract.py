@@ -52,6 +52,14 @@ from analytics.feasibility_report_contract import (
     UnavailableResultObservation,
     UnrecognizedUpstreamKey,
 )
+from analytics.feasibility_report_contract.engine_identity import (
+    ENGINE_VERSION_IDENTITY,
+    ENGINE_VERSION_SOURCE_PATH,
+    ENGINE_VERSION_SOURCE_SHA256,
+    MANIFEST_SCHEMA_SOURCE_PATH,
+    MANIFEST_SCHEMA_SOURCE_SHA256,
+    MANIFEST_SCHEMA_VERSION_IDENTITY,
+)
 from analytics.feasibility_report_contract.taxonomy_identity import (
     FEASIBILITY_SECTION_IDS,
     FEASIBILITY_TAXONOMY_SOURCE_PATH,
@@ -900,7 +908,7 @@ def test_returned_warning_python_ingress_is_exact_and_bounded(
     for warnings, message in (
         ([], "exact tuple"),
         ((1,), "exact strings"),
-        (("x" * 65_537,), "text bound"),
+        (("x" * 1_000_001,), "text bound"),
     ):
         payload["returned_warnings"] = warnings
         with pytest.raises(ValidationError, match=message):
@@ -923,6 +931,13 @@ def test_required_scenario_mirror_and_container_tampering_refuse_origin(
     )
     with pytest.raises(ResultProjectionError, match="origin_surface_invalid"):
         project_d3b_result(blocked)
+
+    empty_scenario_name = _replace_result(
+        accepted_result,
+        lambda payload: payload["scenario_result"].__setitem__("scenario_name", ""),
+    )
+    with pytest.raises(ResultProjectionError, match="scenario_origin_invalid"):
+        project_d3b_result(empty_scenario_name)
 
 
 def test_equity_and_prudential_status_predicates_fail_closed(
@@ -959,8 +974,17 @@ def test_series_debt_balloon_and_integer_predicates_fail_closed(
         payload["kpis"]["avg_dscr"] = 1.2
         payload["scenario_result"]["dscr_series"] = []
 
-    with pytest.raises(ResultProjectionError, match="scenario_origin_invalid"):
-        project_d3b_result(_replace_result(accepted_result, no_series))
+    no_series_projection = project_d3b_result(
+        _replace_result(accepted_result, no_series)
+    )
+    assert (
+        _observation(no_series_projection, "route:kpis.min_dscr").state
+        is ResultObservationState.NOT_COMPUTED
+    )
+    assert (
+        _observation(no_series_projection, "route:kpis.avg_dscr").state
+        is ResultObservationState.NOT_COMPUTED
+    )
 
     def no_live_debt(payload: dict[Any, Any]) -> None:
         payload["debt_result"]["avg_debt_rate"] = 0.05
@@ -1188,16 +1212,60 @@ def test_taxonomy_identity_leaf_is_checksum_guarded_and_import_safe() -> None:
     assert load_feasibility_taxonomy().section_names == FEASIBILITY_SECTION_IDS
 
 
+def test_engine_identity_leaf_is_checksum_guarded_and_source_exact() -> None:
+    root = _MODULE.parents[1]
+    version_source = root / ENGINE_VERSION_SOURCE_PATH
+    manifest_source = root / MANIFEST_SCHEMA_SOURCE_PATH
+    assert hashlib.sha256(version_source.read_bytes()).hexdigest() == (
+        ENGINE_VERSION_SOURCE_SHA256
+    )
+    assert hashlib.sha256(manifest_source.read_bytes()).hexdigest() == (
+        MANIFEST_SCHEMA_SOURCE_SHA256
+    )
+    assert version_source.read_text(encoding="utf-8").strip() == (
+        ENGINE_VERSION_IDENTITY
+    )
+    from analytics.run_manifest import MANIFEST_SCHEMA_VERSION
+
+    assert MANIFEST_SCHEMA_VERSION == MANIFEST_SCHEMA_VERSION_IDENTITY
+
+
 def test_result_projection_import_and_call_do_not_read_or_write_taxonomy_files() -> (
     None
 ):
     script = r"""
 import importlib
 import logging
-import sys
 import tempfile
 from pathlib import Path
+from pydantic import BaseModel
 from pytest import MonkeyPatch
+
+class _PydanticPluginPrime(BaseModel):
+    value: int
+
+_PydanticPluginPrime(value=1)
+_PydanticPluginPrime.model_json_schema()
+
+original_read_text = Path.read_text
+original_read_bytes = Path.read_bytes
+original_write_text = Path.write_text
+original_write_bytes = Path.write_bytes
+
+def denied(*args, **kwargs):
+    raise AssertionError('pure D3C-1a path attempted filesystem I/O')
+
+Path.read_text = denied
+Path.read_bytes = denied
+Path.write_text = denied
+Path.write_bytes = denied
+module = importlib.import_module('analytics.feasibility_result_projection')
+
+Path.read_text = original_read_text
+Path.read_bytes = original_read_bytes
+Path.write_text = original_write_text
+Path.write_bytes = original_write_bytes
+
 import analytics.feasibility_execution as execution
 from tests.contracts.test_d3b_execution_contract import (
     _AUTHORITY_ID,
@@ -1219,22 +1287,17 @@ with tempfile.TemporaryDirectory() as tmp:
             request=bundle.request,
             scenario_authority_id=_AUTHORITY_ID,
         )
-        sys.modules.pop(
-            'analytics.feasibility_report_contract.result_facade', None
-        )
-        sys.modules.pop('analytics.feasibility_result_projection', None)
-
-        def denied(*args, **kwargs):
-            raise AssertionError('pure D3C-1a path attempted filesystem I/O')
-
         Path.read_text = denied
         Path.read_bytes = denied
         Path.write_text = denied
         Path.write_bytes = denied
-        module = importlib.import_module('analytics.feasibility_result_projection')
         projection = module.project_d3b_result(result)
         print(projection.schema_id)
     finally:
+        Path.read_text = original_read_text
+        Path.read_bytes = original_read_bytes
+        Path.write_text = original_write_text
+        Path.write_bytes = original_write_bytes
         logging.disable(logging.NOTSET)
         monkeypatch.undo()
 """
@@ -1860,7 +1923,7 @@ def test_new_numeric_fx_and_route_models_fail_closed_on_hostile_lexemes(
             dict(
                 attempted=True,
                 succeeded=False,
-                warning="x" * 65_537,
+                warning="x" * 1_000_001,
                 degraded=False,
                 degraded_reasons=(),
             ),
@@ -1918,6 +1981,216 @@ def test_projection_graph_rechecks_new_structured_origins(
         D3CResultProjection.model_validate(duplicate_receipts)
 
 
+def test_manifest_identity_key_shape_and_seed_substitutions_are_refused(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    for mutator, code in (
+        (
+            lambda payload: payload["run_manifest"].__setitem__(
+                "engine_version", "99.99.99"
+            ),
+            "manifest_identity_invalid",
+        ),
+        (
+            lambda payload: payload["run_manifest"].__setitem__(
+                "manifest_schema_version", "99.99"
+            ),
+            "manifest_identity_invalid",
+        ),
+        (
+            lambda payload: payload["run_manifest"].__setitem__(7, "opaque"),
+            "manifest_key_invalid",
+        ),
+    ):
+        with pytest.raises(ResultProjectionError, match=code):
+            project_d3b_result(_replace_result(accepted_result, mutator))
+
+    seed_payload = copy.deepcopy(accepted_result.model_dump()["full_result"])
+    seed_payload["run_manifest"]["seed"] = 1 << 4096
+    frozen_seed_payload = _freeze(seed_payload)
+    hostile_seed = copy.copy(accepted_result)
+    object.__setattr__(hostile_seed, "full_result", frozen_seed_payload)
+    object.__setattr__(
+        hostile_seed, "run_manifest", frozen_seed_payload["run_manifest"]
+    )
+    with pytest.raises(ResultProjectionError, match="origin_scalar_invalid"):
+        project_d3b_result(hostile_seed)
+
+    manifest_payload = project_d3b_result(accepted_result).engine_manifest.model_dump()
+    for updates, message in (
+        ({"engine_version": "99.99.99"}, "current identity"),
+        ({"manifest_schema_version": "99.99"}, "current identity"),
+        ({"seed": 1 << 4096}, "at most 4096 bits"),
+    ):
+        with pytest.raises(ValidationError, match=message):
+            EngineManifestProjection.model_validate({**manifest_payload, **updates})
+
+
+def test_public_d3b_empty_dscr_series_projects_route_level_absence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bundle = _bundle(tmp_path, monkeypatch)
+
+    def gateway(**kwargs: Any) -> dict[str, Any]:
+        payload = _gateway_result(kwargs["raw_config"], kwargs["overrides"])
+        payload["scenario_result"]["dscr_series"] = []
+        return payload
+
+    _install_gateway(monkeypatch, gateway)
+    result = execution.execute_evaluation_request(
+        project_case=bundle.project_case,
+        request=bundle.request,
+        scenario_authority_id=_AUTHORITY_ID,
+    )
+    assert type(result) is D3BExecutionSuccess
+    assert result.full_result["scenario_result"]["dscr_series"] == ()
+
+    projection = project_d3b_result(result)
+    assert (
+        _observation(projection, "route:kpis.min_dscr").state
+        is ResultObservationState.NOT_COMPUTED
+    )
+    assert (
+        _observation(projection, "route:kpis.avg_dscr").state
+        is ResultObservationState.NOT_COMPUTED
+    )
+    assert (
+        _observation(projection, "route:kpis.project_irr").state
+        is ResultObservationState.CARRIED
+    )
+
+
+def test_public_d3b_warning_bound_is_not_silently_narrowed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bundle = _bundle(tmp_path, monkeypatch)
+
+    def gateway(**kwargs: Any) -> dict[str, Any]:
+        payload = _gateway_result(kwargs["raw_config"], kwargs["overrides"])
+        payload["warnings"] = [f"warning-{index}" for index in range(513)]
+        return payload
+
+    _install_gateway(monkeypatch, gateway)
+    result = execution.execute_evaluation_request(
+        project_case=bundle.project_case,
+        request=bundle.request,
+        scenario_authority_id=_AUTHORITY_ID,
+    )
+    assert type(result) is D3BExecutionSuccess
+    assert len(result.warnings) == 513
+
+    projection = project_d3b_result(result)
+    assert projection.gateway_warnings == result.warnings
+    assert projection.returned_warnings == result.warnings
+
+
+def test_d3b_numeric_receipt_bound_is_not_silently_narrowed(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    source = accepted_result.numeric_projection_receipts[0]
+    receipts = tuple(
+        replace(source, assertion_id=f"assertion:bulk-{index}") for index in range(513)
+    )
+    expanded = replace(accepted_result, numeric_projection_receipts=receipts)
+    assert type(expanded) is D3BExecutionSuccess
+
+    projection = project_d3b_result(expanded)
+    assert tuple(
+        item.assertion_id for item in projection.numeric_projection_receipts
+    ) == tuple(item.assertion_id for item in receipts)
+
+
+def test_project_case_revision_is_bounded_at_origin_python_json_and_dump(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    boundary_value = 1 << 4095
+    boundary = replace(accepted_result, project_case_revision=boundary_value)
+    projection = project_d3b_result(boundary)
+    assert projection.project_case_revision == boundary_value
+    assert D3CResultProjection.model_validate(projection.model_dump()) == projection
+    assert (
+        D3CResultProjection.model_validate_json(projection.model_dump_json())
+        == projection
+    )
+
+    above_value = 1 << 4096
+    above = replace(accepted_result, project_case_revision=above_value)
+    with pytest.raises(ResultProjectionError, match="at most 4096 bits"):
+        project_d3b_result(above)
+
+    payload = projection.model_dump(mode="json")
+    payload["project_case_revision"] = above_value
+    with pytest.raises(ValidationError, match="at most 4096 bits"):
+        D3CResultProjection.model_validate(payload)
+    with pytest.raises(ValidationError, match="at most 4096 bits"):
+        D3CResultProjection.model_validate_json(json.dumps(payload))
+
+
+def test_origin_key_failure_is_insertion_order_independent_and_prebounded() -> None:
+    huge = 1 << 4097
+    nonfinite = float("nan")
+    failures: list[tuple[str, str, str]] = []
+    for keys in ((huge, nonfinite), (nonfinite, huge)):
+        with pytest.raises(ResultProjectionError) as captured:
+            projection_module._detach_frozen_occurrences(
+                MappingProxyType({key: None for key in keys})
+            )
+        failures.append(
+            (captured.value.code, captured.value.pointer, captured.value.detail)
+        )
+    assert (
+        failures[0]
+        == failures[1]
+        == (
+            "origin_key_invalid",
+            "/full_result",
+            "integer mapping key exceeds 4096 bits",
+        )
+    )
+
+    unsupported_value = object()
+    oversized = MappingProxyType(dict.fromkeys(range(100_001), unsupported_value))
+    with pytest.raises(
+        ResultProjectionError, match="mapping exceeds bounded"
+    ) as captured:
+        projection_module._detach_frozen_occurrences(oversized)
+    assert captured.value.code == "origin_volume_exceeded"
+
+
+def test_hostile_key_failure_is_hash_seed_and_insertion_order_stable() -> None:
+    script = r"""
+import json
+from types import MappingProxyType
+from analytics.feasibility_result_projection import _detach_frozen_occurrences
+
+huge = 1 << 4097
+nonfinite = float('nan')
+for keys in ((huge, nonfinite), (nonfinite, huge)):
+    try:
+        _detach_frozen_occurrences(MappingProxyType({key: None for key in keys}))
+    except Exception as exc:
+        print(json.dumps([exc.code, exc.pointer, exc.detail]))
+"""
+    outputs: list[str] = []
+    for seed in ("1", "17", "8675309"):
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=_MODULE.parents[1],
+            env=dict(
+                os.environ,
+                PYTHONHASHSEED=seed,
+                PYTHONDONTWRITEBYTECODE="1",
+            ),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        outputs.append(completed.stdout)
+    assert len(set(outputs)) == 1
+    first, second = outputs[0].splitlines()
+    assert first == second
+
+
 def test_private_origin_helpers_cover_resource_exactness_and_config_edges() -> None:
     with pytest.raises(ResultProjectionError, match="origin_depth_exceeded"):
         projection_module._detach_frozen_occurrences(None, depth=129)
@@ -1929,9 +2202,13 @@ def test_private_origin_helpers_cover_resource_exactness_and_config_edges() -> N
         )
     with pytest.raises(ResultProjectionError, match="unsupported exact type"):
         projection_module._detach_frozen_occurrences(MappingProxyType({True: None}))
-    with pytest.raises(ResultProjectionError, match="container/text volume"):
+    with pytest.raises(ResultProjectionError, match="container/entry volume"):
         projection_module._detach_frozen_occurrences(
             MappingProxyType({"a": None}), counts=[10_000, 0, 0]
+        )
+    with pytest.raises(ResultProjectionError, match="bounded text volume"):
+        projection_module._detach_frozen_occurrences(
+            MappingProxyType({"a": None}), counts=[0, 0, 1_000_000]
         )
     with pytest.raises(ResultProjectionError, match="container volume"):
         projection_module._detach_frozen_occurrences((), counts=[10_000, 0, 0])
