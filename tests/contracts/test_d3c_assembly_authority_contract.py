@@ -60,7 +60,7 @@ def _pack(*, pack_id: str, kind: str) -> dict[str, Any]:
         "review_date": date(2026, 9, 30),
         "compatible_contract_versions": (FEASIBILITY_REPORT_CONTRACT_VERSION,),
         "project_stages": ("screening",),
-        "section_ids": ("20_appendices_provenance_audit_trail",),
+        "section_ids": ("appendices_provenance_audit_trail",),
         "capability_ids": (f"capability:{kind}",),
         "evidence_minima": (),
         "cross_field_rules": ("Exact pack axis and version must remain visible.",),
@@ -204,7 +204,7 @@ def _accepted_payload() -> dict[str, Any]:
                 "jurisdictions": ("FIC",),
                 "technology_ids": ("wind",),
                 "project_boundary": "Fictionland wind contract fixture",
-                "section_ids": ("20_appendices_provenance_audit_trail",),
+                "section_ids": ("appendices_provenance_audit_trail",),
                 "period": "2026-08-31 controlled fixture",
                 "licence_or_publication_rights": "Internal test use only.",
                 "publication_permitted": False,
@@ -478,12 +478,12 @@ def test_schema_version_and_unknown_fields_are_mandatory_and_closed() -> None:
         (
             ("distribution", "scope_intended_audiences"),
             ("Board circulation",),
-            "does not cover the scope audiences",
+            "audiences do not equal the held scope",
         ),
         (
             ("distribution", "scope_intended_uses"),
             ("Lender reliance",),
-            "does not cover the scope intended uses",
+            "uses do not equal the held scope",
         ),
         (
             ("distribution", "control", "artifact_ids"),
@@ -493,7 +493,7 @@ def test_schema_version_and_unknown_fields_are_mandatory_and_closed() -> None:
                 "artifact:fx_curve",
                 "artifact:fx_curve",
             ),
-            "artifact_ids contain duplicates",
+            "artifact_ids contains duplicate identities",
         ),
     ),
 )
@@ -580,7 +580,7 @@ def test_duplicate_byte_roles_and_artifact_reuse_are_refused() -> None:
         (
             ("artifact_records", 0, "created_at"),
             _ALLOCATED,
-            "outside authority chronology",
+            "outside engine/authority chronology",
         ),
         (
             ("byte_artifact_bindings", 0, "artifact_id"),
@@ -728,6 +728,229 @@ def test_valid_source_supersession_is_retained_in_the_exact_graph() -> None:
 
     accepted = _validate(payload)
     assert accepted.source_records[0].supersedes_source_id == predecessor["source_id"]
+
+
+@pytest.mark.parametrize(
+    ("path", "value", "message"),
+    (
+        (
+            ("report_identity", "report_id"),
+            " report:d3c-fixture ",
+            "not an exact stable identifier",
+        ),
+        (
+            ("actor_records", 0, "actor_id"),
+            " actor:d3c-orchestrator ",
+            "not an exact stable identifier",
+        ),
+        (
+            ("source_records", 0, "source_id"),
+            " source:runtime ",
+            "not an exact stable identifier",
+        ),
+        (
+            ("pack_bindings", 0, "pack_id"),
+            " pack:fic ",
+            "not an exact stable identifier",
+        ),
+        (
+            ("artifact_records", 0, "artifact_id"),
+            " artifact:annual_rows ",
+            "not an exact stable identifier",
+        ),
+        (
+            ("distribution", "control", "distribution_id"),
+            " distribution:d3c-fixture ",
+            "not an exact stable identifier",
+        ),
+        (
+            ("distribution", "control", "intended_audiences"),
+            (" Internal engineering reviewers ",),
+            "not exact bounded text",
+        ),
+    ),
+)
+def test_nested_d2_wire_aliases_are_refused_before_normalization(
+    path: tuple[str | int, ...], value: Any, message: str
+) -> None:
+    payload = _accepted_payload()
+    _set(payload, path, value)
+    with pytest.raises(ValidationError, match=message):
+        _validate(payload)
+
+
+def test_duplicate_pack_references_are_refused_before_set_reconciliation() -> None:
+    payload = _accepted_payload()
+    payload["pack_bindings"][0]["capability_ids"] = (
+        "capability:jurisdiction",
+        "capability:jurisdiction",
+    )
+    with pytest.raises(ValidationError, match="contains duplicate identities"):
+        _validate(payload)
+
+
+def test_result_artifacts_cannot_predate_the_engine_run() -> None:
+    payload = _accepted_payload()
+    early = datetime(2026, 8, 31, 2, 30, tzinfo=_UTC)
+    payload["artifact_records"][0]["created_at"] = early
+    payload["byte_artifact_bindings"][0]["created_at"] = early
+    with pytest.raises(ValidationError, match="outside engine/authority chronology"):
+        _validate(payload)
+
+
+def test_each_technology_axis_has_exactly_one_pack_but_hybrids_remain_valid() -> None:
+    payload = _accepted_payload()
+    duplicate = _pack(pack_id="pack:wind-duplicate", kind="technology")
+    duplicate["capability_ids"] = ("capability:technology-duplicate",)
+    payload["pack_bindings"] += (duplicate,)
+    payload["technology_pack_ids"] += ("pack:wind-duplicate",)
+    payload["authorized_registry_ids"]["capability_ids"] += (
+        "capability:technology-duplicate",
+    )
+    with pytest.raises(ValidationError, match="exactly one D2 pack"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    solar = _pack(pack_id="pack:solar", kind="technology")
+    solar["technology_ids"] = ("solar_pv",)
+    solar["capability_ids"] = ("capability:technology-solar",)
+    payload["pack_bindings"] += (solar,)
+    payload["technology_pack_ids"] += ("pack:solar",)
+    payload["authorized_registry_ids"]["capability_ids"] += (
+        "capability:technology-solar",
+    )
+    accepted = _validate(payload)
+    assert {
+        pack.technology_ids for pack in accepted.pack_bindings if pack.technology_ids
+    } == {
+        ("wind",),
+        ("solar_pv",),
+    }
+
+
+def test_taxonomy_supersession_and_surplus_circulation_fail_closed() -> None:
+    payload = _accepted_payload()
+    payload["artifact_records"][0]["supersedes_artifact_id"] = "artifact:historical"
+    with pytest.raises(ValidationError, match="supersession is unsupported"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["pack_bindings"][0]["section_ids"] = ("unknown_section",)
+    with pytest.raises(ValidationError, match="pack .* unknown taxonomy section"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["source_records"][0]["section_ids"] = ("unknown_section",)
+    with pytest.raises(ValidationError, match="source .* unknown taxonomy section"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["distribution"]["control"]["intended_audiences"] += (
+        "Board members",
+        "Lenders",
+    )
+    payload["distribution"]["control"]["permitted_uses"] += (
+        "Board circulation",
+        "Lender circulation",
+    )
+    with pytest.raises(ValidationError, match="do not equal the held scope"):
+        _validate(payload)
+
+
+def test_raw_d2_guard_bounds_shapes_and_python_mode() -> None:
+    accepted = _accepted()
+    assert AcceptedAssemblyAuthority.model_validate(accepted.model_dump()) == accepted
+    authority._validate_raw_nested_d2_records(
+        {"actor_records": (accepted.actor_records[0],)}
+    )
+
+    with pytest.raises(ValueError, match="actor_records must be an exact list"):
+        authority._validate_raw_nested_d2_records({"actor_records": "not-a-list"})
+    with pytest.raises(ValueError, match="nested D2 records"):
+        authority._validate_raw_nested_d2_records({"actor_records": (7,)})
+
+    payload = _accepted_payload()
+    payload["actor_records"][0]["input_ids"] = "input:not-a-tuple"
+    with pytest.raises(ValidationError, match="exact identifier list or tuple"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["actor_records"][0]["input_ids"] = tuple(
+        f"input:{index}" for index in range(257)
+    )
+    with pytest.raises(ValidationError, match="bounded record count"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["source_records"][0]["quality_checks"] = "not-a-tuple"
+    with pytest.raises(ValidationError, match="exact text list or tuple"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["source_records"][0]["quality_checks"] = tuple(
+        f"quality check {index}" for index in range(257)
+    )
+    with pytest.raises(ValidationError, match="bounded record count"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["source_records"][0]["quality_checks"] = (
+        "Duplicate check.",
+        "Duplicate check.",
+    )
+    with pytest.raises(ValidationError, match="duplicate entries"):
+        _validate(payload)
+
+
+def test_raw_d2_guard_nested_pack_and_disclosure_shapes() -> None:
+    authority._validate_raw_nested_d2_records(
+        {"source_records": ({"source_id": "source:minimal"},)}
+    )
+
+    pack = {
+        "pack_id": "pack:minimal",
+        "input_defaults": (
+            {
+                "input_id": "input:minimal",
+                "source_ids": ("source:minimal",),
+                "applicability_predicate": "Exact fixture predicate.",
+            },
+        ),
+        "evidence_minima": (
+            {
+                "section_id": "appendices_provenance_audit_trail",
+                "requirement": "Exact fixture minimum.",
+            },
+        ),
+    }
+    authority._validate_raw_nested_d2_records({"pack_bindings": (pack,)})
+
+    invalid_pack = {**pack, "input_defaults": "not-a-sequence"}
+    with pytest.raises(ValueError, match="input_defaults must be an exact list"):
+        authority._validate_raw_nested_d2_records({"pack_bindings": (invalid_pack,)})
+
+    duplicate_minimum = copy.deepcopy(pack["evidence_minima"][0])
+    duplicate_pack = {
+        **pack,
+        "evidence_minima": (pack["evidence_minima"][0], duplicate_minimum),
+    }
+    with pytest.raises(ValueError, match="duplicate section_ids"):
+        authority._validate_raw_nested_d2_records({"pack_bindings": (duplicate_pack,)})
+
+    authority._validate_raw_nested_d2_records({"distribution": {}})
+    disclosure = {
+        "artifact_id": "artifact:x",
+        "source_id": "source:x",
+        "reason": "Exact fixture disclosure.",
+    }
+    with pytest.raises(ValueError, match="duplicate bindings"):
+        authority._validate_raw_nested_d2_records(
+            {
+                "distribution": {
+                    "control": {"disclosure_bindings": (disclosure, disclosure)}
+                }
+            }
+        )
 
 
 def test_actor_source_sets_are_exact_not_supersets() -> None:

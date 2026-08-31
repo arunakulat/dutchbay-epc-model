@@ -51,6 +51,16 @@ pack registries, foreign report/run artifact identities, missing source provenan
 chronology, digest drift, dirty-state contradictions, byte/artifact drift, expired distribution,
 public distribution and disclosure references outside the selected graph.
 
+Nested D2 wire records are inspected before D2's whitespace-normalizing string constraints run.
+Raw report, actor, source, pack, artifact and distribution IDs therefore cannot enter as padded or
+otherwise non-exact aliases. Identity and evidential-text tuples are bounded and duplicate-free.
+Selected technology packs are one-per-exact-technology axis, while distinct wind, solar and BESS
+pack axes remain representable. Pack and source section IDs must belong to the exact taxonomy SSOT.
+The three result artifacts cannot predate the engine run and cannot carry an artifact-supersession
+claim without a future governed predecessor-artifact authority. Distribution audiences and uses
+must equal the held engineering scope; a superset cannot silently authorize Board/lender
+circulation.
+
 D3A `support_status=declared` has no field or promotion route in this contract. D3C-0 consumes exact
 D2 pack facts only. An unsupported D2 pack remains visibly unsupported; the authority contract
 does not turn it into a supported or assured pack and carries no grade-ceiling decision.
@@ -120,7 +130,25 @@ candidate is independently accepted and protected-main merged. Its training corp
 D0, D1, D2, D3A, the final D3B-0/D3B-1/D3C-0 implementations, both D3C design records and the binding
 acceptance ledger before its first edit.
 
-## 6. Verification receipts
+## 6. First-candidate veto and successor remediation
+
+The first frozen implementation candidate was
+`1fc574e4d66cc9933e0e1097545be05f84d42a4e`, tree
+`712b7ed66f37de0176183cb8370c668347c52202`. Independent domain and assurance reviewers both
+vetoed that exact SHA despite its green focused tests.
+
+Assurance reproduced silent whitespace normalization in nested D2 report, actor and artifact IDs;
+a duplicate capability reference hidden by set reconciliation; and result artifacts timestamped
+after report allocation but before the governed engine run. Domain reproduced two distinct packs
+for the same wind technology axis, dangling artifact supersession, unknown pack/source taxonomy
+section IDs and surplus Board/lender distribution permissions beyond the held engineering scope.
+
+The successor implementation rejects each reproduced state before package assembly. It preserves
+valid JSON-wire ingress through JSON-aware adapters, keeps strict Python ingress distinct, and
+retains the positive multi-technology hybrid case. The first dispositions accept no changed SHA;
+the successor must receive fresh exact-SHA domain and assurance review after its own freeze.
+
+## 7. Verification receipts
 
 The governed local environment is `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`, Python
 `3.12.13`, with the active worktree first on `PYTHONPATH`. `check_venv.sh --no-bootstrap` passed and
@@ -130,9 +158,9 @@ Focused receipts at this implementation stage:
 
 | Gate | Result |
 |---|---:|
-| D3C-0 constructive and hostile controls | `64 passed` |
+| D3C-0 constructive and hostile controls | `77 passed` |
 | D3C-0 module branch coverage | `100.00%` |
-| Complete `tests/contracts` predecessor regression | `1161 passed` |
+| Complete `tests/contracts` predecessor regression | `1174 passed` |
 | Import, cold-order, gateway, changelog and v14 surface controls | `35 passed` |
 | Ruff check and format | passed |
 | Mypy `--no-incremental` for production, exports and focused tests | passed |
@@ -145,7 +173,7 @@ GitHub exact-head required CI remains mandatory before merge. These engineering 
 alter financial behavior and do not authorize any professional, lender, Board, release or
 deployment conclusion.
 
-## 7. Live authority boundary at implementation
+## 8. Live authority boundary at implementation
 
 At the last live check while preparing this record:
 

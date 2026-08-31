@@ -13,13 +13,25 @@ evidence sufficiency, review, professional authority, or fitness for reliance.
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import date
 from enum import Enum
 from types import MappingProxyType
-from typing import Annotated, Final, Literal, Mapping, TypeAlias, cast
+from typing import Annotated, Any, Final, Literal, Mapping, TypeAlias, cast
 
-from pydantic import AfterValidator, BeforeValidator, Field, model_validator
+from pydantic import (
+    AfterValidator,
+    BeforeValidator,
+    Field,
+    TypeAdapter,
+    ValidationInfo,
+    ValidatorFunctionWrapHandler,
+    field_validator,
+    model_validator,
+)
+
+from analytics.feasibility_sections import load_feasibility_taxonomy
 
 from .records import (
     ActorRecord,
@@ -43,6 +55,7 @@ NON_RELIANCE_STATEMENT: Final = (
 _MAX_RECORDS: Final = 256
 _MAX_TEXT_CODEPOINTS: Final = 4_096
 _STABLE_ID_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]*\Z")
+_MISSING: Final = object()
 
 
 def _exact_stable_id(value: object) -> object:
@@ -86,6 +99,289 @@ ExactIdTuple = Annotated[
     Field(min_length=1, max_length=_MAX_RECORDS),
     AfterValidator(_validate_nonempty_unique_tuple),
 ]
+
+
+def _raw_field(record: object, field_name: str) -> object:
+    if type(record) is dict:
+        return cast(dict[str, object], record).get(field_name, _MISSING)
+    if isinstance(record, StrictFrozenModel):
+        return getattr(record, field_name, _MISSING)
+    raise ValueError(
+        "nested D2 records must be exact dictionaries or frozen contract objects"
+    )
+
+
+def _raw_records(container: dict[str, object], field_name: str) -> tuple[object, ...]:
+    value = container.get(field_name, _MISSING)
+    if value is _MISSING:
+        return ()
+    if type(value) not in {list, tuple}:
+        raise ValueError(f"{field_name} must be an exact list or tuple")
+    return tuple(cast(list[object] | tuple[object, ...], value))
+
+
+def _require_raw_exact_id(value: object, label: str) -> None:
+    if value is _MISSING or value is None:
+        return
+    try:
+        _exact_stable_id(value)
+    except ValueError as exc:
+        raise ValueError(f"{label} is not an exact stable identifier") from exc
+
+
+def _require_raw_exact_id_tuple(value: object, label: str) -> None:
+    if value is _MISSING:
+        return
+    if type(value) not in {list, tuple}:
+        raise ValueError(f"{label} must be an exact identifier list or tuple")
+    identities = tuple(cast(list[object] | tuple[object, ...], value))
+    if len(identities) > _MAX_RECORDS:
+        raise ValueError(f"{label} exceeds the bounded record count")
+    for identity in identities:
+        _require_raw_exact_id(identity, label)
+    if len(identities) != len(set(cast(tuple[str, ...], identities))):
+        raise ValueError(f"{label} contains duplicate identities")
+
+
+def _require_raw_exact_text(value: object, label: str) -> None:
+    if value is _MISSING or value is None:
+        return
+    try:
+        _exact_nonempty_text(value)
+    except ValueError as exc:
+        raise ValueError(f"{label} is not exact bounded text") from exc
+
+
+def _require_raw_exact_text_tuple(value: object, label: str) -> None:
+    if value is _MISSING:
+        return
+    if type(value) not in {list, tuple}:
+        raise ValueError(f"{label} must be an exact text list or tuple")
+    entries = tuple(cast(list[object] | tuple[object, ...], value))
+    if len(entries) > _MAX_RECORDS:
+        raise ValueError(f"{label} exceeds the bounded record count")
+    for entry in entries:
+        _require_raw_exact_text(entry, label)
+    if len(entries) != len(set(cast(tuple[str, ...], entries))):
+        raise ValueError(f"{label} contains duplicate entries")
+
+
+def _validate_raw_record_fields(
+    record: object,
+    label: str,
+    *,
+    id_fields: tuple[str, ...] = (),
+    id_tuple_fields: tuple[str, ...] = (),
+    text_fields: tuple[str, ...] = (),
+    text_tuple_fields: tuple[str, ...] = (),
+) -> None:
+    for field_name in id_fields:
+        _require_raw_exact_id(_raw_field(record, field_name), f"{label}.{field_name}")
+    for field_name in id_tuple_fields:
+        _require_raw_exact_id_tuple(
+            _raw_field(record, field_name), f"{label}.{field_name}"
+        )
+    for field_name in text_fields:
+        _require_raw_exact_text(_raw_field(record, field_name), f"{label}.{field_name}")
+    for field_name in text_tuple_fields:
+        _require_raw_exact_text_tuple(
+            _raw_field(record, field_name), f"{label}.{field_name}"
+        )
+
+
+def _validate_raw_nested_d2_records(data: dict[str, object]) -> None:
+    """Refuse wire aliases before the D2 models can normalize their strings."""
+
+    payload = data
+
+    report = payload.get("report_identity", _MISSING)
+    if report is not _MISSING:
+        _validate_raw_record_fields(
+            report,
+            "report_identity",
+            id_fields=(
+                "report_id",
+                "project_id",
+                "case_id",
+                "run_id",
+                "supersedes_report_id",
+            ),
+        )
+
+    for index, actor in enumerate(_raw_records(payload, "actor_records")):
+        _validate_raw_record_fields(
+            actor,
+            f"actor_records[{index}]",
+            id_fields=("actor_id",),
+            id_tuple_fields=("input_ids", "review_ids"),
+            text_fields=(
+                "name",
+                "organization",
+                "version",
+                "operation",
+                "authority_basis",
+            ),
+        )
+
+    for index, source in enumerate(_raw_records(payload, "source_records")):
+        label = f"source_records[{index}]"
+        _validate_raw_record_fields(
+            source,
+            label,
+            id_fields=("source_id", "extracting_actor_id", "supersedes_source_id"),
+            id_tuple_fields=(
+                "jurisdictions",
+                "technology_ids",
+                "section_ids",
+                "limitation_ids",
+                "review_ids",
+            ),
+            text_fields=(
+                "title",
+                "issuer_or_author",
+                "document_or_dataset_id",
+                "revision",
+                "authority",
+                "project_boundary",
+                "period",
+                "licence_or_publication_rights",
+                "access_restrictions",
+                "extraction_method",
+            ),
+            text_tuple_fields=("quality_checks",),
+        )
+        locator = _raw_field(source, "locator")
+        if locator is not _MISSING:
+            _validate_raw_record_fields(
+                locator,
+                f"{label}.locator",
+                text_fields=("url", "evidence_path", "pinpoint"),
+            )
+
+    for index, pack in enumerate(_raw_records(payload, "pack_bindings")):
+        label = f"pack_bindings[{index}]"
+        _validate_raw_record_fields(
+            pack,
+            label,
+            id_fields=("pack_id", "owner_actor_id"),
+            id_tuple_fields=(
+                "compatible_pack_ids",
+                "jurisdiction_codes",
+                "technology_ids",
+                "section_ids",
+                "capability_ids",
+                "required_input_ids",
+                "optional_input_ids",
+                "output_ids",
+                "validation_ids",
+                "source_ids",
+                "review_ids",
+                "decision_ids",
+                "limitation_ids",
+            ),
+            text_tuple_fields=(
+                "project_stages",
+                "cross_field_rules",
+                "permitted_degradations",
+                "prohibited_substitutions",
+            ),
+        )
+        for default_index, default in enumerate(
+            _raw_sequence_field(pack, "input_defaults", label)
+        ):
+            _validate_raw_record_fields(
+                default,
+                f"{label}.input_defaults[{default_index}]",
+                id_fields=("input_id",),
+                id_tuple_fields=("source_ids",),
+                text_fields=("applicability_predicate",),
+            )
+        evidence_section_ids: list[object] = []
+        for minimum_index, minimum in enumerate(
+            _raw_sequence_field(pack, "evidence_minima", label)
+        ):
+            minimum_label = f"{label}.evidence_minima[{minimum_index}]"
+            _validate_raw_record_fields(
+                minimum,
+                minimum_label,
+                id_fields=("section_id",),
+                text_fields=("requirement",),
+            )
+            section_id = _raw_field(minimum, "section_id")
+            evidence_section_ids.append(section_id)
+        if len(evidence_section_ids) != len(set(evidence_section_ids)):
+            raise ValueError(f"{label}.evidence_minima contains duplicate section_ids")
+
+    for index, artifact in enumerate(_raw_records(payload, "artifact_records")):
+        _validate_raw_record_fields(
+            artifact,
+            f"artifact_records[{index}]",
+            id_fields=(
+                "artifact_id",
+                "report_id",
+                "run_id",
+                "supersedes_artifact_id",
+            ),
+            id_tuple_fields=("source_ids",),
+            text_fields=(
+                "mime_type",
+                "producer",
+                "producer_version",
+                "completeness_profile",
+            ),
+            text_tuple_fields=("disclosure_exceptions",),
+        )
+
+    distribution = payload.get("distribution", _MISSING)
+    if distribution is not _MISSING:
+        control = _raw_field(distribution, "control")
+        if control is not _MISSING:
+            _validate_raw_record_fields(
+                control,
+                "distribution.control",
+                id_fields=("distribution_id",),
+                id_tuple_fields=("artifact_ids",),
+                text_fields=(
+                    "permitted_reliance",
+                    "confidentiality",
+                    "publication_rights",
+                    "redaction_policy",
+                ),
+                text_tuple_fields=(
+                    "intended_audiences",
+                    "permitted_uses",
+                    "reliance_exclusions",
+                ),
+            )
+            disclosure_pairs: list[tuple[object, object]] = []
+            for index, disclosure in enumerate(
+                _raw_sequence_field(
+                    control, "disclosure_bindings", "distribution.control"
+                )
+            ):
+                label = f"distribution.control.disclosure_bindings[{index}]"
+                _validate_raw_record_fields(
+                    disclosure,
+                    label,
+                    id_fields=("artifact_id", "source_id", "validation_id"),
+                    text_fields=("reason",),
+                )
+                artifact_id = _raw_field(disclosure, "artifact_id")
+                source_id = _raw_field(disclosure, "source_id")
+                disclosure_pairs.append((artifact_id, source_id))
+            if len(disclosure_pairs) != len(set(disclosure_pairs)):
+                raise ValueError("distribution disclosures contain duplicate bindings")
+
+
+def _raw_sequence_field(
+    record: object, field_name: str, label: str
+) -> tuple[object, ...]:
+    value = _raw_field(record, field_name)
+    if value is _MISSING:
+        return ()
+    if type(value) not in {list, tuple}:
+        raise ValueError(f"{label}.{field_name} must be an exact list or tuple")
+    return tuple(cast(list[object] | tuple[object, ...], value))
 
 
 class AssemblyAuthorityOutcome(str, Enum):
@@ -267,12 +563,10 @@ class HeldNonRelianceDistributionBinding(StrictFrozenModel):
             raise ValueError("scope intended audiences contain duplicates")
         if len(self.scope_intended_uses) != len(set(self.scope_intended_uses)):
             raise ValueError("scope intended uses contain duplicates")
-        if not set(self.scope_intended_audiences) <= set(
-            self.control.intended_audiences
-        ):
-            raise ValueError("distribution does not cover the scope audiences")
-        if not set(self.scope_intended_uses) <= set(self.control.permitted_uses):
-            raise ValueError("distribution does not cover the scope intended uses")
+        if self.scope_intended_audiences != self.control.intended_audiences:
+            raise ValueError("distribution audiences do not equal the held scope")
+        if self.scope_intended_uses != self.control.permitted_uses:
+            raise ValueError("distribution uses do not equal the held scope")
         if self.control.permitted_reliance != self.permitted_reliance_statement:
             raise ValueError("distribution control contradicts the non-reliance hold")
         if self.control.distribution_class is ConfidentialityClass.PUBLIC:
@@ -318,6 +612,35 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
         tuple[GovernedByteArtifactBinding, ...], Field(min_length=3, max_length=3)
     ]
     distribution: HeldNonRelianceDistributionBinding
+
+    @field_validator(
+        "report_identity",
+        "actor_records",
+        "source_records",
+        "pack_bindings",
+        "artifact_records",
+        "distribution",
+        mode="wrap",
+    )
+    @classmethod
+    def _nested_d2_ingress_is_exact(
+        cls,
+        data: object,
+        handler: ValidatorFunctionWrapHandler,
+        info: ValidationInfo,
+    ) -> object:
+        field_name = cast(str, info.field_name)
+        _validate_raw_nested_d2_records({field_name: data})
+        if info.mode == "json":
+            adapter: TypeAdapter[Any] = TypeAdapter(
+                cls.model_fields[field_name].annotation
+            )
+            converted = adapter.validate_json(
+                json.dumps(data),
+                context=info.context,
+            )
+            return handler(converted)
+        return handler(data)
 
     @model_validator(mode="after")
     def _authority_graph_is_exact(self) -> "AcceptedAssemblyAuthority":
@@ -375,6 +698,12 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
                 raise ValueError(
                     f"source {source.source_id} has a dangling supersession"
                 )
+            if not set(source.section_ids) <= set(
+                load_feasibility_taxonomy().section_names
+            ):
+                raise ValueError(
+                    f"source {source.source_id} references an unknown taxonomy section"
+                )
         for artifact in self.artifact_records:
             if (
                 artifact.report_id != report.report_id
@@ -389,13 +718,18 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
                 raise ValueError(
                     f"artifact {artifact.artifact_id} has dangling source_ids"
                 )
-            if (
-                not report.created_at
+            if not (
+                self.runtime_receipt.engine_run_created_at
                 <= artifact.created_at
                 <= self.authority_created_at
             ):
                 raise ValueError(
-                    f"artifact {artifact.artifact_id} falls outside authority chronology"
+                    f"artifact {artifact.artifact_id} falls outside engine/authority chronology"
+                )
+            if artifact.supersedes_artifact_id is not None:
+                raise ValueError(
+                    f"artifact {artifact.artifact_id} supersession is unsupported "
+                    "without a governed predecessor-artifact authority"
                 )
 
         for disclosure in self.distribution.control.disclosure_bindings:
@@ -428,6 +762,14 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
             raise ValueError(
                 "technology_pack_ids do not equal selected technology packs"
             )
+        selected_technology_axes = tuple(
+            cast(PackBinding, packs[pack_id]).technology_ids[0]
+            for pack_id in self.technology_pack_ids
+        )
+        if len(selected_technology_axes) != len(set(selected_technology_axes)):
+            raise ValueError(
+                "each selected technology type requires exactly one D2 pack"
+            )
         for pack in self.pack_bindings:
             if pack.owner_actor_id not in actors:
                 raise ValueError(f"pack {pack.pack_id} has a dangling owner actor")
@@ -436,6 +778,12 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
             if not set(pack.compatible_pack_ids) <= set(packs):
                 raise ValueError(
                     f"pack {pack.pack_id} has dangling compatible_pack_ids"
+                )
+            if not set(pack.section_ids) <= set(
+                load_feasibility_taxonomy().section_names
+            ):
+                raise ValueError(
+                    f"pack {pack.pack_id} references an unknown taxonomy section"
                 )
         self._validate_pack_registry_ids()
         self._validate_actor_source_reciprocity(actors, sources)
@@ -473,8 +821,6 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
         control = self.distribution.control
         if set(control.artifact_ids) != set(artifacts):
             raise ValueError("distribution must cover every and only selected artifact")
-        if len(control.artifact_ids) != len(set(control.artifact_ids)):
-            raise ValueError("distribution artifact_ids contain duplicates")
         if control.expiry_or_review_date < self.authority_created_at.date():
             raise ValueError("distribution control is expired at authority creation")
         return self
