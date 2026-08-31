@@ -1,7 +1,7 @@
 # Dolphin 3C-1a result-only projection implementation record
 
-**Status:** second corrected replacement; full local verification complete; fresh exact-SHA review
-pending; no D2 package assembly or HOLD movement
+**Status:** third corrected replacement; focused verification complete; complete contract and full
+governed gates pending; no D2 package assembly or HOLD movement
 
 **Protected base:** `e40c13a2fbd4bd974078c4d1dd32e4b1e7ebdf3f` (`origin/main`, PR `#1208` merge)
 
@@ -92,10 +92,20 @@ and **rejected** before push or PR. The remaining blockers were:
 - insertion-order-dependent hostile mapping-key failure selection; and
 - eager mapping-item allocation before an entry-count bound.
 
-The second correction remains inside D3C-1a. It adds a checksum-bound import-safe engine-identity
-leaf; aligns warning, FX-reason and receipt limits to D3B; makes empty DSCR a route-predicate
-absence; and fails deterministically before oversized mapping allocation. No D3C-1b, D3C-2 or D3D
-concern was pulled into this branch.
+The second correction remained inside D3C-1a. It added a checksum-bound import-safe engine-identity
+leaf; aligned warning, FX-reason and receipt limits to D3B; made empty DSCR a route-predicate
+absence; and failed deterministically before oversized mapping allocation. It was frozen at
+`481b4e35c4abf35d979f7e24c06f73c6a5af316a`, independently reviewed, and **rejected** before push
+or PR. The two remaining blockers were:
+
+- D3C rejected D3B-valid structured FX warning/reason strings containing control characters; and
+- revision/seed bounds were validation-only, so Pydantic unsafe copies or direct mutation could
+  serialize unbounded, boolean or string values, while serialization-mode JSON Schema omitted the
+  numeric bounds.
+
+The third correction preserves exact bounded D3B warning/reason text without reinterpretation and
+enforces the 4096-bit revision/seed bounds at validation, serialization and both JSON Schema modes.
+No D3C-1b, D3C-2 or D3D concern was pulled into this branch.
 
 ## 4. Recruitment, leases and recovery
 
@@ -111,9 +121,10 @@ Recruitment followed the separation-of-duties and lease rules:
 - that lease was revoked and acknowledged; and
 - the coordinator invoked the documented stalled-writer takeover exception as sole writer.
 
-After the first replacement was rejected, both challengers remained read-only and the coordinator
-opened the same sole-writer takeover lease for the narrow second correction. No challenger or
-revoked writer received a write lease.
+After each rejected replacement, both challengers remained read-only and the coordinator opened
+the same sole-writer takeover lease for only the named correction. The third lease covers exact
+D3B warning-text parity and serialization/schema integer bounds. No challenger or revoked writer
+received a write lease.
 
 No two writers held a live lease concurrently. The first draft remains recoverable: exact bytes
 SHA-256 `2af8fee946e29ccd904f39d288cd05b1fb1a147fd258bb9d26238f251a17d667`, Git blob
@@ -141,7 +152,8 @@ The leaf contract imports neither the evaluator nor `analytics.contracts_v14`. I
 
 Identity-critical string validators run before Pydantic conversion and require exact `str`.
 SHA-256, Git commit, UTC timestamp, integer lexical, authored-number lexical and binary64 byte/hex
-shapes are independently validated.
+shapes are independently validated. D3B warning and FX-reason strings are instead preserved as
+exact bounded text, including control-bearing content that the upstream D3B contract accepts.
 
 ### 5.2 Independent origin reconciliation
 
@@ -164,6 +176,10 @@ including zero sign. It rechecks:
 - KPI/ScenarioResult/debt reciprocal mirrors; and
 - all-string manifest keys, exact import-safe current engine/schema identities, and the evaluated
   digest.
+
+The 4096-bit ProjectCase revision and manifest-seed bounds are expressed in the validation schema,
+rechecked by field serializers and retained in the serialization schema. Consequently, even an
+unsafe Pydantic copy or direct object mutation cannot emit an over-limit or wrong-type value.
 
 It imports none of D3B's private comparator or private gateway validator. Every numeric projection
 receipt is revalidated and projected in order with unique assertion identity.
@@ -211,9 +227,9 @@ is never summed.
 
 ## 6. Verification evidence
 
-The second-correction focused suite contains 120 tests and covers all four changed implementation
-modules at **100% line and branch coverage** (999 statements and 430 branches). Persistent controls
-include:
+The third-correction focused suite contains 121 tests and covers all four changed implementation
+modules at **100% line and branch coverage** (1,010 statements and 428 branches). Persistent
+controls include:
 
 - one genuine public gateway reached through D3B and then projected without a second call;
 - an evaluator spy and import-direction control proving no D3C gateway/finance invocation;
@@ -225,7 +241,9 @@ include:
 - taxonomy checksum parity, fresh-process no-I/O import/call and three cold-import orders;
 - engine-version and manifest-schema source/hash parity without runtime source reads;
 - D3B-valid empty DSCR, 513-warning and 513-receipt positive oracles;
-- 4096-bit revision boundaries across origin, Python, JSON and serialization;
+- 4096-bit revision/seed boundaries across origin, validation and serialization JSON Schema,
+  Python, JSON and hostile unsafe-copy serialization;
+- exact control-bearing structured FX warning/reason preservation through public D3B and JSON;
 - pre-allocation oversized-mapping refusal; and
 - insertion-order- and real-hash-seed-stable hostile key-failure receipts;
 - total static and observed path-disposition parity; and
@@ -241,26 +259,27 @@ The pre-change `tests/contracts` baseline was `1200 passed, 1 warning`. Replacem
 
 | Gate | Replacement candidate result |
 |---|---:|
-| Focused D3C-1a hostile/oracle suite | `120 passed` |
-| Focused changed-module line/branch coverage | `100.00%` (`999` statements, `430` branches) |
+| Focused D3C-1a hostile/oracle suite | `121 passed` |
+| Focused changed-module line/branch coverage | `100.00%` (`1010` statements, `428` branches) |
 | Ruff / Black / isort / Bandit | pass |
 | Narrow mypy over four implementation modules | `Success: no issues found` |
-| Complete `tests/contracts` gate | `1320 passed, 1 inherited warning` |
-| Full governed ordinary suite | `7341 passed, 18 skipped, 23 warnings` in `720.76s` |
-| Full governed coverage floor | `95.31%` (`32586` statements, `1527` missed; `>=95%` required) |
+| Complete `tests/contracts` gate | `1321 passed, 1 inherited warning` |
+| Full governed ordinary suite | pending third-correction run |
+| Full governed coverage floor | pending third-correction run (`>=95%` required) |
 
-The current full governed suite ran against second-correction code commit
-`f79f1482b3b19f8f99b35b8a120c01c4ae0d7072` and returned exit zero with the exact counts above.
-Its named temporary diagnostic capture and coverage database were deleted immediately after the
-concise receipt was emitted. The later receipt-only commit changes no source or test blob; focused
-and complete contract gates are rerun at that final review SHA.
+The historical full governed suite ran against now-rejected second-correction code commit
+`f79f1482b3b19f8f99b35b8a120c01c4ae0d7072` and returned exit zero.
+It reported `7341 passed, 18 skipped, 23 warnings` in `720.76s` with `95.31%` coverage (`32586`
+statements, `1527` missed). Its named temporary diagnostic capture and coverage database were
+deleted immediately after the concise receipt was emitted. That receipt is rejection evidence,
+not verification of the third correction.
 
 The historical full governed suite and coverage receipt ran twice against now-rejected code commit
 `a2d681883e5a62d4af638a0b033e0364f4d083b6`; the first pass's summary stream was lost when its PTY
 closed, but its completed coverage database independently reported `95.31%`. The controlled rerun
 returned exit zero with `7333 passed, 18 skipped, 23 warnings` and `95.31%` coverage (`32537`
 statements, `1527` missed), then deleted its temporary diagnostic capture and coverage database.
-That historical receipt is rejection evidence, not verification of the second correction.
+That historical receipt is rejection evidence, not verification of the third correction.
 
 Inherited warnings/skips are not D3C success evidence. Exact-head CI remains merge authority and is
 recorded in the PR rather than predicted here.

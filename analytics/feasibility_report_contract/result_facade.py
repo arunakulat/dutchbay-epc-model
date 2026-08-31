@@ -23,6 +23,7 @@ from pydantic import (
     Field,
     Strict,
     ValidationInfo,
+    field_serializer,
     field_validator,
     model_validator,
 )
@@ -44,9 +45,16 @@ _MAX_RECORDS = 512
 _MAX_NUMERIC_PROJECTION_RECEIPTS = 1_024
 _MAX_WARNINGS = 100_000
 _MAX_REVISION_BITS = 4_096
+_MAX_BOUNDED_INTEGER = (1 << _MAX_REVISION_BITS) - 1
 _MAX_PATH_PARTS = 16
 _MAX_TEXT = 4_096
 _MAX_WARNING_TEXT = 1_000_000
+_BoundedRevisionSerialization: TypeAlias = Annotated[
+    int, Field(ge=1, le=_MAX_BOUNDED_INTEGER)
+]
+_BoundedSeedSerialization: TypeAlias = Annotated[
+    int, Field(ge=-_MAX_BOUNDED_INTEGER, le=_MAX_BOUNDED_INTEGER)
+]
 _STABLE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,199}\Z")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}\Z")
 _GIT_COMMIT_RE = re.compile(r"^[0-9a-f]{7,64}\Z")
@@ -71,8 +79,24 @@ def _exact_text(value: object) -> str:
 def _exact_warning_text(value: object) -> str:
     if type(value) is not str or len(value) > _MAX_WARNING_TEXT:
         raise ValueError("warning text must be an exact bounded string")
-    if any(ord(character) < 32 and character not in "\t\n\r" for character in value):
-        raise ValueError("warning text contains a forbidden control character")
+    return value
+
+
+def _bounded_revision(value: object) -> int:
+    if type(value) is not int or value <= 0 or value > _MAX_BOUNDED_INTEGER:
+        raise ValueError(
+            "ProjectCase revision must be a positive exact integer of at most 4096 bits"
+        )
+    return value
+
+
+def _bounded_seed(value: object) -> int | None:
+    if value is not None and (
+        type(value) is not int
+        or value < -_MAX_BOUNDED_INTEGER
+        or value > _MAX_BOUNDED_INTEGER
+    ):
+        raise ValueError("manifest seed must be an exact integer of at most 4096 bits")
     return value
 
 
@@ -1269,20 +1293,25 @@ class EngineManifestProjection(StrictFrozenModel):
     engine_version: ExactText
     git_sha: ExactGitCommit
     generated_at: ExactUtcTimestamp
-    seed: Annotated[int, Strict()] | None
+    seed: (
+        Annotated[
+            int,
+            Strict(),
+            Field(ge=-_MAX_BOUNDED_INTEGER, le=_MAX_BOUNDED_INTEGER),
+        ]
+        | None
+    )
     validation_mode: Literal["strict"]
     manifest_schema_version: ExactText
 
     @field_validator("seed", mode="before")
     @classmethod
     def _seed_is_exact_and_bounded(cls, value: object) -> object:
-        if value is not None and (
-            type(value) is not int or value.bit_length() > _MAX_REVISION_BITS
-        ):
-            raise ValueError(
-                "manifest seed must be an exact integer of at most 4096 bits"
-            )
-        return value
+        return _bounded_seed(value)
+
+    @field_serializer("seed", return_type=_BoundedSeedSerialization | None)
+    def _serialize_bounded_seed(self, value: int | None) -> int | None:
+        return _bounded_seed(value)
 
     @model_validator(mode="after")
     def _engine_identity_is_current(self) -> "EngineManifestProjection":
@@ -1324,7 +1353,11 @@ class D3CResultProjection(StrictFrozenModel):
     request_id: ExactStableId
     project_id: ExactStableId
     case_id: ExactStableId
-    project_case_revision: Annotated[int, Strict(), Field(gt=0)]
+    project_case_revision: Annotated[
+        int,
+        Strict(),
+        Field(ge=1, le=_MAX_BOUNDED_INTEGER),
+    ]
     project_case_sha256: ExactSha256
     evaluation_request_sha256: ExactSha256
     source_file_sha256: ExactSha256
@@ -1370,16 +1403,13 @@ class D3CResultProjection(StrictFrozenModel):
     @field_validator("project_case_revision", mode="before")
     @classmethod
     def _revision_is_exact_and_bounded(cls, value: object) -> object:
-        if (
-            type(value) is not int
-            or value <= 0
-            or value.bit_length() > _MAX_REVISION_BITS
-        ):
-            raise ValueError(
-                "ProjectCase revision must be a positive exact integer of at most "
-                "4096 bits"
-            )
-        return value
+        return _bounded_revision(value)
+
+    @field_serializer(
+        "project_case_revision", return_type=_BoundedRevisionSerialization
+    )
+    def _serialize_bounded_revision(self, value: int) -> int:
+        return _bounded_revision(value)
 
     @field_validator("gateway_warnings", "returned_warnings", mode="before")
     @classmethod

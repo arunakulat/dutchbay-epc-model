@@ -21,6 +21,7 @@ from typing import Any, Callable, Mapping
 import pytest
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
+from pydantic_core import PydanticSerializationError
 
 import analytics.evaluation_v14 as evaluation_v14
 import analytics.feasibility_execution as execution
@@ -1322,6 +1323,12 @@ def test_both_draft_202012_schema_modes_validate_canonical_json_and_are_fresh(
         schema = D3CResultProjection.model_json_schema(mode=mode)
         Draft202012Validator.check_schema(schema)
         Draft202012Validator(schema).validate(payload)
+        over_revision = copy.deepcopy(payload)
+        over_revision["project_case_revision"] = 1 << 4096
+        assert list(Draft202012Validator(schema).iter_errors(over_revision))
+        over_seed = copy.deepcopy(payload)
+        over_seed["engine_manifest"]["seed"] = 1 << 4096
+        assert list(Draft202012Validator(schema).iter_errors(over_seed))
         originals[mode] = copy.deepcopy(schema)
         schema["title"] = "caller-mutated"
         schema.setdefault("properties", {})["schema_id"] = {}
@@ -1913,16 +1920,6 @@ def test_new_numeric_fx_and_route_models_fail_closed_on_hostile_lexemes(
             dict(
                 attempted=True,
                 succeeded=False,
-                warning="bad\x00warning",
-                degraded=False,
-                degraded_reasons=(),
-            ),
-            "forbidden control",
-        ),
-        (
-            dict(
-                attempted=True,
-                succeeded=False,
                 warning="x" * 1_000_001,
                 degraded=False,
                 degraded_reasons=(),
@@ -2084,6 +2081,40 @@ def test_public_d3b_warning_bound_is_not_silently_narrowed(
     assert projection.returned_warnings == result.warnings
 
 
+def test_public_d3b_structured_fx_control_text_is_preserved_exactly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bundle = _bundle(tmp_path, monkeypatch)
+    warning = "fx-failure\x00detail"
+    degraded_reason = "fallback\x00detail"
+
+    def gateway(**kwargs: Any) -> dict[str, Any]:
+        payload = _gateway_result(
+            kwargs["raw_config"], kwargs["overrides"], degraded=True
+        )
+        payload["fx_integration"]["warning"] = warning
+        payload["fx_integration"]["degraded_reasons"] = [degraded_reason]
+        return payload
+
+    _install_gateway(monkeypatch, gateway)
+    result = execution.execute_evaluation_request(
+        project_case=bundle.project_case,
+        request=bundle.request,
+        scenario_authority_id=_AUTHORITY_ID,
+    )
+    assert type(result) is D3BExecutionSuccess
+    assert result.warnings == (warning, degraded_reason)
+
+    projection = project_d3b_result(result)
+    assert projection.fx_integration.warning == warning
+    assert projection.fx_integration.degraded_reasons == (degraded_reason,)
+    assert projection.returned_warnings == (warning, degraded_reason)
+    assert (
+        D3CResultProjection.model_validate_json(projection.model_dump_json())
+        == projection
+    )
+
+
 def test_d3b_numeric_receipt_bound_is_not_silently_narrowed(
     accepted_result: D3BExecutionSuccess,
 ) -> None:
@@ -2124,6 +2155,39 @@ def test_project_case_revision_is_bounded_at_origin_python_json_and_dump(
         D3CResultProjection.model_validate(payload)
     with pytest.raises(ValidationError, match="at most 4096 bits"):
         D3CResultProjection.model_validate_json(json.dumps(payload))
+
+    hostile_projection = projection.model_copy(
+        update={"project_case_revision": above_value}
+    )
+    for dump in (hostile_projection.model_dump, hostile_projection.model_dump_json):
+        with pytest.raises(PydanticSerializationError, match="at most 4096 bits"):
+            dump()
+
+    directly_mutated_projection = projection.model_copy()
+    object.__setattr__(directly_mutated_projection, "project_case_revision", True)
+    for dump in (
+        directly_mutated_projection.model_dump,
+        directly_mutated_projection.model_dump_json,
+    ):
+        with pytest.raises(PydanticSerializationError, match="at most 4096 bits"):
+            dump()
+
+    for hostile_seed in (above_value, True, "hostile"):
+        hostile_manifest = projection.engine_manifest.model_copy(
+            update={"seed": hostile_seed}
+        )
+        for dump in (hostile_manifest.model_dump, hostile_manifest.model_dump_json):
+            with pytest.raises(PydanticSerializationError, match="at most 4096 bits"):
+                dump()
+
+    directly_mutated_manifest = projection.engine_manifest.model_copy()
+    object.__setattr__(directly_mutated_manifest, "seed", "hostile")
+    for dump in (
+        directly_mutated_manifest.model_dump,
+        directly_mutated_manifest.model_dump_json,
+    ):
+        with pytest.raises(PydanticSerializationError, match="at most 4096 bits"):
+            dump()
 
 
 def test_origin_key_failure_is_insertion_order_independent_and_prebounded() -> None:
