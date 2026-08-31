@@ -185,9 +185,10 @@ The reviewer also ran the controls in both orders, proved monkeypatch restoratio
 constructive one-call path, exercised real production container/text limits, reproduced all 138
 focused tests and four serial native-grid tests, and verified an empty production-only diff.
 
-Protected exact-head Linux run `33387739842` then passed all applicable checks for exact commit
-`b6d50cb895acde505520d324c6e0f8e299bd922d`, including all six test shards, grid, quality,
-security, FX, smoke, CodeQL, coverage and test summary. Its combined coverage receipt was:
+Test Suite run `33387739842` then passed all six test shards, grid, quality, security, coverage and
+test-summary jobs for exact commit `b6d50cb895acde505520d324c6e0f8e299bd922d`. Separate
+exact-head FX run `33387739879`, Regression Smoke run `33387739818` and CodeQL check
+`99474212143` also passed. The Test Suite run's combined coverage receipt was:
 
 ```text
 TOTAL  30,981 statements  1,541 missed  95.03%
