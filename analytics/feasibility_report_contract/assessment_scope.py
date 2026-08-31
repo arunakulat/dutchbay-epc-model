@@ -1259,6 +1259,20 @@ def _exact_compatibility_assertion_field_names(
     return None
 
 
+def _copy_exact_string_keyed_dictionary(
+    raw_fields: Any,
+) -> tuple[dict[str, Any] | None, bool]:
+    """Copy an exact dictionary without dispatching through caller-owned keys."""
+    if type(raw_fields) is not dict:
+        return None, False
+    copied_fields: dict[str, Any] = {}
+    for raw_field_name, raw_field_value in dict.items(raw_fields):
+        if type(raw_field_name) is not str:
+            return None, True
+        copied_fields[raw_field_name] = raw_field_value
+    return copied_fields, False
+
+
 def _exact_compatibility_assertion_payload(
     raw_assertion: Any,
 ) -> tuple[dict[str, Any] | None, bool]:
@@ -1268,35 +1282,43 @@ def _exact_compatibility_assertion_payload(
         return None, False
 
     raw_fields = object.__getattribute__(raw_assertion, "__dict__")
-    if type(raw_fields) is not dict or len(raw_fields) != len(field_names):
+    if type(raw_fields) is not dict:
         return None, True
-    for raw_field_name in dict.keys(raw_fields):
+    copied_fields, has_non_exact_key = _copy_exact_string_keyed_dictionary(raw_fields)
+    if (
+        has_non_exact_key
+        or copied_fields is None
+        or len(copied_fields) != len(field_names)
+    ):
+        return None, True
+    for raw_field_name in dict.keys(copied_fields):
         if type(raw_field_name) is not str or raw_field_name not in field_names:
             return None, True
-    return (
-        {field_name: dict.get(raw_fields, field_name) for field_name in field_names},
-        False,
-    )
+    return copied_fields, False
 
 
-def _raw_policy_assertion_sort_key(
-    raw_assertion: Any,
+def _sanitized_policy_assertion_sort_key(
+    sanitized_fields: dict[str, Any] | None,
 ) -> tuple[int, str, str, str]:
-    """Return the policy's canonical child-validation key for raw input."""
-    raw_assertion_type = type(raw_assertion)
-    if raw_assertion_type is dict:
-        raw_category = dict.get(raw_assertion, "category")
-        raw_assertion_id = dict.get(raw_assertion, "assertion_id")
-        raw_kind = dict.get(raw_assertion, "kind")
-    elif _is_exact_compatibility_assertion_model_type(raw_assertion_type):
-        raw_fields = object.__getattribute__(raw_assertion, "__dict__")
-        raw_category = dict.get(raw_fields, "category")
-        raw_assertion_id = dict.get(raw_fields, "assertion_id")
-        raw_kind = dict.get(raw_fields, "kind")
-    else:
-        raw_category = None
-        raw_assertion_id = None
-        raw_kind = None
+    """Return the canonical key from one fresh exact-string-keyed payload."""
+    raw_category = None
+    raw_assertion_id = None
+    raw_kind = None
+    if sanitized_fields is not None:
+        for raw_field_name, raw_field_value in dict.items(sanitized_fields):
+            if type(raw_field_name) is not str:
+                return (
+                    len(_PROJECT_CASE_MATERIAL_CATEGORY_ORDER),
+                    "",
+                    "",
+                    "",
+                )
+            if raw_field_name == "category":
+                raw_category = raw_field_value
+            elif raw_field_name == "assertion_id":
+                raw_assertion_id = raw_field_value
+            elif raw_field_name == "kind":
+                raw_kind = raw_field_value
 
     if type(raw_category) is ProjectCaseMaterialCategory:
         category_token = raw_category.value
@@ -1410,6 +1432,16 @@ def _non_field_model_state_child_error() -> dict[str, Any]:
     }
 
 
+def _non_exact_dictionary_key_child_error() -> dict[str, Any]:
+    """Return a bounded error for a non-exact raw dictionary key."""
+    return {
+        "type": "compatibility_assertion_key",
+        "loc": (),
+        "msg": "Input should contain only exact string compatibility assertion keys",
+        "input": _INVALID_COMPATIBILITY_ASSERTION_INPUT,
+    }
+
+
 def _bounded_assertion_collection_error(mode: str) -> ValidationError:
     """Return a constant-input error for a non-exact assertion collection."""
     error_type = "list_type" if mode == "json" else "tuple_type"
@@ -1507,7 +1539,17 @@ class V14BindingPolicy(StrictFrozenModel):
             validated_child: CompatibilityAssertion | None = None
             child_errors: tuple[dict[str, Any], ...] = ()
             child_input = raw_assertion
-            if info.mode == "python":
+            sanitized_fields: dict[str, Any] | None = None
+            if type(raw_assertion) is dict:
+                exact_dictionary, has_non_exact_key = (
+                    _copy_exact_string_keyed_dictionary(raw_assertion)
+                )
+                if has_non_exact_key:
+                    child_errors = (_non_exact_dictionary_key_child_error(),)
+                elif exact_dictionary is not None:
+                    child_input = exact_dictionary
+                    sanitized_fields = exact_dictionary
+            elif info.mode == "python":
                 exact_payload, has_non_field_state = (
                     _exact_compatibility_assertion_payload(raw_assertion)
                 )
@@ -1515,6 +1557,7 @@ class V14BindingPolicy(StrictFrozenModel):
                     child_errors = (_non_field_model_state_child_error(),)
                 elif exact_payload is not None:
                     child_input = exact_payload
+                    sanitized_fields = exact_payload
             try:
                 if child_errors:
                     pass
@@ -1546,7 +1589,9 @@ class V14BindingPolicy(StrictFrozenModel):
             bundles.append(
                 _PolicyAssertionValidationBundle(
                     authored_index=authored_index,
-                    declared_sort_key=_raw_policy_assertion_sort_key(raw_assertion),
+                    declared_sort_key=_sanitized_policy_assertion_sort_key(
+                        sanitized_fields
+                    ),
                     outcome_sort_key=_child_validation_outcome_sort_key(
                         validated_child,
                         child_errors,

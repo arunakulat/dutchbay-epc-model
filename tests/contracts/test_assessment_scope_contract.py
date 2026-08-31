@@ -2767,6 +2767,86 @@ def test_policy_exact_model_non_field_state_is_bounded_before_serialization() ->
     assert dump_calls == []
 
 
+def test_policy_hash_colliding_keys_are_opaque_to_raw_ordering() -> None:
+    equality_calls: list[object] = []
+    hash_calls: list[bool] = []
+
+    class HashCollidingString(str):
+        def __hash__(self) -> int:
+            hash_calls.append(True)
+            return str.__hash__(self)
+
+        def __eq__(self, other: object) -> bool:
+            equality_calls.append(other)
+            raise RuntimeError("caller equality must not execute")
+
+    policy = _validate_policy(_request_payload())
+    scenario_assertion = next(
+        assertion
+        for assertion in policy.assertions
+        if type(assertion) is assessment_scope_contract.ScenarioIdentityAssertion
+    )
+    scenario_fields = scenario_assertion.model_dump()
+    scenario_category = scenario_fields.pop("category")
+
+    constructed_child = (
+        assessment_scope_contract.ScenarioIdentityAssertion.model_construct(
+            **scenario_fields
+        )
+    )
+    colliding_model_key = HashCollidingString("category")
+    poisoned_model = constructed_child.model_copy(
+        update={colliding_model_key: scenario_category}
+    )
+    assert type(poisoned_model) is assessment_scope_contract.ScenarioIdentityAssertion
+
+    colliding_dictionary_key = HashCollidingString("category")
+    poisoned_dictionary: dict[object, object] = {
+        colliding_dictionary_key: scenario_category
+    }
+    for field_name, field_value in scenario_fields.items():
+        poisoned_dictionary[field_name] = field_value
+    assert type(poisoned_dictionary) is dict
+
+    for hostile_child, expected_error_type in (
+        (poisoned_model, "compatibility_assertion_state"),
+        (poisoned_dictionary, "compatibility_assertion_key"),
+    ):
+        assertions = tuple(
+            hostile_child if assertion is scenario_assertion else assertion
+            for assertion in policy.assertions
+        )
+        payload = _validate(_request_payload()).model_dump()
+        payload["binding_policy"]["assertions"] = assertions
+        equality_calls.clear()
+        hash_calls.clear()
+
+        for root in ("policy", "request"):
+            receipts: list[dict[str, object]] = []
+            for _ in range(2):
+                with pytest.raises(ValidationError) as exc_info:
+                    if root == "policy":
+                        V14BindingPolicy.model_validate(payload["binding_policy"])
+                    else:
+                        EvaluationRequest.model_validate(payload)
+                errors = exc_info.value.errors()
+                receipts.append(
+                    {
+                        "errors": errors,
+                        "text": str(exc_info.value),
+                        "json": exc_info.value.json(),
+                    }
+                )
+                assert {error["type"] for error in errors} == {expected_error_type}
+                assert {error["input"] for error in errors} == {
+                    "<invalid compatibility assertion>"
+                }
+            assert receipts[0] == receipts[1]
+
+        assert equality_calls == []
+        assert hash_calls == []
+
+
 def test_policy_canonical_child_validator_preserves_python_strictness() -> None:
     policy = _validate_policy(_request_payload())
     normalized = policy.model_dump()

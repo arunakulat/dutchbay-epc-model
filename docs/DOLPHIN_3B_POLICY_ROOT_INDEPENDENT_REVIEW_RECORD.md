@@ -1073,3 +1073,111 @@ The protected-base-to-candidate binary diff SHA-256 was
 
 Candidate `0b92cdf…` must remain unmerged. Both VETOs control delivery. No result changes grade,
 evidence, lender, Board, release, deployment, issue or `HOLD` authority.
+
+## 17. Successor review — rejected exact-model state still dispatches during raw ordering
+
+**Controlling disposition:** DOMAIN VETO
+
+**Reviewed implementation:** `3c016fef0aa93d1cfbb523f48f2c4c48dd29a71c`
+
+**Reviewed tree:** `719c05027bf958cc605c04b36f56da110e8286f0`
+
+**Reviewers:** Hubble, independent domain review (`/root/d3b_final_domain_review`); Turing,
+independent assurance review (`/root/d3b_final_assurance_review`)
+
+The assurance reviewer issued `ACCEPT` for this exact candidate and found Section 16's
+serializer-shadow defect closed within the assurance lens. The domain reviewer accepted the same
+correction and inherited semantic corpus, then found a remaining caller-dispatch path while ordering
+an exact trusted instance whose state had already been rejected. The domain `VETO` controls
+delivery. Green tests, security checks and the bounded assurance acceptance cannot override it.
+
+### 17.1 Controlling exact-instance counterexample
+
+Using only Pydantic's public `model_construct` and `model_copy(update=...)` operations, the domain
+reviewer created an exact trusted assertion with unchanged field count, one declared field absent,
+and that field represented by a hash-colliding `str`-subclass key. The exact-instance state detector
+correctly classified the object as invalid. `_raw_policy_assertion_sort_key` then independently
+reread the rejected object's original `__dict__` through `dict.get` while constructing the
+diagnostic-order key.
+
+The built-in lookup invoked the caller key's rich equality and produced these exact outcomes:
+
+| Public root | Attempts | Result |
+|---|---:|---|
+| Standalone `V14BindingPolicy` | 2 | raw caller `RuntimeError` twice |
+| Containing `EvaluationRequest` | 2 | raw caller `RuntimeError` twice |
+
+Equality hooks ran in all `4` of `4` attempts, and no bounded `ValidationError` receipt existed.
+This is not a semantic false accept. It is a CASPER bounded-error and caller-dispatch defect: state
+already rejected by the contract must be opaque to diagnostic ordering.
+
+### 17.2 Exact assurance acceptance preserved
+
+Turing's `ACCEPT` remains valid only for `3c016fe…` and only within its stated assurance scope. The
+reviewer established that all eight trusted field-name tuples matched live Pydantic declarations;
+clean public constructs were freshly revalidated rather than identity-retained; missing, additional,
+replaced and semantically invalid state was refused; and serializer shadows on every trusted class,
+twice at both public roots, produced stable complete structured, text and JSON errors with zero
+shadow hooks. Instrumentation showed the class-owned serializer called once per validation and was
+restored. The inherited collection, tuple-subclass, model-subclass, dictionary-subclass,
+rich-equality, scalar, duplicate/distinct ordering, schema and successful-wire controls passed.
+
+Hubble independently preserved those accepted facts and extended them: all eight class field maps
+were exact; clean constructs accepted `16/16` across classes and roots; invalid declared fields
+revalidated and refused `16/16`; missing and additional state each produced bounded state errors
+`16/16`; tuple/date subclass hooks remained zero; and a non-exact instance dictionary was refused
+without mapping hooks. The independently hardcoded jurisdiction matrix remained `28` accepts and
+`107` refusals at each root. External-route layering, ownership, identity, capacity/basis,
+route-completeness, cost/price, D3A shared-binding distinction, D2 boundary, both schema modes,
+strict Python ingress, JSON round trip and four ten-assertion authored-order permutations all
+remained correct.
+
+### 17.3 Required bounded correction
+
+The successor must derive exact-model diagnostic ordering only from the fresh, sanitized
+declared-field payload. Invalid exact-model state receives one constant deterministic raw ordering
+key and the original `__dict__` is never read again. A public construct/copy regression must replay
+the hash-colliding key twice at both public roots and require stable complete constant-input
+`compatibility_assertion_state` receipts with zero caller equality hooks.
+
+The equivalent exact built-in dictionary path must also fail closed: a non-exact dictionary key
+must not reach raw ordering or the child adapter, and inspection must not invoke caller equality,
+hashing, representation or method dispatch. Dictionary subclasses remain opaque under the already
+accepted Section 13 boundary.
+
+### 17.4 Exact review receipt
+
+At review close, local `HEAD`, upstream, live topic, pull ref and draft-PR head were all
+`3c016fef0aa93d1cfbb523f48f2c4c48dd29a71c`; the tree was
+`719c05027bf958cc605c04b36f56da110e8286f0`; protected/live `origin/main` and the PR base were
+`9e1c6fae6220551754c23535caeaa86b37422230`; the topic was zero behind and twenty commits ahead;
+and the worktree was clean. PR `#1204` was open, draft, mergeable and clean. All four required checks
+and the complete exact-head rollup were green, including all six test shards, coverage, Code
+Quality, Security Scan, CodeQL, smoke, fastlane and verification receipts. Issue `#1110` remained
+`OPEN`; no `HOLD` changed.
+
+Shared local gates passed `300` focused D3B tests, `956` complete-contract tests, `330` D3A tests
+and `298` D2 tests. In-memory branch coverage was `94.69%` for the package and `96.90%` for the
+modified module. Ruff check/format, Black, isort, mypy `--no-incremental`, in-memory compilation,
+forbidden-import AST, excluded-surface and `git diff --check` passed. The local
+import/changelog/cold-import group passed `33` controls and had two timing-only failures at about
+`2.35`–`2.38` seconds against a `2.0`-second threshold; protected-base and candidate medians were
+`2.404` and `2.386` seconds respectively, and exact-head CI was green. Both reviewers disclosed the
+environmental, non-regressive timing limitation and did not treat it as controlling.
+
+Candidate fingerprints:
+
+| File | SHA-256 |
+|---|---|
+| `analytics/feasibility_report_contract/assessment_scope.py` | `9f2cc0774a2ee700cab955490d81f926b62f90c089d6329039ac6cc8b35a6f20` |
+| `tests/contracts/test_assessment_scope_contract.py` | `5b83d5b27f1b201e74f7ebc347bf55cf21ccca94876b3b9ae029e70e62263392` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_INDEPENDENT_REVIEW_RECORD.md` | `b625fc84975efb3dbe11fba5ca9632f84a566c74051796e18f9638c3d987b2b5` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_REMEDIATION_RECORD.md` | `2c3adbdc4b9fcc02c7c96459dc92c1a802280f13991909e36093fde124479cc6` |
+| `changelog.d/d3b-policy-basis-coherence.fixed.md` | `4929267cac5d617e8d9a17cbba5010c3d4e5bfafe5f33ef52c351b39c5b72d04` |
+
+The protected-base-to-candidate binary diff SHA-256 was
+`682565a8b0e14fc658b8ad7515618580a721974f3ea5e69dcf0037061fd5f434`.
+
+Candidate `3c016fe…` must remain unmerged. The assurance `ACCEPT` remains exact-SHA evidence for its
+tested scope; the domain `VETO` controls delivery. Neither disposition changes grade, evidence,
+lender, Board, release, deployment, issue or `HOLD` authority.

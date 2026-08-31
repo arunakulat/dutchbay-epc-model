@@ -609,3 +609,66 @@ The test suites emitted only the repository's pre-existing Hypothesis `norecurse
 mypy emitted only its pre-existing unused-configuration-section warning. This is not
 self-acceptance. A new immutable SHA still requires fresh independent domain and assurance
 dispositions, current protected-main ancestry, a conflict-free PR and exact-head required CI.
+
+## 16. Opaque rejected-state and exact-dictionary-key successor correction
+
+Independent review of `3c016fef0aa93d1cfbb523f48f2c4c48dd29a71c` produced a split
+disposition. Assurance accepted the exact-instance declared-field reconstruction, revalidation and
+class-owned serialization boundary. Domain review then proved that raw diagnostic ordering reread
+an exact trusted instance after its state had already been rejected. A hash-colliding `str`
+subclass in the instance dictionary could therefore execute caller equality and escape raw
+`RuntimeError` at both public roots. The exact assurance `ACCEPT`, controlling domain `VETO`,
+counterexample and supporting receipts are preserved in Section 17 of the independent review
+record.
+
+The bounded successor makes rejected state opaque before child validation and ordering:
+
+- an exact built-in dictionary is inspected linearly through the built-in `dict.items` descriptor;
+- only exact built-in string keys are copied into a fresh dictionary, without caller key lookup;
+- a non-exact raw dictionary key receives one constant-input
+  `compatibility_assertion_key` child error before the adapter or ordering code can inspect it;
+- an exact trusted model's built-in field dictionary is copied through the same exact-key boundary,
+  then checked against its explicit declared-field tuple;
+- missing, additional, replaced or non-exact-key model state retains the existing bounded
+  `compatibility_assertion_state` error;
+- the canonical declared key is derived only by linear inspection of the fresh sanitized payload;
+  invalid or opaque state receives the constant fallback key; and
+- no raw ordering path rereads the caller's original dictionary or model `__dict__`.
+
+The durable regression uses public `model_construct` plus `model_copy(update=...)` to build the
+exact trusted-instance counterexample and separately builds an exact raw dictionary with the same
+hash-colliding key. Each is validated twice at the standalone policy and containing-request roots.
+The model must produce stable complete `compatibility_assertion_state` receipts, the dictionary
+must produce stable complete `compatibility_assertion_key` receipts, every error must carry the
+constant invalid-assertion input, and both equality and hash ledgers must remain empty during
+validation.
+
+This changes only strict in-process Python validation and diagnostic ordering. JSON wire shape,
+accepted authored order, domain semantics, ProjectCase topology, evaluation, finance, application,
+web/API, grade, release and `HOLD` authority remain unchanged. The new immutable checkpoint still
+requires fresh independent domain and assurance dispositions, current protected-main ancestry, a
+conflict-free PR and exact-head required CI before `MERGE-01` can apply.
+
+### 16.1 Local successor receipt
+
+| Control | Result |
+|---|---|
+| Exact-model and exact-dictionary hash-collision negative control | passed twice at both public roots with stable complete receipts and zero equality/hash hooks |
+| Complete D3B-0 assessment-scope contract | `301 passed` |
+| Complete contract suite | `957 passed` |
+| D3A ProjectCase predecessor regression | `330 passed` |
+| D2 machine-contract predecessor regression | `298 passed` |
+| Contract-package branch coverage | `94.61%` total; modified assessment-scope module `96.51%` |
+| Ruff check and format check | passed |
+| Black and isort checks | passed |
+| Mypy `--no-incremental` on the assessment-scope export surface | passed |
+| Both Draft 2020-12 schema modes, strict/frozen ingress and public exports | passed in the focused suite |
+| Import/changelog/cold-import controls and in-memory compilation | `35 passed`; compilation passed |
+| Forbidden-import AST, excluded-surface and `git diff --check` controls | passed |
+| Governed environment and canonical bootstrap | Python `3.12.13`; `73` of `73` rules active |
+
+The test suites emitted only the repository's pre-existing Hypothesis `norecursedirs` warning;
+mypy emitted only its pre-existing unused-configuration-section warning. Coverage was collected in
+memory and created no workspace data file. These are local implementation receipts, not
+self-acceptance. The immutable successor still requires fresh exact-SHA domain and assurance
+dispositions and exact-head required CI before delivery.
