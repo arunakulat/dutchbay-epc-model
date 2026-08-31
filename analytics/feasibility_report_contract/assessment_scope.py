@@ -14,6 +14,7 @@ scope-owned canonical ``run.mode`` token, under the exact policy declared below.
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from dataclasses import dataclass
@@ -26,12 +27,16 @@ from pydantic import (
     Field,
     GetJsonSchemaHandler,
     PositiveInt,
+    TypeAdapter,
+    ValidationError,
+    ValidationInfo,
     ValidatorFunctionWrapHandler,
     WrapValidator,
+    field_validator,
     model_validator,
 )
 from pydantic.json_schema import JsonSchemaValue
-from pydantic_core import CoreSchema
+from pydantic_core import CoreSchema, PydanticCustomError
 
 from analytics.run_modes import RunMode
 
@@ -83,6 +88,10 @@ _ASSESSMENT_JURISDICTION_CODE_PATTERN = r"^[A-Z0-9][A-Z0-9_-]{1,31}(?![\s\S])"
 _ASSESSMENT_CURRENCY_CODE_PATTERN = r"^[A-Z]{3}(?![\s\S])"
 _BINDING_UNIT_TOKEN_PATTERN = r"^[A-Za-z0-9%][A-Za-z0-9%._/*^()\-]{0,63}(?![\s\S])"
 _STABLE_IDENTIFIER_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:/-]*(?![\s\S])"
+_INVALID_COMPATIBILITY_ASSERTION_INPUT = "<invalid compatibility assertion>"
+_INVALID_COMPATIBILITY_ASSERTION_COLLECTION_INPUT = (
+    "<invalid compatibility assertion collection>"
+)
 _SEMVER_NUMERIC_IDENTIFIER = r"(?:0|[1-9][0-9]*)"
 _SEMVER_PRERELEASE_IDENTIFIER = r"(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)"
 _PROJECT_CASE_SEMVER_PATTERN = (
@@ -305,6 +314,14 @@ class ProjectCaseMaterialCategory(str, Enum):
     MISSING_INPUT = "missing_input"
 
 
+_PROJECT_CASE_MATERIAL_CATEGORY_ORDER = MappingProxyType(
+    {
+        category.value: position
+        for position, category in enumerate(ProjectCaseMaterialCategory)
+    }
+)
+
+
 class MaterialDispositionKind(str, Enum):
     """How one ProjectCase category participates in the D3B v1 binding."""
 
@@ -451,6 +468,19 @@ _DOMAIN_ALLOWED_SUBJECTS = MappingProxyType(
         BaseConfigDomain.WACC: frozenset({JurisdictionSubject.FINANCING}),
     }
 )
+
+
+def _require_jurisdiction_subject_can_govern_domain(
+    subject: JurisdictionSubject,
+    domain: BaseConfigDomain,
+) -> None:
+    """Require one jurisdiction subject to be admissible for an authored domain."""
+    if domain in _DOMAINS_WITHOUT_JURISDICTION_ROUTE:
+        raise ValueError(f"{domain.value} authority routes must be project-global")
+    if subject not in _DOMAIN_ALLOWED_SUBJECTS[domain]:
+        raise ValueError(
+            f"jurisdiction subject {subject.value} cannot govern {domain.value}"
+        )
 
 
 class ProjectCaseReference(StrictFrozenModel):
@@ -802,14 +832,10 @@ class BaseScenarioIdentity(StrictFrozenModel):
                     raise ValueError(
                         "base domain route has a dangling jurisdiction binding"
                     )
-                if (
-                    subject_authority.subject
-                    not in _DOMAIN_ALLOWED_SUBJECTS[disposition.domain]
-                ):
-                    raise ValueError(
-                        f"jurisdiction subject {subject_authority.subject.value} "
-                        f"cannot govern {disposition.domain.value}"
-                    )
+                _require_jurisdiction_subject_can_govern_domain(
+                    subject_authority.subject,
+                    disposition.domain,
+                )
                 routed_subjects.add(jurisdiction_binding_id)
 
                 route_authority_sources = {
@@ -879,6 +905,14 @@ class JurisdictionSubjectAssertion(StrictFrozenModel):
     jurisdiction_code: AssessmentJurisdictionCode
     subject: JurisdictionSubject
     base_domain: BaseConfigDomain
+
+    @model_validator(mode="after")
+    def _subject_can_govern_domain(self) -> JurisdictionSubjectAssertion:
+        _require_jurisdiction_subject_can_govern_domain(
+            self.subject,
+            self.base_domain,
+        )
+        return self
 
 
 class TechnologyBindingAssertion(StrictFrozenModel):
@@ -1112,6 +1146,366 @@ CompatibilityAssertion = Annotated[
     ],
     Field(discriminator="kind"),
 ]
+_COMPATIBILITY_ASSERTION_ADAPTER: TypeAdapter[CompatibilityAssertion] = TypeAdapter(
+    CompatibilityAssertion
+)
+
+
+def _is_exact_compatibility_assertion_model_type(candidate: type[Any]) -> bool:
+    """Return whether a type is one exact trusted compatibility model."""
+    return (
+        candidate is ScenarioIdentityAssertion
+        or candidate is LocationAssertion
+        or candidate is JurisdictionSubjectAssertion
+        or candidate is TechnologyBindingAssertion
+        or candidate is GenerationCapacityAssertion
+        or candidate is StorageCapacityAssertion
+        or candidate is CostCompatibilityAssertion
+        or candidate is PriceBasisAssertion
+    )
+
+
+def _exact_compatibility_assertion_field_names(
+    candidate: type[Any],
+) -> tuple[str, ...] | None:
+    """Return declared field names for one exact trusted compatibility model."""
+    if candidate is ScenarioIdentityAssertion:
+        return (
+            "kind",
+            "assertion_id",
+            "category",
+            "project_case_selector",
+            "base_selector",
+        )
+    if candidate is LocationAssertion:
+        return (
+            "kind",
+            "assertion_id",
+            "category",
+            "project_case_selector",
+            "base_selector",
+        )
+    if candidate is JurisdictionSubjectAssertion:
+        return (
+            "kind",
+            "assertion_id",
+            "category",
+            "jurisdiction_binding_id",
+            "jurisdiction_code",
+            "subject",
+            "base_domain",
+        )
+    if candidate is TechnologyBindingAssertion:
+        return (
+            "kind",
+            "assertion_id",
+            "category",
+            "asset_id",
+            "technology_binding_id",
+            "technology_id",
+            "asset_class",
+            "authored_technology_kind",
+            "base_config_key",
+        )
+    if candidate is GenerationCapacityAssertion:
+        return (
+            "kind",
+            "assertion_id",
+            "category",
+            "asset_id",
+            "base_config_key",
+            "project_case_selector",
+            "base_selector",
+            "expected_unit",
+            "electrical_basis",
+            "capacity_basis",
+            "authored_technology_kind",
+        )
+    if candidate is StorageCapacityAssertion:
+        return (
+            "kind",
+            "assertion_id",
+            "category",
+            "asset_id",
+            "base_config_key",
+            "project_case_selector",
+            "base_selector",
+            "expected_unit",
+            "electrical_basis",
+            "capacity_basis",
+            "authored_technology_kind",
+        )
+    if candidate is CostCompatibilityAssertion:
+        return (
+            "kind",
+            "assertion_id",
+            "category",
+            "included_line_ids",
+            "price_basis_id",
+            "reporting_currency",
+            "periodicity",
+            "base_selector",
+        )
+    if candidate is PriceBasisAssertion:
+        return (
+            "kind",
+            "assertion_id",
+            "category",
+            "price_basis_id",
+            "valuation_date",
+            "reporting_currency",
+            "nominality",
+        )
+    return None
+
+
+def _copy_exact_string_keyed_dictionary(
+    raw_fields: Any,
+) -> tuple[dict[str, Any] | None, bool]:
+    """Copy an exact dictionary without dispatching through caller-owned keys."""
+    if type(raw_fields) is not dict:
+        return None, False
+    copied_fields: dict[str, Any] = {}
+    for raw_field_name, raw_field_value in dict.items(raw_fields):
+        if type(raw_field_name) is not str:
+            return None, True
+        copied_fields[raw_field_name] = raw_field_value
+    return copied_fields, False
+
+
+def _exact_compatibility_assertion_payload(
+    raw_assertion: Any,
+) -> tuple[dict[str, Any] | None, bool]:
+    """Return declared fields and whether an exact model has non-field state."""
+    field_names = _exact_compatibility_assertion_field_names(type(raw_assertion))
+    if field_names is None:
+        return None, False
+
+    raw_fields = object.__getattribute__(raw_assertion, "__dict__")
+    if type(raw_fields) is not dict:
+        return None, True
+    copied_fields, has_non_exact_key = _copy_exact_string_keyed_dictionary(raw_fields)
+    if (
+        has_non_exact_key
+        or copied_fields is None
+        or len(copied_fields) != len(field_names)
+    ):
+        return None, True
+    for raw_field_name in dict.keys(copied_fields):
+        if type(raw_field_name) is not str or raw_field_name not in field_names:
+            return None, True
+    return copied_fields, False
+
+
+def _has_exact_compatibility_assertion_kind(
+    sanitized_fields: dict[str, Any],
+) -> bool:
+    """Return whether a sanitized payload declares one exact closed kind."""
+    raw_kind = None
+    kind_is_present = False
+    for raw_field_name, raw_field_value in dict.items(sanitized_fields):
+        if raw_field_name == "kind":
+            raw_kind = raw_field_value
+            kind_is_present = True
+            break
+    if not kind_is_present or type(raw_kind) is not str:
+        return False
+    return (
+        raw_kind == "scenario_identity_assertion"
+        or raw_kind == "location_assertion"
+        or raw_kind == "jurisdiction_subject_assertion"
+        or raw_kind == "technology_binding_assertion"
+        or raw_kind == "generation_capacity_assertion"
+        or raw_kind == "storage_capacity_assertion"
+        or raw_kind == "cost_compatibility_assertion"
+        or raw_kind == "price_basis_assertion"
+    )
+
+
+def _sanitized_policy_assertion_sort_key(
+    sanitized_fields: dict[str, Any] | None,
+) -> tuple[int, str, str, str]:
+    """Return the canonical key from one fresh exact-string-keyed payload."""
+    raw_category = None
+    raw_assertion_id = None
+    raw_kind = None
+    if sanitized_fields is not None:
+        for raw_field_name, raw_field_value in dict.items(sanitized_fields):
+            if type(raw_field_name) is not str:
+                return (
+                    len(_PROJECT_CASE_MATERIAL_CATEGORY_ORDER),
+                    "",
+                    "",
+                    "",
+                )
+            if raw_field_name == "category":
+                raw_category = raw_field_value
+            elif raw_field_name == "assertion_id":
+                raw_assertion_id = raw_field_value
+            elif raw_field_name == "kind":
+                raw_kind = raw_field_value
+
+    if type(raw_category) is ProjectCaseMaterialCategory:
+        category_token = raw_category.value
+    elif type(raw_category) is str:
+        category_token = raw_category
+    else:
+        category_token = ""
+    assertion_id_token = raw_assertion_id if type(raw_assertion_id) is str else ""
+    kind_token = raw_kind if type(raw_kind) is str else ""
+    return (
+        _PROJECT_CASE_MATERIAL_CATEGORY_ORDER.get(
+            category_token,
+            len(_PROJECT_CASE_MATERIAL_CATEGORY_ORDER),
+        ),
+        category_token,
+        assertion_id_token,
+        kind_token,
+    )
+
+
+def _child_error_sort_key(error: dict[str, Any]) -> tuple[str, str, str]:
+    """Return a bounded deterministic signature for one child error."""
+    return (
+        str(error["type"]),
+        json.dumps(error["loc"], ensure_ascii=False, separators=(",", ":")),
+        str(error["msg"]),
+    )
+
+
+def _child_validation_outcome_sort_key(
+    validated_child: CompatibilityAssertion | None,
+    child_errors: tuple[dict[str, Any], ...],
+) -> tuple[int, str]:
+    """Return a total observable outcome key without using caller position."""
+    if validated_child is not None:
+        child_type = type(validated_child)
+        if child_type is ScenarioIdentityAssertion:
+            serialized = ScenarioIdentityAssertion.__pydantic_serializer__.to_json(
+                validated_child
+            )
+        elif child_type is LocationAssertion:
+            serialized = LocationAssertion.__pydantic_serializer__.to_json(
+                validated_child
+            )
+        elif child_type is JurisdictionSubjectAssertion:
+            serialized = JurisdictionSubjectAssertion.__pydantic_serializer__.to_json(
+                validated_child
+            )
+        elif child_type is TechnologyBindingAssertion:
+            serialized = TechnologyBindingAssertion.__pydantic_serializer__.to_json(
+                validated_child
+            )
+        elif child_type is GenerationCapacityAssertion:
+            serialized = GenerationCapacityAssertion.__pydantic_serializer__.to_json(
+                validated_child
+            )
+        elif child_type is StorageCapacityAssertion:
+            serialized = StorageCapacityAssertion.__pydantic_serializer__.to_json(
+                validated_child
+            )
+        elif child_type is CostCompatibilityAssertion:
+            serialized = CostCompatibilityAssertion.__pydantic_serializer__.to_json(
+                validated_child
+            )
+        elif child_type is PriceBasisAssertion:
+            serialized = PriceBasisAssertion.__pydantic_serializer__.to_json(
+                validated_child
+            )
+        else:  # pragma: no cover - guarded by the exact-type child check
+            raise TypeError("validated compatibility assertion type is not trusted")
+        return (1, bytes.decode(serialized))
+    return (
+        0,
+        json.dumps(
+            tuple(_child_error_sort_key(error) for error in child_errors),
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ),
+    )
+
+
+def _bounded_child_line_error(
+    error: dict[str, Any],
+    canonical_index: int,
+) -> dict[str, Any]:
+    """Return one deterministic child error without raw input or context."""
+    return {
+        "type": PydanticCustomError(str(error["type"]), str(error["msg"])),
+        "loc": (canonical_index, *error["loc"]),
+        "input": _INVALID_COMPATIBILITY_ASSERTION_INPUT,
+    }
+
+
+def _non_exact_model_child_error() -> dict[str, Any]:
+    """Return a bounded error for an accepted non-exact model subclass."""
+    return {
+        "type": "compatibility_assertion_type",
+        "loc": (),
+        "msg": "Input should be an exact compatibility assertion model or dictionary",
+        "input": _INVALID_COMPATIBILITY_ASSERTION_INPUT,
+    }
+
+
+def _non_field_model_state_child_error() -> dict[str, Any]:
+    """Return a bounded error for non-field state on an exact model instance."""
+    return {
+        "type": "compatibility_assertion_state",
+        "loc": (),
+        "msg": "Input should not contain non-field compatibility assertion state",
+        "input": _INVALID_COMPATIBILITY_ASSERTION_INPUT,
+    }
+
+
+def _non_exact_dictionary_key_child_error() -> dict[str, Any]:
+    """Return a bounded error for a non-exact raw dictionary key."""
+    return {
+        "type": "compatibility_assertion_key",
+        "loc": (),
+        "msg": "Input should contain only exact string compatibility assertion keys",
+        "input": _INVALID_COMPATIBILITY_ASSERTION_INPUT,
+    }
+
+
+def _invalid_discriminator_child_error() -> dict[str, Any]:
+    """Return one bounded error for a missing or unsupported exact kind."""
+    return {
+        "type": "compatibility_assertion_discriminator",
+        "loc": ("kind",),
+        "msg": "Input should declare one exact supported compatibility assertion kind",
+        "input": _INVALID_COMPATIBILITY_ASSERTION_INPUT,
+    }
+
+
+def _bounded_assertion_collection_error(mode: str) -> ValidationError:
+    """Return a constant-input error for a non-exact assertion collection."""
+    error_type = "list_type" if mode == "json" else "tuple_type"
+    message = (
+        "Input should be a valid array"
+        if mode == "json"
+        else "Input should be a valid tuple"
+    )
+    return ValidationError.from_exception_data(
+        "V14BindingPolicy.assertions",
+        [
+            {
+                "type": PydanticCustomError(error_type, message),
+                "loc": (),
+                "input": _INVALID_COMPATIBILITY_ASSERTION_COLLECTION_INPUT,
+            }
+        ],
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _PolicyAssertionValidationBundle:
+    """One independently validated child plus canonical ordering metadata."""
+
+    authored_index: int
+    declared_sort_key: tuple[int, str, str, str]
+    outcome_sort_key: tuple[int, str]
+    validated_child: CompatibilityAssertion | None
+    child_errors: tuple[dict[str, Any], ...]
 
 
 class ProjectCaseMaterialDisposition(StrictFrozenModel):
@@ -1162,6 +1556,125 @@ class V14BindingPolicy(StrictFrozenModel):
     material_dispositions: tuple[ProjectCaseMaterialDisposition, ...]
     run_mode_policy: RunModeBindingPolicy
 
+    @field_validator("assertions", mode="wrap")
+    @classmethod
+    def _assertion_children_use_canonical_validation_order(
+        cls,
+        raw_assertions: Any,
+        handler: ValidatorFunctionWrapHandler,
+        info: ValidationInfo,
+    ) -> tuple[CompatibilityAssertion, ...]:
+        """Validate children canonically while preserving authored tuple order."""
+        expected_collection_type = list if info.mode == "json" else tuple
+        if type(raw_assertions) is not expected_collection_type:
+            raise _bounded_assertion_collection_error(info.mode)
+
+        bundles: list[_PolicyAssertionValidationBundle] = []
+        for authored_index, raw_assertion in enumerate(raw_assertions):
+            validated_child: CompatibilityAssertion | None = None
+            child_errors: tuple[dict[str, Any], ...] = ()
+            child_input = raw_assertion
+            sanitized_fields: dict[str, Any] | None = None
+            if type(raw_assertion) is dict:
+                exact_dictionary, has_non_exact_key = (
+                    _copy_exact_string_keyed_dictionary(raw_assertion)
+                )
+                if has_non_exact_key:
+                    child_errors = (_non_exact_dictionary_key_child_error(),)
+                elif exact_dictionary is not None:
+                    child_input = exact_dictionary
+                    sanitized_fields = exact_dictionary
+            elif info.mode == "python":
+                exact_payload, has_non_field_state = (
+                    _exact_compatibility_assertion_payload(raw_assertion)
+                )
+                if has_non_field_state:
+                    child_errors = (_non_field_model_state_child_error(),)
+                elif exact_payload is not None:
+                    child_input = exact_payload
+                    sanitized_fields = exact_payload
+                else:
+                    child_errors = (_non_exact_model_child_error(),)
+            if (
+                not child_errors
+                and sanitized_fields is not None
+                and not _has_exact_compatibility_assertion_kind(sanitized_fields)
+            ):
+                child_errors = (_invalid_discriminator_child_error(),)
+                sanitized_fields = None
+            try:
+                if child_errors:
+                    pass
+                elif info.mode == "json":
+                    validated_child = _COMPATIBILITY_ASSERTION_ADAPTER.validate_json(
+                        json.dumps(raw_assertion),
+                        context=info.context,
+                    )
+                else:
+                    validated_child = _COMPATIBILITY_ASSERTION_ADAPTER.validate_python(
+                        child_input,
+                        context=info.context,
+                    )
+                if (
+                    validated_child is not None
+                    and not _is_exact_compatibility_assertion_model_type(
+                        type(validated_child)
+                    )
+                ):
+                    child_errors = (_non_exact_model_child_error(),)
+                    validated_child = None
+            except ValidationError as exc:
+                child_errors = tuple(
+                    sorted(
+                        (dict(error) for error in exc.errors(include_url=False)),
+                        key=_child_error_sort_key,
+                    )
+                )
+            bundles.append(
+                _PolicyAssertionValidationBundle(
+                    authored_index=authored_index,
+                    declared_sort_key=_sanitized_policy_assertion_sort_key(
+                        sanitized_fields
+                    ),
+                    outcome_sort_key=_child_validation_outcome_sort_key(
+                        validated_child,
+                        child_errors,
+                    ),
+                    validated_child=validated_child,
+                    child_errors=child_errors,
+                )
+            )
+
+        canonical_bundles = tuple(
+            sorted(
+                bundles,
+                key=lambda bundle: (
+                    bundle.declared_sort_key,
+                    bundle.outcome_sort_key,
+                ),
+            )
+        )
+        canonical_errors: list[Any] = []
+        for canonical_index, bundle in enumerate(canonical_bundles):
+            for error in bundle.child_errors:
+                canonical_errors.append(
+                    _bounded_child_line_error(error, canonical_index)
+                )
+        if canonical_errors:
+            raise ValidationError.from_exception_data(
+                "V14BindingPolicy.assertions",
+                canonical_errors,
+            )
+
+        authored_children = tuple(
+            cast(CompatibilityAssertion, bundle.validated_child)
+            for bundle in sorted(bundles, key=lambda bundle: bundle.authored_index)
+        )
+        return cast(
+            tuple[CompatibilityAssertion, ...],
+            handler(authored_children),
+        )
+
     @model_validator(mode="after")
     def _policy_covers_every_material_category(self) -> V14BindingPolicy:
         if not self.assertions:
@@ -1172,7 +1685,7 @@ class V14BindingPolicy(StrictFrozenModel):
         cost_line_ids: set[str] = set()
         source_route: tuple[object, ...]
         target_route: tuple[object, ...]
-        for assertion in self.assertions:
+        for assertion in _ordered_policy_assertions(self.assertions):
             if isinstance(assertion, ScenarioIdentityAssertion):
                 source_route = (assertion.category, assertion.project_case_selector)
                 target_route = (assertion.category, assertion.base_selector)
@@ -1263,6 +1776,7 @@ class V14BindingPolicy(StrictFrozenModel):
                     "compatibility assertions and material dispositions must agree for "
                     f"{category.value}"
                 )
+        _require_internal_policy_graph(self)
         return self
 
 
@@ -1314,6 +1828,183 @@ def _require_validation_modules(modules: tuple[ValidationModule, ...]) -> None:
     required = {ValidationModule.CASHFLOW, ValidationModule.DEBT}
     if not required.issubset(set(modules)):
         raise ValueError("validation modules must include cashflow and debt")
+
+
+def _ordered_policy_assertions(
+    assertions: tuple[CompatibilityAssertion, ...],
+) -> tuple[CompatibilityAssertion, ...]:
+    """Return a canonical validation order without changing authored tuple order."""
+    categories = tuple(ProjectCaseMaterialCategory)
+    return tuple(
+        sorted(
+            assertions,
+            key=lambda item: (categories.index(item.category), item.assertion_id),
+        )
+    )
+
+
+def _require_internal_policy_graph(policy: V14BindingPolicy) -> None:
+    """Close every relationship whose operands live inside one binding policy."""
+    assertions = _ordered_policy_assertions(policy.assertions)
+    technology_assertions = tuple(
+        item for item in assertions if isinstance(item, TechnologyBindingAssertion)
+    )
+    technology_by_asset = {item.asset_id: item for item in technology_assertions}
+    if len(technology_by_asset) != len(technology_assertions):
+        raise ValueError("technology assertions must use unique ProjectCase asset IDs")
+    technology_by_binding = {
+        item.technology_binding_id: item for item in technology_assertions
+    }
+    if len(technology_by_binding) != len(technology_assertions):
+        raise ValueError(
+            "D3B v1 requires one policy-owned physical asset per technology binding ID"
+        )
+    _require_unique(
+        ((item.technology_id, item.asset_class) for item in technology_assertions),
+        "technology assertion scope",
+    )
+
+    jurisdiction_identity_by_binding: dict[str, tuple[str, JurisdictionSubject]] = {}
+    jurisdiction_binding_by_identity: dict[tuple[str, JurisdictionSubject], str] = {}
+    generation_by_asset: dict[str, list[GenerationCapacityAssertion]] = {}
+    storage_by_asset: dict[str, list[StorageCapacityAssertion]] = {}
+    cost_assertions: list[CostCompatibilityAssertion] = []
+    price_assertions: list[PriceBasisAssertion] = []
+
+    for assertion in assertions:
+        if isinstance(assertion, JurisdictionSubjectAssertion):
+            identity = (assertion.jurisdiction_code, assertion.subject)
+            prior_identity = jurisdiction_identity_by_binding.setdefault(
+                assertion.jurisdiction_binding_id,
+                identity,
+            )
+            if prior_identity != identity:
+                raise ValueError(
+                    "jurisdiction assertions for one binding ID must share exact "
+                    "jurisdiction code and subject"
+                )
+            prior_binding = jurisdiction_binding_by_identity.setdefault(
+                identity,
+                assertion.jurisdiction_binding_id,
+            )
+            if prior_binding != assertion.jurisdiction_binding_id:
+                raise ValueError(
+                    "jurisdiction assertions must use one binding ID per exact "
+                    "jurisdiction code and subject"
+                )
+        elif isinstance(assertion, GenerationCapacityAssertion):
+            generation_by_asset.setdefault(assertion.asset_id, []).append(assertion)
+        elif isinstance(assertion, StorageCapacityAssertion):
+            storage_by_asset.setdefault(assertion.asset_id, []).append(assertion)
+        elif isinstance(assertion, CostCompatibilityAssertion):
+            cost_assertions.append(assertion)
+        elif isinstance(assertion, PriceBasisAssertion):
+            price_assertions.append(assertion)
+
+    for asset_id in sorted(generation_by_asset):
+        technology = technology_by_asset.get(asset_id)
+        if technology is None or (
+            technology.asset_class is not TechnologyAssetClass.GENERATION
+        ):
+            raise ValueError(
+                "generation capacity assertion requires a matching generation asset "
+                "technology assertion"
+            )
+        generation_assertions = generation_by_asset[asset_id]
+        for assertion in generation_assertions:
+            if (
+                assertion.authored_technology_kind
+                is not technology.authored_technology_kind
+            ):
+                raise ValueError(
+                    "generation capacity and technology assertions must use the same "
+                    "authored technology kind"
+                )
+            if (
+                assertion.base_config_key is not None
+                and assertion.base_config_key != technology.base_config_key
+            ):
+                raise ValueError(
+                    "generation capacity and technology assertions must use the same "
+                    "base config key"
+                )
+        generation_bases = {
+            (item.electrical_basis, item.capacity_basis)
+            for item in generation_assertions
+        }
+        if len(generation_bases) != 1:
+            raise ValueError(
+                "generation capacity assertions for one ProjectCase asset must share "
+                "electrical and capacity bases"
+            )
+
+    for asset_id in sorted(storage_by_asset):
+        technology = technology_by_asset.get(asset_id)
+        if technology is None or (
+            technology.asset_class is not TechnologyAssetClass.STORAGE
+        ):
+            raise ValueError(
+                "storage capacity assertion requires a matching storage asset "
+                "technology assertion"
+            )
+        storage_assertions = storage_by_asset[asset_id]
+        for assertion in storage_assertions:
+            if (
+                assertion.authored_technology_kind
+                is not technology.authored_technology_kind
+            ):
+                raise ValueError(
+                    "storage capacity and technology assertions must use the same "
+                    "authored technology kind"
+                )
+            if assertion.base_config_key != technology.base_config_key:
+                raise ValueError(
+                    "storage capacity and technology assertions must use the same base "
+                    "config key"
+                )
+        storage_bases = {
+            (item.electrical_basis, item.capacity_basis) for item in storage_assertions
+        }
+        if len(storage_bases) != 1:
+            raise ValueError(
+                "storage capacity assertions for one ProjectCase asset must share "
+                "electrical and capacity bases"
+            )
+
+    for technology in technology_assertions:
+        if technology.asset_class is TechnologyAssetClass.GENERATION:
+            has_technology_route = any(
+                item.base_config_key is not None
+                for item in generation_by_asset.get(technology.asset_id, ())
+            )
+            if not has_technology_route:
+                raise ValueError(
+                    "generation compatibility requires one per-technology capacity route"
+                )
+        else:
+            selectors = {
+                item.base_selector
+                for item in storage_by_asset.get(technology.asset_id, ())
+            }
+            if selectors != set(V14StorageCapacitySelector):
+                raise ValueError(
+                    "storage compatibility requires power, energy, and duration routes"
+                )
+
+    if len(price_assertions) != 1:
+        raise ValueError(
+            "v14 binding policy requires exactly one price-basis assertion"
+        )
+    price_assertion = price_assertions[0]
+    for cost_assertion in cost_assertions:
+        if (
+            cost_assertion.price_basis_id != price_assertion.price_basis_id
+            or cost_assertion.reporting_currency != price_assertion.reporting_currency
+        ):
+            raise ValueError(
+                "cost and price-basis assertions must share price basis and reporting "
+                "currency"
+            )
 
 
 def _require_internal_request_graph(request: EvaluationRequest) -> None:
@@ -1370,26 +2061,7 @@ def _require_internal_request_graph(request: EvaluationRequest) -> None:
 
     jurisdiction_assertions: set[str] = set()
     technology_assertions: set[str] = set()
-    technology_assertion_records = tuple(
-        assertion
-        for assertion in request.binding_policy.assertions
-        if isinstance(assertion, TechnologyBindingAssertion)
-    )
-    technology_assertion_by_asset = {
-        assertion.asset_id: assertion for assertion in technology_assertion_records
-    }
-    if len(technology_assertion_by_asset) != len(technology_assertion_records):
-        raise ValueError("technology assertions must use unique ProjectCase asset IDs")
-    generation_bindings: set[str] = set()
-    generation_basis_by_asset: dict[
-        str, tuple[ElectricalBasis, GenerationCapacityBasis]
-    ] = {}
-    storage_selectors_by_binding: dict[str, set[V14StorageCapacitySelector]] = {}
-    storage_basis_by_asset: dict[
-        str, tuple[StorageElectricalBasis, StorageCapacityBasis]
-    ] = {}
-    price_assertion_count = 0
-    for assertion in request.binding_policy.assertions:
+    for assertion in _ordered_policy_assertions(request.binding_policy.assertions):
         if isinstance(assertion, ScenarioIdentityAssertion):
             if BaseConfigDomain.SCENARIO_IDENTITY not in retained_domains:
                 raise ValueError(
@@ -1450,42 +2122,7 @@ def _require_internal_request_graph(request: EvaluationRequest) -> None:
                 )
             technology_assertions.add(assertion.technology_binding_id)
         elif isinstance(assertion, GenerationCapacityAssertion):
-            technology_assertion = technology_assertion_by_asset.get(assertion.asset_id)
-            if technology_assertion is None or (
-                technology_assertion.asset_class is not TechnologyAssetClass.GENERATION
-            ):
-                raise ValueError(
-                    "generation capacity assertion requires a matching generation asset "
-                    "technology assertion"
-                )
-            if (
-                assertion.authored_technology_kind
-                is not technology_assertion.authored_technology_kind
-            ):
-                raise ValueError(
-                    "generation capacity and technology assertions must use the same "
-                    "authored technology kind"
-                )
-            generation_basis = (
-                assertion.electrical_basis,
-                assertion.capacity_basis,
-            )
-            prior_generation_basis = generation_basis_by_asset.setdefault(
-                assertion.asset_id,
-                generation_basis,
-            )
-            if prior_generation_basis != generation_basis:
-                raise ValueError(
-                    "generation capacity assertions for one ProjectCase asset must "
-                    "share electrical and capacity bases"
-                )
             if assertion.base_config_key is not None:
-                if assertion.base_config_key != technology_assertion.base_config_key:
-                    raise ValueError(
-                        "generation capacity and technology assertions must use the same "
-                        "base config key"
-                    )
-                generation_bindings.add(technology_assertion.technology_binding_id)
                 required_domain = BaseConfigDomain.TECHNOLOGY_RESOURCE
             else:
                 required_domain = BaseConfigDomain.PROJECT_RESOURCE
@@ -1495,48 +2132,11 @@ def _require_internal_request_graph(request: EvaluationRequest) -> None:
                     "resource domain"
                 )
         elif isinstance(assertion, StorageCapacityAssertion):
-            technology_assertion = technology_assertion_by_asset.get(assertion.asset_id)
-            if technology_assertion is None or (
-                technology_assertion.asset_class is not TechnologyAssetClass.STORAGE
-            ):
-                raise ValueError(
-                    "storage capacity assertion requires a matching storage asset "
-                    "technology assertion"
-                )
-            if (
-                assertion.authored_technology_kind
-                is not technology_assertion.authored_technology_kind
-            ):
-                raise ValueError(
-                    "storage capacity and technology assertions must use the same "
-                    "authored technology kind"
-                )
-            storage_basis = (
-                assertion.electrical_basis,
-                assertion.capacity_basis,
-            )
-            prior_storage_basis = storage_basis_by_asset.setdefault(
-                assertion.asset_id,
-                storage_basis,
-            )
-            if prior_storage_basis != storage_basis:
-                raise ValueError(
-                    "storage capacity assertions for one ProjectCase asset must share "
-                    "electrical and capacity bases"
-                )
-            if assertion.base_config_key != technology_assertion.base_config_key:
-                raise ValueError(
-                    "storage capacity and technology assertions must use the same base "
-                    "config key"
-                )
             if BaseConfigDomain.TECHNOLOGY_RESOURCE not in retained_domains:
                 raise ValueError(
                     "storage capacity assertion requires retained authored "
                     "technology resources"
                 )
-            storage_selectors_by_binding.setdefault(
-                technology_assertion.technology_binding_id, set()
-            ).add(assertion.base_selector)
         elif isinstance(assertion, CostCompatibilityAssertion):
             required_domain = {
                 ProjectCaseMaterialCategory.CAPEX: BaseConfigDomain.CAPEX,
@@ -1554,7 +2154,6 @@ def _require_internal_request_graph(request: EvaluationRequest) -> None:
                     "cost assertions must match scope price basis and reporting currency"
                 )
         elif isinstance(assertion, PriceBasisAssertion):
-            price_assertion_count += 1
             if (
                 assertion.price_basis_id != request.scope.price_basis_id
                 or assertion.valuation_date != request.scope.valuation_date
@@ -1572,32 +2171,6 @@ def _require_internal_request_graph(request: EvaluationRequest) -> None:
     if technology_assertions != set(scope_technologies):
         raise ValueError(
             "compatibility assertions must cover every scoped technology binding"
-        )
-    generation_scope = {
-        binding_id
-        for binding_id, (_, asset_class) in scope_technologies.items()
-        if asset_class is TechnologyAssetClass.GENERATION
-    }
-    if generation_scope and generation_bindings != generation_scope:
-        raise ValueError(
-            "generation compatibility requires one per-technology capacity route"
-        )
-    storage_scope = {
-        binding_id
-        for binding_id, (_, asset_class) in scope_technologies.items()
-        if asset_class is TechnologyAssetClass.STORAGE
-    }
-    required_storage_selectors = set(V14StorageCapacitySelector)
-    for binding_id in storage_scope:
-        if storage_selectors_by_binding.get(binding_id, set()) != (
-            required_storage_selectors
-        ):
-            raise ValueError(
-                "storage compatibility requires power, energy, and duration routes"
-            )
-    if price_assertion_count != 1:
-        raise ValueError(
-            "evaluation request requires exactly one price-basis assertion"
         )
 
 

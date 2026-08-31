@@ -6,8 +6,10 @@ import ast
 import copy
 import json
 import math
+import random
 import subprocess
 import sys
+from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal
 from enum import IntEnum, StrEnum
@@ -22,10 +24,13 @@ import analytics.feasibility_report_contract.assessment_scope as assessment_scop
 from analytics.feasibility_report_contract import (
     AssessmentScope,
     AuthoredScenarioValidationReceipt,
+    BaseConfigDomain,
     BaseScenarioIdentity,
     CostCompatibilityAssertion,
     EvaluationRequest,
     GenerationCapacityAssertion,
+    JurisdictionSubject,
+    JurisdictionSubjectAssertion,
     ProjectCaseMaterialCategory,
     ProjectCaseMaterialDisposition,
     ProjectCaseReference,
@@ -44,6 +49,75 @@ from analytics.run_manifest import config_sha256
 
 _ROOT = Path(__file__).resolve().parents[2]
 _MODULE = _ROOT / "analytics/feasibility_report_contract/assessment_scope.py"
+
+_EXPECTED_DOMAINS_WITHOUT_JURISDICTION_ROUTE = frozenset(
+    {
+        BaseConfigDomain.SCENARIO_IDENTITY,
+        BaseConfigDomain.RUN_POSTURE,
+    }
+)
+_EXPECTED_DOMAIN_ALLOWED_SUBJECTS = {
+    BaseConfigDomain.PROJECT_IDENTITY_LOCATION: frozenset({JurisdictionSubject.SITE}),
+    BaseConfigDomain.PROJECT_RESOURCE: frozenset({JurisdictionSubject.SITE}),
+    BaseConfigDomain.PROJECT_LIFECYCLE_TIMELINE: frozenset(
+        {
+            JurisdictionSubject.SITE,
+            JurisdictionSubject.PERMIT,
+            JurisdictionSubject.CONTRACT,
+        }
+    ),
+    BaseConfigDomain.TECHNOLOGY_RESOURCE: frozenset(
+        {JurisdictionSubject.SITE, JurisdictionSubject.SUPPLY}
+    ),
+    BaseConfigDomain.REVENUE_TARIFF: frozenset(
+        {JurisdictionSubject.CONTRACT, JurisdictionSubject.GRID}
+    ),
+    BaseConfigDomain.CAPEX: frozenset(
+        {
+            JurisdictionSubject.SITE,
+            JurisdictionSubject.CONTRACT,
+            JurisdictionSubject.ACCOUNTING,
+            JurisdictionSubject.SUPPLY,
+        }
+    ),
+    BaseConfigDomain.OPEX: frozenset(
+        {
+            JurisdictionSubject.SITE,
+            JurisdictionSubject.CONTRACT,
+            JurisdictionSubject.ACCOUNTING,
+            JurisdictionSubject.SUPPLY,
+        }
+    ),
+    BaseConfigDomain.TAX_STATUTORY: frozenset(
+        {JurisdictionSubject.TAX, JurisdictionSubject.CORPORATE}
+    ),
+    BaseConfigDomain.FX: frozenset(
+        {
+            JurisdictionSubject.FINANCING,
+            JurisdictionSubject.ACCOUNTING,
+            JurisdictionSubject.CONTRACT,
+            JurisdictionSubject.CORPORATE,
+        }
+    ),
+    BaseConfigDomain.GRID: frozenset({JurisdictionSubject.GRID}),
+    BaseConfigDomain.ACCOUNTING: frozenset(
+        {JurisdictionSubject.ACCOUNTING, JurisdictionSubject.CORPORATE}
+    ),
+    BaseConfigDomain.FINANCING_DEBT: frozenset({JurisdictionSubject.FINANCING}),
+    BaseConfigDomain.WACC: frozenset({JurisdictionSubject.FINANCING}),
+}
+_ALLOWED_JURISDICTION_SUBJECT_DOMAIN_CASES = tuple(
+    (subject, domain)
+    for domain, subjects in _EXPECTED_DOMAIN_ALLOWED_SUBJECTS.items()
+    for subject in sorted(subjects, key=lambda item: item.value)
+)
+_INVALID_JURISDICTION_SUBJECT_DOMAIN_CASES = tuple(
+    (subject, domain)
+    for domain in BaseConfigDomain
+    for subject in JurisdictionSubject
+    if domain in _EXPECTED_DOMAINS_WITHOUT_JURISDICTION_ROUTE
+    or subject not in _EXPECTED_DOMAIN_ALLOWED_SUBJECTS.get(domain, frozenset())
+)
 
 
 def _project_case_reference() -> dict[str, Any]:
@@ -429,6 +503,19 @@ def _validate(payload: dict[str, Any]) -> EvaluationRequest:
     return EvaluationRequest.model_validate_json(json.dumps(payload))
 
 
+def _validate_policy(payload: dict[str, Any]) -> V14BindingPolicy:
+    return V14BindingPolicy.model_validate_json(json.dumps(payload["binding_policy"]))
+
+
+def _assert_policy_and_request_reject(
+    payload: dict[str, Any],
+    match: str,
+) -> None:
+    for validate in (_validate_policy, _validate):
+        with pytest.raises(ValidationError, match=match):
+            validate(payload)
+
+
 def _assertion(payload: dict[str, Any], assertion_id: str) -> dict[str, Any]:
     return next(
         item
@@ -568,6 +655,63 @@ def _replace_wind_with_solar_dc(payload: dict[str, Any], *, unit: str = "MWdc") 
             "capacity_basis": "nameplate",
             "authored_technology_kind": "solar_pv",
         }
+    )
+
+
+def _add_solar_technology(payload: dict[str, Any]) -> None:
+    """Add one completely routed solar technology to a wind request fixture."""
+    payload["scope"]["technology_scope"].append(
+        {
+            "technology_binding_id": "technology-binding:solar",
+            "technology_id": "solar_pv",
+            "asset_class": "generation",
+        }
+    )
+    payload["base_scenario"]["technology_authorities"].append(
+        {
+            "base_config_key": "solar",
+            "technology_binding_id": "technology-binding:solar",
+            "technology_id": "solar_pv",
+            "asset_class": "generation",
+            "authored_technology_kind": "solar_pv",
+            "authority_source_id": "source:fictionland-solar-basis",
+        }
+    )
+    for domain in ("project_resource", "technology_resource"):
+        _domain_disposition(payload, domain)["authority_routes"].append(
+            {
+                "authority_source_id": "source:fictionland-solar-basis",
+                "jurisdiction_binding_id": "jurisdiction-binding:site",
+                "technology_binding_id": "technology-binding:solar",
+            }
+        )
+    payload["binding_policy"]["assertions"].extend(
+        [
+            {
+                "kind": "technology_binding_assertion",
+                "assertion_id": "assertion:solar-technology",
+                "category": "technology_binding",
+                "asset_id": "asset:solar-01",
+                "technology_binding_id": "technology-binding:solar",
+                "technology_id": "solar_pv",
+                "asset_class": "generation",
+                "authored_technology_kind": "solar_pv",
+                "base_config_key": "solar",
+            },
+            {
+                "kind": "generation_capacity_assertion",
+                "assertion_id": "assertion:solar-capacity",
+                "category": "generation_capacity",
+                "asset_id": "asset:solar-01",
+                "base_config_key": "solar",
+                "project_case_selector": "total_power_capacity",
+                "base_selector": "solar_resource_dc_capacity_mw",
+                "expected_unit": "MWdc",
+                "electrical_basis": "dc",
+                "capacity_basis": "nameplate",
+                "authored_technology_kind": "solar_pv",
+            },
+        ]
     )
 
 
@@ -1119,6 +1263,49 @@ def test_standalone_base_domain_routes_are_closed_and_subject_typed() -> None:
         BaseScenarioIdentity.model_validate_json(json.dumps(payload["base_scenario"]))
 
 
+@pytest.mark.parametrize(
+    ("subject", "domain"),
+    _ALLOWED_JURISDICTION_SUBJECT_DOMAIN_CASES,
+    ids=lambda value: value.value,
+)
+def test_jurisdiction_assertion_accepts_every_admissible_subject_domain_pair(
+    subject: JurisdictionSubject,
+    domain: BaseConfigDomain,
+) -> None:
+    assertion = copy.deepcopy(
+        _assertion(_request_payload(), "assertion:site-jurisdiction")
+    )
+    assertion.update({"subject": subject.value, "base_domain": domain.value})
+
+    validated = JurisdictionSubjectAssertion.model_validate_json(json.dumps(assertion))
+
+    assert validated.subject is subject
+    assert validated.base_domain is domain
+
+
+@pytest.mark.parametrize(
+    ("subject", "domain"),
+    _INVALID_JURISDICTION_SUBJECT_DOMAIN_CASES,
+    ids=lambda value: value.value,
+)
+def test_jurisdiction_assertion_refuses_every_impossible_subject_domain_pair(
+    subject: JurisdictionSubject,
+    domain: BaseConfigDomain,
+) -> None:
+    payload = _request_payload()
+    assertion = _assertion(payload, "assertion:site-jurisdiction")
+    assertion.update({"subject": subject.value, "base_domain": domain.value})
+    message = (
+        f"{domain.value} authority routes must be project-global"
+        if domain in _EXPECTED_DOMAINS_WITHOUT_JURISDICTION_ROUTE
+        else f"jurisdiction subject {subject.value} cannot govern {domain.value}"
+    )
+
+    with pytest.raises(ValidationError, match=message):
+        JurisdictionSubjectAssertion.model_validate_json(json.dumps(assertion))
+    _assert_policy_and_request_reject(payload, message)
+
+
 def test_assertions_require_their_corresponding_retained_authored_domains() -> None:
     for domain, message in (
         ("scenario_identity", "retained authored identity"),
@@ -1160,7 +1347,8 @@ def test_request_cross_binds_scope_base_authority_and_policy_axes() -> None:
         _validate(payload)
 
     payload = _request_payload()
-    _assertion(payload, "assertion:tax-jurisdiction")["base_domain"] = "run_posture"
+    site_jurisdiction = _assertion(payload, "assertion:site-jurisdiction")
+    site_jurisdiction["base_domain"] = "project_lifecycle_timeline"
     with pytest.raises(ValidationError, match="retained authority route"):
         _validate(payload)
 
@@ -1194,8 +1382,7 @@ def test_scope_elements_require_exact_assertion_and_authority_coverage() -> None
         for item in payload["binding_policy"]["assertions"]
         if item["assertion_id"] != "assertion:wind-capacity"
     ]
-    with pytest.raises(ValidationError, match="per-technology capacity route"):
-        _validate(payload)
+    _assert_policy_and_request_reject(payload, "per-technology capacity route")
 
     payload = _request_payload()
     payload["scope"]["technology_scope"].append(
@@ -1229,7 +1416,9 @@ def test_scope_elements_require_exact_assertion_and_authority_coverage() -> None
 def test_hybrid_and_storage_only_request_graphs_are_element_complete() -> None:
     hybrid = _request_payload()
     _add_storage_technology(hybrid)
+    hybrid_policy = _validate_policy(hybrid)
     request = _validate(hybrid)
+    assert request.binding_policy == hybrid_policy
     assert {item.asset_class.value for item in request.scope.technology_scope} == {
         "generation",
         "storage",
@@ -1258,7 +1447,9 @@ def test_hybrid_and_storage_only_request_graphs_are_element_complete() -> None:
     )
     generation_disposition["disposition"] = "explicitly_out_of_v1"
     generation_disposition["action"] = "exclude_from_v1_no_fallback"
+    storage_policy = _validate_policy(storage_only)
     request = _validate(storage_only)
+    assert request.binding_policy == storage_policy
     assert [item.asset_class.value for item in request.scope.technology_scope] == [
         "storage"
     ]
@@ -1562,11 +1753,20 @@ def test_contract_schema_and_semantic_policy_globals_are_immutable() -> None:
     module_globals = vars(assessment_scope_contract)
     without_jurisdiction = module_globals["_DOMAINS_WITHOUT_JURISDICTION_ROUTE"]
     allowed_subjects = module_globals["_DOMAIN_ALLOWED_SUBJECTS"]
+    category_order = module_globals["_PROJECT_CASE_MATERIAL_CATEGORY_ORDER"]
     assert isinstance(without_jurisdiction, frozenset)
+    assert without_jurisdiction == _EXPECTED_DOMAINS_WITHOUT_JURISDICTION_ROUTE
+    assert dict(allowed_subjects) == _EXPECTED_DOMAIN_ALLOWED_SUBJECTS
+    assert dict(category_order) == {
+        category.value: position
+        for position, category in enumerate(ProjectCaseMaterialCategory)
+    }
     with pytest.raises(AttributeError):
         without_jurisdiction.add("other")
     with pytest.raises(TypeError):
         allowed_subjects[next(iter(allowed_subjects))] = frozenset()
+    with pytest.raises(TypeError):
+        category_order[ProjectCaseMaterialCategory.IDENTITY.value] = 99
     assert not any(
         name.endswith("_JSON_SCHEMA") and isinstance(value, dict)
         for name, value in module_globals.items()
@@ -1664,12 +1864,1226 @@ def test_solar_technology_cannot_target_wind_turbine_fields(
         _validate(payload)
 
 
-def test_capacity_and_technology_assertions_share_exact_authored_kind() -> None:
+def test_policy_and_base_authority_share_exact_authored_kind() -> None:
     payload = _request_payload()
-    technology = _assertion(payload, "assertion:wind-technology")
-    technology["authored_technology_kind"] = "solar_pv"
+    payload["base_scenario"]["technology_authorities"][0][
+        "authored_technology_kind"
+    ] = "generic_generation"
     with pytest.raises(ValidationError, match="exact base technology authority"):
         _validate(payload)
+
+
+def test_policy_requires_a_same_asset_generation_technology_owner() -> None:
+    payload = _request_payload()
+    _assertion(payload, "assertion:wind-technology")["asset_id"] = "asset:other"
+    _assert_policy_and_request_reject(payload, "matching generation asset technology")
+
+
+def test_policy_requires_a_same_asset_storage_technology_owner() -> None:
+    payload = _request_payload()
+    _add_storage_technology(payload)
+    payload["binding_policy"]["assertions"] = [
+        item
+        for item in payload["binding_policy"]["assertions"]
+        if item["assertion_id"] != "assertion:bess-technology"
+    ]
+    _assert_policy_and_request_reject(payload, "matching storage asset technology")
+
+
+def test_policy_capacity_and_technology_keys_match() -> None:
+    payload = _request_payload()
+    _assertion(payload, "assertion:wind-capacity")["base_config_key"] = "wind-other"
+    _assert_policy_and_request_reject(payload, "same base config key")
+
+
+def test_policy_storage_and_technology_keys_match() -> None:
+    payload = _request_payload()
+    _add_storage_technology(payload)
+    _assertion(payload, "assertion:bess-energy")["base_config_key"] = "bess-other"
+    _assert_policy_and_request_reject(payload, "same base config key")
+
+
+def test_policy_capacity_and_technology_kinds_match() -> None:
+    payload = _request_payload()
+    technology = _assertion(payload, "assertion:wind-technology")
+    technology["authored_technology_kind"] = "generic_generation"
+    payload["base_scenario"]["technology_authorities"][0][
+        "authored_technology_kind"
+    ] = "generic_generation"
+    _assert_policy_and_request_reject(payload, "same authored technology kind")
+
+
+def test_policy_technology_assertions_have_unique_physical_owners() -> None:
+    payload = _request_payload()
+    _add_storage_technology(payload)
+    _assertion(payload, "assertion:bess-technology")["asset_id"] = "asset:wind-01"
+    _assert_policy_and_request_reject(payload, "unique ProjectCase asset IDs")
+
+
+def test_policy_technology_assertions_have_unique_binding_ids() -> None:
+    payload = _request_payload()
+    _add_storage_technology(payload)
+    technology = _assertion(payload, "assertion:bess-technology")
+    technology["technology_binding_id"] = "technology-binding:wind"
+    _assert_policy_and_request_reject(
+        payload, "one policy-owned physical asset per technology binding ID"
+    )
+
+
+def test_policy_technology_identity_has_one_binding_id() -> None:
+    payload = _request_payload()
+    _add_solar_technology(payload)
+    _assertion(payload, "assertion:solar-technology")["technology_id"] = "wind"
+
+    for assertions in (
+        payload["binding_policy"]["assertions"],
+        list(reversed(payload["binding_policy"]["assertions"])),
+    ):
+        candidate = copy.deepcopy(payload)
+        candidate["binding_policy"]["assertions"] = assertions
+        _assert_policy_and_request_reject(
+            candidate, "duplicate technology assertion scope"
+        )
+
+
+def test_policy_distinct_generation_technology_identities_are_valid() -> None:
+    payload = _request_payload()
+    _add_solar_technology(payload)
+
+    policy = _validate_policy(payload)
+    request = _validate(payload)
+
+    assert request.binding_policy == policy
+    assert {
+        (item.technology_id, item.asset_class.value)
+        for item in request.scope.technology_scope
+    } == {("solar_pv", "generation"), ("wind", "generation")}
+
+
+def test_policy_storage_routes_are_complete() -> None:
+    payload = _request_payload()
+    _add_storage_technology(payload)
+    payload["binding_policy"]["assertions"] = [
+        item
+        for item in payload["binding_policy"]["assertions"]
+        if item["assertion_id"] != "assertion:bess-energy"
+    ]
+    _assert_policy_and_request_reject(payload, "power, energy, and duration routes")
+
+
+def test_policy_repeated_jurisdiction_binding_keeps_one_identity() -> None:
+    payload = _request_payload()
+    second_route = copy.deepcopy(_assertion(payload, "assertion:site-jurisdiction"))
+    second_route.update(
+        {
+            "assertion_id": "assertion:site-location-jurisdiction",
+            "base_domain": "project_identity_location",
+        }
+    )
+    payload["binding_policy"]["assertions"].append(second_route)
+    policy = _validate_policy(payload)
+    request = _validate(payload)
+    assert request.binding_policy == policy
+
+    second_route["jurisdiction_code"] = "ALT"
+    _assert_policy_and_request_reject(
+        payload, "share exact jurisdiction code and subject"
+    )
+
+
+def test_policy_jurisdiction_identity_has_one_binding_id() -> None:
+    payload = _request_payload()
+    aliased_route = copy.deepcopy(_assertion(payload, "assertion:site-jurisdiction"))
+    aliased_route.update(
+        {
+            "assertion_id": "assertion:site-jurisdiction-alias",
+            "jurisdiction_binding_id": "jurisdiction-binding:site-alias",
+            "base_domain": "project_identity_location",
+        }
+    )
+    payload["binding_policy"]["assertions"].append(aliased_route)
+
+    for assertions in (
+        payload["binding_policy"]["assertions"],
+        list(reversed(payload["binding_policy"]["assertions"])),
+    ):
+        candidate = copy.deepcopy(payload)
+        candidate["binding_policy"]["assertions"] = assertions
+        _assert_policy_and_request_reject(
+            candidate,
+            "one binding ID per exact jurisdiction code and subject",
+        )
+
+
+@pytest.mark.parametrize(
+    ("assertion_id", "field", "value"),
+    [
+        ("assertion:opex", "price_basis_id", "price-basis:other"),
+        ("assertion:price-basis", "reporting_currency", "EUR"),
+    ],
+)
+def test_policy_costs_and_price_assertion_share_price_identity(
+    assertion_id: str,
+    field: str,
+    value: str,
+) -> None:
+    payload = _request_payload()
+    _assertion(payload, assertion_id)[field] = value
+    _assert_policy_and_request_reject(
+        payload, "share price basis and reporting currency"
+    )
+
+
+def test_policy_requires_exactly_one_price_assertion() -> None:
+    payload = _request_payload()
+    payload["binding_policy"]["assertions"] = [
+        item
+        for item in payload["binding_policy"]["assertions"]
+        if item["assertion_id"] != "assertion:price-basis"
+    ]
+    price_disposition = next(
+        item
+        for item in payload["binding_policy"]["material_dispositions"]
+        if item["category"] == "price_basis"
+    )
+    price_disposition["disposition"] = "explicitly_out_of_v1"
+    price_disposition["action"] = "exclude_from_v1_no_fallback"
+    _assert_policy_and_request_reject(payload, "exactly one price-basis assertion")
+
+
+def test_policy_basis_first_error_is_independent_of_assertion_order() -> None:
+    original = _request_payload()
+    _assertion(original, "assertion:wind-capacity")["capacity_basis"] = "gross"
+    _add_storage_technology(original)
+    _assertion(original, "assertion:bess-energy")["capacity_basis"] = "gross"
+    reordered = copy.deepcopy(original)
+    reordered["binding_policy"]["assertions"].sort(
+        key=lambda item: item["category"] != "storage_capacity"
+    )
+
+    for validate in (_validate_policy, _validate):
+        messages: list[str] = []
+        for payload in (original, reordered):
+            with pytest.raises(ValidationError) as exc_info:
+                validate(payload)
+            messages.append(exc_info.value.errors()[0]["msg"])
+        assert messages[0] == messages[1]
+        assert "generation capacity assertions" in messages[0]
+
+
+def test_policy_child_errors_are_canonical_and_authored_order_round_trips() -> None:
+    source = _request_payload()
+    authored = source["binding_policy"]["assertions"]
+    shuffled = copy.deepcopy(authored)
+    random.Random(20260830).shuffle(shuffled)
+    variants = (
+        copy.deepcopy(authored),
+        list(reversed(copy.deepcopy(authored))),
+        copy.deepcopy(authored[4:] + authored[:4]),
+        shuffled,
+    )
+
+    expected_locations = {
+        _validate_policy: (
+            "assertions",
+            2,
+            "jurisdiction_subject_assertion",
+        ),
+        _validate: (
+            "binding_policy",
+            "assertions",
+            2,
+            "jurisdiction_subject_assertion",
+        ),
+    }
+    for validate, expected_location in expected_locations.items():
+        first_issues: list[tuple[tuple[object, ...], str]] = []
+        for assertions in variants:
+            payload = _request_payload()
+            payload["binding_policy"]["assertions"] = copy.deepcopy(assertions)
+            site_assertion = _assertion(payload, "assertion:site-jurisdiction")
+            tax_assertion = _assertion(payload, "assertion:tax-jurisdiction")
+            site_assertion["base_domain"] = "tax_statutory"
+            tax_assertion["base_domain"] = "project_resource"
+            with pytest.raises(ValidationError) as exc_info:
+                validate(payload)
+            issue = exc_info.value.errors(include_url=False)[0]
+            first_issues.append((tuple(issue["loc"]), issue["msg"]))
+
+        assert len(set(first_issues)) == 1
+        location, message = first_issues[0]
+        assert location == expected_location
+        assert message == (
+            "Value error, jurisdiction subject site cannot govern tax_statutory"
+        )
+
+    for assertions in variants:
+        payload = _request_payload()
+        payload["binding_policy"]["assertions"] = copy.deepcopy(assertions)
+        expected_ids = tuple(item["assertion_id"] for item in assertions)
+        policy = _validate_policy(payload)
+        request = _validate(payload)
+        for validated_policy in (policy, request.binding_policy):
+            assert (
+                tuple(item.assertion_id for item in validated_policy.assertions)
+                == expected_ids
+            )
+            dumped = validated_policy.model_dump(mode="json")
+            assert tuple(item["assertion_id"] for item in dumped["assertions"]) == (
+                expected_ids
+            )
+
+
+def test_policy_child_error_order_is_stable_across_hash_seeds() -> None:
+    source = _request_payload()
+    authored = source["binding_policy"]["assertions"]
+    shuffled = copy.deepcopy(authored)
+    random.Random(20260830).shuffle(shuffled)
+    variants = (
+        copy.deepcopy(authored),
+        list(reversed(copy.deepcopy(authored))),
+        copy.deepcopy(authored[4:] + authored[:4]),
+        shuffled,
+    )
+    payloads: list[dict[str, Any]] = []
+    for assertions in variants:
+        payload = _request_payload()
+        payload["binding_policy"]["assertions"] = copy.deepcopy(assertions)
+        site_assertion = _assertion(payload, "assertion:site-jurisdiction")
+        tax_assertion = _assertion(payload, "assertion:tax-jurisdiction")
+        site_assertion["base_domain"] = "tax_statutory"
+        tax_assertion["base_domain"] = "project_resource"
+        payloads.append(payload)
+
+    script = """
+import json
+import sys
+from pydantic import ValidationError
+from analytics.feasibility_report_contract import EvaluationRequest, V14BindingPolicy
+
+payloads = json.loads(sys.stdin.read())
+outcomes = []
+for payload in payloads:
+    for root in ("policy", "request"):
+        try:
+            if root == "policy":
+                V14BindingPolicy.model_validate_json(json.dumps(payload["binding_policy"]))
+            else:
+                EvaluationRequest.model_validate_json(json.dumps(payload))
+        except ValidationError as exc:
+            issue = exc.errors(include_url=False)[0]
+            outcomes.append({"root": root, "loc": issue["loc"], "msg": issue["msg"]})
+        else:
+            raise SystemExit("invalid child assertions accepted")
+print(json.dumps(outcomes, sort_keys=True))
+"""
+    receipts: set[str] = set()
+    for seed in range(8):
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=_ROOT,
+            env={
+                **dict(__import__("os").environ),
+                "PYTHONHASHSEED": str(seed),
+                "PYTHONPATH": str(_ROOT),
+            },
+            input=json.dumps(payloads),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        receipts.add(completed.stdout.strip().splitlines()[-1])
+
+    assert len(receipts) == 1
+    issues = json.loads(receipts.pop())
+    policy_issues = [item for item in issues if item["root"] == "policy"]
+    request_issues = [item for item in issues if item["root"] == "request"]
+    assert policy_issues == [policy_issues[0]] * len(variants)
+    assert request_issues == [request_issues[0]] * len(variants)
+    assert policy_issues[0]["loc"] == [
+        "assertions",
+        2,
+        "jurisdiction_subject_assertion",
+    ]
+    assert request_issues[0]["loc"] == [
+        "binding_policy",
+        "assertions",
+        2,
+        "jurisdiction_subject_assertion",
+    ]
+
+
+def test_policy_duplicate_id_child_errors_use_total_outcome_order() -> None:
+    json_payload = _request_payload()
+    python_payload = _validate(_request_payload()).model_dump()
+    receipts: dict[str, list[tuple[dict[str, Any], ...]]] = {
+        "policy": [],
+        "request": [],
+    }
+
+    for mode, source in (("json", json_payload), ("python", python_payload)):
+        for exchange_children in (False, True):
+            payload = copy.deepcopy(source)
+            assertions = list(payload["binding_policy"]["assertions"])
+            site_index = next(
+                index
+                for index, item in enumerate(assertions)
+                if item.get("jurisdiction_binding_id") == "jurisdiction-binding:site"
+            )
+            tax_index = next(
+                index
+                for index, item in enumerate(assertions)
+                if item.get("jurisdiction_binding_id") == "jurisdiction-binding:tax"
+            )
+            site_assertion = assertions[site_index]
+            tax_assertion = assertions[tax_index]
+            tax_assertion["assertion_id"] = site_assertion["assertion_id"]
+            site_assertion["base_domain"] = (
+                "tax_statutory" if mode == "json" else BaseConfigDomain.TAX_STATUTORY
+            )
+            tax_assertion["base_domain"] = (
+                "project_resource"
+                if mode == "json"
+                else BaseConfigDomain.PROJECT_RESOURCE
+            )
+            if exchange_children:
+                assertions[site_index], assertions[tax_index] = (
+                    assertions[tax_index],
+                    assertions[site_index],
+                )
+            payload["binding_policy"]["assertions"] = (
+                assertions if mode == "json" else tuple(assertions)
+            )
+
+            for root in ("policy", "request"):
+                with pytest.raises(ValidationError) as exc_info:
+                    if (mode, root) == ("json", "policy"):
+                        V14BindingPolicy.model_validate_json(
+                            json.dumps(payload["binding_policy"])
+                        )
+                    elif (mode, root) == ("json", "request"):
+                        EvaluationRequest.model_validate_json(json.dumps(payload))
+                    elif root == "policy":
+                        V14BindingPolicy.model_validate(payload["binding_policy"])
+                    else:
+                        EvaluationRequest.model_validate(payload)
+                errors = tuple(exc_info.value.errors(include_url=False))
+                assert {error["input"] for error in errors} == {
+                    "<invalid compatibility assertion>"
+                }
+                assert all("ctx" not in error for error in errors)
+                receipts[root].append(errors)
+
+    assert receipts["policy"] == [receipts["policy"][0]] * 4
+    assert receipts["request"] == [receipts["request"][0]] * 4
+    assert [tuple(issue["loc"]) for issue in receipts["policy"][0]] == [
+        ("assertions", 2, "jurisdiction_subject_assertion"),
+        ("assertions", 3, "jurisdiction_subject_assertion"),
+    ]
+    assert [issue["msg"] for issue in receipts["policy"][0]] == [
+        "Value error, jurisdiction subject site cannot govern tax_statutory",
+        "Value error, jurisdiction subject tax cannot govern project_resource",
+    ]
+
+
+def test_policy_duplicate_id_child_errors_are_hash_seed_stable() -> None:
+    script = """
+import copy
+import json
+import sys
+from pydantic import ValidationError
+from analytics.feasibility_report_contract import (
+    BaseConfigDomain,
+    EvaluationRequest,
+    V14BindingPolicy,
+)
+
+json_source = json.loads(sys.stdin.read())
+python_source = EvaluationRequest.model_validate_json(
+    json.dumps(json_source)
+).model_dump()
+outcomes = []
+for mode, source in (("json", json_source), ("python", python_source)):
+    for exchange_children in (False, True):
+        payload = copy.deepcopy(source)
+        assertions = list(payload["binding_policy"]["assertions"])
+        site_index = next(
+            index
+            for index, item in enumerate(assertions)
+            if item.get("jurisdiction_binding_id") == "jurisdiction-binding:site"
+        )
+        tax_index = next(
+            index
+            for index, item in enumerate(assertions)
+            if item.get("jurisdiction_binding_id") == "jurisdiction-binding:tax"
+        )
+        site = assertions[site_index]
+        tax = assertions[tax_index]
+        tax["assertion_id"] = site["assertion_id"]
+        site["base_domain"] = (
+            "tax_statutory"
+            if mode == "json"
+            else BaseConfigDomain.TAX_STATUTORY
+        )
+        tax["base_domain"] = (
+            "project_resource"
+            if mode == "json"
+            else BaseConfigDomain.PROJECT_RESOURCE
+        )
+        if exchange_children:
+            assertions[site_index], assertions[tax_index] = (
+                assertions[tax_index], assertions[site_index]
+            )
+        payload["binding_policy"]["assertions"] = (
+            assertions if mode == "json" else tuple(assertions)
+        )
+
+        for root in ("policy", "request"):
+            try:
+                if (mode, root) == ("json", "policy"):
+                    V14BindingPolicy.model_validate_json(
+                        json.dumps(payload["binding_policy"])
+                    )
+                elif (mode, root) == ("json", "request"):
+                    EvaluationRequest.model_validate_json(json.dumps(payload))
+                elif root == "policy":
+                    V14BindingPolicy.model_validate(payload["binding_policy"])
+                else:
+                    EvaluationRequest.model_validate(payload)
+            except ValidationError as exc:
+                errors = exc.errors(include_url=False)
+                outcomes.append({"mode": mode, "root": root, "errors": errors})
+            else:
+                raise SystemExit("invalid duplicate-ID children accepted")
+print(json.dumps(outcomes, sort_keys=True))
+"""
+    receipts: set[str] = set()
+    for seed in range(8):
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=_ROOT,
+            env={
+                **dict(__import__("os").environ),
+                "PYTHONHASHSEED": str(seed),
+                "PYTHONPATH": str(_ROOT),
+            },
+            input=json.dumps(_request_payload()),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        receipts.add(completed.stdout.strip().splitlines()[-1])
+
+    assert len(receipts) == 1
+    outcomes = json.loads(receipts.pop())
+    for root in ("policy", "request"):
+        root_receipts = [item["errors"] for item in outcomes if item["root"] == root]
+        assert root_receipts == [root_receipts[0]] * 4
+
+
+def test_policy_fully_tied_child_errors_have_bounded_public_surface() -> None:
+    json_source = _request_payload()
+    python_source = _validate(_request_payload()).model_dump()
+    receipts: dict[tuple[str, str], list[dict[str, object]]] = {}
+
+    for mode, source in (("json", json_source), ("python", python_source)):
+        for scalar_children in ((1, 2), (2, 1)):
+            payload = copy.deepcopy(source)
+            payload["binding_policy"]["assertions"] = (
+                list(scalar_children) if mode == "json" else scalar_children
+            )
+            for root in ("policy", "request"):
+                with pytest.raises(ValidationError) as exc_info:
+                    if (mode, root) == ("json", "policy"):
+                        V14BindingPolicy.model_validate_json(
+                            json.dumps(payload["binding_policy"])
+                        )
+                    elif (mode, root) == ("json", "request"):
+                        EvaluationRequest.model_validate_json(json.dumps(payload))
+                    elif root == "policy":
+                        V14BindingPolicy.model_validate(payload["binding_policy"])
+                    else:
+                        EvaluationRequest.model_validate(payload)
+
+                errors = exc_info.value.errors(include_url=False)
+                receipts.setdefault((mode, root), []).append(
+                    {
+                        "errors": errors,
+                        "text": str(exc_info.value),
+                        "json": exc_info.value.json(include_url=False),
+                    }
+                )
+                assert {error["input"] for error in errors} == {
+                    "<invalid compatibility assertion>"
+                }
+                assert all("ctx" not in error for error in errors)
+
+    for mode in ("json", "python"):
+        for root in ("policy", "request"):
+            mode_root_receipts = receipts[(mode, root)]
+            assert mode_root_receipts == [mode_root_receipts[0]] * 2
+
+
+def test_policy_fully_tied_child_errors_are_hash_seed_stable() -> None:
+    script = """
+import copy
+import json
+import sys
+from pydantic import ValidationError
+from analytics.feasibility_report_contract import EvaluationRequest, V14BindingPolicy
+
+json_source = json.loads(sys.stdin.read())
+python_source = EvaluationRequest.model_validate_json(
+    json.dumps(json_source)
+).model_dump()
+outcomes = []
+for mode, source in (("json", json_source), ("python", python_source)):
+    for scalar_children in ((1, 2), (2, 1)):
+        payload = copy.deepcopy(source)
+        payload["binding_policy"]["assertions"] = (
+            list(scalar_children) if mode == "json" else scalar_children
+        )
+        for root in ("policy", "request"):
+            try:
+                if (mode, root) == ("json", "policy"):
+                    V14BindingPolicy.model_validate_json(
+                        json.dumps(payload["binding_policy"])
+                    )
+                elif (mode, root) == ("json", "request"):
+                    EvaluationRequest.model_validate_json(json.dumps(payload))
+                elif root == "policy":
+                    V14BindingPolicy.model_validate(payload["binding_policy"])
+                else:
+                    EvaluationRequest.model_validate(payload)
+            except ValidationError as exc:
+                outcomes.append(
+                    {
+                        "mode": mode,
+                        "root": root,
+                        "errors": exc.errors(include_url=False),
+                        "text": str(exc),
+                        "json": json.loads(exc.json(include_url=False)),
+                    }
+                )
+            else:
+                raise SystemExit("invalid scalar children accepted")
+print(json.dumps(outcomes, sort_keys=True))
+"""
+    receipts: set[str] = set()
+    for seed in range(8):
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=_ROOT,
+            env={
+                **dict(__import__("os").environ),
+                "PYTHONHASHSEED": str(seed),
+                "PYTHONPATH": str(_ROOT),
+            },
+            input=json.dumps(_request_payload()),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        receipts.add(completed.stdout.strip().splitlines()[-1])
+
+    assert len(receipts) == 1
+    outcomes = json.loads(receipts.pop())
+    for mode in ("json", "python"):
+        for root in ("policy", "request"):
+            mode_root_receipts = [
+                {
+                    "errors": item["errors"],
+                    "text": item["text"],
+                    "json": item["json"],
+                }
+                for item in outcomes
+                if item["mode"] == mode and item["root"] == root
+            ]
+            assert mode_root_receipts == [mode_root_receipts[0]] * 2
+
+
+def test_policy_raw_key_extraction_does_not_dispatch_dict_subclasses() -> None:
+    class RaisingGetDict(dict[str, object]):
+        get_calls = 0
+
+        def get(self, key: object, default: object = None) -> object:
+            self.get_calls += 1
+            raise RuntimeError("overridden get must not execute")
+
+    class StatefulGetDict(dict[str, object]):
+        get_calls = 0
+
+        def get(self, key: object, default: object = None) -> object:
+            self.get_calls += 1
+            if key == "category":
+                return "identity" if self.get_calls % 2 else "price_basis"
+            return dict.get(self, key, default)
+
+    for hostile_child in (
+        RaisingGetDict(
+            {
+                "kind": "unknown_hostile_assertion",
+                "category": "identity",
+                "assertion_id": "assertion:hostile-child",
+            }
+        ),
+        StatefulGetDict(
+            {
+                "kind": "unknown_hostile_assertion",
+                "category": "identity",
+                "assertion_id": "assertion:hostile-child",
+            }
+        ),
+    ):
+        payload = _validate(_request_payload()).model_dump()
+        payload["binding_policy"]["assertions"] = (
+            hostile_child,
+            {
+                "kind": "unknown_regular_assertion",
+                "category": "location",
+                "assertion_id": "assertion:regular-child",
+            },
+        )
+
+        for root in ("policy", "request"):
+            receipts: list[dict[str, object]] = []
+            for _ in range(2):
+                with pytest.raises(ValidationError) as exc_info:
+                    if root == "policy":
+                        V14BindingPolicy.model_validate(payload["binding_policy"])
+                    else:
+                        EvaluationRequest.model_validate(payload)
+                receipts.append(
+                    {
+                        "errors": exc_info.value.errors(),
+                        "text": str(exc_info.value),
+                        "json": exc_info.value.json(),
+                    }
+                )
+            assert receipts[0] == receipts[1]
+
+        assert hostile_child.get_calls == 0
+
+
+def test_policy_raw_key_type_allowlist_uses_identity_only() -> None:
+    equality_calls: list[object] = []
+    trusted_types = (
+        assessment_scope_contract.ScenarioIdentityAssertion,
+        assessment_scope_contract.LocationAssertion,
+        JurisdictionSubjectAssertion,
+        assessment_scope_contract.TechnologyBindingAssertion,
+        GenerationCapacityAssertion,
+        StorageCapacityAssertion,
+        CostCompatibilityAssertion,
+        assessment_scope_contract.PriceBasisAssertion,
+    )
+
+    class RaisingEqualityMeta(type):
+        def __eq__(cls, other: object) -> bool:
+            if any(other is trusted_type for trusted_type in trusted_types):
+                equality_calls.append(other)
+                raise RuntimeError("trusted-class equality must not execute")
+            return cls is other
+
+        __hash__ = type.__hash__
+
+    class OpaqueChild(metaclass=RaisingEqualityMeta):
+        pass
+
+    payload = _validate(_request_payload()).model_dump()
+    payload["binding_policy"]["assertions"] = (
+        OpaqueChild(),
+        {
+            "kind": "unknown_regular_assertion",
+            "category": "location",
+            "assertion_id": "assertion:regular-child",
+        },
+    )
+
+    for root in ("policy", "request"):
+        receipts: list[dict[str, object]] = []
+        for _ in range(2):
+            with pytest.raises(ValidationError) as exc_info:
+                if root == "policy":
+                    V14BindingPolicy.model_validate(payload["binding_policy"])
+                else:
+                    EvaluationRequest.model_validate(payload)
+            receipts.append(
+                {
+                    "errors": exc_info.value.errors(),
+                    "text": str(exc_info.value),
+                    "json": exc_info.value.json(),
+                }
+            )
+        assert receipts[0] == receipts[1]
+
+    assert equality_calls == []
+
+
+def test_policy_collection_shape_is_exact_and_non_dispatching() -> None:
+    class DynamicClassObject:
+        class_calls = 0
+
+        @property
+        def __class__(self) -> type[object]:
+            self.class_calls += 1
+            raise RuntimeError("dynamic class must not execute")
+
+    class RaisingIterationTuple(tuple[object, ...]):
+        iteration_calls = 0
+
+        def __iter__(self) -> Any:
+            self.iteration_calls += 1
+            raise RuntimeError("overridden iterator must not execute")
+
+    for invalid_collection in (
+        DynamicClassObject(),
+        RaisingIterationTuple((1, 2)),
+    ):
+        payload = _validate(_request_payload()).model_dump()
+        payload["binding_policy"]["assertions"] = invalid_collection
+
+        for root in ("policy", "request"):
+            receipts: list[dict[str, object]] = []
+            for _ in range(2):
+                with pytest.raises(ValidationError) as exc_info:
+                    if root == "policy":
+                        V14BindingPolicy.model_validate(payload["binding_policy"])
+                    else:
+                        EvaluationRequest.model_validate(payload)
+                receipts.append(
+                    {
+                        "errors": exc_info.value.errors(),
+                        "text": str(exc_info.value),
+                        "json": exc_info.value.json(),
+                    }
+                )
+                assert {error["input"] for error in exc_info.value.errors()} == {
+                    "<invalid compatibility assertion collection>"
+                }
+            assert receipts[0] == receipts[1]
+
+        if type(invalid_collection) is DynamicClassObject:
+            assert invalid_collection.class_calls == 0
+        else:
+            assert invalid_collection.iteration_calls == 0
+
+
+def test_policy_model_subclass_is_bounded_before_outcome_serialization() -> None:
+    dump_calls: list[bool] = []
+
+    class RaisingDumpAssertion(assessment_scope_contract.ScenarioIdentityAssertion):
+        def model_dump_json(self, *args: object, **kwargs: object) -> str:
+            dump_calls.append(True)
+            raise RuntimeError("overridden serialization must not execute")
+
+    policy = _validate_policy(_request_payload())
+    scenario_assertion = next(
+        assertion
+        for assertion in policy.assertions
+        if type(assertion) is assessment_scope_contract.ScenarioIdentityAssertion
+    )
+    subclass_child = RaisingDumpAssertion.model_validate(
+        scenario_assertion.model_dump()
+    )
+    payload = _validate(_request_payload()).model_dump()
+    payload["binding_policy"]["assertions"] = (
+        subclass_child,
+        *policy.assertions[1:],
+    )
+
+    for root in ("policy", "request"):
+        receipts: list[dict[str, object]] = []
+        for _ in range(2):
+            with pytest.raises(ValidationError) as exc_info:
+                if root == "policy":
+                    V14BindingPolicy.model_validate(payload["binding_policy"])
+                else:
+                    EvaluationRequest.model_validate(payload)
+            errors = exc_info.value.errors(include_url=False)
+            receipts.append(
+                {
+                    "errors": errors,
+                    "text": str(exc_info.value),
+                    "json": exc_info.value.json(),
+                }
+            )
+            assert any(
+                error["type"] == "compatibility_assertion_type" for error in errors
+            )
+        assert receipts[0] == receipts[1]
+
+    assert dump_calls == []
+
+
+def test_policy_exact_model_non_field_state_is_bounded_before_serialization() -> None:
+    dump_calls: list[bool] = []
+
+    def raising_dump_json() -> str:
+        dump_calls.append(True)
+        raise RuntimeError("instance serializer shadow must not execute")
+
+    policy = _validate_policy(_request_payload())
+    scenario_assertion = next(
+        assertion
+        for assertion in policy.assertions
+        if type(assertion) is assessment_scope_contract.ScenarioIdentityAssertion
+    )
+    shadowed_child = scenario_assertion.model_copy(
+        update={"model_dump_json": raising_dump_json}
+    )
+    assert type(shadowed_child) is assessment_scope_contract.ScenarioIdentityAssertion
+
+    assertions = tuple(
+        shadowed_child if assertion is scenario_assertion else assertion
+        for assertion in policy.assertions
+    )
+    payload = _validate(_request_payload()).model_dump()
+    payload["binding_policy"]["assertions"] = assertions
+
+    for root in ("policy", "request"):
+        receipts: list[dict[str, object]] = []
+        for _ in range(2):
+            with pytest.raises(ValidationError) as exc_info:
+                if root == "policy":
+                    V14BindingPolicy.model_validate(payload["binding_policy"])
+                else:
+                    EvaluationRequest.model_validate(payload)
+            errors = exc_info.value.errors()
+            receipts.append(
+                {
+                    "errors": errors,
+                    "text": str(exc_info.value),
+                    "json": exc_info.value.json(),
+                }
+            )
+            assert {error["type"] for error in errors} == {
+                "compatibility_assertion_state"
+            }
+            assert {error["input"] for error in errors} == {
+                "<invalid compatibility assertion>"
+            }
+        assert receipts[0] == receipts[1]
+
+    assert dump_calls == []
+
+
+def test_policy_hash_colliding_keys_are_opaque_to_raw_ordering() -> None:
+    equality_calls: list[object] = []
+    hash_calls: list[bool] = []
+
+    class HashCollidingString(str):
+        def __hash__(self) -> int:
+            hash_calls.append(True)
+            return str.__hash__(self)
+
+        def __eq__(self, other: object) -> bool:
+            equality_calls.append(other)
+            raise RuntimeError("caller equality must not execute")
+
+    policy = _validate_policy(_request_payload())
+    scenario_assertion = next(
+        assertion
+        for assertion in policy.assertions
+        if type(assertion) is assessment_scope_contract.ScenarioIdentityAssertion
+    )
+    scenario_fields = scenario_assertion.model_dump()
+    scenario_category = scenario_fields.pop("category")
+
+    constructed_child = (
+        assessment_scope_contract.ScenarioIdentityAssertion.model_construct(
+            **scenario_fields
+        )
+    )
+    colliding_model_key = HashCollidingString("category")
+    poisoned_model = constructed_child.model_copy(
+        update={colliding_model_key: scenario_category}
+    )
+    assert type(poisoned_model) is assessment_scope_contract.ScenarioIdentityAssertion
+
+    colliding_dictionary_key = HashCollidingString("category")
+    poisoned_dictionary: dict[object, object] = {
+        colliding_dictionary_key: scenario_category
+    }
+    for field_name, field_value in scenario_fields.items():
+        poisoned_dictionary[field_name] = field_value
+    assert type(poisoned_dictionary) is dict
+
+    for hostile_child, expected_error_type in (
+        (poisoned_model, "compatibility_assertion_state"),
+        (poisoned_dictionary, "compatibility_assertion_key"),
+    ):
+        assertions = tuple(
+            hostile_child if assertion is scenario_assertion else assertion
+            for assertion in policy.assertions
+        )
+        payload = _validate(_request_payload()).model_dump()
+        payload["binding_policy"]["assertions"] = assertions
+        equality_calls.clear()
+        hash_calls.clear()
+
+        for root in ("policy", "request"):
+            receipts: list[dict[str, object]] = []
+            for _ in range(2):
+                with pytest.raises(ValidationError) as exc_info:
+                    if root == "policy":
+                        V14BindingPolicy.model_validate(payload["binding_policy"])
+                    else:
+                        EvaluationRequest.model_validate(payload)
+                errors = exc_info.value.errors()
+                receipts.append(
+                    {
+                        "errors": errors,
+                        "text": str(exc_info.value),
+                        "json": exc_info.value.json(),
+                    }
+                )
+                assert {error["type"] for error in errors} == {expected_error_type}
+                assert {error["input"] for error in errors} == {
+                    "<invalid compatibility assertion>"
+                }
+            assert receipts[0] == receipts[1]
+
+        assert equality_calls == []
+        assert hash_calls == []
+
+
+def test_policy_non_builtin_mappings_are_bounded_before_adapter_dispatch() -> None:
+    ledger: dict[str, list[object]] = {
+        name: []
+        for name in (
+            "get",
+            "getitem",
+            "iter",
+            "items",
+            "len",
+            "equality",
+            "hash",
+            "str",
+            "repr",
+        )
+    }
+
+    class LedgerMapping(Mapping[str, object]):
+        def __getitem__(self, key: str) -> object:
+            ledger["getitem"].append(key)
+            raise RuntimeError("mapping item lookup must not execute")
+
+        def __iter__(self) -> Any:
+            ledger["iter"].append(True)
+            raise RuntimeError("mapping iteration must not execute")
+
+        def __len__(self) -> int:
+            ledger["len"].append(True)
+            raise RuntimeError("mapping length must not execute")
+
+        def items(self) -> Any:
+            ledger["items"].append(True)
+            raise RuntimeError("mapping items must not execute")
+
+        def __eq__(self, other: object) -> bool:
+            ledger["equality"].append(other)
+            raise RuntimeError("mapping equality must not execute")
+
+        def __hash__(self) -> int:
+            ledger["hash"].append(True)
+            raise RuntimeError("mapping hashing must not execute")
+
+        def __str__(self) -> str:
+            ledger["str"].append(True)
+            raise RuntimeError("mapping string conversion must not execute")
+
+        def __repr__(self) -> str:
+            ledger["repr"].append(True)
+            raise RuntimeError("mapping representation must not execute")
+
+    class RaisingGetMapping(LedgerMapping):
+        def get(self, key: str, default: object = None) -> object:
+            ledger["get"].append(key)
+            raise RuntimeError("mapping get must be bounded")
+
+    class InheritedGetMapping(LedgerMapping):
+        pass
+
+    class StatefulMapping(LedgerMapping):
+        get_count = 0
+
+        def get(self, key: str, default: object = None) -> object:
+            ledger["get"].append(key)
+            self.get_count += 1
+            if key == "kind":
+                return (
+                    "scenario_identity_assertion"
+                    if self.get_count % 2
+                    else "unknown_stateful_assertion"
+                )
+            return default
+
+    policy = _validate_policy(_request_payload())
+    scenario_assertion = next(
+        assertion
+        for assertion in policy.assertions
+        if type(assertion) is assessment_scope_contract.ScenarioIdentityAssertion
+    )
+    for hostile_child in (
+        RaisingGetMapping(),
+        InheritedGetMapping(),
+        StatefulMapping(),
+    ):
+        assertions = tuple(
+            hostile_child if assertion is scenario_assertion else assertion
+            for assertion in policy.assertions
+        )
+        payload = _validate(_request_payload()).model_dump()
+        payload["binding_policy"]["assertions"] = assertions
+        for calls in ledger.values():
+            calls.clear()
+
+        for root in ("policy", "request"):
+            receipts: list[dict[str, object]] = []
+            for _ in range(2):
+                with pytest.raises(ValidationError) as exc_info:
+                    if root == "policy":
+                        V14BindingPolicy.model_validate(payload["binding_policy"])
+                    else:
+                        EvaluationRequest.model_validate(payload)
+                errors = exc_info.value.errors(include_url=False)
+                receipts.append(
+                    {
+                        "errors": errors,
+                        "text": str(exc_info.value),
+                        "json": exc_info.value.json(include_url=False),
+                    }
+                )
+                assert len(errors) == 1
+                assert errors[0]["type"] == "compatibility_assertion_type"
+                assert errors[0]["input"] == "<invalid compatibility assertion>"
+                assert "ctx" not in errors[0]
+            assert receipts == [receipts[0]] * 2
+
+        assert all(not calls for calls in ledger.values())
+
+
+def test_policy_non_exact_discriminators_are_bounded_before_adapter_dispatch() -> None:
+    ledger: dict[str, list[object]] = {
+        name: []
+        for name in (
+            "get",
+            "getitem",
+            "iter",
+            "items",
+            "equality",
+            "hash",
+            "str",
+            "repr",
+        )
+    }
+
+    class HostileKind(str):
+        def __eq__(self, other: object) -> bool:
+            ledger["equality"].append(other)
+            raise RuntimeError("kind equality must not execute")
+
+        def __hash__(self) -> int:
+            ledger["hash"].append(True)
+            raise RuntimeError("kind hashing must not execute")
+
+        def __str__(self) -> str:
+            ledger["str"].append(True)
+            raise RuntimeError("kind string conversion must not execute")
+
+        def __repr__(self) -> str:
+            ledger["repr"].append(True)
+            raise RuntimeError("kind representation must not execute")
+
+    policy = _validate_policy(_request_payload())
+    scenario_assertion = next(
+        assertion
+        for assertion in policy.assertions
+        if type(assertion) is assessment_scope_contract.ScenarioIdentityAssertion
+    )
+    exact_dictionary = scenario_assertion.model_dump()
+    exact_dictionary["kind"] = HostileKind("scenario_identity_assertion")
+    missing_dictionary = scenario_assertion.model_dump()
+    missing_dictionary.pop("kind")
+    unknown_dictionary = scenario_assertion.model_dump()
+    unknown_dictionary["kind"] = "unknown_compatibility_assertion"
+    exact_model = scenario_assertion.model_copy(
+        update={"kind": HostileKind("scenario_identity_assertion")}
+    )
+    unknown_model = scenario_assertion.model_copy(
+        update={"kind": "unknown_compatibility_assertion"}
+    )
+
+    for hostile_child in (
+        exact_dictionary,
+        missing_dictionary,
+        unknown_dictionary,
+        exact_model,
+        unknown_model,
+    ):
+        assertions = tuple(
+            hostile_child if assertion is scenario_assertion else assertion
+            for assertion in policy.assertions
+        )
+        payload = _validate(_request_payload()).model_dump()
+        payload["binding_policy"]["assertions"] = assertions
+        for calls in ledger.values():
+            calls.clear()
+
+        for root in ("policy", "request"):
+            receipts: list[dict[str, object]] = []
+            for _ in range(2):
+                with pytest.raises(ValidationError) as exc_info:
+                    if root == "policy":
+                        V14BindingPolicy.model_validate(payload["binding_policy"])
+                    else:
+                        EvaluationRequest.model_validate(payload)
+                errors = exc_info.value.errors(include_url=False)
+                receipts.append(
+                    {
+                        "errors": errors,
+                        "text": str(exc_info.value),
+                        "json": exc_info.value.json(include_url=False),
+                    }
+                )
+                assert len(errors) == 1
+                assert errors[0]["type"] == "compatibility_assertion_discriminator"
+                assert errors[0]["input"] == "<invalid compatibility assertion>"
+                assert "ctx" not in errors[0]
+            assert receipts == [receipts[0]] * 2
+
+        assert all(not calls for calls in ledger.values())
+
+
+def test_policy_canonical_child_validator_preserves_python_strictness() -> None:
+    policy = _validate_policy(_request_payload())
+    normalized = policy.model_dump()
+    assert V14BindingPolicy.model_validate(normalized) == policy
+
+    model_children = copy.deepcopy(normalized)
+    model_children["assertions"] = policy.assertions
+    assert V14BindingPolicy.model_validate(model_children) == policy
+
+    list_children = copy.deepcopy(normalized)
+    list_children["assertions"] = list(policy.assertions)
+    with pytest.raises(ValidationError, match="valid tuple"):
+        V14BindingPolicy.model_validate(list_children)
+
+    non_collection = copy.deepcopy(normalized)
+    non_collection["assertions"] = 1
+    with pytest.raises(ValidationError):
+        V14BindingPolicy.model_validate(non_collection)
+
+    malformed_child = copy.deepcopy(normalized)
+    malformed_child["assertions"][0]["category"] = 1
+    with pytest.raises(ValidationError):
+        V14BindingPolicy.model_validate(malformed_child)
+
+    scalar_child = copy.deepcopy(normalized)
+    scalar_child["assertions"] = (1, *policy.assertions)
+    with pytest.raises(ValidationError):
+        V14BindingPolicy.model_validate(scalar_child)
 
 
 @pytest.mark.parametrize(
@@ -1685,11 +3099,23 @@ def test_generation_assertions_for_one_asset_share_one_basis(
 ) -> None:
     payload = _request_payload()
     _assertion(payload, assertion_id)["capacity_basis"] = capacity_basis
-    with pytest.raises(
-        ValidationError,
-        match="one ProjectCase asset must share electrical and capacity bases",
-    ):
-        _validate(payload)
+    for validate in (_validate_policy, _validate):
+        with pytest.raises(
+            ValidationError,
+            match="one ProjectCase asset must share electrical and capacity bases",
+        ):
+            validate(payload)
+
+
+def test_generation_assertions_for_one_asset_share_one_electrical_basis() -> None:
+    payload = _request_payload()
+    capacity = _assertion(payload, "assertion:wind-capacity")
+    capacity["electrical_basis"] = "ac"
+    capacity["expected_unit"] = "MWac"
+    _assert_policy_and_request_reject(
+        payload,
+        "one ProjectCase asset must share electrical and capacity bases",
+    )
 
 
 def test_unitized_generation_assertions_cannot_change_the_asset_basis() -> None:
@@ -1709,11 +3135,12 @@ def test_unitized_generation_assertions_cannot_change_the_asset_basis() -> None:
             "authored_technology_kind": "wind_turbine",
         }
     )
-    with pytest.raises(
-        ValidationError,
-        match="one ProjectCase asset must share electrical and capacity bases",
-    ):
-        _validate(payload)
+    for validate in (_validate_policy, _validate):
+        with pytest.raises(
+            ValidationError,
+            match="one ProjectCase asset must share electrical and capacity bases",
+        ):
+            validate(payload)
 
 
 def test_all_unitized_generation_routes_accept_one_common_nameplate_basis() -> None:
@@ -1752,7 +3179,9 @@ def test_all_unitized_generation_routes_accept_one_common_nameplate_basis() -> N
             )
         ]
     )
+    policy = _validate_policy(payload)
     request = _validate(payload)
+    assert request.binding_policy == policy
     generation_assertions = tuple(
         assertion
         for assertion in request.binding_policy.assertions
@@ -1768,11 +3197,12 @@ def test_storage_assertions_for_one_asset_share_one_basis() -> None:
     payload = _request_payload()
     _add_storage_technology(payload)
     _assertion(payload, "assertion:bess-energy")["capacity_basis"] = "gross"
-    with pytest.raises(
-        ValidationError,
-        match="one ProjectCase asset must share electrical and capacity bases",
-    ):
-        _validate(payload)
+    for validate in (_validate_policy, _validate):
+        with pytest.raises(
+            ValidationError,
+            match="one ProjectCase asset must share electrical and capacity bases",
+        ):
+            validate(payload)
 
 
 def test_resolved_config_digest_is_the_public_v14_digest_and_moves_on_drift() -> None:
