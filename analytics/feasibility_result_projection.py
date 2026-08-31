@@ -12,11 +12,20 @@ from __future__ import annotations
 import math
 import struct
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal
 from types import MappingProxyType
 from typing import Any, Final, Literal, Mapping, TypeAlias, cast
 
-from analytics.contracts_v14 import D3BExecutionSuccess
+from analytics.contracts_v14 import (
+    D3BAuthoredNumericValue,
+    D3BExecutionSuccess,
+    D3BNumericProjectionReceipt,
+)
+from analytics.feasibility_report_contract.assessment_scope import (
+    ValidationModule,
+    resolved_config_sha256,
+)
 from analytics.feasibility_report_contract.result_facade import (
     D3C_ARTIFACT_ONLY_PATHS,
     D3C_INSPECTED_LAYER_KEYS,
@@ -27,10 +36,14 @@ from analytics.feasibility_report_contract.result_facade import (
     RESULT_FACADE_SCHEMA_ID,
     RESULT_FACADE_SOURCE_CONTRACT,
     RESULT_FACADE_WARNING_LIMITATION_CODE,
+    AuthoredNumericProjection,
     CarriedResultObservation,
     D3CResultProjection,
     EngineManifestProjection,
     ExcludedResultField,
+    FxIntegrationProjection,
+    NumericProjectionReceiptProjection,
+    OriginInvariantProjection,
     ProjectionLimitation,
     ResultCarryPredicate,
     ResultFieldRoute,
@@ -38,12 +51,21 @@ from analytics.feasibility_report_contract.result_facade import (
     ResultObservationState,
     ResultScalarKind,
     ResultUnknownKeyType,
+    ResultZeroPolicy,
     UnavailableResultObservation,
     UnrecognizedUpstreamKey,
     result_section_projections,
 )
 
 _MAX_UNRECOGNIZED_KEYS: Final = 512
+_MAX_RESULT_DEPTH: Final = 128
+_MAX_RESULT_CONTAINERS: Final = 10_000
+_MAX_RESULT_SCALARS: Final = 100_000
+_MAX_RESULT_TEXT_CODEPOINTS: Final = 1_000_000
+_ALLOWED_VALIDATION_MODULES: Final = frozenset(item.value for item in ValidationModule)
+_REQUIRED_VALIDATION_MODULES: Final = frozenset(
+    {ValidationModule.CASHFLOW.value, ValidationModule.DEBT.value}
+)
 _MISSING = object()
 _UnavailableState: TypeAlias = Literal[
     ResultObservationState.AMBIGUOUS_DEFAULT,
@@ -72,6 +94,320 @@ class _Lookup:
     present: bool
     value: Any = None
     blocked_at: tuple[str, ...] | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _ValidatedOrigin:
+    full_result: Mapping[Any, Any]
+    origin_invariants: OriginInvariantProjection
+    numeric_projection_receipts: tuple[NumericProjectionReceiptProjection, ...]
+    gateway_warnings: tuple[str, ...]
+    fx_integration: FxIntegrationProjection
+    engine_manifest: EngineManifestProjection
+
+
+def _origin_error(code: str, pointer: str, detail: str) -> ResultProjectionError:
+    return ResultProjectionError(code, pointer, detail)
+
+
+def _detach_frozen_occurrences(
+    value: Any,
+    *,
+    active: set[int] | None = None,
+    depth: int = 0,
+    counts: list[int] | None = None,
+) -> Any:
+    """Copy one exact frozen tree while bounding every serialized occurrence."""
+
+    if depth > _MAX_RESULT_DEPTH:
+        raise _origin_error(
+            "origin_depth_exceeded", "/full_result", "result exceeds depth 128"
+        )
+    ancestors = active if active is not None else set()
+    totals = counts if counts is not None else [0, 0, 0]
+    if type(value) is MappingProxyType:
+        marker = id(value)
+        if marker in ancestors:
+            raise _origin_error(
+                "origin_cycle", "/full_result", "result contains a mapping cycle"
+            )
+        try:
+            items = tuple(value.items())
+        except RuntimeError as exc:  # pragma: no cover - concurrent backing mutation
+            raise _origin_error(
+                "origin_changed", "/full_result", "result changed during detachment"
+            ) from exc
+        for key, _ in items:
+            if type(key) is str:
+                totals[2] += len(key)
+            elif type(key) is int:
+                if key.bit_length() > 4096:
+                    raise _origin_error(
+                        "origin_key_invalid",
+                        "/full_result",
+                        "integer mapping key exceeds 4096 bits",
+                    )
+            elif type(key) is float:
+                if not math.isfinite(key):
+                    raise _origin_error(
+                        "origin_key_invalid",
+                        "/full_result",
+                        "mapping key is not finite binary64",
+                    )
+            else:
+                raise _origin_error(
+                    "origin_key_invalid",
+                    "/full_result",
+                    "mapping key has an unsupported exact type",
+                )
+        totals[0] += 1
+        if (
+            totals[0] > _MAX_RESULT_CONTAINERS
+            or totals[2] > _MAX_RESULT_TEXT_CODEPOINTS
+        ):
+            raise _origin_error(
+                "origin_volume_exceeded",
+                "/full_result",
+                "result exceeds bounded container/text volume",
+            )
+        backing: dict[Any, Any] = {}
+        ancestors.add(marker)
+        try:
+            for key, item in items:
+                backing[key] = _detach_frozen_occurrences(
+                    item,
+                    active=ancestors,
+                    depth=depth + 1,
+                    counts=totals,
+                )
+        finally:
+            ancestors.remove(marker)
+        return MappingProxyType(backing)
+    if type(value) is tuple:
+        marker = id(value)
+        if marker in ancestors:  # pragma: no cover - exact tuples cannot self-cycle
+            raise _origin_error(
+                "origin_cycle", "/full_result", "result contains a sequence cycle"
+            )
+        totals[0] += 1
+        if totals[0] > _MAX_RESULT_CONTAINERS:
+            raise _origin_error(
+                "origin_volume_exceeded",
+                "/full_result",
+                "result exceeds bounded container volume",
+            )
+        ancestors.add(marker)
+        try:
+            return tuple(
+                _detach_frozen_occurrences(
+                    item,
+                    active=ancestors,
+                    depth=depth + 1,
+                    counts=totals,
+                )
+                for item in value
+            )
+        finally:
+            ancestors.remove(marker)
+    totals[1] += 1
+    if totals[1] > _MAX_RESULT_SCALARS:
+        raise _origin_error(
+            "origin_volume_exceeded",
+            "/full_result",
+            "result exceeds bounded scalar volume",
+        )
+    if value is None or type(value) is bool:
+        return value
+    if type(value) is str:
+        totals[2] += len(value)
+        if totals[2] > _MAX_RESULT_TEXT_CODEPOINTS:
+            raise _origin_error(
+                "origin_volume_exceeded",
+                "/full_result",
+                "result exceeds bounded text volume",
+            )
+        return value
+    if type(value) is int and value.bit_length() <= 4096:
+        return value
+    if type(value) is float and math.isfinite(value):
+        return value
+    raise _origin_error(
+        "origin_scalar_invalid",
+        "/full_result",
+        "result contains an unsupported or non-finite scalar",
+    )
+
+
+def _exact_key_token(key: object) -> tuple[str, object]:
+    if type(key) is str:
+        return "string", key
+    if type(key) is int:
+        return "integer", key
+    if type(key) is float and math.isfinite(key):
+        return "binary64", struct.pack(">d", key)
+    raise ValueError("unsupported exact mapping key")
+
+
+def _exact_tree_equal(
+    left: object,
+    right: object,
+    *,
+    depth: int = 0,
+    compared: set[tuple[int, int]] | None = None,
+) -> bool:
+    """Compare frozen graphs by exact type, key identity, and binary64 bytes."""
+
+    if depth > _MAX_RESULT_DEPTH or type(left) is not type(right):
+        return False
+    pairs = compared if compared is not None else set()
+    if type(left) is MappingProxyType:
+        left_mapping = cast(Mapping[Any, Any], left)
+        right_mapping = cast(Mapping[Any, Any], right)
+        pair = (id(left), id(right))
+        if pair in pairs:
+            return True
+        pairs.add(pair)
+        try:
+            left_items = {
+                _exact_key_token(key): item for key, item in left_mapping.items()
+            }
+            right_items = {
+                _exact_key_token(key): item for key, item in right_mapping.items()
+            }
+        except ValueError:
+            return False
+        if (
+            len(left_items) != len(left_mapping)
+            or len(right_items) != len(right_mapping)
+            or left_items.keys() != right_items.keys()
+        ):
+            return False
+        return all(
+            _exact_tree_equal(
+                item,
+                right_items[key],
+                depth=depth + 1,
+                compared=pairs,
+            )
+            for key, item in left_items.items()
+        )
+    if type(left) is tuple:
+        left_tuple = left
+        right_tuple = cast(tuple[Any, ...], right)
+        pair = (id(left), id(right))
+        if pair in pairs:
+            return True
+        pairs.add(pair)
+        return len(left_tuple) == len(right_tuple) and all(
+            _exact_tree_equal(
+                left_item,
+                right_item,
+                depth=depth + 1,
+                compared=pairs,
+            )
+            for left_item, right_item in zip(left_tuple, right_tuple, strict=True)
+        )
+    if type(left) is float:
+        return struct.pack(">d", left) == struct.pack(">d", right)
+    return bool(left == right)
+
+
+def _thaw_json_config(value: object, *, depth: int = 0) -> object:
+    """Return exact JSON-native containers for the public config digest primitive."""
+
+    if depth > _MAX_RESULT_DEPTH:
+        raise ValueError("config exceeds the D3C origin depth bound")
+    if type(value) is MappingProxyType:
+        if any(type(key) is not str for key in value):
+            raise TypeError("config mapping keys must be exact strings")
+        return {
+            key: _thaw_json_config(item, depth=depth + 1) for key, item in value.items()
+        }
+    if type(value) is tuple:
+        return [_thaw_json_config(item, depth=depth + 1) for item in value]
+    if value is None or type(value) in {str, bool, int}:
+        return value
+    if type(value) is float and math.isfinite(value):
+        return value
+    raise TypeError("config contains a non-JSON-native value")
+
+
+def _project_numeric_receipts(
+    result: D3BExecutionSuccess,
+) -> tuple[NumericProjectionReceiptProjection, ...]:
+    receipts = result.numeric_projection_receipts
+    if type(receipts) is not tuple or len(receipts) > 1_024:
+        raise _origin_error(
+            "numeric_receipts_invalid",
+            "/numeric_projection_receipts",
+            "numeric receipts must be an exact bounded tuple",
+        )
+    projected: list[NumericProjectionReceiptProjection] = []
+    for index, receipt in enumerate(receipts):
+        pointer = f"/numeric_projection_receipts/{index}"
+        if type(receipt) is not D3BNumericProjectionReceipt:
+            raise _origin_error(
+                "numeric_receipt_type_invalid",
+                pointer,
+                "numeric receipt has a non-canonical runtime type",
+            )
+        authored = receipt.authored_values
+        if type(authored) is not tuple or not 1 <= len(authored) <= 2:
+            raise _origin_error(
+                "numeric_receipt_authored_values_invalid",
+                pointer,
+                "numeric receipt authored values must be an exact bounded tuple",
+            )
+        authored_projection: list[AuthoredNumericProjection] = []
+        for authored_index, item in enumerate(authored):
+            if type(item) is not D3BAuthoredNumericValue:
+                raise _origin_error(
+                    "numeric_authored_value_type_invalid",
+                    f"{pointer}/authored_values/{authored_index}",
+                    "authored numeric value has a non-canonical runtime type",
+                )
+            try:
+                projected_float = float.fromhex(item.binary64_hex)
+                authored_projection.append(
+                    AuthoredNumericProjection(
+                        json_type=item.json_type,
+                        authored_value=item.authored_value,
+                        binary64_hex=item.binary64_hex,
+                        binary64_bytes_hex=struct.pack(">d", projected_float).hex(),
+                    )
+                )
+            except (TypeError, ValueError) as exc:
+                raise _origin_error(
+                    "numeric_authored_value_invalid",
+                    f"{pointer}/authored_values/{authored_index}",
+                    "authored numeric value violates exact projection identity",
+                ) from exc
+        try:
+            projected_float = float.fromhex(receipt.projected_binary64_hex)
+            projected.append(
+                NumericProjectionReceiptProjection(
+                    assertion_id=receipt.assertion_id,
+                    project_decimal=receipt.project_decimal,
+                    projected_binary64_hex=receipt.projected_binary64_hex,
+                    projected_binary64_bytes_hex=struct.pack(
+                        ">d", projected_float
+                    ).hex(),
+                    authored_values=tuple(authored_projection),
+                )
+            )
+        except (TypeError, ValueError) as exc:
+            raise _origin_error(
+                "numeric_receipt_invalid",
+                pointer,
+                "numeric receipt violates exact Decimal/binary64 identity",
+            ) from exc
+    if len({item.assertion_id for item in projected}) != len(projected):
+        raise _origin_error(
+            "numeric_receipt_duplicate",
+            "/numeric_projection_receipts",
+            "numeric receipt assertion IDs must be unique",
+        )
+    return tuple(projected)
 
 
 def _pointer(path: tuple[str, ...]) -> str:
@@ -233,17 +569,40 @@ def _predicate_result(
         remaining = _lookup(
             full_result, ("full_result", "debt_result", "balloon_remaining")
         )
-        debt = _lookup(full_result, ("full_result", "debt_result", "debt_total"))
+        principal = _lookup(
+            full_result,
+            ("full_result", "debt_result", "principal_by_tranche"),
+        )
         if (
             not remaining.present
             or not _finite_float(remaining.value)
-            or not debt.present
-            or not _finite_float(debt.value)
+            or remaining.value < 0.0
+            or not principal.present
+            or type(principal.value) is not MappingProxyType
+            or set(principal.value) != {"lkr", "usd", "dfi"}
+            or any(
+                not _finite_float(value) or value < 0.0
+                for value in principal.value.values()
+            )
         ):
             return (
                 False,
-                ResultObservationState.NOT_COMPUTED,
-                "the exact reciprocal balloon basis is absent",
+                ResultObservationState.NOT_REPRESENTABLE,
+                "the exact IDC-inclusive principal basis is absent or invalid",
+            )
+        amortizing_base = sum(principal.value.values())
+        if not math.isfinite(amortizing_base) or amortizing_base <= 0.0:
+            return (
+                False,
+                ResultObservationState.NOT_REPRESENTABLE,
+                "the exact IDC-inclusive principal basis is not positive finite",
+            )
+        expected = remaining.value / amortizing_base
+        if not _exact_scalar_equal(source, expected):
+            return (
+                False,
+                ResultObservationState.NOT_REPRESENTABLE,
+                "balloon_pct disagrees with the exact IDC-inclusive principal basis",
             )
         return True, ResultObservationState.CARRIED, ""
 
@@ -294,13 +653,6 @@ def _unavailable(
 def _route_observation(
     full_result: Mapping[Any, Any], route: ResultFieldRoute
 ) -> CarriedResultObservation | UnavailableResultObservation:
-    if route.carry_predicate is ResultCarryPredicate.PROJECT_CONTEXT_REQUIRED:
-        return _unavailable(
-            route,
-            ResultObservationState.NOT_COMPUTED,
-            "governed ProjectCase/request context is outside D3C-1a",
-        )
-
     source = _lookup(full_result, route.source_path)
     if not source.present:
         return _unavailable(
@@ -322,7 +674,10 @@ def _route_observation(
                 ResultObservationState.NOT_REPRESENTABLE,
                 "the source is not an exact finite binary64 scalar",
             )
-        if source.value == 0.0:
+        if (
+            source.value == 0.0
+            and route.zero_policy is ResultZeroPolicy.AMBIGUOUS_DEFAULT
+        ):
             return _unavailable(
                 route,
                 ResultObservationState.AMBIGUOUS_DEFAULT,
@@ -334,6 +689,14 @@ def _route_observation(
             route,
             ResultObservationState.NOT_REPRESENTABLE,
             "the source is not an exact integer scalar",
+        )
+
+    if route.carry_predicate is ResultCarryPredicate.PROJECT_CONTEXT_REQUIRED:
+        return _unavailable(
+            route,
+            ResultObservationState.NOT_REPRESENTABLE,
+            "exact upstream scalar is present but governed ProjectCase/request context "
+            "is outside D3C-1a",
         )
 
     accepted, unavailable_state, reason = _predicate_result(
@@ -499,8 +862,7 @@ def _excluded_fields(
     return tuple(records)
 
 
-def _manifest_projection(result: D3BExecutionSuccess) -> EngineManifestProjection:
-    manifest = result.run_manifest
+def _manifest_projection(manifest: Mapping[Any, Any]) -> EngineManifestProjection:
     if type(manifest) is not MappingProxyType:
         raise ResultProjectionError(
             "manifest_not_frozen", "/run_manifest", "expected an exact mapping proxy"
@@ -536,6 +898,328 @@ def _manifest_projection(result: D3BExecutionSuccess) -> EngineManifestProjectio
         ) from exc
 
 
+def _validate_origin(result: D3BExecutionSuccess) -> _ValidatedOrigin:
+    """Reconcile the complete bounded D3B origin before scalar mapping begins."""
+
+    if type(result.gateway_call_count) is not int or result.gateway_call_count != 1:
+        raise _origin_error(
+            "gateway_call_count_invalid",
+            "/gateway_call_count",
+            "accepted D3B success must disclose exactly one gateway call",
+        )
+    modules = result.validation_modules
+    if (
+        type(modules) is not tuple
+        or not modules
+        or len(modules) > len(_ALLOWED_VALIDATION_MODULES)
+        or any(
+            type(item) is not str or item not in _ALLOWED_VALIDATION_MODULES
+            for item in modules
+        )
+        or len(set(modules)) != len(modules)
+        or not _REQUIRED_VALIDATION_MODULES.issubset(modules)
+    ):
+        raise _origin_error(
+            "validation_modules_invalid",
+            "/validation_modules",
+            "validation modules differ from the closed public v14 vocabulary",
+        )
+    for name in ("request_id", "project_id", "case_id", "authority_id", "config_id"):
+        value = getattr(result, name)
+        if type(value) is not str or not value or len(value) > 160:
+            raise _origin_error(
+                "origin_envelope_invalid",
+                f"/{name}",
+                "D3B origin identifier must be exact bounded text",
+            )
+    if (
+        type(result.project_case_revision) is not int
+        or result.project_case_revision <= 0
+    ):
+        raise _origin_error(
+            "origin_envelope_invalid",
+            "/project_case_revision",
+            "ProjectCase revision must be a positive exact integer",
+        )
+    for name in (
+        "project_case_sha256",
+        "evaluation_request_sha256",
+        "source_file_sha256",
+        "resolved_config_sha256",
+        "evaluated_config_sha256",
+    ):
+        value = getattr(result, name)
+        if (
+            type(value) is not str
+            or len(value) != 64
+            or any(character not in "0123456789abcdef" for character in value)
+        ):
+            raise _origin_error(
+                "origin_envelope_invalid",
+                f"/{name}",
+                "D3B origin digest must be exact lowercase SHA-256",
+            )
+    if (
+        type(result.evidence_cutoff) is not date
+        or type(result.valuation_date) is not date
+    ):
+        raise _origin_error(
+            "origin_envelope_invalid",
+            "/evidence_cutoff",
+            "D3B assessment dates must be exact date values",
+        )
+    if type(result.full_result) is not MappingProxyType:
+        raise _origin_error(
+            "result_not_frozen", "/full_result", "expected an exact mapping proxy"
+        )
+    if type(result.run_manifest) is not MappingProxyType:
+        raise _origin_error(
+            "manifest_not_frozen", "/run_manifest", "expected an exact mapping proxy"
+        )
+    if result.full_result.get("run_manifest", _MISSING) is not result.run_manifest:
+        raise _origin_error(
+            "manifest_identity_mismatch",
+            "/full_result/run_manifest",
+            "the engine manifest is not the exact full-result subtree",
+        )
+
+    full_result = cast(
+        Mapping[Any, Any], _detach_frozen_occurrences(result.full_result)
+    )
+    required_root_types = {
+        "status": str,
+        "config_path": str,
+        "validation_mode": str,
+        "scenario_result": MappingProxyType,
+        "kpis": MappingProxyType,
+        "annual_rows": tuple,
+        "debt_result": MappingProxyType,
+        "equity_distribution": MappingProxyType,
+        "metrics": MappingProxyType,
+        "fx_integration": MappingProxyType,
+        "run_manifest": MappingProxyType,
+    }
+    if any(
+        type(full_result.get(key, _MISSING)) is not expected
+        for key, expected in required_root_types.items()
+    ):
+        raise _origin_error(
+            "origin_surface_invalid",
+            "/full_result",
+            "full result is missing a required exact D3B surface",
+        )
+    if (
+        full_result["status"] != "success"
+        or full_result["config_path"] != "<inline>"
+        or full_result["validation_mode"] != "strict"
+        or not full_result["annual_rows"]
+        or any(
+            type(row) is not MappingProxyType or not row
+            for row in full_result["annual_rows"]
+        )
+    ):
+        raise _origin_error(
+            "origin_protocol_invalid",
+            "/full_result",
+            "full result violates the strict success protocol",
+        )
+
+    scenario = full_result["scenario_result"]
+    required_scenario_types = {
+        "scenario_name": str,
+        "config_path": str,
+        "project_npv": float,
+        "project_irr": float,
+        "dscr_series": tuple,
+        "min_dscr": float,
+        "max_debt_usd": float,
+        "validation_mode": str,
+        "config": MappingProxyType,
+        "annual_rows": tuple,
+        "debt_result": MappingProxyType,
+        "kpis": MappingProxyType,
+        "metadata": MappingProxyType,
+    }
+    if any(
+        type(scenario.get(key, _MISSING)) is not expected
+        for key, expected in required_scenario_types.items()
+    ) or any(
+        not math.isfinite(scenario[key])
+        for key in ("project_npv", "project_irr", "min_dscr", "max_debt_usd")
+    ):
+        raise _origin_error(
+            "scenario_origin_invalid",
+            "/full_result/scenario_result",
+            "ScenarioResult surface is incomplete or non-finite",
+        )
+    if (
+        not scenario["scenario_name"]
+        or scenario["config_path"] != "<inline>"
+        or scenario["validation_mode"] != "strict"
+        or not scenario["config"]
+        or not scenario["annual_rows"]
+        or not scenario["debt_result"]
+        or not scenario["kpis"]
+        or not scenario["metadata"]
+        or not scenario["dscr_series"]
+        or any(
+            type(item) is not float or not math.isfinite(item)
+            for item in scenario["dscr_series"]
+        )
+    ):
+        raise _origin_error(
+            "scenario_origin_invalid",
+            "/full_result/scenario_result",
+            "ScenarioResult violates the strict accepted origin protocol",
+        )
+    if any(
+        not _exact_tree_equal(scenario[name], full_result[name])
+        for name in ("annual_rows", "debt_result", "kpis")
+    ):
+        raise _origin_error(
+            "duplicated_origin_mismatch",
+            "/full_result/scenario_result",
+            "duplicated annual/KPI/debt origins do not reconcile exactly",
+        )
+
+    try:
+        thawed_config = cast(dict[str, object], _thaw_json_config(scenario["config"]))
+        scenario_digest = resolved_config_sha256(thawed_config)
+    except (TypeError, ValueError) as exc:
+        raise _origin_error(
+            "evaluated_config_invalid",
+            "/full_result/scenario_result/config",
+            "ScenarioResult config cannot satisfy the public digest primitive",
+        ) from exc
+    if scenario_digest != result.evaluated_config_sha256:
+        raise _origin_error(
+            "evaluated_config_digest_mismatch",
+            "/full_result/scenario_result/config",
+            "ScenarioResult config digest differs from evaluated_config_sha256",
+        )
+
+    kpis = full_result["kpis"]
+    for key in ("project_npv", "project_irr", "min_dscr", "max_debt_usd"):
+        if (
+            type(kpis.get(key, _MISSING)) is not float
+            or not math.isfinite(kpis[key])
+            or not _exact_tree_equal(scenario[key], kpis[key])
+        ):
+            raise _origin_error(
+                "kpi_origin_mismatch",
+                f"/full_result/kpis/{key}",
+                "KPI and ScenarioResult origins do not reconcile exactly",
+            )
+    debt = full_result["debt_result"]
+    if (
+        type(debt.get("debt_total", _MISSING)) is not float
+        or not math.isfinite(debt["debt_total"])
+        or type(debt.get("min_dscr", _MISSING)) is not float
+        or not math.isfinite(debt["min_dscr"])
+        or type(debt.get("dscr_by_year", _MISSING)) is not MappingProxyType
+        or not debt["dscr_by_year"]
+        or not _exact_tree_equal(debt["debt_total"], kpis["max_debt_usd"])
+        or not _exact_tree_equal(debt["min_dscr"], kpis["min_dscr"])
+    ):
+        raise _origin_error(
+            "debt_origin_mismatch",
+            "/full_result/debt_result",
+            "debt result and KPI origins do not reconcile exactly",
+        )
+
+    manifest = full_result["run_manifest"]
+    engine_manifest = _manifest_projection(manifest)
+    if engine_manifest.config_sha256 != result.evaluated_config_sha256:
+        raise _origin_error(
+            "manifest_digest_mismatch",
+            "/full_result/run_manifest/config_sha256",
+            "manifest digest differs from evaluated_config_sha256",
+        )
+
+    fx = full_result["fx_integration"]
+    try:
+        fx_projection = FxIntegrationProjection(
+            attempted=fx.get("attempted", _MISSING),
+            succeeded=fx.get("succeeded", _MISSING),
+            warning=fx.get("warning", _MISSING),
+            degraded=fx.get("degraded", _MISSING),
+            degraded_reasons=fx.get("degraded_reasons", _MISSING),
+        )
+    except (TypeError, ValueError) as exc:
+        raise _origin_error(
+            "fx_origin_invalid",
+            "/full_result/fx_integration",
+            "FX integration disclosure violates the exact origin protocol",
+        ) from exc
+    gateway_warnings = full_result.get("warnings", ())
+    if (
+        type(gateway_warnings) is not tuple
+        or any(type(item) is not str for item in gateway_warnings)
+        or len(gateway_warnings) > _MAX_RESULT_SCALARS
+        or sum(len(item) for item in gateway_warnings) > _MAX_RESULT_TEXT_CODEPOINTS
+    ):
+        raise _origin_error(
+            "gateway_warnings_invalid",
+            "/full_result/warnings",
+            "gateway warnings must be an exact bounded text tuple",
+        )
+    returned_warnings = (
+        *gateway_warnings,
+        *((fx_projection.warning,) if fx_projection.warning is not None else ()),
+        *fx_projection.degraded_reasons,
+    )
+    if (
+        type(result.warnings) is not tuple
+        or result.warnings != returned_warnings
+        or any(type(item) is not str for item in result.warnings)
+    ):
+        raise _origin_error(
+            "warning_origin_mismatch",
+            "/warnings",
+            "D3B warning tuple differs from exact gateway/FX origins",
+        )
+    expected_fx_degraded = bool(returned_warnings) or (
+        not fx_projection.succeeded or fx_projection.degraded
+    )
+    if (
+        type(result.fx_degraded) is not bool
+        or result.fx_degraded is not expected_fx_degraded
+    ):
+        raise _origin_error(
+            "fx_degradation_mismatch",
+            "/fx_degraded",
+            "D3B FX degradation differs from exact structured origins",
+        )
+    expected_outcome = "degraded_success" if expected_fx_degraded else "success"
+    if result.outcome != expected_outcome:
+        raise _origin_error(
+            "outcome_origin_mismatch",
+            "/outcome",
+            "D3B outcome differs from warning/degradation origins",
+        )
+
+    receipts = _project_numeric_receipts(result)
+    return _ValidatedOrigin(
+        full_result=full_result,
+        origin_invariants=OriginInvariantProjection(
+            gateway_call_count=1,
+            full_status="success",
+            full_config_path="<inline>",
+            scenario_config_path="<inline>",
+            full_validation_mode="strict",
+            scenario_validation_mode="strict",
+            duplicated_origins_exact=True,
+            evaluated_config_digest_verified=True,
+            manifest_identity_verified=True,
+            gateway_warnings_present="warnings" in full_result,
+        ),
+        numeric_projection_receipts=receipts,
+        gateway_warnings=cast(tuple[str, ...], gateway_warnings),
+        fx_integration=fx_projection,
+        engine_manifest=engine_manifest,
+    )
+
+
 def project_d3b_result(result: D3BExecutionSuccess) -> D3CResultProjection:
     """Project exactly one accepted D3B success without executing or recomputing it."""
 
@@ -545,16 +1229,7 @@ def project_d3b_result(result: D3BExecutionSuccess) -> D3CResultProjection:
             "/",
             "D3C-1a accepts exactly D3BExecutionSuccess",
         )
-    if type(result.full_result) is not MappingProxyType:
-        raise ResultProjectionError(
-            "result_not_frozen", "/full_result", "expected an exact mapping proxy"
-        )
-    if result.full_result.get("run_manifest", _MISSING) is not result.run_manifest:
-        raise ResultProjectionError(
-            "manifest_identity_mismatch",
-            "/full_result/run_manifest",
-            "the engine manifest is not the exact full-result subtree",
-        )
+    origin = _validate_origin(result)
 
     try:
         return D3CResultProjection(
@@ -577,16 +1252,20 @@ def project_d3b_result(result: D3BExecutionSuccess) -> D3CResultProjection:
             evidence_cutoff=result.evidence_cutoff,
             valuation_date=result.valuation_date,
             validation_modules=result.validation_modules,
+            origin_invariants=origin.origin_invariants,
+            numeric_projection_receipts=origin.numeric_projection_receipts,
+            gateway_warnings=origin.gateway_warnings,
             returned_warnings=result.warnings,
             fx_degraded=result.fx_degraded,
-            engine_manifest=_manifest_projection(result),
+            fx_integration=origin.fx_integration,
+            engine_manifest=origin.engine_manifest,
             sections=result_section_projections(),
             route_observations=tuple(
-                _route_observation(result.full_result, route)
+                _route_observation(origin.full_result, route)
                 for route in D3C_RESULT_FIELD_ROUTES
             ),
-            excluded_fields=_excluded_fields(result.full_result),
-            unrecognized_keys=_unrecognized_keys(result.full_result),
+            excluded_fields=_excluded_fields(origin.full_result),
+            unrecognized_keys=_unrecognized_keys(origin.full_result),
             limitations=(
                 ProjectionLimitation(
                     code=RESULT_FACADE_WARNING_LIMITATION_CODE,

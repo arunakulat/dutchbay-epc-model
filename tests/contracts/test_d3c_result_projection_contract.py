@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import hashlib
 import inspect
 import json
 import logging
@@ -18,6 +19,7 @@ from types import MappingProxyType
 from typing import Any, Callable, Mapping
 
 import pytest
+from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
 import analytics.evaluation_v14 as evaluation_v14
@@ -27,26 +29,39 @@ from analytics.contracts_v14 import D3BExecutionSuccess
 from analytics.feasibility_report_contract import (
     D3C_INSPECTED_LAYER_KEYS,
     D3C_RESULT_FIELD_ROUTES,
+    D3C_RESULT_PATH_DISPOSITIONS,
+    AuthoredNumericProjection,
     CarriedResultObservation,
     D3CResultProjection,
     EngineManifestProjection,
     ExcludedResultField,
+    FxIntegrationProjection,
+    NumericProjectionReceiptProjection,
+    OriginInvariantProjection,
     ProjectionLimitation,
     ResultCarryPredicate,
     ResultFieldRoute,
     ResultObservationClass,
     ResultObservationState,
+    ResultPathDisposition,
     ResultScalarKind,
     ResultUnknownKeyType,
     ResultValueType,
+    ResultZeroPolicy,
     SectionResultProjection,
     UnavailableResultObservation,
     UnrecognizedUpstreamKey,
+)
+from analytics.feasibility_report_contract.taxonomy_identity import (
+    FEASIBILITY_SECTION_IDS,
+    FEASIBILITY_TAXONOMY_SOURCE_PATH,
+    FEASIBILITY_TAXONOMY_SOURCE_SHA256,
 )
 from analytics.feasibility_result_projection import (
     ResultProjectionError,
     project_d3b_result,
 )
+from analytics.feasibility_sections import load_feasibility_taxonomy
 from tests.contracts.test_d3b_execution_contract import (
     _AUTHORITY_ID,
     _bundle,
@@ -87,10 +102,18 @@ def _freeze(value: Any) -> Any:
 
 
 def _replace_result(
-    result: D3BExecutionSuccess, mutator: Callable[[dict[Any, Any]], None]
+    result: D3BExecutionSuccess,
+    mutator: Callable[[dict[Any, Any]], None],
+    *,
+    reconcile_origins: bool = True,
 ) -> D3BExecutionSuccess:
     payload = copy.deepcopy(result.model_dump()["full_result"])
     mutator(payload)
+    scenario = payload.get("scenario_result")
+    if reconcile_origins and type(scenario) is dict:
+        for name in ("annual_rows", "debt_result", "kpis"):
+            if name in payload:
+                scenario[name] = copy.deepcopy(payload[name])
     frozen = _freeze(payload)
     return replace(
         result,
@@ -145,7 +168,13 @@ def test_real_public_gateway_is_an_independent_lossless_oracle(
     assert projection.fx_degraded is result.fx_degraded
     assert projection.limitations[0].code == "upstream_warning_channel_not_exhaustive"
     assert projection.engine_manifest.config_sha256 == result.evaluated_config_sha256
-    assert projection.unrecognized_keys
+    assert projection.origin_invariants.gateway_call_count == 1
+    assert projection.origin_invariants.duplicated_origins_exact is True
+    assert projection.fx_integration.succeeded is True
+    assert len(projection.numeric_projection_receipts) == len(
+        result.numeric_projection_receipts
+    )
+    assert projection.unrecognized_keys == ()
 
 
 def test_projection_has_no_gateway_or_finance_call(
@@ -222,46 +251,31 @@ def test_finite_binary64_subnormal_is_carried_without_loss(
     assert float(observation.value_text).hex() == observation.binary64_hex
 
 
-def test_exact_mirror_mismatch_is_not_representable(
+def test_required_kpi_mirror_mismatch_is_an_origin_refusal(
     accepted_result: D3BExecutionSuccess,
 ) -> None:
     result = _replace_result(
         accepted_result,
         lambda payload: _set_project_irr(payload, 0.25, 0.5),
     )
-    observation = _observation(project_d3b_result(result), "route:kpis.project_irr")
-    assert observation.state is ResultObservationState.NOT_REPRESENTABLE
-    assert "mirror mismatch" in observation.missing_item
+    with pytest.raises(ResultProjectionError, match="kpi_origin_mismatch"):
+        project_d3b_result(result)
 
 
 @pytest.mark.parametrize(
-    ("mutation", "expected_state"),
+    "mutation",
     [
-        (
-            lambda payload: payload["kpis"].pop("project_irr"),
-            ResultObservationState.NOT_COMPUTED,
-        ),
-        (
-            lambda payload: payload["kpis"].__setitem__("project_irr", None),
-            ResultObservationState.UPSTREAM_NONE,
-        ),
-        (
-            lambda payload: payload["kpis"].__setitem__("project_irr", 1),
-            ResultObservationState.NOT_REPRESENTABLE,
-        ),
+        lambda payload: payload["kpis"].pop("project_irr"),
+        lambda payload: payload["kpis"].__setitem__("project_irr", None),
+        lambda payload: payload["kpis"].__setitem__("project_irr", 1),
     ],
 )
-def test_absent_none_and_wrong_scalar_type_remain_distinct(
+def test_required_kpi_absent_none_and_wrong_type_refuse_origin(
     accepted_result: D3BExecutionSuccess,
     mutation: Callable[[dict[Any, Any]], None],
-    expected_state: ResultObservationState,
 ) -> None:
-    observation = _observation(
-        project_d3b_result(_replace_result(accepted_result, mutation)),
-        "route:kpis.project_irr",
-    )
-    assert observation.state is expected_state
-    assert not hasattr(observation, "value_text")
+    with pytest.raises(ResultProjectionError, match="kpi_origin_mismatch"):
+        project_d3b_result(_replace_result(accepted_result, mutation))
 
 
 def test_total_cfads_requires_rows_but_never_recomputes(
@@ -294,8 +308,11 @@ def test_fx_candidates_stay_unavailable_without_project_context(
         "route:debt_result.fx_avg",
     ):
         observation = _observation(projection, route_id)
-        assert observation.state is ResultObservationState.NOT_COMPUTED
-        assert "ProjectCase/request context" in observation.missing_item
+        assert observation.state is ResultObservationState.NOT_REPRESENTABLE
+        assert (
+            "present but governed ProjectCase/request context"
+            in observation.missing_item
+        )
 
 
 def test_unknown_string_integer_and_binary64_keys_are_surfaced_exactly(
@@ -407,7 +424,7 @@ def test_manifest_fields_are_exact_and_digest_bound(
         accepted_result,
         lambda payload: payload["run_manifest"].__setitem__("config_sha256", "f" * 64),
     )
-    with pytest.raises(ResultProjectionError, match="projection_contract_invalid"):
+    with pytest.raises(ResultProjectionError, match="manifest_digest_mismatch"):
         project_d3b_result(bad)
 
 
@@ -484,15 +501,18 @@ def test_schema_identity_and_json_roundtrip_are_closed(
 def test_warning_and_degradation_facts_are_preserved(
     accepted_result: D3BExecutionSuccess,
 ) -> None:
-    degraded = replace(
+    degraded = _replace_result(
         accepted_result,
-        warnings=("bounded warning",),
-        fx_degraded=True,
-        outcome="degraded_success",
+        lambda payload: payload.__setitem__("warnings", ["bounded warning"]),
     )
+    object.__setattr__(degraded, "warnings", ("bounded warning",))
+    object.__setattr__(degraded, "fx_degraded", True)
+    object.__setattr__(degraded, "outcome", "degraded_success")
     projection = project_d3b_result(degraded)
     assert projection.source_outcome == "degraded_success"
     assert projection.returned_warnings == ("bounded warning",)
+    assert projection.gateway_warnings == ("bounded warning",)
+    assert projection.fx_integration.degraded is False
     assert projection.fx_degraded is True
     assert projection.limitations[0].code == "upstream_warning_channel_not_exhaustive"
 
@@ -501,18 +521,18 @@ def test_known_exclusions_disclose_presence(
     accepted_result: D3BExecutionSuccess,
 ) -> None:
     projection = project_d3b_result(accepted_result)
-    annual_rows = next(
+    metrics = next(
         item
         for item in projection.excluded_fields
-        if item.source_path == ("full_result", "annual_rows")
+        if item.source_path == ("full_result", "metrics")
     )
     refused_fx = next(
         item
         for item in projection.excluded_fields
         if item.source_path == ("full_result", "kpis", "fx_match_ratio")
     )
-    assert annual_rows.state is ResultObservationState.ARTIFACT_ONLY
-    assert annual_rows.observed_present is True
+    assert metrics.state is ResultObservationState.ARTIFACT_ONLY
+    assert metrics.observed_present is True
     assert refused_fx.state is ResultObservationState.KNOWN_REFUSED
     assert refused_fx.observed_present is False
 
@@ -887,25 +907,22 @@ def test_returned_warning_python_ingress_is_exact_and_bounded(
             D3CResultProjection.model_validate(payload)
 
 
-def test_missing_mirror_and_blocked_intermediate_are_explicit(
+def test_required_scenario_mirror_and_container_tampering_refuse_origin(
     accepted_result: D3BExecutionSuccess,
 ) -> None:
     missing_mirror = _replace_result(
         accepted_result,
         lambda payload: payload["scenario_result"].pop("project_irr"),
     )
-    observation = _observation(
-        project_d3b_result(missing_mirror), "route:kpis.project_irr"
-    )
-    assert observation.state is ResultObservationState.NOT_REPRESENTABLE
-    assert "missing exact mirror" in observation.missing_item
+    with pytest.raises(ResultProjectionError, match="scenario_origin_invalid"):
+        project_d3b_result(missing_mirror)
 
     blocked = _replace_result(
         accepted_result,
         lambda payload: payload.__setitem__("scenario_result", "opaque"),
     )
-    observation = _observation(project_d3b_result(blocked), "route:kpis.project_irr")
-    assert observation.state is ResultObservationState.NOT_REPRESENTABLE
+    with pytest.raises(ResultProjectionError, match="origin_surface_invalid"):
+        project_d3b_result(blocked)
 
 
 def test_equity_and_prudential_status_predicates_fail_closed(
@@ -942,15 +959,14 @@ def test_series_debt_balloon_and_integer_predicates_fail_closed(
         payload["kpis"]["avg_dscr"] = 1.2
         payload["scenario_result"]["dscr_series"] = []
 
-    avg_dscr = _observation(
-        project_d3b_result(_replace_result(accepted_result, no_series)),
-        "route:kpis.avg_dscr",
-    )
-    assert avg_dscr.state is ResultObservationState.NOT_COMPUTED
+    with pytest.raises(ResultProjectionError, match="scenario_origin_invalid"):
+        project_d3b_result(_replace_result(accepted_result, no_series))
 
     def no_live_debt(payload: dict[Any, Any]) -> None:
         payload["debt_result"]["avg_debt_rate"] = 0.05
         payload["debt_result"]["debt_total"] = 0.0
+        payload["kpis"]["max_debt_usd"] = 0.0
+        payload["scenario_result"]["max_debt_usd"] = 0.0
 
     debt_rate = _observation(
         project_d3b_result(_replace_result(accepted_result, no_live_debt)),
@@ -966,7 +982,7 @@ def test_series_debt_balloon_and_integer_predicates_fail_closed(
         project_d3b_result(_replace_result(accepted_result, no_balloon_basis)),
         "route:debt_result.balloon_pct",
     )
-    assert balloon.state is ResultObservationState.NOT_COMPUTED
+    assert balloon.state is ResultObservationState.NOT_REPRESENTABLE
 
     wrong_integer = _replace_result(
         accepted_result,
@@ -979,19 +995,15 @@ def test_series_debt_balloon_and_integer_predicates_fail_closed(
     assert construction.state is ResultObservationState.NOT_REPRESENTABLE
 
 
-def test_empty_annual_artifact_is_not_computed(
+def test_empty_annual_artifact_refuses_the_accepted_origin(
     accepted_result: D3BExecutionSuccess,
 ) -> None:
     def mutate(payload: dict[Any, Any]) -> None:
         payload["kpis"]["total_cfads_usd"] = 123.0
         payload["annual_rows"] = []
 
-    observation = _observation(
-        project_d3b_result(_replace_result(accepted_result, mutate)),
-        "route:kpis.total_cfads_usd",
-    )
-    assert observation.state is ResultObservationState.NOT_COMPUTED
-    assert "absent or empty" in observation.missing_item
+    with pytest.raises(ResultProjectionError, match="origin_protocol_invalid"):
+        project_d3b_result(_replace_result(accepted_result, mutate))
 
 
 def test_prudential_predicate_and_annual_container_edges(
@@ -1014,25 +1026,15 @@ def test_prudential_predicate_and_annual_container_edges(
         payload["kpis"]["total_cfads_usd"] = 10.0
         payload["annual_rows"] = None
 
-    assert (
-        _observation(
-            project_d3b_result(_replace_result(accepted_result, non_sequence_rows)),
-            "route:kpis.total_cfads_usd",
-        ).state
-        is ResultObservationState.NOT_COMPUTED
-    )
+    with pytest.raises(ResultProjectionError, match="origin_surface_invalid"):
+        project_d3b_result(_replace_result(accepted_result, non_sequence_rows))
 
     def non_mapping_row(payload: dict[Any, Any]) -> None:
         payload["kpis"]["total_cfads_usd"] = 10.0
         payload["annual_rows"] = [1.0]
 
-    assert (
-        _observation(
-            project_d3b_result(_replace_result(accepted_result, non_mapping_row)),
-            "route:kpis.total_cfads_usd",
-        ).state
-        is ResultObservationState.NOT_REPRESENTABLE
-    )
+    with pytest.raises(ResultProjectionError, match="origin_protocol_invalid"):
+        project_d3b_result(_replace_result(accepted_result, non_mapping_row))
 
 
 @pytest.mark.parametrize(
@@ -1176,3 +1178,972 @@ except Exception as exc:
         )
         outputs.append(completed.stdout)
     assert len(set(outputs)) == 1
+
+
+def test_taxonomy_identity_leaf_is_checksum_guarded_and_import_safe() -> None:
+    source = _MODULE.parents[1] / FEASIBILITY_TAXONOMY_SOURCE_PATH
+    assert hashlib.sha256(source.read_bytes()).hexdigest() == (
+        FEASIBILITY_TAXONOMY_SOURCE_SHA256
+    )
+    assert load_feasibility_taxonomy().section_names == FEASIBILITY_SECTION_IDS
+
+
+def test_result_projection_import_and_call_do_not_read_or_write_taxonomy_files() -> (
+    None
+):
+    script = r"""
+import importlib
+import logging
+import sys
+import tempfile
+from pathlib import Path
+from pytest import MonkeyPatch
+import analytics.feasibility_execution as execution
+from tests.contracts.test_d3b_execution_contract import (
+    _AUTHORITY_ID,
+    _bundle,
+    _gateway_result,
+    _install_gateway,
+)
+
+with tempfile.TemporaryDirectory() as tmp:
+    monkeypatch = MonkeyPatch()
+    try:
+        bundle = _bundle(Path(tmp), monkeypatch)
+        _install_gateway(
+            monkeypatch,
+            lambda **kwargs: _gateway_result(kwargs['raw_config'], kwargs['overrides']),
+        )
+        result = execution.execute_evaluation_request(
+            project_case=bundle.project_case,
+            request=bundle.request,
+            scenario_authority_id=_AUTHORITY_ID,
+        )
+        sys.modules.pop(
+            'analytics.feasibility_report_contract.result_facade', None
+        )
+        sys.modules.pop('analytics.feasibility_result_projection', None)
+
+        def denied(*args, **kwargs):
+            raise AssertionError('pure D3C-1a path attempted filesystem I/O')
+
+        Path.read_text = denied
+        Path.read_bytes = denied
+        Path.write_text = denied
+        Path.write_bytes = denied
+        module = importlib.import_module('analytics.feasibility_result_projection')
+        projection = module.project_d3b_result(result)
+        print(projection.schema_id)
+    finally:
+        logging.disable(logging.NOTSET)
+        monkeypatch.undo()
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=_MODULE.parents[1],
+        env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.stdout.strip() == "dutchbay.section_result_facade.v1"
+
+
+def test_both_draft_202012_schema_modes_validate_canonical_json_and_are_fresh(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    projection = project_d3b_result(accepted_result)
+    payload = projection.model_dump(mode="json")
+    originals: dict[str, dict[str, Any]] = {}
+    for mode in ("validation", "serialization"):
+        schema = D3CResultProjection.model_json_schema(mode=mode)
+        Draft202012Validator.check_schema(schema)
+        Draft202012Validator(schema).validate(payload)
+        originals[mode] = copy.deepcopy(schema)
+        schema["title"] = "caller-mutated"
+        schema.setdefault("properties", {})["schema_id"] = {}
+        assert D3CResultProjection.model_json_schema(mode=mode) == originals[mode]
+    assert (
+        D3CResultProjection.model_validate_json(projection.model_dump_json())
+        == projection
+    )
+
+
+@pytest.mark.parametrize(
+    "order",
+    [
+        (
+            "analytics.feasibility_report_contract.result_facade",
+            "analytics.feasibility_result_projection",
+            "analytics.contracts_v14",
+        ),
+        (
+            "analytics.contracts_v14",
+            "analytics.feasibility_result_projection",
+            "analytics.feasibility_report_contract.result_facade",
+        ),
+        (
+            "analytics.feasibility_result_projection",
+            "analytics.feasibility_report_contract",
+            "analytics.contracts_v14",
+        ),
+    ],
+)
+def test_cold_import_orders_are_cycle_free(order: tuple[str, ...]) -> None:
+    script = "\n".join(f"import {module}" for module in order)
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=_MODULE.parents[1],
+        env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_path_disposition_catalogue_is_total_for_every_inspected_container(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    assert D3C_RESULT_PATH_DISPOSITIONS
+    assert all(
+        type(item) is ResultPathDisposition
+        for item in D3C_RESULT_PATH_DISPOSITIONS.values()
+    )
+    for container, keys in D3C_INSPECTED_LAYER_KEYS.items():
+        assert keys
+        for key in keys:
+            assert (*container, key) in D3C_RESULT_PATH_DISPOSITIONS
+
+    projection = project_d3b_result(accepted_result)
+    unknown_locations = {
+        (item.container_path, item.key_type, item.key_identity)
+        for item in projection.unrecognized_keys
+    }
+    for (
+        actual_container,
+        container,
+        expected_keys,
+    ) in projection_module._inspected_containers(accepted_result.full_result):
+        catalogue_container = actual_container
+        if actual_container[-1].startswith("row:"):
+            catalogue_container = (*actual_container[:-1], "*")
+        for key in container:
+            if type(key) is str and key in expected_keys:
+                assert (*catalogue_container, key) in D3C_RESULT_PATH_DISPOSITIONS
+                continue
+            key_type, identity, _, _ = projection_module._unknown_key_parts(key)
+            assert (actual_container, key_type, identity) in unknown_locations
+
+
+def test_only_project_irr_and_project_npv_declare_ambiguous_zero_policy() -> None:
+    ambiguous = tuple(
+        route.route_id
+        for route in D3C_RESULT_FIELD_ROUTES
+        if route.zero_policy is ResultZeroPolicy.AMBIGUOUS_DEFAULT
+    )
+    assert ambiguous == ("route:kpis.project_irr", "route:kpis.project_npv")
+    assert all(
+        route.zero_policy is ResultZeroPolicy.ALLOW_EXACT
+        for route in D3C_RESULT_FIELD_ROUTES
+        if route.route_id not in ambiguous
+    )
+
+
+def test_route_authorized_zero_families_are_carried_with_exact_sign(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    negative_zero = -0.0
+
+    def mutate(payload: dict[Any, Any]) -> None:
+        payload["kpis"].update(
+            equity_irr=0.0,
+            total_cfads_usd=0.0,
+            avg_dscr=0.0,
+        )
+        payload["scenario_result"]["equity_performance"] = {"equity_irr": 0.0}
+        payload["equity_distribution"]["status"] = "computed"
+        payload["annual_rows"] = [{"year": 1.0, "cfads_usd": 0.0}]
+        payload["debt_result"].update(
+            principal_by_tranche={"lkr": negative_zero, "usd": 100.0, "dfi": 0.0},
+            total_idc=0.0,
+            balloon_remaining=0.0,
+            balloon_pct=0.0,
+        )
+
+    projection = project_d3b_result(_replace_result(accepted_result, mutate))
+    for route_id in (
+        "route:kpis.equity_irr",
+        "route:kpis.total_cfads_usd",
+        "route:kpis.avg_dscr",
+        "route:debt_result.principal_by_tranche.lkr",
+        "route:debt_result.principal_by_tranche.dfi",
+        "route:debt_result.total_idc",
+        "route:debt_result.balloon_remaining",
+        "route:debt_result.balloon_pct",
+    ):
+        assert (
+            _observation(projection, route_id).state is ResultObservationState.CARRIED
+        )
+    lkr = _observation(projection, "route:debt_result.principal_by_tranche.lkr")
+    assert lkr.binary64_hex == "-0x0.0p+0"
+    assert lkr.binary64_bytes_hex == "8000000000000000"
+
+
+@pytest.mark.parametrize("tranche", ["lkr", "usd", "dfi"])
+def test_each_zero_principal_tranche_is_carried_not_default_ambiguous(
+    accepted_result: D3BExecutionSuccess,
+    tranche: str,
+) -> None:
+    principals = {"lkr": 100.0, "usd": 100.0, "dfi": 100.0}
+    principals[tranche] = 0.0
+
+    def mutate(payload: dict[Any, Any]) -> None:
+        payload["debt_result"]["principal_by_tranche"] = principals
+
+    observation = _observation(
+        project_d3b_result(_replace_result(accepted_result, mutate)),
+        f"route:debt_result.principal_by_tranche.{tranche}",
+    )
+    assert observation.state is ResultObservationState.CARRIED
+    assert observation.binary64_hex == "0x0.0p+0"
+
+
+@pytest.mark.parametrize(
+    ("principal", "remaining", "balloon_pct", "expected_state"),
+    [
+        ({"lkr": 100.0, "usd": 0.0, "dfi": 0.0}, 0.0, 0.0, "carried"),
+        ({"lkr": 100.0, "usd": 0.0, "dfi": 0.0}, 10.0, 0.1, "carried"),
+        ({"lkr": 100.0, "usd": 0.0, "dfi": 0.0}, 10.0, 0.2, "not_representable"),
+        (
+            {"lkr": 100.0, "usd": 0.0, "dfi": 0.0},
+            -10.0,
+            -0.1,
+            "not_representable",
+        ),
+        ({"lkr": 0.0, "usd": 0.0, "dfi": 0.0}, 0.0, 0.0, "not_representable"),
+        ({"lkr": -1.0, "usd": 101.0, "dfi": 0.0}, 10.0, 0.1, "not_representable"),
+    ],
+)
+def test_balloon_pct_binds_the_idc_inclusive_principal_basis(
+    accepted_result: D3BExecutionSuccess,
+    principal: dict[str, float],
+    remaining: float,
+    balloon_pct: float,
+    expected_state: str,
+) -> None:
+    def mutate(payload: dict[Any, Any]) -> None:
+        payload["debt_result"].update(
+            principal_by_tranche=principal,
+            balloon_remaining=remaining,
+            balloon_pct=balloon_pct,
+        )
+
+    observation = _observation(
+        project_d3b_result(_replace_result(accepted_result, mutate)),
+        "route:debt_result.balloon_pct",
+    )
+    assert observation.state.value == expected_state
+
+
+def test_balloon_pct_refuses_a_missing_idc_inclusive_basis(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    def mutate(payload: dict[Any, Any]) -> None:
+        payload["debt_result"].update(balloon_remaining=10.0, balloon_pct=0.1)
+        payload["debt_result"].pop("principal_by_tranche", None)
+
+    observation = _observation(
+        project_d3b_result(_replace_result(accepted_result, mutate)),
+        "route:debt_result.balloon_pct",
+    )
+    assert observation.state is ResultObservationState.NOT_REPRESENTABLE
+    assert "IDC-inclusive" in observation.missing_item
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (None, ResultObservationState.UPSTREAM_NONE),
+        ("310", ResultObservationState.NOT_REPRESENTABLE),
+        (310.0, ResultObservationState.NOT_REPRESENTABLE),
+    ],
+)
+def test_fx_route_distinguishes_none_wrong_type_and_present_unbound_context(
+    accepted_result: D3BExecutionSuccess,
+    value: object,
+    expected: ResultObservationState,
+) -> None:
+    result = _replace_result(
+        accepted_result,
+        lambda payload: payload["debt_result"].__setitem__("fx_min", value),
+    )
+    observation = _observation(project_d3b_result(result), "route:debt_result.fx_min")
+    assert observation.state is expected
+
+
+def test_structured_fx_origin_and_aggregate_warning_order_are_lossless(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    def mutate(payload: dict[Any, Any]) -> None:
+        payload["warnings"] = ["gateway-warning"]
+        payload["fx_integration"] = {
+            "attempted": True,
+            "succeeded": False,
+            "warning": "fx-warning",
+            "degraded": True,
+            "degraded_reasons": ["fallback-a", "fallback-b"],
+        }
+
+    result = _replace_result(accepted_result, mutate)
+    warnings = ("gateway-warning", "fx-warning", "fallback-a", "fallback-b")
+    object.__setattr__(result, "warnings", warnings)
+    object.__setattr__(result, "fx_degraded", True)
+    object.__setattr__(result, "outcome", "degraded_success")
+    projection = project_d3b_result(result)
+    assert projection.gateway_warnings == ("gateway-warning",)
+    assert projection.returned_warnings == warnings
+    assert projection.fx_integration == FxIntegrationProjection(
+        attempted=True,
+        succeeded=False,
+        warning="fx-warning",
+        degraded=True,
+        degraded_reasons=("fallback-a", "fallback-b"),
+    )
+
+
+def test_empty_fx_warning_is_preserved_as_an_exact_warning_occurrence(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    def mutate(payload: dict[Any, Any]) -> None:
+        payload["fx_integration"].update(
+            succeeded=False,
+            warning="",
+        )
+
+    result = _replace_result(accepted_result, mutate)
+    object.__setattr__(result, "warnings", ("",))
+    object.__setattr__(result, "fx_degraded", True)
+    object.__setattr__(result, "outcome", "degraded_success")
+    projection = project_d3b_result(result)
+    assert projection.fx_integration.warning == ""
+    assert projection.returned_warnings == ("",)
+
+
+def test_numeric_projection_receipts_are_ordered_unique_and_byte_exact(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    projection = project_d3b_result(accepted_result)
+    assert tuple(
+        item.assertion_id for item in projection.numeric_projection_receipts
+    ) == tuple(
+        item.assertion_id for item in accepted_result.numeric_projection_receipts
+    )
+    for source, projected in zip(
+        accepted_result.numeric_projection_receipts,
+        projection.numeric_projection_receipts,
+        strict=True,
+    ):
+        assert type(projected) is NumericProjectionReceiptProjection
+        assert projected.project_decimal == source.project_decimal
+        assert projected.projected_binary64_hex == source.projected_binary64_hex
+        assert (
+            projected.projected_binary64_bytes_hex
+            == struct.pack(">d", float.fromhex(source.projected_binary64_hex)).hex()
+        )
+        assert all(
+            type(item) is AuthoredNumericProjection
+            for item in projected.authored_values
+        )
+
+    tampered_receipt = copy.copy(accepted_result.numeric_projection_receipts[0])
+    object.__setattr__(
+        tampered_receipt, "projected_binary64_hex", "0x1.0000000000000p+0"
+    )
+    tampered = copy.copy(accepted_result)
+    object.__setattr__(
+        tampered,
+        "numeric_projection_receipts",
+        (tampered_receipt, *accepted_result.numeric_projection_receipts[1:]),
+    )
+    with pytest.raises(ResultProjectionError, match="numeric_receipt_invalid"):
+        project_d3b_result(tampered)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "code"),
+    [
+        (
+            lambda payload: payload.__setitem__("status", "failed"),
+            "origin_protocol_invalid",
+        ),
+        (
+            lambda payload: payload.__setitem__("config_path", "/caller.yaml"),
+            "origin_protocol_invalid",
+        ),
+        (
+            lambda payload: payload.__setitem__("validation_mode", "permissive"),
+            "origin_protocol_invalid",
+        ),
+        (
+            lambda payload: payload["scenario_result"].__setitem__(
+                "annual_rows", [{"year": 2.0}]
+            ),
+            "duplicated_origin_mismatch",
+        ),
+        (
+            lambda payload: payload["scenario_result"]["kpis"].__setitem__(
+                "project_irr", -0.0
+            ),
+            "duplicated_origin_mismatch",
+        ),
+        (
+            lambda payload: payload["scenario_result"]["debt_result"].__setitem__(
+                "debt_total", 101.0
+            ),
+            "duplicated_origin_mismatch",
+        ),
+        (
+            lambda payload: payload["scenario_result"]["config"]["project"].__setitem__(
+                "name", "caller-substitute"
+            ),
+            "evaluated_config_digest_mismatch",
+        ),
+    ],
+)
+def test_complete_origin_matrix_refuses_caller_substituted_snapshots(
+    accepted_result: D3BExecutionSuccess,
+    mutation: Callable[[dict[Any, Any]], None],
+    code: str,
+) -> None:
+    result = _replace_result(
+        accepted_result,
+        mutation,
+        reconcile_origins=False,
+    )
+    with pytest.raises(ResultProjectionError, match=code):
+        project_d3b_result(result)
+
+
+def test_gateway_module_warning_and_fx_postconstruction_tampering_is_refused(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    gateway = copy.copy(accepted_result)
+    object.__setattr__(gateway, "gateway_call_count", 2)
+    with pytest.raises(ResultProjectionError, match="gateway_call_count_invalid"):
+        project_d3b_result(gateway)
+
+    modules = copy.copy(accepted_result)
+    object.__setattr__(modules, "validation_modules", ("rogue_module",))
+    with pytest.raises(ResultProjectionError, match="validation_modules_invalid"):
+        project_d3b_result(modules)
+
+    warnings = copy.copy(accepted_result)
+    object.__setattr__(warnings, "warnings", ("caller-warning",))
+    object.__setattr__(warnings, "fx_degraded", True)
+    object.__setattr__(warnings, "outcome", "degraded_success")
+    with pytest.raises(ResultProjectionError, match="warning_origin_mismatch"):
+        project_d3b_result(warnings)
+
+    fx_result = _replace_result(
+        accepted_result,
+        lambda payload: payload["fx_integration"].__setitem__("degraded", True),
+    )
+    with pytest.raises(ResultProjectionError, match="fx_origin_invalid"):
+        project_d3b_result(fx_result)
+
+
+def test_origin_snapshot_cycle_is_refused_with_a_bounded_error(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    backing = dict(accepted_result.full_result)
+    cycle_backing: dict[str, Any] = {}
+    cycle = MappingProxyType(cycle_backing)
+    cycle_backing["self"] = cycle
+    backing["caller_cycle"] = cycle
+    tampered = copy.copy(accepted_result)
+    object.__setattr__(tampered, "full_result", MappingProxyType(backing))
+    with pytest.raises(ResultProjectionError, match="origin_cycle"):
+        project_d3b_result(tampered)
+
+
+def test_hash_seed_stabilizes_real_projection_traversal_and_first_origin_error() -> (
+    None
+):
+    script = r"""
+import copy
+import json
+import tempfile
+from pathlib import Path
+from dataclasses import replace
+from pytest import MonkeyPatch
+import analytics.feasibility_execution as execution
+from analytics.feasibility_result_projection import project_d3b_result
+from tests.contracts.test_d3b_execution_contract import (
+    _AUTHORITY_ID,
+    _bundle,
+    _gateway_result,
+    _install_gateway,
+)
+from tests.contracts.test_d3c_result_projection_contract import _freeze
+
+with tempfile.TemporaryDirectory() as tmp:
+    monkeypatch = MonkeyPatch()
+    try:
+        bundle = _bundle(Path(tmp), monkeypatch)
+        _install_gateway(
+            monkeypatch,
+            lambda **kwargs: _gateway_result(kwargs['raw_config'], kwargs['overrides']),
+        )
+        result = execution.execute_evaluation_request(
+            project_case=bundle.project_case,
+            request=bundle.request,
+            scenario_authority_id=_AUTHORITY_ID,
+        )
+        payload = copy.deepcopy(result.model_dump()['full_result'])
+        for key in {'zeta', 'alpha', 'middle'}:
+            payload[key] = 'opaque'
+        frozen = _freeze(payload)
+        projected_result = replace(
+            result,
+            full_result=frozen,
+            run_manifest=frozen['run_manifest'],
+        )
+        projection = project_d3b_result(projected_result)
+        print(json.dumps([item.key_identity for item in projection.unrecognized_keys]))
+
+        hostile = copy.copy(result)
+        object.__setattr__(hostile, 'gateway_call_count', 2)
+        object.__setattr__(hostile, 'validation_modules', ('rogue_module',))
+        try:
+            project_d3b_result(hostile)
+        except Exception as exc:
+            print(exc.code)
+    finally:
+        monkeypatch.undo()
+"""
+    outputs = []
+    for seed in ("1", "17", "8675309"):
+        completed = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=_MODULE.parents[1],
+            env=dict(
+                os.environ,
+                PYTHONHASHSEED=seed,
+                PYTHONDONTWRITEBYTECODE="1",
+            ),
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        outputs.append(completed.stdout)
+    assert len(set(outputs)) == 1
+    assert outputs[0].splitlines()[-1] == "gateway_call_count_invalid"
+
+
+def test_origin_projection_contract_literals_cannot_be_forged(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    origin = project_d3b_result(accepted_result).origin_invariants
+    assert type(origin) is OriginInvariantProjection
+    payload = origin.model_dump()
+    payload["duplicated_origins_exact"] = False
+    with pytest.raises(ValidationError):
+        OriginInvariantProjection.model_validate(payload)
+
+
+def test_new_numeric_fx_and_route_models_fail_closed_on_hostile_lexemes(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    integer_route = next(
+        route
+        for route in D3C_RESULT_FIELD_ROUTES
+        if route.scalar_kind is ResultScalarKind.INTEGER
+    )
+    route_payload = integer_route.model_dump()
+    route_payload["zero_policy"] = ResultZeroPolicy.AMBIGUOUS_DEFAULT
+    with pytest.raises(ValidationError, match="integer route cannot"):
+        ResultFieldRoute.model_validate(route_payload)
+
+    projection = project_d3b_result(accepted_result)
+    authored = projection.numeric_projection_receipts[0].authored_values[0]
+    authored_payload = authored.model_dump()
+    hostile_authored = (
+        ({"binary64_bytes_hex": "0000000000000000"}, "identities differ"),
+        (
+            {
+                "json_type": "integer",
+                "authored_value": "01",
+            },
+            "canonical JSON text",
+        ),
+        (
+            {
+                "json_type": "integer",
+                "authored_value": "1" + "0" * 400,
+                "binary64_hex": "0x1.0000000000000p+0",
+                "binary64_bytes_hex": "3ff0000000000000",
+            },
+            "outside binary64",
+        ),
+        (
+            {
+                "json_type": "binary64",
+                "authored_value": "not-a-number",
+            },
+            "binary64 text is invalid",
+        ),
+        (
+            {
+                "json_type": "binary64",
+                "authored_value": "1.00",
+                "binary64_hex": "0x1.0000000000000p+0",
+                "binary64_bytes_hex": "3ff0000000000000",
+            },
+            "must be canonical",
+        ),
+        (
+            {
+                "json_type": "binary64",
+                "authored_value": "1.0",
+            },
+            "text and binary64 identity differ",
+        ),
+    )
+    for updates, message in hostile_authored:
+        with pytest.raises(ValidationError, match=message):
+            AuthoredNumericProjection.model_validate({**authored_payload, **updates})
+
+    receipt = projection.numeric_projection_receipts[0]
+    receipt_payload = receipt.model_dump()
+    with pytest.raises(ValidationError, match="Decimal text is invalid"):
+        NumericProjectionReceiptProjection.model_validate(
+            {**receipt_payload, "project_decimal": "not-decimal"}
+        )
+    alternate = AuthoredNumericProjection(
+        json_type="binary64",
+        authored_value="1.0",
+        binary64_hex="0x1.0000000000000p+0",
+        binary64_bytes_hex="3ff0000000000000",
+    )
+    with pytest.raises(ValidationError, match="authored values disagree"):
+        NumericProjectionReceiptProjection.model_validate(
+            {**receipt_payload, "authored_values": (alternate,)}
+        )
+    rounded_integer = AuthoredNumericProjection(
+        json_type="integer",
+        authored_value="9007199254740992",
+        binary64_hex="0x1.0000000000000p+53",
+        binary64_bytes_hex="4340000000000000",
+    )
+    with pytest.raises(ValidationError, match="ProjectCase Decimal differ"):
+        NumericProjectionReceiptProjection(
+            assertion_id="assertion:rounding-hostile",
+            project_decimal="9007199254740993",
+            projected_binary64_hex="0x1.0000000000000p+53",
+            projected_binary64_bytes_hex="4340000000000000",
+            authored_values=(rounded_integer,),
+        )
+
+    for kwargs, message in (
+        (
+            dict(
+                attempted=True,
+                succeeded=False,
+                warning="bad\x00warning",
+                degraded=False,
+                degraded_reasons=(),
+            ),
+            "forbidden control",
+        ),
+        (
+            dict(
+                attempted=True,
+                succeeded=False,
+                warning="x" * 65_537,
+                degraded=False,
+                degraded_reasons=(),
+            ),
+            "exact bounded string",
+        ),
+        (
+            dict(
+                attempted=True,
+                succeeded=True,
+                warning=None,
+                degraded=False,
+                degraded_reasons=[],
+            ),
+            "exact tuple",
+        ),
+    ):
+        with pytest.raises(ValidationError, match=message):
+            FxIntegrationProjection(**kwargs)
+
+
+def test_projection_graph_rechecks_new_structured_origins(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    projection = project_d3b_result(accepted_result)
+    base = projection.model_dump()
+
+    warning_mismatch = copy.deepcopy(base)
+    warning_mismatch.update(
+        source_outcome="degraded_success",
+        returned_warnings=("caller",),
+        fx_degraded=True,
+    )
+    with pytest.raises(ValidationError, match="returned warnings differ"):
+        D3CResultProjection.model_validate(warning_mismatch)
+
+    degradation_mismatch = copy.deepcopy(base)
+    degradation_mismatch.update(
+        source_outcome="degraded_success",
+        fx_degraded=True,
+    )
+    with pytest.raises(ValidationError, match="FX degradation differs"):
+        D3CResultProjection.model_validate(degradation_mismatch)
+
+    manifest_mismatch = copy.deepcopy(base)
+    manifest_mismatch["engine_manifest"]["config_sha256"] = "f" * 64
+    with pytest.raises(ValidationError, match="manifest digest must match"):
+        D3CResultProjection.model_validate(manifest_mismatch)
+
+    duplicate_receipts = copy.deepcopy(base)
+    duplicate_receipts["numeric_projection_receipts"] = (
+        duplicate_receipts["numeric_projection_receipts"][0],
+        duplicate_receipts["numeric_projection_receipts"][0],
+    )
+    with pytest.raises(ValidationError, match="receipt identities must be unique"):
+        D3CResultProjection.model_validate(duplicate_receipts)
+
+
+def test_private_origin_helpers_cover_resource_exactness_and_config_edges() -> None:
+    with pytest.raises(ResultProjectionError, match="origin_depth_exceeded"):
+        projection_module._detach_frozen_occurrences(None, depth=129)
+    with pytest.raises(ResultProjectionError, match="integer mapping key"):
+        projection_module._detach_frozen_occurrences(MappingProxyType({2**4097: None}))
+    with pytest.raises(ResultProjectionError, match="mapping key is not finite"):
+        projection_module._detach_frozen_occurrences(
+            MappingProxyType({float("nan"): None})
+        )
+    with pytest.raises(ResultProjectionError, match="unsupported exact type"):
+        projection_module._detach_frozen_occurrences(MappingProxyType({True: None}))
+    with pytest.raises(ResultProjectionError, match="container/text volume"):
+        projection_module._detach_frozen_occurrences(
+            MappingProxyType({"a": None}), counts=[10_000, 0, 0]
+        )
+    with pytest.raises(ResultProjectionError, match="container volume"):
+        projection_module._detach_frozen_occurrences((), counts=[10_000, 0, 0])
+    with pytest.raises(ResultProjectionError, match="scalar volume"):
+        projection_module._detach_frozen_occurrences(None, counts=[0, 100_000, 0])
+    with pytest.raises(ResultProjectionError, match="text volume"):
+        projection_module._detach_frozen_occurrences("x", counts=[0, 0, 1_000_000])
+    with pytest.raises(ResultProjectionError, match="unsupported or non-finite"):
+        projection_module._detach_frozen_occurrences(object())
+
+    assert not projection_module._exact_tree_equal((), [], depth=0)
+    assert not projection_module._exact_tree_equal(None, None, depth=129)
+    bool_key = MappingProxyType({True: None})
+    assert not projection_module._exact_tree_equal(bool_key, bool_key)
+    repeated: set[tuple[int, int]] = {(id(bool_key), id(bool_key))}
+    assert projection_module._exact_tree_equal(bool_key, bool_key, compared=repeated)
+    left_tuple = (1.0,)
+    tuple_pairs = {(id(left_tuple), id(left_tuple))}
+    assert projection_module._exact_tree_equal(
+        left_tuple, left_tuple, compared=tuple_pairs
+    )
+    assert not projection_module._exact_tree_equal((1.0,), (2.0,))
+    assert projection_module._exact_key_token(7) == ("integer", 7)
+
+    with pytest.raises(ValueError, match="origin depth"):
+        projection_module._thaw_json_config(None, depth=129)
+    with pytest.raises(TypeError, match="exact strings"):
+        projection_module._thaw_json_config(MappingProxyType({1: None}))
+    assert projection_module._thaw_json_config((1, 2)) == [1, 2]
+    with pytest.raises(TypeError, match="non-JSON-native"):
+        projection_module._thaw_json_config(object())
+
+
+def test_private_route_and_container_helpers_cover_preorigin_refusals(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    root = accepted_result.full_result
+    project_route = next(
+        route
+        for route in D3C_RESULT_FIELD_ROUTES
+        if route.route_id == "route:kpis.project_irr"
+    )
+    missing_root = MappingProxyType(
+        {
+            **dict(root),
+            "scenario_result": MappingProxyType(
+                {
+                    key: value
+                    for key, value in root["scenario_result"].items()
+                    if key != "project_irr"
+                }
+            ),
+        }
+    )
+    matches, reason = projection_module._mirrors_match(
+        missing_root, project_route, root["kpis"]["project_irr"]
+    )
+    assert not matches and "missing exact mirror" in reason
+
+    mismatch_root = MappingProxyType(
+        {
+            **dict(root),
+            "scenario_result": MappingProxyType(
+                {**dict(root["scenario_result"]), "project_irr": 0.5}
+            ),
+        }
+    )
+    accepted, state, _ = projection_module._predicate_result(
+        mismatch_root, project_route, root["kpis"]["project_irr"]
+    )
+    assert not accepted and state is ResultObservationState.NOT_REPRESENTABLE
+
+    cfads_route = next(
+        route
+        for route in D3C_RESULT_FIELD_ROUTES
+        if route.route_id == "route:kpis.total_cfads_usd"
+    )
+    no_rows = MappingProxyType({**dict(root), "annual_rows": ()})
+    assert projection_module._predicate_result(no_rows, cfads_route, 1.0)[1] is (
+        ResultObservationState.NOT_COMPUTED
+    )
+    avg_route = next(
+        route
+        for route in D3C_RESULT_FIELD_ROUTES
+        if route.route_id == "route:kpis.avg_dscr"
+    )
+    no_series_scenario = MappingProxyType(
+        {**dict(root["scenario_result"]), "dscr_series": ()}
+    )
+    no_series = MappingProxyType({**dict(root), "scenario_result": no_series_scenario})
+    assert projection_module._predicate_result(no_series, avg_route, 1.0)[1] is (
+        ResultObservationState.NOT_COMPUTED
+    )
+
+    assert not projection_module._lookup(
+        root, ("full_result", "scenario_result", "wacc", "prudential_npv")
+    ).present
+    assert not projection_module._lookup(
+        MappingProxyType({"intermediate": 1}),
+        ("full_result", "intermediate", "blocked"),
+    ).present
+    malformed_rows = MappingProxyType({**dict(root), "annual_rows": (1.0,)})
+    containers = projection_module._inspected_containers(malformed_rows)
+    assert all("row:0" not in path for path, _, _ in containers)
+    without_rows = MappingProxyType(
+        {key: value for key, value in root.items() if key != "annual_rows"}
+    )
+    assert projection_module._inspected_containers(without_rows)
+    with pytest.raises(ResultProjectionError, match="manifest_not_frozen"):
+        projection_module._manifest_projection({})
+
+
+def test_origin_envelope_receipt_and_postorigin_contract_failures_are_deterministic(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    for field, value, code in (
+        ("request_id", "", "origin_envelope_invalid"),
+        ("project_case_revision", 0, "origin_envelope_invalid"),
+        ("project_case_sha256", "bad", "origin_envelope_invalid"),
+        ("evidence_cutoff", "2026-01-01", "origin_envelope_invalid"),
+    ):
+        tampered = copy.copy(accepted_result)
+        object.__setattr__(tampered, field, value)
+        with pytest.raises(ResultProjectionError, match=code):
+            project_d3b_result(tampered)
+
+    config_key = _replace_result(
+        accepted_result,
+        lambda payload: payload["scenario_result"]["config"].__setitem__(1, None),
+        reconcile_origins=False,
+    )
+    with pytest.raises(ResultProjectionError, match="evaluated_config_invalid"):
+        project_d3b_result(config_key)
+
+    debt = _replace_result(
+        accepted_result,
+        lambda payload: payload["debt_result"].__setitem__("debt_total", 101.0),
+    )
+    with pytest.raises(ResultProjectionError, match="debt_origin_mismatch"):
+        project_d3b_result(debt)
+
+    gateway_warnings = _replace_result(
+        accepted_result,
+        lambda payload: payload.__setitem__("warnings", [1]),
+    )
+    with pytest.raises(ResultProjectionError, match="gateway_warnings_invalid"):
+        project_d3b_result(gateway_warnings)
+
+    degraded = copy.copy(accepted_result)
+    object.__setattr__(degraded, "fx_degraded", True)
+    with pytest.raises(ResultProjectionError, match="fx_degradation_mismatch"):
+        project_d3b_result(degraded)
+
+    outcome = copy.copy(accepted_result)
+    object.__setattr__(outcome, "outcome", "degraded_success")
+    with pytest.raises(ResultProjectionError, match="outcome_origin_mismatch"):
+        project_d3b_result(outcome)
+
+    invalid_receipts = copy.copy(accepted_result)
+    object.__setattr__(invalid_receipts, "numeric_projection_receipts", [])
+    with pytest.raises(ResultProjectionError, match="numeric_receipts_invalid"):
+        project_d3b_result(invalid_receipts)
+
+    wrong_receipt = copy.copy(accepted_result)
+    object.__setattr__(wrong_receipt, "numeric_projection_receipts", (object(),))
+    with pytest.raises(ResultProjectionError, match="numeric_receipt_type_invalid"):
+        project_d3b_result(wrong_receipt)
+
+    empty_authored_receipt = copy.copy(accepted_result.numeric_projection_receipts[0])
+    object.__setattr__(empty_authored_receipt, "authored_values", ())
+    empty_authored = copy.copy(accepted_result)
+    object.__setattr__(
+        empty_authored, "numeric_projection_receipts", (empty_authored_receipt,)
+    )
+    with pytest.raises(
+        ResultProjectionError, match="numeric_receipt_authored_values_invalid"
+    ):
+        project_d3b_result(empty_authored)
+
+    wrong_authored_receipt = copy.copy(accepted_result.numeric_projection_receipts[0])
+    object.__setattr__(wrong_authored_receipt, "authored_values", (object(),))
+    wrong_authored = copy.copy(accepted_result)
+    object.__setattr__(
+        wrong_authored, "numeric_projection_receipts", (wrong_authored_receipt,)
+    )
+    with pytest.raises(
+        ResultProjectionError, match="numeric_authored_value_type_invalid"
+    ):
+        project_d3b_result(wrong_authored)
+
+    malformed_item = copy.copy(
+        accepted_result.numeric_projection_receipts[0].authored_values[0]
+    )
+    object.__setattr__(malformed_item, "binary64_hex", "not-hex")
+    malformed_receipt = copy.copy(accepted_result.numeric_projection_receipts[0])
+    object.__setattr__(malformed_receipt, "authored_values", (malformed_item,))
+    malformed = copy.copy(accepted_result)
+    object.__setattr__(malformed, "numeric_projection_receipts", (malformed_receipt,))
+    with pytest.raises(ResultProjectionError, match="numeric_authored_value_invalid"):
+        project_d3b_result(malformed)
+
+    first = accepted_result.numeric_projection_receipts[0]
+    duplicate = copy.copy(accepted_result.numeric_projection_receipts[1])
+    object.__setattr__(duplicate, "assertion_id", first.assertion_id)
+    duplicate_result = copy.copy(accepted_result)
+    object.__setattr__(
+        duplicate_result, "numeric_projection_receipts", (first, duplicate)
+    )
+    with pytest.raises(ResultProjectionError, match="numeric_receipt_duplicate"):
+        project_d3b_result(duplicate_result)
+
+    invalid_identifier = copy.copy(accepted_result)
+    object.__setattr__(invalid_identifier, "request_id", "caller supplied spaces")
+    with pytest.raises(ResultProjectionError, match="projection_contract_invalid"):
+        project_d3b_result(invalid_identifier)

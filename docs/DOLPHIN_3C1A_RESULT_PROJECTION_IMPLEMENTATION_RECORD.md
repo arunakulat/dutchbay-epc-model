@@ -1,185 +1,235 @@
 # Dolphin 3C-1a result-only projection implementation record
 
-**Status:** implementation candidate; independently reviewable; no D2 package assembly or HOLD
-movement
+**Status:** corrected replacement candidate; exact-SHA review pending; no D2 package assembly or
+HOLD movement
+
 **Protected base:** `e40c13a2fbd4bd974078c4d1dd32e4b1e7ebdf3f` (`origin/main`, PR `#1208` merge)
+
 **Branch/worktree:** `codex/d3c1-result-projection` /
 `/Users/aruna/Downloads/dutchbay-wt-d3c1-result-projection`
+
 **Schema:** `dutchbay.section_result_facade.v1` / `1.0.0`
 
 ## 1. Outcome and boundary
 
-D3C-1a implements the smallest reversible result-translation prerequisite left after the D3B-1
-executor and D3C-0 assembly authority merged. It accepts **exactly one**
+D3C-1a is the smallest reversible result-translation prerequisite left after the D3B-1 executor
+and D3C-0 assembly authority merged. It accepts exactly one
 `analytics.contracts_v14.D3BExecutionSuccess` with outcome `success` or `degraded_success` and
-produces a strict frozen `D3CResultProjection`.
+produces one strict frozen `D3CResultProjection`.
 
-The output is intentionally and structurally **non-authoritative**. It contains:
+The projection is structurally **non-authoritative**. It contains:
 
-- exact D3B origin identities, dates and the observed engine-manifest fields;
-- the exact returned D3B warning tuple, exact FX-degradation flag and mandatory
-  `upstream_warning_channel_not_exhaustive` limitation;
+- exact D3B identities, digests, dates and observed engine-manifest fields;
+- an independently revalidated, occurrence-bounded origin receipt covering the one-call gateway
+  fact, closed validation-module vocabulary, strict `<inline>` full/nested protocol,
+  evaluated-config digest and exact duplicated annual/KPI/debt graphs;
+- every ordered D3B numeric projection receipt with exact ProjectCase Decimal lexical values,
+  authored JSON-number lexemes, binary64 hex and big-endian binary64 bytes;
+- the exact gateway-warning tuple, returned D3B warning tuple, complete structured FX integration,
+  exact FX-degradation flag and mandatory `upstream_warning_channel_not_exhaustive` limitation;
 - one ordered outcome for each of 23 reviewed result-scalar routes;
-- all 20 taxonomy sections in YAML SSOT order, with route candidates and unresolved dependencies
-  only;
-- explicit artifact-only and known-refused path dispositions; and
-- deterministic, value-opaque records for every present undeclared key in each inspected mapping.
+- all 20 taxonomy sections in canonical YAML order, with route candidates and unresolved
+  dependencies only;
+- one immutable reviewed disposition for every inspected upstream path, plus explicit
+  artifact-only and known-refused summaries; and
+- deterministic value-opaque records for every present undeclared inspected key.
 
-It cannot express D2 `SectionRecord`, register records, `RunManifest`, capability disposition,
-artifact/content digests, reconciliation, `FeasibilityReportPackage`, section completion,
+It cannot express D2 `SectionRecord`, registry records, package `RunManifest`, capability outcome,
+artifact/content digests, package reconciliation, `FeasibilityReportPackage`, section completion,
 applicability, evidence sufficiency, review, achieved grade, release, reliance, lender acceptance,
 Board approval, deployment or publication. It receives no `ProjectCase`, `EvaluationRequest` or
 `AcceptedAssemblyAuthority`; those reciprocal bindings remain D3C-1b/D3C-2 work.
 
 ## 2. Full-harness ingress and scope correction
 
-The recruitment corpus was freshly re-ingressed from the current protected head, not carried from
-the prior session:
+The recruitment corpus was freshly re-ingressed from the current protected head:
 
-1. the canonical GWTF CSV and the current canonical definitions of CASPER, CESSPIT and CCCDIR;
+1. the canonical GWTF CSV and current canonical CASPER, CESSPIT and CCCDIR definitions;
 2. the newest PERSIST-01 handover and named predecessor;
 3. D0 discovery/assurance findings and implementation records;
 4. D1 contract, validation, audit and independent-review records;
 5. D2 package schema, ledger, implementation and independent-review records;
-6. D3A, D3B-0, D3B-1 and D3C-0 charters, implementations and independent reviews;
+6. D3A, D3B-0, D3B-1 and D3C-0 charters, implementations and reviews;
 7. both D3C design records and the binding D3C implementation acceptance ledger; and
 8. the D3D grade/release charter, kept outside this dolphin.
 
 The original next-step description combined result translation and complete package assembly. The
-domain and assurance challengers independently classified that as a whale. They required this
-result-only D3C-1a split before a writer lease:
+domain and assurance challengers independently classified it as a whale and required:
 
-- D3C-1a: this exact immutable observation projection;
-- D3C-1b: later reciprocal ProjectCase/request/authority binding and candidate register records;
+- D3C-1a: this exact immutable result observation;
+- D3C-1b: later reciprocal ProjectCase/request/authority binding and candidate D2 records;
 - D3C-2: later ungraded held package assembly; and
-- D3D: separate achieved-grade and release policy, unchanged.
+- D3D: separate achieved-grade and release policy.
 
-The scope correction is material. A genuine public-gateway run emitted runtime warnings while its
-accepted D3B warning tuple remained empty and its outcome was `success`. D3C-1a therefore preserves
-the returned tuple exactly but **always** carries the warning-channel limitation; an empty tuple is
-never described as proof that no upstream warning occurred.
+A genuine public-gateway run emitted transient runtime warnings while its accepted D3B warning
+tuple remained empty and its outcome was `success`. D3C-1a preserves the returned tuple exactly but
+always carries the warning-channel limitation; an empty tuple never proves that no upstream warning
+occurred.
 
-## 3. Recruitment, leases and recovery
+## 3. Rejected first candidate and correction
 
-Recruitment followed the controlling separation-of-duties and lease rules:
+The first exact candidate, commit `432061b9aa3b4b0aab958dbabcdf0e4719e9f9b7`, was independently
+**rejected** by both domain and assurance challengers. The branch was not pushed and no PR was
+opened. Their convergent blockers were:
 
-- one renewable/finance-domain challenger completed a read-only pre-lease disposition;
-- one assurance/contract challenger completed a separate read-only pre-lease disposition;
-- the initial exclusive writer passed the corpus and hostile-drill gate, received a six-file lease,
-  but produced only one untracked contract draft after two bounded prompts;
-- that lease was explicitly revoked and acknowledged before any successor was allowed to write;
-- a successor writer completed fresh ingress and received the same exclusive lease, but likewise
-  failed to put its stated corrections on disk after two bounded prompts;
-- the successor lease was explicitly revoked and acknowledged; and
-- the coordinator then invoked the documented stalled-writer takeover exception as the sole writer.
+- incomplete independent D3B-origin reconciliation;
+- a blanket zero-is-ambiguous rule contrary to the per-field ledger;
+- an expected-key allowlist that could hide deliberately unclassified paths;
+- an incorrect pre-IDC balloon denominator;
+- dropped D3B numeric receipts and structured FX facts;
+- import-time taxonomy filesystem I/O; and
+- missing persisted schema, cold-import, no-I/O and real hash-seed traversal controls.
 
-No two writers held a live lease concurrently. The original draft was not discarded: its exact
-bytes (`SHA-256 2af8fee946e29ccd904f39d288cd05b1fb1a147fd258bb9d26238f251a17d667`) are retained as Git
-blob `16bc7ae293063ba5804b13ba8af73c52f1f13010` under the recovery tag
-`recovery/d3c1a-contract-draft-2af8fee`. The final candidate corrects that draft rather than hiding
-its failed controls.
+The replacement preserves that rejection as evidence and corrects only the chartered result-only
+boundary. No D3C-1b, D3C-2 or D3D concern was pulled into this branch.
 
-## 4. Contract and translation controls
+## 4. Recruitment, leases and recovery
 
-### 4.1 Exact values without D2 authority leakage
+Recruitment followed the separation-of-duties and lease rules:
 
-The leaf contract package imports neither the evaluator nor `analytics.contracts_v14`. It does not
-reuse D2 `CanonicalValue` or `OutputClass.CANONICAL`. Its local value shape is an engine-result
-**observation** with:
+- one renewable/finance-domain challenger and one assurance/contract challenger completed
+  separate read-only pre-lease dispositions;
+- the initial writer passed the corpus and hostile drill, received an exclusive six-file lease,
+  but produced only one untracked draft after two bounded prompts;
+- that lease was revoked and acknowledged before a successor wrote;
+- the successor completed fresh ingress and received the same exclusive lease, but likewise failed
+  to put stated corrections on disk after two bounded prompts;
+- that lease was revoked and acknowledged; and
+- the coordinator invoked the documented stalled-writer takeover exception as sole writer.
 
-- exact full unrounded decimal text from `Decimal.from_float`;
-- canonical finite `float.hex()` identity, accepting normals, signed zero and subnormals;
+No two writers held a live lease concurrently. The first draft remains recoverable: exact bytes
+SHA-256 `2af8fee946e29ccd904f39d288cd05b1fb1a147fd258bb9d26238f251a17d667`, Git blob
+`16bc7ae293063ba5804b13ba8af73c52f1f13010`, annotated recovery tag
+`recovery/d3c1a-contract-draft-2af8fee` (tag object
+`f5fdcb7425a25867b5d6c9bc4903794605e9dd5f`).
+
+Assurance's no-filesystem-I/O blocker required one additional pure leaf,
+`taxonomy_identity.py`. It is a generated identity projection, not a competing authored SSOT: its
+canonical YAML path, exact source SHA-256 and ordered section IDs are bound by committed tests.
+
+## 5. Contract and translation controls
+
+### 5.1 Exact values without D2 authority leakage
+
+The leaf contract imports neither the evaluator nor `analytics.contracts_v14`. It does not reuse D2
+`CanonicalValue` or `OutputClass.CANONICAL`. Its local engine-result observation preserves:
+
+- full unrounded `Decimal.from_float` text;
+- canonical finite `float.hex()` identity, including signed zero and subnormal values;
 - exact big-endian IEEE-754 binary64 bytes;
-- a reviewed static unit;
-- mandatory reviewed meaningful precision as metadata, never rounding or accuracy; and
+- a reviewed static unit and mandatory meaningful-precision metadata; and
 - a single static route and section-candidate set.
 
-All identity-critical string validators run before Pydantic conversion and require exact `str`, so
-numeric inputs and string subclasses cannot be coerced into accepted identities. SHA-256, Git
-commit, UTC timestamp, integer lexical and binary64 byte/hex shapes are separately validated.
+Identity-critical string validators run before Pydantic conversion and require exact `str`.
+SHA-256, Git commit, UTC timestamp, integer lexical, authored-number lexical and binary64 byte/hex
+shapes are independently validated.
 
-### 4.2 Closed translation and absence states
+### 5.2 Independent origin reconciliation
 
-`analytics.feasibility_result_projection.project_d3b_result()` is the only public translation
-entry point. Its signature contains one parameter and the module imports no evaluator, finance,
-application, API, renderer, persistence, network or filesystem surface. It never recalculates IRR,
-NPV, DSCR, CFADS, debt, balloon or FX values.
+`analytics.feasibility_result_projection.project_d3b_result()` is the only public entry point. Its
+signature has one parameter and imports no evaluator, finance, application, API, renderer,
+persistence, network or filesystem surface.
 
-Each reviewed route becomes exactly one of:
+Before any scalar route is inspected, the adapter independently detaches and validates the exact
+frozen graph with depth/container/scalar/text occurrence bounds and cycle refusal. Its comparator
+distinguishes scalar types, mapping-key types and IEEE-754 bytes, including zero sign. It rechecks:
 
-- `carried` — exact finite type, mirror and route predicate satisfied;
-- `ambiguous_default` — exact `+0.0` or `-0.0` without a computation-status receipt;
-- `upstream_none` — the exact key exists with `None`;
-- `not_computed` — a required exact source/status/series/context is absent; or
-- `not_representable` — wrong exact type, missing/mismatched mirror or failed closed predicate.
+- exactly one gateway call and the closed validation-module vocabulary;
+- exact success/degraded outcome, top-warning and structured-FX coherence;
+- strict top/nested `config_path` and `validation_mode` literals;
+- complete top/nested annual-row, KPI and debt graphs;
+- ScenarioResult config against the evaluated-config digest;
+- KPI/ScenarioResult/debt reciprocal mirrors; and
+- exact manifest identity and evaluated digest.
 
-FX statistics are always unavailable in D3C-1a even when present because the required same-direction
-ProjectCase conversion, request price basis, annual timeline and source/date binding are deliberately
-outside this result-only slice.
+It imports none of D3B's private comparator or private gateway validator. Every numeric projection
+receipt is revalidated and projected in order with unique assertion identity.
 
-### 4.3 Unknown and artifact fields
+### 5.3 Route states, zero policy, balloon basis and FX context
 
-Every mapping that the translator traverses has a closed expected-key catalogue, including nested
-principal, WACC, equity-performance and annual-row mappings. Present undeclared keys are sorted by
-exact key kind and identity, then surfaced deterministically without copying or inspecting their
-values. String, integer, boolean and binary64 key identities are distinct; binary64 keys carry both
-canonical text and bytes. More than 512 unknowns, unsupported key types, unbounded/control-bearing
-string identities or malformed origin structures fail closed with a bounded code and RFC 6901
-pointer.
+Each reviewed route becomes exactly one of `carried`, `ambiguous_default`, `upstream_none`,
+`not_computed` or `not_representable`.
 
-Annual rows, schedules and the FX curve remain artifact-only. This slice checks finite
-`annual_rows[*].cfads_usd` only as the accepted predicate for carrying the already-computed total; it
-does not sum or type the rows and does not mint an artifact digest.
+Only `project_irr` and `project_npv` declare exact zero as `ambiguous_default`, because their ledger
+rows identify zero as an upstream-default ambiguity. Exact finite zero remains carryable for every
+other authorized family, including zero LKR/USD/DFI tranche principal, zero total IDC and a fully
+amortized balloon; signed-zero bytes remain exact.
 
-## 5. Verification evidence
+`balloon_pct` is reconciled against only the explicit IDC-inclusive `principal_by_tranche` basis and
+`balloon_remaining`. Missing, nonpositive, negative or disagreeing bases are
+`not_representable`; pre-IDC `debt_total` is never substituted. The check validates an accepted
+output against its explicit operands and never emits a recomputed replacement.
 
-The focused suite contains 71 tests and covers both changed implementation modules at **100% line
-and branch coverage** (586 statements and 240 branches). It includes:
+FX statistics distinguish absent, upstream `None`, wrong-type and present-but-context-unbound
+states. Present finite values remain `not_representable` until D3C-1b supplies the exact directed
+ProjectCase conversion, request price basis, timeline and source/date binding.
 
-- a genuine public `evaluate_with_overrides(..., return_full_result=True)` path reached only through
-  the accepted D3B executor, then handed to D3C-1a without a second call;
-- an evaluator spy and import-direction AST control proving zero D3C gateway/finance calls;
-- exact subnormal and signed-zero identity controls;
-- absent, `None`, wrong-type, mirror-mismatch, empty-series, no-live-debt, balloon-basis,
-  prudential-status and FX-context refusals;
-- string/integer/boolean/binary64 unknown-key separation, insertion-order invariance, value-opacity
-  and bounded-volume refusal;
-- strict model/schema identity, frozen/extra-forbid, JSON round-trip and caller-constructed-substitute
-  controls;
-- post-construction origin-tampering and manifest-identity refusals; and
-- fresh-process hash-seed invariance of the first exact validation error.
+### 5.4 Total path dispositions and pure taxonomy binding
 
-The genuine public oracle produced 23 route outcomes: 17 `carried`, four `not_computed`, and two
-`ambiguous_default`; it surfaced 59 present undeclared keys and nine static excluded-field records.
-Those counts describe that fixture only and confer no grade or release meaning.
+The old expected-key allowlist was replaced by an immutable path-disposition catalogue. Every
+inspected path has exactly one role: route candidate, mirror operand, predicate operand, origin
+invariant, manifest projection, structured projection/container, opaque artifact or known refusal.
+Inspected-key sets are derived from the catalogue, so an expected-but-silent path cannot exist.
 
-The pre-change `tests/contracts` baseline was `1200 passed, 1 warning`. The candidate receipts are:
+Present undeclared keys are ordered by exact key kind and identity without copying their values.
+String, integer, boolean and binary64 key identities are distinct; binary64 keys retain hex and
+bytes. More than 512 unknowns, unsupported key types or resource-bound violations fail with a
+bounded code and pointer.
 
-| Gate | Candidate result |
+The contract/translator performs no filesystem I/O. The import-safe taxonomy identity leaf carries
+the generated ordered IDs and source SHA; tests bind both back to
+`config/feasibility_sections.yaml`. Runtime metrics, metadata, annual columns, schedules and the FX
+curve remain explicitly opaque/artifact-only. Finite `annual_rows[*].cfads_usd` is checked only as a
+predicate for the already-computed total; it is never summed.
+
+## 6. Verification evidence
+
+The corrected focused suite contains 111 tests and covers all three changed implementation modules
+at **100% line and branch coverage** (951 statements and 416 branches). Persistent controls include:
+
+- one genuine public gateway reached through D3B and then projected without a second call;
+- an evaluator spy and import-direction control proving no D3C gateway/finance invocation;
+- exact subnormal, per-route zero, signed-zero and balloon-basis oracles;
+- absent/`None`/wrong-type/context-unbound state separation;
+- exact unknown-key separation, ordering, value-opacity and resource bounds;
+- both Draft 2020-12 schema modes, canonical JSON validation, round trip and fresh-schema isolation;
+- the complete gateway/module/status/path/mode/config/duplicate/warning/FX/receipt hostile matrix;
+- taxonomy checksum parity, fresh-process no-I/O import/call and three cold-import orders;
+- total static and observed path-disposition parity; and
+- hash-seed-stable real unknown traversal and first origin failure.
+
+The corrected genuine public oracle produced 23 route outcomes: 19 `carried`, one `not_computed`
+and three `not_representable`. Legitimate zero LKR/DFI principals are carried; three present FX
+statistics remain context-unbound. It projected four ordered numeric receipts, surfaced no
+unclassified live key and emitted fourteen static exclusion summaries. These counts describe that
+fixture only and confer no grade or release meaning.
+
+The pre-change `tests/contracts` baseline was `1200 passed, 1 warning`. Replacement receipts:
+
+| Gate | Replacement candidate result |
 |---|---:|
-| Focused D3C-1a hostile/oracle suite | `71 passed` |
-| Focused changed-module line/branch coverage | `100.00%` (`586` statements, `240` branches) |
-| Complete `tests/contracts` gate | `1271 passed` |
-| Full governed ordinary suite | `7292 passed, 18 skipped, 24 warnings` |
-| Full governed coverage floor | `95.25%` (`>=95%` required) |
-| Narrow mypy over both implementation modules | `Success: no issues found` |
+| Focused D3C-1a hostile/oracle suite | `111 passed` |
+| Focused changed-module line/branch coverage | `100.00%` (`951` statements, `416` branches) |
+| Ruff / Black / isort / Bandit | pass |
+| Narrow mypy over three implementation modules | `Success: no issues found` |
+| Complete `tests/contracts` gate | `1312 passed, 1 inherited warning` |
+| Full governed ordinary suite | pending replacement exact-head run |
+| Full governed coverage floor | pending replacement exact-head run (`>=95%` required) |
 
-The inherited full-suite warnings and skips include optional-dependency/qualification isolation and
-existing deprecation/runtime warnings; they are not D3C success evidence and do not lift any HOLD.
-Exact-head CI remains the merge authority and is recorded in the PR rather than predicted here.
+Inherited warnings/skips are not D3C success evidence. Exact-head CI remains merge authority and is
+recorded in the PR rather than predicted here.
 
-## 6. Explicit holds and next dolphins
+## 7. Explicit holds and next dolphins
 
-This candidate changes no financial mathematics or committed result, so it does not change
+This candidate changes no financial mathematics or committed result and therefore does not change
 `VERSION`. It does not lift issue `#1110`, release, lender, Board, deployment, evidence or
 publication HOLDs.
 
-The next permissible work is **not** to expand this slice in place. After independent exact-SHA
-acceptance and protected-main merge:
+After independent exact-SHA acceptance and protected-main merge, the next permissible work is:
 
-1. charter D3C-1b to bind one exact projection to the one exact D3A `ProjectCase`, one exact
-   `EvaluationRequest` and one selected accepted D3C-0 authority, with reciprocal origin checks;
-2. emit candidate D2 register records only after those checks, leaving completeness, evidence,
-   review and grade facts explicit and unresolved;
-3. keep D3C-2 package construction separately reversible; and
-4. leave grade/release aggregation exclusively to D3D.
+1. D3C-1b: bind one exact projection to one exact D3A `ProjectCase`, one exact
+   `EvaluationRequest` and one selected accepted D3C-0 authority;
+2. emit candidate D2 records only after reciprocal origin checks, retaining explicit unresolved
+   completeness/evidence/review/grade facts;
+3. keep D3C-2 held package construction separately reversible; and
+4. leave achieved grade/release aggregation exclusively to D3D.

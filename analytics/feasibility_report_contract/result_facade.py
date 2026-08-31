@@ -27,8 +27,7 @@ from pydantic import (
     model_validator,
 )
 
-from analytics.feasibility_sections import load_feasibility_taxonomy
-
+from .taxonomy_identity import FEASIBILITY_SECTION_IDS
 from .vocabulary import StrictFrozenModel
 
 RESULT_FACADE_SCHEMA_ID: Final = "dutchbay.section_result_facade.v1"
@@ -59,6 +58,14 @@ def _exact_text(value: object) -> str:
         raise ValueError("value must be exact bounded nonempty text")
     if any(ord(character) < 32 and character not in "\t\n\r" for character in value):
         raise ValueError("exact text contains a forbidden control character")
+    return value
+
+
+def _exact_warning_text(value: object) -> str:
+    if type(value) is not str or len(value) > _MAX_WARNING_TEXT:
+        raise ValueError("warning text must be an exact bounded string")
+    if any(ord(character) < 32 and character not in "\t\n\r" for character in value):
+        raise ValueError("warning text contains a forbidden control character")
     return value
 
 
@@ -108,6 +115,7 @@ def _exact_binary64_bytes(value: object) -> str:
 
 ExactStableId: TypeAlias = Annotated[str, BeforeValidator(_exact_stable_id)]
 ExactText: TypeAlias = Annotated[str, BeforeValidator(_exact_text)]
+ExactWarningText: TypeAlias = Annotated[str, BeforeValidator(_exact_warning_text)]
 ExactSha256: TypeAlias = Annotated[str, BeforeValidator(_exact_sha256)]
 ExactGitCommit: TypeAlias = Annotated[str, BeforeValidator(_exact_git_commit)]
 ExactUtcTimestamp: TypeAlias = Annotated[str, BeforeValidator(_exact_utc_timestamp)]
@@ -169,6 +177,27 @@ class ResultCarryPredicate(str, Enum):
     PROJECT_CONTEXT_REQUIRED = "project_context_required"
 
 
+class ResultZeroPolicy(str, Enum):
+    """Per-route treatment of an exact binary64 zero."""
+
+    ALLOW_EXACT = "allow_exact"
+    AMBIGUOUS_DEFAULT = "ambiguous_default"
+
+
+class ResultPathDisposition(str, Enum):
+    """One reviewed purpose for every inspected upstream result path."""
+
+    ROUTE_CANDIDATE = "route_candidate"
+    EXACT_MIRROR_OPERAND = "exact_mirror_operand"
+    CARRY_PREDICATE_OPERAND = "carry_predicate_operand"
+    ORIGIN_INVARIANT = "origin_invariant"
+    MANIFEST_PROJECTION = "manifest_projection"
+    STRUCTURED_PROJECTION = "structured_projection"
+    STRUCTURED_CONTAINER = "structured_container"
+    OPAQUE_ARTIFACT = "opaque_artifact"
+    KNOWN_REFUSED = "known_refused"
+
+
 class ResultPrecisionPolicy(str, Enum):
     """Meaningful precision is metadata, never display rounding or accuracy."""
 
@@ -198,6 +227,7 @@ class ResultFieldRoute(StrictFrozenModel):
     precision_policy: Literal[ResultPrecisionPolicy.REVIEWED_FIELD_TABLE_V1]
     output_class: Literal[ResultObservationClass.ENGINE_RESULT_OBSERVATION]
     carry_predicate: ResultCarryPredicate
+    zero_policy: ResultZeroPolicy
     unresolved_dependency_ids: Annotated[tuple[ExactStableId, ...], Field(max_length=8)]
 
     @model_validator(mode="after")
@@ -223,6 +253,11 @@ class ResultFieldRoute(StrictFrozenModel):
         elif self.value_type is not ResultValueType.DECIMAL_TEXT:
             raise ValueError("binary64 route requires exact decimal observation text")
         if (
+            self.scalar_kind is ResultScalarKind.INTEGER
+            and self.zero_policy is not ResultZeroPolicy.ALLOW_EXACT
+        ):
+            raise ValueError("integer route cannot declare binary64 zero ambiguity")
+        if (
             self.carry_predicate is ResultCarryPredicate.PROJECT_CONTEXT_REQUIRED
             and not self.unresolved_dependency_ids
         ):
@@ -245,6 +280,7 @@ def _route(
     *,
     mirrors: tuple[tuple[str, ...], ...] = (),
     scalar_kind: ResultScalarKind = ResultScalarKind.BINARY64,
+    zero_policy: ResultZeroPolicy = ResultZeroPolicy.ALLOW_EXACT,
     dependencies: tuple[str, ...] = (),
 ) -> ResultFieldRoute:
     return ResultFieldRoute(
@@ -263,6 +299,7 @@ def _route(
         precision_policy=ResultPrecisionPolicy.REVIEWED_FIELD_TABLE_V1,
         output_class=ResultObservationClass.ENGINE_RESULT_OBSERVATION,
         carry_predicate=predicate,
+        zero_policy=zero_policy,
         unresolved_dependency_ids=dependencies,
     )
 
@@ -276,6 +313,7 @@ D3C_RESULT_FIELD_ROUTES: Final[tuple[ResultFieldRoute, ...]] = (
         8,
         ResultCarryPredicate.FINITE_NONZERO_EXACT_MIRRORS,
         mirrors=(("full_result", "scenario_result", "project_irr"),),
+        zero_policy=ResultZeroPolicy.AMBIGUOUS_DEFAULT,
     ),
     _route(
         "route:kpis.equity_irr",
@@ -296,6 +334,7 @@ D3C_RESULT_FIELD_ROUTES: Final[tuple[ResultFieldRoute, ...]] = (
         0,
         ResultCarryPredicate.FINITE_NONZERO_EXACT_MIRRORS,
         mirrors=(("full_result", "scenario_result", "project_npv"),),
+        zero_policy=ResultZeroPolicy.AMBIGUOUS_DEFAULT,
     ),
     _route(
         "route:kpis.project_npv_prudential",
@@ -457,176 +496,353 @@ if len(set(_SOURCE_PATHS)) != len(_SOURCE_PATHS):  # pragma: no cover
     raise RuntimeError("D3C result route source paths are not unique")
 
 
-D3C_INSPECTED_LAYER_KEYS: Final[Mapping[tuple[str, ...], frozenset[str]]] = (
-    MappingProxyType(
-        {
-            ("full_result",): frozenset(
-                {
-                    "status",
-                    "config_path",
-                    "validation_mode",
-                    "scenario_result",
-                    "kpis",
-                    "annual_rows",
-                    "debt_result",
-                    "equity_distribution",
-                    "metrics",
-                    "fx_integration",
-                    "run_manifest",
-                    "warnings",
-                }
-            ),
-            ("full_result", "scenario_result"): frozenset(
-                {
-                    "scenario_name",
-                    "config_path",
-                    "project_npv",
-                    "project_irr",
-                    "dscr_series",
-                    "min_dscr",
-                    "max_debt_usd",
-                    "wacc",
-                    "discount_rate_used",
-                    "wacc_label",
-                    "validation_mode",
-                    "config",
-                    "annual_rows",
-                    "debt_result",
-                    "kpis",
-                    "debt_profile",
-                    "debt_covenants",
-                    "metadata",
-                    "wacc_is_real",
-                    "fx_block",
-                    "fx_curve",
-                    "fx_risk_profile",
-                    "cashflow",
-                    "equity_performance",
-                }
-            ),
-            ("full_result", "kpis"): frozenset(
-                {
-                    *(
-                        route.source_path[-1]
-                        for route in D3C_RESULT_FIELD_ROUTES
-                        if route.source_path[1] == "kpis"
-                    ),
-                    "prudential_rate_used",
-                    "fx_match_ratio",
-                    "hedging_coverage_pct",
-                    "var_95_usd_million",
-                    "cvar_95_usd_million",
-                }
-            ),
-            ("full_result", "debt_result"): frozenset(
-                {
-                    *(
-                        route.source_path[2]
-                        for route in D3C_RESULT_FIELD_ROUTES
-                        if route.source_path[1] == "debt_result"
-                    ),
-                    "debt_total",
-                    "min_dscr",
-                    "llcr",
-                    "plcr",
-                    "dscr_by_year",
-                    "principal_schedule",
-                    "interest_schedule",
-                    "principal_by_tranche",
-                }
-            ),
-            ("full_result", "equity_distribution"): frozenset(
-                {"status", "equity_irr", "distributions", "audit"}
-            ),
-            ("full_result", "fx_integration"): frozenset(
-                {"attempted", "succeeded", "warning", "degraded", "degraded_reasons"}
-            ),
-            ("full_result", "run_manifest"): frozenset(
-                {
-                    "config_sha256",
-                    "engine_version",
-                    "git_sha",
-                    "generated_at",
-                    "seed",
-                    "validation_mode",
-                    "manifest_schema_version",
-                }
-            ),
-            ("full_result", "debt_result", "principal_by_tranche"): frozenset(
-                {"lkr", "usd", "dfi"}
-            ),
-            ("full_result", "scenario_result", "wacc"): frozenset(
-                {"base", "prudential_rate", "prudential_npv", "meta"}
-            ),
-            ("full_result", "scenario_result", "equity_performance"): frozenset(
-                {"equity_irr", "equity_npv", "equity_multiple", "metadata"}
-            ),
-            ("full_result", "annual_rows", "*"): frozenset(
-                {
-                    "year",
-                    "gross_kwh",
-                    "grid_loss",
-                    "net_kwh",
-                    "revenue_lkr",
-                    "generation_revenue_lkr",
-                    "bess_revenue_lkr",
-                    "success_fee_lkr",
-                    "env_surcharge_lkr",
-                    "social_levy_lkr",
-                    "total_statutory_deductions_lkr",
-                    "opex_usd",
-                    "fx_rate",
-                    "opex_lkr",
-                    "senior_fee_lkr",
-                    "ebitda_lkr",
-                    "pretax_cfads_lkr",
-                    "total_depreciation_lkr",
-                    "interest_expense_lkr",
-                    "taxable_income_lkr",
-                    "tax_lkr",
-                    "posttax_cfads_lkr",
-                    "risk_haircut_pct",
-                    "risk_haircut_amount_lkr",
-                    "bess_augmentation_capex_lkr",
-                    "cfads_final_lkr",
-                    "cfads_risk_adjusted_lkr",
-                    "revenue_usd",
-                    "cfads_usd",
-                    "effective_tax_rate",
-                    "tax_holiday_applied",
-                    "carried_forward_losses",
-                    "wht_on_interest",
-                    "cf_pre_debt",
-                    "debt_service_total",
-                    "interest_usd",
-                    "balloon_resolution",
-                    "cf_after_debt",
-                }
-            ),
-        }
+_S10 = "capex_opex_contingency_procurement"
+_S20 = "appendices_provenance_audit_trail"
+
+_path_dispositions: dict[tuple[str, ...], ResultPathDisposition] = {}
+
+
+def _declare_path(path: tuple[str, ...], disposition: ResultPathDisposition) -> None:
+    if path in _path_dispositions:  # pragma: no cover - static authoring guard
+        raise RuntimeError(f"duplicate D3C result-path disposition: {path!r}")
+    _path_dispositions[path] = disposition
+
+
+for _route_item in D3C_RESULT_FIELD_ROUTES:
+    _declare_path(
+        _route_item.source_path,
+        ResultPathDisposition.ROUTE_CANDIDATE,
     )
+    for _mirror_path in _route_item.mirror_paths:
+        _declare_path(
+            _mirror_path,
+            ResultPathDisposition.EXACT_MIRROR_OPERAND,
+        )
+
+for _path, _disposition in (
+    # Root and duplicated ScenarioResult origin protocol.
+    (("full_result", "status"), ResultPathDisposition.ORIGIN_INVARIANT),
+    (("full_result", "config_path"), ResultPathDisposition.ORIGIN_INVARIANT),
+    (("full_result", "validation_mode"), ResultPathDisposition.ORIGIN_INVARIANT),
+    (("full_result", "scenario_result"), ResultPathDisposition.ORIGIN_INVARIANT),
+    (("full_result", "kpis"), ResultPathDisposition.ORIGIN_INVARIANT),
+    (("full_result", "annual_rows"), ResultPathDisposition.ORIGIN_INVARIANT),
+    (("full_result", "debt_result"), ResultPathDisposition.ORIGIN_INVARIANT),
+    (
+        ("full_result", "equity_distribution"),
+        ResultPathDisposition.STRUCTURED_CONTAINER,
+    ),
+    (("full_result", "metrics"), ResultPathDisposition.OPAQUE_ARTIFACT),
+    (("full_result", "fx_integration"), ResultPathDisposition.STRUCTURED_PROJECTION),
+    (("full_result", "run_manifest"), ResultPathDisposition.ORIGIN_INVARIANT),
+    (("full_result", "warnings"), ResultPathDisposition.STRUCTURED_PROJECTION),
+    (
+        ("full_result", "scenario_result", "scenario_name"),
+        ResultPathDisposition.ORIGIN_INVARIANT,
+    ),
+    (
+        ("full_result", "scenario_result", "config_path"),
+        ResultPathDisposition.ORIGIN_INVARIANT,
+    ),
+    (
+        ("full_result", "scenario_result", "validation_mode"),
+        ResultPathDisposition.ORIGIN_INVARIANT,
+    ),
+    (
+        ("full_result", "scenario_result", "config"),
+        ResultPathDisposition.ORIGIN_INVARIANT,
+    ),
+    (
+        ("full_result", "scenario_result", "annual_rows"),
+        ResultPathDisposition.ORIGIN_INVARIANT,
+    ),
+    (
+        ("full_result", "scenario_result", "debt_result"),
+        ResultPathDisposition.ORIGIN_INVARIANT,
+    ),
+    (
+        ("full_result", "scenario_result", "kpis"),
+        ResultPathDisposition.ORIGIN_INVARIANT,
+    ),
+    (
+        ("full_result", "scenario_result", "metadata"),
+        ResultPathDisposition.OPAQUE_ARTIFACT,
+    ),
+    (
+        ("full_result", "scenario_result", "dscr_series"),
+        ResultPathDisposition.CARRY_PREDICATE_OPERAND,
+    ),
+    (
+        ("full_result", "scenario_result", "wacc"),
+        ResultPathDisposition.STRUCTURED_CONTAINER,
+    ),
+    (
+        ("full_result", "scenario_result", "equity_performance"),
+        ResultPathDisposition.STRUCTURED_CONTAINER,
+    ),
+    *(
+        (
+            ("full_result", "scenario_result", _name),
+            ResultPathDisposition.KNOWN_REFUSED,
+        )
+        for _name in ("discount_rate_used", "wacc_label", "wacc_is_real")
+    ),
+    *(
+        (
+            ("full_result", "scenario_result", _name),
+            ResultPathDisposition.OPAQUE_ARTIFACT,
+        )
+        for _name in (
+            "debt_profile",
+            "debt_covenants",
+            "fx_block",
+            "fx_curve",
+            "fx_risk_profile",
+            "cashflow",
+        )
+    ),
+    # KPI aliases/statistics are known but deliberately not carried by D3C-1a.
+    (
+        ("full_result", "kpis", "prudential_rate_used"),
+        ResultPathDisposition.CARRY_PREDICATE_OPERAND,
+    ),
+    *(
+        (
+            ("full_result", "kpis", _name),
+            ResultPathDisposition.KNOWN_REFUSED,
+        )
+        for _name in (
+            "scenario_name",
+            "final_cfads_usd",
+            "mean_operational_cfads_usd",
+            "dscr_series",
+            "dscr_min",
+            "min_dscr_period",
+            "dscr_max",
+            "dscr_mean",
+            "dscr_median",
+            "dscr_p10",
+            "dscr_p90",
+            "dscr_std",
+            "total_idc_usd",
+            "npv",
+            "irr",
+            "discount_rate_used",
+            "wacc_label",
+            "wacc_is_real",
+            "balloon_pct",
+            "balloon_residual",
+            "balloon_covenant_breach",
+            "equity_distribution_status",
+            "equity_npv",
+            "equity_multiple",
+            "equity_moic",
+            "equity_payback_period_years",
+            "total_equity_distributed_usd",
+            "average_equity_cash_on_cash",
+            "equity_covenant_locked_years",
+            "fx_match_ratio",
+            "hedging_coverage_pct",
+            "var_95_usd_million",
+            "cvar_95_usd_million",
+        )
+    ),
+    # Debt containers, mirrors, predicates, schedules and unit-ambiguous aliases.
+    (
+        ("full_result", "debt_result", "principal_by_tranche"),
+        ResultPathDisposition.STRUCTURED_CONTAINER,
+    ),
+    *(
+        (
+            ("full_result", "debt_result", _name),
+            ResultPathDisposition.OPAQUE_ARTIFACT,
+        )
+        for _name in (
+            "lkr",
+            "usd",
+            "dfi",
+            "idc_by_tranche",
+            "audit_status",
+            "debt_outstanding",
+            "debt_service_total",
+            "interest_total",
+            "total_service",
+            "senior_fee_usd",
+            "senior_fee_rate",
+            "dscr_series",
+            "raw_dscr_series",
+            "dscr_by_year",
+            "annual_row_debt_period_map",
+            "cfads_bridge_debt_period",
+            "balloon_treatment",
+            "balloon_resolution",
+            "balloon_residual",
+            "balloon_covenant_breach",
+            "max_balloon_pct",
+            "debt_schedules",
+            "dual_dscr",
+            "funding",
+            "principal_schedule",
+            "interest_schedule",
+        )
+    ),
+    (
+        ("full_result", "debt_result", "total_idc_m"),
+        ResultPathDisposition.KNOWN_REFUSED,
+    ),
+    # Equity status is a predicate; the remaining artifact stays opaque.
+    (
+        ("full_result", "equity_distribution", "status"),
+        ResultPathDisposition.CARRY_PREDICATE_OPERAND,
+    ),
+    *(
+        (
+            ("full_result", "equity_distribution", _name),
+            ResultPathDisposition.OPAQUE_ARTIFACT,
+        )
+        for _name in (
+            "success",
+            "scenario_name",
+            "equity_irr",
+            "distributions",
+            "audit",
+            "equity_cashflows_usd",
+            "annual_distributions",
+            "equity_summary",
+            "metadata",
+        )
+    ),
+    # Structured FX and manifest projections.
+    *(
+        (
+            ("full_result", "fx_integration", _name),
+            ResultPathDisposition.STRUCTURED_PROJECTION,
+        )
+        for _name in (
+            "attempted",
+            "succeeded",
+            "warning",
+            "degraded",
+            "degraded_reasons",
+        )
+    ),
+    *(
+        (
+            ("full_result", "run_manifest", _name),
+            ResultPathDisposition.MANIFEST_PROJECTION,
+        )
+        for _name in (
+            "config_sha256",
+            "engine_version",
+            "git_sha",
+            "generated_at",
+            "seed",
+            "validation_mode",
+            "manifest_schema_version",
+        )
+    ),
+    # Optional structured ScenarioResult children.
+    *(
+        (
+            ("full_result", "scenario_result", "wacc", _name),
+            ResultPathDisposition.KNOWN_REFUSED,
+        )
+        for _name in ("base", "prudential_rate", "meta")
+    ),
+    *(
+        (
+            ("full_result", "scenario_result", "equity_performance", _name),
+            ResultPathDisposition.KNOWN_REFUSED,
+        )
+        for _name in ("equity_npv", "equity_multiple", "metadata")
+    ),
+    # The annual artifact is inspected only for closed key drift and CFADS presence.
+    *(
+        (
+            ("full_result", "annual_rows", "*", _name),
+            (
+                ResultPathDisposition.CARRY_PREDICATE_OPERAND
+                if _name == "cfads_usd"
+                else ResultPathDisposition.OPAQUE_ARTIFACT
+            ),
+        )
+        for _name in (
+            "year",
+            "gross_kwh",
+            "grid_loss",
+            "net_kwh",
+            "revenue_lkr",
+            "generation_revenue_lkr",
+            "bess_revenue_lkr",
+            "success_fee_lkr",
+            "env_surcharge_lkr",
+            "social_levy_lkr",
+            "total_statutory_deductions_lkr",
+            "opex_usd",
+            "fx_rate",
+            "opex_lkr",
+            "senior_fee_lkr",
+            "ebitda_lkr",
+            "pretax_cfads_lkr",
+            "total_depreciation_lkr",
+            "interest_expense_lkr",
+            "taxable_income_lkr",
+            "tax_lkr",
+            "posttax_cfads_lkr",
+            "risk_haircut_pct",
+            "risk_haircut_amount_lkr",
+            "bess_augmentation_capex_lkr",
+            "cfads_final_lkr",
+            "cfads_risk_adjusted_lkr",
+            "revenue_usd",
+            "cfads_usd",
+            "effective_tax_rate",
+            "tax_holiday_applied",
+            "carried_forward_losses",
+            "wht_on_interest",
+            "cf_pre_debt",
+            "debt_service_total",
+            "interest_usd",
+            "balloon_resolution",
+            "cf_after_debt",
+        )
+    ),
+):
+    _declare_path(_path, _disposition)
+
+D3C_RESULT_PATH_DISPOSITIONS: Final[Mapping[tuple[str, ...], ResultPathDisposition]] = (
+    MappingProxyType(dict(_path_dispositions))
 )
 
+_inspected_keys: dict[tuple[str, ...], set[str]] = {}
+for _known_path in D3C_RESULT_PATH_DISPOSITIONS:
+    _inspected_keys.setdefault(_known_path[:-1], set()).add(_known_path[-1])
+D3C_INSPECTED_LAYER_KEYS: Final[Mapping[tuple[str, ...], frozenset[str]]] = (
+    MappingProxyType(
+        {_container: frozenset(_keys) for _container, _keys in _inspected_keys.items()}
+    )
+)
 
 D3C_ARTIFACT_ONLY_PATHS: Final[Mapping[tuple[str, ...], tuple[str, ...]]] = (
     MappingProxyType(
         {
-            ("full_result", "annual_rows"): (
-                _S10 := "capex_opex_contingency_procurement",
-                _S14,
-            ),
-            ("full_result", "debt_result", "dscr_by_year"): (_S12,),
-            ("full_result", "debt_result", "principal_schedule"): (_S12,),
-            ("full_result", "debt_result", "interest_schedule"): (_S12,),
+            ("full_result", "metrics"): (_S20,),
+            ("full_result", "scenario_result", "metadata"): (_S20,),
             ("full_result", "scenario_result", "fx_curve"): (_S13,),
+            ("full_result", "debt_result", "dscr_by_year"): (_S12,),
+            ("full_result", "debt_result", "debt_schedules"): (_S12,),
+            ("full_result", "debt_result", "funding"): (_S12,),
         }
     )
 )
 
-
 D3C_KNOWN_REFUSED_PATHS: Final[Mapping[tuple[str, ...], tuple[str, ...]]] = (
     MappingProxyType(
         {
+            ("full_result", "debt_result", "total_idc_m"): (_S12,),
+            ("full_result", "kpis", "npv"): (_S14,),
+            ("full_result", "kpis", "irr"): (_S14,),
+            ("full_result", "kpis", "total_idc_usd"): (_S12,),
             ("full_result", "kpis", "fx_match_ratio"): (_S13,),
             ("full_result", "kpis", "hedging_coverage_pct"): (_S13,),
             ("full_result", "kpis", "var_95_usd_million"): (_S13,),
@@ -635,10 +851,7 @@ D3C_KNOWN_REFUSED_PATHS: Final[Mapping[tuple[str, ...], tuple[str, ...]]] = (
     )
 )
 
-
-D3C_SECTION_IDS: Final[tuple[str, ...]] = tuple(
-    load_feasibility_taxonomy().section_names
-)
+D3C_SECTION_IDS: Final[tuple[str, ...]] = FEASIBILITY_SECTION_IDS
 
 for _declared_route in D3C_RESULT_FIELD_ROUTES:
     if any(
@@ -916,6 +1129,132 @@ class SectionResultProjection(StrictFrozenModel):
         return self
 
 
+class OriginInvariantProjection(StrictFrozenModel):
+    """Exact D3B origin facts independently revalidated before scalar mapping."""
+
+    gateway_call_count: Literal[1]
+    full_status: Literal["success"]
+    full_config_path: Literal["<inline>"]
+    scenario_config_path: Literal["<inline>"]
+    full_validation_mode: Literal["strict"]
+    scenario_validation_mode: Literal["strict"]
+    duplicated_origins_exact: Literal[True]
+    evaluated_config_digest_verified: Literal[True]
+    manifest_identity_verified: Literal[True]
+    gateway_warnings_present: Annotated[bool, Strict()]
+
+
+class AuthoredNumericProjection(StrictFrozenModel):
+    """Exact authored JSON-number identity retained from a D3B receipt."""
+
+    json_type: Literal["integer", "binary64"]
+    authored_value: ExactText
+    binary64_hex: ExactBinary64Hex
+    binary64_bytes_hex: ExactBinary64Bytes
+
+    @model_validator(mode="after")
+    def _authored_identity_is_exact(self) -> "AuthoredNumericProjection":
+        projected = float.fromhex(self.binary64_hex)
+        if struct.pack(">d", projected).hex() != self.binary64_bytes_hex:
+            raise ValueError("authored numeric binary64 identities differ")
+        if self.json_type == "integer":
+            if _INTEGER_TEXT_RE.fullmatch(self.authored_value) is None:
+                raise ValueError("authored integer must use canonical JSON text")
+            try:
+                authored_projection = float(int(self.authored_value))
+            except (OverflowError, ValueError) as exc:
+                raise ValueError("authored integer is outside binary64") from exc
+        else:
+            try:
+                authored_projection = float(self.authored_value)
+            except ValueError as exc:
+                raise ValueError("authored binary64 text is invalid") from exc
+            if repr(authored_projection) != self.authored_value:
+                raise ValueError("authored binary64 text must be canonical")
+        if (
+            not math.isfinite(authored_projection)
+            or authored_projection.hex() != self.binary64_hex
+        ):
+            raise ValueError("authored numeric text and binary64 identity differ")
+        return self
+
+
+class NumericProjectionReceiptProjection(StrictFrozenModel):
+    """Non-authoritative lossless projection of one D3B numeric receipt."""
+
+    assertion_id: ExactStableId
+    project_decimal: ExactText
+    projected_binary64_hex: ExactBinary64Hex
+    projected_binary64_bytes_hex: ExactBinary64Bytes
+    authored_values: Annotated[
+        tuple[AuthoredNumericProjection, ...], Field(min_length=1, max_length=2)
+    ]
+
+    @model_validator(mode="after")
+    def _receipt_identity_is_exact(self) -> "NumericProjectionReceiptProjection":
+        try:
+            decimal_value = Decimal(self.project_decimal)
+            decimal_projection = float(decimal_value)
+        except (InvalidOperation, OverflowError, ValueError) as exc:
+            raise ValueError("numeric receipt Decimal text is invalid") from exc
+        projected = float.fromhex(self.projected_binary64_hex)
+        if (
+            not decimal_value.is_finite()
+            or not math.isfinite(decimal_projection)
+            or decimal_projection.hex() != self.projected_binary64_hex
+            or struct.pack(">d", projected).hex() != self.projected_binary64_bytes_hex
+            or (decimal_value != 0 and projected == 0.0)
+        ):
+            raise ValueError(
+                "numeric receipt does not preserve Decimal/binary64 identity"
+            )
+        if any(
+            item.binary64_hex != self.projected_binary64_hex
+            or item.binary64_bytes_hex != self.projected_binary64_bytes_hex
+            for item in self.authored_values
+        ):
+            raise ValueError("numeric receipt authored values disagree with projection")
+        if any(
+            item.json_type == "integer"
+            and Decimal(item.authored_value) != decimal_value
+            for item in self.authored_values
+        ):
+            raise ValueError("authored integer and ProjectCase Decimal differ")
+        return self
+
+
+class FxIntegrationProjection(StrictFrozenModel):
+    """Exact structured FX integration disclosure from the accepted result."""
+
+    attempted: Annotated[bool, Strict()]
+    succeeded: Annotated[bool, Strict()]
+    warning: ExactWarningText | None
+    degraded: Annotated[bool, Strict()]
+    degraded_reasons: Annotated[
+        tuple[ExactWarningText, ...], Field(max_length=_MAX_RECORDS)
+    ]
+
+    @field_validator("degraded_reasons", mode="before")
+    @classmethod
+    def _reasons_are_an_exact_tuple(cls, value: object, info: ValidationInfo) -> object:
+        if info.mode == "json" and type(value) is list:
+            return tuple(value)
+        if type(value) is not tuple:
+            raise ValueError("FX degraded reasons must be an exact tuple")
+        return value
+
+    @model_validator(mode="after")
+    def _fx_disclosure_is_coherent(self) -> "FxIntegrationProjection":
+        if (
+            not self.attempted
+            or (self.succeeded and self.warning is not None)
+            or (not self.succeeded and self.warning is None)
+            or self.degraded != bool(self.degraded_reasons)
+        ):
+            raise ValueError("FX integration disclosure is internally inconsistent")
+        return self
+
+
 class EngineManifestProjection(StrictFrozenModel):
     """Exact observed engine fields; explicitly not the D2 package RunManifest."""
 
@@ -969,8 +1308,14 @@ class D3CResultProjection(StrictFrozenModel):
     validation_modules: Annotated[
         tuple[ExactText, ...], Field(min_length=1, max_length=16)
     ]
+    origin_invariants: OriginInvariantProjection
+    numeric_projection_receipts: Annotated[
+        tuple[NumericProjectionReceiptProjection, ...], Field(max_length=_MAX_RECORDS)
+    ]
+    gateway_warnings: Annotated[tuple[str, ...], Field(max_length=_MAX_RECORDS)]
     returned_warnings: Annotated[tuple[str, ...], Field(max_length=_MAX_RECORDS)]
     fx_degraded: Annotated[bool, Strict()]
+    fx_integration: FxIntegrationProjection
     engine_manifest: EngineManifestProjection
     sections: Annotated[
         tuple[SectionResultProjection, ...], Field(min_length=20, max_length=20)
@@ -992,7 +1337,7 @@ class D3CResultProjection(StrictFrozenModel):
         tuple[ProjectionLimitation, ...], Field(min_length=1, max_length=1)
     ]
 
-    @field_validator("returned_warnings", mode="before")
+    @field_validator("gateway_warnings", "returned_warnings", mode="before")
     @classmethod
     def _warnings_are_exact_and_bounded(
         cls, value: object, info: ValidationInfo
@@ -1000,12 +1345,12 @@ class D3CResultProjection(StrictFrozenModel):
         if info.mode == "json" and type(value) is list:
             value = tuple(value)
         if type(value) is not tuple:
-            raise ValueError("returned_warnings must be an exact tuple")
+            raise ValueError("warning projections must be exact tuples")
         warnings = value
         if any(type(item) is not str for item in warnings):
-            raise ValueError("returned_warnings must contain exact strings")
+            raise ValueError("warning projections must contain exact strings")
         if sum(len(item) for item in warnings) > _MAX_WARNING_TEXT:
-            raise ValueError("returned_warnings exceed the projection text bound")
+            raise ValueError("warning projections exceed the projection text bound")
         return value
 
     @model_validator(mode="after")
@@ -1018,6 +1363,24 @@ class D3CResultProjection(StrictFrozenModel):
             self.returned_warnings or self.fx_degraded
         ):
             raise ValueError("degraded projection requires warning/degradation facts")
+        expected_returned_warnings = (
+            *self.gateway_warnings,
+            *(
+                (self.fx_integration.warning,)
+                if self.fx_integration.warning is not None
+                else ()
+            ),
+            *self.fx_integration.degraded_reasons,
+        )
+        if self.returned_warnings != expected_returned_warnings:
+            raise ValueError(
+                "returned warnings differ from their exact FX/gateway origins"
+            )
+        expected_fx_degraded = bool(self.returned_warnings) or (
+            not self.fx_integration.succeeded or self.fx_integration.degraded
+        )
+        if self.fx_degraded is not expected_fx_degraded:
+            raise ValueError("FX degradation differs from its exact structured origins")
         if tuple(section.section_id for section in self.sections) != D3C_SECTION_IDS:
             raise ValueError("projection sections differ from the taxonomy SSOT order")
         expected_section_routes = {
@@ -1080,6 +1443,11 @@ class D3CResultProjection(StrictFrozenModel):
             raise ValueError("engine manifest digest must match the evaluated config")
         if len(set(self.validation_modules)) != len(self.validation_modules):
             raise ValueError("validation modules must be unique")
+        receipt_ids = tuple(
+            item.assertion_id for item in self.numeric_projection_receipts
+        )
+        if len(set(receipt_ids)) != len(receipt_ids):
+            raise ValueError("numeric projection receipt identities must be unique")
         unknown_locations = tuple(
             (item.container_path, item.key_type, item.key_identity)
             for item in self.unrecognized_keys
@@ -1115,25 +1483,32 @@ __all__ = (
     "D3C_INSPECTED_LAYER_KEYS",
     "D3C_KNOWN_REFUSED_PATHS",
     "D3C_RESULT_FIELD_ROUTES",
+    "D3C_RESULT_PATH_DISPOSITIONS",
     "D3C_SECTION_IDS",
     "RESULT_FACADE_AUTHORITY_STATUS",
     "RESULT_FACADE_CONTRACT_VERSION",
     "RESULT_FACADE_SCHEMA_ID",
     "RESULT_FACADE_SOURCE_CONTRACT",
     "RESULT_FACADE_WARNING_LIMITATION_CODE",
+    "AuthoredNumericProjection",
     "CarriedResultObservation",
     "D3CResultProjection",
     "EngineManifestProjection",
     "ExcludedResultField",
+    "FxIntegrationProjection",
+    "NumericProjectionReceiptProjection",
+    "OriginInvariantProjection",
     "ProjectionLimitation",
     "ResultCarryPredicate",
     "ResultFieldRoute",
     "ResultObservationClass",
     "ResultObservationState",
+    "ResultPathDisposition",
     "ResultPrecisionPolicy",
     "ResultScalarKind",
     "ResultUnknownKeyType",
     "ResultValueType",
+    "ResultZeroPolicy",
     "RouteObservation",
     "SectionResultProjection",
     "UnavailableResultObservation",
