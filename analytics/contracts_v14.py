@@ -11,15 +11,21 @@ supports both dataclasses and Pydantic objects.
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field, fields, is_dataclass
-from datetime import datetime, timezone
-from typing import Any, Literal, cast
+from datetime import date, datetime, timezone
+from decimal import Decimal, InvalidOperation
+from enum import Enum
+from pathlib import Path, PurePosixPath
+from types import MappingProxyType
+from typing import Any, Literal, Mapping, TypeAlias, cast
 
 from analytics.feasibility_report_contract import (
     FEASIBILITY_REPORT_CONTRACT_VERSION,
     FEASIBILITY_REPORT_SCHEMA_ID,
     SECTION_CONTRACT_VERSION,
     FeasibilityReportPackage,
+    ValidationModule,
 )
 from analytics.feasibility_report_contract.records import (
     ActorRecord,
@@ -262,6 +268,888 @@ class ScenarioResult(ContractMixin):
     fx_risk_profile: FXRiskProfile | None = None
     cashflow: CashflowResult | None = None
     equity_performance: EquityPerformance | None = None
+
+
+class D3BExecutionPhase(str, Enum):
+    """Closed phases for the held D3B-1 execution boundary."""
+
+    REQUEST = "request"
+    AUTHORITY = "authority"
+    CONFIG_LOAD = "config_load"
+    COMPATIBILITY = "compatibility"
+    GATEWAY = "gateway"
+    RESULT_PROTOCOL = "result_protocol"
+
+
+class D3BFailureCode(str, Enum):
+    """Bounded, transport-neutral D3B-1 refusal/failure vocabulary."""
+
+    INVALID_INPUT_TYPE = "invalid_input_type"
+    PROJECT_CASE_IDENTITY_MISMATCH = "project_case_identity_mismatch"
+    SCENARIO_AUTHORITY_NOT_FOUND = "scenario_authority_not_found"
+    SCENARIO_AUTHORITY_MISMATCH = "scenario_authority_mismatch"
+    SCENARIO_PATH_INVALID = "scenario_path_invalid"
+    SCENARIO_FILE_UNAVAILABLE = "scenario_file_unavailable"
+    SOURCE_FILE_DIGEST_MISMATCH = "source_file_digest_mismatch"
+    CONFIG_LOAD_FAILED = "config_load_failed"
+    CONFIG_VALIDATION_FAILED = "config_validation_failed"
+    CONFIG_CHANGED_DURING_LOAD = "config_changed_during_load"
+    RESOLVED_CONFIG_DIGEST_MISMATCH = "resolved_config_digest_mismatch"
+    PROJECT_CASE_ELEMENT_SET_MISMATCH = "project_case_element_set_mismatch"
+    UNBOUND_MATERIAL_PRESENT = "unbound_material_present"
+    MISSING_MATERIAL_VALUE = "missing_material_value"
+    ASSESSMENT_DATE_MISMATCH = "assessment_date_mismatch"
+    COMPATIBILITY_MISMATCH = "compatibility_mismatch"
+    AUTHORED_REDUNDANCY_MISMATCH = "authored_redundancy_mismatch"
+    RUN_POSTURE_INVALID = "run_posture_invalid"
+    GATEWAY_FAILED = "gateway_failed"
+    GATEWAY_PROTOCOL_INVALID = "gateway_protocol_invalid"
+    RUN_MANIFEST_DIGEST_MISMATCH = "run_manifest_digest_mismatch"
+    RESULT_SNAPSHOT_FAILED = "result_snapshot_failed"
+
+
+@dataclass(frozen=True, slots=True)
+class D3BAuthorizedJurisdictionDomain(ContractMixin):
+    """One explicit subject-routed jurisdiction fact in a path authority."""
+
+    jurisdiction_binding_id: str
+    jurisdiction_code: str
+    subject: Literal[
+        "site",
+        "corporate",
+        "contract",
+        "grid",
+        "permit",
+        "tax",
+        "accounting",
+        "financing",
+        "supply",
+    ]
+    base_domain: str
+
+    def __post_init__(self) -> None:
+        for name in (
+            "jurisdiction_binding_id",
+            "jurisdiction_code",
+            "base_domain",
+        ):
+            value = getattr(self, name)
+            if type(value) is not str or not value or len(value) > 160:
+                raise ValueError(f"D3B authority {name} must be bounded exact text")
+        if self.subject not in {
+            "site",
+            "corporate",
+            "contract",
+            "grid",
+            "permit",
+            "tax",
+            "accounting",
+            "financing",
+            "supply",
+        }:
+            raise ValueError("D3B authority jurisdiction subject is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class D3BAuthorizedTechnologyBinding(ContractMixin):
+    """One explicit ProjectCase-to-authored-technology authority fact."""
+
+    technology_binding_id: str
+    technology_id: str
+    asset_class: Literal["generation", "storage"]
+    base_config_key: str
+    authored_technology_kind: Literal[
+        "wind_turbine", "solar_pv", "generic_generation", "storage"
+    ]
+
+    def __post_init__(self) -> None:
+        for name in (
+            "technology_binding_id",
+            "technology_id",
+            "base_config_key",
+        ):
+            value = getattr(self, name)
+            if type(value) is not str or not value or len(value) > 160:
+                raise ValueError(f"D3B authority {name} must be bounded exact text")
+        if self.asset_class not in {"generation", "storage"}:
+            raise ValueError("D3B authority asset_class is invalid")
+        if self.authored_technology_kind not in {
+            "wind_turbine",
+            "solar_pv",
+            "generic_generation",
+            "storage",
+        }:
+            raise ValueError("D3B authority technology kind is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class AuthoredScenarioPathBinding(ContractMixin):
+    """One code-owned config-ID to repository-relative authored-path binding.
+
+    This is an internal authority object, not request-body input.  It deliberately
+    carries no arbitrary absolute file path: the path is resolved only beneath the
+    owning registry's exact repository root by the D3B executor.
+    """
+
+    config_id: str
+    config_version: str
+    authority_source_id: str
+    repository_relative_path: str
+    source_file_sha256: str
+    resolved_config_sha256: str
+    project_case_sha256: str
+    evaluation_request_sha256: str
+    jurisdiction_domains: tuple[D3BAuthorizedJurisdictionDomain, ...]
+    technology_bindings: tuple[D3BAuthorizedTechnologyBinding, ...]
+    evidence_cutoff: date
+    evidence_cutoff_authority_source_id: str
+    valuation_date: date
+    valuation_authority_source_id: str
+    price_basis_id: str
+    price_nominality: Literal["nominal", "real"]
+    reporting_currency: str
+
+    def __post_init__(self) -> None:
+        for name in (
+            "config_id",
+            "config_version",
+            "authority_source_id",
+            "repository_relative_path",
+            "evidence_cutoff_authority_source_id",
+            "valuation_authority_source_id",
+            "price_basis_id",
+            "reporting_currency",
+        ):
+            value = getattr(self, name)
+            if type(value) is not str or not value or "\x00" in value:
+                raise ValueError(
+                    f"AuthoredScenarioPathBinding.{name} must be exact text"
+                )
+        for name in (
+            "source_file_sha256",
+            "resolved_config_sha256",
+            "project_case_sha256",
+            "evaluation_request_sha256",
+        ):
+            value = getattr(self, name)
+            if (
+                type(value) is not str
+                or len(value) != 64
+                or any(character not in "0123456789abcdef" for character in value)
+            ):
+                raise ValueError(
+                    f"AuthoredScenarioPathBinding.{name} must be SHA-256 hex"
+                )
+        if (
+            type(self.evidence_cutoff) is not date
+            or type(self.valuation_date) is not date
+        ):
+            raise ValueError(
+                "authored scenario authority dates must be exact date values"
+            )
+        if self.price_nominality not in {"nominal", "real"}:
+            raise ValueError("authored scenario authority price nominality is invalid")
+        if len(self.reporting_currency) != 3 or not self.reporting_currency.isascii():
+            raise ValueError("authored scenario authority currency must be exact ASCII")
+        relative = PurePosixPath(self.repository_relative_path)
+        if (
+            relative.is_absolute()
+            or not relative.parts
+            or relative.parts[0] != "scenarios"
+            or any(part in {"", ".", ".."} for part in relative.parts)
+            or relative.as_posix() != self.repository_relative_path
+            or relative.suffix not in {".json", ".yaml", ".yml"}
+        ):
+            raise ValueError(
+                "authored scenario path must be a normalized relative path beneath scenarios/"
+            )
+        if (
+            type(self.jurisdiction_domains) is not tuple
+            or not self.jurisdiction_domains
+            or any(
+                type(item) is not D3BAuthorizedJurisdictionDomain
+                for item in self.jurisdiction_domains
+            )
+        ):
+            raise ValueError("D3B authority requires exact jurisdiction-domain facts")
+        if (
+            type(self.technology_bindings) is not tuple
+            or not self.technology_bindings
+            or any(
+                type(item) is not D3BAuthorizedTechnologyBinding
+                for item in self.technology_bindings
+            )
+        ):
+            raise ValueError("D3B authority requires exact technology facts")
+        if len(set(self.jurisdiction_domains)) != len(self.jurisdiction_domains):
+            raise ValueError("D3B authority has duplicate jurisdiction-domain facts")
+        technology_ids = tuple(
+            item.technology_binding_id for item in self.technology_bindings
+        )
+        if len(set(technology_ids)) != len(technology_ids):
+            raise ValueError("D3B authority has duplicate technology bindings")
+
+
+@dataclass(frozen=True, slots=True)
+class AuthoredScenarioPathAuthority(ContractMixin):
+    """Closed, code-owned authored-scenario path registry for one executor call."""
+
+    authority_id: str
+    repository_root: str
+    bindings: tuple[AuthoredScenarioPathBinding, ...]
+
+    def __post_init__(self) -> None:
+        if type(self.authority_id) is not str or not self.authority_id:
+            raise ValueError("authored scenario authority requires authority_id")
+        if (
+            type(self.repository_root) is not str
+            or not Path(self.repository_root).is_absolute()
+        ):
+            raise ValueError(
+                "authored scenario authority requires an absolute repository_root"
+            )
+        if type(self.bindings) is not tuple or not self.bindings:
+            raise ValueError(
+                "authored scenario authority requires exact tuple bindings"
+            )
+        if any(type(item) is not AuthoredScenarioPathBinding for item in self.bindings):
+            raise ValueError(
+                "authored scenario authority bindings must use canonical records"
+            )
+        config_ids = tuple(item.config_id for item in self.bindings)
+        if len(set(config_ids)) != len(config_ids):
+            raise ValueError("authored scenario authority has duplicate config_id")
+
+
+@dataclass(frozen=True, slots=True)
+class D3BExecutionFailureRecord(ContractMixin):
+    """Safe public failure facts; arbitrary source/config/exception text is excluded."""
+
+    code: D3BFailureCode
+    phase: D3BExecutionPhase
+    gateway_call_count: Literal[0, 1]
+    cause_type: str | None = None
+
+    def __post_init__(self) -> None:
+        if type(self.code) is not D3BFailureCode:
+            raise ValueError("D3B failure code must use the closed canonical enum")
+        if type(self.phase) is not D3BExecutionPhase:
+            raise ValueError("D3B failure phase must use the closed canonical enum")
+        if type(self.gateway_call_count) is not int or self.gateway_call_count not in {
+            0,
+            1,
+        }:
+            raise ValueError("D3B gateway_call_count must be exactly 0 or 1")
+        if self.cause_type is not None and (
+            type(self.cause_type) is not str
+            or not self.cause_type
+            or len(self.cause_type) > 160
+            or not self.cause_type.replace("_", "").isalnum()
+        ):
+            raise ValueError("D3B cause_type must be bounded identifier text")
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "code": self.code.value,
+            "phase": self.phase.value,
+            "gateway_call_count": self.gateway_call_count,
+            "cause_type": self.cause_type,
+        }
+
+    def dict(self) -> dict[str, Any]:
+        return self.model_dump()
+
+
+@dataclass(frozen=True, slots=True)
+class D3BExecutionFailure:
+    """Typed refusal/failure with a non-serialized in-process cause.
+
+    ``cause`` preserves the real exception object for internal diagnostics and
+    chaining.  ``model_dump`` intentionally emits only the bounded record so a web
+    adapter cannot accidentally disclose exception or configuration text.
+    """
+
+    request_id: str | None
+    failure: D3BExecutionFailureRecord
+    cause: BaseException | None = field(default=None, repr=False, compare=False)
+    outcome: Literal["failure"] = "failure"
+
+    def __post_init__(self) -> None:
+        if self.request_id is not None and (
+            type(self.request_id) is not str
+            or not self.request_id
+            or len(self.request_id) > 160
+        ):
+            raise ValueError("D3B failure request_id must be bounded exact text")
+        if type(self.failure) is not D3BExecutionFailureRecord:
+            raise ValueError("D3B failure must carry the canonical failure record")
+        if self.cause is not None and not isinstance(self.cause, BaseException):
+            raise ValueError("D3B failure cause must be an exception or null")
+        if self.outcome != "failure":
+            raise ValueError("D3B failure outcome must be exact")
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "outcome": self.outcome,
+            "request_id": self.request_id,
+            "failure": self.failure.model_dump(),
+        }
+
+    def dict(self) -> dict[str, Any]:
+        return self.model_dump()
+
+
+@dataclass(frozen=True, slots=True)
+class D3BAuthoredNumericValue(ContractMixin):
+    """Exact disclosure of one authored JSON number and its binary64 value."""
+
+    json_type: Literal["integer", "binary64"]
+    authored_value: str
+    binary64_hex: str
+
+    def __post_init__(self) -> None:
+        if self.json_type not in {"integer", "binary64"}:
+            raise ValueError("D3B authored numeric JSON type is invalid")
+        if (
+            type(self.authored_value) is not str
+            or not self.authored_value
+            or len(self.authored_value) > 256
+        ):
+            raise ValueError("D3B authored numeric value must be bounded exact text")
+        if (
+            type(self.binary64_hex) is not str
+            or not self.binary64_hex
+            or len(self.binary64_hex) > 256
+        ):
+            raise ValueError("D3B authored numeric value requires bounded binary64 hex")
+        try:
+            projected = float.fromhex(self.binary64_hex)
+        except (OverflowError, TypeError, ValueError) as exc:
+            raise ValueError("D3B authored numeric binary64 hex is invalid") from exc
+        if not math.isfinite(projected) or projected.hex() != self.binary64_hex:
+            raise ValueError("D3B authored numeric binary64 value must be finite")
+        if self.json_type == "integer":
+            if (
+                re.fullmatch(r"(?:0|-[1-9][0-9]*|[1-9][0-9]*)", self.authored_value)
+                is None
+            ):
+                raise ValueError("D3B authored integer must use canonical JSON text")
+            try:
+                authored_projection = float(int(self.authored_value))
+            except (OverflowError, ValueError) as exc:
+                raise ValueError("D3B authored integer is outside binary64") from exc
+        else:
+            try:
+                authored_projection = float(self.authored_value)
+            except ValueError as exc:
+                raise ValueError("D3B authored binary64 text is invalid") from exc
+            if repr(authored_projection) != self.authored_value:
+                raise ValueError("D3B authored binary64 text must be canonical")
+        if (
+            not math.isfinite(authored_projection)
+            or authored_projection.hex() != self.binary64_hex
+        ):
+            raise ValueError(
+                "D3B authored numeric text and binary64 projection must agree"
+            )
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "json_type": self.json_type,
+            "authored_value": self.authored_value,
+            "binary64_hex": self.binary64_hex,
+        }
+
+    def dict(self) -> dict[str, Any]:
+        return self.model_dump()
+
+
+@dataclass(frozen=True, slots=True)
+class D3BNumericProjectionReceipt(ContractMixin):
+    """Disclose one exact ProjectCase Decimal projection used for compatibility."""
+
+    assertion_id: str
+    project_decimal: str
+    projected_binary64_hex: str
+    authored_values: tuple[D3BAuthoredNumericValue, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.assertion_id) is not str
+            or not self.assertion_id
+            or len(self.assertion_id) > 160
+        ):
+            raise ValueError("D3B numeric receipt assertion_id is invalid")
+        if (
+            type(self.project_decimal) is not str
+            or not self.project_decimal
+            or len(self.project_decimal) > 256
+        ):
+            raise ValueError("D3B numeric receipt decimal is invalid")
+        if (
+            type(self.projected_binary64_hex) is not str
+            or not self.projected_binary64_hex
+            or len(self.projected_binary64_hex) > 256
+        ):
+            raise ValueError("D3B numeric projection receipt requires bounded hex text")
+        try:
+            decimal_value = Decimal(self.project_decimal)
+            projected = float.fromhex(self.projected_binary64_hex)
+            decimal_projection = float(decimal_value)
+        except (InvalidOperation, OverflowError, TypeError, ValueError) as exc:
+            raise ValueError("D3B numeric projection receipt is malformed") from exc
+        if (
+            not decimal_value.is_finite()
+            or not math.isfinite(projected)
+            or projected.hex() != self.projected_binary64_hex
+        ):
+            raise ValueError("D3B numeric projection receipt must be finite")
+        if decimal_projection.hex() != self.projected_binary64_hex:
+            raise ValueError(
+                "D3B numeric projection receipt is internally inconsistent"
+            )
+        if decimal_value != 0 and projected == 0.0:
+            raise ValueError(
+                "D3B numeric projection receipt cannot collapse nonzero to binary64 zero"
+            )
+        if (
+            type(self.authored_values) is not tuple
+            or not self.authored_values
+            or len(self.authored_values) > _D3B_MAX_AUTHORED_VALUES_PER_RECEIPT
+            or any(
+                type(item) is not D3BAuthoredNumericValue
+                for item in self.authored_values
+            )
+        ):
+            raise ValueError("D3B numeric receipt requires authored numeric values")
+        if any(
+            item.binary64_hex != self.projected_binary64_hex
+            for item in self.authored_values
+        ):
+            raise ValueError("D3B numeric receipt contains a projection mismatch")
+        if any(
+            item.json_type == "integer"
+            and Decimal(item.authored_value) != decimal_value
+            for item in self.authored_values
+        ):
+            raise ValueError(
+                "D3B authored integer and ProjectCase Decimal must agree exactly"
+            )
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "assertion_id": self.assertion_id,
+            "project_decimal": self.project_decimal,
+            "projected_binary64_hex": self.projected_binary64_hex,
+            "authored_values": [item.model_dump() for item in self.authored_values],
+        }
+
+    def dict(self) -> dict[str, Any]:
+        return self.model_dump()
+
+
+_D3B_MAX_AUTHORED_VALUES_PER_RECEIPT = 2
+_D3B_MAX_NUMERIC_PROJECTION_RECEIPTS = 1_024
+_D3B_MAX_RESULT_DEPTH = 128
+_D3B_MAX_RESULT_CONTAINERS = 10_000
+_D3B_MAX_RESULT_SCALARS = 100_000
+_D3B_MAX_RESULT_TEXT_CODEPOINTS = 1_000_000
+_D3B_ALLOWED_VALIDATION_MODULES = frozenset(item.value for item in ValidationModule)
+_D3B_REQUIRED_VALIDATION_MODULES = frozenset(
+    {ValidationModule.CASHFLOW.value, ValidationModule.DEBT.value}
+)
+
+
+def _dump_frozen_result(
+    value: Any,
+    *,
+    depth: int = 0,
+    counts: list[int] | None = None,
+) -> Any:
+    """Return a detached, occurrence-bounded dump of one frozen result.
+
+    Shared aliases are deliberately counted on every serialized occurrence.  This
+    prevents a small in-memory DAG from expanding into an unbounded detached tree.
+    """
+    if depth > _D3B_MAX_RESULT_DEPTH:
+        raise ValueError("D3B serialized result exceeds the maximum depth")
+    totals = counts if counts is not None else [0, 0, 0]
+    if isinstance(value, Mapping):
+        totals[0] += 1
+        totals[2] += sum(len(key) for key in value if type(key) is str)
+        if (
+            totals[0] > _D3B_MAX_RESULT_CONTAINERS
+            or totals[2] > _D3B_MAX_RESULT_TEXT_CODEPOINTS
+        ):
+            raise ValueError("D3B serialized result exceeds its bounded volume")
+        return {
+            key: _dump_frozen_result(item, depth=depth + 1, counts=totals)
+            for key, item in value.items()
+        }
+    if isinstance(value, tuple):
+        totals[0] += 1
+        if totals[0] > _D3B_MAX_RESULT_CONTAINERS:
+            raise ValueError("D3B serialized result exceeds its bounded volume")
+        return [
+            _dump_frozen_result(item, depth=depth + 1, counts=totals) for item in value
+        ]
+    totals[1] += 1
+    if totals[1] > _D3B_MAX_RESULT_SCALARS:
+        raise ValueError("D3B serialized result exceeds its bounded volume")
+    if type(value) is str:
+        totals[2] += len(value)
+        if totals[2] > _D3B_MAX_RESULT_TEXT_CODEPOINTS:
+            raise ValueError("D3B serialized result exceeds its bounded volume")
+    return value
+
+
+def _is_frozen_result(
+    value: Any,
+    *,
+    active: set[int] | None = None,
+    depth: int = 0,
+    counts: list[int] | None = None,
+) -> bool:
+    """Prove a bounded immutable snapshot and its detached occurrence shape."""
+    if depth > _D3B_MAX_RESULT_DEPTH:
+        return False
+    seen = active if active is not None else set()
+    totals = counts if counts is not None else [0, 0, 0]
+    if isinstance(value, MappingProxyType):
+        marker = id(value)
+        if marker in seen or any(
+            type(key) not in {str, int, float}
+            or (type(key) is float and not math.isfinite(key))
+            or (type(key) is int and key.bit_length() > 4096)
+            for key in value
+        ):
+            return False
+        totals[0] += 1
+        totals[2] += sum(len(key) for key in value if type(key) is str)
+        if (
+            totals[0] > _D3B_MAX_RESULT_CONTAINERS
+            or totals[2] > _D3B_MAX_RESULT_TEXT_CODEPOINTS
+        ):
+            return False
+        seen.add(marker)
+        try:
+            return all(
+                _is_frozen_result(
+                    item,
+                    active=seen,
+                    depth=depth + 1,
+                    counts=totals,
+                )
+                for item in value.values()
+            )
+        finally:
+            seen.remove(marker)
+    if type(value) is tuple:
+        marker = id(value)
+        if marker in seen:
+            return False
+        totals[0] += 1
+        if totals[0] > _D3B_MAX_RESULT_CONTAINERS:
+            return False
+        seen.add(marker)
+        try:
+            return all(
+                _is_frozen_result(
+                    item,
+                    active=seen,
+                    depth=depth + 1,
+                    counts=totals,
+                )
+                for item in value
+            )
+        finally:
+            seen.remove(marker)
+    totals[1] += 1
+    if totals[1] > _D3B_MAX_RESULT_SCALARS:
+        return False
+    if value is None or type(value) is bool:
+        return True
+    if type(value) is str:
+        totals[2] += len(value)
+        return totals[2] <= _D3B_MAX_RESULT_TEXT_CODEPOINTS
+    if type(value) is int:
+        return value.bit_length() <= 4096
+    return type(value) is float and math.isfinite(value)
+
+
+def _detach_frozen_result(
+    value: Any,
+    *,
+    active: set[int] | None = None,
+    memo: dict[int, Any] | None = None,
+    depth: int = 0,
+    counts: list[int] | None = None,
+) -> Any:
+    """Copy one frozen-shaped tree into contract-owned immutable containers.
+
+    ``MappingProxyType`` only makes a view read-only; its creator can retain and
+    mutate the backing dictionary.  A D3B success therefore cannot admit a
+    caller-owned proxy tree directly.  This copier preserves safe aliases while
+    detaching every mapping backing before the handoff is accepted.
+    """
+    if depth > _D3B_MAX_RESULT_DEPTH:
+        raise ValueError("D3B result exceeds the maximum depth")
+    seen = active if active is not None else set()
+    copies = memo if memo is not None else {}
+    totals = counts if counts is not None else [0, 0, 0]
+    if isinstance(value, MappingProxyType):
+        marker = id(value)
+        if marker in seen:
+            raise ValueError("D3B result contains a mapping cycle")
+        if marker in copies:
+            return copies[marker]
+        try:
+            items = tuple(value.items())
+        except RuntimeError as exc:
+            raise ValueError("D3B result changed during detachment") from exc
+        if any(
+            type(key) not in {str, int, float}
+            or (type(key) is float and not math.isfinite(key))
+            or (type(key) is int and key.bit_length() > 4096)
+            for key, _ in items
+        ):
+            raise ValueError("D3B result contains an unsupported mapping key")
+        totals[0] += 1
+        totals[2] += sum(len(key) for key, _ in items if type(key) is str)
+        if (
+            totals[0] > _D3B_MAX_RESULT_CONTAINERS
+            or totals[2] > _D3B_MAX_RESULT_TEXT_CODEPOINTS
+        ):
+            raise ValueError("D3B result exceeds its bounded volume")
+        backing: dict[Any, Any] = {}
+        detached = MappingProxyType(backing)
+        copies[marker] = detached
+        seen.add(marker)
+        try:
+            for key, item in items:
+                backing[key] = _detach_frozen_result(
+                    item,
+                    active=seen,
+                    memo=copies,
+                    depth=depth + 1,
+                    counts=totals,
+                )
+        except Exception:
+            copies.pop(marker, None)
+            raise
+        finally:
+            seen.remove(marker)
+        return detached
+    if type(value) is tuple:
+        marker = id(value)
+        if marker in seen:
+            raise ValueError("D3B result contains a sequence cycle")
+        if marker in copies:
+            return copies[marker]
+        totals[0] += 1
+        if totals[0] > _D3B_MAX_RESULT_CONTAINERS:
+            raise ValueError("D3B result exceeds its bounded volume")
+        seen.add(marker)
+        try:
+            detached_tuple = tuple(
+                _detach_frozen_result(
+                    item,
+                    active=seen,
+                    memo=copies,
+                    depth=depth + 1,
+                    counts=totals,
+                )
+                for item in value
+            )
+        finally:
+            seen.remove(marker)
+        copies[marker] = detached_tuple
+        return detached_tuple
+    totals[1] += 1
+    if totals[1] > _D3B_MAX_RESULT_SCALARS:
+        raise ValueError("D3B result exceeds its bounded volume")
+    if value is None or type(value) is bool:
+        return value
+    if type(value) is str:
+        totals[2] += len(value)
+        if totals[2] > _D3B_MAX_RESULT_TEXT_CODEPOINTS:
+            raise ValueError("D3B result exceeds its bounded volume")
+        return value
+    if type(value) is int and value.bit_length() <= 4096:
+        return value
+    if type(value) is float and math.isfinite(value):
+        return value
+    raise ValueError("D3B result contains an unsupported scalar")
+
+
+@dataclass(frozen=True, slots=True)
+class D3BExecutionSuccess:
+    """Immutable, complete D3B-1 handoff to the later D3C assembler."""
+
+    request_id: str
+    project_id: str
+    case_id: str
+    project_case_revision: int
+    project_case_sha256: str
+    evaluation_request_sha256: str
+    authority_id: str
+    config_id: str
+    source_file_sha256: str
+    resolved_config_sha256: str
+    evaluated_config_sha256: str
+    evidence_cutoff: date
+    valuation_date: date
+    validation_modules: tuple[str, ...]
+    numeric_projection_receipts: tuple[D3BNumericProjectionReceipt, ...]
+    gateway_call_count: Literal[1]
+    full_result: Mapping[Any, Any]
+    run_manifest: Mapping[str, Any]
+    warnings: tuple[str, ...]
+    fx_degraded: bool
+    outcome: Literal["success", "degraded_success"]
+
+    def __post_init__(self) -> None:
+        if type(self.gateway_call_count) is not int or self.gateway_call_count != 1:
+            raise ValueError("successful D3B result requires exactly one gateway call")
+        if type(self.fx_degraded) is not bool:
+            raise ValueError("D3B fx_degraded must be an exact bool")
+        if (
+            type(self.validation_modules) is not tuple
+            or type(self.warnings) is not tuple
+            or type(self.numeric_projection_receipts) is not tuple
+        ):
+            raise ValueError("D3B sequence fields must be immutable tuples")
+        for name in (
+            "request_id",
+            "project_id",
+            "case_id",
+            "authority_id",
+            "config_id",
+        ):
+            value = getattr(self, name)
+            if type(value) is not str or not value or len(value) > 160:
+                raise ValueError(f"D3B {name} must be bounded exact text")
+        if (
+            type(self.project_case_revision) is not int
+            or self.project_case_revision <= 0
+        ):
+            raise ValueError(
+                "D3B ProjectCase revision must be a positive exact integer"
+            )
+        for name in (
+            "project_case_sha256",
+            "evaluation_request_sha256",
+            "source_file_sha256",
+            "resolved_config_sha256",
+            "evaluated_config_sha256",
+        ):
+            value = getattr(self, name)
+            if (
+                type(value) is not str
+                or len(value) != 64
+                or any(character not in "0123456789abcdef" for character in value)
+            ):
+                raise ValueError(f"D3B {name} must be SHA-256 hex")
+        if (
+            type(self.evidence_cutoff) is not date
+            or type(self.valuation_date) is not date
+        ):
+            raise ValueError("D3B assessment dates must be exact date values")
+        if (
+            not self.validation_modules
+            or len(self.validation_modules) > len(_D3B_ALLOWED_VALIDATION_MODULES)
+            or any(
+                type(item) is not str or item not in _D3B_ALLOWED_VALIDATION_MODULES
+                for item in self.validation_modules
+            )
+            or len(set(self.validation_modules)) != len(self.validation_modules)
+            or not _D3B_REQUIRED_VALIDATION_MODULES.issubset(self.validation_modules)
+        ):
+            raise ValueError(
+                "D3B validation modules must use the closed request vocabulary"
+            )
+        if len(
+            self.numeric_projection_receipts
+        ) > _D3B_MAX_NUMERIC_PROJECTION_RECEIPTS or any(
+            type(item) is not D3BNumericProjectionReceipt
+            for item in self.numeric_projection_receipts
+        ):
+            raise ValueError("D3B numeric projection receipts must be canonical")
+        receipt_ids = tuple(
+            item.assertion_id for item in self.numeric_projection_receipts
+        )
+        if len(set(receipt_ids)) != len(receipt_ids):
+            raise ValueError("D3B numeric projection receipts must be unique")
+        if any(type(item) is not str for item in self.warnings):
+            raise ValueError("D3B warnings must be exact text")
+        if (
+            len(self.warnings) > _D3B_MAX_RESULT_SCALARS
+            or sum(len(item) for item in self.warnings)
+            > _D3B_MAX_RESULT_TEXT_CODEPOINTS
+        ):
+            raise ValueError("D3B warnings exceed bounded result limits")
+        if not isinstance(self.full_result, MappingProxyType) or not isinstance(
+            self.run_manifest, MappingProxyType
+        ):
+            raise ValueError(
+                "D3B result and run manifest must be recursively frozen and bounded"
+            )
+        if self.full_result.get("run_manifest") is not self.run_manifest:
+            raise ValueError("D3B run manifest must be the exact full-result subtree")
+        try:
+            detached_full_result = _detach_frozen_result(self.full_result)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "D3B result and run manifest must be recursively frozen and bounded"
+            ) from exc
+        detached_run_manifest = detached_full_result.get("run_manifest")
+        if not _is_frozen_result(detached_full_result) or not _is_frozen_result(
+            detached_run_manifest
+        ):
+            raise ValueError(
+                "D3B result and run manifest must be recursively frozen and bounded"
+            )
+        if not isinstance(detached_run_manifest, MappingProxyType):
+            raise ValueError("D3B run manifest must be the exact full-result subtree")
+        degraded = self.fx_degraded or bool(self.warnings)
+        expected_outcome = "degraded_success" if degraded else "success"
+        if self.outcome != expected_outcome:
+            raise ValueError("D3B outcome must disclose warning/degradation state")
+        object.__setattr__(self, "full_result", detached_full_result)
+        object.__setattr__(self, "run_manifest", detached_run_manifest)
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "outcome": self.outcome,
+            "request_id": self.request_id,
+            "project_id": self.project_id,
+            "case_id": self.case_id,
+            "project_case_revision": self.project_case_revision,
+            "project_case_sha256": self.project_case_sha256,
+            "evaluation_request_sha256": self.evaluation_request_sha256,
+            "authority_id": self.authority_id,
+            "config_id": self.config_id,
+            "source_file_sha256": self.source_file_sha256,
+            "resolved_config_sha256": self.resolved_config_sha256,
+            "evaluated_config_sha256": self.evaluated_config_sha256,
+            "evidence_cutoff": self.evidence_cutoff,
+            "valuation_date": self.valuation_date,
+            "validation_modules": list(self.validation_modules),
+            "numeric_projection_receipts": [
+                item.model_dump() for item in self.numeric_projection_receipts
+            ],
+            "gateway_call_count": self.gateway_call_count,
+            "full_result": _dump_frozen_result(self.full_result),
+            "run_manifest": _dump_frozen_result(self.run_manifest),
+            "warnings": list(self.warnings),
+            "fx_degraded": self.fx_degraded,
+        }
+
+    def dict(self) -> dict[str, Any]:
+        return self.model_dump()
+
+
+D3BExecutionResult: TypeAlias = D3BExecutionSuccess | D3BExecutionFailure
 
 
 @dataclass(frozen=True)
@@ -3714,6 +4602,18 @@ __all__ = [
     "WaccComponents",
     "WaccResult",
     "ScenarioResult",
+    "AuthoredScenarioPathAuthority",
+    "AuthoredScenarioPathBinding",
+    "D3BAuthorizedJurisdictionDomain",
+    "D3BAuthorizedTechnologyBinding",
+    "D3BAuthoredNumericValue",
+    "D3BExecutionFailure",
+    "D3BExecutionFailureRecord",
+    "D3BExecutionPhase",
+    "D3BExecutionResult",
+    "D3BExecutionSuccess",
+    "D3BFailureCode",
+    "D3BNumericProjectionReceipt",
     "FXStructuredBlock",
     "FXCurveOutput",
     "FXRiskProfile",
