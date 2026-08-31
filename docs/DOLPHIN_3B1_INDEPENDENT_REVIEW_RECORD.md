@@ -5,7 +5,7 @@
 **Accepted base:** `dc2b211954f67c9d010831350e51884c9fe79c52`  
 **Branch:** `codex/d3b-v14-execution-seam-r2`  
 **Governed runtime:** `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`, Python 3.12.13  
-**Merge state at review:** uncommitted local exact freeze; protected exact-head CI still required
+**Merge state at latest production/test review:** exact committed head `b6d50cb895acde505520d324c6e0f8e299bd922d` independently accepted and protected exact-head CI green; this receipt update remains documentation-only
 
 ## 1. Exact accepted implementation freeze
 
@@ -147,3 +147,54 @@ conclusion, lender acceptance, Board approval, report approval, package release,
 deployment authority or HOLD movement. D3C remains gated by merged D3B-1, a separately governed and
 accepted D3C-0 assembly authority, the full implementation acceptance ledger and its own independent
 review.
+
+## 8. Seventh-freeze coverage-control rebind
+
+Protected CI for the accepted sixth freeze passed every test shard but correctly refused merge when
+its combined coverage was 94.98% (`1,556` missed of `30,981` executable statements). The seventh
+freeze at exact commit `b6d50cb895acde505520d324c6e0f8e299bd922d` changed only this implementation
+record and the focused test file. It changed no production, contract, loader, D3C-ledger, changelog,
+finance or authority-catalogue byte.
+
+The accepted production/test fingerprints were:
+
+```text
+ecd83ad49cd76e3720cb6f2866c7a4bbdeb04c5bed3cb39c5db8b1c91c00296d  analytics/aep_provenance.py
+ec2ad2ae3a8b494ccdb57c033db5d659038faf980f6d1ca30d144ddbb61d0d66  analytics/contracts_v14.py
+15c887b6fe6f430328f49092fd4af27fb81d501411add19b28ab3d545a7d0c2f  analytics/loader/aep_loader.py
+b8bb85a7e1b788ff9ca34231f63ec86797b4b4022dfc53218e3c190a63e84f32  analytics/scenario_loader.py
+42bf1df615c8f5e475a2c08109119f068946eb60d93691a070ec890df98f2fe8  analytics/feasibility_execution.py
+3842b736ca75775353027b5b941680daee51f918bbf98b14aee5edf029337a44  docs/DOLPHIN_3C_IMPLEMENTATION_ACCEPTANCE_LEDGER.md
+b0ed2d102ebe66be30b60600e220af5ef3dad5ea3854121f08f26cdc25a75292  tests/contracts/test_d3b_execution_contract.py
+```
+
+The independent domain reviewer returned `DOMAIN COVERAGE REBIND ACCEPT`. The reviewer reproduced
+138 focused tests, 1,097 complete contract tests and four serial native-grid tests; verified the
+new mapping-cycle, resource-bound, exact-numeric, digest, price-basis, selector, run-posture and
+technology-key controls; and confirmed that they were non-tautological and did not widen D3B.
+
+The independent assurance reviewer returned `ASSURANCE COVERAGE REBIND ACCEPT`. The reviewer proved
+that the added controls execute exactly these 15 previously missed production statements:
+
+```text
+181, 182, 246, 247, 257, 648, 659, 993,
+1069, 1071, 1073, 1084, 1105, 1111, 1121
+```
+
+The reviewer also ran the controls in both orders, proved monkeypatch restoration against the
+constructive one-call path, exercised real production container/text limits, reproduced all 138
+focused tests and four serial native-grid tests, and verified an empty production-only diff.
+
+Protected exact-head Linux run `33387739842` then passed all applicable checks for exact commit
+`b6d50cb895acde505520d324c6e0f8e299bd922d`, including all six test shards, grid, quality,
+security, FX, smoke, CodeQL, coverage and test summary. Its combined coverage receipt was:
+
+```text
+TOTAL  30,981 statements  1,541 missed  95.03%
+```
+
+The prior 94.98% CI failure, the interrupted macOS xdist/OpenDSS attempt and the successful serial
+native-grid recovery remain distinct evidence. None was relabelled. This receipt update and the
+implementation-record status update are documentation only; their accuracy must be rebound before
+merge and they cannot confer any finance, grade, evidence-sufficiency, professional, lender, Board,
+package-release, circulation, deployment or HOLD authority.

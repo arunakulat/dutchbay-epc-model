@@ -1,7 +1,7 @@
 # Dolphin 3B-1 execution-seam implementation record
 
-**Status:** seventh exact test-only coverage-control freeze pending independent rebind and
-protected exact-head CI
+**Status:** seventh exact production/test freeze independently domain and assurance accepted;
+protected exact-head CI green at 95.03% aggregate coverage
 **Base:** `dc2b211954f67c9d010831350e51884c9fe79c52` (`origin/main`, synchronized
 2026-08-31)  
 **Branch:** `codex/d3b-v14-execution-seam-r2`  
@@ -179,7 +179,13 @@ full local attempt executed 7,117 passing tests and 18 governed skips, but one x
 segfaulted while importing the macOS OpenDSS native backend; that worker returned neither its test
 result nor coverage data. The exact affected native-grid file then passed all four tests serially.
 This is not claimed as a green aggregate local gate. Fresh dual review and protected exact-head
-Linux CI remain required before merge.
+Linux CI remained required before merge. The independent domain and assurance reviewers then
+accepted exact committed production/test head
+`b6d50cb895acde505520d324c6e0f8e299bd922d`. Protected Linux run `33387739842` passed all six
+test shards, grid, quality, security and summary gates and combined `30,981` executable statements
+with `1,541` missed, or 95.03% aggregate coverage. The documentation-only persistence of those
+receipts remains subject to an exact documentation rebind and protected checks; it does not alter
+the accepted production or test bytes.
 
 These are engineering evidence only. They establish no professional conclusion, achieved grade,
 evidence sufficiency, lender acceptance, package approval or release authority.
