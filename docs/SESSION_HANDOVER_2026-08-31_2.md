@@ -298,12 +298,31 @@ this handover itself is protected-main merged and the target worktrees are prove
 - `/Users/aruna/Downloads/dutchbay-wt-d3c0-assembly-authority` /
   `codex/d3c0-assembly-authority`; and
 - `/Users/aruna/Downloads/dutchbay-wt-d3c-package-assembly` /
-  the documentation-delivery branch used by this handover.
+  `codex/d3c-next-thread-handover`.
 
 The D3B-1 topic files were proven byte-identical to protected merge `1d3b004…`. The D3C-0 recovery
 checkpoint `379d048…` changes only the predecessor `assembly_authority.py`; it is superseded by the
-reviewed implementation on protected `main` and is durably named in the D3C-0 implementation
-record. The corresponding remote feature branches were already absent at this cutoff.
+reviewed implementation on protected `main`, but the commit itself was not reachable from a remote
+ref. Before retirement it was therefore preserved in the verified incremental Git bundle:
+
+- path: `/Users/aruna/Downloads/DutchBay_D3C0_Recovery_379d048_2026-08-31.bundle`;
+- contained ref: `379d048de40fb851133dc0c66bf30312c2bf9782`
+  (`refs/heads/codex/d3c0-assembly-authority`);
+- protected-history prerequisite: `1d3b004d8c1cc6ecfa9515d0a4b51ec876e986f8`; and
+- bundle SHA-256: `dafd9b6ee83592799150c45d0467aa6725d6f6df559e02f59107b22531e33abc`.
+
+The bundle must remain outside the retired worktrees. Verify or recover it from a repository that
+contains the protected-history prerequisite with:
+
+```bash
+recovery_bundle=/Users/aruna/Downloads/DutchBay_D3C0_Recovery_379d048_2026-08-31.bundle
+git bundle verify "$recovery_bundle"
+git bundle list-heads "$recovery_bundle"
+git fetch "$recovery_bundle" \
+  refs/heads/codex/d3c0-assembly-authority:refs/heads/recovery/d3c0-379d048
+```
+
+The corresponding remote D3B-1 and D3C-0 feature branches were already absent at this cutoff.
 
 Do not delete the durable main checkout `/Users/aruna/Downloads/dutchbay-epc-model`, the persistent
 project folder `/Users/aruna/Downloads/Dutchbay_EPC_Model`, its `.venv`, protected history, PR
