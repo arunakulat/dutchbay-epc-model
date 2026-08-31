@@ -1,7 +1,7 @@
 # Dolphin 3C-1a result-only projection implementation record
 
-**Status:** corrected replacement candidate; exact-SHA review pending; no D2 package assembly or
-HOLD movement
+**Status:** corrected replacement candidate; full local verification complete; exact-SHA review
+pending; no D2 package assembly or HOLD movement
 
 **Protected base:** `e40c13a2fbd4bd974078c4d1dd32e4b1e7ebdf3f` (`origin/main`, PR `#1208` merge)
 
@@ -184,7 +184,7 @@ predicate for the already-computed total; it is never summed.
 
 ## 6. Verification evidence
 
-The corrected focused suite contains 111 tests and covers all three changed implementation modules
+The corrected focused suite contains 112 tests and covers all three changed implementation modules
 at **100% line and branch coverage** (951 statements and 416 branches). Persistent controls include:
 
 - one genuine public gateway reached through D3B and then projected without a second call;
@@ -208,13 +208,20 @@ The pre-change `tests/contracts` baseline was `1200 passed, 1 warning`. Replacem
 
 | Gate | Replacement candidate result |
 |---|---:|
-| Focused D3C-1a hostile/oracle suite | `111 passed` |
+| Focused D3C-1a hostile/oracle suite | `112 passed` |
 | Focused changed-module line/branch coverage | `100.00%` (`951` statements, `416` branches) |
 | Ruff / Black / isort / Bandit | pass |
 | Narrow mypy over three implementation modules | `Success: no issues found` |
 | Complete `tests/contracts` gate | `1312 passed, 1 inherited warning` |
-| Full governed ordinary suite | pending replacement exact-head run |
-| Full governed coverage floor | pending replacement exact-head run (`>=95%` required) |
+| Full governed ordinary suite | `7333 passed, 18 skipped, 23 warnings` in `722.75s` |
+| Full governed coverage floor | `95.31%` (`32537` statements, `1527` missed; `>=95%` required) |
+
+The full governed suite and coverage receipt ran twice against corrected code commit
+`a2d681883e5a62d4af638a0b033e0364f4d083b6`; the first pass's summary stream was lost when its PTY
+closed, but its completed coverage database independently reported `95.31%`. The controlled rerun
+returned exit zero with the exact counts above and deleted its temporary diagnostic capture and
+coverage database after emitting the concise receipt. The later receipt-only documentation commit
+changes no source or test blob; focused and contract gates are rerun at that final review SHA.
 
 Inherited warnings/skips are not D3C success evidence. Exact-head CI remains merge authority and is
 recorded in the PR rather than predicted here.
