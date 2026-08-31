@@ -22,6 +22,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Dict, List, Mapping, Optional, cast
 
 import pandas as pd
@@ -89,6 +90,24 @@ APPROVED_SOURCES = {
         "iec_standard": "61400-15-1:2025",
     },
 }
+
+# Immutable code-owned baseline for execution boundaries that must not inherit
+# process-global widening performed by an earlier authored-scenario load.  The public
+# APPROVED_SOURCES registry remains extensible for existing application flows.
+BUILTIN_APPROVED_SOURCES = MappingProxyType(
+    {
+        source_id: MappingProxyType(dict(metadata))
+        for source_id, metadata in APPROVED_SOURCES.items()
+    }
+)
+
+
+def builtin_approved_sources_manifest() -> Dict[str, Any]:
+    """Return a detached manifest containing only code-owned built-in sources."""
+    return {
+        source_id: dict(metadata)
+        for source_id, metadata in BUILTIN_APPROVED_SOURCES.items()
+    }
 
 
 def validate_source_manifest(
@@ -494,10 +513,12 @@ def validate_config_aep_provenance(
 
 __all__ = [
     "APPROVED_SOURCES",
+    "BUILTIN_APPROVED_SOURCES",
     "IEC_STANDARDS",
     "PLACEHOLDER_SOURCE_IDS",
     "validate_source_manifest",
     "register_approved_source",
+    "builtin_approved_sources_manifest",
     "load_approved_sources_from_yaml",
     "assert_source_in_manifest",
     "is_placeholder_source",

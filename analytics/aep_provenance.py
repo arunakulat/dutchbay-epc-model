@@ -306,7 +306,10 @@ def register_scenario_approved_sources(
 
 
 def enforce_aep_provenance(
-    config: dict[str, Any], config_path: str | None = None
+    config: dict[str, Any],
+    config_path: str | None = None,
+    *,
+    approved_sources_manifest: dict[str, Any] | None = None,
 ) -> None:
     """Fail loud if a financed scenario's AEP source is not lender-grade.
 
@@ -315,6 +318,10 @@ def enforce_aep_provenance(
     declares no ``resource.power_curve.source_id`` and the policy does not require one.
     Otherwise asserts the declared source is in the approved manifest and (unless
     ``allow_placeholder``) is not a placeholder while a certified OEM curve exists.
+
+    ``approved_sources_manifest`` narrows validation to a caller-owned detached manifest.
+    This lets a held execution boundary refuse process-global sources registered by an
+    earlier, unrelated scenario load.
 
     Raises:
         AepProvenanceError: If a required source is missing, unapproved, or a refused
@@ -356,7 +363,9 @@ def enforce_aep_provenance(
 
     try:
         block = validate_config_aep_provenance(
-            config, allow_placeholder=policy.allow_placeholder
+            config,
+            manifest=approved_sources_manifest,
+            allow_placeholder=policy.allow_placeholder,
         )
     except (KeyError, ValueError) as exc:
         # KeyError/ValueError carry the manifest/placeholder detail; re-raise as the

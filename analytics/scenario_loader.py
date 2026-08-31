@@ -31,6 +31,7 @@ from analytics.conditions_precedent import validate_conditions_precedent
 from analytics.development_readiness import validate_development_readiness
 from analytics.evidence_register import validate_evidence_register
 from analytics.feasibility_sections import validate_feasibility_sections
+from analytics.loader.aep_loader import builtin_approved_sources_manifest
 
 logger = logging.getLogger(__name__)
 
@@ -69,25 +70,38 @@ def _try_config_paths(base_path: Path) -> Path:
             return candidate
 
     tried = ", ".join(str(candidate) for candidate in candidates)
-    raise FileNotFoundError(
-        f"Scenario config not found: {base_path} " f"(tried: {tried})"
-    )
+    raise FileNotFoundError(f"Scenario config not found: {base_path} (tried: {tried})")
 
 
-def _load_raw_config(path: Path) -> dict[str, Any]:
-    """Load a raw scenario configuration from YAML or JSON."""
+def _load_raw_config(
+    path: Path, *, verified_bytes: bytes | None = None
+) -> dict[str, Any]:
+    """Load a raw scenario mapping from the path or caller-verified exact bytes."""
     resolved_path = _try_config_paths(path)
     suffix = resolved_path.suffix.lower()
-
-    with resolved_path.open("r", encoding="utf-8") as file_obj:
-        if suffix in {".yml", ".yaml"}:
-            data = yaml.safe_load(file_obj)
-        elif suffix == ".json":
-            data = json.load(file_obj)
-        else:
-            raise ScenarioConfigError(
-                f"Unsupported scenario config extension '{suffix}' for {resolved_path}"
+    if verified_bytes is not None and type(verified_bytes) is not bytes:
+        raise ScenarioConfigError("verified scenario bytes must be exact bytes")
+    if suffix not in {".yml", ".yaml", ".json"}:
+        raise ScenarioConfigError(
+            f"Unsupported scenario config extension '{suffix}' for {resolved_path}"
+        )
+    if verified_bytes is None:
+        with resolved_path.open("r", encoding="utf-8") as file_obj:
+            data = (
+                yaml.safe_load(file_obj)
+                if suffix in {".yml", ".yaml"}
+                else json.load(file_obj)
             )
+    else:
+        try:
+            source_text = verified_bytes.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ScenarioConfigError("scenario verified bytes are not UTF-8") from exc
+        data = (
+            yaml.safe_load(source_text)
+            if suffix in {".yml", ".yaml"}
+            else json.loads(source_text)
+        )
 
     if data is None:
         raise ScenarioConfigError(f"Empty configuration in file: {resolved_path}")
@@ -231,7 +245,12 @@ def _assert_fx_spot_consistency(config: dict[str, Any], label: str) -> None:
         )
 
 
-def load_scenario_config(path: str | Path) -> dict[str, Any]:
+def load_scenario_config(
+    path: str | Path,
+    *,
+    verified_bytes: bytes | None = None,
+    allow_external_approved_sources: bool = True,
+) -> dict[str, Any]:
     """Load and lightly normalize a scenario configuration.
 
     Behavior:
@@ -240,9 +259,15 @@ def load_scenario_config(path: str | Path) -> dict[str, Any]:
     - does not enforce v14-only sections such as ``debt`` or ``generation``;
     - does not require FX unless callers explicitly ask via ``_resolve_fx``;
     - rejects scalar ``fx`` when present, preserving the no-scalar-FX policy.
+    - when external approved sources are disabled, validates AEP provenance only against
+      the immutable code-owned built-in source manifest.
     """
     config_path = Path(path)
-    cfg = _load_raw_config(config_path)
+    if type(allow_external_approved_sources) is not bool:
+        raise ScenarioConfigError(
+            "allow_external_approved_sources must be an exact boolean"
+        )
+    cfg = _load_raw_config(config_path, verified_bytes=verified_bytes)
     _ensure_meta_source(cfg, config_path)
 
     fx_cfg = cfg.get("fx")
@@ -258,19 +283,44 @@ def load_scenario_config(path: str | Path) -> dict[str, Any]:
     # of capacity_factor (which pass in-memory dicts, never re-loaded) are unaffected.
     reconcile_capacity_factor_with_bankable_aep(cfg, str(config_path))
 
+    resource = cfg.get("resource")
+    power_curve = resource.get("power_curve") if isinstance(resource, dict) else None
+    declared_sources_manifest = (
+        power_curve.get("approved_sources_yaml")
+        if isinstance(power_curve, dict)
+        else None
+    )
+    if (
+        declared_sources_manifest is not None
+        and declared_sources_manifest != ""
+        and not allow_external_approved_sources
+    ):
+        raise ScenarioConfigError(
+            "external approved-sources manifests are forbidden at this execution boundary"
+        )
+
     # Register any per-project approved AEP sources the scenario declares
     # (resource.power_curve.approved_sources_yaml) into the process-global manifest BEFORE
     # the provenance guard runs, so a project can admit its own vetted turbine/source from
     # config (ARCH-01) rather than editing the code registry. No-op (byte-identical) unless
     # the key is declared; fails loud on a missing/malformed manifest (CESSPIT). The YAML
     # path resolves relative to this scenario file.
-    register_scenario_approved_sources(cfg, str(config_path))
+    if allow_external_approved_sources:
+        register_scenario_approved_sources(cfg, str(config_path))
 
     # A scenario that names a turbine power-curve source must name an APPROVED one — the
     # #18 lender-grade provenance control. No-op when no source_id is declared (graceful
     # for simplified base cases / fixtures); fails loud on an unapproved or refused
     # placeholder source. Changes no computed number (byte-identical economics).
-    enforce_aep_provenance(cfg, str(config_path))
+    enforce_aep_provenance(
+        cfg,
+        str(config_path),
+        approved_sources_manifest=(
+            None
+            if allow_external_approved_sources
+            else builtin_approved_sources_manifest()
+        ),
+    )
 
     # Validate the assumption EVIDENCE register (#C5): every material assumption a scenario
     # declares should carry provenance {source, as_of, tier}. SOFT by default (warns, never
