@@ -23,6 +23,7 @@ import analytics.feasibility_report_contract.assembly_authority as authority
 from analytics.feasibility_report_contract.assembly_authority import (
     ASSEMBLY_AUTHORITY_CONTRACT_VERSION,
     ASSEMBLY_AUTHORITY_SCHEMA_ID,
+    HELD_DISTRIBUTION_PROFILE_ID,
     NON_RELIANCE_STATEMENT,
     AcceptedAssemblyAuthority,
     AssemblyAuthorityBlockCode,
@@ -143,6 +144,23 @@ def _accepted_payload() -> dict[str, Any]:
             "project_case_revision": 1,
             "d3b_scenario_authority_id": "authority:d3b-fixture",
             "config_id": "config:fictionland-wind",
+            "scope_id": "scope:d3b-fixture",
+            "project_boundary": "Fictionland wind contract fixture",
+            "jurisdiction_codes": ("FIC",),
+            "technology_ids": ("wind",),
+            "project_stage": "screening",
+            "intended_audiences": (
+                {
+                    "audience_id": "audience:internal-engineering",
+                    "statement": "Internal engineering reviewers",
+                },
+            ),
+            "intended_uses": (
+                {
+                    "use_id": "use:d3c-plumbing-verification",
+                    "statement": "D3C plumbing verification",
+                },
+            ),
             "evidence_cutoff": date(2026, 8, 31),
             "valuation_date": date(2026, 8, 31),
         },
@@ -237,6 +255,7 @@ def _accepted_payload() -> dict[str, Any]:
         "distribution": {
             "release_status": "hold",
             "non_reliance": True,
+            "profile_id": HELD_DISTRIBUTION_PROFILE_ID,
             "permitted_reliance_statement": NON_RELIANCE_STATEMENT,
             "scope_intended_audiences": ("Internal engineering reviewers",),
             "scope_intended_uses": ("D3C plumbing verification",),
@@ -247,7 +266,7 @@ def _accepted_payload() -> dict[str, Any]:
                 "permitted_uses": ("D3C plumbing verification",),
                 "permitted_reliance": NON_RELIANCE_STATEMENT,
                 "distribution_class": "internal",
-                "confidentiality": "Internal controlled fixture.",
+                "confidentiality": "Internal controlled D3C assembly only.",
                 "publication_rights": "No publication is authorized.",
                 "reliance_exclusions": (
                     "No achieved grade, professional conclusion, lender acceptance, "
@@ -468,7 +487,7 @@ def test_schema_version_and_unknown_fields_are_mandatory_and_closed() -> None:
         (
             ("distribution", "control", "distribution_class"),
             "public",
-            "cannot authorize public distribution",
+            "must use the exact internal profile",
         ),
         (
             ("distribution", "control", "expiry_or_review_date"),
@@ -834,12 +853,69 @@ def test_duplicate_pack_references_are_refused_before_set_reconciliation() -> No
         _validate(payload)
 
 
+def test_pack_versions_are_exact_bounded_and_duplicate_free() -> None:
+    payload = _accepted_payload()
+    payload["pack_bindings"][0]["version"] = " 1.0.0 "
+    with pytest.raises(ValidationError, match="version is not exact bounded text"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["pack_bindings"][0]["compatible_contract_versions"] = (
+        FEASIBILITY_REPORT_CONTRACT_VERSION,
+        FEASIBILITY_REPORT_CONTRACT_VERSION,
+    )
+    with pytest.raises(ValidationError, match="contains duplicate entries"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["pack_bindings"][0]["compatible_contract_versions"] = tuple(
+        FEASIBILITY_REPORT_CONTRACT_VERSION for _ in range(257)
+    )
+    with pytest.raises(ValidationError, match="exceeds the bounded record count"):
+        _validate(payload)
+
+
 def test_result_artifacts_cannot_predate_the_engine_run() -> None:
     payload = _accepted_payload()
     early = datetime(2026, 8, 31, 2, 30, tzinfo=_UTC)
     payload["artifact_records"][0]["created_at"] = early
     payload["byte_artifact_bindings"][0]["created_at"] = early
     with pytest.raises(ValidationError, match="outside engine/authority chronology"):
+        _validate(payload)
+
+
+def test_evidence_cutoff_cannot_postdate_the_governed_engine_run() -> None:
+    payload = _accepted_payload()
+    payload["evaluation_request_identity"]["evidence_cutoff"] = date(2027, 1, 1)
+    with pytest.raises(
+        ValidationError, match="cannot postdate the governed engine run"
+    ):
+        _validate(payload)
+
+
+def test_result_artifacts_remain_internal_non_package_inputs() -> None:
+    payload = _accepted_payload()
+    payload["artifact_records"][0]["is_full_package"] = True
+    with pytest.raises(ValidationError, match="cannot be a full package"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["artifact_records"][0]["confidentiality"] = "public"
+    payload["byte_artifact_bindings"][0]["confidentiality"] = "public"
+    with pytest.raises(ValidationError, match="must remain internal"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    artifact = payload["artifact_records"][0]
+    artifact["completeness_profile"] = "Complete lender-ready feasibility package."
+    with pytest.raises(ValidationError, match="invalid completeness profile"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["artifact_records"][0]["disclosure_exceptions"] = (
+        "External circulation and reliance are permitted.",
+    )
+    with pytest.raises(ValidationError, match="invalid disclosure exceptions"):
         _validate(payload)
 
 
@@ -859,10 +935,19 @@ def test_each_technology_axis_has_exactly_one_pack_but_hybrids_remain_valid() ->
     solar = _pack(pack_id="pack:solar", kind="technology")
     solar["technology_ids"] = ("solar_pv",)
     solar["capability_ids"] = ("capability:technology-solar",)
-    payload["pack_bindings"] += (solar,)
-    payload["technology_pack_ids"] += ("pack:solar",)
+    bess = _pack(pack_id="pack:bess", kind="technology")
+    bess["technology_ids"] = ("bess",)
+    bess["capability_ids"] = ("capability:technology-bess",)
+    payload["pack_bindings"] += (solar, bess)
+    payload["technology_pack_ids"] += ("pack:solar", "pack:bess")
+    payload["evaluation_request_identity"]["technology_ids"] = (
+        "wind",
+        "solar_pv",
+        "bess",
+    )
     payload["authorized_registry_ids"]["capability_ids"] += (
         "capability:technology-solar",
+        "capability:technology-bess",
     )
     accepted = _validate(payload)
     assert {
@@ -870,6 +955,7 @@ def test_each_technology_axis_has_exactly_one_pack_but_hybrids_remain_valid() ->
     } == {
         ("wind",),
         ("solar_pv",),
+        ("bess",),
     }
 
 
@@ -907,6 +993,151 @@ def test_taxonomy_supersession_and_surplus_circulation_fail_closed() -> None:
         "Public publication and Board circulation are authorized."
     )
     with pytest.raises(ValidationError, match="contradicts the publication hold"):
+        _validate(payload)
+
+
+def test_distribution_scope_is_reciprocal_to_governed_request_intents() -> None:
+    payload = _accepted_payload()
+    payload["distribution"]["scope_intended_audiences"] = (
+        "Board members",
+        "Lenders",
+    )
+    payload["distribution"]["scope_intended_uses"] = (
+        "Board circulation",
+        "Lender circulation",
+    )
+    payload["distribution"]["control"]["intended_audiences"] = (
+        "Board members",
+        "Lenders",
+    )
+    payload["distribution"]["control"]["permitted_uses"] = (
+        "Board circulation",
+        "Lender circulation",
+    )
+    with pytest.raises(ValidationError, match="governed evaluation scope"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["distribution"]["scope_intended_uses"] = ("Lender circulation",)
+    payload["distribution"]["control"]["permitted_uses"] = ("Lender circulation",)
+    with pytest.raises(ValidationError, match="uses do not match"):
+        _validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("path", "value", "message"),
+    (
+        (
+            ("distribution", "control", "confidentiality"),
+            "No confidentiality applies; external circulation is permitted.",
+            "confidentiality contradicts the held profile",
+        ),
+        (
+            ("distribution", "control", "redaction_policy"),
+            "Distribute externally without redaction.",
+            "redaction policy contradicts the held profile",
+        ),
+        (
+            ("distribution", "control", "reliance_exclusions"),
+            (),
+            "exclusions contradict the held profile",
+        ),
+        (
+            ("distribution", "control", "distribution_class"),
+            "confidential",
+            "must use the exact internal profile",
+        ),
+    ),
+)
+def test_held_distribution_profile_has_no_free_semantic_authority(
+    path: tuple[str | int, ...], value: Any, message: str
+) -> None:
+    payload = _accepted_payload()
+    _set(payload, path, value)
+    with pytest.raises(ValidationError, match=message):
+        _validate(payload)
+
+
+def test_governed_scope_intents_are_exact_bounded_and_unique() -> None:
+    payload = _accepted_payload()
+    request_identity = payload["evaluation_request_identity"]
+    request_identity["intended_audiences"] = "not-an-intent-record"
+    with pytest.raises(ValidationError, match="must be an exact list or tuple"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    request_identity = payload["evaluation_request_identity"]
+    audience_intent = request_identity["intended_audiences"][0]
+    audience_intent["statement"] = " Internal engineering reviewers "
+    with pytest.raises(ValidationError, match="not exact bounded text"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    duplicate = copy.deepcopy(
+        payload["evaluation_request_identity"]["intended_uses"][0]
+    )
+    payload["evaluation_request_identity"]["intended_uses"] += (duplicate,)
+    with pytest.raises(ValidationError, match="duplicate intent identities"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["evaluation_request_identity"]["intended_uses"] = tuple(
+        {
+            "use_id": f"use:{index}",
+            "statement": f"Bounded use {index}",
+        }
+        for index in range(65)
+    )
+    with pytest.raises(ValidationError, match="must contain 1..64 exact intents"):
+        _validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "value", "message"),
+    (
+        ("project_boundary", "Different project and site", "foreign project boundary"),
+        ("jurisdictions", ("LKA",), "foreign jurisdiction scope"),
+        ("technology_ids", ("solar_pv",), "foreign technology scope"),
+    ),
+)
+def test_source_axes_match_the_governed_scope(
+    field_name: str, value: Any, message: str
+) -> None:
+    payload = _accepted_payload()
+    payload["source_records"][0][field_name] = value
+    with pytest.raises(ValidationError, match=message):
+        _validate(payload)
+
+
+def test_selected_packs_exactly_cover_scope_and_project_stage() -> None:
+    payload = _accepted_payload()
+    duplicate = _pack(pack_id="pack:fic-duplicate", kind="jurisdiction")
+    duplicate["capability_ids"] = ("capability:jurisdiction-duplicate",)
+    payload["pack_bindings"] += (duplicate,)
+    payload["jurisdiction_pack_ids"] += ("pack:fic-duplicate",)
+    payload["authorized_registry_ids"]["capability_ids"] += (
+        "capability:jurisdiction-duplicate",
+    )
+    with pytest.raises(ValidationError, match="each selected jurisdiction"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["evaluation_request_identity"]["jurisdiction_codes"] = ("FIC", "LKA")
+    with pytest.raises(
+        ValidationError, match="jurisdiction packs do not exactly cover"
+    ):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["evaluation_request_identity"]["technology_ids"] = ("wind", "solar_pv")
+    with pytest.raises(ValidationError, match="technology packs do not exactly cover"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["evaluation_request_identity"]["project_stage"] = "construction"
+    with pytest.raises(
+        ValidationError, match="does not support the governed project stage"
+    ):
         _validate(payload)
 
 

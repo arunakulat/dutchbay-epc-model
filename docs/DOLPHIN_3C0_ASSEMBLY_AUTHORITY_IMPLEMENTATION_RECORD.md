@@ -29,7 +29,8 @@ An accepted receipt binds the actual D2 record types and the D3C-specific recipr
 
 - the D2 `ReportIdentity`, with distinct `report_id` and `run_id`;
 - the exact D3B request/case identity, including ProjectCase revision, scenario-authority ID,
-  configuration ID, evidence cutoff and valuation date;
+  configuration ID, governed scope ID, project boundary, jurisdiction/technology axes, project
+  stage, typed audience/use intents, evidence cutoff and valuation date;
 - SHA-256 digests for the exact ProjectCase, EvaluationRequest and D3B execution success, including
   the reciprocal ProjectCase and EvaluationRequest digests embedded by the D3B success;
 - the source, actor and timestamp that allocated report/run identity;
@@ -52,7 +53,9 @@ chronology, digest drift, dirty-state contradictions, byte/artifact drift, expir
 public distribution and disclosure references outside the selected graph. Every selected pack and
 source is checked against the EvaluationRequest evidence cutoff using the downstream D2 temporal
 rules. Source supersession must be acyclic, and every disclosure source must belong to the exact
-artifact named by that disclosure.
+artifact named by that disclosure. The cutoff cannot postdate the governed engine run. Source
+project boundary and jurisdiction/technology axes must lie within the governed request scope, and
+the selected packs must exactly cover that scope and support its project stage.
 
 Nested D2 wire records are inspected before D2's whitespace-normalizing string constraints run.
 Raw report, actor, source, pack, artifact and distribution IDs therefore cannot enter as padded or
@@ -63,9 +66,12 @@ same evidential-text ceiling.
 Selected technology packs are one-per-exact-technology axis, while distinct wind, solar and BESS
 pack axes remain representable. Pack and source section IDs must belong to the exact taxonomy SSOT.
 The three result artifacts cannot predate the engine run and cannot carry an artifact-supersession
-claim without a future governed predecessor-artifact authority. Distribution audiences and uses
-must equal the held engineering scope; a superset cannot silently authorize Board/lender
-circulation, and publication rights must say exactly `No publication is authorized.`
+claim without a future governed predecessor-artifact authority. They remain internal,
+`is_full_package=False` inputs with role-exact completeness and disclosure statements; none may
+claim that package assembly has already occurred. Distribution audience/use statements must map
+reciprocally to the governed D3B intent records. Its versioned held profile closes classification,
+confidentiality, redaction, reliance-exclusion and publication semantics; publication rights say
+exactly `No publication is authorized.`
 
 D3A `support_status=declared` has no field or promotion route in this contract. D3C-0 consumes exact
 D2 pack facts only. An unsupported D2 pack remains visibly unsupported; the authority contract
@@ -73,9 +79,10 @@ does not turn it into a supported or assured pack and carries no grade-ceiling d
 
 ## 3. Negative-space boundary
 
-The production module imports only the D2 records/vocabulary needed to express authority facts. An
-executable AST guard proves it does not import the evaluator, finance, application, API or rendering
-surfaces and does not reference `evaluate_with_overrides` or `FeasibilityReportPackage`.
+The production module imports only the D3B audience/use intent types and D2 records/vocabulary
+needed to express authority facts. An executable AST guard proves it does not import the evaluator,
+finance, application, API or rendering surfaces and does not reference `evaluate_with_overrides` or
+`FeasibilityReportPackage`.
 
 D3C-0 therefore does **not**:
 
@@ -169,6 +176,24 @@ constructive fixture now lies on the evidence-cutoff boundary and each second-ca
 counterexample has a hostile negative control. Neither veto accepts this changed tree; it requires
 fresh domain and assurance review after the third candidate is frozen.
 
+The third frozen candidate was `8731555ea1ef60c18bf42d0f24e7708665aa8e6c`, tree
+`ae63784710bf1276230a977cd309822547a3a23d`. Fresh domain and assurance review again vetoed that
+exact SHA. Both proved that jointly changing the two copied audience/use tuples admitted
+Board/lender circulation without any binding to the governed D3B scope. They also reproduced
+contradictory confidentiality/redaction/reliance prose and engine-result artifacts claiming
+`is_full_package=True`. Domain additionally proved that sources could cross the project boundary or
+claim foreign jurisdiction/technology axes. Assurance proved that compatible-contract-version
+occurrences remained duplicate-permissive and unbounded, and that the evidence cutoff could
+postdate the engine run and authority receipt.
+
+The fourth remediation carries the typed D3B audience/use intent identities and statements plus
+the governed project boundary, jurisdiction/technology axes and project stage. Distribution maps
+reciprocally to those intents under one closed held-profile ID; sources and packs reconcile to the
+scope; result-byte artifacts remain explicit non-package inputs; compatible versions are exact,
+bounded and duplicate-free; and the evidence cutoff cannot follow the engine run. Every third-round
+counterexample now has a hostile negative control. The third-round vetoes accept no changed tree;
+the fourth candidate still requires two fresh exact-SHA dispositions after freeze.
+
 ## 7. Verification receipts
 
 The governed local environment is `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`, Python
@@ -179,9 +204,9 @@ Focused receipts at this implementation stage:
 
 | Gate | Result |
 |---|---:|
-| D3C-0 constructive and hostile controls | `89 passed` |
+| D3C-0 constructive and hostile controls | `102 passed` |
 | D3C-0 module branch coverage | `100.00%` |
-| Complete `tests/contracts` predecessor regression | `1186 passed` |
+| Complete `tests/contracts` predecessor regression | `1199 passed` |
 | Import, cold-order, gateway, changelog and v14 surface controls | `53 passed` |
 | Ruff check and format | passed |
 | Mypy `--no-incremental` for production, exports and focused tests | passed |

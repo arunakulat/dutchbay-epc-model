@@ -33,6 +33,7 @@ from pydantic import (
 
 from analytics.feasibility_sections import load_feasibility_taxonomy
 
+from .assessment_scope import AudienceIntent, UseIntent
 from .records import (
     ActorRecord,
     ArtifactRecord,
@@ -52,6 +53,16 @@ NON_RELIANCE_STATEMENT: Final = (
     "No reliance is permitted; package release remains on HOLD."
 )
 NO_PUBLICATION_STATEMENT: Final = "No publication is authorized."
+HELD_DISTRIBUTION_PROFILE_ID: Final = "dutchbay.d3c0.held_internal_distribution.v1"
+_HELD_CONFIDENTIALITY_STATEMENT: Final = "Internal controlled D3C assembly only."
+_HELD_REDACTION_POLICY_STATEMENT: Final = "No external distribution; fail closed."
+_HELD_AUTHORITY_EXCLUSION_STATEMENT: Final = (
+    "No achieved grade, professional conclusion, lender acceptance, Board authority "
+    "or package release is conferred."
+)
+_RESULT_ARTIFACT_DISCLOSURE_STATEMENT: Final = (
+    "Held internal plumbing artifact; no reliance is permitted."
+)
 
 _MAX_RECORDS: Final = 256
 _MAX_TEXT_CODEPOINTS: Final = 4_096
@@ -280,7 +291,9 @@ def _validate_raw_nested_d2_records(data: dict[str, object]) -> None:
                 "decision_ids",
                 "limitation_ids",
             ),
+            text_fields=("version",),
             text_tuple_fields=(
+                "compatible_contract_versions",
                 "project_stages",
                 "cross_field_rules",
                 "permitted_degradations",
@@ -437,8 +450,60 @@ class EvaluationRequestIdentity(StrictFrozenModel):
     project_case_revision: Annotated[int, Field(gt=0)]
     d3b_scenario_authority_id: ExactStableId
     config_id: ExactStableId
+    scope_id: ExactStableId
+    project_boundary: ExactBoundedText
+    jurisdiction_codes: ExactIdTuple
+    technology_ids: ExactIdTuple
+    project_stage: ExactBoundedText
+    intended_audiences: Annotated[
+        tuple[AudienceIntent, ...], Field(min_length=1, max_length=64)
+    ]
+    intended_uses: Annotated[tuple[UseIntent, ...], Field(min_length=1, max_length=64)]
     evidence_cutoff: date
     valuation_date: date
+
+    @field_validator("intended_audiences", "intended_uses", mode="wrap")
+    @classmethod
+    def _scope_intent_ingress_is_exact(
+        cls,
+        data: object,
+        handler: ValidatorFunctionWrapHandler,
+        info: ValidationInfo,
+    ) -> object:
+        field_name = cast(str, info.field_name)
+        if type(data) not in {list, tuple}:
+            raise ValueError(f"{field_name} must be an exact list or tuple")
+        records = tuple(cast(list[object] | tuple[object, ...], data))
+        if not 1 <= len(records) <= 64:
+            raise ValueError(f"{field_name} must contain 1..64 exact intents")
+        id_field = "audience_id" if field_name == "intended_audiences" else "use_id"
+        for index, record in enumerate(records):
+            _validate_raw_record_fields(
+                record,
+                f"evaluation_request_identity.{field_name}[{index}]",
+                id_fields=(id_field,),
+                text_fields=("statement",),
+            )
+        if info.mode == "json":
+            adapter: TypeAdapter[Any] = TypeAdapter(
+                cls.model_fields[field_name].annotation
+            )
+            converted = adapter.validate_json(json.dumps(data), context=info.context)
+            return handler(converted)
+        return handler(data)
+
+    @model_validator(mode="after")
+    def _scope_intent_ids_are_unique(self) -> "EvaluationRequestIdentity":
+        for field_name, id_field in (
+            ("intended_audiences", "audience_id"),
+            ("intended_uses", "use_id"),
+        ):
+            intent_ids = tuple(
+                getattr(intent, id_field) for intent in getattr(self, field_name)
+            )
+            if len(intent_ids) != len(set(intent_ids)):
+                raise ValueError(f"{field_name} contain duplicate intent identities")
+        return self
 
 
 class UpstreamObjectDigestBindings(StrictFrozenModel):
@@ -560,6 +625,7 @@ class HeldNonRelianceDistributionBinding(StrictFrozenModel):
 
     release_status: Literal["hold"]
     non_reliance: Literal[True]
+    profile_id: Literal["dutchbay.d3c0.held_internal_distribution.v1"]
     permitted_reliance_statement: Literal[
         "No reliance is permitted; package release remains on HOLD."
     ]
@@ -585,10 +651,20 @@ class HeldNonRelianceDistributionBinding(StrictFrozenModel):
             raise ValueError("distribution uses do not equal the held scope")
         if self.control.permitted_reliance != self.permitted_reliance_statement:
             raise ValueError("distribution control contradicts the non-reliance hold")
-        if self.control.distribution_class is ConfidentialityClass.PUBLIC:
-            raise ValueError("held assembly facts cannot authorize public distribution")
+        if self.control.distribution_class is not ConfidentialityClass.INTERNAL:
+            raise ValueError("held distribution must use the exact internal profile")
         if self.control.publication_rights != NO_PUBLICATION_STATEMENT:
             raise ValueError("distribution control contradicts the publication hold")
+        if self.control.confidentiality != _HELD_CONFIDENTIALITY_STATEMENT:
+            raise ValueError(
+                "distribution confidentiality contradicts the held profile"
+            )
+        if self.control.redaction_policy != _HELD_REDACTION_POLICY_STATEMENT:
+            raise ValueError(
+                "distribution redaction policy contradicts the held profile"
+            )
+        if self.control.reliance_exclusions != (_HELD_AUTHORITY_EXCLUSION_STATEMENT,):
+            raise ValueError("distribution exclusions contradict the held profile")
         return self
 
 
@@ -681,6 +757,8 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
             raise ValueError("engine run cannot predate the allocated report identity")
         if self.runtime_receipt.captured_at > self.authority_created_at:
             raise ValueError("assembly authority cannot predate its runtime receipt")
+        if request.evidence_cutoff > self.runtime_receipt.engine_run_created_at.date():
+            raise ValueError("evidence cutoff cannot postdate the governed engine run")
 
         actors = _index_records(self.actor_records, "actor_id", "actor")
         sources = _index_records(self.source_records, "source_id", "source")
@@ -705,6 +783,19 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
         if runtime_source.content_digest != self.runtime_receipt.source_digest:
             raise ValueError("runtime receipt digest differs from its source record")
 
+        scope_audiences = tuple(
+            intent.statement for intent in request.intended_audiences
+        )
+        scope_uses = tuple(intent.statement for intent in request.intended_uses)
+        if self.distribution.scope_intended_audiences != scope_audiences:
+            raise ValueError(
+                "distribution audiences do not match the governed evaluation scope"
+            )
+        if self.distribution.scope_intended_uses != scope_uses:
+            raise ValueError(
+                "distribution uses do not match the governed evaluation scope"
+            )
+
         for source in self.source_records:
             if source.extracting_actor_id not in actors:
                 raise ValueError(
@@ -722,6 +813,18 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
             ):
                 raise ValueError(
                     f"source {source.source_id} references an unknown taxonomy section"
+                )
+            if source.project_boundary != request.project_boundary:
+                raise ValueError(
+                    f"source {source.source_id} has a foreign project boundary"
+                )
+            if not set(source.jurisdictions) <= set(request.jurisdiction_codes):
+                raise ValueError(
+                    f"source {source.source_id} has foreign jurisdiction scope"
+                )
+            if not set(source.technology_ids) <= set(request.technology_ids):
+                raise ValueError(
+                    f"source {source.source_id} has foreign technology scope"
                 )
             dated_events = {
                 "publication": source.publication_date,
@@ -778,6 +881,14 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
                     f"artifact {artifact.artifact_id} supersession is unsupported "
                     "without a governed predecessor-artifact authority"
                 )
+            if artifact.is_full_package:
+                raise ValueError(
+                    f"result artifact {artifact.artifact_id} cannot be a full package"
+                )
+            if artifact.confidentiality is not ConfidentialityClass.INTERNAL:
+                raise ValueError(
+                    f"result artifact {artifact.artifact_id} must remain internal"
+                )
 
         for disclosure in self.distribution.control.disclosure_bindings:
             if disclosure.artifact_id not in artifacts:
@@ -824,6 +935,20 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
             raise ValueError(
                 "each selected technology type requires exactly one D2 pack"
             )
+        selected_jurisdiction_axes = tuple(
+            cast(PackBinding, packs[pack_id]).jurisdiction_codes[0]
+            for pack_id in self.jurisdiction_pack_ids
+        )
+        if len(selected_jurisdiction_axes) != len(set(selected_jurisdiction_axes)):
+            raise ValueError("each selected jurisdiction requires exactly one D2 pack")
+        if set(selected_jurisdiction_axes) != set(request.jurisdiction_codes):
+            raise ValueError(
+                "selected jurisdiction packs do not exactly cover the governed scope"
+            )
+        if set(selected_technology_axes) != set(request.technology_ids):
+            raise ValueError(
+                "selected technology packs do not exactly cover the governed scope"
+            )
         for pack in self.pack_bindings:
             if pack.owner_actor_id not in actors:
                 raise ValueError(f"pack {pack.pack_id} has a dangling owner actor")
@@ -845,6 +970,10 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
             ):
                 raise ValueError(
                     f"pack {pack.pack_id} is not current at evidence cutoff"
+                )
+            if request.project_stage not in pack.project_stages:
+                raise ValueError(
+                    f"pack {pack.pack_id} does not support the governed project stage"
                 )
         self._validate_pack_registry_ids()
         self._validate_actor_source_reciprocity(actors, sources)
@@ -878,6 +1007,19 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
                         f"byte binding {binding.role.value} differs from artifact "
                         f"{field_name}"
                     )
+            expected_completeness = (
+                f"Exact {binding.role.value} bytes only; not a report package."
+            )
+            if selected_artifact.completeness_profile != expected_completeness:
+                raise ValueError(
+                    f"byte binding {binding.role.value} has an invalid completeness profile"
+                )
+            if selected_artifact.disclosure_exceptions != (
+                _RESULT_ARTIFACT_DISCLOSURE_STATEMENT,
+            ):
+                raise ValueError(
+                    f"byte binding {binding.role.value} has invalid disclosure exceptions"
+                )
 
         control = self.distribution.control
         if set(control.artifact_ids) != set(artifacts):
@@ -1114,6 +1256,7 @@ def resolve_assembly_authority(
 __all__ = (
     "ASSEMBLY_AUTHORITY_CONTRACT_VERSION",
     "ASSEMBLY_AUTHORITY_SCHEMA_ID",
+    "HELD_DISTRIBUTION_PROFILE_ID",
     "NO_PUBLICATION_STATEMENT",
     "NON_RELIANCE_STATEMENT",
     "AcceptedAssemblyAuthority",
