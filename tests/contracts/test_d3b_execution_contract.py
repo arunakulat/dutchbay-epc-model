@@ -2605,6 +2605,88 @@ def test_result_freezer_preserves_shared_legacy_alias_but_refuses_cycle() -> Non
     with pytest.raises(ValueError, match="cyclic sequence"):
         execution._freeze_json(cyclic)
 
+    cyclic_mapping: dict[str, Any] = {}
+    cyclic_mapping["self"] = cyclic_mapping
+    with pytest.raises(ValueError, match="cyclic mapping"):
+        execution._freeze_json(cyclic_mapping)
+
+
+def test_result_freezer_enforces_mapping_specific_volume_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(execution, "_MAX_RESULT_CONTAINERS", 1)
+    with pytest.raises(ValueError, match="container count"):
+        execution._freeze_json({"child": {}})
+
+    monkeypatch.setattr(execution, "_MAX_RESULT_TEXT_CODEPOINTS", 1)
+    with pytest.raises(ValueError, match="text volume"):
+        execution._freeze_json({"ab": None})
+
+
+def test_exact_numeric_equality_and_authority_digest_failure_are_fail_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert execution._all_equal_exact((1, 1.0)) is True
+    assert execution._recognized_values(
+        {"outer": {"value": 1}}, (("outer", "value"), ("absent",))
+    ) == (1,)
+
+    bundle = _bundle(tmp_path, monkeypatch)
+    unknown_price_basis = replace(
+        bundle.authority.bindings[0],
+        price_basis_id="price-basis:not-authored",
+    )
+    assert (
+        execution._authority_binding_matches(
+            unknown_price_basis,
+            bundle.project_case,
+            bundle.request,
+        )
+        is False
+    )
+
+    def fail_digest(_value: Any) -> str:
+        raise ValueError("simulated canonical digest failure")
+
+    monkeypatch.setattr(execution, "resolved_config_sha256", fail_digest)
+    assert (
+        execution._authority_binding_matches(
+            bundle.authority.bindings[0],
+            bundle.project_case,
+            bundle.request,
+        )
+        is False
+    )
+
+
+def test_internal_config_projection_helpers_reject_ambiguous_shapes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bundle = _bundle(tmp_path, monkeypatch)
+
+    assert execution._copy_json(({"value": 1},)) == [{"value": 1}]
+    with pytest.raises(TypeError, match="authored scalar selector"):
+        execution._assertion_config_values(object(), {})
+
+    with pytest.raises(ValueError, match="unknown run posture"):
+        execution._run_mode_plan({"run": {"rogue": True}}, bundle.request)
+    overrides, evaluated = execution._run_mode_plan({"run": {}}, bundle.request)
+    assert overrides == {"run": {"mode": "screening"}}
+    assert evaluated["run"] == {"mode": "screening"}
+    with pytest.raises(ValueError, match="conflicting run posture"):
+        execution._run_mode_plan({"run": {"mode": "full"}}, bundle.request)
+
+    wrong_technology_config = copy.deepcopy(bundle.authored_config)
+    wrong_technology_config["generation"]["technologies"]["rogue"] = {}
+    assert (
+        execution._compatibility_receipts(
+            bundle.project_case,
+            bundle.request,
+            wrong_technology_config,
+        )
+        is None
+    )
+
 
 def test_alias_rich_result_is_one_call_bounded_snapshot_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

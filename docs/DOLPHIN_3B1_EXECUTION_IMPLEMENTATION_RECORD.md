@@ -1,7 +1,7 @@
 # Dolphin 3B-1 execution-seam implementation record
 
-**Status:** sixth exact freeze independently domain and assurance accepted; protected exact-head
-CI pending  
+**Status:** seventh exact test-only coverage-control freeze pending independent rebind and
+protected exact-head CI
 **Base:** `dc2b211954f67c9d010831350e51884c9fe79c52` (`origin/main`, synchronized
 2026-08-31)  
 **Branch:** `codex/d3b-v14-execution-seam-r2`  
@@ -132,8 +132,8 @@ Local evidence at the uncommitted candidate:
 |---|---:|
 | Governed environment receipt | PASS, Python 3.12.13 |
 | GWTF bootstrap | PASS, v3.0, 73 active rules |
-| Focused D3B-1 suite | 135 passed |
-| Complete `tests/contracts` | 1,094 passed |
+| Focused D3B-1 suite | 138 passed |
+| Complete `tests/contracts` | 1,097 passed |
 | Affected loader/AEP/evaluator/manifest/BESS/pipeline regressions | 487 passed |
 | Inherited Dolphin 2 import/taxonomy gate | 386 passed |
 | Evaluator/manifest/BESS/pipeline regressions | 272 passed, including both native grid tests serially |
@@ -141,7 +141,9 @@ Local evidence at the uncommitted candidate:
 | Complete governed mypy, no incremental cache | PASS, 263 source files |
 | Governed scripts mypy, no incremental cache | PASS, 67 source files |
 | `git diff --check` | PASS |
-| Exact full local test and coverage gate | 7,115 passed, 18 skipped; 95.02% aggregate coverage |
+| Sixth-freeze exact full local test and coverage gate | 7,115 passed, 18 skipped; 95.02% aggregate coverage |
+| Seventh-freeze full local attempt | 7,117 passed, 18 skipped; one macOS OpenDSS worker crashed, so no aggregate-coverage PASS claimed |
+| Exact serial native-grid recovery | 4 passed |
 
 The THREAD-01 split startup receipt also passed: `check_venv.sh --no-bootstrap` selected the
 persistent governed Python 3.12.13 environment with this worktree first on `PYTHONPATH`, and
@@ -165,7 +167,19 @@ recursively detaches all accepted proxy trees into contract-owned storage, prese
 refuses cycles, and has hostile controls proving retained annual-row, manifest and root backings
 cannot mutate the handoff. Its exact final local gate completed with 7,115 passing tests, 18
 governed skips, all workers returned and 95.02% aggregate coverage. Protected exact-head Linux CI
-remains required before merge.
+then passed every test shard on commit `6bef07913d06a75af2b5588796a16df66225a98e` but failed the
+combined coverage gate at 94.98% (`1,556` missed of `30,981` executable statements). Green test
+shards and the prior local coverage result did not override that exact-head failure.
+
+The seventh freeze changes no production source. It adds hostile controls for mapping cycles,
+mapping-specific container/text bounds, exact numeric equality, canonical digest refusal,
+unsupported scalar selectors, run-posture ambiguity and mismatched technology keys. On the local
+coverage trace these controls reduced the new executor's missed statements from 57 to 42. The exact
+full local attempt executed 7,117 passing tests and 18 governed skips, but one xdist worker
+segfaulted while importing the macOS OpenDSS native backend; that worker returned neither its test
+result nor coverage data. The exact affected native-grid file then passed all four tests serially.
+This is not claimed as a green aggregate local gate. Fresh dual review and protected exact-head
+Linux CI remain required before merge.
 
 These are engineering evidence only. They establish no professional conclusion, achieved grade,
 evidence sufficiency, lender acceptance, package approval or release authority.
