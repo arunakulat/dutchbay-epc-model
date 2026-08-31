@@ -1181,3 +1181,142 @@ The protected-base-to-candidate binary diff SHA-256 was
 Candidate `3c016fe…` must remain unmerged. The assurance `ACCEPT` remains exact-SHA evidence for its
 tested scope; the domain `VETO` controls delivery. Neither disposition changes grade, evidence,
 lender, Board, release, deployment, issue or `HOLD` authority.
+
+## 18. Frozen-candidate review — non-built-in mappings and hostile discriminators dispatch
+
+**Controlling disposition:** ASSURANCE VETO
+
+**Exact-SHA domain disposition:** DOMAIN ACCEPT
+
+**Reviewed implementation:** `6d4b788f0c37249c75026c6449fde37a08f6dc7f`
+
+**Reviewed tree:** `e37d54300673e313ba7618bd162685c13fb29611`
+
+**Protected/current base:** `9e1c6fae6220551754c23535caeaa86b37422230`
+
+**Reviewers:** Hubble, independent domain review (`/root/d3b_final_domain_review`); resumed
+independent assurance review (`/root/d3b_restart_assurance`)
+
+Hubble issued `DOMAIN ACCEPT` for this exact candidate after independently replaying the Section 17
+counterexample and the inherited semantic corpus. The resumed assurance reviewer then found a
+separate raw-Python ingress boundary that Hubble's domain lens did not close and issued
+`ASSURANCE VETO`. The assurance VETO controls delivery. Hubble's acceptance remains preserved as
+exact-SHA evidence only; neither disposition applies to any successor SHA.
+
+### 18.1 Exact domain acceptance preserved
+
+Hubble established that the Section 17 exact-model and exact-dictionary counterexamples each
+produced deterministic bounded `compatibility_assertion_state` or
+`compatibility_assertion_key` errors, twice at the standalone `V14BindingPolicy` root and twice at
+the containing `EvaluationRequest` root. Every error carried the constant invalid-assertion input,
+and both equality and hash ledgers remained empty.
+
+The reviewer also established all of the following for `6d4b788…`:
+
+- all eight trusted-class field maps matched the live Pydantic declarations;
+- the ten fixture assertions behaved correctly as clean instances and under missing, additional or
+  semantically invalid state;
+- an independently hardcoded 9-by-15 jurisdiction matrix produced 28 accepts and 107 refusals at
+  each of the assertion, base, policy and request roots: 540 decisions with zero mismatch;
+- external-route layering remained correct;
+- 18 independent ownership, basis, route, price, currency and duplicate negative cases were refused
+  at both public roots, while five constructive wind, BESS and solar cases were accepted;
+- four authored orders were preserved through JSON ingress, normalized Python ingress,
+  serialization and round trip, with deterministic distinct-ID, duplicate-ID and fully tied
+  diagnostics;
+- five public instances passed both schema modes, for ten schema validations;
+- the valid D3A shared-binding topology remained accepted while D3B-v1's documented narrower
+  physical-owner limit remained refused; and
+- D2, D3A, the complete contracts, evaluator, finance, app, API, `VERSION` and release surfaces
+  remained outside the change.
+
+The local domain receipt passed the Section 17 control, `301` D3B tests, `957` complete-contract
+tests, `330` D3A tests, `298` D2 tests and `35` import/changelog/cold-import controls. Ruff, Black,
+isort, mypy without incremental cache, compilation, forbidden-import, excluded-surface and diff
+checks passed. Governed Python was `3.12.13`; environment verification passed; all 73 canonical
+rules were active; and exact-head required and full CI were green.
+
+Hubble retained the existing residuals: D3B-0 remains a declaration only and does not load
+ProjectCase/configuration data, call the gateway or assemble a D2 package; shared-binding allocation
+requires a later design; evidence and valuation dates remain D3B-1 work; and transport,
+authentication and OpenAPI remain adapter-owned.
+
+### 18.2 Controlling strict-Python mapping counterexamples
+
+The resumed assurance reviewer supplied a child implementing `collections.abc.Mapping` but not the
+exact built-in `dict`. The collection wrapper passed that object to the discriminated-union adapter,
+which called the caller's `get("kind")`. A raising implementation escaped raw
+`RuntimeError("mapping get must be bounded")` twice at each public root. Exactly one `get:kind`
+call occurred per attempt, and no bounded `ValidationError` existed from which structured, text or
+JSON receipts could be made.
+
+An implementation inheriting `Mapping.get` reproduced the same result through its raising
+`__getitem__("kind")`, twice at each public root. A benign mapping was refused but still executed
+one caller `get`. A stateful mapping alternated between `model_type` and `union_tag_invalid`, so its
+complete receipts changed at both public roots. A stable-get control did not execute `items`,
+iteration, equality, hashing or representation; the demonstrated dispatch was bounded to caller
+`get` or inherited `get` followed by caller `__getitem__`.
+
+This is not a semantic false accept and it is not a cybersecurity finding. It is a strict typed
+application-contract robustness defect: an inadmissible Python child can execute caller behavior
+before the contract returns its promised bounded, deterministic refusal.
+
+### 18.3 Hostile discriminator reachability
+
+The assurance review also established that a non-exact `kind` discriminator could reach hashing,
+equality, string conversion or representation inside the delegated union path. An exact built-in
+dictionary carrying a non-exact `kind` value was sufficient to reach that behavior, including
+failed-representation diagnostics, before a bounded error was eventually attempted. The same
+boundary must therefore be closed for both exact dictionaries and declared-field payloads extracted
+from exact trusted models.
+
+### 18.4 Required bounded correction
+
+Before union delegation in strict Python mode, a successor must admit only:
+
+1. an exact built-in dictionary after the existing exact-key copy; or
+2. one exact trusted model after the existing sanitized declared-field extraction.
+
+Every other Python child, including any non-built-in `Mapping`, must immediately receive one
+constant-input bounded child-type error and a fallback diagnostic-order key, without adapter or
+object-method dispatch. Before either sanitized payload reaches the union adapter, `kind` must be an
+exact built-in string equal to one of the eight closed assertion tags. Missing, non-exact and unknown
+tags must each receive one constant-input bounded discriminator error without caller hashing,
+equality, string conversion or representation.
+
+Durable regressions must cover a raising custom `Mapping.get`, inherited `Mapping.get` reaching a
+raising `__getitem__`, a stateful mapping, an exact dictionary with non-exact `kind`, and an exact
+trusted model with non-exact `kind` state. Every object must run twice at both public roots with
+identical complete structured, text and JSON receipts, constant invalid input and empty
+`get`/`getitem`/iteration/`items`/equality/hash/string/representation ledgers. Existing accepted
+exact dictionary/model behavior, authored order, Section 17 controls and all prior negatives must
+remain unchanged.
+
+### 18.5 Exact review receipt
+
+At both review closes, local `HEAD`, upstream, live topic, pull ref and draft-PR head were all
+`6d4b788f0c37249c75026c6449fde37a08f6dc7f`; the tree was
+`e37d54300673e313ba7618bd162685c13fb29611`; protected/live `origin/main` and the PR base were
+`9e1c6fae6220551754c23535caeaa86b37422230`; the topic was zero behind and 21 commits ahead; and
+the worktree was clean. PR `#1204` was open, draft, mergeable and clean. Exact-head required and full
+CI were green. Both reviews were read-only.
+
+Candidate fingerprints:
+
+| File | SHA-256 |
+|---|---|
+| `analytics/feasibility_report_contract/assessment_scope.py` | `eab858281bc6a855a3fe2bf4873f97df3de0adc3b74566ce3a2d13e14a38ebaa` |
+| `tests/contracts/test_assessment_scope_contract.py` | `4ee479518d6fb7c6011e503338cf04156f1fd1dbb0e863d1b0c354effc76a37f` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_INDEPENDENT_REVIEW_RECORD.md` | `c6eb1bb51d108041e14e32aa17218296c67096a72162ed916fdb5968d5df26c8` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_REMEDIATION_RECORD.md` | `455fdaa3d1c8d15ce35e1cc93dacf143eb777438cc41b2b10314632b1be39f42` |
+| `changelog.d/d3b-policy-basis-coherence.fixed.md` | `73dd7a22e0ec33bae60384c6dfa9a2f8aec0b31299ee251f031f305a61eb7c0c` |
+
+The protected-base-to-candidate binary diff SHA-256 was
+`60610c54582091d31e9a027c5938581a70a3fa10b467ae977c1a8530eafe6be2`; the
+predecessor-to-candidate binary diff SHA-256 was
+`df510a4325bdb303bb6374b3557e293b0ea3cc9bb758d0d44e01d5e79351e4b0`.
+
+Issue `#1110` remained `OPEN` with 23 unchecked items, and every release/lender/Board/evidence
+`HOLD` remained unchanged. Candidate `6d4b788…` must not merge. The controlling assurance VETO can
+be closed only by a new immutable successor, fresh exact-SHA domain and assurance review, and
+exact-head required CI.

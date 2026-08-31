@@ -672,3 +672,73 @@ mypy emitted only its pre-existing unused-configuration-section warning. Coverag
 memory and created no workspace data file. These are local implementation receipts, not
 self-acceptance. The immutable successor still requires fresh exact-SHA domain and assurance
 dispositions and exact-head required CI before delivery.
+
+## 17. Strict-Python child-shape and discriminator successor correction
+
+Independent review of `6d4b788f0c37249c75026c6449fde37a08f6dc7f` produced a second split
+disposition. Hubble issued exact-SHA `DOMAIN ACCEPT` after independently preserving the Section 17
+opaque-state correction and full inherited domain corpus. Resumed assurance then demonstrated that
+a non-built-in `collections.abc.Mapping` child still reached the discriminated-union adapter, where
+caller `get("kind")` or inherited `get` followed by `__getitem__("kind")` could escape raw
+exceptions or produce state-dependent receipts. It also demonstrated caller-hook reachability from
+non-exact `kind` values. The exact split disposition, counterexamples and frozen-candidate receipts
+are preserved in Section 18 of the independent review record.
+
+The bounded successor closes only that input seam:
+
+- an exact built-in dictionary is admitted after the existing built-in `dict.items` exact-key copy;
+- an exact instance of one of the eight trusted models is admitted after the existing declared-field
+  extraction and exact-state check;
+- every other raw Python child, including every non-built-in `Mapping`, receives one constant-input
+  `compatibility_assertion_type` error and the fallback diagnostic-order key before union delegation;
+- each admitted sanitized payload is linearly inspected for `kind` without mapping-method dispatch;
+- `kind` must be an exact built-in string equal to one of the eight closed assertion tags;
+- missing, non-exact and unknown tags receive one constant-input
+  `compatibility_assertion_discriminator` error and the fallback diagnostic-order key before union
+  delegation; and
+- successful exact-dictionary and exact-model validation, authored order, JSON wire semantics and
+  all prior bounded-error paths remain delegated to the existing contract logic unchanged.
+
+The durable controls use three non-built-in mappings: one whose custom `get` raises, one whose
+inherited `Mapping.get` reaches a raising `__getitem__`, and one whose `get` would alternate tags.
+They separately use an exact built-in dictionary and an exact trusted model carrying hostile
+non-exact string-subclass `kind` values. Each controlling object validates twice at the standalone
+policy and containing-request roots. Complete URL-free structured, text and JSON receipts must be
+identical per root; every error must carry the constant invalid-assertion input; and
+`get`/`getitem`/iteration/`items`/equality/hash/string/representation ledgers must remain empty.
+Additional exact-dictionary and exact-model controls cover missing and unknown tags.
+
+This is a strict typed application-contract robustness correction, not a cybersecurity change. It
+does not change finance, evaluation, application, API, web, `VERSION`, grade, release, issue or
+`HOLD` behavior. The successor remains unaccepted until frozen into an immutable checkpoint and
+reviewed independently at that exact SHA.
+
+### 17.1 Local successor receipt
+
+| Control | Result |
+|---|---|
+| New mapping and discriminator controls | `2 passed`, `301 deselected`; each controlling object ran twice at both public roots with stable complete receipts, constant input and zero caller-hook ledgers |
+| Complete D3B-0 assessment-scope contract | `303 passed` |
+| Complete contract suite | `959 passed` |
+| D3A ProjectCase predecessor regression | `330 passed` |
+| D2 machine-contract predecessor regression | `298 passed` |
+| Contract-package branch coverage | `94.58%` total; modified assessment-scope module `96.36%` |
+| Both Draft 2020-12 schema modes, strict/frozen ingress, public exports, forbidden-import AST and contract cold import | `8 passed`, `295 deselected` |
+| Import/changelog/cold-import and gateway-import controls | `35 passed` |
+| Ruff check and format check | passed |
+| Black and isort checks | passed |
+| Mypy `--no-incremental` on the assessment-scope export surface | passed |
+| In-memory compilation, excluded-surface and `git diff --check` controls | passed |
+| Governed environment and canonical bootstrap | Python `3.12.13`; environment check passed; `73` of `73` rules active |
+
+The test suites emitted only the repository's pre-existing Hypothesis `norecursedirs` warning;
+mypy emitted only its pre-existing unused-configuration-section warning. The first in-memory
+coverage command started tracing before NumPy/Pandas were loaded and hit NumPy's duplicate-load
+guard before test execution. The corrected command preloaded those native dependencies, retained
+coverage only in memory, reran all `959` contract tests successfully and produced the percentages
+above. No coverage data file or other untracked artifact was created.
+
+These are local implementation receipts, not self-acceptance. The immutable successor still
+requires fresh exact-SHA domain and assurance dispositions, current protected-main ancestry, a
+conflict-free draft PR and exact-head required CI before delivery. No result grants grade, release,
+lender, Board, issue or `HOLD` authority.

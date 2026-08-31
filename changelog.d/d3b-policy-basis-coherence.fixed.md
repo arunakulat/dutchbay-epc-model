@@ -14,4 +14,9 @@
   instances are revalidated and serialized through their trusted class-owned serializer. Successful
   authored-order serialization is unchanged. D3B v1 explicitly fails closed when multiple physical
   assets reuse one technology binding; supporting that valid D3A topology requires a later
-  allocation design.
+  allocation design. Strict Python child ingress now refuses every non-built-in mapping or other
+  untrusted raw shape before discriminated-union delegation, so caller `get`, inherited
+  `get`/`__getitem__`, iteration and representation hooks cannot affect refusal. Sanitized exact
+  dictionaries and trusted-model field payloads must declare an exact built-in-string `kind` from
+  the eight closed tags before delegation; missing, non-exact and unknown tags receive one bounded
+  constant-input discriminator error with fallback diagnostic ordering.

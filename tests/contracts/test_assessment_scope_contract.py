@@ -9,6 +9,7 @@ import math
 import random
 import subprocess
 import sys
+from collections.abc import Mapping
 from datetime import date
 from decimal import Decimal
 from enum import IntEnum, StrEnum
@@ -2845,6 +2846,214 @@ def test_policy_hash_colliding_keys_are_opaque_to_raw_ordering() -> None:
 
         assert equality_calls == []
         assert hash_calls == []
+
+
+def test_policy_non_builtin_mappings_are_bounded_before_adapter_dispatch() -> None:
+    ledger: dict[str, list[object]] = {
+        name: []
+        for name in (
+            "get",
+            "getitem",
+            "iter",
+            "items",
+            "len",
+            "equality",
+            "hash",
+            "str",
+            "repr",
+        )
+    }
+
+    class LedgerMapping(Mapping[str, object]):
+        def __getitem__(self, key: str) -> object:
+            ledger["getitem"].append(key)
+            raise RuntimeError("mapping item lookup must not execute")
+
+        def __iter__(self) -> Any:
+            ledger["iter"].append(True)
+            raise RuntimeError("mapping iteration must not execute")
+
+        def __len__(self) -> int:
+            ledger["len"].append(True)
+            raise RuntimeError("mapping length must not execute")
+
+        def items(self) -> Any:
+            ledger["items"].append(True)
+            raise RuntimeError("mapping items must not execute")
+
+        def __eq__(self, other: object) -> bool:
+            ledger["equality"].append(other)
+            raise RuntimeError("mapping equality must not execute")
+
+        def __hash__(self) -> int:
+            ledger["hash"].append(True)
+            raise RuntimeError("mapping hashing must not execute")
+
+        def __str__(self) -> str:
+            ledger["str"].append(True)
+            raise RuntimeError("mapping string conversion must not execute")
+
+        def __repr__(self) -> str:
+            ledger["repr"].append(True)
+            raise RuntimeError("mapping representation must not execute")
+
+    class RaisingGetMapping(LedgerMapping):
+        def get(self, key: str, default: object = None) -> object:
+            ledger["get"].append(key)
+            raise RuntimeError("mapping get must be bounded")
+
+    class InheritedGetMapping(LedgerMapping):
+        pass
+
+    class StatefulMapping(LedgerMapping):
+        get_count = 0
+
+        def get(self, key: str, default: object = None) -> object:
+            ledger["get"].append(key)
+            self.get_count += 1
+            if key == "kind":
+                return (
+                    "scenario_identity_assertion"
+                    if self.get_count % 2
+                    else "unknown_stateful_assertion"
+                )
+            return default
+
+    policy = _validate_policy(_request_payload())
+    scenario_assertion = next(
+        assertion
+        for assertion in policy.assertions
+        if type(assertion) is assessment_scope_contract.ScenarioIdentityAssertion
+    )
+    for hostile_child in (
+        RaisingGetMapping(),
+        InheritedGetMapping(),
+        StatefulMapping(),
+    ):
+        assertions = tuple(
+            hostile_child if assertion is scenario_assertion else assertion
+            for assertion in policy.assertions
+        )
+        payload = _validate(_request_payload()).model_dump()
+        payload["binding_policy"]["assertions"] = assertions
+        for calls in ledger.values():
+            calls.clear()
+
+        for root in ("policy", "request"):
+            receipts: list[dict[str, object]] = []
+            for _ in range(2):
+                with pytest.raises(ValidationError) as exc_info:
+                    if root == "policy":
+                        V14BindingPolicy.model_validate(payload["binding_policy"])
+                    else:
+                        EvaluationRequest.model_validate(payload)
+                errors = exc_info.value.errors(include_url=False)
+                receipts.append(
+                    {
+                        "errors": errors,
+                        "text": str(exc_info.value),
+                        "json": exc_info.value.json(include_url=False),
+                    }
+                )
+                assert len(errors) == 1
+                assert errors[0]["type"] == "compatibility_assertion_type"
+                assert errors[0]["input"] == "<invalid compatibility assertion>"
+                assert "ctx" not in errors[0]
+            assert receipts == [receipts[0]] * 2
+
+        assert all(not calls for calls in ledger.values())
+
+
+def test_policy_non_exact_discriminators_are_bounded_before_adapter_dispatch() -> None:
+    ledger: dict[str, list[object]] = {
+        name: []
+        for name in (
+            "get",
+            "getitem",
+            "iter",
+            "items",
+            "equality",
+            "hash",
+            "str",
+            "repr",
+        )
+    }
+
+    class HostileKind(str):
+        def __eq__(self, other: object) -> bool:
+            ledger["equality"].append(other)
+            raise RuntimeError("kind equality must not execute")
+
+        def __hash__(self) -> int:
+            ledger["hash"].append(True)
+            raise RuntimeError("kind hashing must not execute")
+
+        def __str__(self) -> str:
+            ledger["str"].append(True)
+            raise RuntimeError("kind string conversion must not execute")
+
+        def __repr__(self) -> str:
+            ledger["repr"].append(True)
+            raise RuntimeError("kind representation must not execute")
+
+    policy = _validate_policy(_request_payload())
+    scenario_assertion = next(
+        assertion
+        for assertion in policy.assertions
+        if type(assertion) is assessment_scope_contract.ScenarioIdentityAssertion
+    )
+    exact_dictionary = scenario_assertion.model_dump()
+    exact_dictionary["kind"] = HostileKind("scenario_identity_assertion")
+    missing_dictionary = scenario_assertion.model_dump()
+    missing_dictionary.pop("kind")
+    unknown_dictionary = scenario_assertion.model_dump()
+    unknown_dictionary["kind"] = "unknown_compatibility_assertion"
+    exact_model = scenario_assertion.model_copy(
+        update={"kind": HostileKind("scenario_identity_assertion")}
+    )
+    unknown_model = scenario_assertion.model_copy(
+        update={"kind": "unknown_compatibility_assertion"}
+    )
+
+    for hostile_child in (
+        exact_dictionary,
+        missing_dictionary,
+        unknown_dictionary,
+        exact_model,
+        unknown_model,
+    ):
+        assertions = tuple(
+            hostile_child if assertion is scenario_assertion else assertion
+            for assertion in policy.assertions
+        )
+        payload = _validate(_request_payload()).model_dump()
+        payload["binding_policy"]["assertions"] = assertions
+        for calls in ledger.values():
+            calls.clear()
+
+        for root in ("policy", "request"):
+            receipts: list[dict[str, object]] = []
+            for _ in range(2):
+                with pytest.raises(ValidationError) as exc_info:
+                    if root == "policy":
+                        V14BindingPolicy.model_validate(payload["binding_policy"])
+                    else:
+                        EvaluationRequest.model_validate(payload)
+                errors = exc_info.value.errors(include_url=False)
+                receipts.append(
+                    {
+                        "errors": errors,
+                        "text": str(exc_info.value),
+                        "json": exc_info.value.json(include_url=False),
+                    }
+                )
+                assert len(errors) == 1
+                assert errors[0]["type"] == "compatibility_assertion_discriminator"
+                assert errors[0]["input"] == "<invalid compatibility assertion>"
+                assert "ctx" not in errors[0]
+            assert receipts == [receipts[0]] * 2
+
+        assert all(not calls for calls in ledger.values())
 
 
 def test_policy_canonical_child_validator_preserves_python_strictness() -> None:

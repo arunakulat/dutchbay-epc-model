@@ -1297,6 +1297,31 @@ def _exact_compatibility_assertion_payload(
     return copied_fields, False
 
 
+def _has_exact_compatibility_assertion_kind(
+    sanitized_fields: dict[str, Any],
+) -> bool:
+    """Return whether a sanitized payload declares one exact closed kind."""
+    raw_kind = None
+    kind_is_present = False
+    for raw_field_name, raw_field_value in dict.items(sanitized_fields):
+        if raw_field_name == "kind":
+            raw_kind = raw_field_value
+            kind_is_present = True
+            break
+    if not kind_is_present or type(raw_kind) is not str:
+        return False
+    return (
+        raw_kind == "scenario_identity_assertion"
+        or raw_kind == "location_assertion"
+        or raw_kind == "jurisdiction_subject_assertion"
+        or raw_kind == "technology_binding_assertion"
+        or raw_kind == "generation_capacity_assertion"
+        or raw_kind == "storage_capacity_assertion"
+        or raw_kind == "cost_compatibility_assertion"
+        or raw_kind == "price_basis_assertion"
+    )
+
+
 def _sanitized_policy_assertion_sort_key(
     sanitized_fields: dict[str, Any] | None,
 ) -> tuple[int, str, str, str]:
@@ -1442,6 +1467,16 @@ def _non_exact_dictionary_key_child_error() -> dict[str, Any]:
     }
 
 
+def _invalid_discriminator_child_error() -> dict[str, Any]:
+    """Return one bounded error for a missing or unsupported exact kind."""
+    return {
+        "type": "compatibility_assertion_discriminator",
+        "loc": ("kind",),
+        "msg": "Input should declare one exact supported compatibility assertion kind",
+        "input": _INVALID_COMPATIBILITY_ASSERTION_INPUT,
+    }
+
+
 def _bounded_assertion_collection_error(mode: str) -> ValidationError:
     """Return a constant-input error for a non-exact assertion collection."""
     error_type = "list_type" if mode == "json" else "tuple_type"
@@ -1558,6 +1593,15 @@ class V14BindingPolicy(StrictFrozenModel):
                 elif exact_payload is not None:
                     child_input = exact_payload
                     sanitized_fields = exact_payload
+                else:
+                    child_errors = (_non_exact_model_child_error(),)
+            if (
+                not child_errors
+                and sanitized_fields is not None
+                and not _has_exact_compatibility_assertion_kind(sanitized_fields)
+            ):
+                child_errors = (_invalid_discriminator_child_error(),)
+                sanitized_fields = None
             try:
                 if child_errors:
                     pass
