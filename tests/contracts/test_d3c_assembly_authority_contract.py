@@ -507,10 +507,15 @@ def test_schema_version_and_unknown_fields_are_mandatory_and_closed() -> None:
         (
             ("distribution", "scope_intended_audiences"),
             ("Board circulation",),
-            "audiences do not equal the held scope",
+            "audiences do not equal the code-owned held intent profile",
         ),
         (
             ("distribution", "scope_intended_uses"),
+            ("Lender reliance",),
+            "uses do not equal the code-owned held intent profile",
+        ),
+        (
+            ("distribution", "control", "permitted_uses"),
             ("Lender reliance",),
             "uses do not equal the held scope",
         ),
@@ -1014,13 +1019,13 @@ def test_distribution_scope_is_reciprocal_to_governed_request_intents() -> None:
         "Board circulation",
         "Lender circulation",
     )
-    with pytest.raises(ValidationError, match="governed evaluation scope"):
+    with pytest.raises(ValidationError, match="code-owned held intent profile"):
         _validate(payload)
 
     payload = _accepted_payload()
     payload["distribution"]["scope_intended_uses"] = ("Lender circulation",)
     payload["distribution"]["control"]["permitted_uses"] = ("Lender circulation",)
-    with pytest.raises(ValidationError, match="uses do not match"):
+    with pytest.raises(ValidationError, match="uses do not equal the code-owned"):
         _validate(payload)
 
 
@@ -1059,6 +1064,82 @@ def test_held_distribution_profile_has_no_free_semantic_authority(
 
 
 def test_governed_scope_intents_are_exact_bounded_and_unique() -> None:
+    payload = _accepted_payload()
+    request_identity = payload["evaluation_request_identity"]
+    request_identity["intended_audiences"] = (
+        {"audience_id": "audience:board", "statement": "Board members"},
+        {"audience_id": "audience:lenders", "statement": "Lenders"},
+    )
+    request_identity["intended_uses"] = (
+        {
+            "use_id": "use:board-circulation",
+            "statement": "Board circulation",
+        },
+        {
+            "use_id": "use:lender-circulation",
+            "statement": "Lender circulation",
+        },
+    )
+    distribution = payload["distribution"]
+    distribution["scope_intended_audiences"] = ("Board members", "Lenders")
+    distribution["scope_intended_uses"] = (
+        "Board circulation",
+        "Lender circulation",
+    )
+    distribution["control"]["intended_audiences"] = (
+        "Board members",
+        "Lenders",
+    )
+    distribution["control"]["permitted_uses"] = (
+        "Board circulation",
+        "Lender circulation",
+    )
+    with pytest.raises(ValidationError, match="code-owned held intent profile"):
+        _validate(payload)
+
+    python_payload = _accepted().model_dump()
+    request_identity = python_payload["evaluation_request_identity"]
+    request_identity["intended_audiences"] = (
+        {"audience_id": "audience:board", "statement": "Board members"},
+        {"audience_id": "audience:lenders", "statement": "Lenders"},
+    )
+    request_identity["intended_uses"] = (
+        {
+            "use_id": "use:board-circulation",
+            "statement": "Board circulation",
+        },
+        {
+            "use_id": "use:lender-circulation",
+            "statement": "Lender circulation",
+        },
+    )
+    distribution = python_payload["distribution"]
+    distribution["scope_intended_audiences"] = ("Board members", "Lenders")
+    distribution["scope_intended_uses"] = (
+        "Board circulation",
+        "Lender circulation",
+    )
+    distribution["control"]["intended_audiences"] = (
+        "Board members",
+        "Lenders",
+    )
+    distribution["control"]["permitted_uses"] = (
+        "Board circulation",
+        "Lender circulation",
+    )
+    with pytest.raises(ValidationError, match="code-owned held intent profile"):
+        AcceptedAssemblyAuthority.model_validate(python_payload)
+
+    payload = _accepted_payload()
+    payload["evaluation_request_identity"]["intended_uses"] = (
+        {
+            "use_id": "use:external-circulation",
+            "statement": "External circulation",
+        },
+    )
+    with pytest.raises(ValidationError, match="request uses do not equal"):
+        _validate(payload)
+
     payload = _accepted_payload()
     request_identity = payload["evaluation_request_identity"]
     request_identity["intended_audiences"] = "not-an-intent-record"

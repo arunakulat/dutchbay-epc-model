@@ -194,6 +194,22 @@ bounded and duplicate-free; and the evidence cutoff cannot follow the engine run
 counterexample now has a hostile negative control. The third-round vetoes accept no changed tree;
 the fourth candidate still requires two fresh exact-SHA dispositions after freeze.
 
+The fourth frozen candidate was `39c9d3d28efd921b6d070e245e9069f5df23f9d0`, tree
+`3d331a71c58c1665b380fd3b09abcfa77a5b5249`. Both fresh reviewers found the same sole remaining
+controlling defect: the typed D3B intent records and both distribution copies could all be changed
+together to Board/lender circulation while the unchanged request digest remained alongside them.
+The fourth candidate therefore proved three copies consistent, but still did not establish intent
+authority.
+
+The fifth remediation conservatively makes the existing held-profile ID own the exact first-package
+intent profile as well: `audience:internal-engineering` / `Internal engineering reviewers` and
+`use:d3c-plumbing-verification` / `D3C plumbing verification`. Both the typed request projection and
+the distribution scope/control must equal that code-owned profile. Any other intent blocks until a
+separately reviewed general authority mechanism exists; D4 canonical serialization remains
+deferred. The exact joint Board/lender substitution now fires in JSON and strict Python ingress.
+Neither fourth-round veto accepts the changed tree, so the fifth candidate requires fresh exact-SHA
+domain and assurance dispositions.
+
 ## 7. Verification receipts
 
 The governed local environment is `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`, Python
@@ -204,9 +220,9 @@ Focused receipts at this implementation stage:
 
 | Gate | Result |
 |---|---:|
-| D3C-0 constructive and hostile controls | `102 passed` |
+| D3C-0 constructive and hostile controls | `103 passed` |
 | D3C-0 module branch coverage | `100.00%` |
-| Complete `tests/contracts` predecessor regression | `1199 passed` |
+| Complete `tests/contracts` predecessor regression | `1200 passed` |
 | Import, cold-order, gateway, changelog and v14 surface controls | `53 passed` |
 | Ruff check and format | passed |
 | Mypy `--no-incremental` for production, exports and focused tests | passed |

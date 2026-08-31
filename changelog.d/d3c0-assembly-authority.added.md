@@ -4,7 +4,8 @@
   technology axis, taxonomy/supersession guards and exact held-scope circulation. The production
   graph also enforces downstream evidence-cutoff parity, acyclic source lineage, exact
   disclosure-to-artifact provenance, bounded/duplicate-free pack defaults, pre-normalization
-  canonical values, governed D3B scope/intent reciprocity, exact source/pack axes, non-package
-  result artifacts, bounded compatible versions and one closed held-distribution profile. The
-  production catalogue remains empty, package assembly and finance execution remain excluded, and
-  no grade, release or `HOLD` state changes.
+  canonical values, governed D3B scope reciprocity, exact source/pack axes, non-package result
+  artifacts, bounded compatible versions and one closed held-distribution profile whose
+  internal-engineering audience/use intent IDs and statements are code-owned. The production
+  catalogue remains empty, package assembly and finance execution remain excluded, and no grade,
+  release or `HOLD` state changes.

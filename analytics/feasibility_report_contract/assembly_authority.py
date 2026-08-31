@@ -63,6 +63,12 @@ _HELD_AUTHORITY_EXCLUSION_STATEMENT: Final = (
 _RESULT_ARTIFACT_DISCLOSURE_STATEMENT: Final = (
     "Held internal plumbing artifact; no reliance is permitted."
 )
+_HELD_AUDIENCE_INTENT_PROFILE: Final = (
+    ("audience:internal-engineering", "Internal engineering reviewers"),
+)
+_HELD_USE_INTENT_PROFILE: Final = (
+    ("use:d3c-plumbing-verification", "D3C plumbing verification"),
+)
 
 _MAX_RECORDS: Final = 256
 _MAX_TEXT_CODEPOINTS: Final = 4_096
@@ -503,6 +509,20 @@ class EvaluationRequestIdentity(StrictFrozenModel):
             )
             if len(intent_ids) != len(set(intent_ids)):
                 raise ValueError(f"{field_name} contain duplicate intent identities")
+        audience_profile = tuple(
+            (intent.audience_id, intent.statement) for intent in self.intended_audiences
+        )
+        if audience_profile != _HELD_AUDIENCE_INTENT_PROFILE:
+            raise ValueError(
+                "request audiences do not equal the code-owned held intent profile"
+            )
+        use_profile = tuple(
+            (intent.use_id, intent.statement) for intent in self.intended_uses
+        )
+        if use_profile != _HELD_USE_INTENT_PROFILE:
+            raise ValueError(
+                "request uses do not equal the code-owned held intent profile"
+            )
         return self
 
 
@@ -645,6 +665,18 @@ class HeldNonRelianceDistributionBinding(StrictFrozenModel):
             raise ValueError("scope intended audiences contain duplicates")
         if len(self.scope_intended_uses) != len(set(self.scope_intended_uses)):
             raise ValueError("scope intended uses contain duplicates")
+        expected_audiences = tuple(
+            statement for _, statement in _HELD_AUDIENCE_INTENT_PROFILE
+        )
+        expected_uses = tuple(statement for _, statement in _HELD_USE_INTENT_PROFILE)
+        if self.scope_intended_audiences != expected_audiences:
+            raise ValueError(
+                "distribution audiences do not equal the code-owned held intent profile"
+            )
+        if self.scope_intended_uses != expected_uses:
+            raise ValueError(
+                "distribution uses do not equal the code-owned held intent profile"
+            )
         if self.scope_intended_audiences != self.control.intended_audiences:
             raise ValueError("distribution audiences do not equal the held scope")
         if self.scope_intended_uses != self.control.permitted_uses:
@@ -782,19 +814,6 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
         runtime_source = cast(SourceRecord, sources[self.runtime_receipt.source_id])
         if runtime_source.content_digest != self.runtime_receipt.source_digest:
             raise ValueError("runtime receipt digest differs from its source record")
-
-        scope_audiences = tuple(
-            intent.statement for intent in request.intended_audiences
-        )
-        scope_uses = tuple(intent.statement for intent in request.intended_uses)
-        if self.distribution.scope_intended_audiences != scope_audiences:
-            raise ValueError(
-                "distribution audiences do not match the governed evaluation scope"
-            )
-        if self.distribution.scope_intended_uses != scope_uses:
-            raise ValueError(
-                "distribution uses do not match the governed evaluation scope"
-            )
 
         for source in self.source_records:
             if source.extracting_actor_id not in actors:
