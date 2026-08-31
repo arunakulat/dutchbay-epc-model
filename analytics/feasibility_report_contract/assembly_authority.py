@@ -32,9 +32,7 @@ from .records import (
     StrictFrozenModel,
     UtcDateTime,
 )
-from .vocabulary import ActorKind, PackKind
-from .vocabulary import ArtifactFormat, ConfidentialityClass
-
+from .vocabulary import ActorKind, ArtifactFormat, ConfidentialityClass, PackKind
 
 ASSEMBLY_AUTHORITY_SCHEMA_ID: Final = "dutchbay.feasibility_assembly_authority.v1"
 ASSEMBLY_AUTHORITY_CONTRACT_VERSION: Final = "1.0.0"
@@ -78,8 +76,6 @@ ExactBoundedText = Annotated[str, BeforeValidator(_exact_nonempty_text)]
 
 
 def _validate_nonempty_unique_tuple(value: tuple[str, ...]) -> tuple[str, ...]:
-    if len(value) > _MAX_RECORDS:
-        raise ValueError("identity tuple exceeds the bounded record count")
     if len(value) != len(set(value)):
         raise ValueError("identity tuple contains duplicate identities")
     return value
@@ -402,6 +398,18 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
                     f"artifact {artifact.artifact_id} falls outside authority chronology"
                 )
 
+        for disclosure in self.distribution.control.disclosure_bindings:
+            if disclosure.artifact_id not in artifacts:
+                raise ValueError("distribution disclosure has a dangling artifact")
+            if disclosure.source_id not in sources:
+                raise ValueError("distribution disclosure has a dangling source")
+            if (
+                disclosure.validation_id is not None
+                and disclosure.validation_id
+                not in self.authorized_registry_ids.validation_ids
+            ):
+                raise ValueError("distribution disclosure has a dangling validation")
+
         expected_jurisdiction_packs = {
             pack_id
             for pack_id, pack_record in packs.items()
@@ -420,9 +428,6 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
             raise ValueError(
                 "technology_pack_ids do not equal selected technology packs"
             )
-        if not expected_jurisdiction_packs or not expected_technology_packs:
-            raise ValueError("accepted authority requires both pack axes")
-
         for pack in self.pack_bindings:
             if pack.owner_actor_id not in actors:
                 raise ValueError(f"pack {pack.pack_id} has a dangling owner actor")
@@ -435,12 +440,7 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
         self._validate_pack_registry_ids()
         self._validate_actor_source_reciprocity(actors, sources)
 
-        binding_by_role = _index_artifact_roles(self.byte_artifact_bindings)
-        if set(binding_by_role) != set(GovernedByteArtifactRole):
-            raise ValueError(
-                "byte artifacts must contain annual_rows, debt_result and fx_curve once"
-            )
-        bound_artifact_ids = set()
+        _index_artifact_roles(self.byte_artifact_bindings)
         for binding in self.byte_artifact_bindings:
             selected_artifact = cast(
                 ArtifactRecord | None, artifacts.get(binding.artifact_id)
@@ -469,11 +469,6 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
                         f"byte binding {binding.role.value} differs from artifact "
                         f"{field_name}"
                     )
-            bound_artifact_ids.add(binding.artifact_id)
-        if bound_artifact_ids != set(artifacts):
-            raise ValueError(
-                "every selected artifact must have exactly one byte binding"
-            )
 
         control = self.distribution.control
         if set(control.artifact_ids) != set(artifacts):
@@ -482,17 +477,6 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
             raise ValueError("distribution artifact_ids contain duplicates")
         if control.expiry_or_review_date < self.authority_created_at.date():
             raise ValueError("distribution control is expired at authority creation")
-        for disclosure in control.disclosure_bindings:
-            if disclosure.artifact_id not in artifacts:
-                raise ValueError("distribution disclosure has a dangling artifact")
-            if disclosure.source_id not in sources:
-                raise ValueError("distribution disclosure has a dangling source")
-            if (
-                disclosure.validation_id is not None
-                and disclosure.validation_id
-                not in self.authorized_registry_ids.validation_ids
-            ):
-                raise ValueError("distribution disclosure has a dangling validation")
         return self
 
     def _validate_pack_registry_ids(self) -> None:
@@ -538,6 +522,11 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
         referenced_sources = {
             self.allocation_authority.source_id,
             self.runtime_receipt.source_id,
+            *(
+                source.supersedes_source_id
+                for source in self.source_records
+                if source.supersedes_source_id is not None
+            ),
             *(
                 source_id
                 for pack in self.pack_bindings
