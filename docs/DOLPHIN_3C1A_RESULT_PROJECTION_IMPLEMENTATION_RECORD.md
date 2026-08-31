@@ -1,7 +1,7 @@
 # Dolphin 3C-1a result-only projection implementation record
 
-**Status:** second correction in progress after two exact-SHA rejections; broad verification and
-fresh exact-SHA review pending; no D2 package assembly or HOLD movement
+**Status:** second corrected replacement; full local verification complete; fresh exact-SHA review
+pending; no D2 package assembly or HOLD movement
 
 **Protected base:** `e40c13a2fbd4bd974078c4d1dd32e4b1e7ebdf3f` (`origin/main`, PR `#1208` merge)
 
@@ -246,8 +246,14 @@ The pre-change `tests/contracts` baseline was `1200 passed, 1 warning`. Replacem
 | Ruff / Black / isort / Bandit | pass |
 | Narrow mypy over four implementation modules | `Success: no issues found` |
 | Complete `tests/contracts` gate | `1320 passed, 1 inherited warning` |
-| Full governed ordinary suite | pending second-correction run |
-| Full governed coverage floor | pending second-correction run (`>=95%` required) |
+| Full governed ordinary suite | `7341 passed, 18 skipped, 23 warnings` in `720.76s` |
+| Full governed coverage floor | `95.31%` (`32586` statements, `1527` missed; `>=95%` required) |
+
+The current full governed suite ran against second-correction code commit
+`f79f1482b3b19f8f99b35b8a120c01c4ae0d7072` and returned exit zero with the exact counts above.
+Its named temporary diagnostic capture and coverage database were deleted immediately after the
+concise receipt was emitted. The later receipt-only commit changes no source or test blob; focused
+and complete contract gates are rerun at that final review SHA.
 
 The historical full governed suite and coverage receipt ran twice against now-rejected code commit
 `a2d681883e5a62d4af638a0b033e0364f4d083b6`; the first pass's summary stream was lost when its PTY
