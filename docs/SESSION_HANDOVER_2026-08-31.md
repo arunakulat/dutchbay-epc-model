@@ -186,6 +186,14 @@ the wrong order and stopped before test execution; the corrected in-memory comma
 passed all `959` tests and left no coverage data file. A first import-group selection omitted one
 gateway-import test (`34` selected); the corrected complete selection passed `35`.
 
+Successor 22's first PR `#1205` description omitted the mandatory `VERIFY-01` receipts table. The
+receipt workflow failed for that metadata omission; no repository file, test or security control
+failed. The PR body was replaced with the canonical table populated by eight actual or explicitly
+not-run receipts, and the repository's own checker reported `8 receipt row(s) recorded, none
+silent`. This correction is preserved rather than hiding the first failure. A new exact head was
+created so the merge candidate's complete rollup would not retain an obsolete failed check beside
+the corrected success.
+
 Exact-head GitHub CI on final PR head `11ed41a…` completed with every required and non-advisory job
 successful: all six test shards, Coverage Gate, Test Summary, Code Quality, Security Scan, CodeQL,
 smoke, fastlane, verification receipts, changed-path classification and the audit-review image.
