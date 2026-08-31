@@ -1320,3 +1320,115 @@ Issue `#1110` remained `OPEN` with 23 unchecked items, and every release/lender/
 `HOLD` remained unchanged. Candidate `6d4b788…` must not merge. The controlling assurance VETO can
 be closed only by a new immutable successor, fresh exact-SHA domain and assurance review, and
 exact-head required CI.
+
+## 19. Final implementation review — dual acceptance on the strict-Python successor
+
+**Domain disposition:** DOMAIN ACCEPT
+
+**Assurance disposition:** ASSURANCE ACCEPT
+
+**Reviewed implementation candidate:** `52974fcfa484fa30ac76037ef129a536bb7816be`
+
+**Reviewed tree:** `acb1d41ea389cca01de3eef3a9e954092a9a4022`
+
+**Protected/current base:** `9e1c6fae6220551754c23535caeaa86b37422230`
+
+**Reviewers:** independent domain review (`/root/d3b_52974_domain_review`); independent assurance
+review (`/root/d3b_52974_assurance_review`)
+
+Both reviewers worked read-only and independently accepted the same exact implementation candidate,
+tree and base. These dispositions bind only to `52974fc…` / `acb1d41…` / `9e1c6fa…`. They do not
+prospectively accept this appended record or any later commit.
+
+### 19.1 Independent domain acceptance
+
+The domain reviewer issued `DOMAIN ACCEPT` with no blocker after re-ingressing the controlling
+corpus and replaying the new strict-Python mapping/discriminator controls. The two new controls
+passed, while accepted exact-dictionary and exact-model behavior, successful authored order and the
+inherited policy semantics remained unchanged.
+
+The independently hardcoded 9-by-15 jurisdiction subject/domain matrix produced 28 accepts and 107
+refusals at each of four roots: 540 decisions with zero mismatch. External-route layering remained
+correct. Eighteen independent ownership, basis, route, price, currency and duplicate negative cases
+were refused at both public policy roots, for 36 refusals. Six constructive wind, BESS and solar
+positives were accepted. Four authored orders remained stable through validation, serialization and
+round trip.
+
+The reviewer preserved the D3A shared-binding distinction: D3A's valid shared technology-binding
+topology remained accepted, while D3B-v1's documented narrower physical-owner execution limit
+remained refused. The complete local receipt passed `303` D3B tests, `959` contract tests, `330` D3A
+tests, `298` D2 tests and the eight-test schema/strictness/frozen/export selection. Ruff, formatting,
+typing, compilation, forbidden-import, excluded-surface and whitespace controls were green.
+
+The exact-head GitHub rollup contained 19 successful jobs, three governed skips, no failure and no
+pending job. The reviewer retained the controlling residual: D3B-0 remains an input declaration and
+policy contract only. It does not load ProjectCase/configuration data, call the evaluation gateway
+or assemble the D2 report package.
+
+### 19.2 Independent assurance acceptance
+
+The assurance reviewer issued `ASSURANCE ACCEPT` with no blocker after independently exercising
+eight hostile input objects at two public roots and two attempts per root. All 32 attempts returned
+deterministic bounded refusals with identical complete structured, text and JSON receipts per root,
+the constant invalid-assertion input, and zero caller calls across `get`, `__getitem__`, iteration,
+`items`, length, equality, hashing, string conversion and representation ledgers. The independent
+receipt SHA-256 was
+`20be0a4d85ea165b2f961a8516742d9c9feccc7137f9f3def2a8bcc4cc517d8d`.
+
+An independent adapter spy supplied 22 invalid child cases and observed zero adapter calls for all
+of them. Exact built-in dictionary and exact trusted-model positives each delegated exactly once.
+Six valid variants and their round trips preserved all ten assertions and their authored order. The
+valid-variant receipt SHA-256 was
+`140fd345cb63a2efafb1a196f8d8be66edc6c1da130d01fa4ac7992dce378d91`.
+
+The assurance reviewer independently preserved the same `303` D3B, `959` contract, `330` D3A,
+`298` D2 and eight selected schema/strictness/frozen/export passes, together with `35` successful
+import/changelog/cold/gateway-import controls. Static, typing, compilation, forbidden-import,
+excluded-surface and whitespace gates were green. Exact-head required checks and the full GitHub
+rollup were green.
+
+### 19.3 Exact reviewed-candidate receipt
+
+At both review closes, local `HEAD`, upstream, live topic, pull ref and PR head were exactly
+`52974fcfa484fa30ac76037ef129a536bb7816be`; the tree was
+`acb1d41ea389cca01de3eef3a9e954092a9a4022`; protected/live `origin/main` and the PR base were
+`9e1c6fae6220551754c23535caeaa86b37422230`; and the worktree was clean. PR `#1204` was `OPEN`,
+draft, mergeable and clean. Every required check and the complete exact-head rollup were green.
+Issue `#1110` remained `OPEN` with zero of 23 controls checked, and its `HOLD` remained unchanged.
+
+Reviewed-candidate fingerprints:
+
+| File or diff | SHA-256 |
+|---|---|
+| `analytics/feasibility_report_contract/assessment_scope.py` | `707a1e5d22d9b831e65e42d87690e6b951d77cceab172c43c1f7909c3c4e36a6` |
+| `tests/contracts/test_assessment_scope_contract.py` | `70220e8bf210da7dd23e383cbe3190073d3cb5936619a9d85ac71a1109cfd4a9` |
+| pre-append `docs/DOLPHIN_3B_POLICY_ROOT_INDEPENDENT_REVIEW_RECORD.md` | `eac73b38de9b3b05a56dcf1d62c9cb520cbf530a44a89467bf7c1441345ddb68` |
+| `docs/DOLPHIN_3B_POLICY_ROOT_REMEDIATION_RECORD.md` | `532e28b9810fc2446aa517ef81479ab1c02b4e7c8216110fc22f2aa7d72053f1` |
+| `changelog.d/d3b-policy-basis-coherence.fixed.md` | `4696181879e807015b68cc0be9dbbf21f2c6c7afc7b75b6f09c1c43b5b462772` |
+| protected-base-to-candidate binary diff | `bb841f1bac5cf7bd02e0e5bb0e6d35d40b864bcc461934481f2d054a361b4c2b` |
+| predecessor-to-candidate binary diff | `335b11d8eb9924e173eb0ebc276123612de773e72dd9d9e8c9798351804a056c` |
+
+The only warnings were the repository's inherited Hypothesis `norecursedirs` warning and mypy's
+inherited unused-configuration-section warning. Neither reviewer identified a product, contract or
+delivery blocker on the reviewed implementation candidate.
+
+### 19.4 Shared limitations and authority boundary
+
+The dual acceptance establishes engineering domain and assurance acceptance only for the exact
+reviewed implementation. It does not make D3B-0 an executor, load a ProjectCase or authored
+scenario, call finance/evaluation code, assemble a D2 package, support shared-binding allocation,
+complete D3B-1/D3C, or change transport/authentication/OpenAPI ownership. It confers no achieved
+grade, professional review, evidence sufficiency, release, deployment, lender, Board or issue
+authority and lifts no `HOLD`.
+
+No finance, evaluation, app, API, web, `VERSION`, grade, release or issue surface changed in the
+reviewed candidate. The existing later-slice and adapter-owned residuals remain explicit work rather
+than inferred capability.
+
+### 19.5 Documentation-successor rebind gate
+
+Appending this section changes the Git commit and tree even though it changes documentation only.
+The resulting successor head is therefore not `52974fc…`, and neither exact-SHA acceptance applies
+to it until both reviewers independently rebind their dispositions to the new commit/tree and
+exact-head required CI is green again. This record does not self-accept its own successor, mark the
+PR ready, authorize merge, change issue state or lift any `HOLD`.
