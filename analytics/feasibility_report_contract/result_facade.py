@@ -73,12 +73,20 @@ def _exact_text(value: object) -> str:
         raise ValueError("value must be exact bounded nonempty text")
     if any(ord(character) < 32 and character not in "\t\n\r" for character in value):
         raise ValueError("exact text contains a forbidden control character")
+    if _contains_unicode_surrogate(value):
+        raise ValueError("exact text contains a Unicode surrogate code point")
     return value
+
+
+def _contains_unicode_surrogate(value: str) -> bool:
+    return any(0xD800 <= ord(character) <= 0xDFFF for character in value)
 
 
 def _exact_warning_text(value: object) -> str:
     if type(value) is not str or len(value) > _MAX_WARNING_TEXT:
         raise ValueError("warning text must be an exact bounded string")
+    if _contains_unicode_surrogate(value):
+        raise ValueError("warning text contains a Unicode surrogate code point")
     return value
 
 
@@ -1423,6 +1431,10 @@ class D3CResultProjection(StrictFrozenModel):
         warnings = value
         if any(type(item) is not str for item in warnings):
             raise ValueError("warning projections must contain exact strings")
+        if any(_contains_unicode_surrogate(item) for item in warnings):
+            raise ValueError(
+                "warning projections must contain Unicode scalar-value strings"
+            )
         if sum(len(item) for item in warnings) > _MAX_WARNING_TEXT:
             raise ValueError("warning projections exceed the projection text bound")
         return value

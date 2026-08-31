@@ -409,6 +409,45 @@ def test_unrepresentable_unknown_key_refuses_with_bounded_error(
         project_d3b_result(result)
 
 
+def test_surrogate_unknown_key_refusal_is_exact_and_insertion_independent(
+    accepted_result: D3BExecutionSuccess,
+) -> None:
+    surrogate_key = "unknown\ud800key"
+    receipts: list[tuple[str, str, str]] = []
+
+    def with_keys(ordered_keys: tuple[str, str]) -> D3BExecutionSuccess:
+        def mutate(payload: dict[Any, Any]) -> None:
+            for key in ordered_keys:
+                payload[key] = "opaque"
+
+        return _replace_result(accepted_result, mutate)
+
+    for keys in ((surrogate_key, "ordinary"), ("ordinary", surrogate_key)):
+        result = with_keys(keys)
+        assert type(result) is D3BExecutionSuccess
+        with pytest.raises(ResultProjectionError) as captured:
+            project_d3b_result(result)
+        receipts.append(
+            (
+                captured.value.code,
+                captured.value.pointer,
+                captured.value.detail,
+            )
+        )
+
+    assert (
+        receipts
+        == [
+            (
+                "unrepresentable_unknown_key",
+                "/full_result",
+                "an unknown string key cannot be represented as bounded exact text",
+            )
+        ]
+        * 2
+    )
+
+
 def test_unrecognized_key_limit_fails_closed(
     accepted_result: D3BExecutionSuccess,
 ) -> None:
@@ -1940,6 +1979,61 @@ def test_new_numeric_fx_and_route_models_fail_closed_on_hostile_lexemes(
         with pytest.raises(ValidationError, match=message):
             FxIntegrationProjection(**kwargs)
 
+    surrogate_warning_payload = {
+        "attempted": True,
+        "succeeded": False,
+        "warning": "bad\ud800warning",
+        "degraded": False,
+        "degraded_reasons": (),
+    }
+    with pytest.raises(ValidationError, match="Unicode surrogate"):
+        FxIntegrationProjection.model_validate(surrogate_warning_payload)
+    with pytest.raises(ValidationError):
+        FxIntegrationProjection.model_validate_json(
+            json.dumps(surrogate_warning_payload)
+        )
+
+    surrogate_reason_payload = {
+        "attempted": True,
+        "succeeded": True,
+        "warning": None,
+        "degraded": True,
+        "degraded_reasons": ("bad\udfffreason",),
+    }
+    with pytest.raises(ValidationError, match="Unicode surrogate"):
+        FxIntegrationProjection.model_validate(surrogate_reason_payload)
+    with pytest.raises(ValidationError):
+        FxIntegrationProjection.model_validate_json(
+            json.dumps(surrogate_reason_payload)
+        )
+
+    with pytest.raises(ValidationError, match="Unicode surrogate"):
+        UnrecognizedUpstreamKey(
+            state=ResultObservationState.UNRECOGNIZED,
+            observation_id="unrecognized:surrogate",
+            container_path=("full_result",),
+            key_type=ResultUnknownKeyType.STRING,
+            key_identity="unknown\ud800key",
+            binary64_hex=None,
+            binary64_bytes_hex=None,
+            consequence=(
+                "The present upstream key has no reviewed D3C-1a route and was not "
+                "carried."
+            ),
+            remedy=(
+                "Review and add an explicit versioned route or an explicit refusal "
+                "before use."
+            ),
+        )
+
+    projection_payload = project_d3b_result(accepted_result).model_dump(mode="json")
+    projection_payload["gateway_warnings"] = ("bad\ud800warning",)
+    projection_payload["returned_warnings"] = ("bad\ud800warning",)
+    with pytest.raises(ValidationError, match="Unicode scalar-value"):
+        D3CResultProjection.model_validate(projection_payload)
+    with pytest.raises(ValidationError):
+        D3CResultProjection.model_validate_json(json.dumps(projection_payload))
+
 
 def test_projection_graph_rechecks_new_structured_origins(
     accepted_result: D3BExecutionSuccess,
@@ -2109,9 +2203,127 @@ def test_public_d3b_structured_fx_control_text_is_preserved_exactly(
     assert projection.fx_integration.warning == warning
     assert projection.fx_integration.degraded_reasons == (degraded_reason,)
     assert projection.returned_warnings == (warning, degraded_reason)
+    dumped = projection.model_dump()
+    assert dumped["fx_integration"]["warning"] == warning
+    assert dumped["fx_integration"]["degraded_reasons"] == (degraded_reason,)
     assert (
         D3CResultProjection.model_validate_json(projection.model_dump_json())
         == projection
+    )
+
+
+def test_public_d3b_unicode_scalar_warning_boundaries_round_trip_exactly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bundle = _bundle(tmp_path, monkeypatch)
+    warning = "".join(chr(codepoint) for codepoint in range(32))
+    degraded_reason = "\ud7ff\ue000\U0001f642literal-\\ud800"
+
+    def gateway(**kwargs: Any) -> dict[str, Any]:
+        payload = _gateway_result(
+            kwargs["raw_config"], kwargs["overrides"], degraded=True
+        )
+        payload["fx_integration"]["warning"] = warning
+        payload["fx_integration"]["degraded_reasons"] = [degraded_reason]
+        return payload
+
+    _install_gateway(monkeypatch, gateway)
+    result = execution.execute_evaluation_request(
+        project_case=bundle.project_case,
+        request=bundle.request,
+        scenario_authority_id=_AUTHORITY_ID,
+    )
+    assert type(result) is D3BExecutionSuccess
+    assert result.warnings == (warning, degraded_reason)
+
+    projection = project_d3b_result(result)
+    assert projection.fx_integration.warning == warning
+    assert projection.fx_integration.degraded_reasons == (degraded_reason,)
+    assert projection.returned_warnings == (warning, degraded_reason)
+    dumped = projection.model_dump()
+    assert dumped["fx_integration"]["warning"] == warning
+    assert dumped["fx_integration"]["degraded_reasons"] == (degraded_reason,)
+    assert (
+        D3CResultProjection.model_validate_json(projection.model_dump_json())
+        == projection
+    )
+
+
+@pytest.mark.parametrize(
+    ("warning", "degraded_reason"),
+    [
+        ("fx-failure\ud800detail", "fallback"),
+        ("fx-failure", "fallback\ud800detail"),
+    ],
+)
+def test_public_d3b_structured_fx_surrogate_text_is_deterministically_refused(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    warning: str,
+    degraded_reason: str,
+) -> None:
+    bundle = _bundle(tmp_path, monkeypatch)
+
+    def gateway(**kwargs: Any) -> dict[str, Any]:
+        payload = _gateway_result(
+            kwargs["raw_config"], kwargs["overrides"], degraded=True
+        )
+        payload["fx_integration"]["warning"] = warning
+        payload["fx_integration"]["degraded_reasons"] = [degraded_reason]
+        return payload
+
+    _install_gateway(monkeypatch, gateway)
+    result = execution.execute_evaluation_request(
+        project_case=bundle.project_case,
+        request=bundle.request,
+        scenario_authority_id=_AUTHORITY_ID,
+    )
+    assert type(result) is D3BExecutionSuccess
+    assert result.warnings == (warning, degraded_reason)
+
+    with pytest.raises(ResultProjectionError) as captured:
+        project_d3b_result(result)
+    assert (
+        captured.value.code,
+        captured.value.pointer,
+        captured.value.detail,
+    ) == (
+        "fx_origin_invalid",
+        "/full_result/fx_integration",
+        "FX integration disclosure violates the exact origin protocol",
+    )
+
+
+def test_public_d3b_gateway_surrogate_warning_is_deterministically_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bundle = _bundle(tmp_path, monkeypatch)
+    warning = "gateway\ud800warning"
+
+    def gateway(**kwargs: Any) -> dict[str, Any]:
+        payload = _gateway_result(kwargs["raw_config"], kwargs["overrides"])
+        payload["warnings"] = [warning]
+        return payload
+
+    _install_gateway(monkeypatch, gateway)
+    result = execution.execute_evaluation_request(
+        project_case=bundle.project_case,
+        request=bundle.request,
+        scenario_authority_id=_AUTHORITY_ID,
+    )
+    assert type(result) is D3BExecutionSuccess
+    assert result.warnings == (warning,)
+
+    with pytest.raises(ResultProjectionError) as captured:
+        project_d3b_result(result)
+    assert (
+        captured.value.code,
+        captured.value.pointer,
+        captured.value.detail,
+    ) == (
+        "gateway_warnings_invalid",
+        "/full_result/warnings",
+        "gateway warnings must be an exact bounded text tuple",
     )
 
 

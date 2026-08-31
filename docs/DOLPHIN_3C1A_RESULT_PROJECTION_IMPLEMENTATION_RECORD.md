@@ -1,7 +1,7 @@
 # Dolphin 3C-1a result-only projection implementation record
 
-**Status:** third corrected replacement; full local verification complete; fresh exact-SHA review
-pending; no D2 package assembly or HOLD movement
+**Status:** fourth corrected replacement; focused verification complete; complete contract and full
+governed gates pending; no D2 package assembly or HOLD movement
 
 **Protected base:** `e40c13a2fbd4bd974078c4d1dd32e4b1e7ebdf3f` (`origin/main`, PR `#1208` merge)
 
@@ -103,9 +103,18 @@ or PR. The two remaining blockers were:
   serialize unbounded, boolean or string values, while serialization-mode JSON Schema omitted the
   numeric bounds.
 
-The third correction preserves exact bounded D3B warning/reason text without reinterpretation and
-enforces the 4096-bit revision/seed bounds at validation, serialization and both JSON Schema modes.
-No D3C-1b, D3C-2 or D3D concern was pulled into this branch.
+The third correction preserved exact bounded D3B warning/reason text without reinterpretation and
+enforced the 4096-bit revision/seed bounds at validation, serialization and both JSON Schema modes.
+It was frozen at `00787d9549f5d9d2fdb9511f90f54311741d2123`, independently reviewed, and
+**rejected** before push or PR. D3B-valid Python strings containing surrogate code points could
+enter the facade but later fail with a raw error at JSON serialization; the same defect affected
+structured and aggregate warnings plus unknown string-key identities.
+
+The fourth correction makes Unicode scalar values the explicit D3C wire-text boundary. Every
+U+D800–U+DFFF occurrence is refused deterministically before a facade is returned and at direct
+Pydantic Python ingress. It does not sanitize or reinterpret text: every JSON-escapable control,
+the adjacent U+D7FF/U+E000 boundaries, valid non-BMP text and literal backslash escape text remain
+exact. No D3C-1b, D3C-2 or D3D concern was pulled into this branch.
 
 ## 4. Recruitment, leases and recovery
 
@@ -122,8 +131,9 @@ Recruitment followed the separation-of-duties and lease rules:
 - the coordinator invoked the documented stalled-writer takeover exception as sole writer.
 
 After each rejected replacement, both challengers remained read-only and the coordinator opened
-the same sole-writer takeover lease for only the named correction. The third lease covers exact
-D3B warning-text parity and serialization/schema integer bounds. No challenger or revoked writer
+the same sole-writer takeover lease for only the named correction. The third lease covered exact
+D3B warning-text parity and serialization/schema integer bounds. The fourth covers only the
+Unicode-scalar wire boundary and its negative/positive oracles. No challenger or revoked writer
 received a write lease.
 
 No two writers held a live lease concurrently. The first draft remains recoverable: exact bytes
@@ -153,7 +163,9 @@ The leaf contract imports neither the evaluator nor `analytics.contracts_v14`. I
 Identity-critical string validators run before Pydantic conversion and require exact `str`.
 SHA-256, Git commit, UTC timestamp, integer lexical, authored-number lexical and binary64 byte/hex
 shapes are independently validated. D3B warning and FX-reason strings are instead preserved as
-exact bounded text, including control-bearing content that the upstream D3B contract accepts.
+exact bounded Unicode scalar text, including JSON-escapable control-bearing content. Python
+surrogate code points are refused before projection because they cannot satisfy the strict UTF-8
+JSON wire contract; no accepted text is sanitized, normalized, replaced or omitted.
 
 ### 5.2 Independent origin reconciliation
 
@@ -227,8 +239,8 @@ is never summed.
 
 ## 6. Verification evidence
 
-The third-correction focused suite contains 121 tests and covers all four changed implementation
-modules at **100% line and branch coverage** (1,010 statements and 428 branches). Persistent
+The fourth-correction focused suite contains 126 tests and covers all four changed implementation
+modules at **100% line and branch coverage** (1,020 statements and 434 branches). Persistent
 controls include:
 
 - one genuine public gateway reached through D3B and then projected without a second call;
@@ -243,7 +255,10 @@ controls include:
 - D3B-valid empty DSCR, 513-warning and 513-receipt positive oracles;
 - 4096-bit revision/seed boundaries across origin, validation and serialization JSON Schema,
   Python, JSON and hostile unsafe-copy serialization;
-- exact control-bearing structured FX warning/reason preservation through public D3B and JSON;
+- exact JSON-escapable control-bearing structured FX warning/reason preservation through public
+  D3B, Python and JSON;
+- deterministic pre-facade surrogate refusal for structured/aggregate warnings and unknown string
+  keys, plus U+D7FF/U+E000, non-BMP and literal-backslash positive boundary oracles;
 - pre-allocation oversized-mapping refusal; and
 - insertion-order- and real-hash-seed-stable hostile key-failure receipts;
 - total static and observed path-disposition parity; and
@@ -259,33 +274,34 @@ The pre-change `tests/contracts` baseline was `1200 passed, 1 warning`. Replacem
 
 | Gate | Replacement candidate result |
 |---|---:|
-| Focused D3C-1a hostile/oracle suite | `121 passed` |
-| Focused changed-module line/branch coverage | `100.00%` (`1010` statements, `428` branches) |
+| Focused D3C-1a hostile/oracle suite | `126 passed` |
+| Focused changed-module line/branch coverage | `100.00%` (`1020` statements, `434` branches) |
 | Ruff / Black / isort / Bandit | pass |
 | Narrow mypy over four implementation modules | `Success: no issues found` |
-| Complete `tests/contracts` gate | `1321 passed, 1 inherited warning` |
-| Full governed ordinary suite | `7342 passed, 18 skipped, 23 warnings` in `721.51s` |
-| Full governed coverage floor | `95.32%` (`32597` statements, `1527` missed; `>=95%` required) |
+| Complete `tests/contracts` gate | `1326 passed, 1 inherited warning` |
+| Full governed ordinary suite | pending fourth-correction run |
+| Full governed coverage floor | pending fourth-correction run (`>=95%` required) |
 
-The current full governed suite ran against third-correction code commit
-`5958a32d92691b762554a0729e614fc794efae35` and returned exit zero with the exact counts above.
-Its named temporary diagnostic capture and coverage database were deleted immediately after the
-concise receipt was emitted. The later receipt-only commit changes no source or test blob; focused,
-complete contract and static gates are rerun at that final review SHA.
+The historical full governed suite ran against now-rejected third-correction code commit
+`5958a32d92691b762554a0729e614fc794efae35` and returned exit zero.
+It reported `7342 passed, 18 skipped, 23 warnings` in `721.51s` with `95.32%` coverage (`32597`
+statements, `1527` missed). Its named temporary diagnostic capture and coverage database were
+deleted immediately after the concise receipt was emitted. That receipt is rejection evidence,
+not verification of the fourth correction.
 
 The historical full governed suite ran against now-rejected second-correction code commit
 `f79f1482b3b19f8f99b35b8a120c01c4ae0d7072` and returned exit zero.
 It reported `7341 passed, 18 skipped, 23 warnings` in `720.76s` with `95.31%` coverage (`32586`
 statements, `1527` missed). Its named temporary diagnostic capture and coverage database were
 deleted immediately after the concise receipt was emitted. That receipt is rejection evidence,
-not verification of the third correction.
+not verification of the fourth correction.
 
 The historical full governed suite and coverage receipt ran twice against now-rejected code commit
 `a2d681883e5a62d4af638a0b033e0364f4d083b6`; the first pass's summary stream was lost when its PTY
 closed, but its completed coverage database independently reported `95.31%`. The controlled rerun
 returned exit zero with `7333 passed, 18 skipped, 23 warnings` and `95.31%` coverage (`32537`
 statements, `1527` missed), then deleted its temporary diagnostic capture and coverage database.
-That historical receipt is rejection evidence, not verification of the third correction.
+That historical receipt is rejection evidence, not verification of the fourth correction.
 
 Inherited warnings/skips are not D3C success evidence. Exact-head CI remains merge authority and is
 recorded in the PR rather than predicted here.

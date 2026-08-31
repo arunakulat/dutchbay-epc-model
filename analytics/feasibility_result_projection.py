@@ -114,6 +114,10 @@ def _origin_error(code: str, pointer: str, detail: str) -> ResultProjectionError
     return ResultProjectionError(code, pointer, detail)
 
 
+def _contains_unicode_surrogate(value: str) -> bool:
+    return any(0xD800 <= ord(character) <= 0xDFFF for character in value)
+
+
 def _detach_frozen_occurrences(
     value: Any,
     *,
@@ -749,6 +753,7 @@ def _unknown_key_parts(
         if (
             not key
             or len(key) > 4_096
+            or _contains_unicode_surrogate(key)
             or any(
                 ord(character) < 32 and character not in "\t\n\r" for character in key
             )
@@ -1188,6 +1193,7 @@ def _validate_origin(result: D3BExecutionSuccess) -> _ValidatedOrigin:
     if (
         type(gateway_warnings) is not tuple
         or any(type(item) is not str for item in gateway_warnings)
+        or any(_contains_unicode_surrogate(item) for item in gateway_warnings)
         or len(gateway_warnings) > _MAX_RESULT_SCALARS
         or sum(len(item) for item in gateway_warnings) > _MAX_RESULT_TEXT_CODEPOINTS
     ):
