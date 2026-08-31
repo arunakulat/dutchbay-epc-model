@@ -2,5 +2,8 @@
   upstream digests, runtime facts, D2 packs, governed result-byte artifacts, actor/source provenance
   and held non-reliance distribution controls, with pre-normalization wire checks, one pack per
   technology axis, taxonomy/supersession guards and exact held-scope circulation. The production
-  catalogue remains empty, package assembly and finance execution remain excluded, and no grade,
-  release or `HOLD` state changes.
+  graph also enforces downstream evidence-cutoff parity, acyclic source lineage, exact
+  disclosure-to-artifact provenance, bounded/duplicate-free pack defaults, pre-normalization
+  canonical values and an exact no-publication statement. The production catalogue remains empty,
+  package assembly and finance execution remain excluded, and no grade, release or `HOLD` state
+  changes.

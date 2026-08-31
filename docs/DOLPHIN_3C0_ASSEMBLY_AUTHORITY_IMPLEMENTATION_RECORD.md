@@ -49,17 +49,23 @@ An accepted receipt binds the actual D2 record types and the D3C-specific recipr
 The accepted graph refuses aliases, duplicates, dangling or surplus actor/source records, partial
 pack registries, foreign report/run artifact identities, missing source provenance, stale
 chronology, digest drift, dirty-state contradictions, byte/artifact drift, expired distribution,
-public distribution and disclosure references outside the selected graph.
+public distribution and disclosure references outside the selected graph. Every selected pack and
+source is checked against the EvaluationRequest evidence cutoff using the downstream D2 temporal
+rules. Source supersession must be acyclic, and every disclosure source must belong to the exact
+artifact named by that disclosure.
 
 Nested D2 wire records are inspected before D2's whitespace-normalizing string constraints run.
 Raw report, actor, source, pack, artifact and distribution IDs therefore cannot enter as padded or
 otherwise non-exact aliases. Identity and evidential-text tuples are bounded and duplicate-free.
+Pack input-default sequences are also bounded and duplicate-free by `input_id`; their nested
+canonical lexical values and unit tokens are checked before D2 normalization and remain within the
+same evidential-text ceiling.
 Selected technology packs are one-per-exact-technology axis, while distinct wind, solar and BESS
 pack axes remain representable. Pack and source section IDs must belong to the exact taxonomy SSOT.
 The three result artifacts cannot predate the engine run and cannot carry an artifact-supersession
 claim without a future governed predecessor-artifact authority. Distribution audiences and uses
 must equal the held engineering scope; a superset cannot silently authorize Board/lender
-circulation.
+circulation, and publication rights must say exactly `No publication is authorized.`
 
 D3A `support_status=declared` has no field or promotion route in this contract. D3C-0 consumes exact
 D2 pack facts only. An unsupported D2 pack remains visibly unsupported; the authority contract
@@ -130,7 +136,7 @@ candidate is independently accepted and protected-main merged. Its training corp
 D0, D1, D2, D3A, the final D3B-0/D3B-1/D3C-0 implementations, both D3C design records and the binding
 acceptance ledger before its first edit.
 
-## 6. First-candidate veto and successor remediation
+## 6. Exact-candidate veto and remediation chain
 
 The first frozen implementation candidate was
 `1fc574e4d66cc9933e0e1097545be05f84d42a4e`, tree
@@ -145,8 +151,23 @@ section IDs and surplus Board/lender distribution permissions beyond the held en
 
 The successor implementation rejects each reproduced state before package assembly. It preserves
 valid JSON-wire ingress through JSON-aware adapters, keeps strict Python ingress distinct, and
-retains the positive multi-technology hybrid case. The first dispositions accept no changed SHA;
-the successor must receive fresh exact-SHA domain and assurance review after its own freeze.
+retains the positive multi-technology hybrid case. The first dispositions accepted no changed SHA.
+
+The second frozen candidate was `8e5b877135c4d05b70f52326ad7303f89e20f06f`, tree
+`652b889086543a9b275a6ee8efbdaabd1226093d`. Fresh domain and assurance review both vetoed that
+exact SHA. Domain proved its constructive fixture and other accepted graphs could contain packs or
+sources after the EvaluationRequest evidence cutoff, and that a disclosure could name a globally
+selected source absent from its exact artifact. Assurance proved a pack input default could
+silently normalize padded or overlong nested canonical text, that input defaults were occurrence-
+unbounded and duplicate-permissive, that held distribution prose could claim public/Board
+publication authority, and that source provenance could self-supersede.
+
+The present remediation applies the exact downstream cutoff checks, binds disclosures to artifact
+source IDs, bounds and de-duplicates defaults, checks nested canonical values before normalization,
+requires the exact no-publication statement, and refuses every source-supersession cycle. The
+constructive fixture now lies on the evidence-cutoff boundary and each second-candidate
+counterexample has a hostile negative control. Neither veto accepts this changed tree; it requires
+fresh domain and assurance review after the third candidate is frozen.
 
 ## 7. Verification receipts
 
@@ -158,10 +179,10 @@ Focused receipts at this implementation stage:
 
 | Gate | Result |
 |---|---:|
-| D3C-0 constructive and hostile controls | `77 passed` |
+| D3C-0 constructive and hostile controls | `89 passed` |
 | D3C-0 module branch coverage | `100.00%` |
-| Complete `tests/contracts` predecessor regression | `1174 passed` |
-| Import, cold-order, gateway, changelog and v14 surface controls | `35 passed` |
+| Complete `tests/contracts` predecessor regression | `1186 passed` |
+| Import, cold-order, gateway, changelog and v14 surface controls | `53 passed` |
 | Ruff check and format | passed |
 | Mypy `--no-incremental` for production, exports and focused tests | passed |
 | Draft 2020-12 validation and serialization schema checks | passed |

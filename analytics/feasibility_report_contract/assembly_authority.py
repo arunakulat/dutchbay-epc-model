@@ -51,6 +51,7 @@ ASSEMBLY_AUTHORITY_CONTRACT_VERSION: Final = "1.0.0"
 NON_RELIANCE_STATEMENT: Final = (
     "No reliance is permitted; package release remains on HOLD."
 )
+NO_PUBLICATION_STATEMENT: Final = "No publication is authorized."
 
 _MAX_RECORDS: Final = 256
 _MAX_TEXT_CODEPOINTS: Final = 4_096
@@ -286,16 +287,28 @@ def _validate_raw_nested_d2_records(data: dict[str, object]) -> None:
                 "prohibited_substitutions",
             ),
         )
+        default_input_ids: list[object] = []
         for default_index, default in enumerate(
             _raw_sequence_field(pack, "input_defaults", label)
         ):
+            default_label = f"{label}.input_defaults[{default_index}]"
             _validate_raw_record_fields(
                 default,
-                f"{label}.input_defaults[{default_index}]",
+                default_label,
                 id_fields=("input_id",),
                 id_tuple_fields=("source_ids",),
                 text_fields=("applicability_predicate",),
             )
+            default_input_ids.append(_raw_field(default, "input_id"))
+            canonical_value = _raw_field(default, "value")
+            if canonical_value is not _MISSING:
+                _validate_raw_record_fields(
+                    canonical_value,
+                    f"{default_label}.value",
+                    text_fields=("value", "unit"),
+                )
+        if len(default_input_ids) != len(set(default_input_ids)):
+            raise ValueError(f"{label}.input_defaults contains duplicate input_ids")
         evidence_section_ids: list[object] = []
         for minimum_index, minimum in enumerate(
             _raw_sequence_field(pack, "evidence_minima", label)
@@ -381,7 +394,10 @@ def _raw_sequence_field(
         return ()
     if type(value) not in {list, tuple}:
         raise ValueError(f"{label}.{field_name} must be an exact list or tuple")
-    return tuple(cast(list[object] | tuple[object, ...], value))
+    records = tuple(cast(list[object] | tuple[object, ...], value))
+    if len(records) > _MAX_RECORDS:
+        raise ValueError(f"{label}.{field_name} exceeds the bounded record count")
+    return records
 
 
 class AssemblyAuthorityOutcome(str, Enum):
@@ -571,6 +587,8 @@ class HeldNonRelianceDistributionBinding(StrictFrozenModel):
             raise ValueError("distribution control contradicts the non-reliance hold")
         if self.control.distribution_class is ConfidentialityClass.PUBLIC:
             raise ValueError("held assembly facts cannot authorize public distribution")
+        if self.control.publication_rights != NO_PUBLICATION_STATEMENT:
+            raise ValueError("distribution control contradicts the publication hold")
         return self
 
 
@@ -668,6 +686,7 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
         sources = _index_records(self.source_records, "source_id", "source")
         packs = _index_records(self.pack_bindings, "pack_id", "pack")
         artifacts = _index_records(self.artifact_records, "artifact_id", "artifact")
+        evidence_cutoff = request.evidence_cutoff
 
         if self.allocation_authority.actor_id not in actors:
             raise ValueError("allocation actor_id is dangling")
@@ -704,6 +723,34 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
                 raise ValueError(
                     f"source {source.source_id} references an unknown taxonomy section"
                 )
+            dated_events = {
+                "publication": source.publication_date,
+                "observation": source.observation_date,
+                "retrieval": source.retrieval_date,
+            }
+            future_events = sorted(
+                name
+                for name, value in dated_events.items()
+                if value is not None and value > evidence_cutoff
+            )
+            if future_events:
+                raise ValueError(
+                    f"source {source.source_id} is after evidence cutoff: "
+                    f"{future_events}"
+                )
+            if (
+                source.effective_date is not None
+                and source.effective_date > evidence_cutoff
+            ):
+                raise ValueError(
+                    f"source {source.source_id} is not effective at evidence cutoff"
+                )
+            if source.expiry_date is not None and source.expiry_date < evidence_cutoff:
+                raise ValueError(
+                    f"source {source.source_id} expired before evidence cutoff"
+                )
+        self._validate_source_supersession_graph(sources)
+
         for artifact in self.artifact_records:
             if (
                 artifact.report_id != report.report_id
@@ -737,6 +784,13 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
                 raise ValueError("distribution disclosure has a dangling artifact")
             if disclosure.source_id not in sources:
                 raise ValueError("distribution disclosure has a dangling source")
+            disclosure_artifact = cast(
+                ArtifactRecord, artifacts[disclosure.artifact_id]
+            )
+            if disclosure.source_id not in disclosure_artifact.source_ids:
+                raise ValueError(
+                    "distribution disclosure source is absent from its artifact"
+                )
             if (
                 disclosure.validation_id is not None
                 and disclosure.validation_id
@@ -785,6 +839,13 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
                 raise ValueError(
                     f"pack {pack.pack_id} references an unknown taxonomy section"
                 )
+            if (
+                pack.effective_date > evidence_cutoff
+                or pack.review_date > evidence_cutoff
+            ):
+                raise ValueError(
+                    f"pack {pack.pack_id} is not current at evidence cutoff"
+                )
         self._validate_pack_registry_ids()
         self._validate_actor_source_reciprocity(actors, sources)
 
@@ -824,6 +885,19 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
         if control.expiry_or_review_date < self.authority_created_at.date():
             raise ValueError("distribution control is expired at authority creation")
         return self
+
+    @staticmethod
+    def _validate_source_supersession_graph(sources: dict[str, object]) -> None:
+        for source_id, source_record in sources.items():
+            seen = {source_id}
+            predecessor_id = cast(SourceRecord, source_record).supersedes_source_id
+            while predecessor_id is not None:
+                if predecessor_id in seen:
+                    raise ValueError("source supersession graph contains a cycle")
+                seen.add(predecessor_id)
+                predecessor_id = cast(
+                    SourceRecord, sources[predecessor_id]
+                ).supersedes_source_id
 
     def _validate_pack_registry_ids(self) -> None:
         registry = self.authorized_registry_ids
@@ -1040,6 +1114,7 @@ def resolve_assembly_authority(
 __all__ = (
     "ASSEMBLY_AUTHORITY_CONTRACT_VERSION",
     "ASSEMBLY_AUTHORITY_SCHEMA_ID",
+    "NO_PUBLICATION_STATEMENT",
     "NON_RELIANCE_STATEMENT",
     "AcceptedAssemblyAuthority",
     "AllocationAuthorityBinding",

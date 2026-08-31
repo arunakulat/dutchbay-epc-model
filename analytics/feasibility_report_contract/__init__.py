@@ -3,6 +3,7 @@
 from .assembly_authority import (
     ASSEMBLY_AUTHORITY_CONTRACT_VERSION,
     ASSEMBLY_AUTHORITY_SCHEMA_ID,
+    NO_PUBLICATION_STATEMENT,
     NON_RELIANCE_STATEMENT,
     AcceptedAssemblyAuthority,
     AllocationAuthorityBinding,
@@ -239,6 +240,7 @@ __all__ = [
     "MissingValue",
     "MonetaryAmount",
     "NON_RELIANCE_STATEMENT",
+    "NO_PUBLICATION_STATEMENT",
     "OpexCostLine",
     "PriceBasis",
     "PriceBasisAssertion",

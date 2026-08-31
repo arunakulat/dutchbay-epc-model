@@ -57,7 +57,7 @@ def _pack(*, pack_id: str, kind: str) -> dict[str, Any]:
         "version": "1.0.0",
         "owner_actor_id": "actor:d3c-orchestrator",
         "effective_date": date(2026, 8, 31),
-        "review_date": date(2026, 9, 30),
+        "review_date": date(2026, 8, 31),
         "compatible_contract_versions": (FEASIBILITY_REPORT_CONTRACT_VERSION,),
         "project_stages": ("screening",),
         "section_ids": ("appendices_provenance_audit_trail",),
@@ -143,7 +143,7 @@ def _accepted_payload() -> dict[str, Any]:
             "project_case_revision": 1,
             "d3b_scenario_authority_id": "authority:d3b-fixture",
             "config_id": "config:fictionland-wind",
-            "evidence_cutoff": date(2026, 8, 30),
+            "evidence_cutoff": date(2026, 8, 31),
             "valuation_date": date(2026, 8, 31),
         },
         "upstream_digests": {
@@ -273,6 +273,16 @@ def _validate(payload: dict[str, Any]) -> AcceptedAssemblyAuthority:
             ),
         )
     )
+
+
+def _add_pack_input_defaults(
+    payload: dict[str, Any], defaults: tuple[dict[str, Any], ...]
+) -> None:
+    pack = payload["pack_bindings"][0]
+    pack["required_input_ids"] = ("input:default",)
+    pack["source_ids"] = ("source:runtime",)
+    pack["input_defaults"] = defaults
+    payload["authorized_registry_ids"]["input_ids"] = ("input:default",)
 
 
 def _set(payload: dict[str, Any], path: tuple[str | int, ...], value: Any) -> None:
@@ -689,6 +699,25 @@ def test_disclosure_bindings_are_reciprocal() -> None:
             _validate(payload)
 
 
+def test_disclosure_source_must_belong_to_the_exact_artifact() -> None:
+    payload = _accepted_payload()
+    disclosure_only = copy.deepcopy(payload["source_records"][0])
+    disclosure_only["source_id"] = "source:disclosure-only"
+    disclosure_only["content_digest"] = _digest("8")
+    payload["source_records"] += (disclosure_only,)
+    payload["distribution"]["control"]["disclosure_bindings"] = (
+        {
+            "artifact_id": "artifact:annual_rows",
+            "source_id": "source:disclosure-only",
+            "action": "include",
+            "reason": "Globally selected but absent from this exact artifact.",
+        },
+    )
+
+    with pytest.raises(ValidationError, match="source is absent from its artifact"):
+        _validate(payload)
+
+
 @pytest.mark.parametrize(
     ("record_kind", "field_name", "identity", "message"),
     (
@@ -728,6 +757,22 @@ def test_valid_source_supersession_is_retained_in_the_exact_graph() -> None:
 
     accepted = _validate(payload)
     assert accepted.source_records[0].supersedes_source_id == predecessor["source_id"]
+
+
+def test_source_supersession_graph_must_be_acyclic() -> None:
+    payload = _accepted_payload()
+    payload["source_records"][0]["supersedes_source_id"] = "source:runtime"
+    with pytest.raises(ValidationError, match="supersession graph contains a cycle"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    predecessor = copy.deepcopy(payload["source_records"][0])
+    predecessor["source_id"] = "source:runtime-predecessor"
+    predecessor["supersedes_source_id"] = "source:runtime"
+    payload["source_records"][0]["supersedes_source_id"] = predecessor["source_id"]
+    payload["source_records"] += (predecessor,)
+    with pytest.raises(ValidationError, match="supersession graph contains a cycle"):
+        _validate(payload)
 
 
 @pytest.mark.parametrize(
@@ -856,6 +901,50 @@ def test_taxonomy_supersession_and_surplus_circulation_fail_closed() -> None:
     with pytest.raises(ValidationError, match="do not equal the held scope"):
         _validate(payload)
 
+    payload = _accepted_payload()
+    control = payload["distribution"]["control"]
+    control["publication_rights"] = (
+        "Public publication and Board circulation are authorized."
+    )
+    with pytest.raises(ValidationError, match="contradicts the publication hold"):
+        _validate(payload)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ("effective_date", "review_date"),
+)
+def test_selected_packs_must_be_current_at_evidence_cutoff(field_name: str) -> None:
+    payload = _accepted_payload()
+    payload["pack_bindings"][0][field_name] = date(2026, 9, 1)
+    with pytest.raises(ValidationError, match="pack .* not current at evidence cutoff"):
+        _validate(payload)
+
+
+@pytest.mark.parametrize(
+    "field_name",
+    ("publication_date", "observation_date", "retrieval_date"),
+)
+def test_selected_source_events_cannot_postdate_evidence_cutoff(
+    field_name: str,
+) -> None:
+    payload = _accepted_payload()
+    payload["source_records"][0][field_name] = date(2026, 9, 1)
+    with pytest.raises(ValidationError, match="source .* is after evidence cutoff"):
+        _validate(payload)
+
+
+def test_selected_source_effective_and_expiry_dates_bind_the_cutoff() -> None:
+    payload = _accepted_payload()
+    payload["source_records"][0]["effective_date"] = date(2026, 9, 1)
+    with pytest.raises(ValidationError, match="not effective at evidence cutoff"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    payload["source_records"][0]["expiry_date"] = date(2026, 8, 30)
+    with pytest.raises(ValidationError, match="expired before evidence cutoff"):
+        _validate(payload)
+
 
 def test_raw_d2_guard_bounds_shapes_and_python_mode() -> None:
     accepted = _accepted()
@@ -951,6 +1040,81 @@ def test_raw_d2_guard_nested_pack_and_disclosure_shapes() -> None:
                 }
             }
         )
+
+
+@pytest.mark.parametrize(
+    ("canonical_value", "message"),
+    (
+        (
+            {
+                "value_type": "integer",
+                "value": " 1 ",
+                "unit": "count",
+                "precision": 0,
+            },
+            "value.value is not exact bounded text",
+        ),
+        (
+            {
+                "value_type": "integer",
+                "value": "1",
+                "unit": " count ",
+                "precision": 0,
+            },
+            "value.unit is not exact bounded text",
+        ),
+        (
+            {"value_type": "string", "value": "x" * 5_000},
+            "value.value is not exact bounded text",
+        ),
+    ),
+)
+def test_pack_default_canonical_value_is_exact_before_d2_normalization(
+    canonical_value: dict[str, Any], message: str
+) -> None:
+    payload = _accepted_payload()
+    _add_pack_input_defaults(
+        payload,
+        (
+            {
+                "input_id": "input:default",
+                "value": canonical_value,
+                "source_ids": ("source:runtime",),
+                "applicability_predicate": "Exact default predicate.",
+            },
+        ),
+    )
+    with pytest.raises(ValidationError, match=message):
+        _validate(payload)
+
+
+def test_pack_input_defaults_are_bounded_and_duplicate_free() -> None:
+    default = {
+        "input_id": "input:default",
+        "value": {
+            "value_type": "integer",
+            "value": "1",
+            "unit": "count",
+            "precision": 0,
+        },
+        "source_ids": ("source:runtime",),
+        "applicability_predicate": "Exact default predicate.",
+    }
+
+    payload = _accepted_payload()
+    _add_pack_input_defaults(payload, (default,))
+    accepted = _validate(payload)
+    assert accepted.pack_bindings[0].input_defaults[0].value.value == "1"
+
+    payload = _accepted_payload()
+    _add_pack_input_defaults(payload, (default, copy.deepcopy(default)))
+    with pytest.raises(ValidationError, match="duplicate input_ids"):
+        _validate(payload)
+
+    payload = _accepted_payload()
+    _add_pack_input_defaults(payload, tuple(copy.deepcopy(default) for _ in range(257)))
+    with pytest.raises(ValidationError, match="exceeds the bounded record count"):
+        _validate(payload)
 
 
 def test_actor_source_sets_are_exact_not_supersets() -> None:
