@@ -19,7 +19,9 @@
 The archive was unpacked into a controlled temporary directory. Every payload file was hashed and
 compared by content with all files under `docs/source_materials/nso_bess_250mw_2026/`. All 50
 instances matched an existing canonical file byte-for-byte. The temporary extraction was then
-removed. No archive payload was copied into the corpus a second time.
+removed. No archive payload was copied into the corpus a second time. The complete member-level
+mapping, including the source path, hash, size, duplicate-instance status and canonical corpus
+path, is retained in `NSO250MW_Archive_2026-09-01.DEDUPLICATION.csv`.
 
 ## Intra-archive duplicate groups
 

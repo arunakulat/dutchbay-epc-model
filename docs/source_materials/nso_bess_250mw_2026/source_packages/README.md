@@ -59,7 +59,8 @@ The generic `Archive.zip` supplied on 1 September is a new outer package but con
 payload. All 50 payload instances match the current corpus byte-for-byte; two intra-archive
 duplicate groups reduce the payload to 48 unique SHA-256 values. Finder metadata and redundant
 payload copies were not retained. The archive's exact hash, integrity and deduplication result are
-recorded in `NSO250MW_Archive_2026-09-01_DEDUPLICATION_RECEIPT.md`.
+recorded in `NSO250MW_Archive_2026-09-01_DEDUPLICATION_RECEIPT.md`; the complete member-to-corpus
+mapping is retained in `NSO250MW_Archive_2026-09-01.DEDUPLICATION.csv`.
 
 
 ## OEM supply tranche, 27 August 2026 — committed in full

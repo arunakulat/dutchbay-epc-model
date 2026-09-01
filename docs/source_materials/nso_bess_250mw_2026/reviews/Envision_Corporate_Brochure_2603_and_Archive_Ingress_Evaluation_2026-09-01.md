@@ -29,8 +29,9 @@ symlink or encrypted member was present.
 
 The 50 payload instances reduce to 48 unique SHA-256 values. Every instance is byte-identical to a
 file already in this corpus. The two duplicate groups and their canonical paths are recorded in
-`../source_packages/NSO250MW_Archive_2026-09-01_DEDUPLICATION_RECEIPT.md`. No duplicate payload
-copy has been retained.
+`../source_packages/NSO250MW_Archive_2026-09-01_DEDUPLICATION_RECEIPT.md`; the complete mapping is
+retained in `../source_packages/NSO250MW_Archive_2026-09-01.DEDUPLICATION.csv`. No duplicate
+payload copy has been retained.
 
 A separate re-check of eleven loose files named by the project owner found eleven distinct hashes
 within that supplied subset, but all eleven already exist in the corpus. Ten were first added by
@@ -39,9 +40,9 @@ predates that tranche: it was first added by `4d8f6d0` / PR #1029 on 16 August a
 re-supplied later. The receipt contains the per-file hashes and history.
 
 The pre-ingress root manifest had 119 entries but omitted 11 pre-existing corpus files, including
-several READMEs and discovery extracts. Rebuilding it from the actual corpus now pins all 135
-non-manifest files: 11 previously omitted files, 5 files added by this ingress, and the previously
-recorded files. All 135 entries verify. This was a manifest-coverage defect, not missing source
+several READMEs and discovery extracts. Rebuilding it from the actual corpus now pins all 136
+non-manifest files: 11 previously omitted files, 6 files added by this ingress, and the previously
+recorded files. All 136 entries verify. This was a manifest-coverage defect, not missing source
 bytes; no prior evidence file was changed or replaced. Automated completeness enforcement remains
 an open corpus-control improvement.
 
