@@ -50,6 +50,9 @@ gh pr list --state open --limit 100 \
   --json number,title,isDraft,headRefName,headRefOid,mergeStateStatus,url
 gh pr view 1214 \
   --json number,state,headRefOid,baseRefOid,mergeCommit,mergedAt,url
+gh pr view 1215 \
+  --json number,state,headRefOid,baseRefOid,mergeCommit,mergedAt,url
+gh pr checks 1215 --required
 gh issue view 1110 --json number,state,title,closedAt,updatedAt,url
 ```
 
@@ -70,6 +73,7 @@ git merge-base --is-ancestor HEAD origin/main
 git merge --ff-only origin/main
 test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
 git merge-base --is-ancestor 009f2ff22ffc00cf375d563beca1bbe6d1914e72 HEAD
+git merge-base --is-ancestor 8f4e676bc908bfc8fe6b5d1e34cb463fcf19aab2 HEAD
 
 DUTCHBAY_VENV="$dutchbay_venv" ./check_venv.sh --no-bootstrap
 DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
@@ -525,8 +529,9 @@ worktrees and their local branches were then proved clean and retired:
 - `/Users/aruna/Downloads/dutchbay-wt-d3c1b-handover` / `codex/d3c1b-handover`.
 
 Their remote branch heads are absent and the immutable PR records retain their accepted heads. The
-unrelated detached `.claude` worktree, recovery tags, durable main checkout, persistent project
-folder and `.venv`, protected history, PR records and issue records were not touched.
+unrelated branch-attached `.claude` worktree at `9ecbf58…` (whose upstream remote is gone), recovery
+tags, durable main checkout, persistent project folder and `.venv`, protected history, PR records
+and issue records were not touched.
 
 Only after those paths are safely retired may the prerequisite thread create one fresh writer
 worktree from current `origin/main`:
