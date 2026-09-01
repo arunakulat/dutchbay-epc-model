@@ -713,6 +713,15 @@ for _path, _disposition in (
             "dscr_by_year",
             "annual_row_debt_period_map",
             "cfads_bridge_debt_period",
+            # F-6 period taxonomy. `bridge_debt_period` restates
+            # `cfads_bridge_debt_period` above under the engine's own name and
+            # `construction_periods` restates `construction_years`, so the
+            # taxonomy carries no fact this facade does not already see; it is
+            # dispositioned with its siblings rather than routed, which would
+            # carry the same number twice under two names.
+            "construction_periods",
+            "bridge_debt_period",
+            "first_operating_period",
             "balloon_treatment",
             "balloon_resolution",
             "balloon_residual",
