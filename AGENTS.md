@@ -25,7 +25,7 @@ branch or a nonexistent ruleset filename.
 ## Session continuity
 
 Before starting work, read the newest record in `docs/SESSION_HANDOVER_*.md` — currently
-`docs/SESSION_HANDOVER_2026-08-31_2.md` — and execute its **Bootstrap — run this first**
+`docs/SESSION_HANDOVER_2026-09-01.md` — and execute its **Bootstrap — run this first**
 section before substantive work. Each record names its predecessor and states which parts
 of it still stand, so read the newest first and follow the chain back only as far as it
 tells you to. These are the PERSIST-01 durable records: they carry the canonical KPI set,

@@ -105,7 +105,7 @@ D3 every time, including the directions that a later charter cannot amend.
    - `analytics/feasibility_report_contract/records.py`;
    - `analytics/feasibility_report_contract/package.py`;
    - `analytics/feasibility_report_contract/vocabulary.py`;
-   - `analytics/feasibility_report_contract/taxonomy.py`;
+   - `analytics/feasibility_sections.py`;
    - the D2 implementation, remediation and independent-review records; and
    - the complete D2 machine-contract, schema and coverage tests.
 4. D3A project input:
@@ -164,8 +164,9 @@ consumes that governed handoff without importing or calling the evaluator and wi
 KPI.
 
 D3C-0 supplies strict report/run identity, case/request/result digests, runtime receipt, D2 actors,
-sources, packs, three byte-bound result artifacts and a closed internal non-reliance distribution
-profile. Its public production authority catalogue remains intentionally empty. D3B-1's production
+sources, packs, three byte-artifact metadata/digest bindings and a closed internal non-reliance
+distribution profile. The bindings do not contain the governed bytes themselves. Its public
+production authority catalogue remains intentionally empty. D3B-1's production
 scenario-authority catalogue is also intentionally empty. Positive controlled-test authorities
 prove plumbing only; they do not create production project, pack, evidence or release authority.
 Any production catalogue entry is a separate reviewed dolphin.
@@ -231,21 +232,63 @@ The implementation record's opening “fresh exact-SHA review pending” status 
 before those reviews and is superseded by this protected acceptance receipt. Its technical
 boundary, rejected-candidate history and verification detail remain authoritative.
 
+### 4.1 Successor-record review correction
+
+The first frozen version of this successor record, exact SHA
+`82439d38b50c589441cd4ba248f74ea0eff5d2d1`, was rejected by both independent reviewers before
+push or PR. It omitted the original accepted D3B success and governed artifact bytes from D3C-1b,
+despite requiring their content identities; described a caller-supplied accepted authority instead
+of code-owned stable-ID selection; named a nonexistent taxonomy module; and would have left the
+root `AGENTS.md` newest-handover pointer stale.
+
+The domain reviewer proved the information-loss blocker constructively: accepted D3B successes
+with different opaque metadata or annual-row `fx_rate` values can yield the same D3C-1a projection.
+An equal projection cannot therefore stand in for accepted-success identity or the annual FX
+predicate. This corrected successor preserves those counterexamples as mandatory D3C-1b controls,
+requires in-memory artifact-byte verification, restores stable-ID authority selection, names the
+live taxonomy loader and updates the root handover pointer atomically.
+
 ## 5. Next task analysis — D3C-1b only
 
 The former combined D3C package scope is a whale. The next independently reversible Dolphin is
-D3C-1b. It receives exactly:
+D3C-1b. Its exact computational inputs are one D3A `ProjectCase`, the matching accepted D3B-0
+`EvaluationRequest` and one immutable accepted D3B-1 `D3BExecutionSuccess`. It must also receive:
 
-1. one accepted immutable D3C-1a projection;
-2. the exact D3A `ProjectCase` from which the execution originated;
-3. the matching accepted D3B-0 `EvaluationRequest`; and
-4. one selected accepted D3C-0 assembly-authority receipt.
+1. one strict D3C-1a projection derived from that exact success, or a supplied projection proven
+   graph-identical to a fresh call to the existing pure D3C-1a adapter on that success;
+2. one stable D3C-0 authority ID resolved through the code-owned catalogue—never a caller-minted
+   `AcceptedAssemblyAuthority`; and
+3. one bounded in-memory byte payload for each of the three governed artifact roles: annual rows,
+   debt result and FX curve.
 
-It first recomputes and requires exact reciprocal report, run and case identities; ProjectCase,
-request, result and authority digests; runtime receipt; engine manifest; and D3B/D3C origin facts.
-It must preserve the exact directed FX quote, source/target currencies, observation date, request
-price basis, source reference and conversion basis. A matching jurisdiction code, currency pair or
-numeric rate is not enough.
+The public production authority catalogue is intentionally empty, so production selection remains
+blocked until a separately reviewed catalogue entry exists. D3C-1b may exercise a controlled
+code-owned test catalogue to prove plumbing, but must not add a production authority or expose an
+arbitrary-receipt injection seam.
+
+D3C-1b first recomputes and requires exact reciprocal report, run and case identities; ProjectCase
+and EvaluationRequest content digests; the canonical content digest of the exact accepted D3B
+success; runtime receipt; engine manifest; and D3B/D3C origin facts. It derives or exactly
+reconciles the D3C-1a projection against that same success. It hashes each supplied in-memory
+artifact payload and requires the exact D3C-0 byte length, role and SHA-256 binding before emitting
+any candidate. It does not follow an artifact locator or perform filesystem I/O.
+
+No D3C-0 authority self-digest exists, and D4 package/payload hashing is deferred. D3C-1b must not
+invent either. If the accepted-success digest lacks a reusable public primitive, the Dolphin must
+define and independently verify a bounded, deterministic upstream-object content-identity
+contract solely for the ledger's `d3b_execution_success` binding; it is not D4 package
+serialization.
+
+D3C-1b must preserve the exact directed FX quote, source/target currencies, observation date,
+request price basis, source reference and conversion basis. A matching jurisdiction code, currency
+pair or numeric rate is not enough.
+
+The D3C-1a projection is intentionally lossy outside its reviewed routes. Independent review
+proved that two distinct accepted D3B successes differing only in opaque `scenario_result.metadata`
+can produce equal projections; the same is true when an annual-row `fx_rate` differs. The original
+accepted D3B success therefore remains load-bearing. D3C-1b hostile tests must preserve both
+counterexamples and prove that neither an equal projection nor matching projected identities can
+substitute for exact accepted-success content identity and the ledger's annual FX predicate.
 
 Only after every reciprocal check passes may D3C-1b emit candidate D2 records. Those candidates
 must retain explicit unresolved completeness, evidence, review, professional-act and grade facts.
@@ -265,9 +308,16 @@ D3C-1b must not:
 
 ### D3C-1b acceptance criteria
 
-- Bind one and only one exact ProjectCase/request/projection/accepted-authority quartet. Reject any
-  reciprocal report/run/case ID, digest, receipt, result artifact or manifest mismatch before
-  candidate emission.
+- Bind one and only one exact ProjectCase/request/D3B-success/projection/code-selected-authority
+  set. Recompute the ProjectCase, request and accepted-success content digests; freshly derive or
+  exactly reconcile the projection; and reject any reciprocal report/run/case ID, receipt, runtime,
+  manifest or origin mismatch before candidate emission. Do not invent an authority self-digest.
+- Accept the three governed artifact payloads as bounded in-memory bytes. Require exact role,
+  byte-length and SHA-256 agreement with both D3C-0 byte bindings and D2 artifact records before
+  candidate emission; never read a locator or accept metadata-only equality as byte proof.
+- Resolve authority only by stable ID through the code-owned D3C-0 catalogue. Production remains
+  blocked while that catalogue is empty; test-only positive plumbing must retain the same
+  code-owned selection semantics and cannot become a caller-injection route.
 - Apply the reviewed ProjectCase numeric table and precision policy from the D3C acceptance ledger.
   Preserve Decimal lexical identity, authored JSON lexemes and binary64 identity where the
   upstream contracts require them.
@@ -286,8 +336,9 @@ D3C-1b must not:
 - Import no evaluator, finance, application, API, renderer or persistence surface. Perform no
   filesystem, environment, network or clock I/O and prove zero gateway/finance calls with spies.
 - Add constructive and hostile tests, independent like-for-like finance/FX/identity oracles and
-  negative controls proving each guard fires. An oracle copied from the implementation is not
-  independent.
+  negative controls proving each guard fires. Include same-projection/different-D3B-metadata and
+  same-projection/different-annual-`fx_rate` counterexamples. An oracle copied from the
+  implementation is not independent.
 
 After D3C-1b is independently accepted and protected-main merged, start again from fresh live
 `origin/main`. D3C-2 may then assemble one complete D2 `FeasibilityReportPackage` with
@@ -414,6 +465,7 @@ git merge --ff-only origin/main
 test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
 test ! -e "$successor_worktree"
 ! git show-ref --verify --quiet "refs/heads/$successor_branch"
+! git show-ref --verify --quiet "refs/remotes/origin/$successor_branch"
 git worktree add -b "$successor_branch" "$successor_worktree" origin/main
 git -C "$successor_worktree" status --short --branch
 ```
@@ -441,11 +493,18 @@ feasibility-domain reviewer and one separate read-only assurance/web-contract re
 fresh corpus ingress, collision drills and exact-SHA leases. Use the stalled-writer and four
 rejected D3C-1a candidates as training evidence. Persist both final exact-head review dispositions.
 
-Implement D3C-1b only. Bind one exact accepted D3C-1a projection to its exact D3A ProjectCase, exact
-matching EvaluationRequest and one selected accepted D3C-0 authority. Recompute and require every
-reciprocal report/run/case identity, digest, runtime, artifact and manifest fact. Preserve exact
-directed FX quote/date/price-basis/source provenance. Only then emit minimum candidate D2 records,
-with unresolved completeness, evidence, review, professional-act and grade facts explicit.
+Implement D3C-1b only. Receive one exact D3A ProjectCase, its exact matching EvaluationRequest and
+the immutable accepted D3BExecutionSuccess. Derive the D3C-1a projection from that success or prove
+a supplied projection graph-identical to a fresh pure projection. Resolve D3C-0 authority only from
+its stable ID through the code-owned catalogue; a caller-minted receipt is not authority and the
+production catalogue remains empty. Receive the exact three artifact payloads as bounded in-memory
+bytes and require their role, length and SHA-256 bindings without reading a locator.
+
+Recompute and require every reciprocal report/run/case identity, ProjectCase/request/D3B-success
+content digest, runtime, artifact and manifest fact. Do not invent an authority self-digest or D4
+package hash. Preserve exact directed FX quote/date/price-basis/source provenance. Only then emit
+minimum candidate D2 records, with unresolved completeness, evidence, review, professional-act and
+grade facts explicit.
 
 Do not assemble FeasibilityReportPackage; that is D3C-2. Do not call the evaluator or finance,
 recompute a KPI, invent a jurisdiction/default, infer engine-less work, populate a production
