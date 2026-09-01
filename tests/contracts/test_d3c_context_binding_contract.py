@@ -47,8 +47,11 @@ from analytics.feasibility_report_contract.context_binding import (
     D3CContextBindingError,
     GovernedArtifactPayload,
     _bind_d3c_context_from_catalogue_for_test,
+    _reingress_d3c_context_candidate_from_catalogue_for_test,
     bind_d3c_context,
     d3b_execution_success_content_digest,
+    reingress_d3c_context_candidate,
+    reingress_d3c_context_candidate_json,
 )
 from analytics.feasibility_report_contract.result_facade import (
     D3C_SECTION_IDS,
@@ -447,6 +450,24 @@ def _bind(
     )
 
 
+def _reingress(
+    fixture: _ContextFixture,
+    candidate_data: Any,
+    *,
+    authority: AcceptedAssemblyAuthority | None = None,
+    payloads: tuple[GovernedArtifactPayload, ...] | None = None,
+) -> Any:
+    selected_authority = authority or fixture.authority
+    return _reingress_d3c_context_candidate_from_catalogue_for_test(
+        candidate_data=candidate_data,
+        authority_id=selected_authority.authority_id,
+        artifact_payloads=payloads or fixture.payloads,
+        authority_catalogue=MappingProxyType(
+            {selected_authority.authority_id: selected_authority}
+        ),
+    )
+
+
 def _thaw(value: Any, memo: dict[int, Any] | None = None) -> Any:
     copies = memo if memo is not None else {}
     if isinstance(value, MappingProxyType):
@@ -553,8 +574,8 @@ def _independent_identity_node(value: Any) -> Any:
     raise TypeError(type(value).__name__)
 
 
-def _independent_success_digest_oracle(success: D3BExecutionSuccess) -> str:
-    """Return the separately implemented like-for-like success digest oracle."""
+def _independent_success_identity_json(success: D3BExecutionSuccess) -> str:
+    """Render the success identity without production encoder helpers."""
 
     fields = (
         ("request_id", success.request_id),
@@ -583,12 +604,18 @@ def _independent_success_digest_oracle(success: D3BExecutionSuccess) -> str:
         "dutchbay.d3b_execution_success_content_identity.v1",
         [[name, _independent_identity_node(value)] for name, value in fields],
     ]
-    encoded = json.dumps(
+    return json.dumps(
         preimage,
         ensure_ascii=False,
         allow_nan=False,
         separators=(",", ":"),
-    ).encode("utf-8")
+    )
+
+
+def _independent_success_digest_oracle(success: D3BExecutionSuccess) -> str:
+    """Return the separately implemented like-for-like success digest oracle."""
+
+    encoded = _independent_success_identity_json(success).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
 
@@ -705,11 +732,184 @@ def test_constructive_binding_is_candidate_only_and_round_trips(
         output.output_id.startswith("output:debt_result.fx_")
         for output in candidate.output_references
     )
-    round_trip = D3CContextBindingCandidate.model_validate_json(
-        candidate.model_dump_json()
-    )
+    round_trip = _reingress(context_fixture, candidate.model_dump_json())
     assert round_trip == candidate
     assert round_trip.canonical_json_bytes() == candidate.canonical_json_bytes()
+
+
+def test_candidate_ingress_requires_code_selected_authority_and_fresh_bytes(
+    context_fixture: _ContextFixture,
+) -> None:
+    candidate = _bind(context_fixture)
+    values = {
+        field_name: getattr(candidate, field_name)
+        for field_name in D3CContextBindingCandidate.model_fields
+    }
+
+    with pytest.raises(ValidationError, match="code-owned authority selection"):
+        D3CContextBindingCandidate(**values)
+    with pytest.raises(ValidationError, match="code-owned authority selection"):
+        D3CContextBindingCandidate.model_validate(values)
+    with pytest.raises(ValidationError, match="code-owned authority selection"):
+        D3CContextBindingCandidate.model_validate_json(candidate.model_dump_json())
+
+    blocked_python = reingress_d3c_context_candidate(
+        candidate_data=values,
+        authority_id=candidate.authority_id,
+        artifact_payloads=context_fixture.payloads,
+    )
+    blocked_json = reingress_d3c_context_candidate_json(
+        json_data=candidate.model_dump_json(),
+        authority_id=candidate.authority_id,
+        artifact_payloads=context_fixture.payloads,
+    )
+    assert type(blocked_python) is BlockedD3CContextBinding
+    assert type(blocked_json) is BlockedD3CContextBinding
+    assert blocked_python.code.value == blocked_json.code.value == "authority_not_found"
+
+    forged = candidate.model_dump(mode="json")
+    forged["authority_id"] = "authority:caller-forged"
+    forged["accepted_authority"]["authority_id"] = "authority:caller-forged"
+    with pytest.raises(
+        ValidationError, match="embedded authority differs from the code-selected"
+    ):
+        _reingress(context_fixture, json.dumps(forged))
+
+    with pytest.raises(D3CContextBindingError) as caught:
+        _reingress(context_fixture, object())
+    assert caught.value.code == "invalid_candidate_ingress_type"
+
+    blocked_test_catalogue = _reingress_d3c_context_candidate_from_catalogue_for_test(
+        candidate_data=candidate.model_dump_json(),
+        authority_id=candidate.authority_id,
+        artifact_payloads=context_fixture.payloads,
+        authority_catalogue=MappingProxyType({}),
+    )
+    assert type(blocked_test_catalogue) is BlockedD3CContextBinding
+    assert blocked_test_catalogue.code.value == "authority_not_found"
+
+
+def test_authenticated_json_reingress_rejects_coherent_untrusted_copy_graphs(
+    context_fixture: _ContextFixture,
+) -> None:
+    candidate = _bind(context_fixture)
+
+    report_forgery = candidate.model_dump(mode="json")
+    forged_report_id = "report:caller-forged"
+    report_forgery["report_identity"]["report_id"] = forged_report_id
+    embedded_report_identity = report_forgery["accepted_authority"]["report_identity"]
+    embedded_report_identity["report_id"] = forged_report_id
+    for records in (
+        report_forgery["artifact_records"],
+        report_forgery["accepted_authority"]["artifact_records"],
+    ):
+        for record in records:
+            record["report_id"] = forged_report_id
+    for output in report_forgery["output_references"]:
+        output["report_id"] = forged_report_id
+    with pytest.raises(
+        ValidationError, match="embedded authority differs from the code-selected"
+    ):
+        _reingress(context_fixture, json.dumps(report_forgery))
+
+    pack_forgery = candidate.model_dump(mode="json")
+    pack_forgery["pack_bindings"][0]["version"] = "9.9.9"
+    pack_forgery["accepted_authority"]["pack_bindings"][0]["version"] = "9.9.9"
+    with pytest.raises(
+        ValidationError, match="embedded authority differs from the code-selected"
+    ):
+        _reingress(context_fixture, json.dumps(pack_forgery))
+
+    artifact_forgery = candidate.model_dump(mode="json")
+    target = artifact_forgery["byte_artifact_bindings"][0]
+    target_role = target["role"]
+    target_artifact_id = target["artifact_id"]
+    forged_digest = "a" * 64
+    forged_length = 987_654
+    for bindings in (
+        artifact_forgery["byte_artifact_bindings"],
+        artifact_forgery["accepted_authority"]["byte_artifact_bindings"],
+    ):
+        binding = next(item for item in bindings if item["role"] == target_role)
+        binding["byte_length"] = forged_length
+        binding["content_digest"]["value"] = forged_digest
+    for records in (
+        artifact_forgery["artifact_records"],
+        artifact_forgery["accepted_authority"]["artifact_records"],
+    ):
+        record = next(
+            item for item in records if item["artifact_id"] == target_artifact_id
+        )
+        record["content_digest"]["value"] = forged_digest
+    verified = next(
+        item
+        for item in artifact_forgery["verified_artifact_payloads"]
+        if item["role"] == target_role
+    )
+    verified["byte_length"] = forged_length
+    verified["content_digest"]["value"] = forged_digest
+    artifact_output = next(
+        item
+        for item in artifact_forgery["output_references"]
+        if item["output_id"] == f"output:artifact.{target_role}"
+    )
+    artifact_output["digest"]["value"] = forged_digest
+    with pytest.raises(
+        ValidationError, match="embedded authority differs from the code-selected"
+    ):
+        _reingress(context_fixture, json.dumps(artifact_forgery))
+
+
+def test_authenticated_reingress_rehashes_actual_artifact_bytes(
+    context_fixture: _ContextFixture,
+) -> None:
+    candidate = _bind(context_fixture)
+    tampered_payloads = list(context_fixture.payloads)
+    tampered_payloads[0] = GovernedArtifactPayload(
+        role=tampered_payloads[0].role,
+        content=tampered_payloads[0].content + b"!",
+    )
+    with pytest.raises(D3CContextBindingError) as caught:
+        _reingress(
+            context_fixture,
+            candidate.model_dump_json(),
+            payloads=tuple(tampered_payloads),
+        )
+    assert caught.value.code == "artifact_byte_length_mismatch"
+
+    target = context_fixture.authority.byte_artifact_bindings[0]
+    forged_digest = target.content_digest.model_copy(update={"value": "a" * 64})
+    forged_binding = target.model_copy(
+        update={
+            "byte_length": 987_654,
+            "content_digest": forged_digest,
+        }
+    )
+    forged_bindings = (
+        forged_binding,
+        *context_fixture.authority.byte_artifact_bindings[1:],
+    )
+    forged_records = tuple(
+        (
+            record.model_copy(update={"content_digest": forged_digest})
+            if record.artifact_id == target.artifact_id
+            else record
+        )
+        for record in context_fixture.authority.artifact_records
+    )
+    forged_authority = context_fixture.authority.model_copy(
+        update={
+            "byte_artifact_bindings": forged_bindings,
+            "artifact_records": forged_records,
+        }
+    )
+    with pytest.raises(D3CContextBindingError) as caught:
+        _reingress(
+            context_fixture,
+            candidate.model_dump_json(),
+            authority=forged_authority,
+        )
+    assert caught.value.code == "artifact_byte_length_mismatch"
 
 
 def test_success_identity_matches_an_independent_like_for_like_oracle(
@@ -729,6 +929,87 @@ def test_success_identity_matches_an_independent_like_for_like_oracle(
     altered_reference = _independent_success_digest_oracle(altered)
     assert altered_reference != reference_digest
     assert d3b_execution_success_content_digest(altered).value == altered_reference
+
+
+@pytest.mark.parametrize(
+    ("field_name", "foreign_value"),
+    (
+        ("authority_id", "authority:coherent-foreign"),
+        ("config_id", "config:coherent-foreign"),
+        ("source_file_sha256", "a" * 64),
+        ("resolved_config_sha256", "b" * 64),
+        ("evidence_cutoff", date(2026, 8, 28)),
+        ("valuation_date", date(2026, 8, 28)),
+        ("validation_modules", ("cashflow", "debt", "wind")),
+    ),
+)
+@pytest.mark.parametrize("ingress_mode", ("python", "json"))
+def test_authenticated_reingress_rejects_each_coherent_success_origin_substitution(
+    context_fixture: _ContextFixture,
+    field_name: str,
+    foreign_value: Any,
+    ingress_mode: str,
+) -> None:
+    candidate = _bind(context_fixture)
+    original_value = getattr(context_fixture.success, field_name)
+    if foreign_value == original_value:
+        foreign_value = ("cashflow", "debt")
+    assert foreign_value != original_value
+    mutated_success = replace(
+        context_fixture.success,
+        **{field_name: foreign_value},
+    )
+    identity_json = _independent_success_identity_json(mutated_success)
+    digest_value = hashlib.sha256(identity_json.encode("utf-8")).hexdigest()
+    assert digest_value == _independent_success_digest_oracle(mutated_success)
+    assert digest_value == d3b_execution_success_content_digest(mutated_success).value
+    digest = candidate.d3b_execution_success_content_digest.model_copy(
+        update={"value": digest_value}
+    )
+    upstream = context_fixture.authority.upstream_digests.model_copy(
+        update={"d3b_execution_success": digest}
+    )
+    coherent_authority = context_fixture.authority.model_copy(
+        update={"upstream_digests": upstream}
+    )
+    projection = project_d3b_result(mutated_success)
+
+    if ingress_mode == "python":
+        candidate_data: Any = {
+            field: getattr(candidate, field)
+            for field in D3CContextBindingCandidate.model_fields
+        }
+        candidate_data.update(
+            {
+                "accepted_authority": coherent_authority,
+                "d3b_execution_success_content_digest": digest,
+                "d3b_execution_success_content_identity_json": identity_json,
+                "projection": projection,
+            }
+        )
+    else:
+        candidate_data = candidate.model_dump(mode="json")
+        candidate_data.update(
+            {
+                "accepted_authority": coherent_authority.model_dump(mode="json"),
+                "d3b_execution_success_content_digest": digest.model_dump(mode="json"),
+                "d3b_execution_success_content_identity_json": identity_json,
+                "projection": projection.model_dump(mode="json"),
+            }
+        )
+        candidate_data = json.dumps(candidate_data)
+
+    expected_error = (
+        "request receipt differs"
+        if field_name == "authority_id"
+        else "success_origin_mismatch"
+    )
+    with pytest.raises(ValidationError, match=expected_error):
+        _reingress(
+            context_fixture,
+            candidate_data,
+            authority=coherent_authority,
+        )
 
 
 @pytest.mark.parametrize(
@@ -887,7 +1168,18 @@ def test_public_future_code_selected_acceptance_path_has_no_injection_parameter(
         artifact_payloads=context_fixture.payloads,
     )
     assert type(result) is D3CContextBindingCandidate
-    assert selected_ids == [context_fixture.authority.authority_id]
+    python_reingress = reingress_d3c_context_candidate(
+        candidate_data=result.model_dump(mode="python"),
+        authority_id=context_fixture.authority.authority_id,
+        artifact_payloads=context_fixture.payloads,
+    )
+    json_reingress = reingress_d3c_context_candidate_json(
+        json_data=result.model_dump_json(),
+        authority_id=context_fixture.authority.authority_id,
+        artifact_payloads=context_fixture.payloads,
+    )
+    assert python_reingress == json_reingress == result
+    assert selected_ids == [context_fixture.authority.authority_id] * 3
 
 
 def test_reciprocal_request_case_and_authority_digests_are_independent_guards(
@@ -1316,10 +1608,7 @@ def test_complete_directed_fx_candidate_round_trip_and_coherent_tamper_refusal(
     assert derivation.source_id == "source:project-basis"
     assert derivation.valuation_date == derivation.source_observation_date
     assert derivation.annual_row_count == derivation.expected_timeline_periods == 1
-    assert (
-        D3CContextBindingCandidate.model_validate_json(candidate.model_dump_json())
-        == candidate
-    )
+    assert _reingress(directed_fixture, candidate.model_dump_json()) == candidate
 
     base = candidate.model_dump(mode="json")
 
@@ -1327,7 +1616,7 @@ def test_complete_directed_fx_candidate_round_trip_and_coherent_tamper_refusal(
         payload = copy.deepcopy(base)
         mutation(payload)
         with pytest.raises(ValidationError):
-            D3CContextBindingCandidate.model_validate_json(json.dumps(payload))
+            _reingress(directed_fixture, json.dumps(payload))
 
     rejected(
         lambda payload: payload["fx_derivations"][0].update(
@@ -1436,7 +1725,7 @@ def test_candidate_python_reingress_rejects_each_root_graph_substitution(
 
     def rejected(**updates: Any) -> None:
         with pytest.raises(ValidationError):
-            D3CContextBindingCandidate(**{**values, **updates})
+            _reingress(directed_fixture, {**values, **updates})
 
     rejected(
         accepted_authority=candidate.accepted_authority.model_copy(
@@ -1517,6 +1806,78 @@ def test_candidate_python_reingress_rejects_each_root_graph_substitution(
         lambda success: altered_projection,
     )
     rejected(projection=altered_projection)
+
+
+def test_authenticated_reingress_defends_corrupt_selected_receipt_and_faults(
+    context_fixture: _ContextFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = _bind(context_fixture)
+    values = {
+        field_name: getattr(candidate, field_name)
+        for field_name in D3CContextBindingCandidate.model_fields
+    }
+
+    bad_distribution = context_fixture.authority.distribution.model_copy(
+        update={"non_reliance": False}
+    )
+    bad_distribution_authority = context_fixture.authority.model_copy(
+        update={"distribution": bad_distribution}
+    )
+    with pytest.raises(ValidationError, match="hold controls contradict"):
+        _reingress(
+            context_fixture,
+            {
+                **values,
+                "accepted_authority": bad_distribution_authority,
+            },
+            authority=bad_distribution_authority,
+        )
+
+    original_reconcile = context_binding._reconcile_identity_graph
+    foreign_digest = candidate.project_case_content_digest.model_copy(
+        update={"value": "0" * 64}
+    )
+    monkeypatch.setattr(
+        context_binding,
+        "_reconcile_identity_graph",
+        lambda *args: (
+            foreign_digest,
+            candidate.evaluation_request_content_digest,
+            candidate.d3b_execution_success_content_digest,
+        ),
+    )
+    with pytest.raises(ValidationError, match="reconciled upstream digests differ"):
+        _reingress(context_fixture, values)
+
+    monkeypatch.setattr(
+        context_binding, "_reconcile_identity_graph", original_reconcile
+    )
+    bad_runtime = context_fixture.authority.runtime_receipt.model_copy(
+        update={"engine_version": "15.4.0-corrupt"}
+    )
+    bad_runtime_authority = context_fixture.authority.model_copy(
+        update={"runtime_receipt": bad_runtime}
+    )
+    monkeypatch.setattr(
+        context_binding,
+        "_reconcile_identity_graph",
+        lambda *args: (
+            candidate.project_case_content_digest,
+            candidate.evaluation_request_content_digest,
+            candidate.d3b_execution_success_content_digest,
+        ),
+    )
+    with pytest.raises(ValidationError, match="runtime receipt differs"):
+        _reingress(
+            context_fixture,
+            {
+                **values,
+                "accepted_authority": bad_runtime_authority,
+                "runtime_receipt": bad_runtime,
+            },
+            authority=bad_runtime_authority,
+        )
 
 
 def test_success_identity_decoder_rejects_every_malformed_node_family(
@@ -1871,10 +2232,7 @@ def test_no_locator_io_gateway_or_finance_rerun(
     monkeypatch.setattr(Path, "read_text", forbidden)
     candidate = _bind(context_fixture)
     assert type(candidate) is D3CContextBindingCandidate
-    assert (
-        D3CContextBindingCandidate.model_validate_json(candidate.model_dump_json())
-        == candidate
-    )
+    assert _reingress(context_fixture, candidate.model_dump_json()) == candidate
 
     tree = ast.parse(source)
     forbidden_roots = {"finance", "app", "api", "pathlib", "os", "subprocess"}
@@ -1969,6 +2327,9 @@ def test_duplicate_json_keys_and_non_finite_tokens_are_rejected(
     with pytest.raises(D3CContextBindingError) as caught:
         D3CContextBindingCandidate.model_validate_json('{"value":NaN}')
     assert caught.value.code == "non_finite_json_number"
+    with pytest.raises(D3CContextBindingError) as caught:
+        D3CContextBindingCandidate.model_validate_json('{"value":1e999}')
+    assert caught.value.code == "non_finite_json_number"
 
     long_key = "x" * 2_000
     with pytest.raises(D3CContextBindingError) as caught:
@@ -1991,10 +2352,8 @@ def test_json_ingress_type_encoding_unicode_depth_and_volume_guards(
 ) -> None:
     candidate = _bind(context_fixture)
     rendered = candidate.model_dump_json().encode("utf-8")
-    assert D3CContextBindingCandidate.model_validate_json(rendered) == candidate
-    assert (
-        D3CContextBindingCandidate.model_validate_json(bytearray(rendered)) == candidate
-    )
+    assert _reingress(context_fixture, rendered) == candidate
+    assert _reingress(context_fixture, bytearray(rendered)) == candidate
 
     for invalid in (b"\xff", bytearray(b"\xff")):
         with pytest.raises(D3CContextBindingError) as caught:
@@ -2023,9 +2382,20 @@ def test_json_ingress_type_encoding_unicode_depth_and_volume_guards(
         D3CContextBindingCandidate.model_validate_json('{"x":1}')
     assert caught.value.code == "json_ingress_out_of_bounds"
     monkeypatch.setattr(context_binding, "_MAX_JSON_INGRESS_BYTES", 8)
+    for oversized in (
+        '{"value":1}',
+        b"\xff" * 9,
+        bytearray(b"\xff" * 9),
+    ):
+        with pytest.raises(D3CContextBindingError) as caught:
+            D3CContextBindingCandidate.model_validate_json(oversized)
+        assert caught.value.code == "json_ingress_bytes_exceeded"
     with pytest.raises(D3CContextBindingError) as caught:
-        D3CContextBindingCandidate.model_validate_json('{"value":1}')
+        context_binding._scan_json_ingress("é" * 5)
     assert caught.value.code == "json_ingress_bytes_exceeded"
+    monkeypatch.setattr(context_binding, "_MAX_JSON_INGRESS_BYTES", 64 * 1024 * 1024)
+    monkeypatch.setattr(context_binding, "_MAX_IDENTITY_SCALARS", 100_000)
+    assert context_binding._scan_json_ingress("1.5") == 1.5
 
 
 @pytest.mark.parametrize(
@@ -2200,7 +2570,7 @@ def test_candidate_models_are_strict_frozen_and_unknown_fields_fail(
     payload = candidate.model_dump(mode="json")
     payload["package_release"] = {"status": "authorized"}
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-        D3CContextBindingCandidate.model_validate(payload)
+        _reingress(context_fixture, payload)
 
 
 def test_candidate_reingress_rechecks_every_reciprocal_edge(
@@ -2215,10 +2585,12 @@ def test_candidate_reingress_rechecks_every_reciprocal_edge(
             for field_name in D3CContextBindingCandidate.model_fields
         }
         values.update(updates)
-        D3CContextBindingCandidate(**values)
+        _reingress(context_fixture, values)
 
     with pytest.raises(ValidationError, match="cannot alias"):
         rebuild(authority_id=candidate.report_identity.report_id)
+    with pytest.raises(ValidationError, match="authority identity differs"):
+        rebuild(authority_id="authority:foreign")
     with pytest.raises(ValidationError, match="authority graph differs"):
         rebuild(
             report_identity=candidate.report_identity.model_copy(
@@ -2334,7 +2706,7 @@ def test_hostile_json_reingress_refuses_material_graph_mutations(
         payload = copy.deepcopy(base)
         mutation(payload)
         with pytest.raises(ValidationError):
-            D3CContextBindingCandidate.model_validate_json(json.dumps(payload))
+            _reingress(context_fixture, json.dumps(payload))
 
     rejected(
         lambda payload: payload["d3b_execution_success_content_digest"].update(

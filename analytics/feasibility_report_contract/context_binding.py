@@ -23,7 +23,7 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any, Final, Literal, Mapping, Self, TypeAlias, cast
 
-from pydantic import Field, Strict, model_validator
+from pydantic import Field, Strict, ValidationInfo, model_validator
 from typing_extensions import Annotated
 
 from analytics.contracts_v14 import (
@@ -188,16 +188,36 @@ def _scan_json_ingress(json_data: str | bytes | bytearray) -> Any:
 
     if type(json_data) is str:
         text = json_data
-        try:
-            encoded_length = len(text.encode("utf-8"))
-        except UnicodeEncodeError as exc:
+        if len(text) > _MAX_JSON_INGRESS_BYTES:
             raise D3CContextBindingError(
-                "invalid_unicode_scalar",
+                "json_ingress_bytes_exceeded",
                 "/",
-                "JSON strings must contain Unicode scalar values",
-            ) from exc
+                "JSON ingress exceeds the bounded byte limit",
+            )
+        encoded_length = 0
+        for offset in range(0, len(text), 64 * 1024):
+            try:
+                encoded_length += len(text[offset : offset + 64 * 1024].encode("utf-8"))
+            except UnicodeEncodeError as exc:
+                raise D3CContextBindingError(
+                    "invalid_unicode_scalar",
+                    "/",
+                    "JSON strings must contain Unicode scalar values",
+                ) from exc
+            if encoded_length > _MAX_JSON_INGRESS_BYTES:
+                raise D3CContextBindingError(
+                    "json_ingress_bytes_exceeded",
+                    "/",
+                    "JSON ingress exceeds the bounded byte limit",
+                )
     elif type(json_data) is bytes:
         encoded_length = len(json_data)
+        if encoded_length > _MAX_JSON_INGRESS_BYTES:
+            raise D3CContextBindingError(
+                "json_ingress_bytes_exceeded",
+                "/",
+                "JSON ingress exceeds the bounded byte limit",
+            )
         try:
             text = json_data.decode("utf-8")
         except UnicodeDecodeError as exc:
@@ -206,8 +226,14 @@ def _scan_json_ingress(json_data: str | bytes | bytearray) -> Any:
             ) from exc
     elif type(json_data) is bytearray:
         encoded_length = len(json_data)
+        if encoded_length > _MAX_JSON_INGRESS_BYTES:
+            raise D3CContextBindingError(
+                "json_ingress_bytes_exceeded",
+                "/",
+                "JSON ingress exceeds the bounded byte limit",
+            )
         try:
-            text = bytes(json_data).decode("utf-8")
+            text = json_data.decode("utf-8")
         except UnicodeDecodeError as exc:
             raise D3CContextBindingError(
                 "invalid_json_encoding", "/", "JSON ingress must be exact UTF-8"
@@ -215,12 +241,6 @@ def _scan_json_ingress(json_data: str | bytes | bytearray) -> Any:
     else:
         raise D3CContextBindingError(
             "invalid_json_type", "/", "JSON ingress must be str, bytes or bytearray"
-        )
-    if encoded_length > _MAX_JSON_INGRESS_BYTES:
-        raise D3CContextBindingError(
-            "json_ingress_bytes_exceeded",
-            "/",
-            "JSON ingress exceeds the bounded byte limit",
         )
 
     def pairs_hook(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -242,11 +262,22 @@ def _scan_json_ingress(json_data: str | bytes | bytearray) -> Any:
             f"non-finite JSON token {value!r} is forbidden",
         )
 
+    def parse_finite_float(value: str) -> float:
+        parsed = float(value)
+        if not math.isfinite(parsed):
+            raise D3CContextBindingError(
+                "non_finite_json_number",
+                "/",
+                "JSON numbers must be finite binary64 values",
+            )
+        return parsed
+
     try:
         parsed = json.loads(
             text,
             object_pairs_hook=pairs_hook,
             parse_constant=reject_constant,
+            parse_float=parse_finite_float,
         )
     except D3CContextBindingError:
         raise
@@ -353,6 +384,33 @@ class VerifiedArtifactPayload(_StrictJsonIngressModel):
     artifact_id: ExactStableId
     byte_length: Annotated[int, Strict(), Field(gt=0, le=_MAX_ARTIFACT_BYTES)]
     content_digest: Digest
+
+
+_CANDIDATE_INGRESS_CAPABILITY: Final[object] = object()
+
+
+@dataclass(frozen=True, slots=True)
+class _AuthenticatedCandidateIngress:
+    """Private proof that authority selection and artifact-byte checks ran."""
+
+    capability: object
+    authority: AcceptedAssemblyAuthority
+    verified_artifact_payloads: tuple[VerifiedArtifactPayload, ...]
+
+
+def _authenticated_candidate_context(
+    authority: AcceptedAssemblyAuthority,
+    verified_artifact_payloads: tuple[VerifiedArtifactPayload, ...],
+) -> dict[str, object]:
+    """Return validator context unavailable from the public candidate surface."""
+
+    return {
+        "authenticated_d3c_candidate_ingress": _AuthenticatedCandidateIngress(
+            capability=_CANDIDATE_INGRESS_CAPABILITY,
+            authority=authority,
+            verified_artifact_payloads=verified_artifact_payloads,
+        )
+    }
 
 
 class CandidateInputOrigin(_StrictJsonIngressModel):
@@ -681,8 +739,28 @@ class D3CContextBindingCandidate(_StrictJsonIngressModel):
     publication_status: Literal["not_authorized"]
 
     @model_validator(mode="after")
-    def _candidate_graph_is_exact(self) -> D3CContextBindingCandidate:
-        authority = self.accepted_authority
+    def _candidate_graph_is_exact(
+        self, info: ValidationInfo
+    ) -> D3CContextBindingCandidate:
+        ingress = (
+            info.context.get("authenticated_d3c_candidate_ingress")
+            if type(info.context) is dict
+            else None
+        )
+        if (
+            type(ingress) is not _AuthenticatedCandidateIngress
+            or ingress.capability is not _CANDIDATE_INGRESS_CAPABILITY
+            or type(ingress.authority) is not AcceptedAssemblyAuthority
+        ):
+            raise ValueError(
+                "candidate ingress requires code-owned authority selection and "
+                "fresh artifact-byte verification"
+            )
+        authority = ingress.authority
+        if self.accepted_authority != authority:
+            raise ValueError(
+                "embedded authority differs from the code-selected authority"
+            )
         report = self.report_identity
         request_identity = self.evaluation_request_identity
         project_case = self.project_case
@@ -818,6 +896,30 @@ class D3CContextBindingCandidate(_StrictJsonIngressModel):
             raise ValueError(
                 "candidate projection differs from its accepted-success witness"
             )
+        try:
+            (
+                reconciled_project_digest,
+                reconciled_request_digest,
+                reconciled_success_digest,
+            ) = _reconcile_identity_graph(
+                project_case,
+                request,
+                accepted_success,
+                fresh_projection,
+                authority,
+            )
+        except D3CContextBindingError as exc:
+            raise ValueError(
+                f"candidate reciprocal identity reconciliation failed: {exc.code}"
+            ) from exc
+        if (
+            reconciled_project_digest != self.project_case_content_digest
+            or reconciled_request_digest != self.evaluation_request_content_digest
+            or reconciled_success_digest != self.d3b_execution_success_content_digest
+        ):
+            raise ValueError(
+                "candidate reconciled upstream digests differ from retained digests"
+            )
         generated_at = datetime.fromisoformat(
             projection.engine_manifest.generated_at.replace("Z", "+00:00")
         )
@@ -880,9 +982,12 @@ class D3CContextBindingCandidate(_StrictJsonIngressModel):
             )
             for role in GovernedByteArtifactRole
         )
-        if self.verified_artifact_payloads != expected_verified:
+        if (
+            self.verified_artifact_payloads != expected_verified
+            or self.verified_artifact_payloads != ingress.verified_artifact_payloads
+        ):
             raise ValueError(
-                "candidate verified bytes differ from the accepted authority"
+                "candidate verified bytes differ from fresh bytes or accepted authority"
             )
 
         expected_sections = _section_candidates(
@@ -2414,49 +2519,52 @@ def _bind_selected_authority(
         authority.artifact_records,
         authority.byte_artifact_bindings,
     )
-    return D3CContextBindingCandidate(
-        outcome="candidate",
-        schema_id=D3C_CONTEXT_BINDING_SCHEMA_ID,
-        contract_version=D3C_CONTEXT_BINDING_CONTRACT_VERSION,
-        authority_status="candidate_non_authoritative",
-        authority_id=authority.authority_id,
-        project_case=project_case,
-        evaluation_request=request,
-        accepted_authority=authority,
-        report_identity=authority.report_identity,
-        evaluation_request_identity=authority.evaluation_request_identity,
-        project_case_content_digest=project_digest,
-        evaluation_request_content_digest=request_digest,
-        d3b_execution_success_content_digest=success_digest,
-        d3b_execution_success_content_identity_json=(
-            _d3b_success_content_identity_json(success)
-        ),
-        runtime_receipt=authority.runtime_receipt,
-        projection=selected_projection,
-        actor_records=authority.actor_records,
-        source_records=authority.source_records,
-        pack_bindings=authority.pack_bindings,
-        jurisdiction_pack_ids=authority.jurisdiction_pack_ids,
-        technology_pack_ids=authority.technology_pack_ids,
-        authorized_registry_ids=authority.authorized_registry_ids,
-        input_records=inputs,
-        input_origins=origins,
-        input_contexts=input_contexts,
-        fx_derivations=fx_derivations,
-        output_references=outputs,
-        artifact_records=authority.artifact_records,
-        byte_artifact_bindings=authority.byte_artifact_bindings,
-        verified_artifact_payloads=verified,
-        distribution_control=authority.distribution.control,
-        sections=sections,
-        completeness_status="unresolved",
-        evidence_status="unresolved",
-        review_status="not_performed",
-        professional_act_status="not_performed",
-        achieved_grade="ungraded",
-        release_status="hold",
-        reliance_status="not_permitted",
-        publication_status="not_authorized",
+    return D3CContextBindingCandidate.model_validate(
+        {
+            "outcome": "candidate",
+            "schema_id": D3C_CONTEXT_BINDING_SCHEMA_ID,
+            "contract_version": D3C_CONTEXT_BINDING_CONTRACT_VERSION,
+            "authority_status": "candidate_non_authoritative",
+            "authority_id": authority.authority_id,
+            "project_case": project_case,
+            "evaluation_request": request,
+            "accepted_authority": authority,
+            "report_identity": authority.report_identity,
+            "evaluation_request_identity": authority.evaluation_request_identity,
+            "project_case_content_digest": project_digest,
+            "evaluation_request_content_digest": request_digest,
+            "d3b_execution_success_content_digest": success_digest,
+            "d3b_execution_success_content_identity_json": (
+                _d3b_success_content_identity_json(success)
+            ),
+            "runtime_receipt": authority.runtime_receipt,
+            "projection": selected_projection,
+            "actor_records": authority.actor_records,
+            "source_records": authority.source_records,
+            "pack_bindings": authority.pack_bindings,
+            "jurisdiction_pack_ids": authority.jurisdiction_pack_ids,
+            "technology_pack_ids": authority.technology_pack_ids,
+            "authorized_registry_ids": authority.authorized_registry_ids,
+            "input_records": inputs,
+            "input_origins": origins,
+            "input_contexts": input_contexts,
+            "fx_derivations": fx_derivations,
+            "output_references": outputs,
+            "artifact_records": authority.artifact_records,
+            "byte_artifact_bindings": authority.byte_artifact_bindings,
+            "verified_artifact_payloads": verified,
+            "distribution_control": authority.distribution.control,
+            "sections": sections,
+            "completeness_status": "unresolved",
+            "evidence_status": "unresolved",
+            "review_status": "not_performed",
+            "professional_act_status": "not_performed",
+            "achieved_grade": "ungraded",
+            "release_status": "hold",
+            "reliance_status": "not_permitted",
+            "publication_status": "not_authorized",
+        },
+        context=_authenticated_candidate_context(authority, verified),
     )
 
 
@@ -2479,6 +2587,69 @@ def bind_d3c_context(
         request=request,
         success=success,
         projection=projection,
+        authority=cast(AcceptedAssemblyAuthority, resolution),
+        artifact_payloads=artifact_payloads,
+    )
+
+
+def _reingress_selected_authority(
+    *,
+    candidate_data: dict[str, Any] | str | bytes | bytearray,
+    authority: AcceptedAssemblyAuthority,
+    artifact_payloads: tuple[GovernedArtifactPayload, ...],
+) -> D3CContextBindingCandidate:
+    """Authenticate one serialized candidate against selected facts and bytes."""
+
+    verified = _verify_artifact_payloads(artifact_payloads, authority)
+    context = _authenticated_candidate_context(authority, verified)
+    if type(candidate_data) is dict:
+        return D3CContextBindingCandidate.model_validate(
+            candidate_data,
+            context=context,
+        )
+    if type(candidate_data) in {str, bytes, bytearray}:
+        return D3CContextBindingCandidate.model_validate_json(
+            cast(str | bytes | bytearray, candidate_data),
+            context=context,
+        )
+    raise D3CContextBindingError(
+        "invalid_candidate_ingress_type",
+        "/",
+        "candidate ingress must be an exact Python dict or JSON text/bytes",
+    )
+
+
+def reingress_d3c_context_candidate(
+    *,
+    candidate_data: dict[str, Any],
+    authority_id: str,
+    artifact_payloads: tuple[GovernedArtifactPayload, ...],
+) -> D3CContextBindingOutcome:
+    """Re-ingress Python candidate data using production authority and fresh bytes."""
+
+    resolution = resolve_assembly_authority(authority_id)
+    if type(resolution) is BlockedAssemblyAuthority:
+        return _blocked_from_authority(authority_id, resolution)
+    return _reingress_selected_authority(
+        candidate_data=candidate_data,
+        authority=cast(AcceptedAssemblyAuthority, resolution),
+        artifact_payloads=artifact_payloads,
+    )
+
+
+def reingress_d3c_context_candidate_json(
+    *,
+    json_data: str | bytes | bytearray,
+    authority_id: str,
+    artifact_payloads: tuple[GovernedArtifactPayload, ...],
+) -> D3CContextBindingOutcome:
+    """Re-ingress JSON candidate data using production authority and fresh bytes."""
+
+    resolution = resolve_assembly_authority(authority_id)
+    if type(resolution) is BlockedAssemblyAuthority:
+        return _blocked_from_authority(authority_id, resolution)
+    return _reingress_selected_authority(
+        candidate_data=json_data,
         authority=cast(AcceptedAssemblyAuthority, resolution),
         artifact_payloads=artifact_payloads,
     )
@@ -2517,6 +2688,33 @@ def _bind_d3c_context_from_catalogue_for_test(
     )
 
 
+def _reingress_d3c_context_candidate_from_catalogue_for_test(
+    *,
+    candidate_data: dict[str, Any] | str | bytes | bytearray,
+    authority_id: str,
+    artifact_payloads: tuple[GovernedArtifactPayload, ...],
+    authority_catalogue: Mapping[str, AcceptedAssemblyAuthority],
+) -> D3CContextBindingOutcome:
+    """Exercise authenticated re-ingress with an immutable test catalogue."""
+
+    _require(
+        type(authority_catalogue) is MappingProxyType,
+        "test_catalogue_not_immutable",
+        "/authority_id",
+        "test authority catalogue must be an immutable code-owned mapping proxy",
+    )
+    resolution: AssemblyAuthorityResolution = (
+        assembly_authority._resolve_from_catalogue(authority_id, authority_catalogue)
+    )
+    if type(resolution) is BlockedAssemblyAuthority:
+        return _blocked_from_authority(authority_id, resolution)
+    return _reingress_selected_authority(
+        candidate_data=candidate_data,
+        authority=cast(AcceptedAssemblyAuthority, resolution),
+        artifact_payloads=artifact_payloads,
+    )
+
+
 __all__ = (
     "D3B_SUCCESS_CONTENT_IDENTITY_VERSION",
     "D3C_CONTEXT_BINDING_CONTRACT_VERSION",
@@ -2535,4 +2733,6 @@ __all__ = (
     "VerifiedArtifactPayload",
     "bind_d3c_context",
     "d3b_execution_success_content_digest",
+    "reingress_d3c_context_candidate",
+    "reingress_d3c_context_candidate_json",
 )
