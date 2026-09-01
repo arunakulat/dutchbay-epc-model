@@ -1,6 +1,6 @@
 # Dolphin 3C-1b successor handover independent review record
 
-**Disposition:** ACCEPT — corrected successor candidate
+**Disposition:** ACCEPT — corrected successor and post-merge closure
 
 **Review date:** 2026-09-01
 
@@ -151,3 +151,42 @@ fresh exact-SHA review after the prerequisite is separately delivered.
 Both reviewers made no file, index, ref, branch, worktree, remote, issue or pull-request mutation.
 Their final read-only checks confirmed the accepted candidate commit/tree/base and a clean index and
 worktree. Temporary probes used self-removing process state and created no durable runtime logs.
+
+## 8. Post-merge closure correction
+
+PR `#1215` protected-main merged the final handover head `0dfe185…` as `8f4e676…`, with accepted
+and merge tree `4050377…`. After the two named D3C-1b worktrees and branches were retired, the
+durable handover's status still said protected delivery was pending. The sole writer therefore
+prepared a documentation-only closure correction from protected base
+`8f4e676bc908bfc8fe6b5d1e34cb463fcf19aab2`.
+
+Both reviewers REJECTED the first closure candidate
+`1e0182de1bbdc6700a622ae428a5050e4536778d`, tree
+`5560a07238133e61fa179a1311715d18564ab106`. It incorrectly called the preserved `.claude`
+worktree detached, although live Git proved it was branch-attached at `9ecbf58…` with its upstream
+remote gone. Assurance also required the executable bootstrap to re-query PR `#1215`, its required
+checks and protected merge ancestry. The rejected commit remains in branch history.
+
+Both reviewers independently ACCEPTED the corrected exact candidate
+`8299879249df89effc03fa1ac835118f1aeb5fe3`, tree
+`bf39b41dd0fe53bf44e0044b81c421197c1da831`, against the same protected base and merge base. Its
+complete base delta modified only `docs/SESSION_HANDOVER_2026-09-01_2.md`; `git diff --check`
+passed. The corrected handover:
+
+- records D3C-1b PR `#1214` and handover PR `#1215` as protected-main delivered;
+- records the two named worktrees and branches as retired while preserving both immutable PR-head
+  refs and the unrelated branch-attached `.claude` worktree;
+- makes bootstrap re-query PR `#1215`, all four exact-head required checks and `8f4e676…`
+  ancestry; and
+- leaves the five-file taxonomy-I/O prerequisite, D3C-2 pre-lease `HOLD`, finance, evidence,
+  professional, lender, Board, release and publication boundaries unchanged.
+
+At corrected-candidate review, only dependency PRs `#1176` and `#1178` were open, issue `#1110`
+was `OPEN` with Board/lender circulation on `HOLD`, `VERSION` was `15.4.0`, and the production
+assembly-authority catalogue was an empty immutable `MappingProxyType`. Governed Python `3.12.13`,
+the environment check and all `73/73` active GWTF v3.0 rules passed. Both reviewers made no
+mutation.
+
+This section is a documentation-only persistence delta after the accepted closure candidate. The
+handover blob must remain byte-identical to `8299879…`, and both reviewers must rebind acceptance
+to the exact final head/tree/base before push. Any other delta requires a fresh review.
