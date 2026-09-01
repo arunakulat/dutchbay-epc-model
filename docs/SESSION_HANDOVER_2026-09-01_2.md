@@ -9,9 +9,11 @@ candidates and recovery evidence recorded there. This successor supersedes succe
 describes D3C-1b as unimplemented or names the D3C-1b worktree as the next writer surface.
 
 This handover closes the thread that delivered D3C-1b, the authenticated reciprocal context-binding
-prerequisite. It prepares a new thread for D3C-2 only: controlled assembly of one complete D2
-`FeasibilityReportPackage` as an ungraded, held plumbing proof. D3D grade, materiality and release
-policy remains a separate later dolphin.
+prerequisite. Fresh assurance review proved that D2 package validation still reads its taxonomy
+YAML on first construction. The immediate next thread must therefore deliver one separate
+import-safe D2 taxonomy-validation prerequisite. D3C-2 package assembly remains on pre-lease
+`HOLD` until that prerequisite is independently accepted and protected-main merged. D3D grade,
+materiality and release policy remains a separate later dolphin.
 
 Nothing in D3C-1b, this handover, a green test, a review or an engineering merge changes a finance
 result, evidence disposition, professional conclusion, achieved grade, lender or Board decision,
@@ -151,7 +153,8 @@ and closed vocabulary. An implementer-authored green suite is not an independent
 | D3C-0 | PR `#1207`, protected merge `411115c…` | Code-owned assembly-authority prerequisite delivered; production catalogue empty |
 | D3C-1a | PR `#1209`, protected merge `7e53b6c…` | Strict result-only projection delivered; no D2 authority |
 | D3C-1b | PR `#1214`, accepted tree `f064014…`, protected merge `009f2ff…` | Authenticated reciprocal binding and candidate D2 records delivered |
-| D3C-2 | not implemented | Next dolphin: one complete ungraded/held D2 package plumbing proof |
+| D3C-2 taxonomy-I/O prerequisite | not implemented | Immediate next dolphin: remove first-construction taxonomy filesystem I/O without changing taxonomy semantics |
+| D3C-2 package assembly | not implemented; pre-lease `HOLD` | Later dolphin after prerequisite merge: one complete ungraded/held D2 package plumbing proof |
 | D3D | charter merged in PR `#1203` | Grade/materiality/release policy remains separately unimplemented |
 
 At this handover cutoff:
@@ -220,9 +223,10 @@ The final local receipts were:
 
 PR `#1214` was exact-head clean and mergeable on final head `1e557c0`. All 18 executed GitHub
 checks passed, including six Python shards, coverage, Test Summary, required fastlane/smoke/receipt
-contexts, code quality, security, CodeQL and audit-image build. Grid Study, stochastic and report
-qualification were correctly skipped by fail-closed changed-path policy. It squash-merged under
-`MERGE-01` as `009f2ff22ffc00cf375d563beca1bbe6d1914e72` at
+contexts, code quality, security, CodeQL and audit-image build. Grid Study was correctly skipped by
+the fail-closed changed-path policy. Stochastic and report qualification were skipped because their
+workflow conditions permit scheduled/manual runs rather than ordinary PR runs. It squash-merged
+under `MERGE-01` as `009f2ff22ffc00cf375d563beca1bbe6d1914e72` at
 `2026-09-01T06:10:14Z`. The protected merge tree exactly equals the accepted final-candidate tree.
 
 For historical transparency, rejected commit `8e28be9` suffered one native OpenDSS worker segfault
@@ -231,14 +235,109 @@ with four workers. The accepted replacement was freshly green with four workers,
 later passed all six shards. Treat high local worker counts as an environment limitation, not a
 D3C result or a reason to hide the failed receipt.
 
-## 5. Next task analysis — D3C-2 only
+### 4.1 Successor-candidate review correction
 
-D3C-2 is one reversible package-assembly dolphin. It consumes only authenticated D3C-1b context and
-emits one genuine D2 `FeasibilityReportPackage` as a controlled plumbing proof. It does not repair,
-weaken or expand D3C-1b in the same PR. If the existing binding is insufficient, stop and deliver a
-separate prerequisite dolphin first.
+The first frozen version of this successor, commit
+`0ecde08129b357013d8e6e4c87f69a902ccbbea0`, tree
+`7e07190dd0a53e7b8ccab2892eac322cb86ce441`, was accepted by the domain reviewer but rejected by
+the assurance reviewer before push or PR. The domain acceptance could not override an assurance
+veto.
 
-### 5.1 Authentication boundary
+The rejected draft simultaneously required a genuine newly validated D2 package, zero filesystem
+I/O and an initial lease that forbade edits to D2 package validation. Assurance demonstrated in a
+fresh process that `FeasibilityReportPackage` calls `load_feasibility_taxonomy()` and the loader
+uses `Path.read_text()` on `config/feasibility_sections.yaml`. A warm cache or fixture monkeypatch
+would hide rather than close that trust boundary. The draft also incorrectly attributed all three
+skipped qualification jobs to changed-path policy and did not clearly distinguish the authenticated
+private test-catalogue seam from supported production ingress.
+
+This corrected successor retains the no-I/O control, stages the known taxonomy-validation repair as
+a separate prerequisite, corrects the CI receipt and confines private catalogue helpers to the
+controlled test harness. No package-assembly writer lease exists yet.
+
+## 5. Immediate next task — import-safe D2 taxonomy validation only
+
+D3C-2 package assembly is on pre-lease `HOLD`. The immediate next dolphin repairs the known
+first-construction filesystem dependency in D2 package validation and nothing else.
+
+### 5.1 Known blocker and existing safe identity
+
+`analytics/feasibility_report_contract/records.py` validates every `SectionRecord.section_id` by
+calling `load_feasibility_taxonomy().section_names`.
+`analytics/feasibility_report_contract/package.py` repeats that call while validating exact package
+section order. On the first call, `analytics/feasibility_sections.py` reads
+`config/feasibility_sections.yaml` through `Path.read_text()`. Therefore a genuine fresh-process D2
+package construction currently performs filesystem I/O.
+
+The already delivered `analytics/feasibility_report_contract/taxonomy_identity.py` is the intended
+import-safe identity surface. It exposes the exact ordered `FEASIBILITY_SECTION_IDS`, the authored
+YAML source path and the source SHA-256. Existing contract tests compare its ordered IDs and digest
+to the live YAML. The YAML remains the single authored source; the identity module is a generated,
+checksum-guarded projection for pure consumers.
+
+Do not accept a warm `lru_cache`, an eager preload, a fixture monkeypatch or a copied test tuple as
+closure. Those techniques only move or hide the filesystem read. Do not replace the general YAML
+loader for consumers that genuinely need groups, statuses or full definitions. This prerequisite is
+limited to the two D2 validators that need only canonical section identity/order.
+
+### 5.2 Exact prerequisite scope and lease
+
+The initial writer lease is five files only:
+
+1. `analytics/feasibility_report_contract/records.py`;
+2. `analytics/feasibility_report_contract/package.py`;
+3. `tests/contracts/test_d3c2_taxonomy_io_prerequisite.py`;
+4. `docs/DOLPHIN_3C2_TAXONOMY_IO_PREREQUISITE_RECORD.md`; and
+5. `changelog.d/d3c2-taxonomy-io-prerequisite.changed.md`.
+
+The implementation should make both D2 validators consume
+`taxonomy_identity.FEASIBILITY_SECTION_IDS` at import-safe call time. It must preserve exact
+validation behavior: every canonical ID is accepted, every absent/unknown/out-of-order/duplicate ID
+is refused as before, and package section order remains exactly the authored twenty-ID order.
+
+The focused test may read the YAML deliberately to prove source-path, SHA-256 and ordered-ID parity;
+that is a build/contract guard, not package runtime. A separate fresh-process sentinel must patch or
+intercept `Path.read_text` before importing/constructing the records and prove that constructing
+canonical `SectionRecord` objects and one genuine D2 package performs no filesystem I/O. Read the
+test body: a sentinel that runs only after a warm cache is not evidence.
+
+Any need to edit `taxonomy_identity.py`, the authored YAML, the general taxonomy loader, D3A/D3B/
+D3C contracts, finance, evaluation, production catalogues or release policy is unexpected scope
+drift. Stop, preserve and request a new exact-SHA lease or a separate prerequisite; do not expand
+this repair opportunistically.
+
+### 5.3 Prerequisite acceptance criteria
+
+- Fresh-process `SectionRecord` and `FeasibilityReportPackage` construction performs no filesystem,
+  environment, network, persistence or clock I/O.
+- `records.py` and `package.py` no longer import or call `load_feasibility_taxonomy`; both use the
+  import-safe ordered identity projection.
+- Authored YAML path, exact SHA-256 and ordered IDs remain independently parity-tested. A taxonomy
+  edit without a regenerated identity projection fails closed.
+- Canonical, unknown, duplicate, missing and out-of-order section controls prove the validation
+  semantics did not drift.
+- Complete D2 and current `tests/contracts` regressions pass, together with focused statement/
+  branch coverage, import-isolation probes and `git diff --check`.
+- Ruff/format, Black, isort, complete governed mypy, Bandit/dependency audit, finance
+  non-recomputation, full ordinary suite/coverage and exact-head GitHub checks receive exact
+  receipts.
+- `VERSION 15.4.0`, canonical finance outputs, the authored YAML, production catalogues, issue
+  `#1110` and every HOLD/non-reliance state remain unchanged.
+- Both independent reviewers accept the same exact final SHA/tree/base before push. Green tests do
+  not override a semantic or I/O counterexample.
+
+After this prerequisite is independently accepted and protected-main merged, write a new successor
+handover, start from fresh live `origin/main`, re-ingress the full corpus and only then issue a D3C-2
+package-assembly writer lease.
+
+## 6. Later D3C-2 package assembly boundary
+
+Only after the prerequisite above is protected-main merged may D3C-2 begin as one reversible
+package-assembly dolphin. It consumes only authenticated D3C-1b context and emits one genuine D2
+`FeasibilityReportPackage` as a controlled plumbing proof. It does not repair, weaken or expand
+D3C-1b in the same PR. Any newly discovered prerequisite is delivered separately.
+
+### 6.1 Authentication boundary
 
 A type-shaped `D3CContextBindingCandidate` is not authority. Before a writer lease, select and
 record one supported ingress design:
@@ -249,12 +348,15 @@ record one supported ingress design:
    same stable authority ID and freshly supplied bytes.
 
 Raw candidate construction, `model_validate*`, `model_construct`, unchecked `model_copy`, a
-caller-minted authority, copied artifact metadata or direct use of underscore test helpers is not
-authenticated ingress. Do not add a public acceptance-capability parameter. Production remains
-blocked while the code-owned D3C-0 catalogue is empty; the one positive package fixture may use
-only the existing immutable code-owned test-catalogue semantics.
+caller-minted authority or copied artifact metadata is not authenticated ingress. Do not add a
+public acceptance-capability parameter. Production package code must not import, re-export or
+depend on underscore test helpers. The focused test harness may use the existing private immutable
+test-catalogue bind/re-ingress seam solely to produce the held positive plumbing fixture. That seam
+is authenticated within the controlled test harness but remains unsupported for production or
+downstream ingress; it neither populates nor emulates production authority. Production stays
+blocked while the code-owned D3C-0 catalogue is empty.
 
-### 5.2 Exact output and register duty
+### 6.2 Exact output and register duty
 
 The controlled positive path must create exactly one D2 package with:
 
@@ -284,7 +386,7 @@ Carry four distinct report-scoped `ResponsibilityAssignment` records for `prepar
 performed-at timestamp or decision. Software, an AI agent, CI, PR review and merge are not human
 professional acts.
 
-### 5.3 Static mapping and manifest bridge
+### 6.3 Static mapping and manifest bridge
 
 The static section and numeric tables in the binding D3C acceptance ledger remain controlling.
 Map no scalar by parsing a field name, suffix, currency symbol, UI label or neighbouring value.
@@ -309,7 +411,7 @@ D3C-2 imports or calls no evaluator or finance surface, does no persistence/netw
 I/O, does not recompute an annual total, KPI, FX statistic, debt metric, IRR, NPV or DSCR and does
 not render or serve the package.
 
-### 5.4 Acceptance criteria
+### 6.4 Package-assembly acceptance criteria
 
 - Authenticated ingress reselects code-owned authority and freshly verifies all three byte
   payloads; direct/type-shaped candidate ingress is refused.
@@ -336,17 +438,16 @@ not render or serve the package.
 D3D alone may later implement grade ceilings, materiality, decisions and release aggregation. Do
 not pull any D3D field or authority forward.
 
-## 6. Recruitment, collision harness and writer lease
+## 7. Recruitment, collision harness and prerequisite writer lease
 
-Recruit the same three separated roles afresh for D3C-2:
+Recruit three separated roles afresh for the taxonomy-validation prerequisite:
 
-- one exclusive senior Python/Pydantic v2/v14-integration writer-coordinator with D2 package and
-  renewable/project-finance fluency;
-- one read-only renewable/hybrid feasibility-domain reviewer covering wind, solar, BESS, shared
-  interfaces, resource/energy, cost, tariff, debt, FX/tax and non-financial gaps; and
-- one read-only software-contract/assurance reviewer covering authenticated ingress, Pydantic/
-  JSON Schema, bounded deterministic failures, reciprocal registries, provenance, import/I/O and
-  no-rerun controls.
+- one exclusive senior Python/Pydantic v2/D2-contract writer-coordinator with import-isolation and
+  generated-identity experience;
+- one read-only renewable/hybrid feasibility-domain reviewer proving the exact twenty-section
+  identity/order and all section semantics remain unchanged; and
+- one read-only software-contract/assurance reviewer covering fresh-process I/O sentinels,
+  source-digest parity, Pydantic validation, import isolation and hostile taxonomy drift.
 
 Before a writer lease, every worker freshly ingresses section 2 and demonstrates the complete GWTF,
 CASPER, CESSPIT and CCCDIR harness. The coordinator records each scoped pre-lease disposition.
@@ -362,17 +463,16 @@ tests are not filesystem or authentication evidence. Freeze each candidate, insp
 diff and bind both independent dispositions to the same exact SHA/tree/base before push. Preserve
 rejected receipts; do not relabel them as success.
 
-The initial D3C-2 lease should be limited to one new package-assembly module, its focused contract
-test, one implementation record and one changelog fragment. Any need to edit D2, D3A, D3B,
-D3C-0/1a/1b, finance, evaluation, release policy or production catalogues is unexpected scope drift:
-stop, preserve and request a separately reviewed lease or prerequisite dolphin.
+The exact five-file prerequisite lease is in section 5.2. It authorizes no D3C-2 package-assembly
+module or fixture and no semantic change to D2 records. D3C-2 recruitment and its own new lease
+occur only in a later thread after the prerequisite merge and a new successor handover.
 
-## 7. Verification and delivery boundary
+## 8. Verification and delivery boundary
 
 Record exact commands and results for the persistent Python receipt and `73/73` rules bootstrap,
-focused hostile/oracle coverage, complete contracts, inherited D2/D3 selections, schemas and
-round-trip controls, all static mapping predicates, all reciprocal register checks, zero-rerun/I/O
-spies, Ruff/format/Black/isort, complete governed mypy, security/dependency audit, finance
+focused taxonomy parity and hostile-I/O coverage, complete contracts, inherited D2/D3 selections,
+fresh-process `Path.read_text` sentinels, validation/serialization schemas and canonical round-trip
+controls, Ruff/format/Black/isort, complete governed mypy, security/dependency audit, finance
 non-recomputation, full ordinary suite/coverage and `git diff --check`.
 
 Every PR uses the canonical `Verification — receipts, not claims` table from
@@ -382,18 +482,21 @@ merge authority; a local green result cannot replace it.
 Under `MERGE-01`, squash-merge only when both reviewers accept the same exact final head, the
 branch is current with protected `main`, GitHub reports `MERGEABLE`/`CLEAN`, and every required
 check succeeds on that exact head with none failed, pending or unreported. QSTS may skip only when
-the fail-closed path classifier proves D3C-2 is unrelated; if package acceptance depends on QSTS,
-the GitHub-hosted Grid Study must run and pass.
+the fail-closed path classifier proves the prerequisite is unrelated. If live changed-path policy
+classifies the D2 validation files as QSTS-relevant, the GitHub-hosted Grid Study must run and pass;
+do not predict the classification from this handover.
 
 After merge, fast-forward protected `main`, prove it clean/equal to `origin/main`, compare merged
 trees/blobs to the accepted candidate, and re-query issue `#1110`, `VERSION`, production catalogues
 and all HOLD boundaries.
 
-## 8. Explicit deferrals
+## 9. Explicit deferrals
 
-D3C-2 does not implement achieved-grade aggregation, grade ceilings, materiality/release policy,
-D4 canonical serialization or payload/section hashes, HTML/API/PDF/DBPL/XLSX output,
-`ReportContext` or wizard replacement, Sri Lankan pack assurance, Golden Path completion, another
+The immediate prerequisite does not implement a package assembler, change taxonomy content or
+modify general taxonomy loading. It does not implement D3C-2 mapping, achieved-grade aggregation,
+grade ceilings, materiality/release policy, D4 canonical serialization or payload/section hashes,
+HTML/API/PDF/DBPL/XLSX output, `ReportContext` or wizard replacement, Sri Lankan pack assurance,
+Golden Path completion, another
 jurisdiction/project, accounts, persistence, downloads, portfolios, licensing, language/runtime
 rewrites, native kernels, F5-01, F5-02, P01, P02 or P03. It changes no finance mathematics, KPI
 baseline, canonical scenario or `VERSION`.
@@ -402,7 +505,7 @@ The product remains a global commercial-feasibility platform. Sri Lankan materia
 pack, never an inherited global jurisdiction, tax, tariff, permit, FX, accounting or evidence
 default.
 
-## 9. Worktree retirement and successor creation
+## 10. Worktree retirement and successor creation
 
 After this handover is independently checked, protected-main merged and itself verified, prove the
 following exact worktrees clean before retiring them:
@@ -415,14 +518,14 @@ Delete only those local/remote branches after their merges are proven. Do not to
 detached `.claude` worktree, recovery tags, durable main checkout, persistent project folder or
 `.venv`, protected history, PR records or issue records.
 
-Only after those paths are safely retired may a future D3C-2 thread create one fresh writer
+Only after those paths are safely retired may the prerequisite thread create one fresh writer
 worktree from current `origin/main`:
 
 ```bash
 set -eu
 expected_repo=/Users/aruna/Downloads/dutchbay-epc-model
-successor_worktree=/Users/aruna/Downloads/dutchbay-wt-d3c2-package-assembly
-successor_branch=codex/d3c2-package-assembly
+successor_worktree=/Users/aruna/Downloads/dutchbay-wt-d3c2-taxonomy-io-prerequisite
+successor_branch=codex/d3c2-taxonomy-io-prerequisite
 
 cd "$expected_repo"
 test "$(git branch --show-current)" = main
@@ -438,9 +541,10 @@ git -C "$successor_worktree" status --short --branch
 ```
 
 Do not create that writer worktree until live reconciliation, full ingress, recruitment, collision
-drills, authenticated-ingress design disposition and exact lease are complete.
+drills and the exact five-file lease are complete. Do not create a D3C-2 package-assembly worktree
+in the same thread.
 
-## 10. Copy-paste prompt for the next new thread
+## 11. Copy-paste prompt for the next new thread
 
 ```text
 Start this task from the Codex project DutchBay_EPC_Model and use only the persistent governed
@@ -455,23 +559,24 @@ Freshly ingest the canonical GWTF CSV, unabridged CASPER/CESSPIT/CCCDIR meanings
 D3B-0/1, D3C-0/1a/1b, both D3C design records, the binding acceptance ledger and D3D charter before
 planning or editing.
 
-Recruit one exclusive senior Python/Pydantic/v14 package-assembly writer, one separate read-only
-renewable/hybrid feasibility-domain reviewer and one separate read-only software-contract/
-assurance reviewer. Require fresh corpus ingress, collision drills and exact-SHA leases. Persist
-both final exact-head review dispositions.
+Recruit one exclusive senior Python/Pydantic/D2-contract writer, one separate read-only
+renewable/hybrid taxonomy-domain reviewer and one separate read-only software-contract/assurance
+reviewer. Require fresh corpus ingress, collision drills and exact-SHA leases. Persist both final
+exact-head review dispositions.
 
-Implement D3C-2 only: authenticate through the public D3C-1b bind/re-ingress boundary using a
-stable code-selected authority and freshly supplied artifact bytes. A raw/type-shaped candidate,
-caller-minted receipt, copied digest or underscore test helper is not authority. Production remains
-blocked while the production catalogue is empty; use only controlled code-owned test authority for
-the positive plumbing proof.
+Implement only the import-safe D2 taxonomy-validation prerequisite in handover section 5. A fresh
+SectionRecord or FeasibilityReportPackage currently calls load_feasibility_taxonomy(), which reads
+config/feasibility_sections.yaml. Change only records.py and package.py so their identity/order
+validators consume taxonomy_identity.FEASIBILITY_SECTION_IDS. Add one focused test, one durable
+implementation record and one changelog fragment. Preserve the YAML as authored SSOT through an
+independent path/SHA-256/ordered-ID parity test, and prove with a true fresh-process Path.read_text
+sentinel that genuine record/package construction performs zero filesystem I/O. A warm cache or
+monkeypatch after loading is not evidence.
 
-Assemble exactly one real D2 FeasibilityReportPackage with twenty sections in SSOT order, every
-required register, one reconciliation per six D1 families and four visibly not_performed human
-responsibilities. Keep achieved_grade=ungraded, package_release.status=hold and payload_digest=None.
-Follow the ledger's static mapping/precision and engine-to-D2 manifest bridge exactly. Do not call
-the evaluator or finance, recompute a KPI, follow a locator, invent a review/decision/evidence fact,
-populate a production authority, implement D3D policy, render/serve the package or change VERSION.
+Do not change taxonomy content or the general loader, assemble D3C-2, edit D3A/D3B/D3C, call the
+evaluator or finance, populate production authority, implement D3D policy, render/serve a package
+or change VERSION. After the prerequisite is independently accepted and merged under MERGE-01,
+write a new successor and start D3C-2 package assembly only in a fresh later thread.
 
 Use independent constructive and hostile oracles, full contract/regression gates and the canonical
 PR receipts table. Drive the one reversible PR through exact-head independent acceptance, current-
