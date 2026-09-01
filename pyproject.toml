@@ -7,6 +7,13 @@ name = "dutchbay-epc-model"
 version = "15.4.0"
 description = "Lender/DFI-grade project-finance model for utility-scale wind: CFADS, multi-tranche debt with DSCR covenants, tax with TLCF, Monte Carlo, and an ERA5 to Weibull to AEP to finance pipeline."
 readme = "README.md"
+# Proprietary, with an explicit evaluation/audit grant (see LICENSE). Declared so
+# packaging metadata and repository scanners stop reporting the licence as unknown.
+# PEP 639 SPDX-expression form (a string, not a TOML table): setuptools >= 77
+# deprecates `license = {text = ...}` and will remove it. LicenseRef-* is the SPDX
+# syntax for a custom, non-OSI licence.
+license = "LicenseRef-DutchBay-Proprietary-Eval-1.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
   "numpy>=1.24",
