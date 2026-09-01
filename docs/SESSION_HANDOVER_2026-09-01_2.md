@@ -1,6 +1,9 @@
 # Session handover — 2026-09-01, successor 25
 
-**Status:** candidate successor; independent exact-SHA review required before push
+**Status:** corrected successor independently accepted; protected delivery pending
+
+**Independent review:**
+[`DOLPHIN_3C1B_HANDOVER_REVIEW_RECORD.md`](DOLPHIN_3C1B_HANDOVER_REVIEW_RECORD.md)
 
 Durable `PERSIST-01` successor to
 [`SESSION_HANDOVER_2026-09-01.md`](SESSION_HANDOVER_2026-09-01.md) (successor 24). The predecessor
