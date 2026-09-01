@@ -9,6 +9,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CANONICAL_RULESET = REPO_ROOT / "go_with_the_flow_rules_v3_0_clean.csv"
 RETIRED_RULESET_NAME = "go_with_the_flow_rules_v3_0_merged_with_v14.csv"
 RETIRED_INTEGRATION_BRANCH = "feature/add-finance-contracts-pydantic-v2-20251219"
+RECRUIT_MODULES = (
+    "docs/governance/recruit_01/01_capability_and_risk.md",
+    "docs/governance/recruit_01/02_writer_lease_and_recovery.md",
+    "docs/governance/recruit_01/03_independent_review_and_attestation.md",
+    "docs/governance/recruit_01/04_staged_delegation_and_ingress.md",
+)
 
 
 def _rules_by_id() -> dict[str, dict[str, str]]:
@@ -166,6 +172,62 @@ def test_verify_01_requires_receipts_for_claimed_checks() -> None:
         "the SPECIFIC rule wins",
     ):
         assert required in policy
+
+
+def test_recruit_01_routes_all_relevant_tasks_to_canonical_modules() -> None:
+    """Keep recruitment global, risk-scaled, and backed by tracked modules."""
+    recruit_01 = _rules_by_id()["RECRUIT-01"]
+    policy = " ".join(
+        (
+            recruit_01["title"],
+            recruit_01["description"],
+            recruit_01["enforcement"],
+        )
+    )
+
+    assert recruit_01["status"] == "active"
+    assert recruit_01["category"] == "Recruitment & Review"
+    for required in (
+        "every relevant task hereafter",
+        "regardless of subject",
+        "not limited to D0-D3",
+        "at most one active writer lease",
+        "load-bearing governance",
+        "NO_EVIDENCE",
+    ):
+        assert required in policy
+
+    required_module_controls = {
+        RECRUIT_MODULES[0]: (
+            "Semantic risk classes",
+            "Load-bearing documentation",
+            "R3_CONSEQUENTIAL",
+        ),
+        RECRUIT_MODULES[1]: (
+            "at most one participant holds",
+            "DEAD_WORKER_TAKEOVER",
+            "PERSISTENCE_CHECKPOINT",
+        ),
+        RECRUIT_MODULES[2]: (
+            "subject manifest",
+            "independent positive/negative oracle",
+            "without SHA recursion",
+            "squash merge",
+        ),
+        RECRUIT_MODULES[3]: (
+            "not limited to D0–D3",
+            "Capacity admission",
+            "NO_EVIDENCE",
+            "Staged waves",
+        ),
+    }
+    for relative_path, required_controls in required_module_controls.items():
+        assert relative_path in policy
+        module_path = REPO_ROOT / relative_path
+        assert module_path.is_file()
+        module = " ".join(module_path.read_text(encoding="utf-8").split()).casefold()
+        for control in required_controls:
+            assert control.casefold() in module
 
 
 def test_active_r25_scripts_do_not_hardcode_a_retired_branch() -> None:

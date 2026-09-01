@@ -19,7 +19,7 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
 
 When historical sprint instructions conflict with current governance, follow the newer
 current workflow, especially `WORKTREE-01`, `GOV-02`, `R23`, `R25`, `DELIVERY-01`,
-`DATA-01`, `PERSIST-01`, `THREAD-01`, and `MERGE-01`. Never restore a retired sprint integration
+`DATA-01`, `PERSIST-01`, `THREAD-01`, `MERGE-01`, and `RECRUIT-01`. Never restore a retired sprint integration
 branch or a nonexistent ruleset filename.
 
 ## Session continuity
@@ -103,6 +103,11 @@ one, because the next session acts on it.
   workflow calls for it; merging is standing-authorized on green under `MERGE-01`.
 - Checkpoint long-running results and coherent work to durable storage early. Do not
   leave load-bearing results only in chat context.
+- `RECRUIT-01` applies to every relevant task hereafter, regardless of subject, sprint, workstream
+  or named dolphin. Use its four canonical modules under `docs/governance/recruit_01/` for capability
+  and semantic-risk classification, one-active-writer leases and recovery, independent exact-object
+  review/attestation, and capacity-aware staged delegation/ingress. Load-bearing documentation is
+  reviewed by semantic consequence rather than downgraded because it is prose.
 
 ## Runtime logging and evidence retention
 
