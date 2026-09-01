@@ -51,8 +51,10 @@ from .assembly_authority import (
 from .assessment_scope import EvaluationRequest, resolved_config_sha256
 from .project_case import (
     AssumptionReference,
+    CostPeriodicity,
     CurrencyConversion,
     GenerationAsset,
+    MissingValue,
     ProjectCase,
     ResolvedCount,
     ResolvedValue,
@@ -100,7 +102,10 @@ _MAX_IDENTITY_DEPTH: Final = 132
 _MAX_IDENTITY_CONTAINERS: Final = 25_000
 _MAX_IDENTITY_SCALARS: Final = 250_000
 _MAX_IDENTITY_TEXT_CODEPOINTS: Final = 3_000_000
-_MAX_IDENTITY_CANONICAL_BYTES: Final = 64 * 1024 * 1024
+_MAX_IDENTITY_CANONICAL_BYTES: Final = 32 * 1024 * 1024
+_MAX_JSON_INGRESS_BYTES: Final = 64 * 1024 * 1024
+_MAX_JSON_TEXT_CODEPOINTS: Final = _MAX_JSON_INGRESS_BYTES
+_MAX_JSON_INTEGER_BITS: Final = 4_096
 _MAX_ERROR_TEXT: Final = 1_024
 _STABLE_ID_RE: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]*$")
 _SHA256_RE: Final = re.compile(r"^[0-9a-f]{64}$")
@@ -178,12 +183,21 @@ class _StrictJsonIngressModel(StrictFrozenModel):
         return rendered.encode("utf-8")
 
 
-def _scan_json_ingress(json_data: str | bytes | bytearray) -> None:
+def _scan_json_ingress(json_data: str | bytes | bytearray) -> Any:
     """Reject duplicate keys, non-finite constants and invalid Unicode scalars."""
 
     if type(json_data) is str:
         text = json_data
+        try:
+            encoded_length = len(text.encode("utf-8"))
+        except UnicodeEncodeError as exc:
+            raise D3CContextBindingError(
+                "invalid_unicode_scalar",
+                "/",
+                "JSON strings must contain Unicode scalar values",
+            ) from exc
     elif type(json_data) is bytes:
+        encoded_length = len(json_data)
         try:
             text = json_data.decode("utf-8")
         except UnicodeDecodeError as exc:
@@ -191,6 +205,7 @@ def _scan_json_ingress(json_data: str | bytes | bytearray) -> None:
                 "invalid_json_encoding", "/", "JSON ingress must be exact UTF-8"
             ) from exc
     elif type(json_data) is bytearray:
+        encoded_length = len(json_data)
         try:
             text = bytes(json_data).decode("utf-8")
         except UnicodeDecodeError as exc:
@@ -201,6 +216,12 @@ def _scan_json_ingress(json_data: str | bytes | bytearray) -> None:
         raise D3CContextBindingError(
             "invalid_json_type", "/", "JSON ingress must be str, bytes or bytearray"
         )
+    if encoded_length > _MAX_JSON_INGRESS_BYTES:
+        raise D3CContextBindingError(
+            "json_ingress_bytes_exceeded",
+            "/",
+            "JSON ingress exceeds the bounded byte limit",
+        )
 
     def pairs_hook(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
         result: dict[str, Any] = {}
@@ -209,7 +230,7 @@ def _scan_json_ingress(json_data: str | bytes | bytearray) -> None:
                 raise D3CContextBindingError(
                     "duplicate_json_key",
                     "/",
-                    f"duplicate JSON object key {key!r} is forbidden",
+                    "duplicate JSON object keys are forbidden",
                 )
             result[key] = value
         return result
@@ -229,11 +250,12 @@ def _scan_json_ingress(json_data: str | bytes | bytearray) -> None:
         )
     except D3CContextBindingError:
         raise
-    except (RecursionError, json.JSONDecodeError) as exc:
+    except (RecursionError, ValueError) as exc:
         raise D3CContextBindingError(
             "invalid_json", "/", "JSON ingress is malformed or exceeds parser depth"
         ) from exc
     _reject_surrogates(parsed)
+    return parsed
 
 
 def _reject_surrogates(value: Any) -> None:
@@ -268,7 +290,15 @@ def _reject_surrogates(value: Any) -> None:
             for key, child in reversed(tuple(item.items())):
                 stack.append((child, depth + 1))
                 stack.append((key, depth + 1))
-        elif item is None or type(item) in {bool, int, float}:
+        elif type(item) is int:
+            if item.bit_length() > _MAX_JSON_INTEGER_BITS:
+                raise D3CContextBindingError(
+                    "json_integer_out_of_bounds",
+                    "/",
+                    "JSON integer exceeds the bounded bit length",
+                )
+            scalars += 1
+        elif item is None or type(item) in {bool, float}:
             scalars += 1
         else:  # pragma: no cover - stdlib JSON parser has a closed result domain
             raise D3CContextBindingError(
@@ -279,7 +309,7 @@ def _reject_surrogates(value: Any) -> None:
         if (
             containers > _MAX_IDENTITY_CONTAINERS
             or scalars > _MAX_IDENTITY_SCALARS
-            or text_codepoints > _MAX_IDENTITY_TEXT_CODEPOINTS
+            or text_codepoints > _MAX_JSON_TEXT_CODEPOINTS
         ):
             raise D3CContextBindingError(
                 "json_ingress_out_of_bounds",
@@ -333,6 +363,225 @@ class CandidateInputOrigin(_StrictJsonIngressModel):
     reference_id: ExactStableId
 
 
+class CandidateInputContext(_StrictJsonIngressModel):
+    """Ledger-required context retained beside one candidate D2 input record."""
+
+    input_id: ExactStableId
+    family: Literal[
+        "generation_unit_count",
+        "cost_native_amount",
+        "cost_reporting_amount",
+        "currency_conversion_rate",
+    ]
+    project_case_pointer: Annotated[
+        str,
+        Strict(),
+        Field(
+            min_length=2,
+            max_length=512,
+            pattern=r"^/[A-Za-z0-9._:/~\-]+$",
+        ),
+    ]
+    precision_source: Literal[
+        "integral_semantics",
+        "native_minor_unit_places",
+        "reporting_minor_unit_places",
+        "quote_precision",
+    ]
+    state: Literal["resolved", "missing"]
+    expected_unit: Annotated[str, Strict(), Field(min_length=1, max_length=64)]
+    asset_id: ExactStableId | None = None
+    line_id: ExactStableId | None = None
+    conversion_id: ExactStableId | None = None
+    periodicity: CostPeriodicity | None = None
+    price_basis_id: ExactStableId | None = None
+    conversion_edge_id: ExactStableId | None = None
+    from_currency: ExactStableId | None = None
+    to_currency: ExactStableId | None = None
+    valuation_date: date | None = None
+    missing_input_id: ExactStableId | None = None
+    missing_field_path: (
+        Annotated[
+            str,
+            Strict(),
+            Field(min_length=1, max_length=512, pattern=r"^/[A-Za-z0-9._:/~\-]+$"),
+        ]
+        | None
+    ) = None
+    missing_reason: (
+        Annotated[str, Strict(), Field(min_length=1, max_length=4_096)] | None
+    ) = None
+    missing_consequence: (
+        Annotated[str, Strict(), Field(min_length=1, max_length=4_096)] | None
+    ) = None
+    missing_remedy: (
+        Annotated[str, Strict(), Field(min_length=1, max_length=4_096)] | None
+    ) = None
+
+    @model_validator(mode="after")
+    def _context_is_closed(self) -> CandidateInputContext:
+        missing_facts = (
+            self.missing_input_id,
+            self.missing_field_path,
+            self.missing_reason,
+            self.missing_consequence,
+            self.missing_remedy,
+        )
+        if self.state == "resolved" and any(item is not None for item in missing_facts):
+            raise ValueError(
+                "resolved candidate input cannot carry missing-value facts"
+            )
+        if self.state == "missing" and any(item is None for item in missing_facts):
+            raise ValueError(
+                "missing candidate input requires every missing-value fact"
+            )
+
+        if self.family == "generation_unit_count":
+            if (
+                self.precision_source != "integral_semantics"
+                or self.asset_id is None
+                or any(
+                    item is not None
+                    for item in (
+                        self.line_id,
+                        self.conversion_id,
+                        self.periodicity,
+                        self.price_basis_id,
+                        self.conversion_edge_id,
+                        self.from_currency,
+                        self.to_currency,
+                        self.valuation_date,
+                    )
+                )
+            ):
+                raise ValueError("unit-count candidate context is contradictory")
+        elif self.family in {"cost_native_amount", "cost_reporting_amount"}:
+            expected_precision = (
+                "native_minor_unit_places"
+                if self.family == "cost_native_amount"
+                else "reporting_minor_unit_places"
+            )
+            if (
+                self.precision_source != expected_precision
+                or self.line_id is None
+                or self.periodicity is None
+                or self.price_basis_id is None
+                or self.from_currency is None
+                or self.to_currency is None
+                or self.asset_id is not None
+                or self.conversion_id is not None
+                or self.valuation_date is not None
+            ):
+                raise ValueError("cost-amount candidate context is contradictory")
+        elif (
+            self.precision_source != "quote_precision"
+            or self.conversion_id is None
+            or self.price_basis_id is None
+            or self.from_currency is None
+            or self.to_currency is None
+            or self.valuation_date is None
+            or any(
+                item is not None
+                for item in (
+                    self.asset_id,
+                    self.line_id,
+                    self.periodicity,
+                    self.conversion_edge_id,
+                )
+            )
+        ):
+            raise ValueError("currency-conversion candidate context is contradictory")
+        return self
+
+
+ExactBinary64BeHex: TypeAlias = Annotated[
+    str,
+    Strict(),
+    Field(min_length=16, max_length=16, pattern=r"^[0-9a-f]{16}$"),
+]
+
+
+class CandidateFxStatistic(_StrictJsonIngressModel):
+    """Exact contextual FX result identity retained for one candidate output."""
+
+    field_name: Literal["fx_min", "fx_max", "fx_avg"]
+    output_id: ExactStableId
+    binary64_be_hex: ExactBinary64BeHex
+    value: CanonicalValue
+
+    @model_validator(mode="after")
+    def _statistic_identity_is_exact(self) -> CandidateFxStatistic:
+        if self.output_id != f"output:debt_result.{self.field_name}":
+            raise ValueError("FX statistic output identity differs from its field")
+        if (
+            self.value.value_type is not ValueType.DECIMAL
+            or self.value.unit != "LKR/USD"
+            or self.value.precision != 2
+        ):
+            raise ValueError("FX statistic canonical value has foreign semantics")
+        value = struct.unpack(">d", bytes.fromhex(self.binary64_be_hex))[0]
+        if not math.isfinite(value) or self.value.value != str(
+            Decimal.from_float(value)
+        ):
+            raise ValueError("FX statistic decimal text differs from binary64 identity")
+        return self
+
+
+class CandidateFxDerivation(_StrictJsonIngressModel):
+    """Structured directed conversion/source/timeline provenance for FX outputs."""
+
+    derivation_id: ExactStableId
+    conversion_input_id: ExactStableId
+    conversion_id: ExactStableId
+    source_id: ExactStableId
+    from_currency: Literal["USD"]
+    to_currency: Literal["LKR"]
+    quote_unit: Literal["LKR/USD"]
+    conversion_rate: CanonicalValue
+    valuation_date: date
+    request_valuation_date: date
+    source_observation_date: date
+    price_basis_id: ExactStableId
+    request_price_basis_id: ExactStableId
+    annual_row_count: Annotated[int, Strict(), Field(gt=0, le=2**31 - 1)]
+    expected_timeline_periods: Annotated[int, Strict(), Field(gt=0, le=2**31 - 1)]
+    annual_fx_rate_binary64_be_hex: Annotated[
+        tuple[ExactBinary64BeHex, ...], Field(min_length=1, max_length=2**16)
+    ]
+    statistics: Annotated[
+        tuple[CandidateFxStatistic, ...], Field(min_length=3, max_length=3)
+    ]
+
+    @model_validator(mode="after")
+    def _derivation_is_reciprocal(self) -> CandidateFxDerivation:
+        if (
+            self.derivation_id
+            != f"candidate-derivation:fx-context:{self.conversion_id}"
+        ):
+            raise ValueError("FX derivation identity differs from its conversion")
+        if self.conversion_input_id != (
+            f"input:project_case.currency_conversion.{self.conversion_id}.rate"
+        ):
+            raise ValueError("FX derivation input identity differs from its conversion")
+        if (
+            self.conversion_rate.value_type is not ValueType.DECIMAL
+            or self.conversion_rate.unit != self.quote_unit
+            or self.valuation_date != self.request_valuation_date
+            or self.source_observation_date != self.valuation_date
+            or self.price_basis_id != self.request_price_basis_id
+            or self.annual_row_count != self.expected_timeline_periods
+            or len(self.annual_fx_rate_binary64_be_hex) != self.annual_row_count
+            or any(
+                not math.isfinite(struct.unpack(">d", bytes.fromhex(item))[0])
+                for item in self.annual_fx_rate_binary64_be_hex
+            )
+            or tuple(item.field_name for item in self.statistics)
+            != ("fx_min", "fx_max", "fx_avg")
+        ):
+            raise ValueError("FX derivation contains a contradictory reciprocal fact")
+        return self
+
+
 class D3CSectionCandidate(_StrictJsonIngressModel):
     """One taxonomy-ordered candidate, never a completed D2 SectionRecord."""
 
@@ -383,11 +632,19 @@ class D3CContextBindingCandidate(_StrictJsonIngressModel):
     contract_version: Literal["1.0.0"]
     authority_status: Literal["candidate_non_authoritative"]
     authority_id: ExactStableId
+    project_case: ProjectCase
+    evaluation_request: EvaluationRequest
+    accepted_authority: AcceptedAssemblyAuthority
     report_identity: ReportIdentity
     evaluation_request_identity: EvaluationRequestIdentity
     project_case_content_digest: Digest
     evaluation_request_content_digest: Digest
     d3b_execution_success_content_digest: Digest
+    d3b_execution_success_content_identity_json: Annotated[
+        str,
+        Strict(),
+        Field(min_length=1, max_length=_MAX_IDENTITY_CANONICAL_BYTES),
+    ]
     runtime_receipt: GovernedRuntimeReceipt
     projection: D3CResultProjection
     actor_records: tuple[ActorRecord, ...]
@@ -398,6 +655,8 @@ class D3CContextBindingCandidate(_StrictJsonIngressModel):
     authorized_registry_ids: AuthorizedRegistryIds
     input_records: tuple[InputRecord, ...]
     input_origins: tuple[CandidateInputOrigin, ...]
+    input_contexts: tuple[CandidateInputContext, ...]
+    fx_derivations: Annotated[tuple[CandidateFxDerivation, ...], Field(max_length=1)]
     output_references: tuple[OutputReference, ...]
     artifact_records: Annotated[
         tuple[ArtifactRecord, ...], Field(min_length=3, max_length=3)
@@ -423,29 +682,142 @@ class D3CContextBindingCandidate(_StrictJsonIngressModel):
 
     @model_validator(mode="after")
     def _candidate_graph_is_exact(self) -> D3CContextBindingCandidate:
+        authority = self.accepted_authority
         report = self.report_identity
-        request = self.evaluation_request_identity
+        request_identity = self.evaluation_request_identity
+        project_case = self.project_case
+        request = self.evaluation_request
         projection = self.projection
         if self.authority_id == report.report_id or self.authority_id == report.run_id:
             raise ValueError("authority identity cannot alias report or run identity")
+        if self.authority_id != authority.authority_id:
+            raise ValueError(
+                "candidate authority identity differs from its accepted receipt"
+            )
+        if (
+            report != authority.report_identity
+            or request_identity != authority.evaluation_request_identity
+            or self.runtime_receipt != authority.runtime_receipt
+            or self.actor_records != authority.actor_records
+            or self.source_records != authority.source_records
+            or self.pack_bindings != authority.pack_bindings
+            or self.jurisdiction_pack_ids != authority.jurisdiction_pack_ids
+            or self.technology_pack_ids != authority.technology_pack_ids
+            or self.authorized_registry_ids != authority.authorized_registry_ids
+            or self.artifact_records != authority.artifact_records
+            or self.byte_artifact_bindings != authority.byte_artifact_bindings
+            or self.distribution_control != authority.distribution.control
+        ):
+            raise ValueError(
+                "candidate authority graph differs from its accepted receipt"
+            )
+        if (
+            authority.distribution.release_status != self.release_status
+            or not authority.distribution.non_reliance
+            or self.reliance_status != "not_permitted"
+            or self.publication_status != "not_authorized"
+        ):
+            raise ValueError(
+                "candidate hold controls contradict the accepted authority"
+            )
+
+        case_ref = request.project_case
+        if (
+            project_case.identity.project_id,
+            project_case.identity.case_id,
+            project_case.identity.revision,
+        ) != (case_ref.project_id, case_ref.case_id, case_ref.revision):
+            raise ValueError("candidate ProjectCase differs from its EvaluationRequest")
         if (report.project_id, report.case_id) != (
             projection.project_id,
             projection.case_id,
         ):
             raise ValueError("candidate report identity differs from its projection")
         if (
-            request.request_id != projection.request_id
-            or request.project_id != projection.project_id
-            or request.case_id != projection.case_id
-            or request.project_case_revision != projection.project_case_revision
+            request_identity.request_id != projection.request_id
+            or request_identity.project_id != projection.project_id
+            or request_identity.case_id != projection.case_id
+            or request_identity.project_case_revision
+            != projection.project_case_revision
         ):
             raise ValueError("candidate request identity differs from its projection")
+        expected_request_identity = (
+            request.request_id,
+            case_ref.project_id,
+            case_ref.case_id,
+            case_ref.revision,
+            projection.authority_id,
+            request.base_scenario.config_id,
+            request.scope.scope_id,
+            request.scope.project_boundary,
+            _ordered_scope_jurisdictions(request),
+            _ordered_scope_technologies(request),
+            request.scope.project_stage,
+            request.scope.intended_audiences,
+            request.scope.intended_uses,
+            request.scope.evidence_cutoff,
+            request.scope.valuation_date,
+        )
+        actual_request_identity = (
+            request_identity.request_id,
+            request_identity.project_id,
+            request_identity.case_id,
+            request_identity.project_case_revision,
+            request_identity.d3b_scenario_authority_id,
+            request_identity.config_id,
+            request_identity.scope_id,
+            request_identity.project_boundary,
+            request_identity.jurisdiction_codes,
+            request_identity.technology_ids,
+            request_identity.project_stage,
+            request_identity.intended_audiences,
+            request_identity.intended_uses,
+            request_identity.evidence_cutoff,
+            request_identity.valuation_date,
+        )
+        if actual_request_identity != expected_request_identity:
+            raise ValueError("candidate request receipt differs from its full request")
+
+        project_digest = Digest(
+            value=resolved_config_sha256(project_case.model_dump(mode="json"))
+        )
+        request_digest = Digest(
+            value=resolved_config_sha256(request.model_dump(mode="json"))
+        )
+        upstream = authority.upstream_digests
         if (
-            self.project_case_content_digest.value != projection.project_case_sha256
-            or self.evaluation_request_content_digest.value
-            != projection.evaluation_request_sha256
+            self.project_case_content_digest != project_digest
+            or self.evaluation_request_content_digest != request_digest
+            or project_digest != upstream.project_case
+            or project_digest != upstream.d3b_embedded_project_case
+            or request_digest != upstream.evaluation_request
+            or request_digest != upstream.d3b_embedded_evaluation_request
+            or self.d3b_execution_success_content_digest
+            != upstream.d3b_execution_success
+            or project_digest.value != projection.project_case_sha256
+            or request_digest.value != projection.evaluation_request_sha256
         ):
-            raise ValueError("candidate content digests differ from the projection")
+            raise ValueError("candidate upstream content graph is not reciprocal")
+        try:
+            accepted_success = _d3b_success_from_content_identity_json(
+                self.d3b_execution_success_content_identity_json
+            )
+            accepted_success_digest = d3b_execution_success_content_digest(
+                accepted_success
+            )
+            fresh_projection = project_d3b_result(accepted_success)
+        except (D3CContextBindingError, ResultProjectionError, ValueError) as exc:
+            raise ValueError(
+                "candidate accepted-success content identity is invalid"
+            ) from exc
+        if accepted_success_digest != self.d3b_execution_success_content_digest:
+            raise ValueError(
+                "candidate accepted-success witness differs from its authority digest"
+            )
+        if projection != fresh_projection:
+            raise ValueError(
+                "candidate projection differs from its accepted-success witness"
+            )
         generated_at = datetime.fromisoformat(
             projection.engine_manifest.generated_at.replace("Z", "+00:00")
         )
@@ -459,72 +831,69 @@ class D3CContextBindingCandidate(_StrictJsonIngressModel):
                 "candidate runtime receipt differs from the engine manifest"
             )
 
-        for records, field_name in (
-            (self.actor_records, "actor_id"),
-            (self.source_records, "source_id"),
-            (self.pack_bindings, "pack_id"),
-            (self.input_records, "input_id"),
-            (self.output_references, "output_id"),
-            (self.artifact_records, "artifact_id"),
-        ):
-            identities = tuple(getattr(record, field_name) for record in records)
-            if len(identities) != len(set(identities)):
-                raise ValueError(f"candidate contains duplicate {field_name} values")
-
-        artifact_ids = {record.artifact_id for record in self.artifact_records}
-        binding_ids = {record.artifact_id for record in self.byte_artifact_bindings}
-        verified_ids = {
-            record.artifact_id for record in self.verified_artifact_payloads
-        }
-        if artifact_ids != binding_ids or artifact_ids != verified_ids:
-            raise ValueError("candidate artifact identities are not reciprocal")
-        artifact_by_id = {
-            record.artifact_id: record for record in self.artifact_records
-        }
-        binding_by_id = {
-            record.artifact_id: record for record in self.byte_artifact_bindings
-        }
-        for verified in self.verified_artifact_payloads:
-            artifact = artifact_by_id[verified.artifact_id]
-            binding = binding_by_id[verified.artifact_id]
-            if (
-                verified.role is not binding.role
-                or verified.byte_length != binding.byte_length
-                or verified.content_digest != binding.content_digest
-                or verified.content_digest != artifact.content_digest
-            ):
-                raise ValueError("candidate artifact byte receipt is not reciprocal")
-
-        input_ids = {record.input_id for record in self.input_records}
-        output_ids = {record.output_id for record in self.output_references}
-        source_ids = {record.source_id for record in self.source_records}
-        if any(
-            not set(record.source_ids) <= source_ids for record in self.input_records
-        ):
-            raise ValueError("candidate input contains a dangling source reference")
-        if any(origin.input_id not in input_ids for origin in self.input_origins):
-            raise ValueError("candidate input origin is dangling")
-        origin_keys = tuple(
-            (origin.input_id, origin.kind, origin.reference_id)
-            for origin in self.input_origins
+        expected_inputs, expected_origins, expected_contexts = _candidate_inputs(
+            project_case, authority
         )
-        if len(origin_keys) != len(set(origin_keys)):
-            raise ValueError("candidate contains duplicate input origins")
-        if any(
-            output.report_id != report.report_id or output.run_id != report.run_id
-            for output in self.output_references
+        if (
+            self.input_records != expected_inputs
+            or self.input_origins != expected_origins
+            or self.input_contexts != expected_contexts
         ):
-            raise ValueError("candidate output has foreign report/run identity")
+            raise ValueError("candidate input graph differs from its exact ProjectCase")
 
-        if tuple(section.section_id for section in self.sections) != D3C_SECTION_IDS:
-            raise ValueError("candidate sections differ from taxonomy SSOT order")
-        for section in self.sections:
-            if (
-                not set(section.candidate_input_ids) <= input_ids
-                or not set(section.candidate_output_ids) <= output_ids
-                or not set(section.candidate_artifact_ids) <= artifact_ids
-            ):
-                raise ValueError("candidate section contains a dangling reference")
+        _validate_fx_derivation_graph(
+            self.fx_derivations,
+            project_case,
+            request,
+            authority,
+            expected_inputs,
+        )
+        expected_fx_outputs, expected_fx_derivations = _contextual_fx_outputs(
+            project_case,
+            request,
+            accepted_success,
+            fresh_projection,
+            authority,
+            report,
+        )
+        if self.fx_derivations != expected_fx_derivations:
+            raise ValueError(
+                "candidate FX derivations differ from the accepted-success witness"
+            )
+        expected_outputs = tuple(
+            _carried_route_outputs(fresh_projection, report)
+            + expected_fx_outputs
+            + _artifact_outputs(authority)
+        )
+        if self.output_references != expected_outputs:
+            raise ValueError("candidate output graph differs from its exact origins")
+
+        bindings_by_role = {
+            binding.role: binding for binding in authority.byte_artifact_bindings
+        }
+        expected_verified = tuple(
+            VerifiedArtifactPayload(
+                role=role,
+                artifact_id=bindings_by_role[role].artifact_id,
+                byte_length=bindings_by_role[role].byte_length,
+                content_digest=bindings_by_role[role].content_digest,
+            )
+            for role in GovernedByteArtifactRole
+        )
+        if self.verified_artifact_payloads != expected_verified:
+            raise ValueError(
+                "candidate verified bytes differ from the accepted authority"
+            )
+
+        expected_sections = _section_candidates(
+            fresh_projection,
+            expected_inputs,
+            expected_outputs,
+            authority.artifact_records,
+            authority.byte_artifact_bindings,
+        )
+        if self.sections != expected_sections:
+            raise ValueError("candidate sections differ from their exact record graph")
         return self
 
 
@@ -748,26 +1117,10 @@ def _identity_node(
     )
 
 
-def d3b_execution_success_content_digest(result: D3BExecutionSuccess) -> Digest:
-    """Return the bounded deterministic content identity of one exact D3B success.
+def _d3b_success_fields(result: D3BExecutionSuccess) -> tuple[tuple[str, Any], ...]:
+    """Return the exact public D3B-success field sequence for content identity."""
 
-    Mapping order and safe alias topology are intentionally not identities.  Mapping
-    entries are sorted by exact type-tagged key bytes, and shared aliases are expanded
-    and counted on every occurrence.  Every public field of ``D3BExecutionSuccess`` is
-    included, including opaque full-result metadata, annual-row values and the run
-    manifest.  This is solely the D3C ledger's upstream-object identity; it is not D4
-    package serialization.
-    """
-
-    if type(result) is not D3BExecutionSuccess:
-        raise D3CContextBindingError(
-            "invalid_success_type",
-            "/d3b_execution_success",
-            "content identity accepts exactly D3BExecutionSuccess",
-        )
-    bounds = _IdentityBounds()
-    active: set[int] = set()
-    fields = (
+    return (
         ("request_id", result.request_id),
         ("project_id", result.project_id),
         ("case_id", result.case_id),
@@ -790,6 +1143,44 @@ def d3b_execution_success_content_digest(result: D3BExecutionSuccess) -> Digest:
         ("fx_degraded", result.fx_degraded),
         ("outcome", result.outcome),
     )
+
+
+_D3B_SUCCESS_FIELD_NAMES: Final = (
+    "request_id",
+    "project_id",
+    "case_id",
+    "project_case_revision",
+    "project_case_sha256",
+    "evaluation_request_sha256",
+    "authority_id",
+    "config_id",
+    "source_file_sha256",
+    "resolved_config_sha256",
+    "evaluated_config_sha256",
+    "evidence_cutoff",
+    "valuation_date",
+    "validation_modules",
+    "numeric_projection_receipts",
+    "gateway_call_count",
+    "full_result",
+    "run_manifest",
+    "warnings",
+    "fx_degraded",
+    "outcome",
+)
+
+
+def _d3b_success_content_identity_json(result: D3BExecutionSuccess) -> str:
+    """Return the bounded canonical identity preimage for one exact D3B success."""
+
+    if type(result) is not D3BExecutionSuccess:
+        raise D3CContextBindingError(
+            "invalid_success_type",
+            "/d3b_execution_success",
+            "content identity accepts exactly D3BExecutionSuccess",
+        )
+    bounds = _IdentityBounds()
+    active: set[int] = set()
     root = [
         D3B_SUCCESS_CONTENT_IDENTITY_VERSION,
         [
@@ -802,21 +1193,202 @@ def d3b_execution_success_content_digest(result: D3BExecutionSuccess) -> Digest:
                     depth=0,
                 ),
             ]
-            for name, value in fields
+            for name, value in _d3b_success_fields(result)
         ],
     ]
-    canonical = json.dumps(
+    rendered = json.dumps(
         root,
         ensure_ascii=False,
         allow_nan=False,
         separators=(",", ":"),
-    ).encode("utf-8")
-    if len(canonical) > _MAX_IDENTITY_CANONICAL_BYTES:
+    )
+    if len(rendered.encode("utf-8")) > _MAX_IDENTITY_CANONICAL_BYTES:
         raise D3CContextBindingError(
             "success_identity_bytes_exceeded",
             "/d3b_execution_success",
             "accepted-success canonical content exceeds the byte bound",
         )
+    return rendered
+
+
+def _identity_decode_error() -> ValueError:
+    """Return one constant exception for a malformed retained identity witness."""
+
+    return ValueError("accepted-success content identity is malformed")
+
+
+def _decode_identity_node(node: Any, *, depth: int = 0) -> Any:
+    """Decode one canonical content-identity node into its exact immutable value."""
+
+    if depth > _MAX_IDENTITY_DEPTH or type(node) is not list or not node:
+        raise _identity_decode_error()
+    tag = node[0]
+    if type(tag) is not str:
+        raise _identity_decode_error()
+    if tag == "none":
+        if len(node) != 1:
+            raise _identity_decode_error()
+        return None
+    if tag == "bool":
+        if len(node) != 2 or type(node[1]) is not bool:
+            raise _identity_decode_error()
+        return node[1]
+    if tag == "integer":
+        raw = node[1] if len(node) == 2 else None
+        if (
+            type(raw) is not str
+            or re.fullmatch(r"(?:0|-[1-9][0-9]*|[1-9][0-9]*)", raw) is None
+        ):
+            raise _identity_decode_error()
+        value = int(raw)
+        if value.bit_length() > 4096:
+            raise _identity_decode_error()
+        return value
+    if tag == "binary64":
+        raw = node[1] if len(node) == 2 else None
+        if type(raw) is not str or re.fullmatch(r"[0-9a-f]{16}", raw) is None:
+            raise _identity_decode_error()
+        value = struct.unpack(">d", bytes.fromhex(raw))[0]
+        if not math.isfinite(value):
+            raise _identity_decode_error()
+        return value
+    if tag == "text":
+        raw = node[1] if len(node) == 2 else None
+        if type(raw) is not str or any(
+            0xD800 <= ord(character) <= 0xDFFF for character in raw
+        ):
+            raise _identity_decode_error()
+        return raw
+    if tag == "date":
+        raw = node[1] if len(node) == 2 else None
+        if type(raw) is not str:
+            raise _identity_decode_error()
+        try:
+            date_value = date.fromisoformat(raw)
+        except ValueError as exc:
+            raise _identity_decode_error() from exc
+        if date_value.isoformat() != raw:
+            raise _identity_decode_error()
+        return date_value
+    if tag == "mapping":
+        entries = node[1] if len(node) == 2 else None
+        if type(entries) is not list:
+            raise _identity_decode_error()
+        backing: dict[Any, Any] = {}
+        previous_key_bytes: bytes | None = None
+        for entry in entries:
+            if type(entry) is not list or len(entry) != 2:
+                raise _identity_decode_error()
+            key_node, item_node = entry
+            key_bytes = json.dumps(
+                key_node,
+                ensure_ascii=False,
+                allow_nan=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            if previous_key_bytes is not None and key_bytes <= previous_key_bytes:
+                raise _identity_decode_error()
+            previous_key_bytes = key_bytes
+            key = _decode_identity_node(key_node, depth=depth + 1)
+            if type(key) not in {str, int, float} or key in backing:
+                raise _identity_decode_error()
+            backing[key] = _decode_identity_node(item_node, depth=depth + 1)
+        return MappingProxyType(backing)
+    if tag == "tuple":
+        items = node[1] if len(node) == 2 else None
+        if type(items) is not list:
+            raise _identity_decode_error()
+        return tuple(_decode_identity_node(item, depth=depth + 1) for item in items)
+    if tag == "d3b_authored_numeric_value":
+        if len(node) != 4:
+            raise _identity_decode_error()
+        values = tuple(
+            _decode_identity_node(item, depth=depth + 1) for item in node[1:]
+        )
+        if any(type(item) is not str for item in values):
+            raise _identity_decode_error()
+        return D3BAuthoredNumericValue(
+            json_type=cast(Literal["integer", "binary64"], values[0]),
+            authored_value=values[1],
+            binary64_hex=values[2],
+        )
+    if tag == "d3b_numeric_projection_receipt":
+        if len(node) != 5:
+            raise _identity_decode_error()
+        values = tuple(
+            _decode_identity_node(item, depth=depth + 1) for item in node[1:]
+        )
+        if (
+            any(type(item) is not str for item in values[:3])
+            or type(values[3]) is not tuple
+            or any(type(item) is not D3BAuthoredNumericValue for item in values[3])
+        ):
+            raise _identity_decode_error()
+        return D3BNumericProjectionReceipt(
+            assertion_id=values[0],
+            project_decimal=values[1],
+            projected_binary64_hex=values[2],
+            authored_values=values[3],
+        )
+    raise _identity_decode_error()
+
+
+def _d3b_success_from_content_identity_json(identity_json: str) -> D3BExecutionSuccess:
+    """Reconstruct the exact accepted success from its canonical identity witness."""
+
+    if type(identity_json) is not str:
+        raise _identity_decode_error()
+    parsed = _scan_json_ingress(identity_json)
+    if (
+        json.dumps(
+            parsed,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        )
+        != identity_json
+    ):
+        raise _identity_decode_error()
+    if (
+        type(parsed) is not list
+        or len(parsed) != 2
+        or parsed[0] != D3B_SUCCESS_CONTENT_IDENTITY_VERSION
+        or type(parsed[1]) is not list
+        or len(parsed[1]) != len(_D3B_SUCCESS_FIELD_NAMES)
+    ):
+        raise _identity_decode_error()
+    field_values: dict[str, Any] = {}
+    for expected_name, pair in zip(_D3B_SUCCESS_FIELD_NAMES, parsed[1], strict=True):
+        if type(pair) is not list or len(pair) != 2 or pair[0] != expected_name:
+            raise _identity_decode_error()
+        field_values[expected_name] = _decode_identity_node(pair[1])
+    full_result = field_values["full_result"]
+    declared_manifest = field_values.pop("run_manifest")
+    if (
+        type(full_result) is not MappingProxyType
+        or type(declared_manifest) is not MappingProxyType
+        or full_result.get("run_manifest") != declared_manifest
+    ):
+        raise _identity_decode_error()
+    field_values["run_manifest"] = full_result["run_manifest"]
+    try:
+        return D3BExecutionSuccess(**field_values)
+    except (TypeError, ValueError) as exc:
+        raise _identity_decode_error() from exc
+
+
+def d3b_execution_success_content_digest(result: D3BExecutionSuccess) -> Digest:
+    """Return the bounded deterministic content identity of one exact D3B success.
+
+    Mapping order and safe alias topology are intentionally not identities.  Mapping
+    entries are sorted by exact type-tagged key bytes, and shared aliases are expanded
+    and counted on every occurrence.  Every public field of ``D3BExecutionSuccess`` is
+    included, including opaque full-result metadata, annual-row values and the run
+    manifest.  This is solely the D3C ledger's upstream-object identity; it is not D4
+    package serialization.
+    """
+
+    canonical = _d3b_success_content_identity_json(result).encode("utf-8")
     return Digest(value=hashlib.sha256(canonical).hexdigest())
 
 
@@ -831,14 +1403,18 @@ def _blocked_from_authority(
         resolution.code.value,
         D3CContextBindingBlockCode.SELECTED_AUTHORITY_INVALID,
     )
-    rendered_id = authority_id if type(authority_id) is str else repr(authority_id)
+    rendered_id = (
+        authority_id
+        if resolution.code.value != "invalid_authority_id" and type(authority_id) is str
+        else "invalid:assembly-authority-id"
+    )
     return BlockedD3CContextBinding(
         outcome="blocked",
         schema_id=D3C_CONTEXT_BINDING_SCHEMA_ID,
         contract_version=D3C_CONTEXT_BINDING_CONTRACT_VERSION,
         code=code,
         pointer="/authority_id",
-        authority_id=rendered_id[:160],
+        authority_id=rendered_id,
         detail=(
             "No code-owned accepted D3C-0 authority was selected; no D3C-1b "
             "candidate was emitted."
@@ -1153,104 +1729,241 @@ def _origin_edges(
 def _candidate_inputs(
     project_case: ProjectCase,
     authority: AcceptedAssemblyAuthority,
-) -> tuple[tuple[InputRecord, ...], tuple[CandidateInputOrigin, ...]]:
+) -> tuple[
+    tuple[InputRecord, ...],
+    tuple[CandidateInputOrigin, ...],
+    tuple[CandidateInputContext, ...],
+]:
     case_source_ids = {source.source_id for source in project_case.sources}
     case_assumption_ids = {
         assumption.assumption_id for assumption in project_case.assumptions
     }
     authority_source_ids = {source.source_id for source in authority.source_records}
+    missing_by_id = {
+        missing.missing_input_id: missing for missing in project_case.missing_inputs
+    }
     records: list[InputRecord] = []
     origins: list[CandidateInputOrigin] = []
+    contexts: list[CandidateInputContext] = []
 
     def add(
         *,
         input_id: str,
         name: str,
-        value: CanonicalValue,
-        bindings: tuple[ValueBinding, ...],
+        material: ResolvedValue | ResolvedCount | MissingValue,
+        value: CanonicalValue | None,
         section_ids: tuple[str, ...],
+        family: Literal[
+            "generation_unit_count",
+            "cost_native_amount",
+            "cost_reporting_amount",
+            "currency_conversion_rate",
+        ],
+        project_case_pointer: str,
+        precision_source: Literal[
+            "integral_semantics",
+            "native_minor_unit_places",
+            "reporting_minor_unit_places",
+            "quote_precision",
+        ],
+        asset_id: str | None = None,
+        line_id: str | None = None,
+        conversion_id: str | None = None,
+        periodicity: CostPeriodicity | None = None,
+        price_basis_id: str | None = None,
+        conversion_edge_id: str | None = None,
+        from_currency: str | None = None,
+        to_currency: str | None = None,
+        valuation_date: date | None = None,
     ) -> None:
-        source_ids, input_origins = _origin_edges(
-            input_id,
-            bindings,
-            case_source_ids=case_source_ids,
-            case_assumption_ids=case_assumption_ids,
-            authority_source_ids=authority_source_ids,
-        )
-        records.append(
-            InputRecord(
+        missing_input_id: str | None = None
+        missing_field_path: str | None = None
+        missing_reason: str | None = None
+        missing_consequence: str | None = None
+        missing_remedy: str | None = None
+        if type(material) is MissingValue:
+            missing = missing_by_id.get(material.missing_input_id)
+            _require(
+                missing is not None and missing.expected_unit == material.unit,
+                "candidate_missing_input_unbound",
+                project_case_pointer,
+                "MissingValue lacks its exact governed missing-input record",
+            )
+            assert missing is not None
+            missing_input_id = missing.missing_input_id
+            missing_field_path = missing.field_path
+            missing_reason = missing.reason
+            missing_consequence = missing.consequence
+            missing_remedy = missing.remedy
+            records.append(
+                InputRecord(
+                    input_id=input_id,
+                    kind=InputKind.SUPPLIED,
+                    resolution_status=InputResolutionStatus.MISSING,
+                    name=name,
+                    affected_section_ids=section_ids,
+                    reason=missing.reason,
+                    remedy=missing.remedy,
+                )
+            )
+            state: Literal["resolved", "missing"] = "missing"
+        else:
+            resolved_material = cast(ResolvedValue | ResolvedCount, material)
+            _require(
+                value is not None,
+                "candidate_resolved_value_missing",
+                project_case_pointer,
+                "resolved ProjectCase input lacks its canonical candidate value",
+            )
+            source_ids, input_origins = _origin_edges(
+                input_id,
+                resolved_material.bindings,
+                case_source_ids=case_source_ids,
+                case_assumption_ids=case_assumption_ids,
+                authority_source_ids=authority_source_ids,
+            )
+            records.append(
+                InputRecord(
+                    input_id=input_id,
+                    kind=InputKind.RESOLVED,
+                    resolution_status=InputResolutionStatus.RESOLVED,
+                    name=name,
+                    resolved_value=value,
+                    source_ids=source_ids,
+                    affected_section_ids=section_ids,
+                )
+            )
+            origins.extend(input_origins)
+            state = "resolved"
+        contexts.append(
+            CandidateInputContext(
                 input_id=input_id,
-                kind=InputKind.RESOLVED,
-                resolution_status=InputResolutionStatus.RESOLVED,
-                name=name,
-                resolved_value=value,
-                source_ids=source_ids,
-                affected_section_ids=section_ids,
+                family=family,
+                project_case_pointer=project_case_pointer,
+                precision_source=precision_source,
+                state=state,
+                expected_unit=material.unit,
+                asset_id=asset_id,
+                line_id=line_id,
+                conversion_id=conversion_id,
+                periodicity=periodicity,
+                price_basis_id=price_basis_id,
+                conversion_edge_id=conversion_edge_id,
+                from_currency=from_currency,
+                to_currency=to_currency,
+                valuation_date=valuation_date,
+                missing_input_id=missing_input_id,
+                missing_field_path=missing_field_path,
+                missing_reason=missing_reason,
+                missing_consequence=missing_consequence,
+                missing_remedy=missing_remedy,
             )
         )
-        origins.extend(input_origins)
 
     for asset in project_case.assets:
         if (
             type(asset) is GenerationAsset
             and type(asset.capacity) is UnitizedGenerationCapacity
-            and type(asset.capacity.unit_count) is ResolvedCount
         ):
             count = asset.capacity.unit_count
             add(
                 input_id=f"input:project_case.asset.{asset.asset_id}.unit_count",
                 name=f"ProjectCase unit count for {asset.asset_id}",
-                value=CanonicalValue(
-                    value_type=ValueType.INTEGER,
-                    value=str(count.value),
-                    unit="count",
-                    precision=0,
+                material=count,
+                value=(
+                    CanonicalValue(
+                        value_type=ValueType.INTEGER,
+                        value=str(count.value),
+                        unit="count",
+                        precision=0,
+                    )
+                    if type(count) is ResolvedCount
+                    else None
                 ),
-                bindings=count.bindings,
                 section_ids=(
                     "project_description_and_structure",
                     "technology_selection_design_basis",
                 ),
+                family="generation_unit_count",
+                project_case_pointer=f"/assets/{asset.asset_id}/capacity/unit_count",
+                precision_source="integral_semantics",
+                asset_id=asset.asset_id,
             )
 
     for line in project_case.costs.lines:
         native = line.amount.native_amount
-        if type(native) is ResolvedValue:
-            add(
-                input_id=f"input:project_case.cost.{line.line_id}.native_amount",
-                name=f"ProjectCase native amount for {line.line_id}",
-                value=_canonical_decimal(native, line.amount.native_minor_unit_places),
-                bindings=native.bindings,
-                section_ids=("capex_opex_contingency_procurement",),
-            )
+        add(
+            input_id=f"input:project_case.cost.{line.line_id}.native_amount",
+            name=f"ProjectCase native amount for {line.line_id}",
+            material=native,
+            value=(
+                _canonical_decimal(native, line.amount.native_minor_unit_places)
+                if type(native) is ResolvedValue
+                else None
+            ),
+            section_ids=("capex_opex_contingency_procurement",),
+            family="cost_native_amount",
+            project_case_pointer=f"/costs/lines/{line.line_id}/amount/native_amount",
+            precision_source="native_minor_unit_places",
+            line_id=line.line_id,
+            periodicity=line.periodicity,
+            price_basis_id=line.price_basis_id,
+            conversion_edge_id=line.amount.conversion_id,
+            from_currency=line.amount.native_currency,
+            to_currency=line.amount.reporting_currency,
+        )
         reporting = line.amount.reporting_amount
-        if type(reporting) is ResolvedValue:
-            add(
-                input_id=f"input:project_case.cost.{line.line_id}.reporting_amount",
-                name=f"ProjectCase reporting amount for {line.line_id}",
-                value=_canonical_decimal(
-                    reporting, line.amount.reporting_minor_unit_places
-                ),
-                bindings=reporting.bindings,
-                section_ids=("capex_opex_contingency_procurement",),
-            )
+        add(
+            input_id=f"input:project_case.cost.{line.line_id}.reporting_amount",
+            name=f"ProjectCase reporting amount for {line.line_id}",
+            material=reporting,
+            value=(
+                _canonical_decimal(reporting, line.amount.reporting_minor_unit_places)
+                if type(reporting) is ResolvedValue
+                else None
+            ),
+            section_ids=("capex_opex_contingency_procurement",),
+            family="cost_reporting_amount",
+            project_case_pointer=f"/costs/lines/{line.line_id}/amount/reporting_amount",
+            precision_source="reporting_minor_unit_places",
+            line_id=line.line_id,
+            periodicity=line.periodicity,
+            price_basis_id=line.price_basis_id,
+            conversion_edge_id=line.amount.conversion_id,
+            from_currency=line.amount.native_currency,
+            to_currency=line.amount.reporting_currency,
+        )
 
     for conversion in project_case.costs.currency_conversions:
-        if type(conversion.rate) is ResolvedValue:
-            add(
-                input_id=(
-                    "input:project_case.currency_conversion."
-                    f"{conversion.conversion_id}.rate"
-                ),
-                name=(
-                    f"Directed {conversion.from_currency} to "
-                    f"{conversion.to_currency} conversion rate"
-                ),
-                value=_canonical_decimal(conversion.rate, conversion.quote_precision),
-                bindings=conversion.rate.bindings,
-                section_ids=("tax_fx_inflation_accounting",),
-            )
-    return tuple(records), tuple(origins)
+        rate = conversion.rate
+        add(
+            input_id=(
+                "input:project_case.currency_conversion."
+                f"{conversion.conversion_id}.rate"
+            ),
+            name=(
+                f"Directed {conversion.from_currency} to "
+                f"{conversion.to_currency} conversion rate"
+            ),
+            material=rate,
+            value=(
+                _canonical_decimal(rate, conversion.quote_precision)
+                if type(rate) is ResolvedValue
+                else None
+            ),
+            section_ids=("tax_fx_inflation_accounting",),
+            family="currency_conversion_rate",
+            project_case_pointer=(
+                f"/costs/currency_conversions/{conversion.conversion_id}/rate"
+            ),
+            precision_source="quote_precision",
+            conversion_id=conversion.conversion_id,
+            price_basis_id=conversion.price_basis_id,
+            from_currency=conversion.from_currency,
+            to_currency=conversion.to_currency,
+            valuation_date=conversion.valuation_date,
+        )
+    return tuple(records), tuple(origins), tuple(contexts)
 
 
 def _json_pointer(path: tuple[str, ...]) -> str:
@@ -1301,7 +2014,7 @@ def _fx_conversion_context(
     project_case: ProjectCase,
     request: EvaluationRequest,
     authority: AcceptedAssemblyAuthority,
-) -> CurrencyConversion:
+) -> tuple[CurrencyConversion, SourceRecord]:
     matches = tuple(
         conversion
         for conversion in project_case.costs.currency_conversions
@@ -1335,13 +2048,22 @@ def _fx_conversion_context(
         "FX conversion requires one exact governed source reference",
     )
     source_id = cast(SourceReference, rate.bindings[0]).reference_id
+    source_by_id = {source.source_id: source for source in authority.source_records}
+    source = source_by_id.get(source_id)
     _require(
-        source_id in {source.source_id for source in authority.source_records},
+        source is not None,
         "fx_source_not_authorized",
         f"/project_case/costs/currency_conversions/{conversion.conversion_id}/rate",
         "FX conversion source is absent from the selected D3C-0 authority",
     )
-    return conversion
+    assert source is not None
+    _require(
+        source.observation_date == conversion.valuation_date,
+        "fx_source_observation_date_mismatch",
+        f"/authority/source_records/{source_id}/observation_date",
+        "FX source observation date must equal the conversion and request date",
+    )
+    return conversion, source
 
 
 def _contextual_fx_outputs(
@@ -1351,14 +2073,14 @@ def _contextual_fx_outputs(
     projection: D3CResultProjection,
     authority: AcceptedAssemblyAuthority,
     report: ReportIdentity,
-) -> list[OutputReference]:
+) -> tuple[list[OutputReference], tuple[CandidateFxDerivation, ...]]:
     debt = success.full_result.get("debt_result")
     if type(debt) is not MappingProxyType:
-        return []
+        return [], ()
     field_names = ("fx_min", "fx_max", "fx_avg")
     present = tuple(field in debt for field in field_names)
     if not any(present):
-        return []
+        return [], ()
     _require(
         all(present),
         "fx_statistics_incomplete",
@@ -1387,9 +2109,28 @@ def _contextual_fx_outputs(
         "/d3b_execution_success/full_result/annual_rows",
         "every annual row must preserve one exact finite binary64 fx_rate",
     )
-    _fx_conversion_context(project_case, request, authority)
+    assert type(annual_rows) is tuple
+    expected_timeline_periods = debt.get("timeline_periods")
+    _require(
+        type(expected_timeline_periods) is int
+        and 0 < expected_timeline_periods <= 2**31 - 1,
+        "fx_timeline_count_unavailable",
+        "/d3b_execution_success/full_result/debt_result/timeline_periods",
+        "FX statistics require one exact positive expected timeline count",
+    )
+    assert type(expected_timeline_periods) is int
+    _require(
+        len(annual_rows) == expected_timeline_periods,
+        "fx_timeline_count_mismatch",
+        "/d3b_execution_success/full_result/annual_rows",
+        "annual-row count differs from debt_result.timeline_periods",
+    )
+    conversion, source = _fx_conversion_context(project_case, request, authority)
+    rate = cast(ResolvedValue, conversion.rate)
     route_index = {route.route_id: route for route in D3C_RESULT_FIELD_ROUTES}
     outputs: list[OutputReference] = []
+    statistics: list[CandidateFxStatistic] = []
+    derivation_id = f"candidate-derivation:fx-context:{conversion.conversion_id}"
     for field_name in field_names:
         value = debt[field_name]
         _require(
@@ -1399,9 +2140,22 @@ def _contextual_fx_outputs(
             "FX statistic must be an exact finite binary64 value",
         )
         route = route_index[f"route:debt_result.{field_name}"]
+        canonical = CanonicalValue(
+            value_type=ValueType.DECIMAL,
+            value=str(Decimal.from_float(value)),
+            unit=route.unit,
+            precision=route.meaningful_precision,
+        )
+        statistic = CandidateFxStatistic(
+            field_name=cast(Literal["fx_min", "fx_max", "fx_avg"], field_name),
+            output_id=_route_output_id(route.route_id),
+            binary64_be_hex=struct.pack(">d", value).hex(),
+            value=canonical,
+        )
+        statistics.append(statistic)
         outputs.append(
             OutputReference(
-                output_id=_route_output_id(route.route_id),
+                output_id=statistic.output_id,
                 report_id=report.report_id,
                 run_id=report.run_id,
                 section_ids=route.section_ids,
@@ -1409,15 +2163,77 @@ def _contextual_fx_outputs(
                 producing_version=D3C_CONTEXT_BINDING_CONTRACT_VERSION,
                 output_class=OutputClass.CANONICAL,
                 locator=_json_pointer(route.source_path),
-                value=CanonicalValue(
-                    value_type=ValueType.DECIMAL,
-                    value=str(Decimal.from_float(value)),
-                    unit=route.unit,
-                    precision=route.meaningful_precision,
-                ),
+                value=canonical,
+                derivation_ids=(derivation_id,),
             )
         )
-    return outputs
+    derivation = CandidateFxDerivation(
+        derivation_id=derivation_id,
+        conversion_input_id=(
+            f"input:project_case.currency_conversion.{conversion.conversion_id}.rate"
+        ),
+        conversion_id=conversion.conversion_id,
+        source_id=source.source_id,
+        from_currency="USD",
+        to_currency="LKR",
+        quote_unit="LKR/USD",
+        conversion_rate=_canonical_decimal(rate, conversion.quote_precision),
+        valuation_date=conversion.valuation_date,
+        request_valuation_date=request.scope.valuation_date,
+        source_observation_date=cast(date, source.observation_date),
+        price_basis_id=conversion.price_basis_id,
+        request_price_basis_id=request.scope.price_basis_id,
+        annual_row_count=len(annual_rows),
+        expected_timeline_periods=expected_timeline_periods,
+        annual_fx_rate_binary64_be_hex=tuple(
+            struct.pack(">d", cast(float, row["fx_rate"])).hex() for row in annual_rows
+        ),
+        statistics=tuple(statistics),
+    )
+    return outputs, (derivation,)
+
+
+def _validate_fx_derivation_graph(
+    derivations: tuple[CandidateFxDerivation, ...],
+    project_case: ProjectCase,
+    request: EvaluationRequest,
+    authority: AcceptedAssemblyAuthority,
+    inputs: tuple[InputRecord, ...],
+) -> None:
+    """Recheck every retained contextual FX edge without a gateway or locator read."""
+
+    if not derivations:
+        return
+    if len(derivations) != 1:  # pragma: no cover - model max_length is primary
+        raise ValueError("candidate permits at most one directed FX derivation")
+    derivation = derivations[0]
+    try:
+        conversion, source = _fx_conversion_context(project_case, request, authority)
+    except D3CContextBindingError as exc:
+        raise ValueError(
+            "candidate FX derivation lacks exact governed context"
+        ) from exc
+    input_by_id = {record.input_id: record for record in inputs}
+    conversion_input = input_by_id.get(derivation.conversion_input_id)
+    rate = cast(ResolvedValue, conversion.rate)
+    expected_rate = _canonical_decimal(rate, conversion.quote_precision)
+    if (
+        conversion_input is None
+        or conversion_input.resolution_status is not InputResolutionStatus.RESOLVED
+        or conversion_input.resolved_value != expected_rate
+        or derivation.conversion_id != conversion.conversion_id
+        or derivation.source_id != source.source_id
+        or derivation.from_currency != conversion.from_currency
+        or derivation.to_currency != conversion.to_currency
+        or derivation.quote_unit != rate.unit
+        or derivation.conversion_rate != expected_rate
+        or derivation.valuation_date != conversion.valuation_date
+        or derivation.request_valuation_date != request.scope.valuation_date
+        or derivation.source_observation_date != source.observation_date
+        or derivation.price_basis_id != conversion.price_basis_id
+        or derivation.request_price_basis_id != request.scope.price_basis_id
+    ):
+        raise ValueError("candidate FX derivation differs from its governed context")
 
 
 _ARTIFACT_SECTION_IDS: Final[Mapping[GovernedByteArtifactRole, tuple[str, ...]]] = (
@@ -1578,18 +2394,17 @@ def _bind_selected_authority(
         project_case, request, success, selected_projection, authority
     )
     verified = _verify_artifact_payloads(artifact_payloads, authority)
-    inputs, origins = _candidate_inputs(project_case, authority)
+    inputs, origins, input_contexts = _candidate_inputs(project_case, authority)
     output_list = _carried_route_outputs(selected_projection, authority.report_identity)
-    output_list.extend(
-        _contextual_fx_outputs(
-            project_case,
-            request,
-            success,
-            selected_projection,
-            authority,
-            authority.report_identity,
-        )
+    fx_outputs, fx_derivations = _contextual_fx_outputs(
+        project_case,
+        request,
+        success,
+        selected_projection,
+        authority,
+        authority.report_identity,
     )
+    output_list.extend(fx_outputs)
     output_list.extend(_artifact_outputs(authority))
     outputs = tuple(output_list)
     sections = _section_candidates(
@@ -1605,11 +2420,17 @@ def _bind_selected_authority(
         contract_version=D3C_CONTEXT_BINDING_CONTRACT_VERSION,
         authority_status="candidate_non_authoritative",
         authority_id=authority.authority_id,
+        project_case=project_case,
+        evaluation_request=request,
+        accepted_authority=authority,
         report_identity=authority.report_identity,
         evaluation_request_identity=authority.evaluation_request_identity,
         project_case_content_digest=project_digest,
         evaluation_request_content_digest=request_digest,
         d3b_execution_success_content_digest=success_digest,
+        d3b_execution_success_content_identity_json=(
+            _d3b_success_content_identity_json(success)
+        ),
         runtime_receipt=authority.runtime_receipt,
         projection=selected_projection,
         actor_records=authority.actor_records,
@@ -1620,6 +2441,8 @@ def _bind_selected_authority(
         authorized_registry_ids=authority.authorized_registry_ids,
         input_records=inputs,
         input_origins=origins,
+        input_contexts=input_contexts,
+        fx_derivations=fx_derivations,
         output_references=outputs,
         artifact_records=authority.artifact_records,
         byte_artifact_bindings=authority.byte_artifact_bindings,
@@ -1699,6 +2522,9 @@ __all__ = (
     "D3C_CONTEXT_BINDING_CONTRACT_VERSION",
     "D3C_CONTEXT_BINDING_SCHEMA_ID",
     "BlockedD3CContextBinding",
+    "CandidateFxDerivation",
+    "CandidateFxStatistic",
+    "CandidateInputContext",
     "CandidateInputOrigin",
     "D3CContextBindingBlockCode",
     "D3CContextBindingCandidate",

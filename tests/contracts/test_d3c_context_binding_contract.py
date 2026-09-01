@@ -7,8 +7,13 @@ import copy
 import hashlib
 import inspect
 import json
+import os
+import struct
+import subprocess
+import sys
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Literal, cast
@@ -22,7 +27,9 @@ import analytics.feasibility_execution as execution
 import analytics.feasibility_report_contract.context_binding as context_binding
 from analytics.contracts_v14 import (
     AuthoredScenarioPathAuthority,
+    D3BAuthoredNumericValue,
     D3BExecutionSuccess,
+    D3BNumericProjectionReceipt,
 )
 from analytics.feasibility_report_contract import (
     AssumptionReference,
@@ -247,7 +254,7 @@ def _aligned_authority_payload(
         "issuer_or_author": "DutchBay contract tests",
         "document_or_dataset_id": "project-case-basis-v1",
         "revision": "1",
-        "observation_date": scope.evidence_cutoff,
+        "observation_date": scope.valuation_date,
         "retrieval_date": scope.evidence_cutoff,
         "locator": {
             "evidence_path": "tests/fixtures/project-case-basis.json",
@@ -337,6 +344,25 @@ def _fixture_for_success(
         for role in GovernedByteArtifactRole
     )
     return _ContextFixture(project_case, request, success, authority, payloads)
+
+
+def _authority_with_source_observation(
+    authority: AcceptedAssemblyAuthority,
+    source_id: str,
+    observation_date: date,
+) -> AcceptedAssemblyAuthority:
+    return authority.model_copy(
+        update={
+            "source_records": tuple(
+                (
+                    source.model_copy(update={"observation_date": observation_date})
+                    if source.source_id == source_id
+                    else source
+                )
+                for source in authority.source_records
+            )
+        }
+    )
 
 
 def _directed_fx_project_case() -> ProjectCase:
@@ -479,6 +505,173 @@ def _mutated_success(
     return replace(success, full_result=frozen, run_manifest=frozen["run_manifest"])
 
 
+def _independent_identity_node(value: Any) -> Any:
+    """Reference-encode D3B success content without implementation helpers."""
+
+    if value is None:
+        return ["none"]
+    if type(value) is bool:
+        return ["bool", value]
+    if type(value) is int:
+        return ["integer", str(value)]
+    if type(value) is float:
+        return ["binary64", struct.pack(">d", value).hex()]
+    if type(value) is str:
+        return ["text", value]
+    if type(value) is date:
+        return ["date", value.isoformat()]
+    if type(value) is MappingProxyType:
+        entries = []
+        for key, item in value.items():
+            key_node = _independent_identity_node(key)
+            key_bytes = json.dumps(
+                key_node,
+                ensure_ascii=False,
+                allow_nan=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            entries.append((key_bytes, key_node, _independent_identity_node(item)))
+        entries.sort(key=lambda entry: entry[0])
+        return ["mapping", [[key, item] for _, key, item in entries]]
+    if type(value) is tuple:
+        return ["tuple", [_independent_identity_node(item) for item in value]]
+    if type(value) is D3BAuthoredNumericValue:
+        return [
+            "d3b_authored_numeric_value",
+            _independent_identity_node(value.json_type),
+            _independent_identity_node(value.authored_value),
+            _independent_identity_node(value.binary64_hex),
+        ]
+    if type(value) is D3BNumericProjectionReceipt:
+        return [
+            "d3b_numeric_projection_receipt",
+            _independent_identity_node(value.assertion_id),
+            _independent_identity_node(value.project_decimal),
+            _independent_identity_node(value.projected_binary64_hex),
+            _independent_identity_node(value.authored_values),
+        ]
+    raise TypeError(type(value).__name__)
+
+
+def _independent_success_digest_oracle(success: D3BExecutionSuccess) -> str:
+    """Return the separately implemented like-for-like success digest oracle."""
+
+    fields = (
+        ("request_id", success.request_id),
+        ("project_id", success.project_id),
+        ("case_id", success.case_id),
+        ("project_case_revision", success.project_case_revision),
+        ("project_case_sha256", success.project_case_sha256),
+        ("evaluation_request_sha256", success.evaluation_request_sha256),
+        ("authority_id", success.authority_id),
+        ("config_id", success.config_id),
+        ("source_file_sha256", success.source_file_sha256),
+        ("resolved_config_sha256", success.resolved_config_sha256),
+        ("evaluated_config_sha256", success.evaluated_config_sha256),
+        ("evidence_cutoff", success.evidence_cutoff),
+        ("valuation_date", success.valuation_date),
+        ("validation_modules", success.validation_modules),
+        ("numeric_projection_receipts", success.numeric_projection_receipts),
+        ("gateway_call_count", success.gateway_call_count),
+        ("full_result", success.full_result),
+        ("run_manifest", success.run_manifest),
+        ("warnings", success.warnings),
+        ("fx_degraded", success.fx_degraded),
+        ("outcome", success.outcome),
+    )
+    preimage = [
+        "dutchbay.d3b_execution_success_content_identity.v1",
+        [[name, _independent_identity_node(value)] for name, value in fields],
+    ]
+    encoded = json.dumps(
+        preimage,
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _complete_directed_fx_fixture(
+    context_fixture: _ContextFixture,
+) -> _ContextFixture:
+    """Build one fully reciprocal synthetic USD-to-LKR D3C-1b fixture."""
+
+    directed_case = _directed_fx_project_case().model_copy(
+        update={"identity": context_fixture.project_case.identity}
+    )
+    conversion = directed_case.costs.currency_conversions[0]
+    request_payload = context_fixture.request.model_dump(mode="json")
+    request_payload["scope"].update(
+        {
+            "valuation_date": conversion.valuation_date.isoformat(),
+            "evidence_cutoff": conversion.valuation_date.isoformat(),
+            "price_basis_id": conversion.price_basis_id,
+            "price_basis_description": "Controlled LKR valuation basis",
+            "price_nominality": "real",
+            "reporting_currency": "LKR",
+        }
+    )
+    assertions = request_payload["binding_policy"]["assertions"]
+    request_payload["binding_policy"]["assertions"] = [
+        item for item in assertions if item["category"] not in {"capex", "opex"}
+    ]
+    price_assertion = next(
+        item
+        for item in request_payload["binding_policy"]["assertions"]
+        if item["category"] == "price_basis"
+    )
+    price_assertion.update(
+        {
+            "price_basis_id": conversion.price_basis_id,
+            "valuation_date": conversion.valuation_date.isoformat(),
+            "reporting_currency": "LKR",
+            "nominality": "real",
+        }
+    )
+    for disposition in request_payload["binding_policy"]["material_dispositions"]:
+        if disposition["category"] in {"capex", "opex"}:
+            disposition.update(
+                {
+                    "disposition": "explicitly_out_of_v1",
+                    "action": "exclude_from_v1_no_fallback",
+                }
+            )
+    directed_request = EvaluationRequest.model_validate_json(
+        json.dumps(request_payload)
+    )
+    directed_success = _mutated_success(
+        context_fixture.success,
+        lambda root: (
+            root["annual_rows"][0].update({"fx_rate": 300.0}),
+            root["debt_result"].update(
+                {
+                    "timeline_periods": 1,
+                    "fx_min": 299.0,
+                    "fx_max": 301.0,
+                    "fx_avg": 300.0,
+                }
+            ),
+        ),
+    )
+    directed_success = replace(
+        directed_success,
+        project_case_sha256=resolved_config_sha256(
+            directed_case.model_dump(mode="json")
+        ),
+        evaluation_request_sha256=resolved_config_sha256(
+            directed_request.model_dump(mode="json")
+        ),
+        evidence_cutoff=directed_request.scope.evidence_cutoff,
+        valuation_date=directed_request.scope.valuation_date,
+    )
+    return _fixture_for_success(
+        directed_case,
+        directed_request,
+        directed_success,
+    )
+
+
 def test_constructive_binding_is_candidate_only_and_round_trips(
     context_fixture: _ContextFixture,
 ) -> None:
@@ -517,6 +710,25 @@ def test_constructive_binding_is_candidate_only_and_round_trips(
     )
     assert round_trip == candidate
     assert round_trip.canonical_json_bytes() == candidate.canonical_json_bytes()
+
+
+def test_success_identity_matches_an_independent_like_for_like_oracle(
+    context_fixture: _ContextFixture,
+) -> None:
+    original = context_fixture.success
+    reference_digest = _independent_success_digest_oracle(original)
+    assert reference_digest == _KNOWN_D3B_SUCCESS_DIGEST
+    assert d3b_execution_success_content_digest(original).value == reference_digest
+
+    altered = _mutated_success(
+        original,
+        lambda root: root["scenario_result"]["metadata"].update(
+            {"independent_oracle_counterexample": "different"}
+        ),
+    )
+    altered_reference = _independent_success_digest_oracle(altered)
+    assert altered_reference != reference_digest
+    assert d3b_execution_success_content_digest(altered).value == altered_reference
 
 
 @pytest.mark.parametrize(
@@ -586,6 +798,31 @@ def test_public_selection_is_closed_and_has_no_receipt_injection(
     assert caught.value.code == "test_catalogue_not_immutable"
 
 
+def test_blocked_authority_ids_are_repr_safe_and_json_serializable(
+    context_fixture: _ContextFixture,
+) -> None:
+    class HostileAuthorityId:
+        def __repr__(self) -> str:
+            raise RuntimeError("caller repr executed")
+
+    for authority_id in (HostileAuthorityId(), "authority:\ud800"):
+        result = bind_d3c_context(
+            project_case=context_fixture.project_case,
+            request=context_fixture.request,
+            success=context_fixture.success,
+            projection=None,
+            authority_id=cast(Any, authority_id),
+            artifact_payloads=context_fixture.payloads,
+        )
+        assert type(result) is BlockedD3CContextBinding
+        assert result.authority_id == "invalid:assembly-authority-id"
+        assert result.code.value == "invalid_authority_id"
+        assert (
+            BlockedD3CContextBinding.model_validate_json(result.model_dump_json())
+            == result
+        )
+
+
 def test_binding_input_types_and_fresh_projection_failure_are_bounded(
     context_fixture: _ContextFixture,
 ) -> None:
@@ -616,7 +853,9 @@ def test_binding_input_types_and_fresh_projection_failure_are_bounded(
     assert caught.value.code == "invalid_projection_type"
 
     damaged = copy.copy(context_fixture.success)
-    invalid_root = MappingProxyType({"run_manifest": MappingProxyType({})})
+    invalid_root: MappingProxyType[str, Any] = MappingProxyType(
+        {"run_manifest": MappingProxyType({})}
+    )
     object.__setattr__(damaged, "full_result", invalid_root)
     object.__setattr__(damaged, "run_manifest", invalid_root["run_manifest"])
     with pytest.raises(D3CContextBindingError) as caught:
@@ -752,7 +991,7 @@ def test_assumption_origin_edges_are_preserved_without_minting_d2_assumptions() 
 
 
 @pytest.mark.parametrize(
-    ("missing_field", "absent_input_id"),
+    ("missing_field", "candidate_input_id"),
     (
         (
             "native",
@@ -765,10 +1004,10 @@ def test_assumption_origin_edges_are_preserved_without_minting_d2_assumptions() 
         ("conversion", _FX_RATE_INPUT_ID),
     ),
 )
-def test_candidate_input_table_skips_explicit_missing_values(
+def test_candidate_input_table_retains_explicit_missing_values(
     context_fixture: _ContextFixture,
     missing_field: str,
-    absent_input_id: str,
+    candidate_input_id: str,
 ) -> None:
     payload = _case_payload()
     if missing_field in {"native", "reporting"}:
@@ -823,11 +1062,26 @@ def test_candidate_input_table_skips_explicit_missing_values(
         }
     ]
     project_case = ProjectCase.model_validate_json(json.dumps(payload))
-    records, _ = context_binding._candidate_inputs(
+    records, origins, contexts = context_binding._candidate_inputs(
         project_case,
         context_fixture.authority,
     )
-    assert absent_input_id not in {record.input_id for record in records}
+    record = next(item for item in records if item.input_id == candidate_input_id)
+    input_context = next(
+        item for item in contexts if item.input_id == candidate_input_id
+    )
+    assert record.resolution_status.value == "missing"
+    assert record.resolved_value is None
+    assert record.reason == "Controlled missing-value branch fixture."
+    assert record.remedy == "Supply one governed source-bound value."
+    assert input_context.state == "missing"
+    assert input_context.expected_unit == expected_unit
+    assert input_context.missing_input_id == selected
+    assert input_context.missing_field_path == field_path
+    assert input_context.missing_reason == record.reason
+    assert input_context.missing_consequence == "The candidate value is unavailable."
+    assert input_context.missing_remedy == record.remedy
+    assert all(origin.input_id != candidate_input_id for origin in origins)
     has_non_generation = any(
         asset.kind != "generation" for asset in project_case.assets
     )
@@ -902,7 +1156,12 @@ def test_present_fx_statistics_refuse_reversed_project_case_conversion(
         result = _gateway_result(kwargs["raw_config"], kwargs["overrides"])
         result["annual_rows"][0]["fx_rate"] = 300.0
         result["debt_result"].update(
-            {"fx_min": 299.0, "fx_max": 301.0, "fx_avg": 300.0}
+            {
+                "timeline_periods": 1,
+                "fx_min": 299.0,
+                "fx_max": 301.0,
+                "fx_avg": 300.0,
+            }
         )
         return result
 
@@ -946,23 +1205,33 @@ def test_directed_fx_context_has_positive_and_hostile_predicate_oracles(
         }
     )
     directed_request = context_fixture.request.model_copy(update={"scope": scope})
+    directed_authority = _authority_with_source_observation(
+        context_fixture.authority,
+        "source:project-basis",
+        conversion.valuation_date,
+    )
 
     success = _mutated_success(
         context_fixture.success,
         lambda root: (
             root["annual_rows"][0].update({"fx_rate": 300.0}),
             root["debt_result"].update(
-                {"fx_min": 299.0, "fx_max": 301.0, "fx_avg": 300.0}
+                {
+                    "timeline_periods": 1,
+                    "fx_min": 299.0,
+                    "fx_max": 301.0,
+                    "fx_avg": 300.0,
+                }
             ),
         ),
     )
     projection = project_d3b_result(success)
-    outputs = context_binding._contextual_fx_outputs(
+    outputs, derivations = context_binding._contextual_fx_outputs(
         directed_case,
         directed_request,
         success,
         projection,
-        context_fixture.authority,
+        directed_authority,
         context_fixture.authority.report_identity,
     )
     assert tuple(output.output_id for output in outputs) == (
@@ -977,6 +1246,13 @@ def test_directed_fx_context_has_positive_and_hostile_predicate_oracles(
         "LKR/USD",
         "LKR/USD",
     )
+    assert len(derivations) == 1
+    assert derivations[0].annual_row_count == 1
+    assert derivations[0].expected_timeline_periods == 1
+    assert derivations[0].source_observation_date == conversion.valuation_date
+    assert all(
+        output.derivation_ids == (derivations[0].derivation_id,) for output in outputs
+    )
 
     incomplete = _mutated_success(
         context_fixture.success,
@@ -988,7 +1264,7 @@ def test_directed_fx_context_has_positive_and_hostile_predicate_oracles(
             directed_request,
             incomplete,
             project_d3b_result(incomplete),
-            context_fixture.authority,
+            directed_authority,
             context_fixture.authority.report_identity,
         )
     assert caught.value.code == "fx_statistics_incomplete"
@@ -1005,7 +1281,7 @@ def test_directed_fx_context_has_positive_and_hostile_predicate_oracles(
             directed_request,
             missing_annual,
             project_d3b_result(missing_annual),
-            context_fixture.authority,
+            directed_authority,
             context_fixture.authority.report_identity,
         )
     assert caught.value.code == "annual_fx_predicate_unmet"
@@ -1016,17 +1292,390 @@ def test_directed_fx_context_has_positive_and_hostile_predicate_oracles(
         "full_result",
         MappingProxyType({"debt_result": ()}),
     )
+    assert context_binding._contextual_fx_outputs(
+        directed_case,
+        directed_request,
+        damaged,
+        project_d3b_result(context_fixture.success),
+        context_fixture.authority,
+        context_fixture.authority.report_identity,
+    ) == ([], ())
+
+
+def test_complete_directed_fx_candidate_round_trip_and_coherent_tamper_refusal(
+    context_fixture: _ContextFixture,
+) -> None:
+    directed_fixture = _complete_directed_fx_fixture(context_fixture)
+    candidate = _bind(directed_fixture)
+    assert type(candidate) is D3CContextBindingCandidate
+    assert len(candidate.fx_derivations) == 1
+    derivation = candidate.fx_derivations[0]
+    assert derivation.from_currency == "USD"
+    assert derivation.to_currency == "LKR"
+    assert derivation.quote_unit == "LKR/USD"
+    assert derivation.source_id == "source:project-basis"
+    assert derivation.valuation_date == derivation.source_observation_date
+    assert derivation.annual_row_count == derivation.expected_timeline_periods == 1
     assert (
+        D3CContextBindingCandidate.model_validate_json(candidate.model_dump_json())
+        == candidate
+    )
+
+    base = candidate.model_dump(mode="json")
+
+    def rejected(mutation: Any) -> None:
+        payload = copy.deepcopy(base)
+        mutation(payload)
+        with pytest.raises(ValidationError):
+            D3CContextBindingCandidate.model_validate_json(json.dumps(payload))
+
+    rejected(
+        lambda payload: payload["fx_derivations"][0].update(
+            {"source_id": "source:runtime"}
+        )
+    )
+
+    def mutate_statistic_and_output_together(payload: dict[str, Any]) -> None:
+        value = 298.0
+        binary64_hex = struct.pack(">d", value).hex()
+        decimal_text = str(Decimal.from_float(value))
+        statistic = payload["fx_derivations"][0]["statistics"][0]
+        statistic["binary64_be_hex"] = binary64_hex
+        statistic["value"]["value"] = decimal_text
+        output = next(
+            item
+            for item in payload["output_references"]
+            if item["output_id"] == statistic["output_id"]
+        )
+        output["value"]["value"] = decimal_text
+
+    rejected(mutate_statistic_and_output_together)
+
+    def mutate_timeline_witness_coherently(payload: dict[str, Any]) -> None:
+        derivation_payload = payload["fx_derivations"][0]
+        derivation_payload["annual_row_count"] = 2
+        derivation_payload["expected_timeline_periods"] = 2
+        derivation_payload["annual_fx_rate_binary64_be_hex"].append(
+            derivation_payload["annual_fx_rate_binary64_be_hex"][0]
+        )
+
+    rejected(mutate_timeline_witness_coherently)
+    rejected(
+        lambda payload: payload.update(
+            {
+                "d3b_execution_success_content_identity_json": (
+                    payload["d3b_execution_success_content_identity_json"] + " "
+                )
+            }
+        )
+    )
+
+
+def test_candidate_context_and_fx_models_reject_each_contradiction(
+    context_fixture: _ContextFixture,
+) -> None:
+    candidate = _bind(_complete_directed_fx_fixture(context_fixture))
+    assert type(candidate) is D3CContextBindingCandidate
+
+    unit_context = next(
+        item
+        for item in candidate.input_contexts
+        if item.family == "generation_unit_count"
+    )
+    cost_context = next(
+        item for item in candidate.input_contexts if item.family == "cost_native_amount"
+    )
+    conversion_context = next(
+        item
+        for item in candidate.input_contexts
+        if item.family == "currency_conversion_rate"
+    )
+
+    def invalid_model(instance: Any, **updates: Any) -> None:
+        payload = instance.model_dump(mode="python")
+        payload.update(updates)
+        with pytest.raises(ValidationError):
+            type(instance).model_validate(payload)
+
+    invalid_model(unit_context, missing_input_id="missing:foreign")
+    invalid_model(unit_context, state="missing")
+    invalid_model(unit_context, precision_source="quote_precision")
+    invalid_model(cost_context, line_id=None)
+    invalid_model(conversion_context, valuation_date=None)
+
+    derivation = candidate.fx_derivations[0]
+    statistic = derivation.statistics[0]
+    invalid_model(statistic, output_id="output:debt_result.fx_foreign")
+    invalid_model(
+        statistic,
+        value=statistic.value.model_copy(update={"unit": "USD/LKR"}),
+    )
+    invalid_model(
+        statistic,
+        value=statistic.value.model_copy(update={"value": "1"}),
+    )
+    invalid_model(derivation, derivation_id="candidate-derivation:foreign")
+    invalid_model(derivation, conversion_input_id="input:foreign")
+    invalid_model(
+        derivation,
+        request_valuation_date=derivation.request_valuation_date - timedelta(days=1),
+    )
+
+
+def test_candidate_python_reingress_rejects_each_root_graph_substitution(
+    context_fixture: _ContextFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    directed_fixture = _complete_directed_fx_fixture(context_fixture)
+    candidate = _bind(directed_fixture)
+    assert type(candidate) is D3CContextBindingCandidate
+    values = {
+        field_name: getattr(candidate, field_name)
+        for field_name in D3CContextBindingCandidate.model_fields
+    }
+
+    def rejected(**updates: Any) -> None:
+        with pytest.raises(ValidationError):
+            D3CContextBindingCandidate(**{**values, **updates})
+
+    rejected(
+        accepted_authority=candidate.accepted_authority.model_copy(
+            update={"authority_id": "authority:foreign"}
+        )
+    )
+    foreign_distribution = candidate.accepted_authority.distribution.model_copy(
+        update={"non_reliance": False}
+    )
+    rejected(
+        accepted_authority=candidate.accepted_authority.model_copy(
+            update={"distribution": foreign_distribution}
+        )
+    )
+    rejected(
+        project_case=candidate.project_case.model_copy(
+            update={
+                "identity": candidate.project_case.identity.model_copy(
+                    update={"project_id": "project:foreign"}
+                )
+            }
+        )
+    )
+    rejected(
+        projection=candidate.projection.model_copy(
+            update={"project_id": "project:foreign"}
+        )
+    )
+    rejected(
+        projection=candidate.projection.model_copy(
+            update={"request_id": "request:foreign"}
+        )
+    )
+
+    foreign_request_identity = candidate.evaluation_request_identity.model_copy(
+        update={"scope_id": "scope:foreign"}
+    )
+    rejected(
+        accepted_authority=candidate.accepted_authority.model_copy(
+            update={"evaluation_request_identity": foreign_request_identity}
+        ),
+        evaluation_request_identity=foreign_request_identity,
+    )
+
+    original_digest = context_binding.d3b_execution_success_content_digest
+    monkeypatch.setattr(
+        context_binding,
+        "d3b_execution_success_content_digest",
+        lambda success: candidate.d3b_execution_success_content_digest.model_copy(
+            update={"value": "0" * 64}
+        ),
+    )
+    rejected()
+    monkeypatch.setattr(
+        context_binding,
+        "d3b_execution_success_content_digest",
+        original_digest,
+    )
+
+    altered_projection = candidate.projection.model_copy(
+        update={"limitations": (*candidate.projection.limitations, "foreign")}
+    )
+    monkeypatch.setattr(
+        context_binding,
+        "project_d3b_result",
+        lambda success: altered_projection,
+    )
+    rejected()
+
+    alternate_success = _mutated_success(
+        directed_fixture.success,
+        lambda root: root["run_manifest"].update({"git_sha": "b" * 40}),
+    )
+    altered_projection = project_d3b_result(alternate_success)
+    monkeypatch.setattr(
+        context_binding,
+        "project_d3b_result",
+        lambda success: altered_projection,
+    )
+    rejected(projection=altered_projection)
+
+
+def test_success_identity_decoder_rejects_every_malformed_node_family(
+    context_fixture: _ContextFixture,
+) -> None:
+    with pytest.raises(ValueError, match="content identity is malformed"):
+        context_binding._d3b_success_from_content_identity_json(cast(Any, 42))
+
+    malformed_nodes = (
+        None,
+        [1],
+        ["none", None],
+        ["bool", 1],
+        ["integer", "+1"],
+        ["integer", str(1 << 4096)],
+        ["binary64", "foreign"],
+        ["binary64", "7ff0000000000000"],
+        ["text", 1],
+        ["date", 1],
+        ["date", "not-a-date"],
+        ["date", "20260829"],
+        ["mapping", None],
+        ["mapping", [["invalid-entry"]]],
+        [
+            "mapping",
+            [
+                [["text", "z"], ["none"]],
+                [["text", "a"], ["none"]],
+            ],
+        ],
+        ["mapping", [[["bool", True], ["none"]]]],
+        ["tuple", None],
+        ["d3b_authored_numeric_value"],
+        [
+            "d3b_authored_numeric_value",
+            ["integer", "1"],
+            ["text", "1"],
+            ["text", "0x1.0000000000000p+0"],
+        ],
+        ["d3b_numeric_projection_receipt"],
+        [
+            "d3b_numeric_projection_receipt",
+            ["integer", "1"],
+            ["text", "1"],
+            ["text", "0x1.0000000000000p+0"],
+            ["tuple", []],
+        ],
+        ["foreign"],
+    )
+    for node in malformed_nodes:
+        with pytest.raises(ValueError, match="content identity is malformed"):
+            context_binding._decode_identity_node(node)
+    with pytest.raises(ValueError, match="content identity is malformed"):
+        context_binding._decode_identity_node(["none"], depth=10_000)
+
+    candidate = _bind(context_fixture)
+    assert type(candidate) is D3CContextBindingCandidate
+    parsed = json.loads(candidate.d3b_execution_success_content_identity_json)
+
+    def rejected(mutation: Any) -> None:
+        payload = copy.deepcopy(parsed)
+        mutation(payload)
+        rendered = json.dumps(
+            payload,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        )
+        with pytest.raises(ValueError, match="content identity is malformed"):
+            context_binding._d3b_success_from_content_identity_json(rendered)
+
+    rejected(lambda payload: payload.__setitem__(0, "identity:foreign"))
+    rejected(lambda payload: payload[1][0].__setitem__(0, "field:foreign"))
+
+    def replace_manifest(payload: list[Any]) -> None:
+        manifest_pair = next(item for item in payload[1] if item[0] == "run_manifest")
+        manifest_pair[1] = ["mapping", []]
+
+    rejected(replace_manifest)
+
+    def invalidate_request_id(payload: list[Any]) -> None:
+        request_pair = next(item for item in payload[1] if item[0] == "request_id")
+        request_pair[1] = ["text", ""]
+
+    rejected(invalidate_request_id)
+
+
+def test_fx_derivation_reingress_wraps_missing_governed_context(
+    context_fixture: _ContextFixture,
+) -> None:
+    candidate = _bind(_complete_directed_fx_fixture(context_fixture))
+    assert type(candidate) is D3CContextBindingCandidate
+    with pytest.raises(ValueError, match="lacks exact governed context"):
+        context_binding._validate_fx_derivation_graph(
+            candidate.fx_derivations,
+            context_fixture.project_case,
+            context_fixture.request,
+            context_fixture.authority,
+            candidate.input_records,
+        )
+
+
+@pytest.mark.parametrize(
+    ("timeline_periods", "annual_row_count", "expected_code"),
+    (
+        (None, 1, "fx_timeline_count_unavailable"),
+        (True, 1, "fx_timeline_count_unavailable"),
+        (0, 1, "fx_timeline_count_unavailable"),
+        (-1, 1, "fx_timeline_count_unavailable"),
+        (2**31, 1, "fx_timeline_count_unavailable"),
+        (2, 1, "fx_timeline_count_mismatch"),
+        (1, 2, "fx_timeline_count_mismatch"),
+    ),
+)
+def test_contextual_fx_requires_exact_positive_timeline_cardinality(
+    context_fixture: _ContextFixture,
+    timeline_periods: Any,
+    annual_row_count: int,
+    expected_code: str,
+) -> None:
+    directed_case = _directed_fx_project_case()
+    conversion = directed_case.costs.currency_conversions[0]
+    directed_request = context_fixture.request.model_copy(
+        update={
+            "scope": context_fixture.request.scope.model_copy(
+                update={
+                    "valuation_date": conversion.valuation_date,
+                    "price_basis_id": conversion.price_basis_id,
+                }
+            )
+        }
+    )
+
+    def mutation(root: dict[str, Any]) -> None:
+        first_row = copy.deepcopy(root["annual_rows"][0])
+        first_row["fx_rate"] = 300.0
+        rows = [first_row]
+        if annual_row_count == 2:
+            second_row = copy.deepcopy(first_row)
+            second_row["year"] = 2.0
+            rows.append(second_row)
+        root["annual_rows"] = tuple(rows)
+        root["debt_result"].update({"fx_min": 299.0, "fx_max": 301.0, "fx_avg": 300.0})
+        if timeline_periods is None:
+            root["debt_result"].pop("timeline_periods", None)
+        else:
+            root["debt_result"]["timeline_periods"] = timeline_periods
+
+    success = _mutated_success(context_fixture.success, mutation)
+    with pytest.raises(D3CContextBindingError) as caught:
         context_binding._contextual_fx_outputs(
             directed_case,
             directed_request,
-            damaged,
-            project_d3b_result(context_fixture.success),
+            success,
+            project_d3b_result(success),
             context_fixture.authority,
             context_fixture.authority.report_identity,
         )
-        == []
-    )
+    assert caught.value.code == expected_code
 
 
 def test_directed_fx_context_refuses_quote_basis_source_and_statistic_drift(
@@ -1041,6 +1690,11 @@ def test_directed_fx_context_refuses_quote_basis_source_and_statistic_drift(
         }
     )
     directed_request = context_fixture.request.model_copy(update={"scope": scope})
+    directed_authority = _authority_with_source_observation(
+        context_fixture.authority,
+        "source:project-basis",
+        conversion.valuation_date,
+    )
 
     def replace_conversion(updated: Any) -> ProjectCase:
         return directed_case.model_copy(
@@ -1058,7 +1712,7 @@ def test_directed_fx_context_refuses_quote_basis_source_and_statistic_drift(
         context_binding._fx_conversion_context(
             replace_conversion(wrong_unit),
             directed_request,
-            context_fixture.authority,
+            directed_authority,
         )
     assert caught.value.code == "fx_quote_direction_mismatch"
 
@@ -1071,7 +1725,7 @@ def test_directed_fx_context_refuses_quote_basis_source_and_statistic_drift(
         context_binding._fx_conversion_context(
             directed_case,
             wrong_basis_request,
-            context_fixture.authority,
+            directed_authority,
         )
     assert caught.value.code == "fx_basis_mismatch"
 
@@ -1082,14 +1736,15 @@ def test_directed_fx_context_refuses_quote_basis_source_and_statistic_drift(
         context_binding._fx_conversion_context(
             replace_conversion(conversion.model_copy(update={"rate": assumption_rate})),
             directed_request,
-            context_fixture.authority,
+            directed_authority,
         )
     assert caught.value.code == "fx_source_binding_missing"
 
+    resolved_rate = cast(Any, conversion.rate)
     missing_source = conversion.rate.model_copy(
         update={
             "bindings": (
-                conversion.rate.bindings[0].model_copy(
+                resolved_rate.bindings[0].model_copy(
                     update={"reference_id": "source:foreign"}
                 ),
             )
@@ -1099,16 +1754,44 @@ def test_directed_fx_context_refuses_quote_basis_source_and_statistic_drift(
         context_binding._fx_conversion_context(
             replace_conversion(conversion.model_copy(update={"rate": missing_source})),
             directed_request,
-            context_fixture.authority,
+            directed_authority,
         )
     assert caught.value.code == "fx_source_not_authorized"
+
+    source_records = tuple(
+        (
+            source.model_copy(
+                update={
+                    "observation_date": conversion.valuation_date - timedelta(days=1)
+                }
+            )
+            if source.source_id == "source:project-basis"
+            else source
+        )
+        for source in directed_authority.source_records
+    )
+    date_drift_authority = directed_authority.model_copy(
+        update={"source_records": source_records}
+    )
+    with pytest.raises(D3CContextBindingError) as caught:
+        context_binding._fx_conversion_context(
+            directed_case,
+            directed_request,
+            date_drift_authority,
+        )
+    assert caught.value.code == "fx_source_observation_date_mismatch"
 
     wrong_stat = _mutated_success(
         context_fixture.success,
         lambda root: (
             root["annual_rows"][0].update({"fx_rate": 300.0}),
             root["debt_result"].update(
-                {"fx_min": 299, "fx_max": 301.0, "fx_avg": 300.0}
+                {
+                    "timeline_periods": 1,
+                    "fx_min": 299,
+                    "fx_max": 301.0,
+                    "fx_avg": 300.0,
+                }
             ),
         ),
     )
@@ -1118,7 +1801,7 @@ def test_directed_fx_context_refuses_quote_basis_source_and_statistic_drift(
             directed_request,
             wrong_stat,
             project_d3b_result(wrong_stat),
-            context_fixture.authority,
+            directed_authority,
             context_fixture.authority.report_identity,
         )
     assert caught.value.code == "fx_statistic_not_binary64"
@@ -1188,6 +1871,10 @@ def test_no_locator_io_gateway_or_finance_rerun(
     monkeypatch.setattr(Path, "read_text", forbidden)
     candidate = _bind(context_fixture)
     assert type(candidate) is D3CContextBindingCandidate
+    assert (
+        D3CContextBindingCandidate.model_validate_json(candidate.model_dump_json())
+        == candidate
+    )
 
     tree = ast.parse(source)
     forbidden_roots = {"finance", "app", "api", "pathlib", "os", "subprocess"}
@@ -1203,6 +1890,66 @@ def test_no_locator_io_gateway_or_finance_rerun(
         for alias in node.names
     )
     assert imports.isdisjoint(forbidden_roots)
+
+
+def test_fresh_context_import_loads_no_evaluator_finance_or_path_io() -> None:
+    script = r"""
+import importlib
+import sys
+from pathlib import Path
+from pydantic import BaseModel
+
+class _Prime(BaseModel):
+    value: int
+
+_Prime(value=1)
+_Prime.model_json_schema()
+
+def denied(*args, **kwargs):
+    raise AssertionError('D3C-1b import attempted Path I/O')
+
+Path.read_text = denied
+Path.read_bytes = denied
+Path.write_text = denied
+Path.write_bytes = denied
+importlib.import_module('analytics.feasibility_report_contract.context_binding')
+assert 'analytics.evaluation_v14' not in sys.modules
+assert not any(name == 'finance' or name.startswith('finance.') for name in sys.modules)
+print('fresh-import-pure')
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=_MODULE.parents[2],
+        env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.stdout.strip() == "fresh-import-pure"
+
+
+def test_lazy_analytics_facades_preserve_historical_public_imports() -> None:
+    script = r"""
+from analytics import FXCurveOutput, ScenarioResult, calculate_irr
+from analytics.core import solve_tariff_breakeven
+import analytics.evaluation_v14 as evaluation_v14
+
+assert FXCurveOutput.__name__ == 'FXCurveOutput'
+assert ScenarioResult.__name__ == 'ScenarioResult'
+assert callable(calculate_irr)
+assert callable(solve_tariff_breakeven)
+assert callable(evaluation_v14.evaluate_with_overrides)
+print('lazy-facades-compatible')
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=_MODULE.parents[2],
+        env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.stdout.strip() == "lazy-facades-compatible"
 
 
 def test_duplicate_json_keys_and_non_finite_tokens_are_rejected(
@@ -1222,6 +1969,20 @@ def test_duplicate_json_keys_and_non_finite_tokens_are_rejected(
     with pytest.raises(D3CContextBindingError) as caught:
         D3CContextBindingCandidate.model_validate_json('{"value":NaN}')
     assert caught.value.code == "non_finite_json_number"
+
+    long_key = "x" * 2_000
+    with pytest.raises(D3CContextBindingError) as caught:
+        D3CContextBindingCandidate.model_validate_json(
+            json.dumps({long_key: 1})[:-1] + f',"{long_key}":2}}'
+        )
+    assert caught.value.code == "duplicate_json_key"
+
+    with pytest.raises(D3CContextBindingError) as caught:
+        D3CContextBindingCandidate.model_validate_json('{"value":' + "9" * 2_000 + "}")
+    assert caught.value.code == "json_integer_out_of_bounds"
+    with pytest.raises(D3CContextBindingError) as caught:
+        D3CContextBindingCandidate.model_validate_json('{"value":' + "9" * 5_000 + "}")
+    assert caught.value.code == "invalid_json"
 
 
 def test_json_ingress_type_encoding_unicode_depth_and_volume_guards(
@@ -1248,6 +2009,9 @@ def test_json_ingress_type_encoding_unicode_depth_and_volume_guards(
     with pytest.raises(D3CContextBindingError) as caught:
         D3CContextBindingCandidate.model_validate_json('{"x":"\\ud800"}')
     assert caught.value.code == "invalid_unicode_scalar"
+    with pytest.raises(D3CContextBindingError) as caught:
+        context_binding._scan_json_ingress("\ud800")
+    assert caught.value.code == "invalid_unicode_scalar"
 
     monkeypatch.setattr(context_binding, "_MAX_IDENTITY_DEPTH", 0)
     with pytest.raises(D3CContextBindingError) as caught:
@@ -1258,6 +2022,10 @@ def test_json_ingress_type_encoding_unicode_depth_and_volume_guards(
     with pytest.raises(D3CContextBindingError) as caught:
         D3CContextBindingCandidate.model_validate_json('{"x":1}')
     assert caught.value.code == "json_ingress_out_of_bounds"
+    monkeypatch.setattr(context_binding, "_MAX_JSON_INGRESS_BYTES", 8)
+    with pytest.raises(D3CContextBindingError) as caught:
+        D3CContextBindingCandidate.model_validate_json('{"value":1}')
+    assert caught.value.code == "json_ingress_bytes_exceeded"
 
 
 @pytest.mark.parametrize(
@@ -1451,13 +2219,13 @@ def test_candidate_reingress_rechecks_every_reciprocal_edge(
 
     with pytest.raises(ValidationError, match="cannot alias"):
         rebuild(authority_id=candidate.report_identity.report_id)
-    with pytest.raises(ValidationError, match="report identity differs"):
+    with pytest.raises(ValidationError, match="authority graph differs"):
         rebuild(
             report_identity=candidate.report_identity.model_copy(
                 update={"project_id": "project:foreign"}
             )
         )
-    with pytest.raises(ValidationError, match="request identity differs"):
+    with pytest.raises(ValidationError, match="authority graph differs"):
         rebuild(
             evaluation_request_identity=(
                 candidate.evaluation_request_identity.model_copy(
@@ -1465,7 +2233,7 @@ def test_candidate_reingress_rechecks_every_reciprocal_edge(
                 )
             )
         )
-    with pytest.raises(ValidationError, match="content digests differ"):
+    with pytest.raises(ValidationError, match="upstream content graph"):
         rebuild(
             project_case_content_digest=(
                 candidate.project_case_content_digest.model_copy(
@@ -1473,15 +2241,15 @@ def test_candidate_reingress_rechecks_every_reciprocal_edge(
                 )
             )
         )
-    with pytest.raises(ValidationError, match="runtime receipt differs"):
+    with pytest.raises(ValidationError, match="authority graph differs"):
         rebuild(
             runtime_receipt=candidate.runtime_receipt.model_copy(
                 update={"engine_version": "15.4.1"}
             )
         )
-    with pytest.raises(ValidationError, match="duplicate actor_id"):
+    with pytest.raises(ValidationError, match="authority graph differs"):
         rebuild(actor_records=(*candidate.actor_records, candidate.actor_records[0]))
-    with pytest.raises(ValidationError, match="artifact identities"):
+    with pytest.raises(ValidationError, match="verified bytes"):
         rebuild(
             verified_artifact_payloads=(
                 candidate.verified_artifact_payloads[0].model_copy(
@@ -1490,7 +2258,7 @@ def test_candidate_reingress_rechecks_every_reciprocal_edge(
                 *candidate.verified_artifact_payloads[1:],
             )
         )
-    with pytest.raises(ValidationError, match="byte receipt"):
+    with pytest.raises(ValidationError, match="verified bytes"):
         rebuild(
             verified_artifact_payloads=(
                 candidate.verified_artifact_payloads[0].model_copy(
@@ -1499,7 +2267,7 @@ def test_candidate_reingress_rechecks_every_reciprocal_edge(
                 *candidate.verified_artifact_payloads[1:],
             )
         )
-    with pytest.raises(ValidationError, match="dangling source"):
+    with pytest.raises(ValidationError, match="input graph"):
         rebuild(
             input_records=(
                 candidate.input_records[0].model_copy(
@@ -1508,7 +2276,7 @@ def test_candidate_reingress_rechecks_every_reciprocal_edge(
                 *candidate.input_records[1:],
             )
         )
-    with pytest.raises(ValidationError, match="input origin is dangling"):
+    with pytest.raises(ValidationError, match="input graph"):
         rebuild(
             input_origins=(
                 candidate.input_origins[0].model_copy(
@@ -1517,9 +2285,9 @@ def test_candidate_reingress_rechecks_every_reciprocal_edge(
                 *candidate.input_origins[1:],
             )
         )
-    with pytest.raises(ValidationError, match="duplicate input origins"):
+    with pytest.raises(ValidationError, match="input graph"):
         rebuild(input_origins=(*candidate.input_origins, candidate.input_origins[0]))
-    with pytest.raises(ValidationError, match="foreign report/run"):
+    with pytest.raises(ValidationError, match="output graph"):
         rebuild(
             output_references=(
                 candidate.output_references[0].model_copy(
@@ -1528,7 +2296,7 @@ def test_candidate_reingress_rechecks_every_reciprocal_edge(
                 *candidate.output_references[1:],
             )
         )
-    with pytest.raises(ValidationError, match="taxonomy SSOT order"):
+    with pytest.raises(ValidationError, match="sections differ"):
         rebuild(
             sections=(
                 candidate.sections[1],
@@ -1536,7 +2304,7 @@ def test_candidate_reingress_rechecks_every_reciprocal_edge(
                 *candidate.sections[2:],
             )
         )
-    with pytest.raises(ValidationError, match="section contains a dangling"):
+    with pytest.raises(ValidationError, match="sections differ"):
         rebuild(
             sections=(
                 candidate.sections[0].model_copy(
@@ -1545,3 +2313,77 @@ def test_candidate_reingress_rechecks_every_reciprocal_edge(
                 *candidate.sections[1:],
             )
         )
+
+    substituted_origin = candidate.input_origins[0].model_copy(
+        update={"reference_id": "source:runtime"}
+    )
+    with pytest.raises(ValidationError, match="input graph"):
+        rebuild(input_origins=(substituted_origin, *candidate.input_origins[1:]))
+    with pytest.raises(ValidationError, match="input graph"):
+        rebuild(input_origins=())
+
+
+def test_hostile_json_reingress_refuses_material_graph_mutations(
+    context_fixture: _ContextFixture,
+) -> None:
+    candidate = _bind(context_fixture)
+    assert type(candidate) is D3CContextBindingCandidate
+    base = candidate.model_dump(mode="json")
+
+    def rejected(mutation: Any) -> None:
+        payload = copy.deepcopy(base)
+        mutation(payload)
+        with pytest.raises(ValidationError):
+            D3CContextBindingCandidate.model_validate_json(json.dumps(payload))
+
+    rejected(
+        lambda payload: payload["d3b_execution_success_content_digest"].update(
+            {"value": "0" * 64}
+        )
+    )
+    rejected(
+        lambda payload: payload["distribution_control"].update(
+            {
+                "permitted_reliance": "External lender reliance permitted.",
+                "publication_rights": "Public publication authorized.",
+            }
+        )
+    )
+    rejected(lambda payload: payload.update({"pack_bindings": []}))
+    rejected(
+        lambda payload: payload["artifact_records"][0].update(
+            {"mime_type": "application/foreign"}
+        )
+    )
+    rejected(
+        lambda payload: payload["artifact_records"][0].update(
+            {"report_id": "report:foreign"}
+        )
+    )
+    rejected(
+        lambda payload: payload["sections"][0].update(
+            {
+                "candidate_input_ids": [],
+                "candidate_output_ids": [],
+                "candidate_artifact_ids": [],
+                "unresolved_dependency_ids": [],
+            }
+        )
+    )
+
+    valued_output_index = next(
+        index
+        for index, output in enumerate(base["output_references"])
+        if output["value"] is not None
+    )
+    rejected(
+        lambda payload: payload["output_references"][valued_output_index][
+            "value"
+        ].update({"value": "999"})
+    )
+    rejected(lambda payload: payload.update({"input_origins": []}))
+    rejected(
+        lambda payload: payload["input_origins"][0].update(
+            {"reference_id": "source:runtime"}
+        )
+    )
