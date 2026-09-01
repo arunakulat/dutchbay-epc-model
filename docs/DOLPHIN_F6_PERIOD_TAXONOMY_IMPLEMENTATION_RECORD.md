@@ -449,3 +449,105 @@ This dolphin proves only that the checks named above passed. It confers no achie
 report-grade, and no release, deployment, audit, lender or Board authority, and lifts no `HOLD`
 including issue `#1110`. F-2, F-3 and F-1 remain unauthorized. The state after this record is
 `WAIT_FOR_REVIEW`.
+
+---
+
+## 13. Remediation lease (2026-09-01) — blocker cleared, rebased onto the RECRUIT-01 base
+
+Everything above is preserved as the original audit trail: the blocker narrative in §11 and the
+reverted probe in §11.3 stand as written. This section records the **second, SHA-bound lease** the
+coordinator issued after accepting the §11 stop.
+
+### 13.1 Lease terms
+
+- **New base:** `origin/main` = `6fa3fb506bf4d426c25f4517f8f50a32390e9739` (RECRUIT-01 merged as
+  #1217), resolving the base drift flagged at the end of the first lease.
+- **Allowlist:** the original four files **plus** `analytics/feasibility_report_contract/result_facade.py`,
+  confined to adding the three taxonomy names to the existing `OPAQUE_ARTIFACT` tuple. The contract
+  test was explicitly out of scope and was not touched.
+- **Coordinator decision:** `OPAQUE_ARTIFACT`, on the precedent that `cfads_bridge_debt_period` — the
+  bridge period under a legacy name — already sits in that tuple. `ROUTE_CANDIDATE` rejected for the
+  double-carry and blast-radius reasons recorded in §11.4.
+
+### 13.2 Rebase
+
+```
+$ git rebase origin/main
+Successfully rebased and updated refs/heads/dolphin/f6-debt-period-taxonomy.
+$ git diff --stat origin/main      # before the facade fix
+ changelog.d/f6-debt-period-taxonomy.added.md       |  22 +
+ ...HIN_F6_PERIOD_TAXONOMY_IMPLEMENTATION_RECORD.md | 451 +++++++++++++++++++++
+ finance/debt_v14.py                                | 123 ++++++
+ tests/finance/test_debt_period_taxonomy.py         | 415 +++++++++++++++++++
+ 4 files changed, 1011 insertions(+)
+```
+
+Clean, no conflicts — the drift touched only `go_with_the_flow_rules_v3_0_clean.csv` and
+`changelog.d/recruit-01-delegation-and-review.added.md`, neither of them this lease's files.
+
+### 13.3 GWTF ruleset on the new base — the charter's pin now resolves
+
+```
+$ shasum -a 256 go_with_the_flow_rules_v3_0_clean.csv
+cbf2c6a709a1be5e2d7aeab53e5f865984a4263104d884821f83da2dccfd01f3
+$ DUTCHBAY_FLOW_RULESET_CSV=$PWD/go_with_the_flow_rules_v3_0_clean.csv $DUTCHBAY_VENV dutchbay_bootstrap_rules.py
+[rules] 74 rules; versions: v3.0; latest = v3.0
+[rules] Status breakdown: active=74
+```
+
+**74 rules, `active=74`, digest `cbf2c6a7…`** — exactly the charter's pin. The 73-rule / `707ee9ba…`
+receipt in §9 was correct for the first lease's base and is retained as a dated receipt, not a
+discrepancy.
+
+### 13.4 The fix
+
+Three names added to the `OPAQUE_ARTIFACT` tuple immediately after `"cfads_bridge_debt_period"`
+(~line 715), with a comment recording why they are dispositioned rather than routed. Nine inserted
+lines, one file, no deletions.
+
+### 13.5 Route count — verified, not assumed
+
+```
+route count BEFORE fix = 23
+route count AFTER  fix = 23
+```
+
+`len(D3C_RESULT_FIELD_ROUTES)` is unchanged, so the contract test's
+`len(projection.route_observations) == len(D3C_RESULT_FIELD_ROUTES) == 23` assertion holds untouched.
+This is why `OPAQUE_ARTIFACT` was the low-blast-radius choice.
+
+### 13.6 Gates — all re-run on the new base, none carried forward
+
+| Gate | Command | Result |
+|---|---|---|
+| Blocker reproduced on new base | `pytest ... test_d3c_result_projection_contract.py` (pre-fix) | `1 failed, 125 passed` |
+| Blocker cleared | same, post-fix | **`126 passed`** |
+| Full suite | `pytest -p no:cacheprovider -q -rf` | **`7459 passed, 18 skipped`**, exit 0, no failures |
+| KPI bit-identity | `diff kpis_base2.json kpis_after2.json` | **all 39 bit-identical**, base `6fa3fb5` vs patched `f781f85` |
+| Byte-identity sweep | `scratchpad/diff_sweep.py` | 21 compared, every pre-existing key/value/order preserved, exactly 3 added |
+| Canon oracle + taxonomy | `pytest ... test_canonical_lendercase_economics_unchanged tests/finance/test_debt_period_taxonomy.py` | `40 passed` |
+| black / isort / ruff / mypy | on `result_facade.py` | all clean |
+
+The KPI and sweep comparisons were re-captured from scratch against the new base by checking both
+touched files out at `origin/main`, capturing, then restoring to `HEAD` and verifying
+`git status --porcelain` empty. The first lease's run was **not** carried forward as evidence.
+
+### 13.7 Pre-existing canon ULP drift — re-confirmed on the new base
+
+`equity_irr` and `total_cfads_usd` still differ from `tests/_canon.py` by 120 ULP and 1 ULP
+respectively. The base capture at `6fa3fb5`, with both files at their unpatched state, records
+`"equity_irr": "-0.07853839579881605"` and `"total_cfads_usd": "166083177.31686017"` — the same
+values the patched tree produces. Pre-existing on `main`, unaffected by this work, inside the
+oracle's `1e-9` tolerance. No canon constant was touched (`DOC-02`).
+
+### 13.8 Flaky native crash — did not recur
+
+`tests/app/test_grid_screening_emit.py` produced no fatal in this lease's full-suite run (exit 0).
+Across the whole engagement it aborted once in four full runs. Declared, not retried silently.
+
+### 13.9 State
+
+`WAIT_FOR_REVIEW`. No PR opened, nothing pushed, nothing merged. Five commits on
+`dolphin/f6-debt-period-taxonomy` above `6fa3fb5`; the frozen candidate SHAs are in the worker's
+final report. The §12 authority boundary is unchanged: this clears a CI blocker and confers no
+grade, release, lender or Board authority, and lifts no `HOLD`.
