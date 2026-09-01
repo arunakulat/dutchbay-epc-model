@@ -287,11 +287,25 @@ Environment: `DUTCHBAY_VENV=/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/
 | byte-identity sweep | `scratchpad/diff_sweep.py` | 21 compared, additive only |
 | full suite | `-m pytest -p no:cacheprovider -q` | see §8.1 |
 
-### 8.1 Full suite
+### 8.1 Full suite — ONE FAILURE, and it is a lease blocker
 
-Recorded in §10 against the final tree. An earlier background run was **discarded**: the engine file
-was swapped between base and patched mid-run for the §5.2 capture, so modules imported at different
-points could have seen different sources. Declared rather than reported as a pass.
+```
+$ $DUTCHBAY_VENV -m pytest -p no:cacheprovider -q -rf
+FAILED tests/contracts/test_d3c_result_projection_contract.py::test_real_public_gateway_is_an_independent_lossless_oracle
+1 failed, 7458 passed, 18 skipped, 14 warnings in 481.15s (0:08:01)
+```
+
+See §11. The failure is caused by this change and its remedy lies **outside the file allowlist**.
+
+An earlier background run was **discarded**: the engine file was swapped between base and patched
+mid-run for the §5.2 capture, so modules imported at different points could have seen different
+sources. Declared rather than reported as a pass.
+
+A separate full-suite run aborted with a native fatal error inside
+`tests/app/test_grid_screening_emit.py::test_build_model_runs_core_screens` (212 loaded extension
+modules; SWIG/pandapower/numba/rasterio). That file passes standalone (`31 passed in 25.92s`) and the
+crash did not recur across two subsequent full runs. Recorded as a **flaky native-extension crash in
+the environment**, unrelated to this change, which adds no imports.
 
 ### 8.2 Checks NOT run
 
@@ -328,7 +342,7 @@ claim to verify.
 
 | | |
 |---|---|
-| **Candidate commit** | *(recorded at freeze — see §11)* |
+| **Candidate commit** | see §10 commit list; freeze SHA in the worker's final report |
 | **Base commit** | `3bdfb027bdea12035ea9edcf5fbf343bf68d75cc` |
 | **Base tree** | `aab9ea298244c2ec8809bd1584feff36f3ddcc5f` |
 | **Branch** | `dolphin/f6-debt-period-taxonomy` |
@@ -344,7 +358,92 @@ No PR opened, nothing pushed, nothing merged — reserved to the coordinator.
 
 ---
 
-## 11. Authority boundary
+## 11. BLOCKER — the D3C result facade needs a disposition for the three new keys
+
+**State: the lease is complete but the branch is NOT green. A fresh lease is required.**
+
+### 11.1 What fails, and why
+
+`analytics/feasibility_report_contract/result_facade.py` holds an exhaustive disposition table over
+every inspected upstream result path — "assigns every inspected result path one reviewed
+disposition" is the D3C-1a contract. Any key on `debt_result` without an entry is classified
+`UNRECOGNIZED`, and the contract test asserts `projection.unrecognized_keys == ()`:
+
+```
+E       AssertionError: assert (Unrecognized...before use.')) == ()
+E         Left contains 3 more items, first extra item: UnrecognizedUpstreamKey(
+E           state=<ResultObservationState.UNRECOGNIZED: 'unrecognized'>, ...
+E           remedy='Review and add an explicit versioned route or an explicit refusal before use.')
+```
+
+The three items are exactly `construction_periods`, `bridge_debt_period` and
+`first_operating_period`. **This guard is working as designed** — it is the D3C facade refusing to
+carry a result path no one has reviewed.
+
+### 11.2 Caused by this change — receipts
+
+| Engine in tree | Command | Result |
+|---|---|---|
+| base `3bdfb02` | `pytest ... ::test_real_public_gateway_is_an_independent_lossless_oracle` | `1 passed in 1.41s` |
+| patched `89dc0a0` | `pytest ... tests/contracts/test_d3c_result_projection_contract.py` | `1 failed, 125 passed` |
+
+Not pre-existing. Caused by the three additive keys.
+
+### 11.3 Proven remedy — OUTSIDE THIS LEASE'S ALLOWLIST
+
+The charter's §5.1 allowlist does not include `analytics/feasibility_report_contract/result_facade.py`,
+so **the worker did not deliver a fix**. Per the writer-lease state machine the worker returns to
+`READ_ONLY` and requests a fresh lease rather than improvising scope.
+
+To hand the coordinator a *proven* remedy rather than a hypothesis, the candidate fix was applied as
+a **temporary probe and then fully reverted**. Disclosed in full: the probe added three names to the
+existing `OPAQUE_ARTIFACT` disposition tuple in `result_facade.py`, immediately after
+`"cfads_bridge_debt_period"`:
+
+```python
+            "cfads_bridge_debt_period",
+            "construction_periods",
+            "bridge_debt_period",
+            "first_operating_period",
+```
+
+```
+$ $DUTCHBAY_VENV -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_d3c_result_projection_contract.py
+126 passed, 1 warning in 13.37s
+```
+
+The probe was then reverted from the original file copy and the tree verified clean
+(`git status --porcelain` empty, `git diff --stat HEAD` empty). **Nothing outside the allowlist is
+staged, committed or delivered.**
+
+### 11.4 Why `OPAQUE_ARTIFACT` is the recommended disposition — a judgement for the D3C owner
+
+- `cfads_bridge_debt_period`, `annual_row_debt_period_map`, `dscr_series` and `raw_dscr_series` are
+  already `OPAQUE_ARTIFACT`. `bridge_debt_period` restates `cfads_bridge_debt_period` exactly, so
+  matching its established disposition is the consistent choice.
+- The sibling integer scalars `construction_years`, `tenor_years` and `timeline_periods` are
+  `ROUTE_CANDIDATE` routes with an `EXACT_INTEGER` carry predicate. Promoting the new keys to routes
+  would be defensible but has two costs: `construction_periods` restates `construction_years`, so a
+  second route would carry the same number twice under two names; and the contract test also asserts
+  `len(projection.route_observations) == len(D3C_RESULT_FIELD_ROUTES) == 23`, so adding routes also
+  requires editing `tests/contracts/test_d3c_result_projection_contract.py` — a second file outside
+  the allowlist.
+- `OPAQUE_ARTIFACT` therefore gives every new path an explicit reviewed disposition, keeps the route
+  count at 23, and confines the change to three lines in one file.
+
+**This is a contract judgement for the D3C owner and the domain reviewer, not for the implementation
+worker.** The recommendation is offered, not taken.
+
+### 11.5 What a fresh lease needs
+
+Either extend the allowlist to `analytics/feasibility_report_contract/result_facade.py` (plus
+`tests/contracts/test_d3c_result_projection_contract.py` if routes are chosen over opaque artifacts),
+or issue the facade change as its own dolphin sequenced immediately behind this one. F-6 must not
+merge before it: the branch is red on `main`'s required checks as it stands.
+
+---
+
+## 12. Authority boundary
 
 This dolphin proves only that the checks named above passed. It confers no achieved grade, no
 report-grade, and no release, deployment, audit, lender or Board authority, and lifts no `HOLD`
