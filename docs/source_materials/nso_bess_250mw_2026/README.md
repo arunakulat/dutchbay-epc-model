@@ -31,6 +31,10 @@ Envision's BESS business to a group battery affiliate.
   Envision covering the two new source files, their extracts and the 6 August evaluation, and
   directed public GitHub publication on the project owner's authority. The scope and limitations
   are recorded in `PUBLICATION_AUTHORIZATION.md`.
+- On 1 September 2026, the project owner supplied and directed corpus ingress of an outward-facing
+  Envision corporate brochure. It has no confidentiality marking and ends with Envision's public
+  website and QR code. It is held separately from tender evidence at `oem/envision/corporate/`;
+  copyright remains with Envision and its claims remain OEM statements.
 - The NSO 250 MW checklist dossier received on 21 August 2026 is **not** covered by that
   authorization, and parts of it are **not Envision's to authorise** — it contains a the independent test house
   report classified at the battery affiliate's discretion, third-party operator letterheads, certification-body
@@ -53,6 +57,8 @@ Envision's BESS business to a group battery affiliate.
 | Envision 11 MW / 44 MWh design calculation | `oem/envision/Envision_Sri_Lanka_11MW_44MWh_Design_Calculation_V1.0_2026-08-05.pdf` | Later, distinct candidate configuration; document does not state the tender number |
 | Envision functional-requirements checklist | `oem/envision/compliance_evidence/Envision_Functional_Requirements_Checklist_2026-07-21.xlsx` | Supplier declaration against selected Annex A/B clauses; not the official annex and not evidence-complete |
 | NSO 250 MW checklist dossier, 21 Aug 2026 | `source_packages/NSO250MW_checklist_2026-08-21.MANIFEST.sha256` | Manifest only — 72 files / 58 unique across checklist sections A-J. Certificates, grid-forming letters, PSS(R)E and PSCAD models, fire-safety package, independent bankability study, filled Volume 2 GTP, grid-compliance list. Binaries held outside the repository |
+| Envision corporate brochure, version 2603 | `oem/envision/corporate/Envision_Corporate_Brochure_Regular_ver_2603.pdf` | Corporate profile and marketing claims; useful for attributed context only, not tender compliance or a product-specific technical basis |
+| OEM archive re-supply, 1 Sep 2026 | `source_packages/NSO250MW_Archive_2026-09-01_DEDUPLICATION_RECEIPT.md` | New outer archive; all 50 payload instances already present byte-for-byte; no duplicate payload retained |
 
 The files are stored byte-for-byte from the supplied originals. SHA-256 checksums are recorded
 in `MANIFEST.sha256`.
@@ -74,6 +80,7 @@ subsequent addenda remain outstanding** — Annex B (Grid Connection Code requir
 | NSO 250 MW checklist dossier ingress evaluation | `reviews/NSO250MW_Checklist_Package_Ingress_Evaluation_2026-08-21.md` | Full evaluation of the 21 August dossier: 15 findings, evidence-register movement, recovered technical reference data, recommended actions and handling classification |
 | **Addendum 01 / Annex A / clarifications ingress evaluation** | `reviews/NSO250MW_Addendum01_AnnexA_Clarifications_Ingress_Evaluation_2026-08-27.md` | Evaluation of the three controlling documents: **three corrections** to the 21 August review (the dual-mode grid-forming instruction is withdrawn; the SCR sweep is not a bid-stage requirement; the closing date is 4 September), ten new findings, revised evidence register and revised pre-submission punch list |
 | **Tender evidence gap dossier, 27 Aug 2026** | `reviews/NSO250MW_Tender_Gap_Dossier_2026-08-27.pdf` | **OEM query pack** — 21 gaps (5 critical, 6 high, 7 medium, 2 low, 1 informational) written to be sent to Envision as-is. Each gap carries the controlling clause, what the pack contains, why that does not close it, the question to put to the OEM, and the objective closure test. Rendered through the DutchBay Presentation Layer from the register at `registers/build_gap_dossier_2026-08-27.py` |
+| Corporate brochure and archive ingress evaluation, 1 Sep 2026 | `reviews/Envision_Corporate_Brochure_2603_and_Archive_Ingress_Evaluation_2026-09-01.md` | Complete brochure extraction and visual QA, archive deduplication, corporate-claim assessment, internal statistic drift and explicit finding that no tender gap is closed |
 
 These reviews are derived analysis, not controlling tender or OEM documents. When a review
 conflicts with a source file, the source file governs. The detailed gap statement and the 6 August

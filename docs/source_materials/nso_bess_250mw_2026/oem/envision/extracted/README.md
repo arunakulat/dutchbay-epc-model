@@ -11,3 +11,13 @@ workbook and are not controlling tender or OEM evidence.
 The extracts preserve the converter's output, including imperfect table layout and `NaN`
 placeholders for blank workbook cells. Interpretations and normalized tables are in
 `../../../reviews/Envision_11MW_44MWh_and_Functional_Checklist_Ingress_Evaluation_2026-08-06.md`.
+
+## Corporate brochure received 1 September 2026
+
+| Extract | Source | Method | Quality decision |
+|---|---|---|---|
+| `Envision_Corporate_Brochure_Regular_ver_2603.markitdown.md` | `../corporate/Envision_Corporate_Brochure_Regular_ver_2603.pdf` | MarkItDown 0.1.7 | Complete embedded text layer across all 22 physical pages; 2,063 extracted words versus 2,061 from independent Poppler extraction; all pages rendered and visually checked; no OCR applied |
+
+This brochure is corporate marketing evidence, not a tender or product-performance source. Its
+evaluation is at
+`../../../reviews/Envision_Corporate_Brochure_2603_and_Archive_Ingress_Evaluation_2026-09-01.md`.
