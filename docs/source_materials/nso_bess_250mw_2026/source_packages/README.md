@@ -13,6 +13,7 @@ session can verify that a re-supplied copy is the same artifact without the arti
 |---|---|---|---|---|
 | NSO 250 MW checklist dossier | [`NSO250MW_checklist_2026-08-21.MANIFEST.sha256`](NSO250MW_checklist_2026-08-21.MANIFEST.sha256) | 21 Aug 2026 | 72 (58 unique) | [`../reviews/NSO250MW_Checklist_Package_Ingress_Evaluation_2026-08-21.md`](../reviews/NSO250MW_Checklist_Package_Ingress_Evaluation_2026-08-21.md) |
 | OEM supply tranche — **now committed in full** | [`NSO250MW_oem_supply_2026-08-27.MANIFEST.sha256`](NSO250MW_oem_supply_2026-08-27.MANIFEST.sha256) | 27 Aug 2026 | 25 (14 certificates + 11 binaries), plus 13 derived extracts | [`../reviews/NSO250MW_Addendum01_AnnexA_Clarifications_Ingress_Evaluation_2026-08-27.md`](../reviews/NSO250MW_Addendum01_AnnexA_Clarifications_Ingress_Evaluation_2026-08-27.md) |
+| OEM archive re-supply | [`NSO250MW_Archive_2026-09-01_DEDUPLICATION_RECEIPT.md`](NSO250MW_Archive_2026-09-01_DEDUPLICATION_RECEIPT.md) | 1 Sep 2026 | 50 payload instances (48 unique), 0 new | [`../reviews/Envision_Corporate_Brochure_2603_and_Archive_Ingress_Evaluation_2026-09-01.md`](../reviews/Envision_Corporate_Brochure_2603_and_Archive_Ingress_Evaluation_2026-09-01.md) |
 
 ## Why the NSO 250 MW checklist package is manifest-only
 
@@ -51,6 +52,14 @@ The unpacked package, the MarkItDown/OCR extracts and the conversion logs are he
 ```
 
 Extracts never supersede the received original.
+
+## OEM archive re-supply, 1 September 2026
+
+The generic `Archive.zip` supplied on 1 September is a new outer package but contains no new
+payload. All 50 payload instances match the current corpus byte-for-byte; two intra-archive
+duplicate groups reduce the payload to 48 unique SHA-256 values. Finder metadata and redundant
+payload copies were not retained. The archive's exact hash, integrity and deduplication result are
+recorded in `NSO250MW_Archive_2026-09-01_DEDUPLICATION_RECEIPT.md`.
 
 
 ## OEM supply tranche, 27 August 2026 — committed in full

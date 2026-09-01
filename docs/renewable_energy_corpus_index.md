@@ -141,6 +141,19 @@ basis, and standby-regulation and ancillary-service energy both added to it with
 reconciliation), and that there is **no aggregate cap on liquidated damages** while the capacity
 charge can fall to **LKR 0** in a month missing 97 % availability, outside that cap.
 
+**Envision corporate brochure and OEM archive re-supply (ingressed 1 September 2026)** - the
+22-page `ver 2603` corporate brochure is preserved at
+`docs/source_materials/nso_bess_250mw_2026/oem/envision/corporate/` with its complete MarkItDown
+extract. It gives attributed corporate, wind, storage, hydrogen and net-zero-park context, but its
+96 percent efficiency, 15,000-cycle, zero-accident, LCOE and project-scale statements have no
+product-specific test or assurance basis and close no tender gap. The brochure also carries
+internally different wind totals and time spans (more than 80 versus more than 100 GW; three versus
+four years), which are retained as version drift rather than reconciled by inference. The supplied
+`Archive.zip` has 50 payload instances / 48 unique hashes; every payload was already canonical in
+the repository, so only its outer-package deduplication receipt was added and no duplicate payload
+was retained. Evaluation:
+`docs/source_materials/nso_bess_250mw_2026/reviews/Envision_Corporate_Brochure_2603_and_Archive_Ingress_Evaluation_2026-09-01.md`.
+
 **Internal CEB BESS technical notes** (`desktop clean up`): internal merged/technical system-analysis BESS notes (10 MW–40 MWh, 10×16) — ~3 files (private/internal).
 
 ---
