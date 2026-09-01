@@ -250,6 +250,15 @@ Install `[grid]` under the constraints file to protect the core numeric pins:
 
 ## License
 
-Proprietary. All rights reserved.
+Proprietary — with an explicit **evaluation and audit grant**. See [LICENSE](LICENSE).
 
-Version: see the `VERSION` file (the single source of truth; currently 15.3.0).
+In short: you may read, run, test, and modify the model locally in order to evaluate,
+audit, benchmark, or conduct due diligence on it, and you may **publish what you find**,
+including criticism. You may not deploy it, redistribute it, or build a product on it
+without a separate written licence.
+
+The grant exists because this model asks to be checked. Its documentation standard is
+lender-due-diligence grade and its verification rule requires evidence rather than
+assertion; a licence that forbade independent evaluation would contradict both.
+
+Version: see the `VERSION` file — the single source of truth.
