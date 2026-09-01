@@ -31,8 +31,6 @@ from pydantic import (
     model_validator,
 )
 
-from analytics.feasibility_sections import load_feasibility_taxonomy
-
 from .assessment_scope import AudienceIntent, UseIntent
 from .records import (
     ActorRecord,
@@ -45,6 +43,7 @@ from .records import (
     StrictFrozenModel,
     UtcDateTime,
 )
+from .taxonomy_identity import FEASIBILITY_SECTION_IDS
 from .vocabulary import ActorKind, ArtifactFormat, ConfidentialityClass, PackKind
 
 ASSEMBLY_AUTHORITY_SCHEMA_ID: Final = "dutchbay.feasibility_assembly_authority.v1"
@@ -827,9 +826,7 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
                 raise ValueError(
                     f"source {source.source_id} has a dangling supersession"
                 )
-            if not set(source.section_ids) <= set(
-                load_feasibility_taxonomy().section_names
-            ):
+            if not set(source.section_ids) <= set(FEASIBILITY_SECTION_IDS):
                 raise ValueError(
                     f"source {source.source_id} references an unknown taxonomy section"
                 )
@@ -977,9 +974,7 @@ class AcceptedAssemblyAuthority(StrictFrozenModel):
                 raise ValueError(
                     f"pack {pack.pack_id} has dangling compatible_pack_ids"
                 )
-            if not set(pack.section_ids) <= set(
-                load_feasibility_taxonomy().section_names
-            ):
+            if not set(pack.section_ids) <= set(FEASIBILITY_SECTION_IDS):
                 raise ValueError(
                     f"pack {pack.pack_id} references an unknown taxonomy section"
                 )
