@@ -1,8 +1,7 @@
 # Dolphin 3C-1b context-binding implementation record
 
-**Status:** second independently rejected candidate remediated; corrected trust-boundary local
-verification complete; independent exact-SHA review pending; no push, PR, D2 package assembly or
-HOLD movement
+**Status:** corrected trust-boundary implementation independently accepted at exact SHA; no push,
+PR, D2 package assembly or HOLD movement
 
 **Protected base:** `be1956413b407b299d6b116e79bd84456ef62b2d` (`origin/main` at lease)
 
@@ -247,6 +246,19 @@ environment limitation, not relabelled as D3C success or hidden by the green red
 run.
 
 Exact-head CI remains merge authority and is recorded in the PR rather than predicted here.
+
+The independent domain and assurance reviewers both ACCEPTED implementation commit
+`875179fcae059ab3993a8bd1c7ebd2934949ff1b`, tree
+`a8cbc90585547f22a620e4897fcc7d0520a3cc20`, on exact base
+`e60ea866da6b77c1d9e39236c206140eae1af08d`. Their durable dispositions are:
+
+- `docs/DOLPHIN_3C1B_DOMAIN_REVIEW_RECORD.md`; and
+- `docs/DOLPHIN_3C1B_ASSURANCE_REVIEW_RECORD.md`.
+
+Both acceptances preserve the production-empty catalogue, issue `#1110` and every release,
+evidence, professional, lender, Board, deployment, publication and circulation HOLD. A docs-only
+successor commit that adds these receipts must be rebound by both reviewers before push; no
+implementation/test receipt transfers if any accepted code or test blob changes.
 
 ## 8. Explicit holds and next dolphin
 
