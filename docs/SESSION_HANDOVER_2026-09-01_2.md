@@ -1,6 +1,7 @@
 # Session handover — 2026-09-01, successor 25
 
-**Status:** corrected successor independently accepted; protected delivery pending
+**Status:** D3C-1b and this corrected successor are protected-main delivered; the named D3C-1b
+worktrees and branches are retired
 
 **Independent review:**
 [`DOLPHIN_3C1B_HANDOVER_REVIEW_RECORD.md`](DOLPHIN_3C1B_HANDOVER_REVIEW_RECORD.md)
@@ -156,6 +157,7 @@ and closed vocabulary. An implementer-authored green suite is not an independent
 | D3C-0 | PR `#1207`, protected merge `411115c…` | Code-owned assembly-authority prerequisite delivered; production catalogue empty |
 | D3C-1a | PR `#1209`, protected merge `7e53b6c…` | Strict result-only projection delivered; no D2 authority |
 | D3C-1b | PR `#1214`, accepted tree `f064014…`, protected merge `009f2ff…` | Authenticated reciprocal binding and candidate D2 records delivered |
+| D3C-1b handover | PR `#1215`, accepted tree `4050377…`, protected merge `8f4e676…` | Successor 25 and its exact-head independent review record delivered |
 | D3C-2 taxonomy-I/O prerequisite | not implemented | Immediate next dolphin: remove first-construction taxonomy filesystem I/O without changing taxonomy semantics |
 | D3C-2 package assembly | not implemented; pre-lease `HOLD` | Later dolphin after prerequisite merge: one complete ungraded/held D2 package plumbing proof |
 | D3D | charter merged in PR `#1203` | Grade/materiality/release policy remains separately unimplemented |
@@ -168,6 +170,11 @@ At this handover cutoff:
 - the public D3C-1b production bind and re-ingress paths therefore return
   `authority_not_found`; and
 - the only open PRs are dependency PRs `#1176` and `#1178`.
+
+The D3C-1b implementation and handover worktrees were removed cleanly after PRs `#1214` and
+`#1215` merged. Their exact local branches were deleted, their remote branch heads are absent, and
+GitHub PR-head refs retain accepted heads `1e557c0…` and `0dfe185…`. The unrelated `.claude`
+worktree at `9ecbf58…` was preserved.
 
 Re-query every fact. An engineering merge cannot infer or change any of them.
 
@@ -510,16 +517,16 @@ default.
 
 ## 10. Worktree retirement and successor creation
 
-After this handover is independently checked, protected-main merged and itself verified, prove the
-following exact worktrees clean before retiring them:
+This handover was independently checked, protected-main merged and verified. The following exact
+worktrees and their local branches were then proved clean and retired:
 
 - `/Users/aruna/Downloads/dutchbay-wt-d3c1b-context-binding` /
   `codex/d3c1b-context-binding`; and
 - `/Users/aruna/Downloads/dutchbay-wt-d3c1b-handover` / `codex/d3c1b-handover`.
 
-Delete only those local/remote branches after their merges are proven. Do not touch the unrelated
-detached `.claude` worktree, recovery tags, durable main checkout, persistent project folder or
-`.venv`, protected history, PR records or issue records.
+Their remote branch heads are absent and the immutable PR records retain their accepted heads. The
+unrelated detached `.claude` worktree, recovery tags, durable main checkout, persistent project
+folder and `.venv`, protected history, PR records and issue records were not touched.
 
 Only after those paths are safely retired may the prerequisite thread create one fresh writer
 worktree from current `origin/main`:
