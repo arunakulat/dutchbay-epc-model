@@ -562,3 +562,115 @@ Across the whole engagement it aborted once in four full runs. Declared, not ret
 `dolphin/f6-debt-period-taxonomy` above `6fa3fb5`; the frozen candidate SHAs are in the worker's
 final report. The §12 authority boundary is unchanged: this clears a CI blocker and confers no
 grade, release, lender or Board authority, and lifts no `HOLD`.
+
+---
+
+## 14. Assurance REJECT and the test-only remediation (2026-09-01)
+
+Sections 1–13 stand unaltered except for the two corrections named in §14.4. The blocker narrative
+(§11), the reverted probe (§11.3), this rejection and the session-limit interruption in §14.6 are all
+part of the audit trail.
+
+### 14.1 Review outcome — split
+
+| Reviewer | Disposition | Bound to |
+|---|---|---|
+| Domain (finance / lender covenant) | **ACCEPT** | `72e49a8` / tree `93d6365` / base `6fa3fb5` |
+| Assurance (contract, API, regression) | **REJECT** | same SHAs |
+
+Both records are copied **verbatim** into `docs/DOLPHIN_F6_DOMAIN_REVIEW_RECORD.md` and
+`docs/DOLPHIN_F6_ASSURANCE_REVIEW_RECORD.md`, byte-for-byte (`cmp` clean), including the REJECT and
+its criticism of this record. Under `RECRUIT-01` an acceptance cannot override a veto, so `72e49a8`
+did not merge. Neither disposition transfers to the new head.
+
+### 14.2 The rejection ground — upheld in full
+
+`test_no_bridge_period_yields_none_not_a_substitute_value` never called `plan_debt`. Despite its
+name it constrained only `_build_cfads_timeline` and `_resolve_first_operating_period`, while §6 of
+this record listed it as covering the "no bridge period" hostile case **at the contract boundary**.
+It did not. Assurance is right, and `VERIFY-01` is the applicable rule: a claimed check that does not
+check the claimed thing is not a check.
+
+Reproduced independently before accepting it — the no-bridge path is reachable at the published
+surface and the implementation was already correct there:
+
+```
+$ plan_debt(annual_rows=[], config=<construction_periods=3>)
+construction_periods       = 3      (present=True)
+bridge_debt_period         = None   (present=True)
+first_operating_period     = 3      (present=True)
+last 3 keys = ['construction_periods', 'bridge_debt_period', 'first_operating_period']
+```
+
+So both surviving mutants were **non-equivalent and genuinely unguarded**. Assurance's whole-suite
+probe (`bridge_none: 0` across 4067 `plan_debt` calls in 7459 tests) shows the branch had zero
+coverage anywhere in the repository — not an artefact of which files it sampled.
+
+### 14.3 Remedy — test-only, no implementation change
+
+`finance/debt_v14.py` and `analytics/feasibility_report_contract/result_facade.py` are **byte-identical
+to the rejected candidate** (`git diff HEAD` empty for both after all mutation work). Three test
+changes:
+
+1. **`test_no_bridge_is_published_as_explicit_none_with_keys_still_emitted`** (new) — drives
+   `plan_debt(annual_rows=[], …)` and asserts both charter §3.1 CASPER clauses at the published
+   surface: all three keys present, and absence reported as an explicit `None`. Absence is asserted
+   three ways because each catches a different substitute — `is None` (identity), `not isinstance(…,
+   int)` (any integer, `0` included) and `!= 0` (naming the falsy one). No truthiness check is used;
+   a substituted `0` would pass one.
+2. **`test_no_bridge_timeline_builder_returns_none`** (renamed from the misleading name) — its
+   docstring now states that it constrains the BUILDER only and is not a substitute for the contract
+   boundary test, so the overstatement cannot recur.
+3. **`test_published_key_order_places_the_taxonomy_last`** (new) — pins the appended key order, per
+   assurance §7.5. The order was claimed in this record and in the changelog but guarded by no
+   shipped test; it was proved only by an unshipped scratchpad harness.
+
+A latent hygiene defect was found and fixed while drafting: the first form of the absence assertion
+used `bridge is not 0`, which raises `SyntaxWarning: "is not" with 'int' literal` and would fail
+under `-W error`. Verified by compiling the module with `-W error::SyntaxWarning`.
+
+### 14.4 Corrections carried into the shipped artifacts
+
+**The overstated defect (domain reviewer).** "`first_operating_period` was not derivable at all" is
+**false** and had shipped in three places — the changelog fragment, the test module docstring and
+§2.1 of this record. `annual_row_debt_period_map` was already public, so on the base engine
+`min(entry["debt_period"] for entry in map)` returns **3**; verified by direct execution against
+`origin/main`'s `finance/debt_v14.py`. The defect is real but it is that the operating boundary was
+**unnamed** — recovering it required knowing the engine's internal synthetic-bridge convention and
+open-coding it at every call site, with no published name to agree on and nothing holding the
+derivations in step. The facade comment in §13.4 already said this correctly; all three artifacts now
+agree with it. A defect must not be overstated to justify its fix.
+
+**Commit miscount.** §13.9 said "five commits" where there were six. Corrected.
+
+**Hostile-case table.** §6 now distinguishes the published-surface row from the builder-level row and
+names the test that actually exercises each.
+
+### 14.5 Mutation verification — with unmutated controls
+
+Assurance warned that its first broadened run produced false positives: the D3C oracle fails
+*unmutated* inside a `git archive` export while passing `126 passed` in the real worktree. The
+worker's own Control C fell into the same trap in the first lease. **No control, no conclusion** — so
+every run below is bracketed by an unmutated control in the same environment.
+
+| Run | Mutation | Result |
+|---|---|---|
+| **Control 0** | none | **41 passed** |
+| M5a | `bridge_debt_period` `None` → plausible `0` | **1 failed**, 40 passed — `…no_bridge_is_published…` ✅ KILLED |
+| M5b | emit the 3 keys only when a bridge exists | **1 failed**, 40 passed — `…no_bridge_is_published…` ✅ KILLED |
+| M5e | move the taxonomy keys to the front of the mapping | **1 failed**, 40 passed — `…key_order_places_the_taxonomy_last` ✅ KILLED |
+| **Control 1** | none, after restoring | **41 passed** |
+
+Each mutant is killed by the specific test written for it, and by exactly one test — the failures are
+targeted, not collateral. `finance/debt_v14.py` was restored from a pre-mutation copy after each run
+and confirmed byte-identical to `HEAD`.
+
+### 14.6 Interruption disclosure (`PERSIST-01`)
+
+The first remediation attempt was cut off by a session limit mid-edit, with roughly 196 lines of
+uncommitted work and no durable checkpoint — the same failure mode that prompted `PERSIST-01`. Under
+`RECRUIT-01` the interruption **revoked** the lease; the coordinator issued a fresh SHA-bound one and
+the working tree was inspected rather than trusted. The recovered work was committed **as-is** as the
+first action of the new lease, before any further edit, and a stale docstring line left by the
+interrupted edit was found and fixed in the following slice. No evidence from the revoked lease was
+carried forward: the mutation runs in §14.5 were re-executed from scratch under the new lease.

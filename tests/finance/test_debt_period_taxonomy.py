@@ -345,9 +345,11 @@ def test_no_bridge_is_published_as_explicit_none_with_keys_still_emitted() -> No
        period index elsewhere (it is the bridge index when
        ``construction_periods == 0``), so conflating the two would be silent.
 
-    `is None` and `is not 0` are asserted separately and identity-wise: `== None`
-    would be satisfied by a substitute that merely compares equal, and a falsy `0`
-    passes any truthiness check.
+    Absence is asserted three ways, because each catches a different substitute:
+    `is None` (identity, so a value that merely compares equal to `None` fails),
+    `not isinstance(..., int)` (any integer substitute, `0` included), and
+    `!= 0` (naming the falsy one explicitly). A truthiness check would pass on a
+    substituted `0` and is therefore never used.
     """
     debt_result = plan_debt(annual_rows=[], config=_synthetic_config(3))
 
