@@ -674,3 +674,20 @@ the working tree was inspected rather than trusted. The recovered work was commi
 first action of the new lease, before any further edit, and a stale docstring line left by the
 interrupted edit was found and fixed in the following slice. No evidence from the revoked lease was
 carried forward: the mutation runs in §14.5 were re-executed from scratch under the new lease.
+
+### 14.7 Outstanding non-blocking finding NOT addressed in this lease
+
+**Domain review §7.2 — the facade comment's reason covers two keys of three.** The comment added to
+`analytics/feasibility_report_contract/result_facade.py` in §13.4 justifies the `OPAQUE_ARTIFACT`
+disposition on the ground that `bridge_debt_period` and `construction_periods` restate existing keys,
+concluding that "the taxonomy carries no fact this facade does not already see". That reasoning does
+not cover `first_operating_period`, which restates no routed key. The domain reviewer judges the
+disposition itself correct regardless, for the stronger reason that the facade routes no
+period-indexed series, so a period index would be inert there, and suggests the comment say so. No
+behavioural consequence; the reviewer's `ACCEPT` did not depend on it.
+
+**Not actioned here, deliberately.** This lease names `result_facade.py` as *expected untouched* and
+its required-work list does not include this item. The file is byte-identical to the rejected
+candidate, which keeps the remedy provably test-only — a prose edit would forfeit that property for
+no functional gain. Flagged for the coordinator to schedule, either as a one-line follow-up or folded
+into the F-2/F-3 lease that will revisit this facade anyway.
