@@ -5,11 +5,14 @@ engine resolves internally: ``_resolve_construction_periods(cfg)`` returned 2 fo
 the lender case while ``debt_result.get("construction_periods")`` returned ``None``
 (the key was absent — the value reached callers only under the different name
 ``construction_years``), and the bridge index was reachable only as
-``cfads_bridge_debt_period``. ``first_operating_period`` was not derivable at all
-without knowing the engine's internal bridge convention. A consumer holding a
-``debt_result`` therefore could not tell which debt periods are operating.
+``cfads_bridge_debt_period``. Nothing was UNDERIVABLE — ``annual_row_debt_period_map``
+was already public, so ``min(entry["debt_period"] for entry in map)`` returns 3 on
+the base engine. The defect is that the operating boundary was **unnamed**: reading
+it required knowing the engine's internal synthetic-bridge convention and
+open-coding it at every call site, with no published name to agree on and nothing
+holding the derivations in step.
 
-Three tests carry the weight here:
+Four tests carry the weight here:
 
 1. :func:`test_scenario_sweep_is_additive_and_taxonomy_is_consistent` — the
    byte-identity sweep, run over every evaluable committed scenario. It pins the
@@ -22,7 +25,13 @@ Three tests carry the weight here:
    scenario has ``construction_periods == 2`` and a bridge, so
    ``construction_periods == 0``, a bridge-less timeline and a first mapped period
    of 0 are only reachable synthetically.
-3. :func:`test_dscr_index_space_collision_is_still_present` — an executable pin on
+3. :func:`test_no_bridge_is_published_as_explicit_none_with_keys_still_emitted` —
+   both charter CASPER clauses at the PUBLISHED surface on the no-bridge path, the
+   one path where either can still fail. Added after an assurance review found that
+   the helper-level test named below did not constrain ``plan_debt`` at all, leaving
+   two mutations — emitting the taxonomy only when a bridge exists, and publishing a
+   plausible ``0`` instead of ``None`` — alive against the whole suite.
+4. :func:`test_dscr_index_space_collision_is_still_present` — an executable pin on
    the hazard the ``plan_debt`` docstring warns about, so the warning cannot go
    stale silently.
 """
@@ -301,12 +310,17 @@ def test_taxonomy_is_published_for_a_config_that_omits_the_field() -> None:
     assert debt_result["first_operating_period"] == 3
 
 
-def test_no_bridge_period_yields_none_not_a_substitute_value() -> None:
-    """HOSTILE: a timeline with no bridge period.
+def test_no_bridge_timeline_builder_returns_none() -> None:
+    """HOSTILE, HELPER LEVEL: the timeline builder emits no bridge.
 
-    ``_build_cfads_timeline`` creates the bridge only when CFADS is non-empty.
-    Absent must be an explicit ``None`` (CASPER), never a plausible 0, and the
-    operating window must then open at the first post-construction period.
+    ``_build_cfads_timeline`` creates the bridge only when CFADS is non-empty, and
+    the operating window must then open at the first post-construction period.
+
+    This constrains the BUILDER only. It says nothing about what ``plan_debt``
+    publishes, and an earlier revision of this module wrongly claimed it covered
+    the no-bridge case at the contract boundary. The published surface is pinned by
+    :func:`test_no_bridge_is_published_as_explicit_none_with_keys_still_emitted`;
+    the two are complementary, not substitutes.
     """
     _cfads_ext, row_map, _periods, bridge = _build_cfads_timeline(
         annual_rows=[], cfads=[], construction_periods=3, tenor=5
@@ -314,6 +328,68 @@ def test_no_bridge_period_yields_none_not_a_substitute_value() -> None:
     assert bridge is None
     assert row_map == []
     assert _resolve_first_operating_period(row_map, 3, bridge) == 3
+
+
+def test_no_bridge_is_published_as_explicit_none_with_keys_still_emitted() -> None:
+    """HOSTILE, CONTRACT BOUNDARY: the no-bridge path through ``plan_debt``.
+
+    Both charter CASPER clauses can still fail here and nowhere else, so both are
+    asserted against the PUBLISHED result rather than against a helper:
+
+    1. *"present unconditionally — never emitted only on some config paths"*. A
+       build that emitted the taxonomy only when a bridge exists would satisfy
+       every other test in this module, because every evaluable committed scenario
+       has a bridge.
+    2. *"Absent/undefined must be an explicit ``None``, never a plausible
+       substitute value"*. ``0`` is the plausible substitute, and it is a REAL
+       period index elsewhere (it is the bridge index when
+       ``construction_periods == 0``), so conflating the two would be silent.
+
+    `is None` and `is not 0` are asserted separately and identity-wise: `== None`
+    would be satisfied by a substitute that merely compares equal, and a falsy `0`
+    passes any truthiness check.
+    """
+    debt_result = plan_debt(annual_rows=[], config=_synthetic_config(3))
+
+    # (1) unconditional emission.
+    assert TAXONOMY_KEYS <= set(debt_result)
+
+    # (2) explicit None, not a plausible substitute.
+    bridge = debt_result["bridge_debt_period"]
+    assert bridge is None
+    # `0` is a REAL period index elsewhere — it is the bridge index whenever
+    # `construction_periods == 0` — so an absent bridge reported as `0` would be
+    # silently indistinguishable from a present one. Both forms are asserted: the
+    # type check rejects any int substitute, the inequality names the falsy one.
+    # (`is not 0` would say this most directly but raises a SyntaxWarning, which
+    # becomes an error under `-W error`.)
+    assert not isinstance(bridge, int)
+    assert bridge != 0
+
+    # The rest of the taxonomy stays correct on this path.
+    assert debt_result["construction_periods"] == 3
+    assert debt_result["first_operating_period"] == 3
+    assert debt_result["bridge_debt_period"] == debt_result["cfads_bridge_debt_period"]
+    assert debt_result["construction_periods"] == debt_result["construction_years"]
+    assert debt_result["annual_row_debt_period_map"] == []
+
+
+def test_published_key_order_places_the_taxonomy_last() -> None:
+    """The additive keys are APPENDED, so the pre-existing order survives as a prefix.
+
+    The implementation record and the changelog both claim this; without a standing
+    guard the claim is prose. Reordering the mapping would leave every other test in
+    this module passing.
+    """
+    _cfg, debt_result = _plan_for(Path(LENDER_CONFIG))
+    published = list(debt_result)
+    assert published[-3:] == [
+        "construction_periods",
+        "bridge_debt_period",
+        "first_operating_period",
+    ]
+    # Everything before the taxonomy is exactly the pre-existing surface, in order.
+    assert set(published[:-3]) == PRE_EXISTING_KEYS
 
 
 def test_first_mapped_period_zero_is_reported_as_zero() -> None:

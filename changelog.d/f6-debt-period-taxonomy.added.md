@@ -2,9 +2,12 @@ Added the debt period taxonomy to `finance.debt_v14.plan_debt`'s public result, 
 omitted it: `_resolve_construction_periods` returns 2 for the lender case while
 `debt_result.get("construction_periods")` returned `None` — the key was absent and the value reached
 callers only under the different name `construction_years` — the bridge index was reachable only as
-`cfads_bridge_debt_period`, and the first operating period was not derivable at all without knowing
-the engine's internal synthetic-bridge convention, so a consumer holding a `debt_result` could not
-tell which debt periods are operating. The result now carries `construction_periods: int`,
+`cfads_bridge_debt_period`, and the first operating period had no published name at all. Nothing was
+underivable — `annual_row_debt_period_map` was already public, so the boundary could be recovered as
+`min(entry["debt_period"] for entry in map)` — but recovering it required knowing the engine's
+internal synthetic-bridge convention and open-coding it at every call site, with no agreed name and
+nothing holding the derivations in step, so a consumer holding a `debt_result` could not simply read
+which debt periods are operating. The result now carries `construction_periods: int`,
 `bridge_debt_period: int | None` and `first_operating_period: int` unconditionally, on every config
 path, with an explicit `None` where a bridge does not exist rather than a plausible substitute. The
 count is read from the value the engine already resolved through the shared resolver inside

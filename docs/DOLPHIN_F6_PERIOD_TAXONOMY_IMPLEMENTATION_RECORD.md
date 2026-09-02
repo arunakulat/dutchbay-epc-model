@@ -90,9 +90,18 @@ and F-3's 1-year offset are confirmed as stated.
 The charter says the published dict "returns `None`" for `construction_periods`. Precisely: the
 **key is absent**, and the resolved value *is* published — under the different name
 `construction_years`. So a consumer today can obtain the construction count, just not under the name
-the engine itself uses. The genuinely unobtainable piece is `first_operating_period`, which cannot be
-derived without knowing the engine's internal synthetic-bridge convention. The defect and its
-remedy are unchanged; only the description is sharpened.
+the engine itself uses.
+
+**CORRECTED (domain review, §14).** This section originally went on to call `first_operating_period`
+"genuinely unobtainable". That was **wrong**, and the overstatement shipped in three artifacts.
+`annual_row_debt_period_map` was already public, so on the base engine
+`min(entry["debt_period"] for entry in map)` returns **3** — verified by direct execution against
+`origin/main`'s `finance/debt_v14.py`. The defect is real but it is that the operating boundary was
+**unnamed**: recovering it required knowing the engine's internal synthetic-bridge convention and
+open-coding it at every call site, with no published name to agree on and nothing holding the
+derivations in step. The facade comment written in §13.4 states it correctly; the changelog fragment,
+the test module docstring and this section have been corrected to agree with it. A defect should not
+be overstated to justify its fix.
 
 ---
 
@@ -217,7 +226,9 @@ touched. Flagged for the coordinator.
 | Case | Covered by |
 |---|---|
 | `construction_periods = 0` | `test_zero_construction_periods_puts_the_bridge_at_period_zero` — bridge lands at 0, `first_operating_period` must be 1 |
-| no bridge period | `test_no_bridge_period_yields_none_not_a_substitute_value` — explicit `None`, not 0 |
+| no bridge period — **published surface** | `test_no_bridge_is_published_as_explicit_none_with_keys_still_emitted` — `plan_debt(annual_rows=[])`: all three keys present, `bridge_debt_period is None` and `is not 0` |
+| no bridge period — timeline builder | `test_no_bridge_timeline_builder_returns_none` — constrains `_build_cfads_timeline` ONLY, **not** the contract boundary (see §14) |
+| published key order | `test_published_key_order_places_the_taxonomy_last` — the taxonomy is appended, pre-existing order survives as a prefix |
 | first mapped period is 0 | `test_first_mapped_period_zero_is_reported_as_zero` |
 | config omits the field | `test_taxonomy_is_published_for_a_config_that_omits_the_field` — resolved default reported, keys still emitted |
 | out-of-order map | `test_resolver_takes_the_earliest_mapped_period_not_the_first_listed` |
@@ -547,7 +558,7 @@ Across the whole engagement it aborted once in four full runs. Declared, not ret
 
 ### 13.9 State
 
-`WAIT_FOR_REVIEW`. No PR opened, nothing pushed, nothing merged. Five commits on
+`WAIT_FOR_REVIEW`. No PR opened, nothing pushed, nothing merged. Six commits on
 `dolphin/f6-debt-period-taxonomy` above `6fa3fb5`; the frozen candidate SHAs are in the worker's
 final report. The §12 authority boundary is unchanged: this clears a CI blocker and confers no
 grade, release, lender or Board authority, and lifts no `HOLD`.
