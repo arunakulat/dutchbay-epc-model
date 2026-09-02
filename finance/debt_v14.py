@@ -558,6 +558,52 @@ def _build_cfads_timeline(
     return cfads_ext, annual_row_debt_period_map, timeline_periods, bridge_debt_period
 
 
+def _resolve_first_operating_period(
+    annual_row_debt_period_map: Sequence[Mapping[str, Any]],
+    construction_periods: int,
+    bridge_debt_period: Optional[int],
+) -> int:
+    """Resolve the first debt period that carries an operating row.
+
+    The debt timeline built by :func:`_build_cfads_timeline` is laid out as
+    ``[construction] * construction_periods`` + an optional synthetic half-year
+    ``bridge`` period + one period per operating row + post-tenor padding. The
+    operating window therefore opens at
+    ``construction_periods + (1 if a bridge exists else 0)``, and every period
+    strictly below it is NON-operating: it can carry scheduled debt service but
+    maps to no operating row, so a DSCR computed there is not a covenant
+    observation (see :func:`plan_debt` for the index-space contract).
+
+    The row->period map is the DEFINITIONAL source and is used whenever it holds a
+    usable entry; the layout formula is the fallback for the degenerate case of a
+    timeline with no operating rows at all, where the answer is the period at which
+    the first operating row *would* be placed. The two agree on every committed
+    scenario, which ``tests/finance/test_debt_period_taxonomy.py`` pins.
+
+    Args:
+        annual_row_debt_period_map: Canonical row->period map from the engine.
+        construction_periods: Resolved construction-period count (see
+            :func:`_resolve_construction_periods`); the sole authority for the
+            construction window.
+        bridge_debt_period: Synthetic bridge period index, or ``None`` when the
+            timeline carries no bridge.
+
+    Returns:
+        The earliest debt-period index that maps to an operating row, clamped to
+        zero. Never ``None``: the operating window always has a first period, even
+        when no row currently occupies it.
+    """
+    mapped: List[int] = []
+    for mapping in annual_row_debt_period_map:
+        try:
+            mapped.append(int(mapping["debt_period"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+    if mapped:
+        return max(0, min(mapped))
+    return max(0, int(construction_periods)) + (0 if bridge_debt_period is None else 1)
+
+
 def calculate_construction_drawdowns(
     total_debt: float,
     construction_schedule: List[float],
@@ -1491,6 +1537,58 @@ def plan_debt(
     capex-extraction and cost-free-debt site hard-forbids the toy fallback even
     where the config opted in. Never mutates the caller's config; default False
     keeps every other run byte-identical.
+
+    Period taxonomy (published unconditionally)
+    ------------------------------------------
+    The debt timeline is PERIOD-indexed and is NOT the operating-year axis. Its
+    layout is ``[construction] * construction_periods`` + an optional synthetic
+    half-year ``bridge`` period + one period per operating row + post-tenor
+    padding. Three keys make that taxonomy explicit so a consumer holding only a
+    ``debt_result`` can tell which periods are operating:
+
+    - ``construction_periods`` (``int``) — the construction-period count as
+      resolved by :func:`_resolve_construction_periods` and used by the engine.
+      Same value as the legacy ``construction_years`` key, which is retained
+      unchanged; this is the name the engine itself uses.
+    - ``bridge_debt_period`` (``int | None``) — index of the synthetic bridge
+      period, or ``None`` when the timeline carries no bridge. Same value as the
+      legacy ``cfads_bridge_debt_period`` key, which is retained unchanged. The
+      bridge bears scheduled service but maps to NO operating row; its service is
+      folded into operating year 1 by ``dscr_by_year`` and by the pipeline's
+      row enrichment.
+    - ``first_operating_period`` (``int``) — the first debt period that maps to an
+      operating row (see :func:`_resolve_first_operating_period`). Every period
+      ``< first_operating_period`` is non-operating, so a DSCR at such a period is
+      not a covenant observation.
+
+    Index space of each published series
+    ------------------------------------
+    - ``raw_dscr_series`` — PERIOD-indexed, positional, full timeline length
+      (``timeline_periods``). ``raw_dscr_series[p]`` is the DSCR of debt period
+      ``p``; non-operating and unserviced periods appear as ``None``.
+    - ``debt_service_total``, ``interest_total``, ``total_service``,
+      ``debt_outstanding``, ``senior_fee_usd``, ``balloon_resolution`` —
+      PERIOD-indexed, positional, aligned 1:1 with ``raw_dscr_series``.
+    - ``annual_row_debt_period_map`` — ROW-indexed list; each entry maps an
+      ``annual_row_index`` to its ``debt_period`` in the PERIOD space above. This
+      is the only sanctioned way to align an operating row to a period.
+    - ``dscr_by_year`` — keyed by operating YEAR (bridge service folded into
+      year 1); neither of the two index spaces above.
+    - ``dscr_series`` — **NOT period-indexed.** It is the COMPACTED lender-facing
+      series produced by :func:`_clean_public_dscr_series`, which drops the
+      ``None``/non-finite sentinels; its length is therefore shorter than the
+      timeline and its positions carry no period or year meaning. It is safe for
+      ``min``/``max`` aggregation ONLY.
+
+    .. warning::
+       ``dscr_series`` and ``raw_dscr_series`` are in INCOMPATIBLE index spaces,
+       and ``annual_row_debt_period_map[*]["debt_period"]`` indexes the RAW space.
+       ``debt_result["dscr_series"][debt_period]`` therefore reads a different
+       period than intended and must not be used; index ``raw_dscr_series`` with a
+       ``debt_period``, or read ``dscr_by_year`` for a per-year figure. Positional
+       consumers of ``dscr_series`` are likewise unsafe. This collision is a known
+       defect, documented here deliberately; unifying the two series is tracked
+       separately and is NOT fixed by this taxonomy.
     """
     rows = list(annual_rows)
     if forbid_toy_fallback:
@@ -1557,6 +1655,20 @@ def plan_debt(
     debt_outstanding = core.get("debt_outstanding", []) or []
     debt_service_total = core.get("debt_service_total", []) or []
     interest_total = core.get("interest_total", []) or []
+
+    # Period taxonomy (see the docstring). CESSPIT single-resolver discipline: read
+    # the count the ENGINE already resolved via _resolve_construction_periods inside
+    # apply_debt_layer rather than re-deriving it here — a second derivation is
+    # exactly how the published surface came to disagree with the engine. `core` is
+    # the post-balloon-treatment core, so an "amortize" resize is reflected too.
+    period_row_map = core.get("annual_row_debt_period_map", []) or []
+    construction_periods = int(core.get("construction_periods", 0) or 0)
+    bridge_raw = core.get("cfads_bridge_debt_period")
+    bridge_debt_period = None if bridge_raw is None else int(bridge_raw)
+    first_operating_period = _resolve_first_operating_period(
+        period_row_map, construction_periods, bridge_debt_period
+    )
+
     public_dscr_series = _clean_public_dscr_series(core.get("dscr_series", []) or [])
     raw_min = (
         min(public_dscr_series) if public_dscr_series else core.get("dscr_min", 0.0)
@@ -1637,6 +1749,17 @@ def plan_debt(
         "fx_avg": core.get("fx_avg"),
         "dual_dscr": dual_dscr_detail,
         "funding": _build_funding(config, core),
+        # ── Period taxonomy (additive; see the docstring) ──────────────────
+        # Appended AFTER every pre-existing key so the published mapping's
+        # existing key order survives untouched as a prefix. These three are
+        # emitted UNCONDITIONALLY (CASPER) — a taxonomy that appears only on
+        # some config paths is the defect this publishes its way out of.
+        # `construction_periods` and `bridge_debt_period` restate, under the
+        # engine's own names, the values already carried by `construction_years`
+        # and `cfads_bridge_debt_period`; both legacy keys are retained.
+        "construction_periods": construction_periods,
+        "bridge_debt_period": bridge_debt_period,
+        "first_operating_period": first_operating_period,
     }
 
 
