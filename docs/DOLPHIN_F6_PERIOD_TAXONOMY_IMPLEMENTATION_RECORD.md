@@ -691,3 +691,36 @@ its required-work list does not include this item. The file is byte-identical to
 candidate, which keeps the remedy provably test-only — a prose edit would forfeit that property for
 no functional gain. Flagged for the coordinator to schedule, either as a one-line follow-up or folded
 into the F-2/F-3 lease that will revisit this facade anyway.
+
+### 14.8 Gates on the remediated candidate — all re-run on this base
+
+| Gate | Command | Result |
+|---|---|---|
+| GWTF bootstrap | `$DUTCHBAY_VENV dutchbay_bootstrap_rules.py` | `74 rules; latest = v3.0`, `active=74` |
+| CSV digest | `shasum -a 256 go_with_the_flow_rules_v3_0_clean.csv` | `cbf2c6a709a1be5e2d7aeab53e5f865984a4263104d884821f83da2dccfd01f3` |
+| Full suite | `pytest -p no:cacheprovider -q -rf` | **`7461 passed, 18 skipped`**, exit 0, no failures |
+| D3C contract | `pytest ... tests/contracts/test_d3c_result_projection_contract.py` | **`126 passed`** |
+| Taxonomy suite | `pytest ... tests/finance/test_debt_period_taxonomy.py` | `41 passed` (14 test functions, parametrised) |
+| KPI bit-identity | `diff kpis_base4.json kpis_after4.json` | **all 39 bit-identical**, base `6fa3fb5` vs candidate |
+| Byte-identity sweep | `scratchpad/diff_sweep.py` | 21 compared, every pre-existing key/value/order preserved, exactly 3 added |
+| black / isort / ruff / mypy | on `tests/finance/test_debt_period_taxonomy.py` | all clean |
+| `-W error::SyntaxWarning` | `compile()` of the test module | clean (see §14.3) |
+| Code files unchanged | `git diff 72e49a8 -- finance/debt_v14.py analytics/.../result_facade.py` | **empty — remedy is provably test-only** |
+
+The suite total moves `7459 → 7461`, exactly the two tests added, so nothing was lost or skipped into
+the difference.
+
+**Flaky native crash: did not occur.** `tests/app/test_grid_screening_emit.py` completed normally
+(exit 0). Assurance reports hitting the numba/llvmlite segfault on its *first* attempt, so the
+first-lease characterisation of "once in four runs" understated it; the coordinator is tracking it
+separately and it is out of this lease. Declared, not retried silently.
+
+**Checks NOT run.** Pre-commit hooks — not run; the four tools they wrap were run directly. CI
+(`Verification receipts (VERIFY-01)`, TEST-05 coverage gate) — not run; no PR was opened, which the
+charter reserves to the coordinator.
+
+### 14.9 State
+
+`WAIT_FOR_REVIEW`. No PR, nothing pushed, nothing merged. Both dispositions on `72e49a8` are spent:
+the domain `ACCEPT` does not transfer and the assurance `REJECT` is answered, so **both reviewers must
+rebind to the new head**. The §12 authority boundary is unchanged.
