@@ -390,7 +390,16 @@ def _pandapower_zbus_pu_by_order(  # pragma: no cover - requires [grid] extra
         # 1 MW-equivalent probe injection at the POC as a load; the driving-point
         # impedance is read as the POC voltage deviation per unit injected current.
         pp.create_load(net, b_poc, p_mw=0.0, q_mvar=1.0, name="probe")
-        pp.runpp(net, calculate_voltage_angles=True, init="flat")
+        # numba=False (#segfault): pandapower defaults to ``numba=True``, which JIT-compiles
+        # the Newton-Raphson matrix generation through numba -> llvmlite. Inside a full
+        # pytest run that LLVM JIT intermittently takes the whole process down with a native
+        # fatal (observed in tests/app/test_grid_screening_emit.py once ~212 extension modules
+        # are co-resident; it passes standalone). The JIT is a pure ACCELERATION of matrix
+        # generation, not a different algorithm: numba=True vs numba=False was verified
+        # BIT-IDENTICAL on vm_pu, va_degree and p_from_mw (max|diff| = 0.0). These are
+        # screening-sized networks where JIT compilation costs more than it saves, so the
+        # pure-numpy path pandapower ships (pf/no_numba.py) is both safer and faster here.
+        pp.runpp(net, calculate_voltage_angles=True, init="flat", numba=False)
         v_poc = float(net.res_bus.at[b_poc, "vm_pu"])
         # Driving-point proxy: the pu voltage change under the fixed probe is proportional
         # to |Zbus(h)|. Normalise to the fundamental to get a per-unit-on-Ssc impedance.
