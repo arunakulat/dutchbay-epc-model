@@ -1,0 +1,50 @@
+# NSO 250 MW — OEM commercial offers and LTL advisory issues, 3 September 2026
+#
+# MANIFEST ONLY. The content is held in the PRIVATE repository arunakulat/DutchBay_RAG at
+# corpus/nso_bess_250mw_2026_offers/, commit 652f8a5. It is not in this public repository and
+# never has been.
+#
+# Reason: this is the first material in the programme carrying live, unawarded bid pricing in a
+# tender that had not closed. The two Envision offers are marked Confidential on every page and
+# their clause 6 requires prior, explicit and written authorization from Envision before any
+# third-party communication; no such instrument is held. The second OEM quotation carries no
+# confidentiality marking and no vendor name, so the absence of a marking is not a grant of
+# permission and there is no issuing entity whose permission could be sought. Neither
+# PUBLICATION_AUTHORIZATION.md, which enumerates four files from the 6 August 2026 tranche, nor
+# the 29 August reversal, which turned on material forming part of the bid submitted to NSO,
+# reaches supplier pricing given to the bidder pre-award.
+#
+# Route selected by the project owner on 3 September 2026. Follows the precedent set for the
+# 21 August checklist dossier, whose binaries are likewise held outside this repository and
+# recorded here by manifest.
+#
+# Paths below are relative to corpus/nso_bess_250mw_2026_offers/ in the private repository.
+#
+# --- source documents, byte-identical to the copies received ---
+e9a6a12ba665ebbe47e98fbef0af575cfdc3ec7bc9e05420317352d8b46cfc36  raw/Envision_Sri_Lanka_10MW_40MWh_Budgetary_Commercial_Offer_V01_2026-08-31.pdf
+2cf463f543c6ae9e92b79ce17e20ac1a519d36b4b5c6ca55c1e747e03c40a558  raw/Envision_Sri_Lanka_11MW_44MWh_Budgetary_Commercial_Offer_V01_2026-08-31.pdf
+61ab3230e56c00f8144499a96db70ba5ff3dda658b015e4e2cefb9d687319da7  raw/H_Quote_Extracts_2026-08-31.pdf
+#
+# --- derived extracts (MarkItDown 0.1.7 per GWTF R26, plus Poppler layout views) ---
+17cb2c34c0cfcedd91df59604df57b4669c553b7f75cf17d377393e24e96a2fb  extracted/Envision_Sri_Lanka_10MW_40MWh_Budgetary_Commercial_Offer_V01_2026-08-31.markitdown.md
+f778c2f21151a272d34a3cbc731839b98c4174bbdd73ae1abdbe8003a790774a  extracted/Envision_Sri_Lanka_10MW_40MWh_Budgetary_Commercial_Offer_V01_2026-08-31.poppler-layout.txt
+a72d097b59041fc3c35b8daae7a65711222b1cca4363b22d1348d002d6b3c831  extracted/Envision_Sri_Lanka_11MW_44MWh_Budgetary_Commercial_Offer_V01_2026-08-31.markitdown.md
+6afd701a636dc44de8f5db2a53e05518d88c8121fa86edd81e78fefe06b12de6  extracted/H_Quote_Extracts_2026-08-31.markitdown.md
+7789c8f6431891d2a54d49cd0c6d8b30156589ecc99ee7162ea89507049da4f8  extracted/H_Quote_Extracts_2026-08-31.poppler-layout.txt
+#
+# --- derived analysis: ingress evaluations and the Markdown recommendation ---
+c7e405825acaaf8d0e60939097e3f645d4756ceb275ba9b1bd77a980b1472168  evaluation/Envision_Budgetary_Commercial_Offers_Ingress_Evaluation_2026-09-03.md
+5f15002e837ffc3c2bb860c9a8c8a8c0eab2d7565715693a190e8467fbf8a6d9  evaluation/LTL_Envision_Commercial_Offer_Recommendation_2026-09-03.md
+243efd42806e2607fdc6947ef5f64bce3fd7a3a8ea1276489068e01776cd36fb  evaluation/OEM_H_Quote_Ingress_and_Comparative_Evaluation_2026-09-03.md
+a65e4645be722a8b4d6252d86aa47a8b89e0dfde93abd70a0822efc498a5d517  evaluation/OEM_H_source_note.md
+#
+# --- documents issued to LTL, rendered through the DBPL print core ---
+b3f02aa5a62efec214a75e1b75da67e1b51be3720bed75b56d926cf7dfe1c9a0  issues/LTL_Comparative_Offer_Recommendation_DBPL_2026-09-03.pdf
+65bdff14636df2d17385d24c271dd49baad917ddb6f80d7ca30a98bf529798a8  issues/LTL_Envision_Offer_Recommendation_DBPL_2026-09-03.pdf
+#
+# --- document registers; these carry the price tables as source literals ---
+ff015daf8f78c3f0674198613a92a60a77388d4254c9eee805be47973552ff37  registers/build_ltl_comparative_recommendation_2026-09-03.py
+ec3bc5a36bc021c43c012237587942e4a8fef44614222c2c5bf6fea7fd4100c7  registers/build_ltl_offer_recommendation_2026-09-03.py
+#
+# --- the private tranche's own README ---
+9c6f33c367ba13a128c94ca0218174a62ed7e78de5331a8ee6b0a2d906b3d55f  README.md
