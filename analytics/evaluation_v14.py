@@ -224,13 +224,30 @@ def normalize_kpi_dict(raw_kpis: Mapping[str, Any]) -> dict[str, float]:
     """
     Normalize KPI dict to {str -> float}.
 
-    Filters out non-numeric values and logs warnings for skipped entries.
+    Drops every entry that is not ``float``-convertible, logging each one at
+    ``DEBUG`` level only.  The drop is therefore **silent in ordinary
+    operation**: a KPI that became ``"N/A"`` upstream is gone here, and its
+    absence is indistinguishable from its never having been emitted.
+
+    That is deliberate rather than an oversight.  This shim sits on the
+    ``return_full_result=False`` path of :func:`evaluate_with_overrides`, which
+    is the parameter's default and is called inside Monte Carlo, sensitivity,
+    tornado, solver and optimizer loops; warning per dropped entry per
+    iteration would flood those runs.  The observability fix is therefore at
+    the caller, not here.
+
+    **A caller that must not lose entries passes**
+    ``return_full_result=True`` and reads ``kpis`` off the full result, which
+    bypasses this function entirely.  Dolphin 3C requires exactly that for any
+    contract-facing capture, because a fixture recorded downstream of this
+    function has already taken the loss.
 
     Args:
         raw_kpis: Raw KPI mapping from pipeline result
 
     Returns:
-        Normalized dict with only numeric (float-convertible) values
+        Normalized dict with only numeric (float-convertible) values.  Entries
+        that failed conversion are absent, not defaulted or zero-filled.
 
     Example:
         >>> kpis = {"project_irr": 0.145, "name": "test", "min_dscr": "1.45"}
