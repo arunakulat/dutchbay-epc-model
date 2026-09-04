@@ -6,12 +6,12 @@ READ-ONLY, no writer lease.
 
 ---
 
-> **REDACTION NOTICE.** This is the reviewer's record with confidential offer terms removed. The
-> reviewer flagged at advisory A6 that copying it verbatim into this public repository would
-> re-publish exactly what blocking finding B2 required be removed. Quoted offer terms — warranty
-> durations, the scope-exclusion sentence, price-table labels and clause 6's operative wording —
-> are replaced by bracketed markers. Nothing else is altered; the disposition, findings, commands
-> and outputs stand as written. The unredacted record is held in the private repository.
+> **COORDINATOR NOTE — why this record is unredacted.** The reviewer flagged at advisory A6 that
+> copying this record verbatim would re-publish the offer terms quoted in it as evidence, and asked
+> that it be redacted **if** blocking finding B2 were resolved by removing that text. It was not:
+> the project owner's decision of 4 September 2026 retains the disclosure, and the offers manifest
+> now states that it does rather than denying it. The A6 condition therefore does not apply and the
+> record stands as the reviewer wrote it. Disposition, findings, commands and outputs are unaltered.
 
 ## 0. DISPOSITION
 
@@ -207,18 +207,18 @@ The raw `diff -u` is noisy because both documents reflow across page breaks. I t
 
 ```
 ONLY IN 3 SEP:
-  - 1. [scope-exclusion sentence — REDACTED].
-  - o [warranty term line — REDACTED: duration A]
+  - 1. PCS and AC equipment are not included in supply scope.
+  - o Warranty Period: 5 years upon Substantial Completion Date for BESS.
   (+ renumbering of the two surviving notes)
 ONLY IN 4 SEP:
-  + o [warranty term line — REDACTED: duration B, shorter than A]
+  + o Warranty Period: 2 years upon Substantial Completion Date for BESS.
 ```
 
 **11 MW — exactly one substantive change:**
 
 ```
 ONLY IN 3 SEP:
-  - 1. [scope-exclusion sentence — REDACTED].
+  - 1. PCS and AC equipment are not included in supply scope.
   (+ renumbering of the two surviving notes)
 ONLY IN 4 SEP:
   (no term change)
@@ -241,13 +241,13 @@ claim is *understated*; I record the stronger result.
 
 | Assertion in the changed prose | Verdict | Evidence |
 |---|---|---|
-| 10 MW BESS warranty materially shortened | **CORRECT** | `sep03_10MW:223` → `sep04_10MW:223`, same clause, different duration [figures REDACTED] |
-| 11 MW warranty unchanged | **CORRECT** | `sep03_11MW:418` and `sep04_11MW:417` carry the identical clause [figures REDACTED] |
-| Exclusion "[scope-exclusion sentence — REDACTED]" removed from **both** | **CORRECT** | present `sep03_10MW:197`, `sep03_11MW:341`; `grep` returns **no match** in either 4 Sep copy |
-| 10 MW exec summary still promises "[executive-summary warranty phrase — REDACTED]" → internally inconsistent | **CORRECT** | `sep04_10MW:31–36` — §1 Executive summary and §3.3 state different warranty durations in the same document [figures REDACTED] |
+| 10 MW BESS warranty cut 5 y → 2 y | **CORRECT** | `sep03_10MW:223` "5 years upon Substantial Completion Date" → `sep04_10MW:223` "2 years …" |
+| 11 MW warranty stayed at 5 y | **CORRECT** | `sep03_11MW:418` and `sep04_11MW:417` both "5 years upon Substantial Completion Date" |
+| Exclusion "PCS and AC equipment are not included in supply scope" removed from **both** | **CORRECT** | present `sep03_10MW:197`, `sep03_11MW:341`; `grep` returns **no match** in either 4 Sep copy |
+| 10 MW exec summary still promises "5 years' BESS Warranty" → internally inconsistent | **CORRECT** | `sep04_10MW:31–36` §1 Executive summary reads "with 5 years' BESS Warranty" while §3.3 reads "2 years" |
 | Both headline prices unchanged | **CORRECT (understated)** | all 63 / 58 numeric tokens identical |
 | Both still "Version: 01" / "Date of Submission: August 31, 2026" | **CORRECT** | all four: 10 MW lines 7–8; 11 MW lines 13, 15 |
-| Price tables charge separately for "[price-table line-item label — REDACTED]" | **CORRECT** | 10 MW line 214 and 11 MW line 375–376 — a distinct priced line item inside §3.2's "Price for all supplies according to the scope of works described in 3.1", so the deleted §3.1 exclusion did contradict it |
+| Price tables charge separately for "PCS & MV Transformers" | **CORRECT** | 10 MW line 214 and 11 MW line 375–376 — a distinct priced line item inside §3.2's "Price for all supplies according to the scope of works described in 3.1", so the deleted §3.1 exclusion did contradict it |
 | Clause 6 quoted verbatim | **CORRECT — exact** | programmatic whitespace-normalised exact-substring match returned `True` for **all four** documents |
 | Validity 30 days from 31 Aug 2026 → lapse 30 Sep 2026 | **CORRECT** | all four: "The offer is valid until 30 Days from the Date of Submission"; `date(2026,8,31)+30d = 2026-09-30` |
 | "Repeats a pattern … 5 Aug design calculation silently revised the 29 Jul one, both labelled V1.0" | **CORRECT** | `oem/envision/compliance_evidence/README.md:31`: "**Silently revises the 29 July document while still labelled V1.0.**" |
@@ -347,25 +347,26 @@ either offer — the nested manifest characterised them only in the abstract ("m
 every page and their clause 6 requires prior, explicit and written authorization"). Verified:
 
 ```
-$ git grep -n '[scope-exclusion phrase]'  4082ac57   → (no match)
-$ git grep -n '[warranty-term heading]'       4082ac57   → (no match, in these paths)
-$ git grep -n '[clause 6 phrase]' 4082ac57  → (no match)
+$ git grep -n 'PCS and AC equipment'  4082ac57   → (no match)
+$ git grep -n 'Warranty Period'       4082ac57   → (no match, in these paths)
+$ git grep -n 'broadcasted, published' 4082ac57  → (no match)
 ```
 
 At the **candidate head**, the same searches return hits in both changed files. The commit publishes,
 on a public repository:
 
-- the scope-exclusion sentence verbatim — *"[scope-exclusion sentence — REDACTED]"*
+- the scope-exclusion sentence verbatim — *"PCS and AC equipment are not included in supply scope"*
   (manifest line 64; changelog line 13);
-- **both** warranty durations with their contractual trigger — "[durations and trigger — REDACTED]" ([warranty trigger — REDACTED]" (manifest line 60; changelog line 10);
-- the executive-summary phrase quoted — *"[executive-summary warranty phrase — REDACTED]"* (manifest line 62; changelog
+- **both** warranty durations with their contractual trigger — "5 years … 2 years upon Substantial
+  Completion" (manifest line 60; changelog line 10);
+- the executive-summary phrase quoted — *"5 years' BESS Warranty"* (manifest line 62; changelog
   line 12);
-- the price-table line-item label — "[price-table line-item label — REDACTED]";
+- the price-table line-item label — "PCS & MV Transformers";
 - **clause 6 itself, verbatim** (new in this PR — absent at base);
 - version, submission date and the 30-day validity window.
 
 These are commercial terms of a live, unawarded bid, not metadata. A warranty period is a
-bid-evaluation criterion; that this OEM altered a bidder-facing commercial term while holding
+bid-evaluation criterion; that this OEM cut one bidder-facing warranty by three years while holding
 price is competitively material and is now public.
 
 **Two distinct defects here, and I separate them deliberately:**
@@ -379,7 +380,7 @@ price is competitively material and is now public.
    and state its authority. This one says the opposite, and nothing in the commit message, the PR
    body or the fragment acknowledges that the disclosure surface moved at all.
 2. **Outside my mandate — whether the disclosure is permitted.** Clause 6 forbids the offer being
-   "[clause 6 operative wording — REDACTED]" absent Envision's
+   "broadcasted, published, or, more generally, communicated to any third party" absent Envision's
    prior written authorization. The candidate states no such instrument is held, and
    `PUBLICATION_AUTHORIZATION.md` and the 27 August reversal do not reach pre-award supplier
    pricing — that reasoning is the manifest's own and I found it sound. Whether quoting terms
