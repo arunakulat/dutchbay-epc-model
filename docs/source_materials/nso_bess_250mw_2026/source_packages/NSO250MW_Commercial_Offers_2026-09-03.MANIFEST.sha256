@@ -3,8 +3,8 @@
 # DOCUMENTS HELD PRIVATELY. The offer documents and their extracts are held in the PRIVATE
 # repository arunakulat/DutchBay_RAG at corpus/nso_bess_250mw_2026_offers/. The 3 September
 # tranche is at commit 652f8a5; the 4 September re-supply, its extracts and the comparison
-# that establishes the revisions are at commit 133833a on branch
-# claude/offer-resupply-2026-09-04, which is pushed. No
+# that establishes the revisions were merged to that repository's main at commit 840e138
+# (PR #1). The feature branch that carried them has been deleted, so the pin names main. No
 # offer document has ever been committed to this public repository.
 #
 # THIS FILE IS NOT MANIFEST-ONLY. The 4 September re-supply block below recites specific

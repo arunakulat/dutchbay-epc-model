@@ -168,10 +168,11 @@ one, because the next session acts on it.
 - Do not publish confidential or third-party materials without explicit authorization.
   Retain original provenance and confidentiality markings when publication is authorized.
 
-### Two mistakes that have recurred — check for both before every corpus commit
+### Three ways a corpus commit goes wrong — check all three before committing
 
-Both were made more than once in this repository, each time by someone who believed they were
-being careful. Neither is caught by CI. Read them as a checklist, not as history.
+Each of these has actually happened here, each time to someone who believed they were being
+careful, and **none of them is caught by CI**. Read them as a checklist, not as history. The
+manifest defects in particular have reached `main` four times.
 
 **1. A nested manifest's parent pin goes stale the moment you edit the child.**
 `docs/source_materials/**/MANIFEST.sha256` records the SHA-256 of the *other* manifests beneath it.

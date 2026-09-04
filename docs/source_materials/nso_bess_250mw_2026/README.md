@@ -35,8 +35,19 @@ Envision's BESS business to a group battery affiliate.
   Envision corporate brochure. It has no confidentiality marking and ends with Envision's public
   website and QR code. It is held separately from tender evidence at `oem/envision/corporate/`;
   copyright remains with Envision and its claims remain OEM statements.
-- The **OEM commercial offers received on 3 September 2026 are held in the private corpus and
-  recorded here by manifest only.** Two Envision budgetary offers and a second OEM quotation, with
+- The **OEM commercial offer DOCUMENTS are held in the private corpus.** No offer document is, or
+  has been, in this repository. **The package manifest is not manifest-only, however**: on the
+  project owner's decision of **4 September 2026** it recites specific revised commercial terms
+  from the re-supplied offers, and its header states that it does rather than asserting otherwise.
+  That is a deliberate widening of the disclosure surface against the 3 September route, recorded
+  here as a handling reversal rather than applied quietly. Clause 6 still forbids third-party
+  communication absent Envision's prior written authorization, and none is held.
+- **Re-supply, 4 September 2026.** Both Envision offers were supplied again carrying the *same*
+  version and submission date as the 3 September copies while differing substantively in
+  commercial terms — silent revisions, so version and date do not identify the document. Both sets
+  of hashes are recorded, and the comparison establishing the revisions is pinned by SHA-256 so it
+  cannot be revised without trace. Neither issue automatically supersedes the other.
+- The 3 September package comprises two Envision budgetary offers and a second OEM quotation, with
   their extracts, the ingress evaluations, two DBPL issues to LTL and the registers that render
   them. They are the first material in the programme carrying **live, unawarded bid pricing** in a
   tender that had not closed. The Envision offers are marked *Confidential* on every page and their
@@ -70,7 +81,7 @@ Envision's BESS business to a group battery affiliate.
 | Envision functional-requirements checklist | `oem/envision/compliance_evidence/Envision_Functional_Requirements_Checklist_2026-07-21.xlsx` | Supplier declaration against selected Annex A/B clauses; not the official annex and not evidence-complete |
 | NSO 250 MW checklist dossier, 21 Aug 2026 | `source_packages/NSO250MW_checklist_2026-08-21.MANIFEST.sha256` | Manifest only — 72 files / 58 unique across checklist sections A-J. Certificates, grid-forming letters, PSS(R)E and PSCAD models, fire-safety package, independent bankability study, filled Volume 2 GTP, grid-compliance list. Binaries held outside the repository |
 | Envision corporate brochure, version 2603 | `oem/envision/corporate/Envision_Corporate_Brochure_Regular_ver_2603.pdf` | Corporate profile and marketing claims; useful for attributed context only, not tender compliance or a product-specific technical basis |
-| **OEM commercial offers and LTL advisory issues, 3 Sep 2026** | `source_packages/NSO250MW_Commercial_Offers_2026-09-03.MANIFEST.sha256` | **Manifest only** — 17 files held in the private `DutchBay_RAG` corpus at `corpus/nso_bess_250mw_2026_offers/`. Two Envision budgetary offers of 31 August 2026 and a second OEM quotation of the same date, their extracts, the ingress evaluations, two DBPL issues to LTL and the registers that render them. Live unawarded bid pricing; see the handling note above |
+| **OEM commercial offers and LTL advisory issues, 3 Sep 2026, re-supplied 4 Sep** | `source_packages/NSO250MW_Commercial_Offers_2026-09-03.MANIFEST.sha256` | **Documents private; some terms disclosed.** 22 entries held in the private `DutchBay_RAG` corpus at `corpus/nso_bess_250mw_2026_offers/`. Two Envision budgetary offers of 31 August 2026 and a second OEM quotation of the same date, their extracts, the ingress evaluations, two DBPL issues to LTL, the registers that render them, and the 4 September re-supply with the comparison establishing its silent revisions. Live unawarded bid pricing. That manifest is **not** manifest-only — it recites specific revised terms on the owner's 4 Sep decision; see the handling note above |
 | LTSA workbook re-supply, 3 Sep 2026 | `source_packages/NSO250MW_LTSA_Resupply_2026-09-03_DEDUPLICATION_RECEIPT.md` | Byte-identical to `oem/envision/commercial/23_LTSA_Solution.xlsx`; nothing copied. Identity establishes that the `BESS-100225-Draft` tab behind finding A7 has **not** been revised |
 | OEM archive re-supply, 1 Sep 2026 | `source_packages/NSO250MW_Archive_2026-09-01_DEDUPLICATION_RECEIPT.md` | New outer archive; all 50 payload instances already present byte-for-byte; no duplicate payload retained |
 
