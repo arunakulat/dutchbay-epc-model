@@ -1,16 +1,24 @@
 - **Corpus manifest repaired** — `MANIFEST.sha256` recorded a `registers/__pycache__/*.pyc`
   bytecode file, added by #1226. `__pycache__/` is gitignored, so the file was never in the tree
-  and `sha256sum -c` failed on `main` (138 OK, 1 FAILED). Removed; the manifest verifies again at
-  138/138. This is the fourth manifest defect in this programme to reach `main` unnoticed because
-  **no test covers either corpus manifest** — a stale, incomplete or impossible entry passes CI
-  silently. Worth a test.
-- **Envision commercial offers re-supplied, 4 September 2026** — the two budgetary offers were
-  supplied again. They are the same logical documents as those recorded on 3 September (both
-  Version 01, both dated 31 August 2026) but are **not byte-identical** to the recorded copies.
-  Both hashes are added to `NSO250MW_Commercial_Offers_2026-09-03.MANIFEST.sha256` so the
-  divergence is on the record; neither copy supersedes the other. Content remains **manifest only**
-  on the established 3 September route: clause 6 of both offers forbids the offer being
-  "broadcasted, published, or, more generally, communicated to any third party without prior,
-  explicit and written authorization from Envision", no such instrument is held, and this
-  repository is public. Offer validity is 30 days from 31 August 2026, so both lapse on
-  30 September 2026.
+  and `sha256sum -c` failed on `main`. Removed; the manifest verifies again. This is the fourth
+  manifest defect in this programme to reach `main` unnoticed because **no test covers either
+  corpus manifest** — a stale, incomplete or impossible entry passes CI silently.
+- **Envision commercial offers silently revised, 4 September 2026** — both budgetary offers were
+  supplied again carrying the **same version and date** as the 3 September copies ("Version: 01",
+  "Date of Submission: August 31, 2026"), but their text **differs substantively**. Verified by
+  extracting and diffing against the copies held in the private repository:
+  - the **10 MW offer's BESS warranty was cut from 5 years to 2 years**, while the 11 MW offer's
+    stayed at 5 years. The edit did not reach the 10 MW executive summary, which still promises
+    "5 years' BESS Warranty", so that document is now internally inconsistent;
+  - the scope note *"PCS and AC equipment are not included in supply scope"* was **removed from
+    both** offers, resolving a contradiction against their own price tables, which charge
+    separately for "PCS & MV Transformers";
+  - **both headline prices are unchanged**, so on the 10 MW offer the price held while the
+    warranty was reduced.
+
+  This repeats a pattern already on the record for this OEM, whose 5 August design calculation
+  silently revised the 29 July one while both were labelled V1.0. Both sets of hashes are recorded
+  in `NSO250MW_Commercial_Offers_2026-09-03.MANIFEST.sha256`; neither issue automatically
+  supersedes the other. Content remains **manifest only**: clause 6 of both offers forbids
+  publication without Envision's prior written authorization, none is held, and this repository is
+  public.
