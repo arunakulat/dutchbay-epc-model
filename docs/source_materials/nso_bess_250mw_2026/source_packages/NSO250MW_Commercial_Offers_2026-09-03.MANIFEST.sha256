@@ -48,3 +48,26 @@ ec3bc5a36bc021c43c012237587942e4a8fef44614222c2c5bf6fea7fd4100c7  registers/buil
 #
 # --- the private tranche's own README ---
 9c6f33c367ba13a128c94ca0218174a62ed7e78de5331a8ee6b0a2d906b3d55f  README.md
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+# RE-SUPPLY, 4 September 2026. Two Envision budgetary commercial offers were supplied again.
+#
+# They are the SAME LOGICAL DOCUMENTS as the two recorded above — both Version 01, both dated
+# 31 August 2026 — but they are NOT byte-identical to the copies recorded above. Different bytes,
+# same content: a re-export or a second transmission. Recorded here so the divergence is on the
+# record rather than discovered later; neither copy supersedes the other.
+#
+# Held on the SAME basis as the rest of this manifest: content in the private repository, recorded
+# here by hash only. Clause 6 of both offers reads, verbatim:
+#
+#   "The offer is confidential thus shall be used by the Employer/EPC exclusively for the
+#    evaluation of the project, and may not be broadcasted, published, or, more generally,
+#    communicated to any third party without prior, explicit and written authorization from
+#    Envision."
+#
+# This repository is public, so committing the content here would be the "published" case that
+# clause names. No authorization instrument is held. Offer validity is 30 days from 31 August
+# 2026, so both offers lapse on 30 September 2026.
+#
+228ace5417f32dbdd89dd6bd66e1da3d07e06f76684fcdcd502a9350db673c4d  raw/resupply_2026-09-04/Srilanka_Envision_Commercial_Offer_10MW_40MWh.pdf
+9181734ec864b4ae512f85f59c5bf7280ae2e5937b5c9bf9b7f249449b64ea7f  raw/resupply_2026-09-04/Srilanka_Envision_Commercial_Offer_11MW_44MWh.pdf
