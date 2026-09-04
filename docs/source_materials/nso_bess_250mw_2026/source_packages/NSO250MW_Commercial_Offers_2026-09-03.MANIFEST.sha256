@@ -57,43 +57,29 @@ ec3bc5a36bc021c43c012237587942e4a8fef44614222c2c5bf6fea7fd4100c7  registers/buil
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 # RE-SUPPLY, 4 September 2026. Two Envision budgetary commercial offers were supplied again.
 #
-# They carry the SAME VERSION AND DATE as the two recorded above — both still "Version: 01",
-# both still "Date of Submission: August 31, 2026" — but they are NOT the same documents. The
-# text was compared against the 3 September copies held in the private repository and DIFFERS
-# SUBSTANTIVELY. These are SILENT REVISIONS: the content changed and the version and date did not.
+# They carry the SAME VERSION AND DATE as the two recorded above, and they are NOT the same
+# documents. The 4 September text was compared against the 3 September copies held in the private
+# repository and DIFFERS SUBSTANTIVELY in commercial terms. These are SILENT REVISIONS: the content
+# changed and the version and date did not, so the version and date do not identify the document.
 #
-#   1. The 10 MW offer's BESS warranty was CUT from 5 years to 2 years upon Substantial
-#      Completion. The 11 MW offer's stayed at 5 years. The 10 MW document is now internally
-#      inconsistent as a result: its executive summary still promises "5 years' BESS Warranty",
-#      which the edit did not reach.
-#   2. The scope note "PCS and AC equipment are not included in supply scope" was REMOVED from
-#      BOTH offers. In the 3 September copies that exclusion contradicted the offers' own price
-#      tables, which charge separately for "PCS & MV Transformers". Deleting it resolves that
-#      contradiction in the buyer's favour.
+# THE TERMS THEMSELVES ARE NOT REPRODUCED HERE. This repository is public and clause 6 of both
+# offers forbids the offer being communicated to any third party absent Envision's prior, explicit
+# and written authorization. No such instrument is held. What changed, in what direction, and the
+# full comparison are recorded in the private repository at
+#   evaluation/Envision_Offer_Resupply_Comparison_2026-09-04.md
+# whose SHA-256 is pinned below so the analysis cannot be revised without trace.
 #
-# Both headline prices are unchanged in both offers. So on the 10 MW offer the price held while
-# the warranty was reduced.
-#
-# This repeats a pattern already on the record for this OEM: the 5 August design calculation
+# This repeats a pattern already on the record for this OEM, whose 5 August design calculation
 # silently revised the 29 July one while both were labelled V1.0.
 #
-# The 4 September copies do NOT supersede the 3 September copies automatically — which issue
-# governs is a question for the bidder, and both are recorded here so the divergence cannot be
-# lost.
+# Neither issue automatically supersedes the other; which governs is a question for the bidder, and
+# both are recorded here so the divergence cannot be lost.
 #
-# The documents themselves are held on the same basis as the rest of this manifest: private
-# repository, recorded here by hash. The terms recited above, and clause 6 quoted below, ARE
-# disclosed in this public repository — see the header note. Clause 6 reads, verbatim:
-#
-#   "The offer is confidential thus shall be used by the Employer/EPC exclusively for the
-#    evaluation of the project, and may not be broadcasted, published, or, more generally,
-#    communicated to any third party without prior, explicit and written authorization from
-#    Envision."
-#
-# This repository is public, so the recitation above falls within the "published" case that
-# clause names, and no authorization instrument is held. That is recorded plainly here rather
-# than left implicit. Offer validity is 30 days from 31 August 2026, so both offers lapse on
-# 30 September 2026.
-#
+# --- 4 September source documents ---
 228ace5417f32dbdd89dd6bd66e1da3d07e06f76684fcdcd502a9350db673c4d  raw/resupply_2026-09-04/Srilanka_Envision_Commercial_Offer_10MW_40MWh.pdf
 9181734ec864b4ae512f85f59c5bf7280ae2e5937b5c9bf9b7f249449b64ea7f  raw/resupply_2026-09-04/Srilanka_Envision_Commercial_Offer_11MW_44MWh.pdf
+#
+# --- 4 September derived extracts and the comparison that establishes the revisions ---
+d8767562699dfbd3d81c5cb917584d65dd9ab144b64bb0ee7fd12ce926bf6cff  evaluation/Envision_Offer_Resupply_Comparison_2026-09-04.md
+6c1ca327e1e8fdac9c3f577319ebc0464fd4b17b6188ba0d8843dd401dcb6f3e  extracted/resupply_2026-09-04/Srilanka_Envision_Commercial_Offer_10MW_40MWh.markitdown.md
+86adc2372725dae547c788b474aa4e580cd338857ad95f67c67850d05286b16f  extracted/resupply_2026-09-04/Srilanka_Envision_Commercial_Offer_11MW_44MWh.markitdown.md

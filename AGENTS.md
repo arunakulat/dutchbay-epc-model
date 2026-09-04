@@ -168,6 +168,46 @@ one, because the next session acts on it.
 - Do not publish confidential or third-party materials without explicit authorization.
   Retain original provenance and confidentiality markings when publication is authorized.
 
+### Two mistakes that have recurred — check for both before every corpus commit
+
+Both were made more than once in this repository, each time by someone who believed they were
+being careful. Neither is caught by CI. Read them as a checklist, not as history.
+
+**1. A nested manifest's parent pin goes stale the moment you edit the child.**
+`docs/source_materials/**/MANIFEST.sha256` records the SHA-256 of the *other* manifests beneath it.
+Editing a nested manifest therefore invalidates the parent unless the same commit refreshes it. Get
+this wrong and `sha256sum -c` reports `FAILED` — content present, hash mismatched — which in an
+evidence corpus is the signal reserved for **an evidence file has been altered**. That is a worse
+artifact than the stale entry it usually replaces.
+
+  - After ANY manifest edit, run `sha256sum -c MANIFEST.sha256` from the corpus root and require
+    `exit 0`. Do not infer success from the edit having applied.
+  - Refresh the parent with `scripts/analysis/refresh_corpus_manifest.py`, which refuses unrecorded
+    paths by design — that refusal is a feature; do not route around it.
+  - Never record a gitignored path. A `__pycache__/*.pyc` entry can never verify, because the file
+    can never be in the tree.
+
+**2. "Recorded by hash only" stops being true the moment you quote the source.**
+A manifest note or changelog entry that explains *what changed* in a confidential document can
+publish the very terms the hash-only route exists to withhold — warranty durations, scope
+exclusions, contract clauses, price-line labels. The document then asserts "manifest only" while
+disclosing commercial terms, and the assertion is false.
+
+  - Before committing a note about withheld material, diff the disclosure surface against the base:
+    `git grep -n '<distinctive phrase>' <base-sha> -- docs/ changelog.d/` should return nothing, and
+    if it now returns hits you have widened publication.
+  - Describe the finding abstractly in public — its direction, its materiality, where the analysis
+    is held — and pin the private analysis document by SHA-256 so it cannot be revised without
+    trace. That gives a reader everything except the confidential terms.
+  - If publication really is intended, it is a project-owner decision on recorded authority, and
+    the change must **say** that the disclosure surface moved and on what basis. This repository
+    records handling reversals rather than applying them quietly; see
+    `docs/source_materials/nso_bess_250mw_2026/source_packages/README.md`.
+  - Publication to a public repository is effectively irreversible. Decide before merge, not after.
+
+**3. A review record can re-publish what the fix removed.** When redaction and a review pass land
+together, redact the review record in the same pass — it quotes the material as evidence.
+
 ## Presentation layer and PDF generation
 
 - Follow `DBPL-01`. **DBPL / dbpl / DutchBay Presentation Layer names a print contract, not a
