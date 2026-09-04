@@ -19,6 +19,9 @@
   This repeats a pattern already on the record for this OEM, whose 5 August design calculation
   silently revised the 29 July one while both were labelled V1.0. Both sets of hashes are recorded
   in `NSO250MW_Commercial_Offers_2026-09-03.MANIFEST.sha256`; neither issue automatically
-  supersedes the other. Content remains **manifest only**: clause 6 of both offers forbids
-  publication without Envision's prior written authorization, none is held, and this repository is
-  public.
+  supersedes the other. The offer **documents** are not in this public repository; they are held
+  privately and recorded here by hash. The revised **terms set out above are disclosed** here, on
+  the project owner's decision of 4 September 2026: clause 6 of both offers requires Envision's
+  prior, explicit and written authorization before communication to a third party, no such
+  instrument is held, and this repository is public. This entry is a disclosure of those terms,
+  not a manifest-only record, and is labelled as one so it does not misdescribe itself.

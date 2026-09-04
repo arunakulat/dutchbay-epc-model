@@ -1,8 +1,13 @@
 # NSO 250 MW — OEM commercial offers and LTL advisory issues, 3 September 2026
 #
-# MANIFEST ONLY. The content is held in the PRIVATE repository arunakulat/DutchBay_RAG at
-# corpus/nso_bess_250mw_2026_offers/, commit 652f8a5. It is not in this public repository and
-# never has been.
+# DOCUMENTS HELD PRIVATELY. The offer documents and their extracts are held in the PRIVATE
+# repository arunakulat/DutchBay_RAG at corpus/nso_bess_250mw_2026_offers/, commit 652f8a5. No
+# offer document has ever been committed to this public repository.
+#
+# THIS FILE IS NOT MANIFEST-ONLY. The 4 September re-supply block below recites specific
+# commercial terms and quotes clause 6 verbatim. That disclosure is deliberate, made on the
+# project owner's decision of 4 September 2026, and is stated here so this file does not
+# misdescribe what it contains.
 #
 # Reason: this is the first material in the programme carrying live, unawarded bid pricing in a
 # tender that had not closed. The two Envision offers are marked Confidential on every page and
@@ -76,17 +81,19 @@ ec3bc5a36bc021c43c012237587942e4a8fef44614222c2c5bf6fea7fd4100c7  registers/buil
 # governs is a question for the bidder, and both are recorded here so the divergence cannot be
 # lost.
 #
-# Held on the SAME basis as the rest of this manifest: content in the private repository, recorded
-# here by hash only. Clause 6 of both offers reads, verbatim:
+# The documents themselves are held on the same basis as the rest of this manifest: private
+# repository, recorded here by hash. The terms recited above, and clause 6 quoted below, ARE
+# disclosed in this public repository — see the header note. Clause 6 reads, verbatim:
 #
 #   "The offer is confidential thus shall be used by the Employer/EPC exclusively for the
 #    evaluation of the project, and may not be broadcasted, published, or, more generally,
 #    communicated to any third party without prior, explicit and written authorization from
 #    Envision."
 #
-# This repository is public, so committing the content here would be the "published" case that
-# clause names. No authorization instrument is held. Offer validity is 30 days from 31 August
-# 2026, so both offers lapse on 30 September 2026.
+# This repository is public, so the recitation above falls within the "published" case that
+# clause names, and no authorization instrument is held. That is recorded plainly here rather
+# than left implicit. Offer validity is 30 days from 31 August 2026, so both offers lapse on
+# 30 September 2026.
 #
 228ace5417f32dbdd89dd6bd66e1da3d07e06f76684fcdcd502a9350db673c4d  raw/resupply_2026-09-04/Srilanka_Envision_Commercial_Offer_10MW_40MWh.pdf
 9181734ec864b4ae512f85f59c5bf7280ae2e5937b5c9bf9b7f249449b64ea7f  raw/resupply_2026-09-04/Srilanka_Envision_Commercial_Offer_11MW_44MWh.pdf
