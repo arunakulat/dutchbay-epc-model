@@ -145,18 +145,33 @@ def test_resolver_does_not_mutate_the_caller_config() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_quarterly_resolves_but_the_engine_gate_rejects_it() -> None:
-    """``quarterly`` is describable but not yet buildable, and the two seams differ.
+def test_quarterly_now_resolves_and_passes_the_engine_gate() -> None:
+    """``quarterly`` became buildable in A2, so the gate that rejected it now admits it.
 
-    Config validation passes (the value is genuinely valid) while the engine gate
-    raises. When A2 lands, ``quarterly`` joins ENGINE_SUPPORTED_RESOLUTIONS and only
-    the second half of this test changes.
+    In A1 this test asserted the opposite half: ``quarterly`` resolved but
+    ``require_engine_support`` raised, because no code could build sub-annual rows yet.
+    A2 added :func:`finance.subannual_rows_v14.build_subannual_rows`, so the resolution
+    joined ENGINE_SUPPORTED_RESOLUTIONS and the gate opened — exactly the seam the split
+    was designed for. The resolver itself was not touched in either dolphin.
     """
     grid = resolve_period_grid({"cashflow": {"resolution": "quarterly"}})
-    assert grid == QUARTERLY  # resolution succeeded
+    assert grid == QUARTERLY
+    require_engine_support(grid)  # must not raise
+
+
+def test_the_engine_gate_still_rejects_a_describable_but_unbuilt_resolution() -> None:
+    """The gate must keep its teeth once quarterly passes it.
+
+    The mechanism is what matters, not the one resolution that happened to be behind it:
+    a resolution the grid can describe but the engine cannot build must still fail rather
+    than be served as annual. Asserted against a synthetic grid so the test does not
+    decay into a tautology the moment every named resolution is buildable.
+    """
+    unbuilt = PeriodGrid(resolution="fortnightly", periods_per_year=26)
+    assert unbuilt.resolution not in ENGINE_SUPPORTED_RESOLUTIONS
 
     with pytest.raises(ValueError, match="does not yet build sub-annual rows"):
-        require_engine_support(grid)
+        require_engine_support(unbuilt)
 
 
 def test_annual_passes_the_engine_gate() -> None:

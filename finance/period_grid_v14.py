@@ -61,6 +61,7 @@ deliberately no generic ``aggregate``; the caller must say which kind it holds.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Sequence
 
@@ -92,10 +93,13 @@ SUPPORTED_RESOLUTIONS: Dict[str, int] = {
     "quarterly": 4,
 }
 
-# The subset the CASHFLOW ENGINE can actually produce rows for today. This is the gate
-# that A2 widens to include "quarterly"; SUPPORTED_RESOLUTIONS above is only about the
-# arithmetic, which is already complete.
-ENGINE_SUPPORTED_RESOLUTIONS = frozenset({"annual"})
+# The subset the CASHFLOW ENGINE can actually produce rows for today. A2 widened this to
+# include "quarterly" once finance.subannual_rows_v14.build_subannual_rows existed to
+# build them; SUPPORTED_RESOLUTIONS above is only about the arithmetic, which was already
+# complete in A1. The two stay separate so a resolution can be describable before it is
+# buildable — the gate exists to stop a config naming a resolution the engine would
+# silently serve as annual.
+ENGINE_SUPPORTED_RESOLUTIONS = frozenset({"annual", "quarterly"})
 
 
 @dataclass(frozen=True)
@@ -283,7 +287,12 @@ def aggregate_flows_to_annual(
             otherwise silently drop or misattribute a partial year.
     """
     chunks = _whole_years(values, grid, kind="flow")
-    return [float(sum(chunk)) for chunk in chunks]
+    # math.fsum, not the builtin sum: fsum is exactly rounded, so the result does not
+    # depend on summation order. A2's allocator computes each year's closing residual
+    # against this function, and with a left-to-right sum the two disagreed by one ULP on
+    # the live lendercase — enough to break the exact round-trip the allocation promises.
+    # Under the annual grid each chunk holds one value and fsum returns it unchanged.
+    return [float(math.fsum(chunk)) for chunk in chunks]
 
 
 def aggregate_balances_to_annual(
