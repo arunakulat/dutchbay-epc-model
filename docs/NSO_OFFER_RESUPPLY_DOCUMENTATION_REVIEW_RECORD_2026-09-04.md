@@ -12,6 +12,14 @@ READ-ONLY, no writer lease.
 > the project owner's decision of 4 September 2026 retains the disclosure, and the offers manifest
 > now states that it does rather than denying it. The A6 condition therefore does not apply and the
 > record stands as the reviewer wrote it. Disposition, findings, commands and outputs are unaltered.
+>
+> **Amendment, 5 September 2026 — two spans paraphrased, nothing else touched.** This record quoted
+> clause 6 of the offers twice, in §5.2 and §5.2 item 2, as evidence for the findings there. Clause 6
+> is now quoted in exactly one place in this repository — the offers manifest header, at
+> `NSO250MW-OFFERS-HANDLING-2026-09-04`, item 3 — and those two spans are paraphrased so this record
+> does not re-publish what the consolidation moved. The findings, their force and every command,
+> output and SHA in this record are unchanged. This is the third failure mode named in `AGENTS.md`:
+> a review record re-publishing what the fix removed.
 
 ## 0. DISPOSITION
 
@@ -343,8 +351,9 @@ and the changelog fragment states:
 > Content remains **manifest only**.
 
 Both are false at this head. At the **base**, the public repository contained no verbatim text from
-either offer — the nested manifest characterised them only in the abstract ("marked Confidential on
-every page and their clause 6 requires prior, explicit and written authorization"). Verified:
+either offer — the nested manifest characterised them only in the abstract: marked Confidential on
+every page, with clause 6 requiring Envision's authorization before any third-party communication.
+Verified:
 
 ```
 $ git grep -n 'PCS and AC equipment'  4082ac57   → (no match)
@@ -380,8 +389,8 @@ price is competitively material and is now public.
    and state its authority. This one says the opposite, and nothing in the commit message, the PR
    body or the fragment acknowledges that the disclosure surface moved at all.
 2. **Outside my mandate — whether the disclosure is permitted.** Clause 6 forbids the offer being
-   "broadcasted, published, or, more generally, communicated to any third party" absent Envision's
-   prior written authorization. The candidate states no such instrument is held, and
+   communicated to any third party absent Envision's prior written authorization. The candidate
+   states no such instrument is held, and
    `PUBLICATION_AUTHORIZATION.md` and the 27 August reversal do not reach pre-award supplier
    pricing — that reasoning is the manifest's own and I found it sound. Whether quoting terms
    (rather than prices) crosses that line is a **project-owner decision on recorded authority**, per

@@ -26,13 +26,14 @@
     warranty was reduced;
   - this repeats a pattern already on the record for this OEM, whose 5 August design calculation
     silently revised the 29 July one while both were labelled V1.0.
-- **Handling of that finding** — the offer **documents** are not in this public repository and
-  never have been; they are held privately and recorded by hash, and the comparison establishing
-  the revisions is pinned by SHA-256 so it cannot be revised without trace. The revised **terms
-  above are disclosed** here on the project owner's decision of 4 September 2026. Clause 6 of both
-  offers requires Envision's prior, explicit and written authorization before communication to a
-  third party, no such instrument is held, and this repository is public. That is a widening of the
-  disclosure surface against the 3 September route, recorded as a handling reversal rather than
-  applied quietly, and the package manifest and both corpus READMEs say so rather than asserting
-  "manifest only". Both sets of hashes are recorded; neither issue automatically supersedes the
-  other.
+- **Handling of that finding, now stated once** — the offer documents are not in this public
+  repository and never have been; both sets of hashes are recorded and the comparison establishing
+  the revisions is pinned by SHA-256, so the analysis cannot be revised without trace. Neither
+  issue automatically supersedes the other. Everything else about how the package is handled —
+  what this repository does and does not disclose about the offers, on whose decision, and why
+  that route was chosen — is stated in exactly one place: the header of
+  `docs/source_materials/nso_bess_250mw_2026/source_packages/NSO250MW_Commercial_Offers_2026-09-03.MANIFEST.sha256`,
+  under the identifier `NSO250MW-OFFERS-HANDLING-2026-09-04`. It had been written out in five
+  places; the five copies disagreed with each other, and every blocking finding of two RECRUIT-01
+  reviews of this change was one of those disagreements. The READMEs and this fragment now cite
+  the identifier instead of restating it.

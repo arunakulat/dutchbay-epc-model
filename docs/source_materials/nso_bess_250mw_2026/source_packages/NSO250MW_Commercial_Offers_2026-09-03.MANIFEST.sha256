@@ -1,30 +1,57 @@
 # NSO 250 MW — OEM commercial offers and LTL advisory issues, 3 September 2026
 #
-# DOCUMENTS HELD PRIVATELY. The offer documents and their extracts are held in the PRIVATE
-# repository arunakulat/DutchBay_RAG at corpus/nso_bess_250mw_2026_offers/. The 3 September
-# tranche is at commit 652f8a5; the 4 September re-supply, its extracts and the comparison
-# that establishes the revisions were merged to that repository's main at commit 840e138
-# (PR #1). The feature branch that carried them has been deleted, so the pin names main. No
-# offer document has ever been committed to this public repository.
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+# HANDLING NOTE — NSO250MW-OFFERS-HANDLING-2026-09-04
 #
-# THIS FILE IS NOT MANIFEST-ONLY. The 4 September re-supply block below recites specific
-# commercial terms and quotes clause 6 verbatim. That disclosure is deliberate, made on the
-# project owner's decision of 4 September 2026, and is stated here so this file does not
-# misdescribe what it contains.
+# This block is the ONLY statement of how this package is handled. The corpus README, the
+# source_packages README and the changelog fragment cite the identifier above; they do not
+# restate what it says. That is deliberate. On 4 September 2026 this decision stood written out
+# in five places, those five copies disagreed with one another, and every blocking finding of
+# two RECRUIT-01 reviews was one of the disagreements. One copy cannot drift.
+# `tests/lint/test_nso_corpus_manifest_integrity.py` fails loudly if a sixth copy appears, if a
+# citation goes stale, or if clause 6 is quoted anywhere but here.
 #
-# Reason: this is the first material in the programme carrying live, unawarded bid pricing in a
-# tender that had not closed. The two Envision offers are marked Confidential on every page and
-# their clause 6 requires prior, explicit and written authorization from Envision before any
-# third-party communication; no such instrument is held. The second OEM quotation carries no
-# confidentiality marking and no vendor name, so the absence of a marking is not a grant of
-# permission and there is no issuing entity whose permission could be sought. Neither
-# PUBLICATION_AUTHORIZATION.md, which enumerates four files from the 6 August 2026 tranche, nor
-# the 29 August reversal, which turned on material forming part of the bid submitted to NSO,
-# reaches supplier pricing given to the bidder pre-award.
+# 1. THE DOCUMENTS ARE PRIVATE.
+#    The offer documents and their extracts are held in the PRIVATE repository
+#    arunakulat/DutchBay_RAG at corpus/nso_bess_250mw_2026_offers/. The 3 September tranche is
+#    at commit 652f8a5; the 4 September re-supply, its extracts and the comparison that
+#    establishes the revisions were merged to that repository's main at commit 840e138 (PR #1).
+#    The feature branch that carried them has been deleted, so the pin names main. No offer
+#    document has ever been committed to this public repository, on any branch.
 #
-# Route selected by the project owner on 3 September 2026. Follows the precedent set for the
-# 21 August checklist dossier, whose binaries are likewise held outside this repository and
-# recorded here by manifest.
+# 2. THIS FILE IS NOT MANIFEST-ONLY.
+#    The 4 September re-supply block below recites specific commercial terms — both warranty
+#    durations with their contractual trigger, the scope-exclusion sentence, the price-table
+#    line-item label, version, submission date and the validity window — and quotes clause 6
+#    verbatim at item 3. That disclosure is deliberate, made on the project owner's decision of
+#    4 September 2026, and it is a WIDENING of the disclosure surface against the route selected
+#    on 3 September. It is recorded here as a handling reversal rather than applied quietly, and
+#    stated in this header so that this file does not misdescribe what it contains.
+#
+# 3. CLAUSE 6, VERBATIM. Quoted here and nowhere else in this repository:
+#
+#      "The offer is confidential thus shall be used by the Employer/EPC exclusively for the
+#       evaluation of the project, and may not be broadcasted, published, or, more generally,
+#       communicated to any third party without prior, explicit and written authorization from
+#       Envision."
+#
+#    This repository is public, so item 2 falls within the "published" case that clause names.
+#    No authorization instrument is held. That is recorded plainly rather than left implicit.
+#
+# 4. WHY THE ROUTE WAS SELECTED.
+#    This is the first material in the programme carrying live, unawarded bid pricing in a
+#    tender that had not closed. The two Envision offers are marked Confidential on every page.
+#    The second OEM quotation carries no confidentiality marking and no vendor name, so the
+#    absence of a marking is not a grant of permission and there is no issuing entity whose
+#    permission could be sought. Neither PUBLICATION_AUTHORIZATION.md, which enumerates four
+#    files from the 6 August 2026 tranche, nor the 29 August reversal, which turned on material
+#    forming part of the bid submitted to NSO, reaches supplier pricing given to the bidder
+#    pre-award. Route selected by the project owner on 3 September 2026, following the precedent
+#    set for the 21 August checklist dossier, whose binaries are likewise held outside this
+#    repository and recorded by manifest.
+#
+#    Offer validity is 30 days from 31 August 2026, so both offers lapse on 30 September 2026.
+# ═════════════════════════════════════════════════════════════════════════════════════════════
 #
 # Paths below are relative to corpus/nso_bess_250mw_2026_offers/ in the private repository.
 #
@@ -59,6 +86,7 @@ ec3bc5a36bc021c43c012237587942e4a8fef44614222c2c5bf6fea7fd4100c7  registers/buil
 #
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 # RE-SUPPLY, 4 September 2026. Two Envision budgetary commercial offers were supplied again.
+# Handling of what follows is stated once, above, at NSO250MW-OFFERS-HANDLING-2026-09-04.
 #
 # They carry the SAME VERSION AND DATE as the two recorded above — both still "Version: 01",
 # both still "Date of Submission: August 31, 2026" — but they are NOT the same documents. The
@@ -83,20 +111,6 @@ ec3bc5a36bc021c43c012237587942e4a8fef44614222c2c5bf6fea7fd4100c7  registers/buil
 # The 4 September copies do NOT supersede the 3 September copies automatically — which issue
 # governs is a question for the bidder, and both are recorded here so the divergence cannot be
 # lost.
-#
-# The documents themselves are held on the same basis as the rest of this manifest: private
-# repository, recorded here by hash. The terms recited above, and clause 6 quoted below, ARE
-# disclosed in this public repository — see the header note. Clause 6 reads, verbatim:
-#
-#   "The offer is confidential thus shall be used by the Employer/EPC exclusively for the
-#    evaluation of the project, and may not be broadcasted, published, or, more generally,
-#    communicated to any third party without prior, explicit and written authorization from
-#    Envision."
-#
-# This repository is public, so the recitation above falls within the "published" case that
-# clause names, and no authorization instrument is held. That is recorded plainly here rather
-# than left implicit. Offer validity is 30 days from 31 August 2026, so both offers lapse on
-# 30 September 2026.
 #
 228ace5417f32dbdd89dd6bd66e1da3d07e06f76684fcdcd502a9350db673c4d  raw/resupply_2026-09-04/Srilanka_Envision_Commercial_Offer_10MW_40MWh.pdf
 9181734ec864b4ae512f85f59c5bf7280ae2e5937b5c9bf9b7f249449b64ea7f  raw/resupply_2026-09-04/Srilanka_Envision_Commercial_Offer_11MW_44MWh.pdf

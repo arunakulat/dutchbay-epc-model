@@ -168,11 +168,21 @@ one, because the next session acts on it.
 - Do not publish confidential or third-party materials without explicit authorization.
   Retain original provenance and confidentiality markings when publication is authorized.
 
-### Three ways a corpus commit goes wrong — check all three before committing
+### Four ways a corpus commit goes wrong — check all four before committing
 
 Each of these has actually happened here, each time to someone who believed they were being
-careful, and **none of them is caught by CI**. Read them as a checklist, not as history. The
-manifest defects in particular have reached `main` four times.
+careful. Read them as a checklist, not as history. The manifest defects in particular have reached
+`main` four times, and two of the four commits carried nothing but documentation paths — which is
+enough to skip the sharded suite entirely.
+
+**CI now catches most, but not all, of what follows.**
+`tests/lint/test_nso_corpus_manifest_integrity.py` runs in the `fastlane` job on every PR — the
+sharded suite skips any PR whose diff is only `*.md`, `changelog.d/` and `docs/`, which a corpus
+edit easily is — and it fails loudly on: a recorded entry that is absent or hash-mismatched; a
+**tracked file absent from the manifest**, the direction `sha256sum -c` is structurally blind to; a
+stale parent pin; a nested manifest nobody classified; a referrer that has stopped citing the
+handling note; and clause 6 of the offers quoted outside its single home. What it cannot judge is
+**whether a new disclosure should have been made at all** — item 2 below is still yours.
 
 **1. A nested manifest's parent pin goes stale the moment you edit the child.**
 `docs/source_materials/**/MANIFEST.sha256` records the SHA-256 of the *other* manifests beneath it.
@@ -207,7 +217,17 @@ disclosing commercial terms, and the assertion is false.
   - Publication to a public repository is effectively irreversible. Decide before merge, not after.
 
 **3. A review record can re-publish what the fix removed.** When redaction and a review pass land
-together, redact the review record in the same pass — it quotes the material as evidence.
+together, redact the review record in the same pass — it quotes the material as evidence. This
+recurred on 4 September 2026: the consolidation removed clause 6 from four files and left it in the
+review record that had flagged the disclosure. Paraphrase the evidence and cite the single home.
+
+**4. And the reason all three keep happening: one fact, written down in five places.**
+Every blocking finding of the two `RECRUIT-01` reviews of the offer re-supply was five copies of the
+same handling statement disagreeing with one another — not five separate mistakes. Duplicated state
+with nothing to keep it consistent behaves in prose exactly as it does in code. State a fact once,
+in the file closest to the data, give it an identifier, and have everything else cite the identifier.
+`NSO250MW-OFFERS-HANDLING-2026-09-04` in the offers manifest header is the worked example, and the
+guard above fails if a sixth copy appears.
 
 ## Presentation layer and PDF generation
 
