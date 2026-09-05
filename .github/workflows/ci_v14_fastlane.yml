@@ -16,8 +16,13 @@ on:
     branches:
       - main
   pull_request:
+    # Must match test-suite.yml's branch list. A PR into a branch this lane does not cover
+    # would run the sharded suite but NOT the corpus guard below — the reverse of the gap the
+    # guard exists to close, since the guard is here precisely because the suite skips
+    # docs-only diffs.
     branches:
       - main
+      - develop
 
 # Cancel a superseded PR run when a new commit is pushed; main runs are never cancelled.
 concurrency:
@@ -80,7 +85,9 @@ jobs:
       # in the sharded suite: test-suite.yml skips its pytest shard for docs-only PRs, and
       # every corpus-manifest defect that has reached main arrived on a docs-only PR. A
       # guard that skips on exactly the changes it exists to catch is not a guard. Costs
-      # ~1s and needs only stdlib + git.
+      # ~2s, of which about half is pytest collection: tests/conftest.py imports libcst, yaml
+      # and the analytics package, so this needs the [dev] install above and git, not stdlib
+      # alone. No network.
       - name: Evidence corpus - manifest and single-source handling gate
         run: python -m pytest tests/lint/test_nso_corpus_manifest_integrity.py -q
 

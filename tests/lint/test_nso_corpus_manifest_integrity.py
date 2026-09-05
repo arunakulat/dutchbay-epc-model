@@ -33,12 +33,14 @@ skips its pytest shard entirely for docs-only PRs — while every manifest defec
 ``main`` arrived on a docs-only PR. So this module is wired into the ``fastlane`` job of
 ``ci_v14_fastlane.yml``, the one lane that runs unconditionally on every pull request, and not
 only into the sharded suite. Move it and it stops running on exactly the changes it exists to
-catch.
+catch. Both workflows must keep the same ``pull_request`` branch list, or the gap reopens on
+whichever branch only one of them covers.
 """
 
 from __future__ import annotations
 
 import hashlib
+import re
 import subprocess
 from pathlib import Path
 
@@ -67,6 +69,15 @@ EXTERNAL_MANIFESTS: tuple[Path, ...] = (
     OFFERS_MANIFEST,
 )
 
+# Files that live in the corpus tree but are not themselves evidence, so the manifest does not
+# record them. Declared rather than special-cased, for the same reason the classification above
+# is: an undeclared exception turns fastlane red with no supported way to express it.
+NOT_EVIDENCE: frozenset[str] = frozenset(
+    {
+        "MANIFEST.sha256",  # a manifest cannot record its own hash
+    }
+)
+
 # The one place the offer package's handling is stated, and the files that must cite it
 # instead of restating it.
 HANDLING_ANCHOR = "NSO250MW-OFFERS-HANDLING-2026-09-04"
@@ -85,23 +96,28 @@ CLAUSE_SIX_HEADING = "3. CLAUSE 6, VERBATIM."
 MIN_SPAN_CHARS = 30
 
 
+# One ``sha256sum`` output line: 64 hex digits, two spaces (text mode) or a space and an
+# asterisk (binary mode, ``sha256sum -b``), then the path. Both forms, and upper-case digests,
+# are accepted by ``sha256sum -c``, so rejecting them here would fail a manifest the tool
+# itself verifies — a false positive that would turn fastlane red with a misleading diagnosis
+# after any regeneration with ``-b``.
+ENTRY = re.compile(r"([0-9a-fA-F]{64}) [ *](.*)")
+
+
 def _entries(manifest: Path) -> dict[str, str]:
     """Parse a ``sha256sum``-format manifest into {path: digest}, ignoring comments."""
     entries: dict[str, str] = {}
-    for lineno, raw in enumerate(
-        manifest.read_text(encoding="utf-8").splitlines(), start=1
-    ):
-        line = raw.strip()
-        if not line or line.startswith("#"):
+    text = manifest.read_text(encoding="utf-8").lstrip("\ufeff")
+    for lineno, raw in enumerate(text.splitlines(), start=1):
+        # splitlines() has already removed the terminator. Do NOT strip beyond that: a path
+        # with trailing whitespace would be silently rewritten into a different path, and the
+        # guard would then hash a file the manifest does not name.
+        if not raw.strip() or raw.lstrip().startswith("#"):
             continue
-        digest, separator, path = line.partition("  ")
-        assert separator, f"{manifest.name}:{lineno}: not a sha256sum entry: {raw!r}"
-        assert len(digest) == 64 and not set(digest) - set(
-            "0123456789abcdef"
-        ), f"{manifest.name}:{lineno}: malformed digest {digest!r}"
-        assert (
-            path not in entries
-        ), f"{manifest.name}:{lineno}: duplicate entry for {path}"
+        match = ENTRY.fullmatch(raw)
+        assert match, f"{manifest.name}:{lineno}: not a sha256sum entry: {raw!r}"
+        digest, path = match.group(1).lower(), match.group(2)
+        assert path not in entries, f"{manifest.name}:{lineno}: duplicate for {path}"
         entries[path] = digest
     return entries
 
@@ -156,6 +172,22 @@ def test_recorded_entries_are_present_and_hash_as_recorded(manifest: Path) -> No
     )
 
 
+@pytest.mark.parametrize(
+    "manifest", list(EXTERNAL_MANIFESTS), ids=lambda path: path.name
+)
+def test_external_manifests_are_well_formed(manifest: Path) -> None:
+    """Classification must not mean "checked by nothing".
+
+    An external manifest's paths cannot be resolved against this tree — that is what makes it
+    external — but its *form* can still be validated: 64-hex digests, a legal separator, no
+    duplicate entries. Without this, a malformed digest or a duplicated path in the checklist
+    or offers manifest is caught by nothing at the moment it is written. The parent pins their
+    bytes, which detects later tampering, not authoring error.
+    """
+    entries = _entries(manifest)
+    assert entries, f"{manifest.name} records no entries at all"
+
+
 def test_every_nested_manifest_is_classified() -> None:
     """No nested manifest may sit unclassified, silently skipped by both directions above.
 
@@ -193,14 +225,15 @@ def test_every_tracked_corpus_file_is_recorded() -> None:
     """
     recorded = set(_entries(PARENT_MANIFEST))
     tracked = _tracked_under(CORPUS)
-    # A manifest cannot record its own hash; nothing else is exempt.
-    unrecorded = tracked - recorded - {PARENT_MANIFEST.name}
+    unrecorded = tracked - recorded - NOT_EVIDENCE
 
     assert not unrecorded, (
         f"{len(unrecorded)} file(s) are tracked under {CORPUS.relative_to(REPO_ROOT)} but absent "
         f"from MANIFEST.sha256. `sha256sum -c` passes on this state — it only walks recorded "
-        f"entries — so nothing else will tell you. Add them with "
-        f"scripts/analysis/refresh_corpus_manifest.py: {sorted(unrecorded)}"
+        f"entries — so nothing else will tell you. Append each from the corpus "
+        f"root with `sha256sum <path> >> MANIFEST.sha256`, then re-verify with `sha256sum -c`. "
+        f"scripts/analysis/refresh_corpus_manifest.py will NOT do this: it refuses unrecorded "
+        f"paths by design, so it cannot be used to quietly add a file: {sorted(unrecorded)}"
     )
 
 
@@ -249,14 +282,24 @@ def test_offer_handling_is_stated_once() -> None:
     )
 
 
-def _clause_six_spans() -> list[str]:
-    """Read the quoted lines of clause 6 out of the manifest, as they literally appear there.
+def _clause_six_span_matches() -> list[tuple[int, set[str]]]:
+    """Search for each quoted line of clause 6 and return only *where* it was found.
 
-    Deriving the search terms from the single home means this module holds no copy of the
-    clause. The lines are returned with the manifest's comment prefix and indentation stripped,
-    which is exactly the substring another file would contain if it reproduced them.
+    Two properties matter here and both are deliberate.
+
+    The search terms are read out of the manifest rather than written down, so this module
+    holds no copy of the clause. An earlier revision hard-coded them, which made this file a
+    second copy of the confidentiality clause in a public repository — precisely what the guard
+    forbids — and CI caught it on the first run.
+
+    The span text also never leaves this function. ``addopts`` in ``pyproject.toml`` carries
+    ``--showlocals``, so any local bound in a frame on a failing stack is printed into the
+    GitHub Actions log, which for this repository is public. Returning span *indices* and file
+    paths lets a genuine failure report that the clause was reproduced and where, without
+    reproducing it again in the log — which is how the first run of this guard put a fragment
+    of the clause into the log of run 33959805520.
     """
-    spans: list[str] = []
+    quoted: list[str] = []
     inside = False
     for raw in OFFERS_MANIFEST.read_text(encoding="utf-8").splitlines():
         line = raw.lstrip("#").strip()
@@ -265,27 +308,14 @@ def _clause_six_spans() -> list[str]:
             continue
         if not inside:
             continue
-        if line.startswith('"') or spans:
+        if line.startswith('"') or quoted:
             # The quotation runs from the opening double quote to the line that closes it.
-            spans.append(line.strip('"'))
+            quoted.append(line.strip('"'))
             if line.endswith('"'):
                 break
-    return [span for span in spans if len(span) >= MIN_SPAN_CHARS]
 
-
-def test_clause_six_is_quoted_in_exactly_one_file() -> None:
-    """Clause 6 is the confidentiality clause itself. It belongs in one place, or nowhere."""
-    home = OFFERS_MANIFEST.relative_to(REPO_ROOT).as_posix()
-    spans = _clause_six_spans()
-
-    assert len(spans) >= 3, (
-        f"only {len(spans)} quoted span(s) could be read from the manifest under "
-        f"{CLAUSE_SIX_HEADING!r}. This guard searches for text it reads out of the manifest, so "
-        f"a moved or reshaped quotation block leaves it searching for nothing — which would "
-        f"pass silently. Restore the block or update CLAUSE_SIX_HEADING."
-    )
-
-    for span in spans:
+    results: list[tuple[int, set[str]]] = []
+    for index, span in enumerate(q for q in quoted if len(q) >= MIN_SPAN_CHARS):
         found = subprocess.run(
             ["git", "grep", "--name-only", "--fixed-strings", span, "--", "."],
             cwd=REPO_ROOT,
@@ -294,19 +324,36 @@ def test_clause_six_is_quoted_in_exactly_one_file() -> None:
         )
         # git grep exits 1 when there are no matches; that is not an error here.
         assert found.returncode in (0, 1), found.stderr
-        matches = set(found.stdout.split())
+        # splitlines(), not split(): `git grep --name-only` emits one path per line and
+        # does not quote plain spaces, and this repository has tracked paths with spaces.
+        results.append((index, set(found.stdout.splitlines())))
+    return results
 
+
+def test_clause_six_is_quoted_in_exactly_one_file() -> None:
+    """Clause 6 is the confidentiality clause itself. It belongs in one place, or nowhere."""
+    home = OFFERS_MANIFEST.relative_to(REPO_ROOT).as_posix()
+    results = _clause_six_span_matches()
+
+    assert len(results) >= 3, (
+        f"only {len(results)} quoted span(s) could be read from the manifest under "
+        f"{CLAUSE_SIX_HEADING!r}. This guard searches for text it reads out of the manifest, so "
+        f"a moved or reshaped quotation block leaves it searching for nothing — which would pass "
+        f"silently. Restore the block or update CLAUSE_SIX_HEADING."
+    )
+
+    for index, matches in results:
         # Liveness: the span was read out of the manifest, so it must be found there. If it is
         # not, the search term is malformed and every "no other file matched" below is vacuous.
         assert home in matches, (
-            f"the span read from the manifest does not match the manifest itself: {span!r}. The "
-            f"search term is malformed, so this guard is not actually checking anything."
+            f"clause-6 span {index} was read from the manifest but does not match the manifest "
+            f"itself. The search term is malformed, so this guard is checking nothing."
         )
 
         elsewhere = sorted(matches - {home})
         assert not elsewhere, (
-            f"clause 6 of the Envision offers is reproduced outside {home}, in {elsewhere}. The "
-            f"clause forbids communicating the offer to third parties, and this repository is "
-            f"public. Paraphrase and cite {HANDLING_ANCHOR} instead. A review record "
-            f"re-publishing what a fix removed is how this recurred last time."
+            f"clause 6 of the Envision offers is reproduced outside {home}: span {index} also "
+            f"matches {elsewhere}. The clause forbids communicating the offer to third parties "
+            f"and this repository is public. Paraphrase and cite {HANDLING_ANCHOR} instead. The "
+            f"span text is withheld from this message deliberately — this log is public."
         )

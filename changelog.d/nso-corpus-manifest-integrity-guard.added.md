@@ -12,8 +12,8 @@
 - **It is wired into `fastlane`, not the sharded suite.** `test-suite.yml` skips its pytest shard
   for PRs whose diff is only `*.md`, `changelog.d/` and `docs/` — and two of the four defect
   commits carried nothing else. A guard that skips on exactly the changes it exists to catch is not
-  a guard, so it runs in the one lane that runs unconditionally on every PR. It costs about a
-  second and needs only the standard library and git.
+  a guard, so it runs in the one lane that runs unconditionally on every PR. It costs about two
+  seconds, roughly half of that pytest collection, and needs the `[dev]` install and git.
 - **Every guard is proved against its own defect.** Each failure mode was reproduced in the working
   tree and confirmed to fail the corresponding assertion, then reverted — including the parent-pin
   guard, which caught a scripted revert that silently undid part of this change while it was being
