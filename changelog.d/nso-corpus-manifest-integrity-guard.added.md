@@ -14,7 +14,13 @@
   commits carried nothing else. A guard that skips on exactly the changes it exists to catch is not
   a guard, so it runs in the one lane that runs unconditionally on every PR. It costs about a
   second and needs only the standard library and git.
-- **Every guard is proved against its own defect.** Each of the six failure modes was reproduced in
-  the working tree and confirmed to fail the corresponding assertion, then reverted — including the
-  parent-pin guard, which caught a scripted revert that silently undid part of this change while it
-  was being written.
+- **Every guard is proved against its own defect.** Each failure mode was reproduced in the working
+  tree and confirmed to fail the corresponding assertion, then reverted — including the parent-pin
+  guard, which caught a scripted revert that silently undid part of this change while it was being
+  written.
+- **The clause-6 guard caught itself, on its first CI run.** Its search terms were originally
+  hard-coded, which made the test file a second copy of the clause in a public repository — the
+  exact thing it forbids. It passed locally only because the file was still untracked and `git
+  grep` could not see it. The terms are now **read out of the manifest at run time**, so no copy
+  exists to drift, and a liveness assertion requires each derived span to match its own source:
+  a malformed search term fails loudly instead of matching nothing and passing.

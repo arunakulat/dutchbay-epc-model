@@ -76,14 +76,13 @@ HANDLING_REFERRERS: tuple[Path, ...] = (
     REPO_ROOT / "changelog.d" / "nso-commercial-offer-resupply.fixed.md",
 )
 
-# Distinctive spans of clause 6 of the Envision offers. The clause is quoted verbatim in the
-# offers manifest and must not be reproduced anywhere else in this public repository — the
-# clause is the very thing that forbids third-party communication of the offer.
-CLAUSE_SIX_SPANS: tuple[str, ...] = (
-    "The offer is confidential thus shall be used",
-    "more generally, communicated to any third party",
-    "prior, explicit and written authorization",
-)
+# The manifest header line that opens the verbatim quotation of clause 6, and the shortest
+# span worth searching for. The spans themselves are READ OUT OF THE MANIFEST at run time and
+# are deliberately NOT written here: a literal copy in this file would itself be a second copy
+# of the clause in a public repository, which is precisely what this module exists to forbid.
+# CI caught exactly that on the first run of this guard, when the spans were hard-coded.
+CLAUSE_SIX_HEADING = "3. CLAUSE 6, VERBATIM."
+MIN_SPAN_CHARS = 30
 
 
 def _entries(manifest: Path) -> dict[str, str]:
@@ -97,12 +96,12 @@ def _entries(manifest: Path) -> dict[str, str]:
             continue
         digest, separator, path = line.partition("  ")
         assert separator, f"{manifest.name}:{lineno}: not a sha256sum entry: {raw!r}"
-        assert len(digest) == 64 and not set(digest) - set("0123456789abcdef"), (
-            f"{manifest.name}:{lineno}: malformed digest {digest!r}"
-        )
-        assert path not in entries, (
-            f"{manifest.name}:{lineno}: duplicate entry for {path}"
-        )
+        assert len(digest) == 64 and not set(digest) - set(
+            "0123456789abcdef"
+        ), f"{manifest.name}:{lineno}: malformed digest {digest!r}"
+        assert (
+            path not in entries
+        ), f"{manifest.name}:{lineno}: duplicate entry for {path}"
         entries[path] = digest
     return entries
 
@@ -216,9 +215,9 @@ def test_nested_manifest_parent_pins_are_current() -> None:
 
     for nested in sorted(PACKAGES.glob("*.MANIFEST.sha256")):
         key = nested.relative_to(CORPUS).as_posix()
-        assert key in recorded, (
-            f"the parent manifest does not pin nested manifest {key}"
-        )
+        assert (
+            key in recorded
+        ), f"the parent manifest does not pin nested manifest {key}"
         if recorded[key] != _sha256(nested):
             stale.append(key)
 
@@ -250,11 +249,43 @@ def test_offer_handling_is_stated_once() -> None:
     )
 
 
+def _clause_six_spans() -> list[str]:
+    """Read the quoted lines of clause 6 out of the manifest, as they literally appear there.
+
+    Deriving the search terms from the single home means this module holds no copy of the
+    clause. The lines are returned with the manifest's comment prefix and indentation stripped,
+    which is exactly the substring another file would contain if it reproduced them.
+    """
+    spans: list[str] = []
+    inside = False
+    for raw in OFFERS_MANIFEST.read_text(encoding="utf-8").splitlines():
+        line = raw.lstrip("#").strip()
+        if CLAUSE_SIX_HEADING in line:
+            inside = True
+            continue
+        if not inside:
+            continue
+        if line.startswith('"') or spans:
+            # The quotation runs from the opening double quote to the line that closes it.
+            spans.append(line.strip('"'))
+            if line.endswith('"'):
+                break
+    return [span for span in spans if len(span) >= MIN_SPAN_CHARS]
+
+
 def test_clause_six_is_quoted_in_exactly_one_file() -> None:
     """Clause 6 is the confidentiality clause itself. It belongs in one place, or nowhere."""
     home = OFFERS_MANIFEST.relative_to(REPO_ROOT).as_posix()
+    spans = _clause_six_spans()
 
-    for span in CLAUSE_SIX_SPANS:
+    assert len(spans) >= 3, (
+        f"only {len(spans)} quoted span(s) could be read from the manifest under "
+        f"{CLAUSE_SIX_HEADING!r}. This guard searches for text it reads out of the manifest, so "
+        f"a moved or reshaped quotation block leaves it searching for nothing — which would "
+        f"pass silently. Restore the block or update CLAUSE_SIX_HEADING."
+    )
+
+    for span in spans:
         found = subprocess.run(
             ["git", "grep", "--name-only", "--fixed-strings", span, "--", "."],
             cwd=REPO_ROOT,
@@ -263,10 +294,19 @@ def test_clause_six_is_quoted_in_exactly_one_file() -> None:
         )
         # git grep exits 1 when there are no matches; that is not an error here.
         assert found.returncode in (0, 1), found.stderr
-        elsewhere = sorted(set(found.stdout.split()) - {home})
+        matches = set(found.stdout.split())
+
+        # Liveness: the span was read out of the manifest, so it must be found there. If it is
+        # not, the search term is malformed and every "no other file matched" below is vacuous.
+        assert home in matches, (
+            f"the span read from the manifest does not match the manifest itself: {span!r}. The "
+            f"search term is malformed, so this guard is not actually checking anything."
+        )
+
+        elsewhere = sorted(matches - {home})
         assert not elsewhere, (
-            f"clause 6 of the Envision offers is reproduced outside {home}, in {elsewhere} "
-            f"(span: {span!r}). The clause forbids communicating the offer to third parties, and "
-            f"this repository is public. Paraphrase and cite {HANDLING_ANCHOR} instead. A review "
-            f"record re-publishing what a fix removed is how this recurred last time."
+            f"clause 6 of the Envision offers is reproduced outside {home}, in {elsewhere}. The "
+            f"clause forbids communicating the offer to third parties, and this repository is "
+            f"public. Paraphrase and cite {HANDLING_ANCHOR} instead. A review record "
+            f"re-publishing what a fix removed is how this recurred last time."
         )
