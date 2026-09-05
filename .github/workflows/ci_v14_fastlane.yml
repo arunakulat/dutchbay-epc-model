@@ -82,9 +82,9 @@ jobs:
       # CESSPIT gate on the NSO evidence corpus: manifest <-> tree agreement in BOTH
       # directions, nested-manifest parent pins, and the single-source handling note.
       # It lives HERE, in the one lane that runs unconditionally on every PR, rather than
-      # in the sharded suite: test-suite.yml skips its pytest shard for docs-only PRs, and
-      # every corpus-manifest defect that has reached main arrived on a docs-only PR. A
-      # guard that skips on exactly the changes it exists to catch is not a guard. Costs
+      # in the sharded suite: test-suite.yml skips its pytest shard for docs-only PRs, and two
+      # of the six manifest defects that have reached main carried nothing but documentation
+      # paths. A guard that skips on exactly the changes it exists to catch is not a guard. Costs
       # ~2s, of which about half is pytest collection: tests/conftest.py imports libcst, yaml
       # and the analytics package, so this needs the [dev] install above and git, not stdlib
       # alone. No network.

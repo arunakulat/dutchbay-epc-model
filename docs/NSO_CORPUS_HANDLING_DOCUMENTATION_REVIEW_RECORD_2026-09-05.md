@@ -3,6 +3,41 @@
 Independent reviewer recruited under `RECRUIT-01`. Documentation / evidence-record mandate.
 READ-ONLY on the candidate; no writer lease held or requested.
 
+> **COORDINATOR NOTE — appended 5 September 2026. The reviewer's record below is unaltered.**
+>
+> **The two blocking findings are upheld, and I verified them myself before acting.**
+>
+> **B2 — the "four manifest defects" count was false.** I reconstructed the parent manifest's
+> state at every `main` commit that touched it and got the reviewer's table row for row: six
+> defective states in two classes — an incomplete manifest across five commits from `637aad3` to
+> `782c958`, closed at #1211, and one impossible entry introduced by #1226 and fixed by #1234.
+> Exactly one defect falls in the window I claimed held four. Two of the six commits carried only
+> documentation paths, not two of four. Corrected in `AGENTS.md`, both changelog fragments, the
+> guard docstring and the fastlane comment, with an erratum in `AGENTS.md` rather than a silent
+> edit. The reviewer is also right that an accepted record already on `main`
+> (`NSO_MANIFEST_PYCACHE_REPAIR_REVIEW_RECORD_2026-09-04.md:274`) had asked for exactly this and
+> I did not act on it.
+>
+> **B3 — the "two reviews" claim was false and it flattered me.** One `RECRUIT-01` review of this
+> change is persisted, with three blocking findings: a manifest that did not verify, "manifest
+> only" not being what the commit did, and a false receipts table. Only the second is a
+> prose-duplication defect. Saying that *every* blocking finding of *two* reviews was the same
+> root cause recast a broken manifest and a false receipts table as one tidy problem this commit
+> had solved. That is the kind of claim I should be slowest to make about my own work. Corrected
+> in all five places.
+>
+> **Advisories.** A1, A2, A3, A5 and A6 applied. A4 applied by dropping "on any branch" and
+> replacing it with the scan I actually ran and its bounds — 1,790 blobs across 12 refs and 118
+> commits, no match against any of the 22 recorded hashes, the only matching path being the
+> manifest itself, from a shallow clone that cannot settle a claim over the full history. A7 and
+> A8 are noted; A9 was in the code reviewer's lane and is corrected there.
+>
+> **Binding and rounds.** This disposition binds to `3e4b79f`. The tree moved under both
+> reviewers while they worked — CI went red and I pushed a fix — which is a `RECRUIT-01` breach
+> on my part, detected by both and recorded rather than absorbed. The project owner limited this
+> change to one round, so the corrections above are **unreviewed**; each carries its own receipt
+> in the commit that made it.
+
 ## 0. DISPOSITION
 
 # REJECT

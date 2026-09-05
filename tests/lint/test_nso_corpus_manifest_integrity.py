@@ -1,8 +1,10 @@
 """CESSPIT guard: the NSO 250 MW evidence corpus must agree with its own manifests.
 
-Two classes of defect motivate this guard, and neither is hypothetical — between #1226 and
-#1234 four manifest defects reached ``main`` unnoticed, because **no test covered either
-corpus manifest**.
+Two classes of defect motivate this guard, and neither is hypothetical. Manifest defects have
+reached ``main`` in two classes, because **no test covered either corpus manifest**: an
+*incomplete* manifest across five commits from ``637aad3`` to ``782c958``, closed at #1211, and
+one *impossible* entry introduced by #1226 and fixed by #1234. Six defective states in all,
+reconstructed from the manifest's state at every ``main`` commit that touched it.
 
 1. **The manifest and the tree disagree.**
 
@@ -29,8 +31,8 @@ corpus manifest**.
    the offers quoted anywhere but its single home fails here rather than in a third review.
 
 **Where this runs, and why it matters.** The corpus is docs-only by path, and ``test-suite.yml``
-skips its pytest shard entirely for docs-only PRs — while every manifest defect that reached
-``main`` arrived on a docs-only PR. So this module is wired into the ``fastlane`` job of
+skips its pytest shard entirely for docs-only PRs — and two of the six defective commits carried
+nothing but documentation paths. So this module is wired into the ``fastlane`` job of
 ``ci_v14_fastlane.yml``, the one lane that runs unconditionally on every pull request, and not
 only into the sharded suite. Move it and it stops running on exactly the changes it exists to
 catch. Both workflows must keep the same ``pull_request`` branch list, or the gap reopens on

@@ -171,9 +171,14 @@ one, because the next session acts on it.
 ### Four ways a corpus commit goes wrong — check all four before committing
 
 Each of these has actually happened here, each time to someone who believed they were being
-careful. Read them as a checklist, not as history. The manifest defects in particular have reached
-`main` four times, and two of the four commits carried nothing but documentation paths — which is
-enough to skip the sharded suite entirely.
+careful. Read them as a checklist, not as history. Manifest defects in particular have reached
+`main` repeatedly, in two classes: an **incomplete** manifest across five commits from `637aad3` to
+`782c958`, closed at #1211, and one **impossible** entry introduced by #1226 and fixed by #1234.
+Two of those six commits carried nothing but documentation paths — enough to skip the sharded suite
+entirely. (An earlier draft of this section said "four times". It was wrong; the count matched no
+individuation of the history, and an accepted review record on `main` had already asked for it to
+be enumerated or softened. The table above is reconstructed from the manifest's state at every
+`main` commit that touched it.)
 
 **CI now catches most, but not all, of what follows.**
 `tests/lint/test_nso_corpus_manifest_integrity.py` runs in the `fastlane` job on every PR — the
@@ -222,9 +227,11 @@ recurred on 4 September 2026: the consolidation removed clause 6 from four files
 review record that had flagged the disclosure. Paraphrase the evidence and cite the single home.
 
 **4. And the reason all three keep happening: one fact, written down in five places.**
-Every blocking finding of the two `RECRUIT-01` reviews of the offer re-supply was five copies of the
-same handling statement disagreeing with one another — not five separate mistakes. Duplicated state
-with nothing to keep it consistent behaves in prose exactly as it does in code. State a fact once,
+One persisted `RECRUIT-01` review of the offer re-supply raised three blocking findings, and **one**
+of the three was the five copies of the handling statement disagreeing with one another; the other
+two were a manifest that did not verify and a false receipts table. That one finding, plus the
+divergence between the copies, is what motivated the consolidation. Duplicated state with nothing to
+keep it consistent behaves in prose exactly as it does in code. State a fact once,
 in the file closest to the data, give it an identifier, and have everything else cite the identifier.
 `NSO250MW-OFFERS-HANDLING-2026-09-04` in the offers manifest header is the worked example, and the
 guard above fails if a sixth copy appears.

@@ -13,8 +13,10 @@ READ-ONLY, no writer lease.
 > now states that it does rather than denying it. The A6 condition therefore does not apply and the
 > record stands as the reviewer wrote it. Disposition, findings, commands and outputs are unaltered.
 >
-> **Amendment, 5 September 2026 — two spans paraphrased, nothing else touched.** This record quoted
-> clause 6 of the offers twice, in §5.2 and §5.2 item 2, as evidence for the findings there. Clause 6
+> **Amendment, 5 September 2026 — two spans paraphrased, nothing else touched.** This record
+> reproduced wording of clause 6 twice. The §5.2 span quoted the *base manifest's own
+> characterisation* of the clause rather than the offer, and that text still stands publicly at
+> `1240a9a`; the §5.2 item 2 span quoted the clause's operative words directly. Clause 6
 > is now quoted in exactly one place in this repository — the offers manifest header, at
 > `NSO250MW-OFFERS-HANDLING-2026-09-04`, item 3 — and those two spans are paraphrased so this record
 > does not re-publish what the consolidation moved. The findings, their force and every command,

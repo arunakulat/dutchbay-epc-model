@@ -4,10 +4,12 @@
 # HANDLING NOTE — NSO250MW-OFFERS-HANDLING-2026-09-04
 #
 # This block is the ONLY statement of how this package is handled. The corpus README, the
-# source_packages README and the changelog fragment cite the identifier above; they do not
-# restate what it says. That is deliberate. On 4 September 2026 this decision stood written out
-# in five places, those five copies disagreed with one another, and every blocking finding of
-# two RECRUIT-01 reviews was one of the disagreements. One copy cannot drift.
+# source_packages README and the changelog fragment cite the identifier above rather than
+# restating the reasoning, the authority or the route. The bare fact that the documents are
+# private is repeated where a reader needs it; everything that could be got subtly wrong lives
+# here only. That is deliberate. On 4 September 2026 this decision stood written out
+# in five places and those five copies disagreed with one another; one of the three blocking
+# findings of the RECRUIT-01 review of that change was the disagreement. One copy cannot drift.
 # `tests/lint/test_nso_corpus_manifest_integrity.py` fails loudly if a sixth copy appears, if a
 # citation goes stale, or if clause 6 is quoted anywhere but here.
 #
@@ -17,13 +19,19 @@
 #    at commit 652f8a5; the 4 September re-supply, its extracts and the comparison that
 #    establishes the revisions were merged to that repository's main at commit 840e138 (PR #1).
 #    The feature branch that carried them has been deleted, so the pin names main. No offer
-#    document has ever been committed to this public repository, on any branch.
+#    document has ever been committed to this public repository. Asserted at the strength of the
+#    evidence held, and no further: on 5 September 2026, across the 12 refs and 118 commits
+#    reachable from a working clone, 1,790 blobs were hashed and NONE matched any of the 22
+#    hashes recorded below; the only path matching an offer filename in any reachable commit is
+#    this manifest itself. That clone is shallow, so this is not a receipt over the whole of
+#    the repository's history — it is the strongest statement the available evidence supports.
 #
 # 2. THIS FILE IS NOT MANIFEST-ONLY.
-#    The 4 September re-supply block below recites specific commercial terms — both warranty
-#    durations with their contractual trigger, the scope-exclusion sentence, the price-table
-#    line-item label, version, submission date and the validity window — and quotes clause 6
-#    verbatim at item 3. That disclosure is deliberate, made on the project owner's decision of
+#    The 4 September re-supply block below recites specific commercial terms: both warranty
+#    durations with their contractual trigger, the executive-summary phrase "5 years' BESS
+#    Warranty", the scope-exclusion sentence, the price-table line-item label, and the version
+#    and submission date. This note itself quotes clause 6 verbatim at item 3 and states the
+#    offer validity window at item 4. That disclosure is deliberate, made on the owner's decision of
 #    4 September 2026, and it is a WIDENING of the disclosure surface against the route selected
 #    on 3 September. It is recorded here as a handling reversal rather than applied quietly, and
 #    stated in this header so that this file does not misdescribe what it contains.

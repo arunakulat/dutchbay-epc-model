@@ -1,9 +1,10 @@
 - **Corpus manifest repaired** — `MANIFEST.sha256` recorded a `registers/__pycache__/*.pyc`
   bytecode file, added by #1226. `__pycache__/` is gitignored, so the file was never in the tree
   and never can be: `sha256sum -c` failed on `main` with `138 OK, 1 FAILED`, exit 1. Removed; the
-  manifest verifies at `138/138 OK`, exit 0. This is the fourth manifest defect in this programme
-  to reach `main` unnoticed because **no test covers either corpus manifest** — a stale, incomplete
-  or impossible entry passes CI silently.
+  manifest verifies at `138/138 OK`, exit 0. It reached `main` unnoticed because **no test covers
+  either corpus manifest** — a stale, incomplete or impossible entry passes CI silently. It is one of
+  two classes of manifest defect that have reached `main`: an incomplete manifest across five commits
+  from `637aad3` to `782c958`, closed at #1211, and this impossible entry, introduced by #1226.
 - **The coupling behind it** — the parent manifest pins the SHA-256 of the nested
   `NSO250MW_Commercial_Offers_2026-09-03.MANIFEST.sha256`, so an edit to the nested file
   invalidates the parent unless the same commit refreshes it. One committed tree on this branch
@@ -34,6 +35,6 @@
   that route was chosen — is stated in exactly one place: the header of
   `docs/source_materials/nso_bess_250mw_2026/source_packages/NSO250MW_Commercial_Offers_2026-09-03.MANIFEST.sha256`,
   under the identifier `NSO250MW-OFFERS-HANDLING-2026-09-04`. It had been written out in five
-  places; the five copies disagreed with each other, and every blocking finding of two RECRUIT-01
-  reviews of this change was one of those disagreements. The READMEs and this fragment now cite
-  the identifier instead of restating it.
+  places and the five copies disagreed with each other; one of the three blocking findings of the
+  RECRUIT-01 review of this change was that disagreement. The READMEs and this fragment now cite the
+  identifier instead of restating it.
