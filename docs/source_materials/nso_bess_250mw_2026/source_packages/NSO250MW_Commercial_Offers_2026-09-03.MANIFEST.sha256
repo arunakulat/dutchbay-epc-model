@@ -1,22 +1,65 @@
 # NSO 250 MW — OEM commercial offers and LTL advisory issues, 3 September 2026
 #
-# MANIFEST ONLY. The content is held in the PRIVATE repository arunakulat/DutchBay_RAG at
-# corpus/nso_bess_250mw_2026_offers/, commit 652f8a5. It is not in this public repository and
-# never has been.
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+# HANDLING NOTE — NSO250MW-OFFERS-HANDLING-2026-09-04
 #
-# Reason: this is the first material in the programme carrying live, unawarded bid pricing in a
-# tender that had not closed. The two Envision offers are marked Confidential on every page and
-# their clause 6 requires prior, explicit and written authorization from Envision before any
-# third-party communication; no such instrument is held. The second OEM quotation carries no
-# confidentiality marking and no vendor name, so the absence of a marking is not a grant of
-# permission and there is no issuing entity whose permission could be sought. Neither
-# PUBLICATION_AUTHORIZATION.md, which enumerates four files from the 6 August 2026 tranche, nor
-# the 29 August reversal, which turned on material forming part of the bid submitted to NSO,
-# reaches supplier pricing given to the bidder pre-award.
+# This block is the ONLY statement of how this package is handled. The corpus README, the
+# source_packages README and the changelog fragment cite the identifier above rather than
+# restating the reasoning, the authority or the route. The bare fact that the documents are
+# private is repeated where a reader needs it; everything that could be got subtly wrong lives
+# here only. That is deliberate. On 4 September 2026 this decision stood written out
+# in five places and those five copies disagreed with one another; one of the three blocking
+# findings of the RECRUIT-01 review of that change was the disagreement. One copy cannot drift.
+# `tests/lint/test_nso_corpus_manifest_integrity.py` fails loudly if a sixth copy appears, if a
+# citation goes stale, or if clause 6 is quoted anywhere but here.
 #
-# Route selected by the project owner on 3 September 2026. Follows the precedent set for the
-# 21 August checklist dossier, whose binaries are likewise held outside this repository and
-# recorded here by manifest.
+# 1. THE DOCUMENTS ARE PRIVATE.
+#    The offer documents and their extracts are held in the PRIVATE repository
+#    arunakulat/DutchBay_RAG at corpus/nso_bess_250mw_2026_offers/. The 3 September tranche is
+#    at commit 652f8a5; the 4 September re-supply, its extracts and the comparison that
+#    establishes the revisions were merged to that repository's main at commit 840e138 (PR #1).
+#    The feature branch that carried them has been deleted, so the pin names main. No offer
+#    document has ever been committed to this public repository. Asserted at the strength of the
+#    evidence held, and no further: on 5 September 2026, across the 12 refs and 118 commits
+#    reachable from a working clone, 1,790 blobs were hashed and NONE matched any of the 22
+#    hashes recorded below; the only path matching an offer filename in any reachable commit is
+#    this manifest itself. That clone is shallow, so this is not a receipt over the whole of
+#    the repository's history — it is the strongest statement the available evidence supports.
+#
+# 2. THIS FILE IS NOT MANIFEST-ONLY.
+#    The 4 September re-supply block below recites specific commercial terms: both warranty
+#    durations with their contractual trigger, the executive-summary phrase "5 years' BESS
+#    Warranty", the scope-exclusion sentence, the price-table line-item label, and the version
+#    and submission date. This note itself quotes clause 6 verbatim at item 3 and states the
+#    offer validity window at item 4. That disclosure is deliberate, made on the owner's decision of
+#    4 September 2026, and it is a WIDENING of the disclosure surface against the route selected
+#    on 3 September. It is recorded here as a handling reversal rather than applied quietly, and
+#    stated in this header so that this file does not misdescribe what it contains.
+#
+# 3. CLAUSE 6, VERBATIM. Quoted here and nowhere else in this repository:
+#
+#      "The offer is confidential thus shall be used by the Employer/EPC exclusively for the
+#       evaluation of the project, and may not be broadcasted, published, or, more generally,
+#       communicated to any third party without prior, explicit and written authorization from
+#       Envision."
+#
+#    This repository is public, so item 2 falls within the "published" case that clause names.
+#    No authorization instrument is held. That is recorded plainly rather than left implicit.
+#
+# 4. WHY THE ROUTE WAS SELECTED.
+#    This is the first material in the programme carrying live, unawarded bid pricing in a
+#    tender that had not closed. The two Envision offers are marked Confidential on every page.
+#    The second OEM quotation carries no confidentiality marking and no vendor name, so the
+#    absence of a marking is not a grant of permission and there is no issuing entity whose
+#    permission could be sought. Neither PUBLICATION_AUTHORIZATION.md, which enumerates four
+#    files from the 6 August 2026 tranche, nor the 29 August reversal, which turned on material
+#    forming part of the bid submitted to NSO, reaches supplier pricing given to the bidder
+#    pre-award. Route selected by the project owner on 3 September 2026, following the precedent
+#    set for the 21 August checklist dossier, whose binaries are likewise held outside this
+#    repository and recorded by manifest.
+#
+#    Offer validity is 30 days from 31 August 2026, so both offers lapse on 30 September 2026.
+# ═════════════════════════════════════════════════════════════════════════════════════════════
 #
 # Paths below are relative to corpus/nso_bess_250mw_2026_offers/ in the private repository.
 #
@@ -48,3 +91,41 @@ ec3bc5a36bc021c43c012237587942e4a8fef44614222c2c5bf6fea7fd4100c7  registers/buil
 #
 # --- the private tranche's own README ---
 9c6f33c367ba13a128c94ca0218174a62ed7e78de5331a8ee6b0a2d906b3d55f  README.md
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────────
+# RE-SUPPLY, 4 September 2026. Two Envision budgetary commercial offers were supplied again.
+# Handling of what follows is stated once, above, at NSO250MW-OFFERS-HANDLING-2026-09-04.
+#
+# They carry the SAME VERSION AND DATE as the two recorded above — both still "Version: 01",
+# both still "Date of Submission: August 31, 2026" — but they are NOT the same documents. The
+# text was compared against the 3 September copies held in the private repository and DIFFERS
+# SUBSTANTIVELY. These are SILENT REVISIONS: the content changed and the version and date did not.
+#
+#   1. The 10 MW offer's BESS warranty was CUT from 5 years to 2 years upon Substantial
+#      Completion. The 11 MW offer's stayed at 5 years. The 10 MW document is now internally
+#      inconsistent as a result: its executive summary still promises "5 years' BESS Warranty",
+#      which the edit did not reach.
+#   2. The scope note "PCS and AC equipment are not included in supply scope" was REMOVED from
+#      BOTH offers. In the 3 September copies that exclusion contradicted the offers' own price
+#      tables, which charge separately for "PCS & MV Transformers". Deleting it resolves that
+#      contradiction in the buyer's favour.
+#
+# Both headline prices are unchanged in both offers. So on the 10 MW offer the price held while
+# the warranty was reduced.
+#
+# This repeats a pattern already on the record for this OEM: the 5 August design calculation
+# silently revised the 29 July one while both were labelled V1.0.
+#
+# The 4 September copies do NOT supersede the 3 September copies automatically — which issue
+# governs is a question for the bidder, and both are recorded here so the divergence cannot be
+# lost.
+#
+228ace5417f32dbdd89dd6bd66e1da3d07e06f76684fcdcd502a9350db673c4d  raw/resupply_2026-09-04/Srilanka_Envision_Commercial_Offer_10MW_40MWh.pdf
+9181734ec864b4ae512f85f59c5bf7280ae2e5937b5c9bf9b7f249449b64ea7f  raw/resupply_2026-09-04/Srilanka_Envision_Commercial_Offer_11MW_44MWh.pdf
+#
+# --- 4 September derived extracts and the comparison that establishes the revisions ---
+#     The comparison is the evidence base for the finding recorded above. Pinning it means the
+#     analysis cannot be revised without trace.
+d8767562699dfbd3d81c5cb917584d65dd9ab144b64bb0ee7fd12ce926bf6cff  evaluation/Envision_Offer_Resupply_Comparison_2026-09-04.md
+6c1ca327e1e8fdac9c3f577319ebc0464fd4b17b6188ba0d8843dd401dcb6f3e  extracted/resupply_2026-09-04/Srilanka_Envision_Commercial_Offer_10MW_40MWh.markitdown.md
+86adc2372725dae547c788b474aa4e580cd338857ad95f67c67850d05286b16f  extracted/resupply_2026-09-04/Srilanka_Envision_Commercial_Offer_11MW_44MWh.markitdown.md

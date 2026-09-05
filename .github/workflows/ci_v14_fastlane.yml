@@ -16,8 +16,13 @@ on:
     branches:
       - main
   pull_request:
+    # Must match test-suite.yml's branch list. A PR into a branch this lane does not cover
+    # would run the sharded suite but NOT the corpus guard below — the reverse of the gap the
+    # guard exists to close, since the guard is here precisely because the suite skips
+    # docs-only diffs.
     branches:
       - main
+      - develop
 
 # Cancel a superseded PR run when a new commit is pushed; main runs are never cancelled.
 concurrency:
@@ -73,6 +78,18 @@ jobs:
             analytics/scenario_loader.py \
             analytics/fx_sensitivity_real.py \
             run_full_pipeline_v14.py
+
+      # CESSPIT gate on the NSO evidence corpus: manifest <-> tree agreement in BOTH
+      # directions, nested-manifest parent pins, and the single-source handling note.
+      # It lives HERE, in the one lane that runs unconditionally on every PR, rather than
+      # in the sharded suite: test-suite.yml skips its pytest shard for docs-only PRs, and two
+      # of the six manifest defects that have reached main carried nothing but documentation
+      # paths. A guard that skips on exactly the changes it exists to catch is not a guard. Costs
+      # ~2s, of which about half is pytest collection: tests/conftest.py imports libcst, yaml
+      # and the analytics package, so this needs the [dev] install above and git, not stdlib
+      # alone. No network.
+      - name: Evidence corpus - manifest and single-source handling gate
+        run: python -m pytest tests/lint/test_nso_corpus_manifest_integrity.py -q
 
       # The full tests/ tree runs in test-suite.yml's sharded `test` job (gated by the
       # required `Test Summary` check), NOT here — see the header note (#760). This lane is
