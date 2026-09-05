@@ -281,3 +281,22 @@ PDF/A-1, which predates features it requires.
 
 One consequence worth stating: **row labels are repeated, not merged.** Schwabish's "label only the
 first row" collides with WCAG PDF6, and accessibility wins over visual tidiness.
+
+## Tables and page breaks — the keep-together wrapper
+
+Tagged output has a sharp edge. WeasyPrint's PDF/UA tag builder raises
+`ValueError: Table wrapper without a table` when a **captioned table's wrapper is split so a
+caption-only fragment lands on a page with no rows** — which happens when a short table that does not
+fit the remaining space is pushed whole to the next page, orphaning its caption on the previous one.
+Because DBPL mandates both captions and `pdf/ua-1` tagging, this would otherwise make *any* document
+with a page-straddling table fail to render.
+
+The fix is structural: every table (document control, revision history and each section table) is
+wrapped in a `.dbpl-keep` block, and `.dbpl-keep { break-inside: avoid; }` moves the table and its
+caption to the next page as a unit. `break-inside: avoid` is **ignored on the anonymous
+table-wrapper box** but **honoured on this real block box**, which is why the wrapper is necessary
+rather than a rule on `table` itself. A table taller than one page cannot be kept whole; it then
+splits normally, which the tag builder handles correctly — so keep a single table under a page, use a
+Lazard landscape section, or split it into grouped tables. Regression-guarded in
+`tests/app/test_dbpl.py` (`test_every_table_sits_in_a_keep_together_block`,
+`test_page_straddling_table_renders_under_pdf_ua`).
