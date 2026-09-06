@@ -1,6 +1,6 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # NSO 250 MW BESS — LTL consolidated award, single 11 MW / 44 MWh unit
-# capex variant: UPSIDE (USD 78/kWh all-in)
+# capex variant: UPSIDE — equipment USD 98.68/kWh, all-in USD 134.09/kWh
 # ═══════════════════════════════════════════════════════════════════════════════
 # Tender TR/REP&PM/ICB/2026/001/C — 250 MW / 1,000 MWh standalone BESS, BOO, 15-year term.
 #
@@ -20,9 +20,16 @@
 # 0.15*Y + 0.85*Y*(P2/P1) adjustment covers roughly one MONTH between bid closing and ESA
 # signing, not the term. The Monte Carlo varies the spot over that window only.
 #
-# CAPEX. USD 78/kWh all-in decomposes as equipment USD 48.20/kWh CIF, balance of
-# plant USD 14.00/kWh, augmentation reserve USD 8.00/kWh, and land plus auxiliaries at
-# 10% of total capex per the owner's direction of 5 September 2026. Aggressive tier-1 Chinese pricing. Tests what the bid earns if bought at the bottom of the market.
+# CAPEX. Built UP from the equipment price, not back-solved from an assumed total. Equipment
+# is USD 98.68/kWh of CONTRACTED capacity; adding balance of plant USD 14.00/kWh and an
+# augmentation reserve USD 8.00/kWh, then land and auxiliaries at 10% of total capex per
+# the owner's direction of 5 September 2026, gives USD 134.09/kWh all-in.
+# Cheapest QUOTED supply: Envision's 11 MW / 44 MWh offer, the configuration every winner
+# bid.
+# Only the equipment line is sourced; balance of plant, augmentation and the land percentage
+# remain judgement, exactly as section 2 of the reverse-engineering evaluation records them.
+# Quotes priced per kWh of DC INSTALLED energy are restated onto the contracted denominator —
+# the offers install 9-19% more DC than they contract, and the two bases rank differently.
 #
 # MDSC. The ESA pays the full charge whenever ADSC >= MDSC, so a project augmented to hold
 # the floor earns a FLAT charge: `mdsc_fade_pct_annual` is 0.0 and the cost of holding the
@@ -49,7 +56,7 @@ generation:
       power_mw: 11.0
       energy_mwh: 44.0
       duration_h: 4.0
-      capex_usd: 3432000
+      capex_usd: 5899824
       availability_pct: 97.0
       revenue:
         model: capacity_charge
@@ -68,12 +75,12 @@ tariff:
 capex:
   cost_basis_year: 2026
   estimate_class: 4
-  usd_total: 3432000
-  capex_per_kw_usd: 312.0
+  usd_total: 5899824
+  capex_per_kw_usd: 536.3
 
 opex:
-  usd_per_year: 87472
-  opex_per_kw_yr_usd: 7.95
+  usd_per_year: 133127
+  opex_per_kw_yr_usd: 12.10
   escalation_pct: 0.0
 
 tax:
@@ -101,10 +108,51 @@ tax:
 statutory:
   success_fee_pct: 0.0
   env_surcharge_pct: 0.0
-  social_services_levy_pct: 0.025   # SSCL on the capacity charge, per the Section 4 bid form
+  # SSCL is NOT borne by the project. ESA Volume III Article 5(o): "Any applicable Value Added
+  # Tax or similar Sales Taxes that is payable will then be added to such payments." The
+  # Section 4 bid form (Addendum 01 item 13) matches — the Capacity Charge Rate is quoted
+  # EXCLUDING VAT, with "SSCL (if applicable)" and "VAT - 18%" as separate lines added on top
+  # and recovered from NSO. Deducting it from revenue, as this file did until 2026-09-06,
+  # double-charged the project ~LKR 139m/yr. Import-side SSCL is a different levy and is
+  # carried in `taxes_indirect` below.
+  social_services_levy_pct: 0.0
 
 risk_adjustment:
   cfads_haircut_pct: 0.1
+
+# Import levies and unrecoverable input VAT. Until 2026-09-06 this block was ABSENT, which
+# finance/import_levies.py treats as every line zero — silently the most favourable tax corner
+# available. It is now stated explicitly so the assumption is reviewable.
+#
+# BONDED WAREHOUSING SCHEME. RFP Clarifications 2026-08-21: obtaining the facility is the
+# BIDDER's responsibility (cl. 47); it covers only equipment forming part of the BESS facility,
+# and transmission-line materials and external grid interconnection works are expressly NOT
+# eligible (cl. 48); approval takes 6-8 weeks and can only be applied for after Financial Close,
+# which is why Addendum 01 extended SCOD by two months (cl. 8); and SSCL applicability at import
+# is left to "the prevailing laws and regulations in effect at the time of importation" (cl. 13).
+# Relief is therefore real but conditional. This variant assumes it is OBTAINED.
+#
+# VAT is relieved on both lines because it is passed through, not absorbed: the project charges
+# output VAT on the capacity charge under ESA Article 5(o), so input VAT is recoverable. This is
+# a recovery position, not a concession, and it does not depend on the bonded approval.
+#
+# NOT modelled: the cl. 48 carve-out. Relief here applies to the whole imported share, whereas
+# the tender restricts it to BESS-facility equipment. Splitting interconnection scope out of
+# capex would reduce `import_share_pct` for the relieved portion and make the base slightly
+# worse; it needs a capex split these files do not yet carry.
+taxes_indirect:
+  import_share_pct: 0.69      # imported (CIF) share of the pre-levy capex base
+  cid_pct: 0.0                # Customs Import Duty — HS 8502.31 is Free
+  pal_pct: 0.05               # Ports & Airports Levy on CIF
+  sscl_import_pct: 0.025      # SSCL at the point of import (distinct from the revenue-side levy)
+  vat_capex_pct: 0.18
+  vat_on_full_capex: false
+  vat_on_duties: true         # SL cascade: VAT base includes CIF + duties
+  vat_opex_pct: 0.18
+  relief:
+    bonded_scheme: true
+    vat_capex_relieved: true
+    vat_opex_relieved: true
 
 fx:
   enabled: true
@@ -190,12 +238,12 @@ monte_carlo:
   parameters:
     # Equipment price is the dominant uncertainty — the bid data fixes revenue, not cost.
     - name: capex.usd_total
-      low: 2745600
-      high: 4118400
+      low: 4719859
+      high: 7079789
       distribution: triangular
     - name: opex.usd_per_year
-      low: 65604
-      high: 113714
+      low: 99845
+      high: 173065
       distribution: triangular
     # Spot over the bid-closing-to-ESA-signing window only (about one month), not the term.
     - name: fx.start_lkr_per_usd
@@ -224,6 +272,9 @@ metadata:
   last_updated: '2026-09-06'
   author: DutchBay analysis
   review_status: >-
-    Derived from opened bid prices in a live, unawarded tender. Revenue is bid data;
-    every cost line is assumption. Bid opening only — no award has been made.
+    Derived from opened bid prices in a live, unawarded tender. Revenue is bid data.
+    The equipment cost line is sourced — a quoted OEM price on the `upside`, `base` and
+    `stress` variants, and the bid-implied ceiling on `bidimplied`, which is a ceiling
+    and not a cost estimate. Balance of plant, augmentation and the land percentage
+    remain judgement. Bid opening only — no award has been made.
   sprint: 'NSO 250MW LTL consolidated case'
