@@ -147,9 +147,9 @@ def test_bonded_relief_leaves_sscl_standing(name: str) -> None:
     config = _config(name)
     indirect = resolve_indirect_taxes(config)
     assert indirect is not None, f"{name}: no taxes_indirect block to resolve"
-    assert indirect.bonded_scheme is False, (
-        f"{name}: relief.bonded_scheme is true, which zeroes SSCL along with CID and PAL."
-    )
+    assert (
+        indirect.bonded_scheme is False
+    ), f"{name}: relief.bonded_scheme is true, which zeroes SSCL along with CID and PAL."
     assert indirect.sscl_import_pct == pytest.approx(0.025, abs=ABS_TOL)
     assert indirect.duty_rate >= 0.025 - ABS_TOL, (
         f"{name}: duty_rate is {indirect.duty_rate!r}; the 2.5% import SSCL has been relieved "
