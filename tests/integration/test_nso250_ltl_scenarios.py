@@ -150,8 +150,33 @@ def test_bonded_relief_leaves_sscl_standing(name: str) -> None:
     assert (
         indirect.bonded_scheme is False
     ), f"{name}: relief.bonded_scheme is true, which zeroes SSCL along with CID and PAL."
-    assert indirect.sscl_import_pct == pytest.approx(0.025, abs=ABS_TOL)
+    assert indirect.sscl_import_pct == pytest.approx(0.025, abs=ABS_TOL), (
+        f"{name}: sscl_import_pct is {indirect.sscl_import_pct!r}, not 0.025. The import SSCL "
+        "is not relievable under the bonded scheme; zeroing the rate does not make it so."
+    )
     assert indirect.duty_rate >= 0.025 - ABS_TOL, (
         f"{name}: duty_rate is {indirect.duty_rate!r}; the 2.5% import SSCL has been relieved "
         "by something. It is not relievable under the bonded scheme."
+    )
+
+
+def test_stress_carries_a_heavier_duty_line_than_the_relieved_variants() -> None:
+    """`stress` assumes the bonded facility is NOT obtained, so PAL must still bite.
+
+    Guarded by intent rather than only by the KPI oracle's side effect. Collapsing stress's
+    `pal_pct` to 0.0 moves the oracle (project_irr by ~3.5e-3, well past its tolerance) and so
+    would be caught anyway, but the differential is a property of the variant design and is
+    worth asserting where a reader will look for it.
+    """
+    relieved = [
+        resolve_indirect_taxes(_config(n)) for n in SCENARIOS if "stress" not in n
+    ]
+    stressed = [resolve_indirect_taxes(_config(n)) for n in SCENARIOS if "stress" in n]
+    assert relieved and stressed
+    worst_relieved = max(i.duty_rate for i in relieved if i is not None)
+    best_stressed = min(i.duty_rate for i in stressed if i is not None)
+    assert best_stressed > worst_relieved + ABS_TOL, (
+        f"stress duty_rate {best_stressed!r} is not strictly above the relieved variants' "
+        f"{worst_relieved!r}. `stress` assumes the bonded facility is not obtained, so PAL "
+        "must survive there and be relieved elsewhere."
     )

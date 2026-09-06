@@ -103,9 +103,12 @@ tax:
   # allowance for a total investment of USD 250,000 to USD 3,000,000 in a new undertaking. Two
   # independent RECRUIT-01 reviewers vetoed it on the same ground and the change was withdrawn:
   #   1. THE BAND IS BREACHED HERE, NOW, ON EVERY VARIANT. Taking the narrowest reading the
-  #      claim itself invoked — plant-only, per site — the cheapest variant (bidimplied) is
-  #      USD 3.17m against a USD 3.00m ceiling, and base/upside/stress run 1.8x-1.9x over. Read
-  #      per portfolio the base is 25x-45x over. No reading qualifies.
+  #      claim itself invoked — the PLANT-ONLY share (90%) of the LEVY-INCLUSIVE depreciable
+  #      base, per site — the cheapest variant (bidimplied) is USD 3.17m against a USD 3.00m
+  #      ceiling, while upside, base and stress run 1.80x, 1.81x and 1.99x over. Read per
+  #      portfolio, that same measure runs 25.4x to 47.8x over. Raw `capex.usd_total` before
+  #      capitalised levies is marginally kinder and still breaches everywhere. Nothing
+  #      qualifies on any reading.
   #   2. `project.boi_approved` is false in this same file. The allowance is conditional on BOI
   #      approval, and nothing in finance/ reads that key, so the contradiction fails silent.
   #   3. The Second Schedule is not held in this repository or its corpus. Every other citation
@@ -170,7 +173,9 @@ risk_adjustment:
 # the scheme relieves (CID, PAL, CESS, VAT), and the SSCL raw-materials-only exemption are all
 # EXTERNAL to this repository and its corpus, and are asserted here from secondary sources. The
 # RFP Clarifications of 2026-08-21 cited below are UNVERIFIABLE - no clarifications document is
-# held. Treat all four as claims to check against the issued originals, not as established here. Until 2026-09-06 these files set
+# held. Treat all four as claims to check against the issued originals, not as established here.
+#
+# Until 2026-09-06 these files set
 # `relief.bonded_scheme: true`, and `finance/import_levies.py` zeroes CID, PAL AND SSCL together
 # behind that one flag - so the SSCL line was being relieved by a scheme that does not relieve
 # it. The flag is now false on every variant and the relief is expressed on the lines the scheme

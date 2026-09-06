@@ -28,9 +28,10 @@
 
   **An enhanced capital allowance was proposed with these corrections and withdrawn under
   review.** Switching it on at a multiple of 2.0 assumed each site's depreciable base sits inside
-  the Second Schedule's USD 250,000–3,000,000 band. It does not: plant-only per site, the
-  cheapest variant is USD 3.17m and the others run 1.8×–1.9× over, while the portfolio files are
-  25×–45× over. `project.boi_approved` is false in the same files, and nothing in `finance/`
+  the Second Schedule's USD 250,000–3,000,000 band. It does not. On the plant-only share of the
+  levy-inclusive depreciable base — the narrowest reading the claim itself invoked — the cheapest
+  variant is USD 3.17m against a USD 3.00m ceiling and the others run 1.80×–1.99× over, while per
+  portfolio the same measure runs **25.4× to 47.8×** over. `project.boi_approved` is false in the same files, and nothing in `finance/`
   reads that key, so the contradiction failed silent. The Second Schedule is not held in this
   repository or its corpus, making the citation circular. Two independent `RECRUIT-01` reviewers
   vetoed it on the same ground and it is out — the allowance would have supplied about 64% of the
@@ -51,3 +52,14 @@
   throughout, before and after; that is pre-existing and is now pinned so the distinction cannot
   be lost. The three OEM-priced variants stay at a negative equity IRR, which is the finding
   rather than a defect: the awarded capacity charges do not support those equipment prices.
+
+  **One thing "positive" does not mean.** The direction of every KPI move here is positive, and
+  that is a statement about the delta and not about viability. Read against the Sri Lankan cost of
+  equity of 18.00% that LTL's own IPO advisers apply to every Sri Lankan valuation in the group
+  (NDB IB / CT CLSA, 31 July 2024, s.8.1.4 — a 12.00% risk-free rate plus a 6.00% power-sector
+  risk premium), `bidimplied` returns 6.72% against an 18.00% hurdle, a shortfall of 11.3pp — and
+  `bidimplied` is the best case in the family, explicitly a bid-implied ceiling rather than a cost
+  estimate. The other three are negative. **No variant in this family clears.** Lifting
+  `wacc.cost_of_equity` from 0.15 to the sourced 0.18 is a separate change and is deliberately not
+  made here; it was verified to move none of the seven pinned KPIs, so it is orthogonal to this
+  one rather than merely deferred.

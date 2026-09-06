@@ -135,7 +135,56 @@ non-existence, and the withdrawn SCOD extension may yet be real.
 | A11 | False provenance in `build_ltl_case_dbpl_2026-09-06.py:293` | **recorded, not applied** — same repository boundary |
 | A12 | Split the commit | **not applied, reasoned** — the bundling objection was that a veto on one correction forced surgery on the other two. With the allowance withdrawn, the remaining two are same-family corrections to the same eight files, each bound to a tender document, and the repository squash-merges, so separate commits would confer no revertability. Recorded for the reviewers to accept or reject. |
 
-## 4. Re-disposition
+## 5. Re-disposition — **ACCEPT WITH AMENDMENTS**
 
-Recorded in the pull request against the final head, after the remediation and after this record
-and its domain counterpart were themselves committed.
+Delivered against candidate `fb30dd9885133307148cf91451619731a6710034`, tree
+`d3977c7485f54ba3d57709ac3e1f2d2592b56bde`, base `ba4b51898f53afa6bb35f1e1464efb43c1c73951`
+(`git merge-base HEAD ba4b518` → `ba4b518`, so the base is unchanged and the fast-forward
+carve-out is not in play). **The veto on `b4c2d25` is discharged.** The review is of the
+cumulative tree `ba4b518..fb30dd9`, which is what squash-merge lands.
+
+The reviewer confirmed the formatting-only claim independently (3 insertions, 3 deletions, one
+file; `git diff --stat 0e3b5f0 fb30dd9 -- scenarios/ tests/fixtures/` empty), re-ran the
+toolchain, and ran `pytest tests/finance/ tests/integration/test_nso250_ltl_scenarios.py -q` →
+**1111 passed**. It then corroborated the oracle through a **different entry point**
+(`api.pipeline_api.run_pipeline` rather than `evaluate_with_overrides`): **48 fields to within
+1e-9, zero mismatches**. Decisively, the fixture's `bidimplied` values of 0.0899888641 /
+0.0672310611 are precisely the `(8.9989, 6.7231)` the reviewer had computed for the
+allowance-reverted case in its *first* round, before this remediation existed — so the oracle was
+not fitted to a number the reviewer had not already independently produced.
+
+Guard non-vacuity, completed: all seven KPI fields fired on a +1e-5 perturbation; the scaling
+identity fired on a 0.1% drift; the scenario-set guard fired on a dropped variant; NC1 and NC2
+fired on **8/8 files each**; NC2b fired with the flag left false, substantiating the docstring's
+claim that the SSCL guard is pinned by effect rather than spelling.
+
+New numeric claims checked: USD 59,773 = 3,465,103 × 0.69 × 0.025 exactly; the ~64% attribution
+= (10.7226−8.9989)/(10.7226−8.0188) = 63.8%; the `construction_years` sensitivity measured at
+1.66pp on the 0↔1 leg and 2.83pp across the full range, so "roughly 2pp" is fair.
+
+Two amendments, neither blocking:
+
+| # | amendment | disposition |
+|---|---|---|
+| 1 | The same residual paragraph-merge the domain reviewer raised — introduced by this PR (`git show ba4b518:… \| grep -c` → 0), a 129-character line where the block wraps at ~98 | **applied** |
+| 2 | **Pin the squash-merge commit message.** `RELEASING.md:74` uses `gh pr merge --squash`, whose default concatenates the stack. `b4c2d25`'s message still asserts in the present tense that the allowance "is now on at a total write-off multiple of 2.0", with the superseded 10.72% / 8.17%. If that concatenation lands, `main`'s permanent history carries the vetoed justification and the wrong numbers as current, contradicting the changelog beside it | **applied at merge** — the squash body is `0e3b5f0`'s message plus the amendment commit, never the default concatenation |
+
+The reviewer discharged its own first-round split-the-commit amendment, checking the squash
+premise rather than accepting it (`RELEASING.md:74` documents `gh pr merge --squash
+--delete-branch`, so separate commits collapse to one on `main` and confer zero revertability),
+and confirmed amendment 5's provenance line was drawn item for item where it drew it. It verified
+the two reviewers converged independently — the domain reviewer used machinery
+(`_extract_capex_base_usd`, `capex_uplift_lines_usd`) the assurance reviewer never ran, and
+produced a decomposition row it had not computed.
+
+It also verified the IPO-report reading directly rather than deferring: `grep -i
+"BOI\|concession\|tax holiday\|exempt"` over the extracted text returns nothing, and the SOBA
+line is a deferral on 100% of cost for a different entity and a different (LNG) project. Its
+caution, recorded: reaching for that line as authority for these BESS scenarios would be a
+category error on three axes at once — different entity, different project, timing versus
+multiplier.
+
+**Standing caution, not an amendment:** the false claim at
+`build_ltl_case_dbpl_2026-09-06.py:293` — that Addendum 01 and the 21 August clarifications are
+"held in the public corpus" — is the same class of defect this PR was vetoed for, is still live
+in the other repository, and should not be allowed to age.
