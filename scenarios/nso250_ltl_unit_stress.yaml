@@ -44,7 +44,10 @@ project:
   capacity_factor: 0.0
   degradation: 0.0
   life_years: 15
-  cod_year: 2027          # RFP Vol I cl. 1.4: COD 06-May-2027
+  # RFP Vol I cl. 1.4 puts COD at 06-May-2027. Documentary only — the key is read at
+  # analytics/feasibility_execution.py and has no KPI effect. Note it does not agree with the
+  # annual grid, where FC in 2027 plus the rounded construction year implies COD in 2028.
+  cod_year: 2027
   developer: "LTL-controlled entity (Ceylex / Lakdhanavi), per owner premise"
   jurisdiction: Sri Lanka
   boi_approved: false
@@ -94,17 +97,25 @@ tax:
   plant_capex_share: 0.90
   plant_depreciation_years: 5
   civil_depreciation_years: 20
-  # ENHANCED CAPITAL ALLOWANCE. The Second Schedule grants an allowance equal to 100% of the
-  # investment in depreciable assets IN ADDITION TO the normal capital allowance, for a total
-  # investment between USD 250,000 and USD 3,000,000 in a new undertaking, with effect from
-  # 01-Apr-2026 and subject to BOI approval; 150% where the assets are used in the NORTHERN
-  # PROVINCE (of the 24 awarded sites, Kilinochchi and Chunnakam 1 & 2 qualify). The multiple
-  # is the TOTAL write-off factor on the depreciable base, so 2.0 = 1.0 normal + 1.0 enhanced.
-  # Each site is a separate undertaking and its depreciable base sits inside the band; the band
-  # is a CEILING, so a negotiated price high enough to push the plant base past USD 3m forfeits
-  # the allowance that justified it. Northern-Province sites would carry 2.5.
-  enhanced_capital_allowance_multiple: 2.0
-  enhanced_allowance_applies: true
+  # ENHANCED CAPITAL ALLOWANCE — OFF, and it must stay off until three things are true.
+  # A 2026-09-06 change switched this on at a multiple of 2.0 on the reasoning that the Second
+  # Schedule grants 100% of the investment in depreciable assets IN ADDITION TO the normal
+  # allowance for a total investment of USD 250,000 to USD 3,000,000 in a new undertaking. Two
+  # independent RECRUIT-01 reviewers vetoed it on the same ground and the change was withdrawn:
+  #   1. THE BAND IS BREACHED HERE, NOW, ON EVERY VARIANT. Taking the narrowest reading the
+  #      claim itself invoked — plant-only, per site — the cheapest variant (bidimplied) is
+  #      USD 3.17m against a USD 3.00m ceiling, and base/upside/stress run 1.8x-1.9x over. Read
+  #      per portfolio the base is 25x-45x over. No reading qualifies.
+  #   2. `project.boi_approved` is false in this same file. The allowance is conditional on BOI
+  #      approval, and nothing in finance/ reads that key, so the contradiction fails silent.
+  #   3. The Second Schedule is not held in this repository or its corpus. Every other citation
+  #      in this file can be checked against a held document; this one could only be checked
+  #      against itself.
+  # Re-proposing it requires the Schedule as a primary extract with its retrieval provenance,
+  # a reconciliation with `boi_approved`, and eligibility demonstrated against each file's own
+  # `capex.usd_total` rather than asserted.
+  enhanced_capital_allowance_multiple: 1.5
+  enhanced_allowance_applies: false
   loss_carryforward_years: 6
   wht_on_interest_to_nonresidents: 0.1
   wht_on_interest_enabled: true
@@ -119,7 +130,9 @@ statutory:
   env_surcharge_pct: 0.0
   # SSCL is NOT borne by the project. ESA Volume III Article 5(o): "Any applicable Value Added
   # Tax or similar Sales Taxes that is payable will then be added to such payments." The
-  # Section 4 bid form (Addendum 01 item 13) matches — the Capacity Charge Rate is quoted
+  # Section 4 bid form (cited in earlier work as "Addendum 01 item 13", a document NOT held in
+  # the corpus — see the taxes_indirect header; the pass-through rests on Article 5(o), which is
+  # held and verified, and does not depend on it) matches — the Capacity Charge Rate is quoted
   # EXCLUDING VAT, with "SSCL (if applicable)" and "VAT - 18%" as separate lines added on top
   # and recovered from NSO. Deducting it from revenue, as this file did until 2026-09-06,
   # double-charged the project ~LKR 139m/yr. Import-side SSCL is a different levy and is
@@ -150,7 +163,14 @@ risk_adjustment:
 # MORE generous is clawed back above the same threshold.
 #
 # SSCL IS NOT RELIEVED. Only raw materials imported for processing and re-export are exempt from
-# the Social Security Contribution Levy; capital goods pay. Until 2026-09-06 these files set
+# the Social Security Contribution Levy; capital goods pay.
+#
+# PROVENANCE OF THE PARAGRAPH ABOVE. The ESA names both gazettes verbatim, so the CITATIONS are
+# corpus-verified. Their CONTENT is not: the >= 1 MWh eligibility threshold, the list of levies
+# the scheme relieves (CID, PAL, CESS, VAT), and the SSCL raw-materials-only exemption are all
+# EXTERNAL to this repository and its corpus, and are asserted here from secondary sources. The
+# RFP Clarifications of 2026-08-21 cited below are UNVERIFIABLE - no clarifications document is
+# held. Treat all four as claims to check against the issued originals, not as established here. Until 2026-09-06 these files set
 # `relief.bonded_scheme: true`, and `finance/import_levies.py` zeroes CID, PAL AND SSCL together
 # behind that one flag - so the SSCL line was being relieved by a scheme that does not relieve
 # it. The flag is now false on every variant and the relief is expressed on the lines the scheme
@@ -161,7 +181,9 @@ risk_adjustment:
 # until 2026-09-06. No such addendum is held in the corpus; RFP Vol I cl. 1.4 as held carries
 # the unextended schedule, which is what the timeline block below now models. Separately, ESA
 # Art 6A(b)(i) refers to "the bid closing (i.e. 14th October 2025)" against Volume I's
-# 14-Aug-2026 - a template carry-over that should be resolved against the issued originals. This variant assumes it is NOT obtained, so the duty lines bite.
+# 14-Aug-2026 - a template carry-over that should be resolved against the issued originals.
+#
+# Relief is real but conditional. THIS VARIANT ASSUMES IT IS NOT OBTAINED, so the duty lines bite.
 #
 # VAT is relieved on both lines because it is passed through, not absorbed: the project charges
 # output VAT on the capacity charge under ESA Article 5(o), so input VAT is recoverable. This is
@@ -204,7 +226,12 @@ Financing_Terms:
   debt_sizing: dual_dscr
   dscr_p99_downside_factor: 0.80
   balloon_treatment: cash_sweep
-  construction_years: 1   # RFP cl. 1.4: FC 06-Jan-2027 to COD 06-May-2027
+  # RFP cl. 1.4 puts FC at 06-Jan-2027 and COD at 06-May-2027 — 0.33 years. This annual-grid
+  # model takes 1 as a CONSERVATIVE ROUNDING of that, not as a figure read off the schedule:
+  # 0 would zero IDC entirely, which is wrong for a four-month build on drawn debt, while 1
+  # overstates IDC by about eight months and pushes the first equity distribution roughly eight
+  # months late. Both errors run against the project. The choice is worth ~2pp of project IRR.
+  construction_years: 1
   tenor_years: 12
   interest_only_years: 1
   amortization_style: auto
