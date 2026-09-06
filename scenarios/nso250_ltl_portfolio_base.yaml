@@ -1,0 +1,229 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# NSO 250 MW BESS — LTL consolidated award, 24-project portfolio
+# capex variant: BASE (USD 95/kWh all-in)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tender TR/REP&PM/ICB/2026/001/C — 250 MW / 1,000 MWh standalone BESS, BOO, 15-year term.
+#
+# WHAT THIS MODELS. On the project owner's premise of 6 September 2026 that Ceylex
+# Engineering and Lakdhanavi are one entity under LTL Holdings, that entity won 24 of the
+# 25 projects (Aitken Spence took Kosgama). Nineteen substations carry 25 projects because
+# Volume I cl. 1.3 permits two proposals at six named substations. This file models the
+# 24-project portfolio.
+#
+# REVENUE. A flat Capacity Charge Rate in LKR/MW/month — "the procurement shall be in power
+# (MW) terms" (Volume I cl. 2.8) — paid for 15 years with NO indexation and NO energy
+# payment anywhere in the ESA. R = 1,752,500 is the capacity-weighted average of the 24
+# LTL-controlled winning bids (range 1,695,000 to 1,850,000).
+#
+# FX. One-off: LTL funds the imported equipment from USD its overseas operations already
+# earn, so there is no rolling exposure. `annual_depr` is 0.0 deliberately — the tender's
+# 0.15*Y + 0.85*Y*(P2/P1) adjustment covers roughly one MONTH between bid closing and ESA
+# signing, not the term. The Monte Carlo varies the spot over that window only.
+#
+# CAPEX. USD 95/kWh all-in decomposes as equipment USD 63.50/kWh CIF, balance of
+# plant USD 14.00/kWh, augmentation reserve USD 8.00/kWh, and land plus auxiliaries at
+# 10% of total capex per the owner's direction of 5 September 2026. The level the winning bids support at roughly a 15% equity return. The central case.
+#
+# MDSC. The ESA pays the full charge whenever ADSC >= MDSC, so a project augmented to hold
+# the floor earns a FLAT charge: `mdsc_fade_pct_annual` is 0.0 and the cost of holding the
+# floor sits in the augmentation reserve inside capex. `mdsc_floor_soh` records the tender's
+# own year-15 floor of 68%. Setting a fade here as well would double-count.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+project:
+  name: "NSO 250MW BESS — LTL portfolio (base capex)"
+  location: "Sri Lanka — 19 grid substations, 24 projects"
+  capacity_mw: 264.0
+  capacity_factor: 0.0
+  degradation: 0.0
+  life_years: 15
+  cod_year: 2028
+  developer: "LTL-controlled entity (Ceylex / Lakdhanavi), per owner premise"
+  jurisdiction: Sri Lanka
+  boi_approved: false
+
+generation:
+  technologies:
+    bess_unit:
+      type: bess
+      power_mw: 264.0
+      energy_mwh: 1056.0
+      duration_h: 4.0
+      capex_usd: 100320000
+      availability_pct: 97.0
+      revenue:
+        model: capacity_charge
+        capacity_charge_lkr_per_mw_month: 1752500
+        contract_years: 15
+        availability_factor: 1.0
+        dispatchable_ratio: 1.0
+        mdsc_fade_pct_annual: 0.0
+        mdsc_floor_soh: 0.68
+
+tariff:
+  lkr_per_kwh: 0.0
+  tariff_type: fixed
+  ppa_term_years: 15
+
+capex:
+  cost_basis_year: 2026
+  estimate_class: 4
+  usd_total: 100320000
+  capex_per_kw_usd: 380.0
+
+opex:
+  usd_per_year: 2431440
+  opex_per_kw_yr_usd: 9.21
+  escalation_pct: 0.0
+
+tax:
+  corporate_tax_rate: 0.30
+  tax_holiday_route: none
+  tax_holiday_years: 0
+  tax_holiday_start_year: 1
+  depreciation_method: straight_line
+  depreciation_years: 5
+  depreciation_start_year: 1
+  plant_capex_share: 0.90
+  plant_depreciation_years: 5
+  civil_depreciation_years: 20
+  enhanced_capital_allowance_multiple: 1.5
+  enhanced_allowance_applies: false
+  loss_carryforward_years: 6
+  wht_on_interest_to_nonresidents: 0.1
+  wht_on_interest_enabled: true
+  wht_gross_up: false
+  wht_on_dividends: 0.15
+  wht_on_dividends_enabled: true
+  capitalize_idc_in_depreciable_base: true
+  interest_deductibility: true
+
+statutory:
+  success_fee_pct: 0.0
+  env_surcharge_pct: 0.0
+  social_services_levy_pct: 0.025   # SSCL on the capacity charge, per the Section 4 bid form
+
+risk_adjustment:
+  cfads_haircut_pct: 0.1
+
+fx:
+  enabled: true
+  mode: deterministic
+  base_currency: USD
+  quote_currency: LKR
+  rates:
+    lkr_per_usd: 327.0
+  start_lkr_per_usd: 327.0
+  annual_depr: 0.0
+  uncertainty_pct: 0.02
+
+Financing_Terms:
+  debt_ratio: 0.7
+  debt_sizing: dual_dscr
+  dscr_p99_downside_factor: 0.80
+  balloon_treatment: cash_sweep
+  tenor_years: 12
+  interest_only_years: 1
+  amortization_style: auto
+  interest_rate_nominal: 0.1180
+  mix:
+    lkr_max: 1.0
+    dfi_max: 0.0
+    usd_commercial_min: 0.0
+  rates:
+    lkr_nominal: 0.1180   # 10y LKR govt bond, 01.07.2037 quoted 11.75/85 on 2026-08-31
+    lkr_min: 0.1180
+    dfi_nominal: 0.1180
+    dfi_min: 0.1180
+    usd_nominal: 0.1180
+    usd_commercial_min: 0.1180
+  target_dscr: 1.3
+  min_dscr: 1.2
+  reserves:
+    dsra_months: 6
+  fees:
+    upfront_pct: 0.01
+  enforce_hard_covenants: false
+
+returns:
+  project_life_years: 15
+  project_discount_rate: 0.12
+  equity_discount_rate: 0.15
+
+constraints:
+  max_debt_ratio: 0.8
+  warn_debt_ratio: 0.75
+  min_dscr_covenant: 1.3
+  target_dscr: 1.35
+  warn_dscr: 1.25
+  max_balloon_pct: 0.1
+  warn_balloon_pct: 0.05
+  max_tenor_years: 15
+  warn_tenor_years: 14
+  max_interest_rate: 0.25
+  min_interest_rate: 0.0
+  lender_type: Commercial
+  jurisdiction: Sri Lanka
+  fail_on_covenant_breach: false
+  fail_on_large_balloon: false
+
+timeline:
+  ppa_to_fc_years: 1
+  construction_years: 1
+  ops_years: 15
+  lifetime_years: 16
+
+wacc:
+  mode: build_up
+  drives_discount_rate: true
+  cost_of_equity: 0.15
+  prudential_spread_bps: 100
+  description: "Build-up WACC drives the project discount rate."
+
+# ═════════════════════════════════════════════════════════════════════════════
+# MONTE CARLO — 5,000 trials. Engine contract is a LIST of {name, low, high, distribution}
+# with dotted config paths; every name below resolves in this file.
+# ═════════════════════════════════════════════════════════════════════════════
+monte_carlo:
+  n_scenarios: 5000
+  seed: 42
+  parameters:
+    # Equipment price is the dominant uncertainty — the bid data fixes revenue, not cost.
+    - name: capex.usd_total
+      low: 80256000
+      high: 120384000
+      distribution: triangular
+    - name: opex.usd_per_year
+      low: 1823580
+      high: 3160872
+      distribution: triangular
+    # Spot over the bid-closing-to-ESA-signing window only (about one month), not the term.
+    - name: fx.start_lkr_per_usd
+      low: 318.0
+      high: 338.0
+      distribution: normal
+    # Availability below 97% is penalised at TWICE the shortfall and sits outside the 20%
+    # monthly LD cap, so the downside tail here is real revenue loss.
+    - name: generation.technologies.bess_unit.revenue.availability_factor
+      low: 0.90
+      high: 1.00
+      distribution: triangular
+    # Rupee credit spread over the sovereign benchmark.
+    - name: Financing_Terms.rates.lkr_nominal
+      low: 0.1180
+      high: 0.1450
+      distribution: uniform
+  var_confidence: 0.95
+  cvar_confidence: 0.95
+  percentiles: [5, 10, 25, 50, 75, 90, 95]
+  min_dscr_covenant: 1.2
+  min_llcr_covenant: 1.25
+
+metadata:
+  version: '1.0'
+  last_updated: '2026-09-06'
+  author: DutchBay analysis
+  review_status: >-
+    Derived from opened bid prices in a live, unawarded tender. Revenue is bid data;
+    every cost line is assumption. Bid opening only — no award has been made.
+  sprint: 'NSO 250MW LTL consolidated case'
