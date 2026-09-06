@@ -44,7 +44,10 @@ project:
   capacity_factor: 0.0
   degradation: 0.0
   life_years: 15
-  cod_year: 2028
+  # RFP Vol I cl. 1.4 puts COD at 06-May-2027. Documentary only — the key is read at
+  # analytics/feasibility_execution.py and has no KPI effect. Note it does not agree with the
+  # annual grid, where FC in 2027 plus the rounded construction year implies COD in 2028.
+  cod_year: 2027
   developer: "LTL-controlled entity (Ceylex / Lakdhanavi), per owner premise"
   jurisdiction: Sri Lanka
   boi_approved: false
@@ -94,6 +97,26 @@ tax:
   plant_capex_share: 0.90
   plant_depreciation_years: 5
   civil_depreciation_years: 20
+  # ENHANCED CAPITAL ALLOWANCE — OFF, and it must stay off until three things are true.
+  # A 2026-09-06 change switched this on at a multiple of 2.0 on the reasoning that the Second
+  # Schedule grants 100% of the investment in depreciable assets IN ADDITION TO the normal
+  # allowance for a total investment of USD 250,000 to USD 3,000,000 in a new undertaking. Two
+  # independent RECRUIT-01 reviewers vetoed it on the same ground and the change was withdrawn:
+  #   1. THE BAND IS BREACHED HERE, NOW, ON EVERY VARIANT. Taking the narrowest reading the
+  #      claim itself invoked — the PLANT-ONLY share (90%) of the LEVY-INCLUSIVE depreciable
+  #      base, per site — the cheapest variant (bidimplied) is USD 3.17m against a USD 3.00m
+  #      ceiling, while upside, base and stress run 1.80x, 1.81x and 1.99x over. Read per
+  #      portfolio, that same measure runs 25.4x to 47.8x over. Raw `capex.usd_total` before
+  #      capitalised levies is marginally kinder and still breaches everywhere. Nothing
+  #      qualifies on any reading.
+  #   2. `project.boi_approved` is false in this same file. The allowance is conditional on BOI
+  #      approval, and nothing in finance/ reads that key, so the contradiction fails silent.
+  #   3. The Second Schedule is not held in this repository or its corpus. Every other citation
+  #      in this file can be checked against a held document; this one could only be checked
+  #      against itself.
+  # Re-proposing it requires the Schedule as a primary extract with its retrieval provenance,
+  # a reconciliation with `boi_approved`, and eligibility demonstrated against each file's own
+  # `capex.usd_total` rather than asserted.
   enhanced_capital_allowance_multiple: 1.5
   enhanced_allowance_applies: false
   loss_carryforward_years: 6
@@ -110,7 +133,9 @@ statutory:
   env_surcharge_pct: 0.0
   # SSCL is NOT borne by the project. ESA Volume III Article 5(o): "Any applicable Value Added
   # Tax or similar Sales Taxes that is payable will then be added to such payments." The
-  # Section 4 bid form (Addendum 01 item 13) matches — the Capacity Charge Rate is quoted
+  # Section 4 bid form (cited in earlier work as "Addendum 01 item 13", a document NOT held in
+  # the corpus — see the taxes_indirect header; the pass-through rests on Article 5(o), which is
+  # held and verified, and does not depend on it) matches — the Capacity Charge Rate is quoted
   # EXCLUDING VAT, with "SSCL (if applicable)" and "VAT - 18%" as separate lines added on top
   # and recovered from NSO. Deducting it from revenue, as this file did until 2026-09-06,
   # double-charged the project ~LKR 139m/yr. Import-side SSCL is a different levy and is
@@ -124,13 +149,46 @@ risk_adjustment:
 # finance/import_levies.py treats as every line zero — silently the most favourable tax corner
 # available. It is now stated explicitly so the assumption is reviewable.
 #
-# BONDED WAREHOUSING SCHEME. RFP Clarifications 2026-08-21: obtaining the facility is the
-# BIDDER's responsibility (cl. 47); it covers only equipment forming part of the BESS facility,
+# BONDED WAREHOUSING SCHEME. Established under the Customs Ordinance by the Regulations of the
+# Minister of Finance of 10-Aug-2018 (Gazette Extraordinary 2083/33), as amended with effect
+# from 15-Oct-2025 (Gazette Extraordinary 2458/38) to add RENEWABLE ENERGY STORAGE FACILITIES
+# of at least 1 MWh as an eligible sector. At 44 MWh contracted per site the facility qualifies
+# comfortably. The scheme relieves Customs Import Duty, PAL, CESS and VAT on approved capital
+# goods DURING THE CONSTRUCTION PERIOD. Obtaining it is the BIDDER's responsibility (RFP
+# Clarifications 2026-08-21 cl. 47); it covers only equipment forming part of the BESS facility,
 # and transmission-line materials and external grid interconnection works are expressly NOT
-# eligible (cl. 48); approval takes 6-8 weeks and can only be applied for after Financial Close,
-# which is why Addendum 01 extended SCOD by two months (cl. 8); and SSCL applicability at import
-# is left to "the prevailing laws and regulations in effect at the time of importation" (cl. 13).
-# Relief is therefore real but conditional. This variant assumes it is NOT obtained, so the duty lines bite.
+# eligible (cl. 48); approval takes 6-8 weeks and can only be applied for after Financial Close.
+#
+# ESA Article 6A(a)(i) names this scheme as "the basis upon which the bid of the Company was
+# made and accepted": amending, withdrawing or negating its benefits is a Change in Law Event
+# carrying an equitable Capacity Charge adjustment once the effect exceeds LKR 20,000,000. The
+# relief is therefore contractually protected, and symmetrically so - a benefit that becomes
+# MORE generous is clawed back above the same threshold.
+#
+# SSCL IS NOT RELIEVED. Only raw materials imported for processing and re-export are exempt from
+# the Social Security Contribution Levy; capital goods pay.
+#
+# PROVENANCE OF THE PARAGRAPH ABOVE. The ESA names both gazettes verbatim, so the CITATIONS are
+# corpus-verified. Their CONTENT is not: the >= 1 MWh eligibility threshold, the list of levies
+# the scheme relieves (CID, PAL, CESS, VAT), and the SSCL raw-materials-only exemption are all
+# EXTERNAL to this repository and its corpus, and are asserted here from secondary sources. The
+# RFP Clarifications of 2026-08-21 cited below are UNVERIFIABLE - no clarifications document is
+# held. Treat all four as claims to check against the issued originals, not as established here.
+#
+# Until 2026-09-06 these files set
+# `relief.bonded_scheme: true`, and `finance/import_levies.py` zeroes CID, PAL AND SSCL together
+# behind that one flag - so the SSCL line was being relieved by a scheme that does not relieve
+# it. The flag is now false on every variant and the relief is expressed on the lines the scheme
+# actually reaches: CID is 0.0 because HS 8502.31 is Free in its own right, PAL is 0.0 where the
+# facility is obtained, and SSCL stands at 2.5%.
+#
+# NOT EVIDENCED: the two-month SCOD extension these headers attributed to "Addendum 01 cl. 8"
+# until 2026-09-06. No such addendum is held in the corpus; RFP Vol I cl. 1.4 as held carries
+# the unextended schedule, which is what the timeline block below now models. Separately, ESA
+# Art 6A(b)(i) refers to "the bid closing (i.e. 14th October 2025)" against Volume I's
+# 14-Aug-2026 - a template carry-over that should be resolved against the issued originals.
+#
+# Relief is real but conditional. THIS VARIANT ASSUMES IT IS NOT OBTAINED, so the duty lines bite.
 #
 # VAT is relieved on both lines because it is passed through, not absorbed: the project charges
 # output VAT on the capacity charge under ESA Article 5(o), so input VAT is recoverable. This is
@@ -142,14 +200,17 @@ risk_adjustment:
 # worse; it needs a capex split these files do not yet carry.
 taxes_indirect:
   import_share_pct: 0.69      # imported (CIF) share of the pre-levy capex base
-  cid_pct: 0.0                # Customs Import Duty — HS 8502.31 is Free
-  pal_pct: 0.05               # Ports & Airports Levy on CIF
-  sscl_import_pct: 0.025      # SSCL at the point of import (distinct from the revenue-side levy)
+  cid_pct: 0.0                # Customs Import Duty — HS 8502.31 is Free in its own right
+  pal_pct: 0.05               # Ports & Airports Levy — bonded facility NOT obtained on this variant
+  sscl_import_pct: 0.025      # SSCL — not relieved by the bonded scheme in any case
   vat_capex_pct: 0.18
   vat_on_full_capex: false
   vat_on_duties: true         # SL cascade: VAT base includes CIF + duties
   vat_opex_pct: 0.18
   relief:
+    # false on EVERY variant: the flag zeroes CID+PAL+SSCL as one line in
+    # finance/import_levies.py, and the scheme does not reach SSCL. Relief is
+    # expressed on the individual rates above instead.
     bonded_scheme: false
     vat_capex_relieved: true
     vat_opex_relieved: true
@@ -170,6 +231,12 @@ Financing_Terms:
   debt_sizing: dual_dscr
   dscr_p99_downside_factor: 0.80
   balloon_treatment: cash_sweep
+  # RFP cl. 1.4 puts FC at 06-Jan-2027 and COD at 06-May-2027 — 0.33 years. This annual-grid
+  # model takes 1 as a CONSERVATIVE ROUNDING of that, not as a figure read off the schedule:
+  # 0 would zero IDC entirely, which is wrong for a four-month build on drawn debt, while 1
+  # overstates IDC by about eight months and pushes the first equity distribution roughly eight
+  # months late. Both errors run against the project. The choice is worth ~2pp of project IRR.
+  construction_years: 1
   tenor_years: 12
   interest_only_years: 1
   amortization_style: auto
@@ -215,8 +282,16 @@ constraints:
   fail_on_covenant_breach: false
   fail_on_large_balloon: false
 
+# DELIVERY TIMELINE. RFP Vol I cl. 1.4 Project Milestones Schedule, not an assumption:
+# Letter of Award 29-Sep-2026, acceptance 06-Oct-2026, ESA signing 06-Nov-2026, Financial
+# Closure 06-Jan-2027 (within 2 months of ESA signing) and Commissioning, Testing & COD
+# 06-May-2027 (within 6 months of ESA signing). Financial close to COD is FOUR MONTHS.
+# `Financing_Terms.construction_years` is the binding key — finance/debt_v14.py reads it
+# there and DEFAULTS TO 2 when absent, which is what these files were silently running,
+# and finance/equity_distribution_v14_hydra.py prepends that many zero years to the equity
+# return vector. The `timeline` block below does not feed the debt engine.
 timeline:
-  ppa_to_fc_years: 1
+  ppa_to_fc_years: 0
   construction_years: 1
   ops_years: 15
   lifetime_years: 16
