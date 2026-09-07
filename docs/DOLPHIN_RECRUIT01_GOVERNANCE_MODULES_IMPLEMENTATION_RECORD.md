@@ -152,3 +152,19 @@ then passed. Full lint and exact-head CI results belong in the PR receipts and r
 no inherited test count is used as fresh evidence. Independent reviews must challenge the current
 candidate, including the September 2 predecessor amendment, before delivery. These are author-side
 receipts, not self-approval.
+
+
+### Rejected first recovery candidate and repair lease
+
+Candidate `7f10c067057abffa537ad0bca5f2509485527487` was independently rejected by both reviewers
+for two mypy `arg-type` errors in the new test wrapper. The initial full lint gate nevertheless
+passed `462 tests in 110.13s`; passing tests did not override the type finding. Lease
+`RECRUIT-TYPED-REPAIR-20260907` permits only the wrapper signature, AGENTS handover pointer and this
+record, followed by checks and a replacement freeze. The wrapper now matches Python 3.12
+`Path.read_text(encoding, errors)` rather than forwarding untyped argument collections.
+
+Assurance independently showed that the keyword policy guard can accept a semantically inverted
+sentence when required phrases still occur. Its checks enforce textual presence and routing,
+not semantic equivalence or actual worker compliance. That limitation is accepted within scope:
+independent source review remains mandatory, and no green keyword test is semantic acceptance.
+A machine-enforced lease or attestation service is outside this documentation/control-test dolphin.

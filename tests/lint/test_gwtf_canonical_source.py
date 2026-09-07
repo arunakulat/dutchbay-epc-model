@@ -263,8 +263,10 @@ def test_recruit_policy_guard_rejects_removed_controls(
     target = REPO_ROOT / RECRUIT_MODULES[module_index]
     original_read = Path.read_text
 
-    def altered_read(path: Path, *args: object, **kwargs: object) -> str:
-        text = original_read(path, *args, **kwargs)
+    def altered_read(
+        path: Path, encoding: str | None = None, errors: str | None = None
+    ) -> str:
+        text = original_read(path, encoding=encoding, errors=errors)
         return (
             text.replace(removed_control, "REMOVED_CONTROL") if path == target else text
         )
