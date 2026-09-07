@@ -58,3 +58,20 @@ closure. Issue #1110 and BOARD/LENDER CIRCULATION HOLD remain unchanged. Neither
 handover, engineering acceptance nor a green merge grants release, deployment, professional,
 lender or Board authority. Any interruption revokes writer continuity and requires fresh
 ownership/hash reconciliation before another lease.
+
+
+## Hosted validation correction before merge
+
+Hosted run `34166367061` on receipt head
+`72fc317cf37380169b52b4ab9b50419b6a098693` failed the two nested real-Coverage.py test
+cases. The shard's inherited `COVERAGE_FILE` made the nested CLI seek the wrong data
+basename, returning `No data to combine`. The exact inherited environment reproduced both
+failures locally. No merge occurred; the earlier acceptance and final-head attestations
+are superseded for delivery purposes.
+
+The fixture now binds the child CLI's `COVERAGE_FILE` to its scratch `.coverage`, tests
+both absent and inherited shard variables, and checks that a parent-data sentinel remains
+unchanged. Production coverage-script bytes are unchanged by this correction. Fresh
+full-subject domain and assurance review and a new exact-head hosted run are required;
+revision receipts are retained under programme `pr1237/revision2/`. Subsequent review
+records and append-only PR attestations identify the accepted successor, if any.

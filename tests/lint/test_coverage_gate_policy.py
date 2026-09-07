@@ -312,12 +312,26 @@ def test_test_summary_distinguishes_a_breach_from_an_unmeasured_gate() -> None:
     assert "NOT evidence of a coverage regression" in summary
 
 
+@pytest.mark.parametrize("inherited_datafile", [None, ".coverage.3.12.1"])
 @pytest.mark.parametrize(("covered", "returncode"), [(19, 0), (18, 2)])
 def test_complete_inputs_enforce_real_coverage_floor(
-    tmp_path: Path, covered: int, returncode: int
+    tmp_path: Path,
+    covered: int,
+    returncode: int,
+    inherited_datafile: str | None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Real Coverage.py accepts 95% and rejects 90% over a complete shard union."""
     from coverage import CoverageData
+
+    # CI's pytest shard sets COVERAGE_FILE. The nested coverage CLI must use its
+    # own scratch basename, leaving the parent shard's coverage database intact.
+    parent_data = tmp_path / (inherited_datafile or "parent-coverage")
+    parent_data.write_bytes(b"parent coverage sentinel")
+    if inherited_datafile is None:
+        monkeypatch.delenv("COVERAGE_FILE", raising=False)
+    else:
+        monkeypatch.setenv("COVERAGE_FILE", str(parent_data))
 
     workdir = tmp_path / "work"
     artifacts = workdir / "shard-artifacts"
@@ -337,6 +351,7 @@ def test_complete_inputs_enforce_real_coverage_floor(
         TOTAL_SHARDS="6",
         GITHUB_OUTPUT=str(output),
         COVERAGE_RCFILE=os.devnull,
+        COVERAGE_FILE=str(workdir / ".coverage"),
     )
     result = subprocess.run(
         ["bash", "-e", str(script)],
@@ -346,6 +361,7 @@ def test_complete_inputs_enforce_real_coverage_floor(
         text=True,
         timeout=60,
     )
+    assert parent_data.read_bytes() == b"parent coverage sentinel"
     assert result.returncode == returncode, result.stdout + result.stderr
     assert output.read_text().splitlines()[-1] == "enforced=true"
     if returncode:
