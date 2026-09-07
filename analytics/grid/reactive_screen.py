@@ -297,7 +297,16 @@ def _poc_pf_and_voltage(  # pragma: no cover - requires [grid] extra
     injection through the transformer), so the pf is the pf *seen by the grid* at the POC.
     """
     try:
-        pp.runpp(net, calculate_voltage_angles=True, init="flat")
+        # numba=False (#segfault): pandapower defaults to ``numba=True``, which JIT-compiles
+        # the Newton-Raphson matrix generation through numba -> llvmlite. Inside a full
+        # pytest run that LLVM JIT intermittently takes the whole process down with a native
+        # fatal (observed in tests/app/test_grid_screening_emit.py once ~212 extension modules
+        # are co-resident; it passes standalone). The JIT is a pure ACCELERATION of matrix
+        # generation, not a different algorithm: numba=True vs numba=False was verified
+        # BIT-IDENTICAL on vm_pu, va_degree and p_from_mw (max|diff| = 0.0). These are
+        # screening-sized networks where JIT compilation costs more than it saves, so the
+        # pure-numpy path pandapower ships (pf/no_numba.py) is both safer and faster here.
+        pp.runpp(net, calculate_voltage_angles=True, init="flat", numba=False)
     except Exception:  # pragma: no cover - non-convergence path
         return False, float("nan"), 0.0, 0.0
     if not bool(net["converged"]):

@@ -289,6 +289,16 @@ table.dbpl tr { break-inside: avoid; }
 .dbpl-tablenotes > div { margin-bottom: 2pt; }
 .dbpl-tablenotes .dbpl-label { font-weight: 600; }
 
+/* Keep-together wrapper for a table and its notes. WeasyPrint's PDF/UA tag builder raises
+   "Table wrapper without a table" when a captioned table's wrapper is split so a caption-only
+   fragment lands on a page with no rows — which happens when a short table that does not fit the
+   remaining space is pushed whole to the next page, orphaning its caption on the previous one.
+   break-inside: avoid is honoured on this real block box (unlike on the anonymous table-wrapper
+   box, where WeasyPrint ignores it), so table + caption move to the next page as a unit. A table
+   taller than a page cannot be kept whole; it then splits normally, which the tag builder handles
+   correctly. Without this, any DBPL document with a page-straddling table fails to render. */
+.dbpl-keep { break-inside: avoid; }
+
 /* Key Symbols legend — ADB Key Indicators. A data-integrity control: "not available" and
    "zero" must never render identically. */
 .dbpl-keysymbols {

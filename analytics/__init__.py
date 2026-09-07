@@ -1,79 +1,111 @@
-"""Analytics module for DutchBay EPC Model.
+"""Public analytics namespace with import-safe lazy compatibility exports.
 
-Contracts status:
-- contracts_v14.py: frozen dataclasses with a Pydantic-compatible ``model_dump()``
-  facade (it deliberately uses ``@dataclass`` + ``dataclasses.asdict`` for
-  serialization and does NOT provide Pydantic field-level validation; the
-  serialization layer accepts both dataclasses and Pydantic objects).
-- returns.py: Project & equity returns (IRR, NPV, MIRR)
-- risk_metrics.py: Tail risk analytics (VaR, CVaR)
-
-Sprint 16 Planned:
-- Add Pydantic V2 contracts for returns and risk outputs
+Importing an ``analytics`` child module must not pull the evaluator or finance
+surface into memory as a side effect. The historical eager facade did exactly
+that through ``analytics.core``. PEP 562 lazy attributes preserve the public
+``from analytics import ...`` API while allowing pure contract consumers to
+load without an evaluator, finance, filesystem, or calculation graph.
 """
 
-# Core contracts (frozen dataclasses) - ONLY import what exists in contracts_v14.py
-from analytics.contracts_v14 import (
-    CASPER_CONTRACT_VERSION,
-    BreakevenResult,
-    CasperResult,
-    MonteCarloResult,
-    MultiMetricSensitivitySuite,
-    MultiMetricTornadoResult,
-    ParameterRangeConfig,
-    ScenarioResult,
-    SensitivityRequest,
-    SensitivitySuite,
-    ShockResult,
-    TornadoResult,
-    WaccComponents,
-    WaccResult,
+from __future__ import annotations
+
+from importlib import import_module
+from typing import TYPE_CHECKING, Any, Final
+
+if TYPE_CHECKING:
+    from analytics.contracts_v14 import (
+        CASPER_CONTRACT_VERSION,
+        BreakevenResult,
+        CasperResult,
+        MonteCarloResult,
+        MultiMetricSensitivitySuite,
+        MultiMetricTornadoResult,
+        ParameterRangeConfig,
+        ScenarioResult,
+        SensitivityRequest,
+        SensitivitySuite,
+        ShockResult,
+        TornadoResult,
+        WaccComponents,
+        WaccResult,
+    )
+    from analytics.core.returns import (
+        AllReturns,
+        EquityReturns,
+        ProjectReturns,
+        ReturnsConfig,
+        calculate_equity_returns,
+        calculate_irr,
+        calculate_mirr,
+        calculate_npv,
+        calculate_project_returns,
+        summarize_all_returns,
+    )
+    from analytics.core.risk_metrics import (
+        CovenantBreachAnalysis,
+        DownsideRisk,
+        MetricRiskSummary,
+        PercentileAnalysis,
+        RiskConfig,
+        TailRiskAnalyzer,
+        TailRiskReport,
+        VaRCVaRResult,
+    )
+    from analytics.fx.fx_contracts import (
+        FXCurveOutput,
+        FXRiskProfile,
+        FXStructuredBlock,
+    )
+
+_CONTRACT_EXPORTS: Final = (
+    "CASPER_CONTRACT_VERSION",
+    "BreakevenResult",
+    "CasperResult",
+    "MonteCarloResult",
+    "MultiMetricSensitivitySuite",
+    "MultiMetricTornadoResult",
+    "ParameterRangeConfig",
+    "ScenarioResult",
+    "SensitivityRequest",
+    "SensitivitySuite",
+    "ShockResult",
+    "TornadoResult",
+    "WaccComponents",
+    "WaccResult",
 )
-
-# Returns calculation module
-from analytics.core.returns import (
-    AllReturns,
-    EquityReturns,
-    ProjectReturns,
-    ReturnsConfig,
-    calculate_equity_returns,
-    calculate_irr,
-    calculate_mirr,
-    calculate_npv,
-    calculate_project_returns,
-    summarize_all_returns,
+_RETURN_EXPORTS: Final = (
+    "AllReturns",
+    "EquityReturns",
+    "ProjectReturns",
+    "ReturnsConfig",
+    "calculate_equity_returns",
+    "calculate_irr",
+    "calculate_mirr",
+    "calculate_npv",
+    "calculate_project_returns",
+    "summarize_all_returns",
 )
-
-# Risk metrics module
-from analytics.core.risk_metrics import (
-    CovenantBreachAnalysis,
-    DownsideRisk,
-    MetricRiskSummary,
-    PercentileAnalysis,
-    RiskConfig,
-    TailRiskAnalyzer,
-    TailRiskReport,
-    VaRCVaRResult,
+_RISK_EXPORTS: Final = (
+    "CovenantBreachAnalysis",
+    "DownsideRisk",
+    "MetricRiskSummary",
+    "PercentileAnalysis",
+    "RiskConfig",
+    "TailRiskAnalyzer",
+    "TailRiskReport",
+    "VaRCVaRResult",
 )
+_FX_EXPORTS: Final = ("FXCurveOutput", "FXRiskProfile", "FXStructuredBlock")
 
-# FX contracts
-from analytics.fx.fx_contracts import (
-    FXCurveOutput,
-    FXRiskProfile,
-    FXStructuredBlock,
-)
-
-# (The analytics.contracts_v14_compat stub layer is fully retired. The
-# DownsideMetrics/TailRiskMetrics stubs went in audit R2; the last symbol,
-# build_cashflow_result_from_annual_rows, had ZERO real callers — the "live
-# production callers" note was stale — so the module is removed. The canonical
-# MultiMetricSensitivitySuite/DownsideMetrics live in analytics.contracts_v14.)
-
+_EXPORT_MODULES: Final[dict[str, str]] = {
+    **{name: "analytics.contracts_v14" for name in _CONTRACT_EXPORTS},
+    **{name: "analytics.core.returns" for name in _RETURN_EXPORTS},
+    **{name: "analytics.core.risk_metrics" for name in _RISK_EXPORTS},
+    **{name: "analytics.fx.fx_contracts" for name in _FX_EXPORTS},
+}
 
 __all__ = [
-    # Contract version
     "CASPER_CONTRACT_VERSION",
-    # Core contracts (frozen dataclasses)
     "BreakevenResult",
     "CasperResult",
     "MonteCarloResult",
@@ -86,30 +118,27 @@ __all__ = [
     "TornadoResult",
     "WaccComponents",
     "WaccResult",
-    # FX contracts
     "FXCurveOutput",
     "FXRiskProfile",
     "FXStructuredBlock",
-    # Legacy compatibility (Sprint 16 removal)
     "MultiMetricSensitivitySuite",
-    # Returns module
-    "AllReturns",
-    "EquityReturns",
-    "ProjectReturns",
-    "ReturnsConfig",
-    "calculate_equity_returns",
-    "calculate_irr",
-    "calculate_mirr",
-    "calculate_npv",
-    "calculate_project_returns",
-    "summarize_all_returns",
-    # Risk metrics module
-    "CovenantBreachAnalysis",
-    "DownsideRisk",
-    "MetricRiskSummary",
-    "PercentileAnalysis",
-    "RiskConfig",
-    "TailRiskAnalyzer",
-    "TailRiskReport",
-    "VaRCVaRResult",
+    *_RETURN_EXPORTS,
+    *_RISK_EXPORTS,
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Resolve one historical public export without eager graph loading."""
+
+    module_name = _EXPORT_MODULES.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(module_name), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    """Expose lazy compatibility names to interactive and inspection clients."""
+
+    return sorted(set(globals()) | set(__all__))
