@@ -73,3 +73,44 @@ No finance, QSTS, deployment or final-head CI execution was claimed. Historical 
 receipts. Tests establish selected phrase loss detection, not actual lease compliance or full
 semantic correctness. The ending candidate and clean worktree matched the starting freeze.
 No release, lender, Board, professional, publication, deployment, issue or HOLD authority changed.
+
+
+## Fresh substantive replacement disposition
+
+```yaml
+candidate_commit: c3705f032c5f407f37e7bd731e0e0abcb514a5fe
+candidate_tree: 7c7bd50599353e7c2ff25a6d26dbacdfe9286f5e
+base_sha: 93aefbb7400287126060b1846b8cd83078fb6ac8
+merge_base_sha: 93aefbb7400287126060b1846b8cd83078fb6ac8
+subject_manifest_sha256: d7a6bcd42a716a2bde9426dac09302333768210bf21f2626a32aab4bf98c72be
+candidate_csv_sha256: 0cc23891d3328d95e14031e07075d186b43545e4eb0d310303ff3c8d1c2148c1
+disposition: ACCEPT
+mutation_attestation: read-only; ending commit/tree and clean state unchanged
+hold_and_authority_effect: none
+```
+
+This is the same independent reviewer identified above, returning a fresh substantive disposition
+without seeing the other reviewer's replacement conclusion. It is not inherited acceptance from
+the rejected candidate. The reviewer verified this record's initial rejection as a faithful
+condensed transcription, and independently reconstructed the eleven-subject manifest excluding
+only these two named review-receipt paths. The typed signature, handover pointer and explicit
+textual-guard limitation were inspected on the replacement.
+
+Fresh command receipts use the same exact commands recorded above:
+- Two-file mypy with `--cache-dir=/dev/null`: exit 0, no issues in 2 source files.
+- Two-file focused pytest: 17 passed in 0.82s, including all four removal controls.
+- `git diff --check`: exit 0. Identity/manifest probe matched all replacement fields.
+
+The reviewer freshly replayed all six source-level tabletop challenges above; interruption,
+timeout-only takeover, receipt/PR-evidence mutation, normative base dependency drift, conflicting
+reviewers and failed-worker completion remain refused. Source-level reasoning is the independent
+oracle for this normative-prose deliverable; tests are supplementary.
+
+WF-01 and the stale-pointer residual are CLOSED. All six PRE control replays remain CLOSED.
+The phrase-guard limitation is ACCEPTED_RESIDUAL_WITHIN_SCOPE: source review remains mandatory,
+and no actual worker-compliance or machine-enforced lease system is claimed.
+
+Earlier environment/bootstrap results are explicitly earlier receipts in the same review session,
+not newly rerun results. No full finance, QSTS, deployment or GitHub final-head check is claimed.
+This acceptance still requires a separate final-head rebind after the receipt commit, followed by
+exact-head CI and protected merge verification.
