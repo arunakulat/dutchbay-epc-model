@@ -35,6 +35,7 @@ def test_codex_guidance_uses_current_gwtf_authority() -> None:
         "DELIVERY-01",
         "PERSIST-01",
         "THREAD-01",
+        "RECRUIT-01",
     ):
         assert rule_id in guidance
     assert RETIRED_RULESET not in guidance
@@ -61,6 +62,9 @@ def test_codex_guidance_preserves_required_safety_and_quality_gates() -> None:
         "PYTHONPATH",
         "portable `.venv` fallback",
         "verify_shared_venv_worktrees.py",
+        "every relevant task hereafter",
+        "docs/governance/recruit_01/",
+        "Load-bearing documentation",
     )
     for phrase in required_phrases:
         assert phrase in guidance

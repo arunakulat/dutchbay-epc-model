@@ -1,0 +1,75 @@
+{
+  "_note": "Financial-KPI regression oracle for the eight NSO 250MW BESS LTL scenarios. Extracted from the live pipeline at the head of the branch that added it, per the #996 D3b convention that a runtime-input scenario must not double as its own regression oracle. Both RECRUIT-01 reviewers of that change recorded that these eight files had NO test coverage, so every KPI claim about them rested on author self-report - the exact VERIFY-01 exposure. Consumed only by tests/integration/test_nso250_ltl_scenarios.py. Full float precision: re-baseline deliberately, and say why in the test docstring.",
+  "nso250_ltl_portfolio_base": {
+    "project_irr": 0.018022382509547193,
+    "equity_irr": -0.01224642375699525,
+    "min_dscr_period": 1.3,
+    "min_dscr": 0.8671489013989253,
+    "avg_dscr": 1.9178426116863885,
+    "llcr": 1.8730975027389003,
+    "plcr": 2.012127656267788
+  },
+  "nso250_ltl_portfolio_bidimplied": {
+    "project_irr": 0.0899887852811328,
+    "equity_irr": 0.0672309598719083,
+    "min_dscr_period": 1.2999999999999998,
+    "min_dscr": 0.8676901437250558,
+    "avg_dscr": 1.4069778847188816,
+    "llcr": 1.7015295453851091,
+    "plcr": 1.8394067916468175
+  },
+  "nso250_ltl_portfolio_stress": {
+    "project_irr": 0.0075551039840439545,
+    "equity_irr": -0.02433326281908732,
+    "min_dscr_period": 1.3,
+    "min_dscr": 0.8685517294677662,
+    "avg_dscr": 2.1323558843189407,
+    "llcr": 1.90787594742737,
+    "plcr": 2.0479280118700136
+  },
+  "nso250_ltl_portfolio_upside": {
+    "project_irr": 0.018815268822276916,
+    "equity_irr": -0.011329215290960759,
+    "min_dscr_period": 1.3,
+    "min_dscr": 0.8667469606042043,
+    "avg_dscr": 1.872250876884492,
+    "llcr": 1.8680645126773872,
+    "plcr": 2.0068766135635254
+  },
+  "nso250_ltl_unit_base": {
+    "project_irr": 0.018022466044832583,
+    "equity_irr": -0.012246291215062044,
+    "min_dscr_period": 1.3,
+    "min_dscr": 0.8671491470207147,
+    "avg_dscr": 1.9178721716505636,
+    "llcr": 1.8730988637612522,
+    "plcr": 2.0121291329525057
+  },
+  "nso250_ltl_unit_bidimplied": {
+    "project_irr": 0.08998886414609952,
+    "equity_irr": 0.06723106109327026,
+    "min_dscr_period": 1.3,
+    "min_dscr": 0.8676903100880229,
+    "avg_dscr": 1.4069806718353486,
+    "llcr": 1.701530378856919,
+    "plcr": 1.8394077036545828
+  },
+  "nso250_ltl_unit_stress": {
+    "project_irr": 0.007555154150269064,
+    "equity_irr": -0.0243332000745784,
+    "min_dscr_period": 1.2999999999999998,
+    "min_dscr": 0.8685518509194536,
+    "avg_dscr": 2.1323794881706686,
+    "llcr": 1.9078767506737913,
+    "plcr": 2.0479288726800675
+  },
+  "nso250_ltl_unit_upside": {
+    "project_irr": 0.018815232293370905,
+    "equity_irr": -0.011329273439154686,
+    "min_dscr_period": 1.3,
+    "min_dscr": 0.8667468532202636,
+    "avg_dscr": 1.87223939621387,
+    "llcr": 1.868063930593442,
+    "plcr": 2.006875981006713
+  }
+}
