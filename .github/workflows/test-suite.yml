@@ -35,8 +35,18 @@ permissions:
 
 # TEST-03: every ordinary pytest job is the bounded regression/coverage gate.
 # The separately named stochastic-qualification job overrides this explicitly.
+#
+# TOTAL_SHARDS is WORKFLOW-level, not job-level, because two jobs must agree on it: the
+# `test` job splits the tree into that many pytest-split groups, and the `coverage` job
+# checks it received that many shard artifacts before enforcing the floor. A second
+# hard-coded count in the coverage job could drift from the matrix and silently weaken the
+# completeness check, so there is exactly one number here. The `shard:` matrix list must
+# still be written out literally — GitHub does not expose the `env` context to
+# `strategy` — so tests/lint/test_coverage_gate_policy.py pins the list against this
+# value, which is the only place the two can be held together.
 env:
   DUTCHBAY_TEST_MODE: full
+  TOTAL_SHARDS: 6
 
 jobs:
   changes:
@@ -104,8 +114,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: changes
 
-    env:
-      TOTAL_SHARDS: 6
+    # TOTAL_SHARDS is inherited from the workflow-level env above — it is shared with the
+    # `coverage` job, which must know how many shard artifacts to expect.
 
     strategy:
       fail-fast: false
@@ -216,6 +226,16 @@ jobs:
     needs: [changes, test]
     if: always()
 
+    outputs:
+      # 'true' only once every shard's coverage data was present AND the floor was
+      # actually evaluated over the union. The `summary` job reads this to tell a real
+      # floor breach apart from a gate that never had a complete tree to measure — the
+      # two look identical from `needs.coverage.result` alone, and naming the wrong one
+      # is the #1121 misattribution in the form it left behind. The matrix is
+      # single-legged (3.12), so this job output is unambiguous; restoring a second
+      # version leg means revisiting this (matrix legs overwrite each other's outputs).
+      enforced: ${{ steps.floor.outputs.enforced }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -256,13 +276,37 @@ jobs:
       run: echo "Docs-only PR — no shard coverage produced; the 95% floor gate is not applicable."
 
     - name: Combine coverage + enforce 95% floor
+      id: floor
       if: needs.changes.outputs.code_changed == 'true'
       run: |
         # Gather the per-shard data files and merge. `coverage combine` auto-discovers
         # .coverage.* in the working dir, so move them out of the artifact dir first.
         mv shard-artifacts/.coverage.${{ matrix.python-version }}.* . 2>/dev/null || true
-        ls -la .coverage.* || { echo "::error::no shard coverage data found"; exit 1; }
+
+        # Count downloaded data before combining: missing shards block without
+        # producing a misleading percentage. File presence does not prove that a
+        # shard completed; failed/cancelled test jobs also block Test Summary.
+        echo "enforced=false" >> "$GITHUB_OUTPUT"
+        if ! [[ "${TOTAL_SHARDS:-}" =~ ^[1-9][0-9]*$ ]]; then
+          echo "::error::coverage not enforced: TOTAL_SHARDS must be a positive integer"
+          exit 1
+        fi
+        shopt -s nullglob
+        shard_files=(.coverage.${{ matrix.python-version }}.*)
+        present=${#shard_files[@]}
+        if [ "$present" -ne "$TOTAL_SHARDS" ]; then
+          echo "::error::coverage not enforced: $present of $TOTAL_SHARDS shard artifacts present; shard coverage inputs are incomplete or unexpected. This is NOT evidence of a coverage regression — inspect shard results and re-run the suite on the current head."
+          exit 1
+        fi
+        echo "$present of $TOTAL_SHARDS shard artifacts present — enforcing the 95% floor over the union."
+
         coverage combine
+        # Set BEFORE the floor runs. 'enforced' means "the floor was applied to a complete
+        # union", NOT "the floor passed" — the default shell is `bash -e`, so a genuine
+        # breach exits here and anything written after it would never run, collapsing a
+        # real regression into the same output as a cancelled run. That inversion is
+        # exactly the ambiguity this output exists to remove.
+        echo "enforced=true" >> "$GITHUB_OUTPUT"
         coverage report --fail-under=95
         coverage xml
         coverage html
@@ -438,7 +482,16 @@ jobs:
         # the R8/TEST-02 95% floor over the UNION (the gate the old single-job
         # --cov-fail-under provided, now downstream of sharding). A coverage regression
         # below 95% fails that job and — here — blocks the merge.
-        gate "Coverage" "${{ needs.coverage.result }}" "combined coverage fell below the 95% R8/TEST-02 floor"
+        #
+        # Missing inputs fail before the floor. The Test gate above reports a
+        # cancelled matrix first; this branch also handles successful tests whose
+        # artifacts never reached coverage. Preserve fail-closed behaviour in both cases.
+        if [ "${{ needs.coverage.outputs.enforced }}" = "true" ]; then
+          coverage_cause="the 95% R8/TEST-02 coverage floor or subsequent coverage reporting failed; inspect the Coverage Gate log"
+        else
+          coverage_cause="the gate never applied the floor to a complete tree — it did not receive all ${TOTAL_SHARDS} shards' coverage data (shards cancelled or incomplete), or it failed before the floor ran; its own log names which. This is NOT evidence of a coverage regression; re-run on the current head"
+        fi
+        gate "Coverage" "${{ needs.coverage.result }}" "$coverage_cause"
         grid_required=false
         if [ "${{ needs.changes.outputs.qsts_execution_changed }}" = "true" ] || \
            [ "${{ github.event_name }}" = "schedule" ] || \
