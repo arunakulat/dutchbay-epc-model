@@ -45,6 +45,7 @@
 {% endif %}
 
 {% if doc.control %}
+<div class="dbpl-keep">
 <table class="dbpl dbpl-control">
   <caption>Document control</caption>
   <thead><tr><th scope="col">Control field</th><th scope="col">Controlled value</th></tr></thead>
@@ -54,9 +55,11 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% endif %}
 
 {% if doc.revisions %}
+<div class="dbpl-keep">
 <table class="dbpl dbpl-revision">
   <caption>Revision history<span class="dbpl-unit">Status records the reason for issue; draft and final are not distinguished by watermark</span></caption>
   <thead><tr>
@@ -79,6 +82,7 @@
 </table>
 <div class="dbpl-tablenotes">
   <div class="dbpl-source"><span class="dbpl-label">Source:</span> {{ doc.revision_source | default('Project document control register.') }}</div>
+</div>
 </div>
 {% endif %}
 {% endif %}
@@ -110,6 +114,7 @@
 {% endif %}
 
 {% if section.table %}
+<div class="dbpl-keep">
 <table class="dbpl">
   {% if section.table.caption %}
   <caption>{{ section.table.caption }}{% if section.table.unit %}<span class="dbpl-unit">{{ section.table.unit }}</span>{% endif %}</caption>
@@ -159,6 +164,7 @@
   {% endif %}
 </div>
 {% endif %}
+</div>
 {% endif %}
 
 {% if section.key_symbols %}

@@ -26,7 +26,8 @@ Before review, the coordinator freezes and reports:
 - clean index/worktree state;
 - exact changed paths;
 - a deterministic subject manifest of sorted `path<TAB>git-blob-SHA` entries for every substantive
-  implementation, test, configuration, schema, and changelog object;
+  implementation, test, configuration, schema, changelog, and substantive documentation object,
+  including governance modules and implementation records;
 - governing charter/rule identities and applicable predecessor findings; and
 - writer receipts, limitations, HOLDs, and declared checks not run.
 
@@ -94,17 +95,33 @@ reviewers must rebind to the final delivery head after proving:
 - receipt content accurately represents their dispositions; and
 - base movement, if any, is separately dispositioned.
 
-The final rebind must be persisted in an immutable channel that does not change the Git tree it
-attests to, such as a PR review, PR evidence comment, or required check-run attestation. A later
-PERSIST-01 successor may mirror that evidence after merge. If any subject blob changes, both
+Open the PR before final rebind so its evidence channel exists. Persist the final rebind outside
+the Git tree it attests to, with the reviewer identity, exact commit/tree/base, subject-manifest
+digest, evidence identifier/URL, and content SHA-256. PR reviews, evidence comments and check runs
+are not inherently immutable: treat the record as append-only, preserve its exact content in a
+durable receipt, and verify its identity and content again at merge. An edit, deletion or mismatch
+invalidates the rebind until the reviewer issues a new one. A later PERSIST-01 successor may mirror
+that evidence after merge. If any subject blob changes, both
 substantive reviews restart; the documentation-only shortcut does not apply.
 
 ## 7. Base movement and merge continuity
 
-A base-only branch update does not silently inherit acceptance. Reviewers may issue a bounded
-carry-forward rebind only after proving the subject manifest unchanged, inspecting the new base
-delta for interaction, rerunning the affected gates, and binding to the new commit/tree/base. Any
-interaction or subject drift requires full review.
+The 2026-09-02 base fast-forward carve-out remains mandatory. When the base advances purely to
+satisfy the up-to-date-branch requirement, acceptance may carry forward only if all three proofs
+are recorded in the PR:
+
+1. **BLOB-HASH IDENTITY** for every file the reviewer judged, including documentation and files
+   outside the changed-path list. An empty diff is not proof of matching object hashes.
+2. **BIDIRECTIONAL IMPORT ISOLATION**: no changed module references a reviewed module and no reviewed
+   module references a changed module. For non-code sources, also account for normative references
+   and dependencies; if isolation cannot be established, require fresh review.
+3. The **complete diff between reviewed and updated head**, shown in full, not a summary.
+
+If any proof is absent, incomplete or fails, the disposition LAPSES. A judgement that a delta
+cannot matter never substitutes for these artifacts. The exception covers only a base update;
+any change to the candidate's own subject bytes requires fresh substantive review. After all three
+proofs, reviewers bind the carry-forward disposition to the updated commit/tree/base and the
+coordinator reruns the affected gates. No earlier acceptance silently transfers.
 
 A squash merge creates a new commit identity. It preserves acceptance only when the protected merge
 tree exactly equals the accepted final-head tree, expected ancestry is proven, and every required CI

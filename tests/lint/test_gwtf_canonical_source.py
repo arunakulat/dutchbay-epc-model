@@ -5,6 +5,8 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CANONICAL_RULESET = REPO_ROOT / "go_with_the_flow_rules_v3_0_clean.csv"
 RETIRED_RULESET_NAME = "go_with_the_flow_rules_v3_0_merged_with_v14.csv"
@@ -213,6 +215,10 @@ def test_recruit_01_routes_all_relevant_tasks_to_canonical_modules() -> None:
             "independent positive/negative oracle",
             "without SHA recursion",
             "squash merge",
+            "BLOB-HASH IDENTITY",
+            "BIDIRECTIONAL IMPORT ISOLATION",
+            "complete diff between reviewed and updated head",
+            "disposition LAPSES",
         ),
         RECRUIT_MODULES[3]: (
             "not limited to D0–D3",
@@ -239,3 +245,30 @@ def test_active_r25_scripts_do_not_hardcode_a_retired_branch() -> None:
     ):
         content = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
         assert RETIRED_INTEGRATION_BRANCH not in content
+
+
+@pytest.mark.parametrize(
+    ("module_index", "removed_control"),
+    [
+        (0, "R3_CONSEQUENTIAL"),
+        (1, "DEAD_WORKER_TAKEOVER"),
+        (2, "BIDIRECTIONAL IMPORT ISOLATION"),
+        (3, "NO_EVIDENCE"),
+    ],
+)
+def test_recruit_policy_guard_rejects_removed_controls(
+    monkeypatch: pytest.MonkeyPatch, module_index: int, removed_control: str
+) -> None:
+    """Observe the policy guard rejecting control loss without changing source files."""
+    target = REPO_ROOT / RECRUIT_MODULES[module_index]
+    original_read = Path.read_text
+
+    def altered_read(path: Path, *args: object, **kwargs: object) -> str:
+        text = original_read(path, *args, **kwargs)
+        return (
+            text.replace(removed_control, "REMOVED_CONTROL") if path == target else text
+        )
+
+    monkeypatch.setattr(Path, "read_text", altered_read)
+    with pytest.raises(AssertionError):
+        test_recruit_01_routes_all_relevant_tasks_to_canonical_modules()

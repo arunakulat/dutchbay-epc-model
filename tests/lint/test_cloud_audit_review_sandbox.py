@@ -253,6 +253,27 @@ def _bounded_watchdog(path: Path) -> str:
     return source[start:end]
 
 
+def _candidate_control_with_private_lock(tmp_path: Path, lock_path: Path) -> Path:
+    """Copy the candidate control, rebinding its creation lock to a per-test path.
+
+    The shipped control hard-codes the machine-global ``CREATE_LOCK`` under ``/tmp``. Two
+    ordinary-suite tests drive that control concurrently under ``-n auto``: one reaches
+    ``mkdir -- "$CREATE_LOCK"`` and legitimately holds the lock, while the other asserts the
+    lock is absent. On the shared path the second observes the first and fails for a reason
+    unrelated to the code under test. A per-test lock keeps both assertions exact.
+    """
+    source = CANDIDATE_CODESPACE.read_text(encoding="utf-8")
+    patched = source.replace(
+        'readonly CREATE_LOCK="/tmp/dutchbay-1110-candidate-codespace.lock"',
+        f'readonly CREATE_LOCK="{lock_path!s}"',
+    )
+    assert patched != source, "candidate control lock declaration moved"
+    control = tmp_path / "candidate-proof"
+    control.write_text(patched, encoding="utf-8")
+    control.chmod(0o755)
+    return control
+
+
 def _create_transport_watchdog() -> str:
     """Extract the persistent Codespace creator's transport watchdog."""
     source = CREATE_CODESPACE.read_text(encoding="utf-8")
@@ -682,14 +703,15 @@ esac
     gh_stub.chmod(0o755)
     branch = "codex/local-controller-control"
     sha = "a" * 40
-    lock_path = Path("/tmp/dutchbay-1110-candidate-codespace.lock")
+    lock_path = tmp_path / "candidate.lock"
+    candidate_control = _candidate_control_with_private_lock(tmp_path, lock_path)
     assert not lock_path.exists()
     for local_branch, local_head, expected_error in (
         ("codex/other", sha, "local controller branch"),
         (branch, "b" * 40, "local controller head"),
     ):
         result = subprocess.run(
-            (str(CANDIDATE_CODESPACE), branch, sha),
+            (str(candidate_control), branch, sha),
             cwd=REPO_ROOT,
             env={
                 **os.environ,
@@ -1070,7 +1092,8 @@ esac
     )
     git_stub.chmod(0o755)
     gh_stub.chmod(0o755)
-    lock_path = Path("/tmp/dutchbay-1110-candidate-codespace.lock")
+    lock_path = tmp_path / "candidate.lock"
+    candidate_control = _candidate_control_with_private_lock(tmp_path, lock_path)
     assert not lock_path.exists()
     base_environment = {
         **os.environ,
@@ -1088,7 +1111,7 @@ esac
     ):
         visibility_path.unlink(missing_ok=True)
         result = subprocess.run(
-            (str(CANDIDATE_CODESPACE), branch, sha),
+            (str(candidate_control), branch, sha),
             cwd=REPO_ROOT,
             env={
                 **base_environment,

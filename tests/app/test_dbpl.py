@@ -642,6 +642,66 @@ def test_output_is_tagged_pdf_ua() -> None:
     assert any("pdf/ua-1" in line for line in result.provenance_lines())
 
 
+def test_every_table_sits_in_a_keep_together_block() -> None:
+    """Each table (control, revision and body sections) is wrapped in a .dbpl-keep block, and the
+    stylesheet keeps that block whole.
+
+    WeasyPrint's PDF/UA tag builder raises "Table wrapper without a table" when a captioned table's
+    wrapper is split so a caption-only fragment lands on a page with no rows. break-inside:avoid is
+    ignored on the anonymous table-wrapper box but honoured on this real block box, so the wrapper
+    is the fix. This is a structural guard on that mechanism.
+    """
+    from app.reports.dbpl.print_core import dbpl_stylesheet
+
+    doc = _doc(
+        control=[("ID", "X")],
+        revisions=[{"rev": "A", "date": "d", "status": "Issued"}],
+        sections=[
+            {
+                "heading": "T",
+                "table": {
+                    "caption": "Cap",
+                    "columns": ["X", "Y"],
+                    "rows": [{"cells": ["1", "2"]}],
+                    "source": "S",
+                },
+            }
+        ],
+    )
+    html = _render_html(doc)
+    # one keep-block per table: document control, revision history, and the section table
+    assert html.count('<div class="dbpl-keep">') == 3
+    assert html.count("<table") == 3
+    assert "break-inside: avoid" in _rule_block(dbpl_stylesheet(), ".dbpl-keep")
+
+
+def test_page_straddling_table_renders_under_pdf_ua() -> None:
+    """A captioned table pushed across a page boundary must still render tagged.
+
+    Before the .dbpl-keep wrapper this raised ValueError("Table wrapper without a table") from the
+    WeasyPrint tag builder. The exact failing offset depends on page geometry, so sweep several so
+    the guard is not tied to one layout.
+    """
+    table = {
+        "caption": "Straddle probe",
+        "columns": ["X", "Y"],
+        "rows": [{"cells": [f"row {i}", str(i)]} for i in range(3)],
+        "source": "probe",
+    }
+    for n in range(24, 40, 2):
+        filler = {
+            "heading": "Filler",
+            "points": [
+                f"point {i} with enough text to shift the page boundary"
+                for i in range(n)
+            ],
+        }
+        doc = _doc(sections=[filler, {"heading": "Table", "table": table}])
+        result = render_dbpl_pdf(_render_html(doc))
+        assert result.pdf[:5] == b"%PDF-"
+        assert result.pdf_variant == "pdf/ua-1"
+
+
 def test_tables_never_hyphenate() -> None:
     """Cells carry names, labels and codes — not prose.
 

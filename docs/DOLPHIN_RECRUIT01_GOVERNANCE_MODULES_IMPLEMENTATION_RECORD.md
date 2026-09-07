@@ -1,6 +1,8 @@
 # Dolphin RECRUIT-01 governance modules — implementation and PERSIST-01 record
 
-**Status:** verified implementation candidate; exact-object independent review pending
+**Status:** recovered and reconciled candidate; fresh independent review required
+
+Sections 1–7 preserve the September 1 checkpoint. Section 8 supersedes its live status.
 
 **Date:** 2026-09-01
 
@@ -107,3 +109,46 @@ is frozen. The receipts above are implementation delivery evidence only, not sel
 This governance dolphin grants no achieved grade, evidence sufficiency, professional conclusion,
 release, lender or Board reliance, deployment, publication, issue closure, or `HOLD` removal. It
 changes how relevant future work is recruited and reviewed, not what any model output means.
+
+## 8. September 7 takeover and reconciliation
+
+The owner explicitly authorized this task to take over and deliver the existing worktree. The
+original task `01a05a9c-cb6f-7dd1-b179-f32a10e9a7a5` acknowledged lease revocation and strictly
+read-only status for itself and all workers, with no live subagents remaining. Its two reviews
+returned no usable dispositions: both are `NO_EVIDENCE`, not acceptance.
+
+Preserved checkpoint: `a822586bdf73ff26410d87a69a83d1c4f53de9ba`, tree
+`ee0e072f0abca9a0a12b577cba3b1df7048f0e1e`. The takeover coordinator is task
+`01a07c84-d0ec-7821-8f88-797a9bbeab2f`. It is the sole writer; reviewers receive no mutation lease.
+The new protected base is `93aefbb7400287126060b1846b8cd83078fb6ac8`.
+
+Lease `RECRUIT-RECOVERY-20260907` covers the original ten paths, this record, and the successor
+handover `docs/SESSION_HANDOVER_2026-09-07.md`; a later receipt-only lease may add the two named
+`docs/RECRUIT01_WORKFLOW_REVIEW_2026-09-07.md` and
+`docs/RECRUIT01_ASSURANCE_REVIEW_2026-09-07.md` records. No application, finance, source-corpus or
+other task's work is leased. The merge of current base preserves all its changes. The expected CSV
+conflict stopped the update lease; a new bounded reconciliation lease retained the pointer and
+carried the September 2 amendment into module 3. Original history remains recoverable.
+
+The repair preserves all three base-update proofs (reviewed-file blob identity, bidirectional import
+isolation and complete diff), makes substantive documentation part of the frozen manifest, orders
+PR creation before final attestation, and replaces the false premise that a PR comment is inherently
+immutable with content-hashed, durably preserved evidence checked again at merge.
+
+Fresh receipts, from this worktree with the governed venv and active checkout on `PYTHONPATH`:
+
+| Check | Command | Result |
+|---|---|---|
+| Environment | `DUTCHBAY_VENV=/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv ./check_venv.sh --no-bootstrap` | PASS, Python 3.12.13, imports from this worktree |
+| Bootstrap | `DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" PYTHONPATH="$PWD" /Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python dutchbay_bootstrap_rules.py` | 74 active v3.0 rules |
+| Focused policy | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python -m pytest -o addopts='' -n 0 --no-cov -p no:cacheprovider tests/lint/test_gwtf_canonical_source.py tests/lint/test_codex_project_guidance.py tests/lint/test_pr_receipts_policy.py -q` | 33 passed in 0.94s, including four firing policy-removal negative controls |
+| Ruff lint/format | governed `ruff check` and `ruff format --check` on the two changed Python tests | PASS; 2 files already formatted |
+| Black/isort | governed `black --check` and `isort --check-only` on the two changed Python tests | PASS |
+| Whitespace | `git diff --check` | PASS |
+| Full finance/QSTS/deployment | not run | No implementation or runtime change in this governance dolphin |
+
+The initial format check requested one reformat; the allowlisted formatter was run and its check
+then passed. Full lint and exact-head CI results belong in the PR receipts and review records;
+no inherited test count is used as fresh evidence. Independent reviews must challenge the current
+candidate, including the September 2 predecessor amendment, before delivery. These are author-side
+receipts, not self-approval.
