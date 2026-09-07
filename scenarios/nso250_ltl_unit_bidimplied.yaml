@@ -135,9 +135,12 @@ statutory:
   env_surcharge_pct: 0.0
   # SSCL is NOT borne by the project. ESA Volume III Article 5(o): "Any applicable Value Added
   # Tax or similar Sales Taxes that is payable will then be added to such payments." The
-  # Section 4 bid form (cited in earlier work as "Addendum 01 item 13", a document NOT held in
-  # the corpus — see the taxes_indirect header; the pass-through rests on Article 5(o), which is
-  # held and verified, and does not depend on it) matches — the Capacity Charge Rate is quoted
+  # Section 4 bid form matches, and ADDENDUM 01 ITEM 13 IS THE INSTRUMENT THAT MAKES IT MATCH.
+  # Item 13 repeals the Volume II Section 4 rate table headed "(excluding VAT)" and replaces it
+  # with one carrying "SSCL (if applicable)", "Capacity Charge Rate inclusive of SSCL" and
+  # "VAT -18%" as separate lines. A 2026-09-06 edit annotated this citation as naming "a
+  # document NOT held in the corpus"; that was wrong, the document is held, and the original
+  # citation is reinstated. The Capacity Charge Rate is quoted
   # EXCLUDING VAT, with "SSCL (if applicable)" and "VAT - 18%" as separate lines added on top
   # and recovered from NSO. Deducting it from revenue, as this file did until 2026-09-06,
   # double-charged the project ~LKR 139m/yr. Import-side SSCL is a different levy and is
@@ -178,7 +181,10 @@ risk_adjustment:
 #
 # The RFP Clarifications of 21-Aug-2026 are NOT in that category. They are held in the public
 # repository and every clause cited below is verified verbatim against the transcript at
-# docs/source_materials/nso_bess_250mw_2026/rfp/extracted/: item 13 leaves SSCL at import to
+# docs/source_materials/nso_bess_250mw_2026/rfp/extracted/
+# NSO_250MW_BESS_RFP_Clarifications_2026-08-21.verified-transcript.md — named in full because the
+# same directory holds a tesseract raw dump its own README marks "do not cite", and because that
+# README makes the PDF govern where the two differ: item 13 leaves SSCL at import to
 # "the prevailing laws and regulations in effect at the time of importation"; item 47 confirms
 # the bidder bears responsibility for obtaining the facility and records the two-month SCOD
 # extension; item 48 restricts the facility to "imported equipment that forms part of the BESS
@@ -196,11 +202,32 @@ risk_adjustment:
 # two-month SCOD extension in Addendum 01, on the stated ground that no such addendum was held.
 # That was wrong. Addendum 01 of 07-Aug-2026 and the RFP Clarifications of 21-Aug-2026 are BOTH
 # held, in the PUBLIC repository at docs/source_materials/nso_bess_250mw_2026/rfp/, as PDFs with
-# extracted transcripts. The search that concluded otherwise covered only the private corpus.
-# The extension is real and is confirmed twice over: Addendum 01 item 01 moves COD from
-# 06-May-2027 to 16-Aug-2027, and Clarification 47 states that "the Scheduled Commercial
-# Operation Date (SCOD) has been extended by two (2) months". The original citation was correct
-# and is reinstated.
+# extracted transcripts, ingressed by #1180 on 2026-08-27 and present in the base tree the
+# withdrawal was reviewed against.
+#
+# THE DIAGNOSIS MATTERS MORE THAN THE FACT. It is tempting to record this as "we searched the
+# wrong repository", and that is not what happened: the PRIVATE corpus also carried the governing
+# schedule, tabulated in full at nso_bess_250mw_2026_offers/evaluation/Envision_Budgetary_
+# Commercial_Offers_Ingress_Evaluation_2026-09-03.md, dated three days BEFORE the withdrawal, and
+# the public repository had carried a complete Addendum ingress review since 27-Aug-2026. Both
+# corpora already discussed the document. The failure was never grepping for "Addendum 01" by
+# name in either of them before declaring it unheld.
+# The extension is real. Addendum 01 item 01 moves COD from 06-May-2027 to 16-Aug-2027, and
+# Clarification 47 states that "the Scheduled Commercial Operation Date (SCOD) has been extended
+# by two (2) months". Those two are NOT independent and do NOT measure the same thing, and the
+# arithmetic looks wrong until both are said properly. Cl. 47 derives its authority from the
+# Addendum ("please refer to Addendum No. 1, under which..."), so it is a second document and not
+# a second source. And the "two months" is the ESA-RELATIVE milestone — 6 months from signing
+# becomes 8 — whereas the ABSOLUTE slip from 06-May to 16-Aug-2027 is 102 days: 64 days of SCOD
+# extension plus 38 days the whole ESA chain moved when the closing date went from 14-Aug to
+# 04-Sep-2026. They reconcile; they are not the same number.
+#
+# WHY THE ORIGINAL CITATION WAS RIGHT, which matters more than that it was. It read "(cl. 8)" in
+# a list beside (cl. 47), (cl. 48) and (cl. 13) — all CLARIFICATION numbers. Clarification 8 asks
+# whether the RFP timeline allows for bonded warehousing approval and answers "Please refer
+# Addendum 01": an exact match for the claim. The 2026-09-06 edit read it as "Addendum 01 CLAUSE
+# 8", went looking for a clause that does not exist (Addendum item 08 revises Volume I cl. 6.3.1,
+# Major Deviations), found none, and withdrew a true citation. The citation is reinstated.
 #
 # Separately, ESA Art 6A(b)(i) refers to "the bid closing (i.e. 14th October 2025)" against the
 # governing closing date of 04-Sep-2026 - a genuine template carry-over, still to be resolved
@@ -255,9 +282,11 @@ Financing_Terms:
   # days, or 0.42 years. (The superseded Volume I schedule gave 0.33 years; the rounding below
   # is unchanged by the correction, so no KPI moves.) This annual-grid model takes 1 as a
   # CONSERVATIVE ROUNDING of that, not as a figure read off the schedule:
-  # 0 would zero IDC entirely, which is wrong for a four-month build on drawn debt, while 1
-  # overstates IDC by about eight months and pushes the first equity distribution roughly eight
+  # 0 would zero IDC entirely, which is wrong for a five-month build on drawn debt, while 1
+  # overstates IDC by about seven months and pushes the first equity distribution roughly seven
   # months late. Both errors run against the project. The choice is worth ~2pp of project IRR.
+  # (Until 2026-09-07 these two lines read "four-month" and "eight months", which were the
+  # VOLUME I figures — 120 days, 0.33 years — left behind when the dates above were corrected.)
   construction_years: 1
   tenor_years: 12
   interest_only_years: 1
