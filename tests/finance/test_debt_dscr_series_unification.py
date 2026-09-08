@@ -767,6 +767,55 @@ def test_real_covenant_rejects_incomplete_or_contradictory_observations(
     assert _build_debt_covenant_snapshot(cfg, original) == before
 
 
+@pytest.mark.parametrize(
+    "undefined", [None, float("nan"), float("inf"), float("-inf"), "n/a"]
+)
+@pytest.mark.parametrize("period_dscr", [0.8, 0.0, -0.5])
+def test_undefined_fold_representations_preserve_the_defined_period_breach(
+    undefined: Any, period_dscr: float
+) -> None:
+    """DOM-03/ASR-03: accepted undefined forms cannot erase a fallback breach.
+
+    The source fold is explicitly undefined while its period is defined. Only the
+    redundant folded representation changes; all source values stay fixed. This
+    reproduces the independent reviewer counterexample without the production builder.
+    """
+    original = {
+        "dscr_periods": [
+            {
+                "period": 0,
+                "dscr": period_dscr,
+                "operating_year": 7,
+                "annual_row_index": 0,
+                "covenant_dscr": None,
+            }
+        ],
+        "dscr_series": [period_dscr],
+        "annual_row_debt_period_map": [
+            {
+                "debt_period": 0,
+                "annual_row_index": 0,
+                "year": 7,
+            }
+        ],
+        "dscr_by_year": {7: None},
+        "timeline_periods": 1,
+        "min_dscr": period_dscr,
+        "balloon_remaining": 0.0,
+    }
+    before = _build_debt_covenant_snapshot(_covenant_config(), original)
+    assert (
+        before.audit_status,
+        before.years_below_threshold,
+        before.first_breach_year,
+        before.last_breach_year,
+    ) == ("REVIEW", 1, 7, 7)
+    altered = copy.deepcopy(original)
+    altered["dscr_periods"][0]["covenant_dscr"] = undefined
+    assert _build_debt_covenant_snapshot(_covenant_config(), altered) == before
+    assert _build_debt_covenant_snapshot(_covenant_config(), original) == before
+
+
 @pytest.mark.parametrize("construction_periods", [0, 3])
 def test_no_operating_rows_preserves_explicit_absence(
     construction_periods: int,

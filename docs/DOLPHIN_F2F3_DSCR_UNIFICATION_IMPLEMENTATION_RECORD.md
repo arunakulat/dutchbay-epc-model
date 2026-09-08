@@ -154,7 +154,7 @@ Boundary-corrected focused run: 443 passed, one Hypothesis collection warning in
 comparisons. Domain reconstructed the annual fold directly from CFADS, fees and
 scheduled service. Assurance independently proved the D3B digest preimage changed
 only at two engine-version leaves, and the synthetic manifest only at engine
-version, VERSION hash and generator-source hash; all seven payload hashes match.
+version, VERSION hash and generator-source hash; all six feeder/profile payload hashes match. The checksum inventory changes only at the manifest.json digest token.
 The domain review's first synthetic-control assumption failed before mutation;
 its corrected cashflow/service oracle then passed before/after the killed mutant.
 That failed control remains in the preserved review, never counted as a kill.
@@ -167,6 +167,42 @@ finance-maintenance dolphin; series routing by the contract coordinator. Empty-r
 plans retain zero observations and the existing zero-breach/PASS behavior; that is
 not evidence that an economic covenant was assessed. Balloon semantics and all
 existing HOLDs remain outside this correction.
+
+## Normalized-observation successor
+
+Fresh reviews of `df4720c` closed the original DOM-01/02 and ASR-01/02
+counterexamples, but independently found DOM-03 / ASR-03: validation normalized
+undefined coverage while assessment consumed the original raw observation. When a
+source fold was explicitly undefined and its period ratio breached, an equivalent
+NaN/infinity/text redundant fold could suppress the documented fallback. Both
+complete blocked successor dispositions are preserved verbatim as
+`review_002_domain_blocked.md` and `review_002_assurance_blocked.md`.
+
+Lease F2F3-NORMALIZED-006 makes assessment consume the canonical normalized records
+whose equivalence was validated. Fifteen reviewer-derived cases cover five
+undefined representations with positive-below-threshold, zero and negative period
+ratios; source values remain fixed and passing controls bracket each probe. The
+ordinary engine math, alias, compact result and covenant labels are unchanged.
+Normalized-source focused tests: 458 passed, one Hypothesis collection warning in 23.48 seconds; mypy passed all 185 source files and scoped pre-commit passed. Restoring the raw return in memory killed nine regression cases (nine failed/eight passed), with 17 passing controls before and after; source bytes remained unchanged. Fresh independent review must close DOM-03 / ASR-03 before delivery.
+
+ASR-04 corrects an error originating in the initial assurance review and repeated
+above: there are six unchanged feeder/profile payloads, not seven. The additional
+`MANIFEST.sha256` inventory correctly changes with the `manifest.json` digest.
+The initial review is preserved unedited; this statement explicitly supersedes its
+false count. Fresh assurance execution proved exact checksum-inventory equality
+except that digest token. The coordinator also independently counted the six
+entries in the existing pinned-payload test constant. No source evidence was
+altered to make the incorrect claim true.
+
+The `df4720c` local full-suite run terminated with exit 139 at approximately 28%,
+without a completed result. Faulthandler identifies llvmlite/Numba module linking;
+the macOS crash report independently shows ValueSymbolTable/Module destruction,
+LLVM Linker, LLVMLinkModules2 and LLVMPY_LinkModules. This matches the historical
+signature in issue #1229, verified OPEN. Application frames were truncated, so no
+particular application test is attributed. Its concise receipt and source crash
+report hash are retained externally. No dependency/JIT/grid-code workaround is
+part of F2/F3, and no native-crash cure is claimed. Final-source full-suite and
+hosted exact-head gates remain pending at this checkpoint.
 
 ## Unevaluable current files
 

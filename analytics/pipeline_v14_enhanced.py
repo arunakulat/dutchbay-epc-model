@@ -31,7 +31,6 @@ CCCDIR Compliance:
 from __future__ import annotations
 
 import logging
-import math
 import time
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
@@ -564,7 +563,6 @@ def _validated_covenant_periods(debt_result: dict[str, Any]) -> list[dict[str, A
         expected = _build_dscr_periods(series, row_map, by_year)
     except (KeyError, TypeError, ValueError, OverflowError) as exc:
         raise PipelineValidationError(f"Invalid DSCR source mapping: {exc}") from exc
-    validated: list[dict[str, Any]] = []
     for period, (entry, reference) in enumerate(zip(periods, expected, strict=True)):
         if not isinstance(entry, dict) or not reference.keys() <= entry.keys():
             raise PipelineValidationError(
@@ -586,8 +584,9 @@ def _validated_covenant_periods(debt_result: dict[str, Any]) -> list[dict[str, A
                     f"dscr_periods[{period}].{field_name} conflicts with its "
                     "published DSCR source"
                 )
-        validated.append(entry)
-    return validated
+    # Assess the normalized observations that were validated, not raw equivalent
+    # sentinels: NaN/inf/text must activate the same period fallback as None.
+    return expected
 
 
 def _build_debt_covenant_snapshot(
@@ -643,17 +642,7 @@ def _build_debt_covenant_snapshot(
             value = entry["dscr"]
         if value is None:
             continue
-        try:
-            dscr_value = float(value)
-        except (TypeError, ValueError):
-            logger.debug(
-                "Skipping non-numeric DSCR covenant value at operating year %r: %r",
-                operating_year,
-                value,
-            )
-            continue
-        if not math.isfinite(dscr_value):
-            continue
+        dscr_value = float(value)
         if dscr_value < dscr_threshold:
             year_label = int(operating_year)
             years_below += 1

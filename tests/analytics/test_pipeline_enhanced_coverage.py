@@ -438,8 +438,8 @@ def test_covenant_bad_threshold_falls_back_to_default() -> None:
 def test_covenant_skips_none_and_nonnumeric_and_inf() -> None:
     """None, non-numeric and non-finite DSCRs are skipped; only the real breach counts.
 
-    Each sentinel now sits on a genuine OPERATING year, so the defensive branches are
-    still the thing under test — a period is not skipped merely for being non-operating.
+    Each sentinel sits on a genuine OPERATING year. Canonical normalization, rather
+    than absence of an operating label, makes these observations undefined.
     """
     config: dict[str, Any] = {"Financing_Terms": {"target_dscr": 1.30}}
     debt_result: dict[str, Any] = {
