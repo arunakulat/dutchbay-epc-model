@@ -715,13 +715,20 @@ for _path, _disposition in (
             "cfads_bridge_debt_period",
             # F-6 period taxonomy. `bridge_debt_period` restates
             # `cfads_bridge_debt_period` above under the engine's own name and
-            # `construction_periods` restates `construction_years`, so the
-            # taxonomy carries no fact this facade does not already see; it is
-            # dispositioned with its siblings rather than routed, which would
-            # carry the same number twice under two names.
+            # `construction_periods` restates `construction_years`. The remaining
+            # `first_operating_period` is derived from the opaque row map. This
+            # facade routes no period-indexed series, so that index remains opaque
+            # with its source; a future series route requires a separate review.
             "construction_periods",
             "bridge_debt_period",
             "first_operating_period",
+            # F-2/F-3 unified DSCR series. `dscr_periods` is `dscr_series` with
+            # each entry labelled by `operating_year` and carrying the
+            # `dscr_by_year` fold as `covenant_dscr`; all three of those are
+            # already dispositioned OPAQUE_ARTIFACT above, so it restates facts
+            # this facade already sees and carries no new number. It is a
+            # period-indexed series, and this facade routes none of them.
+            "dscr_periods",
             "balloon_treatment",
             "balloon_resolution",
             "balloon_residual",

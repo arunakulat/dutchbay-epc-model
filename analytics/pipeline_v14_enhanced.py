@@ -31,6 +31,7 @@ CCCDIR Compliance:
 from __future__ import annotations
 
 import logging
+import math
 import time
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
@@ -51,7 +52,11 @@ from analytics.core.metrics import DEFAULT_DISCOUNT_RATE, calculate_scenario_kpi
 from analytics.run_manifest import build_run_manifest, engine_version
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
-from finance.debt_v14 import _extract_capex_usd, plan_debt
+from finance.debt_v14 import (
+    _clean_public_dscr_series,
+    _extract_capex_usd,
+    plan_debt,
+)
 from finance.utils import get_nested
 from finance.wacc_v14 import compute_build_up_wacc, compute_wacc_from_config
 
@@ -505,8 +510,52 @@ def _build_debt_covenant_snapshot(
     config: dict[str, Any],
     debt_result: dict[str, Any],
 ) -> DebtCovenantSnapshot:
-    """CASPER: Build DebtCovenantSnapshot for tail risk tracking."""
-    dscr_series = list(debt_result.get("dscr_series") or [])
+    """CASPER: Build DebtCovenantSnapshot for tail risk tracking.
+
+    Breach YEARS are taken from ``dscr_periods[*].operating_year`` — the label the debt
+    engine derives from its own row->period map — never from a list position (F-3). The
+    published series is PERIOD-indexed and its leading construction periods and synthetic
+    bridge period map to no operating row, so ``enumerate(series, start=1)`` labelled
+    operating year N as N + (non-operating periods before it): a config-dependent
+    off-by-one that no consumer could correct downstream.
+
+    The coverage tested per year is ``covenant_dscr``, the engine's ``dscr_by_year``
+    figure, which folds the orphaned bridge period's scheduled service into operating
+    year 1. That fold is what drives ``min_dscr`` on the CEB BESS scenarios (~0.87-0.91
+    against a 1.3000 period floor); reading the bare period DSCR instead would let this
+    snapshot report "all covenant requirements met" while ``dscr_min`` sits below the
+    threshold. Where a year carries no folded figure the period DSCR is used.
+    """
+    if "dscr_periods" not in debt_result:
+        # CASPER: fail loudly rather than gracefully. A legacy-shaped `debt_result`
+        # carries no operating-year labels at all, and quietly returning "no breaches"
+        # from an empty list would report full covenant compliance for a result this
+        # function cannot actually assess — the flattering failure mode F-3 exists to
+        # remove.
+        raise PipelineValidationError(
+            "debt_result is missing 'dscr_periods'; covenant years cannot be labelled "
+            "without the engine's row->period map. Build it with finance.debt_v14."
+            "plan_debt (F-2/F-3)."
+        )
+    dscr_periods = debt_result["dscr_periods"]
+    if not isinstance(dscr_periods, list):
+        raise PipelineValidationError(
+            "debt_result.dscr_periods must be a labelled list"
+        )
+    if "dscr_series" in debt_result and len(dscr_periods) != len(
+        debt_result["dscr_series"]
+    ):
+        raise PipelineValidationError("dscr_periods must label every debt period")
+    mapped_periods = {
+        mapping["debt_period"]
+        for mapping in debt_result.get("annual_row_debt_period_map", [])
+    }
+    if not mapped_periods <= {
+        entry.get("period") for entry in dscr_periods if isinstance(entry, dict)
+    }:
+        raise PipelineValidationError(
+            "dscr_periods is missing mapped operating periods"
+        )
     dscr_min = float(debt_result.get("min_dscr") or 0.0)
 
     dscr_threshold_raw = get_nested(config, ["Financing_Terms", "target_dscr"])
@@ -525,25 +574,59 @@ def _build_debt_covenant_snapshot(
     first_breach_year: Optional[int] = None
     last_breach_year: Optional[int] = None
 
-    for idx, value in enumerate(dscr_series, start=1):
+    observed_years: set[int] = set()
+    for entry in dscr_periods:
+        if not isinstance(entry, dict) or "operating_year" not in entry:
+            raise PipelineValidationError(
+                "dscr_periods entry is missing operating_year"
+            )
+        operating_year = entry["operating_year"]
+        if operating_year is None:
+            if (
+                entry.get("annual_row_index") is not None
+                or entry.get("period") in mapped_periods
+            ):
+                raise PipelineValidationError(
+                    "mapped DSCR period is missing operating_year"
+                )
+            # Construction, the synthetic bridge, or post-tenor padding: the period
+            # maps to no operating row, so its coverage ratio is not a covenant
+            # observation and may not create or date a breach.
+            continue
+        if type(operating_year) is not int or operating_year <= 0:
+            raise PipelineValidationError("operating_year must be a positive integer")
+        if operating_year in observed_years:
+            raise PipelineValidationError("dscr_periods has a duplicate operating_year")
+        observed_years.add(operating_year)
+        value = entry.get("covenant_dscr")
+        if value is None:
+            value = entry.get("dscr")
         if value is None:
             continue
         try:
             dscr_value = float(value)
         except (TypeError, ValueError):
             logger.debug(
-                "Skipping non-numeric DSCR covenant value at position %d: %r",
-                idx,
+                "Skipping non-numeric DSCR covenant value at operating year %r: %r",
+                operating_year,
                 value,
             )
             continue
-        if dscr_value == float("inf"):
+        if not math.isfinite(dscr_value):
             continue
         if dscr_value < dscr_threshold:
+            year_label = int(operating_year)
             years_below += 1
-            if first_breach_year is None:
-                first_breach_year = idx
-            last_breach_year = idx
+            first_breach_year = (
+                min(first_breach_year, year_label)
+                if first_breach_year is not None
+                else year_label
+            )
+            last_breach_year = (
+                max(last_breach_year, year_label)
+                if last_breach_year is not None
+                else year_label
+            )
 
     balloon_remaining = float(debt_result.get("balloon_remaining") or 0.0)
     balloon_flag = balloon_remaining > 1000.0
@@ -906,7 +989,13 @@ def run_v14_pipeline_enhanced(
 
         project_npv = float(kpis.get("project_npv", 0.0))
         project_irr = float(kpis.get("project_irr", 0.0))
-        dscr_series = list(debt_result.get("dscr_series") or [])
+        # `ScenarioResult.dscr_series` is typed `list[float]` and the D3B/D3C accepted
+        # -origin protocols reject any entry that is not an exact finite float. Since
+        # F-2 the engine publishes ONE positional series carrying `None` for every
+        # period with no defined DSCR, so the undefined sentinels are dropped here.
+        # The resulting values are byte-identical to the compacted series this contract
+        # carried before F-2 — the compaction moved, the contract did not.
+        dscr_series = _clean_public_dscr_series(debt_result.get("dscr_series") or [])
         min_dscr = float(debt_result.get("min_dscr", 0.0))
         max_debt_usd = float(kpis.get("max_debt_usd", 0.0))
 
