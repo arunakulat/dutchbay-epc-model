@@ -38,6 +38,7 @@ Where the weight sits
 
 from __future__ import annotations
 
+import copy
 import math
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -432,6 +433,21 @@ def _covenant_config(threshold: float = 1.30) -> Dict[str, Any]:
 def _debt_result(periods: List[Dict[str, Any]], min_dscr: float) -> Dict[str, Any]:
     return {
         "dscr_periods": periods,
+        "dscr_series": [entry["dscr"] for entry in periods],
+        "annual_row_debt_period_map": [
+            {
+                "debt_period": entry["period"],
+                "annual_row_index": entry["annual_row_index"],
+                "year": entry["operating_year"],
+            }
+            for entry in periods
+            if entry["operating_year"] is not None
+        ],
+        "dscr_by_year": {
+            entry["operating_year"]: entry["covenant_dscr"]
+            for entry in periods
+            if entry["operating_year"] is not None
+        },
         "min_dscr": min_dscr,
         "balloon_remaining": 0.0,
     }
@@ -625,6 +641,130 @@ def test_real_engine_labels_fail_loudly_when_corrupted(mutation: str) -> None:
         debt["dscr_periods"][first + 1]["operating_year"] = 1
     with pytest.raises(PipelineValidationError):
         _build_debt_covenant_snapshot(cfg, debt)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "missing_period",
+        "missing_dscr",
+        "missing_covenant_dscr",
+        "missing_annual_row_index",
+        "missing_operating_year",
+        "erase_all_coverage",
+        "null_fold",
+        "nonfinite_fold",
+        "nonnumeric_fold",
+        "replace_fold_with_period",
+        "null_period_coverage",
+        "shift_year",
+        "label_bridge",
+        "wrong_row",
+        "duplicate_period",
+        "float_period",
+        "bool_period",
+        "bool_row",
+        "bool_year",
+        "reverse_periods",
+        "missing_source_map",
+        "missing_source_series",
+        "missing_source_fold",
+        "missing_fold_year",
+        "malformed_map_entry",
+        "missing_map_year",
+        "invalid_map_year",
+        "wrong_map_row_index",
+        "duplicate_map_period",
+        "wrong_series_length",
+        "wrong_timeline_length",
+    ],
+)
+def test_real_covenant_rejects_incomplete_or_contradictory_observations(
+    mutation: str,
+) -> None:
+    """Replay independent DOM/ASR findings with genuine CEB plan controls.
+
+    The source table and map are independent of the corrupted redundant observation.
+    A missing/null fold must not substitute the higher bare-period ratio or turn the
+    three-breach FAIL into REVIEW/PASS. Dates must still belong to the mapped row.
+    """
+    cfg, original = _plan_for(SCENARIO_DIR / "ceb_bess_10mw_capacity_charge.yaml")
+    before = _build_debt_covenant_snapshot(cfg, original)
+    assert (
+        before.years_below_threshold,
+        before.first_breach_year,
+        before.last_breach_year,
+        before.audit_status,
+    ) == (3, 1, 7, "FAIL")
+    debt = copy.deepcopy(original)
+    first = debt["first_operating_period"]
+    entry = debt["dscr_periods"][first]
+    if mutation in {
+        "missing_period",
+        "missing_dscr",
+        "missing_covenant_dscr",
+        "missing_annual_row_index",
+        "missing_operating_year",
+    }:
+        del entry[mutation.removeprefix("missing_")]
+    elif mutation == "erase_all_coverage":
+        for observation in debt["dscr_periods"]:
+            del observation["dscr"]
+            del observation["covenant_dscr"]
+    elif mutation == "null_fold":
+        entry["covenant_dscr"] = None
+    elif mutation == "nonfinite_fold":
+        entry["covenant_dscr"] = float("inf")
+    elif mutation == "nonnumeric_fold":
+        entry["covenant_dscr"] = "n/a"
+    elif mutation == "replace_fold_with_period":
+        entry["covenant_dscr"] = entry["dscr"]
+    elif mutation == "null_period_coverage":
+        entry["dscr"] = None
+    elif mutation == "shift_year":
+        entry["operating_year"] = 99
+    elif mutation == "label_bridge":
+        debt["dscr_periods"][debt["bridge_debt_period"]]["operating_year"] = 100
+    elif mutation == "wrong_row":
+        entry["annual_row_index"] = 999
+    elif mutation == "duplicate_period":
+        debt["dscr_periods"][0]["period"] = 1
+    elif mutation == "float_period":
+        entry["period"] = float(first)
+    elif mutation == "bool_period":
+        debt["dscr_periods"][0]["period"] = False
+    elif mutation == "bool_row":
+        entry["annual_row_index"] = False
+    elif mutation == "bool_year":
+        entry["operating_year"] = True
+    elif mutation == "reverse_periods":
+        debt["dscr_periods"].reverse()
+    elif mutation == "missing_source_map":
+        del debt["annual_row_debt_period_map"]
+    elif mutation == "missing_source_series":
+        del debt["dscr_series"]
+    elif mutation == "missing_source_fold":
+        del debt["dscr_by_year"]
+    elif mutation == "missing_fold_year":
+        del debt["dscr_by_year"][1]
+    elif mutation == "malformed_map_entry":
+        debt["annual_row_debt_period_map"][0] = None
+    elif mutation == "missing_map_year":
+        del debt["annual_row_debt_period_map"][0]["year"]
+    elif mutation == "invalid_map_year":
+        debt["annual_row_debt_period_map"][0]["year"] = -1
+        debt["dscr_by_year"][-1] = debt["dscr_by_year"].pop(1)
+    elif mutation == "wrong_map_row_index":
+        debt["annual_row_debt_period_map"][0]["annual_row_index"] = 999
+    elif mutation == "duplicate_map_period":
+        debt["annual_row_debt_period_map"][1]["debt_period"] = first
+    elif mutation == "wrong_series_length":
+        debt["dscr_series"].pop()
+    else:
+        debt["timeline_periods"] += 1
+    with pytest.raises(PipelineValidationError):
+        _build_debt_covenant_snapshot(cfg, debt)
+    assert _build_debt_covenant_snapshot(cfg, original) == before
 
 
 @pytest.mark.parametrize("construction_periods", [0, 3])

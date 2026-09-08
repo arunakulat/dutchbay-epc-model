@@ -53,8 +53,10 @@ from analytics.run_manifest import build_run_manifest, engine_version
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
 from finance.debt_v14 import (
+    _build_dscr_periods,
     _clean_public_dscr_series,
     _extract_capex_usd,
+    _finite_dscr,
     plan_debt,
 )
 from finance.utils import get_nested
@@ -506,6 +508,88 @@ def _build_tranche_debt_profile(
     )
 
 
+def _validated_covenant_periods(debt_result: dict[str, Any]) -> list[dict[str, Any]]:
+    """Require complete covenant observations consistent with their published sources.
+
+    The labelled list is a redundant view of the positional series, row map and
+    annual fold. Validate that relationship before any compliance verdict. Explicit
+    undefined sentinels remain valid; an omitted or conflicting value cannot erase
+    a defined observation. Synthetic callers must supply the same source contract.
+    """
+    for key in (
+        "dscr_periods",
+        "dscr_series",
+        "annual_row_debt_period_map",
+        "dscr_by_year",
+    ):
+        if key not in debt_result:
+            raise PipelineValidationError(
+                f"debt_result is missing {key!r}; build the complete result with "
+                "finance.debt_v14.plan_debt"
+            )
+    periods = debt_result["dscr_periods"]
+    series = debt_result["dscr_series"]
+    row_map = debt_result["annual_row_debt_period_map"]
+    by_year = debt_result["dscr_by_year"]
+    if not all(isinstance(value, list) for value in (periods, series, row_map)):
+        raise PipelineValidationError("DSCR periods, series and row map must be lists")
+    if not isinstance(by_year, dict):
+        raise PipelineValidationError("dscr_by_year must be a year-keyed mapping")
+    if len(periods) != len(series):
+        raise PipelineValidationError("dscr_periods must label every debt period")
+    if "timeline_periods" in debt_result and debt_result["timeline_periods"] != len(
+        series
+    ):
+        raise PipelineValidationError("DSCR series does not span timeline_periods")
+    for row_index, mapping in enumerate(row_map):
+        if not isinstance(mapping, dict):
+            raise PipelineValidationError("DSCR row map entries must be mappings")
+        if (
+            type(mapping.get("debt_period")) is not int
+            or type(mapping.get("annual_row_index")) is not int
+            or mapping["annual_row_index"] != row_index
+        ):
+            raise PipelineValidationError(
+                "DSCR row map has invalid period or row indices"
+            )
+        try:
+            has_fold = mapping["year"] in by_year
+        except (KeyError, TypeError) as exc:
+            raise PipelineValidationError(
+                "DSCR row map is missing a valid year"
+            ) from exc
+        if not has_fold:
+            raise PipelineValidationError("dscr_by_year is missing a mapped year")
+    try:
+        expected = _build_dscr_periods(series, row_map, by_year)
+    except (KeyError, TypeError, ValueError, OverflowError) as exc:
+        raise PipelineValidationError(f"Invalid DSCR source mapping: {exc}") from exc
+    validated: list[dict[str, Any]] = []
+    for period, (entry, reference) in enumerate(zip(periods, expected, strict=True)):
+        if not isinstance(entry, dict) or not reference.keys() <= entry.keys():
+            raise PipelineValidationError(
+                f"dscr_periods[{period}] is missing required observation fields"
+            )
+        for field_name in ("period", "annual_row_index", "operating_year"):
+            value = entry[field_name]
+            if (
+                type(value) is not type(reference[field_name])
+                or value != reference[field_name]
+            ):
+                raise PipelineValidationError(
+                    f"dscr_periods[{period}].{field_name} conflicts with the row map "
+                    "or positional series"
+                )
+        for field_name in ("dscr", "covenant_dscr"):
+            if _finite_dscr(entry[field_name]) != reference[field_name]:
+                raise PipelineValidationError(
+                    f"dscr_periods[{period}].{field_name} conflicts with its "
+                    "published DSCR source"
+                )
+        validated.append(entry)
+    return validated
+
+
 def _build_debt_covenant_snapshot(
     config: dict[str, Any],
     debt_result: dict[str, Any],
@@ -524,38 +608,11 @@ def _build_debt_covenant_snapshot(
     year 1. That fold is what drives ``min_dscr`` on the CEB BESS scenarios (~0.87-0.91
     against a 1.3000 period floor); reading the bare period DSCR instead would let this
     snapshot report "all covenant requirements met" while ``dscr_min`` sits below the
-    threshold. Where a year carries no folded figure the period DSCR is used.
+    threshold. Where the authoritative annual table explicitly carries no folded
+    figure, the period DSCR is used. Missing or contradictory representations are
+    rejected before assessment.
     """
-    if "dscr_periods" not in debt_result:
-        # CASPER: fail loudly rather than gracefully. A legacy-shaped `debt_result`
-        # carries no operating-year labels at all, and quietly returning "no breaches"
-        # from an empty list would report full covenant compliance for a result this
-        # function cannot actually assess — the flattering failure mode F-3 exists to
-        # remove.
-        raise PipelineValidationError(
-            "debt_result is missing 'dscr_periods'; covenant years cannot be labelled "
-            "without the engine's row->period map. Build it with finance.debt_v14."
-            "plan_debt (F-2/F-3)."
-        )
-    dscr_periods = debt_result["dscr_periods"]
-    if not isinstance(dscr_periods, list):
-        raise PipelineValidationError(
-            "debt_result.dscr_periods must be a labelled list"
-        )
-    if "dscr_series" in debt_result and len(dscr_periods) != len(
-        debt_result["dscr_series"]
-    ):
-        raise PipelineValidationError("dscr_periods must label every debt period")
-    mapped_periods = {
-        mapping["debt_period"]
-        for mapping in debt_result.get("annual_row_debt_period_map", [])
-    }
-    if not mapped_periods <= {
-        entry.get("period") for entry in dscr_periods if isinstance(entry, dict)
-    }:
-        raise PipelineValidationError(
-            "dscr_periods is missing mapped operating periods"
-        )
+    dscr_periods = _validated_covenant_periods(debt_result)
     dscr_min = float(debt_result.get("min_dscr") or 0.0)
 
     dscr_threshold_raw = get_nested(config, ["Financing_Terms", "target_dscr"])
@@ -574,33 +631,16 @@ def _build_debt_covenant_snapshot(
     first_breach_year: Optional[int] = None
     last_breach_year: Optional[int] = None
 
-    observed_years: set[int] = set()
     for entry in dscr_periods:
-        if not isinstance(entry, dict) or "operating_year" not in entry:
-            raise PipelineValidationError(
-                "dscr_periods entry is missing operating_year"
-            )
         operating_year = entry["operating_year"]
         if operating_year is None:
-            if (
-                entry.get("annual_row_index") is not None
-                or entry.get("period") in mapped_periods
-            ):
-                raise PipelineValidationError(
-                    "mapped DSCR period is missing operating_year"
-                )
             # Construction, the synthetic bridge, or post-tenor padding: the period
             # maps to no operating row, so its coverage ratio is not a covenant
             # observation and may not create or date a breach.
             continue
-        if type(operating_year) is not int or operating_year <= 0:
-            raise PipelineValidationError("operating_year must be a positive integer")
-        if operating_year in observed_years:
-            raise PipelineValidationError("dscr_periods has a duplicate operating_year")
-        observed_years.add(operating_year)
-        value = entry.get("covenant_dscr")
+        value = entry["covenant_dscr"]
         if value is None:
-            value = entry.get("dscr")
+            value = entry["dscr"]
         if value is None:
             continue
         try:

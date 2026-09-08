@@ -87,15 +87,15 @@ Checks at the implementation checkpoint:
   unmutated controls passed 279 tests before and after. Source hashes stayed fixed.
   Mutants restore offset years, include the bridge, discard the fold, recompact,
   ignore folded covenant coverage, diverge the alias, and invent invalid years.
-- Pre-commit on the initial changed paths passed. Final checkpoint hooks must rerun.
+- Pre-commit on all 19 recovered subject paths passed; repo Ruff check, Black (748 files) and isort passed on cabc5f3. Ruff format disagreed on three files, including two with the same base disagreement; mandatory Black/isort style was retained.
 - Full suite before identity-pin synchronization: 30 failed, 7,364 passed,
   18 skipped, 333 errors. D3C identity and synthetic-grid VERSION pins caused
   reproduced failures after the version bump; pin synchronization answers them.
   SSH readiness failed on a sandbox-denied loopback bind and passed outside the sandbox (1 passed). This failed full run is retained as failed.
 - Version-pin follow-up: 1,585 contract/grid tests passed; three failures identified
   the two derived checksum pins. Those pins are synchronized with source identities.
-- Full post-fix suite, final independent dispositions, final-head CI and merge
-  verification are pending at writing. No historical run substitutes for them.
+- Full identity-corrected suite on cabc5f3: 7,727 passed, 18 skipped, 15 warnings in 518.47 seconds. This did not override the independent boundary-integrity vetoes described below.
+- Full boundary-corrected suite, fresh independent dispositions, final-head CI and merge verification are pending at writing. No historical run substitutes for them.
 
 The native test stack created a 51-byte `:memory:.ses` transient session file.
 It was hash-recorded and preserved in the evidence directory before named removal.
@@ -121,6 +121,52 @@ were checkpointed, then a fresh bounded identity-dependency lease was issued.
 F1, A1, A2, fee/tax changes, canon rebaseline, broad audit and shared-ledger writes
 are excluded. F5-02 and #1110 evidence/professional/release/Board/lender HOLDs remain.
 Engineering tests, review and merge confer no additional authority.
+
+## Independent boundary findings and remediation
+
+Both independent GPT-6 Astra Extra High reviewers blocked `cabc5f3` despite its
+full-suite pass. Their complete initial dispositions are preserved verbatim outside
+the repository as `review_001_domain_blocked.md` and
+`review_001_assurance_blocked.md` under the evidence directory. Neither reviewer
+received the other's initial conclusion before returning its own disposition.
+
+- DOM-01 / ASR-01: deleting or nulling a defined folded observation could downgrade
+  the CEB capacity-charge case from three breaches/FAIL to two/REVIEW. Erasing both
+  coverage fields could return zero breaches/PASS at the same 0.9069456485322224
+  headline. State: `BLOCKS_CURRENT_CANDIDATE` until fresh independent review closes it.
+- DOM-02 / ASR-02: a positive unique year could contradict the published row map,
+  misdate a breach, or turn an unmapped bridge into an operating observation.
+  State: `BLOCKS_CURRENT_CANDIDATE` until fresh independent review closes it.
+
+Fresh sole-writer lease F2F3-BOUNDARY-005 scopes the correction to the covenant
+boundary, its two test modules and this record. The boundary now requires the
+positional series, row map and annual fold alongside the labelled observations.
+It reuses the debt engine's canonical labelled-view builder to validate every
+period/row/year identifier and both coverage fields before assessment. A missing
+field differs from an explicit undefined sentinel; a null or altered redundant
+fold cannot suppress a defined source observation. Synthetic fixtures now carry
+the same source contract; no map-free production bypass is retained. Their
+threshold, sentinel, balloon and breach assertions remain intact. This checks
+internal consistency of published sources, not authenticity of coherently altered
+sources or an independent recalculation of finance at the reporting boundary.
+
+Boundary-corrected focused run: 443 passed, one Hypothesis collection warning in 23.26 seconds; mypy passed all 185 finance/analytics source files. Initial repair lint identified a missing explicit zip strict parameter and typing identified an Any return; both were corrected without weakening either gate. Thirty-one public CEB corruption cases preserve passing unmodified controls before and after each rejection. A validation-bypass mutation failed both null-fold and shifted-year regression tests, with four passing tests before/after and two no-row controls remaining green under the mutant. All 37 scenario observations (including 29 evaluated results and eight identical failures) match the prior candidate exactly after the boundary correction. Fresh reviewer replay and acceptance remain required. Both initial reviewers independently reproduced 29/37 exact KPI
+comparisons. Domain reconstructed the annual fold directly from CFADS, fees and
+scheduled service. Assurance independently proved the D3B digest preimage changed
+only at two engine-version leaves, and the synthetic manifest only at engine
+version, VERSION hash and generator-source hash; all seven payload hashes match.
+The domain review's first synthetic-control assumption failed before mutation;
+its corrected cashflow/service oracle then passed before/after the killed mutant.
+That failed control remains in the preserved review, never counted as a kill.
+
+An inherited ordering test checks the old prefix as a set and the appended tail in
+order. Full prefix order is independently verified across all 29 outputs, but the
+standing test does not prove it against arbitrary reordering. This is an accepted
+residual within the current scope. Alias migration remains owned by a separate
+finance-maintenance dolphin; series routing by the contract coordinator. Empty-row
+plans retain zero observations and the existing zero-breach/PASS behavior; that is
+not evidence that an economic covenant was assessed. Balloon semantics and all
+existing HOLDs remain outside this correction.
 
 ## Unevaluable current files
 

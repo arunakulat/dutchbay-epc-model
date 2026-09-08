@@ -386,6 +386,29 @@ def test_covenant_missing_dscr_periods_raises() -> None:
         _build_debt_covenant_snapshot(config, legacy)
 
 
+def _with_covenant_sources(debt_result: dict[str, Any]) -> dict[str, Any]:
+    """Give synthetic observations the same required source fields as a debt plan."""
+    periods = debt_result["dscr_periods"]
+    return {
+        **debt_result,
+        "dscr_series": [entry["dscr"] for entry in periods],
+        "annual_row_debt_period_map": [
+            {
+                "debt_period": entry["period"],
+                "annual_row_index": entry["annual_row_index"],
+                "year": entry["operating_year"],
+            }
+            for entry in periods
+            if entry["operating_year"] is not None
+        ],
+        "dscr_by_year": {
+            entry["operating_year"]: entry["covenant_dscr"]
+            for entry in periods
+            if entry["operating_year"] is not None
+        },
+    }
+
+
 def test_covenant_bad_threshold_falls_back_to_default() -> None:
     """A non-floatable target_dscr threshold falls back to 1.30.
 
@@ -406,7 +429,7 @@ def test_covenant_bad_threshold_falls_back_to_default() -> None:
         "min_dscr": 1.5,
         "balloon_remaining": 0.0,
     }
-    snap = _build_debt_covenant_snapshot(config, debt_result)
+    snap = _build_debt_covenant_snapshot(config, _with_covenant_sources(debt_result))
     assert math.isclose(snap.dscr_threshold, 1.30)
     assert snap.audit_status == "PASS"
     assert snap.years_below_threshold == 0
@@ -430,7 +453,7 @@ def test_covenant_skips_none_and_nonnumeric_and_inf() -> None:
         "min_dscr": 1.10,
         "balloon_remaining": 0.0,
     }
-    snap = _build_debt_covenant_snapshot(config, debt_result)
+    snap = _build_debt_covenant_snapshot(config, _with_covenant_sources(debt_result))
     # Only the single 1.10 entry counts as a breach, and it is dated by its OPERATING
     # YEAR (4), not by its list position (5) — the F-3 fix.
     assert snap.years_below_threshold == 1
@@ -456,7 +479,7 @@ def test_covenant_balloon_breach_appends_notes() -> None:
         "balloon_covenant_breach": True,
         "max_balloon_pct": 0.10,
     }
-    snap = _build_debt_covenant_snapshot(config, debt_result)
+    snap = _build_debt_covenant_snapshot(config, _with_covenant_sources(debt_result))
     assert snap.balloon_flag is True
     assert "Balloon" in snap.notes
     assert "BREACHES" in snap.notes
