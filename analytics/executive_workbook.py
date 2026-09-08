@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence, Union
 
 import pandas as pd
+from pandas.api.types import is_float_dtype
 
 from analytics.reproducible_workbook import normalize_xlsx_reproducible
 
@@ -260,6 +261,17 @@ def _pipeline_ratios_df(
     """ "Ratios" sheet: DSCR/LLCR/PLCR stats plus covenant thresholds & verdict."""
     ratios = _metric_value_df(kpis, _RATIO_KPI_KEYS)
     covenants = _metric_value_df(debt_covenants, _RATIO_COVENANT_KEYS)
+    # Preserve pandas' existing float dtype and NaN treatment of all-missing
+    # blocks explicitly, without dropping undefined covenant disclosures.
+    for missing, populated in ((ratios, covenants), (covenants, ratios)):
+        if (
+            missing["Value"].isna().all()
+            and is_float_dtype(populated["Value"].dtype)
+            and populated["Value"].notna().any()
+        ):
+            missing["Value"] = pd.Series(
+                float("nan"), index=missing.index, dtype=populated["Value"].dtype
+            )
     return pd.concat([ratios, covenants], ignore_index=True)
 
 

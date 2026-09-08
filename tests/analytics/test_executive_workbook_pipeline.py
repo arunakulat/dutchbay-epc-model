@@ -24,6 +24,7 @@ CCCDIR one-source (no financial value derived here).
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -207,6 +208,117 @@ class TestFramesAgainstRealPipeline:
         assert "period" in frames["debt"].columns
         assert not frames["ratios"].empty
         assert len(frames["scenario_summary"]) == 1
+
+
+@pytest.mark.filterwarnings(
+    "error:The behavior of DataFrame concatenation with empty or all-NA entries:FutureWarning"
+)
+class TestRatioDtypeCompatibility:
+    """Preserve the pre-change dtype and null contracts without concat warnings."""
+
+    @pytest.mark.parametrize("reverse", [False, True])
+    @pytest.mark.parametrize("dtype", ["float32", "float64"])
+    @pytest.mark.parametrize(
+        "missing",
+        [[], [None], [np.nan], [pd.NA], [None, None], [pd.NA, np.nan]],
+    )
+    @pytest.mark.parametrize("with_nan", [False, True])
+    def test_missing_block_uses_populated_float_dtype(
+        self, reverse: bool, dtype: str, missing: list[Any], with_nan: bool
+    ) -> None:
+        populated = [np.dtype(dtype).type(1.3)]
+        if with_nan:
+            populated.append(np.dtype(dtype).type(np.nan))
+        left, right = (missing, populated) if reverse else (populated, missing)
+        expected_values = (
+            [np.nan] * len(missing) + populated
+            if reverse
+            else populated + [np.nan] * len(missing)
+        )
+        self._assert_ratios(left, right, expected_values, dtype)
+
+    @pytest.mark.parametrize("reverse", [False, True])
+    @pytest.mark.parametrize(
+        "left,right,expected,dtype",
+        [
+            ([], [], [], "object"),
+            ([None], [pd.NA], [None, pd.NA], "object"),
+            ([None], [np.nan], [None, np.nan], "object"),
+            ([pd.NA], [np.nan], [np.nan, np.nan], "object"),
+            ([None], [None], [None, None], "object"),
+            ([np.nan], [np.nan], [np.nan, np.nan], "float64"),
+            ([1], [], [1], "object"),
+            ([True], [], [True], "object"),
+            (["PASS"], [], ["PASS"], "object"),
+            ([1], [None], [1, None], "object"),
+            ([True], [pd.NA], [True, pd.NA], "object"),
+            (["PASS"], [None], ["PASS", None], "object"),
+            ([1], [2], [1, 2], "int64"),
+            ([True], [False], [True, False], "bool"),
+            ([1.3], [2], [1.3, 2.0], "float64"),
+            ([1.3], ["PASS"], [1.3, "PASS"], "object"),
+        ],
+    )
+    def test_other_blocks_keep_dtype_and_null_sentinels(
+        self,
+        reverse: bool,
+        left: list[Any],
+        right: list[Any],
+        expected: list[Any],
+        dtype: str,
+    ) -> None:
+        if reverse:
+            left, right = right, left
+            expected = expected[len(right) :] + expected[: len(right)]
+        self._assert_ratios(left, right, expected, dtype)
+
+    @staticmethod
+    def _assert_ratios(
+        left: list[Any], right: list[Any], values: list[Any], dtype: str
+    ) -> None:
+        """Check exact frame structure and scalar sentinels through the public caller."""
+        kpi_keys = ["min_dscr", "llcr"][: len(left)]
+        covenant_keys = ["first_breach_year", "last_breach_year"][: len(right)]
+        result = {
+            "kpis": dict(zip(kpi_keys, left, strict=True)),
+            "scenario_result": {
+                "debt_covenants": dict(zip(covenant_keys, right, strict=True))
+            },
+        }
+        expected = pd.DataFrame(
+            {
+                "Metric": pd.Series(kpi_keys + covenant_keys, dtype=object),
+                "Value": pd.Series(values, dtype=dtype),
+            }
+        )
+        actual = frames_from_pipeline_result(result)["ratios"]
+        pd.testing.assert_frame_equal(actual, expected, check_exact=True)
+        # assert_frame_equal can tolerate different null sentinels in object cells.
+        assert [(type(v), repr(v)) for v in actual["Value"]] == [
+            (type(v), repr(v)) for v in expected["Value"]
+        ]
+
+    def test_undefined_covenant_rows_remain_in_workbook(self, tmp_path: Path) -> None:
+        result = {
+            "kpis": {"min_dscr": 1.3},
+            "scenario_result": {
+                "debt_covenants": {
+                    "first_breach_year": None,
+                    "last_breach_year": None,
+                }
+            },
+        }
+        path = emit_executive_workbook_from_pipeline(
+            result, tmp_path / "undefined.xlsx"
+        )
+        workbook = openpyxl.load_workbook(path)
+        assert list(workbook["Ratios"].values) == [
+            ("Metric", "Value"),
+            ("min_dscr", 1.3),
+            ("first_breach_year", None),
+            ("last_breach_year", None),
+        ]
+        workbook.close()
 
 
 # ---------------------------------------------------------------------------
