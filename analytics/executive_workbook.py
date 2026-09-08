@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence, Union
 
+import numpy as np
 import pandas as pd
 from pandas.api.types import is_float_dtype
 
@@ -268,6 +269,13 @@ def _pipeline_ratios_df(
             missing["Value"].isna().all()
             and is_float_dtype(populated["Value"].dtype)
             and populated["Value"].notna().any()
+            # Temporal missing sentinels are not numeric NaNs, even in an
+            # object column; pandas preserves them and the resulting object dtype.
+            and all(
+                value is not pd.NaT
+                and not isinstance(value, (np.datetime64, np.timedelta64))
+                for value in missing["Value"]
+            )
         ):
             missing["Value"] = pd.Series(
                 float("nan"), index=missing.index, dtype=populated["Value"].dtype

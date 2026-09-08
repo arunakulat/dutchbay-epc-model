@@ -219,8 +219,40 @@ class TestRatioDtypeCompatibility:
     @pytest.mark.parametrize("reverse", [False, True])
     @pytest.mark.parametrize("dtype", ["float32", "float64"])
     @pytest.mark.parametrize(
+        "nat", [pd.NaT, np.datetime64("NaT"), np.timedelta64("NaT")]
+    )
+    @pytest.mark.parametrize("tail", [[], [None], [np.nan], [pd.NA]])
+    def test_temporal_missing_sentinels_are_not_numeric_nan(
+        self, reverse: bool, dtype: str, nat: Any, tail: list[Any]
+    ) -> None:
+        populated = [np.dtype(dtype).type(1.3)]
+        missing = [nat] + tail
+        # A temporal block infers NaT; adding pd.NA instead keeps object scalars.
+        expected_missing = (
+            [nat, pd.NA] if tail and tail[0] is pd.NA else [pd.NaT] * len(missing)
+        )
+        left, right = (missing, populated) if reverse else (populated, missing)
+        values = (
+            expected_missing + [float(populated[0])]
+            if reverse
+            else [float(populated[0])] + expected_missing
+        )
+        self._assert_ratios(left, right, values, "object")
+
+    @pytest.mark.parametrize("reverse", [False, True])
+    @pytest.mark.parametrize("dtype", ["float32", "float64"])
+    @pytest.mark.parametrize(
         "missing",
-        [[], [None], [np.nan], [pd.NA], [None, None], [pd.NA, np.nan]],
+        [
+            [],
+            [None],
+            [np.nan],
+            [pd.NA],
+            [None, None],
+            [pd.NA, np.nan],
+            [complex(np.nan, 0)],
+            [complex(0, np.nan)],
+        ],
     )
     @pytest.mark.parametrize("with_nan", [False, True])
     def test_missing_block_uses_populated_float_dtype(
