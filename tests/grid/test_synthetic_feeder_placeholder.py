@@ -57,7 +57,7 @@ EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
     # and profile are byte-identical - so this moved only because the manifest
     # records which sources produced them, which is the guard working, not
     # drifting. Verified deterministic across repeated runs (MRM-01).
-    "24a723f33e13035def1f3fa68140bf6dc22f1b380d230b44331caadde5b25b2f"
+    "04579a8ee748d79b16aec3e1769fea213e27c364f8747359e96bc2b723530956"
 )
 
 MASTER_REDIRECT_MUTATIONS = [

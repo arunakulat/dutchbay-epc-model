@@ -31,9 +31,12 @@ Four tests carry the weight here:
    the helper-level test named below did not constrain ``plan_debt`` at all, leaving
    two mutations — emitting the taxonomy only when a bridge exists, and publishing a
    plausible ``0`` instead of ``None`` — alive against the whole suite.
-4. :func:`test_dscr_index_space_collision_is_still_present` — an executable pin on
-   the hazard the ``plan_debt`` docstring warns about, so the warning cannot go
-   stale silently.
+4. :func:`test_dscr_index_space_collision_is_resolved` — formerly
+   ``test_dscr_index_space_collision_is_still_present``, an executable pin on the
+   hazard the ``plan_debt`` docstring used to warn about. Dolphin F-2 unified the
+   two series, so the pin is INVERTED rather than deleted: it now asserts the
+   collision is gone and stays gone. The original test instructed exactly this —
+   "The dolphin that unifies the two series MUST update or delete it."
 """
 
 from __future__ import annotations
@@ -63,6 +66,13 @@ LENDER_CONFIG = str(SCENARIO_DIR / "dutchbay_lendercase_2025Q4.yaml")
 TAXONOMY_KEYS = frozenset(
     {"construction_periods", "bridge_debt_period", "first_operating_period"}
 )
+
+# The key Dolphin F-2/F-3 adds on top, tracked SEPARATELY from ``TAXONOMY_KEYS`` so this
+# module keeps saying which dolphin published what. ``dscr_periods`` is the unified
+# positional DSCR series with each entry labelled by its operating year; its own contract
+# is guarded in ``tests/finance/test_debt_dscr_series_unification.py``. It appears here
+# only so the additive-only sweep below stays exact rather than being loosened.
+UNIFICATION_KEYS = frozenset({"dscr_periods"})
 
 # Every key ``plan_debt`` published BEFORE the taxonomy was added, captured from
 # the pre-change engine across all evaluable scenarios (the set is identical for
@@ -173,9 +183,9 @@ def test_scenario_sweep_is_additive_and_taxonomy_is_consistent(scenario: Path) -
     # 1. Nothing removed or renamed; exactly the three taxonomy keys added.
     missing = PRE_EXISTING_KEYS - published
     assert not missing, f"plan_debt dropped pre-existing keys: {sorted(missing)}"
-    assert published - PRE_EXISTING_KEYS == set(TAXONOMY_KEYS), (
+    assert published - PRE_EXISTING_KEYS == set(TAXONOMY_KEYS | UNIFICATION_KEYS), (
         "plan_debt published unexpected keys: "
-        f"{sorted(published - PRE_EXISTING_KEYS - TAXONOMY_KEYS)}"
+        f"{sorted(published - PRE_EXISTING_KEYS - TAXONOMY_KEYS - UNIFICATION_KEYS)}"
     )
 
     # 2. Present UNCONDITIONALLY with the declared types (CASPER).
@@ -382,16 +392,22 @@ def test_published_key_order_places_the_taxonomy_last() -> None:
     The implementation record and the changelog both claim this; without a standing
     guard the claim is prose. Reordering the mapping would leave every other test in
     this module passing.
+
+    F-2/F-3 appended ``dscr_periods`` AFTER the F-6 taxonomy, so the tail is four keys
+    in dolphin order. The pin is extended rather than relaxed: the exact list is still
+    asserted, in order, and everything before it is still exactly the pre-existing
+    surface.
     """
     _cfg, debt_result = _plan_for(Path(LENDER_CONFIG))
     published = list(debt_result)
-    assert published[-3:] == [
+    assert published[-4:] == [
         "construction_periods",
         "bridge_debt_period",
         "first_operating_period",
+        "dscr_periods",
     ]
-    # Everything before the taxonomy is exactly the pre-existing surface, in order.
-    assert set(published[:-3]) == PRE_EXISTING_KEYS
+    # Everything before the additive tail is exactly the pre-existing surface, in order.
+    assert set(published[:-4]) == PRE_EXISTING_KEYS
 
 
 def test_first_mapped_period_zero_is_reported_as_zero() -> None:
@@ -462,32 +478,47 @@ def test_layout_fallback_matches_the_timeline_construction(
 
 
 # ---------------------------------------------------------------------------
-# Documented hazard (F-2) — pinned, not fixed.
+# The former hazard (F-2) — now FIXED, and pinned as fixed.
 # ---------------------------------------------------------------------------
 
 
-def test_dscr_index_space_collision_is_still_present() -> None:
-    """Executable pin on the collision the ``plan_debt`` docstring warns about.
+def test_dscr_index_space_collision_is_resolved() -> None:
+    """Executable pin that the F-2 index-space collision is GONE, and stays gone.
 
-    ``dscr_series`` is compacted by ``_clean_public_dscr_series`` while
-    ``raw_dscr_series`` is positional, and ``annual_row_debt_period_map`` indexes
-    the RAW space — so ``debt_result["dscr_series"][debt_period]`` reads a
-    different period than a caller would expect. F-6 documents this; it does not
-    fix it.
+    F-6 shipped this test asserting the DEFECT, with an explicit instruction to its
+    successor:
 
-    This test asserts the DEFECT, deliberately, so the docstring warning cannot go
-    stale unnoticed. The dolphin that unifies the two series MUST update or delete
-    it — a failure here means the hazard changed, which is exactly when the
-    docstring needs rewriting.
+        "The dolphin that unifies the two series MUST update or delete it — a failure
+        here means the hazard changed, which is exactly when the docstring needs
+        rewriting."
+
+    The hazard has changed: it is fixed. ``dscr_series`` used to be compacted by
+    ``_clean_public_dscr_series`` (15 entries against a 23-period timeline on the lender
+    case) while ``raw_dscr_series`` was positional, and
+    ``annual_row_debt_period_map[*]["debt_period"]`` indexes the positional space — so
+    ``debt_result["dscr_series"][debt_period]`` read a different period than a caller
+    would expect: at ``first_operating_period`` 3 the compacted series held ``1.3`` where
+    the period's real DSCR is ``2.604704706563112``.
+
+    The pin is INVERTED rather than deleted, so a regression that reintroduced the
+    compaction would fail here as loudly as the original defect failed elsewhere. The
+    assertions are the exact negation of the ones they replace.
     """
     _cfg, debt_result = _plan_for(Path(LENDER_CONFIG))
     public = debt_result["dscr_series"]
     raw = debt_result["raw_dscr_series"]
     period = debt_result["first_operating_period"]
+    timeline = int(debt_result["timeline_periods"])
 
-    assert len(public) < len(raw), "the compaction that causes the collision is gone"
+    # Was: len(public) < len(raw). There is one series now, and it spans the timeline.
+    assert len(public) == len(raw) == timeline
+    assert public == raw
     assert period < len(public)
-    assert public[period] != pytest.approx(raw[period]), (
-        "dscr_series and raw_dscr_series now agree at the first operating period; "
-        "the index-space collision documented in plan_debt's docstring has changed"
-    )
+
+    # Was: public[period] != raw[period]. They are the same series, so they agree.
+    assert public[period] == pytest.approx(raw[period])
+
+    # And the value at a mapped period is that PERIOD's DSCR, which is the substance of
+    # the fix — not merely two lists that happen to be equal.
+    assert public[period] == debt_result["dscr_periods"][period]["dscr"]
+    assert public[period] == pytest.approx(2.604704706563112)
