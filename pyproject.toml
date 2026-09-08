@@ -321,7 +321,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-ra --strict-markers --strict-config --showlocals"
-norecursedirs = [".git", "__pycache__", ".pytest_cache", ".venv*", "venv*", "build", "dist", "*.egg-info"]
+norecursedirs = [".git", "__pycache__", ".pytest_cache", ".hypothesis", ".venv*", "venv*", "build", "dist", "*.egg-info"]
 markers = [
     "slow: tests with long runtime (>5s; deselect with -m 'not slow')",
     "integration: integration tests spanning multiple modules",
