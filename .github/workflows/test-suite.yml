@@ -595,7 +595,8 @@ jobs:
     - name: Checkout exact pull-request head
       uses: actions/checkout@v7
       with:
-        fetch-depth: 1
+        # The paired base/candidate physical receipt archives the protected main base.
+        fetch-depth: 0
         persist-credentials: false
         ref: ${{ env.EXPECTED_HEAD_SHA }}
     - name: Verify and record immutable execution identity
@@ -656,4 +657,7 @@ jobs:
       if: always()
       with:
         name: grid-study-python-3.12-${{ github.run_id }}-${{ github.run_attempt }}
-        path: grid-study-results.xml
+        if-no-files-found: error
+        path: |
+          grid-study-results.xml
+          outputs/grid_base_candidate_numerical_receipt.json
