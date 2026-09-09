@@ -1129,6 +1129,12 @@ def _solve_case(  # pragma: no cover - requires [grid] extra
                 no_undill=True,
             )
             ss.prepare(quick=True, incremental=True, nomp=True)
+            # ANDES can partially load an importable generated module before its required
+            # stored members are read.  In that case the incremental selector may see a
+            # matching checksum even though ``with_calls`` is false.  Repeat serially in
+            # full mode so the incomplete module is regenerated before the disturbance.
+            if not ss.with_calls:
+                ss.prepare(quick=True, incremental=False, nomp=True)
 
             disturbance_applied = _apply_disturbance(ss, spec)
             if not disturbance_applied:

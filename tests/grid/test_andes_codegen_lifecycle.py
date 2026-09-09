@@ -7,10 +7,11 @@ post-preparation disturbance boundary are replaced in the lifecycle-only probes.
 
 from __future__ import annotations
 
+import multiprocessing
 import sys
+import threading
 from collections.abc import Iterator
 from pathlib import Path
-import threading
 from typing import Any
 
 import pytest
@@ -111,6 +112,35 @@ def _load_probe(probe: Any) -> Any:
     return system
 
 
+def _threaded_load_child(probe: Any) -> None:
+    """Run one real threaded lifecycle probe inside a killable child process."""
+    errors: list[BaseException] = []
+
+    def threaded_load() -> None:
+        try:
+            _load_probe(probe)
+        except (
+            BaseException
+        ) as exc:  # pragma: no cover - child reports failures by exit
+            errors.append(exc)
+
+    worker = threading.Thread(
+        target=threaded_load, name="ci-fork-lifecycle-worker", daemon=False
+    )
+    worker.start()
+    worker.join()
+    if errors:
+        raise errors[0]
+
+
+def _nonreturning_thread_child() -> None:
+    """Keep a non-daemon worker alive until the supervising process terminates us."""
+    blocker = threading.Event()
+    worker = threading.Thread(target=blocker.wait, name="ci-fork-hanging-worker")
+    worker.start()
+    worker.join()
+
+
 def test_missing_valid_stale_and_broken_code_lifecycle(codegen_probe: Any) -> None:
     """Cold code is generated, warm calls reuse it, and one stale model is repaired."""
     probe = codegen_probe
@@ -120,26 +150,20 @@ def test_missing_valid_stale_and_broken_code_lifecycle(codegen_probe: Any) -> No
     probe["prepared"].clear()
     for _ in range(3):
         _load_probe(probe)
-    # A caller's worker thread must follow the same in-process preparation lifecycle. A
-    # daemon thread plus bounded join keeps a hostile hang from being hidden by
-    # ThreadPoolExecutor.__exit__ -> shutdown(wait=True), which joins forever.
-    thread_errors: list[BaseException] = []
-
-    def threaded_load() -> None:
-        try:
-            _load_probe(probe)
-        except (
-            BaseException
-        ) as exc:  # pragma: no cover - only an injected thread failure
-            thread_errors.append(exc)
-
-    worker = threading.Thread(
-        target=threaded_load, name="ci-fork-lifecycle-worker", daemon=True
-    )
-    worker.start()
-    worker.join(timeout=60)
-    assert not worker.is_alive(), "thread-initiated preparation hung beyond 60 seconds"
-    assert thread_errors == []
+    # A caller's worker thread must follow the same in-process preparation lifecycle. Put
+    # the real threaded probe in a child so a hung non-daemon worker can be terminated
+    # without restoring the fixture's patches while it is still executing.
+    context = multiprocessing.get_context("fork")
+    threaded_process = context.Process(target=_threaded_load_child, args=(probe,))
+    threaded_process.start()
+    threaded_process.join(timeout=60)
+    if threaded_process.is_alive():
+        threaded_process.terminate()
+        threaded_process.join(timeout=5)
+    threaded_process_alive = threaded_process.is_alive()
+    assert not threaded_process_alive, "threaded lifecycle child was not terminated"
+    assert threaded_process.exitcode == 0
+    threaded_process.close()
     assert probe["prepared"] == []
 
     bus = probe["storage"] / "Bus.py"
@@ -147,6 +171,37 @@ def test_missing_valid_stale_and_broken_code_lifecycle(codegen_probe: Any) -> No
     _clear_pycode_modules()
     _load_probe(probe)
     assert probe["prepared"] == ["Bus"]
+
+    # An importable module can retain its current checksum while losing a required stored
+    # member.  ANDES reports that partial load through ``with_calls=False``; the production
+    # fallback must regenerate every model rather than trusting the matching checksum.
+    complete_bus = bus.read_text()
+    assert "md5 = " in complete_bus
+    assert "f_args = " in complete_bus
+    bus.write_text(
+        "\n".join(
+            line
+            for line in complete_bus.splitlines()
+            if not line.lstrip().startswith("f_args = ")
+        )
+        + "\n"
+    )
+    _clear_pycode_modules()
+    probe["prepared"].clear()
+    repaired = _load_probe(probe)
+    assert sorted(probe["prepared"]) == sorted(repaired.models)
+
+    # A genuinely non-returning worker is contained in a child and must be terminated by
+    # the supervising test within its explicit deadline.
+    hanging_process = context.Process(target=_nonreturning_thread_child)
+    hanging_process.start()
+    hanging_process.join(timeout=1)
+    assert hanging_process.is_alive()
+    hanging_process.terminate()
+    hanging_process.join(timeout=5)
+    assert not hanging_process.is_alive()
+    assert hanging_process.exitcode != 0
+    hanging_process.close()
 
     # Invalid Python preserves the explicit setup-failure path and cannot create a pool.
     init = probe["storage"] / "__init__.py"
