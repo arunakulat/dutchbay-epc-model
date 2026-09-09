@@ -1,0 +1,577 @@
+"""Persist a paired physical receipt for the base and candidate ride-through paths."""
+
+from __future__ import annotations
+
+import importlib.metadata
+import io
+import json
+import math
+import os
+import platform
+import re
+import signal
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+from dataclasses import asdict, replace
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from analytics.contracts_v14 import RideThroughResult
+from analytics.grid import ride_through
+
+pytestmark = [
+    pytest.mark.grid,
+    pytest.mark.filterwarnings(
+        "error:This process .* is multi-threaded.*:DeprecationWarning"
+    ),
+]
+
+_BASE_SHA = "4da2a82352d532138ee7f2483b82dfbf5a1d9c2b"
+_RECEIPT_PATH = Path("outputs/grid_base_candidate_numerical_receipt.json")
+_CASES: tuple[dict[str, Any], ...] = (
+    {
+        "id": "lvrt_mild",
+        "kind": "lvrt",
+        "kwargs": {
+            "lvrt_fault_x_pu": 0.30,
+            "fault_start_s": 1.0,
+            "fault_clear_s": 1.08,
+        },
+    },
+    {
+        "id": "lvrt_severe",
+        "kind": "lvrt",
+        "kwargs": {
+            "lvrt_fault_x_pu": 0.001,
+            "fault_start_s": 1.0,
+            "fault_clear_s": 1.9,
+            "tf": 3.0,
+        },
+    },
+    {"id": "hvrt_default", "kind": "hvrt", "kwargs": {}},
+    {
+        "id": "hvrt_severe",
+        "kind": "hvrt",
+        "kwargs": {"envelope_kind": "hvrt_severe"},
+    },
+    {"id": "frequency_default", "kind": "frequency", "kwargs": {}},
+    {
+        "id": "frequency_severe",
+        "kind": "frequency",
+        "kwargs": {"envelope_kind": "frequency_severe"},
+    },
+)
+_FLOAT_FIELDS = (
+    "target_pu",
+    "target_hz",
+    "k_factor",
+    "min_voltage_pu",
+    "max_voltage_pu",
+    "freq_extreme_hz",
+)
+_EXACT_FIELDS = (
+    "case",
+    "ran",
+    "converged",
+    "rode_through",
+    "n_devices",
+)
+_EXPECTED_DISTURBANCES = {
+    "lvrt": "impedance_fault",
+    "hvrt": "load_rejection",
+    "frequency": "generator_trip",
+}
+
+
+def _apply_envelope(ride_module: Any, case: dict[str, Any]) -> dict[str, Any]:
+    """Turn a serializable case description into ride-through call arguments."""
+    kwargs = dict(case["kwargs"])
+    envelope_kind = kwargs.pop("envelope_kind", None)
+    if envelope_kind == "hvrt_severe":
+        envelope = ride_module.envelope_from_fixture()
+        kwargs["envelope"] = replace(
+            envelope,
+            hvrt_enter_pu=1.001,
+            ov_trip_pu=1.002,
+        )
+    elif envelope_kind == "frequency_severe":
+        envelope = ride_module.envelope_from_fixture()
+        kwargs["envelope"] = replace(
+            envelope,
+            freq_continuous_hz=(49.99, 50.01),
+            freq_trip_hz=(49.98, 50.02),
+        )
+    return kwargs
+
+
+def _selected_model(record: dict[str, Any]) -> str:
+    """Extract the bundled ANDES model file selected by the solver detail."""
+    detail = record["provenance"]["detail"]
+    match = re.search(r"case=(ieee14/[^;]+)", detail)
+    assert match, detail
+    return match.group(1)
+
+
+def _physical_evidence_payload(spec: Any, evidence: Any) -> dict[str, Any]:
+    """Serialize the resolved case spec and all internal physical evidence."""
+    lvrt_evidence, hvrt_evidence, frequency_evidence = evidence
+    return json.loads(
+        json.dumps(
+            {
+                "spec": asdict(spec),
+                "lvrt": asdict(lvrt_evidence) if lvrt_evidence is not None else None,
+                "hvrt": asdict(hvrt_evidence) if hvrt_evidence is not None else None,
+                "frequency": (
+                    asdict(frequency_evidence)
+                    if frequency_evidence is not None
+                    else None
+                ),
+            }
+        )
+    )
+
+
+def _run_candidate_case(
+    case: dict[str, Any],
+) -> tuple[RideThroughResult, dict[str, Any]]:
+    """Run one candidate case while retaining the real internal evidence bundle."""
+    captured: dict[str, Any] = {}
+    original = ride_through._gather_case_evidence
+
+    def capture_evidence(
+        system: Any,
+        spec: Any,
+        *,
+        vmin: float | None,
+        vmax: float | None,
+        nominal_hz: float,
+    ) -> Any:
+        evidence = original(system, spec, vmin=vmin, vmax=vmax, nominal_hz=nominal_hz)
+        captured["physical_evidence"] = _physical_evidence_payload(spec, evidence)
+        return evidence
+
+    ride_through._gather_case_evidence = capture_evidence
+    try:
+        result = ride_through.run_ride_through_case(
+            case["kind"], run_dynamics=True, **_apply_envelope(ride_through, case)
+        )
+    finally:
+        ride_through._gather_case_evidence = original
+    return result, captured["physical_evidence"]
+
+
+def _record(
+    case: dict[str, Any],
+    result: RideThroughResult,
+    physical_evidence: dict[str, Any],
+) -> dict[str, Any]:
+    """Select the physical and solver fields that form the paired receipt."""
+    return {
+        "id": case["id"],
+        "inputs": case,
+        "result": {
+            field: getattr(result, field) for field in (*_EXACT_FIELDS, *_FLOAT_FIELDS)
+        },
+        "physical_evidence": physical_evidence,
+        "provenance": {
+            "detail": result.detail,
+            "method": result.method,
+            "bankable": result.bankable,
+            "result_provenance": result.provenance,
+            "disclaimer": result.disclaimer,
+        },
+    }
+
+
+def _runtime_identity() -> dict[str, str]:
+    """Identify the interpreter and solver packages used by a physical run."""
+    import andes
+
+    return {
+        "python": sys.version,
+        "platform": platform.platform(),
+        "andes_version": importlib.metadata.version("andes"),
+        "andes_file": str(Path(andes.__file__).resolve()),
+        "numpy_version": importlib.metadata.version("numpy"),
+        "scipy_version": importlib.metadata.version("scipy"),
+    }
+
+
+def _assert_physical_case(case: dict[str, Any], record: dict[str, Any]) -> None:
+    """Require the selected case to have executed and produced finite physics."""
+    result = record["result"]
+    assert result["ran"] is True, f"{case['id']} was not executed"
+    assert result["n_devices"] > 0, f"{case['id']} had no dynamic devices"
+    detail = record["provenance"]["detail"]
+    assert re.search(r"case=ieee14/[^;]+", detail), detail
+    assert f"disturbance={_EXPECTED_DISTURBANCES[case['kind']]}" in detail, detail
+    if case["kind"] == "lvrt":
+        measured = result["min_voltage_pu"]
+        assert isinstance(measured, float) and math.isfinite(measured)
+        assert measured < result["target_pu"], detail
+        assert result["rode_through"] in (True, False)
+    elif case["kind"] == "hvrt":
+        measured = result["max_voltage_pu"]
+        assert isinstance(measured, float) and math.isfinite(measured)
+        assert measured > result["target_pu"], detail
+        assert result["rode_through"] in (True, False)
+    else:
+        measured = result["freq_extreme_hz"]
+        assert isinstance(measured, float) and math.isfinite(measured)
+        assert 40.0 < measured < 60.0, detail
+        assert result["rode_through"] in (True, False, None)
+    if case["id"] in {"lvrt_mild"}:
+        assert result["rode_through"] is True, detail
+    if case["id"] in {"lvrt_severe", "hvrt_severe", "frequency_severe"}:
+        assert result["rode_through"] is False, detail
+
+
+def _assert_finite(value: Any, label: str) -> None:
+    """Require a captured physical scalar to be a finite number."""
+    assert isinstance(value, (int, float)) and not isinstance(value, bool), label
+    assert math.isfinite(float(value)), label
+
+
+def _assert_internal_physical_evidence(
+    case: dict[str, Any], record: dict[str, Any]
+) -> None:
+    """Require the private evidence bundle used for grading to be retained."""
+    physical = record["physical_evidence"]
+    spec = physical["spec"]
+    assert spec["kind"] == case["kind"]
+    assert spec["disturbance"] == _EXPECTED_DISTURBANCES[case["kind"]]
+    assert spec["fault_start_s"] == case["kwargs"].get("fault_start_s", 1.0)
+    assert spec["fault_clear_s"] == case["kwargs"].get("fault_clear_s", 1.1)
+    if case["kind"] == "lvrt":
+        evidence = physical["lvrt"]
+        assert evidence is not None
+        _assert_finite(evidence["min_voltage_pu"], f"{case['id']} min voltage")
+        _assert_finite(
+            evidence["recovered_voltage_pu"], f"{case['id']} recovered voltage"
+        )
+        assert evidence["ibr_tripped"] in (True, False, None)
+        assert evidence["min_voltage_pu"] == record["result"]["min_voltage_pu"]
+    elif case["kind"] == "hvrt":
+        evidence = physical["hvrt"]
+        assert evidence is not None
+        _assert_finite(evidence["max_voltage_pu"], f"{case['id']} max voltage")
+        _assert_finite(evidence["settled_voltage_pu"], f"{case['id']} settled voltage")
+        assert evidence["ibr_tripped"] in (True, False, None)
+        assert evidence["max_voltage_pu"] == record["result"]["max_voltage_pu"]
+    else:
+        evidence = physical["frequency"]
+        assert evidence is not None
+        for field in ("nadir_hz", "zenith_hz", "settled_hz"):
+            _assert_finite(evidence[field], f"{case['id']} {field}")
+            assert 40.0 < evidence[field] < 60.0
+        assert evidence["ibr_tripped"] in (True, False, None)
+        assert record["result"]["freq_extreme_hz"] in (
+            evidence["nadir_hz"],
+            evidence["zenith_hz"],
+        )
+
+
+def _assert_internal_evidence_equivalent(
+    base: dict[str, Any], candidate: dict[str, Any]
+) -> None:
+    """Compare captured grading inputs and physical evidence across both runs."""
+    base_physical = base["physical_evidence"]
+    candidate_physical = candidate["physical_evidence"]
+    assert base_physical["spec"] == candidate_physical["spec"]
+    for kind, fields in {
+        "lvrt": ("min_voltage_pu", "recovered_voltage_pu"),
+        "hvrt": ("max_voltage_pu", "settled_voltage_pu"),
+        "frequency": ("nadir_hz", "zenith_hz", "settled_hz"),
+    }.items():
+        base_evidence = base_physical[kind]
+        candidate_evidence = candidate_physical[kind]
+        if base_evidence is None or candidate_evidence is None:
+            assert base_evidence is candidate_evidence
+            continue
+        assert base_evidence["ibr_tripped"] == candidate_evidence["ibr_tripped"]
+        for field in fields:
+            assert math.isclose(
+                candidate_evidence[field],
+                base_evidence[field],
+                rel_tol=1e-9,
+                abs_tol=1e-12,
+            ), (
+                f"{candidate['id']} changed internal {kind}.{field}: "
+                f"base={base_evidence[field]!r} "
+                f"candidate={candidate_evidence[field]!r}"
+            )
+
+
+_BASE_RUNNER = r"""
+import importlib.metadata
+import json
+import platform
+import sys
+import warnings
+from dataclasses import asdict, replace
+from pathlib import Path
+
+warnings.filterwarnings(
+    "error",
+    message=r"This process .* is multi-threaded.*",
+    category=DeprecationWarning,
+)
+
+import andes
+from analytics.contracts_v14 import RideThroughResult
+from analytics.grid import ride_through
+
+runtime = {
+    "python": sys.version,
+    "platform": platform.platform(),
+    "andes_version": importlib.metadata.version("andes"),
+    "andes_file": str(Path(andes.__file__).resolve()),
+    "numpy_version": importlib.metadata.version("numpy"),
+    "scipy_version": importlib.metadata.version("scipy"),
+}
+
+case = json.loads(sys.argv[1])
+kwargs = dict(case["kwargs"])
+envelope_kind = kwargs.pop("envelope_kind", None)
+if envelope_kind == "hvrt_severe":
+    envelope = ride_through.envelope_from_fixture()
+    kwargs["envelope"] = replace(envelope, hvrt_enter_pu=1.001, ov_trip_pu=1.002)
+elif envelope_kind == "frequency_severe":
+    envelope = ride_through.envelope_from_fixture()
+    kwargs["envelope"] = replace(
+        envelope,
+        freq_continuous_hz=(49.99, 50.01),
+        freq_trip_hz=(49.98, 50.02),
+    )
+captured = {}
+original = ride_through._gather_case_evidence
+
+def capture_evidence(system, spec, *, vmin, vmax, nominal_hz):
+    evidence = original(
+        system, spec, vmin=vmin, vmax=vmax, nominal_hz=nominal_hz
+    )
+    lvrt_evidence, hvrt_evidence, frequency_evidence = evidence
+    captured["physical_evidence"] = json.loads(json.dumps({
+        "spec": asdict(spec),
+        "lvrt": asdict(lvrt_evidence) if lvrt_evidence is not None else None,
+        "hvrt": asdict(hvrt_evidence) if hvrt_evidence is not None else None,
+        "frequency": (
+            asdict(frequency_evidence)
+            if frequency_evidence is not None
+            else None
+        ),
+    }))
+    return evidence
+
+ride_through._gather_case_evidence = capture_evidence
+try:
+    result = ride_through.run_ride_through_case(
+        case["kind"], run_dynamics=True, **kwargs
+    )
+finally:
+    ride_through._gather_case_evidence = original
+assert isinstance(result, RideThroughResult)
+fields = (
+    "case", "ran", "converged", "rode_through", "n_devices",
+    "target_pu", "target_hz", "k_factor", "min_voltage_pu",
+    "max_voltage_pu", "freq_extreme_hz",
+)
+print(json.dumps({
+    "id": case["id"],
+    "inputs": case,
+    "result": {field: getattr(result, field) for field in fields},
+    "physical_evidence": captured["physical_evidence"],
+    "provenance": {
+        "detail": result.detail,
+        "method": result.method,
+        "bankable": result.bankable,
+        "result_provenance": result.provenance,
+        "disclaimer": result.disclaimer,
+    },
+    "runtime": runtime,
+    "revision": {"commit": case["base_commit"], "tree": case["base_tree"]},
+}))
+"""
+
+
+def _terminate_process_group(process: subprocess.Popen[str]) -> None:
+    """Terminate a timed-out base run and all descendants in its process group."""
+    for sig, wait_seconds in ((signal.SIGTERM, 5), (signal.SIGKILL, 10)):
+        try:
+            os.killpg(process.pid, sig)
+        except ProcessLookupError:
+            break
+        try:
+            process.wait(timeout=wait_seconds)
+        except subprocess.TimeoutExpired:
+            continue
+        if not _process_group_exists(process):
+            return
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if not _process_group_exists(process):
+            return
+        time.sleep(0.1)
+    raise RuntimeError(f"base process group {process.pid} survived termination")
+
+
+def _process_group_exists(process: subprocess.Popen[str]) -> bool:
+    """Return whether the isolated session still contains any process."""
+    try:
+        os.killpg(process.pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
+
+
+def _run_base_case(repo: Path, case: dict[str, Any]) -> dict[str, Any]:
+    """Run one base case in an isolated interpreter and return its JSON result."""
+    archive = subprocess.check_output(["git", "archive", _BASE_SHA], cwd=repo)
+    base_tree = subprocess.check_output(
+        ["git", "rev-parse", f"{_BASE_SHA}^{{tree}}"], cwd=repo, text=True
+    ).strip()
+    with tempfile.TemporaryDirectory(prefix="dutchbay-base-case-") as base_dir_text:
+        base_dir = Path(base_dir_text)
+        with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as archive_file:
+            archive_file.extractall(base_dir, filter="data")
+        with tempfile.TemporaryDirectory(prefix="dutchbay-base-home-") as home_text:
+            environment = os.environ.copy()
+            environment.update(
+                {
+                    "HOME": home_text,
+                    "PYTHONPATH": str(base_dir),
+                    "PYTHONDONTWRITEBYTECODE": "1",
+                }
+            )
+            payload = {**case, "base_commit": _BASE_SHA, "base_tree": base_tree}
+            process = subprocess.Popen(
+                [sys.executable, "-c", _BASE_RUNNER, json.dumps(payload)],
+                cwd=base_dir,
+                env=environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                start_new_session=True,
+            )
+            try:
+                stdout, stderr = process.communicate(timeout=300)
+            except subprocess.TimeoutExpired:
+                _terminate_process_group(process)
+                stdout, stderr = process.communicate()
+                pytest.fail(
+                    f"base case {case['id']} timed out; process group was terminated: "
+                    f"{stderr.strip().splitlines()[-1:]}"
+                )
+            except BaseException:
+                if _process_group_exists(process):
+                    _terminate_process_group(process)
+                raise
+            if _process_group_exists(process):
+                _terminate_process_group(process)
+                raise RuntimeError(
+                    f"base case {case['id']} left a descendant process after exit"
+                )
+        if process.returncode != 0:
+            detail = stderr.strip().splitlines()[-1:]
+            pytest.fail(
+                f"base case {case['id']} failed with exit {process.returncode}: {detail}"
+            )
+        try:
+            return json.loads(stdout.strip().splitlines()[-1])
+        except (IndexError, json.JSONDecodeError) as exc:
+            pytest.fail(f"base case {case['id']} did not emit JSON: {exc}")
+    raise AssertionError("unreachable")
+
+
+def _assert_equivalent(
+    base: dict[str, Any], candidate: dict[str, Any]
+) -> dict[str, Any]:
+    """Require paired result fields to match and return numeric deltas."""
+    base_result = base["result"]
+    candidate_result = candidate["result"]
+    for field in _EXACT_FIELDS:
+        assert candidate_result[field] == base_result[field], (
+            f"{candidate['id']} changed {field}: "
+            f"base={base_result[field]!r} candidate={candidate_result[field]!r}"
+        )
+    deltas: dict[str, float | None] = {}
+    for field in _FLOAT_FIELDS:
+        before = base_result[field]
+        after = candidate_result[field]
+        if before is None or after is None:
+            if before is not after:
+                raise AssertionError(
+                    f"{candidate['id']} changed {field}: "
+                    f"base={before!r} candidate={after!r}"
+                )
+            deltas[field] = None
+            continue
+        if not math.isclose(after, before, rel_tol=1e-9, abs_tol=1e-12):
+            raise AssertionError(
+                f"{candidate['id']} changed {field}: "
+                f"base={before!r} candidate={after!r}"
+            )
+        deltas[field] = after - before
+    return deltas
+
+
+def test_base_candidate_physical_numerical_receipt() -> None:
+    """Compare identical physical cases and persist the current exact-head receipt."""
+    pytest.importorskip("andes")
+    repo = Path.cwd()
+    candidate_sha = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=repo, text=True
+    ).strip()
+    candidate_tree = subprocess.check_output(
+        ["git", "rev-parse", "HEAD^{tree}"], cwd=repo, text=True
+    ).strip()
+    candidate_runtime = _runtime_identity()
+    paired: list[dict[str, Any]] = []
+    for case in _CASES:
+        candidate_result, candidate_evidence = _run_candidate_case(case)
+        candidate_record = _record(case, candidate_result, candidate_evidence)
+        base_record = _run_base_case(repo, case)
+        _assert_physical_case(case, base_record)
+        _assert_physical_case(case, candidate_record)
+        _assert_internal_physical_evidence(case, base_record)
+        _assert_internal_physical_evidence(case, candidate_record)
+        _assert_internal_evidence_equivalent(base_record, candidate_record)
+        base_model = _selected_model(base_record)
+        candidate_model = _selected_model(candidate_record)
+        assert base_model == candidate_model, (
+            f"{case['id']} selected different model files: "
+            f"base={base_model!r} candidate={candidate_model!r}"
+        )
+        for field in ("python", "andes_version", "numpy_version", "scipy_version"):
+            assert base_record["runtime"][field] == candidate_runtime[field], (
+                f"{case['id']} used different {field}: "
+                f"base={base_record['runtime'][field]!r} "
+                f"candidate={candidate_runtime[field]!r}"
+            )
+        paired.append(
+            {
+                "id": case["id"],
+                "base": base_record,
+                "candidate": candidate_record,
+                "selected_model": base_model,
+                "numeric_deltas": _assert_equivalent(base_record, candidate_record),
+            }
+        )
+    receipt = {
+        "schema": "dutchbay.ci_fork.base_candidate_physical_receipt.v1",
+        "base_commit": _BASE_SHA,
+        "base_tree": base_record["revision"]["tree"],
+        "candidate_commit": candidate_sha,
+        "candidate_tree": candidate_tree,
+        "candidate_runtime": candidate_runtime,
+        "case_count": len(paired),
+        "comparison": "identical case/disturbance inputs; exact booleans/counts and 1e-9 relative numeric tolerance",
+        "cases": paired,
+    }
+    _RECEIPT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _RECEIPT_PATH.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")

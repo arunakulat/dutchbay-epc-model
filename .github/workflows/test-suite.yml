@@ -184,13 +184,17 @@ jobs:
         # which stranded whole heavy files in one shard (measured 426s vs 129s spread
         # on the first 6-shard run). Non-contiguous grouping is safe here: -n auto
         # already distributes tests across workers arbitrarily WITHIN a shard, so
-        # inter-test order was never guaranteed anyway. The whole tree is still exercised — every test runs in exactly
-        # one shard, so the gate can't be dodged by omission (the #149 Test Summary hole).
+        # inter-test order was never guaranteed anyway. The ordinary tree is exercised
+        # exactly once across the ordinary shards; the paired protected-base receipt is intentionally
+        # isolated to the full-history Grid Study below.
         # -n auto parallelises WITHIN each shard; the two parallelisms compound.
         # Coverage writes DATA ONLY (--cov-report=) — the `coverage` job runs
         # coverage combine + report --fail-under=95 over all shards (R8/TEST-02).
+        # The paired receipt archives protected main and therefore runs only in the
+        # full-history Grid Study; ordinary shallow shards must not collect it.
         pytest \
           tests/ \
+          --ignore=tests/grid/test_base_candidate_physical_receipt.py \
           --splits "$TOTAL_SHARDS" \
           --group ${{ matrix.shard }} \
           --splitting-algorithm least_duration \
@@ -595,7 +599,8 @@ jobs:
     - name: Checkout exact pull-request head
       uses: actions/checkout@v7
       with:
-        fetch-depth: 1
+        # The paired base/candidate physical receipt archives the protected main base.
+        fetch-depth: 0
         persist-credentials: false
         ref: ${{ env.EXPECTED_HEAD_SHA }}
     - name: Verify and record immutable execution identity
@@ -651,9 +656,57 @@ jobs:
       run: >-
         python -m pytest tests/ -m grid -n auto --tb=short
         --junit-xml=grid-study-results.xml
+    - name: Validate complete Grid Study evidence
+      if: always()
+      env:
+        EXPECTED_HEAD_SHA: ${{ env.EXPECTED_HEAD_SHA }}
+      run: |
+        set -euo pipefail
+        test -s grid-study-results.xml
+        test -s outputs/grid_base_candidate_numerical_receipt.json
+        python - <<'PY'
+        import json
+        import os
+        import xml.etree.ElementTree as ET
+
+        junit = ET.parse("grid-study-results.xml").getroot()
+        testcases = list(junit.iter("testcase"))
+        if not testcases:
+            raise SystemExit("Grid Study JUnit evidence contains no testcases")
+        if any(case.find("failure") is not None or case.find("error") is not None for case in testcases):
+            raise SystemExit("Grid Study JUnit evidence contains a failure or error")
+        if not any(case.find("skipped") is None for case in testcases):
+            raise SystemExit("Grid Study JUnit evidence contains only skipped testcases")
+        with open("outputs/grid_base_candidate_numerical_receipt.json", encoding="utf-8") as stream:
+            receipt = json.load(stream)
+        if receipt.get("candidate_commit") != os.environ["EXPECTED_HEAD_SHA"]:
+            raise SystemExit("paired receipt candidate commit does not match exact head")
+        if receipt.get("base_commit") != "4da2a82352d532138ee7f2483b82dfbf5a1d9c2b":
+            raise SystemExit("paired receipt base commit is not protected main")
+        expected_ids = {
+            "lvrt_mild",
+            "lvrt_severe",
+            "hvrt_default",
+            "hvrt_severe",
+            "frequency_default",
+            "frequency_severe",
+        }
+        case_ids = {case["id"] for case in receipt.get("cases", [])}
+        if (
+            receipt.get("case_count") != 6
+            or len(receipt.get("cases", [])) != 6
+            or case_ids != expected_ids
+        ):
+            raise SystemExit("paired receipt does not contain all six physical cases")
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
+            stream.write("- Paired base/candidate receipt: six cases and exact head validated\n")
+        PY
     - name: Upload concise Grid Study result
       uses: actions/upload-artifact@v7
       if: always()
       with:
         name: grid-study-python-3.12-${{ github.run_id }}-${{ github.run_attempt }}
-        path: grid-study-results.xml
+        if-no-files-found: error
+        path: |
+          grid-study-results.xml
+          outputs/grid_base_candidate_numerical_receipt.json
