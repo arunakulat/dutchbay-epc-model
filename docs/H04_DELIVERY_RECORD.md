@@ -23,7 +23,7 @@ September 8 successors and their existing HOLD boundaries remain in force.
 
 The verbatim domain and assurance dispositions are in `H04_DOMAIN_REVIEW.md` and
 `H04_ASSURANCE_REVIEW.md`. Original message bytes are also preserved externally;
-the tracked copies add only a terminal newline if necessary. Their separate
+the tracked copies normalize trailing newlines to one terminal newline. Their separate
 reviewer identities, execution metadata, exact probes and limitations are stated
 in those records. Both reviewers must independently bind the receipt-only final
 head after proving subject-blob identity and accurate receipt content.
