@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Iterator
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import threading
 from typing import Any
 
 import pytest
@@ -120,9 +120,26 @@ def test_missing_valid_stale_and_broken_code_lifecycle(codegen_probe: Any) -> No
     probe["prepared"].clear()
     for _ in range(3):
         _load_probe(probe)
-    # A caller's worker thread must follow the same in-process preparation lifecycle.
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        executor.submit(_load_probe, probe).result(timeout=60)
+    # A caller's worker thread must follow the same in-process preparation lifecycle. A
+    # daemon thread plus bounded join keeps a hostile hang from being hidden by
+    # ThreadPoolExecutor.__exit__ -> shutdown(wait=True), which joins forever.
+    thread_errors: list[BaseException] = []
+
+    def threaded_load() -> None:
+        try:
+            _load_probe(probe)
+        except (
+            BaseException
+        ) as exc:  # pragma: no cover - only an injected thread failure
+            thread_errors.append(exc)
+
+    worker = threading.Thread(
+        target=threaded_load, name="ci-fork-lifecycle-worker", daemon=True
+    )
+    worker.start()
+    worker.join(timeout=60)
+    assert not worker.is_alive(), "thread-initiated preparation hung beyond 60 seconds"
+    assert thread_errors == []
     assert probe["prepared"] == []
 
     bus = probe["storage"] / "Bus.py"
