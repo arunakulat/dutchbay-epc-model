@@ -16,6 +16,7 @@ from typing import Any, Dict, Final, List, Optional
 
 import numpy as np
 import pandas as pd
+from numpy.typing import NDArray
 from scipy.optimize import brentq, newton
 
 # =========================================================================
@@ -231,8 +232,21 @@ def calculate_irr_robust(
 # =========================================================================
 
 
+def _calculate_dscr(
+    op_cf: NDArray[np.float64], total_ds: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """Return legacy DSCR only where debt service strictly exceeds 1e-6."""
+    dscr = np.full_like(op_cf, np.nan, dtype=float)
+    np.divide(op_cf, total_ds, out=dscr, where=total_ds > 1e-6)
+    return dscr
+
+
+_DEFAULT_PROJECT_PARAMETERS = ProjectParameters()
+
+
 def build_financial_model(
-    proj: ProjectParameters = ProjectParameters(), debt: Optional[DebtStructure] = None
+    proj: ProjectParameters = _DEFAULT_PROJECT_PARAMETERS,
+    debt: Optional[DebtStructure] = None,
 ) -> Dict[str, Any]:
     """Build a complete 20-year financial projection given project and debt parameters."""
     # Defaults
@@ -337,7 +351,7 @@ def build_financial_model(
     lkr_int_usd = lkr_int / fx  # type: ignore[assignment]
     lkr_prin_usd = lkr_prin / fx
     total_ds = usd_int + usd_prin + lkr_int_usd + lkr_prin_usd
-    dscr = np.where(total_ds > 1e-6, op_cf / total_ds, np.nan)
+    dscr = _calculate_dscr(op_cf, total_ds)
     eq_cf = op_cf - total_ds
     # Build annual dataframe
     annual_data = pd.DataFrame(

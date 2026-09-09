@@ -16,6 +16,9 @@ vintage (150 MW-era) research instrument whose absolute numbers are not canonica
 
 from __future__ import annotations
 
+from dataclasses import replace
+
+import numpy as np
 import pytest
 
 pytest.importorskip("scipy")
@@ -24,10 +27,57 @@ pytest.importorskip("matplotlib")
 
 from scripts.research import optimization as opt  # noqa: E402
 from scripts.research.legacy_v12 import (  # noqa: E402
+    _calculate_dscr,
     build_financial_model,
     create_default_debt_structure,
     create_default_parameters,
 )
+
+
+def test_dscr_matches_scalar_conditional_at_service_boundaries() -> None:
+    """Undefined service stays NaN without evaluating invalid divisions."""
+    cashflows = np.array([2.0, 0.0, 2.0, 2.0, 2.0, 2.0, -2.0, 0.0, np.nan])
+    service = np.array(
+        [
+            0.0,
+            0.0,
+            -1.0,
+            np.nextafter(1e-6, 0.0),
+            1e-6,
+            np.nextafter(1e-6, np.inf),
+            1.0,
+            1.0,
+            1.0,
+        ]
+    )
+    expected = np.array(
+        [
+            float(cf) / float(ds) if ds > 1e-6 else np.nan
+            for cf, ds in zip(cashflows, service, strict=True)
+        ]
+    )
+    with np.errstate(divide="raise", invalid="raise"):
+        actual = _calculate_dscr(cashflows, service)
+    np.testing.assert_array_equal(actual, expected, strict=True)
+
+
+@pytest.mark.parametrize("all_lkr", [False, True], ids=["default", "all-lkr"])
+@pytest.mark.filterwarnings("error::RuntimeWarning")
+def test_model_dscr_matches_annual_cashflow_and_service(all_lkr: bool) -> None:
+    """Real schedules retain their scalar DSCRs and five undefined final years."""
+    debt = create_default_debt_structure()
+    if all_lkr:
+        debt = replace(debt, usd_debt=0.0, lkr_debt=debt.total_debt)
+    annual = build_financial_model(create_default_parameters(), debt)["annual_data"]
+    expected = np.array(
+        [
+            float(cf) / float(ds) if ds > 1e-6 else np.nan
+            for cf, ds in zip(annual["Op_CF"], annual["Total_DS"], strict=True)
+        ]
+    )
+    np.testing.assert_array_equal(annual["DSCR"].to_numpy(), expected, strict=True)
+    assert annual.loc[annual["Year"] > debt.debt_tenor_years, "DSCR"].isna().all()
+    assert annual["DSCR"].isna().sum() == 5
 
 
 def test_module_imports():
