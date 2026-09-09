@@ -8,6 +8,7 @@ import math
 import os
 import subprocess
 import sys
+import textwrap
 from dataclasses import asdict, replace
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -83,6 +84,17 @@ def test_transport_normalizes_sequences_and_preserves_precision() -> None:
     result = json.loads(json.dumps(adapter._json_value(values), allow_nan=False))
     assert result["nested"][2].hex() == values["nested"][2].hex()
     assert result["nested"][3].hex() == "-0x0.0p+0"
+
+
+@pytest.mark.parametrize("top", [None, {}, {5: 2.4, 7.9: 1.5, "11": 9, True: 4}])
+def test_numeric_spectrum_transport_preserves_parser_semantics(top: object) -> None:
+    from analytics.grid.harmonics import _harmonic_spectrum
+
+    grid = {"harmonic_spectrum": top, "gridcode": {"harmonic_spectrum": {11: 0.9}}}
+    original = repr(grid)
+    transported = adapter._wire_parameters({"grid": grid})
+    assert _harmonic_spectrum(transported["grid"]) == _harmonic_spectrum(grid)
+    assert repr(grid) == original
 
 
 @pytest.mark.parametrize(
@@ -228,7 +240,7 @@ def test_spawn_failure_is_actionable(monkeypatch: pytest.MonkeyPatch) -> None:
         adapter.run_screening("strength", {})
 
 
-def test_caller_interruption_kills_and_reaps_child(
+def test_injected_interruption_kills_and_reaps_child(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     children = []
@@ -252,6 +264,51 @@ def test_caller_interruption_kills_and_reaps_child(
         os.kill(children[0].pid, 0)
     with pytest.raises(ChildProcessError):
         os.waitpid(children[0].pid, os.WNOHANG)
+
+
+@pytest.mark.parametrize("attempt", range(3))
+def test_real_sigint_kills_and_reaps_child(tmp_path: Path, attempt: int) -> None:
+    """Actual signals exercise Python's communicate SIGINT bookkeeping."""
+    pidfile = tmp_path / f"worker_{attempt}.pid"
+    child = (
+        "import os,signal,time; from pathlib import Path; "
+        f"Path({str(pidfile)!r}).write_text(str(os.getpid())); "
+        "time.sleep(.15); os.kill(os.getppid(),signal.SIGINT); time.sleep(60)"
+    )
+    caller = textwrap.dedent("""
+        import json,os,signal,sys
+        from pathlib import Path
+        from analytics.grid import pandapower_screening as adapter
+        adapter._worker_command = lambda: [sys.executable, '-c', CHILD]
+        try:
+            adapter.run_screening('strength', {})
+        except KeyboardInterrupt:
+            pid = int(Path(PIDFILE).read_text())
+            try:
+                waited, status = os.waitpid(pid, os.WNOHANG)
+            except ChildProcessError:
+                pass
+            else:
+                if waited == 0:
+                    os.kill(pid, signal.SIGKILL)
+                    os.waitpid(pid, 0)
+                raise AssertionError('adapter left an unreaped child')
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                pass
+            else:
+                raise AssertionError('worker still exists after interruption')
+            print(json.dumps({'reaped': True}))
+        else:
+            raise AssertionError('real SIGINT did not interrupt caller')
+    """)
+    caller = f"CHILD={child!r}\nPIDFILE={str(pidfile)!r}\n" + caller
+    result = subprocess.run(
+        [sys.executable, "-c", caller], text=True, capture_output=True, timeout=15
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {"reaped": True}
 
 
 def test_child_diagnostics_remain_visible(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -8,6 +8,7 @@ import subprocess
 import sys
 import textwrap
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from decimal import Decimal, localcontext
 from pathlib import Path
 from uuid import uuid4
@@ -103,6 +104,58 @@ def invoke(kind: str):
     if kind == "reactive":
         return screen_reactive_capability(GRID)
     return screen_harmonics(GRID, scr=5.0)
+
+
+@pytest.mark.parametrize("location", ["top", "nested", "precedence", "empty_top"])
+def test_spectrum_mapping_matches_list_across_real_consumers(location: str) -> None:
+    """Existing mapping/list and precedence semantics survive both process callers."""
+    mapping = deepcopy(GRID)
+    mapping.pop("harmonic_spectrum")
+    spectrum = {5: 2.4, 7.9: 1.5, "11": 9.0, True: 4.0}
+    pairs = [[5, 2.4], [7.9, 1.5], ["11", 9.0], [True, 4.0]]
+    if location == "top":
+        mapping["harmonic_spectrum"] = spectrum
+    else:
+        mapping["gridcode"]["harmonic_spectrum"] = spectrum
+        if location == "precedence":
+            mapping["harmonic_spectrum"] = {13: 0.7}
+        elif location == "empty_top":
+            mapping["harmonic_spectrum"] = {}
+    listed = deepcopy(mapping)
+    if location == "top":
+        listed["harmonic_spectrum"] = pairs
+    else:
+        listed["gridcode"]["harmonic_spectrum"] = pairs
+        if location == "precedence":
+            listed["harmonic_spectrum"] = [[13, 0.7]]
+        elif location == "empty_top":
+            listed["harmonic_spectrum"] = []
+    before = repr(mapping)
+    assert screen_harmonics(mapping, scr=5.0) == screen_harmonics(listed, scr=5.0)
+    assert screen_reactive_capability(mapping, p_steps=2) == screen_reactive_capability(
+        listed, p_steps=2
+    )
+    assert repr(mapping) == before
+
+
+def test_numeric_spectrum_runs_real_report_core_and_harmonics() -> None:
+    """Numeric spectrum data cannot abort the mandatory reactive report core."""
+    from app.reports.grid_screening_emit import build_grid_screening_model
+    from tests.app.test_grid_screening_emit import _scenario
+
+    mapping = _scenario()
+    mapping["grid"]["harmonic_spectrum"] = {5: 2.4, 7: 1.5}
+    listed = deepcopy(mapping)
+    listed["grid"]["harmonic_spectrum"] = [[5, 2.4], [7, 1.5]]
+    models = [
+        build_grid_screening_model(
+            scenario, scenario_variant="numeric-spectrum", generated_at="2020-01-01"
+        )
+        for scenario in (mapping, listed)
+    ]
+    assert models[0] == models[1]
+    assert models[0].study.reactive.method == "pandapower_runpp"
+    assert models[0].harmonics.method == "pandapower_zbus"
 
 
 @pytest.mark.parametrize(

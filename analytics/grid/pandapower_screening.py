@@ -99,6 +99,30 @@ def _worker_command() -> list[str]:
     ]
 
 
+def _wire_parameters(parameters: Mapping[str, object]) -> JsonValue:
+    """Represent supported numeric spectrum mappings as equivalent ordered pairs.
+
+    Keep both source locations and their precedence intact. Numeric keys retain
+    their types; string and boolean keys remain values the existing parser ignores.
+    """
+    arguments = dict(parameters)
+    grid = arguments.get("grid")
+    if isinstance(grid, Mapping):
+        grid = dict(grid)
+        arguments["grid"] = grid
+        gridcode = grid.get("gridcode")
+        containers = [grid]
+        if isinstance(gridcode, Mapping):
+            gridcode = dict(gridcode)
+            grid["gridcode"] = gridcode
+            containers.append(gridcode)
+        for container in containers:
+            spectrum = container.get("harmonic_spectrum")
+            if isinstance(spectrum, Mapping):
+                container["harmonic_spectrum"] = list(spectrum.items())
+    return _json_value(arguments)
+
+
 def in_screening_worker() -> bool:
     """Return whether this interpreter owns the initialized, adapted worker."""
     module = sys.modules.get("analytics.grid._pandapower_worker")
@@ -187,7 +211,7 @@ def run_screening(kind: ScreenKind, parameters: Mapping[str, object]) -> ScreenR
         raise ValueError(f"Unknown screening operation: {kind}")
     timeout, _versions = _policy()
     request = json.dumps(
-        {"kind": kind, "parameters": _json_value(parameters)}, allow_nan=False
+        {"kind": kind, "parameters": _wire_parameters(parameters)}, allow_nan=False
     )
     env = dict(os.environ)
     env["PYTHONPATH"] = os.pathsep.join(
@@ -195,19 +219,26 @@ def run_screening(kind: ScreenKind, parameters: Mapping[str, object]) -> ScreenR
     )
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     try:
-        # communicate() drains both pipes; run() kills and waits on timeout and also
-        # reaps its child if the caller is interrupted. No shell, forked Python state,
-        # process pool, shared worker lifetime, or durable runtime log is involved.
-        completed = subprocess.run(
+        # Own cleanup explicitly: Python 3.12's run() can leave a killed child
+        # unreaped after real SIGINT consumes communicate()'s brief signal wait.
+        with subprocess.Popen(
             _worker_command(),
-            input=request,
             text=True,
-            capture_output=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             cwd=_ROOT,
             env=env,
-            timeout=timeout,
-            check=False,
-        )
+        ) as child:
+            try:
+                stdout, stderr = child.communicate(request, timeout=timeout)
+            except BaseException:
+                child.kill()
+                child.wait()
+                raise
+            completed = subprocess.CompletedProcess(
+                child.args, child.returncode, stdout, stderr
+            )
     except subprocess.TimeoutExpired as exc:
         raise ScreeningProcessError(
             f"Pandapower {kind} worker exceeded {timeout:g} seconds and was terminated."

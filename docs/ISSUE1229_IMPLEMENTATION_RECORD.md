@@ -1,6 +1,6 @@
 # Issue #1229 screening adapter implementation record
 
-Status: PATCH_APPLIED; acceptance, full campaign, independent reviews and delivery pending.
+Status: REPAIRED_AFTER_REJECTION; fresh independent reviews, full campaign and delivery pending.
 Controlling authority and both verbatim owner instructions are in
 `ISSUE1229_IMPLEMENTATION_PROFILE.md`, copied from the coordinator's profile.
 
@@ -78,7 +78,7 @@ alias and a late import match the unmodified vendor control.
 Exact writer commands and original results live in the external evidence package.
 The expanded native/lifecycle/app-emitter focused run passed **106 tests in
 211.05 seconds**, exit 0. Subsequent grid-free transport/optional/import tests,
-including real caller-interruption kill-and-reap, passed **171 tests in19.61
+including an injected Python interruption, passed **171 tests in19.61
 seconds**, with three existing SWIG DeprecationWarnings. A fresh parent also executed an existing unrelated Numba specialization before
 and after the real screen, then compiled and executed a new float specialization.
 The dispatcher method, vendor helper and global JIT setting stayed unchanged.
@@ -130,8 +130,38 @@ latency comparisons. `baseline_comparison_receipt.json` status PASS denotes
 successful controls/measurement collection and numeric identity, not performance
 acceptance. See `report_latency_receipt.json` and `latency_disposition.json`.
 
-Required-not-run at this checkpoint: five consecutive full suites, independent
-grid-domain and assurance review, exact-head hosted CI/Grid Study, PR merge and
+The first independent domain and assurance reviews both **REJECTED** commit
+`dd9d7521ad58256027d35e11be9bb50900762032`. GDR-001 found that numeric mapping
+spectra supported by the original harmonic parser could abort both harmonic and
+mandatory reactive/report calls. A1229-001 reproduced three real SIGINT cases in
+which Python3.12 killed the worker but left it unreaped. The earlier injected
+KeyboardInterrupt test bypassed the standard library's actual signal bookkeeping;
+its passing result never proved real-signal cleanup. Original complete dispositions
+and44 selected execution events remain byte-preserved under programme
+`issue1229_review_rejections_001/`; their manifest and exact rejected subject remain
+unchanged. No acceptance was transferred from this rejected subject.
+
+Fresh lease003 authorizes these bounded repairs. Numeric spectrum mappings at both
+supported locations become ordered pairs, preserving key types, original parser
+semantics, top-level/nested precedence and caller data. Process cleanup now uses
+explicit Popen kill-and-wait after communication interruption. Twelve focused repair
+tests passed in79.15s: actual mapping/list/nested/empty precedence comparisons,
+real report-core/harmonic calls and three actual caller SIGINT cases. The expanded focused regression passed **236 tests in271.29s**, exit0. The same
+eight real-signal and supported-input regression tests failed8/8 on the rejected
+Git archive and passed8/8 on the repaired source. Exact commands and concise
+original-fails/repaired-passes evidence are recorded externally.
+Both reviewers must review the freshly frozen substantive subject again.
+
+The coordinator also rejected two external campaign controls before any suite ran:
+legitimate module-level collection skips were absent from expected JUnit population,
+and a rapid-exit parent could leave a detached descendant undetected. The corrected
+controls separately track collection outcomes and inherited unique process ownership,
+verify stable empty owned-process scans, and fail closed on unresolved ownership.
+Their actual positive/hostile controls and exact hashes require independent review.
+These external harness findings are separate from the production-source findings.
+
+Required-not-run at this checkpoint: five consecutive full suites, fresh independent
+grid-domain and assurance acceptance, exact-head hosted CI/Grid Study, PR merge and
 issue closure. Every remaining gate must bind the eventual exact frozen object.
 
 ## Limits and authority
