@@ -184,13 +184,17 @@ jobs:
         # which stranded whole heavy files in one shard (measured 426s vs 129s spread
         # on the first 6-shard run). Non-contiguous grouping is safe here: -n auto
         # already distributes tests across workers arbitrarily WITHIN a shard, so
-        # inter-test order was never guaranteed anyway. The whole tree is still exercised — every test runs in exactly
-        # one shard, so the gate can't be dodged by omission (the #149 Test Summary hole).
+        # inter-test order was never guaranteed anyway. The ordinary tree is exercised
+        # exactly once across the ordinary shards; the paired protected-base receipt is intentionally
+        # isolated to the full-history Grid Study below.
         # -n auto parallelises WITHIN each shard; the two parallelisms compound.
         # Coverage writes DATA ONLY (--cov-report=) — the `coverage` job runs
         # coverage combine + report --fail-under=95 over all shards (R8/TEST-02).
+        # The paired receipt archives protected main and therefore runs only in the
+        # full-history Grid Study; ordinary shallow shards must not collect it.
         pytest \
           tests/ \
+          --ignore=tests/grid/test_base_candidate_physical_receipt.py \
           --splits "$TOTAL_SHARDS" \
           --group ${{ matrix.shard }} \
           --splitting-algorithm least_duration \
@@ -666,18 +670,34 @@ jobs:
         import xml.etree.ElementTree as ET
 
         junit = ET.parse("grid-study-results.xml").getroot()
-        if int(junit.attrib.get("tests", "0")) < 1:
-            raise SystemExit("Grid Study JUnit evidence contains no executed tests")
+        testcases = list(junit.iter("testcase"))
+        if not testcases:
+            raise SystemExit("Grid Study JUnit evidence contains no testcases")
+        if any(case.find("failure") is not None or case.find("error") is not None for case in testcases):
+            raise SystemExit("Grid Study JUnit evidence contains a failure or error")
+        if not any(case.find("skipped") is None for case in testcases):
+            raise SystemExit("Grid Study JUnit evidence contains only skipped testcases")
         with open("outputs/grid_base_candidate_numerical_receipt.json", encoding="utf-8") as stream:
             receipt = json.load(stream)
         if receipt.get("candidate_commit") != os.environ["EXPECTED_HEAD_SHA"]:
             raise SystemExit("paired receipt candidate commit does not match exact head")
         if receipt.get("base_commit") != "4da2a82352d532138ee7f2483b82dfbf5a1d9c2b":
             raise SystemExit("paired receipt base commit is not protected main")
-        if receipt.get("case_count") != 6 or len(receipt.get("cases", [])) != 6:
+        expected_ids = {
+            "lvrt_mild",
+            "lvrt_severe",
+            "hvrt_default",
+            "hvrt_severe",
+            "frequency_default",
+            "frequency_severe",
+        }
+        case_ids = {case["id"] for case in receipt.get("cases", [])}
+        if (
+            receipt.get("case_count") != 6
+            or len(receipt.get("cases", [])) != 6
+            or case_ids != expected_ids
+        ):
             raise SystemExit("paired receipt does not contain all six physical cases")
-        if len({case["id"] for case in receipt["cases"]}) != 6:
-            raise SystemExit("paired receipt case ids are not unique")
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
             stream.write("- Paired base/candidate receipt: six cases and exact head validated\n")
         PY

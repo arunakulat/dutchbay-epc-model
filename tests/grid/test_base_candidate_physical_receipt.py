@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -238,20 +239,25 @@ def _terminate_process_group(process: subprocess.Popen[str]) -> None:
             break
         try:
             process.wait(timeout=wait_seconds)
-            break
         except subprocess.TimeoutExpired:
             continue
-    try:
-        os.killpg(process.pid, 0)
-    except ProcessLookupError:
-        return
-    os.killpg(process.pid, signal.SIGKILL)
-    process.wait(timeout=10)
-    try:
-        os.killpg(process.pid, 0)
-    except ProcessLookupError:
-        return
+        if not _process_group_exists(process):
+            return
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if not _process_group_exists(process):
+            return
+        time.sleep(0.1)
     raise RuntimeError(f"base process group {process.pid} survived termination")
+
+
+def _process_group_exists(process: subprocess.Popen[str]) -> bool:
+    """Return whether the isolated session still contains any process."""
+    try:
+        os.killpg(process.pid, 0)
+    except ProcessLookupError:
+        return False
+    return True
 
 
 def _run_base_case(repo: Path, case: dict[str, Any]) -> dict[str, Any]:
@@ -278,7 +284,8 @@ def _run_base_case(repo: Path, case: dict[str, Any]) -> dict[str, Any]:
                 [sys.executable, "-c", _BASE_RUNNER, json.dumps(payload)],
                 cwd=base_dir,
                 env=environment,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
                 start_new_session=True,
             )
@@ -290,6 +297,15 @@ def _run_base_case(repo: Path, case: dict[str, Any]) -> dict[str, Any]:
                 pytest.fail(
                     f"base case {case['id']} timed out; process group was terminated: "
                     f"{stderr.strip().splitlines()[-1:]}"
+                )
+            except BaseException:
+                if _process_group_exists(process):
+                    _terminate_process_group(process)
+                raise
+            if _process_group_exists(process):
+                _terminate_process_group(process)
+                raise RuntimeError(
+                    f"base case {case['id']} left a descendant process after exit"
                 )
         if process.returncode != 0:
             detail = stderr.strip().splitlines()[-1:]
