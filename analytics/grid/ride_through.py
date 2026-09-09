@@ -1119,7 +1119,16 @@ def _solve_case(  # pragma: no cover - requires [grid] extra
     for rel in _CANDIDATE_CASES:
         try:
             case = andes.get_case(rel)
-            ss = andes.load(case, setup=False, no_output=True, default_config=True)
+            # Constructor-time undill can start a process pool for missing/stale code.
+            # Prepare explicitly in-process; incremental loads reuse valid model calls.
+            ss = andes.load(
+                case,
+                setup=False,
+                no_output=True,
+                default_config=True,
+                no_undill=True,
+            )
+            ss.prepare(quick=True, incremental=True, nomp=True)
 
             disturbance_applied = _apply_disturbance(ss, spec)
             if not disturbance_applied:
