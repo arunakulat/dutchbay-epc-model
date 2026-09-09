@@ -15,7 +15,7 @@ import sys
 import tarfile
 import tempfile
 import time
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
@@ -117,7 +117,59 @@ def _selected_model(record: dict[str, Any]) -> str:
     return match.group(1)
 
 
-def _record(case: dict[str, Any], result: RideThroughResult) -> dict[str, Any]:
+def _physical_evidence_payload(spec: Any, evidence: Any) -> dict[str, Any]:
+    """Serialize the resolved case spec and all internal physical evidence."""
+    lvrt_evidence, hvrt_evidence, frequency_evidence = evidence
+    return json.loads(
+        json.dumps(
+            {
+                "spec": asdict(spec),
+                "lvrt": asdict(lvrt_evidence) if lvrt_evidence is not None else None,
+                "hvrt": asdict(hvrt_evidence) if hvrt_evidence is not None else None,
+                "frequency": (
+                    asdict(frequency_evidence)
+                    if frequency_evidence is not None
+                    else None
+                ),
+            }
+        )
+    )
+
+
+def _run_candidate_case(
+    case: dict[str, Any],
+) -> tuple[RideThroughResult, dict[str, Any]]:
+    """Run one candidate case while retaining the real internal evidence bundle."""
+    captured: dict[str, Any] = {}
+    original = ride_through._gather_case_evidence
+
+    def capture_evidence(
+        system: Any,
+        spec: Any,
+        *,
+        vmin: float | None,
+        vmax: float | None,
+        nominal_hz: float,
+    ) -> Any:
+        evidence = original(system, spec, vmin=vmin, vmax=vmax, nominal_hz=nominal_hz)
+        captured["physical_evidence"] = _physical_evidence_payload(spec, evidence)
+        return evidence
+
+    ride_through._gather_case_evidence = capture_evidence
+    try:
+        result = ride_through.run_ride_through_case(
+            case["kind"], run_dynamics=True, **_apply_envelope(ride_through, case)
+        )
+    finally:
+        ride_through._gather_case_evidence = original
+    return result, captured["physical_evidence"]
+
+
+def _record(
+    case: dict[str, Any],
+    result: RideThroughResult,
+    physical_evidence: dict[str, Any],
+) -> dict[str, Any]:
     """Select the physical and solver fields that form the paired receipt."""
     return {
         "id": case["id"],
@@ -125,6 +177,7 @@ def _record(case: dict[str, Any], result: RideThroughResult) -> dict[str, Any]:
         "result": {
             field: getattr(result, field) for field in (*_EXACT_FIELDS, *_FLOAT_FIELDS)
         },
+        "physical_evidence": physical_evidence,
         "provenance": {
             "detail": result.detail,
             "method": result.method,
@@ -178,13 +231,89 @@ def _assert_physical_case(case: dict[str, Any], record: dict[str, Any]) -> None:
         assert result["rode_through"] is False, detail
 
 
+def _assert_finite(value: Any, label: str) -> None:
+    """Require a captured physical scalar to be a finite number."""
+    assert isinstance(value, (int, float)) and not isinstance(value, bool), label
+    assert math.isfinite(float(value)), label
+
+
+def _assert_internal_physical_evidence(
+    case: dict[str, Any], record: dict[str, Any]
+) -> None:
+    """Require the private evidence bundle used for grading to be retained."""
+    physical = record["physical_evidence"]
+    spec = physical["spec"]
+    assert spec["kind"] == case["kind"]
+    assert spec["disturbance"] == _EXPECTED_DISTURBANCES[case["kind"]]
+    assert spec["fault_start_s"] == case["kwargs"].get("fault_start_s", 1.0)
+    assert spec["fault_clear_s"] == case["kwargs"].get("fault_clear_s", 1.1)
+    if case["kind"] == "lvrt":
+        evidence = physical["lvrt"]
+        assert evidence is not None
+        _assert_finite(evidence["min_voltage_pu"], f"{case['id']} min voltage")
+        _assert_finite(
+            evidence["recovered_voltage_pu"], f"{case['id']} recovered voltage"
+        )
+        assert evidence["ibr_tripped"] in (True, False, None)
+        assert evidence["min_voltage_pu"] == record["result"]["min_voltage_pu"]
+    elif case["kind"] == "hvrt":
+        evidence = physical["hvrt"]
+        assert evidence is not None
+        _assert_finite(evidence["max_voltage_pu"], f"{case['id']} max voltage")
+        _assert_finite(evidence["settled_voltage_pu"], f"{case['id']} settled voltage")
+        assert evidence["ibr_tripped"] in (True, False, None)
+        assert evidence["max_voltage_pu"] == record["result"]["max_voltage_pu"]
+    else:
+        evidence = physical["frequency"]
+        assert evidence is not None
+        for field in ("nadir_hz", "zenith_hz", "settled_hz"):
+            _assert_finite(evidence[field], f"{case['id']} {field}")
+            assert 40.0 < evidence[field] < 60.0
+        assert evidence["ibr_tripped"] in (True, False, None)
+        assert record["result"]["freq_extreme_hz"] in (
+            evidence["nadir_hz"],
+            evidence["zenith_hz"],
+        )
+
+
+def _assert_internal_evidence_equivalent(
+    base: dict[str, Any], candidate: dict[str, Any]
+) -> None:
+    """Compare captured grading inputs and physical evidence across both runs."""
+    base_physical = base["physical_evidence"]
+    candidate_physical = candidate["physical_evidence"]
+    assert base_physical["spec"] == candidate_physical["spec"]
+    for kind, fields in {
+        "lvrt": ("min_voltage_pu", "recovered_voltage_pu"),
+        "hvrt": ("max_voltage_pu", "settled_voltage_pu"),
+        "frequency": ("nadir_hz", "zenith_hz", "settled_hz"),
+    }.items():
+        base_evidence = base_physical[kind]
+        candidate_evidence = candidate_physical[kind]
+        if base_evidence is None or candidate_evidence is None:
+            assert base_evidence is candidate_evidence
+            continue
+        assert base_evidence["ibr_tripped"] == candidate_evidence["ibr_tripped"]
+        for field in fields:
+            assert math.isclose(
+                candidate_evidence[field],
+                base_evidence[field],
+                rel_tol=1e-9,
+                abs_tol=1e-12,
+            ), (
+                f"{candidate['id']} changed internal {kind}.{field}: "
+                f"base={base_evidence[field]!r} "
+                f"candidate={candidate_evidence[field]!r}"
+            )
+
+
 _BASE_RUNNER = r"""
 import importlib.metadata
 import json
 import platform
 import sys
 import warnings
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 warnings.filterwarnings(
@@ -219,9 +348,33 @@ elif envelope_kind == "frequency_severe":
         freq_continuous_hz=(49.99, 50.01),
         freq_trip_hz=(49.98, 50.02),
     )
-result = ride_through.run_ride_through_case(
-    case["kind"], run_dynamics=True, **kwargs
-)
+captured = {}
+original = ride_through._gather_case_evidence
+
+def capture_evidence(system, spec, *, vmin, vmax, nominal_hz):
+    evidence = original(
+        system, spec, vmin=vmin, vmax=vmax, nominal_hz=nominal_hz
+    )
+    lvrt_evidence, hvrt_evidence, frequency_evidence = evidence
+    captured["physical_evidence"] = json.loads(json.dumps({
+        "spec": asdict(spec),
+        "lvrt": asdict(lvrt_evidence) if lvrt_evidence is not None else None,
+        "hvrt": asdict(hvrt_evidence) if hvrt_evidence is not None else None,
+        "frequency": (
+            asdict(frequency_evidence)
+            if frequency_evidence is not None
+            else None
+        ),
+    }))
+    return evidence
+
+ride_through._gather_case_evidence = capture_evidence
+try:
+    result = ride_through.run_ride_through_case(
+        case["kind"], run_dynamics=True, **kwargs
+    )
+finally:
+    ride_through._gather_case_evidence = original
 assert isinstance(result, RideThroughResult)
 fields = (
     "case", "ran", "converged", "rode_through", "n_devices",
@@ -232,6 +385,7 @@ print(json.dumps({
     "id": case["id"],
     "inputs": case,
     "result": {field: getattr(result, field) for field in fields},
+    "physical_evidence": captured["physical_evidence"],
     "provenance": {
         "detail": result.detail,
         "method": result.method,
@@ -379,13 +533,14 @@ def test_base_candidate_physical_numerical_receipt() -> None:
     candidate_runtime = _runtime_identity()
     paired: list[dict[str, Any]] = []
     for case in _CASES:
-        candidate_result = ride_through.run_ride_through_case(
-            case["kind"], run_dynamics=True, **_apply_envelope(ride_through, case)
-        )
-        candidate_record = _record(case, candidate_result)
+        candidate_result, candidate_evidence = _run_candidate_case(case)
+        candidate_record = _record(case, candidate_result, candidate_evidence)
         base_record = _run_base_case(repo, case)
         _assert_physical_case(case, base_record)
         _assert_physical_case(case, candidate_record)
+        _assert_internal_physical_evidence(case, base_record)
+        _assert_internal_physical_evidence(case, candidate_record)
+        _assert_internal_evidence_equivalent(base_record, candidate_record)
         base_model = _selected_model(base_record)
         candidate_model = _selected_model(candidate_record)
         assert base_model == candidate_model, (
