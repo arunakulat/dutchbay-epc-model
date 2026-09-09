@@ -10,6 +10,7 @@ from __future__ import annotations
 import multiprocessing
 import sys
 import threading
+import warnings
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -114,6 +115,11 @@ def _load_probe(probe: Any) -> Any:
 
 def _spawned_threaded_load_child(storage_path: str) -> None:
     """Run one real threaded lifecycle probe inside a killable spawned process."""
+    warnings.filterwarnings(
+        "error",
+        message=r"This process .* is multi-threaded.*",
+        category=DeprecationWarning,
+    )
     pytest.importorskip("andes")
     import multiprocess
     from andes.core import Model
@@ -218,6 +224,11 @@ def _stop_child(process: Any) -> None:
 
 def _nonreturning_thread_child(started: Any) -> None:
     """Keep a non-daemon worker alive until the supervising process terminates us."""
+    warnings.filterwarnings(
+        "error",
+        message=r"This process .* is multi-threaded.*",
+        category=DeprecationWarning,
+    )
     blocker = threading.Event()
     worker = threading.Thread(target=blocker.wait, name="ci-fork-hanging-worker")
     worker.start()
@@ -274,7 +285,11 @@ def test_missing_valid_stale_and_broken_code_lifecycle(codegen_probe: Any) -> No
     _clear_pycode_modules()
     probe["prepared"].clear()
     repaired = _load_probe(probe)
-    assert sorted(probe["prepared"]) == sorted(repaired.models)
+    model_names = list(repaired.models)
+    assert set(probe["prepared"]) == set(model_names)
+    assert len(probe["prepared"]) >= len(model_names)
+    assert probe["prepared"][-len(model_names) :] == model_names
+    assert "f_args = " in bus.read_text()
 
     # A genuinely non-returning worker is contained in a child and must be terminated by
     # the supervising test within its explicit deadline.
