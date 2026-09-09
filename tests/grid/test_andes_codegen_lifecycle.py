@@ -112,25 +112,91 @@ def _load_probe(probe: Any) -> Any:
     return system
 
 
-def _threaded_load_child(probe: Any) -> None:
-    """Run one real threaded lifecycle probe inside a killable child process."""
+def _spawned_threaded_load_child(storage_path: str) -> None:
+    """Run one real threaded lifecycle probe inside a killable spawned process."""
+    pytest.importorskip("andes")
+    import multiprocess
+    from andes.core import Model
+    from andes.system import codegen
+
+    storage = Path(storage_path)
+    saved_modules = {
+        name: module
+        for name, module in sys.modules.copy().items()
+        if name in {"pycode", "andes.pycode"}
+        or name.startswith(("pycode.", "andes.pycode."))
+    }
+    before_children = {p.pid for p in multiprocess.active_children()}
+    prepared: list[str] = []
+    pools: list[int] = []
+    ready: list[Any] = []
     errors: list[BaseException] = []
+    original_prepare = Model.prepare
 
-    def threaded_load() -> None:
-        try:
-            _load_probe(probe)
-        except (
-            BaseException
-        ) as exc:  # pragma: no cover - child reports failures by exit
-            errors.append(exc)
+    def owned_path(path: str | None = None, mkdir: bool = False) -> str:
+        if mkdir:
+            storage.mkdir(parents=True, exist_ok=True)
+        return str(storage)
 
-    worker = threading.Thread(
-        target=threaded_load, name="ci-fork-lifecycle-worker", daemon=False
-    )
-    worker.start()
-    worker.join()
-    if errors:
-        raise errors[0]
+    def observe_prepare(model: Any, *args: Any, **kwargs: Any) -> Any:
+        prepared.append(model.class_name)
+        return original_prepare(model, *args, **kwargs)
+
+    def forbid_pool(ncpu: int) -> Any:
+        pools.append(ncpu)
+        raise AssertionError("ANDES attempted a code-generation pool")
+
+    def after_prepare(system: Any, spec: Any) -> bool:
+        ready.append(system)
+        return False
+
+    originals = {
+        (codegen, "get_pycode_path"): codegen.get_pycode_path,
+        (codegen, "andes_root"): codegen.andes_root,
+        (codegen, "Pool"): codegen.Pool,
+        (Model, "prepare"): Model.prepare,
+        (ride_through, "_apply_disturbance"): ride_through._apply_disturbance,
+        (ride_through, "_CANDIDATE_CASES"): ride_through._CANDIDATE_CASES,
+    }
+    _clear_pycode_modules()
+    codegen.get_pycode_path = owned_path
+    codegen.andes_root = lambda: str(storage.parent / "no-package")
+    codegen.Pool = forbid_pool
+    Model.prepare = observe_prepare
+    ride_through._apply_disturbance = after_prepare
+    ride_through._CANDIDATE_CASES = ("ieee14/ieee14_wt3.xlsx",)
+
+    try:
+        probe = {
+            "before_children": before_children,
+            "storage": storage,
+            "prepared": prepared,
+            "pools": pools,
+            "ready": ready,
+        }
+
+        def threaded_load() -> None:
+            try:
+                _load_probe(probe)
+            except (
+                BaseException
+            ) as exc:  # pragma: no cover - child reports failures by exit
+                errors.append(exc)
+
+        worker = threading.Thread(
+            target=threaded_load, name="ci-fork-lifecycle-worker", daemon=False
+        )
+        worker.start()
+        worker.join()
+        if errors:
+            raise errors[0]
+    finally:
+        for (owner, name), original in originals.items():
+            setattr(owner, name, original)
+        _clear_pycode_modules()
+        sys.modules.update(saved_modules)
+        assert pools == [], "pool attempts must not disappear inside candidate fallback"
+        assert {p.pid for p in multiprocess.active_children()} == before_children
 
 
 def _nonreturning_thread_child() -> None:
@@ -153,8 +219,10 @@ def test_missing_valid_stale_and_broken_code_lifecycle(codegen_probe: Any) -> No
     # A caller's worker thread must follow the same in-process preparation lifecycle. Put
     # the real threaded probe in a child so a hung non-daemon worker can be terminated
     # without restoring the fixture's patches while it is still executing.
-    context = multiprocessing.get_context("fork")
-    threaded_process = context.Process(target=_threaded_load_child, args=(probe,))
+    context = multiprocessing.get_context("spawn")
+    threaded_process = context.Process(
+        target=_spawned_threaded_load_child, args=(str(probe["storage"]),)
+    )
     threaded_process.start()
     threaded_process.join(timeout=60)
     if threaded_process.is_alive():
