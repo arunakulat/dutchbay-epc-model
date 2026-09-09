@@ -19,6 +19,19 @@ from . import test_power_curve_sourcing as sourcing_tests
 CASES = ("list", "fetch", "thrust", "reference")
 
 
+def _listing(*, empty: bool = False) -> pd.DataFrame:
+    """Expose the four columns of the public unfiltered listing API."""
+    frame = pd.DataFrame(
+        {
+            "manufacturer": ["Enercon"],
+            "turbine_type": ["E-126/7500"],
+            "has_power_curve": [True],
+            "has_cp_curve": [False],
+        }
+    )
+    return frame.iloc[:0] if empty else frame
+
+
 def _call(case: str) -> None:
     """Call the original collected test function, including its assertions."""
     if case in ("list", "fetch"):
@@ -54,7 +67,7 @@ def installed_sources(
     monkeypatch.setattr(
         wind,
         "get_turbine_types",
-        lambda **kwargs: pd.DataFrame({"manufacturer": ["Enercon"]}),
+        lambda **kwargs: _listing(),
         raising=False,
     )
     monkeypatch.setattr(wind, "WindTurbine", lambda **kwargs: turbine, raising=False)
@@ -93,7 +106,7 @@ def test_empty_listing_fails(
         patch.setattr(
             installed_sources,
             "get_turbine_types",
-            lambda **kwargs: pd.DataFrame({"manufacturer": []}),
+            lambda **kwargs: _listing(empty=True),
         )
         with pytest.raises(AssertionError):
             _without_skip("list")
@@ -201,7 +214,7 @@ def test_guard_rejects_assertion_to_skip_mutant(
         patch.setattr(
             installed_sources,
             "get_turbine_types",
-            lambda **kwargs: pd.DataFrame({"manufacturer": []}),
+            lambda **kwargs: _listing(empty=True),
         )
         with pytest.raises(pytest.fail.Exception, match="unexpected skip"):
             _without_skip("list")
