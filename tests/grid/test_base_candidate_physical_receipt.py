@@ -109,6 +109,14 @@ def _apply_envelope(ride_module: Any, case: dict[str, Any]) -> dict[str, Any]:
     return kwargs
 
 
+def _selected_model(record: dict[str, Any]) -> str:
+    """Extract the bundled ANDES model file selected by the solver detail."""
+    detail = record["provenance"]["detail"]
+    match = re.search(r"case=(ieee14/[^;]+)", detail)
+    assert match, detail
+    return match.group(1)
+
+
 def _record(case: dict[str, Any], result: RideThroughResult) -> dict[str, Any]:
     """Select the physical and solver fields that form the paired receipt."""
     return {
@@ -175,8 +183,15 @@ import importlib.metadata
 import json
 import platform
 import sys
+import warnings
 from dataclasses import replace
 from pathlib import Path
+
+warnings.filterwarnings(
+    "error",
+    message=r"This process .* is multi-threaded.*",
+    category=DeprecationWarning,
+)
 
 import andes
 from analytics.contracts_v14 import RideThroughResult
@@ -371,6 +386,12 @@ def test_base_candidate_physical_numerical_receipt() -> None:
         base_record = _run_base_case(repo, case)
         _assert_physical_case(case, base_record)
         _assert_physical_case(case, candidate_record)
+        base_model = _selected_model(base_record)
+        candidate_model = _selected_model(candidate_record)
+        assert base_model == candidate_model, (
+            f"{case['id']} selected different model files: "
+            f"base={base_model!r} candidate={candidate_model!r}"
+        )
         for field in ("python", "andes_version", "numpy_version", "scipy_version"):
             assert base_record["runtime"][field] == candidate_runtime[field], (
                 f"{case['id']} used different {field}: "
@@ -382,6 +403,7 @@ def test_base_candidate_physical_numerical_receipt() -> None:
                 "id": case["id"],
                 "base": base_record,
                 "candidate": candidate_record,
+                "selected_model": base_model,
                 "numeric_deltas": _assert_equivalent(base_record, candidate_record),
             }
         )
