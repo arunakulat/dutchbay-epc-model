@@ -149,12 +149,13 @@ def test_reciprocal_overflow_does_not_bypass_finite_library_root(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An unrelated reciprocal overflow must leave the finite root choice intact."""
-    # Model two positive discount-factor roots at the actual library seam.
-    # Only the finite 20% rate zeroes the supplied cashflows. This challenges
-    # widening the error context over the library's later root-to-rate division.
-    monkeypatch.setattr(np, "roots", lambda _: np.array([5e-324, 1.0 / 1.2]))
+    # Inject a hostile eigensolver result at the real library seam; this does
+    # not claim the installed eigensolver returns it for these cashflows.
+    # The finite 10%/20% rates are analytic roots. Default bisection cannot
+    # bracket either, so widening the error context would lose the valid 10%.
+    monkeypatch.setattr(np, "roots", lambda _: np.array([5e-324, 1.0 / 1.1, 1.0 / 1.2]))
     with pytest.warns(RuntimeWarning, match="overflow encountered in divide"):
-        assert irr([-100.0, 120.0]) == pytest.approx(0.20, abs=1e-12)
+        assert irr([-100.0, 230.0, -132.0]) == pytest.approx(0.10, abs=1e-12)
 
 
 @pytest.mark.parametrize("overflows", [False, True])
