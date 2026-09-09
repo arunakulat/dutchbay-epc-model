@@ -190,6 +190,7 @@ def _spawned_threaded_load_child(storage_path: str) -> None:
         worker.join()
         if errors:
             raise errors[0]
+        assert prepared == [], "valid warm threaded load must not regenerate models"
     finally:
         for (owner, name), original in originals.items():
             setattr(owner, name, original)
@@ -199,11 +200,28 @@ def _spawned_threaded_load_child(storage_path: str) -> None:
         assert {p.pid for p in multiprocess.active_children()} == before_children
 
 
-def _nonreturning_thread_child() -> None:
+def _stop_child(process: Any) -> None:
+    """Terminate a child and escalate if it ignores the first signal."""
+    try:
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=5)
+        if process.is_alive():
+            process.kill()
+            process.join(timeout=5)
+    finally:
+        if process.is_alive():
+            process.kill()
+            process.join(timeout=5)
+    assert not process.is_alive(), "child process survived termination escalation"
+
+
+def _nonreturning_thread_child(started: Any) -> None:
     """Keep a non-daemon worker alive until the supervising process terminates us."""
     blocker = threading.Event()
     worker = threading.Thread(target=blocker.wait, name="ci-fork-hanging-worker")
     worker.start()
+    started.set()
     worker.join()
 
 
@@ -223,15 +241,14 @@ def test_missing_valid_stale_and_broken_code_lifecycle(codegen_probe: Any) -> No
     threaded_process = context.Process(
         target=_spawned_threaded_load_child, args=(str(probe["storage"]),)
     )
-    threaded_process.start()
-    threaded_process.join(timeout=60)
-    if threaded_process.is_alive():
-        threaded_process.terminate()
-        threaded_process.join(timeout=5)
-    threaded_process_alive = threaded_process.is_alive()
-    assert not threaded_process_alive, "threaded lifecycle child was not terminated"
-    assert threaded_process.exitcode == 0
-    threaded_process.close()
+    try:
+        threaded_process.start()
+        threaded_process.join(timeout=60)
+        threaded_process_alive = threaded_process.is_alive()
+        assert not threaded_process_alive, "threaded lifecycle child was not terminated"
+        assert threaded_process.exitcode == 0
+    finally:
+        _stop_child(threaded_process)
     assert probe["prepared"] == []
 
     bus = probe["storage"] / "Bus.py"
@@ -261,15 +278,18 @@ def test_missing_valid_stale_and_broken_code_lifecycle(codegen_probe: Any) -> No
 
     # A genuinely non-returning worker is contained in a child and must be terminated by
     # the supervising test within its explicit deadline.
-    hanging_process = context.Process(target=_nonreturning_thread_child)
-    hanging_process.start()
-    hanging_process.join(timeout=1)
-    assert hanging_process.is_alive()
-    hanging_process.terminate()
-    hanging_process.join(timeout=5)
-    assert not hanging_process.is_alive()
+    started = context.Event()
+    hanging_process = context.Process(
+        target=_nonreturning_thread_child, args=(started,)
+    )
+    try:
+        hanging_process.start()
+        assert started.wait(timeout=5), "hanging child did not start its worker"
+        hanging_process.join(timeout=1)
+        assert hanging_process.is_alive()
+    finally:
+        _stop_child(hanging_process)
     assert hanging_process.exitcode != 0
-    hanging_process.close()
 
     # Invalid Python preserves the explicit setup-failure path and cannot create a pool.
     init = probe["storage"] / "__init__.py"
