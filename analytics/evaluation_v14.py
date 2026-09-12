@@ -233,18 +233,27 @@ def normalize_kpi_dict(raw_kpis: Mapping[str, Any]) -> dict[str, float]:
 
     A ``bool`` is **not** dropped.  ``float(False)`` succeeds, so a boolean KPI
     such as ``wacc_is_real`` arrives downstream as ``0.0``/``1.0``, a finite
-    number indistinguishable from a computed one.  This differs from
-    :mod:`analytics.casper.casper_payload`, whose normalizer over the same raw
-    dict excludes ``bool`` explicitly; the two therefore disagree by exactly
-    those keys.  Changing it here is a runtime change and is out of scope, so
+    number indistinguishable from a computed one.
+
+    This admits strictly more than :mod:`analytics.casper.casper_payload`, whose
+    normalizer over the same raw dict keeps a key only when
+    ``isinstance(v, (int, float)) and not isinstance(v, bool)``.  The two
+    therefore disagree on ``bool`` keys **and on every value ``float()`` accepts
+    that is not an ``int`` or a ``float``** -- numeric strings,
+    :class:`~decimal.Decimal`, :class:`~fractions.Fraction`, and any object
+    defining ``__float__``.  A scenario whose ``name`` is the string ``"2030"``
+    is the live case: it becomes the numeric KPI ``scenario_name=2030.0`` here
+    while the CASPER payload omits it.  The disagreement runs one way only --
+    nothing CASPER keeps is dropped here -- so the risk is a phantom KPI, never
+    a lost one.  Changing it here is a runtime change and is out of scope, so
     the divergence is documented and pinned rather than silently carried.
 
     That is deliberate rather than an oversight.  This shim sits on the
     ``return_full_result=False`` path of :func:`evaluate_with_overrides`, which
     is the parameter's default and is called inside Monte Carlo, sensitivity,
-    tornado, solver and optimizer loops; warning per dropped entry per
-    iteration would flood those runs.  The observability fix is therefore at
-    the caller, not here.
+    tornado, solver and optimizer loops.  A warning per dropped entry would
+    flood those runs, so this function stays at ``DEBUG``; the observability
+    fix belongs at the caller.
 
     **The remedy exists on one caller only.**
     :func:`evaluate_with_overrides` accepts ``return_full_result=True``, which
