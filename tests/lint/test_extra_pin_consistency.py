@@ -139,3 +139,69 @@ def test_every_dbpl_package_is_locked_and_within_its_declared_pin() -> None:
             f"{name} locked at {lock[name]}, outside declared {requirement.specifier}; "
             "require_dbpl_stack() would raise DbplDependencyError at render time"
         )
+
+
+# ── Hard-coded version literals in integration guards ────────────────────────
+#
+# The three declarations above were not the whole story.  Several integration
+# guards assert an exact installed version as a string literal, e.g.
+# ``assert version("weasyprint") == "69.0"``.  Each is a FOURTH declaration of
+# the same pin, duplicated away from the lock, and a bump that misses one does
+# not fail fast: it fails deep in a slow integration shard, long after the
+# dependency files look self-consistent.  That is exactly how the WeasyPrint
+# 70.0 bump first broke CI.
+#
+# The literals are left where they are -- they say "these versions were cleared
+# together", which is a real claim -- but they may no longer disagree with the
+# lock silently.
+
+_VERSION_ASSERT_RE = re.compile(
+    r"""version\(\s*["']([A-Za-z0-9._-]+)["']\s*\)\s*==\s*["']([^"']+)["']"""
+)
+
+
+def _hard_coded_version_asserts() -> dict[Path, dict[str, str]]:
+    """Map each integration guard to the ``{distribution: version}`` it asserts."""
+    found: dict[Path, dict[str, str]] = {}
+    for path in sorted((REPO_ROOT / "tests" / "integration").glob("*.py")):
+        pairs = _VERSION_ASSERT_RE.findall(path.read_text())
+        if pairs:
+            found[path] = {_canonical(name): ver for name, ver in pairs}
+    return found
+
+
+def test_the_version_assert_scanner_still_finds_its_subjects() -> None:
+    """Guard the guard: a regex that matched nothing would pass everything."""
+    found = _hard_coded_version_asserts()
+    assert found, "no hard-coded version asserts found; the scanner has gone blind"
+
+    distributions = {name for names in found.values() for name in names}
+    assert "weasyprint" in distributions, (
+        "weasyprint's integration version assert is no longer detected; if it was "
+        "deliberately removed, delete this control with it"
+    )
+
+
+def test_hard_coded_version_asserts_match_the_lock() -> None:
+    """An integration guard may not assert a version the lock contradicts.
+
+    This is the control that the three-file check alone did not provide, and the
+    one that would have caught the WeasyPrint bump breaking
+    ``tests/integration/test_report_jobs_tooling.py`` before CI did.
+    """
+    lock = _read_pins("requirements.txt")
+
+    drift: list[str] = []
+    for path, asserted in _hard_coded_version_asserts().items():
+        rel = path.relative_to(REPO_ROOT)
+        for name, asserted_version in asserted.items():
+            locked = lock.get(name)
+            if locked is not None and locked != asserted_version:
+                drift.append(
+                    f"{rel}: asserts {name}=={asserted_version}, lock says {locked}"
+                )
+
+    assert not drift, (
+        "integration guards assert versions the lock contradicts; bump them together "
+        f"or the failure surfaces in a slow shard instead of here: {drift}"
+    )
