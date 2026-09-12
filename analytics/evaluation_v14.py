@@ -224,10 +224,20 @@ def normalize_kpi_dict(raw_kpis: Mapping[str, Any]) -> dict[str, float]:
     """
     Normalize KPI dict to {str -> float}.
 
-    Drops every entry that is not ``float``-convertible, logging each one at
-    ``DEBUG`` level only.  The drop is therefore **silent in ordinary
-    operation**: a KPI that became ``"N/A"`` upstream is gone here, and its
-    absence is indistinguishable from its never having been emitted.
+    Drops every entry whose ``float()`` raises ``TypeError`` or ``ValueError``,
+    logging each one at ``DEBUG`` level only.  The drop is therefore **silent in
+    ordinary operation**: a KPI that became ``"N/A"`` upstream is gone here, and
+    its absence is indistinguishable from its never having been emitted.  Other
+    exception classes are not caught and propagate -- an out-of-range ``int``
+    such as ``10**400`` raises ``OverflowError`` rather than dropping.
+
+    A ``bool`` is **not** dropped.  ``float(False)`` succeeds, so a boolean KPI
+    such as ``wacc_is_real`` arrives downstream as ``0.0``/``1.0``, a finite
+    number indistinguishable from a computed one.  This differs from
+    :mod:`analytics.casper.casper_payload`, whose normalizer over the same raw
+    dict excludes ``bool`` explicitly; the two therefore disagree by exactly
+    those keys.  Changing it here is a runtime change and is out of scope, so
+    the divergence is documented and pinned rather than silently carried.
 
     That is deliberate rather than an oversight.  This shim sits on the
     ``return_full_result=False`` path of :func:`evaluate_with_overrides`, which
@@ -236,11 +246,17 @@ def normalize_kpi_dict(raw_kpis: Mapping[str, Any]) -> dict[str, float]:
     iteration would flood those runs.  The observability fix is therefore at
     the caller, not here.
 
-    **A caller that must not lose entries passes**
-    ``return_full_result=True`` and reads ``kpis`` off the full result, which
-    bypasses this function entirely.  Dolphin 3C requires exactly that for any
-    contract-facing capture, because a fixture recorded downstream of this
-    function has already taken the loss.
+    **The remedy exists on one caller only.**
+    :func:`evaluate_with_overrides` accepts ``return_full_result=True``, which
+    returns ``kpis`` off the full result and bypasses this function entirely.
+    The other two callers have no such parameter:
+    :func:`evaluate_scenario_from_dict` and
+    :func:`evaluate_with_casper_tail_risk`, whose output becomes
+    ``CasperResult.baseline_kpis`` on the CASPER path -- a once-per-run call
+    where the per-iteration flood argument above does not apply.  Direct
+    callers of this exported function have no remedy either.  Dolphin 3C's
+    requirement is scoped to the single gateway call (charter section 9.3), not
+    to callers generally.
 
     Args:
         raw_kpis: Raw KPI mapping from pipeline result
