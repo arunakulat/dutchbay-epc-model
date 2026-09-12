@@ -9,6 +9,7 @@ from __future__ import annotations
 import copy
 import logging
 import math
+import warnings
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from finance.import_levies import (
@@ -355,28 +356,195 @@ def _rate_decimal(value: Any, default: float = 0.0) -> float:
     return raw / 100.0 if raw > 1.0 else raw
 
 
-def _clean_public_dscr_series(values: Sequence[Any]) -> List[float]:
-    """Return lender-facing DSCR values suitable for min/max comparisons.
+def _finite_dscr(value: Any) -> Optional[float]:
+    """Coerce one DSCR entry to a finite float, or ``None`` when it is undefined.
 
-    Only the *undefined* sentinel is dropped: ``None`` and non-finite values (``inf`` /
-    ``nan``), which arise when a period has no debt service (DSCR = CFADS/0). A FINITE
-    value <= 0.0 is RETAINED — a 0.0 (CFADS = 0 against live debt service) or a negative
-    DSCR is a real total-coverage breach and must surface in the lender-facing min, not be
-    hidden behind an at-target headline. (Previously ``<= 0.0`` was filtered, conflating a
-    real 0.0 breach with the missing/inf sentinel.)
+    ``None``, non-numeric and non-finite (``inf`` / ``nan``) entries are the *undefined*
+    sentinel: they arise when a period carries no debt service (DSCR = CFADS/0), which is
+    not a coverage observation at all. A FINITE value <= 0.0 is RETAINED — a 0.0 (CFADS = 0
+    against live debt service) or a negative DSCR is a real total-coverage breach and must
+    surface in the lender-facing minimum rather than hide behind an at-target headline.
+    """
+    if value is None:
+        return None
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    return numeric if math.isfinite(numeric) else None
+
+
+def _clean_public_dscr_series(values: Sequence[Any]) -> List[float]:
+    """Drop the undefined sentinels from a PERIOD-indexed DSCR series.
+
+    .. deprecated:: F-2
+       This is no longer the public ``dscr_series`` compactor — that compaction WAS the
+       F-2 index-space collision, and :func:`plan_debt` now publishes one positional
+       series (see its docstring). Two callers remain:
+
+       * :func:`_solve_gearing_for_dscr`, whose target metric is deliberately the minimum
+         over every DEFINED period (bridge included) and is held byte-identical here so
+         the gearing solve — and therefore canon — does not move; and
+       * ``analytics.pipeline_v14_enhanced.run_v14_pipeline_enhanced``, which compacts
+         the positional series for ``ScenarioResult.dscr_series``, a ``list[float]``
+         contract that the D3B/D3C accepted-origin protocols reject ``None`` from.
+
+       Do not use it for a lender-facing minimum: ``min_dscr`` is taken over OPERATING
+       periods folded with ``dscr_by_year`` (see :func:`_operating_dscr_minimum`).
+
+    Only the undefined sentinel is dropped; see :func:`_finite_dscr` for the contract.
+    Because the result is compacted, its positions carry NO period or year meaning and it
+    is safe for ``min``/``max`` aggregation only.
     """
     clean: List[float] = []
     for value in values:
-        if value is None:
-            continue
-        try:
-            numeric = float(value)
-        except (TypeError, ValueError):
-            continue
-        if not math.isfinite(numeric):
-            continue
-        clean.append(numeric)
+        numeric = _finite_dscr(value)
+        if numeric is not None:
+            clean.append(numeric)
     return clean
+
+
+def _normalize_operating_year(year_raw: Any, annual_row_index: int) -> int:
+    """Require an explicit positive integral year from the engine's row map.
+
+    Invalid labels must not become plausible row ordinals on a covenant surface.
+    The timeline builder's existing default for an omitted input-row year remains
+    explicit in its published map; an invalid supplied label is never substituted.
+    """
+    try:
+        numeric = float(year_raw)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(
+            f"annual row {annual_row_index}: operating year must be a positive integer"
+        ) from exc
+    if (
+        isinstance(year_raw, bool)
+        or not math.isfinite(numeric)
+        or not numeric.is_integer()
+        or numeric <= 0
+    ):
+        raise ValueError(
+            f"annual row {annual_row_index}: operating year must be a positive integer"
+        )
+    return int(numeric)
+
+
+def _build_dscr_periods(
+    dscr_series: Sequence[Any],
+    annual_row_debt_period_map: Sequence[Mapping[str, Any]],
+    dscr_by_year: Mapping[Any, Any],
+) -> List[Dict[str, Any]]:
+    """Build the single positional DSCR series, each entry labelled with its year.
+
+    This is the F-2/F-3 unification: ONE series in ONE index space (the PERIOD space),
+    with every entry carrying the operating year it belongs to, so a consumer FILTERS
+    rather than indexing blindly into a compacted list whose positions mean nothing.
+
+    One entry per debt period ``p`` of ``dscr_series``, in period order:
+
+    - ``period`` (``int``) — the debt-period index; equals the list position.
+    - ``dscr`` (``float | None``) — that period's DSCR, ``None`` when undefined.
+    - ``operating_year`` (``int | None``) — the covenant year label taken from the
+      row->period map, or ``None`` when the period maps to NO operating row
+      (construction, the synthetic bridge, post-tenor padding). A DSCR at such a period
+      is not a covenant observation.
+    - ``annual_row_index`` (``int | None``) — the operating row this period serves.
+    - ``covenant_dscr`` (``float | None``) — the PER-YEAR coverage from ``dscr_by_year``,
+      which folds the orphaned bridge period's scheduled service into operating year 1.
+      This is the figure a covenant is actually tested on and it can sit materially BELOW
+      the period DSCR (both CEB BESS scenarios: ~0.87-0.91 folded against a 1.3000 period
+      floor). Carrying it here is what keeps the fold explicit at the point of use.
+
+    The row->period map is the DEFINITIONAL source of the operating labels — never list
+    position, which is what produced the F-3 off-by-one.
+    """
+    labels: Dict[int, Dict[str, Any]] = {}
+    for mapping in annual_row_debt_period_map:
+        try:
+            period = int(mapping["debt_period"])
+            row_index = int(mapping["annual_row_index"])
+        except (KeyError, TypeError, ValueError, OverflowError) as exc:
+            raise ValueError(
+                "DSCR row map requires debt_period and annual_row_index"
+            ) from exc
+        if period < 0 or period >= len(dscr_series) or period in labels:
+            raise ValueError("DSCR row map has an invalid or duplicate debt period")
+        if "year" not in mapping:
+            raise ValueError("DSCR row map is missing its operating year")
+        # Use the engine's original year key to preserve its per-year fold.
+        year_raw = mapping["year"]
+        operating_year = _normalize_operating_year(year_raw, row_index)
+        if any(label["operating_year"] == operating_year for label in labels.values()):
+            raise ValueError("DSCR row map has a duplicate operating year")
+        folded = dscr_by_year.get(year_raw)
+        labels[period] = {
+            "operating_year": operating_year,
+            "annual_row_index": row_index,
+            "covenant_dscr": _finite_dscr(folded),
+        }
+
+    periods: List[Dict[str, Any]] = []
+    for period, value in enumerate(dscr_series):
+        label = labels.get(period)
+        periods.append(
+            {
+                "period": period,
+                "dscr": _finite_dscr(value),
+                "operating_year": None if label is None else label["operating_year"],
+                "annual_row_index": (
+                    None if label is None else label["annual_row_index"]
+                ),
+                "covenant_dscr": None if label is None else label["covenant_dscr"],
+            }
+        )
+    return periods
+
+
+def _operating_dscr_minimum(
+    dscr_periods: Sequence[Mapping[str, Any]],
+) -> Optional[float]:
+    """Minimum DSCR over OPERATING periods only, or ``None`` when there are none.
+
+    A period with no ``operating_year`` maps to no operating row, so its coverage ratio
+    is not a covenant observation and must not set the lender-facing floor. Note this is
+    only the PERIOD half of the minimum: :func:`plan_debt` folds it against the per-year
+    ``dscr_by_year`` table, which carries the bridge service into operating year 1.
+    """
+    values = [
+        entry["dscr"]
+        for entry in dscr_periods
+        if entry.get("operating_year") is not None and entry.get("dscr") is not None
+    ]
+    return min(values) if values else None
+
+
+def deprecated_raw_dscr_series(debt_result: Mapping[str, Any]) -> List[Any]:
+    """Read ``raw_dscr_series`` from a ``plan_debt`` result, with the deprecation notice.
+
+    .. deprecated:: F-2
+       ``raw_dscr_series`` is now an exact alias of ``dscr_series`` and is retained for
+       at least one release and two completed sprints under ``REFACTOR-04``. Read ``dscr_series``
+       (positional, one entry per debt period) or ``dscr_periods`` (the same series with
+       each entry labelled by ``operating_year``) instead. Removal requires a separate
+       reviewed migration after that minimum; see ``docs/DEPRECATIONS.md``.
+
+    The alias key itself CANNOT raise on access: ``plan_debt`` returns a plain ``dict``
+    and the D3B/D3C result freezers dispatch on ``type(value) is dict`` /
+    ``type(value) in {list, tuple}`` (``analytics/feasibility_execution._freeze_json``),
+    so returning a ``dict``/``list`` subclass that warns on ``__getitem__`` would make the
+    published result fail the exact-freeze contract outright. This accessor is therefore
+    the warning-raising surface, per ``REFACTOR-04``'s ``warnings.warn`` requirement.
+    """
+    warnings.warn(
+        "debt_result['raw_dscr_series'] is deprecated; removal requires a separate "
+        "reviewed migration after at least one release and two completed sprints. "
+        "It is now an exact alias of "
+        "debt_result['dscr_series']; use 'dscr_series' for the positional series or "
+        "'dscr_periods' for the same series labelled by operating year.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return list(debt_result.get("raw_dscr_series") or [])
 
 
 def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
@@ -1109,8 +1277,15 @@ def _solve_gearing_for_dscr(
         else:
             cfg["debt_ratio"] = ratio
         core = apply_debt_layer(params=cfg, annual_rows=annual_rows)
-        # Target the SAME public covenant metric plan_debt reports (cleaned series),
-        # not the raw operational dscr_min (which includes the balloon/bridge period).
+        # Target the minimum over every DEFINED period, bridge included. This is NOT
+        # plan_debt's published min_dscr: since F-2/F-3 that headline excludes
+        # non-operating periods and folds dscr_by_year, whereas the solve deliberately
+        # keeps the wider set. Two reasons. (1) Including the bridge can only LOWER the
+        # metric, so the solve is weakly MORE conservative — it never sizes debt up on
+        # the strength of the exclusion. (2) It is held byte-identical because changing
+        # the solver's target changes which trial gearing is accepted, and that moves
+        # canon (DOC-02) — out of scope for a KPI-neutral dolphin. Revisiting it is a
+        # separate, re-baselined decision.
         # NOTE (#737): deliberately NOT the bridge-corrected per-year fold. With senior
         # credit-support fees, operating year 1 — which covers its own service PLUS the
         # orphaned bridge service out of fee-netted CFADS — can read slightly below the
@@ -1563,34 +1738,48 @@ def plan_debt(
 
     Index space of each published series
     ------------------------------------
-    - ``raw_dscr_series`` — PERIOD-indexed, positional, full timeline length
-      (``timeline_periods``). ``raw_dscr_series[p]`` is the DSCR of debt period
-      ``p``; non-operating and unserviced periods appear as ``None``.
+    There is now exactly ONE DSCR index space — the PERIOD space (F-2). Every
+    positional series below has length ``timeline_periods`` and shares index ``p``.
+
+    - ``dscr_series`` — PERIOD-indexed, positional, full timeline length.
+      ``dscr_series[p]`` is the DSCR of debt period ``p``; a period with no debt
+      service, and every construction period, appears as ``None``.
+    - ``dscr_periods`` — the SAME series with each entry labelled, so a consumer
+      filters instead of indexing blindly. One dict per period, in period order:
+      ``period``, ``dscr``, ``operating_year`` (``None`` for construction, the
+      bridge and post-tenor padding), ``annual_row_index`` and ``covenant_dscr``
+      (the per-year, bridge-fold-applied coverage — see below). This is the
+      canonical surface; see :func:`_build_dscr_periods`.
     - ``debt_service_total``, ``interest_total``, ``total_service``,
       ``debt_outstanding``, ``senior_fee_usd``, ``balloon_resolution`` —
-      PERIOD-indexed, positional, aligned 1:1 with ``raw_dscr_series``.
+      PERIOD-indexed, positional, aligned 1:1 with ``dscr_series``.
     - ``annual_row_debt_period_map`` — ROW-indexed list; each entry maps an
-      ``annual_row_index`` to its ``debt_period`` in the PERIOD space above. This
-      is the only sanctioned way to align an operating row to a period.
+      ``annual_row_index`` to its ``debt_period`` in the PERIOD space above. It is
+      the DEFINITIONAL source of the operating-year labels in ``dscr_periods``.
     - ``dscr_by_year`` — keyed by operating YEAR (bridge service folded into
-      year 1); neither of the two index spaces above.
-    - ``dscr_series`` — **NOT period-indexed.** It is the COMPACTED lender-facing
-      series produced by :func:`_clean_public_dscr_series`, which drops the
-      ``None``/non-finite sentinels; its length is therefore shorter than the
-      timeline and its positions carry no period or year meaning. It is safe for
-      ``min``/``max`` aggregation ONLY.
+      year 1), not by period. Restated per entry as ``dscr_periods[*].covenant_dscr``.
+    - ``raw_dscr_series`` — **DEPRECATED** (``REFACTOR-04`` shim lifecycle, one
+      release). An exact alias of ``dscr_series``, retained so existing consumers
+      keep working; see :func:`deprecated_raw_dscr_series`. New code must not use it.
 
-    .. warning::
-       ``dscr_series`` and ``raw_dscr_series`` are in INCOMPATIBLE index spaces,
-       and ``annual_row_debt_period_map[*]["debt_period"]`` indexes the RAW space.
-       ``debt_result["dscr_series"][debt_period]`` therefore reads a different
-       period than intended and must not be used; index ``raw_dscr_series`` with a
-       ``debt_period``, or read ``dscr_by_year`` for a per-year figure. Positional
-       consumers of ``dscr_series`` are likewise unsafe. This collision is a known
-       defect, documented here deliberately; unifying the two series is tracked
-       separately and is NOT fixed by this taxonomy.
+    ``min_dscr``
+    ------------
+    The CONSERVATIVE minimum over two views, and both terms are load-bearing:
+
+    1. the minimum over OPERATING periods of ``dscr_series`` — periods that map to
+       no operating row are excluded, because a coverage ratio there is not a
+       covenant observation (:func:`_operating_dscr_minimum`); and
+    2. the minimum over ``dscr_by_year``, which FOLDS the orphaned bridge period's
+       scheduled service into operating year 1.
+
+    Term 2 is what the covenant is actually tested on and it can sit far below term
+    1 (both CEB BESS scenarios: ~0.87-0.91 folded against a 1.3000 period floor).
+    Dropping it — or "restricting to operating periods" in a way that bypasses it —
+    would RAISE reported coverage and overstate lender protection.
     """
     rows = list(annual_rows)
+    for row_index, row in enumerate(rows):
+        _normalize_operating_year(row.get("year", row_index + 1), row_index)
     if forbid_toy_fallback:
         config = {**config, _FORBID_TOY_FALLBACK_KEY: True}
     _warn_if_decorative_tranches(config)
@@ -1669,21 +1858,41 @@ def plan_debt(
         period_row_map, construction_periods, bridge_debt_period
     )
 
-    public_dscr_series = _clean_public_dscr_series(core.get("dscr_series", []) or [])
-    raw_min = (
-        min(public_dscr_series) if public_dscr_series else core.get("dscr_min", 0.0)
+    # F-2/F-3: ONE positional DSCR series, every entry labelled with the operating year
+    # it belongs to. `core["dscr_series"]` is already period-indexed; the published
+    # `dscr_series` is now that same series verbatim, so `dscr_series[debt_period]` is
+    # finally the DSCR of `debt_period` (it used to be the COMPACTED list, whose
+    # positions meant nothing — the F-2 collision).
+    positional_dscr_series = list(core.get("dscr_series", []) or [])
+    dscr_periods = _build_dscr_periods(
+        positional_dscr_series, period_row_map, core.get("dscr_by_year") or {}
     )
+
+    # PERIOD half of the covenant minimum, over OPERATING periods only (F-3): a period
+    # that maps to no operating row carries no covenant observation. Proven not to move
+    # `min_dscr` on any evaluable committed scenario — the bridge DSCR is strictly above
+    # the operating-period minimum in every one — but the exclusion is correct on its own
+    # terms and is what stops a sub-1.0 non-operating ratio setting a lender-facing floor.
+    operating_min = _operating_dscr_minimum(dscr_periods)
+    raw_min = operating_min if operating_min is not None else core.get("dscr_min", 0.0)
     # Single source of truth for the covenant minimum (round-5 #3). The lender-facing
     # min_dscr must agree with the bridge-corrected per-year covenant table (dscr_by_year),
-    # not only the raw per-period series. The raw series carries the sub-annual bridge
+    # not only the per-period series. The period series carries the sub-annual bridge
     # (period 2) and phantom interest-only (period 3) entries as separate values, whereas
     # dscr_by_year folds the orphaned bridge service into operating year 1. Report the
     # CONSERVATIVE minimum over both views so the headline can never overstate coverage
-    # relative to the per-year table the covenant is actually tested on. The two now DIVERGE
-    # on several committed scenarios (lendercase 1.2857 fold vs 1.30 period since #737/#738;
-    # both CEB BESS scenarios ~0.91 fold vs 1.30 period — the year-1 bridge/interest-only
-    # lead-in service folds into operating year 1, verified economically real, not a
-    # double-count, in #806). The min() keeps the headline honest wherever they diverge.
+    # relative to the per-year table the covenant is actually tested on. The two DIVERGE
+    # on several committed scenarios (both CEB BESS scenarios ~0.87-0.91 fold vs 1.30
+    # period — the year-1 bridge/interest-only lead-in service folds into operating
+    # year 1, verified economically real, not a double-count, in #806). The min() keeps
+    # the headline honest wherever they diverge.
+    #
+    # THE FOLD IS LOAD-BEARING AND MUST NOT BE BYPASSED. Restricting the PERIOD half to
+    # operating periods raises that half wherever a non-operating period held the minimum;
+    # dropping the `by_year_min` term as well would raise the HEADLINE and overstate
+    # lender protection. The fold is preserved verbatim below — same source
+    # (`core["dscr_by_year"]`), same traversal, same `min()` — and `dscr_periods` now also
+    # carries it per entry as `covenant_dscr` so consumers can see it without re-deriving.
     by_year_min: Optional[float] = None
     for _dscr in (core.get("dscr_by_year") or {}).values():
         if _dscr is None:
@@ -1727,8 +1936,11 @@ def plan_debt(
         "total_service": debt_service_total,
         "senior_fee_usd": core.get("senior_fee_usd", []),
         "senior_fee_rate": core.get("senior_fee_rate", 0.0),
-        "dscr_series": public_dscr_series,
-        "raw_dscr_series": core.get("dscr_series", []),
+        "dscr_series": positional_dscr_series,
+        # DEPRECATED (F-2, REFACTOR-04 shim lifecycle): an exact alias of `dscr_series`,
+        # retained for one release. See `deprecated_raw_dscr_series` for the warning
+        # surface and why the key itself cannot raise on access.
+        "raw_dscr_series": list(positional_dscr_series),
         "dscr_by_year": core.get("dscr_by_year", {}),
         "annual_row_debt_period_map": core.get("annual_row_debt_period_map", []),
         "cfads_bridge_debt_period": core.get("cfads_bridge_debt_period"),
@@ -1760,6 +1972,12 @@ def plan_debt(
         "construction_periods": construction_periods,
         "bridge_debt_period": bridge_debt_period,
         "first_operating_period": first_operating_period,
+        # ── Unified DSCR series (F-2/F-3; additive, appended last) ─────────
+        # ONE positional series, each entry labelled with its `operating_year`
+        # (`None` for construction, the bridge and post-tenor padding) and its
+        # fold-applied `covenant_dscr`. Consumers FILTER on `operating_year`;
+        # they never index a compacted list whose positions carry no meaning.
+        "dscr_periods": dscr_periods,
     }
 
 

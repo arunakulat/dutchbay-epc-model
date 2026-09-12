@@ -1,0 +1,4 @@
+changelog.d/hygiene-wind-failures.fixed.md	945ed3dad6913d0c835436a6fa9d78b38d84ab33
+docs/H01_IMPLEMENTATION.md	85611d992b15740ef75fd0e81af56ef17f9e5460
+tests/wind/test_power_curve_sourcing.py	80546f200428be27909d1487faa1784754086ee0
+tests/wind/test_power_curve_sourcing_skip_integrity.py	c4f1df3423663f221f1d3b8b16c80fe592484d46

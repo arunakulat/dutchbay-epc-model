@@ -195,7 +195,7 @@ class WindAnalyzer:
         r_squared = 1 - (ss_res / ss_tot)
 
         # Kolmogorov-Smirnov test
-        ks_statistic, ks_pvalue = stats.kstest(
+        ks_result = stats.kstest(
             ws_data, lambda x: stats.weibull_min.cdf(x, shape_k, loc=0, scale=scale_c)
         )
 
@@ -203,7 +203,7 @@ class WindAnalyzer:
             "shape_k": float(shape_k),
             "scale_c": float(scale_c),
             "r_squared": float(r_squared),
-            "ks_pvalue": float(ks_pvalue),
+            "ks_pvalue": float(ks_result.pvalue),
             "mean_ws": float(ws_data.mean()),
         }
 

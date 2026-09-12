@@ -164,7 +164,7 @@ def fit_weibull_on_series(
     ss_res = float(np.sum((empirical_cdf - theoretical_cdf) ** 2))
     ss_tot = float(np.sum((empirical_cdf - np.mean(empirical_cdf)) ** 2))
     r_squared = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
-    _ks_stat, ks_pvalue = stats.kstest(
+    ks_result = stats.kstest(
         arr, lambda x: stats.weibull_min.cdf(x, shape_k, loc=0, scale=scale_c)
     )
 
@@ -174,7 +174,7 @@ def fit_weibull_on_series(
         mean_ws_ms=float(arr.mean()),
         std_ws_ms=weibull_std(float(scale_c), float(shape_k)),
         r_squared=float(r_squared),
-        ks_pvalue=float(ks_pvalue),
+        ks_pvalue=float(ks_result.pvalue),
         energy_gof_pct=energy_moment_gof_pct(arr, float(scale_c), float(shape_k)),
         n_samples=int(len(arr)),
     )

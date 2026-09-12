@@ -20,6 +20,8 @@ Date: December 2025
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
@@ -435,41 +437,84 @@ class TestLenderStackOutputQuality:
             f"got {len(annual_rows)}"
         )
 
-    def test_dscr_series_has_expected_length(self, minimal_test_config):
-        """QUALITY: dscr_series should have length = operating years."""
-        result = run_v14_pipeline(
-            config=minimal_test_config,
-            validation_mode="off",
-        )
+    def test_dscr_series_spans_the_full_debt_timeline(self, minimal_test_config):
+        """QUALITY: dscr_series carries one entry per debt period.
 
-        operating_years = minimal_test_config["Project"]["operating_years"]
-
-        dscr_series = result["debt_result"]["dscr_series"]
-        # DSCR series typically excludes construction years
-        assert len(dscr_series) <= operating_years + 5, (
-            f"dscr_series length unreasonable: expected ~{operating_years}, "
-            f"got {len(dscr_series)}"
-        )
-
-    def test_min_dscr_matches_series_minimum(self, minimal_test_config):
-        """QUALITY: min_dscr should match minimum of dscr_series."""
+        This test previously asserted ``len(dscr_series) <= operating_years + 5``, with a
+        comment that the series "typically excludes construction years". Since F-2 that
+        is false — the series is positional over the whole timeline, construction periods
+        included as ``None`` — and the assertion survived only because its +5 slack
+        happened to absorb the construction and bridge periods. A tolerance that hides a
+        contract change is not a check, so it is replaced by the exact contract.
+        """
         result = run_v14_pipeline(
             config=minimal_test_config,
             validation_mode="off",
         )
 
         debt_result = result["debt_result"]
-        min_dscr = debt_result["min_dscr"]
         dscr_series = debt_result["dscr_series"]
 
-        # Filter out inf values
-        finite_dscrs = [d for d in dscr_series if d != float("inf")]
+        assert len(dscr_series) == debt_result["timeline_periods"], (
+            "dscr_series must be positional over the full debt timeline: expected "
+            f"{debt_result['timeline_periods']} entries, got {len(dscr_series)}"
+        )
+        assert len(dscr_series) == len(debt_result["dscr_periods"])
+        # Construction periods are present, and present as the undefined sentinel.
+        construction_periods = int(debt_result["construction_periods"])
+        assert construction_periods > 0
+        assert all(value is None for value in dscr_series[:construction_periods])
 
-        if finite_dscrs:
-            series_min = min(finite_dscrs)
-            assert abs(min_dscr - series_min) < 0.01, (
-                f"min_dscr mismatch: min_dscr={min_dscr}, " f"series_min={series_min}"
-            )
+    def test_min_dscr_is_the_operating_minimum_folded_with_the_per_year_table(
+        self, minimal_test_config
+    ):
+        """QUALITY: min_dscr is the conservative minimum over BOTH lender views.
+
+        This test used to take a bare ``min()`` over ``dscr_series``, which was the
+        COMPACTED series. Since F-2 that series is POSITIONAL — one entry per debt
+        period, ``None`` where a period carries no defined DSCR — so a bare ``min()``
+        over it is not even well defined, and it was never the covenant contract.
+
+        The published headline is ``min(minimum over OPERATING periods, minimum over the
+        dscr_by_year fold)``. Both terms are asserted because both are load-bearing: the
+        fold carries the synthetic bridge period's scheduled service into operating
+        year 1, and on the CEB BESS scenarios it ALONE drives ``min_dscr`` to ~0.87-0.91
+        against a 1.3000 period floor. A test that checked only the period view would
+        stay green while a change discarded the fold and reported coverage rose.
+
+        Asserted exactly, not within 0.01: this is an identity, not an approximation.
+        """
+        result = run_v14_pipeline(
+            config=minimal_test_config,
+            validation_mode="off",
+        )
+
+        debt_result = result["debt_result"]
+
+        operating = [
+            entry["dscr"]
+            for entry in debt_result["dscr_periods"]
+            if entry["operating_year"] is not None and entry["dscr"] is not None
+        ]
+        folded = [
+            float(value)
+            for value in (debt_result["dscr_by_year"] or {}).values()
+            if value is not None and math.isfinite(float(value))
+        ]
+
+        # Guard against the check going vacuous, which is how the old `if finite_dscrs:`
+        # form could have silently asserted nothing at all.
+        assert operating, "no operating period carried a DSCR — nothing was checked"
+        assert folded, "the per-year covenant table was empty — nothing was checked"
+
+        min_dscr = debt_result["min_dscr"]
+        assert min_dscr == min(min(operating), min(folded)), (
+            f"min_dscr mismatch: min_dscr={min_dscr}, "
+            f"operating_min={min(operating)}, fold_min={min(folded)}"
+        )
+        # Neither view may be bypassed: the headline can never sit ABOVE either of them.
+        assert min_dscr <= min(folded)
+        assert min_dscr <= min(operating)
 
     def test_project_irr_is_reasonable(self, minimal_test_config):
         """QUALITY: project_irr should be reasonable (0-50%)."""

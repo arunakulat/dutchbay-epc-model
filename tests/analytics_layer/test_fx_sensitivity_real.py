@@ -3,7 +3,7 @@
 Tests Sprint 16 FX sensitivity implementation:
 - FXSensitivityAnalyzer with real pipeline integration
 - Linear regression-based sensitivity coefficients
-- Variance decomposition for risk attribution
+- Relative variance attribution across configured sweep regimes
 - Multiple sensitivity scenarios (FX rate, hedge ratio, spread)
 
 Framework Compliance:
@@ -17,11 +17,14 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from statistics import fmean, linear_regression, pvariance
 from typing import Any, Dict
 from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 
+from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.fx_sensitivity_real import (
     FXSensitivityAnalyzer,
     FXSensitivityConfig,
@@ -293,35 +296,55 @@ class TestFXSensitivityAnalyzer:
 
     @patch("analytics.fx_sensitivity_real.evaluate_with_overrides")
     def test_variance_decomposition(
-        self, mock_evaluate, sample_config, mock_pipeline_results
-    ):
-        """Variance decomposition should attribute risk to parameters."""
-
-        # Mock with different sensitivities
-        def mock_pipeline_call(base_config_path, overrides):
-            fx_shock = overrides.get("fx", {}).get("fx_shock", 0.0)
-            hedge_ratio = overrides.get("fx", {}).get("hedge_ratio", 0.0)
-            result = mock_pipeline_results.copy()
-            # FX has larger impact than hedge ratio
-            result["project_irr"] = 0.12 - 0.15 * fx_shock + 0.05 * hedge_ratio
-            return result
-
-        mock_evaluate.side_effect = mock_pipeline_call
-
+        self,
+        mock_evaluate: MagicMock,
+        sample_config: FXSensitivityConfig,
+        mock_pipeline_results: dict[str, Any],
+    ) -> None:
+        """Sweep variance shares should match a known linear response."""
         analyzer = FXSensitivityAnalyzer(
             base_config_path="scenarios/test.yaml",
             config=sample_config,
         )
+        base_fx = analyzer._base_fx()
+
+        # Mock with different sensitivities
+        def mock_pipeline_call(
+            base_config_path: str, overrides: dict[str, Any]
+        ) -> dict[str, Any]:
+            fx = overrides.get("fx", {})
+            fx_shock = float(fx.get("start_lkr_per_usd", base_fx)) / base_fx - 1.0
+            hedge_ratio = float(fx.get("hedge_ratio", 0.0))
+            spread_bps = float(fx.get("spread_bps", 0.0))
+            result = mock_pipeline_results.copy()
+            result["project_irr"] = (
+                0.12 - 0.15 * fx_shock + 0.05 * hedge_ratio - 0.0001 * spread_bps
+            )
+            return result
+
+        mock_evaluate.side_effect = mock_pipeline_call
 
         result = analyzer.run()
 
-        # Total variance contributions should sum to ~1.0
-        total_variance_contrib = sum(
-            c.variance_contribution
-            for c in result.coefficients
-            if c.variance_contribution is not None
-        )
-        assert 0.9 <= total_variance_contrib <= 1.1
+        # Var(a + bX) = b**2 Var(X), independently of the fitted coefficients.
+        expected = {
+            "fx_rate": (-0.15, 0.15**2 * pvariance(sample_config.fx_rate_shocks)),
+            "hedge_ratio": (
+                0.05,
+                0.05**2 * pvariance(sample_config.hedge_ratio_values),
+            ),
+            "spread": (-0.0001, 0.0001**2 * pvariance(sample_config.spread_shocks_bps)),
+        }
+        total = sum(variance for _, variance in expected.values())
+        assert len(result.coefficients) == 3
+        assert {c.parameter for c in result.coefficients} == set(expected)
+        assert result.total_variance == pytest.approx(total, rel=1e-10, abs=1e-15)
+        for coefficient in result.coefficients:
+            slope, variance = expected[coefficient.parameter]
+            assert coefficient.coefficient == pytest.approx(slope, rel=1e-10, abs=1e-12)
+            assert coefficient.variance_contribution == pytest.approx(
+                variance / total, rel=1e-10, abs=1e-12
+            )
 
     @patch("analytics.fx_sensitivity_real.evaluate_with_overrides")
     def test_error_handling_pipeline_failure(self, mock_evaluate, sample_config):
@@ -353,23 +376,29 @@ class TestFXSensitivityAnalyzer:
 
     @patch("analytics.fx_sensitivity_real.evaluate_with_overrides")
     def test_regression_quality_check(
-        self, mock_evaluate, sample_config, mock_pipeline_results
-    ):
-        """Analyzer should report regression quality (R-squared)."""
+        self,
+        mock_evaluate: MagicMock,
+        sample_config: FXSensitivityConfig,
+        mock_pipeline_results: dict[str, Any],
+    ) -> None:
+        """A perfect fit must retain its known nonzero FX slope."""
+        analyzer = FXSensitivityAnalyzer(
+            base_config_path="scenarios/test.yaml",
+            config=sample_config,
+        )
+        base_fx = analyzer._base_fx()
 
         # Mock perfect linear relationship for high R-squared
-        def mock_pipeline_call(base_config_path, overrides):
-            fx_shock = overrides.get("fx", {}).get("fx_shock", 0.0)
+        def mock_pipeline_call(
+            base_config_path: str, overrides: dict[str, Any]
+        ) -> dict[str, Any]:
+            fx = overrides.get("fx", {})
+            fx_shock = float(fx.get("start_lkr_per_usd", base_fx)) / base_fx - 1.0
             result = mock_pipeline_results.copy()
             result["project_irr"] = 0.12 - 0.10 * fx_shock  # Perfect linear
             return result
 
         mock_evaluate.side_effect = mock_pipeline_call
-
-        analyzer = FXSensitivityAnalyzer(
-            base_config_path="scenarios/test.yaml",
-            config=sample_config,
-        )
 
         result = analyzer.run()
 
@@ -378,20 +407,11 @@ class TestFXSensitivityAnalyzer:
             (c for c in result.coefficients if c.parameter == "fx_rate"), None
         )
         assert fx_coef is not None
-        assert fx_coef.r_squared is not None
-        assert fx_coef.r_squared > 0.95  # High quality fit
+        assert fx_coef.coefficient == pytest.approx(-0.10, rel=1e-10, abs=1e-12)
+        assert fx_coef.r_squared == pytest.approx(1.0, abs=1e-12)
 
     def test_scenario_generation_fx_shocks(self, sample_config):
         """Analyzer should generate correct number of scenarios."""
-        analyzer = FXSensitivityAnalyzer(
-            base_config_path="scenarios/test.yaml",
-            config=sample_config,
-        )
-
-        # With 5 FX shocks, 5 hedge ratios, 5 spreads = 5 + 5 + 5 = 15 scenarios minimum
-        # (assuming one-at-a-time sensitivity)
-        expected_min_scenarios = 15
-
         # This is tested indirectly through pipeline calls
         assert len(sample_config.fx_rate_shocks) == 5
         assert len(sample_config.hedge_ratio_values) == 5
@@ -406,13 +426,18 @@ class TestFXSensitivityAnalyzer:
 class TestFXSensitivityIntegration:
     """Integration tests for FX sensitivity analyzer."""
 
-    @pytest.mark.skip(reason="Requires real scenario file and pipeline")
-    def test_real_pipeline_integration(self):
-        """Test FX sensitivity with actual pipeline (integration test)."""
-        # This test requires a real scenario file
-        scenario_path = Path("scenarios/dutchbay_basecase_2025Q4.yaml")
-        if not scenario_path.exists():
-            pytest.skip("Test scenario file not found")
+    def test_real_pipeline_integration(self) -> None:
+        """Compare live base-case sweeps with gateway and scalar statistical oracles."""
+        scenario_path = (
+            Path(__file__).resolve().parents[2]
+            / "scenarios/dutchbay_basecase_2025Q4.yaml"
+        )
+        assert scenario_path.is_file(), f"Committed scenario missing: {scenario_path}"
+        scenario = yaml.safe_load(scenario_path.read_text())
+        base_fx = float(scenario["fx"]["start_lkr_per_usd"])
+        # This committed scenario is unhedged, so spread is measured at FULL hedge.
+        assert float(scenario["fx"].get("hedge_ratio") or 0.0) == 0.0
+        base_spread = float(scenario["fx"].get("spread_bps") or 0.0)
 
         config = FXSensitivityConfig(
             fx_rate_shocks=[-0.05, 0.0, 0.05],
@@ -428,18 +453,71 @@ class TestFXSensitivityIntegration:
 
         result = analyzer.run()
 
-        # Assertions
-        assert result.base_value is not None
-        assert len(result.coefficients) > 0
-        assert result.explained_variance is not None
-        assert 0.0 <= result.explained_variance <= 1.0
+        def project_irr(fx: dict[str, float]) -> float:
+            """Evaluate directly through the canonical gateway, outside the analyzer."""
+            overrides = {"fx": fx} if fx else {}
+            value = float(
+                evaluate_with_overrides(str(scenario_path), overrides)["project_irr"]
+            )
+            assert math.isfinite(value)
+            return value
 
-        # FX rate should typically have largest impact
-        fx_coef = next(
-            (c for c in result.coefficients if c.parameter == "fx_rate"), None
+        baseline = project_irr({})
+        assert math.isfinite(result.base_value)
+        assert result.base_value == pytest.approx(baseline, rel=1e-10, abs=1e-12)
+        fx_values = [
+            project_irr({"start_lkr_per_usd": base_fx * (1.0 + shock)})
+            for shock in config.fx_rate_shocks
+        ]
+        hedge_values = [
+            project_irr({"hedge_ratio": hedge}) for hedge in config.hedge_ratio_values
+        ]
+        spread_values = [
+            project_irr({"spread_bps": base_spread + shock, "hedge_ratio": 1.0})
+            for shock in config.spread_shocks_bps
+        ]
+        # Directions are specific to this scenario's forward-versus-spot relationship.
+        assert fx_values[0] > fx_values[1] > fx_values[2]
+        assert hedge_values[0] < hedge_values[1] < hedge_values[2]
+        assert spread_values[0] > spread_values[1] > spread_values[2]
+        assert fx_values[1] == pytest.approx(baseline, rel=1e-10, abs=1e-12)
+        assert hedge_values[0] == pytest.approx(baseline, rel=1e-10, abs=1e-12)
+        assert spread_values[0] == pytest.approx(hedge_values[-1], rel=1e-10, abs=1e-12)
+
+        samples = {
+            "fx_rate": (config.fx_rate_shocks, fx_values),
+            "hedge_ratio": (config.hedge_ratio_values, hedge_values),
+            "spread": (config.spread_shocks_bps, spread_values),
+        }
+        assert len(result.coefficients) == 3
+        assert {c.parameter for c in result.coefficients} == set(samples)
+        total_variance = sum(pvariance(ys) for _, ys in samples.values())
+        assert total_variance > 0.0
+        assert result.total_variance == pytest.approx(
+            total_variance, rel=1e-10, abs=1e-15
         )
-        assert fx_coef is not None
-        assert fx_coef.coefficient != 0.0
+        r_squared_values = []
+        for coefficient in result.coefficients:
+            xs, ys = samples[coefficient.parameter]
+            # Standard-library scalar regression is independent of the analyzer's NumPy fit.
+            slope, intercept = linear_regression(xs, ys)
+            variance = pvariance(ys)
+            residual_mean_square = fmean(
+                (y - (slope * x + intercept)) ** 2 for x, y in zip(xs, ys, strict=True)
+            )
+            r_squared = 1.0 - residual_mean_square / variance
+            r_squared_values.append(r_squared)
+            assert math.isfinite(coefficient.coefficient)
+            assert coefficient.coefficient == pytest.approx(slope, rel=1e-10, abs=1e-12)
+            assert coefficient.r_squared == pytest.approx(r_squared, abs=1e-12)
+            assert coefficient.variance_contribution == pytest.approx(
+                variance / total_variance, rel=1e-10, abs=1e-12
+            )
+        # This is mean fit R-squared across different sweep regimes, not an
+        # independent stochastic variance decomposition. Raw slopes have unlike units.
+        assert result.explained_variance == pytest.approx(
+            fmean(r_squared_values), abs=1e-12
+        )
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dutchbay-epc-model"
-version = "15.4.0"
+version = "15.5.0"
 description = "Lender/DFI-grade project-finance model for utility-scale wind: CFADS, multi-tranche debt with DSCR covenants, tax with TLCF, Monte Carlo, and an ERA5 to Weibull to AEP to finance pipeline."
 readme = "README.md"
 # Proprietary, with an explicit evaluation/audit grant (see LICENSE). Declared so
@@ -321,7 +321,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-ra --strict-markers --strict-config --showlocals"
-norecursedirs = [".git", "__pycache__", ".pytest_cache", ".venv*", "venv*", "build", "dist", "*.egg-info"]
+norecursedirs = [".git", "__pycache__", ".pytest_cache", ".hypothesis", ".venv*", "venv*", "build", "dist", "*.egg-info"]
 markers = [
     "slow: tests with long runtime (>5s; deselect with -m 'not slow')",
     "integration: integration tests spanning multiple modules",

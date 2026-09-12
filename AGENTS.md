@@ -19,13 +19,13 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
 
 When historical sprint instructions conflict with current governance, follow the newer
 current workflow, especially `WORKTREE-01`, `GOV-02`, `R23`, `R25`, `DELIVERY-01`,
-`DATA-01`, `PERSIST-01`, `THREAD-01`, and `MERGE-01`. Never restore a retired sprint integration
+`DATA-01`, `PERSIST-01`, `THREAD-01`, `MERGE-01`, and `RECRUIT-01`. Never restore a retired sprint integration
 branch or a nonexistent ruleset filename.
 
 ## Session continuity
 
 Before starting work, read the newest record in `docs/SESSION_HANDOVER_*.md` — currently
-`docs/SESSION_HANDOVER_2026-09-01_2.md` — and execute its **Bootstrap — run this first**
+`docs/SESSION_HANDOVER_2026-09-07.md` — and execute its **Bootstrap — run this first**
 section before substantive work. Each record names its predecessor and states which parts
 of it still stand, so read the newest first and follow the chain back only as far as it
 tells you to. These are the PERSIST-01 durable records: they carry the canonical KPI set,
@@ -103,6 +103,11 @@ one, because the next session acts on it.
   workflow calls for it; merging is standing-authorized on green under `MERGE-01`.
 - Checkpoint long-running results and coherent work to durable storage early. Do not
   leave load-bearing results only in chat context.
+- `RECRUIT-01` applies to every relevant task hereafter, regardless of subject, sprint, workstream
+  or named dolphin. Use its four canonical modules under `docs/governance/recruit_01/` for capability
+  and semantic-risk classification, one-active-writer leases and recovery, independent exact-object
+  review/attestation, and capacity-aware staged delegation/ingress. Load-bearing documentation is
+  reviewed by semantic consequence rather than downgraded because it is prose.
 
 ## Runtime logging and evidence retention
 
@@ -167,6 +172,74 @@ one, because the next session acts on it.
   about limitations. Avoid marketing language and unsupported claims.
 - Do not publish confidential or third-party materials without explicit authorization.
   Retain original provenance and confidentiality markings when publication is authorized.
+
+### Four ways a corpus commit goes wrong — check all four before committing
+
+Each of these has actually happened here, each time to someone who believed they were being
+careful. Read them as a checklist, not as history. Manifest defects in particular have reached
+`main` repeatedly, in two classes: an **incomplete** manifest across five commits from `637aad3` to
+`782c958`, closed at #1211, and one **impossible** entry introduced by #1226 and fixed by #1234.
+Two of those six commits carried nothing but documentation paths — enough to skip the sharded suite
+entirely. (An earlier draft of this section said "four times". It was wrong; the count matched no
+individuation of the history, and an accepted review record on `main` had already asked for it to
+be enumerated or softened. The table above is reconstructed from the manifest's state at every
+`main` commit that touched it.)
+
+**CI now catches most, but not all, of what follows.**
+`tests/lint/test_nso_corpus_manifest_integrity.py` runs in the `fastlane` job on every PR — the
+sharded suite skips any PR whose diff is only `*.md`, `changelog.d/` and `docs/`, which a corpus
+edit easily is — and it fails loudly on: a recorded entry that is absent or hash-mismatched; a
+**tracked file absent from the manifest**, the direction `sha256sum -c` is structurally blind to; a
+stale parent pin; a nested manifest nobody classified; a referrer that has stopped citing the
+handling note; and clause 6 of the offers quoted outside its single home. What it cannot judge is
+**whether a new disclosure should have been made at all** — item 2 below is still yours.
+
+**1. A nested manifest's parent pin goes stale the moment you edit the child.**
+`docs/source_materials/**/MANIFEST.sha256` records the SHA-256 of the *other* manifests beneath it.
+Editing a nested manifest therefore invalidates the parent unless the same commit refreshes it. Get
+this wrong and `sha256sum -c` reports `FAILED` — content present, hash mismatched — which in an
+evidence corpus is the signal reserved for **an evidence file has been altered**. That is a worse
+artifact than the stale entry it usually replaces.
+
+  - After ANY manifest edit, run `sha256sum -c MANIFEST.sha256` from the corpus root and require
+    `exit 0`. Do not infer success from the edit having applied.
+  - Refresh the parent with `scripts/analysis/refresh_corpus_manifest.py`, which refuses unrecorded
+    paths by design — that refusal is a feature; do not route around it.
+  - Never record a gitignored path. A `__pycache__/*.pyc` entry can never verify, because the file
+    can never be in the tree.
+
+**2. "Recorded by hash only" stops being true the moment you quote the source.**
+A manifest note or changelog entry that explains *what changed* in a confidential document can
+publish the very terms the hash-only route exists to withhold — warranty durations, scope
+exclusions, contract clauses, price-line labels. The document then asserts "manifest only" while
+disclosing commercial terms, and the assertion is false.
+
+  - Before committing a note about withheld material, diff the disclosure surface against the base:
+    `git grep -n '<distinctive phrase>' <base-sha> -- docs/ changelog.d/` should return nothing, and
+    if it now returns hits you have widened publication.
+  - Describe the finding abstractly in public — its direction, its materiality, where the analysis
+    is held — and pin the private analysis document by SHA-256 so it cannot be revised without
+    trace. That gives a reader everything except the confidential terms.
+  - If publication really is intended, it is a project-owner decision on recorded authority, and
+    the change must **say** that the disclosure surface moved and on what basis. This repository
+    records handling reversals rather than applying them quietly; see
+    `docs/source_materials/nso_bess_250mw_2026/source_packages/README.md`.
+  - Publication to a public repository is effectively irreversible. Decide before merge, not after.
+
+**3. A review record can re-publish what the fix removed.** When redaction and a review pass land
+together, redact the review record in the same pass — it quotes the material as evidence. This
+recurred on 4 September 2026: the consolidation removed clause 6 from four files and left it in the
+review record that had flagged the disclosure. Paraphrase the evidence and cite the single home.
+
+**4. And the reason all three keep happening: one fact, written down in five places.**
+One persisted `RECRUIT-01` review of the offer re-supply raised three blocking findings, and **one**
+of the three was the five copies of the handling statement disagreeing with one another; the other
+two were a manifest that did not verify and a false receipts table. That one finding, plus the
+divergence between the copies, is what motivated the consolidation. Duplicated state with nothing to
+keep it consistent behaves in prose exactly as it does in code. State a fact once,
+in the file closest to the data, give it an identifier, and have everything else cite the identifier.
+`NSO250MW-OFFERS-HANDLING-2026-09-04` in the offers manifest header is the worked example, and the
+guard above fails if a sixth copy appears.
 
 ## Presentation layer and PDF generation
 

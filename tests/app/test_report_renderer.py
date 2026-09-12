@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Dict
+import builtins
+from types import ModuleType
+from typing import Any, Dict
 
 import pytest
 
@@ -363,16 +365,35 @@ def test_html_escapes_site_name() -> None:
     assert "<Wind>" not in html
 
 
-def test_pdf_without_weasyprint_raises_clear_error() -> None:
-    # In CI/local the optional extra is absent, so this exercises the fail-loud
-    # path. When WeasyPrint *is* installed, skip (the happy path is covered below).
-    try:
-        import weasyprint  # noqa: F401
-    except ImportError:
-        with pytest.raises(ReportDependencyError, match="WeasyPrint"):
-            render_report_pdf(_context())
-    else:  # pragma: no cover - only when the optional extra is installed
-        pytest.skip("WeasyPrint installed; error path not applicable")
+@pytest.mark.parametrize(
+    "load_error",
+    [
+        ModuleNotFoundError("No module named 'weasyprint'", name="weasyprint"),
+        OSError("cannot load library 'libpango-1.0'"),
+    ],
+    ids=["missing-package", "native-loader-error"],
+)
+def test_pdf_without_weasyprint_raises_clear_error(
+    monkeypatch: pytest.MonkeyPatch, load_error: ImportError | OSError
+) -> None:
+    """The real PDF loader wraps package/native failures and preserves their cause."""
+    context = _context()
+    original_import = builtins.__import__
+
+    def fail_weasyprint_import(name: str, *args: Any, **kwargs: Any) -> ModuleType:
+        """Inject only the dependency failure, leaving the production loader intact."""
+        if name == "weasyprint":
+            raise load_error
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fail_weasyprint_import)
+    with pytest.raises(ReportDependencyError) as exc_info:
+        render_report_pdf(context)
+    assert "WeasyPrint" in str(exc_info.value)
+    assert "pip install -e '.[report]'" in str(exc_info.value)
+    assert "pango/cairo" in str(exc_info.value)
+    assert "HTML report is available" in str(exc_info.value)
+    assert exc_info.value.__cause__ is load_error
 
 
 def test_pdf_render_when_weasyprint_available() -> None:
