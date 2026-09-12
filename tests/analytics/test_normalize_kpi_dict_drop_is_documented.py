@@ -19,24 +19,37 @@ it, and each break is pinned below:
   bare name ``logger``, and the runtime half filtered captured records by
   logger name.
 
+* Round three broke them again, twice over.  The counterfactual marker was any
+  ``not`` anywhere in the sentence, so "the caller is warned about every entry
+  that could not be converted" passed on a negation of *conversion*; and the
+  emission-verb list held only present-tense forms, so "is also logged at
+  ``WARNING`` level" and "is surfaced at ``WARNING`` level" passed as well.
+
 So the two oracles below are written against the defect class rather than
 against the wordings that were tried:
 
-* **Code half** -- every logging call in the except handler is matched on its
-  *method name*, whatever object it is reached through.
-* **Docstring half** -- any sentence mentioning a warning must reject it,
-  both by carrying a counterfactual marker and by making no present-tense
-  claim that this function emits one.
+* **Code half** -- every logging call reached by attribute access in the except
+  handler is matched on its *method name*, whatever object it is reached
+  through.  Forms that do not go through an attribute (a bound-method alias, a
+  ``getattr`` lookup) escape this half and are caught by the runtime half
+  instead; the two cover each other.
+* **Docstring half** -- in any sentence mentioning a warning, a rejection
+  marker must sit within three tokens of the warn token, and no emission verb
+  may appear.
 
-This is a gate over the sentences a docstring may contain, not a proof that
-prose and code agree; a sufficiently inventive wording could still pass it.
-What it does guarantee is that every phrasing review has produced -- and the
-whole present-tense family those phrasings belong to -- fails.
+**What these controls do and do not establish.**  They pin the *code*'s
+behaviour, and they reject every phrasing that three rounds of independent
+review produced.  They do **not** pin the *polarity* of a prose claim in
+general: the docstring's direction of assertion is unchecked except where a
+named control checks it, so an inverted sentence elsewhere in the docstring can
+still pass.  A known residue survives even the warning gate -- a double negative
+("operators are not left without a warning") satisfies the proximity rule while
+asserting the opposite of the truth.  Review remains the backstop; this file
+narrows what review has to catch, and does not replace it.
 
 Raising the level is deliberately *not* the fix.  ``normalize_kpi_dict`` runs on
-the ``return_full_result=False`` default path of the sole evaluation gateway,
-which Monte Carlo, sensitivity, tornado, solver and optimizer loops call
-per-iteration.
+the ``return_full_result=False`` default path of :func:`evaluate_with_overrides`,
+which Monte Carlo, sensitivity, tornado and optimizer loops call per-iteration.
 """
 
 from __future__ import annotations
@@ -64,13 +77,20 @@ _LOG_METHODS = frozenset(
 
 
 def _logging_calls_in_except_handler() -> list[str]:
-    """Return every logging-method name called in the except handler, sorted.
+    """Return every logging call reached by ATTRIBUTE ACCESS in the handler.
 
     Derived from the live source, so the assertions below track the code rather
-    than restating it.  The match is on the attribute name, deliberately
-    ignoring the receiver: an earlier version required ``ast.Name`` with
-    ``id == "logger"``, and a mutant that reached a fresh logger through
-    ``logging.getLogger("kpi_drops")`` walked straight past it.
+    than restating it.  The match is on the attribute name and ignores the
+    receiver, so ``logger.warning``, ``logger.getChild(..).warning`` and
+    ``logging.getLogger(..).warning`` are caught alike; an earlier version
+    required ``ast.Name`` with ``id == "logger"`` and a fresh logger walked past
+    it.
+
+    It is deliberately not exhaustive over *all* emission forms.  A bound-method
+    alias (``fn = logger.warning``) and a ``getattr(logger, "warning")`` lookup
+    are not attribute calls at the call site and are invisible here; both are
+    caught by :func:`test_no_warning_or_above_escapes_this_function`, which
+    observes records rather than syntax.  Neither half is sufficient alone.
     """
     tree = ast.parse(textwrap.dedent(inspect.getsource(normalize_kpi_dict)))
     return sorted(
@@ -82,6 +102,35 @@ def _logging_calls_in_except_handler() -> list[str]:
         and isinstance(node.func, ast.Attribute)
         and node.func.attr in _LOG_METHODS
     )
+
+
+def _caught_exception_source() -> str:
+    """Return the exception tuple the drop handler catches, unparsed from source."""
+    tree = ast.parse(textwrap.dedent(inspect.getsource(normalize_kpi_dict)))
+    (handler,) = [h for h in ast.walk(tree) if isinstance(h, ast.ExceptHandler)]
+    assert handler.type is not None, "a bare except would swallow everything"
+    return ast.unparse(handler.type)
+
+
+def test_only_typeerror_and_valueerror_are_caught() -> None:
+    """The docstring's propagation claim, pinned on both sides.
+
+    Two independent reviewers found the same hole: widening the handler to
+    ``except Exception:`` silently falsified the docstring's ``OverflowError``
+    sentence while all ten controls stayed green -- precisely the defect class
+    this file exists to close.  So the caught tuple is derived from the source,
+    and the behaviour it produces is exercised.
+    """
+    assert ast.dump(ast.parse(_caught_exception_source(), mode="eval")) == ast.dump(
+        ast.parse("(TypeError, ValueError)", mode="eval")
+    ), f"the handler now catches {_caught_exception_source()!r}"
+
+    # An out-of-range int raises OverflowError, which is NOT caught: it must
+    # propagate rather than be dropped.
+    with pytest.raises(OverflowError):
+        normalize_kpi_dict({"huge": 10**400})
+
+    assert "OverflowError" in (normalize_kpi_dict.__doc__ or "")
 
 
 def test_non_numeric_entries_are_dropped_not_defaulted() -> None:
@@ -126,9 +175,22 @@ def _casper_kpi_predicate_source() -> str:
         if not isinstance(fn, ast.FunctionDef) or fn.name != "build_casper_payload":
             continue
         for node in ast.walk(fn):
-            if isinstance(node, ast.DictComp) and node.generators[0].ifs:
-                return ast.unparse(node.generators[0].ifs[0])
-    raise AssertionError("CASPER's baseline-KPI comprehension was not found")
+            # Selected by ASSIGNMENT TARGET, not by walk order.  ``ast.walk`` is
+            # breadth-first, so an unrelated comprehension at the function's top
+            # level was found before this one, which sits inside an ``if``: the
+            # control then failed with a misleading diagnosis naming a predicate
+            # CASPER never used.
+            if not isinstance(node, ast.Assign) or not isinstance(
+                node.value, ast.DictComp
+            ):
+                continue
+            targets = {t.id for t in node.targets if isinstance(t, ast.Name)}
+            if "baseline_kpis" not in targets:
+                continue
+            ifs = node.value.generators[0].ifs
+            assert ifs, "CASPER's baseline-KPI comprehension no longer filters"
+            return ast.unparse(ifs[0])
+    raise AssertionError("CASPER's baseline-KPI assignment was not found")
 
 
 def test_the_casper_divergence_is_one_way_and_wider_than_bool() -> None:
@@ -178,6 +240,24 @@ def test_the_casper_divergence_is_one_way_and_wider_than_bool() -> None:
         "equity_share",
     }
     assert ours["scenario_name"] == 2030.0  # the phantom KPI, pinned
+
+    # The docstring restates CASPER's rule in prose.  That restatement was
+    # compared to nothing, so misstating it as ``isinstance(v, float)`` passed
+    # every control.  Pin the prose to the source: every ``...`` span in the
+    # docstring that parses as an expression is compared as a TREE, so the
+    # restatement may be parenthesised however reads best.
+    normalised_doc = " ".join((normalize_kpi_dict.__doc__ or "").split())
+    quoted = re.findall(r"``([^`]+)``", normalised_doc)
+    restated: list[str] = []
+    for span in quoted:
+        try:
+            restated.append(ast.dump(ast.parse(span, mode="eval")))
+        except SyntaxError:
+            continue
+    assert ast.dump(ast.parse(actual, mode="eval")) in restated, (
+        f"docstring does not restate CASPER's actual admission rule {actual!r}; "
+        "prose and source must agree, not merely coexist"
+    )
 
     # One-directional: nothing CASPER admits is lost here, values included.
     for key, value in theirs.items():
@@ -245,12 +325,28 @@ def test_docstring_names_the_level_the_source_actually_uses() -> None:
 
 # A mention of a warning is legitimate only where the docstring is explaining
 # why one is *not* emitted.  Both conditions must hold for every such sentence.
-_REJECTION_MARKER = re.compile(
-    r"\bwould\b|\brather than\b|\binstead of\b|\bnot\b", re.IGNORECASE
+#
+# The marker must SCOPE OVER the warn token, not merely share a sentence with
+# it.  An earlier version accepted any `\bnot\b` anywhere in the sentence, and
+# review found the obvious consequence: "The caller is warned about every entry
+# that could not be converted" passed, because `not` negated *conversion* — a
+# word this function's own subject matter supplies constantly.  Proximity is the
+# fix: the marker must sit within three tokens of the warn token, on either side.
+_MARKER = r"(?:would|rather\s+than|instead\s+of|never|no|not)"
+_GAP = r"(?:\s+\w+){0,3}"
+_MARKER_THEN_WARN = rf"{_MARKER}{_GAP}\s+warn\w*"
+_WARN_THEN_MARKER = rf"warn\w*{_GAP}\s+{_MARKER}"
+_SCOPED_REJECTION = re.compile(
+    f"{_MARKER_THEN_WARN}|{_WARN_THEN_MARKER}", re.IGNORECASE
 )
-_PRESENT_TENSE_EMISSION = re.compile(
-    r"\b(?:emit|emits|log|logs|warn|warns|write|writes|record|records"
-    r"|issue|issues|produce|produces|send|sends|report|reports)\b",
+# Past participles included: review escaped the present-tense-only list with
+# "is also logged at WARNING level" and "is surfaced at WARNING level".
+_EMISSION_VERB = re.compile(
+    r"\b(?:emit|emits|emitted|log|logs|logged|warn|warns|warned|write|writes"
+    r"|written|record|records|recorded|issue|issues|issued|produce|produces"
+    r"|produced|send|sends|sent|report|reports|reported|raise|raises|raised"
+    r"|surface|surfaces|surfaced|trigger|triggers|triggered|accompany"
+    r"|accompanies|accompanied|see|sees|seen)\b",
     re.IGNORECASE,
 )
 
@@ -279,10 +375,10 @@ def test_docstring_makes_no_warning_level_claim() -> None:
     for sentence in _sentences(doc):
         if not re.search(r"\bwarn\w*", sentence, re.IGNORECASE):
             continue
-        if not _REJECTION_MARKER.search(sentence):
-            offending.append(("no counterfactual marker", sentence))
-        elif _PRESENT_TENSE_EMISSION.search(sentence):
-            offending.append(("present-tense emission claim", sentence))
+        if not _SCOPED_REJECTION.search(sentence):
+            offending.append(("marker does not scope over the warning", sentence))
+        elif _EMISSION_VERB.search(sentence):
+            offending.append(("emission claim", sentence))
 
     assert not offending, f"docstring asserts warning-level logging: {offending!r}"
 
@@ -337,16 +433,25 @@ def test_docstring_scopes_the_remedy_to_the_caller_that_has_it() -> None:
 
     for name in with_remedy:
         assert name in doc, f"docstring omits the caller that has the remedy: {name}"
-    for name in without_remedy:
-        assert name in doc, f"docstring omits a caller lacking the remedy: {name}"
 
-    # The claim, not just the names.  Two directions, because prose can assert
-    # the boundary in one sentence and contradict it in another.
-    assert re.search(
-        r"no such parameter|have no remedy|cannot (?:use|pass)|remedy exists on one",
-        doc,
+    # The claim must sit in the SAME SENTENCE as the callers it is about.
+    # Searching the whole docstring was not enough: the heading "The remedy
+    # exists on one caller only" satisfied the anchor on its own, so inverting
+    # the boundary sentence to "the other two callers accept the same parameter"
+    # left every control green while asserting the opposite of the truth.
+    unavailable = re.compile(
+        r"no such parameter|have no remedy|has no remedy|no remedy"
+        r"|cannot (?:use|pass|set)|lacks? (?:the )?remedy",
         re.IGNORECASE,
-    ), "docstring names the callers but does not state that the remedy is unavailable"
+    )
+    sentences = _sentences(doc)
+    for name in without_remedy:
+        mentioning = [s for s in sentences if name in s]
+        assert mentioning, f"docstring omits a caller lacking the remedy: {name}"
+        assert any(unavailable.search(s) for s in mentioning), (
+            f"docstring names {name} but no sentence mentioning it states that the "
+            f"remedy is unavailable there; sentences were {mentioning!r}"
+        )
 
     # A universal-availability claim is false while `without_remedy` is
     # non-empty, and must never appear however the rest is worded.
