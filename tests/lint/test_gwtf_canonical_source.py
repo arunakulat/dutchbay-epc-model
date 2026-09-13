@@ -274,3 +274,81 @@ def test_recruit_policy_guard_rejects_removed_controls(
     monkeypatch.setattr(Path, "read_text", altered_read)
     with pytest.raises(AssertionError):
         test_recruit_01_routes_all_relevant_tasks_to_canonical_modules()
+
+
+def test_r18_matches_the_measured_commit_convention() -> None:
+    """Keep R18 aligned with the convention main actually follows."""
+    r18 = _rules_by_id()["R18"]
+    policy = " ".join((r18["title"], r18["description"], r18["enforcement"]))
+
+    assert r18["status"] == "active"
+    assert r18["category"] == "Git Workflow"
+    for sanctioned in (
+        "feat",
+        "fix",
+        "docs",
+        "style",
+        "refactor",
+        "perf",
+        "test",
+        "build",
+        "ci",
+        "chore",
+        "revert",
+    ):
+        assert sanctioned in policy
+    assert "Conventional Commits" in policy
+    assert "'deploy' is NOT sanctioned" in policy
+    assert "type(scope): summary" in policy
+    assert "REFACTOR-03" in policy
+    assert "RECEIPT under VERIFY-01" in policy
+    # The retired example citation must not creep back in.
+    assert "fb3b1f7 as example" not in policy
+
+
+def test_r21_scales_verification_to_the_commit_boundary() -> None:
+    """Pin the graduated check cadence without losing R21's environment guards."""
+    r21 = _rules_by_id()["R21"]
+    policy = " ".join((r21["title"], r21["description"], r21["enforcement"]))
+
+    assert r21["status"] == "active"
+    assert "narrowest meaningful check before each commit" in policy
+    assert "full suite before pushing" in policy
+    # The literal pre-amendment wording must be gone, not merely supplemented.
+    assert "run 'pytest' before committing or pushing" not in policy
+
+
+@pytest.mark.parametrize(
+    ("rule_id", "removed_control", "guard"),
+    [
+        (
+            "R18",
+            "Conventional Commits",
+            test_r18_matches_the_measured_commit_convention,
+        ),
+        (
+            "R21",
+            "narrowest meaningful check before each commit",
+            test_r21_scales_verification_to_the_commit_boundary,
+        ),
+    ],
+)
+def test_commit_cadence_guards_reject_control_loss(
+    monkeypatch: pytest.MonkeyPatch,
+    rule_id: str,
+    removed_control: str,
+    guard: object,
+) -> None:
+    """Observe each guard firing on control loss, without changing source files."""
+    original = _rules_by_id()
+    mutated = {key: dict(row) for key, row in original.items()}
+    mutated[rule_id]["description"] = mutated[rule_id]["description"].replace(
+        removed_control, "REMOVED_CONTROL"
+    )
+    mutated[rule_id]["enforcement"] = mutated[rule_id]["enforcement"].replace(
+        removed_control, "REMOVED_CONTROL"
+    )
+
+    monkeypatch.setitem(globals(), "_rules_by_id", lambda: mutated)
+    with pytest.raises(AssertionError):
+        guard()  # type: ignore[operator]
