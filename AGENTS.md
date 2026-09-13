@@ -41,20 +41,24 @@ by filename: several records carry no date in the name, and the family is wider 
 `docs/SESSION_HANDOVER_*.md`.
 
 ```bash
-for f in $(ls -1 docs/SESSION_HANDOVER_*.md docs/H*_HANDOVER*.md docs/H*_DELIVERY_*.md \
-             2>/dev/null | sort -u); do
-  echo "$(git log -1 --format=%ai -- "$f") $f"
-done | sort -r | head -5
+git ls-files 'docs/SESSION_HANDOVER_*.md' 'docs/H*_HANDOVER*.md' 'docs/H*_DELIVERY_*.md' |
+  sort -u |
+  while read -r f; do echo "$(git log -1 --format='%ct %cI' -- "$f") $f"; done |
+  sort -rn | head -5
 ```
 
-Those globs are examples, not an inventory — confirm against `docs/` rather than assuming
-they enumerate the family. Each record names its predecessor and states which parts of it
-still stand, so read the newest first and follow the chain back only as far as it tells
-you to.
+`git ls-files` does its own matching, so an unmatched pattern cannot abort the command
+under `zsh`; `%ct` is the committer epoch, which sorts correctly across the mixed UTC
+offsets already present in this corpus. It lists only tracked files — a successor written
+this session is not committed yet, so check `git status` as well. Those patterns are
+examples, not an inventory: confirm against `docs/` rather than assuming they enumerate
+the family. Each record names its predecessor and states which parts of it still stand, so
+read the newest first and follow the chain back only as far as it tells you to.
 
-*Illustration, not authority — re-resolve it, never cite this line:* on 2026-09-13 that
-procedure returned `docs/SESSION_HANDOVER_2026-09-07.md`, which all eleven later handover
-records still named as the repository startup pointer.
+*Illustration, not authority — re-resolve it, never cite this line:* on 2026-09-13,
+resolving the pointer this way returned `docs/SESSION_HANDOVER_2026-09-07.md` — reached
+via the newest record, `docs/H08_DELIVERY_HANDOVER.md`, which names it — and all eleven
+later handover records still named it as the repository startup pointer.
 
 These are the PERSIST-01 durable records: they carry the canonical KPI set, the traps that
 have already cost a session real time, and the open-item list.
