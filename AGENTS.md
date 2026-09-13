@@ -24,12 +24,29 @@ branch or a nonexistent ruleset filename.
 
 ## Session continuity
 
-Before starting work, read the newest record in `docs/SESSION_HANDOVER_*.md` — currently
-`docs/SESSION_HANDOVER_2026-09-07.md` — and execute its **Bootstrap — run this first**
-section before substantive work. Each record names its predecessor and states which parts
-of it still stand, so read the newest first and follow the chain back only as far as it
-tells you to. These are the PERSIST-01 durable records: they carry the canonical KPI set,
-the traps that have already cost a session real time, and the open-item list.
+Handover records come in two kinds, and the newest record is not automatically the one to
+bootstrap from:
+
+- a **repository startup record** carries a `## Bootstrap — run this first` section and
+  governs session startup until a later record of the same kind supersedes it;
+- a **scope-specific successor** carries delivery continuity for one PR, dolphin or
+  workstream, authorizes nothing beyond it, and names the startup record that still
+  applies to startup.
+
+So resolve the pointer rather than trusting a filename: read the newest record by date,
+then execute the **Bootstrap — run this first** section of whichever record it names as
+the repository startup/bootstrap pointer — itself, when it is one. Scope-specific records
+also appear as `docs/H*_HANDOVER*.md` and `docs/H*_DELIVERY_HANDOVER*.md`, so the newest
+record is not always inside `docs/SESSION_HANDOVER_*.md`. Each record names its
+predecessor and states which parts of it still stand, so read the newest first and follow
+the chain back only as far as it tells you to.
+
+*Illustration, not authority — re-resolve it, never cite this line:* on 2026-09-13 that
+procedure returned `docs/SESSION_HANDOVER_2026-09-07.md`, which every later handover
+record still named as the repository startup pointer.
+
+These are the PERSIST-01 durable records: they carry the canonical KPI set, the traps that
+have already cost a session real time, and the open-item list.
 
 The handover bootstrap is an executable startup checklist, not an independent governance
 source. Where a handover and this file disagree about environment or governance, this file

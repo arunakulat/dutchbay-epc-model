@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -68,3 +69,92 @@ def test_codex_guidance_preserves_required_safety_and_quality_gates() -> None:
     )
     for phrase in required_phrases:
         assert phrase in guidance
+
+
+BOOTSTRAP_HEADING = "## Bootstrap — run this first"
+ILLUSTRATION_MARKER = "Illustration, not authority"
+HANDOVER_PATTERN = re.compile(r"docs/SESSION_HANDOVER_[0-9A-Za-z_\-]+\.md")
+
+
+def _session_continuity_section() -> str:
+    """Return the body of the AGENTS.md 'Session continuity' section."""
+    guidance = _guidance()
+    start = guidance.index("## Session continuity")
+    end = guidance.index("\n## ", start + 1)
+    return guidance[start:end]
+
+
+def _carries_bootstrap_section(record_text: str) -> bool:
+    """Report whether a handover record is a repository startup record.
+
+    A scope-specific successor carries delivery continuity only and defers
+    startup to the record it names, so it has no bootstrap section to execute.
+    """
+    return BOOTSTRAP_HEADING in record_text
+
+
+def _named_records_are_illustration_only(section: str) -> bool:
+    """Report whether every named handover file sits in the illustration.
+
+    The gateway may name a record to show what the resolution currently returns,
+    but a name inside the instruction itself is the failure mode: it goes stale
+    the moment a successor is written, and the reader follows it anyway.
+    """
+    named = list(HANDOVER_PATTERN.finditer(section))
+    if not named:
+        return True
+    marker = section.find(ILLUSTRATION_MARKER)
+    if marker < 0:
+        return False
+    return all(match.start() > marker for match in named)
+
+
+def test_session_continuity_resolves_the_pointer_rather_than_pinning_a_filename() -> (
+    None
+):
+    """Keep the startup pointer derivable, so it cannot silently go stale.
+
+    The hardcoded form went stale between 2026-09-07 and 2026-09-13: ten later
+    handover records were written while the gateway still asserted that one
+    named file *was* the newest record.
+    """
+    section = _session_continuity_section()
+
+    assert "read the newest record by date" in section
+    assert "repository startup/bootstrap pointer" in section
+    assert _named_records_are_illustration_only(section)
+
+    # Negative control: the wording this replaced must fail the same predicate,
+    # or the guard is defending against nothing.
+    historical = (
+        "## Session continuity\n\n"
+        "Before starting work, read the newest record in `docs/SESSION_HANDOVER_*.md` "
+        "\u2014 currently\n`docs/SESSION_HANDOVER_2026-09-07.md` \u2014 and execute its "
+        "**Bootstrap \u2014 run this first**\nsection before substantive work.\n"
+    )
+    assert not _named_records_are_illustration_only(historical)
+
+
+def test_session_continuity_illustration_is_a_real_startup_record() -> None:
+    """The dated illustration must still resolve to an executable bootstrap.
+
+    This is the guard a naive 'newest file by date' rule would fail: the newest
+    record by filename is a scope-specific successor with no bootstrap section,
+    so pointing at it would leave the next session with nothing to execute.
+    """
+    section = _session_continuity_section()
+    marker = section.find(ILLUSTRATION_MARKER)
+    assert marker >= 0, "the gateway must label its named record as an illustration"
+    named = HANDOVER_PATTERN.findall(section[marker:])
+    assert named, "the illustration must name the record it resolved to"
+
+    record = REPO_ROOT / named[0]
+    assert record.is_file(), f"{named[0]} is named in AGENTS.md but does not exist"
+    assert _carries_bootstrap_section(record.read_text(encoding="utf-8"))
+
+    # Negative control: the predicate must reject a scope-specific successor,
+    # or it is asserting nothing about the record it just accepted.
+    assert not _carries_bootstrap_section(
+        "# Session handover — scope-specific successor\n\n"
+        "## Verified checkpoint\n\nNo bootstrap section here.\n"
+    )
