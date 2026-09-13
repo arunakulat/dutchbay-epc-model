@@ -10,6 +10,15 @@ These tests deliberately do NOT assert that a hook is installed on the running h
 checks out a fresh clone and correctly has none, and a test that failed there would be
 testing the runner rather than the repository. What is checkable, and what these pin, is
 that the governed setup path still performs the installation.
+
+LIMIT, declared rather than left silent (`VERIFY-01`): these are text assertions. They
+prove the install call is PRESENT and sits inside the expected guard chain. They cannot
+prove it is REACHABLE. A reviewer demonstrated the gap concretely by wrapping the call in
+an `if false` branch, after which every assertion here still passed. Closing it properly
+means extracting the block into a separately invocable script that a test can run against
+a throwaway repository and observe a hook appear; that is tracked as follow-up work and is
+deliberately not attempted here. Until then, treat a green run as evidence the call has
+not been deleted or reworded, never as evidence it executes.
 """
 
 from __future__ import annotations
@@ -36,6 +45,25 @@ def test_setup_script_installs_the_precommit_hooks() -> None:
     assert "DUTCHBAY_SKIP_HOOKS" in script
     # Failure must be announced rather than swallowed.
     assert "is NOT active" in script
+
+
+def test_install_call_sits_inside_the_documented_guard_chain() -> None:
+    """Pin the install call's position, not merely its presence.
+
+    Presence alone is satisfied by a call anywhere in the file, including one a refactor
+    has stranded. This asserts the documented shape -- skip-guard, then non-git guard,
+    then the install in the `else` -- so moving the call out of that chain fails loudly.
+    See the LIMIT in this module's docstring: position is checkable, reachability is not.
+    """
+    script = SETUP_SCRIPT.read_text(encoding="utf-8")
+
+    skip_guard = script.index('if [ -n "${DUTCHBAY_SKIP_HOOKS:-}" ]')
+    non_git_guard = script.index("rev-parse --git-dir", skip_guard)
+    else_branch = script.index("else", non_git_guard)
+    install = script.index("-m pre_commit install", else_branch)
+    closing_fi = script.index("\nfi", install)
+
+    assert skip_guard < non_git_guard < else_branch < install < closing_fi
 
 
 def test_makefile_exposes_a_standalone_hooks_target() -> None:
