@@ -193,7 +193,7 @@ def test_missing_packaging_degrades_spec_check_to_unknown(
 @pytest.mark.parametrize(
     ("requirement", "name", "spec"),
     [
-        ("weasyprint<70,>=69", "weasyprint", "<70,>=69"),
+        ("weasyprint<71,>=70", "weasyprint", "<71,>=70"),
         ("redis[hiredis]<6,>=5", "redis", "<6,>=5"),
         ("opendssdirect.py>=0.9.4", "opendssdirect.py", ">=0.9.4"),
         ("reportlab>=4.0", "reportlab", ">=4.0"),
