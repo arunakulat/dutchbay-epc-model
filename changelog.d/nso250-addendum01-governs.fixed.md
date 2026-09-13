@@ -29,9 +29,13 @@
   Clarification 47 states that "the Scheduled Commercial Operation Date (SCOD) has been extended
   by two (2) months" — a second document, but **not** a second source, since it derives its
   authority from the Addendum it points to. Nor is its "two months" the same measure as the
-  102-day absolute move from 06-May to 16-Aug-2027: two months is the ESA-relative milestone
-  (6 months from signing becomes 8), and the other 38 days are the whole ESA chain shifting when
-  the closing date moved from 14-Aug to 04-Sep-2026. They reconcile; they are not one number.
+  102-day absolute move from 06-May to 16-Aug-2027. Two months is the ESA-relative milestone, and
+  it is verbatim in both documents — Volume I clause 1.4 says "Within 06 months from the date of
+  signing of ESA", the Addendum says "Within 08 months". The absolute 102 days, measured
+  consistently at the COD end, is 39 days the whole ESA chain moved when signing went from 06-Nov
+  to 14-Dec-2026, plus 61 days of extension, plus a 2-day roll because eight months from signing
+  falls on Saturday 14-Aug-2027 and the tabulated date is Monday the 16th. They reconcile; they
+  are not one number.
 
   **No KPI moves.** `Financing_Terms.construction_years` stays 1 — 154 days is 0.42 years and
   rounds to the same integer as the 0.33 the superseded schedule implied — and `cod_year` stays

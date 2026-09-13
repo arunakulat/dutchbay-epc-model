@@ -217,9 +217,12 @@ risk_adjustment:
 # arithmetic looks wrong until both are said properly. Cl. 47 derives its authority from the
 # Addendum ("please refer to Addendum No. 1, under which..."), so it is a second document and not
 # a second source. And the "two months" is the ESA-RELATIVE milestone — 6 months from signing
-# becomes 8 — whereas the ABSOLUTE slip from 06-May to 16-Aug-2027 is 102 days: 64 days of SCOD
-# extension plus 38 days the whole ESA chain moved when the closing date went from 14-Aug to
-# 04-Sep-2026. They reconcile; they are not the same number.
+# becomes 8, verbatim in both ("Within 06 months" in Volume I cl. 1.4, "Within 08 months" in the
+# Addendum) — whereas the ABSOLUTE slip from 06-May to 16-Aug-2027 is 102 days. Measured
+# consistently at the COD end that is 39 days the whole ESA chain moved when signing went from
+# 06-Nov to 14-Dec-2026, plus 61 days of SCOD extension, plus a 2-day roll because 8 months from
+# signing falls on Saturday 14-Aug-2027 and the tabulated COD is Monday the 16th. They reconcile;
+# they are not the same number.
 #
 # WHY THE ORIGINAL CITATION WAS RIGHT, which matters more than that it was. It read "(cl. 8)" in
 # a list beside (cl. 47), (cl. 48) and (cl. 13) — all CLARIFICATION numbers. Clarification 8 asks
