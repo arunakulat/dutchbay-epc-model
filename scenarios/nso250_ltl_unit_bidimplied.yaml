@@ -45,9 +45,10 @@ project:
   capacity_factor: 0.0
   degradation: 0.0
   life_years: 15
-  # RFP Vol I cl. 1.4 puts COD at 06-May-2027. Documentary only — the key is read at
-  # analytics/feasibility_execution.py and has no KPI effect. Note it does not agree with the
-  # annual grid, where FC in 2027 plus the rounded construction year implies COD in 2028.
+  # Addendum 01 item 01 puts COD at 16-Aug-2027, superseding the 06-May-2027 of the unamended
+  # Volume I. Documentary only — the key is read at analytics/feasibility_execution.py and has
+  # no KPI effect. Note it does not agree with the annual grid, where FC in 2027 plus the
+  # rounded construction year implies COD in 2028.
   cod_year: 2027
   developer: "LTL-controlled entity (Ceylex / Lakdhanavi), per owner premise"
   jurisdiction: Sri Lanka
@@ -134,9 +135,12 @@ statutory:
   env_surcharge_pct: 0.0
   # SSCL is NOT borne by the project. ESA Volume III Article 5(o): "Any applicable Value Added
   # Tax or similar Sales Taxes that is payable will then be added to such payments." The
-  # Section 4 bid form (cited in earlier work as "Addendum 01 item 13", a document NOT held in
-  # the corpus — see the taxes_indirect header; the pass-through rests on Article 5(o), which is
-  # held and verified, and does not depend on it) matches — the Capacity Charge Rate is quoted
+  # Section 4 bid form matches, and ADDENDUM 01 ITEM 13 IS THE INSTRUMENT THAT MAKES IT MATCH.
+  # Item 13 repeals the Volume II Section 4 rate table headed "(excluding VAT)" and replaces it
+  # with one carrying "SSCL (if applicable)", "Capacity Charge Rate inclusive of SSCL" and
+  # "VAT -18%" as separate lines. A 2026-09-06 edit annotated this citation as naming "a
+  # document NOT held in the corpus"; that was wrong, the document is held, and the original
+  # citation is reinstated. The Capacity Charge Rate is quoted
   # EXCLUDING VAT, with "SSCL (if applicable)" and "VAT - 18%" as separate lines added on top
   # and recovered from NSO. Deducting it from revenue, as this file did until 2026-09-06,
   # double-charged the project ~LKR 139m/yr. Import-side SSCL is a different levy and is
@@ -172,9 +176,20 @@ risk_adjustment:
 # PROVENANCE OF THE PARAGRAPH ABOVE. The ESA names both gazettes verbatim, so the CITATIONS are
 # corpus-verified. Their CONTENT is not: the >= 1 MWh eligibility threshold, the list of levies
 # the scheme relieves (CID, PAL, CESS, VAT), and the SSCL raw-materials-only exemption are all
-# EXTERNAL to this repository and its corpus, and are asserted here from secondary sources. The
-# RFP Clarifications of 2026-08-21 cited below are UNVERIFIABLE - no clarifications document is
-# held. Treat all four as claims to check against the issued originals, not as established here.
+# EXTERNAL to this repository and its corpus, and are asserted here from secondary sources. Treat
+# those three as claims to check against the issued originals, not as established here.
+#
+# The RFP Clarifications of 21-Aug-2026 are NOT in that category. They are held in the public
+# repository and every clause cited below is verified verbatim against the transcript at
+# docs/source_materials/nso_bess_250mw_2026/rfp/extracted/
+# NSO_250MW_BESS_RFP_Clarifications_2026-08-21.verified-transcript.md — named in full because the
+# same directory holds a tesseract raw dump its own README marks "do not cite", and because that
+# README makes the PDF govern where the two differ: item 13 leaves SSCL at import to
+# "the prevailing laws and regulations in effect at the time of importation"; item 47 confirms
+# the bidder bears responsibility for obtaining the facility and records the two-month SCOD
+# extension; item 48 restricts the facility to "imported equipment that forms part of the BESS
+# facility" and rules transmission-line materials and external interconnection works "not
+# eligible". A header that called these unverifiable, as this one did on 2026-09-06, was wrong.
 #
 # Until 2026-09-06 these files set
 # `relief.bonded_scheme: true`, and `finance/import_levies.py` zeroes CID, PAL AND SSCL together
@@ -183,11 +198,40 @@ risk_adjustment:
 # actually reaches: CID is 0.0 because HS 8502.31 is Free in its own right, PAL is 0.0 where the
 # facility is obtained, and SSCL stands at 2.5%.
 #
-# NOT EVIDENCED: the two-month SCOD extension these headers attributed to "Addendum 01 cl. 8"
-# until 2026-09-06. No such addendum is held in the corpus; RFP Vol I cl. 1.4 as held carries
-# the unextended schedule, which is what the timeline block below now models. Separately, ESA
-# Art 6A(b)(i) refers to "the bid closing (i.e. 14th October 2025)" against Volume I's
-# 14-Aug-2026 - a template carry-over that should be resolved against the issued originals.
+# A WITHDRAWAL, ITSELF WITHDRAWN. On 2026-09-06 these headers withdrew their own citation of a
+# two-month SCOD extension in Addendum 01, on the stated ground that no such addendum was held.
+# That was wrong. Addendum 01 of 07-Aug-2026 and the RFP Clarifications of 21-Aug-2026 are BOTH
+# held, in the PUBLIC repository at docs/source_materials/nso_bess_250mw_2026/rfp/, as PDFs with
+# extracted transcripts, ingressed by #1180 on 2026-08-27 and present in the base tree the
+# withdrawal was reviewed against.
+#
+# THE DIAGNOSIS MATTERS MORE THAN THE FACT. It is tempting to record this as "we searched the
+# wrong repository", and that is not what happened: the PRIVATE corpus also carried the governing
+# schedule, tabulated in full at nso_bess_250mw_2026_offers/evaluation/Envision_Budgetary_
+# Commercial_Offers_Ingress_Evaluation_2026-09-03.md, dated three days BEFORE the withdrawal, and
+# the public repository had carried a complete Addendum ingress review since 27-Aug-2026. Both
+# corpora already discussed the document. The failure was never grepping for "Addendum 01" by
+# name in either of them before declaring it unheld.
+# The extension is real. Addendum 01 item 01 moves COD from 06-May-2027 to 16-Aug-2027, and
+# Clarification 47 states that "the Scheduled Commercial Operation Date (SCOD) has been extended
+# by two (2) months". Those two are NOT independent and do NOT measure the same thing, and the
+# arithmetic looks wrong until both are said properly. Cl. 47 derives its authority from the
+# Addendum ("please refer to Addendum No. 1, under which..."), so it is a second document and not
+# a second source. And the "two months" is the ESA-RELATIVE milestone — 6 months from signing
+# becomes 8 — whereas the ABSOLUTE slip from 06-May to 16-Aug-2027 is 102 days: 64 days of SCOD
+# extension plus 38 days the whole ESA chain moved when the closing date went from 14-Aug to
+# 04-Sep-2026. They reconcile; they are not the same number.
+#
+# WHY THE ORIGINAL CITATION WAS RIGHT, which matters more than that it was. It read "(cl. 8)" in
+# a list beside (cl. 47), (cl. 48) and (cl. 13) — all CLARIFICATION numbers. Clarification 8 asks
+# whether the RFP timeline allows for bonded warehousing approval and answers "Please refer
+# Addendum 01": an exact match for the claim. The 2026-09-06 edit read it as "Addendum 01 CLAUSE
+# 8", went looking for a clause that does not exist (Addendum item 08 revises Volume I cl. 6.3.1,
+# Major Deviations), found none, and withdrew a true citation. The citation is reinstated.
+#
+# Separately, ESA Art 6A(b)(i) refers to "the bid closing (i.e. 14th October 2025)" against the
+# governing closing date of 04-Sep-2026 - a genuine template carry-over, still to be resolved
+# against the issued originals.
 #
 # Relief is real but conditional. THIS VARIANT ASSUMES THE FACILITY IS OBTAINED.
 #
@@ -195,10 +239,12 @@ risk_adjustment:
 # output VAT on the capacity charge under ESA Article 5(o), so input VAT is recoverable. This is
 # a recovery position, not a concession, and it does not depend on the bonded approval.
 #
-# NOT modelled: the cl. 48 carve-out. Relief here applies to the whole imported share, whereas
-# the tender restricts it to BESS-facility equipment. Splitting interconnection scope out of
-# capex would reduce `import_share_pct` for the relieved portion and make the base slightly
-# worse; it needs a capex split these files do not yet carry.
+# NOT modelled: the cl. 48 carve-out, whose text is now VERIFIED verbatim rather than cited at
+# second hand. Relief here applies to the whole imported share, whereas the tender restricts it
+# to "imported equipment that forms part of the BESS facility" and rules transmission-line
+# materials, accessories and external grid interconnection works "not eligible". Splitting that
+# interconnection scope out of capex would reduce `import_share_pct` for the relieved portion and
+# make the base slightly worse; it needs a capex split these files do not yet carry.
 taxes_indirect:
   import_share_pct: 0.69      # imported (CIF) share of the pre-levy capex base
   cid_pct: 0.0                # Customs Import Duty — HS 8502.31 is Free in its own right
@@ -232,11 +278,15 @@ Financing_Terms:
   debt_sizing: dual_dscr
   dscr_p99_downside_factor: 0.80
   balloon_treatment: cash_sweep
-  # RFP cl. 1.4 puts FC at 06-Jan-2027 and COD at 06-May-2027 — 0.33 years. This annual-grid
-  # model takes 1 as a CONSERVATIVE ROUNDING of that, not as a figure read off the schedule:
-  # 0 would zero IDC entirely, which is wrong for a four-month build on drawn debt, while 1
-  # overstates IDC by about eight months and pushes the first equity distribution roughly eight
+  # Addendum 01 item 01, which governs, puts FC at 15-Mar-2027 and COD at 16-Aug-2027 — 154
+  # days, or 0.42 years. (The superseded Volume I schedule gave 0.33 years; the rounding below
+  # is unchanged by the correction, so no KPI moves.) This annual-grid model takes 1 as a
+  # CONSERVATIVE ROUNDING of that, not as a figure read off the schedule:
+  # 0 would zero IDC entirely, which is wrong for a five-month build on drawn debt, while 1
+  # overstates IDC by about seven months and pushes the first equity distribution roughly seven
   # months late. Both errors run against the project. The choice is worth ~2pp of project IRR.
+  # (Until 2026-09-07 these two lines read "four-month" and "eight months", which were the
+  # VOLUME I figures — 120 days, 0.33 years — left behind when the dates above were corrected.)
   construction_years: 1
   tenor_years: 12
   interest_only_years: 1
@@ -283,10 +333,17 @@ constraints:
   fail_on_covenant_breach: false
   fail_on_large_balloon: false
 
-# DELIVERY TIMELINE. RFP Vol I cl. 1.4 Project Milestones Schedule, not an assumption:
-# Letter of Award 29-Sep-2026, acceptance 06-Oct-2026, ESA signing 06-Nov-2026, Financial
-# Closure 06-Jan-2027 (within 2 months of ESA signing) and Commissioning, Testing & COD
-# 06-May-2027 (within 6 months of ESA signing). Financial close to COD is FOUR MONTHS.
+# DELIVERY TIMELINE. ADDENDUM 01 of 07-Aug-2026 item 01 GOVERNS. It revises RFP Vol I cl. 1.4
+# in full, and the revised schedule is the one the tender actually ran to: Letter of Award
+# 06-Nov-2026, acceptance 13-Nov-2026, ESA signing 14-Dec-2026, Financial Closure 15-Mar-2027
+# (within 3 months of ESA signing) and Commissioning, Testing & COD 16-Aug-2027 (within 8
+# months of ESA signing). Financial close to COD is FIVE MONTHS.
+#
+# The unamended Volume I schedule, which these headers cited until 2026-09-06, is superseded and
+# never governed. The decisive check is the closing date: Volume I says 14-Aug-2026, Addendum 01
+# says 04-Sep-2026, and the bids were opened on 04-Sep-2026. Anything derived from the Volume I
+# dates - including the "four months" this file previously asserted - is reading a schedule the
+# procurement did not follow.
 # `Financing_Terms.construction_years` is the binding key — finance/debt_v14.py reads it
 # there and DEFAULTS TO 2 when absent, which is what these files were silently running,
 # and finance/equity_distribution_v14_hydra.py prepends that many zero years to the equity
