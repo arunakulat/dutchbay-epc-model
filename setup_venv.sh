@@ -54,6 +54,27 @@ else
     "New environment failed validation; inspect and remove only $VENV_DIR before retrying."
 fi
 
+# GWTF R10 and GOV-02 both describe the pre-commit hook set as LOCAL enforcement that
+# runs automatically on commit - R10 says "hooks run automatically on git commit. Failed
+# hooks prevent commit", and GOV-02 relies on `no-commit-to-branch` blocking a commit on
+# main BEFORE the confusing push-time ruleset rejection. Hooks live in .git/hooks, which
+# git does not track, so a fresh clone - or any .git predating this step - has none and
+# both claims are silently false. Installing is idempotent, so doing it on every setup
+# costs nothing and keeps the claims true. Observed 2026-09-13: this repository had no
+# pre-commit hook installed at all, so neither rule's local enforcement existed.
+if [ -n "${DUTCHBAY_SKIP_HOOKS:-}" ]; then
+  echo "Skipping pre-commit hook installation (DUTCHBAY_SKIP_HOOKS is set)."
+elif ! git -C "$PROJECT_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  echo "Not a git checkout; skipping pre-commit hook installation."
+else
+  echo "Installing pre-commit hooks (GWTF R10, GOV-02)..."
+  if ! (cd "$PROJECT_ROOT" && "$VENV_PYTHON" -m pre_commit install); then
+    echo "WARNING: pre-commit hook installation FAILED." >&2
+    echo "         R10 and GOV-02 local enforcement is NOT active in this checkout." >&2
+    echo "         Repair with: $VENV_PYTHON -m pre_commit install" >&2
+  fi
+fi
+
 echo "Environment ready: $VENV_DIR"
 echo "Activate it for this checkout with:"
 echo "  cd '$PROJECT_ROOT'"

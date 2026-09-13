@@ -1,4 +1,4 @@
-.PHONY: setup lint type security audit test test-stochastic-qualification test-report-qualification cov html package lock clean
+.PHONY: setup hooks lint type security audit test test-stochastic-qualification test-report-qualification cov html package lock clean
 
 PY ?= python
 PIP ?= pip
@@ -30,6 +30,12 @@ COV := --cov=finance --cov=analytics --cov=wind_resource --cov=api --cov=app --c
 # script installs the pinned reproducibility lock without an editable checkout.
 setup:
 	./setup_venv.sh
+
+# Install the git pre-commit hook set. `setup` already does this; this target exists
+# so an existing checkout can restore R10/GOV-02 local enforcement without a full
+# environment reconcile. Idempotent. Hooks are untracked, so a fresh clone has none.
+hooks:
+	$(if $(VENV_PY),$(VENV_PY) -m pre_commit,pre-commit) install
 
 # Mandatory gates: ruff. Advisory (matches CI): black --check (the committed tree is
 # style-drifted vs the current formatter, so black is non-blocking by design).

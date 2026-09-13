@@ -153,13 +153,22 @@ Notes:
 
 ### Pre-commit hooks
 
-Install the hooks once; they then run on every commit (black, ruff, isort, mypy, and file
-hygiene checks, plus a `no-commit-to-branch` guard that blocks commits on `main`):
+`./setup_venv.sh` (and therefore `make setup`) installs the hooks for you, because
+`R10` and `GOV-02` both describe them as enforcement that runs automatically — a claim
+that is silently false in any checkout where nobody ran the install. Hooks live in
+`.git/hooks`, which git does not track, so a fresh clone starts with none.
+
+To restore them in an existing checkout without a full environment reconcile, or to run
+the set on demand:
 
 ```bash
-pre-commit install
+make hooks                      # idempotent; same as `pre-commit install`
 pre-commit run --all-files      # run the whole hook set on demand
 ```
+
+They then run on every commit (black, ruff, isort, and file hygiene checks, plus a
+`no-commit-to-branch` guard that blocks commits on `main`). Set `DUTCHBAY_SKIP_HOOKS=1`
+to suppress installation during setup on a host where it is not wanted.
 
 ## Testing
 
