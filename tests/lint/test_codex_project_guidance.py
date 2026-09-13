@@ -73,7 +73,10 @@ def test_codex_guidance_preserves_required_safety_and_quality_gates() -> None:
 
 BOOTSTRAP_HEADING = "## Bootstrap — run this first"
 ILLUSTRATION_MARKER = "Illustration, not authority"
-HANDOVER_PATTERN = re.compile(r"docs/SESSION_HANDOVER_[0-9A-Za-z_\-]+\.md")
+# Matches a concrete record name, not a glob: `docs/H*_HANDOVER*.md` has no digits
+# after the H and `docs/SESSION_HANDOVER_*.md` has no `.md` after the class, so the
+# globs the prose uses as examples do not trip the guard.
+HANDOVER_PATTERN = re.compile(r"docs/(?:SESSION_HANDOVER|H\d+)[0-9A-Za-z_\-]*\.md")
 
 
 def _session_continuity_section() -> str:
@@ -85,10 +88,13 @@ def _session_continuity_section() -> str:
 
 
 def _carries_bootstrap_section(record_text: str) -> bool:
-    """Report whether a handover record is a repository startup record.
+    """Report whether a record carries a bootstrap checklist to execute.
 
-    A scope-specific successor carries delivery continuity only and defers
-    startup to the record it names, so it has no bootstrap section to execute.
+    This is a necessary condition for a startup record, not a kind classifier:
+    `docs/SESSION_HANDOVER_2026-09-07_PR1178.md` calls itself a scoped successor
+    and still carries the heading, though its body defers to its predecessor.
+    What the illustration guard needs is exactly this weaker claim -- that the
+    record it names has something to execute.
     """
     return BOOTSTRAP_HEADING in record_text
 
@@ -114,14 +120,15 @@ def test_session_continuity_resolves_the_pointer_rather_than_pinning_a_filename(
 ):
     """Keep the startup pointer derivable, so it cannot silently go stale.
 
-    The hardcoded form went stale between 2026-09-07 and 2026-09-13: ten later
-    handover records were written while the gateway still asserted that one
-    named file *was* the newest record.
+    The hardcoded form went stale between 2026-09-07 and 2026-09-13: eleven
+    later handover records were written while the gateway still asserted that
+    one named file *was* the newest record.
     """
     section = _session_continuity_section()
 
-    assert "read the newest record by date" in section
+    assert "resolve the pointer rather than trusting a filename" in section
     assert "repository startup/bootstrap pointer" in section
+    assert "Order by commit date" in section
     assert _named_records_are_illustration_only(section)
 
     # Negative control: the wording this replaced must fail the same predicate,
@@ -133,6 +140,16 @@ def test_session_continuity_resolves_the_pointer_rather_than_pinning_a_filename(
         "**Bootstrap \u2014 run this first**\nsection before substantive work.\n"
     )
     assert not _named_records_are_illustration_only(historical)
+
+    # Second negative control: the same defect spelled with an H-family record.
+    # The prose names that family, so a guard blind to it would be narrower than
+    # the text it defends.
+    h_family = (
+        "## Session continuity\n\n"
+        "Before starting work, read `docs/H08_DELIVERY_HANDOVER.md` and execute "
+        "its bootstrap.\n"
+    )
+    assert not _named_records_are_illustration_only(h_family)
 
 
 def test_session_continuity_illustration_is_a_real_startup_record() -> None:

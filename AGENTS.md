@@ -27,23 +27,34 @@ branch or a nonexistent ruleset filename.
 Handover records come in two kinds, and the newest record is not automatically the one to
 bootstrap from:
 
-- a **repository startup record** carries a `## Bootstrap — run this first` section and
-  governs session startup until a later record of the same kind supersedes it;
+- a **repository startup record** governs session startup and carries the
+  `## Bootstrap — run this first` checklist to execute;
 - a **scope-specific successor** carries delivery continuity for one PR, dolphin or
-  workstream, authorizes nothing beyond it, and names the startup record that still
-  applies to startup.
+  workstream, authorizes nothing beyond it, and names the record that still governs
+  startup. It may repeat a bootstrap heading of its own, but that heading defers to the
+  record it names rather than replacing it.
 
-So resolve the pointer rather than trusting a filename: read the newest record by date,
-then execute the **Bootstrap — run this first** section of whichever record it names as
-the repository startup/bootstrap pointer — itself, when it is one. Scope-specific records
-also appear as `docs/H*_HANDOVER*.md` and `docs/H*_DELIVERY_HANDOVER*.md`, so the newest
-record is not always inside `docs/SESSION_HANDOVER_*.md`. Each record names its
-predecessor and states which parts of it still stand, so read the newest first and follow
-the chain back only as far as it tells you to.
+So resolve the pointer rather than trusting a filename: read the newest record, then
+execute the **Bootstrap — run this first** section of whichever record it names as the
+repository startup/bootstrap pointer — itself, when it is one. Order by commit date, not
+by filename: several records carry no date in the name, and the family is wider than
+`docs/SESSION_HANDOVER_*.md`.
+
+```bash
+for f in $(ls -1 docs/SESSION_HANDOVER_*.md docs/H*_HANDOVER*.md docs/H*_DELIVERY_*.md \
+             2>/dev/null | sort -u); do
+  echo "$(git log -1 --format=%ai -- "$f") $f"
+done | sort -r | head -5
+```
+
+Those globs are examples, not an inventory — confirm against `docs/` rather than assuming
+they enumerate the family. Each record names its predecessor and states which parts of it
+still stand, so read the newest first and follow the chain back only as far as it tells
+you to.
 
 *Illustration, not authority — re-resolve it, never cite this line:* on 2026-09-13 that
-procedure returned `docs/SESSION_HANDOVER_2026-09-07.md`, which every later handover
-record still named as the repository startup pointer.
+procedure returned `docs/SESSION_HANDOVER_2026-09-07.md`, which all eleven later handover
+records still named as the repository startup pointer.
 
 These are the PERSIST-01 durable records: they carry the canonical KPI set, the traps that
 have already cost a session real time, and the open-item list.
