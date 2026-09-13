@@ -24,12 +24,44 @@ branch or a nonexistent ruleset filename.
 
 ## Session continuity
 
-Before starting work, read the newest record in `docs/SESSION_HANDOVER_*.md` — currently
-`docs/SESSION_HANDOVER_2026-09-07.md` — and execute its **Bootstrap — run this first**
-section before substantive work. Each record names its predecessor and states which parts
-of it still stand, so read the newest first and follow the chain back only as far as it
-tells you to. These are the PERSIST-01 durable records: they carry the canonical KPI set,
-the traps that have already cost a session real time, and the open-item list.
+Handover records come in two kinds, and the newest record is not automatically the one to
+bootstrap from:
+
+- a **repository startup record** governs session startup and carries the
+  `## Bootstrap — run this first` checklist to execute;
+- a **scope-specific successor** carries delivery continuity for one PR, dolphin or
+  workstream, authorizes nothing beyond it, and names the record that still governs
+  startup. It may repeat a bootstrap heading of its own, but that heading defers to the
+  record it names rather than replacing it.
+
+So resolve the pointer rather than trusting a filename: read the newest record, then
+execute the **Bootstrap — run this first** section of whichever record it names as the
+repository startup/bootstrap pointer — itself, when it is one. Order by commit date, not
+by filename: several records carry no date in the name, and the family is wider than
+`docs/SESSION_HANDOVER_*.md`.
+
+```bash
+git ls-files 'docs/SESSION_HANDOVER_*.md' 'docs/H*_HANDOVER*.md' 'docs/H*_DELIVERY_*.md' |
+  sort -u |
+  while read -r f; do echo "$(git log -1 --format='%ct %cI' -- "$f") $f"; done |
+  sort -rn | head -5
+```
+
+`git ls-files` does its own matching, so an unmatched pattern cannot abort the command
+under `zsh`; `%ct` is the committer epoch, which sorts correctly across the mixed UTC
+offsets already present in this corpus. It lists only tracked files — a successor written
+this session is not committed yet, so check `git status` as well. Those patterns are
+examples, not an inventory: confirm against `docs/` rather than assuming they enumerate
+the family. Each record names its predecessor and states which parts of it still stand, so
+read the newest first and follow the chain back only as far as it tells you to.
+
+*Illustration, not authority — re-resolve it, never cite this line:* on 2026-09-13,
+resolving the pointer this way returned `docs/SESSION_HANDOVER_2026-09-07.md` — reached
+via the newest record, `docs/H08_DELIVERY_HANDOVER.md`, which names it — and all eleven
+later handover records still named it as the repository startup pointer.
+
+These are the PERSIST-01 durable records: they carry the canonical KPI set, the traps that
+have already cost a session real time, and the open-item list.
 
 The handover bootstrap is an executable startup checklist, not an independent governance
 source. Where a handover and this file disagree about environment or governance, this file
