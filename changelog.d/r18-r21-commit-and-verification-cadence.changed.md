@@ -3,29 +3,34 @@ enforcement claim in `REFACTOR-03`. Remediates audit pointer `RS-F4`, which name
 enforcement-drift.
 
 `R18` now sanctions the eleven-type Conventional Commits set (as enumerated by commitlint
-`config-conventional`), records `deploy` as unsanctioned so it is not re-litigated, makes scope
-*expected* with an explicit carve-out for cross-cutting changes and `REFACTOR-03` Dolphin Strategy
-commits, and restates its test-status clause as a `VERIFY-01` receipt.
+`config-conventional`), records `deploy` as unsanctioned, makes scope *expected* with an explicit
+carve-out for cross-cutting changes and `REFACTOR-03` Dolphin Strategy commits, and restates its
+test-status clause as a `VERIFY-01` receipt.
 
-**Its enforcement cell deliberately carries no frozen conformance figure.** `R18` drifted because it
-pinned one example commit; a pinned percentage decays identically. An earlier draft of this change
-froze five fresh measurements into normative text — and independent review found one of them (a
-"504 consecutive commits" claim) overstated ~15x *and* self-contradicting, because the counted run
-included the very `deploy(fly):` commits the same cell declared unsanctioned. Conformance is now
-**computed** by `tests/lint/test_commit_message_conformance.py`, which measures from git history at
-test time against ratchet floors and skips on a shallow checkout.
+**No cell this rule touches carries a frozen figure.** `R18` drifted because it pinned one example
+commit; a pinned percentage decays identically. Two review rounds were needed to get this right: the
+first draft froze five fresh measurements into normative text, one of them overstated ~15x and
+self-contradicting; the second removed three of four and left a stale commit count in the description.
 
-As at 2026-09-13, for the record rather than for the rule: 99.25% of the last 400 commits use a
-sanctioned type and 90.75% carry a scope.
+Conformance is **computed** by `tests/lint/test_commit_message_conformance.py`, measured against
+`origin/main` rather than the current branch, so its verdict describes shared history and not whichever
+branch a runner stands on. Its binding to `R18`'s type list is a set comparison in both directions —
+substring presence bound nothing, since `ci` matches inside "explicit" — and that binding runs
+everywhere including CI, because it reads the CSV rather than git history. Only the measurement itself
+needs full history and skips without it.
 
-`R21` step (5) now requires the narrowest meaningful check before each commit and the full suite
-before pushing; the previous literal wording is impractical per-commit, and `AGENTS.md` already
-instructs the graduated form. No test-count figure is pinned — the one first drafted had been lifted
-from a stale workflow comment and was wrong by ~1.7x.
+**No scope floor is gated.** An earlier draft asserted one, which was a category error: `R18` makes
+scope *expected*, not required, and explicitly sanctions unscoped commits. That floor was also authored
+at exactly the observed value, 170/200 with zero headroom, and would have failed on the next sanctioned
+unscoped commit — on a check that `R21` makes mandatory before every push.
 
-`REFACTOR-03` enforcement claimed a pre-commit hook that warns on `refactor:` commits touching more
-than one file. No such hook exists or ever did. Left unamended, the CSV would have asserted both that
-this repository has no commit-message linter and that it has one.
+`R21` step (5) now requires the narrowest meaningful check before each commit and the full suite before
+pushing. No test-count figure is pinned; the one first drafted had been lifted from a stale workflow
+comment and was wrong by ~1.7x.
 
-Rule count unchanged at 74; no row added, removed or reordered. Every asserted control ships a
-negative control demonstrating the guard fires — 17 in total.
+`REFACTOR-03` enforcement claimed a pre-commit hook that warns on `refactor:` commits touching more than
+one file. No such hook exists or ever did. Left unamended, the CSV would have asserted both that this
+repository has no commit-message linter and that it has one.
+
+Rule count unchanged at 74; no row added, removed or reordered. 19 negative controls, each verified to
+fire from its own assertion.

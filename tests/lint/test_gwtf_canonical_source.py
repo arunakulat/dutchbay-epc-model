@@ -285,19 +285,11 @@ R18_REQUIRED_CONTROLS = (
     "RECEIPT under VERIFY-01",
     "NO frozen conformance figure",
     "test_commit_message_conformance.py",
-)
-R18_SANCTIONED_TYPES = (
-    "feat",
-    "fix",
-    "docs",
-    "style",
-    "refactor",
-    "perf",
-    "test",
-    "build",
-    "ci",
-    "chore",
-    "revert",
+    # Assert the ENUMERATION, not each type: substring presence bound nothing, because
+    # `ci` matches inside "explicit" and `test`/`chore` appear elsewhere in the cell, so
+    # removing a type from the rule left the guard green. Set-equality binding, which also
+    # catches ADDITION, lives in tests/lint/test_commit_message_conformance.py.
+    "feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert",
 )
 R21_REQUIRED_CONTROLS = (
     "narrowest meaningful check before each commit",
@@ -320,8 +312,6 @@ def test_r18_states_the_sanctioned_commit_convention() -> None:
     assert _rules_by_id()["R18"]["category"] == "Git Workflow"
     for control in R18_REQUIRED_CONTROLS:
         assert control in policy
-    for sanctioned in R18_SANCTIONED_TYPES:
-        assert sanctioned in policy
     # The retired example citation must not creep back. The historical text was
     # "...cleanup commit (fb3b1f7) as example." - match the SHA itself, because an
     # earlier draft of this guard banned "fb3b1f7 as example", a substring the real
