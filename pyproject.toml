@@ -187,7 +187,7 @@ ingestion = [
 # The guarded import (app.reports.renderer -> ReportDependencyError) preserves a
 # fail-loud boundary for deliberately minimal installs (CASPER).
 report = [
-  "weasyprint>=69,<70",
+  "weasyprint>=70,<71",
   # reportlab powers the standalone assessment-report generator
   # (scripts/generate_solar_assessment_report.py) and is exercised when pvlib is present.
   "reportlab>=4.0",
