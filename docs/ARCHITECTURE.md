@@ -247,7 +247,7 @@ different surface.
   graceful optional-dep failure.
 - **Test coverage**: the six engine packages (`analytics`, `finance`,
   `wind_resource`, `api`, `app`, `solar_resource`) are gated at ≥95% via `--cov-fail-under=95` in CI
-  and `make test` (currently ~97%, 2,683 tests). See the README for the enforcement
+  and `make test` (currently ~97%). See the README for the enforcement
   detail (#439).
 - **Auditability**: every run is stamped with a `run_manifest` (config hash,
   engine version, commit).
