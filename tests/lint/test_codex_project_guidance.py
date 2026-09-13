@@ -75,8 +75,10 @@ BOOTSTRAP_HEADING = "## Bootstrap — run this first"
 ILLUSTRATION_MARKER = "Illustration, not authority"
 # Matches a concrete record name, not a glob: `docs/H*_HANDOVER*.md` has no digits
 # after the H and `docs/SESSION_HANDOVER_*.md` has no `.md` after the class, so the
-# globs the prose uses as examples do not trip the guard.
-HANDOVER_PATTERN = re.compile(r"docs/(?:SESSION_HANDOVER|H\d+)[0-9A-Za-z_\-]*\.md")
+# globs the prose uses as examples do not trip the guard. The `docs/` prefix is
+# optional because ten of the eleven live records name the pointer without it --
+# requiring the prefix would miss the spelling the corpus itself models.
+HANDOVER_PATTERN = re.compile(r"(?:docs/)?(?:SESSION_HANDOVER|H\d+)[0-9A-Za-z_\-]*\.md")
 
 
 def _session_continuity_section() -> str:
@@ -150,6 +152,15 @@ def test_session_continuity_resolves_the_pointer_rather_than_pinning_a_filename(
         "its bootstrap.\n"
     )
     assert not _named_records_are_illustration_only(h_family)
+
+    # Third negative control: the same defect spelled without the `docs/` prefix,
+    # which is how ten of the eleven live records write it.
+    bare = (
+        "## Session continuity\n\n"
+        "Before starting work, read `SESSION_HANDOVER_2026-09-07.md` and execute "
+        "its **Bootstrap — run this first** section.\n"
+    )
+    assert not _named_records_are_illustration_only(bare)
 
 
 def test_session_continuity_illustration_is_a_real_startup_record() -> None:
