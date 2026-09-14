@@ -96,10 +96,27 @@ def _carries_bootstrap_section(record_text: str) -> bool:
     fence: tuple[str, int] | None = None
     delimiter_lines: set[int] = set()
     unfenced: list[bool] = []
+    html_comment = False
+    raw_tag: str | None = None
     for index, line in enumerate(lines):
         stripped = line.lstrip(" ")
         indent = len(line) - len(stripped)
-        unfenced.append(fence is None)
+        line_hidden = html_comment or raw_tag is not None
+        if "<!--" in line and not html_comment:
+            line_hidden = True
+            html_comment = "-->" not in line.split("<!--", 1)[1]
+        elif html_comment and "-->" in line:
+            html_comment = False
+        if raw_tag is None:
+            opening_tag = re.match(
+                r"<(pre|script|style|textarea)(?:\s|>)", stripped, re.IGNORECASE
+            )
+            if opening_tag:
+                raw_tag = opening_tag.group(1).lower()
+                line_hidden = True
+        elif re.search(rf"</{raw_tag}\s*>", stripped, re.IGNORECASE):
+            raw_tag = None
+        unfenced.append(fence is None and not line_hidden)
         if indent > 3:
             continue
         if fence is None:
@@ -304,6 +321,16 @@ def test_session_continuity_resolves_the_pointer_rather_than_pinning_a_filename(
         "H95_HANDOVER unicode.md",
         "docs/H97_HANDOVER next-line.md",
     ]
+    qualified = (
+        "Ignore SESSION_HANDOVER_* without a terminator; use "
+        "./docs/H81_HANDOVER repo.md, ../docs/H82_HANDOVER parent.md, and "
+        "/tmp/project/docs/H83_HANDOVER absolute.md."
+    )
+    assert prose_record_references(qualified) == [
+        "docs/H81_HANDOVER repo.md",
+        "docs/H82_HANDOVER parent.md",
+        "docs/H83_HANDOVER absolute.md",
+    ]
 
     span = _illustration_span(section)
     assert span is not None
@@ -355,6 +382,12 @@ def test_session_continuity_illustration_names_existing_records() -> None:
     )
     assert not _carries_bootstrap_section(
         "# Session handover\n\n## Bootstrap — run this first\n\n## Next section\n"
+    )
+    assert not _carries_bootstrap_section(
+        "# Handover\n<!--\n## Bootstrap — run this first\n- hidden\n-->\n"
+    )
+    assert not _carries_bootstrap_section(
+        "# Handover\n<pre>\n## Bootstrap — run this first\n- hidden\n</pre>\n"
     )
 
 
@@ -638,6 +671,10 @@ def test_handover_resolver_rejects_control_character_filenames(
         docs / "H01_HANDOVER tab\tfield.md",
         docs / "H02_HANDOVER line\nbreak.md",
         docs / "H03_HANDOVER record\x1eseparator.md",
+        docs / "H04_HANDOVER unicode\u0085control.md",
+        docs / "H05_HANDOVER zero\u200bwidth.md",
+        docs / "H06_HANDOVER_*.md",
+        docs / "H07_HANDOVER_[draft].md",
     ]
     for path in hostile:
         path.write_text("hostile\n", encoding="utf-8")
@@ -646,7 +683,7 @@ def test_handover_resolver_rejects_control_character_filenames(
 
     result = _run_resolver(repo)
     assert result.returncode == 2
-    assert "unsupported control characters" in result.stderr
+    assert "unsupported display characters" in result.stderr
     assert "\\t" in result.stderr
     assert "\\n" in result.stderr
     assert "\\x1e" in result.stderr

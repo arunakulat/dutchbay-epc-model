@@ -16,14 +16,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 RECORD_PREFIX_EXPRESSION = r"(?:SESSION_HANDOVER_|H\d+_(?:HANDOVER|DELIVERY_))"
-RECORD_FILENAME_EXPRESSION = rf"{RECORD_PREFIX_EXPRESSION}[^/\x00-\x1f\x7f]*\.md"
+RECORD_FILENAME_EXPRESSION = rf"{RECORD_PREFIX_EXPRESSION}[0-9A-Za-z_. -]*\.md"
 RECORD_PATTERN = re.compile(rf"^docs/{RECORD_FILENAME_EXPRESSION}$")
 NEAR_FAMILY_PATTERN = re.compile(
     rf"^docs/{RECORD_PREFIX_EXPRESSION}[^/]*\.md$", re.DOTALL
 )
 RECORD_CANDIDATE_PATTERN = re.compile(
-    rf"(?<![0-9A-Za-z_./-])(?P<record>(?:docs/)?{RECORD_PREFIX_EXPRESSION}"
-    rf"[^/\n]*?\.md)"
+    rf"(?=(?P<record>(?:docs/)?{RECORD_PREFIX_EXPRESSION}[^/\n]*?\.md))"
 )
 DISPLAY_LIMIT = 5
 
@@ -106,7 +105,7 @@ def _candidate_paths(output: bytes) -> set[str]:
 
 
 def _validated_candidate_paths(paths: set[str]) -> set[str]:
-    """Return supported records and reject control-bearing near-family paths."""
+    """Return supported records and reject unsafe near-family paths."""
     unsupported = sorted(
         path
         for path in paths
@@ -115,7 +114,7 @@ def _validated_candidate_paths(paths: set[str]) -> set[str]:
     if unsupported:
         rendered = ", ".join(repr(path) for path in unsupported)
         raise ResolutionError(
-            "handover-like filenames contain unsupported control characters: "
+            "handover-like filenames use unsupported display characters: "
             + rendered
         )
     return {path for path in paths if RECORD_PATTERN.fullmatch(path)}
@@ -153,7 +152,13 @@ def prose_record_matches(text: str) -> list[tuple[int, int, str]]:
             continue
         normalized = record if record.startswith("docs/") else f"docs/{record}"
         if RECORD_PATTERN.fullmatch(normalized):
-            matches.append((match.start("record"), match.end("record"), record))
+            start, end = match.start("record"), match.end("record")
+            if any(
+                old_start <= start and end <= old_end
+                for old_start, old_end, _ in matches
+            ):
+                continue
+            matches.append((start, end, record))
     return matches
 
 

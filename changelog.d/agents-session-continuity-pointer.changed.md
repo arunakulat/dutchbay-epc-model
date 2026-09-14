@@ -17,3 +17,5 @@
   Git path inventories, followed-commit metadata and per-commit changes use NUL framing;
   control-bearing near-family names fail before history interpretation. Independently
   bounded prose candidates ensure a rejected glob cannot mask a later concrete reference.
+  The display-safe suffix grammar is explicit, and the model product owner must optimize
+  and review the resolver before runtime exceeds 60 seconds or the corpus reaches 100 records.
