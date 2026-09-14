@@ -8,6 +8,8 @@ optional ``packaging`` must all degrade to an honest recorded value.
 from __future__ import annotations
 
 import importlib.metadata as importlib_metadata
+import tomllib
+from pathlib import Path
 
 import pytest
 
@@ -22,10 +24,10 @@ from app.ops.extras import (
     probe_extras,
 )
 
-# ── Declared pins come from metadata, so they cannot drift ───────────────────
+# ── Declared pins come from the tree that is executing ───────────────────────
 
 
-def test_declared_extras_reads_the_real_distribution_metadata() -> None:
+def test_declared_extras_reads_the_projects_own_declaration() -> None:
     extras = declared_extras()
     assert "report" in extras, "the project declares a [report] extra"
     joined = " ".join(extras["report"])
@@ -236,3 +238,142 @@ def test_genuinely_absent_package_is_reported_absent(
     assert status.available is False
     assert status.missing == ("definitely-not-installed-xyz",)
     assert status.broken == (), "absent is missing, not broken"
+
+
+# ── Resolution: pyproject first, metadata as the deferral ────────────────────
+#
+# Regression guard for the 2026-09-14 defect. `app/` is not a packaged directory, so this
+# module always executes from a checkout, while the installed distribution in the shared
+# governed venv was built from whichever checkout last ran `pip install`. The pins it
+# reported therefore described a tree that was not running. Two observed consequences:
+# a build declaring `weasyprint<70,>=69` outlived the `>=70,<71` bump of #1256 and rejected
+# the very version the lock requires, and a venv built by `setup_venv.sh` alone carried no
+# project distribution at all, so the extra declared nothing and every DBPL PDF failed.
+
+
+PYPROJECT = Path(__file__).resolve().parents[2] / "pyproject.toml"
+
+
+def _stale_metadata(*specs: str):
+    """An installed build whose recorded pins disagree with the checkout."""
+    return lambda name: [f'{spec}; extra == "report"' for spec in specs]
+
+
+def test_declared_pins_follow_the_executing_tree_not_the_installed_build(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pins must come from the tree running, not from whatever last built the dist."""
+
+    live = tuple(declared_extras()["report"])
+
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        _stale_metadata("weasyprint<70,>=69"),
+    )
+
+    # Negative control: metadata-only resolution -- the behaviour before this fix -- really
+    # does return the stale pin, so the assertion below is not comparing against an inert stub.
+    assert ops_extras._metadata_extras(ops_extras.DEFAULT_DISTRIBUTION)["report"] == (
+        "weasyprint<70,>=69",
+    )
+
+    # The live resolution is unmoved by it.
+    assert tuple(declared_extras()["report"]) == live
+    assert probe_extra("report").spec_source == "pyproject"
+
+
+def test_declared_pins_match_the_checkouts_pyproject_verbatim() -> None:
+    """What is resolved is exactly what the active checkout declares."""
+
+    with PYPROJECT.open("rb") as handle:
+        optional = tomllib.load(handle)["project"]["optional-dependencies"]
+
+    for extra, requirements in optional.items():
+        assert tuple(declared_extras()[extra]) == tuple(requirements)
+
+
+def test_an_absent_project_distribution_still_declares_the_extra(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A venv built by ./setup_venv.sh alone installs no project distribution at all."""
+
+    def absent(name: str):
+        raise importlib_metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(ops_extras.importlib_metadata, "requires", absent)
+
+    # Negative control: metadata alone can say nothing here.
+    assert ops_extras._metadata_extras(ops_extras.DEFAULT_DISTRIBUTION) == {}
+
+    status = probe_extra("report")
+    assert status.spec_source == "pyproject"
+    assert {p.distribution for p in status.packages} >= {
+        "weasyprint",
+        "reportlab",
+        "geopandas",
+        "contextily",
+    }
+
+
+def test_metadata_answers_when_no_pyproject_sits_beside_the_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A deployed wheel has no source tree; metadata is then the only truthful source."""
+
+    monkeypatch.setattr(
+        ops_extras, "GOVERNING_PYPROJECT", Path("/nonexistent/pyproject.toml")
+    )
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        _stale_metadata("weasyprint<70,>=69"),
+    )
+
+    status = probe_extra("report")
+    assert status.spec_source == "metadata"
+    assert [p.declared_spec for p in status.packages] == ["<70,>=69"]
+
+
+def test_an_unparseable_pyproject_degrades_to_metadata(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """CASPER: an unreadable source defers to the other one, it never raises."""
+
+    broken = tmp_path / "pyproject.toml"
+    broken.write_text("this is not [valid toml at all ===\n", encoding="utf-8")
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", broken)
+
+    assert probe_extra("report").spec_source == "metadata"
+
+
+def test_a_foreign_pyproject_does_not_answer_for_this_distribution(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Another project's pyproject must not be mistaken for ours."""
+
+    foreign = tmp_path / "pyproject.toml"
+    foreign.write_text(
+        '[project]\nname = "somebody-elses-project"\n'
+        '[project.optional-dependencies]\nreport = ["nonsense>=1"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", foreign)
+
+    assert probe_extra("report").spec_source == "metadata"
+    assert "nonsense" not in " ".join(declared_extras()["report"])
+
+
+def test_a_hyphen_underscore_name_difference_still_matches() -> None:
+    """PEP 503: dutchbay_epc_model and dutchbay-epc-model are the same distribution."""
+
+    assert declared_extras("dutchbay_epc_model") == declared_extras(
+        "dutchbay-epc-model"
+    )
+
+
+def test_spec_source_is_surfaced_for_a_health_route() -> None:
+    """Provenance is reported, not inferred -- the two sources can disagree."""
+
+    payload = probe_extra("report").as_dict()
+    assert payload["spec_source"] in {"pyproject", "metadata", "none"}
