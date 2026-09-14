@@ -30,7 +30,7 @@ not abstract (see ``docs/knowledge_base/grid_screening_scope.md``).
 Provenance (surfaced, not internal — the ``surface-provenance-in-presentation-layer`` directive)
 -------------------------------------------------------------------------------------------------
 The report surfaces (a) DEPENDENCY RESOLUTION / reproducibility — the resolved ``[grid]`` pin
-set (pandapower==3.3.0 / andes>=2.0 / opendssdirect.py>=0.9.4) plus the CASPER
+set plus its typed declaration source/status and the CASPER
 available-vs-degraded state of each optional engine at run-time — and (b) VERIFICATION
 DISCIPLINE — that the results are adversarially reviewed, KPI-neutral / oracle byte-identical,
 and degrade gracefully when an engine is absent.
@@ -59,6 +59,7 @@ import platform
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from enum import StrEnum
 from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any, Mapping, Optional
@@ -81,6 +82,11 @@ from analytics.scenario_loader import load_scenario_config
 
 __all__ = [
     "GRID_EXTRA_PINS",
+    "GRID_DEPENDENCY_PROVENANCE",
+    "DependencyProvenance",
+    "DependencyResolutionStatus",
+    "DependencySpecSource",
+    "GridDependencyProvenanceError",
     "MANDATORY_SCREENING_CAVEAT",
     "EMT_GAP_CAVEAT",
     "EMT_CONFIRMATION_STAMP",
@@ -153,13 +159,13 @@ SYNTHETIC_CURTAILMENT_DETAIL = (
     "not promote synthetic inputs to real evidence."
 )
 
-#: FALLBACK ``[grid]`` pin set, reached only when :func:`_grid_extra_pins` can resolve nothing
-#: at all — no ``pyproject.toml`` declaring the distribution AND no installed metadata, or a
-#: lookup that raised. The LIVE pins come from :func:`app.ops.extras.declared_extras`, which
+#: FALLBACK ``[grid]`` pin set, reached only when
+#: :func:`_resolve_grid_extra_pins` finds no declaration at all — no ``pyproject.toml``
+#: declaring the distribution and no installed metadata. Resolution errors fail loudly. The
+#: LIVE pins come from :func:`app.ops.extras.declared_extras`, which
 #: reads the governing ``pyproject.toml`` first and falls back to the installed distribution's
-#: metadata; a hard-coded copy of pyproject silently drifts, and this one did: it read
-#: ``pandapower ==3.3.0`` while the project declared ``>=3.5,<4`` and the environment ran 3.5.4,
-#: so the report surfaced a false pin as dependency provenance. The fallback is held to the
+#: metadata; a hard-coded copy of pyproject can silently drift and previously caused the report
+#: to surface a false pin as dependency provenance. The fallback is held to the
 #: declared value by ``test_grid_extra_pins_fallback_matches_what_pyproject_declares``, so a
 #: future drift fails a test instead of reaching a reader.
 GRID_EXTRA_PINS_FALLBACK: tuple[tuple[str, str], ...] = (
@@ -169,8 +175,66 @@ GRID_EXTRA_PINS_FALLBACK: tuple[tuple[str, str], ...] = (
 )
 
 
-def _grid_extra_pins() -> tuple[tuple[str, str], ...]:
-    """The ``[grid]`` pins as the executing tree declares them.
+class DependencySpecSource(StrEnum):
+    """Artifact from which the surfaced dependency declarations were read."""
+
+    PYPROJECT = "pyproject"
+    METADATA = "metadata"
+    STATIC_FALLBACK = "static_fallback"
+    UNKNOWN = "unknown"
+
+
+class DependencyResolutionStatus(StrEnum):
+    """Completeness state of a dependency-provenance resolution."""
+
+    RESOLVED = "resolved"
+    FALLBACK = "fallback"
+    MALFORMED = "malformed"
+    PARTIAL = "partial"
+
+
+@dataclass(frozen=True)
+class DependencyProvenance:
+    """Typed, renderable provenance for the optional-extra declaration."""
+
+    source: DependencySpecSource
+    status: DependencyResolutionStatus
+    detail: str
+
+
+class GridDependencyProvenanceError(RuntimeError):
+    """Raised when dependency declarations cannot support an honest lender surface."""
+
+    def __init__(self, message: str, *, provenance: DependencyProvenance) -> None:
+        super().__init__(message)
+        self.provenance = provenance
+
+
+_DEPENDENCY_NAME_SEPARATOR_RE = re.compile(r"[-_.]+")
+_SPECIFIER_RE = re.compile(
+    r"^(?:(?:~=|==|!=|<=|>=|<|>|===)[^,;\s]+)(?:,(?:~=|==|!=|<=|>=|<|>|===)[^,;\s]+)*$"
+)
+
+
+def _normalize_dependency_name(name: str) -> str:
+    """Return a distribution name in PEP 503 normalized form."""
+    return _DEPENDENCY_NAME_SEPARATOR_RE.sub("-", name).lower()
+
+
+def _resolution_error(
+    message: str,
+    *,
+    source: DependencySpecSource,
+    status: DependencyResolutionStatus,
+) -> GridDependencyProvenanceError:
+    provenance = DependencyProvenance(source=source, status=status, detail=message)
+    return GridDependencyProvenanceError(message, provenance=provenance)
+
+
+def _resolve_grid_extra_pins() -> tuple[
+    tuple[tuple[str, str], ...], DependencyProvenance
+]:
+    """Resolve a complete, typed ``[grid]`` declaration or fail loudly.
 
     Resolution is :func:`app.ops.extras.declared_extras`'s, not this module's: the governing
     ``pyproject.toml`` answers first and the installed distribution's metadata only as a
@@ -178,27 +242,109 @@ def _grid_extra_pins() -> tuple[tuple[str, str], ...]:
     describes but not for a source tree it did not build, and one non-editable install can
     serve many checkouts at differing commits.
 
-    CASPER: a tree that declares nothing resolvable — no pyproject declaring the distribution
-    and no installed metadata — is a legitimate state, so it degrades to
-    :data:`GRID_EXTRA_PINS_FALLBACK` rather than failing the report. A bare source checkout is
-    no longer such a state: it still carries the ``pyproject.toml`` that answers.
+    An environment with no declaration uses a visibly labelled static fallback. Resolution
+    errors, malformed requirements, duplicate normalized names and partial declaration sets are
+    refused: those states cannot be presented as resolved tree provenance to a lender.
     """
     try:
-        from app.ops.extras import declared_extras
+        from app.ops.extras import declared_extras, probe_extra
 
         declared = declared_extras().get("grid", ())
-        pins: list[tuple[str, str]] = []
-        for requirement in declared:
-            name, spec = _split_requirement(requirement)
-            if name:
-                pins.append((name, spec))
-        if pins:
-            return tuple(pins)
-    except (
-        Exception
-    ):  # noqa: BLE001 - CASPER: provenance degrades, it never crashes the report
-        pass
-    return GRID_EXTRA_PINS_FALLBACK
+        source_text = probe_extra("grid").spec_source
+    except Exception as exc:  # noqa: BLE001 - provenance failures are lender-facing failures
+        raise _resolution_error(
+            f"[grid] dependency declaration resolution failed: {type(exc).__name__}: {exc}",
+            source=DependencySpecSource.UNKNOWN,
+            status=DependencyResolutionStatus.MALFORMED,
+        ) from exc
+
+    if not declared:
+        provenance = DependencyProvenance(
+            source=DependencySpecSource.STATIC_FALLBACK,
+            status=DependencyResolutionStatus.FALLBACK,
+            detail="No [grid] declaration was available; values are a labelled static fallback.",
+        )
+        return GRID_EXTRA_PINS_FALLBACK, provenance
+
+    try:
+        source = DependencySpecSource(source_text)
+    except (TypeError, ValueError) as exc:
+        raise _resolution_error(
+            f"[grid] declarations were returned with unsupported source {source_text!r}",
+            source=DependencySpecSource.UNKNOWN,
+            status=DependencyResolutionStatus.MALFORMED,
+        ) from exc
+    if source not in {DependencySpecSource.PYPROJECT, DependencySpecSource.METADATA}:
+        raise _resolution_error(
+            f"[grid] declarations were returned without a governing source: {source.value}",
+            source=source,
+            status=DependencyResolutionStatus.MALFORMED,
+        )
+
+    pins: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for requirement in declared:
+        if not isinstance(requirement, str):
+            raise _resolution_error(
+                f"Non-string [grid] requirement declaration: {requirement!r}",
+                source=source,
+                status=DependencyResolutionStatus.MALFORMED,
+            )
+        name, spec = _split_requirement(requirement)
+        if name is None or (spec and _SPECIFIER_RE.fullmatch(spec) is None):
+            raise _resolution_error(
+                f"Unparseable [grid] requirement declaration: {requirement!r}",
+                source=source,
+                status=DependencyResolutionStatus.MALFORMED,
+            )
+        normalized_name = _normalize_dependency_name(name)
+        if normalized_name in seen:
+            raise _resolution_error(
+                f"Duplicate normalized [grid] dependency name: {normalized_name!r}",
+                source=source,
+                status=DependencyResolutionStatus.MALFORMED,
+            )
+        seen.add(normalized_name)
+        pins.append((name, spec))
+
+    expected_specs = {
+        _normalize_dependency_name(name): frozenset(
+            clause.strip() for clause in spec.split(",") if clause.strip()
+        )
+        for name, spec in GRID_EXTRA_PINS_FALLBACK
+    }
+    actual_specs = {
+        _normalize_dependency_name(name): frozenset(
+            clause.strip() for clause in spec.split(",") if clause.strip()
+        )
+        for name, spec in pins
+    }
+    if actual_specs != expected_specs:
+        missing = sorted(expected_specs.keys() - actual_specs.keys())
+        unexpected = sorted(actual_specs.keys() - expected_specs.keys())
+        mismatched = sorted(
+            name
+            for name in expected_specs.keys() & actual_specs.keys()
+            if expected_specs[name] != actual_specs[name]
+        )
+        raise _resolution_error(
+            "Partial [grid] declaration: "
+            f"missing={missing}, unexpected={unexpected}, mismatched_specs={mismatched}",
+            source=source,
+            status=DependencyResolutionStatus.PARTIAL,
+        )
+
+    provenance = DependencyProvenance(
+        source=source,
+        status=DependencyResolutionStatus.RESOLVED,
+        detail=f"Complete [grid] declaration resolved from {source.value}.",
+    )
+    return tuple(pins), provenance
+
+
+def _grid_extra_pins() -> tuple[tuple[str, str], ...]:
+    """Compatibility projection of the strict typed ``[grid]`` resolution."""
+    return _resolve_grid_extra_pins()[0]
 
 
 def _split_requirement(requirement: str) -> tuple[Optional[str], str]:
@@ -215,7 +361,7 @@ def _split_requirement(requirement: str) -> tuple[Optional[str], str]:
 
 #: The pin set surfaced in the report. Resolved once at import from whatever the executing tree
 #: declares — pyproject first, metadata second — with the static fallback behind both.
-GRID_EXTRA_PINS: tuple[tuple[str, str], ...] = _grid_extra_pins()
+GRID_EXTRA_PINS, GRID_DEPENDENCY_PROVENANCE = _resolve_grid_extra_pins()
 
 #: The verification-discipline statement — surfaced so the report carries the engineering
 #: provenance behind the results, not just the numbers (the surface-provenance directive).
@@ -297,6 +443,7 @@ class GridScreeningModel:
     synthetic_curtailment_detail: str = SYNTHETIC_CURTAILMENT_DETAIL
 
     # Dependency-reproducibility provenance (CASPER available-vs-degraded state).
+    dependency_provenance: DependencyProvenance = GRID_DEPENDENCY_PROVENANCE
     engine_status: tuple[ScreenStatus, ...] = ()
     python_version: str = ""
 
@@ -543,6 +690,7 @@ def build_grid_screening_model(
         freq_response=freq_response,
         curtailment=curtailment,
         degraded_screens=degraded,
+        dependency_provenance=GRID_DEPENDENCY_PROVENANCE,
         engine_status=_probe_engine_status(),
         python_version=platform.python_version(),
     )

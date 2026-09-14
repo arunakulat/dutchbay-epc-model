@@ -222,8 +222,11 @@
 {# ── PROVENANCE: dependency resolution + CASPER available-vs-degraded ─────── #}
 <h2>8 · Provenance — dependency resolution &amp; reproducibility</h2>
 <div class="provenance">
-  <p>Resolved <code>[grid]</code> optional-extra pin set (the exact engines this screen is
-     built against; <code>pip install -e ".[grid]"</code>):</p>
+  <p><strong>Declaration source:</strong> <code>{{ m.dependency_provenance.source.value }}</code>
+     · <strong>resolution status:</strong> <code>{{ m.dependency_provenance.status.value }}</code><br>
+     {{ m.dependency_provenance.detail }}</p>
+  <p>Surfaced <code>[grid]</code> optional-extra pin set (resolved from the source above, or
+     explicitly labelled as fallback; <code>pip install -e ".[grid]"</code>):</p>
   <table>
     <tr><th>Engine</th><th>Pin</th><th>Present at run-time?</th><th>Resolved version</th></tr>
     {% for e in m.engine_status %}

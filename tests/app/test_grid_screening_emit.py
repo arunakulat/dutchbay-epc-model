@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import ast
 import re
+import tomllib
 from pathlib import Path
 from typing import Any, Dict, Mapping
 
@@ -47,6 +48,57 @@ from app.reports.grid_screening_emit import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _collectable_test_names(source: str) -> set[str]:
+    """Approximate pytest's collectable module/class test-function namespace."""
+    tree = ast.parse(source)
+    names: set[str] = set()
+    disabled_functions = {
+        node.targets[0].value.id
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Attribute)
+        and node.targets[0].attr == "__test__"
+        and isinstance(node.targets[0].value, ast.Name)
+        and isinstance(node.value, ast.Constant)
+        and node.value.value is False
+    }
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.name.startswith("test_") and node.name not in disabled_functions:
+                names.add(node.name)
+        elif isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
+            special_methods = {
+                child.name
+                for child in node.body
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            explicitly_disabled = any(
+                isinstance(child, ast.Assign)
+                and any(
+                    isinstance(target, ast.Name) and target.id == "__test__"
+                    for target in child.targets
+                )
+                and isinstance(child.value, ast.Constant)
+                and child.value.value is False
+                for child in node.body
+            )
+            if explicitly_disabled or {"__init__", "__new__"} & special_methods:
+                continue
+            for child in node.body:
+                if (
+                    isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and child.name.startswith("test_")
+                ):
+                    names.add(child.name)
+    return names
+
+
+def _missing_control_citations(module_source: str, test_source: str) -> set[str]:
+    cited = set(re.findall(r"\btest_[A-Za-z0-9_]+\b", module_source))
+    return cited - _collectable_test_names(test_source)
 
 
 def _grid_block(*, study_enabled: bool = True) -> Dict[str, Any]:
@@ -337,9 +389,9 @@ def test_pin_set_and_available_state_rendered() -> None:
     )
     html = render_grid_screening_html(model)
     # The resolved pin set is surfaced (dependency reproducibility). Assert against the pins the
-    # emitter actually resolved rather than against literals: this test previously hard-coded
-    # ``==3.3.0``, which locked in the very drift it was meant to surface — the project declared
-    # ``>=3.5,<4`` throughout. Autoescape is on (a hostile bus name must be escaped), so ``>``
+    # emitter actually resolved rather than against literals: this test previously hard-coded a
+    # stale exact pin, which locked in the very drift it was meant to surface. Autoescape is on,
+    # so ``>``
     # renders as ``&gt;``.
     from markupsafe import escape
 
@@ -598,12 +650,8 @@ def test_every_control_the_module_cites_by_name_exists() -> None:
     """
     module_source = Path(gse.__file__).read_text(encoding="utf-8")
     cited = set(re.findall(r"\btest_[A-Za-z0-9_]+\b", module_source))
-    defined = {
-        node.name
-        for node in ast.walk(ast.parse(Path(__file__).read_text(encoding="utf-8")))
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        and node.name.startswith("test_")
-    }
+    test_source = Path(__file__).read_text(encoding="utf-8")
+    defined = _collectable_test_names(test_source)
 
     module = Path(gse.__file__).name
     assert cited, f"{module} cites no control by name; this guard has gone blind"
@@ -612,6 +660,45 @@ def test_every_control_the_module_cites_by_name_exists() -> None:
         f"{module} cites controls that are not defined in "
         f"{Path(__file__).name}: {missing}"
     )
+
+
+def test_control_citation_guard_rejects_nested_noncollectable_and_typo_names() -> None:
+    """Nested functions and methods on non-Test classes cannot satisfy a citation."""
+    hostile_tests = """
+def helper():
+    def test_shadowed_control():
+        pass
+
+class Controls:
+    def test_noncollectable_method(self):
+        pass
+
+class TestCollected:
+    def test_real_control(self):
+        pass
+
+class TestDisabled:
+    __test__ = False
+    def test_disabled_method(self):
+        pass
+
+class TestConstructor:
+    def __init__(self):
+        pass
+    def test_constructor_method(self):
+        pass
+"""
+    cited = (
+        "test_shadowed_control test_noncollectable_method test_real_control test_typoo "
+        "test_disabled_method test_constructor_method"
+    )
+    assert _missing_control_citations(cited, hostile_tests) == {
+        "test_shadowed_control",
+        "test_noncollectable_method",
+        "test_typoo",
+        "test_disabled_method",
+        "test_constructor_method",
+    }
 
 
 def test_grid_extra_pins_are_read_from_what_the_tree_declares() -> None:
@@ -633,32 +720,36 @@ def test_grid_extra_pins_are_read_from_what_the_tree_declares() -> None:
 def test_grid_extra_pins_fallback_matches_what_pyproject_declares() -> None:
     """The static fallback must not drift from pyproject.
 
-    This is the guard for the bug this replaced: the table read ``pandapower ==3.3.0`` while the
-    project declared ``>=3.5,<4``, so the report surfaced a false pin as provenance. Comparison
+    This is the guard for the bug this replaced: the table carried a stale exact pin while the
+    project declared a compatible range, so the report surfaced false provenance. Comparison
     is on the SET of specifier clauses, not the string: pyproject answers first and returns its
     own text verbatim, but the metadata path behind it re-orders clauses (``>=70,<71`` comes
     back as ``<71,>=70``), so a string compare would pass or fail on which artifact answered.
     """
-    from app.ops.extras import declared_extras
+    from packaging.requirements import InvalidRequirement, Requirement
+    from packaging.utils import canonicalize_name
 
-    declared = declared_extras().get("grid")
-    if not declared:
-        pytest.skip("no [grid] extra in pyproject or in distribution metadata")
+    with (REPO_ROOT / "pyproject.toml").open("rb") as handle:
+        raw_grid_requirements = tomllib.load(handle)["project"]["optional-dependencies"]["grid"]
 
-    def clauses(spec: str) -> set[str]:
-        return {c.strip() for c in spec.split(",") if c.strip()}
+    def parse_unique(requirements: list[str] | tuple[str, ...]) -> dict[str, frozenset[str]]:
+        parsed: dict[str, frozenset[str]] = {}
+        for declaration in requirements:
+            try:
+                requirement = Requirement(declaration)
+            except InvalidRequirement as exc:
+                pytest.fail(f"unparseable [grid] declaration {declaration!r}: {exc}")
+            name = canonicalize_name(requirement.name)
+            assert name not in parsed, f"duplicate normalized [grid] dependency {name!r}"
+            parsed[name] = frozenset(str(item) for item in requirement.specifier)
+        return parsed
 
-    from_metadata = {
-        name: clauses(spec)
-        for name, spec in (gse._split_requirement(r) for r in declared)
-        if name
-    }
-    for name, spec in gse.GRID_EXTRA_PINS_FALLBACK:
-        assert name in from_metadata, f"fallback lists {name}, pyproject does not"
-        assert clauses(spec) == from_metadata[name], (
-            f"fallback pin for {name} is {spec!r} but pyproject declares "
-            f"{','.join(sorted(from_metadata[name]))!r}"
-        )
+    pyproject_pins = parse_unique(raw_grid_requirements)
+    fallback_declarations = [f"{name}{spec}" for name, spec in gse.GRID_EXTRA_PINS_FALLBACK]
+    fallback_pins = parse_unique(fallback_declarations)
+    assert fallback_pins == pyproject_pins
+    assert gse.GRID_DEPENDENCY_PROVENANCE.source is gse.DependencySpecSource.PYPROJECT
+    assert gse.GRID_DEPENDENCY_PROVENANCE.status is gse.DependencyResolutionStatus.RESOLVED
 
 
 def test_grid_pins_degrade_to_the_fallback_without_any_declaration(
@@ -672,7 +763,15 @@ def test_grid_pins_degrade_to_the_fallback_without_any_declaration(
     import app.ops.extras as ops_extras
 
     monkeypatch.setattr(ops_extras, "declared_extras", lambda *a, **k: {})
-    assert gse._grid_extra_pins() == gse.GRID_EXTRA_PINS_FALLBACK
+    monkeypatch.setattr(
+        ops_extras,
+        "probe_extra",
+        lambda *a, **k: type("Status", (), {"spec_source": "none"})(),
+    )
+    pins, provenance = gse._resolve_grid_extra_pins()
+    assert pins == gse.GRID_EXTRA_PINS_FALLBACK
+    assert provenance.source is gse.DependencySpecSource.STATIC_FALLBACK
+    assert provenance.status is gse.DependencyResolutionStatus.FALLBACK
 
 
 def test_split_requirement_handles_extras_and_garbage() -> None:
@@ -686,22 +785,72 @@ def test_split_requirement_handles_extras_and_garbage() -> None:
 def test_grid_pins_degrade_to_the_fallback_when_resolution_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """CASPER: provenance lookup must never crash the report."""
+    """A lookup failure cannot masquerade as resolved lender provenance."""
     import app.ops.extras as ops_extras
 
     def boom(*_a: object, **_k: object) -> dict:
         raise RuntimeError("declaration unreadable")
 
     monkeypatch.setattr(ops_extras, "declared_extras", boom)
-    assert gse._grid_extra_pins() == gse.GRID_EXTRA_PINS_FALLBACK
+    with pytest.raises(gse.GridDependencyProvenanceError) as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.source is gse.DependencySpecSource.UNKNOWN
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
 
 
-def test_grid_pins_skip_unparseable_requirements(
+def test_grid_pins_reject_unparseable_and_duplicate_requirements(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import app.ops.extras as ops_extras
 
     monkeypatch.setattr(
-        ops_extras, "declared_extras", lambda *a, **k: {"grid": ("!!!", "andes>=2.0")}
+        ops_extras,
+        "probe_extra",
+        lambda *a, **k: type("Status", (), {"spec_source": "pyproject"})(),
     )
-    assert gse._grid_extra_pins() == (("andes", ">=2.0"),)
+    for declarations in (
+        ("!!!", "andes>=2.0", "opendssdirect.py>=0.9.4"),
+        (123, "andes>=2.0", "opendssdirect.py>=0.9.4"),
+        ("pandapower>=3.5,<4", "Panda_Power>=3.5,<4", "andes>=2.0"),
+    ):
+        monkeypatch.setattr(
+            ops_extras, "declared_extras", lambda *a, _d=declarations, **k: {"grid": _d}
+        )
+        with pytest.raises(gse.GridDependencyProvenanceError) as caught:
+            gse._resolve_grid_extra_pins()
+        assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
+
+
+def test_grid_pins_reject_hostile_declaration_only_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An extra declaration cannot ride the lender pin table without fallback review."""
+    import app.ops.extras as ops_extras
+
+    declarations = (
+        "pandapower>=3.5,<4",
+        "andes>=2.0",
+        "opendssdirect.py>=0.9.4",
+        "declaration-only-payload>=1",
+    )
+    monkeypatch.setattr(ops_extras, "declared_extras", lambda *a, **k: {"grid": declarations})
+    monkeypatch.setattr(
+        ops_extras,
+        "probe_extra",
+        lambda *a, **k: type("Status", (), {"spec_source": "pyproject"})(),
+    )
+    with pytest.raises(gse.GridDependencyProvenanceError) as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.PARTIAL
+    assert "declaration-only-payload" in str(caught.value)
+
+
+def test_render_surfaces_dependency_source_and_status() -> None:
+    model = build_grid_screening_model(
+        _scenario(), scenario_variant="provenance", generated_at="2026-09-14T00:00:00Z"
+    )
+    html = render_grid_screening_html(model)
+    assert "Declaration source:" in html
+    assert f">{model.dependency_provenance.source.value}<" in html
+    assert f">{model.dependency_provenance.status.value}<" in html
+    assert model.dependency_provenance.detail in html

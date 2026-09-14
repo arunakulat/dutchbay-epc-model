@@ -22,7 +22,14 @@
   `test_grid_extra_pins_match_declared_metadata` with holding it to the declared value. No such name
   has ever existed -- the control is real but spelled differently -- so a reader following the
   reference to check the claim found nothing. Added a control that derives both sides (citations by
-  scanning the module's source, definitions by walking the test module's AST) and fails when a cited
-  name is not defined. Confirmed against the original misspelling, which it rejects by name.
-- No behaviour change. `GRID_EXTRA_PINS` resolves to the same three pins before and after, and all
-  thirty-two controls pass (thirty-one existing, one added).
+  scanning the module's source, definitions from pytest-collectable module functions and `Test*`
+  class methods) and fails when a cited name is only nested, belongs to a non-collected class, or is
+  misspelled.
+- Add typed source and resolution-status provenance to the grid report and render it structurally.
+  A complete declaration records `pyproject` or `metadata`; a genuinely absent declaration is
+  labelled `static_fallback`. Resolution exceptions, malformed requirements, duplicate normalized
+  names and partial dependency sets now fail loudly instead of appearing as resolved provenance.
+- Strengthen the fallback drift oracle: it parses the governing `pyproject.toml` directly with TOML
+  and PEP 508 tooling, rejects duplicates and malformed declarations, and compares the complete
+  bidirectional normalized name/specifier mapping. A hostile declaration-only dependency is a
+  negative control. This is provenance-only and changes no finance or project KPI.
