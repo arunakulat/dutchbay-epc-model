@@ -200,7 +200,9 @@ def _introduction(path: str) -> Introduction:
             width = 3 if status.startswith(("R", "C")) else 2
             if cursor + width > len(changes):
                 raise ResolutionError(f"malformed NUL-framed lineage for {path}")
-            names = [os.fsdecode(field) for field in changes[cursor + 1 : cursor + width]]
+            names = [
+                os.fsdecode(field) for field in changes[cursor + 1 : cursor + width]
+            ]
             cursor += width
             if status == "A":
                 if names[0] == current_path and RECORD_PATTERN.fullmatch(current_path):
