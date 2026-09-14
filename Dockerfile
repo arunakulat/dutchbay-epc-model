@@ -89,9 +89,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # plus the DBPL house fonts. fonts-liberation carries the families the DutchBay
 # Presentation Layer asks for (GWTF DBPL-01); without it WeasyPrint still renders but
 # silently substitutes, and fonts-dejavu-core alone leaves the house style unmatched.
-# libharfbuzz-subset0 is what WeasyPrint 70.0 asks for by name at import — without it
-# it warns that the library "will be required by future versions" and falls back to a
-# coarser subsetter, which is a live difference in the PDF, not just a quieter log.
+# libharfbuzz-subset0 is what WeasyPrint 70.0 dlopens by name at import — without it it
+# warns that the library "will be required by future versions" and subsets every face
+# with fontTools instead, warning again per face at render time. Rendered output is
+# unchanged (same glyphs, same text, same geometry); what differs is the embedded font
+# program, which keeps tables HarfBuzz drops. Keep this line when bumping: WeasyPrint
+# calls the fontTools path deprecated, so a later version removes it.
 # no -dev headers, no build toolchain. curl is added solely for the container
 # HEALTHCHECK below. --no-install-recommends keeps the layer minimal.
 RUN apt-get update \
