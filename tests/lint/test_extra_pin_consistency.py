@@ -6,19 +6,23 @@ checked that they say the same thing:
 * ``requirements.txt`` -- the reproducibility lock CI installs and ``pip-audit`` reads;
 * ``constraints.txt`` -- the resolver ceiling, applied at image build
   (``Dockerfile`` ``pip install -c constraints.txt``);
-* ``pyproject.toml`` ``[project.optional-dependencies]`` -- the specifier baked
-  into the built distribution's metadata;
+* ``pyproject.toml`` ``[project.optional-dependencies]`` -- the specifier
+  :func:`app.ops.extras.declared_extras` reads directly, and the one baked into
+  the built distribution's metadata;
 * a string literal in an integration guard, e.g.
   ``assert version("weasyprint") == "70.0"``;
 * ``docs/MODULE_REFERENCE.md`` -- prose, and out of this file's reach.
 
 The third is not documentation.  ``app.ops.extras.probe_extra`` reads
-``declared_spec`` back out of that metadata and sets ``satisfies_spec``, and
+``declared_spec`` back out of it and sets ``satisfies_spec``, and
 ``app.reports.dbpl.print_core.require_dbpl_stack`` raises
 ``DbplDependencyError`` when an installed package "violates its declared pin"
 (DBPL-01).  So bumping the lock while leaving the ``pyproject`` ceiling behind
 does not produce a version disagreement on paper -- it stops every DBPL PDF from
-rendering at runtime, which is the deliverable itself.
+rendering at runtime, which is the deliverable itself.  That is now a *direct*
+consequence rather than one mediated by a build: since 2026-09-14 the pins are
+read from the ``pyproject.toml`` beside the executing code, so a stale ceiling
+bites immediately instead of waiting for the next install.
 
 The fourth is what actually broke CI on this change's first push: the three
 dependency files were perfectly self-consistent and the disagreement was in a
