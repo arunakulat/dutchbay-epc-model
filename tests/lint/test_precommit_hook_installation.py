@@ -190,7 +190,7 @@ def test_make_hooks_rejects_unquoted_spaced_path_mutation(tmp_path: Path) -> Non
 
 def test_development_docs_point_at_the_governed_path() -> None:
     """Documentation must not describe installation as a purely manual step."""
-    docs = DEV_DOCS.read_text(encoding="utf-8")
+    docs = " ".join(DEV_DOCS.read_text(encoding="utf-8").split())
 
     assert "make hooks" in docs
     assert "git does not track" in docs
