@@ -8,6 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from scripts.list_session_handover_records import PROSE_RECORD_PATTERN
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AGENTS_FILE = REPO_ROOT / "AGENTS.md"
 CANONICAL_RULESET = "go_with_the_flow_rules_v3_0_clean.csv"
@@ -76,12 +78,6 @@ def test_codex_guidance_preserves_required_safety_and_quality_gates() -> None:
 
 BOOTSTRAP_HEADING = "## Bootstrap — run this first"
 ILLUSTRATION_MARKER = "Illustration, not authority"
-# Matches a concrete record name, not a glob: `docs/H*_HANDOVER*.md` has no digits
-# after the H and `docs/SESSION_HANDOVER_*.md` has no `.md` after the class, so the
-# globs the prose uses as examples do not trip the guard. The `docs/` prefix is
-# optional because ten of the eleven live records name the pointer without it --
-# requiring the prefix would miss the spelling the corpus itself models.
-HANDOVER_PATTERN = re.compile(r"(?:docs/)?(?:SESSION_HANDOVER|H\d+)[0-9A-Za-z_\-]*\.md")
 RESOLVER_SCRIPT = REPO_ROOT / "scripts/list_session_handover_records.py"
 
 
@@ -94,15 +90,39 @@ def _session_continuity_section() -> str:
 
 
 def _carries_bootstrap_section(record_text: str) -> bool:
-    """Report whether a record carries a bootstrap checklist to execute.
+    """Report whether an unfenced bootstrap H2 has a nonempty section body."""
+    lines = record_text.splitlines()
+    fence: tuple[str, int] | None = None
+    delimiter_lines: set[int] = set()
+    unfenced: list[bool] = []
+    for index, line in enumerate(lines):
+        stripped = line.lstrip(" ")
+        indent = len(line) - len(stripped)
+        marker = re.match(r"(`{3,}|~{3,})", stripped) if indent <= 3 else None
+        unfenced.append(fence is None)
+        if marker is None:
+            continue
+        token = marker.group(1)
+        if fence is None:
+            fence = (token[0], len(token))
+            delimiter_lines.add(index)
+        elif token[0] == fence[0] and len(token) >= fence[1]:
+            fence = None
+            delimiter_lines.add(index)
 
-    This is a necessary condition for a startup record, not a kind classifier:
-    `docs/SESSION_HANDOVER_2026-09-07_PR1178.md` calls itself a scoped successor
-    and still carries the heading, though its body defers to its predecessor.
-    What the illustration guard needs is exactly this weaker claim -- that the
-    record it names has something to execute.
-    """
-    return BOOTSTRAP_HEADING in record_text.splitlines()
+    for index, line in enumerate(lines):
+        if not unfenced[index] or line.rstrip() != BOOTSTRAP_HEADING:
+            continue
+        end = len(lines)
+        for candidate in range(index + 1, len(lines)):
+            if unfenced[candidate] and re.match(r"^#{1,2}\s+", lines[candidate]):
+                end = candidate
+                break
+        return any(
+            line.strip() and body_index not in delimiter_lines
+            for body_index, line in enumerate(lines[index + 1 : end], start=index + 1)
+        )
+    return False
 
 
 def _illustration_span(section: str) -> tuple[int, int] | None:
@@ -124,7 +144,7 @@ def _named_records_are_illustration_only(section: str) -> bool:
     but a name inside the instruction itself is the failure mode: it goes stale
     the moment a successor is written, and the reader follows it anyway.
     """
-    named = list(HANDOVER_PATTERN.finditer(section))
+    named = list(PROSE_RECORD_PATTERN.finditer(section))
     if not named:
         return True
     span = _illustration_span(section)
@@ -132,6 +152,23 @@ def _named_records_are_illustration_only(section: str) -> bool:
         return False
     start, end = span
     return all(start <= match.start() < end for match in named)
+
+
+def _illustration_records(section: str) -> list[str]:
+    """Return normalized record paths named in the illustration paragraph."""
+    span = _illustration_span(section)
+    if span is None:
+        return []
+    start, end = span
+    return [
+        name if name.startswith("docs/") else f"docs/{name}"
+        for name in PROSE_RECORD_PATTERN.findall(section[start:end])
+    ]
+
+
+def _illustration_records_exist(section: str) -> bool:
+    """Report whether every concrete illustration record exists."""
+    return all((REPO_ROOT / name).is_file() for name in _illustration_records(section))
 
 
 def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> str:
@@ -219,14 +256,34 @@ def test_session_continuity_resolves_the_pointer_rather_than_pinning_a_filename(
     appended = section + "\nPinned startup: `docs/SESSION_HANDOVER_2099-01-01.md`.\n"
     assert not _named_records_are_illustration_only(appended)
 
+    dotted_before = section.replace(
+        "*Illustration, not authority",
+        "Pinned startup: `H99_HANDOVER.review.v2.md`.\n\n"
+        "*Illustration, not authority",
+        1,
+    )
+    assert not _named_records_are_illustration_only(dotted_before)
+
+    dotted_after = section + "\nPinned: `docs/H99_DELIVERY_RECORD.v2.md`.\n"
+    assert not _named_records_are_illustration_only(dotted_after)
+
+    span = _illustration_span(section)
+    assert span is not None
+    nonexistent_inside = (
+        section[: span[1]]
+        + " Also compare `docs/H99_HANDOVER.review.v2.md`."
+        + section[span[1] :]
+    )
+    assert _named_records_are_illustration_only(nonexistent_inside)
+    assert not _illustration_records_exist(nonexistent_inside)
+
 
 def test_session_continuity_illustration_names_existing_records() -> None:
     """Require every illustration record to exist and its startup target to bootstrap."""
     section = _session_continuity_section()
     span = _illustration_span(section)
     assert span is not None, "the gateway must label its named record as an illustration"
-    start, end = span
-    named = HANDOVER_PATTERN.findall(section[start:end])
+    named = _illustration_records(section)
     assert len(named) >= 2, "the illustration must name its target and successor"
 
     records = [REPO_ROOT / path for path in named]
@@ -243,6 +300,13 @@ def test_session_continuity_illustration_names_existing_records() -> None:
     assert not _carries_bootstrap_section(
         "# Session handover\n\nThis record does not carry "
         "## Bootstrap — run this first and must defer.\n"
+    )
+    assert not _carries_bootstrap_section(
+        "# Session handover\n\n```markdown\n"
+        "## Bootstrap — run this first\n- not executable here\n```\n"
+    )
+    assert not _carries_bootstrap_section(
+        "# Session handover\n\n## Bootstrap — run this first\n\n## Next section\n"
     )
 
 
@@ -300,12 +364,14 @@ def test_handover_resolver_rejects_untracked_and_staged_records(
     candidate.write_text("not durable\n", encoding="utf-8")
     untracked = _run_resolver(repo)
     assert untracked.returncode == 2
-    assert "untracked: docs/H02_DELIVERY_HANDOVER.md" in untracked.stderr
+    assert "worktree-only (untracked or ignored): docs/H02_DELIVERY_HANDOVER.md" in (
+        untracked.stderr
+    )
 
     _git(repo, "add", candidate.relative_to(repo).as_posix())
     staged = _run_resolver(repo)
     assert staged.returncode == 2
-    assert "staged: docs/H02_DELIVERY_HANDOVER.md" in staged.stderr
+    assert "staged addition: docs/H02_DELIVERY_HANDOVER.md" in staged.stderr
 
 
 def test_handover_resolver_rejects_rename_and_intent_to_add(tmp_path: Path) -> None:
@@ -331,7 +397,7 @@ def test_handover_resolver_rejects_rename_and_intent_to_add(tmp_path: Path) -> N
     )
     rename_result = _run_resolver(repo)
     assert rename_result.returncode == 2
-    assert "staged: docs/H03_DELIVERY_RECORD.md" in rename_result.stderr
+    assert "staged addition: docs/H03_DELIVERY_RECORD.md" in rename_result.stderr
 
     _git(
         repo,
@@ -339,12 +405,82 @@ def test_handover_resolver_rejects_rename_and_intent_to_add(tmp_path: Path) -> N
         renamed.relative_to(repo).as_posix(),
         baseline.relative_to(repo).as_posix(),
     )
+    nonmatching = docs / "not_a_handover.md"
+    _git(
+        repo,
+        "mv",
+        baseline.relative_to(repo).as_posix(),
+        nonmatching.relative_to(repo).as_posix(),
+    )
+    nonmatching_result = _run_resolver(repo)
+    assert nonmatching_result.returncode == 2
+    assert "staged deletion: docs/SESSION_HANDOVER_2026-01-01.md" in (
+        nonmatching_result.stderr
+    )
+    _git(
+        repo,
+        "mv",
+        nonmatching.relative_to(repo).as_posix(),
+        baseline.relative_to(repo).as_posix(),
+    )
     intent = docs / "H04_HANDOVER.md"
     intent.write_text("intent to add\n", encoding="utf-8")
     _git(repo, "add", "--intent-to-add", intent.relative_to(repo).as_posix())
     intent_result = _run_resolver(repo)
     assert intent_result.returncode == 2
-    assert "staged: docs/H04_HANDOVER.md" in intent_result.stderr
+    assert "staged addition: docs/H04_HANDOVER.md" in intent_result.stderr
+
+
+def test_handover_resolver_rejects_deletions_and_ignored_records(
+    tmp_path: Path,
+) -> None:
+    """HEAD/index/worktree divergence must fail in both directions."""
+    repo = tmp_path / "repo"
+    docs = repo / "docs"
+    docs.mkdir(parents=True)
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "Resolver Test")
+    _git(repo, "config", "user.email", "resolver@example.invalid")
+    baseline = docs / "SESSION_HANDOVER_2026-01-01.md"
+    baseline.write_text("committed\n", encoding="utf-8")
+    _git(repo, "add", baseline.relative_to(repo).as_posix())
+    _commit(repo, "docs: add baseline", "2026-01-01T00:00:00+00:00")
+
+    _git(repo, "rm", baseline.relative_to(repo).as_posix())
+    staged_delete = _run_resolver(repo)
+    assert staged_delete.returncode == 2
+    assert "staged deletion: docs/SESSION_HANDOVER_2026-01-01.md" in (
+        staged_delete.stderr
+    )
+    _git(
+        repo,
+        "restore",
+        "--staged",
+        "--worktree",
+        baseline.relative_to(repo).as_posix(),
+    )
+
+    baseline.unlink()
+    unstaged_delete = _run_resolver(repo)
+    assert unstaged_delete.returncode == 2
+    assert "worktree deletion: docs/SESSION_HANDOVER_2026-01-01.md" in (
+        unstaged_delete.stderr
+    )
+    baseline.write_text("committed\n", encoding="utf-8")
+
+    ignored = docs / "H09_DELIVERY_IGNORED.md"
+    (repo / ".gitignore").write_text(
+        f"/{ignored.relative_to(repo)}\n", encoding="utf-8"
+    )
+    ignored.write_text("ignored\n", encoding="utf-8")
+    assert ignored.relative_to(repo).as_posix() not in _git(
+        repo, "status", "--porcelain", "--untracked-files=all"
+    )
+    ignored_result = _run_resolver(repo)
+    assert ignored_result.returncode == 2
+    assert "worktree-only (untracked or ignored): docs/H09_DELIVERY_IGNORED.md" in (
+        ignored_result.stderr
+    )
 
 
 def test_handover_resolver_rejects_delete_and_readd_history(tmp_path: Path) -> None:
@@ -397,6 +533,30 @@ def test_handover_resolver_rejects_tied_newest_introductions(tmp_path: Path) -> 
     assert result.returncode == 2
     assert "newest introduction timestamp" in result.stderr
     assert "docs/H05_HANDOVER.md, docs/H06_HANDOVER.md" in result.stderr
+
+
+def test_handover_resolver_rejects_backdated_descendant(tmp_path: Path) -> None:
+    """Topology must defeat a descendant introduction with an earlier epoch."""
+    repo = tmp_path / "repo"
+    docs = repo / "docs"
+    docs.mkdir(parents=True)
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "Resolver Test")
+    _git(repo, "config", "user.email", "resolver@example.invalid")
+
+    predecessor = docs / "SESSION_HANDOVER_2026-01-01.md"
+    predecessor.write_text("predecessor\n", encoding="utf-8")
+    _git(repo, "add", predecessor.relative_to(repo).as_posix())
+    _commit(repo, "docs: add predecessor", "2026-01-02T00:00:00+00:00")
+
+    descendant = docs / "H01_HANDOVER.md"
+    descendant.write_text("descendant\n", encoding="utf-8")
+    _git(repo, "add", descendant.relative_to(repo).as_posix())
+    _commit(repo, "docs: add backdated descendant", "2026-01-01T00:00:00+00:00")
+
+    result = _run_resolver(repo)
+    assert result.returncode == 2
+    assert "descendant introduction docs/H01_HANDOVER.md is backdated" in result.stderr
 
 
 def test_handover_resolver_rejects_shallow_history(tmp_path: Path) -> None:

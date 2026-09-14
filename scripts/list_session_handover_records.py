@@ -14,8 +14,14 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-RECORD_PATTERN = re.compile(
-    r"^docs/(?:SESSION_HANDOVER_[^/]+|H\d+_(?:HANDOVER[^/]*|DELIVERY_[^/]*))\.md$"
+RECORD_FILENAME_EXPRESSION = (
+    r"(?:SESSION_HANDOVER_[0-9A-Za-z_.-]+|"
+    r"H\d+_(?:HANDOVER[0-9A-Za-z_.-]*|DELIVERY_[0-9A-Za-z_.-]+))\.md"
+)
+RECORD_PATTERN = re.compile(rf"^docs/{RECORD_FILENAME_EXPRESSION}$")
+PROSE_RECORD_PATTERN = re.compile(
+    rf"(?<![0-9A-Za-z_./-])(?:docs/)?{RECORD_FILENAME_EXPRESSION}"
+    rf"(?![0-9A-Za-z_.-])"
 )
 DISPLAY_LIMIT = 5
 
@@ -114,7 +120,9 @@ def _introduction(path: str) -> Introduction:
         )
     fields = additions[0].split("\t")
     if len(fields) != 3:
-        raise ResolutionError(f"malformed introduction record for {path}: {additions[0]!r}")
+        raise ResolutionError(
+            f"malformed introduction record for {path}: {additions[0]!r}"
+        )
     try:
         epoch = int(fields[0])
     except ValueError as exc:
@@ -124,30 +132,115 @@ def _introduction(path: str) -> Introduction:
     return Introduction(epoch, fields[1], fields[2], path)
 
 
-def _reject_uncommitted_records(head_candidates: set[str]) -> None:
-    """Fail when a staged or untracked handover lacks a durable introduction.
+def _worktree_candidates(root: Path) -> set[str]:
+    """Return matching records physically present in the worktree.
+
+    This filesystem view deliberately includes ignored files, which Git's ordinary
+    untracked listing omits.
 
     Args:
+        root: Resolved repository root.
+
+    Returns:
+        Matching repository-relative paths currently present on disk.
+    """
+    docs = root / "docs"
+    if not docs.is_dir():
+        return set()
+    return {
+        path.relative_to(root).as_posix()
+        for path in docs.iterdir()
+        if path.is_file()
+        and RECORD_PATTERN.fullmatch(path.relative_to(root).as_posix())
+    }
+
+
+def _reject_uncommitted_records(root: Path, head_candidates: set[str]) -> None:
+    """Fail when HEAD, index, and worktree handover path sets differ.
+
+    Args:
+        root: Resolved repository root.
         head_candidates: Matching records committed in ``HEAD``.
 
     Raises:
-        ResolutionError: At least one new handover is staged or untracked.
+        ResolutionError: A matching record is added, removed, renamed, or untracked.
     """
     index_candidates = _candidate_paths(
         _git("ls-files", "--cached", "-z", "--", "docs")
     )
-    staged = index_candidates - head_candidates
-    untracked = _candidate_paths(
-        _git("ls-files", "--others", "--exclude-standard", "-z", "--", "docs")
-    )
-    if not staged and not untracked:
+    worktree_candidates = _worktree_candidates(root)
+    staged_additions = index_candidates - head_candidates
+    staged_deletions = head_candidates - index_candidates
+    worktree_additions = worktree_candidates - index_candidates
+    worktree_deletions = index_candidates - worktree_candidates
+    if not any(
+        (staged_additions, staged_deletions, worktree_additions, worktree_deletions)
+    ):
         return
-    states = [f"staged: {path}" for path in sorted(staged)]
-    states.extend(f"untracked: {path}" for path in sorted(untracked))
+    states = [f"staged addition: {path}" for path in sorted(staged_additions)]
+    states.extend(f"staged deletion: {path}" for path in sorted(staged_deletions))
+    states.extend(
+        f"worktree-only (untracked or ignored): {path}"
+        for path in sorted(worktree_additions)
+    )
+    states.extend(
+        f"worktree deletion: {path}" for path in sorted(worktree_deletions)
+    )
     raise ResolutionError(
-        "uncommitted handover records have no introduction order; commit or remove them:\n"
+        "HEAD, index, and worktree handover records differ; reconcile them:\n"
         + "\n".join(states)
     )
+
+
+def _is_ancestor(ancestor_sha: str, descendant_sha: str) -> bool:
+    """Report whether one introduction commit is an ancestor of another.
+
+    Args:
+        ancestor_sha: Candidate ancestor commit.
+        descendant_sha: Candidate descendant commit.
+
+    Returns:
+        ``True`` only when Git proves the ancestry relation.
+
+    Raises:
+        ResolutionError: Git cannot determine the relation.
+    """
+    completed = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor_sha, descendant_sha],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if completed.returncode == 0:
+        return True
+    if completed.returncode == 1:
+        return False
+    detail = completed.stderr.strip() or "no diagnostic returned"
+    raise ResolutionError(
+        f"git could not compare introduction commits {ancestor_sha} and "
+        f"{descendant_sha}: {detail}"
+    )
+
+
+def _reject_backdated_descendants(introductions: list[Introduction]) -> None:
+    """Reject descendant introductions timestamped before an ancestor introduction.
+
+    Args:
+        introductions: Resolved introduction records.
+
+    Raises:
+        ResolutionError: Commit topology and introduction timestamps disagree.
+    """
+    for ancestor in introductions:
+        for descendant in introductions:
+            if ancestor.epoch <= descendant.epoch:
+                continue
+            if _is_ancestor(ancestor.commit_sha, descendant.commit_sha):
+                raise ResolutionError(
+                    f"descendant introduction {descendant.path} is backdated before "
+                    f"ancestor introduction {ancestor.path}"
+                )
 
 
 def _reject_ambiguous_newest(introductions: list[Introduction]) -> None:
@@ -189,15 +282,18 @@ def main() -> int:
         shallow = _git("rev-parse", "--is-shallow-repository").strip()
         if shallow != "false":
             if shallow == "true":
-                raise ResolutionError("repository history is shallow; fetch complete history")
+                raise ResolutionError(
+                    "repository history is shallow; fetch complete history"
+                )
             raise ResolutionError(f"indeterminate shallow-repository state: {shallow!r}")
         committed = _candidate_paths(
             _git("ls-tree", "-r", "-z", "--name-only", "HEAD", "--", "docs")
         )
-        _reject_uncommitted_records(committed)
+        _reject_uncommitted_records(root, committed)
         if not committed:
             raise ResolutionError("no committed session-handover records found")
         resolved = [_introduction(path) for path in committed]
+        _reject_backdated_descendants(resolved)
         _reject_ambiguous_newest(resolved)
         introductions = sorted(
             resolved,

@@ -8,6 +8,7 @@
   or untracked successors. The named files survive within one bounded, dated illustration.
   Structural tests reject concrete record names outside that paragraph, require every record
   named inside it to exist, and require the stated startup target to carry the bootstrap
-  heading. Hostile temporary-repository tests prove that correcting an older record does not
-  outrank a newer successor and that shallow history, ambiguous latest timestamps, repeated
-  add events, and staged or untracked records stop resolution.
+  heading with a nonempty section body. Hostile temporary-repository tests prove that
+  correcting an older record does not outrank a newer successor and that shallow history,
+  backdated descendants, ambiguous latest timestamps, repeated add events, and any matching
+  path difference across HEAD, index and worktree stop resolution, including ignored files.
