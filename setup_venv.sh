@@ -61,6 +61,22 @@ else
     "New environment failed validation; inspect and remove only $VENV_DIR before retrying."
 fi
 
+# Install the configured pre-commit hook set so GOV-02's no-commit-to-branch defence and
+# the formatting, lint, import-order and file checks can run automatically.
+# The configured set does not currently include mypy, despite R10 naming it; #1270 tracks
+# that governance/configuration mismatch. Hooks live in .git/hooks, which git does not
+# track, so a fresh clone or an older checkout has none until setup installs them.
+if [ -n "${DUTCHBAY_SKIP_HOOKS:-}" ]; then
+  echo "Skipping pre-commit hook installation (DUTCHBAY_SKIP_HOOKS is set)."
+elif ! git -C "$PROJECT_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+  echo "Not a git checkout; skipping pre-commit hook installation."
+else
+  echo "Installing configured pre-commit hooks (GOV-02; R10 mismatch tracked in #1270)..."
+  (cd "$PROJECT_ROOT" && "$VENV_PYTHON" -m pre_commit install) || fail \
+    "Pre-commit hook installation failed; configured checks and GOV-02 are inactive." \
+    "Repair with: '$VENV_PYTHON' -m pre_commit install"
+fi
+
 echo "Environment ready: $VENV_DIR"
 echo "Activate it for this checkout with:"
 echo "  cd '$PROJECT_ROOT'"

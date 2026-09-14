@@ -153,13 +153,26 @@ Notes:
 
 ### Pre-commit hooks
 
-Install the hooks once; they then run on every commit (black, ruff, isort, mypy, and file
-hygiene checks, plus a `no-commit-to-branch` guard that blocks commits on `main`):
+`./setup_venv.sh` (and therefore `make setup`) installs the configured hooks so the
+enabled formatting, lint, import-order and file checks run automatically and GOV-02's
+`no-commit-to-branch` guard is active. Hooks live in `.git/hooks`, which git does not
+track, so a fresh clone starts with none. R10 also names mypy, but the current hook
+configuration does not enable it; [issue #1270](https://github.com/arunakulat/dutchbay-epc-model/issues/1270)
+tracks that contract/configuration mismatch. The separate `make type` and CI type gates
+remain mandatory.
+
+To restore them in an existing checkout without a full environment reconcile, or to run
+the set on demand:
 
 ```bash
-pre-commit install
+make hooks                      # idempotent; same as `pre-commit install`
 pre-commit run --all-files      # run the whole hook set on demand
 ```
+
+The configured set then runs on every commit (black, ruff, isort, and file hygiene checks,
+plus a `no-commit-to-branch` guard that blocks commits on `main`). Setup fails if mandatory
+installation fails. Set `DUTCHBAY_SKIP_HOOKS=1` to explicitly suppress installation on a
+host where it is not wanted.
 
 ## Testing
 
