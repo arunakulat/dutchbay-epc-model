@@ -100,6 +100,37 @@ def test_local_setup_reuses_the_shared_contract_without_path_laundering() -> Non
     assert "setup:\n\t./setup_venv.sh" in makefile
 
 
+def test_local_setup_reconciles_an_existing_environment_with_the_lock() -> None:
+    """R21 step (2) is "create or reconcile"; validation alone is not reconciliation.
+
+    Observed 2026-09-14: weasyprint stayed at 69.0 in the governed environment for
+    a day after #1256 raised the pin to 70.0 for PYSEC-2026-3940, because the
+    existing-environment branch validated "without modifying it" and the health
+    contract only checks that the governed distributions are PRESENT, not that
+    they match the lock. ./setup_venv.sh printed "Environment ready" and exited 0
+    while tests/integration/test_report_jobs_tooling.py failed on the stale pin --
+    so the one command R21 names as the repair path could not perform the repair,
+    and two further packages (scipy-stubs, websocket-client) had drifted unnoticed
+    because no test asserted their versions at all.
+    """
+
+    setup = SETUP_SCRIPT.read_text(encoding="utf-8")
+    install = '-m pip install --quiet -r "$REQUIREMENTS"'
+
+    existing_branch, separator, created_branch = setup.partition("\nelse\n")
+    assert separator, "setup_venv.sh no longer branches on an existing environment"
+
+    # Both paths must land the committed lock, not just the freshly-created one.
+    assert install in existing_branch
+    assert install in created_branch
+
+    # The reconcile must precede the health check, or a drifted environment is
+    # still judged on its pre-reconcile state.
+    assert existing_branch.index(install) < existing_branch.index(
+        "dutchbay_validate_venv"
+    )
+
+
 def test_envrc_activation_reuses_the_shared_contract_without_provisioning() -> None:
     """Entering the checkout must not select or build an ungoverned environment."""
 
