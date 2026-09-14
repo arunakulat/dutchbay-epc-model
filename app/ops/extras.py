@@ -200,8 +200,14 @@ class PackageStatus:
 
     Fields
         distribution: the distribution name, e.g. ``weasyprint``.
-        declared_spec: the version specifier declared by the project, verbatim from metadata
-            (e.g. ``<70,>=69``). Empty string when the requirement pins nothing.
+        declared_spec: the version specifier declared by the project, verbatim from
+            whichever artifact answered -- the governing ``pyproject.toml`` or the installed
+            distribution's metadata. Verbatim means the two sources render one pin as two
+            different strings -- the weasyprint pin reads ``>=70,<71`` from ``pyproject.toml``
+            and ``<71,>=70`` once metadata has round-tripped it -- so a caller testing this
+            field against a literal must parse it into a ``SpecifierSet`` rather than compare
+            text. ``ExtraStatus.spec_source`` records which artifact answered; this field does
+            not, so read them together. Empty string when the requirement pins nothing.
         installed_version: the resolved installed version, or ``None`` when absent.
         installed: True iff the distribution is present in the environment.
         importable: True/False when a deep probe ran, else ``None`` (not probed). Kept separate
