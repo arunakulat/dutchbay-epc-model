@@ -12,15 +12,41 @@ turns "log into Fly and look" into "GET the endpoint", which needs no credential
 
 Single source of truth
 ----------------------
-The declared pins come from :func:`importlib.metadata.requires` on the installed distribution —
-i.e. from the package's own recorded metadata, which is generated from ``pyproject.toml`` at build
-time. They are therefore **authoritative and cannot drift**.
+The declared pins come from whichever artifact governs the code that is actually **executing**:
+the ``pyproject.toml`` beside this package when there is one, and the installed distribution's
+recorded metadata otherwise.
 
 That matters: the pre-existing hard-coded ``GRID_EXTRA_PINS`` table in
 :mod:`app.reports.grid_screening_emit` claimed in its docstring to be "kept in sync with
 pyproject" and was not — it pinned ``pandapower==3.3.0`` while the project declared
 ``pandapower>=3.5,<4``, so the grid report surfaced a false pin as dependency provenance. Reading
-metadata removes that whole class of bug rather than correcting one instance of it.
+the project's own declaration removes that whole class of bug rather than correcting one instance
+of it.
+
+Why not metadata alone
+----------------------
+This module used to read metadata *only*, reasoning that it is generated from ``pyproject.toml``
+at build time and therefore "cannot drift". Metadata is indeed authoritative for the distribution
+it describes — but it is not authoritative for a source tree it did not build, and locally those
+are not the same tree.
+
+``app/`` is deliberately not a packaged directory (see the ``Dockerfile`` header and
+``[tool.setuptools.packages.find]``), so this very module always loads from the checkout, and
+ENV-01 puts the active checkout first on ``PYTHONPATH`` so ``analytics`` and ``finance`` do too.
+One non-editable install in the shared governed venv therefore served eighteen worktrees sitting
+at differing commits, and the pins it reported described whichever checkout last built it.
+Observed 2026-09-14: a build declaring ``weasyprint<70,>=69`` outlived the ``>=70,<71`` bump of
+#1256, and reconciling the venv to the pinned 70.0 turned a latent mismatch into nine hard
+:class:`~app.reports.dbpl.print_core.DbplDependencyError` failures — the guard rejecting the very
+version the lock requires. A venv built by ``setup_venv.sh`` alone has no project distribution at
+all, which made the extra declare nothing and failed every DBPL PDF outright. CI saw neither: it
+installs with ``pip install -e``, whose metadata is rebuilt at every install.
+
+Reading the executing tree's own declaration removes both failure modes without installing
+anything, and stays correct in the container, where the editable install's source and
+``/app/pyproject.toml`` are the same tree. :attr:`ExtraStatus.spec_source` records which artifact
+answered, because a pin whose provenance is invisible is the class of bug this module exists to
+prevent.
 
 Installed is not the same as working
 ------------------------------------
@@ -50,7 +76,9 @@ from __future__ import annotations
 import importlib
 import importlib.metadata as importlib_metadata
 import re
+import tomllib
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable, Mapping, Optional
 
 __all__ = [
@@ -89,6 +117,77 @@ _REQ_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 
 #: Marker fragment identifying which extra a requirement belongs to.
 _EXTRA_MARKER_RE = re.compile(r"""extra\s*==\s*['"]([^'"]+)['"]""")
+
+#: The ``pyproject.toml`` governing the source tree this module was loaded from. ``app/`` is not
+#: a packaged directory, so this file always resolves inside a checkout — or ``/app`` in the
+#: container image — and the project root is two levels above ``app/ops/``. Module-level so a
+#: test can point the resolution at a different tree.
+GOVERNING_PYPROJECT = Path(__file__).resolve().parents[2] / "pyproject.toml"
+
+#: PEP 503 name normalization, so ``dutchbay_epc_model`` and ``dutchbay-epc-model`` compare equal.
+_NAME_SEPARATOR_RE = re.compile(r"[-_.]+")
+
+
+def _normalize_distribution(name: str) -> str:
+    """Return ``name`` in PEP 503 normalized form."""
+    return _NAME_SEPARATOR_RE.sub("-", name).lower()
+
+
+def _pyproject_extras(
+    distribution: str,
+) -> Optional[Mapping[str, tuple[str, ...]]]:
+    """Optional-dependencies declared by the governing ``pyproject.toml``.
+
+    Returns ``None`` -- never raises -- when the file is absent, unparseable, or declares a
+    different distribution than the one asked about. ``None`` means "this source cannot answer",
+    which is what makes the metadata fallback a correct deferral rather than a guess. The name
+    check is what keeps ``declared_extras("some-other-dist")`` honest: a checkout's pyproject
+    must not answer for a distribution it does not define.
+    """
+    try:
+        with GOVERNING_PYPROJECT.open("rb") as handle:
+            project = tomllib.load(handle)["project"]
+        if _normalize_distribution(str(project["name"])) != _normalize_distribution(
+            distribution
+        ):
+            return None
+        optional = project.get("optional-dependencies") or {}
+        return {
+            str(extra): tuple(
+                str(requirement).split(";", 1)[0].strip()
+                for requirement in requirements
+            )
+            for extra, requirements in optional.items()
+        }
+    except (
+        Exception
+    ):  # noqa: BLE001 - CASPER: an unreadable source degrades, never raises
+        return None
+
+
+def _metadata_extras(distribution: str) -> Mapping[str, tuple[str, ...]]:
+    """Optional-dependencies recorded in the installed distribution's metadata."""
+    try:
+        requirements = importlib_metadata.requires(distribution) or []
+    except importlib_metadata.PackageNotFoundError:
+        return {}
+
+    grouped: dict[str, list[str]] = {}
+    for requirement in requirements:
+        marker = _EXTRA_MARKER_RE.search(requirement)
+        if marker is None:
+            continue
+        grouped.setdefault(marker.group(1), []).append(
+            requirement.split(";", 1)[0].strip()
+        )
+    return {extra: tuple(reqs) for extra, reqs in grouped.items()}
+
+
+def _declared_spec_source(distribution: str) -> str:
+    """Which artifact answered for ``distribution``: ``pyproject``, ``metadata`` or ``none``."""
+    if _pyproject_extras(distribution) is not None:
+        return "pyproject"
+    return "metadata" if _metadata_extras(distribution) else "none"
 
 
 class UnknownExtraError(KeyError):
@@ -134,11 +233,22 @@ class PackageStatus:
 
 @dataclass(frozen=True)
 class ExtraStatus:
-    """The state of one optional extra as a whole."""
+    """The state of one optional extra as a whole.
+
+    Fields
+        extra: the extra name, e.g. ``report``.
+        packages: the probed state of each package the extra declares.
+        deep: whether the probe also attempted an import of each package.
+        spec_source: which artifact the declared pins were read from — ``pyproject`` (the
+            executing tree's own declaration), ``metadata`` (the installed distribution), or
+            ``none`` (neither could answer). Surfaced rather than inferred, because the two can
+            disagree and a pin whose provenance is invisible is exactly how this drifted.
+    """
 
     extra: str
     packages: tuple[PackageStatus, ...] = ()
     deep: bool = False
+    spec_source: str = "unknown"
 
     @property
     def available(self) -> bool:
@@ -164,6 +274,7 @@ class ExtraStatus:
         return {
             "available": self.available,
             "deep_probed": self.deep,
+            "spec_source": self.spec_source,
             "missing": list(self.missing),
             "broken": list(self.broken),
             "packages": [
@@ -199,26 +310,20 @@ def _requirement_spec(requirement: str, name: str) -> str:
 def declared_extras(
     distribution: str = DEFAULT_DISTRIBUTION,
 ) -> Mapping[str, tuple[str, ...]]:
-    """Map every declared extra to its requirement strings, read from package metadata.
+    """Map every declared extra to its requirement strings.
 
-    Returns an empty mapping when the distribution is not installed as package metadata — which
-    happens in a bare source checkout — rather than raising, so a probe degrades to "nothing
-    known" instead of crashing a health route.
+    Read from the governing ``pyproject.toml`` when that file declares ``distribution``, and from
+    the installed distribution's metadata otherwise. The module docstring explains why the
+    executing tree's own declaration outranks metadata that may describe a different tree.
+
+    Returns an empty mapping when neither source can answer — an unknown distribution, or a
+    checkout with no ``pyproject.toml`` and nothing installed — rather than raising, so a probe
+    degrades to "nothing known" instead of crashing a health route.
     """
-    try:
-        requirements = importlib_metadata.requires(distribution) or []
-    except importlib_metadata.PackageNotFoundError:
-        return {}
-
-    grouped: dict[str, list[str]] = {}
-    for requirement in requirements:
-        marker = _EXTRA_MARKER_RE.search(requirement)
-        if marker is None:
-            continue
-        grouped.setdefault(marker.group(1), []).append(
-            requirement.split(";", 1)[0].strip()
-        )
-    return {extra: tuple(reqs) for extra, reqs in grouped.items()}
+    from_pyproject = _pyproject_extras(distribution)
+    if from_pyproject is not None:
+        return from_pyproject
+    return _metadata_extras(distribution)
 
 
 def _check_spec(version: str, spec: str) -> Optional[bool]:
@@ -308,6 +413,7 @@ def probe_extra(
         extra=extra,
         packages=tuple(s for s in statuses if s is not None),
         deep=deep,
+        spec_source=_declared_spec_source(distribution),
     )
 
 
@@ -324,5 +430,12 @@ def probe_extras(
         try:
             results.append(probe_extra(name, distribution=distribution, deep=deep))
         except UnknownExtraError:
-            results.append(ExtraStatus(extra=name, packages=(), deep=deep))
+            results.append(
+                ExtraStatus(
+                    extra=name,
+                    packages=(),
+                    deep=deep,
+                    spec_source=_declared_spec_source(distribution),
+                )
+            )
     return tuple(results)

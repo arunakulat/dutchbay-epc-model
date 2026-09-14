@@ -249,9 +249,12 @@ Checking a specific extra is reported at all:
 python scripts/verify_deployment.py "$URL" --expect-extra=report
 ```
 
-The probe behind it (`app/ops/extras.py`) reads declared pins from the installed distribution's
-own metadata rather than a hand-kept table, so what the endpoint reports cannot drift from
-`pyproject.toml`.
+The probe behind it (`app/ops/extras.py`) reads declared pins from the project's own declaration
+rather than a hand-kept table: the `pyproject.toml` beside the executing code when there is one,
+and the installed distribution's recorded metadata otherwise. In this image both are the same
+tree (`COPY . .` puts `pyproject.toml` at `/app`, which is also the editable install's source),
+so the endpoint reports what the image actually declares. Each extra's `spec_source` field
+records which of the two answered.
 
 ## Configuration reference
 
