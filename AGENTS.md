@@ -47,10 +47,12 @@ The resolver orders by the commit that introduced each record, so correcting an 
 record later cannot make it appear to be the newest successor. It fails loudly when the
 matching record sets in `HEAD`, the index and the worktree differ (including ignored
 records), when history is shallow or contains repeated additions, when a descendant is
-backdated before its predecessor, or when the newest introduction timestamp is ambiguous.
-Equal timestamps among older displayed records are ordered by path for display only. Each
-record names its predecessor and states which parts of it still stand, so read the newest
-first and follow the chain back only as far as it tells you to.
+backdated before its predecessor, when introduction commits are incomparable, or when the
+newest introduction timestamp is ambiguous. A rename from outside a supported handover
+family is dated when it enters the family; a rename within the family preserves the first
+entry. Equal timestamps among older displayed records are ordered by path for display only.
+Each record names its predecessor and states which parts of it still stand, so read the
+newest first and follow the chain back only as far as it tells you to.
 
 *Illustration, not authority — re-resolve it, never cite this line:* on 2026-09-13,
 the startup target was `docs/SESSION_HANDOVER_2026-09-07.md`, reached via successor

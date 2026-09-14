@@ -8,7 +8,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from scripts.list_session_handover_records import PROSE_RECORD_PATTERN
+from scripts.list_session_handover_records import prose_record_matches
+from scripts.list_session_handover_records import prose_record_references
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AGENTS_FILE = REPO_ROOT / "AGENTS.md"
@@ -98,15 +99,21 @@ def _carries_bootstrap_section(record_text: str) -> bool:
     for index, line in enumerate(lines):
         stripped = line.lstrip(" ")
         indent = len(line) - len(stripped)
-        marker = re.match(r"(`{3,}|~{3,})", stripped) if indent <= 3 else None
         unfenced.append(fence is None)
-        if marker is None:
+        if indent > 3:
             continue
-        token = marker.group(1)
         if fence is None:
+            opening = re.match(r"(`{3,}|~{3,})", stripped)
+            if opening is None:
+                continue
+            token = opening.group(1)
             fence = (token[0], len(token))
             delimiter_lines.add(index)
-        elif token[0] == fence[0] and len(token) >= fence[1]:
+            continue
+        closing = re.fullmatch(
+            rf"{re.escape(fence[0])}{{{fence[1]},}}[ \t]*", stripped
+        )
+        if closing is not None:
             fence = None
             delimiter_lines.add(index)
 
@@ -144,14 +151,14 @@ def _named_records_are_illustration_only(section: str) -> bool:
     but a name inside the instruction itself is the failure mode: it goes stale
     the moment a successor is written, and the reader follows it anyway.
     """
-    named = list(PROSE_RECORD_PATTERN.finditer(section))
+    named = prose_record_matches(section)
     if not named:
         return True
     span = _illustration_span(section)
     if span is None:
         return False
     start, end = span
-    return all(start <= match.start() < end for match in named)
+    return all(start <= match_start < end for match_start, _, _ in named)
 
 
 def _illustration_records(section: str) -> list[str]:
@@ -162,7 +169,7 @@ def _illustration_records(section: str) -> list[str]:
     start, end = span
     return [
         name if name.startswith("docs/") else f"docs/{name}"
-        for name in PROSE_RECORD_PATTERN.findall(section[start:end])
+        for name in prose_record_references(section[start:end])
     ]
 
 
@@ -226,8 +233,9 @@ def test_session_continuity_resolves_the_pointer_rather_than_pinning_a_filename(
     # or the guard is defending against nothing.
     historical = (
         "## Session continuity\n\n"
-        "Before starting work, read the newest record in `docs/SESSION_HANDOVER_*.md` "
-        "\u2014 currently\n`docs/SESSION_HANDOVER_2026-09-07.md` \u2014 and execute its "
+        "Before starting work, read the newest record in "
+        "`docs/SESSION_HANDOVER_*.md` \u2014 currently\n"
+        "`docs/SESSION_HANDOVER_2026-09-07.md` \u2014 and execute its "
         "**Bootstrap \u2014 run this first**\nsection before substantive work.\n"
     )
     assert not _named_records_are_illustration_only(historical)
@@ -267,6 +275,19 @@ def test_session_continuity_resolves_the_pointer_rather_than_pinning_a_filename(
     dotted_after = section + "\nPinned: `docs/H99_DELIVERY_RECORD.v2.md`.\n"
     assert not _named_records_are_illustration_only(dotted_after)
 
+    unquoted_space_before = section.replace(
+        "*Illustration, not authority",
+        "Pinned startup: H99_HANDOVER review.v2.md.\n\n"
+        "*Illustration, not authority",
+        1,
+    )
+    assert not _named_records_are_illustration_only(unquoted_space_before)
+
+    unquoted_space_after = (
+        section + "\nPinned startup: docs/H99_DELIVERY_RECORD review.v2.md.\n"
+    )
+    assert not _named_records_are_illustration_only(unquoted_space_after)
+
     span = _illustration_span(section)
     assert span is not None
     nonexistent_inside = (
@@ -279,10 +300,12 @@ def test_session_continuity_resolves_the_pointer_rather_than_pinning_a_filename(
 
 
 def test_session_continuity_illustration_names_existing_records() -> None:
-    """Require every illustration record to exist and its startup target to bootstrap."""
+    """Require illustration records to exist and startup target to bootstrap."""
     section = _session_continuity_section()
     span = _illustration_span(section)
-    assert span is not None, "the gateway must label its named record as an illustration"
+    assert span is not None, (
+        "the gateway must label its named record as an illustration"
+    )
     named = _illustration_records(section)
     assert len(named) >= 2, "the illustration must name its target and successor"
 
@@ -304,6 +327,14 @@ def test_session_continuity_illustration_names_existing_records() -> None:
     assert not _carries_bootstrap_section(
         "# Session handover\n\n```markdown\n"
         "## Bootstrap — run this first\n- not executable here\n```\n"
+    )
+    assert not _carries_bootstrap_section(
+        "# Session handover\n\n```markdown\n```not a close\n"
+        "## Bootstrap — run this first\n- still fenced\n```\n"
+    )
+    assert not _carries_bootstrap_section(
+        "# Session handover\n\n~~~markdown\n~~~not a close\n"
+        "## Bootstrap — run this first\n- still fenced\n~~~\n"
     )
     assert not _carries_bootstrap_section(
         "# Session handover\n\n## Bootstrap — run this first\n\n## Next section\n"
@@ -505,7 +536,72 @@ def test_handover_resolver_rejects_delete_and_readd_history(tmp_path: Path) -> N
 
     result = _run_resolver(repo)
     assert result.returncode == 2
-    assert "multiple add events found" in result.stderr
+    assert "multiple handover-family entries found" in result.stderr
+
+
+def test_handover_resolver_dates_entry_into_supported_namespace(tmp_path: Path) -> None:
+    """Date namespace entry, preserve renames, and treat copies as new records."""
+    outside_repo = tmp_path / "outside"
+    outside_docs = outside_repo / "docs"
+    outside_docs.mkdir(parents=True)
+    _git(outside_repo, "init")
+    _git(outside_repo, "config", "user.name", "Resolver Test")
+    _git(outside_repo, "config", "user.email", "resolver@example.invalid")
+    note = outside_docs / "ordinary note.md"
+    note.write_text("same lineage\n", encoding="utf-8")
+    _git(outside_repo, "add", note.relative_to(outside_repo).as_posix())
+    _commit(outside_repo, "docs: add ordinary note", "2026-01-01T00:00:00+00:00")
+    entered = outside_docs / "H01_HANDOVER renamed.md"
+    _git(
+        outside_repo,
+        "mv",
+        note.relative_to(outside_repo).as_posix(),
+        entered.relative_to(outside_repo).as_posix(),
+    )
+    _commit(outside_repo, "docs: enter handover family", "2026-01-02T00:00:00+00:00")
+    outside_result = _run_resolver(outside_repo)
+    assert outside_result.returncode == 0, outside_result.stderr
+    assert outside_result.stdout.split("\t", 1)[0] == "1767312000"
+
+    inside_repo = tmp_path / "inside"
+    inside_docs = inside_repo / "docs"
+    inside_docs.mkdir(parents=True)
+    _git(inside_repo, "init")
+    _git(inside_repo, "config", "user.name", "Resolver Test")
+    _git(inside_repo, "config", "user.email", "resolver@example.invalid")
+    original = inside_docs / "SESSION_HANDOVER_2026-01-01.md"
+    original.write_text("same lineage\n", encoding="utf-8")
+    _git(inside_repo, "add", original.relative_to(inside_repo).as_posix())
+    _commit(inside_repo, "docs: add handover", "2026-01-01T00:00:00+00:00")
+    renamed = inside_docs / "H01_HANDOVER renamed.md"
+    _git(
+        inside_repo,
+        "mv",
+        original.relative_to(inside_repo).as_posix(),
+        renamed.relative_to(inside_repo).as_posix(),
+    )
+    _commit(inside_repo, "docs: rename handover", "2026-01-02T00:00:00+00:00")
+    inside_result = _run_resolver(inside_repo)
+    assert inside_result.returncode == 0, inside_result.stderr
+    assert inside_result.stdout.split("\t", 1)[0] == "1767225600"
+
+    copy_repo = tmp_path / "copy"
+    copy_docs = copy_repo / "docs"
+    copy_docs.mkdir(parents=True)
+    _git(copy_repo, "init")
+    _git(copy_repo, "config", "user.name", "Resolver Test")
+    _git(copy_repo, "config", "user.email", "resolver@example.invalid")
+    source = copy_docs / "H01_HANDOVER.md"
+    source.write_text("copied lineage\n", encoding="utf-8")
+    _git(copy_repo, "add", source.relative_to(copy_repo).as_posix())
+    _commit(copy_repo, "docs: add source handover", "2026-01-01T00:00:00+00:00")
+    copied = copy_docs / "H02_HANDOVER copied.md"
+    copied.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    _git(copy_repo, "add", copied.relative_to(copy_repo).as_posix())
+    _commit(copy_repo, "docs: add copied successor", "2026-01-02T00:00:00+00:00")
+    copy_result = _run_resolver(copy_repo)
+    assert copy_result.returncode == 0, copy_result.stderr
+    assert copy_result.stdout.split("\t", 1)[0] == "1767312000"
 
 
 def test_handover_resolver_rejects_tied_newest_introductions(tmp_path: Path) -> None:
@@ -557,6 +653,53 @@ def test_handover_resolver_rejects_backdated_descendant(tmp_path: Path) -> None:
     result = _run_resolver(repo)
     assert result.returncode == 2
     assert "descendant introduction docs/H01_HANDOVER.md is backdated" in result.stderr
+
+
+def test_handover_resolver_rejects_parallel_introductions(tmp_path: Path) -> None:
+    """Parallel handover introductions cannot obtain authority from timestamps."""
+    repo = tmp_path / "repo"
+    docs = repo / "docs"
+    docs.mkdir(parents=True)
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "Resolver Test")
+    _git(repo, "config", "user.email", "resolver@example.invalid")
+    (repo / "README.md").write_text("root\n", encoding="utf-8")
+    _git(repo, "add", "README.md")
+    _commit(repo, "docs: add root", "2026-01-01T00:00:00+00:00")
+    root_sha = _git(repo, "rev-parse", "HEAD").strip()
+
+    _git(repo, "checkout", "-b", "left")
+    left = docs / "SESSION_HANDOVER_left.md"
+    left.write_text("left\n", encoding="utf-8")
+    _git(repo, "add", left.relative_to(repo).as_posix())
+    _commit(repo, "docs: add left", "2026-01-02T00:00:00+00:00")
+
+    _git(repo, "checkout", "-b", "right", root_sha)
+    right = docs / "H01_HANDOVER.md"
+    right.parent.mkdir()
+    right.write_text("right\n", encoding="utf-8")
+    _git(repo, "add", right.relative_to(repo).as_posix())
+    _commit(repo, "docs: add right", "2026-01-03T00:00:00+00:00")
+
+    _git(repo, "checkout", "left")
+    merge_env = {
+        **os.environ,
+        "GIT_AUTHOR_DATE": "2026-01-04T00:00:00+00:00",
+        "GIT_COMMITTER_DATE": "2026-01-04T00:00:00+00:00",
+    }
+    _git(
+        repo,
+        "merge",
+        "--no-ff",
+        "right",
+        "-m",
+        "docs: merge histories",
+        env=merge_env,
+    )
+
+    result = _run_resolver(repo)
+    assert result.returncode == 2
+    assert "introduction commits are incomparable" in result.stderr
 
 
 def test_handover_resolver_rejects_shallow_history(tmp_path: Path) -> None:

@@ -10,5 +10,7 @@
   named inside it to exist, and require the stated startup target to carry the bootstrap
   heading with a nonempty section body. Hostile temporary-repository tests prove that
   correcting an older record does not outrank a newer successor and that shallow history,
-  backdated descendants, ambiguous latest timestamps, repeated add events, and any matching
-  path difference across HEAD, index and worktree stop resolution, including ignored files.
+  backdated descendants, incomparable histories, ambiguous latest timestamps, repeated
+  family entries, and any matching path difference across HEAD, index and worktree stop
+  resolution, including ignored files. File lineage is dated when it first enters a
+  supported handover family, while later renames within that family retain the entry date.
