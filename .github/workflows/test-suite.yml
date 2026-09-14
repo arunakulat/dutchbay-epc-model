@@ -103,9 +103,16 @@ jobs:
         echo "classification: code_changed=$code"
 
   test:
-    # Sharded matrix: the ~3,600-test tree is split into TOTAL_SHARDS balanced slices
-    # (pytest-split --splits/--group) that run as parallel jobs, so the gate's wall-clock
-    # is the slowest single shard instead of the full serial-ish suite. Each shard still
+    # Sharded matrix: the tests/ tree (several thousand tests) is split into TOTAL_SHARDS
+    # DURATION-balanced slices (pytest-split --splits/--group) that run as parallel jobs,
+    # so the gate's wall-clock is the slowest single shard instead of the full serial-ish
+    # suite. No test count is pinned here on purpose: the tree grows continuously, so any
+    # figure is stale on arrival — the previous "~3,600" had drifted to ~2.3x understated
+    # and was copied verbatim into a draft governance amendment before review caught it
+    # (#1258). Nothing derives from a count: TOTAL_SHARDS is a literal pinned by
+    # tests/lint/test_coverage_gate_policy.py, and the split is by DURATION SUM, so shards
+    # carry unequal counts by design (see the `Run test shard` step below). Measure it when
+    # you actually need it: `pytest tests/ --collect-only -q | tail -1`. Each shard still
     # runs its slice across the runner cores via -n auto, so the two parallelisms
     # compound. Coverage is measured per shard (DATA FILE ONLY — NO --cov-fail-under
     # here, one shard cannot reach the 95% floor alone); the combined 95% gate lives in

@@ -274,3 +274,140 @@ def test_recruit_policy_guard_rejects_removed_controls(
     monkeypatch.setattr(Path, "read_text", altered_read)
     with pytest.raises(AssertionError):
         test_recruit_01_routes_all_relevant_tasks_to_canonical_modules()
+
+
+R18_REQUIRED_CONTROLS = (
+    "Conventional Commits",
+    "commitlint config-conventional",
+    "type(scope): summary",
+    "'deploy' is NOT sanctioned",
+    "REFACTOR-03",
+    "RECEIPT under VERIFY-01",
+    "NO frozen conformance figure",
+    "test_commit_message_conformance.py",
+    # Assert the ENUMERATION, not each type: substring presence bound nothing, because
+    # `ci` matches inside "explicit" and `test`/`chore` appear elsewhere in the cell, so
+    # removing a type from the rule left the guard green. Set-equality binding, which also
+    # catches ADDITION, lives in tests/lint/test_commit_message_conformance.py.
+    "feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert",
+)
+R21_REQUIRED_CONTROLS = (
+    "narrowest meaningful check before each commit",
+    "full suite before pushing",
+    "AGENTS.md",
+)
+
+
+def _policy(rule_id: str) -> str:
+    """Join a rule's human-readable cells the way the other guards in this file do."""
+    rule = _rules_by_id()[rule_id]
+    return " ".join((rule["title"], rule["description"], rule["enforcement"]))
+
+
+def test_r18_states_the_sanctioned_commit_convention() -> None:
+    """Pin R18 to the standard type set and to carrying no frozen statistic."""
+    policy = _policy("R18")
+
+    assert _rules_by_id()["R18"]["status"] == "active"
+    assert _rules_by_id()["R18"]["category"] == "Git Workflow"
+    for control in R18_REQUIRED_CONTROLS:
+        assert control in policy
+    # The retired example citation must not creep back. The historical text was
+    # "...cleanup commit (fb3b1f7) as example." - match the SHA itself, because an
+    # earlier draft of this guard banned "fb3b1f7 as example", a substring the real
+    # citation never contained, and so could never fire.
+    assert "fb3b1f7" not in policy
+
+
+def test_r21_scales_verification_to_the_commit_boundary() -> None:
+    """Pin the graduated cadence and the absence of a frozen test count."""
+    policy = _policy("R21")
+
+    assert _rules_by_id()["R21"]["status"] == "active"
+    for control in R21_REQUIRED_CONTROLS:
+        assert control in policy
+    assert "run 'pytest' before committing or pushing" not in policy
+    # The figure previously drafted here was lifted from a stale workflow comment.
+    assert "3,600" not in policy
+
+
+def test_r21_agents_md_echo_is_present() -> None:
+    """R21 cites AGENTS.md as authority, so bind them the way TEST-01's guard does."""
+    agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+
+    assert "Run the narrowest meaningful checks while iterating" in agents
+
+
+def test_refactor_03_does_not_claim_a_commit_message_hook() -> None:
+    """No commit-message hook exists; REFACTOR-03 must not contradict R18 by claiming one."""
+    policy = _policy("REFACTOR-03")
+
+    assert "Git hooks: NONE" in policy
+    assert "pre-commit check warns if" not in policy
+
+
+@pytest.mark.parametrize(
+    ("rule_id", "removed_control", "guard"),
+    [
+        *(
+            ("R18", control, test_r18_states_the_sanctioned_commit_convention)
+            for control in R18_REQUIRED_CONTROLS
+        ),
+        *(
+            ("R21", control, test_r21_scales_verification_to_the_commit_boundary)
+            for control in R21_REQUIRED_CONTROLS
+        ),
+        (
+            "REFACTOR-03",
+            "Git hooks: NONE",
+            test_refactor_03_does_not_claim_a_commit_message_hook,
+        ),
+    ],
+)
+def test_commit_convention_guards_reject_control_loss(
+    monkeypatch: pytest.MonkeyPatch,
+    rule_id: str,
+    removed_control: str,
+    guard: object,
+) -> None:
+    """Observe every asserted control being load-bearing, one at a time."""
+    mutated = {key: dict(row) for key, row in _rules_by_id().items()}
+    for cell in ("title", "description", "enforcement"):
+        mutated[rule_id][cell] = mutated[rule_id][cell].replace(
+            removed_control, "REMOVED_CONTROL"
+        )
+
+    monkeypatch.setitem(globals(), "_rules_by_id", lambda: mutated)
+    with pytest.raises(AssertionError):
+        guard()  # type: ignore[operator]
+
+
+@pytest.mark.parametrize(
+    ("rule_id", "injected", "guard"),
+    [
+        ("R18", " fb3b1f7 ", test_r18_states_the_sanctioned_commit_convention),
+        (
+            "R21",
+            " run 'pytest' before committing or pushing ",
+            test_r21_scales_verification_to_the_commit_boundary,
+        ),
+        (
+            "REFACTOR-03",
+            " pre-commit check warns if ",
+            test_refactor_03_does_not_claim_a_commit_message_hook,
+        ),
+    ],
+)
+def test_commit_convention_guards_reject_retired_text_returning(
+    monkeypatch: pytest.MonkeyPatch,
+    rule_id: str,
+    injected: str,
+    guard: object,
+) -> None:
+    """The inverse assertions need their own control: re-inject the retired text."""
+    mutated = {key: dict(row) for key, row in _rules_by_id().items()}
+    mutated[rule_id]["enforcement"] += injected
+
+    monkeypatch.setitem(globals(), "_rules_by_id", lambda: mutated)
+    with pytest.raises(AssertionError):
+        guard()  # type: ignore[operator]

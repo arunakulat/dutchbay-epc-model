@@ -6,19 +6,23 @@ checked that they say the same thing:
 * ``requirements.txt`` -- the reproducibility lock CI installs and ``pip-audit`` reads;
 * ``constraints.txt`` -- the resolver ceiling, applied at image build
   (``Dockerfile`` ``pip install -c constraints.txt``);
-* ``pyproject.toml`` ``[project.optional-dependencies]`` -- the specifier baked
-  into the built distribution's metadata;
+* ``pyproject.toml`` ``[project.optional-dependencies]`` -- the specifier
+  :func:`app.ops.extras.declared_extras` reads directly, and the one baked into
+  the built distribution's metadata;
 * a string literal in an integration guard, e.g.
   ``assert version("weasyprint") == "70.0"``;
 * ``docs/MODULE_REFERENCE.md`` -- prose, and out of this file's reach.
 
 The third is not documentation.  ``app.ops.extras.probe_extra`` reads
-``declared_spec`` back out of that metadata and sets ``satisfies_spec``, and
+``declared_spec`` back out of it and sets ``satisfies_spec``, and
 ``app.reports.dbpl.print_core.require_dbpl_stack`` raises
 ``DbplDependencyError`` when an installed package "violates its declared pin"
 (DBPL-01).  So bumping the lock while leaving the ``pyproject`` ceiling behind
 does not produce a version disagreement on paper -- it stops every DBPL PDF from
-rendering at runtime, which is the deliverable itself.
+rendering at runtime, which is the deliverable itself.  That is now a *direct*
+consequence rather than one mediated by a build: since 2026-09-14 the pins are
+read from the ``pyproject.toml`` beside the executing code, so a stale ceiling
+bites immediately instead of waiting for the next install.
 
 The fourth is what actually broke CI on this change's first push: the three
 dependency files were perfectly self-consistent and the disagreement was in a
@@ -113,10 +117,44 @@ def _read_pins(filename: str) -> dict[str, str]:
     return _parse_requirements(filename)[0]
 
 
-def _declared_extras() -> dict[str, list[str]]:
-    data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())
-    extras: dict[str, list[str]] = data["project"]["optional-dependencies"]
+def _extras_from(data: dict, source: str) -> dict[str, list[str]]:
+    """Pull ``[project.optional-dependencies]`` out of parsed TOML, or say why not.
+
+    Split from the file read so the refusals below can be exercised against synthetic
+    TOML: a guard whose failure path is never run is a guard nobody has seen work.
+    """
+    try:
+        extras: dict[str, list[str]] = data["project"]["optional-dependencies"]
+    except KeyError as exc:
+        raise AssertionError(
+            f"{source}: no [project.optional-dependencies] (missing key "
+            f"{exc.args[0]!r}); this module parametrizes an extras-driven control "
+            "at collection time, so collection cannot complete and no control in "
+            "this module can run"
+        ) from exc
+    if not extras:
+        raise AssertionError(
+            f"{source}: [project.optional-dependencies] declares no extras; an "
+            "empty section parametrizes nothing, which pytest reports as 'got "
+            "empty parameter set' and scores as a SKIP -- the control would go "
+            "quiet rather than red"
+        )
     return extras
+
+
+def _declared_extras() -> dict[str, list[str]]:
+    """Return the extras pyproject declares, refusing to proceed without them.
+
+    This runs at *collection* time, from the ``parametrize`` below, so an unguarded
+    ``KeyError`` here is not one failing control: it is a collection error that takes
+    all of them out, naming neither the file nor what was expected of it.  Failing the
+    whole module is nonetheless the right outcome -- degrading to "no extras found"
+    would let a hollowed-out pyproject disable these controls while the suite stayed
+    green, which is the exact failure mode the rest of this file exists to catch.  Only
+    the message needs to be worth reading.
+    """
+    path = REPO_ROOT / "pyproject.toml"
+    return _extras_from(tomllib.loads(path.read_text()), str(path))
 
 
 def test_the_lock_is_not_empty() -> None:
@@ -164,6 +202,50 @@ def test_constraints_never_contradict_the_lock() -> None:
         if name in lock and not spec.contains(Version(lock[name]), prereleases=True)
     ]
     assert not violated, f"the lock breaches a declared constraint ceiling: {violated}"
+
+
+@pytest.mark.parametrize(
+    ("data", "expected", "consequence"),
+    [
+        ({}, "missing key 'project'", "collection cannot complete"),
+        (
+            {"project": {"name": "x"}},
+            "missing key 'optional-dependencies'",
+            "collection cannot complete",
+        ),
+        (
+            {"project": {"optional-dependencies": {}}},
+            "declares no extras",
+            "scores as a SKIP",
+        ),
+    ],
+    ids=["no-project-table", "no-extras-section", "empty-extras-section"],
+)
+def test_a_pyproject_without_usable_extras_is_refused_by_name(
+    data: dict, expected: str, consequence: str
+) -> None:
+    """The three ways this module's input can be hollow must each say so.
+
+    Before this, the first two raised a bare ``KeyError`` from inside the
+    ``parametrize`` below -- a collection error reading only
+    ``KeyError: 'optional-dependencies'``, which took all of this module's controls
+    with it while naming neither the file nor the expectation.  The third was worse:
+    it raised nothing at all, and pytest scored the empty parameter set as a SKIP.
+    """
+    with pytest.raises(AssertionError) as caught:
+        _extras_from(data, "SENTINEL/pyproject.toml")
+
+    message = str(caught.value)
+    assert expected in message, message
+    assert consequence in message, message
+    assert "SENTINEL/pyproject.toml" in message, "the refusal must name its source"
+
+
+def test_the_live_pyproject_passes_that_same_refusal() -> None:
+    """Guard the guard: the check above is worthless if it also rejects the real file."""
+    extras = _declared_extras()
+    assert DBPL_EXTRA in extras, f"[{DBPL_EXTRA}] is the load-bearing extra"
+    assert len(extras) > 1, f"only one extra declared: {sorted(extras)}"
 
 
 @pytest.mark.parametrize("extra", sorted(_declared_extras()))
@@ -238,7 +320,13 @@ def test_no_extra_is_silently_vacuous() -> None:
 def test_every_dbpl_package_is_locked_and_within_its_declared_pin() -> None:
     """DBPL-01's complete stack must be locked, since the print core fails loud."""
     lock = _read_pins("requirements.txt")
-    specs = _declared_extras()[DBPL_EXTRA]
+    extras = _declared_extras()
+    absent = (
+        f"pyproject declares no [{DBPL_EXTRA}] extra; DBPL-01's stack is declared "
+        f"nowhere, so nothing below can check it (found: {sorted(extras)})"
+    )
+    assert DBPL_EXTRA in extras, absent
+    specs = extras[DBPL_EXTRA]
 
     names = {_canonical(Requirement(s).name) for s in specs}
     missing = {"weasyprint", "reportlab", "geopandas", "contextily"} - names

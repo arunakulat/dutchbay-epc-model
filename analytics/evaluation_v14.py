@@ -224,13 +224,68 @@ def normalize_kpi_dict(raw_kpis: Mapping[str, Any]) -> dict[str, float]:
     """
     Normalize KPI dict to {str -> float}.
 
-    Filters out non-numeric values and logs warnings for skipped entries.
+    Drops every entry whose ``float()`` raises ``TypeError`` or ``ValueError``,
+    logging each one at ``DEBUG`` level only.  The drop is therefore **silent in
+    ordinary operation**: a KPI that became ``"N/A"`` upstream is gone here, and
+    its absence is indistinguishable from its never having been emitted.  Other
+    exception classes are not caught and propagate -- an out-of-range ``int``
+    such as ``10**400`` raises ``OverflowError`` rather than dropping.
+
+    A ``bool`` is **not** dropped.  ``float(False)`` succeeds, so a boolean KPI
+    such as ``wacc_is_real`` arrives downstream as ``0.0``/``1.0``, a finite
+    number indistinguishable from a computed one.
+
+    This admits strictly more than :mod:`analytics.casper.casper_payload`, whose
+    normalizer over the same raw dict keeps a key only when
+    ``isinstance(v, (int, float)) and not isinstance(v, bool)``.  The two
+    therefore disagree on ``bool`` keys **and on every value ``float()`` accepts
+    that is not an ``int`` or a ``float``** -- numeric strings,
+    :class:`~decimal.Decimal`, :class:`~fractions.Fraction`, and any object
+    defining ``__float__`` or ``__index__`` -- ``bytes`` and ``bytearray``
+    holding digits among them.  The governing clause is the exhaustive one:
+    every value ``float()`` accepts that is neither ``int`` nor ``float``; the
+    list is illustrative.  A scenario whose ``name`` is numeric is the
+    reachable case: it becomes the numeric KPI ``scenario_name=2030.0`` here
+    while the CASPER payload omits it.  ``analytics.core.metrics`` coerces the
+    name with ``str()``, so an unquoted ``name: 2030`` does it too.  No scenario
+    in ``scenarios/`` currently has one, so this is reachable by configuration
+    rather than presently instantiated.  The disagreement runs one way only --
+    nothing CASPER keeps is dropped here -- so the risk is a phantom KPI, never
+    a lost one.  Changing it here is a runtime change and is out of scope, so
+    the divergence is documented and pinned rather than silently carried.
+
+    That is deliberate rather than an oversight.  This shim sits on the
+    ``return_full_result=False`` path of :func:`evaluate_with_overrides`, which
+    is the parameter's default and is called inside Monte Carlo, sensitivity,
+    tornado and optimizer loops.  A warning per dropped entry would flood those
+    runs, so this function stays at ``DEBUG``; the observability fix belongs at
+    the caller.
+
+    Beware the name: :mod:`analytics.evaluate_scenario` exports a *different*
+    ``evaluate_with_overrides``, and that is the one
+    :mod:`analytics.core.parameter_solvers` imports.  It does not call this
+    function, so nothing here applies to it -- it returns ``scenario_name`` as
+    ``str``, ``dscr_series`` as ``list`` and ``wacc_is_real`` as ``bool`` where
+    this path yields ``2030.0``, nothing, and ``1.0``.
+
+    **The remedy exists on one caller only.**
+    :func:`evaluate_with_overrides` accepts ``return_full_result=True``, which
+    returns ``kpis`` off the full result and bypasses this function entirely.
+    The other two callers have no such parameter:
+    :func:`evaluate_scenario_from_dict` and
+    :func:`evaluate_with_casper_tail_risk`, whose output becomes
+    ``CasperResult.baseline_kpis`` on the CASPER path -- a once-per-run call
+    where the per-iteration flood argument above does not apply.  Direct
+    callers of this exported function have no remedy either.  Dolphin 3C's
+    requirement is scoped to the single gateway call (charter section 9.3), not
+    to callers generally.
 
     Args:
         raw_kpis: Raw KPI mapping from pipeline result
 
     Returns:
-        Normalized dict with only numeric (float-convertible) values
+        Normalized dict with only numeric (float-convertible) values.  Entries
+        that failed conversion are absent, not defaulted or zero-filled.
 
     Example:
         >>> kpis = {"project_irr": 0.145, "name": "test", "min_dscr": "1.45"}
