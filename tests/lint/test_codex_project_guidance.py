@@ -392,7 +392,6 @@ def test_handover_resolver_dates_entry_into_supported_namespace(tmp_path: Path) 
     assert copy_result.stdout.split("\t", 1)[0] == "1767312000"
 
 
-
 def test_handover_resolver_rejects_control_character_filenames(
     tmp_path: Path,
 ) -> None:

@@ -116,8 +116,7 @@ def _validated_candidate_paths(paths: set[str]) -> set[str]:
     if unsupported:
         rendered = ", ".join(repr(path) for path in unsupported)
         raise ResolutionError(
-            "handover-like filenames use unsupported display characters: "
-            + rendered
+            "handover-like filenames use unsupported display characters: " + rendered
         )
     return {path for path in paths if RECORD_PATTERN.fullmatch(path)}
 
@@ -201,10 +200,7 @@ def _introduction(path: str) -> Introduction:
             width = 3 if status.startswith(("R", "C")) else 2
             if cursor + width > len(changes):
                 raise ResolutionError(f"malformed NUL-framed lineage for {path}")
-            names = [
-                os.fsdecode(field)
-                for field in changes[cursor + 1 : cursor + width]
-            ]
+            names = [os.fsdecode(field) for field in changes[cursor + 1 : cursor + width]]
             cursor += width
             if status == "A":
                 if names[0] == current_path and RECORD_PATTERN.fullmatch(current_path):
@@ -260,11 +256,9 @@ def _worktree_candidates(root: Path) -> set[str]:
     docs = root / "docs"
     if not docs.is_dir():
         return set()
-    return _validated_candidate_paths({
-        path.relative_to(root).as_posix()
-        for path in docs.iterdir()
-        if path.is_file()
-    })
+    return _validated_candidate_paths(
+        {path.relative_to(root).as_posix() for path in docs.iterdir() if path.is_file()}
+    )
 
 
 def _reject_uncommitted_records(root: Path, head_candidates: set[str]) -> None:
@@ -295,9 +289,7 @@ def _reject_uncommitted_records(root: Path, head_candidates: set[str]) -> None:
         f"worktree-only (untracked or ignored): {path}"
         for path in sorted(worktree_additions)
     )
-    states.extend(
-        f"worktree deletion: {path}" for path in sorted(worktree_deletions)
-    )
+    states.extend(f"worktree deletion: {path}" for path in sorted(worktree_deletions))
     raise ResolutionError(
         "HEAD, index, and worktree handover records differ; reconcile them:\n"
         + "\n".join(states)
@@ -409,9 +401,7 @@ def main() -> int:
                 f"indeterminate shallow-repository state: {shallow!r}"
             )
         committed = _candidate_paths(
-            _git_bytes(
-                "ls-tree", "-r", "-z", "--name-only", "HEAD", "--", "docs"
-            )
+            _git_bytes("ls-tree", "-r", "-z", "--name-only", "HEAD", "--", "docs")
         )
         _reject_uncommitted_records(root, committed)
         if not committed:
