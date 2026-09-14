@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -79,6 +82,7 @@ ILLUSTRATION_MARKER = "Illustration, not authority"
 # optional because ten of the eleven live records name the pointer without it --
 # requiring the prefix would miss the spelling the corpus itself models.
 HANDOVER_PATTERN = re.compile(r"(?:docs/)?(?:SESSION_HANDOVER|H\d+)[0-9A-Za-z_\-]*\.md")
+RESOLVER_SCRIPT = REPO_ROOT / "scripts/list_session_handover_records.py"
 
 
 def _session_continuity_section() -> str:
@@ -101,8 +105,20 @@ def _carries_bootstrap_section(record_text: str) -> bool:
     return BOOTSTRAP_HEADING in record_text
 
 
+def _illustration_span(section: str) -> tuple[int, int] | None:
+    """Return the exact illustration paragraph span, if present."""
+    start = section.find(ILLUSTRATION_MARKER)
+    if start < 0:
+        return None
+    paragraph_start = section.rfind("\n", 0, start) + 1
+    paragraph_end = section.find("\n\n", start)
+    if paragraph_end < 0:
+        paragraph_end = len(section)
+    return paragraph_start, paragraph_end
+
+
 def _named_records_are_illustration_only(section: str) -> bool:
-    """Report whether every named handover file sits in the illustration.
+    """Report whether every named handover sits inside one illustration paragraph.
 
     The gateway may name a record to show what the resolution currently returns,
     but a name inside the instruction itself is the failure mode: it goes stale
@@ -111,10 +127,45 @@ def _named_records_are_illustration_only(section: str) -> bool:
     named = list(HANDOVER_PATTERN.finditer(section))
     if not named:
         return True
-    marker = section.find(ILLUSTRATION_MARKER)
-    if marker < 0:
+    span = _illustration_span(section)
+    if span is None:
         return False
-    return all(match.start() > marker for match in named)
+    start, end = span
+    return all(start <= match.start() < end for match in named)
+
+
+def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> str:
+    """Run a Git command in a hostile-oracle repository."""
+    completed = subprocess.run(
+        ["git", *args],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    return completed.stdout
+
+
+def _commit(repo: Path, message: str, iso_date: str) -> None:
+    """Commit the complete hostile-oracle index at a controlled timestamp."""
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_DATE": iso_date,
+        "GIT_COMMITTER_DATE": iso_date,
+    }
+    _git(repo, "commit", "-m", message, env=env)
+
+
+def _run_resolver(repo: Path) -> subprocess.CompletedProcess[str]:
+    """Execute the production resolver against a temporary Git repository."""
+    return subprocess.run(
+        [sys.executable, str(RESOLVER_SCRIPT)],
+        cwd=repo,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
 
 
 def test_session_continuity_resolves_the_pointer_rather_than_pinning_a_filename() -> (
@@ -130,7 +181,8 @@ def test_session_continuity_resolves_the_pointer_rather_than_pinning_a_filename(
 
     assert "resolve the pointer rather than trusting a filename" in section
     assert "repository startup/bootstrap pointer" in section
-    assert "Order by commit date" in section
+    assert "python scripts/list_session_handover_records.py" in section
+    assert "commit that introduced each record" in section
     assert _named_records_are_illustration_only(section)
 
     # Negative control: the wording this replaced must fail the same predicate,
@@ -162,23 +214,25 @@ def test_session_continuity_resolves_the_pointer_rather_than_pinning_a_filename(
     )
     assert not _named_records_are_illustration_only(bare)
 
+    # A pointer appended below the illustration paragraph is still authoritative
+    # prose and must not pass merely because it occurs after the marker.
+    appended = section + "\nPinned startup: `docs/SESSION_HANDOVER_2099-01-01.md`.\n"
+    assert not _named_records_are_illustration_only(appended)
 
-def test_session_continuity_illustration_is_a_real_startup_record() -> None:
-    """The dated illustration must still resolve to an executable bootstrap.
 
-    This is the guard a naive 'newest file by date' rule would fail: the newest
-    record by filename is a scope-specific successor with no bootstrap section,
-    so pointing at it would leave the next session with nothing to execute.
-    """
+def test_session_continuity_illustration_names_existing_records() -> None:
+    """Require every illustration record to exist and its startup target to bootstrap."""
     section = _session_continuity_section()
-    marker = section.find(ILLUSTRATION_MARKER)
-    assert marker >= 0, "the gateway must label its named record as an illustration"
-    named = HANDOVER_PATTERN.findall(section[marker:])
-    assert named, "the illustration must name the record it resolved to"
+    span = _illustration_span(section)
+    assert span is not None, "the gateway must label its named record as an illustration"
+    start, end = span
+    named = HANDOVER_PATTERN.findall(section[start:end])
+    assert len(named) >= 2, "the illustration must name its target and successor"
 
-    record = REPO_ROOT / named[0]
-    assert record.is_file(), f"{named[0]} is named in AGENTS.md but does not exist"
-    assert _carries_bootstrap_section(record.read_text(encoding="utf-8"))
+    records = [REPO_ROOT / path for path in named]
+    for path, record in zip(named, records, strict=True):
+        assert record.is_file(), f"{path} is named in AGENTS.md but does not exist"
+    assert _carries_bootstrap_section(records[0].read_text(encoding="utf-8"))
 
     # Negative control: the predicate must reject a scope-specific successor,
     # or it is asserting nothing about the record it just accepted.
@@ -186,3 +240,65 @@ def test_session_continuity_illustration_is_a_real_startup_record() -> None:
         "# Session handover — scope-specific successor\n\n"
         "## Verified checkpoint\n\nNo bootstrap section here.\n"
     )
+
+
+def test_handover_resolver_orders_by_introduction_not_last_touch(
+    tmp_path: Path,
+) -> None:
+    """A later correction to an old record must not outrank its newer successor."""
+    repo = tmp_path / "repo"
+    docs = repo / "docs"
+    docs.mkdir(parents=True)
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "Resolver Test")
+    _git(repo, "config", "user.email", "resolver@example.invalid")
+
+    old = docs / "SESSION_HANDOVER_2026-01-01.md"
+    old.write_text("old\n", encoding="utf-8")
+    _git(repo, "add", old.relative_to(repo).as_posix())
+    _commit(repo, "docs: add old handover", "2026-01-01T00:00:00+00:00")
+
+    successor = docs / "H04_DELIVERY_RECORD.md"
+    successor.write_text("newer\n", encoding="utf-8")
+    _git(repo, "add", successor.relative_to(repo).as_posix())
+    _commit(repo, "docs: add successor", "2026-01-02T00:00:00+00:00")
+
+    old.write_text("old corrected later\n", encoding="utf-8")
+    _git(repo, "add", old.relative_to(repo).as_posix())
+    _commit(repo, "docs: correct old handover", "2026-01-03T00:00:00+00:00")
+
+    result = _run_resolver(repo)
+    assert result.returncode == 0, result.stderr
+    paths = [line.split("\t")[-1] for line in result.stdout.splitlines()]
+    assert paths[:2] == [
+        "docs/H04_DELIVERY_RECORD.md",
+        "docs/SESSION_HANDOVER_2026-01-01.md",
+    ]
+
+
+def test_handover_resolver_rejects_untracked_and_staged_records(
+    tmp_path: Path,
+) -> None:
+    """Uncommitted successors must be visible as fail-loud ordering blockers."""
+    repo = tmp_path / "repo"
+    docs = repo / "docs"
+    docs.mkdir(parents=True)
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "Resolver Test")
+    _git(repo, "config", "user.email", "resolver@example.invalid")
+
+    committed = docs / "SESSION_HANDOVER_2026-01-01.md"
+    committed.write_text("committed\n", encoding="utf-8")
+    _git(repo, "add", committed.relative_to(repo).as_posix())
+    _commit(repo, "docs: add baseline", "2026-01-01T00:00:00+00:00")
+
+    candidate = docs / "H02_DELIVERY_HANDOVER.md"
+    candidate.write_text("not durable\n", encoding="utf-8")
+    untracked = _run_resolver(repo)
+    assert untracked.returncode == 2
+    assert "untracked: docs/H02_DELIVERY_HANDOVER.md" in untracked.stderr
+
+    _git(repo, "add", candidate.relative_to(repo).as_posix())
+    staged = _run_resolver(repo)
+    assert staged.returncode == 2
+    assert "staged: docs/H02_DELIVERY_HANDOVER.md" in staged.stderr

@@ -3,10 +3,10 @@
   a successor was written (eleven later records accumulated behind it). It now states the two
   record kinds — a repository startup record carrying the `## Bootstrap — run this first`
   checklist, and a scope-specific successor that names the record still governing startup —
-  gives a committer-date ordering command, and tells the reader to resolve the pointer from
-  the newest record's own declaration. The named file survives only as a dated illustration.
-  `tests/lint/test_codex_project_guidance.py` ratchets against the wording this replaced: it
-  fails if a `SESSION_HANDOVER_*` or `H<n>_*` record name reappears above the illustration
-  marker, or if the illustration stops naming a record that actually carries a bootstrap
-  section. It is a positional regression ratchet over prose — not a proof that no hardcoded
-  pointer can return, and not a check on whether the illustration's claim is still true.
+  uses one executable resolver ordered by each record's introduction commit, and tells the
+  reader to follow the newest record's own declaration. The resolver fails loudly for staged
+  or untracked successors. The named files survive only in one bounded, dated illustration.
+  Structural tests reject concrete record names outside that paragraph, require every record
+  named inside it to exist, and require only the stated startup target to carry the bootstrap
+  heading. Hostile temporary-repository tests prove that correcting an older record does not
+  outrank a newer successor and that staged or untracked records stop resolution.
