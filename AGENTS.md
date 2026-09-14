@@ -24,12 +24,34 @@ branch or a nonexistent ruleset filename.
 
 ## Session continuity
 
-Before starting work, read the newest record in `docs/SESSION_HANDOVER_*.md` — currently
-`docs/SESSION_HANDOVER_2026-09-07.md` — and execute its **Bootstrap — run this first**
-section before substantive work. Each record names its predecessor and states which parts
-of it still stand, so read the newest first and follow the chain back only as far as it
-tells you to. These are the PERSIST-01 durable records: they carry the canonical KPI set,
-the traps that have already cost a session real time, and the open-item list.
+Do not trust or copy a concrete handover filename into this gateway. Run the resolver,
+read the first record it prints, and follow that record's own declaration of the startup
+record and required actions. If the resolver fails, stop rather than guessing a pointer.
+
+```bash
+python scripts/list_session_handover_records.py
+```
+
+The resolver orders by each record's introduction commit, so correcting an older record
+later cannot make it appear to be the newest successor. It fails loudly when the
+matching record sets in `HEAD`, the index and the worktree differ (including ignored
+records), when history is shallow or contains repeated additions, when a descendant is
+backdated before its predecessor, when introduction commits are incomparable, or when the
+newest introduction timestamp is ambiguous. A rename from outside a supported handover
+family is dated when it enters the family; a rename within the family preserves the first
+entry. Supported suffixes use ASCII letters, digits, underscore, dot, hyphen and space;
+near-family names outside that display-safe grammar fail before history is interpreted.
+Git path inventories, followed-commit metadata and per-commit changes use NUL
+framing. Equal timestamps among older displayed records are ordered by path for display
+only.
+
+The model product owner must optimize and review the resolver before its canonical-corpus
+runtime exceeds 60 seconds or before the handover corpus reaches 100 records.
+Each record names its predecessor and states which parts of it still stand, so read the
+newest first and follow the chain back only as far as it tells you to.
+
+These are the PERSIST-01 durable records: they carry the canonical KPI set, the traps that
+have already cost a session real time, and the open-item list.
 
 The handover bootstrap is an executable startup checklist, not an independent governance
 source. Where a handover and this file disagree about environment or governance, this file
