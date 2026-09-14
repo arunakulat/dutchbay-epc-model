@@ -3,12 +3,45 @@
 The module deliberately uses only the Python standard library so it can inspect a
 candidate environment before project dependencies are trusted.  It never creates or
 modifies an environment; setup and activation remain separate responsibilities.
+
+Dependency drift
+----------------
+Presence is not health.  Until this module compared versions, the contract asserted
+only that the policy's ``required_distributions`` were *installed*, so an environment
+whose packages had wandered away from ``requirements.txt`` still reported
+``Environment validation PASS``.  Of the lock's pinned distributions only nine carried
+a version assertion anywhere under ``tests/`` -- five in
+``tests/integration/test_report_jobs_tooling.py`` and four in
+``tests/integration/test_ingestion_tooling.py`` -- so drift in any of the other ~302
+was invisible.  Observed 2026-09-14 in the governed environment: ``weasyprint`` 69.0
+against a pinned 70.0, ``scipy-stubs`` 1.18.0.1 against 1.18.1.0, and
+``websocket-client`` 1.9.0 against 1.9.2.  Only ``weasyprint`` surfaced, and only
+because a test happened to name it.
+
+:func:`validate_environment` now compares **every** pin in the lock against what the
+candidate environment actually has installed, and separates the two failure modes:
+
+* a **version disagreement** is drift and is always fatal, for any locked
+  distribution.  Nothing legitimately installs a version the lock does not name.
+* an **absent** distribution is a capability question, not an environment-health one.
+  It stays fatal for the policy's ``required_distributions`` and is otherwise recorded
+  in the receipt for the caller to see.  Which extras a given host must have installed
+  is owned by the guards at the point of use -- ``require_dbpl_stack()`` under DBPL-01,
+  and ``app.ops.extras.probe_extra`` -- not by this module.  The deployed image is the
+  reason that line exists: ``Dockerfile`` installs the full lock and then only
+  ``.[api,jobs,report]``.
+
+Distributions installed but *not* locked are deliberately out of scope: the lock is
+not a closed-world statement of the environment, and ``pip``, ``setuptools``,
+``wheel`` and the project's own distribution are all legitimately present without
+appearing in it.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -30,8 +63,27 @@ _POLICY_FIELDS = frozenset(
         "required_distributions",
         "project_distribution",
         "import_probe",
+        "dependency_lock",
     }
 )
+
+#: PEP 503 name normalisation, spelled in the standard library on purpose.
+#:
+#: ``packaging.utils.canonicalize_name`` is the usual way to write this and is what
+#: ``tests/lint/test_extra_pin_consistency.py`` uses.  This module cannot import it:
+#: ``dutchbay_resolve_venv`` imports this file under a *bare* bootstrap Python 3.12
+#: that is not required to have any project dependency installed, so a third-party
+#: import here would break environment resolution on exactly the unprovisioned host
+#: the contract exists to diagnose.
+#:
+#: The substitution below is the same operation packaging performs, not an
+#: approximation of it.  Collapsing runs of ``-``, ``_`` and ``.`` matters: a
+#: hand-rolled ``lower().replace("_", "-")`` leaves ``opendssdirect.py``,
+#: ``boolean.py``, ``pdfminer.six`` and ``svg.py`` unnormalised, which silently
+#: disables every comparison keyed on them.  The equivalence is pinned against
+#: ``packaging`` over the real lock in
+#: ``tests/lint/test_dutchbay_environment_contract.py``.
+_CANONICAL_NAME_SEPARATORS = re.compile(r"[-_.]+")
 
 
 class EnvironmentContractError(RuntimeError):
@@ -50,6 +102,91 @@ class EnvironmentPolicy:
     required_distributions: tuple[str, ...]
     project_distribution: str
     import_probe: str
+    dependency_lock: str
+
+
+@dataclass(frozen=True)
+class LockedDistribution:
+    """One exact ``name==version`` pin read from the committed dependency lock."""
+
+    declared_name: str
+    canonical_name: str
+    version: str
+
+
+def canonical_distribution_name(name: str) -> str:
+    """Return the PEP 503 normalised form of a distribution name.
+
+    Equivalent to ``packaging.utils.canonicalize_name``; see
+    :data:`_CANONICAL_NAME_SEPARATORS` for why this module spells it by hand.
+    """
+
+    return _CANONICAL_NAME_SEPARATORS.sub("-", name).lower()
+
+
+def load_dependency_lock(path: Path) -> tuple[LockedDistribution, ...]:
+    """Read the committed lock as exact pins, refusing anything it cannot pin.
+
+    The lock is generated (``make lock`` from a clean environment), so every line is
+    expected to be an exact ``name==version`` pin.  A line this parser cannot reduce
+    to one exact pin raises instead of being skipped.  Skipping is not the safe
+    default here: a distribution absent from the parsed result is compared against
+    nothing, so a lenient parser silently shrinks the very check it feeds -- which is
+    how the naive parser behind ``tests/lint/test_extra_pin_consistency.py`` let a
+    real disagreement through.  Teaching this function about a new construct is a
+    deliberate act, and the failure names the line that forced it.
+    """
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise EnvironmentContractError(
+            f"Cannot read dependency lock {path}: {exc}"
+        ) from exc
+
+    pins: dict[str, LockedDistribution] = {}
+    for number, raw in enumerate(text.splitlines(), start=1):
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        # ``--hash=`` options bind to the requirement they follow; drop them and keep
+        # the pin rather than refusing the whole line.
+        line = line.split("--hash", 1)[0].strip()
+        if line.startswith("-"):
+            raise EnvironmentContractError(
+                f"{path} line {number}: option or include line {line!r} can move pins "
+                "out of this comparison; teach load_dependency_lock about it first."
+            )
+        name, separator, version = line.partition("==")
+        name = name.strip()
+        version = version.strip()
+        if not separator or not name or not version or not name.isascii():
+            raise EnvironmentContractError(
+                f"{path} line {number}: {line!r} is not an exact name==version pin; "
+                "the dependency lock must pin every distribution exactly."
+            )
+        if any(character in line for character in ";[,<>!~*"):
+            raise EnvironmentContractError(
+                f"{path} line {number}: {line!r} carries a marker, extras group or "
+                "additional specifier that this comparison does not model; teach "
+                "load_dependency_lock about it first."
+            )
+        canonical = canonical_distribution_name(name)
+        previous = pins.get(canonical)
+        if previous is not None and previous.version != version:
+            raise EnvironmentContractError(
+                f"{path} line {number}: {name} is pinned twice with different "
+                f"versions ({previous.version} and {version})."
+            )
+        pins[canonical] = LockedDistribution(
+            declared_name=name, canonical_name=canonical, version=version
+        )
+    if not pins:
+        raise EnvironmentContractError(
+            f"Dependency lock {path} contains no pins; a lock that parses to nothing "
+            "would silently pass every environment."
+        )
+    return tuple(sorted(pins.values(), key=lambda pin: pin.canonical_name))
 
 
 @dataclass(frozen=True)
@@ -88,6 +225,9 @@ class EnvironmentReceipt:
     project_install_url: str | None
     editable_project_install: bool
     foreign_checkout_paths: tuple[str, ...]
+    dependency_lock: str
+    locked_distribution_count: int
+    absent_locked_distributions: tuple[str, ...]
 
     def to_dict(self) -> dict[str, object]:
         """Return a deterministic JSON-compatible receipt mapping."""
@@ -109,6 +249,9 @@ class EnvironmentReceipt:
             "project_install_url": self.project_install_url,
             "editable_project_install": self.editable_project_install,
             "foreign_checkout_paths": list(self.foreign_checkout_paths),
+            "dependency_lock": self.dependency_lock,
+            "locked_distribution_count": self.locked_distribution_count,
+            "absent_locked_distributions": list(self.absent_locked_distributions),
         }
 
 
@@ -156,6 +299,11 @@ def load_environment_policy(path: Path = DEFAULT_POLICY_PATH) -> EnvironmentPoli
         raise EnvironmentContractError(
             "portable_fallback must be exactly the relative .venv path."
         )
+    lock = Path(_require_string(raw, "dependency_lock"))
+    if lock.is_absolute() or ".." in lock.parts:
+        raise EnvironmentContractError(
+            "dependency_lock must be a relative path inside the active checkout."
+        )
     return EnvironmentPolicy(
         schema=POLICY_SCHEMA,
         environment_variable=_require_string(raw, "environment_variable"),
@@ -165,6 +313,7 @@ def load_environment_policy(path: Path = DEFAULT_POLICY_PATH) -> EnvironmentPoli
         required_distributions=tuple(required),
         project_distribution=_require_string(raw, "project_distribution"),
         import_probe=_require_string(raw, "import_probe"),
+        dependency_lock=str(lock),
     )
 
 
@@ -224,6 +373,7 @@ import importlib
 import importlib.metadata as metadata
 import json
 import os
+import re
 import site
 import sys
 from pathlib import Path
@@ -231,16 +381,26 @@ from pathlib import Path
 checkout = Path(os.environ["DUTCHBAY_ACTIVE_CHECKOUT"]).resolve(strict=True)
 probe_name = os.environ["DUTCHBAY_IMPORT_PROBE"]
 project_distribution = os.environ["DUTCHBAY_PROJECT_DISTRIBUTION"]
-required = json.loads(os.environ["DUTCHBAY_REQUIRED_DISTRIBUTIONS"])
 module = importlib.import_module(probe_name)
 module_path = Path(module.__file__).resolve(strict=True)
 
-versions = {}
-for name in required:
+# Enumerate the environment ONCE and report it verbatim.  The probe observes; the
+# caller judges.  Keying on the PEP 503 canonical name lets the caller compare against
+# the lock without knowing how pip happened to spell a distribution, and first-wins on
+# a duplicate matches the sys.path precedence that an import would follow.
+separators = re.compile(r"[-_.]+")
+installed = {}
+for distribution_entry in metadata.distributions():
     try:
-        versions[name] = metadata.version(name)
-    except metadata.PackageNotFoundError:
-        versions[name] = None
+        raw_name = distribution_entry.metadata["Name"]
+        raw_version = distribution_entry.metadata["Version"]
+    except Exception:
+        continue
+    if not raw_name or not raw_version:
+        continue
+    canonical = separators.sub("-", raw_name).lower()
+    if canonical not in installed:
+        installed[canonical] = raw_version
 
 editable = False
 project_install_url = None
@@ -298,7 +458,7 @@ print(json.dumps({
     "python_executable": str(Path(sys.executable).resolve(strict=True)),
     "python_prefix": str(Path(sys.prefix).resolve(strict=True)),
     "import_path": str(module_path),
-    "required_distributions": versions,
+    "installed_distributions": installed,
     "project_install_url": project_install_url,
     "editable_project_install": editable,
     "foreign_checkout_paths": sorted(foreign),
@@ -341,9 +501,6 @@ def validate_environment(
             "DUTCHBAY_ACTIVE_CHECKOUT": str(resolved.active_checkout),
             "DUTCHBAY_IMPORT_PROBE": resolved.policy.import_probe,
             "DUTCHBAY_PROJECT_DISTRIBUTION": resolved.policy.project_distribution,
-            "DUTCHBAY_REQUIRED_DISTRIBUTIONS": json.dumps(
-                resolved.policy.required_distributions
-            ),
             "PYTHONDONTWRITEBYTECODE": "1",
             "PYTHONPATH": str(resolved.active_checkout)
             + (os.pathsep + previous_pythonpath if previous_pythonpath else ""),
@@ -386,17 +543,38 @@ def validate_environment(
         raise EnvironmentContractError(
             f"Python prefix mismatch: selected {expected_prefix}, runtime reported {actual_prefix}."
         )
-    missing = [
-        name
-        for name, version in raw["required_distributions"].items()
-        if version is None
-    ]
+    installed = raw["installed_distributions"]
+    required_versions = {
+        name: installed.get(canonical_distribution_name(name))
+        for name in resolved.policy.required_distributions
+    }
+    missing = [name for name, version in required_versions.items() if version is None]
     if missing:
         raise EnvironmentContractError(
             "Selected environment is incomplete; missing governed distributions: "
             + ", ".join(sorted(missing, key=str.casefold))
             + "."
         )
+    lock_path = resolved.active_checkout / resolved.policy.dependency_lock
+    locked = load_dependency_lock(lock_path)
+    drifted = [
+        (pin, installed[pin.canonical_name])
+        for pin in locked
+        if pin.canonical_name in installed
+        and installed[pin.canonical_name] != pin.version
+    ]
+    if drifted:
+        detail = "; ".join(
+            f"{pin.declared_name} {actual} installed, {pin.version} locked"
+            for pin, actual in drifted
+        )
+        raise EnvironmentContractError(
+            f"Selected environment has drifted from {resolved.policy.dependency_lock}: "
+            f"{detail}. Reconcile it with ./setup_venv.sh."
+        )
+    absent = tuple(
+        pin.declared_name for pin in locked if pin.canonical_name not in installed
+    )
     import_path = Path(raw["import_path"])
     _require_under(import_path, resolved.active_checkout, "Active import")
     if raw["editable_project_install"]:
@@ -412,9 +590,7 @@ def validate_environment(
             + "."
         )
     versions = tuple(
-        sorted(
-            raw["required_distributions"].items(), key=lambda item: item[0].casefold()
-        )
+        sorted(required_versions.items(), key=lambda item: item[0].casefold())
     )
     return EnvironmentReceipt(
         schema=RECEIPT_SCHEMA,
@@ -433,6 +609,9 @@ def validate_environment(
         project_install_url=raw["project_install_url"],
         editable_project_install=False,
         foreign_checkout_paths=(),
+        dependency_lock=resolved.policy.dependency_lock,
+        locked_distribution_count=len(locked),
+        absent_locked_distributions=absent,
     )
 
 
