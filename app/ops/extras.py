@@ -160,7 +160,11 @@ def _read_pyproject_extras(
             distribution
         ):
             return None, None
-        optional = project.get("optional-dependencies") or {}
+        optional = (
+            project["optional-dependencies"]
+            if "optional-dependencies" in project
+            else {}
+        )
         if not isinstance(optional, Mapping):
             raise TypeError("project.optional-dependencies must be a table")
         for extra, requirements in optional.items():
@@ -191,29 +195,36 @@ def _pyproject_extras(
 
 def _metadata_declaration_without_selector(
     requirement: str,
-) -> tuple[tuple[str, ...], Optional[str]]:
-    """Group by metadata's extra selector while retaining every other marker condition."""
+) -> tuple[tuple[str, ...], Optional[str], Optional[str]]:
+    """Associate metadata safely without laundering marker semantics.
+
+    Installed ``Requires-Dist`` uses a marker to associate a requirement with an extra. Only a
+    marker whose *entire* expression is one ``extra == "name"`` selector can be removed without
+    changing the declaration. Any compound expression is retained verbatim (after packaging's
+    normalization), so the strict lender resolver rejects rather than silently weakening it.
+    """
     parsed = Requirement(requirement)
     if parsed.marker is None:
-        return (), None
+        return (), None, None
 
     marker = str(parsed.marker)
     selectors = tuple(dict.fromkeys(_EXTRA_MARKER_RE.findall(marker)))
-    if not selectors:
-        return (), None
     base = requirement.split(";", 1)[0].strip()
-    if " or " in marker:
-        # Do not rewrite a disjunction: retaining it makes the lender resolver reject it
-        # explicitly instead of changing its meaning.
-        return selectors, f"{base}; {marker}"
-
-    residual_parts = [
-        part.strip()
-        for part in marker.split(" and ")
-        if _EXTRA_MARKER_RE.fullmatch(part.strip()) is None
-    ]
-    residual = " and ".join(residual_parts)
-    return selectors, f"{base}; {residual}" if residual else base
+    if len(selectors) == 1 and _EXTRA_MARKER_RE.fullmatch(marker) is not None:
+        return selectors, base, None
+    if selectors:
+        # Equality selectors are sufficient to associate the declaration, but removing even one
+        # atom from a compound expression would change its meaning. Keep the complete marker.
+        return selectors, f"{base}; {marker}", None
+    if re.search(r"\bextra\b", marker):
+        return (
+            (),
+            None,
+            f"unsupported metadata extra association marker: {marker}",
+        )
+    # A marker that does not reference ``extra`` describes a base dependency, not an optional
+    # dependency association, and is intentionally outside this extras projection.
+    return (), None, None
 
 
 def _read_metadata_extras(
@@ -233,10 +244,14 @@ def _read_metadata_extras(
     errors: list[str] = []
     for requirement in requirements:
         try:
-            extras, declaration = _metadata_declaration_without_selector(requirement)
+            extras, declaration, association_error = (
+                _metadata_declaration_without_selector(requirement)
+            )
         except InvalidRequirement as exc:
             errors.append(f"invalid requirement {requirement!r}: {exc}")
             continue
+        if association_error is not None:
+            errors.append(association_error)
         if declaration is None:
             continue
         for extra in extras:

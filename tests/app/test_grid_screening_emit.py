@@ -1026,10 +1026,10 @@ def test_pyproject_marker_survives_source_read_and_fails_lender_resolution(
         gse._resolve_grid_extra_pins()
 
 
-def test_metadata_compound_marker_retains_residual_and_fails_lender_resolution(
+def test_metadata_compound_marker_retains_complete_marker_and_fails_lender_resolution(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Only metadata's selector is removed; the environmental condition survives."""
+    """A compound selector is retained whole so association cannot erase semantics."""
     import app.ops.extras as ops_extras
 
     monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", tmp_path / "missing.toml")
@@ -1045,9 +1045,146 @@ def test_metadata_compound_marker_retains_residual_and_fails_lender_resolution(
 
     observation = ops_extras.resolve_declared_extras()
     assert observation.spec_source == "metadata"
-    assert observation.extras["grid"][0].endswith('; python_version >= "3.12"')
+    assert observation.extras["grid"][0].endswith(
+        '; python_version >= "3.12" and extra == "grid"'
+    )
     with pytest.raises(gse.GridDependencyProvenanceError, match="markers"):
         gse._resolve_grid_extra_pins()
+
+
+@pytest.mark.parametrize("toml_value", ["[]", '""', "0", "false"])
+def test_present_falsy_optional_dependencies_is_malformed_not_absent(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, toml_value: str
+) -> None:
+    """A present non-table value cannot be laundered into an absent declaration."""
+    import app.ops.extras as ops_extras
+
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "dutchbay-epc-model"\n'
+        f"optional-dependencies = {toml_value}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", pyproject)
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda _distribution: [
+            'pandapower>=3.5,<4; extra == "grid"',
+            'andes>=2.0; extra == "grid"',
+            'opendssdirect.py>=0.9.4; extra == "grid"',
+        ],
+    )
+
+    observation = ops_extras.resolve_declared_extras()
+    assert observation.spec_source == "metadata"
+    assert observation.resolution_error is not None
+    assert "optional-dependencies must be a table" in observation.resolution_error
+    with pytest.raises(gse.GridDependencyProvenanceError, match="degraded") as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
+
+
+def test_metadata_simple_parenthesized_equality_is_the_only_stripped_selector(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Packaging-normalized parentheses around one equality remain a safe association."""
+    import app.ops.extras as ops_extras
+
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", tmp_path / "missing.toml")
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda _distribution: [
+            'pandapower>=3.5,<4; (extra == "grid")',
+            'andes>=2.0; extra == "grid"',
+            'opendssdirect.py>=0.9.4; extra == "grid"',
+        ],
+    )
+
+    observation = ops_extras.resolve_declared_extras()
+    assert observation.spec_source == "metadata"
+    assert observation.resolution_error is None
+    assert observation.extras["grid"][0] == "pandapower>=3.5,<4"
+    _pins, provenance = gse._resolve_grid_extra_pins()
+    assert provenance.source is gse.DependencySpecSource.METADATA
+    assert provenance.status is gse.DependencyResolutionStatus.RESOLVED
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        'extra == "grid" and extra == "other"',
+        'extra == "grid" and extra == "grid"',
+        'extra == "grid" or extra == "other"',
+        '(extra == "grid" and python_version >= "3.12")',
+    ],
+    ids=[
+        "distinct-conjunction",
+        "repeated-selector",
+        "pure-disjunction",
+        "nested-compound",
+    ],
+)
+def test_metadata_compound_extra_associations_remain_complete_and_are_rejected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, marker: str
+) -> None:
+    """No compound equality expression is simplified during metadata grouping."""
+    import app.ops.extras as ops_extras
+
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", tmp_path / "missing.toml")
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda _distribution: [
+            f"pandapower>=3.5,<4; {marker}",
+            'andes>=2.0; extra == "grid"',
+            'opendssdirect.py>=0.9.4; extra == "grid"',
+        ],
+    )
+
+    observation = ops_extras.resolve_declared_extras()
+    declaration = next(
+        item for item in observation.extras["grid"] if item.startswith("pandapower")
+    )
+    assert ";" in declaration
+    assert "extra" in declaration
+    with pytest.raises(gse.GridDependencyProvenanceError, match="markers") as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
+
+
+@pytest.mark.parametrize(
+    "marker",
+    ['extra in "grid"', 'extra not in "grid"', 'extra != "grid"'],
+    ids=["in", "not-in", "not-equal"],
+)
+def test_metadata_unsupported_extra_association_records_resolution_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, marker: str
+) -> None:
+    """An unsupported extra operator cannot disappear into an incomplete grid declaration."""
+    import app.ops.extras as ops_extras
+
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", tmp_path / "missing.toml")
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda _distribution: [
+            f"pandapower>=3.5,<4; {marker}",
+            'andes>=2.0; extra == "grid"',
+            'opendssdirect.py>=0.9.4; extra == "grid"',
+        ],
+    )
+
+    observation = ops_extras.resolve_declared_extras()
+    assert observation.spec_source == "metadata"
+    assert observation.resolution_error is not None
+    assert (
+        "unsupported metadata extra association marker" in observation.resolution_error
+    )
+    with pytest.raises(gse.GridDependencyProvenanceError, match="degraded") as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
 
 
 def test_malformed_pyproject_cannot_hide_behind_valid_metadata_for_lender_surface(

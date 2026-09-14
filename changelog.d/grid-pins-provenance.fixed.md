@@ -36,12 +36,15 @@
   from the lender-facing representation. Production parsing now uses the declared runtime
   `packaging.Requirement` implementation, so valid PEP 508 whitespace is normalized and accepted
   rather than falsely classified as malformed.
-- Preserve complete PEP 508 markers from pyproject. Installed metadata now removes only its
-  selector-only `extra == ...` association; compound environmental marker conditions remain on the
-  declaration and therefore fail the strict lender resolver instead of disappearing. The atomic
-  observation is deeply immutable and carries a resolution diagnostic that distinguishes a missing
-  or foreign pyproject from present-but-malformed/unreadable input. Health probes retain their
-  degrade behavior, while the lender-facing resolver fails loudly on that diagnostic.
+- Preserve complete PEP 508 markers from pyproject. Installed metadata now removes only a marker
+  whose entire expression is one `extra == ...` association; conjunctive, repeated, disjunctive and
+  nested selectors remain complete on the declaration and therefore fail the strict lender
+  resolver instead of being simplified. Unsupported `extra` operators produce a retained
+  resolution diagnostic. A present-but-falsy non-table `project.optional-dependencies` value is
+  malformed, never equivalent to an absent declaration. The atomic observation is deeply immutable
+  and distinguishes a missing or foreign pyproject from present-but-malformed/unreadable input.
+  Health probes retain their degrade behavior, while the lender-facing resolver fails loudly on
+  that diagnostic.
 - Strengthen the fallback drift oracle: it parses the governing `pyproject.toml` directly with TOML
   and PEP 508 tooling, rejects duplicates and malformed declarations, and compares the complete
   bidirectional normalized name/specifier mapping. A hostile declaration-only dependency is a
