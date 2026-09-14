@@ -59,9 +59,8 @@ an image build can introduce. :func:`probe_extra` therefore reports ``installed`
 CASPER
 ------
 Every probe degrades rather than raising. A distribution that is absent, a requirement string that
-cannot be parsed, an import that fails for any reason, or a missing optional ``packaging`` library
-all produce an honest recorded state — never an exception out of this module. A health endpoint
-that can crash is worse than no health endpoint.
+cannot be parsed, or an import that fails for any reason produces an honest recorded state — never
+an exception out of this module. A health endpoint that can crash is worse than no health endpoint.
 
 GWTF:
     - CESSPIT: the one hard failure is asking for an extra the distribution does not declare, which
@@ -86,8 +85,10 @@ __all__ = [
     "DEPLOYED_EXTRAS",
     "PackageStatus",
     "ExtraStatus",
+    "ExtraDeclarations",
     "UnknownExtraError",
     "declared_extras",
+    "resolve_declared_extras",
     "probe_extra",
     "probe_extras",
 ]
@@ -109,10 +110,8 @@ _IMPORT_NAME_OVERRIDES: Mapping[str, str] = {
 }
 
 #: Leading distribution name in a PEP 508 requirement string, e.g. ``redis[hiredis]<6,>=5`` ->
-#: ``redis``. Deliberately a small regex rather than a ``packaging`` import: ``packaging`` is a
-#: TRANSITIVE dependency here, not a declared one, and this repository has already been bitten by
-#: an undeclared dependency riding the requirements freeze (the #756 post-mortem). The optional
-#: ``packaging`` use below is CASPER-guarded for the same reason.
+#: ``redis``. The health-probe hot path retains this small regex; the lender-facing grid provenance
+#: path uses the now-direct runtime dependency ``packaging.Requirement`` for strict PEP 508 parsing.
 _REQ_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 
 #: Marker fragment identifying which extra a requirement belongs to.
@@ -200,14 +199,8 @@ class PackageStatus:
 
     Fields
         distribution: the distribution name, e.g. ``weasyprint``.
-        declared_spec: the version specifier declared by the project, verbatim from
-            whichever artifact answered -- the governing ``pyproject.toml`` or the installed
-            distribution's metadata. Verbatim means the two sources render one pin as two
-            different strings -- the weasyprint pin reads ``>=70,<71`` from ``pyproject.toml``
-            and ``<71,>=70`` once metadata has round-tripped it -- so a caller testing this
-            field against a literal must parse it into a ``SpecifierSet`` rather than compare
-            text. ``ExtraStatus.spec_source`` records which artifact answered; this field does
-            not, so read them together. Empty string when the requirement pins nothing.
+        declared_spec: the version specifier declared by the project, verbatim from metadata
+            (e.g. ``<70,>=69``). Empty string when the requirement pins nothing.
         installed_version: the resolved installed version, or ``None`` when absent.
         installed: True iff the distribution is present in the environment.
         importable: True/False when a deep probe ran, else ``None`` (not probed). Kept separate
@@ -215,8 +208,7 @@ class PackageStatus:
             without pango/cairo is the canonical case.
         import_error: the exception summary when a deep probe failed, else ``None``.
         satisfies_spec: whether the installed version satisfies ``declared_spec``; ``None`` when
-            not installed, when nothing is pinned, or when the optional ``packaging`` library is
-            unavailable to evaluate it.
+            not installed, nothing is pinned, or the version/specifier cannot be evaluated.
     """
 
     distribution: str
@@ -235,6 +227,14 @@ class PackageStatus:
         if self.satisfies_spec is False:
             return False
         return self.importable is not False
+
+
+@dataclass(frozen=True)
+class ExtraDeclarations:
+    """One atomic observation of optional dependencies and their source artifact."""
+
+    extras: Mapping[str, tuple[str, ...]]
+    spec_source: str
 
 
 @dataclass(frozen=True)
@@ -326,17 +326,34 @@ def declared_extras(
     checkout with no ``pyproject.toml`` and nothing installed — rather than raising, so a probe
     degrades to "nothing known" instead of crashing a health route.
     """
+    return resolve_declared_extras(distribution).extras
+
+
+def resolve_declared_extras(
+    distribution: str = DEFAULT_DISTRIBUTION,
+) -> ExtraDeclarations:
+    """Read optional dependencies and source in one atomic resolver observation.
+
+    The returned mapping and ``spec_source`` always describe the same lookup. Callers that
+    surface provenance must consume this object instead of separately calling
+    :func:`declared_extras` and a source probe, because the governing tree can change between
+    independent observations.
+    """
     from_pyproject = _pyproject_extras(distribution)
     if from_pyproject is not None:
-        return from_pyproject
-    return _metadata_extras(distribution)
+        return ExtraDeclarations(extras=from_pyproject, spec_source="pyproject")
+    from_metadata = _metadata_extras(distribution)
+    return ExtraDeclarations(
+        extras=from_metadata,
+        spec_source="metadata" if from_metadata else "none",
+    )
 
 
 def _check_spec(version: str, spec: str) -> Optional[bool]:
     """Whether ``version`` satisfies ``spec``; ``None`` when it cannot be evaluated.
 
-    CASPER: ``packaging`` is transitive here, not declared, so its absence degrades this to
-    ``None`` rather than failing the probe.
+    CASPER: although ``packaging`` is a direct runtime dependency, an unavailable/broken import
+    or an invalid version/specifier still degrades this health probe to ``None``.
     """
     if not spec:
         return None

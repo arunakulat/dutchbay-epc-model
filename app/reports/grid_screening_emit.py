@@ -65,6 +65,8 @@ from pathlib import Path
 from typing import Any, Mapping, Optional
 
 from jinja2 import Environment, FileSystemLoader
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.utils import canonicalize_name
 
 from analytics.contracts_v14 import (
     GRID_EMT_CONFIRMATION_SCR,
@@ -210,17 +212,6 @@ class GridDependencyProvenanceError(RuntimeError):
         self.provenance = provenance
 
 
-_DEPENDENCY_NAME_SEPARATOR_RE = re.compile(r"[-_.]+")
-_SPECIFIER_RE = re.compile(
-    r"^(?:(?:~=|==|!=|<=|>=|<|>|===)[^,;\s]+)(?:,(?:~=|==|!=|<=|>=|<|>|===)[^,;\s]+)*$"
-)
-
-
-def _normalize_dependency_name(name: str) -> str:
-    """Return a distribution name in PEP 503 normalized form."""
-    return _DEPENDENCY_NAME_SEPARATOR_RE.sub("-", name).lower()
-
-
 def _resolution_error(
     message: str,
     *,
@@ -231,9 +222,9 @@ def _resolution_error(
     return GridDependencyProvenanceError(message, provenance=provenance)
 
 
-def _resolve_grid_extra_pins() -> tuple[
-    tuple[tuple[str, str], ...], DependencyProvenance
-]:
+def _resolve_grid_extra_pins() -> (
+    tuple[tuple[tuple[str, str], ...], DependencyProvenance]
+):
     """Resolve a complete, typed ``[grid]`` declaration or fail loudly.
 
     Resolution is :func:`app.ops.extras.declared_extras`'s, not this module's: the governing
@@ -247,24 +238,40 @@ def _resolve_grid_extra_pins() -> tuple[
     refused: those states cannot be presented as resolved tree provenance to a lender.
     """
     try:
-        from app.ops.extras import declared_extras, probe_extra
+        from app.ops.extras import resolve_declared_extras
 
-        declared = declared_extras().get("grid", ())
-        source_text = probe_extra("grid").spec_source
-    except Exception as exc:  # noqa: BLE001 - provenance failures are lender-facing failures
+        observation = resolve_declared_extras()
+        grid_declared = "grid" in observation.extras
+        declared = observation.extras.get("grid", ())
+        source_text = observation.spec_source
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 - provenance failures are lender-facing failures
         raise _resolution_error(
             f"[grid] dependency declaration resolution failed: {type(exc).__name__}: {exc}",
             source=DependencySpecSource.UNKNOWN,
             status=DependencyResolutionStatus.MALFORMED,
         ) from exc
 
-    if not declared:
+    if not grid_declared:
         provenance = DependencyProvenance(
             source=DependencySpecSource.STATIC_FALLBACK,
             status=DependencyResolutionStatus.FALLBACK,
             detail="No [grid] declaration was available; values are a labelled static fallback.",
         )
         return GRID_EXTRA_PINS_FALLBACK, provenance
+
+    if not declared:
+        source = (
+            DependencySpecSource(source_text)
+            if source_text in {"pyproject", "metadata"}
+            else DependencySpecSource.UNKNOWN
+        )
+        raise _resolution_error(
+            "Explicit [grid] dependency declaration is empty.",
+            source=source,
+            status=DependencyResolutionStatus.PARTIAL,
+        )
 
     try:
         source = DependencySpecSource(source_text)
@@ -281,23 +288,42 @@ def _resolve_grid_extra_pins() -> tuple[
             status=DependencyResolutionStatus.MALFORMED,
         )
 
-    pins: list[tuple[str, str]] = []
+    parsed_pins: list[tuple[str, str, str, frozenset[str]]] = []
     seen: set[str] = set()
-    for requirement in declared:
-        if not isinstance(requirement, str):
+    for declaration in declared:
+        if not isinstance(declaration, str):
             raise _resolution_error(
-                f"Non-string [grid] requirement declaration: {requirement!r}",
+                f"Non-string [grid] requirement declaration: {declaration!r}",
                 source=source,
                 status=DependencyResolutionStatus.MALFORMED,
             )
-        name, spec = _split_requirement(requirement)
-        if name is None or (spec and _SPECIFIER_RE.fullmatch(spec) is None):
+        try:
+            requirement = Requirement(declaration)
+        except InvalidRequirement as exc:
             raise _resolution_error(
-                f"Unparseable [grid] requirement declaration: {requirement!r}",
+                f"Unparseable [grid] requirement declaration: {declaration!r}",
+                source=source,
+                status=DependencyResolutionStatus.MALFORMED,
+            ) from exc
+        if requirement.extras:
+            raise _resolution_error(
+                f"[grid] dependency extras are not supported: {declaration!r}",
                 source=source,
                 status=DependencyResolutionStatus.MALFORMED,
             )
-        normalized_name = _normalize_dependency_name(name)
+        if requirement.marker is not None:
+            raise _resolution_error(
+                f"[grid] requirement markers are not supported: {declaration!r}",
+                source=source,
+                status=DependencyResolutionStatus.MALFORMED,
+            )
+        if requirement.url is not None:
+            raise _resolution_error(
+                f"[grid] direct URL requirements are not supported: {declaration!r}",
+                source=source,
+                status=DependencyResolutionStatus.MALFORMED,
+            )
+        normalized_name = canonicalize_name(requirement.name)
         if normalized_name in seen:
             raise _resolution_error(
                 f"Duplicate normalized [grid] dependency name: {normalized_name!r}",
@@ -305,19 +331,25 @@ def _resolve_grid_extra_pins() -> tuple[
                 status=DependencyResolutionStatus.MALFORMED,
             )
         seen.add(normalized_name)
-        pins.append((name, spec))
+        normalized_spec = str(requirement.specifier)
+        parsed_pins.append(
+            (
+                requirement.name,
+                normalized_spec,
+                normalized_name,
+                frozenset(str(clause) for clause in requirement.specifier),
+            )
+        )
 
     expected_specs = {
-        _normalize_dependency_name(name): frozenset(
-            clause.strip() for clause in spec.split(",") if clause.strip()
+        canonicalize_name(parsed.name): frozenset(
+            str(clause) for clause in parsed.specifier
         )
         for name, spec in GRID_EXTRA_PINS_FALLBACK
+        for parsed in (Requirement(f"{name}{spec}"),)
     }
     actual_specs = {
-        _normalize_dependency_name(name): frozenset(
-            clause.strip() for clause in spec.split(",") if clause.strip()
-        )
-        for name, spec in pins
+        normalized_name: clauses for _, _, normalized_name, clauses in parsed_pins
     }
     if actual_specs != expected_specs:
         missing = sorted(expected_specs.keys() - actual_specs.keys())
@@ -339,7 +371,7 @@ def _resolve_grid_extra_pins() -> tuple[
         status=DependencyResolutionStatus.RESOLVED,
         detail=f"Complete [grid] declaration resolved from {source.value}.",
     )
-    return tuple(pins), provenance
+    return tuple((name, spec) for name, spec, _, _ in parsed_pins), provenance
 
 
 def _grid_extra_pins() -> tuple[tuple[str, str], ...]:

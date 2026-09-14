@@ -26,10 +26,12 @@ import ast
 import re
 import tomllib
 from pathlib import Path
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, Mapping, Sequence
 
 import pytest
 import yaml
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.utils import canonicalize_name
 
 from analytics.contracts_v14 import (
     QSTS_SYNTHETIC_OUTPUT_CLASS,
@@ -88,10 +90,9 @@ def _collectable_test_names(source: str) -> set[str]:
             if explicitly_disabled or {"__init__", "__new__"} & special_methods:
                 continue
             for child in node.body:
-                if (
-                    isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
-                    and child.name.startswith("test_")
-                ):
+                if isinstance(
+                    child, (ast.FunctionDef, ast.AsyncFunctionDef)
+                ) and child.name.startswith("test_"):
                     names.add(child.name)
     return names
 
@@ -99,6 +100,31 @@ def _collectable_test_names(source: str) -> set[str]:
 def _missing_control_citations(module_source: str, test_source: str) -> set[str]:
     cited = set(re.findall(r"\btest_[A-Za-z0-9_]+\b", module_source))
     return cited - _collectable_test_names(test_source)
+
+
+def _parse_strict_pin_declarations(
+    declarations: Sequence[str],
+) -> dict[str, frozenset[str]]:
+    """Independent PEP 508 oracle for a lossless simple pin table."""
+    parsed: dict[str, frozenset[str]] = {}
+    for declaration in declarations:
+        try:
+            requirement = Requirement(declaration)
+        except InvalidRequirement as exc:
+            raise ValueError(f"unparseable declaration: {declaration!r}") from exc
+        if requirement.extras:
+            raise ValueError(f"dependency extras are unsupported: {declaration!r}")
+        if requirement.marker is not None:
+            raise ValueError(f"requirement markers are unsupported: {declaration!r}")
+        if requirement.url is not None:
+            raise ValueError(
+                f"direct URL requirements are unsupported: {declaration!r}"
+            )
+        name = canonicalize_name(requirement.name)
+        if name in parsed:
+            raise ValueError(f"duplicate normalized dependency: {name!r}")
+        parsed[name] = frozenset(str(item) for item in requirement.specifier)
+    return parsed
 
 
 def _grid_block(*, study_enabled: bool = True) -> Dict[str, Any]:
@@ -726,30 +752,70 @@ def test_grid_extra_pins_fallback_matches_what_pyproject_declares() -> None:
     own text verbatim, but the metadata path behind it re-orders clauses (``>=70,<71`` comes
     back as ``<71,>=70``), so a string compare would pass or fail on which artifact answered.
     """
-    from packaging.requirements import InvalidRequirement, Requirement
-    from packaging.utils import canonicalize_name
-
     with (REPO_ROOT / "pyproject.toml").open("rb") as handle:
-        raw_grid_requirements = tomllib.load(handle)["project"]["optional-dependencies"]["grid"]
+        raw_grid_requirements = tomllib.load(handle)["project"][
+            "optional-dependencies"
+        ]["grid"]
 
-    def parse_unique(requirements: list[str] | tuple[str, ...]) -> dict[str, frozenset[str]]:
-        parsed: dict[str, frozenset[str]] = {}
-        for declaration in requirements:
-            try:
-                requirement = Requirement(declaration)
-            except InvalidRequirement as exc:
-                pytest.fail(f"unparseable [grid] declaration {declaration!r}: {exc}")
-            name = canonicalize_name(requirement.name)
-            assert name not in parsed, f"duplicate normalized [grid] dependency {name!r}"
-            parsed[name] = frozenset(str(item) for item in requirement.specifier)
-        return parsed
-
-    pyproject_pins = parse_unique(raw_grid_requirements)
-    fallback_declarations = [f"{name}{spec}" for name, spec in gse.GRID_EXTRA_PINS_FALLBACK]
-    fallback_pins = parse_unique(fallback_declarations)
+    pyproject_pins = _parse_strict_pin_declarations(raw_grid_requirements)
+    fallback_declarations = [
+        f"{name}{spec}" for name, spec in gse.GRID_EXTRA_PINS_FALLBACK
+    ]
+    fallback_pins = _parse_strict_pin_declarations(fallback_declarations)
     assert fallback_pins == pyproject_pins
     assert gse.GRID_DEPENDENCY_PROVENANCE.source is gse.DependencySpecSource.PYPROJECT
-    assert gse.GRID_DEPENDENCY_PROVENANCE.status is gse.DependencyResolutionStatus.RESOLVED
+    assert (
+        gse.GRID_DEPENDENCY_PROVENANCE.status is gse.DependencyResolutionStatus.RESOLVED
+    )
+
+
+@pytest.mark.parametrize(
+    "declarations,diagnostic",
+    [
+        (("!!!",), "unparseable"),
+        (("Panda_Power>=3", "panda-power<4"), "duplicate normalized"),
+        (("pandapower[control]>=3",), "dependency extras"),
+        (("pandapower>=3; python_version >= '3.12'",), "requirement markers"),
+        (("pandapower @ https://example.invalid/p.whl",), "direct URL"),
+    ],
+)
+def test_independent_pin_oracle_rejects_lossy_or_ambiguous_declarations(
+    declarations: tuple[str, ...], diagnostic: str
+) -> None:
+    with pytest.raises(ValueError, match=diagnostic):
+        _parse_strict_pin_declarations(declarations)
+
+
+def test_valid_pep508_whitespace_is_semantically_equal_and_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PEP 508 whitespace around a comma is valid and must not create false drift."""
+    import app.ops.extras as ops_extras
+
+    declarations = (
+        "pandapower>=3.5, <4",
+        "andes>=2.0",
+        "opendssdirect.py>=0.9.4",
+    )
+    fallback_declarations = tuple(
+        f"{name}{spec}" for name, spec in gse.GRID_EXTRA_PINS_FALLBACK
+    )
+    assert _parse_strict_pin_declarations(
+        declarations
+    ) == _parse_strict_pin_declarations(fallback_declarations)
+
+    monkeypatch.setattr(
+        ops_extras,
+        "resolve_declared_extras",
+        lambda *a, **k: ops_extras.ExtraDeclarations(
+            extras={"grid": declarations}, spec_source="pyproject"
+        ),
+    )
+    pins, provenance = gse._resolve_grid_extra_pins()
+    assert _parse_strict_pin_declarations(
+        tuple(f"{name}{spec}" for name, spec in pins)
+    ) == _parse_strict_pin_declarations(fallback_declarations)
+    assert provenance.status is gse.DependencyResolutionStatus.RESOLVED
 
 
 def test_grid_pins_degrade_to_the_fallback_without_any_declaration(
@@ -762,11 +828,10 @@ def test_grid_pins_degrade_to_the_fallback_without_any_declaration(
     """
     import app.ops.extras as ops_extras
 
-    monkeypatch.setattr(ops_extras, "declared_extras", lambda *a, **k: {})
     monkeypatch.setattr(
         ops_extras,
-        "probe_extra",
-        lambda *a, **k: type("Status", (), {"spec_source": "none"})(),
+        "resolve_declared_extras",
+        lambda *a, **k: ops_extras.ExtraDeclarations(extras={}, spec_source="none"),
     )
     pins, provenance = gse._resolve_grid_extra_pins()
     assert pins == gse.GRID_EXTRA_PINS_FALLBACK
@@ -791,7 +856,7 @@ def test_grid_pins_degrade_to_the_fallback_when_resolution_raises(
     def boom(*_a: object, **_k: object) -> dict:
         raise RuntimeError("declaration unreadable")
 
-    monkeypatch.setattr(ops_extras, "declared_extras", boom)
+    monkeypatch.setattr(ops_extras, "resolve_declared_extras", boom)
     with pytest.raises(gse.GridDependencyProvenanceError) as caught:
         gse._resolve_grid_extra_pins()
     assert caught.value.provenance.source is gse.DependencySpecSource.UNKNOWN
@@ -803,22 +868,23 @@ def test_grid_pins_reject_unparseable_and_duplicate_requirements(
 ) -> None:
     import app.ops.extras as ops_extras
 
-    monkeypatch.setattr(
-        ops_extras,
-        "probe_extra",
-        lambda *a, **k: type("Status", (), {"spec_source": "pyproject"})(),
-    )
     for declarations in (
         ("!!!", "andes>=2.0", "opendssdirect.py>=0.9.4"),
         (123, "andes>=2.0", "opendssdirect.py>=0.9.4"),
         ("pandapower>=3.5,<4", "Panda_Power>=3.5,<4", "andes>=2.0"),
     ):
         monkeypatch.setattr(
-            ops_extras, "declared_extras", lambda *a, _d=declarations, **k: {"grid": _d}
+            ops_extras,
+            "resolve_declared_extras",
+            lambda *a, _d=declarations, **k: ops_extras.ExtraDeclarations(
+                extras={"grid": _d}, spec_source="pyproject"
+            ),
         )
         with pytest.raises(gse.GridDependencyProvenanceError) as caught:
             gse._resolve_grid_extra_pins()
-        assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
+        assert (
+            caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
+        )
 
 
 def test_grid_pins_reject_hostile_declaration_only_dependency(
@@ -833,16 +899,105 @@ def test_grid_pins_reject_hostile_declaration_only_dependency(
         "opendssdirect.py>=0.9.4",
         "declaration-only-payload>=1",
     )
-    monkeypatch.setattr(ops_extras, "declared_extras", lambda *a, **k: {"grid": declarations})
     monkeypatch.setattr(
         ops_extras,
-        "probe_extra",
-        lambda *a, **k: type("Status", (), {"spec_source": "pyproject"})(),
+        "resolve_declared_extras",
+        lambda *a, **k: ops_extras.ExtraDeclarations(
+            extras={"grid": declarations}, spec_source="pyproject"
+        ),
     )
     with pytest.raises(gse.GridDependencyProvenanceError) as caught:
         gse._resolve_grid_extra_pins()
     assert caught.value.provenance.status is gse.DependencyResolutionStatus.PARTIAL
     assert "declaration-only-payload" in str(caught.value)
+
+
+def test_grid_pins_reject_explicit_empty_declaration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An explicit empty [grid] is partial, not an absent-source fallback."""
+    import app.ops.extras as ops_extras
+
+    monkeypatch.setattr(
+        ops_extras,
+        "resolve_declared_extras",
+        lambda *a, **k: ops_extras.ExtraDeclarations(
+            extras={"grid": ()}, spec_source="pyproject"
+        ),
+    )
+    with pytest.raises(gse.GridDependencyProvenanceError) as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.source is gse.DependencySpecSource.PYPROJECT
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.PARTIAL
+
+
+@pytest.mark.parametrize(
+    "hostile_requirement,dimension",
+    [
+        ("pandapower[control]>=3.5,<4", "extras"),
+        ("pandapower>=3.5,<4; python_version >= '3.12'", "markers"),
+        ("pandapower @ https://example.invalid/pandapower.whl", "direct URL"),
+    ],
+)
+def test_grid_pins_reject_lossy_pep508_dimensions(
+    monkeypatch: pytest.MonkeyPatch,
+    hostile_requirement: str,
+    dimension: str,
+) -> None:
+    """Extras, markers and URLs cannot be stripped from surfaced provenance."""
+    import app.ops.extras as ops_extras
+
+    declarations = (
+        hostile_requirement,
+        "andes>=2.0",
+        "opendssdirect.py>=0.9.4",
+    )
+    monkeypatch.setattr(
+        ops_extras,
+        "resolve_declared_extras",
+        lambda *a, **k: ops_extras.ExtraDeclarations(
+            extras={"grid": declarations}, spec_source="pyproject"
+        ),
+    )
+    with pytest.raises(gse.GridDependencyProvenanceError) as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
+    assert dimension in str(caught.value)
+
+
+def test_grid_pin_resolution_observes_declarations_and_source_atomically(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A source changing after the first read cannot relabel the observed declaration."""
+    import app.ops.extras as ops_extras
+
+    pyproject_calls = 0
+    metadata_calls = 0
+    declarations = {
+        "grid": (
+            "pandapower>=3.5,<4",
+            "andes>=2.0",
+            "opendssdirect.py>=0.9.4",
+        )
+    }
+
+    def changing_pyproject(_distribution: str) -> Mapping[str, tuple[str, ...]] | None:
+        nonlocal pyproject_calls
+        pyproject_calls += 1
+        return declarations if pyproject_calls == 1 else None
+
+    def hostile_metadata(_distribution: str) -> Mapping[str, tuple[str, ...]]:
+        nonlocal metadata_calls
+        metadata_calls += 1
+        return {"grid": ("substituted>=9",)}
+
+    monkeypatch.setattr(ops_extras, "_pyproject_extras", changing_pyproject)
+    monkeypatch.setattr(ops_extras, "_metadata_extras", hostile_metadata)
+    pins, provenance = gse._resolve_grid_extra_pins()
+    assert pins == tuple(gse.GRID_EXTRA_PINS_FALLBACK)
+    assert provenance.source is gse.DependencySpecSource.PYPROJECT
+    assert pyproject_calls == 1
+    assert metadata_calls == 0
 
 
 def test_render_surfaces_dependency_source_and_status() -> None:

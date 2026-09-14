@@ -29,6 +29,13 @@
   A complete declaration records `pyproject` or `metadata`; a genuinely absent declaration is
   labelled `static_fallback`. Resolution exceptions, malformed requirements, duplicate normalized
   names and partial dependency sets now fail loudly instead of appearing as resolved provenance.
+- Read the declarations and their source through one atomic `ExtraDeclarations` observation, so a
+  source-tree change between two lookups cannot relabel one artifact's dependency values as the
+  other's. An explicit empty `[grid]` declaration is rejected as partial rather than treated as an
+  absent declaration. PEP 508 extras, markers and direct URLs are rejected rather than stripped
+  from the lender-facing representation. Production parsing now uses the declared runtime
+  `packaging.Requirement` implementation, so valid PEP 508 whitespace is normalized and accepted
+  rather than falsely classified as malformed.
 - Strengthen the fallback drift oracle: it parses the governing `pyproject.toml` directly with TOML
   and PEP 508 tooling, rejects duplicates and malformed declarations, and compares the complete
   bidirectional normalized name/specifier mapping. A hostile declaration-only dependency is a
