@@ -12,17 +12,19 @@ import os
 import re
 import subprocess
 import sys
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
-RECORD_PREFIX_EXPRESSION = r"(?:SESSION_HANDOVER_|H\d+_(?:HANDOVER|DELIVERY_))"
+RECORD_PREFIX_EXPRESSION = r"(?:SESSION_HANDOVER_|H[0-9]+_(?:HANDOVER|DELIVERY_))"
 RECORD_FILENAME_EXPRESSION = rf"{RECORD_PREFIX_EXPRESSION}[0-9A-Za-z_. -]*\.md"
 RECORD_PATTERN = re.compile(rf"^docs/{RECORD_FILENAME_EXPRESSION}$")
 NEAR_FAMILY_PATTERN = re.compile(
     rf"^docs/{RECORD_PREFIX_EXPRESSION}[^/]*\.md$", re.DOTALL
 )
-RECORD_CANDIDATE_PATTERN = re.compile(
-    rf"(?=(?P<record>(?:docs/)?{RECORD_PREFIX_EXPRESSION}[^/\n]*?\.md))"
+NEAR_FAMILY_SHAPE = re.compile(
+    r"^docs/(?:SESSION[^/]*_HANDOVER_|H[^/_]+_(?:HANDOVER|DELIVERY_))[^/]*\.md$",
+    re.DOTALL,
 )
 DISPLAY_LIMIT = 5
 
@@ -109,7 +111,7 @@ def _validated_candidate_paths(paths: set[str]) -> set[str]:
     unsupported = sorted(
         path
         for path in paths
-        if NEAR_FAMILY_PATTERN.fullmatch(path) and not RECORD_PATTERN.fullmatch(path)
+        if _looks_like_near_family(path) and not RECORD_PATTERN.fullmatch(path)
     )
     if unsupported:
         rendered = ", ".join(repr(path) for path in unsupported)
@@ -120,46 +122,21 @@ def _validated_candidate_paths(paths: set[str]) -> set[str]:
     return {path for path in paths if RECORD_PATTERN.fullmatch(path)}
 
 
-def prose_record_references(text: str) -> list[str]:
-    """Return concrete handover references from prose without treating globs as files.
-
-    Each supported prefix starts an independently bounded, single-line candidate.
-    Glob-bearing candidates are rejected without consuming later concrete references.
-
-    Args:
-        text: Markdown or plain prose to inspect.
-
-    Returns:
-        Concrete references in source order, with an optional ``docs/`` prefix
-        preserved.
-    """
-    return [record for _, _, record in prose_record_matches(text)]
-
-
-def prose_record_matches(text: str) -> list[tuple[int, int, str]]:
-    """Return source spans and values for concrete prose references.
-
-    Args:
-        text: Markdown or plain prose to inspect.
-
-    Returns:
-        ``(start, end, record)`` tuples ordered by source position.
-    """
-    matches: list[tuple[int, int, str]] = []
-    for match in RECORD_CANDIDATE_PATTERN.finditer(text):
-        record = match.group("record")
-        if re.search(r"[*?\[\]]", record):
+def _looks_like_near_family(path: str) -> bool:
+    """Detect family names obscured by Unicode digits or control/format marks."""
+    normalized: list[str] = []
+    for character in path:
+        if unicodedata.category(character) in {"Cc", "Cf", "Cs"}:
             continue
-        normalized = record if record.startswith("docs/") else f"docs/{record}"
-        if RECORD_PATTERN.fullmatch(normalized):
-            start, end = match.start("record"), match.end("record")
-            if any(
-                old_start <= start and end <= old_end
-                for old_start, old_end, _ in matches
-            ):
-                continue
-            matches.append((start, end, record))
-    return matches
+        if character.isdecimal() and not character.isascii():
+            normalized.append(str(unicodedata.decimal(character)))
+        else:
+            normalized.append(character)
+    normalized_path = "".join(normalized)
+    return any(
+        pattern.fullmatch(normalized_path) is not None
+        for pattern in (NEAR_FAMILY_PATTERN, NEAR_FAMILY_SHAPE)
+    )
 
 
 def _introduction(path: str) -> Introduction:

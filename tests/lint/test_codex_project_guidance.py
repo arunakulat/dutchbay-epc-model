@@ -8,9 +8,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-from scripts.list_session_handover_records import prose_record_matches
-from scripts.list_session_handover_records import prose_record_references
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AGENTS_FILE = REPO_ROOT / "AGENTS.md"
 CANONICAL_RULESET = "go_with_the_flow_rules_v3_0_clean.csv"
@@ -77,8 +74,6 @@ def test_codex_guidance_preserves_required_safety_and_quality_gates() -> None:
         assert phrase in guidance
 
 
-BOOTSTRAP_HEADING = "## Bootstrap — run this first"
-ILLUSTRATION_MARKER = "Illustration, not authority"
 RESOLVER_SCRIPT = REPO_ROOT / "scripts/list_session_handover_records.py"
 
 
@@ -88,111 +83,6 @@ def _session_continuity_section() -> str:
     start = guidance.index("## Session continuity")
     end = guidance.index("\n## ", start + 1)
     return guidance[start:end]
-
-
-def _carries_bootstrap_section(record_text: str) -> bool:
-    """Report whether an unfenced bootstrap H2 has a nonempty section body."""
-    lines = record_text.splitlines()
-    fence: tuple[str, int] | None = None
-    delimiter_lines: set[int] = set()
-    unfenced: list[bool] = []
-    html_comment = False
-    raw_tag: str | None = None
-    for index, line in enumerate(lines):
-        stripped = line.lstrip(" ")
-        indent = len(line) - len(stripped)
-        line_hidden = html_comment or raw_tag is not None
-        if "<!--" in line and not html_comment:
-            line_hidden = True
-            html_comment = "-->" not in line.split("<!--", 1)[1]
-        elif html_comment and "-->" in line:
-            html_comment = False
-        if raw_tag is None:
-            opening_tag = re.match(
-                r"<(pre|script|style|textarea)(?:\s|>)", stripped, re.IGNORECASE
-            )
-            if opening_tag:
-                raw_tag = opening_tag.group(1).lower()
-                line_hidden = True
-        elif re.search(rf"</{raw_tag}\s*>", stripped, re.IGNORECASE):
-            raw_tag = None
-        unfenced.append(fence is None and not line_hidden)
-        if indent > 3:
-            continue
-        if fence is None:
-            opening = re.match(r"(`{3,}|~{3,})", stripped)
-            if opening is None:
-                continue
-            token = opening.group(1)
-            fence = (token[0], len(token))
-            delimiter_lines.add(index)
-            continue
-        closing = re.fullmatch(
-            rf"{re.escape(fence[0])}{{{fence[1]},}}[ \t]*", stripped
-        )
-        if closing is not None:
-            fence = None
-            delimiter_lines.add(index)
-
-    for index, line in enumerate(lines):
-        if not unfenced[index] or line.rstrip() != BOOTSTRAP_HEADING:
-            continue
-        end = len(lines)
-        for candidate in range(index + 1, len(lines)):
-            if unfenced[candidate] and re.match(r"^#{1,2}\s+", lines[candidate]):
-                end = candidate
-                break
-        return any(
-            line.strip() and body_index not in delimiter_lines
-            for body_index, line in enumerate(lines[index + 1 : end], start=index + 1)
-        )
-    return False
-
-
-def _illustration_span(section: str) -> tuple[int, int] | None:
-    """Return the exact illustration paragraph span, if present."""
-    start = section.find(ILLUSTRATION_MARKER)
-    if start < 0:
-        return None
-    paragraph_start = section.rfind("\n", 0, start) + 1
-    paragraph_end = section.find("\n\n", start)
-    if paragraph_end < 0:
-        paragraph_end = len(section)
-    return paragraph_start, paragraph_end
-
-
-def _named_records_are_illustration_only(section: str) -> bool:
-    """Report whether every named handover sits inside one illustration paragraph.
-
-    The gateway may name a record to show what the resolution currently returns,
-    but a name inside the instruction itself is the failure mode: it goes stale
-    the moment a successor is written, and the reader follows it anyway.
-    """
-    named = prose_record_matches(section)
-    if not named:
-        return True
-    span = _illustration_span(section)
-    if span is None:
-        return False
-    start, end = span
-    return all(start <= match_start < end for match_start, _, _ in named)
-
-
-def _illustration_records(section: str) -> list[str]:
-    """Return normalized record paths named in the illustration paragraph."""
-    span = _illustration_span(section)
-    if span is None:
-        return []
-    start, end = span
-    return [
-        name if name.startswith("docs/") else f"docs/{name}"
-        for name in prose_record_references(section[start:end])
-    ]
-
-
-def _illustration_records_exist(section: str) -> bool:
-    """Report whether every concrete illustration record exists."""
-    return all((REPO_ROOT / name).is_file() for name in _illustration_records(section))
 
 
 def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> str:
@@ -229,166 +119,14 @@ def _run_resolver(repo: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_session_continuity_resolves_the_pointer_rather_than_pinning_a_filename() -> (
-    None
-):
-    """Keep the startup pointer derivable, so it cannot silently go stale.
-
-    The hardcoded form went stale between 2026-09-07 and 2026-09-13: eleven
-    later handover records were written while the gateway still asserted that
-    one named file *was* the newest record.
-    """
+def test_session_continuity_has_no_concrete_record_tokens() -> None:
+    """Keep every concrete handover pointer out of the instruction gateway."""
     section = _session_continuity_section()
 
-    assert "resolve the pointer rather than trusting a filename" in section
-    assert "repository startup/bootstrap pointer" in section
     assert "python scripts/list_session_handover_records.py" in section
-    assert "commit that introduced each record" in section
-    assert _named_records_are_illustration_only(section)
-
-    # Negative control: the wording this replaced must fail the same predicate,
-    # or the guard is defending against nothing.
-    historical = (
-        "## Session continuity\n\n"
-        "Before starting work, read the newest record in "
-        "`docs/SESSION_HANDOVER_*.md` \u2014 currently\n"
-        "`docs/SESSION_HANDOVER_2026-09-07.md` \u2014 and execute its "
-        "**Bootstrap \u2014 run this first**\nsection before substantive work.\n"
-    )
-    assert not _named_records_are_illustration_only(historical)
-
-    # Second negative control: the same defect spelled with an H-family record.
-    # The prose names that family, so a guard blind to it would be narrower than
-    # the text it defends.
-    h_family = (
-        "## Session continuity\n\n"
-        "Before starting work, read `docs/H08_DELIVERY_HANDOVER.md` and execute "
-        "its bootstrap.\n"
-    )
-    assert not _named_records_are_illustration_only(h_family)
-
-    # Third negative control: the same defect spelled without the `docs/` prefix,
-    # which is how ten of the eleven live records write it.
-    bare = (
-        "## Session continuity\n\n"
-        "Before starting work, read `SESSION_HANDOVER_2026-09-07.md` and execute "
-        "its **Bootstrap — run this first** section.\n"
-    )
-    assert not _named_records_are_illustration_only(bare)
-
-    # A pointer appended below the illustration paragraph is still authoritative
-    # prose and must not pass merely because it occurs after the marker.
-    appended = section + "\nPinned startup: `docs/SESSION_HANDOVER_2099-01-01.md`.\n"
-    assert not _named_records_are_illustration_only(appended)
-
-    dotted_before = section.replace(
-        "*Illustration, not authority",
-        "Pinned startup: `H99_HANDOVER.review.v2.md`.\n\n"
-        "*Illustration, not authority",
-        1,
-    )
-    assert not _named_records_are_illustration_only(dotted_before)
-
-    dotted_after = section + "\nPinned: `docs/H99_DELIVERY_RECORD.v2.md`.\n"
-    assert not _named_records_are_illustration_only(dotted_after)
-
-    unquoted_space_before = section.replace(
-        "*Illustration, not authority",
-        "Pinned startup: H99_HANDOVER review.v2.md.\n\n"
-        "*Illustration, not authority",
-        1,
-    )
-    assert not _named_records_are_illustration_only(unquoted_space_before)
-
-    unquoted_space_after = (
-        section + "\nPinned startup: docs/H99_DELIVERY_RECORD review.v2.md.\n"
-    )
-    assert not _named_records_are_illustration_only(unquoted_space_after)
-
-    bounded_forms = (
-        "Ignore `docs/SESSION_HANDOVER_*.md`; then use "
-        "[docs/H91_HANDOVER link.v2.md](target), "
-        "\"H92_HANDOVER quoted.md\", 'H93_DELIVERY_RECORD single.md', "
-        "(H94_HANDOVER parenthesized.md), and —H95_HANDOVER unicode.md.\n"
-        "A rejected cross-line glob `docs/H96_HANDOVER_*\n"
-        "must not hide docs/H97_HANDOVER next-line.md."
-    )
-    assert prose_record_references(bounded_forms) == [
-        "docs/H91_HANDOVER link.v2.md",
-        "H92_HANDOVER quoted.md",
-        "H93_DELIVERY_RECORD single.md",
-        "H94_HANDOVER parenthesized.md",
-        "H95_HANDOVER unicode.md",
-        "docs/H97_HANDOVER next-line.md",
-    ]
-    qualified = (
-        "Ignore SESSION_HANDOVER_* without a terminator; use "
-        "./docs/H81_HANDOVER repo.md, ../docs/H82_HANDOVER parent.md, and "
-        "/tmp/project/docs/H83_HANDOVER absolute.md."
-    )
-    assert prose_record_references(qualified) == [
-        "docs/H81_HANDOVER repo.md",
-        "docs/H82_HANDOVER parent.md",
-        "docs/H83_HANDOVER absolute.md",
-    ]
-
-    span = _illustration_span(section)
-    assert span is not None
-    nonexistent_inside = (
-        section[: span[1]]
-        + " Also compare `docs/H99_HANDOVER.review.v2.md`."
-        + section[span[1] :]
-    )
-    assert _named_records_are_illustration_only(nonexistent_inside)
-    assert not _illustration_records_exist(nonexistent_inside)
-
-
-def test_session_continuity_illustration_names_existing_records() -> None:
-    """Require illustration records to exist and startup target to bootstrap."""
-    section = _session_continuity_section()
-    span = _illustration_span(section)
-    assert span is not None, (
-        "the gateway must label its named record as an illustration"
-    )
-    named = _illustration_records(section)
-    assert len(named) >= 2, "the illustration must name its target and successor"
-
-    records = [REPO_ROOT / path for path in named]
-    for path, record in zip(named, records, strict=True):
-        assert record.is_file(), f"{path} is named in AGENTS.md but does not exist"
-    assert _carries_bootstrap_section(records[0].read_text(encoding="utf-8"))
-
-    # Negative control: the predicate must reject a scope-specific successor,
-    # or it is asserting nothing about the record it just accepted.
-    assert not _carries_bootstrap_section(
-        "# Session handover — scope-specific successor\n\n"
-        "## Verified checkpoint\n\nNo bootstrap section here.\n"
-    )
-    assert not _carries_bootstrap_section(
-        "# Session handover\n\nThis record does not carry "
-        "## Bootstrap — run this first and must defer.\n"
-    )
-    assert not _carries_bootstrap_section(
-        "# Session handover\n\n```markdown\n"
-        "## Bootstrap — run this first\n- not executable here\n```\n"
-    )
-    assert not _carries_bootstrap_section(
-        "# Session handover\n\n```markdown\n```not a close\n"
-        "## Bootstrap — run this first\n- still fenced\n```\n"
-    )
-    assert not _carries_bootstrap_section(
-        "# Session handover\n\n~~~markdown\n~~~not a close\n"
-        "## Bootstrap — run this first\n- still fenced\n~~~\n"
-    )
-    assert not _carries_bootstrap_section(
-        "# Session handover\n\n## Bootstrap — run this first\n\n## Next section\n"
-    )
-    assert not _carries_bootstrap_section(
-        "# Handover\n<!--\n## Bootstrap — run this first\n- hidden\n-->\n"
-    )
-    assert not _carries_bootstrap_section(
-        "# Handover\n<pre>\n## Bootstrap — run this first\n- hidden\n</pre>\n"
-    )
+    assert "first record" in section
+    assert "SESSION_HANDOVER_" not in section
+    assert re.search(r"H[0-9]+_(?:HANDOVER|DELIVERY_)", section) is None
 
 
 def test_handover_resolver_orders_by_introduction_not_last_touch(
@@ -675,6 +413,12 @@ def test_handover_resolver_rejects_control_character_filenames(
         docs / "H05_HANDOVER zero\u200bwidth.md",
         docs / "H06_HANDOVER_*.md",
         docs / "H07_HANDOVER_[draft].md",
+        docs / "H*_HANDOVER.md",
+        docs / "SESSION?_HANDOVER_masked.md",
+        docs / "H\u0661_HANDOVER.md",
+        docs / "H0\u200b1_HANDOVER.md",
+        docs / "H0\udcff1_HANDOVER.md",
+        docs / "SESSION\u200b_HANDOVER_hidden.md",
     ]
     for path in hostile:
         path.write_text("hostile\n", encoding="utf-8")

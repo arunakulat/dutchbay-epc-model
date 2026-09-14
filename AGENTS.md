@@ -24,27 +24,16 @@ branch or a nonexistent ruleset filename.
 
 ## Session continuity
 
-Handover records come in two kinds, and the newest record is not automatically the one to
-bootstrap from:
-
-- a **repository startup record** governs session startup and carries the
-  `## Bootstrap — run this first` checklist to execute;
-- a **scope-specific successor** carries delivery continuity for one PR, dolphin or
-  workstream, authorizes nothing beyond it, and names the record that still governs
-  startup. It may repeat a bootstrap heading of its own, but that heading defers to the
-  record it names rather than replacing it.
-
-So resolve the pointer rather than trusting a filename: read the newest record, then
-execute the **Bootstrap — run this first** section of whichever record it names as the
-repository startup/bootstrap pointer — itself, when it is one. Several records carry no
-date in the name, and the family is wider than `docs/SESSION_HANDOVER_*.md`.
+Do not trust or copy a concrete handover filename into this gateway. Run the resolver,
+read the first record it prints, and follow that record's own declaration of the startup
+record and required actions. If the resolver fails, stop rather than guessing a pointer.
 
 ```bash
 python scripts/list_session_handover_records.py
 ```
 
-The resolver orders by the commit that introduced each record, so correcting an older
-record later cannot make it appear to be the newest successor. It fails loudly when the
+The resolver orders by each record's introduction commit, so correcting an older record
+later cannot make it appear to be the newest successor. It fails loudly when the
 matching record sets in `HEAD`, the index and the worktree differ (including ignored
 records), when history is shallow or contains repeated additions, when a descendant is
 backdated before its predecessor, when introduction commits are incomparable, or when the
@@ -60,10 +49,6 @@ The model product owner must optimize and review the resolver before its canonic
 runtime exceeds 60 seconds or before the handover corpus reaches 100 records.
 Each record names its predecessor and states which parts of it still stand, so read the
 newest first and follow the chain back only as far as it tells you to.
-
-*Illustration, not authority — re-resolve it, never cite this line:* on 2026-09-13,
-the startup target was `docs/SESSION_HANDOVER_2026-09-07.md`, reached via successor
-`docs/H08_DELIVERY_HANDOVER.md`.
 
 These are the PERSIST-01 durable records: they carry the canonical KPI set, the traps that
 have already cost a session real time, and the open-item list.
