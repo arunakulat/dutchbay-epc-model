@@ -35,14 +35,15 @@ DEV_DOCS = REPO_ROOT / "docs" / "DEVELOPMENT.md"
 HOOK_BLOCK_MARKER = "# Install the configured pre-commit hook set"
 
 
-def _run_hook_setup_tail(script: str, tmp_path: Path) -> subprocess.CompletedProcess[str]:
+def _run_hook_setup_tail(
+    script: str, tmp_path: Path
+) -> subprocess.CompletedProcess[str]:
     """Execute the exact hook-installation tail with a deliberately failing installer."""
     start = script.index(HOOK_BLOCK_MARKER)
     probe = tmp_path / "hook-install-probe.sh"
     probe.write_text(
         "set -euo pipefail\n"
-        "fail() { echo \"ERROR: $*\" >&2; exit 1; }\n"
-        + script[start:],
+        'fail() { echo "ERROR: $*" >&2; exit 1; }\n' + script[start:],
         encoding="utf-8",
     )
     env = os.environ.copy()
@@ -80,8 +81,7 @@ def _run_make_hooks(
     python = venv_dir / "bin" / "python"
     python.parent.mkdir(parents=True)
     python.write_text(
-        "#!/usr/bin/env bash\n"
-        "printf '%s\\n' \"$@\" > \"$DUTCHBAY_HOOK_ARGS_LOG\"\n",
+        "#!/usr/bin/env bash\n" 'printf \'%s\\n\' "$@" > "$DUTCHBAY_HOOK_ARGS_LOG"\n',
         encoding="utf-8",
     )
     python.chmod(0o755)
@@ -121,17 +121,15 @@ def test_setup_script_installs_the_precommit_hooks() -> None:
 
 def test_setup_fails_closed_when_hook_installation_fails(tmp_path: Path) -> None:
     """A failed mandatory hook install must prevent the final ready declaration."""
-    _assert_install_failure_is_fatal(
-        SETUP_SCRIPT.read_text(encoding="utf-8"), tmp_path
-    )
+    _assert_install_failure_is_fatal(SETUP_SCRIPT.read_text(encoding="utf-8"), tmp_path)
 
 
 def test_fail_closed_guard_rejects_nonfatal_mutation(tmp_path: Path) -> None:
     """Observe the fatal-install guard fail against the previous warning-only behavior."""
     script = SETUP_SCRIPT.read_text(encoding="utf-8")
     mutated = script.replace(
-        ") || fail \\\n    \"Pre-commit hook installation failed;",
-        ") || echo \\\n    \"Pre-commit hook installation failed;",
+        ') || fail \\\n    "Pre-commit hook installation failed;',
+        ') || echo \\\n    "Pre-commit hook installation failed;',
         1,
     )
     assert mutated != script
