@@ -128,8 +128,9 @@ def _extras_from(data: dict, source: str) -> dict[str, list[str]]:
     except KeyError as exc:
         raise AssertionError(
             f"{source}: no [project.optional-dependencies] (missing key "
-            f"{exc.args[0]!r}); every control in this module reads the declared "
-            "extras from there and none can run without it"
+            f"{exc.args[0]!r}); this module parametrizes an extras-driven control "
+            "at collection time, so collection cannot complete and no control in "
+            "this module can run"
         ) from exc
     if not extras:
         raise AssertionError(
@@ -204,16 +205,24 @@ def test_constraints_never_contradict_the_lock() -> None:
 
 
 @pytest.mark.parametrize(
-    ("data", "expected"),
+    ("data", "expected", "consequence"),
     [
-        ({}, "missing key 'project'"),
-        ({"project": {"name": "x"}}, "missing key 'optional-dependencies'"),
-        ({"project": {"optional-dependencies": {}}}, "declares no extras"),
+        ({}, "missing key 'project'", "collection cannot complete"),
+        (
+            {"project": {"name": "x"}},
+            "missing key 'optional-dependencies'",
+            "collection cannot complete",
+        ),
+        (
+            {"project": {"optional-dependencies": {}}},
+            "declares no extras",
+            "scores as a SKIP",
+        ),
     ],
     ids=["no-project-table", "no-extras-section", "empty-extras-section"],
 )
 def test_a_pyproject_without_usable_extras_is_refused_by_name(
-    data: dict, expected: str
+    data: dict, expected: str, consequence: str
 ) -> None:
     """The three ways this module's input can be hollow must each say so.
 
@@ -228,6 +237,7 @@ def test_a_pyproject_without_usable_extras_is_refused_by_name(
 
     message = str(caught.value)
     assert expected in message, message
+    assert consequence in message, message
     assert "SENTINEL/pyproject.toml" in message, "the refusal must name its source"
 
 
