@@ -8,6 +8,7 @@ additions rather than silently ordering records without a durable introduction c
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -15,14 +16,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 RECORD_PREFIX_EXPRESSION = r"(?:SESSION_HANDOVER_|H\d+_(?:HANDOVER|DELIVERY_))"
-RECORD_FILENAME_EXPRESSION = rf"{RECORD_PREFIX_EXPRESSION}[^/]*\.md"
+RECORD_FILENAME_EXPRESSION = rf"{RECORD_PREFIX_EXPRESSION}[^/\x00-\x1f\x7f]*\.md"
 RECORD_PATTERN = re.compile(rf"^docs/{RECORD_FILENAME_EXPRESSION}$")
-BACKTICKED_RECORD_PATTERN = re.compile(
-    rf"`(?P<record>(?:docs/)?{RECORD_FILENAME_EXPRESSION})`"
+NEAR_FAMILY_PATTERN = re.compile(
+    rf"^docs/{RECORD_PREFIX_EXPRESSION}[^/]*\.md$", re.DOTALL
 )
-UNQUOTED_RECORD_PATTERN = re.compile(
+RECORD_CANDIDATE_PATTERN = re.compile(
     rf"(?<![0-9A-Za-z_./-])(?P<record>(?:docs/)?{RECORD_PREFIX_EXPRESSION}"
-    rf"[^\n/`*?\[\]]*?\.md)(?=$|[\t ,;:!?)]+|\.(?=\s|$))"
+    rf"[^/\n]*?\.md)"
 )
 DISPLAY_LIMIT = 5
 
@@ -66,35 +67,65 @@ def _git(*args: str) -> str:
     return completed.stdout
 
 
-def _nul_paths(output: str) -> set[str]:
+def _git_bytes(*args: str) -> bytes:
+    """Run Git and return unmodified bytes for filename-safe parsing."""
+    completed = subprocess.run(
+        ["git", *args],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if completed.returncode != 0:
+        detail = os.fsdecode(completed.stderr).strip() or "no diagnostic returned"
+        raise ResolutionError(f"git {' '.join(args)} failed: {detail}")
+    return completed.stdout
+
+
+def _nul_paths(output: bytes) -> set[str]:
     """Return non-empty paths from NUL-delimited Git output.
 
     Args:
-        output: NUL-delimited path text.
+        output: NUL-delimited path bytes.
 
     Returns:
         Matching path strings without empty terminators.
     """
-    return {path for path in output.split("\0") if path}
+    return {os.fsdecode(path) for path in output.split(b"\0") if path}
 
 
-def _candidate_paths(output: str) -> set[str]:
+def _candidate_paths(output: bytes) -> set[str]:
     """Filter NUL-delimited Git output to session-handover records.
 
     Args:
-        output: NUL-delimited path text.
+        output: NUL-delimited path bytes.
 
     Returns:
         Paths belonging to either supported handover family.
     """
-    return {path for path in _nul_paths(output) if RECORD_PATTERN.fullmatch(path)}
+    return _validated_candidate_paths(_nul_paths(output))
+
+
+def _validated_candidate_paths(paths: set[str]) -> set[str]:
+    """Return supported records and reject control-bearing near-family paths."""
+    unsupported = sorted(
+        path
+        for path in paths
+        if NEAR_FAMILY_PATTERN.fullmatch(path) and not RECORD_PATTERN.fullmatch(path)
+    )
+    if unsupported:
+        rendered = ", ".join(repr(path) for path in unsupported)
+        raise ResolutionError(
+            "handover-like filenames contain unsupported control characters: "
+            + rendered
+        )
+    return {path for path in paths if RECORD_PATTERN.fullmatch(path)}
 
 
 def prose_record_references(text: str) -> list[str]:
     """Return concrete handover references from prose without treating globs as files.
 
-    Backticks bound any non-slash filename accepted by the production family. Unquoted
-    references use a conservative single-line form and stop before sentence punctuation.
+    Each supported prefix starts an independently bounded, single-line candidate.
+    Glob-bearing candidates are rejected without consuming later concrete references.
 
     Args:
         text: Markdown or plain prose to inspect.
@@ -103,18 +134,7 @@ def prose_record_references(text: str) -> list[str]:
         Concrete references in source order, with an optional ``docs/`` prefix
         preserved.
     """
-    matches = [
-        *(
-            (match.start("record"), match.group("record"))
-            for match in BACKTICKED_RECORD_PATTERN.finditer(text)
-            if not re.search(r"[*?\[\]]", match.group("record"))
-        ),
-        *(
-            (match.start("record"), match.group("record"))
-            for match in UNQUOTED_RECORD_PATTERN.finditer(text)
-        ),
-    ]
-    return [record for _, record in sorted(matches)]
+    return [record for _, _, record in prose_record_matches(text)]
 
 
 def prose_record_matches(text: str) -> list[tuple[int, int, str]]:
@@ -126,18 +146,15 @@ def prose_record_matches(text: str) -> list[tuple[int, int, str]]:
     Returns:
         ``(start, end, record)`` tuples ordered by source position.
     """
-    matches = [
-        *(
-            (match.start("record"), match.end("record"), match.group("record"))
-            for match in BACKTICKED_RECORD_PATTERN.finditer(text)
-            if not re.search(r"[*?\[\]]", match.group("record"))
-        ),
-        *(
-            (match.start("record"), match.end("record"), match.group("record"))
-            for match in UNQUOTED_RECORD_PATTERN.finditer(text)
-        ),
-    ]
-    return sorted(matches)
+    matches: list[tuple[int, int, str]] = []
+    for match in RECORD_CANDIDATE_PATTERN.finditer(text):
+        record = match.group("record")
+        if re.search(r"[*?\[\]]", record):
+            continue
+        normalized = record if record.startswith("docs/") else f"docs/{record}"
+        if RECORD_PATTERN.fullmatch(normalized):
+            matches.append((match.start("record"), match.end("record"), record))
+    return matches
 
 
 def _introduction(path: str) -> Introduction:
@@ -152,44 +169,81 @@ def _introduction(path: str) -> Introduction:
     Raises:
         ResolutionError: History is incomplete, ambiguous, or malformed.
     """
-    history = _git(
+    history = _git_bytes(
         "log",
         "--follow",
         "--find-renames=1%",
-        "--format=@@%ct%x09%cI%x09%H",
-        "--name-status",
+        "-z",
+        "--format=%H%x00%ct%x00%cI",
         "--",
         path,
     )
+    metadata = history.split(b"\0")
+    if metadata and metadata[-1] == b"":
+        metadata.pop()
+    if len(metadata) % 3:
+        raise ResolutionError(f"malformed NUL-framed history metadata for {path}")
     entries: list[tuple[str, str, str]] = []
     current_path = path
-    for block in history.split("@@")[1:]:
-        lines = [line for line in block.splitlines() if line]
-        if not lines:
-            continue
-        header = lines[0].split("\t")
-        if len(header) != 3:
-            raise ResolutionError(f"malformed lineage header for {path}: {lines[0]!r}")
-        for change in lines[1:]:
-            fields = change.split("\t")
-            status = fields[0]
-            if status == "A" and len(fields) == 2:
-                if fields[1] == current_path and RECORD_PATTERN.fullmatch(current_path):
-                    entries.append((header[0], header[1], header[2]))
-            elif status.startswith("C") and len(fields) == 3:
-                if fields[2] == current_path and RECORD_PATTERN.fullmatch(current_path):
-                    entries.append((header[0], header[1], header[2]))
+    for offset in range(0, len(metadata), 3):
+        try:
+            commit_sha, epoch_text, iso_date = (
+                field.decode("ascii") for field in metadata[offset : offset + 3]
+            )
+        except UnicodeDecodeError as exc:
+            raise ResolutionError(f"malformed lineage header for {path}") from exc
+        header = (epoch_text, iso_date, commit_sha)
+        changes = [
+            field
+            for field in _git_bytes(
+                "diff-tree",
+                "--root",
+                "-r",
+                "-M1%",
+                "-C1%",
+                "--find-copies-harder",
+                "--name-status",
+                "-z",
+                "--no-commit-id",
+                commit_sha,
+            ).split(b"\0")
+            if field
+        ]
+        cursor = 0
+        copied_entry = False
+        while cursor < len(changes):
+            try:
+                status = changes[cursor].decode("ascii", errors="strict")
+            except UnicodeDecodeError as exc:
+                raise ResolutionError(f"malformed lineage status for {path}") from exc
+            width = 3 if status.startswith(("R", "C")) else 2
+            if cursor + width > len(changes):
+                raise ResolutionError(f"malformed NUL-framed lineage for {path}")
+            names = [
+                os.fsdecode(field)
+                for field in changes[cursor + 1 : cursor + width]
+            ]
+            cursor += width
+            if status == "A":
+                if names[0] == current_path and RECORD_PATTERN.fullmatch(current_path):
+                    entries.append(header)
+            elif status.startswith("C"):
+                if names[1] == current_path and RECORD_PATTERN.fullmatch(current_path):
+                    entries.append(header)
                     # A copy introduces a distinct record; its source is not an
                     # earlier incarnation of the copied destination.
+                    copied_entry = True
                     break
-            elif status.startswith("R") and len(fields) == 3:
-                if fields[2] != current_path:
+            elif status.startswith("R"):
+                if names[1] != current_path:
                     continue
-                old_matches = RECORD_PATTERN.fullmatch(fields[1]) is not None
-                new_matches = RECORD_PATTERN.fullmatch(fields[2]) is not None
+                old_matches = RECORD_PATTERN.fullmatch(names[0]) is not None
+                new_matches = RECORD_PATTERN.fullmatch(names[1]) is not None
                 if not old_matches and new_matches:
-                    entries.append((header[0], header[1], header[2]))
-                current_path = fields[1]
+                    entries.append(header)
+                current_path = names[0]
+        if copied_entry:
+            break
     if not entries:
         raise ResolutionError(
             f"no handover-family entry found for {path}; "
@@ -224,12 +278,11 @@ def _worktree_candidates(root: Path) -> set[str]:
     docs = root / "docs"
     if not docs.is_dir():
         return set()
-    return {
+    return _validated_candidate_paths({
         path.relative_to(root).as_posix()
         for path in docs.iterdir()
         if path.is_file()
-        and RECORD_PATTERN.fullmatch(path.relative_to(root).as_posix())
-    }
+    })
 
 
 def _reject_uncommitted_records(root: Path, head_candidates: set[str]) -> None:
@@ -243,7 +296,7 @@ def _reject_uncommitted_records(root: Path, head_candidates: set[str]) -> None:
         ResolutionError: A matching record is added, removed, renamed, or untracked.
     """
     index_candidates = _candidate_paths(
-        _git("ls-files", "--cached", "-z", "--", "docs")
+        _git_bytes("ls-files", "--cached", "-z", "--", "docs")
     )
     worktree_candidates = _worktree_candidates(root)
     staged_additions = index_candidates - head_candidates
@@ -374,7 +427,9 @@ def main() -> int:
                 f"indeterminate shallow-repository state: {shallow!r}"
             )
         committed = _candidate_paths(
-            _git("ls-tree", "-r", "-z", "--name-only", "HEAD", "--", "docs")
+            _git_bytes(
+                "ls-tree", "-r", "-z", "--name-only", "HEAD", "--", "docs"
+            )
         )
         _reject_uncommitted_records(root, committed)
         if not committed:

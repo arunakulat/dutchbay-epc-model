@@ -288,6 +288,23 @@ def test_session_continuity_resolves_the_pointer_rather_than_pinning_a_filename(
     )
     assert not _named_records_are_illustration_only(unquoted_space_after)
 
+    bounded_forms = (
+        "Ignore `docs/SESSION_HANDOVER_*.md`; then use "
+        "[docs/H91_HANDOVER link.v2.md](target), "
+        "\"H92_HANDOVER quoted.md\", 'H93_DELIVERY_RECORD single.md', "
+        "(H94_HANDOVER parenthesized.md), and —H95_HANDOVER unicode.md.\n"
+        "A rejected cross-line glob `docs/H96_HANDOVER_*\n"
+        "must not hide docs/H97_HANDOVER next-line.md."
+    )
+    assert prose_record_references(bounded_forms) == [
+        "docs/H91_HANDOVER link.v2.md",
+        "H92_HANDOVER quoted.md",
+        "H93_DELIVERY_RECORD single.md",
+        "H94_HANDOVER parenthesized.md",
+        "H95_HANDOVER unicode.md",
+        "docs/H97_HANDOVER next-line.md",
+    ]
+
     span = _illustration_span(section)
     assert span is not None
     nonexistent_inside = (
@@ -547,7 +564,7 @@ def test_handover_resolver_dates_entry_into_supported_namespace(tmp_path: Path) 
     _git(outside_repo, "init")
     _git(outside_repo, "config", "user.name", "Resolver Test")
     _git(outside_repo, "config", "user.email", "resolver@example.invalid")
-    note = outside_docs / "ordinary note.md"
+    note = outside_docs / "ordinary\x1enote.md"
     note.write_text("same lineage\n", encoding="utf-8")
     _git(outside_repo, "add", note.relative_to(outside_repo).as_posix())
     _commit(outside_repo, "docs: add ordinary note", "2026-01-01T00:00:00+00:00")
@@ -602,6 +619,38 @@ def test_handover_resolver_dates_entry_into_supported_namespace(tmp_path: Path) 
     copy_result = _run_resolver(copy_repo)
     assert copy_result.returncode == 0, copy_result.stderr
     assert copy_result.stdout.split("\t", 1)[0] == "1767312000"
+
+
+
+def test_handover_resolver_rejects_control_character_filenames(
+    tmp_path: Path,
+) -> None:
+    """Control-bearing near-family names must fail before ambiguous display."""
+    repo = tmp_path / "repo"
+    docs = repo / "docs"
+    docs.mkdir(parents=True)
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "Resolver Test")
+    _git(repo, "config", "user.email", "resolver@example.invalid")
+    baseline = docs / "SESSION_HANDOVER_2026-01-01.md"
+    baseline.write_text("baseline\n", encoding="utf-8")
+    hostile = [
+        docs / "H01_HANDOVER tab\tfield.md",
+        docs / "H02_HANDOVER line\nbreak.md",
+        docs / "H03_HANDOVER record\x1eseparator.md",
+    ]
+    for path in hostile:
+        path.write_text("hostile\n", encoding="utf-8")
+    _git(repo, "add", "docs")
+    _commit(repo, "docs: add control names", "2026-01-01T00:00:00+00:00")
+
+    result = _run_resolver(repo)
+    assert result.returncode == 2
+    assert "unsupported control characters" in result.stderr
+    assert "\\t" in result.stderr
+    assert "\\n" in result.stderr
+    assert "\\x1e" in result.stderr
+    assert result.stdout == ""
 
 
 def test_handover_resolver_rejects_tied_newest_introductions(tmp_path: Path) -> None:

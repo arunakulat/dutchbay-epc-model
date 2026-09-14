@@ -50,7 +50,11 @@ records), when history is shallow or contains repeated additions, when a descend
 backdated before its predecessor, when introduction commits are incomparable, or when the
 newest introduction timestamp is ambiguous. A rename from outside a supported handover
 family is dated when it enters the family; a rename within the family preserves the first
-entry. Equal timestamps among older displayed records are ordered by path for display only.
+entry. Supported names may contain spaces and punctuation but not slash or control
+characters; near-family names outside that display-safe grammar fail before history is
+interpreted. Git path inventories, followed-commit metadata and per-commit changes use NUL
+framing. Equal timestamps among older displayed records are ordered by path for display
+only.
 Each record names its predecessor and states which parts of it still stand, so read the
 newest first and follow the chain back only as far as it tells you to.
 

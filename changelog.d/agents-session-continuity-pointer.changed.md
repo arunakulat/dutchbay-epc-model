@@ -14,3 +14,6 @@
   family entries, and any matching path difference across HEAD, index and worktree stop
   resolution, including ignored files. File lineage is dated when it first enters a
   supported handover family, while later renames within that family retain the entry date.
+  Git path inventories, followed-commit metadata and per-commit changes use NUL framing;
+  control-bearing near-family names fail before history interpretation. Independently
+  bounded prose candidates ensure a rejected glob cannot mask a later concrete reference.
