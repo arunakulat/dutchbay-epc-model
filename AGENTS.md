@@ -49,10 +49,10 @@ git ls-files 'docs/SESSION_HANDOVER_*.md' 'docs/H*_HANDOVER*.md' 'docs/H*_DELIVE
 
 `git ls-files` does its own matching, so an unmatched pattern cannot abort the command
 under `zsh`; `%ct` is the committer epoch, which sorts correctly across the mixed UTC
-offsets already present in this corpus. It lists only tracked files — a successor written
-this session is not committed yet, so check `git status` as well. Those patterns are
-examples, not an inventory: confirm against `docs/` rather than assuming they enumerate
-the family. Each record names its predecessor and states which parts of it still stand, so
+offsets already present in this corpus. It orders by committed history only, so a successor
+written this session is missing while untracked and sorts last once staged — check
+`git status` as well. Those patterns are examples, not an inventory: confirm against
+`docs/` rather than assuming they enumerate the family. Each record names its predecessor and states which parts of it still stand, so
 read the newest first and follow the chain back only as far as it tells you to.
 
 *Illustration, not authority — re-resolve it, never cite this line:* on 2026-09-13,
