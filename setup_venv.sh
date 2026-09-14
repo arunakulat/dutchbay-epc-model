@@ -23,6 +23,8 @@ VENV_DIR=$(dutchbay_resolve_venv "$PROJECT_ROOT" "$PYTHON_CMD") || fail \
   "Unable to resolve DUTCHBAY_VENV from config/development_environment.json."
 VENV_PYTHON="$VENV_DIR/bin/python"
 
+[ -f "$REQUIREMENTS" ] || fail "Pinned dependency lock not found: $REQUIREMENTS"
+
 echo "Selected environment: $VENV_DIR"
 
 if [ -e "$VENV_DIR" ]; then
@@ -39,11 +41,16 @@ if [ -e "$VENV_DIR" ]; then
     fail "Existing environment uses $VENV_VERSION; Python 3.12 is required. Move or remove $VENV_DIR, then rerun ./setup_venv.sh."
   fi
 
-  echo "Validating existing environment without modifying it..."
+  # R21 step (2) is "create or RECONCILE". Validation alone is not reconciliation:
+  # the health contract checks that the governed distributions are present, not
+  # that they match the lock, so a pin raised on main survives indefinitely in an
+  # already-provisioned environment and the script still reports "ready".
+  echo "Reconciling existing environment with the committed lock..."
+  "$VENV_PYTHON" -m pip install --quiet -r "$REQUIREMENTS"
+  echo "Validating reconciled environment..."
   dutchbay_validate_venv "$PROJECT_ROOT" "$VENV_DIR" || fail \
     "Existing environment failed the governed health contract. Move or repair only $VENV_DIR, then rerun ./setup_venv.sh."
 else
-  [ -f "$REQUIREMENTS" ] || fail "Pinned dependency lock not found: $REQUIREMENTS"
   echo "Creating Python 3.12 environment at the exact selected path..."
   mkdir -p "$(dirname "$VENV_DIR")"
   "$PYTHON_CMD" -m venv "$VENV_DIR"
