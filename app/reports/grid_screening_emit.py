@@ -153,13 +153,15 @@ SYNTHETIC_CURTAILMENT_DETAIL = (
     "not promote synthetic inputs to real evidence."
 )
 
-#: FALLBACK ``[grid]`` pin set, used only when the project is not installed as package metadata
-#: (a bare source checkout). The AUTHORITATIVE pins are read from the installed distribution's
-#: own metadata by :func:`_grid_extra_pins` — a hard-coded copy of pyproject silently drifts, and
-#: this one did: it read ``pandapower ==3.3.0`` while the project declared ``>=3.5,<4`` and the
-#: environment ran 3.5.4, so the report surfaced a false pin as dependency provenance. The
-#: fallback is held to the declared value by ``test_grid_extra_pins_match_declared_metadata``,
-#: so a future drift fails a test instead of reaching a reader.
+#: FALLBACK ``[grid]`` pin set, reached only when :func:`_grid_extra_pins` can resolve nothing
+#: at all — no ``pyproject.toml`` declaring the distribution AND no installed metadata, or a
+#: lookup that raised. The LIVE pins come from :func:`app.ops.extras.declared_extras`, which
+#: reads the governing ``pyproject.toml`` first and falls back to the installed distribution's
+#: metadata; a hard-coded copy of pyproject silently drifts, and this one did: it read
+#: ``pandapower ==3.3.0`` while the project declared ``>=3.5,<4`` and the environment ran 3.5.4,
+#: so the report surfaced a false pin as dependency provenance. The fallback is held to the
+#: declared value by ``test_grid_extra_pins_fallback_matches_what_pyproject_declares``, so a
+#: future drift fails a test instead of reaching a reader.
 GRID_EXTRA_PINS_FALLBACK: tuple[tuple[str, str], ...] = (
     ("pandapower", ">=3.5,<4"),
     ("andes", ">=2.0"),
@@ -168,10 +170,18 @@ GRID_EXTRA_PINS_FALLBACK: tuple[tuple[str, str], ...] = (
 
 
 def _grid_extra_pins() -> tuple[tuple[str, str], ...]:
-    """The ``[grid]`` pins, preferring the installed distribution's own recorded metadata.
+    """The ``[grid]`` pins as the executing tree declares them.
 
-    CASPER: an uninstalled source tree has no metadata to read, which is a legitimate state, so
-    it degrades to :data:`GRID_EXTRA_PINS_FALLBACK` rather than failing the report.
+    Resolution is :func:`app.ops.extras.declared_extras`'s, not this module's: the governing
+    ``pyproject.toml`` answers first and the installed distribution's metadata only as a
+    fallback. That ordering is deliberate — metadata is authoritative for the distribution it
+    describes but not for a source tree it did not build, and one non-editable install can
+    serve many checkouts at differing commits.
+
+    CASPER: a tree that declares nothing resolvable — no pyproject declaring the distribution
+    and no installed metadata — is a legitimate state, so it degrades to
+    :data:`GRID_EXTRA_PINS_FALLBACK` rather than failing the report. A bare source checkout is
+    no longer such a state: it still carries the ``pyproject.toml`` that answers.
     """
     try:
         from app.ops.extras import declared_extras
@@ -203,8 +213,8 @@ def _split_requirement(requirement: str) -> tuple[Optional[str], str]:
     return name, remainder.strip()
 
 
-#: The pin set surfaced in the report. Resolved once at import from metadata (authoritative)
-#: with the static fallback behind it.
+#: The pin set surfaced in the report. Resolved once at import from whatever the executing tree
+#: declares — pyproject first, metadata second — with the static fallback behind both.
 GRID_EXTRA_PINS: tuple[tuple[str, str], ...] = _grid_extra_pins()
 
 #: The verification-discipline statement — surfaced so the report carries the engineering

@@ -1,0 +1,28 @@
+- Stop `app/reports/grid_screening_emit.py` describing its `[grid]` pin provenance as metadata. It
+  resolves through `app.ops.extras.declared_extras`, which #1263 changed to read the governing
+  `pyproject.toml` first and the installed distribution's metadata only behind it -- and metadata
+  is specifically *not* authoritative any more, because it describes whichever tree last built it
+  rather than the tree executing. Four claims in this module said otherwise: the fallback constant
+  called metadata "AUTHORITATIVE", `_grid_extra_pins`'s summary said it "prefer[s] the installed
+  distribution's own recorded metadata", its CASPER note said an uninstalled source tree "has no
+  metadata to read" (it has the pyproject that answers), and `GRID_EXTRA_PINS` said it resolved
+  "from metadata (authoritative)". Verified live: `probe_extra("grid").spec_source` is `pyproject`.
+- The same staleness had spread to the controls' own names. `..._are_read_from_distribution_metadata`
+  and `..._fallback_matches_declared_metadata` assert against `declared_extras`, which no longer
+  means metadata; `..._degrade_to_the_fallback_without_metadata` documents an uninstalled checkout
+  as the degradation trigger, which stopped being one. Renamed to say what they check. Their skip
+  reason -- "project not installed as distribution metadata" -- named a condition that can no longer
+  arise in a checkout, so it is now "no `[grid]` extra in pyproject or in distribution metadata".
+- Correct the rationale for comparing specifier clause *sets* rather than strings. It said "metadata
+  normalises their order", which is true only of the path that now answers second; pyproject returns
+  its own text verbatim. The set comparison is still right, and now for the stated reason: the same
+  pin reads `>=70,<71` from pyproject and `<71,>=70` from metadata, so a string compare would pass
+  or fail on which artifact answered.
+- Fix a citation that pointed nowhere. The fallback constant credited
+  `test_grid_extra_pins_match_declared_metadata` with holding it to the declared value. No such name
+  has ever existed -- the control is real but spelled differently -- so a reader following the
+  reference to check the claim found nothing. Added a control that derives both sides (citations by
+  scanning the module's source, definitions by walking the test module's AST) and fails when a cited
+  name is not defined. Confirmed against the original misspelling, which it rejects by name.
+- No behaviour change. `GRID_EXTRA_PINS` resolves to the same three pins before and after, and all
+  thirty-two controls pass (thirty-one existing, one added).

@@ -22,6 +22,8 @@ pin the load-bearing #884 guarantees:
 
 from __future__ import annotations
 
+import ast
+import re
 from pathlib import Path
 from typing import Any, Dict, Mapping
 
@@ -583,31 +585,65 @@ def test_sync_api_route_is_not_modified_by_this_slice() -> None:
 # ── dependency-provenance drift guard ────────────────────────────────────────
 
 
-def test_grid_extra_pins_are_read_from_distribution_metadata() -> None:
-    """The surfaced pins must come from the installed distribution, not a hand-kept copy."""
+def test_every_control_the_module_cites_by_name_exists() -> None:
+    """A docstring citing a control nobody can grep for is not a citation.
+
+    ``grid_screening_emit`` pointed at ``test_grid_extra_pins_match_declared_metadata`` as the
+    thing holding its fallback to the declared value. No such name has ever existed: the
+    control is real but spelled ``..._fallback_matches_...``, so a reader following the
+    reference to check the claim found nothing and had to take it on trust.
+
+    Both sides are derived -- the citations by scanning the module's own source, the
+    definitions by walking this file's AST -- so neither can be satisfied by restating it.
+    """
+    module_source = Path(gse.__file__).read_text(encoding="utf-8")
+    cited = set(re.findall(r"\btest_[A-Za-z0-9_]+\b", module_source))
+    defined = {
+        node.name
+        for node in ast.walk(ast.parse(Path(__file__).read_text(encoding="utf-8")))
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name.startswith("test_")
+    }
+
+    module = Path(gse.__file__).name
+    assert cited, f"{module} cites no control by name; this guard has gone blind"
+    missing = sorted(cited - defined)
+    assert not missing, (
+        f"{module} cites controls that are not defined in "
+        f"{Path(__file__).name}: {missing}"
+    )
+
+
+def test_grid_extra_pins_are_read_from_what_the_tree_declares() -> None:
+    """The surfaced pins must come from the executing tree, not a hand-kept copy.
+
+    ``declared_extras`` reads the governing ``pyproject.toml`` first and installed metadata
+    only behind it, so a bare source checkout resolves here rather than skipping.
+    """
     from app.ops.extras import declared_extras
 
     declared = declared_extras().get("grid")
-    if (
-        not declared
-    ):  # bare source checkout — the fallback path is exercised below instead
-        pytest.skip("project not installed as distribution metadata")
+    # Neither artifact declares [grid] — the fallback path is exercised below instead.
+    if not declared:
+        pytest.skip("no [grid] extra in pyproject or in distribution metadata")
     surfaced = {dist for dist, _ in gse.GRID_EXTRA_PINS}
     assert surfaced == {gse._split_requirement(r)[0] for r in declared}
 
 
-def test_grid_extra_pins_fallback_matches_declared_metadata() -> None:
+def test_grid_extra_pins_fallback_matches_what_pyproject_declares() -> None:
     """The static fallback must not drift from pyproject.
 
     This is the guard for the bug this replaced: the table read ``pandapower ==3.3.0`` while the
     project declared ``>=3.5,<4``, so the report surfaced a false pin as provenance. Comparison
-    is on the SET of specifier clauses because metadata normalises their order.
+    is on the SET of specifier clauses, not the string: pyproject answers first and returns its
+    own text verbatim, but the metadata path behind it re-orders clauses (``>=70,<71`` comes
+    back as ``<71,>=70``), so a string compare would pass or fail on which artifact answered.
     """
     from app.ops.extras import declared_extras
 
     declared = declared_extras().get("grid")
     if not declared:
-        pytest.skip("project not installed as distribution metadata")
+        pytest.skip("no [grid] extra in pyproject or in distribution metadata")
 
     def clauses(spec: str) -> set[str]:
         return {c.strip() for c in spec.split(",") if c.strip()}
@@ -625,10 +661,14 @@ def test_grid_extra_pins_fallback_matches_declared_metadata() -> None:
         )
 
 
-def test_grid_pins_degrade_to_the_fallback_without_metadata(
+def test_grid_pins_degrade_to_the_fallback_without_any_declaration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """CASPER: an uninstalled source tree still renders a report, using the fallback."""
+    """CASPER: a tree that declares nothing resolvable still renders a report.
+
+    Not an uninstalled checkout — that still carries the ``pyproject.toml`` that answers. This
+    is the case where neither artifact yields a ``[grid]`` extra.
+    """
     import app.ops.extras as ops_extras
 
     monkeypatch.setattr(ops_extras, "declared_extras", lambda *a, **k: {})
@@ -636,21 +676,21 @@ def test_grid_pins_degrade_to_the_fallback_without_metadata(
 
 
 def test_split_requirement_handles_extras_and_garbage() -> None:
-    """The metadata parser's edge cases: an extras group, and an unparseable string."""
+    """The requirement parser's edge cases: an extras group, and an unparseable string."""
     assert gse._split_requirement("redis[hiredis]<6,>=5") == ("redis", "<6,>=5")
     assert gse._split_requirement("pandapower<4,>=3.5") == ("pandapower", "<4,>=3.5")
     assert gse._split_requirement("bare") == ("bare", "")
     assert gse._split_requirement("!!!") == (None, "")
 
 
-def test_grid_pins_degrade_to_the_fallback_when_metadata_raises(
+def test_grid_pins_degrade_to_the_fallback_when_resolution_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """CASPER: provenance lookup must never crash the report."""
     import app.ops.extras as ops_extras
 
     def boom(*_a: object, **_k: object) -> dict:
-        raise RuntimeError("metadata store unreadable")
+        raise RuntimeError("declaration unreadable")
 
     monkeypatch.setattr(ops_extras, "declared_extras", boom)
     assert gse._grid_extra_pins() == gse.GRID_EXTRA_PINS_FALLBACK
