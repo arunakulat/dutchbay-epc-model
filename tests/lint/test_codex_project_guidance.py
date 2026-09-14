@@ -102,7 +102,7 @@ def _carries_bootstrap_section(record_text: str) -> bool:
     What the illustration guard needs is exactly this weaker claim -- that the
     record it names has something to execute.
     """
-    return BOOTSTRAP_HEADING in record_text
+    return BOOTSTRAP_HEADING in record_text.splitlines()
 
 
 def _illustration_span(section: str) -> tuple[int, int] | None:
@@ -240,6 +240,10 @@ def test_session_continuity_illustration_names_existing_records() -> None:
         "# Session handover — scope-specific successor\n\n"
         "## Verified checkpoint\n\nNo bootstrap section here.\n"
     )
+    assert not _carries_bootstrap_section(
+        "# Session handover\n\nThis record does not carry "
+        "## Bootstrap — run this first and must defer.\n"
+    )
 
 
 def test_handover_resolver_orders_by_introduction_not_last_touch(
@@ -302,3 +306,115 @@ def test_handover_resolver_rejects_untracked_and_staged_records(
     staged = _run_resolver(repo)
     assert staged.returncode == 2
     assert "staged: docs/H02_DELIVERY_HANDOVER.md" in staged.stderr
+
+
+def test_handover_resolver_rejects_rename_and_intent_to_add(tmp_path: Path) -> None:
+    """Index paths absent from HEAD must block, regardless of staging mechanism."""
+    repo = tmp_path / "repo"
+    docs = repo / "docs"
+    docs.mkdir(parents=True)
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "Resolver Test")
+    _git(repo, "config", "user.email", "resolver@example.invalid")
+
+    baseline = docs / "SESSION_HANDOVER_2026-01-01.md"
+    baseline.write_text("committed\n", encoding="utf-8")
+    _git(repo, "add", baseline.relative_to(repo).as_posix())
+    _commit(repo, "docs: add baseline", "2026-01-01T00:00:00+00:00")
+
+    renamed = docs / "H03_DELIVERY_RECORD.md"
+    _git(
+        repo,
+        "mv",
+        baseline.relative_to(repo).as_posix(),
+        renamed.relative_to(repo).as_posix(),
+    )
+    rename_result = _run_resolver(repo)
+    assert rename_result.returncode == 2
+    assert "staged: docs/H03_DELIVERY_RECORD.md" in rename_result.stderr
+
+    _git(
+        repo,
+        "mv",
+        renamed.relative_to(repo).as_posix(),
+        baseline.relative_to(repo).as_posix(),
+    )
+    intent = docs / "H04_HANDOVER.md"
+    intent.write_text("intent to add\n", encoding="utf-8")
+    _git(repo, "add", "--intent-to-add", intent.relative_to(repo).as_posix())
+    intent_result = _run_resolver(repo)
+    assert intent_result.returncode == 2
+    assert "staged: docs/H04_HANDOVER.md" in intent_result.stderr
+
+
+def test_handover_resolver_rejects_delete_and_readd_history(tmp_path: Path) -> None:
+    """Multiple add events cannot be collapsed into one asserted introduction."""
+    repo = tmp_path / "repo"
+    docs = repo / "docs"
+    docs.mkdir(parents=True)
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "Resolver Test")
+    _git(repo, "config", "user.email", "resolver@example.invalid")
+
+    record = docs / "SESSION_HANDOVER_2026-01-01.md"
+    record.write_text("first\n", encoding="utf-8")
+    _git(repo, "add", record.relative_to(repo).as_posix())
+    _commit(repo, "docs: add record", "2026-01-01T00:00:00+00:00")
+    _git(repo, "rm", record.relative_to(repo).as_posix())
+    _commit(repo, "docs: remove record", "2026-01-02T00:00:00+00:00")
+    record.parent.mkdir()
+    record.write_text("re-added\n", encoding="utf-8")
+    _git(repo, "add", record.relative_to(repo).as_posix())
+    _commit(repo, "docs: re-add record", "2026-01-03T00:00:00+00:00")
+
+    result = _run_resolver(repo)
+    assert result.returncode == 2
+    assert "multiple add events found" in result.stderr
+
+
+def test_handover_resolver_rejects_tied_newest_introductions(tmp_path: Path) -> None:
+    """Same-commit predecessor and successor additions cannot gain lexical authority."""
+    repo = tmp_path / "repo"
+    docs = repo / "docs"
+    docs.mkdir(parents=True)
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "Resolver Test")
+    _git(repo, "config", "user.email", "resolver@example.invalid")
+
+    baseline = docs / "SESSION_HANDOVER_2026-01-01.md"
+    baseline.write_text("baseline\n", encoding="utf-8")
+    _git(repo, "add", baseline.relative_to(repo).as_posix())
+    _commit(repo, "docs: add baseline", "2026-01-01T00:00:00+00:00")
+
+    predecessor = docs / "H05_HANDOVER.md"
+    successor = docs / "H06_HANDOVER.md"
+    predecessor.write_text("predecessor\n", encoding="utf-8")
+    successor.write_text("successor\n", encoding="utf-8")
+    _git(repo, "add", "docs/H05_HANDOVER.md", "docs/H06_HANDOVER.md")
+    _commit(repo, "docs: add tied records", "2026-01-02T00:00:00+00:00")
+
+    result = _run_resolver(repo)
+    assert result.returncode == 2
+    assert "newest introduction timestamp" in result.stderr
+    assert "docs/H05_HANDOVER.md, docs/H06_HANDOVER.md" in result.stderr
+
+
+def test_handover_resolver_rejects_shallow_history(tmp_path: Path) -> None:
+    """Shallow history must stop resolution before record interpretation."""
+    source = tmp_path / "source"
+    docs = source / "docs"
+    docs.mkdir(parents=True)
+    _git(source, "init")
+    _git(source, "config", "user.name", "Resolver Test")
+    _git(source, "config", "user.email", "resolver@example.invalid")
+    record = docs / "SESSION_HANDOVER_2026-01-01.md"
+    record.write_text("baseline\n", encoding="utf-8")
+    _git(source, "add", record.relative_to(source).as_posix())
+    _commit(source, "docs: add baseline", "2026-01-01T00:00:00+00:00")
+
+    shallow = tmp_path / "shallow"
+    _git(tmp_path, "clone", "--depth", "1", source.as_uri(), shallow.as_posix())
+    assert _git(shallow, "rev-parse", "--is-shallow-repository").strip() == "true"
+    result = _run_resolver(shallow)
+    assert result.returncode == 2
+    assert "repository history is shallow" in result.stderr

@@ -5,8 +5,9 @@
   checklist, and a scope-specific successor that names the record still governing startup —
   uses one executable resolver ordered by each record's introduction commit, and tells the
   reader to follow the newest record's own declaration. The resolver fails loudly for staged
-  or untracked successors. The named files survive only in one bounded, dated illustration.
+  or untracked successors. The named files survive within one bounded, dated illustration.
   Structural tests reject concrete record names outside that paragraph, require every record
-  named inside it to exist, and require only the stated startup target to carry the bootstrap
+  named inside it to exist, and require the stated startup target to carry the bootstrap
   heading. Hostile temporary-repository tests prove that correcting an older record does not
-  outrank a newer successor and that staged or untracked records stop resolution.
+  outrank a newer successor and that shallow history, ambiguous latest timestamps, repeated
+  add events, and staged or untracked records stop resolution.

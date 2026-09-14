@@ -84,7 +84,7 @@ def _candidate_paths(output: str) -> set[str]:
 
 
 def _introduction(path: str) -> Introduction:
-    """Resolve the oldest add commit for a committed record.
+    """Resolve the unique add commit for a committed record.
 
     Args:
         path: Repository-relative handover path.
@@ -93,7 +93,7 @@ def _introduction(path: str) -> Introduction:
         The record's first durable introduction.
 
     Raises:
-        ResolutionError: History is incomplete or the add record is malformed.
+        ResolutionError: History is incomplete, ambiguous, or malformed.
     """
     history = _git(
         "log",
@@ -108,9 +108,13 @@ def _introduction(path: str) -> Introduction:
         raise ResolutionError(
             f"no introduction commit found for {path}; fetch complete history before retrying"
         )
-    fields = additions[-1].split("\t")
+    if len(additions) != 1:
+        raise ResolutionError(
+            f"multiple add events found for {path}; delete/re-add history is ambiguous"
+        )
+    fields = additions[0].split("\t")
     if len(fields) != 3:
-        raise ResolutionError(f"malformed introduction record for {path}: {additions[-1]!r}")
+        raise ResolutionError(f"malformed introduction record for {path}: {additions[0]!r}")
     try:
         epoch = int(fields[0])
     except ValueError as exc:
@@ -120,15 +124,19 @@ def _introduction(path: str) -> Introduction:
     return Introduction(epoch, fields[1], fields[2], path)
 
 
-def _reject_uncommitted_records() -> None:
+def _reject_uncommitted_records(head_candidates: set[str]) -> None:
     """Fail when a staged or untracked handover lacks a durable introduction.
+
+    Args:
+        head_candidates: Matching records committed in ``HEAD``.
 
     Raises:
         ResolutionError: At least one new handover is staged or untracked.
     """
-    staged = _candidate_paths(
-        _git("diff", "--cached", "--name-only", "--diff-filter=A", "-z", "--", "docs")
+    index_candidates = _candidate_paths(
+        _git("ls-files", "--cached", "-z", "--", "docs")
     )
+    staged = index_candidates - head_candidates
     untracked = _candidate_paths(
         _git("ls-files", "--others", "--exclude-standard", "-z", "--", "docs")
     )
@@ -140,6 +148,29 @@ def _reject_uncommitted_records() -> None:
         "uncommitted handover records have no introduction order; commit or remove them:\n"
         + "\n".join(states)
     )
+
+
+def _reject_ambiguous_newest(introductions: list[Introduction]) -> None:
+    """Reject a tied newest introduction timestamp.
+
+    Equal older timestamps affect display order only. A tie at the maximum timestamp
+    would make the startup choice depend on a lexical path rule, so it cannot be resolved.
+
+    Args:
+        introductions: Resolved introduction records.
+
+    Raises:
+        ResolutionError: More than one record shares the newest introduction epoch.
+    """
+    newest_epoch = max(record.epoch for record in introductions)
+    newest = sorted(
+        record.path for record in introductions if record.epoch == newest_epoch
+    )
+    if len(newest) > 1:
+        raise ResolutionError(
+            f"newest introduction timestamp {newest_epoch} is shared by: "
+            + ", ".join(newest)
+        )
 
 
 def main() -> int:
@@ -155,14 +186,21 @@ def main() -> int:
         root = Path(root_text).resolve()
         if Path.cwd().resolve() != root:
             raise ResolutionError(f"run from the repository root: {root}")
-        _reject_uncommitted_records()
+        shallow = _git("rev-parse", "--is-shallow-repository").strip()
+        if shallow != "false":
+            if shallow == "true":
+                raise ResolutionError("repository history is shallow; fetch complete history")
+            raise ResolutionError(f"indeterminate shallow-repository state: {shallow!r}")
         committed = _candidate_paths(
             _git("ls-tree", "-r", "-z", "--name-only", "HEAD", "--", "docs")
         )
+        _reject_uncommitted_records(committed)
         if not committed:
             raise ResolutionError("no committed session-handover records found")
+        resolved = [_introduction(path) for path in committed]
+        _reject_ambiguous_newest(resolved)
         introductions = sorted(
-            (_introduction(path) for path in committed),
+            resolved,
             key=lambda record: (-record.epoch, record.path),
         )
     except ResolutionError as exc:
