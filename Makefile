@@ -35,12 +35,13 @@ setup:
 # (DUTCHBAY_VENV, per ENV-01/THREAD-01) first, then an in-checkout .venv, then PATH.
 # VENV_PY alone never resolves in this project, because the governed venv lives
 # outside the checkout - so the bare-PATH fallback was doing all the work.
-# Install the git pre-commit hook set. `setup` already does this; this target exists
-# so an existing checkout can restore R10/GOV-02 local enforcement without a full
-# environment reconcile. Idempotent. Hooks are untracked, so a fresh clone has none.
+# Install the configured git pre-commit hook set. `setup` already does this; this target
+# lets an existing checkout restore the enabled local checks and GOV-02 guard without a
+# full environment reconcile. R10's mypy mismatch remains tracked in #1270. Idempotent.
+# Hooks are untracked, so a fresh clone has none.
 HOOK_PY := $(if $(DUTCHBAY_VENV),$(DUTCHBAY_VENV)/bin/python,$(VENV_PY))
 hooks:
-	$(if $(HOOK_PY),$(HOOK_PY) -m pre_commit,pre-commit) install
+	$(if $(HOOK_PY),"$(HOOK_PY)" -m pre_commit install,pre-commit install)
 
 # Mandatory gates: ruff. Advisory (matches CI): black --check (the committed tree is
 # style-drifted vs the current formatter, so black is non-blocking by design).

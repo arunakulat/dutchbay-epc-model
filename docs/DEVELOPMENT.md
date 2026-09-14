@@ -153,10 +153,13 @@ Notes:
 
 ### Pre-commit hooks
 
-`./setup_venv.sh` (and therefore `make setup`) installs the hooks for you, because
-`R10` and `GOV-02` both describe them as enforcement that runs automatically — a claim
-that is silently false in any checkout where nobody ran the install. Hooks live in
-`.git/hooks`, which git does not track, so a fresh clone starts with none.
+`./setup_venv.sh` (and therefore `make setup`) installs the configured hooks so the
+enabled formatting, lint, import-order and file checks run automatically and GOV-02's
+`no-commit-to-branch` guard is active. Hooks live in `.git/hooks`, which git does not
+track, so a fresh clone starts with none. R10 also names mypy, but the current hook
+configuration does not enable it; [issue #1270](https://github.com/arunakulat/dutchbay-epc-model/issues/1270)
+tracks that contract/configuration mismatch. The separate `make type` and CI type gates
+remain mandatory.
 
 To restore them in an existing checkout without a full environment reconcile, or to run
 the set on demand:
@@ -166,9 +169,10 @@ make hooks                      # idempotent; same as `pre-commit install`
 pre-commit run --all-files      # run the whole hook set on demand
 ```
 
-They then run on every commit (black, ruff, isort, and file hygiene checks, plus a
-`no-commit-to-branch` guard that blocks commits on `main`). Set `DUTCHBAY_SKIP_HOOKS=1`
-to suppress installation during setup on a host where it is not wanted.
+The configured set then runs on every commit (black, ruff, isort, and file hygiene checks,
+plus a `no-commit-to-branch` guard that blocks commits on `main`). Setup fails if mandatory
+installation fails. Set `DUTCHBAY_SKIP_HOOKS=1` to explicitly suppress installation on a
+host where it is not wanted.
 
 ## Testing
 
