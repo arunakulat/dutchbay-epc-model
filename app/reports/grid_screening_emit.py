@@ -227,10 +227,10 @@ def _resolve_grid_extra_pins() -> (
 ):
     """Resolve a complete, typed ``[grid]`` declaration or fail loudly.
 
-    Resolution is :func:`app.ops.extras.declared_extras`'s, not this module's: the governing
-    ``pyproject.toml`` answers first and the installed distribution's metadata only as a
-    fallback. That ordering is deliberate — metadata is authoritative for the distribution it
-    describes but not for a source tree it did not build, and one non-editable install can
+    Resolution is :func:`app.ops.extras.resolve_declared_extras`'s, not this module's: the
+    governing ``pyproject.toml`` answers first and the installed distribution's metadata only
+    as a fallback. That ordering is deliberate — metadata is authoritative for the distribution
+    it describes but not for a source tree it did not build, and one non-editable install can
     serve many checkouts at differing commits.
 
     An environment with no declaration uses a visibly labelled static fallback. Resolution
@@ -252,6 +252,18 @@ def _resolve_grid_extra_pins() -> (
             source=DependencySpecSource.UNKNOWN,
             status=DependencyResolutionStatus.MALFORMED,
         ) from exc
+
+    if observation.resolution_error is not None:
+        raise _resolution_error(
+            f"[grid] dependency declaration resolution is degraded: "
+            f"{observation.resolution_error}",
+            source=(
+                DependencySpecSource(source_text)
+                if source_text in {"pyproject", "metadata"}
+                else DependencySpecSource.UNKNOWN
+            ),
+            status=DependencyResolutionStatus.MALFORMED,
+        )
 
     if not grid_declared:
         provenance = DependencyProvenance(

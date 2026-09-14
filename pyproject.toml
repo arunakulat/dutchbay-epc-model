@@ -220,21 +220,13 @@ jobs = [
 # install never needs the grid toolchain, and the grid tests are gated behind
 # ``pytest.importorskip('pandapower')``. Install with:
 #     PIP_CONSTRAINT=constraints.txt pip install -e ".[grid]"
-# PIN NOTE (verified empirically against PyPI metadata + the frozen core pins, which live
-# in requirements.txt: numpy==2.4.6 / scipy==1.17.1 / pandas==2.3.3): pandapower is pinned
-# EXACTLY to ==3.3.0. Both pandapower 3.4.0 and 3.3.3 declare scipy<1.17 (3.4.0 also
-# numpy<2.4) — they EXCLUDE the core pins and would force a silent scipy/numpy downgrade
-# with KPI-drift risk. 3.3.0 declares numpy~=2.2 / scipy~=1.15 / pandas~=2.3, which the core
-# pins satisfy, so the exact ==3.3.0 pin (NOT a version range) is what deterministically
-# prevents the downgrade — it holds on its own, independent of constraints.txt (which pins
-# only pandas<3). andes and opendssdirect.py impose no core caps. The OpenDSS wheel
+# COMPATIBILITY NOTE: the current Python 3.12 scientific-stack baseline supports the declared
+# pandapower range; requirements.txt carries the exact reproducibility pin. Older candidate
+# versions imposed incompatible NumPy/SciPy bounds, so future range changes require a lockfile
+# resolution and the normal KPI-oracle controls. The OpenDSS wheel
 # dist name is ``opendssdirect.py`` (imports as ``opendssdirect``); the bare name
 # ``opendssdirect`` does NOT exist on PyPI. PyWake / windpowerlib are not needed here —
 # they already ride in via [wind]; add them as a follow-up only if a grid path requires them.
-# pandapower 3.3.0 required scipy~=1.15 — irreconcilable with the pinned lock on
-# ANY interpreter, which is why [grid] could not be composed into [feasibility].
-# 3.5.x resolves it on Python 3.12 (it requires scipy~=1.18 there, and the lock now
-# pins 1.18.0). This is an ABSTRACT floor; requirements.txt carries the exact pin.
 grid = [
   "pandapower>=3.5,<4",
   "andes>=2.0",
@@ -252,12 +244,9 @@ grid = [
 # builders, and SALib for the global-sensitivity step (SALib otherwise only
 # arrives via [dev], which a report-only install would not have).
 #
-# `grid` IS composed in as of the 3.12 baseline migration. It previously could not
-# be: pandapower's scipy pin was irreconcilable with the lock on 3.11
-# (pandapower==3.3.0 -> scipy~=1.15; 3.5.4 -> scipy<1.17 on 3.11), so installing it
-# alongside [dev] silently downgraded scipy off the lock and broke the mypy gate's
-# scipy-stubs. On 3.12 pandapower 3.5.x wants scipy~=1.18, the lock now pins
-# scipy==1.18.0 + scipy-stubs==1.18.0.1, and the three resolve together cleanly.
+# `grid` is composed in as of the Python 3.12 baseline migration. It previously could not
+# be installed alongside the gate toolchain without changing the frozen scientific stack.
+# The current abstract ranges and exact lock now resolve together cleanly.
 # This is what unblocks #923: once `grid.qsts.finance_wiring.enabled` is flipped,
 # pandapower becomes a RUNTIME dependency of the canonical path, so it has to be
 # installable alongside the gate toolchain rather than quarantined in its own venv.

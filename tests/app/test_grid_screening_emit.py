@@ -981,23 +981,115 @@ def test_grid_pin_resolution_observes_declarations_and_source_atomically(
         )
     }
 
-    def changing_pyproject(_distribution: str) -> Mapping[str, tuple[str, ...]] | None:
+    def changing_pyproject(
+        _distribution: str,
+    ) -> tuple[Mapping[str, tuple[str, ...]] | None, str | None]:
         nonlocal pyproject_calls
         pyproject_calls += 1
-        return declarations if pyproject_calls == 1 else None
+        return (declarations, None) if pyproject_calls == 1 else (None, None)
 
-    def hostile_metadata(_distribution: str) -> Mapping[str, tuple[str, ...]]:
+    def hostile_metadata(
+        _distribution: str,
+    ) -> tuple[Mapping[str, tuple[str, ...]], str | None]:
         nonlocal metadata_calls
         metadata_calls += 1
-        return {"grid": ("substituted>=9",)}
+        return {"grid": ("substituted>=9",)}, None
 
-    monkeypatch.setattr(ops_extras, "_pyproject_extras", changing_pyproject)
-    monkeypatch.setattr(ops_extras, "_metadata_extras", hostile_metadata)
+    monkeypatch.setattr(ops_extras, "_read_pyproject_extras", changing_pyproject)
+    monkeypatch.setattr(ops_extras, "_read_metadata_extras", hostile_metadata)
     pins, provenance = gse._resolve_grid_extra_pins()
     assert pins == tuple(gse.GRID_EXTRA_PINS_FALLBACK)
     assert provenance.source is gse.DependencySpecSource.PYPROJECT
     assert pyproject_calls == 1
     assert metadata_calls == 0
+
+
+def test_pyproject_marker_survives_source_read_and_fails_lender_resolution(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The actual pyproject reader must not erase a marker before strict resolution."""
+    import app.ops.extras as ops_extras
+
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "dutchbay-epc-model"\n'
+        "[project.optional-dependencies]\ngrid = ["
+        "\"pandapower>=3.5,<4; python_version >= '3.12'\", "
+        '"andes>=2.0", "opendssdirect.py>=0.9.4"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", pyproject)
+
+    observation = ops_extras.resolve_declared_extras()
+    assert "; python_version" in observation.extras["grid"][0]
+    with pytest.raises(gse.GridDependencyProvenanceError, match="markers"):
+        gse._resolve_grid_extra_pins()
+
+
+def test_metadata_compound_marker_retains_residual_and_fails_lender_resolution(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Only metadata's selector is removed; the environmental condition survives."""
+    import app.ops.extras as ops_extras
+
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", tmp_path / "missing.toml")
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda _distribution: [
+            'pandapower>=3.5,<4; python_version >= "3.12" and extra == "grid"',
+            'andes>=2.0; extra == "grid"',
+            'opendssdirect.py>=0.9.4; extra == "grid"',
+        ],
+    )
+
+    observation = ops_extras.resolve_declared_extras()
+    assert observation.spec_source == "metadata"
+    assert observation.extras["grid"][0].endswith('; python_version >= "3.12"')
+    with pytest.raises(gse.GridDependencyProvenanceError, match="markers"):
+        gse._resolve_grid_extra_pins()
+
+
+def test_malformed_pyproject_cannot_hide_behind_valid_metadata_for_lender_surface(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import app.ops.extras as ops_extras
+
+    malformed = tmp_path / "pyproject.toml"
+    malformed.write_text("not valid TOML ===\n", encoding="utf-8")
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", malformed)
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda _distribution: [
+            'pandapower>=3.5,<4; extra == "grid"',
+            'andes>=2.0; extra == "grid"',
+            'opendssdirect.py>=0.9.4; extra == "grid"',
+        ],
+    )
+
+    with pytest.raises(gse.GridDependencyProvenanceError, match="degraded") as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
+
+
+def test_realistic_other_extras_without_grid_uses_labelled_fallback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import app.ops.extras as ops_extras
+
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "dutchbay-epc-model"\n'
+        '[project.optional-dependencies]\nreport = ["jinja2>=3.1"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", pyproject)
+
+    pins, provenance = gse._resolve_grid_extra_pins()
+    assert pins == gse.GRID_EXTRA_PINS_FALLBACK
+    assert provenance.source is gse.DependencySpecSource.STATIC_FALLBACK
+    assert provenance.status is gse.DependencyResolutionStatus.FALLBACK
 
 
 def test_render_surfaces_dependency_source_and_status() -> None:

@@ -16,12 +16,10 @@ The declared pins come from whichever artifact governs the code that is actually
 the ``pyproject.toml`` beside this package when there is one, and the installed distribution's
 recorded metadata otherwise.
 
-That matters: the pre-existing hard-coded ``GRID_EXTRA_PINS`` table in
-:mod:`app.reports.grid_screening_emit` claimed in its docstring to be "kept in sync with
-pyproject" and was not — it pinned ``pandapower==3.3.0`` while the project declared
-``pandapower>=3.5,<4``, so the grid report surfaced a false pin as dependency provenance. Reading
-the project's own declaration removes that whole class of bug rather than correcting one instance
-of it.
+That matters: a pre-existing hard-coded ``GRID_EXTRA_PINS`` table in
+:mod:`app.reports.grid_screening_emit` drifted from the project declaration, so the grid report
+surfaced false dependency provenance. Reading the project's own declaration removes that whole
+class of bug rather than correcting one instance of it.
 
 Why not metadata alone
 ----------------------
@@ -78,7 +76,10 @@ import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Iterable, Mapping, Optional
+
+from packaging.requirements import InvalidRequirement, Requirement
 
 __all__ = [
     "DEFAULT_DISTRIBUTION",
@@ -132,61 +133,121 @@ def _normalize_distribution(name: str) -> str:
     return _NAME_SEPARATOR_RE.sub("-", name).lower()
 
 
-def _pyproject_extras(
+def _read_pyproject_extras(
     distribution: str,
-) -> Optional[Mapping[str, tuple[str, ...]]]:
-    """Optional-dependencies declared by the governing ``pyproject.toml``.
+) -> tuple[Optional[Mapping[str, tuple[str, ...]]], Optional[str]]:
+    """Read pyproject declarations and preserve present-source failures.
 
-    Returns ``None`` -- never raises -- when the file is absent, unparseable, or declares a
-    different distribution than the one asked about. ``None`` means "this source cannot answer",
-    which is what makes the metadata fallback a correct deferral rather than a guess. The name
-    check is what keeps ``declared_extras("some-other-dist")`` honest: a checkout's pyproject
-    must not answer for a distribution it does not define.
+    A missing file or different distribution is ordinary absence and returns ``(None, None)``.
+    Present-but-unreadable, malformed, or structurally invalid content returns a diagnostic so
+    lender-facing consumers can fail loudly while health probes still degrade.
     """
     try:
         with GOVERNING_PYPROJECT.open("rb") as handle:
             project = tomllib.load(handle)["project"]
+    except FileNotFoundError:
+        return None, None
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 - retain failure while CASPER consumers degrade
+        return (
+            None,
+            f"governing pyproject is unreadable or malformed: {type(exc).__name__}: {exc}",
+        )
+
+    try:
         if _normalize_distribution(str(project["name"])) != _normalize_distribution(
             distribution
         ):
-            return None
+            return None, None
         optional = project.get("optional-dependencies") or {}
-        return {
-            str(extra): tuple(
-                str(requirement).split(";", 1)[0].strip()
-                for requirement in requirements
-            )
+        if not isinstance(optional, Mapping):
+            raise TypeError("project.optional-dependencies must be a table")
+        for extra, requirements in optional.items():
+            if not isinstance(requirements, list) or not all(
+                isinstance(requirement, str) for requirement in requirements
+            ):
+                raise TypeError(
+                    f"project.optional-dependencies.{extra} must be an array of strings"
+                )
+        extras = {
+            str(extra): tuple(str(requirement).strip() for requirement in requirements)
             for extra, requirements in optional.items()
         }
-    except (
-        Exception
-    ):  # noqa: BLE001 - CASPER: an unreadable source degrades, never raises
-        return None
+        return extras, None
+    except Exception as exc:  # noqa: BLE001 - retain malformed declaration detail
+        return (
+            None,
+            f"governing pyproject declaration is malformed: {type(exc).__name__}: {exc}",
+        )
 
 
-def _metadata_extras(distribution: str) -> Mapping[str, tuple[str, ...]]:
-    """Optional-dependencies recorded in the installed distribution's metadata."""
+def _pyproject_extras(
+    distribution: str,
+) -> Optional[Mapping[str, tuple[str, ...]]]:
+    """CASPER projection of declarations from the governing pyproject."""
+    return _read_pyproject_extras(distribution)[0]
+
+
+def _metadata_declaration_without_selector(
+    requirement: str,
+) -> tuple[tuple[str, ...], Optional[str]]:
+    """Group by metadata's extra selector while retaining every other marker condition."""
+    parsed = Requirement(requirement)
+    if parsed.marker is None:
+        return (), None
+
+    marker = str(parsed.marker)
+    selectors = tuple(dict.fromkeys(_EXTRA_MARKER_RE.findall(marker)))
+    if not selectors:
+        return (), None
+    base = requirement.split(";", 1)[0].strip()
+    if " or " in marker:
+        # Do not rewrite a disjunction: retaining it makes the lender resolver reject it
+        # explicitly instead of changing its meaning.
+        return selectors, f"{base}; {marker}"
+
+    residual_parts = [
+        part.strip()
+        for part in marker.split(" and ")
+        if _EXTRA_MARKER_RE.fullmatch(part.strip()) is None
+    ]
+    residual = " and ".join(residual_parts)
+    return selectors, f"{base}; {residual}" if residual else base
+
+
+def _read_metadata_extras(
+    distribution: str,
+) -> tuple[Mapping[str, tuple[str, ...]], Optional[str]]:
+    """Read installed metadata declarations while retaining malformed-source detail."""
     try:
         requirements = importlib_metadata.requires(distribution) or []
     except importlib_metadata.PackageNotFoundError:
-        return {}
+        return {}, None
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 - health callers degrade; lender callers inspect
+        return {}, f"installed metadata is unreadable: {type(exc).__name__}: {exc}"
 
     grouped: dict[str, list[str]] = {}
+    errors: list[str] = []
     for requirement in requirements:
-        marker = _EXTRA_MARKER_RE.search(requirement)
-        if marker is None:
+        try:
+            extras, declaration = _metadata_declaration_without_selector(requirement)
+        except InvalidRequirement as exc:
+            errors.append(f"invalid requirement {requirement!r}: {exc}")
             continue
-        grouped.setdefault(marker.group(1), []).append(
-            requirement.split(";", 1)[0].strip()
-        )
-    return {extra: tuple(reqs) for extra, reqs in grouped.items()}
+        if declaration is None:
+            continue
+        for extra in extras:
+            grouped.setdefault(extra, []).append(declaration)
+    result = {extra: tuple(reqs) for extra, reqs in grouped.items()}
+    return result, "; ".join(errors) if errors else None
 
 
-def _declared_spec_source(distribution: str) -> str:
-    """Which artifact answered for ``distribution``: ``pyproject``, ``metadata`` or ``none``."""
-    if _pyproject_extras(distribution) is not None:
-        return "pyproject"
-    return "metadata" if _metadata_extras(distribution) else "none"
+def _metadata_extras(distribution: str) -> Mapping[str, tuple[str, ...]]:
+    """CASPER projection of optional dependencies from installed metadata."""
+    return _read_metadata_extras(distribution)[0]
 
 
 class UnknownExtraError(KeyError):
@@ -199,8 +260,10 @@ class PackageStatus:
 
     Fields
         distribution: the distribution name, e.g. ``weasyprint``.
-        declared_spec: the version specifier declared by the project, verbatim from metadata
-            (e.g. ``<70,>=69``). Empty string when the requirement pins nothing.
+        declared_spec: version-specifier text extracted from the declaration selected from the
+            governing ``pyproject.toml`` or installed distribution metadata. Empty string when
+            the requirement pins nothing. Consult ``ExtraStatus.spec_source`` for the supplying
+            artifact; this field alone does not identify its source.
         installed_version: the resolved installed version, or ``None`` when absent.
         installed: True iff the distribution is present in the environment.
         importable: True/False when a deep probe ran, else ``None`` (not probed). Kept separate
@@ -231,10 +294,15 @@ class PackageStatus:
 
 @dataclass(frozen=True)
 class ExtraDeclarations:
-    """One atomic observation of optional dependencies and their source artifact."""
+    """One deeply immutable observation of declarations, source and resolution diagnostics."""
 
     extras: Mapping[str, tuple[str, ...]]
     spec_source: str
+    resolution_error: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        copied = {str(extra): tuple(values) for extra, values in self.extras.items()}
+        object.__setattr__(self, "extras", MappingProxyType(copied))
 
 
 @dataclass(frozen=True)
@@ -305,7 +373,7 @@ def _requirement_name(requirement: str) -> Optional[str]:
 
 
 def _requirement_spec(requirement: str, name: str) -> str:
-    """The version specifier portion, verbatim, with any extras marker stripped."""
+    """The source specifier portion with dependency extras and markers removed."""
     body = requirement.split(";", 1)[0].strip()
     remainder = body[len(name) :].strip() if body.startswith(name) else body
     if remainder.startswith("["):  # drop an extras group, e.g. redis[hiredis]<6,>=5
@@ -339,13 +407,17 @@ def resolve_declared_extras(
     :func:`declared_extras` and a source probe, because the governing tree can change between
     independent observations.
     """
-    from_pyproject = _pyproject_extras(distribution)
+    from_pyproject, pyproject_error = _read_pyproject_extras(distribution)
     if from_pyproject is not None:
         return ExtraDeclarations(extras=from_pyproject, spec_source="pyproject")
-    from_metadata = _metadata_extras(distribution)
+    from_metadata, metadata_error = _read_metadata_extras(distribution)
+    resolution_errors = tuple(
+        error for error in (pyproject_error, metadata_error) if error is not None
+    )
     return ExtraDeclarations(
         extras=from_metadata,
         spec_source="metadata" if from_metadata else "none",
+        resolution_error="; ".join(resolution_errors) if resolution_errors else None,
     )
 
 
@@ -408,13 +480,35 @@ def _probe_package(requirement: str, *, deep: bool) -> Optional[PackageStatus]:
     )
 
 
+def _probe_extra_from_declarations(
+    extra: str,
+    *,
+    distribution: str,
+    declarations: ExtraDeclarations,
+    deep: bool = False,
+) -> ExtraStatus:
+    """Probe one extra from one already-resolved declaration/source observation."""
+    extras = declarations.extras
+    if extras and extra not in extras:
+        raise UnknownExtraError(
+            f"{distribution!r} declares no extra {extra!r}; known: {sorted(extras)}"
+        )
+    statuses = [_probe_package(req, deep=deep) for req in extras.get(extra, ())]
+    return ExtraStatus(
+        extra=extra,
+        packages=tuple(s for s in statuses if s is not None),
+        deep=deep,
+        spec_source=declarations.spec_source,
+    )
+
+
 def probe_extra(
     extra: str,
     *,
     distribution: str = DEFAULT_DISTRIBUTION,
     deep: bool = False,
 ) -> ExtraStatus:
-    """Probe one optional extra.
+    """Probe one optional extra from one atomic declaration/source observation.
 
     Args:
         extra: the extra name, e.g. ``report``.
@@ -426,17 +520,12 @@ def probe_extra(
         UnknownExtraError: the distribution does not declare ``extra``. This is a caller bug, so
             it fails loud — unlike runtime state, which is always reported rather than raised on.
     """
-    extras = declared_extras(distribution)
-    if extras and extra not in extras:
-        raise UnknownExtraError(
-            f"{distribution!r} declares no extra {extra!r}; known: {sorted(extras)}"
-        )
-    statuses = [_probe_package(req, deep=deep) for req in extras.get(extra, ())]
-    return ExtraStatus(
-        extra=extra,
-        packages=tuple(s for s in statuses if s is not None),
+    declarations = resolve_declared_extras(distribution)
+    return _probe_extra_from_declarations(
+        extra,
+        distribution=distribution,
+        declarations=declarations,
         deep=deep,
-        spec_source=_declared_spec_source(distribution),
     )
 
 
@@ -446,19 +535,26 @@ def probe_extras(
     distribution: str = DEFAULT_DISTRIBUTION,
     deep: bool = False,
 ) -> tuple[ExtraStatus, ...]:
-    """Probe several extras. Unknown names degrade to an empty status rather than raising, so a
-    health route stays up even if the deployed image declares a different extra set."""
+    """Probe extras from one observation; unknown names degrade instead of raising."""
+    declarations = resolve_declared_extras(distribution)
     results: list[ExtraStatus] = []
     for name in names:
         try:
-            results.append(probe_extra(name, distribution=distribution, deep=deep))
+            results.append(
+                _probe_extra_from_declarations(
+                    name,
+                    distribution=distribution,
+                    declarations=declarations,
+                    deep=deep,
+                )
+            )
         except UnknownExtraError:
             results.append(
                 ExtraStatus(
                     extra=name,
                     packages=(),
                     deep=deep,
-                    spec_source=_declared_spec_source(distribution),
+                    spec_source=declarations.spec_source,
                 )
             )
     return tuple(results)

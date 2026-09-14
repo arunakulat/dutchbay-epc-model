@@ -1,8 +1,8 @@
 """Tests for the optional-extra availability probe.
 
 The probe backs a health endpoint, so the property that matters most is that it NEVER raises on
-runtime state — an absent package, a broken import, a malformed requirement and a missing
-optional ``packaging`` must all degrade to an honest recorded value.
+runtime state — an absent package, a broken import, or a malformed requirement must degrade to
+an honest recorded value.
 """
 
 from __future__ import annotations
@@ -113,7 +113,7 @@ def test_absent_package_is_missing_not_broken() -> None:
 
 
 def test_unevaluated_spec_does_not_make_a_package_unhealthy() -> None:
-    # satisfies_spec is None when `packaging` is unavailable; that is unknown, not a failure.
+    # None means the spec could not be evaluated; that is unknown, not a failure.
     assert (
         _pkg(installed=True, installed_version="1.0", satisfies_spec=None).healthy
         is True
@@ -143,7 +143,11 @@ def test_malformed_requirement_is_skipped_not_raised(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        ops_extras, "declared_extras", lambda *a, **k: {"e": ("!!!bad!!!",)}
+        ops_extras,
+        "resolve_declared_extras",
+        lambda *a, **k: ops_extras.ExtraDeclarations(
+            extras={"e": ("!!!bad!!!",)}, spec_source="pyproject"
+        ),
     )
     assert probe_extra("e").packages == ()
 
@@ -222,8 +226,11 @@ def test_genuinely_absent_package_is_reported_absent(
     """
     monkeypatch.setattr(
         ops_extras,
-        "declared_extras",
-        lambda *a, **k: {"e": ("definitely-not-installed-xyz>=1.0", "pytest>=7.0")},
+        "resolve_declared_extras",
+        lambda *a, **k: ops_extras.ExtraDeclarations(
+            extras={"e": ("definitely-not-installed-xyz>=1.0", "pytest>=7.0")},
+            spec_source="pyproject",
+        ),
     )
     status = probe_extra("e")
     by_name = {p.distribution: p for p in status.packages}
@@ -257,6 +264,96 @@ PYPROJECT = Path(__file__).resolve().parents[2] / "pyproject.toml"
 def _stale_metadata(*specs: str):
     """An installed build whose recorded pins disagree with the checkout."""
     return lambda name: [f'{spec}; extra == "report"' for spec in specs]
+
+
+def test_declared_extras_is_a_backward_projection_of_one_observation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    expected = {"report": ("render-engine>=1",)}
+    calls = 0
+
+    def observe(*_args: object, **_kwargs: object) -> ops_extras.ExtraDeclarations:
+        nonlocal calls
+        calls += 1
+        return ops_extras.ExtraDeclarations(extras=expected, spec_source="pyproject")
+
+    monkeypatch.setattr(ops_extras, "resolve_declared_extras", observe)
+    assert declared_extras() == expected
+    assert calls == 1
+
+
+def test_extra_declarations_are_deeply_immutable() -> None:
+    source = {"grid": ["pandapower>=3.5,<4"]}
+    observation = ops_extras.ExtraDeclarations(  # type: ignore[arg-type]
+        extras=source, spec_source="pyproject"
+    )
+    source["grid"].append("substituted>=9")
+    assert observation.extras["grid"] == ("pandapower>=3.5,<4",)
+    with pytest.raises(TypeError):
+        observation.extras["grid"] = ("substituted>=9",)  # type: ignore[index]
+
+
+def test_probe_extra_cannot_mix_values_with_a_later_source_observation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A changing resolver cannot relabel first-read declarations at ExtraStatus."""
+    calls = 0
+
+    def changing(*_args: object, **_kwargs: object) -> ops_extras.ExtraDeclarations:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return ops_extras.ExtraDeclarations(
+                extras={"report": ("first-source-package>=1",)},
+                spec_source="pyproject",
+            )
+        return ops_extras.ExtraDeclarations(
+            extras={"report": ("substituted-package>=9",)},
+            spec_source="metadata",
+        )
+
+    monkeypatch.setattr(ops_extras, "resolve_declared_extras", changing)
+    status = probe_extra("report")
+    assert calls == 1
+    assert status.spec_source == "pyproject"
+    assert [package.distribution for package in status.packages] == [
+        "first-source-package"
+    ]
+
+
+def test_probe_extras_reuses_one_observation_for_the_entire_tuple(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One returned status tuple cannot contain declarations from different sources."""
+    calls = 0
+
+    def changing(*_args: object, **_kwargs: object) -> ops_extras.ExtraDeclarations:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return ops_extras.ExtraDeclarations(
+                extras={"alpha": ("alpha-package>=1",), "beta": ("beta-package>=2",)},
+                spec_source="pyproject",
+            )
+        return ops_extras.ExtraDeclarations(
+            extras={"alpha": ("substituted>=9",)}, spec_source="metadata"
+        )
+
+    monkeypatch.setattr(ops_extras, "resolve_declared_extras", changing)
+    statuses = probe_extras(("alpha", "unknown", "beta"))
+    assert calls == 1
+    assert [status.spec_source for status in statuses] == [
+        "pyproject",
+        "pyproject",
+        "pyproject",
+    ]
+    assert [package.distribution for package in statuses[0].packages] == [
+        "alpha-package"
+    ]
+    assert statuses[1].packages == ()
+    assert [package.distribution for package in statuses[2].packages] == [
+        "beta-package"
+    ]
 
 
 def test_declared_pins_follow_the_executing_tree_not_the_installed_build(
@@ -345,6 +442,34 @@ def test_an_unparseable_pyproject_degrades_to_metadata(
     monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", broken)
 
     assert probe_extra("report").spec_source == "metadata"
+    observation = ops_extras.resolve_declared_extras()
+    assert observation.spec_source == "metadata"
+    assert observation.resolution_error is not None
+    assert "unreadable or malformed" in observation.resolution_error
+
+
+def test_an_unreadable_pyproject_path_is_distinct_from_absence(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    unreadable = tmp_path / "pyproject.toml"
+    unreadable.mkdir()
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", unreadable)
+
+    observation = ops_extras.resolve_declared_extras()
+    assert observation.resolution_error is not None
+    assert "IsADirectoryError" in observation.resolution_error
+
+
+def test_missing_and_foreign_pyprojects_are_absence_not_resolution_errors(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", tmp_path / "missing.toml")
+    assert ops_extras.resolve_declared_extras().resolution_error is None
+
+    foreign = tmp_path / "foreign.toml"
+    foreign.write_text('[project]\nname = "another-project"\n', encoding="utf-8")
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", foreign)
+    assert ops_extras.resolve_declared_extras().resolution_error is None
 
 
 def test_a_foreign_pyproject_does_not_answer_for_this_distribution(
