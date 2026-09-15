@@ -34,7 +34,7 @@
 # the accepted-advisory allowlist is currently EMPTY (no known vulnerabilities).
 # ─────────────────────────────────────────────────────────────────────────────
 absl-py==2.5.0
-affine==3.0.0
+affine==3.0.1
 altair==6.2.2
 andes==2.0.0
 annotated-doc==0.0.5
