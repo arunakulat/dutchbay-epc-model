@@ -16,12 +16,10 @@ The declared pins come from whichever artifact governs the code that is actually
 the ``pyproject.toml`` beside this package when there is one, and the installed distribution's
 recorded metadata otherwise.
 
-That matters: the pre-existing hard-coded ``GRID_EXTRA_PINS`` table in
-:mod:`app.reports.grid_screening_emit` claimed in its docstring to be "kept in sync with
-pyproject" and was not — it pinned ``pandapower==3.3.0`` while the project declared
-``pandapower>=3.5,<4``, so the grid report surfaced a false pin as dependency provenance. Reading
-the project's own declaration removes that whole class of bug rather than correcting one instance
-of it.
+That matters: a pre-existing hard-coded ``GRID_EXTRA_PINS`` table in
+:mod:`app.reports.grid_screening_emit` drifted from the project declaration, so the grid report
+surfaced false dependency provenance. Reading the project's own declaration removes that whole
+class of bug rather than correcting one instance of it.
 
 Why not metadata alone
 ----------------------
@@ -59,9 +57,8 @@ an image build can introduce. :func:`probe_extra` therefore reports ``installed`
 CASPER
 ------
 Every probe degrades rather than raising. A distribution that is absent, a requirement string that
-cannot be parsed, an import that fails for any reason, or a missing optional ``packaging`` library
-all produce an honest recorded state — never an exception out of this module. A health endpoint
-that can crash is worse than no health endpoint.
+cannot be parsed, or an import that fails for any reason produces an honest recorded state — never
+an exception out of this module. A health endpoint that can crash is worse than no health endpoint.
 
 GWTF:
     - CESSPIT: the one hard failure is asking for an extra the distribution does not declare, which
@@ -79,15 +76,21 @@ import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Iterable, Mapping, Optional
+
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.utils import InvalidName, canonicalize_name
 
 __all__ = [
     "DEFAULT_DISTRIBUTION",
     "DEPLOYED_EXTRAS",
     "PackageStatus",
     "ExtraStatus",
+    "ExtraDeclarations",
     "UnknownExtraError",
     "declared_extras",
+    "resolve_declared_extras",
     "probe_extra",
     "probe_extras",
 ]
@@ -109,10 +112,8 @@ _IMPORT_NAME_OVERRIDES: Mapping[str, str] = {
 }
 
 #: Leading distribution name in a PEP 508 requirement string, e.g. ``redis[hiredis]<6,>=5`` ->
-#: ``redis``. Deliberately a small regex rather than a ``packaging`` import: ``packaging`` is a
-#: TRANSITIVE dependency here, not a declared one, and this repository has already been bitten by
-#: an undeclared dependency riding the requirements freeze (the #756 post-mortem). The optional
-#: ``packaging`` use below is CASPER-guarded for the same reason.
+#: ``redis``. The health-probe hot path retains this small regex; the lender-facing grid provenance
+#: path uses the now-direct runtime dependency ``packaging.Requirement`` for strict PEP 508 parsing.
 _REQ_NAME_RE = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 
 #: Marker fragment identifying which extra a requirement belongs to.
@@ -124,70 +125,155 @@ _EXTRA_MARKER_RE = re.compile(r"""extra\s*==\s*['"]([^'"]+)['"]""")
 #: test can point the resolution at a different tree.
 GOVERNING_PYPROJECT = Path(__file__).resolve().parents[2] / "pyproject.toml"
 
-#: PEP 503 name normalization, so ``dutchbay_epc_model`` and ``dutchbay-epc-model`` compare equal.
-_NAME_SEPARATOR_RE = re.compile(r"[-_.]+")
-
 
 def _normalize_distribution(name: str) -> str:
     """Return ``name`` in PEP 503 normalized form."""
-    return _NAME_SEPARATOR_RE.sub("-", name).lower()
+    return str(canonicalize_name(name))
+
+
+def _validated_project_distribution(value: object) -> str:
+    """Validate and normalize a pyproject project name without coercing its type."""
+    if not isinstance(value, str):
+        raise TypeError(
+            "project.name must be a non-empty valid distribution-name string"
+        )
+    try:
+        return str(canonicalize_name(value, validate=True))
+    except InvalidName as exc:
+        raise ValueError(
+            "project.name must be a non-empty valid distribution-name string"
+        ) from exc
+
+
+def _read_pyproject_extras(
+    distribution: str,
+) -> tuple[Optional[Mapping[str, tuple[str, ...]]], Optional[str]]:
+    """Read pyproject declarations and preserve present-source failures.
+
+    A missing file or different distribution is ordinary absence and returns ``(None, None)``.
+    Present-but-unreadable, malformed, or structurally invalid content returns a diagnostic so
+    lender-facing consumers can fail loudly while health probes still degrade.
+    """
+    try:
+        with GOVERNING_PYPROJECT.open("rb") as handle:
+            project = tomllib.load(handle)["project"]
+    except FileNotFoundError:
+        return None, None
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 - retain failure while CASPER consumers degrade
+        return (
+            None,
+            f"governing pyproject is unreadable or malformed: {type(exc).__name__}: {exc}",
+        )
+
+    try:
+        project_distribution = _validated_project_distribution(project["name"])
+        if project_distribution != _normalize_distribution(distribution):
+            return None, None
+        optional = (
+            project["optional-dependencies"]
+            if "optional-dependencies" in project
+            else {}
+        )
+        if not isinstance(optional, Mapping):
+            raise TypeError("project.optional-dependencies must be a table")
+        for extra, requirements in optional.items():
+            if not isinstance(requirements, list) or not all(
+                isinstance(requirement, str) for requirement in requirements
+            ):
+                raise TypeError(
+                    f"project.optional-dependencies.{extra} must be an array of strings"
+                )
+        extras = {
+            str(extra): tuple(str(requirement).strip() for requirement in requirements)
+            for extra, requirements in optional.items()
+        }
+        return extras, None
+    except Exception as exc:  # noqa: BLE001 - retain malformed declaration detail
+        return (
+            None,
+            f"governing pyproject declaration is malformed: {type(exc).__name__}: {exc}",
+        )
 
 
 def _pyproject_extras(
     distribution: str,
 ) -> Optional[Mapping[str, tuple[str, ...]]]:
-    """Optional-dependencies declared by the governing ``pyproject.toml``.
+    """CASPER projection of declarations from the governing pyproject."""
+    return _read_pyproject_extras(distribution)[0]
 
-    Returns ``None`` -- never raises -- when the file is absent, unparseable, or declares a
-    different distribution than the one asked about. ``None`` means "this source cannot answer",
-    which is what makes the metadata fallback a correct deferral rather than a guess. The name
-    check is what keeps ``declared_extras("some-other-dist")`` honest: a checkout's pyproject
-    must not answer for a distribution it does not define.
+
+def _metadata_declaration_without_selector(
+    requirement: str,
+) -> tuple[tuple[str, ...], Optional[str], Optional[str]]:
+    """Associate metadata safely without laundering marker semantics.
+
+    Installed ``Requires-Dist`` uses a marker to associate a requirement with an extra. Only a
+    marker whose *entire* expression is one ``extra == "name"`` selector can be removed without
+    changing the declaration. Any compound expression is retained verbatim (after packaging's
+    normalization), so the strict lender resolver rejects rather than silently weakening it.
     """
-    try:
-        with GOVERNING_PYPROJECT.open("rb") as handle:
-            project = tomllib.load(handle)["project"]
-        if _normalize_distribution(str(project["name"])) != _normalize_distribution(
-            distribution
-        ):
-            return None
-        optional = project.get("optional-dependencies") or {}
-        return {
-            str(extra): tuple(
-                str(requirement).split(";", 1)[0].strip()
-                for requirement in requirements
-            )
-            for extra, requirements in optional.items()
-        }
-    except (
-        Exception
-    ):  # noqa: BLE001 - CASPER: an unreadable source degrades, never raises
-        return None
+    parsed = Requirement(requirement)
+    if parsed.marker is None:
+        return (), None, None
+
+    marker = str(parsed.marker)
+    selectors = tuple(dict.fromkeys(_EXTRA_MARKER_RE.findall(marker)))
+    base = requirement.split(";", 1)[0].strip()
+    if len(selectors) == 1 and _EXTRA_MARKER_RE.fullmatch(marker) is not None:
+        return selectors, base, None
+    if selectors:
+        # Equality selectors are sufficient to associate the declaration, but removing even one
+        # atom from a compound expression would change its meaning. Keep the complete marker.
+        return selectors, f"{base}; {marker}", None
+    if re.search(r"\bextra\b", marker):
+        return (
+            (),
+            None,
+            f"unsupported metadata extra association marker: {marker}",
+        )
+    # A marker that does not reference ``extra`` describes a base dependency, not an optional
+    # dependency association, and is intentionally outside this extras projection.
+    return (), None, None
 
 
-def _metadata_extras(distribution: str) -> Mapping[str, tuple[str, ...]]:
-    """Optional-dependencies recorded in the installed distribution's metadata."""
+def _read_metadata_extras(
+    distribution: str,
+) -> tuple[Mapping[str, tuple[str, ...]], Optional[str]]:
+    """Read installed metadata declarations while retaining malformed-source detail."""
     try:
         requirements = importlib_metadata.requires(distribution) or []
     except importlib_metadata.PackageNotFoundError:
-        return {}
+        return {}, None
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 - health callers degrade; lender callers inspect
+        return {}, f"installed metadata is unreadable: {type(exc).__name__}: {exc}"
 
     grouped: dict[str, list[str]] = {}
+    errors: list[str] = []
     for requirement in requirements:
-        marker = _EXTRA_MARKER_RE.search(requirement)
-        if marker is None:
+        try:
+            extras, declaration, association_error = (
+                _metadata_declaration_without_selector(requirement)
+            )
+        except InvalidRequirement as exc:
+            errors.append(f"invalid requirement {requirement!r}: {exc}")
             continue
-        grouped.setdefault(marker.group(1), []).append(
-            requirement.split(";", 1)[0].strip()
-        )
-    return {extra: tuple(reqs) for extra, reqs in grouped.items()}
+        if association_error is not None:
+            errors.append(association_error)
+        if declaration is None:
+            continue
+        for extra in extras:
+            grouped.setdefault(extra, []).append(declaration)
+    result = {extra: tuple(reqs) for extra, reqs in grouped.items()}
+    return result, "; ".join(errors) if errors else None
 
 
-def _declared_spec_source(distribution: str) -> str:
-    """Which artifact answered for ``distribution``: ``pyproject``, ``metadata`` or ``none``."""
-    if _pyproject_extras(distribution) is not None:
-        return "pyproject"
-    return "metadata" if _metadata_extras(distribution) else "none"
+def _metadata_extras(distribution: str) -> Mapping[str, tuple[str, ...]]:
+    """CASPER projection of optional dependencies from installed metadata."""
+    return _read_metadata_extras(distribution)[0]
 
 
 class UnknownExtraError(KeyError):
@@ -200,14 +286,10 @@ class PackageStatus:
 
     Fields
         distribution: the distribution name, e.g. ``weasyprint``.
-        declared_spec: the version specifier declared by the project, verbatim from
-            whichever artifact answered -- the governing ``pyproject.toml`` or the installed
-            distribution's metadata. Verbatim means the two sources render one pin as two
-            different strings -- the weasyprint pin reads ``>=70,<71`` from ``pyproject.toml``
-            and ``<71,>=70`` once metadata has round-tripped it -- so a caller testing this
-            field against a literal must parse it into a ``SpecifierSet`` rather than compare
-            text. ``ExtraStatus.spec_source`` records which artifact answered; this field does
-            not, so read them together. Empty string when the requirement pins nothing.
+        declared_spec: version-specifier text extracted from the declaration selected from the
+            governing ``pyproject.toml`` or installed distribution metadata. Empty string when
+            the requirement pins nothing. Consult ``ExtraStatus.spec_source`` for the supplying
+            artifact; this field alone does not identify its source.
         installed_version: the resolved installed version, or ``None`` when absent.
         installed: True iff the distribution is present in the environment.
         importable: True/False when a deep probe ran, else ``None`` (not probed). Kept separate
@@ -215,8 +297,7 @@ class PackageStatus:
             without pango/cairo is the canonical case.
         import_error: the exception summary when a deep probe failed, else ``None``.
         satisfies_spec: whether the installed version satisfies ``declared_spec``; ``None`` when
-            not installed, when nothing is pinned, or when the optional ``packaging`` library is
-            unavailable to evaluate it.
+            not installed, nothing is pinned, or the version/specifier cannot be evaluated.
     """
 
     distribution: str
@@ -235,6 +316,19 @@ class PackageStatus:
         if self.satisfies_spec is False:
             return False
         return self.importable is not False
+
+
+@dataclass(frozen=True)
+class ExtraDeclarations:
+    """One deeply immutable observation of declarations, source and resolution diagnostics."""
+
+    extras: Mapping[str, tuple[str, ...]]
+    spec_source: str
+    resolution_error: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        copied = {str(extra): tuple(values) for extra, values in self.extras.items()}
+        object.__setattr__(self, "extras", MappingProxyType(copied))
 
 
 @dataclass(frozen=True)
@@ -305,7 +399,7 @@ def _requirement_name(requirement: str) -> Optional[str]:
 
 
 def _requirement_spec(requirement: str, name: str) -> str:
-    """The version specifier portion, verbatim, with any extras marker stripped."""
+    """The source specifier portion with dependency extras and markers removed."""
     body = requirement.split(";", 1)[0].strip()
     remainder = body[len(name) :].strip() if body.startswith(name) else body
     if remainder.startswith("["):  # drop an extras group, e.g. redis[hiredis]<6,>=5
@@ -326,17 +420,38 @@ def declared_extras(
     checkout with no ``pyproject.toml`` and nothing installed — rather than raising, so a probe
     degrades to "nothing known" instead of crashing a health route.
     """
-    from_pyproject = _pyproject_extras(distribution)
+    return resolve_declared_extras(distribution).extras
+
+
+def resolve_declared_extras(
+    distribution: str = DEFAULT_DISTRIBUTION,
+) -> ExtraDeclarations:
+    """Read optional dependencies and source in one atomic resolver observation.
+
+    The returned mapping and ``spec_source`` always describe the same lookup. Callers that
+    surface provenance must consume this object instead of separately calling
+    :func:`declared_extras` and a source probe, because the governing tree can change between
+    independent observations.
+    """
+    from_pyproject, pyproject_error = _read_pyproject_extras(distribution)
     if from_pyproject is not None:
-        return from_pyproject
-    return _metadata_extras(distribution)
+        return ExtraDeclarations(extras=from_pyproject, spec_source="pyproject")
+    from_metadata, metadata_error = _read_metadata_extras(distribution)
+    resolution_errors = tuple(
+        error for error in (pyproject_error, metadata_error) if error is not None
+    )
+    return ExtraDeclarations(
+        extras=from_metadata,
+        spec_source="metadata" if from_metadata else "none",
+        resolution_error="; ".join(resolution_errors) if resolution_errors else None,
+    )
 
 
 def _check_spec(version: str, spec: str) -> Optional[bool]:
     """Whether ``version`` satisfies ``spec``; ``None`` when it cannot be evaluated.
 
-    CASPER: ``packaging`` is transitive here, not declared, so its absence degrades this to
-    ``None`` rather than failing the probe.
+    CASPER: although ``packaging`` is a direct runtime dependency, an unavailable/broken import
+    or an invalid version/specifier still degrades this health probe to ``None``.
     """
     if not spec:
         return None
@@ -391,13 +506,35 @@ def _probe_package(requirement: str, *, deep: bool) -> Optional[PackageStatus]:
     )
 
 
+def _probe_extra_from_declarations(
+    extra: str,
+    *,
+    distribution: str,
+    declarations: ExtraDeclarations,
+    deep: bool = False,
+) -> ExtraStatus:
+    """Probe one extra from one already-resolved declaration/source observation."""
+    extras = declarations.extras
+    if extras and extra not in extras:
+        raise UnknownExtraError(
+            f"{distribution!r} declares no extra {extra!r}; known: {sorted(extras)}"
+        )
+    statuses = [_probe_package(req, deep=deep) for req in extras.get(extra, ())]
+    return ExtraStatus(
+        extra=extra,
+        packages=tuple(s for s in statuses if s is not None),
+        deep=deep,
+        spec_source=declarations.spec_source,
+    )
+
+
 def probe_extra(
     extra: str,
     *,
     distribution: str = DEFAULT_DISTRIBUTION,
     deep: bool = False,
 ) -> ExtraStatus:
-    """Probe one optional extra.
+    """Probe one optional extra from one atomic declaration/source observation.
 
     Args:
         extra: the extra name, e.g. ``report``.
@@ -409,17 +546,12 @@ def probe_extra(
         UnknownExtraError: the distribution does not declare ``extra``. This is a caller bug, so
             it fails loud — unlike runtime state, which is always reported rather than raised on.
     """
-    extras = declared_extras(distribution)
-    if extras and extra not in extras:
-        raise UnknownExtraError(
-            f"{distribution!r} declares no extra {extra!r}; known: {sorted(extras)}"
-        )
-    statuses = [_probe_package(req, deep=deep) for req in extras.get(extra, ())]
-    return ExtraStatus(
-        extra=extra,
-        packages=tuple(s for s in statuses if s is not None),
+    declarations = resolve_declared_extras(distribution)
+    return _probe_extra_from_declarations(
+        extra,
+        distribution=distribution,
+        declarations=declarations,
         deep=deep,
-        spec_source=_declared_spec_source(distribution),
     )
 
 
@@ -429,19 +561,26 @@ def probe_extras(
     distribution: str = DEFAULT_DISTRIBUTION,
     deep: bool = False,
 ) -> tuple[ExtraStatus, ...]:
-    """Probe several extras. Unknown names degrade to an empty status rather than raising, so a
-    health route stays up even if the deployed image declares a different extra set."""
+    """Probe extras from one observation; unknown names degrade instead of raising."""
+    declarations = resolve_declared_extras(distribution)
     results: list[ExtraStatus] = []
     for name in names:
         try:
-            results.append(probe_extra(name, distribution=distribution, deep=deep))
+            results.append(
+                _probe_extra_from_declarations(
+                    name,
+                    distribution=distribution,
+                    declarations=declarations,
+                    deep=deep,
+                )
+            )
         except UnknownExtraError:
             results.append(
                 ExtraStatus(
                     extra=name,
                     packages=(),
                     deep=deep,
-                    spec_source=_declared_spec_source(distribution),
+                    spec_source=declarations.spec_source,
                 )
             )
     return tuple(results)

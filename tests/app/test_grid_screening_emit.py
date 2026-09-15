@@ -22,11 +22,16 @@ pin the load-bearing #884 guarantees:
 
 from __future__ import annotations
 
+import ast
+import re
+import tomllib
 from pathlib import Path
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, Mapping, Sequence
 
 import pytest
 import yaml
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.utils import canonicalize_name
 
 from analytics.contracts_v14 import (
     QSTS_SYNTHETIC_OUTPUT_CLASS,
@@ -45,6 +50,81 @@ from app.reports.grid_screening_emit import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _collectable_test_names(source: str) -> set[str]:
+    """Approximate pytest's collectable module/class test-function namespace."""
+    tree = ast.parse(source)
+    names: set[str] = set()
+    disabled_functions = {
+        node.targets[0].value.id
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Attribute)
+        and node.targets[0].attr == "__test__"
+        and isinstance(node.targets[0].value, ast.Name)
+        and isinstance(node.value, ast.Constant)
+        and node.value.value is False
+    }
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.name.startswith("test_") and node.name not in disabled_functions:
+                names.add(node.name)
+        elif isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
+            special_methods = {
+                child.name
+                for child in node.body
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            explicitly_disabled = any(
+                isinstance(child, ast.Assign)
+                and any(
+                    isinstance(target, ast.Name) and target.id == "__test__"
+                    for target in child.targets
+                )
+                and isinstance(child.value, ast.Constant)
+                and child.value.value is False
+                for child in node.body
+            )
+            if explicitly_disabled or {"__init__", "__new__"} & special_methods:
+                continue
+            for child in node.body:
+                if isinstance(
+                    child, (ast.FunctionDef, ast.AsyncFunctionDef)
+                ) and child.name.startswith("test_"):
+                    names.add(child.name)
+    return names
+
+
+def _missing_control_citations(module_source: str, test_source: str) -> set[str]:
+    cited = set(re.findall(r"\btest_[A-Za-z0-9_]+\b", module_source))
+    return cited - _collectable_test_names(test_source)
+
+
+def _parse_strict_pin_declarations(
+    declarations: Sequence[str],
+) -> dict[str, frozenset[str]]:
+    """Independent PEP 508 oracle for a lossless simple pin table."""
+    parsed: dict[str, frozenset[str]] = {}
+    for declaration in declarations:
+        try:
+            requirement = Requirement(declaration)
+        except InvalidRequirement as exc:
+            raise ValueError(f"unparseable declaration: {declaration!r}") from exc
+        if requirement.extras:
+            raise ValueError(f"dependency extras are unsupported: {declaration!r}")
+        if requirement.marker is not None:
+            raise ValueError(f"requirement markers are unsupported: {declaration!r}")
+        if requirement.url is not None:
+            raise ValueError(
+                f"direct URL requirements are unsupported: {declaration!r}"
+            )
+        name = canonicalize_name(requirement.name)
+        if name in parsed:
+            raise ValueError(f"duplicate normalized dependency: {name!r}")
+        parsed[name] = frozenset(str(item) for item in requirement.specifier)
+    return parsed
 
 
 def _grid_block(*, study_enabled: bool = True) -> Dict[str, Any]:
@@ -335,9 +415,9 @@ def test_pin_set_and_available_state_rendered() -> None:
     )
     html = render_grid_screening_html(model)
     # The resolved pin set is surfaced (dependency reproducibility). Assert against the pins the
-    # emitter actually resolved rather than against literals: this test previously hard-coded
-    # ``==3.3.0``, which locked in the very drift it was meant to surface — the project declared
-    # ``>=3.5,<4`` throughout. Autoescape is on (a hostile bus name must be escaped), so ``>``
+    # emitter actually resolved rather than against literals: this test previously hard-coded a
+    # stale exact pin, which locked in the very drift it was meant to surface. Autoescape is on,
+    # so ``>``
     # renders as ``&gt;``.
     from markupsafe import escape
 
@@ -583,85 +663,661 @@ def test_sync_api_route_is_not_modified_by_this_slice() -> None:
 # ── dependency-provenance drift guard ────────────────────────────────────────
 
 
-def test_grid_extra_pins_are_read_from_distribution_metadata() -> None:
-    """The surfaced pins must come from the installed distribution, not a hand-kept copy."""
-    from app.ops.extras import declared_extras
+def test_every_control_the_module_cites_by_name_exists() -> None:
+    """A docstring citing a control nobody can grep for is not a citation.
 
-    declared = declared_extras().get("grid")
-    if (
-        not declared
-    ):  # bare source checkout — the fallback path is exercised below instead
-        pytest.skip("project not installed as distribution metadata")
-    surfaced = {dist for dist, _ in gse.GRID_EXTRA_PINS}
-    assert surfaced == {gse._split_requirement(r)[0] for r in declared}
+    ``grid_screening_emit`` pointed at ``test_grid_extra_pins_match_declared_metadata`` as the
+    thing holding its fallback to the declared value. No such name has ever existed: the
+    control is real but spelled ``..._fallback_matches_...``, so a reader following the
+    reference to check the claim found nothing and had to take it on trust.
+
+    Both sides are derived -- the citations by scanning the module's own source, the
+    definitions by walking this file's AST -- so neither can be satisfied by restating it.
+    """
+    module_source = Path(gse.__file__).read_text(encoding="utf-8")
+    cited = set(re.findall(r"\btest_[A-Za-z0-9_]+\b", module_source))
+    test_source = Path(__file__).read_text(encoding="utf-8")
+    defined = _collectable_test_names(test_source)
+
+    module = Path(gse.__file__).name
+    assert cited, f"{module} cites no control by name; this guard has gone blind"
+    missing = sorted(cited - defined)
+    assert not missing, (
+        f"{module} cites controls that are not defined in "
+        f"{Path(__file__).name}: {missing}"
+    )
 
 
-def test_grid_extra_pins_fallback_matches_declared_metadata() -> None:
-    """The static fallback must not drift from pyproject.
+def test_control_citation_guard_rejects_nested_noncollectable_and_typo_names() -> None:
+    """Nested functions and methods on non-Test classes cannot satisfy a citation."""
+    hostile_tests = """
+def helper():
+    def test_shadowed_control():
+        pass
 
-    This is the guard for the bug this replaced: the table read ``pandapower ==3.3.0`` while the
-    project declared ``>=3.5,<4``, so the report surfaced a false pin as provenance. Comparison
-    is on the SET of specifier clauses because metadata normalises their order.
+class Controls:
+    def test_noncollectable_method(self):
+        pass
+
+class TestCollected:
+    def test_real_control(self):
+        pass
+
+class TestDisabled:
+    __test__ = False
+    def test_disabled_method(self):
+        pass
+
+class TestConstructor:
+    def __init__(self):
+        pass
+    def test_constructor_method(self):
+        pass
+"""
+    cited = (
+        "test_shadowed_control test_noncollectable_method test_real_control test_typoo "
+        "test_disabled_method test_constructor_method"
+    )
+    assert _missing_control_citations(cited, hostile_tests) == {
+        "test_shadowed_control",
+        "test_noncollectable_method",
+        "test_typoo",
+        "test_disabled_method",
+        "test_constructor_method",
+    }
+
+
+def test_grid_extra_pins_are_read_from_what_the_tree_declares() -> None:
+    """The surfaced pins must come from the executing tree, not a hand-kept copy.
+
+    ``declared_extras`` reads the governing ``pyproject.toml`` first and installed metadata
+    only behind it, so a bare source checkout resolves here rather than skipping.
     """
     from app.ops.extras import declared_extras
 
     declared = declared_extras().get("grid")
+    # Neither artifact declares [grid] — the fallback path is exercised below instead.
     if not declared:
-        pytest.skip("project not installed as distribution metadata")
-
-    def clauses(spec: str) -> set[str]:
-        return {c.strip() for c in spec.split(",") if c.strip()}
-
-    from_metadata = {
-        name: clauses(spec)
-        for name, spec in (gse._split_requirement(r) for r in declared)
-        if name
-    }
-    for name, spec in gse.GRID_EXTRA_PINS_FALLBACK:
-        assert name in from_metadata, f"fallback lists {name}, pyproject does not"
-        assert clauses(spec) == from_metadata[name], (
-            f"fallback pin for {name} is {spec!r} but pyproject declares "
-            f"{','.join(sorted(from_metadata[name]))!r}"
-        )
+        pytest.skip("no [grid] extra in pyproject or in distribution metadata")
+    surfaced = {dist for dist, _ in gse.GRID_EXTRA_PINS}
+    assert surfaced == {gse._split_requirement(r)[0] for r in declared}
 
 
-def test_grid_pins_degrade_to_the_fallback_without_metadata(
+def test_grid_extra_pins_fallback_matches_what_pyproject_declares() -> None:
+    """The static fallback must not drift from pyproject.
+
+    This is the guard for the bug this replaced: the table carried a stale exact pin while the
+    project declared a compatible range, so the report surfaced false provenance. Comparison
+    is on the SET of specifier clauses, not the string: pyproject answers first and returns its
+    own text verbatim, but the metadata path behind it re-orders clauses (``>=70,<71`` comes
+    back as ``<71,>=70``), so a string compare would pass or fail on which artifact answered.
+    """
+    with (REPO_ROOT / "pyproject.toml").open("rb") as handle:
+        raw_grid_requirements = tomllib.load(handle)["project"][
+            "optional-dependencies"
+        ]["grid"]
+
+    pyproject_pins = _parse_strict_pin_declarations(raw_grid_requirements)
+    fallback_declarations = [
+        f"{name}{spec}" for name, spec in gse.GRID_EXTRA_PINS_FALLBACK
+    ]
+    fallback_pins = _parse_strict_pin_declarations(fallback_declarations)
+    assert fallback_pins == pyproject_pins
+    assert gse.GRID_DEPENDENCY_PROVENANCE.source is gse.DependencySpecSource.PYPROJECT
+    assert (
+        gse.GRID_DEPENDENCY_PROVENANCE.status is gse.DependencyResolutionStatus.RESOLVED
+    )
+
+
+@pytest.mark.parametrize(
+    "declarations,diagnostic",
+    [
+        (("!!!",), "unparseable"),
+        (("Panda_Power>=3", "panda-power<4"), "duplicate normalized"),
+        (("pandapower[control]>=3",), "dependency extras"),
+        (("pandapower>=3; python_version >= '3.12'",), "requirement markers"),
+        (("pandapower @ https://example.invalid/p.whl",), "direct URL"),
+    ],
+)
+def test_independent_pin_oracle_rejects_lossy_or_ambiguous_declarations(
+    declarations: tuple[str, ...], diagnostic: str
+) -> None:
+    with pytest.raises(ValueError, match=diagnostic):
+        _parse_strict_pin_declarations(declarations)
+
+
+def test_valid_pep508_whitespace_is_semantically_equal_and_accepted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """CASPER: an uninstalled source tree still renders a report, using the fallback."""
+    """PEP 508 whitespace around a comma is valid and must not create false drift."""
     import app.ops.extras as ops_extras
 
-    monkeypatch.setattr(ops_extras, "declared_extras", lambda *a, **k: {})
-    assert gse._grid_extra_pins() == gse.GRID_EXTRA_PINS_FALLBACK
+    declarations = (
+        "pandapower>=3.5, <4",
+        "andes>=2.0",
+        "opendssdirect.py>=0.9.4",
+    )
+    fallback_declarations = tuple(
+        f"{name}{spec}" for name, spec in gse.GRID_EXTRA_PINS_FALLBACK
+    )
+    assert _parse_strict_pin_declarations(
+        declarations
+    ) == _parse_strict_pin_declarations(fallback_declarations)
+
+    monkeypatch.setattr(
+        ops_extras,
+        "resolve_declared_extras",
+        lambda *a, **k: ops_extras.ExtraDeclarations(
+            extras={"grid": declarations}, spec_source="pyproject"
+        ),
+    )
+    pins, provenance = gse._resolve_grid_extra_pins()
+    assert _parse_strict_pin_declarations(
+        tuple(f"{name}{spec}" for name, spec in pins)
+    ) == _parse_strict_pin_declarations(fallback_declarations)
+    assert provenance.status is gse.DependencyResolutionStatus.RESOLVED
+
+
+def test_grid_pins_degrade_to_the_fallback_without_any_declaration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CASPER: a tree that declares nothing resolvable still renders a report.
+
+    Not an uninstalled checkout — that still carries the ``pyproject.toml`` that answers. This
+    is the case where neither artifact yields a ``[grid]`` extra.
+    """
+    import app.ops.extras as ops_extras
+
+    monkeypatch.setattr(
+        ops_extras,
+        "resolve_declared_extras",
+        lambda *a, **k: ops_extras.ExtraDeclarations(extras={}, spec_source="none"),
+    )
+    pins, provenance = gse._resolve_grid_extra_pins()
+    assert pins == gse.GRID_EXTRA_PINS_FALLBACK
+    assert provenance.source is gse.DependencySpecSource.STATIC_FALLBACK
+    assert provenance.status is gse.DependencyResolutionStatus.FALLBACK
 
 
 def test_split_requirement_handles_extras_and_garbage() -> None:
-    """The metadata parser's edge cases: an extras group, and an unparseable string."""
+    """The requirement parser's edge cases: an extras group, and an unparseable string."""
     assert gse._split_requirement("redis[hiredis]<6,>=5") == ("redis", "<6,>=5")
     assert gse._split_requirement("pandapower<4,>=3.5") == ("pandapower", "<4,>=3.5")
     assert gse._split_requirement("bare") == ("bare", "")
     assert gse._split_requirement("!!!") == (None, "")
 
 
-def test_grid_pins_degrade_to_the_fallback_when_metadata_raises(
+def test_grid_pins_degrade_to_the_fallback_when_resolution_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """CASPER: provenance lookup must never crash the report."""
+    """A lookup failure cannot masquerade as resolved lender provenance."""
     import app.ops.extras as ops_extras
 
     def boom(*_a: object, **_k: object) -> dict:
-        raise RuntimeError("metadata store unreadable")
+        raise RuntimeError("declaration unreadable")
 
-    monkeypatch.setattr(ops_extras, "declared_extras", boom)
-    assert gse._grid_extra_pins() == gse.GRID_EXTRA_PINS_FALLBACK
+    monkeypatch.setattr(ops_extras, "resolve_declared_extras", boom)
+    with pytest.raises(gse.GridDependencyProvenanceError) as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.source is gse.DependencySpecSource.UNKNOWN
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
 
 
-def test_grid_pins_skip_unparseable_requirements(
+def test_grid_pins_reject_unparseable_and_duplicate_requirements(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import app.ops.extras as ops_extras
 
-    monkeypatch.setattr(
-        ops_extras, "declared_extras", lambda *a, **k: {"grid": ("!!!", "andes>=2.0")}
+    for declarations in (
+        ("!!!", "andes>=2.0", "opendssdirect.py>=0.9.4"),
+        (123, "andes>=2.0", "opendssdirect.py>=0.9.4"),
+        ("pandapower>=3.5,<4", "PANDAPOWER>=3.5,<4", "andes>=2.0"),
+    ):
+        monkeypatch.setattr(
+            ops_extras,
+            "resolve_declared_extras",
+            lambda *a, _d=declarations, **k: ops_extras.ExtraDeclarations(
+                extras={"grid": _d}, spec_source="pyproject"
+            ),
+        )
+        with pytest.raises(gse.GridDependencyProvenanceError) as caught:
+            gse._resolve_grid_extra_pins()
+        assert (
+            caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
+        )
+
+
+def test_grid_pins_reject_hostile_declaration_only_dependency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An extra declaration cannot ride the lender pin table without fallback review."""
+    import app.ops.extras as ops_extras
+
+    declarations = (
+        "pandapower>=3.5,<4",
+        "andes>=2.0",
+        "opendssdirect.py>=0.9.4",
+        "declaration-only-payload>=1",
     )
-    assert gse._grid_extra_pins() == (("andes", ">=2.0"),)
+    monkeypatch.setattr(
+        ops_extras,
+        "resolve_declared_extras",
+        lambda *a, **k: ops_extras.ExtraDeclarations(
+            extras={"grid": declarations}, spec_source="pyproject"
+        ),
+    )
+    with pytest.raises(gse.GridDependencyProvenanceError) as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.PARTIAL
+    assert "declaration-only-payload" in str(caught.value)
+
+
+def test_grid_pins_reject_explicit_empty_declaration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An explicit empty [grid] is partial, not an absent-source fallback."""
+    import app.ops.extras as ops_extras
+
+    monkeypatch.setattr(
+        ops_extras,
+        "resolve_declared_extras",
+        lambda *a, **k: ops_extras.ExtraDeclarations(
+            extras={"grid": ()}, spec_source="pyproject"
+        ),
+    )
+    with pytest.raises(gse.GridDependencyProvenanceError) as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.source is gse.DependencySpecSource.PYPROJECT
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.PARTIAL
+
+
+@pytest.mark.parametrize(
+    "hostile_requirement,dimension",
+    [
+        ("pandapower[control]>=3.5,<4", "extras"),
+        ("pandapower>=3.5,<4; python_version >= '3.12'", "markers"),
+        ("pandapower @ https://example.invalid/pandapower.whl", "direct URL"),
+    ],
+)
+def test_grid_pins_reject_lossy_pep508_dimensions(
+    monkeypatch: pytest.MonkeyPatch,
+    hostile_requirement: str,
+    dimension: str,
+) -> None:
+    """Extras, markers and URLs cannot be stripped from surfaced provenance."""
+    import app.ops.extras as ops_extras
+
+    declarations = (
+        hostile_requirement,
+        "andes>=2.0",
+        "opendssdirect.py>=0.9.4",
+    )
+    monkeypatch.setattr(
+        ops_extras,
+        "resolve_declared_extras",
+        lambda *a, **k: ops_extras.ExtraDeclarations(
+            extras={"grid": declarations}, spec_source="pyproject"
+        ),
+    )
+    with pytest.raises(gse.GridDependencyProvenanceError) as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
+    assert dimension in str(caught.value)
+
+
+def test_grid_pin_resolution_observes_declarations_and_source_atomically(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A source changing after the first read cannot relabel the observed declaration."""
+    import app.ops.extras as ops_extras
+
+    pyproject_calls = 0
+    metadata_calls = 0
+    declarations = {
+        "grid": (
+            "pandapower>=3.5,<4",
+            "andes>=2.0",
+            "opendssdirect.py>=0.9.4",
+        )
+    }
+
+    def changing_pyproject(
+        _distribution: str,
+    ) -> tuple[Mapping[str, tuple[str, ...]] | None, str | None]:
+        nonlocal pyproject_calls
+        pyproject_calls += 1
+        return (declarations, None) if pyproject_calls == 1 else (None, None)
+
+    def hostile_metadata(
+        _distribution: str,
+    ) -> tuple[Mapping[str, tuple[str, ...]], str | None]:
+        nonlocal metadata_calls
+        metadata_calls += 1
+        return {"grid": ("substituted>=9",)}, None
+
+    monkeypatch.setattr(ops_extras, "_read_pyproject_extras", changing_pyproject)
+    monkeypatch.setattr(ops_extras, "_read_metadata_extras", hostile_metadata)
+    pins, provenance = gse._resolve_grid_extra_pins()
+    assert _parse_strict_pin_declarations(
+        tuple(f"{name}{spec}" for name, spec in pins)
+    ) == _parse_strict_pin_declarations(
+        tuple(f"{name}{spec}" for name, spec in gse.GRID_EXTRA_PINS_FALLBACK)
+    )
+    assert provenance.source is gse.DependencySpecSource.PYPROJECT
+    assert pyproject_calls == 1
+    assert metadata_calls == 0
+
+
+def test_pyproject_marker_survives_source_read_and_fails_lender_resolution(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The actual pyproject reader must not erase a marker before strict resolution."""
+    import app.ops.extras as ops_extras
+
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "dutchbay-epc-model"\n'
+        "[project.optional-dependencies]\ngrid = ["
+        "\"pandapower>=3.5,<4; python_version >= '3.12'\", "
+        '"andes>=2.0", "opendssdirect.py>=0.9.4"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", pyproject)
+
+    observation = ops_extras.resolve_declared_extras()
+    assert "; python_version" in observation.extras["grid"][0]
+    with pytest.raises(gse.GridDependencyProvenanceError, match="markers"):
+        gse._resolve_grid_extra_pins()
+
+
+def test_metadata_compound_marker_retains_complete_marker_and_fails_lender_resolution(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A compound selector is retained whole so association cannot erase semantics."""
+    import app.ops.extras as ops_extras
+
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", tmp_path / "missing.toml")
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda _distribution: [
+            'pandapower>=3.5,<4; python_version >= "3.12" and extra == "grid"',
+            'andes>=2.0; extra == "grid"',
+            'opendssdirect.py>=0.9.4; extra == "grid"',
+        ],
+    )
+
+    observation = ops_extras.resolve_declared_extras()
+    assert observation.spec_source == "metadata"
+    assert observation.extras["grid"][0].endswith(
+        '; python_version >= "3.12" and extra == "grid"'
+    )
+    with pytest.raises(gse.GridDependencyProvenanceError, match="markers"):
+        gse._resolve_grid_extra_pins()
+
+
+@pytest.mark.parametrize("toml_value", ["[]", '""', "0", "false"])
+def test_present_falsy_optional_dependencies_is_malformed_not_absent(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, toml_value: str
+) -> None:
+    """A present non-table value cannot be laundered into an absent declaration."""
+    import app.ops.extras as ops_extras
+
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "dutchbay-epc-model"\n'
+        f"optional-dependencies = {toml_value}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", pyproject)
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda _distribution: [
+            'pandapower>=3.5,<4; extra == "grid"',
+            'andes>=2.0; extra == "grid"',
+            'opendssdirect.py>=0.9.4; extra == "grid"',
+        ],
+    )
+
+    observation = ops_extras.resolve_declared_extras()
+    assert observation.spec_source == "metadata"
+    assert observation.resolution_error is not None
+    assert "optional-dependencies must be a table" in observation.resolution_error
+    with pytest.raises(gse.GridDependencyProvenanceError, match="degraded") as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
+
+
+@pytest.mark.parametrize(
+    "toml_name",
+    ["0", "false", "[]", '""', '"   "', '"bad name"', '"bad!name"'],
+    ids=[
+        "integer",
+        "boolean",
+        "array",
+        "empty",
+        "whitespace",
+        "embedded-space",
+        "invalid-punctuation",
+    ],
+)
+def test_invalid_governing_project_name_blocks_trusted_metadata_fallback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, toml_name: str
+) -> None:
+    """A present invalid project identity is malformed, not a foreign-project absence."""
+    import app.ops.extras as ops_extras
+
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        f"[project]\nname = {toml_name}\n"
+        '[project.optional-dependencies]\ngrid = ["hostile>=9"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", pyproject)
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda _distribution: [
+            'pandapower>=3.5,<4; extra == "grid"',
+            'andes>=2.0; extra == "grid"',
+            'opendssdirect.py>=0.9.4; extra == "grid"',
+        ],
+    )
+
+    observation = ops_extras.resolve_declared_extras()
+    assert observation.spec_source == "metadata"
+    assert observation.resolution_error is not None
+    assert "project.name must be a non-empty valid distribution-name string" in (
+        observation.resolution_error
+    )
+    with pytest.raises(gse.GridDependencyProvenanceError, match="degraded") as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
+
+
+def test_valid_foreign_project_name_is_absence_and_allows_metadata_resolution(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A standards-valid different project is ordinary source absence, not corruption."""
+    import app.ops.extras as ops_extras
+
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "somebody-elses-project"\n'
+        '[project.optional-dependencies]\ngrid = ["hostile>=9"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", pyproject)
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda _distribution: [
+            'pandapower>=3.5,<4; extra == "grid"',
+            'andes>=2.0; extra == "grid"',
+            'opendssdirect.py>=0.9.4; extra == "grid"',
+        ],
+    )
+
+    observation = ops_extras.resolve_declared_extras()
+    assert observation.spec_source == "metadata"
+    assert observation.resolution_error is None
+    assert all("hostile" not in item for item in observation.extras["grid"])
+    _pins, provenance = gse._resolve_grid_extra_pins()
+    assert provenance.source is gse.DependencySpecSource.METADATA
+    assert provenance.status is gse.DependencyResolutionStatus.RESOLVED
+
+
+def test_metadata_simple_parenthesized_equality_is_the_only_stripped_selector(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Packaging-normalized parentheses around one equality remain a safe association."""
+    import app.ops.extras as ops_extras
+
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", tmp_path / "missing.toml")
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda _distribution: [
+            'pandapower>=3.5,<4; (extra == "grid")',
+            'andes>=2.0; extra == "grid"',
+            'opendssdirect.py>=0.9.4; extra == "grid"',
+        ],
+    )
+
+    observation = ops_extras.resolve_declared_extras()
+    assert observation.spec_source == "metadata"
+    assert observation.resolution_error is None
+    assert observation.extras["grid"][0] == "pandapower>=3.5,<4"
+    _pins, provenance = gse._resolve_grid_extra_pins()
+    assert provenance.source is gse.DependencySpecSource.METADATA
+    assert provenance.status is gse.DependencyResolutionStatus.RESOLVED
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        'extra == "grid" and extra == "other"',
+        'extra == "grid" and extra == "grid"',
+        'extra == "grid" or extra == "other"',
+        '(extra == "grid" and python_version >= "3.12")',
+    ],
+    ids=[
+        "distinct-conjunction",
+        "repeated-selector",
+        "pure-disjunction",
+        "nested-compound",
+    ],
+)
+def test_metadata_compound_extra_associations_remain_complete_and_are_rejected(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, marker: str
+) -> None:
+    """No compound equality expression is simplified during metadata grouping."""
+    import app.ops.extras as ops_extras
+
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", tmp_path / "missing.toml")
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda _distribution: [
+            f"pandapower>=3.5,<4; {marker}",
+            'andes>=2.0; extra == "grid"',
+            'opendssdirect.py>=0.9.4; extra == "grid"',
+        ],
+    )
+
+    observation = ops_extras.resolve_declared_extras()
+    declaration = next(
+        item for item in observation.extras["grid"] if item.startswith("pandapower")
+    )
+    assert ";" in declaration
+    assert "extra" in declaration
+    with pytest.raises(gse.GridDependencyProvenanceError, match="markers") as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
+
+
+@pytest.mark.parametrize(
+    "marker",
+    ['extra in "grid"', 'extra not in "grid"', 'extra != "grid"'],
+    ids=["in", "not-in", "not-equal"],
+)
+def test_metadata_unsupported_extra_association_records_resolution_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, marker: str
+) -> None:
+    """An unsupported extra operator cannot disappear into an incomplete grid declaration."""
+    import app.ops.extras as ops_extras
+
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", tmp_path / "missing.toml")
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda _distribution: [
+            f"pandapower>=3.5,<4; {marker}",
+            'andes>=2.0; extra == "grid"',
+            'opendssdirect.py>=0.9.4; extra == "grid"',
+        ],
+    )
+
+    observation = ops_extras.resolve_declared_extras()
+    assert observation.spec_source == "metadata"
+    assert observation.resolution_error is not None
+    assert (
+        "unsupported metadata extra association marker" in observation.resolution_error
+    )
+    with pytest.raises(gse.GridDependencyProvenanceError, match="degraded") as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
+
+
+def test_malformed_pyproject_cannot_hide_behind_valid_metadata_for_lender_surface(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import app.ops.extras as ops_extras
+
+    malformed = tmp_path / "pyproject.toml"
+    malformed.write_text("not valid TOML ===\n", encoding="utf-8")
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", malformed)
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda _distribution: [
+            'pandapower>=3.5,<4; extra == "grid"',
+            'andes>=2.0; extra == "grid"',
+            'opendssdirect.py>=0.9.4; extra == "grid"',
+        ],
+    )
+
+    with pytest.raises(gse.GridDependencyProvenanceError, match="degraded") as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
+
+
+def test_realistic_other_extras_without_grid_uses_labelled_fallback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import app.ops.extras as ops_extras
+
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "dutchbay-epc-model"\n'
+        '[project.optional-dependencies]\nreport = ["jinja2>=3.1"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", pyproject)
+
+    pins, provenance = gse._resolve_grid_extra_pins()
+    assert pins == gse.GRID_EXTRA_PINS_FALLBACK
+    assert provenance.source is gse.DependencySpecSource.STATIC_FALLBACK
+    assert provenance.status is gse.DependencyResolutionStatus.FALLBACK
+
+
+def test_render_surfaces_dependency_source_and_status() -> None:
+    model = build_grid_screening_model(
+        _scenario(), scenario_variant="provenance", generated_at="2026-09-14T00:00:00Z"
+    )
+    html = render_grid_screening_html(model)
+    assert "Declaration source:" in html
+    assert f">{model.dependency_provenance.source.value}<" in html
+    assert f">{model.dependency_provenance.status.value}<" in html
+    assert model.dependency_provenance.detail in html
