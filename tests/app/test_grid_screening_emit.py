@@ -998,7 +998,11 @@ def test_grid_pin_resolution_observes_declarations_and_source_atomically(
     monkeypatch.setattr(ops_extras, "_read_pyproject_extras", changing_pyproject)
     monkeypatch.setattr(ops_extras, "_read_metadata_extras", hostile_metadata)
     pins, provenance = gse._resolve_grid_extra_pins()
-    assert pins == tuple(gse.GRID_EXTRA_PINS_FALLBACK)
+    assert _parse_strict_pin_declarations(
+        tuple(f"{name}{spec}" for name, spec in pins)
+    ) == _parse_strict_pin_declarations(
+        tuple(f"{name}{spec}" for name, spec in gse.GRID_EXTRA_PINS_FALLBACK)
+    )
     assert provenance.source is gse.DependencySpecSource.PYPROJECT
     assert pyproject_calls == 1
     assert metadata_calls == 0
