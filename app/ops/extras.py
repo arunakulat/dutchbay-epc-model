@@ -80,6 +80,7 @@ from types import MappingProxyType
 from typing import Iterable, Mapping, Optional
 
 from packaging.requirements import InvalidRequirement, Requirement
+from packaging.utils import InvalidName, canonicalize_name
 
 __all__ = [
     "DEFAULT_DISTRIBUTION",
@@ -124,13 +125,24 @@ _EXTRA_MARKER_RE = re.compile(r"""extra\s*==\s*['"]([^'"]+)['"]""")
 #: test can point the resolution at a different tree.
 GOVERNING_PYPROJECT = Path(__file__).resolve().parents[2] / "pyproject.toml"
 
-#: PEP 503 name normalization, so ``dutchbay_epc_model`` and ``dutchbay-epc-model`` compare equal.
-_NAME_SEPARATOR_RE = re.compile(r"[-_.]+")
-
 
 def _normalize_distribution(name: str) -> str:
     """Return ``name`` in PEP 503 normalized form."""
-    return _NAME_SEPARATOR_RE.sub("-", name).lower()
+    return str(canonicalize_name(name))
+
+
+def _validated_project_distribution(value: object) -> str:
+    """Validate and normalize a pyproject project name without coercing its type."""
+    if not isinstance(value, str):
+        raise TypeError(
+            "project.name must be a non-empty valid distribution-name string"
+        )
+    try:
+        return str(canonicalize_name(value, validate=True))
+    except InvalidName as exc:
+        raise ValueError(
+            "project.name must be a non-empty valid distribution-name string"
+        ) from exc
 
 
 def _read_pyproject_extras(
@@ -156,9 +168,8 @@ def _read_pyproject_extras(
         )
 
     try:
-        if _normalize_distribution(str(project["name"])) != _normalize_distribution(
-            distribution
-        ):
+        project_distribution = _validated_project_distribution(project["name"])
+        if project_distribution != _normalize_distribution(distribution):
             return None, None
         optional = (
             project["optional-dependencies"]

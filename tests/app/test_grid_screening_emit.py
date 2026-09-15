@@ -1085,6 +1085,85 @@ def test_present_falsy_optional_dependencies_is_malformed_not_absent(
     assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
 
 
+@pytest.mark.parametrize(
+    "toml_name",
+    ["0", "false", "[]", '""', '"   "', '"bad name"', '"bad!name"'],
+    ids=[
+        "integer",
+        "boolean",
+        "array",
+        "empty",
+        "whitespace",
+        "embedded-space",
+        "invalid-punctuation",
+    ],
+)
+def test_invalid_governing_project_name_blocks_trusted_metadata_fallback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, toml_name: str
+) -> None:
+    """A present invalid project identity is malformed, not a foreign-project absence."""
+    import app.ops.extras as ops_extras
+
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        f"[project]\nname = {toml_name}\n"
+        '[project.optional-dependencies]\ngrid = ["hostile>=9"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", pyproject)
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda _distribution: [
+            'pandapower>=3.5,<4; extra == "grid"',
+            'andes>=2.0; extra == "grid"',
+            'opendssdirect.py>=0.9.4; extra == "grid"',
+        ],
+    )
+
+    observation = ops_extras.resolve_declared_extras()
+    assert observation.spec_source == "metadata"
+    assert observation.resolution_error is not None
+    assert "project.name must be a non-empty valid distribution-name string" in (
+        observation.resolution_error
+    )
+    with pytest.raises(gse.GridDependencyProvenanceError, match="degraded") as caught:
+        gse._resolve_grid_extra_pins()
+    assert caught.value.provenance.status is gse.DependencyResolutionStatus.MALFORMED
+
+
+def test_valid_foreign_project_name_is_absence_and_allows_metadata_resolution(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A standards-valid different project is ordinary source absence, not corruption."""
+    import app.ops.extras as ops_extras
+
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[project]\nname = "somebody-elses-project"\n'
+        '[project.optional-dependencies]\ngrid = ["hostile>=9"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", pyproject)
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda _distribution: [
+            'pandapower>=3.5,<4; extra == "grid"',
+            'andes>=2.0; extra == "grid"',
+            'opendssdirect.py>=0.9.4; extra == "grid"',
+        ],
+    )
+
+    observation = ops_extras.resolve_declared_extras()
+    assert observation.spec_source == "metadata"
+    assert observation.resolution_error is None
+    assert all("hostile" not in item for item in observation.extras["grid"])
+    _pins, provenance = gse._resolve_grid_extra_pins()
+    assert provenance.source is gse.DependencySpecSource.METADATA
+    assert provenance.status is gse.DependencyResolutionStatus.RESOLVED
+
+
 def test_metadata_simple_parenthesized_equality_is_the_only_stripped_selector(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

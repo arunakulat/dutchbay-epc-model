@@ -41,10 +41,12 @@
   nested selectors remain complete on the declaration and therefore fail the strict lender
   resolver instead of being simplified. Unsupported `extra` operators produce a retained
   resolution diagnostic. A present-but-falsy non-table `project.optional-dependencies` value is
-  malformed, never equivalent to an absent declaration. The atomic observation is deeply immutable
-  and distinguishes a missing or foreign pyproject from present-but-malformed/unreadable input.
-  Health probes retain their degrade behavior, while the lender-facing resolver fails loudly on
-  that diagnostic.
+  malformed, never equivalent to an absent declaration. A present `project.name` is likewise
+  type-checked and validated as a distribution name before comparison; invalid identity blocks a
+  trusted metadata fallback, while a valid different project remains ordinary absence. The atomic
+  observation is deeply immutable and distinguishes a missing or foreign pyproject from
+  present-but-malformed/unreadable input. Health probes retain their degrade behavior, while the
+  lender-facing resolver fails loudly on that diagnostic.
 - Strengthen the fallback drift oracle: it parses the governing `pyproject.toml` directly with TOML
   and PEP 508 tooling, rejects duplicates and malformed declarations, and compares the complete
   bidirectional normalized name/specifier mapping. A hostile declaration-only dependency is a
