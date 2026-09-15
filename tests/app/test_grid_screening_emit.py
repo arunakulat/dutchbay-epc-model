@@ -871,7 +871,7 @@ def test_grid_pins_reject_unparseable_and_duplicate_requirements(
     for declarations in (
         ("!!!", "andes>=2.0", "opendssdirect.py>=0.9.4"),
         (123, "andes>=2.0", "opendssdirect.py>=0.9.4"),
-        ("pandapower>=3.5,<4", "Panda_Power>=3.5,<4", "andes>=2.0"),
+        ("pandapower>=3.5,<4", "PANDAPOWER>=3.5,<4", "andes>=2.0"),
     ):
         monkeypatch.setattr(
             ops_extras,
