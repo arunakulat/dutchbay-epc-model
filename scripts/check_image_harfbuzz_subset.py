@@ -81,13 +81,33 @@ PROBE_HTML = (
 
 
 def _fail(check: str, detail: str) -> NoReturn:
-    """Report a failed check on stderr and exit non-zero."""
+    """Report one failed check on stderr and end the process non-zero.
+
+    Args:
+        check: The check's name, as the passing line would have named it.
+        detail: What was observed and what it means for the image, in a form a
+            reviewer can act on without reading this file.
+
+    Raises:
+        SystemExit: Always, with code 1. The return type is ``NoReturn`` so the
+            caller's later use of a name bound in a guarded ``try`` stays sound.
+    """
     print(f"FAIL  {check}\n      {detail}", file=sys.stderr)
     sys.exit(1)
 
 
 def main() -> int:
-    """Run the four checks in order, loudest-failing first."""
+    """Run the four checks in order, cheapest and most diagnostic first.
+
+    Each check prints its own receipt, so a passing run records what was proved
+    rather than a bare exit code.
+
+    Returns:
+        ``0`` when the HarfBuzz-Subset path is live in this image.
+
+    Raises:
+        SystemExit: Code 1, via `_fail`, naming the first check that failed.
+    """
     # ── 1. The loader resolved the library, here, in this filesystem ────────────────
     try:
         from weasyprint.text.ffi import ffi, harfbuzz, harfbuzz_subset
@@ -143,7 +163,14 @@ def main() -> int:
     records: list[str] = []
 
     class _Capture(logging.Handler):
+        """Collect WeasyPrint's warnings so the render's log can be asserted on."""
+
         def emit(self, record: logging.LogRecord) -> None:
+            """Append one formatted record to the enclosing `records` list.
+
+            Args:
+                record: The log record WeasyPrint emitted.
+            """
             records.append(record.getMessage())
 
     # Glyph counts per Font.subset call. Font.subset returns early on an empty
@@ -153,6 +180,17 @@ def main() -> int:
     original_subset = Font.subset
 
     def _counting_subset(self, to_unicode, hinting):
+        """Record the glyph count, then delegate to the real `Font.subset`.
+
+        Args:
+            self: The `Font` being subset.
+            to_unicode: The glyph set the render wants kept; empty means
+                `Font.subset` returns without reaching the HarfBuzz gate.
+            hinting: Passed straight through.
+
+        Returns:
+            Whatever `Font.subset` returns (it returns ``None``).
+        """
         subset_glyphs.append(len(to_unicode or ()))
         return original_subset(self, to_unicode, hinting)
 
