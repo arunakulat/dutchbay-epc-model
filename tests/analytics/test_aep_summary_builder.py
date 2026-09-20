@@ -514,3 +514,42 @@ def test_regen_summary_is_loader_compatible(cfg: dict, tmp_path: Path) -> None:
     assert loaded["net_site_aep_gwh"] == pytest.approx(464.3, abs=0.5)
     assert loaded["power_curve_key"] == "iea_reference_10mw"
     assert "aep" in loaded["provenance"]
+
+
+# ── #1275: the IEC 61400-12-1 density pair is all-or-nothing ──────────────────
+#
+# The correction applied only when BOTH air_density_site_kgm3 and air_density_ref_kgm3
+# resolved; a half-declared pair fell through to factor 1.0 in silence. Dropping the ref
+# from the committed lender scenario moved net P50 464.4 -> 484.5 GWh (+4.33%) with no
+# error and no log line — the last silent KPI-moving default in this builder.
+
+
+def _strip_density(cfg: dict, *keys: str) -> dict:
+    """Remove density keys from BOTH places the builder resolves them from."""
+    out = copy.deepcopy(cfg)
+    for key in keys:
+        out["resource"]["power_curve"].pop(key, None)
+        out.get("wind_resource", {}).pop(key, None)
+    # the site density has a second fallback name under wind_resource
+    if "air_density_site_kgm3" in keys:
+        out.get("wind_resource", {}).pop("air_density_kgm3", None)
+    return out
+
+
+def test_half_declared_density_pair_fails_loud(cfg: dict) -> None:
+    missing_ref = _strip_density(cfg, "air_density_ref_kgm3")
+    with pytest.raises(ValueError, match="air_density_ref_kgm3"):
+        build_aep_summary_from_config(missing_ref)
+
+    missing_site = _strip_density(cfg, "air_density_site_kgm3")
+    with pytest.raises(ValueError, match="air_density_site_kgm3"):
+        build_aep_summary_from_config(missing_site)
+
+
+def test_no_density_pair_still_regenerates_uncorrected(cfg: dict) -> None:
+    """Neither declared stays legal — the documented pre-10MW back-compat path."""
+    neither = _strip_density(cfg, "air_density_site_kgm3", "air_density_ref_kgm3")
+    summary = build_aep_summary_from_config(neither)
+    corrected = build_aep_summary_from_config(cfg)
+    # No correction => a larger gross than the density-corrected canonical basis.
+    assert summary["gross_aep_gwh"] > corrected["gross_aep_gwh"]
