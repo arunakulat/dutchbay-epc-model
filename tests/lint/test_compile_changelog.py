@@ -103,3 +103,54 @@ def test_repo_changelog_has_unreleased_anchor() -> None:
         encoding="utf-8"
     )
     assert CL.UNRELEASED in text
+
+
+def test_validate_body_accepts_bullets_and_continuations() -> None:
+    # The shape the README documents: bullets, with two-space continuation lines, and
+    # flush-left prose paragraphs as many existing fragments already carry.
+    CL.validate_body(
+        "ok.fixed.md",
+        [
+            "- a bullet with **bold** and `code`",
+            "  a two-space continuation line",
+            "- a second bullet mentioning a C# library and a col#umn",
+            "Flush-left prose, which the corpus uses and the compiler folds as-is.",
+        ],
+    )
+
+
+@pytest.mark.parametrize("hashes", ["#", "##", "###", "####", "#####", "######"])
+def test_validate_body_rejects_every_heading_level(hashes: str) -> None:
+    # Negative control (VERIFY-01): the guard is observed to fire at every heading
+    # depth, not only the '##' that truncates the [Unreleased] window.
+    with pytest.raises(ValueError, match="bullets only"):
+        CL.validate_body("bad.fixed.md", ["- fine", f"{hashes} Added"])
+
+
+def test_collect_fails_closed_on_a_heading_fragment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Guard-the-guard: prove the validator is actually WIRED into the fold path, so a
+    # real compile refuses the fragment instead of corrupting CHANGELOG.md.
+    (tmp_path / "900-good.added.md").write_text("- a clean bullet\n", encoding="utf-8")
+    monkeypatch.setattr(CL, "FRAG_DIR", tmp_path)
+    assert CL._collect() == {"added": ["- a clean bullet"]}
+
+    (tmp_path / "901-bad.fixed.md").write_text(
+        "## Fixed\n\n- a bullet under a stray heading\n", encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="901-bad.fixed.md"):
+        CL._collect()
+
+
+def test_every_repo_fragment_body_is_heading_free() -> None:
+    # The live gate: no pending fragment may carry a heading. A fragment that does
+    # folds it into [Unreleased] verbatim, where '##' truncates the window that every
+    # later compile inserts into (observed on main before #1275).
+    checked = 0
+    for frag in CL.fragments():
+        body = frag.read_text(encoding="utf-8").strip("\n")
+        CL.validate_body(frag.name, [ln for ln in body.split("\n") if ln.strip()])
+        checked += 1
+    # Guard-the-guard: an empty or mis-globbed changelog.d must not pass vacuously.
+    assert checked > 0, "no fragments were scanned - the shape check is inert"
