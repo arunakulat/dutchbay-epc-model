@@ -112,6 +112,99 @@ def validate_curve_selection(
     }
 
 
+def _validated_number(
+    raw: Any,
+    *,
+    key: str,
+    low: float,
+    high: float,
+    high_inclusive: bool = True,
+    hint: str,
+) -> float:
+    """Return ``raw`` as a float inside its declared band, or fail loud (#1275).
+
+    Mirrors :func:`_resolve_wake_ti`: a KPI-moving config knob is either a real number in
+    range or a config error. ``bool`` is rejected explicitly because it is an ``int``
+    subclass, so ``correlation: true`` would otherwise read as ``1.0``.
+
+    Raises:
+        ValueError: If ``raw`` is not a number, or lies outside the band.
+    """
+    band = f"[{low}, {high}]" if high_inclusive else f"[{low}, {high})"
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        raise ValueError(
+            f"resource.uncertainty.{key} must be a number in {band} (got {raw!r}); {hint}."
+        )
+    value = float(raw)
+    in_band = low <= value <= high if high_inclusive else low <= value < high
+    if not in_band:
+        raise ValueError(
+            f"resource.uncertainty.{key} must be in {band} (got {value!r}); {hint}."
+        )
+    return value
+
+
+def _validated_life_years(raw: Any) -> int:
+    """Return the project life in whole years, or fail loud (#1275).
+
+    ``life_years`` divides the interannual sigma as ``sigma/sqrt(life_years)``, so a zero
+    or negative value silently became 1.0 inside
+    :meth:`~wind_resource.bankable_aep.UncertaintyBudget.combined_sigma_pct` and moved the
+    project-life P90 without a word.
+
+    Raises:
+        ValueError: If ``raw`` is not a positive whole number of years.
+    """
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        raise ValueError(
+            "resource.uncertainty.life_years must be a positive whole number of years "
+            f"(got {raw!r}); it divides the interannual sigma as sigma/sqrt(life_years)."
+        )
+    if raw < 1:
+        raise ValueError(
+            "resource.uncertainty.life_years must be >= 1 "
+            f"(got {raw}); it divides the interannual sigma as sigma/sqrt(life_years)."
+        )
+    return int(raw)
+
+
+def _resolve_density_factor(rho_site: Any, rho_ref: Any) -> float:
+    """Resolve the IEC 61400-12-1 velocity-cube density factor, fail-loud on a half pair (#1275).
+
+    Three cases, and only the first two are legitimate:
+
+    - **Both declared** — the correction applies (the canonical lender basis).
+    - **Neither declared** — no correction, preserving the documented pre-10MW scenarios.
+      Logged, so a regeneration never quietly runs uncorrected.
+    - **Exactly one declared** — a config error. Previously this fell through to the
+      no-correction branch silently: dropping ``air_density_ref_kgm3`` from the lender
+      scenario while keeping the site value moved net P50 464.4 -> 484.5 GWh (+4.33%) with
+      no error and no log line.
+
+    Raises:
+        ValueError: If exactly one of the two densities is declared.
+    """
+    if rho_site is not None and rho_ref is not None:
+        return density_velocity_factor(float(rho_site), float(rho_ref))
+    if rho_site is None and rho_ref is None:
+        logger.info(
+            "AEP summary: no air-density pair declared (resource.power_curve."
+            "air_density_site_kgm3/air_density_ref_kgm3); the IEC 61400-12-1 velocity-cube "
+            "correction is NOT applied. Declare both to correct the curve to site density."
+        )
+        return 1.0
+    declared, missing = (
+        ("air_density_site_kgm3", "air_density_ref_kgm3")
+        if rho_site is not None
+        else ("air_density_ref_kgm3", "air_density_site_kgm3")
+    )
+    raise ValueError(
+        f"resource.power_curve.{declared} is declared but {missing} is not. The IEC "
+        "61400-12-1 density correction needs BOTH, and silently skipping it moves the "
+        "headline AEP by several percent — declare the pair, or neither."
+    )
+
+
 def _uncertainty_from_config(
     resource: Mapping[str, Any],
 ) -> "tuple[UncertaintyBudget, float, float, int]":
@@ -125,6 +218,14 @@ def _uncertainty_from_config(
     optimism rather than assuming a naive 0%. A scenario that has its own EYA sets an explicit
     value (the DutchBay lender case: 2.0%, EN220-corroborated), which overrides the default. This
     is a policy default at config-consumption; the ``exceedance_levels`` kernel stays 0.0-identity.
+
+    CESSPIT-strict on the three policy knobs (#1275): each is range-validated here and fails
+    loud, because each MOVES a lender-facing exceedance number and none of them was checked
+    before — ``budget_from_mapping`` gates the sigma key NAMES, never the policy knobs' VALUES.
+    Validating at this layer (rather than in the kernels) also keeps the summary's reported
+    ``uncertainty`` block equal to what the maths actually used: ``correlation`` was previously
+    echoed into provenance RAW while :meth:`UncertaintyBudget.systematic_sigma_pct` silently
+    clamped it, so a summary could record an input that was never applied.
     """
     unc: Dict[str, Any] = dict(resource.get("uncertainty", {}) or {})
     # Sigma parsing is shared with the timeseries diagnostic path (#618):
@@ -132,7 +233,17 @@ def _uncertainty_from_config(
     # drift on key names/defaults. The haircut POLICY below stays at this layer.
     budget = budget_from_mapping(unc)
     if "p50_haircut_pct" in unc:
-        haircut_pct = float(unc["p50_haircut_pct"])
+        haircut_pct = _validated_number(
+            unc["p50_haircut_pct"],
+            key="p50_haircut_pct",
+            low=0.0,
+            high=100.0,
+            high_inclusive=False,
+            hint=(
+                "a pre-construction P50 over-prediction haircut is a REDUCTION in percent "
+                "(e.g. 2.0); a negative value would inflate the bankable P50"
+            ),
+        )
     else:
         # Silent-default observability (CESSPIT): a scenario that omits the knob gets the
         # recommended no-EYA default — surface it so a regeneration is never quietly haircut.
@@ -142,8 +253,21 @@ def _uncertainty_from_config(
             "%.1f%% pre-construction P50 over-prediction default (WES 2026). Set it explicitly to override.",
             haircut_pct,
         )
-    correlation = float(unc.get("correlation", 0.0))
-    life_years = int(unc.get("life_years", 20))
+    correlation = (
+        _validated_number(
+            unc["correlation"],
+            key="correlation",
+            low=0.0,
+            high=1.0,
+            hint=(
+                "a uniform inter-category correlation rho is a fraction in [0, 1] "
+                "(0 = the IEC RSS baseline, 1 = fully correlated)"
+            ),
+        )
+        if "correlation" in unc
+        else 0.0
+    )
+    life_years = _validated_life_years(unc["life_years"]) if "life_years" in unc else 20
     return budget, haircut_pct, correlation, life_years
 
 
@@ -444,8 +568,9 @@ def build_aep_summary_from_config(config: Mapping[str, Any]) -> Dict[str, Any]:
     # velocity-cube air-density correction so the regen reproduces the canonical
     # bankable basis. Dividing the curve's wind-speed axis by the velocity factor
     # is equivalent to the bankable engine's density shift (thinner air -> higher
-    # speed needed per power level). Falls back to no correction when the density
-    # fields are absent, preserving pre-10MW scenarios.
+    # speed needed per power level). Falls back to no correction when BOTH density
+    # fields are absent, preserving pre-10MW scenarios; a half-declared pair is a
+    # config error rather than a silent skip (#1275, see _resolve_density_factor).
     curve = parse_power_curve(
         selection["curve_key"], air_density_kgm3=IEC_REFERENCE_AIR_DENSITY_KGM3
     )
@@ -455,11 +580,7 @@ def build_aep_summary_from_config(config: Mapping[str, Any]) -> Dict[str, Any]:
     rho_ref = power_curve_cfg.get(
         "air_density_ref_kgm3", wind.get("air_density_ref_kgm3")
     )
-    density_factor = (
-        density_velocity_factor(float(rho_site), float(rho_ref))
-        if rho_site is not None and rho_ref is not None
-        else 1.0
-    )
+    density_factor = _resolve_density_factor(rho_site, rho_ref)
     gross_gwh = gross_aep_farm_gwh(
         weibull_a,
         weibull_k,
