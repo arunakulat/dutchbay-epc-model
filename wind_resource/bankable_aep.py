@@ -18,6 +18,21 @@ DFI/lender assessment:
    both emitted.
 
 All inputs are config-driven (GWTF ARCH-01). No finance logic lives here.
+
+WHICH PARTS OF THIS MODULE THE LENDER PATH ACTUALLY CALLS (#1281)
+-----------------------------------------------------------------
+The committed headline is assembled by
+:func:`analytics.wind.aep_summary_builder.build_aep_summary_from_config`, which calls
+(1) :func:`density_velocity_factor`, (3) :func:`model_wake_loss` and (4)
+:func:`exceedance_levels` / :class:`UncertaintyBudget` from here — but takes (2) gross
+AEP from :func:`analytics.wind.aep_tornado.gross_aep_farm_gwh`, not from
+:func:`gross_aep_weibull` below. That is deliberate: keeping a second, independently
+written integrator OUT of the production path is what lets it serve as an oracle for
+the one that is in it (``TEST-01``), and the two are pinned to agree by
+``tests/analytics/test_gross_aep_integrator_parity.py``.
+
+Stated here because the module's name otherwise implies the whole chain runs from this
+file, and a reviewer looking for the live gross-AEP maths would read dead code.
 """
 
 from __future__ import annotations
@@ -106,6 +121,22 @@ def gross_aep_weibull(
 
     The curve is optionally air-density corrected (IEC 61400-12-1 v-shift) when
     ``rho_site_kgm3`` is given.
+
+    NOT THE PRODUCTION INTEGRATOR (#1281). Despite this module's name, the gross AEP
+    behind the committed headline is computed by
+    :func:`analytics.wind.aep_tornado.gross_aep_farm_gwh`, which
+    :func:`analytics.wind.aep_summary_builder.build_aep_summary_from_config` calls; this
+    function has no production caller. It is retained deliberately, as an independently
+    written second implementation that the lender path can be checked against — an
+    oracle in the ``TEST-01`` sense, which it could not be if the production path used it.
+
+    The two differ in two documented ways: cut-out is EXPLICIT here (power zeroed outside
+    ``[cut_in_ms, cut_out_ms]``) and implicit there (``np.interp(..., right=0.0)``, so the
+    supplied curve must encode its own cut-out), and the quadrature grids differ (a
+    3,000-point ``linspace`` here, a 0.05 m/s ``arange`` there). They agree to well within
+    0.1% on every curve in the store — verified by
+    ``tests/analytics/test_gross_aep_integrator_parity.py``, which pins the tolerance rather
+    than leaving the agreement as a docstring assertion.
     """
     ws = np.asarray(wind_speed_ms, dtype=float)
     pw = np.asarray(power_kw, dtype=float)
