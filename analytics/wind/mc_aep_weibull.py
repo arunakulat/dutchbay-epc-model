@@ -12,8 +12,12 @@ of years — i.e. the 10th percentile of the distribution (conservative).
 Method note: each Monte-Carlo draw is a plausible annual Weibull resource
 ``(A_i, k_i)``; its AEP is computed analytically via the OEM curve
 (:func:`analytics.wind.aep_tornado.gross_aep_farm_gwh`), so the base case is
-method-consistent with the canonical ~402.6 GWh, and the spread reflects
-resource uncertainty (not Monte-Carlo sampling noise).
+method-consistent with the headline AEP for whatever curve and scenario it is given,
+and the spread reflects resource uncertainty (not Monte-Carlo sampling noise). The
+committed lender headline is the bankable net P50 **464.3 GWh** (15 x IEA-10MW,
+ERA5-fitted Weibull, post the 2.0% pre-construction haircut); the ~402.6 GWh this note
+used to name is the superseded 23 x EN-171/6.5 base on the declared Weibull, retained
+only as a characterization/sensitivity machine (#1277).
 
 Context:
     Sprint 10 - Issue #24 (Monte Carlo AEP from ECMWF-derived Weibull).
