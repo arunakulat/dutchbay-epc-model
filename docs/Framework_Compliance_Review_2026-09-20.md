@@ -83,9 +83,19 @@ the repo give conflicting expansions.
 - `VERIFY-01` is followed unusually well. All seven carry a receipts table with real commands and
   real output, and — the part that usually slips — explicit `not run — <reason>` rows. #1274
   declares that the full suite could not run locally and names CI as the substitute; #1272 and
-  #1273 declare that lint/format/type checks were skipped because no Python changed. Note the
-  automated gate does **not** force this: `claude[bot]` is an exempt author inside
-  `scripts/ci/check_pr_receipts.py`, so the receipts are voluntary, not gate-driven.
+  #1273 declare that lint/format/type checks were skipped because no Python changed. The gate
+  enforces this rather than merely inviting it: `EXEMPT_AUTHORS` in
+  `scripts/ci/check_pr_receipts.py` is `{dependabot, github-actions, copilot, renovate}` and
+  **does not include `claude[bot]`**, so every pull request reviewed here had to satisfy it. The
+  checker also rejects a Result cell of `none`, `n/a`, `tbd`, `-` or the template's own worked
+  example, so a row cannot be closed with a word that says nothing.
+
+  *Corrected 2026-09-20, after filing.* An earlier draft of this review stated the opposite — that
+  `claude[bot]` was exempt and the receipts were voluntary. That was wrong. It was disproved by
+  this record's own pull request (#1285), where the gate failed a `claude[bot]`-authored PR for a
+  Result cell reading `none`. The error is recorded rather than quietly overwritten, because a
+  compliance review asserting a gate is weaker than it is would licence exactly the silence
+  `VERIFY-01` exists to prevent.
 - `VERIFY-01` clause 5 (new guard ships with its negative control) is met where it applies. #1274
   records the script failing with the library uninstalled (`FAIL harfbuzz_subset is not None`,
   exit 1) and a separate check that check 4 is not vacuous. #1276 ships rejection tests per knob.
