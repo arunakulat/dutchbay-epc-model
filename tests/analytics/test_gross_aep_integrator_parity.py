@@ -109,6 +109,6 @@ def test_parity_holds_across_the_resource_range() -> None:
                 n_turbines=N_TURBINES,
             ).aep_gwh_farm
             drift_pct = 100.0 * abs(cross_check - production) / production
-            assert drift_pct < PARITY_TOLERANCE_PCT, (
-                f"A={weibull_a}, k={weibull_k}: integrators disagree by {drift_pct:.4f}%"
-            )
+            assert (
+                drift_pct < PARITY_TOLERANCE_PCT
+            ), f"A={weibull_a}, k={weibull_k}: integrators disagree by {drift_pct:.4f}%"
