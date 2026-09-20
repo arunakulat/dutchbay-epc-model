@@ -228,6 +228,6 @@ def test_every_committed_scenario_still_passes_the_new_guards() -> None:
         assert 0.0 <= unc["correlation"] <= 1.0
         assert unc["life_years"] >= 1
         built += 1
-    assert built >= 4, (
-        f"expected the committed bankable scenarios to regenerate, got {built}"
-    )
+    assert (
+        built >= 4
+    ), f"expected the committed bankable scenarios to regenerate, got {built}"
