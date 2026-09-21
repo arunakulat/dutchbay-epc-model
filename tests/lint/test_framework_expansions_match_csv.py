@@ -38,7 +38,8 @@ carries a third invented triple, and `analytics/sensitivity/REORGANIZATION.md` c
 same one as the already-exempt Sprint 16 completion report.
 
 `changelog.d/` and `CHANGELOG.md` are exempt for a different reason: an entry recording
-that an expansion was removed has to name the expansion.
+that an expansion was removed has to name the expansion. This module exempts ITSELF for the
+same reason -- see `SELF` below.
 """
 
 from __future__ import annotations
@@ -52,6 +53,11 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CANONICAL_RULESET = REPO_ROOT / "go_with_the_flow_rules_v3_0_clean.csv"
+
+# This module scans itself out. It is the one file that MUST contain the wrong expansions:
+# `RETIRED_EXPANSIONS` is a denylist of them, and every control below plants one to watch a
+# guard fire. Scanning it would make the guard fail on its own evidence.
+SELF = Path(__file__).resolve().relative_to(REPO_ROOT).as_posix()
 
 FRAMEWORK_ACRONYMS = ("CASPER", "CESSPIT", "CCCDIR")
 
@@ -151,6 +157,10 @@ def _tokens(
     text: str, splitter: re.Pattern[str], *, drop_connectors: bool
 ) -> list[str]:
     """Split `text` into comparable lowercase words, discarding anything unalphabetic."""
+    # `\n` and `\t` here are the two-character escapes as they appear in a Python source
+    # line, not real whitespace: this scans files as text, so a string literal's trailing
+    # escape would otherwise ride along on the last word of a phrase.
+    text = text.replace("\\n", " ").replace("\\t", " ")
     words = [w.strip("*_`'\".,:;!?()[]“”‘’").casefold() for w in splitter.split(text)]
     words = [w for w in words if w and w[0].isalpha()]
     if drop_connectors:
@@ -203,7 +213,7 @@ def _scannable_files() -> list[str]:
     return [
         p
         for p in _tracked_text_files()
-        if p not in DATED_RECORDS and not p.startswith(_CHANGE_RECORDS)
+        if p != SELF and p not in DATED_RECORDS and not p.startswith(_CHANGE_RECORDS)
     ]
 
 
@@ -214,6 +224,24 @@ def test_dated_record_exemptions_all_exist() -> None:
         "DATED_RECORDS lists paths that no longer exist; remove them so the "
         f"exemption cannot silently cover a different file later: {missing}"
     )
+
+
+def test_the_guard_scans_itself_out() -> None:
+    """The self-exemption has to hold, and has to be the only file exempted implicitly.
+
+    Found by CI rather than by reasoning: the first push of this guard failed on its own
+    source, because `git ls-files` starts listing a file the moment it is staged, and the
+    local runs that had passed were made while it was still untracked. Everything else is
+    exempted by an explicit path a reader can audit.
+    """
+    scannable = _scannable_files()
+    assert SELF not in scannable
+    assert (
+        SELF in _tracked_text_files()
+    ), "the guard must be tracked, or it scans nothing"
+    assert any(
+        p.startswith("tests/lint/") for p in scannable
+    ), "other lint modules must still be scanned; only this one is exempt"
 
 
 def test_the_three_acronyms_are_peer_rows() -> None:
@@ -455,7 +483,11 @@ def test_initials_guard_accepts_the_canonical_wording(
         "### CASPER - Clear API Surfaces with Predictable Error Responses\n"
         "### CESSPIT: Config Explicit, Schema Strict, Pre-flight Integrity Tests\n"
         "### CCCDIR (Contracts Centralized, Compliance Documented, "
-        "Import Relationships explicit)\n",
+        "Import Relationships explicit)\n"
+        # The same wording as it appears inside a Python string literal, trailing escape
+        # and all. This is the shape that failed CI on the first push of this guard.
+        '        "### CASPER - Clear API Surfaces with Predictable Error '
+        'Responses\\n"\n',
         encoding="utf-8",
     )
 
