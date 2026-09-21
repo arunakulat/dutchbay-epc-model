@@ -524,7 +524,9 @@ Before merging code that touches discount rates:
 - **IRR/NPV Core**: [`finance/irr.py`](../../finance/irr.py)
 - **Returns Analytics**: [`analytics/core/returns.py`](../../analytics/core/returns.py)
 - **Config Schema**: [`docs/CONFIG_SCHEMA.md`](../CONFIG_SCHEMA.md)
-- **CCCDIR Principle**: Configuration in Config DIRectory (no hardcoded defaults)
+- **No hardcoded defaults**: `ARCH-01` (config-first architecture) and `FRAMEWORK-02`
+  CESSPIT (config explicit, no silent defaults for FX, tax or debt terms)
+- **Canonical ruleset**: [`go_with_the_flow_rules_v3_0_clean.csv`](../../go_with_the_flow_rules_v3_0_clean.csv)
 
 ---
 
