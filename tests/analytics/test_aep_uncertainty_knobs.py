@@ -138,3 +138,96 @@ def test_builder_correlation_widens_uncertainty() -> None:
     assert summary["net_site_aep_gwh"] == pytest.approx(473.8, abs=0.5)  # P50 unchanged
     assert summary["exceedance"]["sigma_1yr_pct"] > 10.07  # wider than RSS baseline
     assert summary["exceedance"]["net_aep_p90_1yr_gwh"] < 412.7
+
+
+# --- #1275: the policy knobs are range-validated at the config layer -----------------
+#
+# Before this guard each knob was read with a bare ``float()``/``int()`` and applied:
+#   - p50_haircut_pct = -10.0 inflated the bankable P50 464.4 -> 521.2 GWh (+12.2%);
+#   - correlation = 5.0 was silently clamped to rho=1.0 inside systematic_sigma_pct,
+#     dropping P90-life 409.1 -> 333.3 GWh, while the summary echoed the RAW 5.0 into
+#     provenance — recording an input the maths never used;
+#   - life_years = 0 silently became 1.0 inside combined_sigma_pct.
+# The sibling knob resource.wake.turbulence_intensity has failed loud on exactly this
+# class of input since #832; these three had no check at all.
+
+
+@pytest.mark.parametrize("bad", [-10.0, -0.1, 100.0, 150.0, "2.0", True, None])
+def test_builder_rejects_out_of_band_haircut(bad: object) -> None:
+    cfg = copy.deepcopy(dict(load_scenario_config(LENDER)))
+    cfg["resource"]["uncertainty"] = {"p50_haircut_pct": bad}
+    with pytest.raises(ValueError, match="p50_haircut_pct"):
+        build_aep_summary_from_config(cfg)
+
+
+@pytest.mark.parametrize("bad", [-3.0, -0.001, 1.0001, 5.0, "0.5", True, None])
+def test_builder_rejects_out_of_band_correlation(bad: object) -> None:
+    cfg = copy.deepcopy(dict(load_scenario_config(LENDER)))
+    cfg["resource"]["uncertainty"] = {"correlation": bad, "p50_haircut_pct": 0.0}
+    with pytest.raises(ValueError, match="correlation"):
+        build_aep_summary_from_config(cfg)
+
+
+@pytest.mark.parametrize("bad", [0, -1, 20.5, "20", True, None])
+def test_builder_rejects_non_positive_life_years(bad: object) -> None:
+    cfg = copy.deepcopy(dict(load_scenario_config(LENDER)))
+    cfg["resource"]["uncertainty"] = {"life_years": bad, "p50_haircut_pct": 0.0}
+    with pytest.raises(ValueError, match="life_years"):
+        build_aep_summary_from_config(cfg)
+
+
+@pytest.mark.parametrize("good", [0.0, 0.5, 1.0])
+def test_builder_accepts_the_full_correlation_band(good: float) -> None:
+    """The band ENDS are valid: rho=0 is the IEC RSS baseline, rho=1 the linear sum."""
+    cfg = copy.deepcopy(dict(load_scenario_config(LENDER)))
+    cfg["resource"]["uncertainty"] = {"correlation": good, "p50_haircut_pct": 0.0}
+    summary = build_aep_summary_from_config(cfg)
+    assert summary["uncertainty"]["correlation"] == good
+
+
+def test_reported_correlation_is_the_one_applied() -> None:
+    """Provenance integrity: the summary's correlation is what sigma was computed at.
+
+    rho=1.0 is the boundary the old silent clamp mapped every over-range value onto, so a
+    summary reporting 1.0 must carry the linear-sum sigma, not the RSS baseline.
+    """
+    cfg = copy.deepcopy(dict(load_scenario_config(LENDER)))
+    cfg["resource"]["uncertainty"] = {"correlation": 1.0, "p50_haircut_pct": 0.0}
+    summary = build_aep_summary_from_config(cfg)
+    budget = UncertaintyBudget()
+    applied = summary["uncertainty"]["correlation"]
+    assert summary["exceedance"]["sigma_1yr_pct"] == pytest.approx(
+        budget.combined_sigma_pct(1.0, applied), abs=0.01
+    )
+
+
+def test_every_committed_scenario_still_passes_the_new_guards() -> None:
+    """Independent oracle (TEST-01): the guards must reject nothing already committed.
+
+    The scenarios and their frozen AEP summaries predate this change; if a new range check
+    were wrong, a committed scenario would stop building. Sweeping them is what establishes
+    that #1275 adds refusals only outside the space the project actually uses.
+    """
+    # `example_fx_structured_blocks.yaml` is a multi-document YAML illustration, not a
+    # scenario, and does not load as one. Named explicitly so a scenario that BECOMES
+    # unloadable fails here instead of being skipped in silence.
+    not_a_scenario = {"example_fx_structured_blocks.yaml"}
+    scenarios = sorted((REPO_ROOT / "scenarios").glob("*.yaml"))
+    assert scenarios, "no committed scenarios found"
+    built = 0
+    for path in scenarios:
+        if path.name in not_a_scenario:
+            continue
+        cfg = dict(load_scenario_config(str(path)))
+        resource = cfg.get("resource") or {}
+        if not (resource.get("power_curve") or {}).get("curve_key"):
+            continue  # not an AEP-regenerating scenario
+        summary = build_aep_summary_from_config(cfg)
+        unc = summary["uncertainty"]
+        assert 0.0 <= unc["p50_haircut_pct"] < 100.0
+        assert 0.0 <= unc["correlation"] <= 1.0
+        assert unc["life_years"] >= 1
+        built += 1
+    assert (
+        built >= 4
+    ), f"expected the committed bankable scenarios to regenerate, got {built}"
