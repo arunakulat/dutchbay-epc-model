@@ -212,8 +212,11 @@ be enumerated or softened. The table above is reconstructed from the manifest's 
 sharded suite skips any PR whose diff is only `*.md`, `changelog.d/` and `docs/`, which a corpus
 edit easily is — and it fails loudly on: a recorded entry that is absent or hash-mismatched; a
 **tracked file absent from the manifest**, the direction `sha256sum -c` is structurally blind to; a
-stale parent pin; a nested manifest nobody classified; a referrer that has stopped citing the
-handling note; and clause 6 of the offers quoted outside its single home. What it cannot judge is
+stale parent pin; a nested manifest nobody classified; **a corpus area carrying no manifest at
+all**; a referrer that has stopped citing the handling note; and a restricted clause quoted outside
+its single home. It derives its coverage from the tree — every immediate child of
+`docs/source_materials` holding tracked files is a corpus area — so a **new** corpus area is
+checked from its first commit and nobody has to remember to enlist it. What it cannot judge is
 **whether a new disclosure should have been made at all** — item 2 below is still yours.
 
 **1. A nested manifest's parent pin goes stale the moment you edit the child.**
