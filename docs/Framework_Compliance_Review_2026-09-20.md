@@ -208,7 +208,7 @@ and with each other:
 | Source | CESSPIT | CASPER | CCCDIR |
 |---|---|---|---|
 | **`go_with_the_flow_rules_v3_0_clean.csv`** (canonical, test-pinned) | Config Explicit, Schema Strict, Pre-flight Integrity Tests | Clear API Surfaces with Predictable Error Responses | Contracts Centralized, Compliance Documented, Import Relationships explicit |
-| `.github/SPRINT_WORKFLOW_CHECKLIST.md` | "Core-Easy-Simple" (as sub-item **C3 of CCCDIR**) | "Clean Architecture" / "Clean separation" (as **C2 of CCCDIR**) | treated as the parent framework |
+| `.github/SPRINT_WORKFLOW_CHECKLIST.md` — **fixed since, see below** | "Core-Easy-Simple" (as sub-item **C3 of CCCDIR**) | "Clean Architecture" / "Clean separation" (as **C2 of CCCDIR**) | treated as the parent framework |
 | `docs/AUDIT_CASHFLOW_V14_FINAL.md` | Correct, Efficient, Structured, Snappy, Proactive, Immutable, Testable | Contract-first, Audit-safe, Service-oriented, Pure, Extensible, Resilient | Config-driven, Clear, Consistent, Defensive, Immutable, Reproducible |
 | `docs/SPRINT_16_REORGANIZATION_COMPLETE.md` | "Comprehensive Error Handling" | "Contract-First Design" | "Clear, Complete, Consistent Documentation" |
 | `Full Dolphin Rules` — **in the DutchBay_RAG repo root** | Config-Enforced Schema Safety Pipeline Integration Triad | **Capital Analytics, Sensitivity, Portfolio Evaluation Rigor** | Config-Centric Contract-Driven Integration Rules |
@@ -221,6 +221,21 @@ wrong definitions.
 
 This is pre-existing, not introduced today. #1274 independently spotted the same contradiction and
 raised it in its own PR body rather than papering over it. Worth a small PR of its own.
+
+> **Partly fixed before this record landed (21 September 2026).** Two pull requests closed part of
+> this finding while this review was in flight. **#1283** rewrote
+> `.github/SPRINT_WORKFLOW_CHECKLIST.md`: it now states that `CASPER`, `CESSPIT` and `CCCDIR` are
+> "three peer rules, not parts of one another", gives the canonical expansions, and cites
+> `FRAMEWORK-01/02/03` by rule id throughout. **#1286** re-filed five live-guidance files
+> (`analytics/contracts/README.md`, `docs/DEBT_NAMING_CONVENTIONS_v14.md`,
+> `docs/FX_FLAG_TRACKING_GUIDELINES.md`, `docs/policy/discount_rate_policy.md`,
+> `finance/FINANCE_REORGANIZATION.md`) onto the real rules.
+>
+> **Still outstanding at the time of filing**, verified against `main` at `57d2842`:
+> `docs/AUDIT_CASHFLOW_V14_FINAL.md` (lines 69-71) and
+> `docs/SPRINT_16_REORGANIZATION_COMPLETE.md` (lines 549-564) both still carry their own
+> incompatible expansions, and `Full Dolphin Rules` still sits in the DutchBay_RAG root. The row
+> above is kept as observed on 20 September so the finding and its remedy both stay legible.
 
 ### The worst copy is the one in the other repo
 
@@ -305,7 +320,15 @@ what `MERGE-01` means by green.
 Three follow-ups worth their own PRs, none blocking:
 
 1. Delete `Full Dolphin Rules` from the DutchBay_RAG root and replace it with a pointer to the
-   canonical CSV — the highest-value of the three, because it is actively misleading and sits in
+   canonical CSV — the highest-value remaining item, because it is actively misleading and sits in
    the repo where ingestion work happens.
-2. Reconcile `.github/SPRINT_WORKFLOW_CHECKLIST.md` with the canonical ruleset (Finding A).
+2. ~~Reconcile `.github/SPRINT_WORKFLOW_CHECKLIST.md` with the canonical ruleset~~ — **done by
+   #1283**; #1286 covered five further live-guidance files. What remains in this repo is
+   `docs/AUDIT_CASHFLOW_V14_FINAL.md` and `docs/SPRINT_16_REORGANIZATION_COMPLETE.md`.
 3. Re-run the Kalpitiya ingestion onto a branch that gets pushed (Finding B).
+
+**The durable fix, which none of the above delivers.** Every copy found here was caught by reading,
+not by a gate: nothing checks a prose claim about the frameworks against the CSV. Until a lint test
+pins the expansions to `FRAMEWORK-01/02/03` — `tests/lint/test_gwtf_canonical_source.py` is the
+natural home — new copies will keep appearing faster than they are found. This record is itself an
+example: its first version stated a wrong fact about the `VERIFY-01` gate, and only CI caught it.
