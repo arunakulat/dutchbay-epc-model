@@ -30,7 +30,7 @@ reconstructed from the manifest's state at every ``main`` commit that touched it
    the changelog fragment cite that identifier. A sixth copy, a stale citation, or clause 6 of
    the offers quoted anywhere but its single home fails here rather than in a third review.
 
-**Why this iterates over corpus areas rather than naming one.** Until #1285 every path in this
+**Why this iterates over corpus areas rather than naming one.** Until #1289 every path in this
 module was hard-coded to ``docs/source_materials/nso_bess_250mw_2026``, so the *next* corpus
 area would have landed covered by nothing at all — which is the precise condition the guard
 was written to end, reproduced one directory across. Coverage is therefore derived from the
@@ -149,7 +149,7 @@ ENTRY = re.compile(r"([0-9a-fA-F]{64}) [ *](.*)")
 def _entries(manifest: Path) -> dict[str, str]:
     """Parse a ``sha256sum``-format manifest into {path: digest}, ignoring comments."""
     entries: dict[str, str] = {}
-    text = manifest.read_text(encoding="utf-8").lstrip("﻿")
+    text = manifest.read_text(encoding="utf-8").lstrip("\ufeff")
     for lineno, raw in enumerate(text.splitlines(), start=1):
         # splitlines() has already removed the terminator. Do NOT strip beyond that: a path
         # with trailing whitespace would be silently rewritten into a different path, and the
@@ -665,7 +665,7 @@ def test_negative_control_new_area_without_a_manifest_is_reported(
 ) -> None:
     """The gap this change exists to close: a second corpus area, covered from commit one.
 
-    Before #1285 every path in this module was hard-coded to the NSO area, so ``beta_2026``
+    Before #1289 every path in this module was hard-coded to the NSO area, so ``beta_2026``
     below would have been discovered by nothing, checked by nothing, and green.
     """
     assert [area.name for area in _corpus_areas(synthetic_corpus)] == ["alpha_2026"]
