@@ -226,8 +226,10 @@ Request, at minimum:
 ## 10. Reproducibility and controls
 
 `registers/analyze_met_mast_617725_2026-09-22.py` independently rebuilds every derived file.
-It refuses to run if the raw hash, row/column count, record bounds, missing intervals,
-assessment dimensions, all-null/near-empty channel counts or wind ordering invariants drift.
+It refuses to run if the raw size or hash, row/column count, record bounds, missing-interval
+count or wind-speed ordering invariants drift. It computes and reports assessment dimensions
+and all-null/near-empty channel counts without separate assertions for those values. The
+source hash fixes the input used to derive them.
 The run used the governed Python 3.12.13 environment with pandas 2.3.3, NumPy 2.4.6,
 SciPy 1.18.1 and Matplotlib 3.11.1. Two consecutive runs produced byte-identical output.
 

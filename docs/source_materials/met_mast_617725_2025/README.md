@@ -94,9 +94,11 @@ DUTCHBAY_MET_MAST_617725_SOURCE=/path/to/private/617725数据导出.txt \
 ```
 
 The run used Python 3.12.13, pandas 2.3.3, NumPy 2.4.6, SciPy 1.18.1 and Matplotlib
-3.11.1. The script asserts the source hash, dimensions, timestamp bounds, missing-interval
-count, assessment dimensions and core QC invariants before writing derived files. Repeated
-runs produce byte-identical outputs.
+3.11.1. Before writing derived files, the script checks the source size and hash, raw
+dimensions, timestamp bounds, missing-interval count and wind-speed ordering. It reports
+assessment dimensions and empty-channel counts; those values have no separate assertion.
+The source hash fixes the input used to derive them. Repeated runs produce byte-identical
+outputs.
 
 ## Integrity
 

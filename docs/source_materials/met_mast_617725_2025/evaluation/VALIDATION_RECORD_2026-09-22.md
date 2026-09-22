@@ -16,7 +16,7 @@ not retained.
 |---|---|---|
 | Governed runtime | PASS | Python 3.12.13 from `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` |
 | Raw-copy identity | PASS | Attachment and private RAG source at commit `52ae2fecb05f84497a68d00affbd95f4b0c18986`, now delivered to private `main` by PR #9 as `f1666885bbad5382977e664ccc1f41912b9c5f5e`, both SHA-256 `a19963698f6d7e1085f8c66bb1810ecc1e8937e7f004ab25b81539bfd2e2cd46` |
-| Generator assertions | PASS | Hash, 33,456 × 57 shape, record bounds, 98 missing intervals, assessment bounds/counts, null-channel counts and speed-order invariants |
+| Generator checks | PASS | Source size and hash, 33,456 × 57 raw shape, record bounds, 98 missing intervals and wind-speed ordering. Assessment dimensions and null-channel counts are reported, without separate assertions; the source hash fixes their input. |
 | Independent oracle | PASS | A separate standard-library parser reproduced shape, timestamp gaps, five mean-speed counts/means, 2,146-row 120 m outage, 71.50568267% SW+WSW occurrence and 1.016455696203 median 120/100 ratio |
 | Deterministic regeneration | PASS | Two consecutive generator runs produced byte-identical JSON, CSV and PNG outputs |
 | Static Python checks | PASS | Ruff, format and explicitly scoped mypy checks; source compiled with Python `compile()` without writing bytecode |
