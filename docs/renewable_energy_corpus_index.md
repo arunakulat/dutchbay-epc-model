@@ -6,6 +6,8 @@
 
 **Build date:** `2026-06-25`
 
+**Met-mast evidence update:** `2026-09-22`
+
 ---
 
 ## Locations
@@ -65,6 +67,18 @@ The flagship project — EIA in three languages, feasibility, financials, statut
 - `Turbine_Locations_A1.pdf` / `Turbine_Locations_A1_Sat.pdf` — A1 turbine-location plans (line + satellite).
 - `Turbine_locations_designs_V1.1-Layout1.pdf`, `Turbine_locations_with_plans_V1.1 Land Requirement.pdf` — layout V1.1 (design + land-requirement annotated).
 - `Kalpitiya maps and other drawings.zip` — bundled Kalpitiya maps/drawings.
+
+### Primary met-mast export — project binding unresolved
+
+- `617725数据导出.txt` — 10-minute measurements at 30, 50, 80, 100 and 120 m,
+  embedded export creation **10 November 2025 16:23**, covering 20 March–8 November
+  2025 at 8.056318° N, 79.708150° E. The confidential interval series is held only in
+  `arunakulat/DutchBay_RAG`; its hash-pinned aggregates, QC, evaluation, figure,
+  manifests and reproducer are at `docs/source_materials/met_mast_617725_2025/`.
+  The source does not identify a project or mast, lies 16.4 km from the Kalpitiya 60 MW
+  proposal centre and 24.2 km from the Dutch Bay model centroid, and covers only 232.24
+  clean assessment days. It is primary partial-period evidence, not an annual or lender-grade
+  wind-resource basis; model and P50/P75/P90 use remain **HOLD**.
 
 ---
 

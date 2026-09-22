@@ -1,0 +1,360 @@
+{
+  "assessment_window": {
+    "duration_days": 232.24305555555554,
+    "end": "2025-11-08 23:50:00",
+    "expected_intervals": 33444,
+    "missing_interval_count": 97,
+    "missing_interval_ranges": [
+      {
+        "end": "2025-10-28 16:00:00",
+        "interval_count": 97,
+        "start": "2025-10-28 00:00:00"
+      }
+    ],
+    "present_intervals": 33347,
+    "reason": "begins after the multi-channel commissioning transition at 2025-03-21 17:50",
+    "start": "2025-03-21 18:00:00",
+    "timestamp_completeness_pct": 99.70996292309532
+  },
+  "concurrent_vertical_profile": {
+    "correlations": {
+      "Speed 100 m Avg [m/s]": {
+        "Speed 100 m Avg [m/s]": 1.0,
+        "Speed 120 m Avg [m/s]": 0.9989099323427574,
+        "Speed 30 m Avg [m/s]": 0.9697172642234414,
+        "Speed 50 m Avg [m/s]": 0.9890774601385421,
+        "Speed 80 m Avg [m/s]": 0.9982544692120057
+      },
+      "Speed 120 m Avg [m/s]": {
+        "Speed 100 m Avg [m/s]": 0.9989099323427574,
+        "Speed 120 m Avg [m/s]": 1.0,
+        "Speed 30 m Avg [m/s]": 0.9684984023194764,
+        "Speed 50 m Avg [m/s]": 0.985935300037939,
+        "Speed 80 m Avg [m/s]": 0.9965335577383965
+      },
+      "Speed 30 m Avg [m/s]": {
+        "Speed 100 m Avg [m/s]": 0.9697172642234414,
+        "Speed 120 m Avg [m/s]": 0.9684984023194764,
+        "Speed 30 m Avg [m/s]": 1.0,
+        "Speed 50 m Avg [m/s]": 0.9863729874984322,
+        "Speed 80 m Avg [m/s]": 0.9774915148240394
+      },
+      "Speed 50 m Avg [m/s]": {
+        "Speed 100 m Avg [m/s]": 0.9890774601385421,
+        "Speed 120 m Avg [m/s]": 0.985935300037939,
+        "Speed 30 m Avg [m/s]": 0.9863729874984322,
+        "Speed 50 m Avg [m/s]": 1.0,
+        "Speed 80 m Avg [m/s]": 0.9943477561775705
+      },
+      "Speed 80 m Avg [m/s]": {
+        "Speed 100 m Avg [m/s]": 0.9982544692120057,
+        "Speed 120 m Avg [m/s]": 0.9965335577383965,
+        "Speed 30 m Avg [m/s]": 0.9774915148240394,
+        "Speed 50 m Avg [m/s]": 0.9943477561775705,
+        "Speed 80 m Avg [m/s]": 1.0
+      }
+    },
+    "expected_interval_coverage_pct": 93.29326635569907,
+    "means_ms": {
+      "100": 8.629261241626871,
+      "120": 8.79323098618634,
+      "30": 7.748451652190635,
+      "50": 8.5253796352681,
+      "80": 8.556397230857986
+    },
+    "medians_ms": {
+      "100": 9.1,
+      "120": 9.23,
+      "30": 8.34,
+      "50": 9.15,
+      "80": 9.05
+    },
+    "valid_count": 31201
+  },
+  "direction_80m": {
+    "basis": "80 m average direction paired with 80 m average speed",
+    "circular_mean_deg": 226.0439920583264,
+    "dominant_occurrence_sectors": [
+      "SW",
+      "WSW"
+    ],
+    "mean_resultant_length": 0.8321864098905158,
+    "sw_plus_wsw_frequency_pct": 71.50568267010526,
+    "sw_plus_wsw_speed_cubed_share_pct": 87.9637378824701,
+    "valid_count": 33347
+  },
+  "distance_context": {
+    "dutchbay_model_centroid_km": 24.202779904711363,
+    "envision_kalpitiya_60mw_proposal_centre_km": 16.385477557158506,
+    "nrel_karathivu_km": 26.419019533109523,
+    "nrel_narakkalliya_km": 31.055466979650276,
+    "nrel_puttalam_met_km": 23.27094109723895,
+    "nrel_wellammalal_km": 30.95144539551669
+  },
+  "evidence_disposition": {
+    "classification": "primary met-mast export; partial-period and incompletely documented",
+    "missing_controls": [
+      "mast/site identity and project binding",
+      "timezone and clock/DST convention",
+      "sensor manufacturer, model, serial and calibration certificates",
+      "boom orientation and mounting geometry",
+      "logger make, scan rate and averaging method",
+      "maintenance, icing/lightning/fault and sensor-change log",
+      "flag definitions and the rows excluded before export",
+      "at least one complete annual cycle",
+      "concurrent long-term reference and MCP method"
+    ],
+    "model_input_status": "HOLD - not promoted into any scenario or lender output",
+    "not_usable_as_standalone_for": [
+      "annual long-term mean wind speed",
+      "bankable P50/P75/P90",
+      "direct validation of the 16.4 km-distant Kalpitiya proposal site",
+      "direct validation of the 24.2 km-distant Dutch Bay model centroid",
+      "warranty or certified power-performance assessment"
+    ],
+    "usable_for": [
+      "preliminary wind-regime characterisation",
+      "sensor-level data-quality assessment",
+      "directional and vertical-profile screening",
+      "future MCP work once timestamp timezone and reference data are supplied"
+    ]
+  },
+  "outage_adjusted_sensitivity": {
+    "concurrent_high_wind_median_120_to_100_ratio": 1.0164556962025315,
+    "envision_kalpitiya_proposal_mean_130m_ms": 8.97,
+    "filled_120m_interval_count": 2146,
+    "five_height_median_alpha_used": 0.0512310334558085,
+    "pre_outage_linear_validation": {
+      "intercept_ms": 0.09236556910406354,
+      "post_return_count": 1631,
+      "post_return_mae_ms": 0.09732247103863403,
+      "post_return_mean_error_ms": -0.039651500530083636,
+      "post_return_rmse_ms": 0.16240665616591612,
+      "slope": 1.0085380329284568
+    },
+    "proxy_vs_proposal_pct": -3.8149585920022377,
+    "purpose": "sensitivity only; no source values are replaced",
+    "ratio_proxy_full_window_120m_mean_ms": 8.592490896833565,
+    "ratio_proxy_full_window_130m_extrapolated_mean_ms": 8.6277982142974,
+    "raw_available_120m_mean_ms": 8.79323098618634,
+    "raw_available_130m_extrapolated_mean_ms": 8.829363162721615
+  },
+  "quality": {
+    "all_null_column_count": 8,
+    "all_null_columns": [
+      "Direction 120 m Min [°]",
+      "Direction 120 m Max [°]",
+      "Direction 80 m Min [°]",
+      "Direction 80 m Max [°]",
+      "Direction 30 m Min [°]",
+      "Direction 30 m Max [°]",
+      "Temp 0 m Avg [℃]",
+      "Pressure 120 m Avg [kPa]"
+    ],
+    "filter_basis": "Included flags: <Unflagged data>; excluded flags field is blank",
+    "near_empty_column_count": 6,
+    "near_empty_columns": [
+      "Temp 0 m Min [℃]",
+      "Temp 0 m Max [℃]",
+      "Temp 0 m SD [℃]",
+      "Pressure 120 m Min [kPa]",
+      "Pressure 120 m Max [kPa]",
+      "Pressure 120 m SD [kPa]"
+    ],
+    "qc_event_count": 13,
+    "source_is_filtered_export": true,
+    "wind_min_avg_max_order_violations": 0
+  },
+  "record": {
+    "columns_including_timestamp": 57,
+    "embedded_export_created": "2025-11-10 16:23",
+    "end": "2025-11-08 23:50:00",
+    "excluded_flags_raw": "",
+    "expected_ten_minute_intervals": 33554,
+    "included_flags_raw": "<Unflagged data>",
+    "missing_interval_count": 98,
+    "missing_interval_ranges": [
+      {
+        "end": "2025-03-21 06:50:00",
+        "interval_count": 1,
+        "start": "2025-03-21 06:50:00"
+      },
+      {
+        "end": "2025-10-28 16:00:00",
+        "interval_count": 97,
+        "start": "2025-10-28 00:00:00"
+      }
+    ],
+    "present_intervals": 33456,
+    "rows": 33456,
+    "start": "2025-03-20 23:40:00",
+    "timestamp_completeness_pct": 99.70793348036001,
+    "timezone": null
+  },
+  "schema": "dutchbay.epc.met_mast_analysis_summary.v1",
+  "shear": {
+    "alpha_30_to_120_mean": 0.09226450944306291,
+    "alpha_30_to_120_median": 0.061946193344052436,
+    "alpha_30_to_120_p05": 0.02629979792522092,
+    "alpha_30_to_120_p95": 0.2921052791359593,
+    "alpha_five_height_ols_mean": 0.0805397740456864,
+    "alpha_five_height_ols_median": 0.0512310334558085,
+    "alpha_five_height_ols_p05": 0.014983076327682723,
+    "alpha_five_height_ols_p95": 0.2783088198687422,
+    "filter": "all five mean speeds >= 3 m/s",
+    "negative_alpha_pct": 0.8632231696145444,
+    "valid_count": 28382
+  },
+  "source_identity": {
+    "commit": "52ae2fecb05f84497a68d00affbd95f4b0c18986",
+    "coordinates": {
+      "latitude_deg_n": 8.056318,
+      "longitude_deg_e": 79.70815
+    },
+    "elevation_m": 5.0,
+    "filename_token_617725_status": "undocumented; not assumed to be a mast identifier",
+    "project_binding": "not stated in source",
+    "relative_path": "corpus/met_mast_617725_2025/raw/617725数据导出.txt",
+    "repository": "arunakulat/DutchBay_RAG"
+  },
+  "source_sha256": "a19963698f6d7e1085f8c66bb1810ecc1e8937e7f004ab25b81539bfd2e2cd46",
+  "turbulence_intensity": [
+    {
+      "filter": "mean speed >= 3 m/s",
+      "height_m": 30,
+      "mean_ti": 0.12598499098664334,
+      "median_ti": 0.10090556274256145,
+      "p90_ti": 0.22113022113022113,
+      "p95_ti": 0.2595213534144832,
+      "valid_count": 29766
+    },
+    {
+      "filter": "mean speed >= 3 m/s",
+      "height_m": 50,
+      "mean_ti": 0.09184680128515968,
+      "median_ti": 0.0781010719754977,
+      "p90_ti": 0.13533834586466165,
+      "p95_ti": 0.18276879540317154,
+      "valid_count": 30985
+    },
+    {
+      "filter": "mean speed >= 3 m/s",
+      "height_m": 80,
+      "mean_ti": 0.08207581888090436,
+      "median_ti": 0.07257783130360398,
+      "p90_ti": 0.11232777446892993,
+      "p95_ti": 0.14285714285714285,
+      "valid_count": 31442
+    },
+    {
+      "filter": "mean speed >= 3 m/s",
+      "height_m": 100,
+      "mean_ti": 0.07920287749928767,
+      "median_ti": 0.07029053420805999,
+      "p90_ti": 0.1090047393364929,
+      "p95_ti": 0.13586642372455382,
+      "valid_count": 31523
+    },
+    {
+      "filter": "mean speed >= 3 m/s",
+      "height_m": 120,
+      "mean_ti": 0.0767491229008686,
+      "median_ti": 0.06970128022759602,
+      "p90_ti": 0.10091743119266054,
+      "p95_ti": 0.12352941176470589,
+      "valid_count": 30007
+    }
+  ],
+  "wind_speed_by_height": [
+    {
+      "expected_interval_coverage_pct": 99.70996292309532,
+      "height_m": 30,
+      "max_ms": 16.88,
+      "mean_ms": 7.5623075539029,
+      "median_ms": 8.16,
+      "min_ms": 0.31,
+      "p01_ms": 0.84,
+      "p05_ms": 1.95,
+      "p25_ms": 5.2,
+      "p75_ms": 9.94,
+      "p95_ms": 12.05,
+      "p99_ms": 13.56,
+      "std_ms": 3.1366282686973506,
+      "valid_count": 33347,
+      "weibull_scale_a_ms_mle": 8.481703263233,
+      "weibull_shape_k_mle": 2.614876255797646
+    },
+    {
+      "expected_interval_coverage_pct": 99.70996292309532,
+      "height_m": 50,
+      "max_ms": 17.81,
+      "mean_ms": 8.32014663987765,
+      "median_ms": 8.95,
+      "min_ms": 0.38,
+      "p01_ms": 1.2145999999999997,
+      "p05_ms": 2.49,
+      "p25_ms": 6.09,
+      "p75_ms": 10.67,
+      "p95_ms": 12.77,
+      "p99_ms": 14.39,
+      "std_ms": 3.171556160856208,
+      "valid_count": 33347,
+      "weibull_scale_a_ms_mle": 9.307253379851947,
+      "weibull_shape_k_mle": 2.920560997641962
+    },
+    {
+      "expected_interval_coverage_pct": 99.70996292309532,
+      "height_m": 80,
+      "max_ms": 18.22,
+      "mean_ms": 8.357926949950519,
+      "median_ms": 8.86,
+      "min_ms": 0.37,
+      "p01_ms": 1.44,
+      "p05_ms": 2.81,
+      "p25_ms": 6.18,
+      "p75_ms": 10.59,
+      "p95_ms": 12.84,
+      "p99_ms": 14.63,
+      "std_ms": 3.0650236666414523,
+      "valid_count": 33347,
+      "weibull_scale_a_ms_mle": 9.340183936557654,
+      "weibull_shape_k_mle": 3.0450184186365035
+    },
+    {
+      "expected_interval_coverage_pct": 99.70996292309532,
+      "height_m": 100,
+      "max_ms": 18.39,
+      "mean_ms": 8.433161903619515,
+      "median_ms": 8.92,
+      "min_ms": 0.34,
+      "p01_ms": 1.27,
+      "p05_ms": 2.85,
+      "p25_ms": 6.27,
+      "p75_ms": 10.68,
+      "p95_ms": 12.97,
+      "p99_ms": 14.8,
+      "std_ms": 3.0924564383793065,
+      "valid_count": 33347,
+      "weibull_scale_a_ms_mle": 9.418025970492131,
+      "weibull_shape_k_mle": 3.030004510657448
+    },
+    {
+      "expected_interval_coverage_pct": 93.29326635569907,
+      "height_m": 120,
+      "max_ms": 18.81,
+      "mean_ms": 8.79323098618634,
+      "median_ms": 9.23,
+      "min_ms": 0.38,
+      "p01_ms": 1.7,
+      "p05_ms": 3.38,
+      "p25_ms": 6.68,
+      "p75_ms": 10.93,
+      "p95_ms": 13.32,
+      "p99_ms": 15.2,
+      "std_ms": 3.028569334031284,
+      "valid_count": 31201,
+      "weibull_scale_a_ms_mle": 9.798358343668838,
+      "weibull_shape_k_mle": 3.2597896763630176
+    }
+  ]
+}
