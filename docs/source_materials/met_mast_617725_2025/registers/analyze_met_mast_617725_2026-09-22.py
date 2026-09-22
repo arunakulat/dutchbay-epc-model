@@ -21,7 +21,7 @@ import os
 import re
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import matplotlib
 
@@ -29,6 +29,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from matplotlib.projections.polar import PolarAxes
 from scipy.stats import weibull_min
 
 HERE = Path(__file__).resolve().parent
@@ -88,20 +89,38 @@ def sha256_path(path: Path) -> str:
     return digest.hexdigest()
 
 
+def required_fullmatch(pattern: str, value: str, label: str) -> re.Match[str]:
+    """Return a full regex match or raise a field-specific source error."""
+    match = re.fullmatch(pattern, value)
+    if match is None:
+        raise ValueError(f"source header field does not match {label}: {value!r}")
+    return match
+
+
 def parse_source_header(path: Path) -> dict[str, Any]:
     """Parse and preserve every source-header line before the TSV header."""
     with path.open(encoding="utf-8", newline="") as handle:
         header_lines = [handle.readline().rstrip("\r\n") for _ in range(12)]
 
-    created = re.fullmatch(r"Created (.+)", header_lines[0])
-    latitude = re.fullmatch(r"Latitude = N ([0-9.]+)", header_lines[2])
-    longitude = re.fullmatch(r"Longitude = E ([0-9.]+)", header_lines[3])
-    elevation = re.fullmatch(r"Elevation = ([0-9.]+)m", header_lines[4])
-    calm = re.fullmatch(r"Calm threshold = ([0-9.]+)m/s", header_lines[5])
-    included = re.fullmatch(r"Included flags: (.*)", header_lines[7])
-    excluded = re.fullmatch(r"Excluded flags:(.*)", header_lines[8])
-    if not all((created, latitude, longitude, elevation, calm, included, excluded)):
-        raise ValueError("source header does not match the pinned export structure")
+    created = required_fullmatch(r"Created (.+)", header_lines[0], "creation time")
+    latitude = required_fullmatch(
+        r"Latitude = N ([0-9.]+)", header_lines[2], "latitude"
+    )
+    longitude = required_fullmatch(
+        r"Longitude = E ([0-9.]+)", header_lines[3], "longitude"
+    )
+    elevation = required_fullmatch(
+        r"Elevation = ([0-9.]+)m", header_lines[4], "elevation"
+    )
+    calm = required_fullmatch(
+        r"Calm threshold = ([0-9.]+)m/s", header_lines[5], "calm threshold"
+    )
+    included = required_fullmatch(
+        r"Included flags: (.*)", header_lines[7], "included flags"
+    )
+    excluded = required_fullmatch(
+        r"Excluded flags:(.*)", header_lines[8], "excluded flags"
+    )
 
     included_value = included.group(1).strip()
     excluded_value = excluded.group(1).strip()
@@ -203,12 +222,12 @@ def profile_columns(frame: pd.DataFrame) -> pd.DataFrame:
     """Profile every source column without dropping sparse or empty channels."""
     rows: list[dict[str, Any]] = []
     total = len(frame)
-    for column in frame.columns:
+    for column_index, column in enumerate(frame.columns, start=1):
         family, height, statistic, unit = classify_column(column)
         if column == "Date/Time":
             rows.append(
                 {
-                    "column_index": 1,
+                    "column_index": column_index,
                     "column": column,
                     "family": family,
                     "height_m": "",
@@ -226,8 +245,9 @@ def profile_columns(frame: pd.DataFrame) -> pd.DataFrame:
 
         series = frame[column]
         valid = series.dropna()
+        valid_timestamps = frame.loc[series.notna(), "Date/Time"]
         record: dict[str, Any] = {
-            "column_index": frame.columns.get_loc(column) + 1,
+            "column_index": column_index,
             "column": column,
             "family": family,
             "height_m": height,
@@ -240,14 +260,10 @@ def profile_columns(frame: pd.DataFrame) -> pd.DataFrame:
             "zero_count": int((series == 0).sum()),
             "negative_count": int((series < 0).sum()),
             "first_non_null_timestamp": (
-                frame.loc[series.first_valid_index(), "Date/Time"]
-                if not valid.empty
-                else ""
+                valid_timestamps.iloc[0] if not valid.empty else ""
             ),
             "last_non_null_timestamp": (
-                frame.loc[series.last_valid_index(), "Date/Time"]
-                if not valid.empty
-                else ""
+                valid_timestamps.iloc[-1] if not valid.empty else ""
             ),
         }
         for name, value in (
@@ -348,7 +364,8 @@ def monthly_statistics(
     frame["month"] = frame["Date/Time"].dt.to_period("M").astype(str)
     rows: list[dict[str, Any]] = []
     for month, group in frame.groupby("month", sort=True):
-        period = pd.Period(month)
+        month_label = str(month)
+        period = pd.Period(month_label)
         start = max(ASSESSMENT_START, period.start_time)
         end = min(assessment_end, period.end_time.floor("10min"))
         expected = len(pd.date_range(start, end, freq="10min"))
@@ -356,8 +373,8 @@ def monthly_statistics(
             series = group[SPEED_AVG[height]].dropna()
             rows.append(
                 {
-                    "month": month,
-                    "month_is_partial": month in {"2025-03", "2025-11"},
+                    "month": month_label,
+                    "month_is_partial": month_label in {"2025-03", "2025-11"},
                     "height_m": height,
                     "expected_intervals": expected,
                     "valid_count": len(series),
@@ -757,7 +774,7 @@ def create_figure(
     )
     axis_availability.spines[["top", "right"]].set_visible(False)
 
-    axis_rose = figure.add_subplot(grid[1, 0], projection="polar")
+    axis_rose = cast(PolarAxes, figure.add_subplot(grid[1, 0], projection="polar"))
     theta = np.deg2rad(direction["centre_deg"].to_numpy())
     axis_rose.bar(
         theta,

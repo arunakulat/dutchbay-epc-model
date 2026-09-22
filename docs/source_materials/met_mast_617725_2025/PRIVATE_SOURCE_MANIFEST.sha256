@@ -6,6 +6,6 @@
 # corpus/met_mast_617725_2025/raw/617725数据导出.txt
 #
 # Size: 8,758,675 bytes. Embedded creation: 2025-11-10 16:23, timezone not stated.
-# This cross-repository receipt is verified by the focused EPC corpus-integrity test when the
-# private checkout is available; the pinned identity remains testable without publishing bytes.
+# The focused EPC guard always verifies this pin and the absence of public raw bytes. When
+# DUTCHBAY_MET_MAST_617725_SOURCE is explicitly set, it also hashes the private source itself.
 a19963698f6d7e1085f8c66bb1810ecc1e8937e7f004ab25b81539bfd2e2cd46  corpus/met_mast_617725_2025/raw/617725数据导出.txt

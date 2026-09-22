@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = REPO_ROOT / "docs" / "source_materials" / "met_mast_617725_2025"
@@ -14,6 +17,7 @@ PRIVATE_REPOSITORY = "arunakulat/DutchBay_RAG"
 PRIVATE_COMMIT = "52ae2fecb05f84497a68d00affbd95f4b0c18986"
 PRIVATE_SOURCE_PATH = "corpus/met_mast_617725_2025/raw/617725数据导出.txt"
 SOURCE_SHA256 = "a19963698f6d7e1085f8c66bb1810ecc1e8937e7f004ab25b81539bfd2e2cd46"
+SOURCE_ENV = "DUTCHBAY_MET_MAST_617725_SOURCE"
 
 
 def _sha256(path: Path) -> str:
@@ -63,6 +67,17 @@ def test_confidential_source_is_hash_pinned_but_not_published() -> None:
     note = PRIVATE_SOURCE_MANIFEST.read_text(encoding="utf-8")
     assert PRIVATE_REPOSITORY in note
     assert PRIVATE_COMMIT in note
+
+
+def test_private_source_matches_pin_when_explicitly_available() -> None:
+    """Verify private bytes locally without making them a public CI dependency."""
+    raw_path = os.environ.get(SOURCE_ENV)
+    if raw_path is None:
+        pytest.skip(f"{SOURCE_ENV} is not configured on this host")
+
+    source = Path(raw_path).expanduser().resolve()
+    assert source.is_file(), f"private source does not exist: {source}"
+    assert _sha256(source) == SOURCE_SHA256
 
 
 def test_derived_metadata_binds_to_the_private_source() -> None:
