@@ -8,6 +8,7 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+PROJECT_CONFIG = ROOT / ".codex" / "config.toml"
 ENVIRONMENT_FILE = ROOT / ".codex" / "environments" / "environment.toml"
 ENVRC = ROOT / ".envrc"
 SETUP_SCRIPT = ROOT / "setup_venv.sh"
@@ -25,6 +26,26 @@ def _environment() -> dict[str, object]:
 
     with ENVIRONMENT_FILE.open("rb") as stream:
         return tomllib.load(stream)
+
+
+def test_codex_project_config_tracks_the_approved_defaults() -> None:
+    """Keep the formerly local project settings reviewable and reproducible."""
+    with PROJECT_CONFIG.open("rb") as stream:
+        config = tomllib.load(stream)
+
+    assert config == {
+        "approval_policy": "never",
+        "sandbox_mode": "danger-full-access",
+        "model_verbosity": "medium",
+        "model_reasoning_summary": "concise",
+    }
+
+    assert (
+        PROJECT_CONFIG.read_text(encoding="utf-8") == 'approval_policy = "never"\n'
+        'sandbox_mode = "danger-full-access"\n'
+        'model_verbosity = "medium"\n'
+        'model_reasoning_summary = "concise"\n'
+    )
 
 
 def test_codex_environment_uses_supported_location_and_version() -> None:
