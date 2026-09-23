@@ -18,13 +18,17 @@
   `finance/debt_v14.py` silently defaults to **2** — and
   `finance/equity_distribution_v14_hydra.py` turns into two zero years at the head of the equity
   return vector. RFP Volume I clause 1.4 states ESA signing 06-Nov-2026, Financial Closure
-  06-Jan-2027 and COD 06-May-2027: four months, not two years. The key is now explicit, and the
-  header states 1 as a **conservative rounding** of 0.33 years rather than a figure read off the
-  schedule — 0 would zero IDC, which is wrong for a four-month build on drawn debt, while 1
+  06-Jan-2027 and COD 06-May-2027 — **superseded; see the correction fragment beside this one,
+  which is part of the same release.** Addendum 01 item 01 revises that clause in full and gives
+  ESA signing 14-Dec-2026, Financial Closure 15-Mar-2027 and COD 16-Aug-2027, five months rather
+  than four. The key is now explicit, and the header states 1 as a **conservative rounding** of
+  0.42 years rather than a figure read off the schedule — 0 would zero IDC, which is wrong for a four-month build on drawn debt, while 1
   overstates it by about eight months. The choice is worth roughly 2pp of project IRR. The
   headers also cited an "Addendum 01" two-month SCOD extension, and elsewhere "Addendum 01 item
-  13" as live authority; no such document is held in the corpus, so both claims are withdrawn and
-  the VAT pass-through now rests where it can be checked, on ESA Article 5(o).
+  13" as live authority. **Both withdrawals were wrong and are themselves withdrawn in the
+  correction fragment beside this one.** Addendum 01 is held, in this repository, ingressed by
+  #1180 on 2026-08-27 and present in the base tree this change was reviewed against. Both original
+  citations were correct.
 
   **An enhanced capital allowance was proposed with these corrections and withdrawn under
   review.** Switching it on at a multiple of 2.0 assumed each site's depreciable base sits inside
