@@ -1,0 +1,96 @@
+# Kalpitiya 60 MW — Envision EN-206 wind proposal and turbine performance document, 7 September 2026
+#
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+# HANDLING NOTE — KALPITIYA60MW-WIND-HANDLING-2026-09-21
+#
+# This block is the ONLY statement of how this package is handled. The corpus README, the
+# source_packages README and the deduplication receipt cite the identifier above rather than
+# restating the reasoning, the authority or the route. One copy cannot drift. Five copies of
+# the equivalent statement for the NSO offers package disagreed with one another on 4 September
+# 2026, and that disagreement was a blocking finding of the RECRUIT-01 review of that change.
+# `tests/lint/test_nso_corpus_manifest_integrity.py` fails loudly if a second copy appears or if
+# a citation goes stale.
+#
+# 1. THE DOCUMENTS ARE PRIVATE.
+#    The two source documents, their extracts, the derived data, the registers and the two
+#    evaluations are held in the PRIVATE repository arunakulat/DutchBay_RAG at
+#    corpus/kalpitiya_60mw_2026_envision_wind/, merged to that repository's main at commit
+#    28204a5 (PR #6). No document in this package, and no extract of one, has ever been
+#    committed to this public repository. The 16 hashes below are the whole of what this
+#    repository holds about the package.
+#
+# 2. WHY THE ROUTE WAS SELECTED.
+#    Both documents are restricted, on two different grounds.
+#
+#    The turbine performance document is a Released controlled document, PMD-004447 Rev A,
+#    7 September 2026, and is marked Confidential in the document-control header of every page.
+#    The proposal and energy yield study carries an express bar on reproduction without the
+#    written permission of its copyright holder. It carries no document number and no revision
+#    of its own, so it can be cited only by hash — which is what this manifest is for.
+#
+#    No written authorization instrument is held for either document. Neither
+#    PUBLICATION_AUTHORIZATION.md, which enumerates four files from the 6 August 2026 tranche,
+#    nor the 29 August reversal, which turned on material forming part of the bid submitted to
+#    NSO, reaches OEM turbine performance data or an unsolicited commercial proposal. This
+#    repository is public, and a push to it is effectively irreversible: the content can be
+#    cloned, cached and indexed before any later removal takes effect.
+#
+#    Route selected on the precedent already set twice in this corpus — the 21 August checklist
+#    dossier and the 3 September commercial offers, both held outside this repository and
+#    recorded here by manifest. See NSO250MW-OFFERS-HANDLING-2026-09-04 for the reasoning in
+#    the offers case; it is cited, not restated.
+#
+# 3. THIS FILE IS MANIFEST-ONLY, AND WHAT THAT STILL DISCLOSES.
+#    Unlike the offers manifest, this file recites no figure from either document: no power
+#    curve value, no thrust coefficient, no energy yield, no wind speed, no loss factor, no
+#    coordinate, no price. The evaluation of the package and the comparison against the Dutch
+#    Bay Final EIA and feasibility study are held privately at the paths recorded below, and
+#    their findings are not reproduced here.
+#
+#    What the filenames themselves carry is disclosed rather than glossed over. They name the
+#    turbine model and its de-rate, the controlled-document number and revision, the site and
+#    its nominal capacity, and — in the air density embedded in one derived filename — one
+#    modelling parameter. The deduplication receipt beside this file reproduces the AS-SUPPLIED
+#    filenames of the two source documents, which carry two further parameters: the unit count
+#    and the hub height. A manifest cannot identify an object without naming it and a receipt
+#    cannot be checked without naming what arrived, so this is the irreducible minimum, and it
+#    is recorded as a disclosure rather than treated as none.
+#
+# 4. NOTHING HERE HAS BEEN PROMOTED.
+#    No figure from this package has entered a scenario, a model input, a baseline or a report.
+#    The evaluation holds two open questions that must be answered in writing by the issuer
+#    before anything in the package is used: which power curve produced the energy yield
+#    appendix, and what the wind data provenance and uncertainty basis are. Recording a package
+#    is not accepting it.
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+#
+# Paths below are relative to corpus/kalpitiya_60mw_2026_envision_wind/ in the private
+# repository. Verify there with `sha256sum -c MANIFEST.sha256` from that directory.
+#
+# --- source documents, byte-identical to the copies received ---
+9d21b053b2636f1d384e7b4235775402bdd289ce29c063df85dd162e8417ce8c  raw/Envision_EN206-10.5_Power_Curve_and_Ct_PMD-004447_RevA_2026-09-07.pdf
+845d3df5c0310b39e42ca4ff729f3eb8c11691aa76c77f7a5416c0dc6adc6d19  raw/Envision_Kalpitiya_60MW_Proposal_Solution_and_Technical_Alignment_2026-09.pdf
+#
+# --- derived extracts: MarkItDown 0.1.7 per GWTF R26, corroborated with pdfplumber 0.11.10
+#     where the converter shredded a ruled numeric table, and the complete DATA-01 structured
+#     extract of every table in both documents ---
+cba5d6fad024ca21d3910b4d4dfae813b6f29217789901a7e877e7bae04310d5  extracted/Envision_EN206-10.5_Power_Curve_and_Ct_PMD-004447_RevA_2026-09-07.markitdown.md
+c4f2943d08528c3ee581de6f9e81bbba9d60053c23f82651d51b55f998d26196  extracted/Envision_EN206-10.5_Power_Curve_and_Ct_PMD-004447_RevA_2026-09-07.pdfplumber-layout.txt
+8ba4fb70143b48a901542ae13303d23d737facf01ccf978ff977442452dc9033  extracted/Envision_Kalpitiya_60MW_Proposal_Solution_and_Technical_Alignment_2026-09.markitdown.md
+f1aa8c588cf855f46e2f03e4c48bd7209f35c731cb4263c8a4e3418e71a856d1  extracted/doc_a_power_curve_document.json
+507ca41cbe360d43693d885920af3502e08882b2fbc5f32a18cd1c76a97c707d  extracted/doc_b_proposal_document.json
+78b5d2ec036df9b4364005764d8a15d4c72ba7c446e327b8feb764318de38647  extracted/power_curve_en206_10.5_rho1.148.csv
+aab2e10b38e6c16e051766209441d57cbd6a18ddf57e97156a776e509fe5c9d8  extracted/appendix1_energy_yield.csv
+36c9f778f1c2aa591f18af300e1bc9a06ac6bfd1c22985ef5f00e1c228b8d7ef  extracted/layout_coordinates.csv
+#
+# --- registers: the scripts that produce the extracts and check them against each other ---
+762a2091c1d79eff60bbf9dc5346a929e72f1a9af040ded691212d1691162d7d  registers/parse_power_curve_2026-09-20.py
+1fa477b1b7b4161cc5d895fd04505cc4b6ae09395af089b916c75640d3aa740d  registers/extract_all_tables_2026-09-20.py
+d54077085d7435edaa02230805d65aa1a7728ff55113bd226484164185973fee  registers/check_yield_consistency_2026-09-20.py
+#
+# --- evaluations; held privately, findings not reproduced in this repository ---
+513f9e474fda61f20d25241db22e2d74c96019df5129badbab7e81a4b6702eed  evaluation/Kalpitiya_60MW_Envision_Package_Ingress_Evaluation_2026-09-20.md
+435115fff9d220467bdde3096c838c5c07a3c62ee7c3d5c4f8c7698e2e0f49c7  evaluation/Kalpitiya_vs_DutchBay_EIA_Feasibility_Comparison_2026-09-20.md
+#
+# --- the private tranche's own README ---
+54898cd918316a5bc7f2644179e1c7bf8548fe3b259855621c34d4d3e4f6b533  README.md
