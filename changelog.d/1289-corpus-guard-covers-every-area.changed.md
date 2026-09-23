@@ -14,7 +14,9 @@
   The checks are helpers returning what they found; each has a paired `test_negative_control_*`
   that builds a small valid corpus in a throwaway git repository, asserts the helper reports
   nothing, introduces exactly one defect, and asserts the same helper the live tests call
-  reports it. Six guards, fifteen tests, still about a second in `fastlane`.
+  reports it. Eight guards, eight controls, and a ninth test that fails if a guard is ever
+  added without one — the count is enforced, not written down. Still about a second in
+  `fastlane`.
 - **The module keeps its `nso` filename deliberately.** The `fastlane` job invokes it by path,
   `AGENTS.md` cites it and two accepted `RECRUIT-01` review records bind to it; renaming would
   trade a real risk — the step silently not running — for a cosmetic gain.

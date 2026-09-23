@@ -41,12 +41,15 @@ whether a nested manifest's subject lives in this repository or outside it (see
 ``NESTED_IN_REPO`` / ``NESTED_EXTERNAL``). An area with no parent manifest at all is a
 finding, not a skip, so the discovery step cannot be defeated by omitting the manifest.
 
-**The guards are proved to fire.** ``VERIFY-01`` clause 5: a guard that has never been
-observed to fail is itself an unverified claim. Each check below is a helper returning the
-defects it found, and each has a paired ``test_negative_control_*`` that builds a small,
-valid corpus in a throwaway git repository, introduces exactly one defect, and asserts the
-same helper the live tests call reports it. Negative controls that ran against a synthetic
-tree only — never the real one — is the point: they can be made to fail on demand.
+**Every guard is proved to fire.** ``VERIFY-01`` clause 5: a guard that has never been
+observed to fail is itself an unverified claim. There are eight guards here and eight
+``test_negative_control_*`` tests, one per guard, and that count is enforced by
+:func:`test_every_guard_has_a_negative_control` rather than asserted in this docstring —
+prose drifts, and a count written down by the author is exactly the unverified claim the
+rule is about. Each control builds its subject in a throwaway git repository or a
+``tmp_path``, asserts the helper reports nothing, introduces exactly one defect, and
+asserts the same helper the live test calls reports it. They run against a synthetic tree
+and never the real one, which is the point: they can be made to fail on demand.
 
 **Where this runs, and why it matters.** The corpus is docs-only by path, and ``test-suite.yml``
 skips its pytest shard entirely for docs-only PRs — and two of the six defective commits carried
@@ -430,27 +433,64 @@ def test_nested_manifest_parent_pins_are_current(area: Path) -> None:
     )
 
 
+def _defines_anchor(home: Path, anchor: str) -> bool:
+    """True when ``home`` carries the handling note's definition line for ``anchor``."""
+    return f"HANDLING NOTE \u2014 {anchor}" in home.read_text(encoding="utf-8")
+
+
+def _orphaned_referrers(anchor: str, referrers: Iterable[Path]) -> list[Path]:
+    """Referrers that no longer cite ``anchor``."""
+    return sorted(
+        referrer
+        for referrer in referrers
+        if anchor not in referrer.read_text(encoding="utf-8")
+    )
+
+
 @pytest.mark.parametrize("anchor", sorted(HANDLING_ANCHORS))
 def test_handling_notes_are_stated_once(anchor: str) -> None:
     """A handling statement is defined in one place and cited, never restated, elsewhere."""
     home, referrers = HANDLING_ANCHORS[anchor]
-    manifest_text = home.read_text(encoding="utf-8")
 
-    assert f"HANDLING NOTE — {anchor}" in manifest_text, (
+    assert _defines_anchor(home, anchor), (
         f"{home.name} no longer defines the handling note under {anchor}. Every referrer "
         f"points at that identifier; moving or renaming it orphans all of them."
     )
 
     orphaned = [
         referrer.relative_to(REPO_ROOT).as_posix()
-        for referrer in referrers
-        if anchor not in referrer.read_text(encoding="utf-8")
+        for referrer in _orphaned_referrers(anchor, referrers)
     ]
     assert not orphaned, (
         f"{orphaned} describe this package but no longer cite {anchor}. Cite the identifier; "
         f"do not restate what it says. Five copies of this statement disagreed with each other "
         f"on 4 September 2026, and that is what these files are pointing at instead."
     )
+
+
+def _quoted_spans(manifest: Path, heading: str) -> list[str]:
+    """The quoted lines under ``heading``, long enough to be worth searching for.
+
+    Returns them rather than searching, so the extraction can be exercised on a tree this
+    module is allowed to break. An empty result is the silent-pass failure mode the live
+    test's minimum-span assertion exists to catch: a moved or reshaped quotation block
+    leaves the search looking for nothing at all.
+    """
+    quoted: list[str] = []
+    inside = False
+    for raw in manifest.read_text(encoding="utf-8").splitlines():
+        line = raw.lstrip("#").strip()
+        if heading in line:
+            inside = True
+            continue
+        if not inside:
+            continue
+        if line.startswith('"') or quoted:
+            # The quotation runs from the opening double quote to the line that closes it.
+            quoted.append(line.strip('"'))
+            if line.endswith('"'):
+                break
+    return [span for span in quoted if len(span) >= MIN_SPAN_CHARS]
 
 
 def _quoted_span_matches(manifest: Path, heading: str) -> list[tuple[int, set[str]]]:
@@ -470,23 +510,8 @@ def _quoted_span_matches(manifest: Path, heading: str) -> list[tuple[int, set[st
     reproducing it again in the log — which is how the first run of this guard put a fragment
     of the clause into the log of run 33959805520.
     """
-    quoted: list[str] = []
-    inside = False
-    for raw in manifest.read_text(encoding="utf-8").splitlines():
-        line = raw.lstrip("#").strip()
-        if heading in line:
-            inside = True
-            continue
-        if not inside:
-            continue
-        if line.startswith('"') or quoted:
-            # The quotation runs from the opening double quote to the line that closes it.
-            quoted.append(line.strip('"'))
-            if line.endswith('"'):
-                break
-
     results: list[tuple[int, set[str]]] = []
-    for index, span in enumerate(q for q in quoted if len(q) >= MIN_SPAN_CHARS):
+    for index, span in enumerate(_quoted_spans(manifest, heading)):
         found = subprocess.run(
             ["git", "grep", "--name-only", "--fixed-strings", span, "--", "."],
             cwd=REPO_ROOT,
@@ -692,3 +717,153 @@ def test_negative_control_new_area_without_a_manifest_is_reported(
     _git(synthetic_corpus, "add", "-A")
     assert _areas_without_a_parent_manifest(synthetic_corpus) == []
     assert _unrecorded_under(beta, synthetic_corpus) == set()
+
+
+def test_negative_control_malformed_manifest_entries_are_reported(
+    tmp_path: Path,
+) -> None:
+    """``_entries`` fires on the authoring errors the external manifests are checked for.
+
+    An external manifest's paths cannot be resolved against this tree, so form is the only
+    thing that can be checked and it has to actually be checked. Three ways to get it wrong:
+    a digest that is not 64 hex, the same path recorded twice, and a manifest that records
+    nothing at all.
+    """
+    good = tmp_path / "good.MANIFEST.sha256"
+    good.write_text(f"# a comment\n{'a' * 64}  held/a.pdf\n", encoding="utf-8")
+    assert _entries(good) == {"held/a.pdf": "a" * 64}
+
+    short = tmp_path / "short.MANIFEST.sha256"
+    short.write_text(f"{'a' * 63}  held/a.pdf\n", encoding="utf-8")
+    with pytest.raises(AssertionError, match="not a sha256sum entry"):
+        _entries(short)
+
+    duplicated = tmp_path / "dupe.MANIFEST.sha256"
+    duplicated.write_text(
+        f"{'a' * 64}  held/a.pdf\n{'b' * 64}  held/a.pdf\n", encoding="utf-8"
+    )
+    with pytest.raises(AssertionError, match="duplicate for"):
+        _entries(duplicated)
+
+    empty = tmp_path / "empty.MANIFEST.sha256"
+    empty.write_text("# nothing but a comment\n", encoding="utf-8")
+    assert not _entries(empty)
+
+
+def test_negative_control_orphaned_handling_referrer_is_reported(
+    tmp_path: Path,
+) -> None:
+    """The single-source handling note fires when a citation goes stale or the note moves."""
+    anchor = "SYNTHETIC-HANDLING-2026-01-01"
+    home = tmp_path / "PACKAGE.MANIFEST.sha256"
+    home.write_text(
+        f"# HANDLING NOTE — {anchor}\n# how this is handled\n", encoding="utf-8"
+    )
+    citing = tmp_path / "README.md"
+    citing.write_text(f"Handling is stated once, at {anchor}.\n", encoding="utf-8")
+
+    assert _defines_anchor(home, anchor)
+    assert _orphaned_referrers(anchor, [citing]) == []
+
+    # A referrer that has stopped citing the identifier — usually because somebody restated
+    # what it says instead, which is how five copies came to disagree on 4 September 2026.
+    restating = tmp_path / "RESTATED.md"
+    restating.write_text("The documents are private. Trust me.\n", encoding="utf-8")
+    assert _orphaned_referrers(anchor, [citing, restating]) == [restating]
+
+    # The note itself renamed or removed, which orphans every referrer at once.
+    home.write_text("# HANDLING NOTE — SOME-OTHER-ANCHOR\n", encoding="utf-8")
+    assert not _defines_anchor(home, anchor)
+
+
+def test_negative_control_reshaped_quotation_block_is_reported(
+    tmp_path: Path,
+) -> None:
+    """The quoted-clause guard fires when its search terms silently become nothing.
+
+    This is the module's own history: the first revision hard-coded the spans, which made
+    the test file a second copy of the clause. Reading them out of the manifest fixed that
+    but introduced the opposite risk — a moved or reshaped block leaves the search looking
+    for nothing and passing. The live test asserts a minimum span count for exactly this,
+    and this control is what shows that assertion can fail.
+    """
+    heading = "3. CLAUSE 9, VERBATIM."
+    manifest = tmp_path / "PACKAGE.MANIFEST.sha256"
+    long_enough = "x" * (MIN_SPAN_CHARS + 5)
+    manifest.write_text(
+        f'# {heading}\n#   "{long_enough}\n#    {long_enough}\n#    {long_enough}"\n',
+        encoding="utf-8",
+    )
+    assert len(_quoted_spans(manifest, heading)) == 3
+
+    # The heading renamed: the walk never enters the block, so there is nothing to search
+    # for and every "no other file matched" downstream would be vacuous.
+    assert _quoted_spans(manifest, "3. CLAUSE 9, IN FULL.") == []
+
+    # The block reshaped so the quotation no longer opens with a double quote.
+    manifest.write_text(
+        f"# {heading}\n#   {long_enough}\n#   {long_enough}\n", encoding="utf-8"
+    )
+    assert _quoted_spans(manifest, heading) == []
+
+    # Spans below the minimum length are dropped, so a block of short lines is also nothing.
+    manifest.write_text(f'# {heading}\n#   "short"\n', encoding="utf-8")
+    assert _quoted_spans(manifest, heading) == []
+
+
+# The map from each guard to the control that proves it fires. Written down once, here,
+# because the alternative is a count in prose that nobody re-checks: the first revision of
+# this block claimed six controls for eight guards and three guards had none.
+GUARD_CONTROLS: dict[str, str] = {
+    "test_every_corpus_area_has_a_parent_manifest": "test_negative_control_new_area_without_a_manifest_is_reported",
+    "test_recorded_entries_are_present_and_hash_as_recorded": "test_negative_control_missing_and_altered_entries_are_reported",
+    "test_external_manifests_are_well_formed": "test_negative_control_malformed_manifest_entries_are_reported",
+    "test_every_nested_manifest_is_classified": "test_negative_control_unclassified_nested_manifest_is_reported",
+    "test_every_tracked_corpus_file_is_recorded": "test_negative_control_unrecorded_tracked_file_is_reported",
+    "test_nested_manifest_parent_pins_are_current": "test_negative_control_parent_pin_defects_are_reported",
+    "test_handling_notes_are_stated_once": "test_negative_control_orphaned_handling_referrer_is_reported",
+    "test_quoted_clauses_appear_in_exactly_one_file": "test_negative_control_reshaped_quotation_block_is_reported",
+}
+
+
+def test_every_guard_has_a_negative_control() -> None:
+    """``VERIFY-01`` clause 5, enforced on this module rather than claimed by it.
+
+    A guard added later without a control is the same unverified claim as a guard that has
+    never been observed to fail, and it is the easy mistake: the guard is the interesting
+    part and the control is the chore. This reads the module's own test functions, so it
+    catches the omission at the moment it is made instead of at the next review.
+    """
+    defined = {
+        name
+        for name, value in globals().items()
+        if name.startswith("test_") and callable(value)
+    }
+    guards = {name for name in defined if not name.startswith("test_negative_control")}
+    controls = {name for name in defined if name.startswith("test_negative_control")}
+
+    # This test is itself a guard over the module, not over the corpus, so it is its own
+    # exception — a control for it would be a control for a control.
+    guards.discard("test_every_guard_has_a_negative_control")
+
+    uncontrolled = sorted(guards - set(GUARD_CONTROLS))
+    assert not uncontrolled, (
+        f"{uncontrolled} check the corpus but no negative control proves they fire. "
+        f"VERIFY-01 clause 5: a guard that has never been observed to fail is itself an "
+        f"unverified claim. Add a test_negative_control_* that drives the same helper "
+        f"against a tree it may break, then map it in GUARD_CONTROLS."
+    )
+
+    retired = sorted(set(GUARD_CONTROLS) - guards)
+    assert not retired, f"{retired} are mapped in GUARD_CONTROLS but no longer exist."
+
+    missing = sorted(
+        control for control in GUARD_CONTROLS.values() if control not in controls
+    )
+    assert not missing, f"{missing} are named as controls but are not defined here."
+
+    orphaned = sorted(controls - set(GUARD_CONTROLS.values()))
+    assert not orphaned, (
+        f"{orphaned} are negative controls that no guard claims. Map each to the guard it "
+        f"proves, or delete it: a control nothing is paired with proves nothing."
+    )
