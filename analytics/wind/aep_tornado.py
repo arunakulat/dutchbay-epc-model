@@ -106,11 +106,16 @@ def gross_aep_farm_gwh(
     WIND-3 (#484): cut-out is handled IMPLICITLY here via ``np.interp(..., right=0.0)`` — the
     supplied power curve must already encode the cut-out (its last point is the cut-out speed,
     above which interp returns 0). ``wind_resource.bankable_aep.gross_aep_weibull`` instead
-    zeroes power EXPLICITLY outside ``[cut_in, cut_out]``. The two integrators were verified to
-    agree to < 0.1% on the canonical IEA-10MW curve (the Weibull pdf is vanishing near the
-    25 m/s cut-out), so this is a documented, bounded modelling-style difference, not a bug;
-    the committed headline (464.3 GWh) is the FROZEN ``aep_summary_dutchbay_10mw.json`` value
-    and is unaffected by either integrator at runtime.
+    zeroes power EXPLICITLY outside ``[cut_in, cut_out]``. The two agree to well within 0.1%
+    on every curve in the store, so this is a documented, bounded modelling-style difference,
+    not a bug; the committed headline (464.3 GWh) is the FROZEN
+    ``aep_summary_dutchbay_10mw.json`` value and is unaffected by either integrator at runtime.
+
+    That agreement is now EXECUTED rather than asserted here (#1281):
+    ``tests/analytics/test_gross_aep_integrator_parity.py`` pins it at 0.05% across the whole
+    curve store and a sweep of the plausible site resource range. This is the module a reader
+    should open for the live gross-AEP maths — ``bankable_aep`` carries the cross-check
+    implementation, deliberately kept off the production path so it can act as its oracle.
     """
     pdf = _weibull_pdf(_WS_GRID, weibull_a, weibull_k)
     pdf = pdf / float(np.trapezoid(pdf, _WS_GRID))  # renormalise over the grid

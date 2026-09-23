@@ -13,8 +13,11 @@ canonical analytic AEP chain. The pieces (one scenario file drives both):
    (:func:`analytics.wind.aep_summary_builder.build_aep_summary_from_config`) on the
    *fitted* ``(A, k)`` — then reports the drift of the fit vs the scenario's declared
    ``wind_resource.weibull_a/k``. It does NOT overwrite the declared baseline (VALIDATE
-   mode): the auditable 483.6 GWh headline stays the analytic engine on the declared
-   Weibull. Adopting a fitted ``(A, k)`` is a deliberate, dated config edit.
+   mode): the auditable headline — bankable net P50 **464.3 GWh**, the modelled 473.8 GWh
+   less the 2.0% pre-construction haircut — stays the analytic engine on the declared
+   Weibull. Adopting a fitted ``(A, k)`` is a deliberate, dated config edit. 483.6 GWh is
+   NOT that headline: it was the net P50 on the superseded declared Weibull A=8.32/k=2.1,
+   retired by the ERA5 re-baseline for overstating the resource by 2.0% (#1277).
 3. :func:`assess` is the live end-to-end orchestrator (retrieve -> hub series -> coverage
    guard -> assessment). The CDS/xarray imports stay call-time guarded (CASPER), so this
    module imports cleanly without the ``[wind]`` extra and CI can exercise (2) on

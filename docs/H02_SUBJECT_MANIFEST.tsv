@@ -1,0 +1,5 @@
+changelog.d/hygiene-dependency-guards.fixed.md	382d40150607cd8d28d13301f2f55a3341307570
+docs/H02_IMPLEMENTATION.md	56411950a65e0d36c5abfa4a38a15995b55046fc
+tests/analytics_layer/test_mc_exports.py	1162d45c5f08d5d7ec34fd338db9734476731078
+tests/app/test_jobs_backend_gate.py	729a152645e4b4727cb4c276358aca0211c29ccf
+tests/app/test_report_renderer.py	c0a393e2a027829c0ec988143cf47e53e9da4579

@@ -1,0 +1,128 @@
+{
+  "reviewer_role": "dependency_type",
+  "reviewer_identity": "/root/dependency_type",
+  "candidate_commit": "06a4048b51cccd61d7447ec350f3d3a77822f1ba",
+  "candidate_tree": "56567180e07a1c3d3c716df8e447e55f897aa1f3",
+  "base_sha": "dbd924a00dd4b29e23139da768a8f2603396dc17",
+  "merge_base_sha": "dbd924a00dd4b29e23139da768a8f2603396dc17",
+  "subject_manifest_sha256": "60aa8ca1d6627507edea3b46ffa552ec4b5868cefa71bd8422388aeff142a57a",
+  "corpus_and_rule_identities": {
+    "assignment": "pr1178/dependency_type_FINAL_PROFILE.md final-assignment addendum supersedes its historical original-phase branch wording",
+    "fresh_subject_sources": [
+      "changelog.d/1178-scipy-stubs.fixed.md",
+      "docs/PR1178_SCIPY_STUBS_IMPLEMENTATION_RECORD.md",
+      "requirements.txt",
+      "tests/wind/test_weibull_ks_pvalue.py",
+      "wind_resource/weibull_fit.py",
+      "wind_resource/wind_analyzer.py"
+    ],
+    "governance": "Previously fully ingressed current AGENTS, all 74 CSV rules, all four RECRUIT-01 modules, pinned unabridged frameworks, newest handover and applicable predecessor HOLDs; these remain controlling. CSV SHA256 0cc23891d3328d95e14031e07075d186b43545e4eb0d310303ff3c8d1c2148c1.",
+    "normative_contracts": "Retained requirements/constraints/pyproject/mypy/workflow contracts; initial PR1174/1176 findings; preexisting wind tests; target wheel statistical type declarations.",
+    "primary_wheel_sha256": "fc1f00da3eb6bf1adf2138774b5e6a91dcf7c77039ff199577dc47929c10793e"
+  },
+  "review_scope": "Fresh substantive review of all six changed objects, source-level numerical preservation, new test quality, independent faithful target-stub type check and hostile result-field substitution. No original acceptance was carried; no peer final disposition was read.",
+  "checks_executed_and_exact_results": [
+    {
+      "command": "git diff dbd924a 06a4048",
+      "result": "Complete six-file diff inspected. Runtime changes are only retaining stats.kstest result and selecting its named pvalue property. All call arguments, fitting/filtering/math and other output fields remain identical."
+    },
+    {
+      "command": "Governed Python: download version-specific PyPI scipy-stubs1.18.1.0 wheel in memory; verify SHA256 against published metadata; for each --shadow-file source in original_type_reproduction.json compare local source bytes with the corresponding wheel member",
+      "result": "exit0; all589 shadow sources byte-identical to freshly fetched verified wheel"
+    },
+    {
+      "command_argv_source": "/Users/aruna/Downloads/DutchBay_Oldest_First_Programme_2026-09-07/pr1178/original_type_reproduction.json",
+      "command_argv_source_sha256": "84f90d01d0b2951bb24b17ac0fe799105ca64d2b614cad74af1664d194987f43",
+      "command_execution": "Independently ran subprocess.run(json.loads(receipt.read_text())['command'], text=True, capture_output=True) against repaired HEAD, with DUTCHBAY_VENV=/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv, PYTHONPATH=$PWD, PYTHONDONTWRITEBYTECODE=1.",
+      "result": "exit0; Success: no issues found in2 source files; unused mypy configuration warnings only. This uses target stubs, no incremental cache and cache-dir=/dev/null."
+    },
+    {
+      "command": "Governed Python runpy.run_path('tests/wind/test_weibull_ks_pvalue.py'); invoke test_weibull_ks_pvalue_matches_two_sided_distribution(seed,entrypoint) for seed in (7,21) and entrypoint in ('series','analyzer')",
+      "result": "exit0; all4 positive cases pass"
+    },
+    {
+      "command": "Same independent runpy test invocation after in-memory replacement stats.kstest=lambda *a,**kw: types.SimpleNamespace(pvalue=original(*a,**kw).statistic); count AssertionError for the4 cases; assert failed==4; restore original",
+      "result": "exit0 for reviewer harness; all4 hostile statistic-substitution cases rejected by the actual committed test"
+    },
+    {
+      "command": "gh pr view1178 --json headRefOid,baseRefOid",
+      "result": "Published head06a4048b51cccd61d7447ec350f3d3a77822f1ba and basedbd924a00dd4b29e23139da768a8f2603396dc17 match reviewed object"
+    },
+    {
+      "command": "For each repaired_subject_manifest.tsv row: git rev-parse HEAD:path equals recorded blob; pathlib.Path(path).read_bytes() equals git show HEAD:path; SHA256 manifest",
+      "result": "All6 subjects match frozen commit and working bytes; manifest60aa8ca1d6627507edea3b46ffa552ec4b5868cefa71bd8422388aeff142a57a"
+    },
+    {
+      "command": "git diff --check; git status --porcelain",
+      "result": "exit0; no whitespace errors; clean working tree"
+    }
+  ],
+  "independent_oracles_or_counterexamples": [
+    {
+      "oracle": "Faithful primary-source type check",
+      "result": "Original two-consumer argv that reproduced the hosted errors now succeeds against589 freshly wheel-verified target stub shadows. No stub edits, casts, ignore directives or mypy relaxation are introduced."
+    },
+    {
+      "oracle": "Direct KS statistic plus hostile field substitution",
+      "result": "Read the entire test body. It independently computes empirical-CDF jump maxima against the explicit Weibull formula and obtains the two-sided finite-sample tail using kstwo.sf. It does not call kstest for its oracle. Independently observed all4 positive and all4 negative cases. Its use of fitted parameters intentionally checks the retained diagnostic computation, not calibrated post-fit statistical significance."
+    },
+    {
+      "oracle": "Bounded source-level numerical invariant",
+      "result": "For the retained SciPy1.18.1 KstestResult, tuple item1 and named pvalue refer to the same result field, already independently exercised on four seeded samples in initial review. The fresh full diff changes no call inputs or runtime pins. This is sufficient source-level preservation evidence for this two-site access repair, supplemented by inspected coordinator full-output equivalence receipt."
+    }
+  ],
+  "predecessor_finding_matrix": [
+    {
+      "finding_id": "PR1178-HOSTED-KS-TUPLE-TYPE-FAILURE",
+      "applicability": "Direct",
+      "probe_evidence": "Independent repaired target-stub two-consumer mypy exit0; named property source inspection",
+      "result": "CLOSED"
+    },
+    {
+      "finding_id": "PR1178-STALE-ORIGINAL-BASE",
+      "applicability": "Direct delivery prerequisite",
+      "probe_evidence": "Fresh frozen successor and live PR head/base match current reviewed base",
+      "result": "CLOSED"
+    },
+    {
+      "finding_id": "PR1176-MPMATH-SYMPY-CEILING",
+      "applicability": "Neither pin changes",
+      "probe_evidence": "Complete original and repaired requirements diff",
+      "result": "NOT_APPLICABLE"
+    },
+    {
+      "finding_id": "PR1176-NUMPY-TYPING-COMPAT-CEILING",
+      "applicability": "Neither implicated pin changes",
+      "probe_evidence": "Requirements diff and original successful hosted installation",
+      "result": "NOT_APPLICABLE"
+    },
+    {
+      "finding_id": "PR1174-CONSUMER-CEILINGS",
+      "applicability": "General method applies",
+      "probe_evidence": "Primary metadata compatibility from initial review, unchanged target pin, inspected full_candidate_resolver.json exit0",
+      "result": "CLOSED"
+    }
+  ],
+  "findings_and_residual_limitations": [
+    {
+      "id": "DT-FINAL-01",
+      "state": "ACCEPTED_RESIDUAL_WITHIN_SCOPE",
+      "finding": "Local target type evidence uses verified shadow sources; no target package installation occurred. Actual final-head hosted installation and all required CI must succeed before merge."
+    },
+    {
+      "id": "DT-FINAL-02",
+      "state": "ACCEPTED_RESIDUAL_WITHIN_SCOPE",
+      "finding": "This reviewer did not rerun full resolver, full library/scripts mypy, full pytest, QSTS, lint/format or release qualification. Inspected coordinator receipts support their disclosed local results; my independent execution targets the changed type/runtime boundary and the new guard. No general qualification claim."
+    },
+    {
+      "id": "DT-FINAL-03",
+      "state": "ACCEPTED_RESIDUAL_WITHIN_SCOPE",
+      "finding": "Implementation record explicitly discloses old installed stubs, unused mypy sections, NetCDF binary-size warning, preexisting Ruff/Black format difference and absence of local pre-commit hook. No suppression or weakened gate is introduced."
+    }
+  ],
+  "hold_and_authority_effect": "None. Issue1110, empty production assembly authority and all professional/publication/deployment/release/lender/Board/HOLD boundaries remain unchanged. Engineering acceptance does not authorize merge before required CI or replace assurance review and final-head rebind.",
+  "disposition": "ACCEPT_SUBSTANTIVE_REPAIRED_CANDIDATE",
+  "outcome": "EVIDENCE_RETURNED",
+  "mutation_attestation": "Read-only source/Git/receipt/network inspection and in-memory runtime/type probes. No writes to repository, index, refs, environment, PR, issue or evidence files. No package installation. No peer final review viewed before this disposition.",
+  "final_head_rebind": "PENDING coordinator persistence and hash validation"
+}

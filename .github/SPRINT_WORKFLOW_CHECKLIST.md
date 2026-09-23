@@ -1,10 +1,12 @@
 # DutchBay Sprint Workflow Checklist
 
-**Purpose:** Ensure every sprint/branch meets GWTF v3.0, CCCDIR, and quality standards
+**Purpose:** Ensure every sprint/branch meets GWTF v3.0 and quality standards
+
+**Canonical source:** `go_with_the_flow_rules_v3_0_clean.csv` at the repository root. This checklist is derived from it and is not a replacement copy; where the two disagree, the CSV wins.
 
 **When to Use:** At start of each sprint, before creating feature branches
 
-**Last Updated:** December 16, 2025
+**Last Updated:** September 20, 2026
 
 ---
 
@@ -29,7 +31,7 @@ Before starting a new sprint or feature branch:
 - [ ] **No hardcoded values** in code
 - [ ] **All parameters** from YAML config (`dutchbay_lendercase_2025Q4.yaml`)
 - [ ] **Config paths documented** in module docstrings
-- [ ] **Fallback logic** defined if config sections missing
+- [ ] **No silent fallbacks** — a missing required section fails loud (FRAMEWORK-02)
 - [ ] **Example:** `corporate_tax_rate = float(config.tax.corporate_tax_rate)` ✅
 - [ ] **NOT:** `corporate_tax_rate = 0.24` ❌
 
@@ -72,7 +74,7 @@ grep -r "import argparse" finance/ dutchbay_v14chat/ run_*_v14.py
 - [ ] **Call validate_config_for_v14()** before processing
 - [ ] **strict=True** for production runs
 - [ ] **Error messages** logged with invalid configs
-- [ ] **Fallback behavior** documented for strict=False
+- [ ] **No `strict=False`** in production code paths (FRAMEWORK-02)
 
 **Example:**
 ```python
@@ -147,102 +149,37 @@ mypy finance/new_module_v14.py --strict
 
 ## 📝 Implementation Phase
 
-### CCCDIR Framework Checklist
+### Framework Principles (FRAMEWORK-01 / 02 / 03)
 
-#### C1: Configuration
+`CASPER`, `CESSPIT` and `CCCDIR` are **three peer rules**, not parts of one another.
+The wording below is a summary of rows `FRAMEWORK-01`, `FRAMEWORK-02` and `FRAMEWORK-03`
+of `go_with_the_flow_rules_v3_0_clean.csv`; read those rows for the full statement and
+enforcement notes before auditing anything against them.
 
-- [ ] **Config source** documented in module docstring
-- [ ] **Path example:** `scenarios/dutchbay_lendercase_2025Q4.yaml::tax`
-- [ ] **Fallback paths** defined and tested
-- [ ] **Config validation** required before use
-- [ ] **Config_source parameter** tracked for audit
+#### FRAMEWORK-01: CASPER — Clear API Surfaces with Predictable Error Responses
 
-**Example:**
-```python
-"""
-Configuration Path:
-- scenarios/dutchbay_lendercase_2025Q4.yaml::tax (canonical)
-- scenarios/dutchbay_lendercase_2025Q4.yaml::project (fallback)
-"""
+- [ ] **Clean module interfaces** with explicit, documented error types
+- [ ] **Optional dependencies fail at call time, not import time**, behind `_require_*()`
+      guards (see `analytics/sensitivity/global_sa.py::_require_salib`)
+- [ ] **Actionable error messages** when a guard trips
+- [ ] **Lender packs** go through `build_casper_risk_blocks()`
+- [ ] **Analytics exports** carry CASPER metadata (scenario, timestamp, contract_version)
 
-def build_tax_profile(
-    config_tax: DictConfig,
-    # ...
-    config_source: str = "config",  # For audit trail
-):
-```
+#### FRAMEWORK-02: CESSPIT — Config Explicit, Schema Strict, Pre-flight Integrity Tests
 
-#### C2: CASPER (Clean Architecture)
+- [ ] **All scenario params in YAML/JSON** — no hardcoded values
+- [ ] **`validate_config_for_v14` called in strict mode** at CLI entry
+- [ ] **No silent defaults or fallbacks** for FX, tax or debt terms
+- [ ] **No bypass mechanisms** — `strict=False` does not belong in production code
+- [ ] **Error messages** name the exact config path and the expected structure
 
-- [ ] **Separation of concerns** - module does ONE thing
-- [ ] **API contract** - clear public interface
-- [ ] **No side effects** - pure functions where possible
-- [ ] **Immutable outputs** - frozen dataclasses
-- [ ] **Error handling** - explicit validation errors
+#### FRAMEWORK-03: CCCDIR — Contracts Centralized, Compliance Documented, Import Relationships explicit
 
-**Example:**
-```python
-@dataclass(frozen=True)  # ✅ Immutable
-class TaxProfile:
-    corporate_tax_rate: float
-    # ...
-
-def build_tax_profile(config_tax: DictConfig) -> TaxProfile:  # ✅ Clear contract
-    # Validate inputs
-    if not (0.0 <= config_tax.corporate_tax_rate <= 1.0):
-        raise ValueError(...)  # ✅ Explicit error
-```
-
-#### C3: CESSPIT (Core-Easy-Simple)
-
-- [ ] **Core module** - focused, single responsibility
-- [ ] **Easy to integrate** - simple factory pattern
-- [ ] **Simple interface** - minimal parameters
-- [ ] **Clear naming** - self-documenting code
-- [ ] **Minimal dependencies** - only essentials imported
-
-**Example:**
-```python
-# ✅ Simple: config in, profile out
-def build_tax_profile(config_tax: DictConfig, ...) -> TaxProfile:
-    """Factory pattern - easy to understand."""
-    # Compute once, return immutable
-```
-
-#### C4: LIBsct (Linting-Import-Bans)
-
-- [ ] **LibCST tests** written for module
-- [ ] **Import bans** enforced (no argparse/Typer)
-- [ ] **Hardcoding bans** tested
-- [ ] **Hot-spot APIs** validated
-- [ ] **CI fails** if violations detected
-
-**Checklist:**
-```bash
-# Add to tests/lint/test_module_compliance.py
-[ ] No argparse imports
-[ ] No Typer imports (in v14 modules)
-[ ] No hardcoded constants (numeric literals)
-[ ] No interactive input() calls
-[ ] Correct import paths (omegaconf, not sys.argv)
-```
-
-#### C5: CDIR (Config-Directory-Import-Reproducibility)
-
-- [ ] **Config-first** - params from YAML
-- [ ] **Directory structure** - correct location (finance/, analytics/, etc.)
-- [ ] **Import patterns** - `from omegaconf import DictConfig`
-- [ ] **Reproducibility** - config source tracked
-- [ ] **Version tracking** - VERSION file updated
-
-**Checklist:**
-```
-[ ] File in correct directory (finance/*, analytics/*, etc.)
-[ ] Imports follow pattern: from omegaconf import ...
-[ ] Config path documented: scenarios/dutchbay_lendercase_2025Q4.yaml
-[ ] Config_source parameter included for audit
-[ ] VERSION file updated if financial behavior changed
-```
+- [ ] **Result types** defined in `contracts_v14` and imported only from there
+- [ ] **Only `evaluate_with_overrides()`** imported from `evaluation_v14`
+- [ ] **No direct imports** of internal evaluation logic (`EvaluationContext`,
+      `FinanceState`, internal functions) — a LibCST test bans them
+- [ ] **Import audit** kept current in `docs/AUDIT_IMPORT_GATEWAY_PATTERN.md`
 
 ---
 
@@ -340,8 +277,9 @@ pytest tests/api/test_module_v14_regression.py --cov=finance.new_module_v14 --co
 - [ ] Schema guard integration verified
 - [ ] LibCST linting passed
 - [ ] Type hints complete (mypy --strict)
-- [ ] CASPER + CESSPIT architecture followed
-- [ ] CCCDIR framework aligned
+- [ ] FRAMEWORK-01 (CASPER) followed
+- [ ] FRAMEWORK-02 (CESSPIT) followed
+- [ ] FRAMEWORK-03 (CCCDIR) followed
 - [ ] Tests passing (unit, integration, regression)
 - [ ] Documentation complete
 ```
@@ -369,12 +307,10 @@ Before merging to main/sprint branch:
   - [ ] R3: No argparse ✅
   - [ ] R5: Schema guard pre-flight ✅
 
-- [ ] **CCCDIR Alignment** verified
-  - [ ] Config-first: All from YAML ✅
-  - [ ] CASPER: Clean separation ✅
-  - [ ] CESSPIT: Core/Easy/Simple ✅
-  - [ ] LIBsct: Linting enforced ✅
-  - [ ] CDIR: Config/Directory/Import/Reproducible ✅
+- [ ] **Framework Principles** verified
+  - [ ] FRAMEWORK-01 CASPER: clear API surfaces, call-time optional-dep guards ✅
+  - [ ] FRAMEWORK-02 CESSPIT: config explicit, schema strict, no silent fallbacks ✅
+  - [ ] FRAMEWORK-03 CCCDIR: contracts centralized, imports explicit ✅
 
 - [ ] **Quality Standards** met
   - [ ] No hardcoded values
@@ -419,14 +355,12 @@ For each sprint/branch, fill out:
 
 **Score: 8/8 (100%)**
 
-## CCCDIR Framework
-- [x] C1: Configuration (YAML-driven)
-- [x] C2: CASPER (Clean architecture)
-- [x] C3: CESSPIT (Core/Easy/Simple)
-- [x] C4: LIBsct (Linting enforced)
-- [x] C5: CDIR (Config/Directory/Import/Reproducible)
+## Framework Principles
+- [x] FRAMEWORK-01: CASPER (clear API surfaces, predictable errors)
+- [x] FRAMEWORK-02: CESSPIT (config explicit, schema strict, pre-flight tests)
+- [x] FRAMEWORK-03: CCCDIR (contracts centralized, imports explicit)
 
-**Score: 5/5 (100%)**
+**Score: 3/3 (100%)**
 
 ## Quality Standards
 - [x] No hardcoded variables
@@ -446,7 +380,8 @@ For each sprint/branch, fill out:
 
 ## 🔗 References
 
-- **GWTF Ruleset:** `go_with_the_flow_rules_v3_0_clean.csv`
+- **GWTF Ruleset (canonical):** `go_with_the_flow_rules_v3_0_clean.csv`
+- **Framework rows:** `FRAMEWORK-01` (CASPER), `FRAMEWORK-02` (CESSPIT), `FRAMEWORK-03` (CCCDIR)
 - **Config Template:** `scenarios/dutchbay_lendercase_2025Q4.yaml`
 - **Schema Guard:** `analytics/schema_guard.py`
 - **LibCST Tests:** `tests/lint/`
@@ -465,6 +400,6 @@ For each sprint/branch, fill out:
 
 ---
 
-**Last Updated:** December 16, 2025  
-**Version:** 1.0.0  
+**Last Updated:** September 20, 2026  
+**Version:** 1.1.0  
 **Status:** ACTIVE - Use for all future sprints

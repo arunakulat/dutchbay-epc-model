@@ -65,6 +65,22 @@ def _have_opposite_signs(a: float, b: float) -> bool:
     return (a < 0.0 < b) or (b < 0.0 < a)
 
 
+def _irr_normalization_overflows(cashflows: Sequence[float]) -> bool:
+    """Detect a nonfinite companion coefficient from finite float cashflows.
+
+    numpy-financial 1.0.0 passes reversed cashflows to ``np.roots``, which
+    trims end zeros and divides by the last nonzero cashflow. An infinite
+    coefficient necessarily fails NumPy's finite-matrix check before eigvals.
+    Python float division detects that same overflow without emitting a warning;
+    successful polynomial solves and the later root-to-rate conversion are untouched.
+    """
+    nonzero = [cf for cf in cashflows if cf != 0.0]
+    if len(nonzero) < 2 or not all(math.isfinite(cf) for cf in nonzero):
+        return False
+    leading = nonzero[-1]
+    return any(not math.isfinite(cf / leading) for cf in nonzero[:-1])
+
+
 # ============================================================================
 # PERIODIC NPV/IRR (Standard Regular Cashflows)
 # ============================================================================
@@ -150,6 +166,8 @@ def irr(
 
     # First attempt: library IRR (fast when it works)
     try:
+        if _irr_normalization_overflows(cfs):
+            raise FloatingPointError("IRR polynomial normalization overflows")
         val = float(npf.irr(cfs))
     except Exception:
         val = float("nan")

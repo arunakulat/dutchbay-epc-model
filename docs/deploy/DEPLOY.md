@@ -236,6 +236,17 @@ libraries (`Dockerfile` installs `libpango-1.0-0`, `libpangocairo-1.0-0`, `libpa
 of those from the runtime stage and the package still imports as metadata but fails at the first
 PDF request. `--deep` is what catches that before a user does.
 
+`libharfbuzz-subset0` is in the same runtime set and behaves differently, so it is called out
+rather than appended to that list. WeasyPrint 70.0 `dlopen`s it by name with `allow_fail=True`:
+drop it and *nothing* fails. The import warns once that the library will be required by future
+versions, and every render then subsets its fonts with fontTools instead, warning again per face.
+The PDF stays valid and correctly tagged, so neither `--deep` nor `/health` can see the
+difference — a missing font library that does not break anything is exactly the kind a probe
+misses. It is gated instead by the `docker-build` workflow, which renders a PDF *inside* the built
+image and fails if the HarfBuzz path was not taken (`scripts/check_image_harfbuzz_subset.py`).
+Keep the library when bumping WeasyPrint: it calls the fontTools fallback deprecated, so a later
+version removes it and the silent degradation becomes a hard failure.
+
 Exit codes make it usable as a CI gate: `0` all checks passed, `1` a check failed, `2` the
 instance was unreachable or is not this application. `--json` emits the same result machine-readably.
 
@@ -249,9 +260,12 @@ Checking a specific extra is reported at all:
 python scripts/verify_deployment.py "$URL" --expect-extra=report
 ```
 
-The probe behind it (`app/ops/extras.py`) reads declared pins from the installed distribution's
-own metadata rather than a hand-kept table, so what the endpoint reports cannot drift from
-`pyproject.toml`.
+The probe behind it (`app/ops/extras.py`) reads declared pins from the project's own declaration
+rather than a hand-kept table: the `pyproject.toml` beside the executing code when there is one,
+and the installed distribution's recorded metadata otherwise. In this image both are the same
+tree (`COPY . .` puts `pyproject.toml` at `/app`, which is also the editable install's source),
+so the endpoint reports what the image actually declares. Each extra's `spec_source` field
+records which of the two answered.
 
 ## Configuration reference
 
@@ -316,9 +330,11 @@ synchronous-route variables in `app/api/config.py`; CDS variables in
 - **Local Docker build not run in the authoring environment.** The image could not be
   built or booted where this scaffolding was authored. The `docker-build` CI workflow is
   the build-and-boot verification for the image; a green run of that workflow is the
-  gate that the image builds and the web process starts and answers `/health`. What a
-  *running* instance actually contains is now verifiable without deploy access — see
-  **Post-deploy verification** above; run it with `--deep` after any image change.
+  gate that the image builds, the web process starts and answers `/health`, and a PDF
+  rendered inside the image takes WeasyPrint's HarfBuzz-Subset path rather than the
+  deprecated fontTools fallback. What a *running* instance actually contains is now
+  verifiable without deploy access — see **Post-deploy verification** above; run it with
+  `--deep` after any image change.
 - **Verification reports what the instance says about itself.** `verify_deployment.py`
   reads the deployment's own health surface. That is sufficient for presence, pins and
   importability, and it is strictly better than an unverified assumption — but it is not

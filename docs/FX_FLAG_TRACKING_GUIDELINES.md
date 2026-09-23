@@ -298,10 +298,13 @@ To implement truthful FX flag tracking:
 - Clear visibility into hedging strategies
 
 ### For Compliance
-- ✅ CASPER: Contract-explicit flag semantics
-- ✅ CESSPIT: Evidence-based tracking (not config-based)
-- ✅ GWTF: Single source of truth for FX status
-- ✅ CCCDIR: Comprehensive documentation
+- ✅ `FRAMEWORK-01` CASPER (clear API surfaces, predictable errors): flag semantics are
+  contract-explicit, with a documented error response rather than a quiet fallback
+- ✅ `FRAMEWORK-02` CESSPIT (config explicit, schema strict): FX inputs come from config
+  and are schema-validated pre-flight; no silent FX default
+- ✅ `FRAMEWORK-03` CCCDIR (contracts centralized, compliance documented): one FX status
+  contract, documented here
+- ✅ GWTF: the ruleset as a whole — `go_with_the_flow_rules_v3_0_clean.csv` is canonical
 
 ---
 

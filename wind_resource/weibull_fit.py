@@ -10,9 +10,15 @@ with ``floc=0``) and reports the **drift** of that fit against the scenario's
 declared ``wind_resource.weibull_a/k``.
 
 Per project policy the fit does NOT overwrite the declared baseline (which backs the
-auditable 483.6 GWh headline). It runs in VALIDATE mode: surface the drift so silent
-resource erosion is caught; adopting a new ``(A, k)`` is a deliberate, dated config
-edit, not an automatic side effect.
+auditable headline: bankable net P50 **464.3 GWh**, i.e. the modelled 473.8 GWh less the
+2.0% pre-construction over-prediction haircut, frozen in
+``scenarios/aep_summary_dutchbay_10mw.json``). It runs in VALIDATE mode: surface the
+drift so silent resource erosion is caught; adopting a new ``(A, k)`` is a deliberate,
+dated config edit, not an automatic side effect.
+
+Do not calibrate an acceptable drift against 483.6 GWh: that was the net P50 on the
+superseded DECLARED Weibull (A=8.32/k=2.1), which the ERA5 fit showed overstated the
+resource by 2.0%. It was retired by the re-baseline this module exists to catch (#1277).
 
 GWTF: config-first, fully typed, no hardcoded site constants.
 """
@@ -164,7 +170,7 @@ def fit_weibull_on_series(
     ss_res = float(np.sum((empirical_cdf - theoretical_cdf) ** 2))
     ss_tot = float(np.sum((empirical_cdf - np.mean(empirical_cdf)) ** 2))
     r_squared = 1.0 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
-    _ks_stat, ks_pvalue = stats.kstest(
+    ks_result = stats.kstest(
         arr, lambda x: stats.weibull_min.cdf(x, shape_k, loc=0, scale=scale_c)
     )
 
@@ -174,7 +180,7 @@ def fit_weibull_on_series(
         mean_ws_ms=float(arr.mean()),
         std_ws_ms=weibull_std(float(scale_c), float(shape_k)),
         r_squared=float(r_squared),
-        ks_pvalue=float(ks_pvalue),
+        ks_pvalue=float(ks_result.pvalue),
         energy_gof_pct=energy_moment_gof_pct(arr, float(scale_c), float(shape_k)),
         n_samples=int(len(arr)),
     )

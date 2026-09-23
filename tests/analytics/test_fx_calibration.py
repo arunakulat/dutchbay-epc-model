@@ -21,6 +21,7 @@ from analytics.fx import fx_history
 from analytics.fx.fx_calibration import (
     CRISIS_REGIME,
     NORMAL_REGIME,
+    FXCalibration,
     calibrate_from_config,
     calibrate_fx,
 )
@@ -91,7 +92,9 @@ class TestFxHistory:
 
 class TestFxCalibration:
     @pytest.fixture(scope="class")
-    def cal(self):
+    @classmethod
+    def cal(cls) -> FXCalibration:
+        """Calibrate the pinned FX vintage once for this test class."""
         return calibrate_fx(
             load_pinned_history(), pinned_spot=_PINNED_SPOT, frequency="weekly"
         )
@@ -392,9 +395,8 @@ class TestFxRefresh:
             "preferred_live_backbone",
         ]
         for k in descriptor_keys:
-            assert (
-                gen[k] == committed[k]
-            ), f"descriptor {k!r} drifted from committed sidecar"
+            message = f"descriptor {k!r} drifted from committed sidecar"
+            assert gen[k] == committed[k], message
 
     def test_write_vintage_fails_loud_on_silent_row_drop(self, tmp_path: Path) -> None:
         # A rate that rounds to "0" at 4dp would be dropped on reload; the write
