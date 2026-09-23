@@ -39,14 +39,21 @@ files, and every area is checked in both directions from its first commit withou
 remembering to enlist it. What stays *declared* is the one thing that must not be inferred —
 whether a nested manifest's subject lives in this repository or outside it (see
 ``NESTED_IN_REPO`` / ``NESTED_EXTERNAL``). An area with no parent manifest at all is a
-finding, not a skip, so the discovery step cannot be defeated by omitting the manifest.
+finding, not a skip, so the discovery step cannot be defeated by omitting the manifest —
+nor by not being a directory: an area held as a symlink or vendored as a submodule, and a
+loose file dropped at the root, are each one index entry belonging to no area, and
+:func:`_loose_entries` reports all three rather than passing over them.
 
 **Every guard is proved to fire.** ``VERIFY-01`` clause 5: a guard that has never been
-observed to fail is itself an unverified claim. There are eight guards here and eight
-``test_negative_control_*`` tests, one per guard, and that count is enforced by
-:func:`test_every_guard_has_a_negative_control` rather than asserted in this docstring —
-prose drifts, and a count written down by the author is exactly the unverified claim the
-rule is about. Each control builds its subject in a throwaway git repository or a
+observed to fail is itself an unverified claim. Every guard here is paired with at least one
+``test_negative_control_*``, and that pairing is enforced by
+:func:`test_every_guard_has_a_negative_control` rather than asserted in this docstring. No
+count is written here on purpose: the first revision of this module claimed six controls for
+eight guards, and a count written down by the author is exactly the unverified claim the
+rule is about. Read ``GUARD_CONTROLS`` for the current mapping. A guard whose two halves can
+fail independently gets a control for each — the clause guard shipped with its extraction
+proved and its search unproved, and a reviewer switched the search off without reddening
+anything. Each control builds its subject in a throwaway git repository or a
 ``tmp_path``, asserts the helper reports nothing, introduces exactly one defect, and
 asserts the same helper the live test calls reports it. They run against a synthetic tree
 and never the real one, which is the point: they can be made to fail on demand.
@@ -135,14 +142,23 @@ HANDLING_ANCHORS: dict[str, tuple[Path, tuple[Path, ...]]] = {
     ),
 }
 
-# A restricted clause quoted verbatim belongs in one file or nowhere. heading that opens the
-# quotation block -> the manifest that is its single home. The spans themselves are READ OUT OF
-# THE MANIFEST at run time and are deliberately NOT written here: a literal copy in this file
-# would itself be a second copy of the clause in a public repository, which is precisely what
-# this module exists to forbid. CI caught exactly that on the first run of this guard, when the
-# spans were hard-coded.
-VERBATIM_QUOTATION_HOMES: dict[str, Path] = {
-    "3. CLAUSE 6, VERBATIM.": OFFERS_MANIFEST,
+# A restricted clause quoted verbatim belongs in one file or nowhere: the manifest that is its
+# single home -> the headings that open the quotation blocks it carries. The spans themselves
+# are READ OUT OF THE MANIFEST at run time and are deliberately NOT written here: a literal copy
+# in this file would itself be a second copy of the clause in a public repository, which is
+# precisely what this module exists to forbid. CI caught exactly that on the first run of this
+# guard, when the spans were hard-coded.
+#
+# KEYED BY MANIFEST, DELIBERATELY. An earlier revision keyed this by heading, which is a
+# section number and a clause name — boilerplate that every offers manifest carries, not an
+# identifier. A second corpus area quoting its own clause 6 under the same heading evicted the
+# NSO entry from this dict, and the tree scan that is supposed to catch an unregistered
+# quotation collapsed in exactly the same way, so the two cancelled out and alphabetical order
+# decided which area kept its guard. A RECRUIT-01 reviewer built that case and measured it
+# green. The pair (heading, manifest) is the thing that must be unique, so it is the thing
+# registered.
+VERBATIM_QUOTATION_HOMES: dict[Path, tuple[str, ...]] = {
+    OFFERS_MANIFEST: ("3. CLAUSE 6, VERBATIM.",),
 }
 MIN_SPAN_CHARS = 30
 
@@ -248,6 +264,54 @@ def _corpus_areas(repo_root: Path) -> list[Path]:
         if "/" in entry
     }
     return sorted(source_materials / name for name in names)
+
+
+# git index modes, for naming what a loose entry actually is. An area held as a symlink or a
+# submodule is a single index entry with no path separator beneath the root, exactly like a
+# stray file, and the three are told apart only by mode.
+LOOSE_ENTRY_KINDS: dict[str, str] = {
+    "120000": "a symlink",
+    "160000": "a submodule (gitlink)",
+}
+
+
+def _loose_entries(repo_root: Path) -> list[str]:
+    """Tracked entries sitting directly under ``docs/source_materials``, belonging to no area.
+
+    :func:`_corpus_areas` takes an area to be the first path segment and keeps only entries
+    that have one, so an entry with no separator beneath the root is discovered by nothing,
+    checked by nothing and reported by nothing. Three shapes land that way and all three are
+    plausible in an evidence corpus: a loose evidence file dropped at the root, an area held
+    as a **symlink**, and an area vendored as a **submodule** — and the last two are the
+    obvious shapes for material that lives elsewhere, which is what this corpus is about. A
+    ``RECRUIT-01`` reviewer built all three and measured them green, against a docstring
+    saying discovery could not be defeated by omitting the manifest. It could: by omitting
+    the directory.
+    """
+    source_materials = repo_root / "docs" / "source_materials"
+    if not source_materials.is_dir():
+        return []
+    listing = subprocess.run(
+        ["git", "ls-files", "-z", "--stage", "--", str(source_materials)],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    prefix = f"{source_materials.relative_to(repo_root).as_posix()}/"
+    loose: list[str] = []
+    for record in listing.split("\0"):
+        if not record:
+            continue
+        # `git ls-files --stage` emits "<mode> <object> <stage>\t<path>"; -z keeps the path
+        # unquoted, so a non-ASCII name is not C-escaped here.
+        meta, _, path = record.partition("\t")
+        name = path.removeprefix(prefix)
+        if "/" in name:
+            continue
+        kind = LOOSE_ENTRY_KINDS.get(meta.split(" ", 1)[0], "a file")
+        loose.append(f"{name} ({kind})")
+    return sorted(loose)
 
 
 def _nested_manifests(area: Path) -> list[Path]:
@@ -368,28 +432,69 @@ def _manifests_of(area: Path) -> list[Path]:
 
 def _declarations_in_tree(
     areas: Sequence[Path], pattern: re.Pattern[str]
-) -> dict[str, Path]:
-    """Map each identifier ``pattern`` finds in a manifest to the manifest defining it."""
-    found: dict[str, Path] = {}
+) -> list[tuple[str, Path]]:
+    """Every ``(identifier, manifest)`` occurrence ``pattern`` finds across the areas.
+
+    A list of occurrences rather than a mapping from identifier to manifest. The mapping
+    lost one of two areas whenever both used the same identifier, which for a quotation
+    heading is the normal case rather than the exotic one, and it lost it silently.
+    """
+    found: list[tuple[str, Path]] = []
     for area in areas:
         for manifest in _manifests_of(area):
             for identifier in pattern.findall(manifest.read_text(encoding="utf-8")):
-                found[identifier] = manifest
+                found.append((identifier, manifest))
     return found
 
 
-def _unregistered(
-    areas: Sequence[Path], pattern: re.Pattern[str], registered: dict[str, Path]
-) -> tuple[list[str], list[str]]:
-    """Identifiers defined in the tree but unregistered, and ones registered to the wrong home."""
-    defined = _declarations_in_tree(areas, pattern)
-    missing = sorted(key for key in defined if key not in registered)
-    misrouted = sorted(
-        key
-        for key, manifest in defined.items()
-        if key in registered and registered[key].resolve() != manifest.resolve()
+def _occurrence(identifier: str, manifest: Path) -> str:
+    """``identifier`` and the file carrying it, since an identifier may occur in several."""
+    try:
+        where = _label(manifest)
+    except ValueError:
+        where = manifest.name
+    return f"{identifier!r} in {where}"
+
+
+def _registered_quotations() -> list[tuple[str, Path]]:
+    """``VERBATIM_QUOTATION_HOMES`` as ``(heading, manifest)`` pairs, the unit that is unique."""
+    return sorted(
+        (
+            (heading, manifest)
+            for manifest, headings in VERBATIM_QUOTATION_HOMES.items()
+            for heading in headings
+        ),
+        key=lambda pair: (pair[1].as_posix(), pair[0]),
     )
-    return missing, misrouted
+
+
+def _quotation_id(value: object) -> str:
+    """Parametrisation id for either half of a ``(heading, manifest)`` pair."""
+    return value if isinstance(value, str) else _label(Path(str(value)))
+
+
+def _unregistered(
+    areas: Sequence[Path],
+    pattern: re.Pattern[str],
+    registered: Iterable[tuple[str, Path]],
+) -> tuple[list[str], list[str]]:
+    """Occurrences defined in the tree but unregistered, and ones registered to another file.
+
+    Both sides are compared as ``(identifier, file)`` pairs. Comparing identifiers alone let
+    a second area inherit the first area's registration and pass on it.
+    """
+    pairs = {(identifier, home.resolve()) for identifier, home in registered}
+    identifiers = {identifier for identifier, _ in pairs}
+    missing: set[str] = set()
+    misrouted: set[str] = set()
+    for identifier, manifest in _declarations_in_tree(areas, pattern):
+        if (identifier, manifest.resolve()) in pairs:
+            continue
+        if identifier in identifiers:
+            misrouted.add(_occurrence(identifier, manifest))
+        else:
+            missing.add(_occurrence(identifier, manifest))
+    return sorted(missing), sorted(misrouted)
 
 
 CORPUS_AREAS: list[Path] = _corpus_areas(REPO_ROOT)
@@ -419,7 +524,17 @@ def _label(path: Path) -> str:
 
 
 def test_every_corpus_area_has_a_parent_manifest() -> None:
-    """Discovery must not be defeatable by simply not writing a manifest."""
+    """Discovery must not be defeatable by not writing a manifest, nor by not being a directory."""
+    loose = _loose_entries(REPO_ROOT)
+    assert not loose, (
+        f"{loose} are tracked directly under {SOURCE_MATERIALS.relative_to(REPO_ROOT)} rather "
+        f"than inside a corpus area. An area is the first path segment below that root, so "
+        f"these belong to no area and every check in this module skips them without a word. "
+        f"A symlinked or submoduled area is the same case: git holds it as one entry with no "
+        f"segment beneath it. Move the evidence into an area with its own "
+        f"{PARENT_MANIFEST_NAME}, or commit the area's files rather than a link to them."
+    )
+
     assert CORPUS_AREAS, (
         f"no corpus area was discovered under {SOURCE_MATERIALS.relative_to(REPO_ROOT)}. "
         f"Either the tree moved or `git ls-files` returned nothing, and in both cases every "
@@ -565,7 +680,7 @@ def test_every_handling_note_in_the_tree_is_registered() -> None:
     missing, misrouted = _unregistered(
         CORPUS_AREAS,
         HANDLING_NOTE_DEFINITION,
-        {k: v[0] for k, v in HANDLING_ANCHORS.items()},
+        [(anchor, home) for anchor, (home, _) in HANDLING_ANCHORS.items()],
     )
 
     assert not missing, (
@@ -582,7 +697,7 @@ def test_every_handling_note_in_the_tree_is_registered() -> None:
 def test_every_verbatim_quotation_in_the_tree_is_registered() -> None:
     """Same forcing function for a quoted restricted clause, where the stakes are highest."""
     missing, misrouted = _unregistered(
-        CORPUS_AREAS, VERBATIM_HEADING, VERBATIM_QUOTATION_HOMES
+        CORPUS_AREAS, VERBATIM_HEADING, _registered_quotations()
     )
 
     assert not missing, (
@@ -643,6 +758,36 @@ def _quoted_spans(manifest: Path, heading: str) -> list[str]:
     return [span for span in quoted if len(span) >= MIN_SPAN_CHARS]
 
 
+def _spans_found_in(
+    repo_root: Path, spans: Sequence[str]
+) -> list[tuple[int, set[str]]]:
+    """Which tracked files contain each span, by index — never the span text itself.
+
+    Separated from :func:`_quoted_span_matches` so that the *detection* half of the clause
+    guard has a negative control. Extraction had one; the search did not, and a reviewer
+    showed that narrowing the pathspec from the whole tree to the manifest alone made the
+    guard find no duplicate anywhere while every test in this module stayed green — a guard
+    that reports nothing looks exactly like a corpus with nothing to report.
+    """
+    __tracebackhide__ = True
+    results: list[tuple[int, set[str]]] = []
+    for index, span in enumerate(spans):
+        found = subprocess.run(
+            # -z separates paths with NUL and turns off C-quoting, so a path with a space or
+            # a non-ASCII character comes back as itself. Without it `git grep --name-only`
+            # renders "docs/caf\u00e9 report.md" quoted and escaped, and the set below would
+            # then never match the home path it is compared against.
+            ["git", "grep", "--name-only", "-z", "--fixed-strings", span, "--", "."],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+        )
+        # git grep exits 1 when there are no matches; that is not an error here.
+        assert found.returncode in (0, 1), found.stderr
+        results.append((index, {path for path in found.stdout.split("\0") if path}))
+    return results
+
+
 def _quoted_span_matches(manifest: Path, heading: str) -> list[tuple[int, set[str]]]:
     """Search for each quoted line under ``heading`` and return only *where* it was found.
 
@@ -671,27 +816,23 @@ def _quoted_span_matches(manifest: Path, heading: str) -> list[tuple[int, set[st
     # docstring below used to claim the span text "never leaves this function"; measured, it
     # did: a reviewer forced the assertion and counted three of four clause lines in the log.
     __tracebackhide__ = True
-    results: list[tuple[int, set[str]]] = []
-    for index, span in enumerate(_quoted_spans(manifest, heading)):
-        found = subprocess.run(
-            ["git", "grep", "--name-only", "--fixed-strings", span, "--", "."],
-            cwd=REPO_ROOT,
-            capture_output=True,
-            text=True,
-        )
-        # git grep exits 1 when there are no matches; that is not an error here.
-        assert found.returncode in (0, 1), found.stderr
-        # splitlines(), not split(): `git grep --name-only` emits one path per line and
-        # does not quote plain spaces, and this repository has tracked paths with spaces.
-        results.append((index, set(found.stdout.splitlines())))
-    return results
+    return _spans_found_in(REPO_ROOT, _quoted_spans(manifest, heading))
 
 
-@pytest.mark.parametrize("heading", sorted(VERBATIM_QUOTATION_HOMES))
-def test_quoted_clauses_appear_in_exactly_one_file(heading: str) -> None:
-    """A quoted restricted clause belongs in one place, or nowhere."""
+@pytest.mark.parametrize(
+    ("heading", "manifest"),
+    _registered_quotations(),
+    ids=_quotation_id,
+)
+def test_quoted_clauses_appear_in_exactly_one_file(
+    heading: str, manifest: Path
+) -> None:
+    """A quoted restricted clause belongs in one place, or nowhere.
+
+    Parametrised over ``(heading, manifest)`` pairs rather than over headings: a heading is
+    boilerplate and two areas may legitimately share one, and keying by it dropped a case.
+    """
     __tracebackhide__ = True
-    manifest = VERBATIM_QUOTATION_HOMES[heading]
     home = manifest.relative_to(REPO_ROOT).as_posix()
     results = _quoted_span_matches(manifest, heading)
 
@@ -987,17 +1128,43 @@ def test_negative_control_reshaped_quotation_block_is_reported(
 # The map from each guard to the control that proves it fires. Written down once, here,
 # because the alternative is a count in prose that nobody re-checks: the first revision of
 # this block claimed six controls for eight guards and three guards had none.
-GUARD_CONTROLS: dict[str, str] = {
-    "test_every_handling_note_in_the_tree_is_registered": "test_negative_control_unregistered_handling_note_is_reported",
-    "test_every_verbatim_quotation_in_the_tree_is_registered": "test_negative_control_unregistered_verbatim_quotation_is_reported",
-    "test_every_corpus_area_has_a_parent_manifest": "test_negative_control_new_area_without_a_manifest_is_reported",
-    "test_recorded_entries_are_present_and_hash_as_recorded": "test_negative_control_missing_and_altered_entries_are_reported",
-    "test_external_manifests_are_well_formed": "test_negative_control_malformed_manifest_entries_are_reported",
-    "test_every_nested_manifest_is_classified": "test_negative_control_unclassified_nested_manifest_is_reported",
-    "test_every_tracked_corpus_file_is_recorded": "test_negative_control_unrecorded_tracked_file_is_reported",
-    "test_nested_manifest_parent_pins_are_current": "test_negative_control_parent_pin_defects_are_reported",
-    "test_handling_notes_are_stated_once": "test_negative_control_orphaned_handling_referrer_is_reported",
-    "test_quoted_clauses_appear_in_exactly_one_file": "test_negative_control_reshaped_quotation_block_is_reported",
+# A tuple per guard, because two of them have two halves that fail independently and a
+# single control leaves the other half unproved. That is not hypothetical: the clause guard
+# carried only an extraction control, and a reviewer disabled its search half without
+# reddening anything in this module.
+GUARD_CONTROLS: dict[str, tuple[str, ...]] = {
+    "test_every_handling_note_in_the_tree_is_registered": (
+        "test_negative_control_unregistered_handling_note_is_reported",
+    ),
+    "test_every_verbatim_quotation_in_the_tree_is_registered": (
+        "test_negative_control_unregistered_verbatim_quotation_is_reported",
+    ),
+    "test_every_corpus_area_has_a_parent_manifest": (
+        "test_negative_control_new_area_without_a_manifest_is_reported",
+        "test_negative_control_loose_entry_under_source_materials_is_reported",
+    ),
+    "test_recorded_entries_are_present_and_hash_as_recorded": (
+        "test_negative_control_missing_and_altered_entries_are_reported",
+    ),
+    "test_external_manifests_are_well_formed": (
+        "test_negative_control_malformed_manifest_entries_are_reported",
+    ),
+    "test_every_nested_manifest_is_classified": (
+        "test_negative_control_unclassified_nested_manifest_is_reported",
+    ),
+    "test_every_tracked_corpus_file_is_recorded": (
+        "test_negative_control_unrecorded_tracked_file_is_reported",
+    ),
+    "test_nested_manifest_parent_pins_are_current": (
+        "test_negative_control_parent_pin_defects_are_reported",
+    ),
+    "test_handling_notes_are_stated_once": (
+        "test_negative_control_orphaned_handling_referrer_is_reported",
+    ),
+    "test_quoted_clauses_appear_in_exactly_one_file": (
+        "test_negative_control_reshaped_quotation_block_is_reported",
+        "test_negative_control_a_reproduced_span_is_found_in_both_files",
+    ),
 }
 
 
@@ -1032,12 +1199,17 @@ def test_every_guard_has_a_negative_control() -> None:
     retired = sorted(set(GUARD_CONTROLS) - guards)
     assert not retired, f"{retired} are mapped in GUARD_CONTROLS but no longer exist."
 
-    missing = sorted(
-        control for control in GUARD_CONTROLS.values() if control not in controls
+    unpaired = sorted(guard for guard, named in GUARD_CONTROLS.items() if not named)
+    assert not unpaired, (
+        f"{unpaired} are mapped to an empty tuple, which passes every check below while "
+        f"proving nothing. Name the control, or remove the guard."
     )
+
+    claimed = {control for named in GUARD_CONTROLS.values() for control in named}
+    missing = sorted(control for control in claimed if control not in controls)
     assert not missing, f"{missing} are named as controls but are not defined here."
 
-    orphaned = sorted(controls - set(GUARD_CONTROLS.values()))
+    orphaned = sorted(controls - claimed)
     assert not orphaned, (
         f"{orphaned} are negative controls that no guard claims. Map each to the guard it "
         f"proves, or delete it: a control nothing is paired with proves nothing."
@@ -1061,12 +1233,12 @@ def test_negative_control_unregistered_handling_note_is_reported(
         encoding="utf-8",
     )
 
-    missing, misrouted = _unregistered(areas, HANDLING_NOTE_DEFINITION, {})
-    assert missing == [anchor] and misrouted == []
+    missing, misrouted = _unregistered(areas, HANDLING_NOTE_DEFINITION, [])
+    assert len(missing) == 1 and anchor in missing[0] and misrouted == []
 
     # Registered against the manifest that defines it: clean.
     missing, misrouted = _unregistered(
-        areas, HANDLING_NOTE_DEFINITION, {anchor: nested}
+        areas, HANDLING_NOTE_DEFINITION, [(anchor, nested)]
     )
     assert (missing, misrouted) == ([], [])
 
@@ -1074,9 +1246,9 @@ def test_negative_control_unregistered_handling_note_is_reported(
     # reading a file that does not define the note and passing vacuously.
     elsewhere = areas[0] / PARENT_MANIFEST_NAME
     missing, misrouted = _unregistered(
-        areas, HANDLING_NOTE_DEFINITION, {anchor: elsewhere}
+        areas, HANDLING_NOTE_DEFINITION, [(anchor, elsewhere)]
     )
-    assert missing == [] and misrouted == [anchor]
+    assert missing == [] and len(misrouted) == 1 and anchor in misrouted[0]
 
 
 def test_negative_control_unregistered_verbatim_quotation_is_reported(
@@ -1092,8 +1264,121 @@ def test_negative_control_unregistered_verbatim_quotation_is_reported(
         encoding="utf-8",
     )
 
-    missing, misrouted = _unregistered(areas, VERBATIM_HEADING, {})
-    assert missing == [heading] and misrouted == []
+    missing, misrouted = _unregistered(areas, VERBATIM_HEADING, [])
+    assert len(missing) == 1 and heading in missing[0] and misrouted == []
 
-    missing, misrouted = _unregistered(areas, VERBATIM_HEADING, {heading: nested})
+    missing, misrouted = _unregistered(areas, VERBATIM_HEADING, [(heading, nested)])
     assert (missing, misrouted) == ([], [])
+
+    # The collision case, which is the whole reason this is keyed by pair. A SECOND area
+    # quotes its own clause under the SAME boilerplate heading. Registering the first area's
+    # block must not cover the second: keyed by heading alone, the two entries collapsed into
+    # one, the tree scan collapsed with them and this came back empty and green.
+    beta = synthetic_corpus / "docs" / "source_materials" / "beta_2026"
+    beta_manifest = beta / "source_packages" / "BETA_2026-01-01.MANIFEST.sha256"
+    _write(beta_manifest, f"# {heading} Quoted here too:\n{'0' * 64}  held/b.pdf\n")
+    _write(beta / PARENT_MANIFEST_NAME, "")
+    _git(synthetic_corpus, "add", "-A")
+    two_areas = _corpus_areas(synthetic_corpus)
+    assert len(two_areas) == 2
+
+    missing, misrouted = _unregistered(two_areas, VERBATIM_HEADING, [(heading, nested)])
+    # With NEITHER registered, BOTH occurrences must come back. This is the assertion that
+    # fails if the tree scan ever goes back to one manifest per identifier: the dedup keeps
+    # whichever area sorts last and drops the other without a word, so asserting only that
+    # the second area is reported passes under the very defect this control exists for.
+    both, _ = _unregistered(two_areas, VERBATIM_HEADING, [])
+    assert len(both) == 2 and {nested.name, beta_manifest.name} == {
+        entry.rsplit(" in ", 1)[1] for entry in both
+    }, f"each area's quotation block must be reported in its own right; got {both}"
+
+    # Reported as misrouted rather than missing: the heading IS registered, just against
+    # another area's manifest. Either way it is named, which is the property that was lost.
+    reported = missing + misrouted
+    assert len(reported) == 1 and beta_manifest.name in reported[0], (
+        f"the second area's quotation block must still be reported in its own right; "
+        f"got {reported}"
+    )
+
+    # Registering it in its own right clears it, and the first area keeps its own entry.
+    missing, misrouted = _unregistered(
+        two_areas,
+        VERBATIM_HEADING,
+        [(heading, nested), (heading, beta_manifest)],
+    )
+    assert (missing, misrouted) == ([], [])
+
+
+def test_negative_control_loose_entry_under_source_materials_is_reported(
+    synthetic_corpus: Path,
+) -> None:
+    """All three shapes that belong to no corpus area are named, and told apart.
+
+    An area is the first path segment below ``docs/source_materials``, so anything git holds
+    as a single entry with no segment beneath it is discovered by nothing. A file dropped at
+    the root is the obvious one; an area held as a symlink or vendored as a submodule is the
+    one that matters here, because material held elsewhere is what this corpus is about, and
+    both were green while the module's docstring said discovery could not be defeated.
+    """
+    root = synthetic_corpus / "docs" / "source_materials"
+    assert _loose_entries(synthetic_corpus) == []
+
+    _write(root / "LOOSE_EVIDENCE.pdf", "dropped at the root, inside no area\n")
+    (root / "linked_area").symlink_to("alpha_2026")
+    _git(synthetic_corpus, "add", "-A")
+    _git(
+        synthetic_corpus,
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        f"160000,{'0' * 39}1,docs/source_materials/vendored_area",
+    )
+
+    reported = _loose_entries(synthetic_corpus)
+
+    assert reported == [
+        "LOOSE_EVIDENCE.pdf (a file)",
+        "linked_area (a symlink)",
+        "vendored_area (a submodule (gitlink))",
+    ], reported
+
+    # And the area that is a real directory is still discovered, so this reports the strays
+    # rather than replacing discovery with a blanket complaint.
+    assert [area.name for area in _corpus_areas(synthetic_corpus)] == ["alpha_2026"]
+
+
+def test_negative_control_a_reproduced_span_is_found_in_both_files(
+    tmp_path: Path,
+) -> None:
+    """The search half of the clause guard fires, which extraction alone never proved.
+
+    ``test_negative_control_reshaped_quotation_block_is_reported`` covers reading the spans
+    out of the manifest. It says nothing about whether the search then finds a copy, and a
+    ``RECRUIT-01`` reviewer narrowed the pathspec from the whole tree to the manifest itself,
+    which left the guard unable to find a duplicate anywhere while this module stayed green.
+    A guard that reports no leak and a guard that cannot see one look identical from here,
+    so the difference is asserted: a planted duplicate must come back naming both files.
+    """
+    repo = tmp_path / "repo"
+    span = "This document is confidential and shall not be reproduced in any form."
+    only = "A sentence that exists in the manifest and in no other tracked file at all."
+
+    _write(
+        repo / "home.MANIFEST.sha256",
+        f'# 3. CLAUSE 6, VERBATIM.\n#   "{span}"\n#   "{only}"\n',
+    )
+    _write(repo / "docs" / "leaked.md", f"Someone pasted it here too: {span}\n")
+    _write(repo / "docs" / "innocent.md", "Nothing quoted in this one.\n")
+    _git(repo, "init", "-q")
+    _git(repo, "add", "-A")
+
+    found = dict(_spans_found_in(repo, [span, only]))
+
+    assert found[0] == {"home.MANIFEST.sha256", "docs/leaked.md"}, (
+        f"the reproduced span must name both files; got {sorted(found[0])}. A search that "
+        f"reaches only the manifest returns just its home and reports no leak."
+    )
+    assert found[1] == {"home.MANIFEST.sha256"}, (
+        f"a span with no duplicate anywhere must name only its home; "
+        f"got {sorted(found[1])}"
+    )

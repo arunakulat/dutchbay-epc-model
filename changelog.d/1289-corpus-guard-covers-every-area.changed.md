@@ -14,11 +14,12 @@
   The checks are helpers returning what they found; each has a paired `test_negative_control_*`
   that builds a small valid corpus in a throwaway git repository, asserts the helper reports
   nothing, introduces exactly one defect, and asserts the same helper the live tests call
-  reports it. Ten guards, ten controls, and an eleventh test that fails if a guard is ever added
-  without one, if a control no guard claims is left behind, or if the mapping names something
-  that no longer exists — the count is enforced, not written down, because the first draft of
-  this entry claimed six controls for eight guards and three guards had none. Measured cost in
-  `fastlane`: 1.90 / 2.01 / 2.06 s wall over three runs, of which about 1.1 s is the tests.
+  reports it. `test_every_guard_has_a_negative_control` fails if a guard is ever added without
+  one, if a control no guard claims is left behind, or if the mapping names something that no
+  longer exists. No count is stated here on purpose: the first draft of this entry claimed six
+  controls for eight guards and three guards had none, so `GUARD_CONTROLS` is the mapping and
+  the test is the count. A guard whose two halves fail independently carries one control per
+  half.
 - **The declaration tables are now forced complete, not trusted.** Nested-manifest
   classification was already forced; the single-source handling note and the restricted-clause
   check were keyed by hand-maintained tables that nothing checked, so a new corpus area's
@@ -41,3 +42,26 @@
   in the same commit — and two `RECRUIT-01` review records discuss it by path. Those two records
   are **both REJECT** and both bind only to the superseded `3e4b79f`; they are bindings to break,
   not endorsement. An earlier draft of this entry called them "accepted", which was false.
+- **A second corpus area would have switched off the first area's clause guard, silently.**
+  The restricted-clause registry was keyed by the quotation heading — a section number and a
+  clause name that every offers manifest carries, which is boilerplate and not an identifier.
+  A second area quoting its own clause 6 under the same heading evicted the first entry, and
+  the tree scan meant to catch an unregistered quotation was keyed the same way and collapsed
+  with it, so the two cancelled out and alphabetical order decided which area kept its guard.
+  Both are now keyed by `(heading, manifest)`, the pair that is actually unique, and the check
+  reports every occurrence rather than one per identifier. The guard this would have dropped is
+  the one that already caught a confidentiality leak into a public Actions log.
+- **Discovery could be defeated by not being a directory.** An area is the first path segment
+  below `docs/source_materials`, so a tracked entry with no segment beneath it belonged to no
+  area and was checked, and reported, by nothing. Three shapes land that way and all three are
+  plausible in an evidence corpus: a loose file at the root, an area held as a **symlink**, and
+  an area vendored as a **submodule** — the last two being the obvious shapes for material held
+  elsewhere, which is what this corpus is for. `_loose_entries` now names all three and
+  distinguishes them by index mode.
+- **The clause guard's search half had never been observed to fire.** Its control covered
+  reading the spans out of the manifest and said nothing about whether the search then finds a
+  copy; narrowing its pathspec to the manifest alone left it unable to detect a duplicate
+  anywhere while every test in the module stayed green. The search is now a separate helper
+  with its own control that plants a span in two tracked files and requires both to come back.
+  Its `git grep` also passes `-z`, so a path with a space or a non-ASCII character is returned
+  unquoted instead of C-escaped, which would have made the home-path comparison fail to match.

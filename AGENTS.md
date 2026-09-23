@@ -214,9 +214,13 @@ edit easily is — and it fails loudly on: a recorded entry that is absent or ha
 **tracked file absent from the manifest**, the direction `sha256sum -c` is structurally blind to; a
 stale parent pin; a nested manifest nobody classified; **a corpus area carrying no manifest at
 all**; a handling note nobody registered; a referrer that has stopped citing the handling note;
-and a restricted clause quoted outside its single home. It derives its coverage from the tree —
+a restricted clause quoted outside its single home; and **anything tracked directly under
+`docs/source_materials` that belongs to no area** — a loose file, or an area held as a symlink or
+a submodule, each of which git stores as a single entry that area-based discovery would otherwise
+walk straight past. It derives its coverage from the tree —
 every immediate child of `docs/source_materials` holding tracked files is a corpus area — so a
-**new** corpus area is checked from its first commit and nobody has to remember to enlist it. Read
+**new** corpus area is checked from its first commit and nobody has to remember to enlist it,
+provided it is committed as a directory of files rather than linked or vendored in. Read
 that last point precisely: what is automatic is that the guard will **fail** until the area's
 nested manifests are classified and its handling note is registered. It forces the declaration; it
 does not write it for you, and CI stays red until you do. What it cannot judge is **whether a new
