@@ -345,41 +345,133 @@ def test_tranche_profile_bad_target_dscr_uses_none() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_covenant_bad_threshold_falls_back_to_default() -> None:
-    """A non-floatable target_dscr threshold falls back to 1.30 (lines 444-449)."""
-    config: dict[str, Any] = {"Financing_Terms": {"target_dscr": "garbage"}}
-    debt_result: dict[str, Any] = {
+def _covenant_period(
+    period: int,
+    dscr: Any,
+    operating_year: int | None = None,
+    annual_row_index: int | None = None,
+    covenant_dscr: float | None = None,
+) -> dict[str, Any]:
+    """One ``dscr_periods`` entry, in the shape ``plan_debt`` publishes (F-2/F-3).
+
+    ``_build_debt_covenant_snapshot`` reads ``dscr_periods``, not ``dscr_series``: the
+    covenant year labels come from the engine's row->period map, so a fixture must carry
+    them. ``operating_year=None`` marks a construction, bridge or post-tenor period,
+    which carries no covenant observation.
+    """
+    return {
+        "period": period,
+        "dscr": dscr,
+        "operating_year": operating_year,
+        "annual_row_index": annual_row_index,
+        "covenant_dscr": covenant_dscr,
+    }
+
+
+def test_covenant_missing_dscr_periods_raises() -> None:
+    """A legacy-shaped debt_result is REJECTED rather than reported compliant.
+
+    Before F-3 this module's fixtures carried only ``dscr_series``. Reading an absent
+    ``dscr_periods`` and iterating an empty list would return ``years_below_threshold=0``
+    and "All DSCR covenant requirements met" — a silent full-compliance verdict on a
+    result the function cannot assess.
+    """
+    config: dict[str, Any] = {"Financing_Terms": {"target_dscr": 1.30}}
+    legacy: dict[str, Any] = {
         "dscr_series": [1.5, 1.6, 2.0],
         "min_dscr": 1.5,
         "balloon_remaining": 0.0,
     }
-    snap = _build_debt_covenant_snapshot(config, debt_result)
+    with pytest.raises(PipelineValidationError, match="dscr_periods"):
+        _build_debt_covenant_snapshot(config, legacy)
+
+
+def _with_covenant_sources(debt_result: dict[str, Any]) -> dict[str, Any]:
+    """Give synthetic observations the same required source fields as a debt plan."""
+    periods = debt_result["dscr_periods"]
+    return {
+        **debt_result,
+        "dscr_series": [entry["dscr"] for entry in periods],
+        "annual_row_debt_period_map": [
+            {
+                "debt_period": entry["period"],
+                "annual_row_index": entry["annual_row_index"],
+                "year": entry["operating_year"],
+            }
+            for entry in periods
+            if entry["operating_year"] is not None
+        ],
+        "dscr_by_year": {
+            entry["operating_year"]: entry["covenant_dscr"]
+            for entry in periods
+            if entry["operating_year"] is not None
+        },
+    }
+
+
+def test_covenant_bad_threshold_falls_back_to_default() -> None:
+    """A non-floatable target_dscr threshold falls back to 1.30.
+
+    This test PASSED against the legacy fixture for the wrong reason: it expected
+    ``years_below_threshold == 0`` and ``PASS``, which is exactly what an absent
+    ``dscr_periods`` produced from an empty loop, so it would have stayed green with the
+    covenant scan doing nothing at all. It now carries three real operating years, all
+    above the fallback threshold, so the verdict is earned rather than vacuous.
+    """
+    config: dict[str, Any] = {"Financing_Terms": {"target_dscr": "garbage"}}
+    debt_result: dict[str, Any] = {
+        "dscr_periods": [
+            _covenant_period(0, None),
+            _covenant_period(1, 1.5, 1, 0, 1.5),
+            _covenant_period(2, 1.6, 2, 1, 1.6),
+            _covenant_period(3, 2.0, 3, 2, 2.0),
+        ],
+        "min_dscr": 1.5,
+        "balloon_remaining": 0.0,
+    }
+    snap = _build_debt_covenant_snapshot(config, _with_covenant_sources(debt_result))
     assert math.isclose(snap.dscr_threshold, 1.30)
     assert snap.audit_status == "PASS"
     assert snap.years_below_threshold == 0
 
 
 def test_covenant_skips_none_and_nonnumeric_and_inf() -> None:
-    """None, non-numeric, and inf DSCRs are skipped (lines 457, 460-466, 468)."""
+    """None, non-numeric and non-finite DSCRs are skipped; only the real breach counts.
+
+    Each sentinel sits on a genuine OPERATING year. Canonical normalization, rather
+    than absence of an operating label, makes these observations undefined.
+    """
     config: dict[str, Any] = {"Financing_Terms": {"target_dscr": 1.30}}
     debt_result: dict[str, Any] = {
-        # mix of None, non-numeric, inf, and one genuine breach (< 1.30)
-        "dscr_series": [None, "n/a", float("inf"), 1.10],
+        "dscr_periods": [
+            _covenant_period(0, None),  # construction: no operating year
+            _covenant_period(1, None, 1, 0),  # undefined
+            _covenant_period(2, "n/a", 2, 1),  # non-numeric
+            _covenant_period(3, float("inf"), 3, 2),  # non-finite
+            _covenant_period(4, 1.10, 4, 3, 1.10),  # the one genuine breach
+        ],
         "min_dscr": 1.10,
         "balloon_remaining": 0.0,
     }
-    snap = _build_debt_covenant_snapshot(config, debt_result)
-    # Only the single 1.10 entry counts as a breach.
+    snap = _build_debt_covenant_snapshot(config, _with_covenant_sources(debt_result))
+    # Only the single 1.10 entry counts as a breach, and it is dated by its OPERATING
+    # YEAR (4), not by its list position (5) — the F-3 fix.
     assert snap.years_below_threshold == 1
     assert snap.audit_status == "REVIEW"
-    assert snap.first_breach_year == snap.last_breach_year
+    assert snap.first_breach_year == 4
+    assert snap.last_breach_year == 4
 
 
 def test_covenant_balloon_breach_appends_notes() -> None:
     """A flagged balloon breach extends the covenant notes (balloon branch)."""
     config: dict[str, Any] = {"Financing_Terms": {"target_dscr": 1.30}}
     debt_result: dict[str, Any] = {
-        "dscr_series": [1.0, 1.1, 1.2, 1.25],
+        "dscr_periods": [
+            _covenant_period(0, 1.0, 1, 0, 1.0),
+            _covenant_period(1, 1.1, 2, 1, 1.1),
+            _covenant_period(2, 1.2, 3, 2, 1.2),
+            _covenant_period(3, 1.25, 4, 3, 1.25),
+        ],
         "min_dscr": 1.0,
         "balloon_remaining": 5_000_000.0,
         "balloon_pct": 0.36,
@@ -387,12 +479,15 @@ def test_covenant_balloon_breach_appends_notes() -> None:
         "balloon_covenant_breach": True,
         "max_balloon_pct": 0.10,
     }
-    snap = _build_debt_covenant_snapshot(config, debt_result)
+    snap = _build_debt_covenant_snapshot(config, _with_covenant_sources(debt_result))
     assert snap.balloon_flag is True
     assert "Balloon" in snap.notes
     assert "BREACHES" in snap.notes
-    # Four sub-1.30 years -> FAIL.
+    # Four sub-1.30 years -> FAIL, dated 1 through 4.
     assert snap.audit_status == "FAIL"
+    assert snap.years_below_threshold == 4
+    assert snap.first_breach_year == 1
+    assert snap.last_breach_year == 4
 
 
 # ---------------------------------------------------------------------------

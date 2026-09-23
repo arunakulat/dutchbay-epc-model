@@ -26,6 +26,14 @@ The file holds one or more markdown bullets, e.g.:
 
 Do **not** edit `CHANGELOG.md` directly for routine changes.
 
+Do **not** put a markdown heading in a fragment — not even `## Fixed` restating the
+category, which the filename already carries. The compiler folds every non-blank
+fragment line into `[Unreleased]` verbatim, so a heading becomes a heading in
+`CHANGELOG.md`: it renders at release level, and a `##` one truncates the
+`[Unreleased]` window that every later compile inserts into. `validate_body` in
+`scripts/compile_changelog.py` rejects headings outright, and
+`tests/lint/test_compile_changelog.py` fails if any pending fragment carries one.
+
 ## Flush (compile) — on demand
 
 ```

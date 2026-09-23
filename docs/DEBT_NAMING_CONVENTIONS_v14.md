@@ -339,8 +339,11 @@ principal_absolute = debt_result["lkr"]["principal_m"] * 1e6
 - `finance/debt_v14.py` - Debt planning module
 - `tests/api/test_debt_construction_idc_regression_v14.py` - Test fixtures
 - Sprint 18 Issue #5: Debt naming clarity
-- CASPER Framework: Contract-explicit naming
-- CCCDIR: Comprehensive documentation standards
+- `FRAMEWORK-01` CASPER (clear API surfaces with predictable error responses):
+  contract-explicit naming on the public debt surface
+- `FRAMEWORK-03` CCCDIR (contracts centralized, compliance documented, import
+  relationships explicit): the naming is documented here and nowhere else
+- `go_with_the_flow_rules_v3_0_clean.csv` — canonical wording for both rules above
 
 ---
 

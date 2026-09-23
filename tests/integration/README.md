@@ -204,7 +204,7 @@ pytest tests/integration/ -v
 ```
 test_10k_iterations_performance took 75s (target: 60s)
 ```
-**Solution**: 
+**Solution**:
 - Check system load
 - Run with `--tb=short` for faster feedback
 - Consider Numba JIT optimization (future enhancement)
@@ -220,7 +220,7 @@ fixture 'dutchbay_base_config' not found
 # Verify test discovery
 pytest --collect-only tests/integration/
 
-# Should show ~88 tests collected
+# Should list the integration tests (a count, not "no tests ran")
 ```
 
 ---

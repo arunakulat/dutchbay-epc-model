@@ -368,30 +368,31 @@ for result in sorted(tornado_results, key=lambda x: x.impact_abs, reverse=True):
 
 ## Architecture Principles
 
-### GWTF (Go-With-The-Flow)
+The three framework rules below are quoted from `go_with_the_flow_rules_v3_0_clean.csv`
+at the repository root, which is canonical. They are peers, not parts of one another.
 
-- **Single source:** `contracts_v14.py` is the canonical definition
-- **Clear delegation:** Package re-exports, doesn't redefine
-- **Predictable imports:** Old and new patterns both work
+### FRAMEWORK-01 — CASPER (Clear API Surfaces with Predictable Error Responses)
 
-### CESSPIT (Comprehensive Error Handling)
+- **Explicit error types:** Pydantic validation raises at instantiation, not later
+- **Actionable messages:** Validation errors specify the exact offending field
+- **Versioned surface:** `CASPER_CONTRACT_VERSION` lets consumers detect incompatibility
 
-- **Fail-fast:** Pydantic validation at instantiation
-- **Clear errors:** Validation messages specify exact issue
-- **Type safety:** All fields fully type-annotated
+### FRAMEWORK-02 — CESSPIT (Config Explicit, Schema Strict, Pre-flight Integrity Tests)
 
-### CASPER (Contract-First Design)
+- **Schema strict:** Field validators enforce complex constraints before construction
+- **No silent coercion:** All fields fully type-annotated; invalid input fails, it is not repaired
+- **Immutable once valid:** All contracts are frozen (Pydantic `frozen=True`)
 
-- **Frozen models:** All contracts are immutable (Pydantic `frozen=True`)
-- **Explicit validation:** Field validators for complex constraints
-- **Version tracking:** `CASPER_CONTRACT_VERSION` for compatibility
+### FRAMEWORK-03 — CCCDIR (Contracts Centralized, Compliance Documented, Import Relationships explicit)
 
-### CCCDIR (Clear, Complete, Consistent Documentation)
-
-- **Package-level:** This README
-- **Module-level:** Comprehensive docstrings in `contracts_v14.py`
-- **Field-level:** Every field documented with `Field(description=...)`
-- **Usage examples:** Practical code samples throughout
+- **Contracts centralized:** `contracts_v14.py` is the one canonical definition; the package
+  re-exports and never redefines
+- **Import relationships explicit:** analytics depends on the evaluation gateway's public
+  surface only. `tests/lint/test_contracts_gateway_imports.py` is a LibCST guard that fails
+  any module-level import of a private (`_`-prefixed) name from `analytics.evaluation_v14`;
+  `tests/lint/test_no_direct_finance_pipeline_imports.py` guards the module boundary itself
+- **Compliance documented:** this README, module docstrings in `contracts_v14.py`, and a
+  `Field(description=...)` on every field
 
 ---
 

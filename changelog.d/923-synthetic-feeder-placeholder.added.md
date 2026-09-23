@@ -1,5 +1,3 @@
-### Added
-
 - Add Dolphin #923-B1: a deterministic, manifest-bound synthetic OpenDSS feeder and
   8,760-hour generation-profile generator, exposed through the governed Hydra entry
   point under `scripts/`, for software-wiring tests while the real CEB feeder is

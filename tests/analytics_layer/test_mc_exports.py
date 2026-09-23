@@ -1,10 +1,12 @@
-from __future__ import annotations
-
 """
 Tests for analytics.mc.exports - Lender risk table generation.
 
 Sprint 18: Comprehensive test coverage for lender-grade Monte Carlo analytics.
 """
+
+from __future__ import annotations
+
+from dataclasses import FrozenInstanceError
 
 import numpy as np
 import pytest
@@ -17,6 +19,7 @@ except ImportError:
     HAS_PANDAS = False
 
 from analytics.contracts_v14 import MonteCarloResult
+from analytics.mc import exports
 from analytics.mc.exports import (
     CovenantSpec,
     _get_trial_array,
@@ -43,7 +46,7 @@ class TestCovenantSpec:
     def test_covenant_spec_frozen(self):
         """CovenantSpec should be immutable."""
         covenant = CovenantSpec()
-        with pytest.raises(Exception):  # FrozenInstanceError or similar
+        with pytest.raises(FrozenInstanceError):
             covenant.dscr_floor = 1.40  # type: ignore
 
 
@@ -68,7 +71,7 @@ class TestGetTrialArray:
         result = MonteCarloResult(
             summary={},
             metadata={"trials": {"dscr_min": [1.32, 1.45]}},
-            trials=None,
+            trials=None,  # type: ignore[arg-type]  # Deliberate legacy input.
         )
 
         arr = _get_trial_array(result, "dscr_min")
@@ -290,19 +293,21 @@ class TestBuildCasperRiskBlocks:
 class TestPandasRequirement:
     """Test pandas dependency handling."""
 
-    @pytest.mark.skipif(HAS_PANDAS, reason="Test requires pandas to be missing")
-    def test_build_lender_risk_table_requires_pandas(self):
-        """Should raise RuntimeError if pandas not installed."""
+    def test_build_lender_risk_table_requires_pandas(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The real call-time guard fails when its pandas reference is unavailable."""
         result = MonteCarloResult(
             summary={},
             metadata={},
             trials={"dscr_min": [1.32]},
         )
 
+        monkeypatch.setattr(exports, "pd", None)
         with pytest.raises(RuntimeError) as exc_info:
             build_lender_risk_table(result)
 
-        assert "pandas" in str(exc_info.value).lower()
+        assert "pandas is required for build_lender_risk_table()" in str(exc_info.value)
 
 
 if __name__ == "__main__":

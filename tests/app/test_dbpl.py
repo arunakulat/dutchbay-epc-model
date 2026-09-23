@@ -14,6 +14,7 @@ from collections import Counter
 import pytest
 from jinja2 import Environment, FileSystemLoader
 
+from app.ops import extras as ops_extras
 from app.ops.extras import ExtraStatus, PackageStatus
 from app.reports.dbpl import print_core as pc
 from app.reports.dbpl.print_core import (
@@ -291,6 +292,57 @@ def test_uninstalled_project_raises_rather_than_rendering_unverified(
     )
     with pytest.raises(DbplDependencyError, match="declares no packages"):
         require_dbpl_stack()
+
+
+# ── The pins are read from the tree that is executing ────────────────────────
+#
+# These two exercise the REAL resolution rather than stubbing `probe_extra`, because the
+# 2026-09-14 defect lived in the resolution itself. `app/` is not a packaged directory, so
+# this print core always runs from a checkout, while the installed distribution in the shared
+# governed venv was built from whichever checkout last ran `pip install` -- one build serving
+# eighteen worktrees at differing commits.
+
+
+def test_a_stale_installed_build_does_not_veto_the_locked_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Observed 2026-09-14: nine DbplDependencyError failures on the version the lock requires.
+
+    The venv held a build declaring `weasyprint<70,>=69`, from a pyproject predating #1256's
+    `>=70,<71` bump for PYSEC-2026-3940. Reconciling the venv to the pinned 70.0 made the guard
+    reject it -- the deliverable blocked by metadata describing a tree that was not running.
+    """
+
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda name: ['weasyprint<70,>=69; extra == "report"'],
+    )
+
+    status = require_dbpl_stack(deep=False)
+    assert status.spec_source == "pyproject"
+    assert status.available is True
+    assert status.broken == ()
+
+
+def test_an_absent_project_distribution_does_not_block_the_deliverable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A venv built by ./setup_venv.sh alone installs no project distribution at all.
+
+    The `[report]` packages themselves are in requirements.txt, so they ARE present; only the
+    project's own metadata is missing. Reading the checkout's declaration means the extra is
+    still fully described, so the PDF renders instead of failing on an unverifiable stack.
+    """
+
+    def absent(name: str):
+        raise ops_extras.importlib_metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(ops_extras.importlib_metadata, "requires", absent)
+
+    status = require_dbpl_stack(deep=False)
+    assert status.spec_source == "pyproject"
+    assert status.available is True
 
 
 # ── Font provenance ──────────────────────────────────────────────────────────
@@ -640,6 +692,66 @@ def test_output_is_tagged_pdf_ua() -> None:
     assert result.pdf[:5] == b"%PDF-"
     assert result.pdf_variant == "pdf/ua-1"
     assert any("pdf/ua-1" in line for line in result.provenance_lines())
+
+
+def test_every_table_sits_in_a_keep_together_block() -> None:
+    """Each table (control, revision and body sections) is wrapped in a .dbpl-keep block, and the
+    stylesheet keeps that block whole.
+
+    WeasyPrint's PDF/UA tag builder raises "Table wrapper without a table" when a captioned table's
+    wrapper is split so a caption-only fragment lands on a page with no rows. break-inside:avoid is
+    ignored on the anonymous table-wrapper box but honoured on this real block box, so the wrapper
+    is the fix. This is a structural guard on that mechanism.
+    """
+    from app.reports.dbpl.print_core import dbpl_stylesheet
+
+    doc = _doc(
+        control=[("ID", "X")],
+        revisions=[{"rev": "A", "date": "d", "status": "Issued"}],
+        sections=[
+            {
+                "heading": "T",
+                "table": {
+                    "caption": "Cap",
+                    "columns": ["X", "Y"],
+                    "rows": [{"cells": ["1", "2"]}],
+                    "source": "S",
+                },
+            }
+        ],
+    )
+    html = _render_html(doc)
+    # one keep-block per table: document control, revision history, and the section table
+    assert html.count('<div class="dbpl-keep">') == 3
+    assert html.count("<table") == 3
+    assert "break-inside: avoid" in _rule_block(dbpl_stylesheet(), ".dbpl-keep")
+
+
+def test_page_straddling_table_renders_under_pdf_ua() -> None:
+    """A captioned table pushed across a page boundary must still render tagged.
+
+    Before the .dbpl-keep wrapper this raised ValueError("Table wrapper without a table") from the
+    WeasyPrint tag builder. The exact failing offset depends on page geometry, so sweep several so
+    the guard is not tied to one layout.
+    """
+    table = {
+        "caption": "Straddle probe",
+        "columns": ["X", "Y"],
+        "rows": [{"cells": [f"row {i}", str(i)]} for i in range(3)],
+        "source": "probe",
+    }
+    for n in range(24, 40, 2):
+        filler = {
+            "heading": "Filler",
+            "points": [
+                f"point {i} with enough text to shift the page boundary"
+                for i in range(n)
+            ],
+        }
+        doc = _doc(sections=[filler, {"heading": "Table", "table": table}])
+        result = render_dbpl_pdf(_render_html(doc))
+        assert result.pdf[:5] == b"%PDF-"
+        assert result.pdf_variant == "pdf/ua-1"
 
 
 def test_tables_never_hyphenate() -> None:

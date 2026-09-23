@@ -78,7 +78,7 @@ _MODULE = Path(
 ).resolve()
 _UTC = timezone.utc
 _KNOWN_D3B_SUCCESS_DIGEST = (
-    "d6dfe823cec253092ffc88ee588f559cb0f39bce65823e1886969fc56117a048"
+    "23871193b0cb28d100fd65f3da9e67e0052f15812bbdcb1636bea8a23c8aa720"
 )
 _FX_RATE_INPUT_ID = (
     "input:project_case.currency_conversion.fx:lkr-to-usd:2026-08-29.rate"

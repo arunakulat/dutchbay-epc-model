@@ -22,9 +22,12 @@ import re
 import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence
 
 import yaml
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -92,11 +95,27 @@ class PowerCurve:
         return {self.key: block}
 
 
-def list_oedb_turbines(manufacturer: Optional[str] = None) -> Any:
-    """List turbines available in the oedb open library (optionally filtered)."""
+def list_oedb_turbines(manufacturer: Optional[str] = None) -> pd.DataFrame:
+    """List turbines with either curve, preserving windpowerlib's outer merge.
+
+    Missing cells become False with explicit dtype inference. Separate selections
+    retain duplicate-key contributions and upstream errors for malformed flags.
+    The optional manufacturer expression keeps its case-insensitive regex meaning.
+    """
+    import pandas as pd
     from windpowerlib import get_turbine_types
 
-    df = get_turbine_types(print_out=False)
+    raw: pd.DataFrame = get_turbine_types(print_out=False, filter_=False)
+    cp_flags = raw["has_cp_curve"]
+    cp_curves = raw.loc[
+        cp_flags.where(cp_flags.notna(), False).infer_objects(copy=False)
+    ][["manufacturer", "turbine_type", "has_cp_curve"]]
+    power_flags = raw["has_power_curve"]
+    power_curves = raw.loc[
+        power_flags.where(power_flags.notna(), False).infer_objects(copy=False)
+    ][["manufacturer", "turbine_type", "has_power_curve"]]
+    df = pd.merge(power_curves, cp_curves, how="outer", sort=True)
+    df = df.where(df.notna(), False).infer_objects(copy=False)
     if manufacturer:
         mask = (
             df["manufacturer"]
@@ -368,9 +387,8 @@ def from_wasp_wtg(
     Multi-mode files carry several ``PerformanceTable`` blocks (one per air density); the one
     nearest ``air_density_kgm3`` is used. ``PowerOutput`` (W) is converted to kW.
     """
-    root = ElementTree.parse(
-        str(path)
-    ).getroot()  # nosec B314 - local operator-supplied .wtg turbine file, not untrusted network input
+    # Local operator-supplied .wtg turbine file, not untrusted network input.
+    root = ElementTree.parse(str(path)).getroot()  # nosec B314
     desc = (
         root.get("Description") or root.get("ManufacturerName") or Path(str(path)).stem
     )
