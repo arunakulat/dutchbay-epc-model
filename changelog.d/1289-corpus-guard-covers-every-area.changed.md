@@ -14,9 +14,30 @@
   The checks are helpers returning what they found; each has a paired `test_negative_control_*`
   that builds a small valid corpus in a throwaway git repository, asserts the helper reports
   nothing, introduces exactly one defect, and asserts the same helper the live tests call
-  reports it. Eight guards, eight controls, and a ninth test that fails if a guard is ever
-  added without one — the count is enforced, not written down. Still about a second in
-  `fastlane`.
-- **The module keeps its `nso` filename deliberately.** The `fastlane` job invokes it by path,
-  `AGENTS.md` cites it and two accepted `RECRUIT-01` review records bind to it; renaming would
-  trade a real risk — the step silently not running — for a cosmetic gain.
+  reports it. Ten guards, ten controls, and an eleventh test that fails if a guard is ever added
+  without one, if a control no guard claims is left behind, or if the mapping names something
+  that no longer exists — the count is enforced, not written down, because the first draft of
+  this entry claimed six controls for eight guards and three guards had none. Measured cost in
+  `fastlane`: 1.90 / 2.01 / 2.06 s wall over three runs, of which about 1.1 s is the tests.
+- **The declaration tables are now forced complete, not trusted.** Nested-manifest
+  classification was already forced; the single-source handling note and the restricted-clause
+  check were keyed by hand-maintained tables that nothing checked, so a new corpus area's
+  manifests were gated in both directions while its handling note was gated by nothing, silently.
+  Both tables are now checked against the tree: a `HANDLING NOTE` or a verbatim quotation block
+  that no entry claims fails by name. Two independent reviewers found this gap; one built the
+  next corpus area with its anchor unregistered, stripped every citation and added a sixth
+  restated copy of the handling statement, and the suite stayed green.
+- **A restricted clause could reach a public CI log through a failing assertion.** `addopts`
+  carries `--showlocals`, which prints every frame local on a failing stack into GitHub Actions,
+  and this repository's logs are public. The module reasoned about that for the span search and
+  stopped one function short: a reviewer forced the assertion and measured three of four clause
+  lines printed, against a docstring claiming the text never left. The parse now returns its
+  defects from a frame that has been popped before anything raises, failures name line numbers
+  and never quote the line, and the clause guards drop their own frames. Verified with a
+  synthetic sentinel: zero occurrences in a forced failure.
+- **The module keeps its `nso` filename deliberately.** Four things name it: the `fastlane` job
+  invokes it by literal path, `AGENTS.md` cites it by path, the offers manifest cites it by
+  filename — so a rename would also mean editing a nested manifest and refreshing the parent pin
+  in the same commit — and two `RECRUIT-01` review records discuss it by path. Those two records
+  are **both REJECT** and both bind only to the superseded `3e4b79f`; they are bindings to break,
+  not endorsement. An earlier draft of this entry called them "accepted", which was false.

@@ -59,10 +59,16 @@ only into the sharded suite. Move it and it stops running on exactly the changes
 catch. Both workflows must keep the same ``pull_request`` branch list, or the gap reopens on
 whichever branch only one of them covers.
 
-**The module name still says ``nso``.** It is deliberate and it is a compromise: renaming a file
-the ``fastlane`` job invokes by path, ``AGENTS.md`` cites and two accepted ``RECRUIT-01`` review
-records bind to would trade a real risk — the step silently not running — for a cosmetic gain.
-The scope is what the code says, not what the filename says.
+**The module name still says ``nso``.** It is deliberate and it is a compromise. Four things
+name this file: the ``fastlane`` job invokes it by literal path, ``AGENTS.md`` cites it by path,
+the offers manifest cites it by filename in its handling note — so a rename would also mean
+editing a nested manifest and refreshing the parent pin in the same commit, the precise coupling
+recorded above as having broken twice — and two ``RECRUIT-01`` review records discuss it by
+path. Those two records are **both REJECT** and both bind only to the superseded ``3e4b79f``;
+they are cited here as bindings to break, not as endorsement, and an earlier revision of this
+paragraph called them "accepted", which was false. Renaming would trade a real risk — the step
+silently not running — for a cosmetic gain. The scope is what the code says, not what the
+filename says.
 """
 
 from __future__ import annotations
@@ -149,9 +155,23 @@ MIN_SPAN_CHARS = 30
 ENTRY = re.compile(r"([0-9a-fA-F]{64}) [ *](.*)")
 
 
-def _entries(manifest: Path) -> dict[str, str]:
-    """Parse a ``sha256sum``-format manifest into {path: digest}, ignoring comments."""
+def _parse_entries(manifest: Path) -> tuple[dict[str, str], list[int], list[int]]:
+    """Parse a manifest, returning {path: digest} and the line numbers of any defects.
+
+    The parsing lives in its own frame and *returns* rather than asserting, so that when
+    :func:`_entries` raises, this frame has already been popped and no line of manifest text
+    is bound anywhere on the failing stack. ``addopts`` in ``pyproject.toml`` carries
+    ``--showlocals``, which prints every local in every frame of a failing test into the
+    GitHub Actions log — and for this repository that log is public. The offers manifest is
+    one of the files parsed here and it is the single home of a confidentiality clause, so
+    an assertion that echoed the offending line, or a frame that still held the whole file,
+    would reproduce restricted text in public to report a formatting error. That is the same
+    failure this module already guards against one function down, in
+    :func:`_quoted_span_matches`; it belongs here too.
+    """
     entries: dict[str, str] = {}
+    malformed: list[int] = []
+    duplicated: list[int] = []
     text = manifest.read_text(encoding="utf-8").lstrip("\ufeff")
     for lineno, raw in enumerate(text.splitlines(), start=1):
         # splitlines() has already removed the terminator. Do NOT strip beyond that: a path
@@ -160,10 +180,33 @@ def _entries(manifest: Path) -> dict[str, str]:
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
         match = ENTRY.fullmatch(raw)
-        assert match, f"{manifest.name}:{lineno}: not a sha256sum entry: {raw!r}"
+        if match is None:
+            malformed.append(lineno)
+            continue
         digest, path = match.group(1).lower(), match.group(2)
-        assert path not in entries, f"{manifest.name}:{lineno}: duplicate for {path}"
+        if path in entries:
+            duplicated.append(lineno)
+            continue
         entries[path] = digest
+    return entries, malformed, duplicated
+
+
+def _entries(manifest: Path) -> dict[str, str]:
+    """Parse a ``sha256sum``-format manifest into {path: digest}, ignoring comments.
+
+    Failures name the file and the line NUMBER and never quote the line: see
+    :func:`_parse_entries` for why.
+    """
+    entries, malformed, duplicated = _parse_entries(manifest)
+    assert not malformed, (
+        f"{manifest.name}: line(s) {malformed} are not sha256sum entries. A line must be 64 "
+        f"hex digits, two spaces or a space and an asterisk, then the path. The offending "
+        f"text is withheld from this message deliberately — this log is public."
+    )
+    assert not duplicated, (
+        f"{manifest.name}: line(s) {duplicated} record a path an earlier line already "
+        f"records. Remove the duplicate rather than re-hashing it."
+    )
     return entries
 
 
@@ -208,11 +251,26 @@ def _corpus_areas(repo_root: Path) -> list[Path]:
 
 
 def _nested_manifests(area: Path) -> list[Path]:
-    """Every manifest beneath ``area`` other than the area's own parent manifest."""
+    """Every manifest beneath ``area`` other than the area's own parent manifest.
+
+    A nested manifest normally carries its package name in front of the suffix, but a
+    ``MANIFEST.sha256`` sitting in a SUBDIRECTORY is a manifest too, and an earlier revision
+    missed it: it globbed ``*.MANIFEST.sha256``, whose leading ``*`` requires the dot, so the
+    bare name never matched and the ``path.name !=`` filter beside it was unreachable. A
+    manifest at depth was therefore classified by nothing and its entries checked by nothing
+    — the module's own headline defect, one directory further down. Both shapes are collected
+    here, and only the area's own parent manifest is excluded, by path rather than by name.
+    """
+    parent = (area / PARENT_MANIFEST_NAME).resolve()
     return sorted(
         path
-        for path in area.rglob(f"*{NESTED_MANIFEST_SUFFIX}")
-        if path.name != PARENT_MANIFEST_NAME
+        for path in area.rglob("*")
+        if path.is_file()
+        and (
+            path.name == PARENT_MANIFEST_NAME
+            or path.name.endswith(NESTED_MANIFEST_SUFFIX)
+        )
+        and path.resolve() != parent
     )
 
 
@@ -292,6 +350,48 @@ def _in_repo_manifests(repo_root: Path) -> dict[Path, Path]:
     return mapping
 
 
+# A handling note defines itself with this line, and a verbatim quotation opens with a heading
+# in this shape. Both conventions are mechanical, so the tables above can be checked for
+# completeness against the tree instead of being trusted. Without that check the two tables are
+# the one part of this module a new corpus area does NOT get for free: its manifests would be
+# gated in both directions while its handling note was gated by nothing, silently — which is the
+# defect class that produced every blocking finding of both predecessor reviews.
+HANDLING_NOTE_DEFINITION = re.compile(r"HANDLING NOTE \u2014 ([A-Z0-9][A-Z0-9-]*)")
+VERBATIM_HEADING = re.compile(r"^#?\s*(\d+\.[^\n]*?, VERBATIM\.)", re.MULTILINE)
+
+
+def _manifests_of(area: Path) -> list[Path]:
+    """Every manifest in ``area``: its parent manifest, if present, and the nested ones."""
+    parent = area / PARENT_MANIFEST_NAME
+    return ([parent] if parent.is_file() else []) + _nested_manifests(area)
+
+
+def _declarations_in_tree(
+    areas: Sequence[Path], pattern: re.Pattern[str]
+) -> dict[str, Path]:
+    """Map each identifier ``pattern`` finds in a manifest to the manifest defining it."""
+    found: dict[str, Path] = {}
+    for area in areas:
+        for manifest in _manifests_of(area):
+            for identifier in pattern.findall(manifest.read_text(encoding="utf-8")):
+                found[identifier] = manifest
+    return found
+
+
+def _unregistered(
+    areas: Sequence[Path], pattern: re.Pattern[str], registered: dict[str, Path]
+) -> tuple[list[str], list[str]]:
+    """Identifiers defined in the tree but unregistered, and ones registered to the wrong home."""
+    defined = _declarations_in_tree(areas, pattern)
+    missing = sorted(key for key in defined if key not in registered)
+    misrouted = sorted(
+        key
+        for key, manifest in defined.items()
+        if key in registered and registered[key].resolve() != manifest.resolve()
+    )
+    return missing, misrouted
+
+
 CORPUS_AREAS: list[Path] = _corpus_areas(REPO_ROOT)
 IN_REPO_MANIFESTS: dict[Path, Path] = _in_repo_manifests(REPO_ROOT)
 
@@ -331,8 +431,11 @@ def test_every_corpus_area_has_a_parent_manifest() -> None:
         f"{orphans} are corpus areas with no {PARENT_MANIFEST_NAME}. An area without one has "
         f"no manifest to disagree with, so nothing here checks it — the exact condition that "
         f"let manifest defects reach main six times. Write the manifest from the area root "
-        f"with `find . -type f ! -name {PARENT_MANIFEST_NAME} -exec sha256sum {{}} +`, then "
-        f"verify with `sha256sum -c {PARENT_MANIFEST_NAME}`."
+        f"with `find . -type f ! -name {PARENT_MANIFEST_NAME} -printf '%P\\n' | sort | "
+        f"xargs -d '\\n' sha256sum > {PARENT_MANIFEST_NAME}`, then verify with "
+        f"`sha256sum -c {PARENT_MANIFEST_NAME}`. Use -printf '%P', not a bare `-exec sha256sum "
+        f"{{}} +`: that writes ./-prefixed paths, which `sha256sum -c` accepts but which do "
+        f"not match the tracked paths, so this guard would then report every file unrecorded."
     )
 
 
@@ -447,6 +550,52 @@ def _orphaned_referrers(anchor: str, referrers: Iterable[Path]) -> list[Path]:
     )
 
 
+def test_every_handling_note_in_the_tree_is_registered() -> None:
+    """A handling note nobody registered is gated by nothing, and nothing says so.
+
+    Nested-manifest classification is forced by
+    :func:`test_every_nested_manifest_is_classified`, so a new corpus area cannot land with
+    an unclassified manifest. ``HANDLING_ANCHORS`` had no such forcing function, which left
+    the module inconsistent with its own argument: a new area's manifests were checked in
+    both directions from the first commit while its handling note — the statement that says
+    what may and may not be published about restricted documents — was checked by nothing,
+    silently. That is the defect class that produced every blocking finding of both
+    predecessor reviews, so it is the last one that should be opt-in.
+    """
+    missing, misrouted = _unregistered(
+        CORPUS_AREAS,
+        HANDLING_NOTE_DEFINITION,
+        {k: v[0] for k, v in HANDLING_ANCHORS.items()},
+    )
+
+    assert not missing, (
+        f"{missing} are handling notes defined in a manifest but absent from "
+        f"HANDLING_ANCHORS, so nothing checks that their referrers still cite them. Add each "
+        f"as anchor -> (the manifest that defines it, the files that must cite it)."
+    )
+    assert not misrouted, (
+        f"{misrouted} are registered against a different manifest than the one that defines "
+        f"them. The home must be the file the note actually lives in."
+    )
+
+
+def test_every_verbatim_quotation_in_the_tree_is_registered() -> None:
+    """Same forcing function for a quoted restricted clause, where the stakes are highest."""
+    missing, misrouted = _unregistered(
+        CORPUS_AREAS, VERBATIM_HEADING, VERBATIM_QUOTATION_HOMES
+    )
+
+    assert not missing, (
+        f"{missing} open a verbatim quotation block in a manifest but are absent from "
+        f"VERBATIM_QUOTATION_HOMES, so nothing checks that the quoted text appears in that "
+        f"file and nowhere else. This repository is public; register each heading."
+    )
+    assert not misrouted, (
+        f"{misrouted} are registered against a different manifest than the one carrying the "
+        f"quotation."
+    )
+
+
 @pytest.mark.parametrize("anchor", sorted(HANDLING_ANCHORS))
 def test_handling_notes_are_stated_once(anchor: str) -> None:
     """A handling statement is defined in one place and cited, never restated, elsewhere."""
@@ -476,6 +625,7 @@ def _quoted_spans(manifest: Path, heading: str) -> list[str]:
     test's minimum-span assertion exists to catch: a moved or reshaped quotation block
     leaves the search looking for nothing at all.
     """
+    __tracebackhide__ = True
     quoted: list[str] = []
     inside = False
     for raw in manifest.read_text(encoding="utf-8").splitlines():
@@ -503,13 +653,24 @@ def _quoted_span_matches(manifest: Path, heading: str) -> list[tuple[int, set[st
     second copy of the confidentiality clause in a public repository — precisely what the guard
     forbids — and CI caught it on the first run.
 
-    The span text also never leaves this function. ``addopts`` in ``pyproject.toml`` carries
-    ``--showlocals``, so any local bound in a frame on a failing stack is printed into the
-    GitHub Actions log, which for this repository is public. Returning span *indices* and file
-    paths lets a genuine failure report that the clause was reproduced and where, without
+    The span text is kept out of the log by two mechanisms, because one was not enough.
+    ``addopts`` in ``pyproject.toml`` carries ``--showlocals``, so any local bound in a frame
+    on a failing stack is printed into the GitHub Actions log, which for this repository is
+    public. Returning span *indices* and file paths is the first: it lets a genuine failure
+    report that the clause was reproduced and where, without
     reproducing it again in the log — which is how the first run of this guard put a fragment
-    of the clause into the log of run 33959805520.
+    of the clause into the log of run 33959805520. The second is ``__tracebackhide__``: the
+    loop below binds each span to a local, and returning indices does nothing about a local
+    on the stack. A ``RECRUIT-01`` reviewer forced the assertion and measured three of the
+    four clause lines printed, against a docstring that claimed the text never left. It does
+    not leave now, and the two guards below carry the same marker for the same reason.
     """
+    # --showlocals prints every local of every frame on a failing stack into the GitHub
+    # Actions log, which for this repository is public. __tracebackhide__ drops this frame
+    # from that stack, so `span` — a line of the restricted clause — is never printed. The
+    # docstring below used to claim the span text "never leaves this function"; measured, it
+    # did: a reviewer forced the assertion and counted three of four clause lines in the log.
+    __tracebackhide__ = True
     results: list[tuple[int, set[str]]] = []
     for index, span in enumerate(_quoted_spans(manifest, heading)):
         found = subprocess.run(
@@ -529,6 +690,7 @@ def _quoted_span_matches(manifest: Path, heading: str) -> list[tuple[int, set[st
 @pytest.mark.parametrize("heading", sorted(VERBATIM_QUOTATION_HOMES))
 def test_quoted_clauses_appear_in_exactly_one_file(heading: str) -> None:
     """A quoted restricted clause belongs in one place, or nowhere."""
+    __tracebackhide__ = True
     manifest = VERBATIM_QUOTATION_HOMES[heading]
     home = manifest.relative_to(REPO_ROOT).as_posix()
     results = _quoted_span_matches(manifest, heading)
@@ -735,19 +897,30 @@ def test_negative_control_malformed_manifest_entries_are_reported(
 
     short = tmp_path / "short.MANIFEST.sha256"
     short.write_text(f"{'a' * 63}  held/a.pdf\n", encoding="utf-8")
-    with pytest.raises(AssertionError, match="not a sha256sum entry"):
+    with pytest.raises(AssertionError, match="are not sha256sum entries"):
         _entries(short)
 
     duplicated = tmp_path / "dupe.MANIFEST.sha256"
     duplicated.write_text(
         f"{'a' * 64}  held/a.pdf\n{'b' * 64}  held/a.pdf\n", encoding="utf-8"
     )
-    with pytest.raises(AssertionError, match="duplicate for"):
+    with pytest.raises(AssertionError, match="record a path an earlier line already"):
         _entries(duplicated)
 
     empty = tmp_path / "empty.MANIFEST.sha256"
     empty.write_text("# nothing but a comment\n", encoding="utf-8")
     assert not _entries(empty)
+
+    # AS-R2: the diagnosis must not reproduce the line it is complaining about. --showlocals
+    # prints every frame local into a public CI log, and one of the manifests parsed here is
+    # the single home of a confidentiality clause.
+    secret = tmp_path / "secret.MANIFEST.sha256"
+    sentinel = "SENTINEL-THAT-MUST-NOT-REACH-A-PUBLIC-LOG"
+    secret.write_text(f"not-a-digest {sentinel}\n", encoding="utf-8")
+    with pytest.raises(AssertionError) as raised:
+        _entries(secret)
+    assert sentinel not in str(raised.value)
+    assert sentinel not in repr(raised.traceback[-1].frame.f_locals)
 
 
 def test_negative_control_orphaned_handling_referrer_is_reported(
@@ -815,6 +988,8 @@ def test_negative_control_reshaped_quotation_block_is_reported(
 # because the alternative is a count in prose that nobody re-checks: the first revision of
 # this block claimed six controls for eight guards and three guards had none.
 GUARD_CONTROLS: dict[str, str] = {
+    "test_every_handling_note_in_the_tree_is_registered": "test_negative_control_unregistered_handling_note_is_reported",
+    "test_every_verbatim_quotation_in_the_tree_is_registered": "test_negative_control_unregistered_verbatim_quotation_is_reported",
     "test_every_corpus_area_has_a_parent_manifest": "test_negative_control_new_area_without_a_manifest_is_reported",
     "test_recorded_entries_are_present_and_hash_as_recorded": "test_negative_control_missing_and_altered_entries_are_reported",
     "test_external_manifests_are_well_formed": "test_negative_control_malformed_manifest_entries_are_reported",
@@ -867,3 +1042,58 @@ def test_every_guard_has_a_negative_control() -> None:
         f"{orphaned} are negative controls that no guard claims. Map each to the guard it "
         f"proves, or delete it: a control nothing is paired with proves nothing."
     )
+
+
+def test_negative_control_unregistered_handling_note_is_reported(
+    synthetic_corpus: Path,
+) -> None:
+    """A handling note defined in the tree but absent from the table is reported.
+
+    This is the trap the next corpus area would have walked into: its manifests gated in
+    both directions, its handling note gated by nothing, and the operator checklist saying
+    it was covered.
+    """
+    areas = _corpus_areas(synthetic_corpus)
+    nested = _nested_manifests(areas[0])[0]
+    anchor = "SYNTHETIC-HANDLING-2026-01-01"
+    nested.write_text(
+        f"# HANDLING NOTE \u2014 {anchor}\n" + nested.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    missing, misrouted = _unregistered(areas, HANDLING_NOTE_DEFINITION, {})
+    assert missing == [anchor] and misrouted == []
+
+    # Registered against the manifest that defines it: clean.
+    missing, misrouted = _unregistered(
+        areas, HANDLING_NOTE_DEFINITION, {anchor: nested}
+    )
+    assert (missing, misrouted) == ([], [])
+
+    # Registered against the wrong file: reported, because the referrer check would then be
+    # reading a file that does not define the note and passing vacuously.
+    elsewhere = areas[0] / PARENT_MANIFEST_NAME
+    missing, misrouted = _unregistered(
+        areas, HANDLING_NOTE_DEFINITION, {anchor: elsewhere}
+    )
+    assert missing == [] and misrouted == [anchor]
+
+
+def test_negative_control_unregistered_verbatim_quotation_is_reported(
+    synthetic_corpus: Path,
+) -> None:
+    """A verbatim quotation block in the tree that no table entry claims is reported."""
+    areas = _corpus_areas(synthetic_corpus)
+    nested = _nested_manifests(areas[0])[0]
+    heading = "3. CLAUSE 9, VERBATIM."
+    nested.write_text(
+        f"# {heading} Quoted here and nowhere else:\n"
+        + nested.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    missing, misrouted = _unregistered(areas, VERBATIM_HEADING, {})
+    assert missing == [heading] and misrouted == []
+
+    missing, misrouted = _unregistered(areas, VERBATIM_HEADING, {heading: nested})
+    assert (missing, misrouted) == ([], [])
