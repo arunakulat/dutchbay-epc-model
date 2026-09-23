@@ -1,0 +1,68 @@
+{
+  "accepted_subject_manifest_sha256": "12de78217336f40f69e0add665d660c2ffdf475d2bbcc4d47be63e0e350c9ec8",
+  "receipts": [
+    {
+      "path": "docs/DOLPHIN_F2F3_ASSURANCE_REVIEW_001_BLOCKED.md",
+      "external_source": "/Users/aruna/Downloads/DutchBay_Oldest_First_Programme_2026-09-07/f2f3/delivery_metadata/DOLPHIN_F2F3_ASSURANCE_REVIEW_001_BLOCKED.md",
+      "raw_sha256": "7f73b2ad6312d14c0a214d7007dd27b2d3a1ae5a51a55c63409a5636806fa0df",
+      "committed_sha256": "0fb2fcebf1eb70410cf496ca0f5a32ec5ffc122a34e9a4a14416fcc5b26fbb13",
+      "normalization": "trailing LF-only blank lines normalized to one final LF; no other bytes changed"
+    },
+    {
+      "path": "docs/DOLPHIN_F2F3_ASSURANCE_REVIEW_002_BLOCKED.md",
+      "external_source": "/Users/aruna/Downloads/DutchBay_Oldest_First_Programme_2026-09-07/f2f3/delivery_metadata/DOLPHIN_F2F3_ASSURANCE_REVIEW_002_BLOCKED.md",
+      "raw_sha256": "ed4f5aced03f731e126db0f2de8e4d5b75d45ea0684a1dd54c9abeb28cf2b29f",
+      "committed_sha256": "2f5bcde0bbfdbf03fd384504254f3c2e11761fa4c8485c8d1e21332f04040efb",
+      "normalization": "trailing LF-only blank lines normalized to one final LF; no other bytes changed"
+    },
+    {
+      "path": "docs/DOLPHIN_F2F3_ASSURANCE_REVIEW_003_ACCEPTED.md",
+      "external_source": "/Users/aruna/Downloads/DutchBay_Oldest_First_Programme_2026-09-07/f2f3/delivery_metadata/DOLPHIN_F2F3_ASSURANCE_REVIEW_003_ACCEPTED.md",
+      "raw_sha256": "973561580930a92dc0bff13c7605e736668826b658a6c57dcc402af0656bc3a4",
+      "committed_sha256": "5773258b5eb28b613376cec6cec002a3e980652972d08599fd68aacd64e311f2",
+      "normalization": "trailing LF-only blank lines normalized to one final LF; no other bytes changed"
+    },
+    {
+      "path": "docs/DOLPHIN_F2F3_DOMAIN_CRASH_SOURCE_ADDENDUM.md",
+      "external_source": "/Users/aruna/Downloads/DutchBay_Oldest_First_Programme_2026-09-07/f2f3/delivery_metadata/DOLPHIN_F2F3_DOMAIN_CRASH_SOURCE_ADDENDUM.md",
+      "raw_sha256": "13bc4557acdf59d0f5ac1c9eb15008c5eee24f8f4d6ebc7505735231c231d408",
+      "committed_sha256": "bfa367179c227aa6b7f26db722e373a9e30d0a7c3b0c7b5cbba49163b74742ed",
+      "normalization": "trailing LF-only blank lines normalized to one final LF; no other bytes changed"
+    },
+    {
+      "path": "docs/DOLPHIN_F2F3_DOMAIN_REVIEW_001_BLOCKED.md",
+      "external_source": "/Users/aruna/Downloads/DutchBay_Oldest_First_Programme_2026-09-07/f2f3/delivery_metadata/DOLPHIN_F2F3_DOMAIN_REVIEW_001_BLOCKED.md",
+      "raw_sha256": "987436f4966cd514ca88de405f7082a550e2ce0ecd55ec2a8bf67a14233478df",
+      "committed_sha256": "db297fa4401f297043aaeeaa480a5a0c14af0fddd0a8b25403ea7aa8e98c07ff",
+      "normalization": "trailing LF-only blank lines normalized to one final LF; no other bytes changed"
+    },
+    {
+      "path": "docs/DOLPHIN_F2F3_DOMAIN_REVIEW_002_BLOCKED.md",
+      "external_source": "/Users/aruna/Downloads/DutchBay_Oldest_First_Programme_2026-09-07/f2f3/delivery_metadata/DOLPHIN_F2F3_DOMAIN_REVIEW_002_BLOCKED.md",
+      "raw_sha256": "cc386c70c042224a312cda7c6d9a08ab22c871ad5b8fce13b96c7669535d26cc",
+      "committed_sha256": "b577d4e00c591938ed131e5018fbbd8dce8b4a13152708d75e9447a5476bb332",
+      "normalization": "trailing LF-only blank lines normalized to one final LF; no other bytes changed"
+    },
+    {
+      "path": "docs/DOLPHIN_F2F3_DOMAIN_REVIEW_003_ACCEPTED.md",
+      "external_source": "/Users/aruna/Downloads/DutchBay_Oldest_First_Programme_2026-09-07/f2f3/delivery_metadata/DOLPHIN_F2F3_DOMAIN_REVIEW_003_ACCEPTED.md",
+      "raw_sha256": "a0dc54550a116d1b2102e7214be5539ffb0ff184902d19592ddc0564ea3f427a",
+      "committed_sha256": "172d15e8923da6e5540f6dd4d53b10e87e132668646be623d6aa5face0754e3a",
+      "normalization": "trailing LF-only blank lines normalized to one final LF; no other bytes changed"
+    },
+    {
+      "path": "docs/DOLPHIN_F2F3_SUBJECT_MANIFEST.tsv",
+      "external_source": "/Users/aruna/Downloads/DutchBay_Oldest_First_Programme_2026-09-07/f2f3/delivery_metadata/DOLPHIN_F2F3_SUBJECT_MANIFEST.tsv",
+      "raw_sha256": "12de78217336f40f69e0add665d660c2ffdf475d2bbcc4d47be63e0e350c9ec8",
+      "committed_sha256": "12de78217336f40f69e0add665d660c2ffdf475d2bbcc4d47be63e0e350c9ec8",
+      "normalization": "none"
+    },
+    {
+      "path": "docs/SESSION_HANDOVER_2026-09-08_PR1243.md",
+      "external_source": "/Users/aruna/Downloads/DutchBay_Oldest_First_Programme_2026-09-07/f2f3/delivery_metadata/SESSION_HANDOVER_2026-09-08_PR1243.md",
+      "raw_sha256": "be5e0b7bb83f302949302679012ffb79087144b1f996176644a12c3ac1383263",
+      "committed_sha256": "be5e0b7bb83f302949302679012ffb79087144b1f996176644a12c3ac1383263",
+      "normalization": "trailing LF-only blank lines normalized to one final LF; no other bytes changed"
+    }
+  ]
+}

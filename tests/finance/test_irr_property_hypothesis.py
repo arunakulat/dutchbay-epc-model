@@ -1,12 +1,11 @@
 """Property test: a root returned by ``finance.irr.irr`` must zero the NPV.
 
-``numpy_financial.irr`` (frozen at v1.0.0 since Oct 2019) is documented to return a
-materially WRONG root for legitimate cashflows (numpy-financial #28/#33/#39), and
-``finance.irr.irr`` accepts the ``numpy_financial`` result if it lands within
-``[lower, upper]`` without an independent sign-change/monotonicity check — precisely the
-multi-sign-change hazard the code audit flagged. This Hypothesis test is the cheap
-guardrail (#595): over an adversarial corpus of sign-changing cashflows, whatever rate
-``irr`` returns must actually zero the NPV. A wrong root would not.
+``numpy_financial.irr`` 1.0.0 can return a materially wrong root for legitimate
+cashflows (numpy-financial #28/#33/#39). ``finance.irr.irr`` checks both caller bounds
+and the NPV residual before accepting that library result, using bisection when either
+check fails. This Hypothesis test guards that contract (#595): over an adversarial
+corpus of sign-changing cashflows, whatever rate ``irr`` returns must actually zero
+the NPV. A wrong root would not.
 
 Robustness: the property is asserted RELATIVE to the discounted-absolute magnitude at the
 root (so it is invariant to cashflow scale and to the local steepness of the NPV curve),
@@ -19,6 +18,8 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
+import numpy_financial as npf
 import pytest
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
@@ -105,3 +106,71 @@ def test_irr_matches_closed_form_roots(cashflows: list[float], expected: float) 
     rate = irr(cashflows)
     assert rate is not None
     assert rate == pytest.approx(expected, abs=1e-6)
+
+
+@pytest.mark.parametrize("tail", [5e-324, 1e-310])
+@pytest.mark.parametrize("end_zeros", [False, True])
+def test_normalization_overflow_uses_existing_fallback_without_warning(
+    tail: float, end_zeros: bool, recwarn: pytest.WarningsRecorder
+) -> None:
+    """The real polynomial failure still yields the analytic 10% fallback root."""
+    cashflows = [-100.0, 110.0, tail]
+    if end_zeros:
+        cashflows = [0.0, *cashflows, 0.0, -0.0]
+
+    with pytest.warns(RuntimeWarning, match="overflow encountered in divide"):
+        with pytest.raises(np.linalg.LinAlgError, match="infs or NaNs"):
+            npf.irr(cashflows)
+
+    rate = irr(cashflows)
+    assert rate == pytest.approx(0.10, abs=1e-9)
+    assert len(recwarn) == 0
+
+
+@pytest.mark.parametrize("tail", [5e-324, 1e-310])
+def test_normalization_fallback_preserves_caller_bounds(tail: float) -> None:
+    """A root excluded by caller bounds remains undefined after overflow."""
+    assert irr([-100.0, 110.0, tail], lower_bound=0.2, upper_bound=0.3) is None
+    assert irr([-100.0, 110.0, tail], lower_bound=0.1, upper_bound=0.3) == 0.1
+
+
+@pytest.mark.parametrize("scale", [1e-10, 1.0, 1e10, 1e100])
+def test_multiple_root_selection_and_scale_remain_unchanged(scale: float) -> None:
+    """The factored polynomial has 10% and 20% roots; bounds select the latter."""
+    cashflows = [scale * value for value in [-100.0, 230.0, -132.0]]
+    assert irr(cashflows) == pytest.approx(0.10, abs=1e-6)
+    # The existing bisection has an absolute stopping tolerance, so use an
+    # ordinary scale for its independent bounded-root check.
+    if scale == 1.0:
+        assert irr(cashflows, 0.15, 0.25) == pytest.approx(0.20, abs=1e-6)
+
+
+def test_reciprocal_overflow_does_not_bypass_finite_library_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unrelated reciprocal overflow must leave the finite root choice intact."""
+    # Inject a hostile eigensolver result at the real library seam; this does
+    # not claim the installed eigensolver returns it for these cashflows.
+    # The finite 10%/20% rates are analytic roots. Default bisection cannot
+    # bracket either, so widening the error context would lose the valid 10%.
+    monkeypatch.setattr(np, "roots", lambda _: np.array([5e-324, 1.0 / 1.1, 1.0 / 1.2]))
+    with pytest.warns(RuntimeWarning, match="overflow encountered in divide"):
+        assert irr([-100.0, 230.0, -132.0]) == pytest.approx(0.10, abs=1e-12)
+
+
+@pytest.mark.parametrize("overflows", [False, True])
+def test_normalization_overflow_matches_float64_boundary(overflows: bool) -> None:
+    """Adjacent coefficients straddle the finite companion-matrix boundary."""
+    from finance.irr import _irr_normalization_overflows
+
+    numerator = float(np.finfo(float).max) / 2.0
+    if overflows:
+        numerator = math.nextafter(numerator, math.inf)
+    cashflows = [-numerator, 0.5]
+    assert _irr_normalization_overflows(cashflows) is overflows
+    if overflows:
+        with pytest.warns(RuntimeWarning, match="overflow encountered in divide"):
+            with pytest.raises(np.linalg.LinAlgError, match="infs or NaNs"):
+                npf.irr(cashflows)
+    else:
+        assert math.isfinite(float(npf.irr(cashflows)))

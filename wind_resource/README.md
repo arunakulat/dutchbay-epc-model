@@ -1,241 +1,101 @@
-# Wind Resource Assessment Module
+# `wind_resource/`
 
-**Version:** 1.0.0  
-**Date:** December 21, 2025  
-**Status:** ✅ VALIDATED with 11-year ERA5 dataset
+ERA5 reanalysis → Weibull characterisation → wake → IEC uncertainty → the bankable AEP that
+feeds the finance model.
 
-## Executive Summary
+**This page points; it does not repeat.** Every number that matters lives in exactly one
+authoritative place, listed under [Where the numbers live](#where-the-numbers-live). A figure
+copied to a second place is a figure that will drift — this file spent nine months asserting a
+lender base case the project had already retired, which is what #1279 records.
 
-Comprehensive wind resource assessment toolkit validated with cross-checking of two independent ERA5 datasets.
+## Two paths, and which one is the headline
 
-### Key Validated Results
+| | Lender path | Diagnostic path |
+|---|---|---|
+| Entry point | `analytics.wind.aep_summary_builder.build_aep_summary_from_config` | `wind_resource.wind_pipeline.WindPipeline` |
+| Resource input | a *declared* Weibull `(A, k)` from the scenario | an hourly hub-height *timeseries* |
+| AEP method | analytic integration of the curve over the Weibull | integration over the raw series |
+| Feeds finance | **yes** — this is the committed headline | **no**, by design |
 
-| Metric | Value | Assessment |
-|--------|-------|------------|
-| **Mean Wind Speed** | 7.33 m/s @ 150m | ⭐⭐⭐⭐⭐ Excellent |
-| **Weibull k** | 2.650 | Excellent fit quality |
-| **Gross Capacity Factor** | 42.5% | TOP TIER for Sri Lanka |
-| **Net AEP (P75)** | **286.3 GWh/year** | **LENDER BASE CASE** |
-| **Annual Revenue (P75)** | $19.4M USD | Robust economics |
-| **Inter-annual CoV** | 2.9% | Exceptional stability |
-| **Data Period** | 2014-2025 (11 years) | Long-term validated |
+`energy_calculator.py` says so in its own docstring, and `analytics/wind/losses_model.py` is
+shared by both so the two can never disagree on the loss stack.
 
-## Cross-Validation Results
+The third group is the **validate-only side branches**. `weibull_fit`, `arco_assessment`,
+`crossval`, `long_term_trend`, `mcp`, `era5_grid.spatial_representativeness` and
+`siting_metadata` all compute an independent view of the resource and report its *drift*
+against the declared baseline. None of them mutates it. Adopting a new `(A, k)`, a new
+reference period or a measured interannual sigma is always a deliberate, dated config edit,
+never an automatic side effect — that rule is the reason the headline is auditable.
 
-Two independent ERA5 datasets analyzed:
+## Module map
 
-```
-Metric                    Dataset 1    Dataset 2    Difference
----------------------------------------------------------------
-Mean Wind Speed (m/s)       7.33         7.33         0.00 ✅
-Gross CF (%)               43.7         42.5         -1.2
-Net AEP P50 (GWh/yr)       327.2        318.1        -2.8%
-Net AEP P75 (GWh/yr)       294.5        286.3        -2.8%
-Revenue P50 ($M/yr)        22.14        21.53        -2.8%
-```
+`docs/MODULE_REFERENCE.md`, section *Wind Resource Pipeline (ERA5 to bankable AEP)*, describes
+every module in this package and its role. It is kept complete by
+`tests/docs/test_module_reference_covers_wind.py`, so a new module cannot land undescribed.
 
-**Conclusion:** 2.8% difference is WELL WITHIN industry uncertainty (±10-15%).  
-**Recommendation:** Use 11-year dataset (Dataset 2) results for lender base case.
+## Running it
 
-## Module Features
-
-- ✅ **ERA5 Data Fetching**: Automated download from Copernicus CDS
-- ✅ **Statistical Analysis**: Weibull fitting, temporal patterns, variability
-- ✅ **Energy Calculations**: Power curves, losses, P-level scenarios  
-- ✅ **Cashflow Integration**: JSON exports for financial models
-- ✅ **GWTF Compliant**: Follows repository standards
-
-## Module Structure
-
-```
-wind_resource/
-├── __init__.py              # Module exports
-├── era5_fetcher.py          # ERA5 API wrapper (TODO)
-├── wind_analyzer.py         # Statistical analysis (TODO)
-├── energy_calculator.py     # AEP calculations (TODO)
-├── wind_pipeline.py         # Main orchestrator (TODO)
-├── README.md                # This file
-└── config/
-    ├── __init__.py
-    ├── locations.yaml       # ✅ Pre-defined sites
-    ├── power_curves.yaml    # Turbine specs (TODO)
-    └── era5_config.yaml     # API settings (TODO)
-```
-
-## Quick Start (Planned)
-
-```python
-from wind_resource import WindPipeline
-
-# Define location
-location = {
-    'name': 'DutchBay',
-    'lat': 8.33,
-    'lon': 79.76
-}
-
-# Run assessment
-pipeline = WindPipeline(
-    location=location,
-    hub_height=150.0,
-    num_turbines=15,
-    rated_capacity=6500
-)
-
-results = pipeline.run_complete_assessment(
-    start_date='2014-12-01',
-    end_date='2025-12-31'
-)
-
-# Export for cashflow
-cashflow_data = pipeline.export_for_cashflow_model(scenario='P75')
-```
-
-## Installation Requirements
+The heavy geoscience dependencies are opt-in and call-time guarded (CASPER), so this package
+imports cleanly without them and fails with an actionable message if you call a path that
+needs one:
 
 ```bash
-pip install cdsapi xarray netcdf4 pyyaml scipy
+pip install -e '.[wind]'        # cdsapi, xarray, netcdf4, windpowerlib, turbine-models, py-wake
+pip install -e '.[micrositing]' # adds topfarm (OpenMDAO), for layout_optimizer only
 ```
 
-### ERA5 API Setup
+ERA5 retrieval needs your own Copernicus CDS key in `~/.cdsapirc` — register at
+<https://cds.climate.copernicus.eu>. No credential is held in this repository (CASPER).
 
-1. Register at: https://cds.climate.copernicus.eu/user/register
-2. Accept terms: https://cds.climate.copernicus.eu/api/v2/terms/accepted
-3. Create `~/.cdsapirc`:
-   ```
-   url: https://cds.climate.copernicus.eu/api/v2
-   key: YOUR_UID:YOUR_API_KEY
-   ```
+Hydra CLIs, `key=value` only — `argparse` is banned repo-wide (R3):
 
-## Implementation Status
-
-### ✅ Completed
-- [x] Module structure created
-- [x] Configuration YAML templates
-- [x] Locations database (Dutch Bay, Mannar, Hambantota)
-- [x] Wind resource analysis validated (11-year dataset)
-- [x] Cross-validation completed (2 datasets)
-- [x] Financial projections calculated
-
-### 🚧 In Progress
-- [ ] ERA5 fetcher implementation
-- [ ] Wind analyzer implementation  
-- [ ] Energy calculator implementation
-- [ ] Pipeline orchestrator
-- [ ] CLI tools (Hydra-based, GWTF compliant)
-- [ ] Integration tests
-
-## Analysis Methodology
-
-### Wind Resource
-- **Data Source**: ERA5 Reanalysis (ECMWF Copernicus)
-- **Spatial Resolution**: ~31km grid
-- **Temporal Resolution**: Hourly (2014-2025)
-- **Height Extrapolation**: Power law with calculated wind shear (α=0.115)
-
-### Energy Production
-- **Turbine**: Envision EN-171/6.5 MW
-- **Hub Height**: 150m
-- **Farm Capacity**: 15 turbines × 6.5 MW = 97.5 MW
-- **Power Curve**: Cubic interpolation
-- **Losses**: 12.4% total (availability, curtailment, electrical, wake, environmental)
-
-### P-Level Scenarios
-- **P50 (Base)**: 318.1 GWh/year - 50% exceedance
-- **P75 (Lender)**: 286.3 GWh/year - 75% exceedance ← **RECOMMENDED**
-- **P90 (Stress)**: 254.5 GWh/year - 90% exceedance
-
-## Monthly Energy Profile
-
-```
-Month      Energy (GWh)   CF %    % Annual
--------------------------------------------
-Jan          24.6         33.9      6.8%
-Feb          21.2         32.0      5.8%
-Mar          11.7         16.2      3.2%
-Apr          10.7         15.2      2.9%     ← LOWEST
-May          38.7         53.4     10.6%
-Jun          56.6         80.7     15.6%     ← PEAK
-Jul          49.8         68.7     13.7%
-Aug          47.0         64.8     12.9%
-Sep          45.4         64.7     12.5%
-Oct          21.6         29.8      5.9%
-Nov          13.9         19.8      3.8%
-Dec          22.5         31.0      6.2%
--------------------------------------------
-TOTAL       363.8         42.5    100.0%
-
-SW Monsoon (May-Sep): 65.3% of annual energy
+```bash
+python scripts/run_wind_analysis_v14.py location=dutchbay   # conf/wind_analysis.yaml
 ```
 
-## Revenue Projections
+The full pipeline consumes a *frozen* wind export rather than calling Copernicus itself; see
+the header of `run_full_pipeline_v14.py`.
 
-**Assumptions:**
-- Tariff: LKR 20.30/kWh
-- Exchange Rate: LKR 300/USD
-- USD Tariff: $0.0677/kWh
-- PPA Period: 20 years
+## Configuration
 
-**Annual Revenue:**
-- P50 (Base): $21.53M
-- P75 (Lender): **$19.37M** ← **RECOMMENDED**
-- P90 (Stress): $17.22M
+All of it is YAML under `config/` (CCCDIR — no hidden constants, and identity fields raise
+rather than default):
 
-**20-Year Cumulative:**
-- P75: **$387.5M**
-- Revenue Risk (P50-P75): $43.1M over 20 years
+| File | Holds |
+|---|---|
+| `locations.yaml` | site definitions (`dutchbay`, `mannar`, `hambantota`) |
+| `power_curves.yaml` | the turbine curve store, keyed by slug — the slug a scenario names in `resource.power_curve.curve_key` |
+| `era5_config.yaml` | CDS API settings, shear bounds, loss factors, P-levels |
+| `era5_request_kalpitiya.yaml` | a worked single-point ARCO request |
+| `gis_export_dutchbay.yaml` | grid-export settings for `era5_grid` |
 
-## Integration with Cashflow Model
+A curve reaches the store only through `power_curve_sourcing.py`, which either fetches from
+the open turbine library or validates a manually entered OEM spec-sheet curve. Neither path
+fabricates curve data, and both stamp provenance.
 
-Exported JSON structure for cashflow integration:
+## Where the numbers live
 
-```json
-{
-  "location": "DutchBay",
-  "scenario": "P75",
-  "annual_energy_gwh": 286.3,
-  "annual_revenue_usd": 19373481,
-  "capacity_factor_net": 0.335,
-  "num_turbines": 15,
-  "rated_capacity_mw": 97.5,
-  "tariff_usd_kwh": 0.0677,
-  "monthly_energy_profile": [...]  
-}
-```
+Do not copy these into a document, a docstring or this README. Cite the path instead.
 
-## Validation & Quality Assurance
+| Want | Read |
+|---|---|
+| The committed bankable AEP, its losses, uncertainty budget and full method note | `scenarios/aep_summary_dutchbay_10mw.json` |
+| The turbine, hub height, count, Weibull and loss stack of a case | that case's file in `scenarios/` |
+| Which power curve a scenario uses and where the curve came from | `resource.power_curve` in the scenario, resolved against `analytics.loader.aep_loader.APPROVED_SOURCES` |
+| How gross AEP, wake, losses and P50/P75/P90 are computed | `bankable_aep.py` and `analytics/wind/{aep_tornado,losses_model}.py` |
+| The chain of custody from ERA5 to the finance model | `docs/WIND_AEP_CHAIN_OF_CUSTODY.md` |
+| The wind interface contract | `docs/WIND_INTERFACE_SCHEMA.md` |
 
-### Data Quality
-- ✅ ERA5 data: 100% complete, no gaps
-- ✅ 11-year time series: 2014-2025
-- ✅ Cross-validation: <3% variance between datasets
-- ✅ Inter-annual stability: 2.9% CoV (exceptional)
+## Standards
 
-### Technical Validation
-- ✅ Weibull fit quality: Excellent (KS test p-value)
-- ✅ Wind shear: 0.115 (typical coastal)
-- ✅ Capacity factor: 42.5% (top tier for region)
-- ✅ Operational zones: 86% partial load, 0% cut-out events
+IEC 61400-12-1 for the air-density wind-speed normalisation; IEC 61400-15-2 for the loss
+taxonomy and the P50/P75/P90 uncertainty build-up (note that -15-2 is the energy-yield part and
+was still in draft as of 2025 — it is not the published IEC 61400-15-1:2025, which covers site
+suitability input conditions); Bastankhah & Porte-Agel 2014 for the Gaussian wake deficit via
+PyWake, with the Niayifar & Porte-Agel 2016 turbulence-intensity closure; MEASNET and
+IEC 61400-15 practice for MCP and long-term adjustment.
 
-## References
+## Licence
 
-- ERA5 Documentation: https://cds.climate.copernicus.eu/datasets/reanalysis-era5-single-levels
-- CDS API Guide: https://cds.climate.copernicus.eu/how-to-api
-- IEC 61400-15: Wind resource assessment standard
-- Manwell et al. "Wind Energy Explained" (2009)
-
-## License
-
-Proprietary - Dutch Bay Wind Farm EPC Model
-
-## Support
-
-For issues or questions:
-- GitHub Issues: https://github.com/arunakulat/dutchbay-epc-model/issues
-- Documentation: See `docs/wind_resource/` (TODO)
-
----
-
-**Last Updated:** December 21, 2025  
-**Analysis Completed By:** Wind Resource Assessment Team  
-**Validation Status:** ✅ COMPLETE - Ready for lender presentation
+Proprietary — see the repository `LICENSE`, which grants evaluation and audit, not deployment
+or redistribution.

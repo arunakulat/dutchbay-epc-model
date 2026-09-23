@@ -4,6 +4,15 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Changed
+- **F2/F3 debt and covenant contract (15.5.0).** `plan_debt.dscr_series` is
+  positional and `dscr_periods` publishes explicit operating-year labels and per-year
+  folded coverage. Covenant breach years use those labels and folded coverage;
+  malformed labels fail loudly. Headline `min_dscr` retains both the operating-period
+  minimum and `dscr_by_year` fold. This changes covenant reporting and the public
+  series shape; it does not authorize a canon rebaseline or a release. The deprecated
+  raw alias and compact `ScenarioResult.dscr_series` remain compatible.
+
 ## v15.4.0 - 2026-08-18
 
 ### Added

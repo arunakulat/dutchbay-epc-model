@@ -27,6 +27,7 @@ No argparse (kept out of the R3 banned-API surface): flags are read from ``sys.a
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -53,6 +54,15 @@ _ALIASES: dict[str, str] = {
 }
 UNRELEASED = "## [Unreleased]"
 
+# A fragment body carries bullets only. ``fold`` splices every non-blank fragment line
+# into ``[Unreleased]`` VERBATIM, so a markdown heading in a fragment becomes a heading in
+# CHANGELOG.md: a ``## X`` renders at release level, and because ``_section_end`` stops at
+# the first ``## `` after the anchor it also truncates the ``[Unreleased]`` window that
+# every later run inserts into. A fragment never needs a category heading anyway - the
+# category comes from the filename - so headings are rejected outright rather than
+# stripped, per CESSPIT: fail loudly at the boundary instead of silently repairing input.
+_HEADING = re.compile(r"^#{1,6}\s")
+
 
 def category_of(name: str) -> str:
     """Return the canonical category for a fragment filename ``<id>.<category>.md``."""
@@ -67,6 +77,27 @@ def category_of(name: str) -> str:
             f"{CATEGORIES} (or aliases {sorted(_ALIASES)})"
         )
     return cat
+
+
+def validate_body(name: str, lines: list[str]) -> None:
+    """Raise ``ValueError`` if a fragment body contains a markdown heading.
+
+    Args:
+        name: The fragment's filename, used in the error message.
+        lines: The fragment's non-blank body lines.
+
+    Raises:
+        ValueError: If any line is a markdown heading (``#`` through ``######``).
+    """
+    bad = [ln for ln in lines if _HEADING.match(ln)]
+    if bad:
+        shown = ", ".join(repr(ln) for ln in bad)
+        raise ValueError(
+            f"fragment {name!r}: a fragment body holds bullets only, no markdown "
+            f"headings - the category comes from the filename, and a heading is folded "
+            f"into CHANGELOG.md verbatim, where it renders at release level and "
+            f"truncates the [Unreleased] window. Offending line(s): {shown}"
+        )
 
 
 def fragments() -> list[Path]:
@@ -156,6 +187,7 @@ def _collect() -> dict[str, list[str]]:
         cat = category_of(frag.name)
         body = frag.read_text(encoding="utf-8").strip("\n")
         frag_lines = [ln for ln in body.split("\n") if ln.strip() != ""]
+        validate_body(frag.name, frag_lines)
         if frag_lines:
             by_cat.setdefault(cat, []).extend(frag_lines)
     return by_cat

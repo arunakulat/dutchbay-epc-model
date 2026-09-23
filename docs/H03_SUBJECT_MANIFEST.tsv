@@ -1,0 +1,3 @@
+changelog.d/hygiene-pytest-compatibility.fixed.md	52a773169ed0cd1778a6c49c11a17663bc46bcb8
+pyproject.toml	912f58077b4bb2202f282d236d0abe866f811534
+tests/analytics/test_fx_calibration.py	6675e343db5e909f33a085d4282662b5465e0b72

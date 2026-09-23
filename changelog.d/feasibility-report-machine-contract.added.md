@@ -1,5 +1,3 @@
-# Added
-
 - Add the strict, frozen DBAY-FRC-001 v1 feasibility-report package contract, typed registries,
   discriminated capability dispositions, exact 20-section SSOT parity and fail-closed contract
   controls. Independent domain and assurance vetoes drove durable negative controls for

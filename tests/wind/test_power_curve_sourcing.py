@@ -1,13 +1,14 @@
 """Tests for power-curve sourcing (issue #181).
 
-The fetch/list paths hit the oedb online library and skip if windpowerlib/network is
-unavailable; validation, manual entry, store round-trip and EnergyCalculator
-consumability are tested offline.
+The fetch/list paths use the packages' local turbine data. Only absence of the
+optional package skips a test; import, loading and assertion failures propagate.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import shutil
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -26,7 +27,7 @@ from wind_resource.power_curve_sourcing import (
 )
 
 
-def _good():
+def _good() -> PowerCurve:
     return manual_power_curve(
         key="test_8mw",
         manufacturer="TestCo",
@@ -55,15 +56,15 @@ def _good():
     )
 
 
-def test_validate_good_curve():
+def test_validate_good_curve() -> None:
     assert validate_power_curve(_good()) == []
 
 
-def test_rated_wind_speed_detected():
+def test_rated_wind_speed_detected() -> None:
     assert _good().rated_ms == 12.0  # first ws reaching 8000 kW
 
 
-def test_validate_flags_bad_curves():
+def test_validate_flags_bad_curves() -> None:
     mismatch = manual_power_curve("k", "M", "m", 8000, [0, 3, 4], [0, 0])
     assert any("length mismatch" in i for i in validate_power_curve(mismatch))
     nonmono = manual_power_curve("k", "M", "m", 8000, [0, 4, 3], [0, 1000, 2000])
@@ -74,7 +75,7 @@ def test_validate_flags_bad_curves():
     assert any("never reaches" in i for i in validate_power_curve(underrated))
 
 
-def test_add_to_store_and_reload(tmp_path):
+def test_add_to_store_and_reload(tmp_path: Path) -> None:
     store = tmp_path / "pc.yaml"
     store.write_text("# curves\n")
     add_curve_to_store(_good(), store_path=store)
@@ -86,7 +87,7 @@ def test_add_to_store_and_reload(tmp_path):
     assert entry["provenance"]["source"] == "manual"
 
 
-def test_duplicate_key_raises(tmp_path):
+def test_duplicate_key_raises(tmp_path: Path) -> None:
     store = tmp_path / "pc.yaml"
     store.write_text("")
     add_curve_to_store(_good(), store_path=store)
@@ -94,7 +95,7 @@ def test_duplicate_key_raises(tmp_path):
         add_curve_to_store(_good(), store_path=store)
 
 
-def test_invalid_curve_rejected(tmp_path):
+def test_invalid_curve_rejected(tmp_path: Path) -> None:
     store = tmp_path / "pc.yaml"
     store.write_text("")
     bad = manual_power_curve("k", "M", "m", 1000, [0, 3, 4], [0, 500, 2000])
@@ -102,7 +103,7 @@ def test_invalid_curve_rejected(tmp_path):
         add_curve_to_store(bad, store_path=store)
 
 
-def test_added_curve_consumable_by_energy_calculator(tmp_path):
+def test_added_curve_consumable_by_energy_calculator(tmp_path: Path) -> None:
     store = tmp_path / "power_curves.yaml"
     shutil.copy(DEFAULT_STORE, store)  # real schema + existing curves
     add_curve_to_store(_good(), store_path=store)
@@ -124,24 +125,28 @@ def test_added_curve_consumable_by_energy_calculator(tmp_path):
     assert calc.calculate_gross_aep()["windfarm_aep_mwh"] > 0
 
 
+def _require_optional_package(name: str) -> None:
+    """Skip absent packages; leave broken installed packages to fail on import."""
+    if importlib.util.find_spec(name) is None:
+        pytest.skip(f"{name} not installed")
+
+
 @pytest.mark.parametrize("path", ["list", "fetch"])
-def test_oedb_paths_if_available(path):
-    try:
-        if path == "list":
-            df = list_oedb_turbines("Enercon")
-            assert len(df) > 0
-        else:
-            pc = fetch_oedb_power_curve(
-                "E-126/7500", hub_height_m=135, manufacturer="Enercon"
-            )
-            assert pc.rated_capacity_kw == pytest.approx(7500, rel=0.02)
-            assert validate_power_curve(pc) == []
-            assert pc.source == "oedb_windpowerlib"
-    except Exception as exc:  # network / windpowerlib absent
-        pytest.skip(f"oedb/windpowerlib unavailable: {type(exc).__name__}")
+def test_oedb_paths_if_available(path: str) -> None:
+    _require_optional_package("windpowerlib")
+    if path == "list":
+        df = list_oedb_turbines("Enercon")
+        assert len(df) > 0
+    else:
+        pc = fetch_oedb_power_curve(
+            "E-126/7500", hub_height_m=135, manufacturer="Enercon"
+        )
+        assert pc.rated_capacity_kw == pytest.approx(7500, rel=0.02)
+        assert validate_power_curve(pc) == []
+        assert pc.source == "oedb_windpowerlib"
 
 
-def _wtg_xml():
+def _wtg_xml() -> str:
     return (
         '<WindTurbineGenerator Description="TestCo TC-200/12.0" RotorDiameter="200">'
         '<PerformanceTable AirDensity="1.225">'
@@ -162,7 +167,7 @@ def _wtg_xml():
     )
 
 
-def test_from_wasp_wtg_picks_density_and_converts(tmp_path):
+def test_from_wasp_wtg_picks_density_and_converts(tmp_path: Path) -> None:
     from wind_resource.power_curve_sourcing import from_wasp_wtg
 
     path = tmp_path / "t.wtg"
@@ -177,7 +182,7 @@ def test_from_wasp_wtg_picks_density_and_converts(tmp_path):
     assert validate_power_curve(pc) == []
 
 
-def test_from_tabular_file_dat_watts(tmp_path):
+def test_from_tabular_file_dat_watts(tmp_path: Path) -> None:
     from wind_resource.power_curve_sourcing import from_tabular_file
 
     path = tmp_path / "curve.dat"
@@ -193,17 +198,15 @@ def test_from_tabular_file_dat_watts(tmp_path):
 # ── 10 MW reference curves + thrust-coefficient (Ct) capture ──────────────────
 
 
-def test_turbine_models_fetch_captures_thrust_when_present():
+def test_turbine_models_fetch_captures_thrust_when_present() -> None:
     """IEA/DTU reference designs ship Ct; the fetch captures it aligned to ws.
 
     NREL's 10 MW reference ships Cp only, so its thrust_coeffs stay None.
     """
-    try:
-        iea = fetch_turbine_models_curve(
-            "IEA_Reference_10MW_198", key="iea", manufacturer="IEA"
-        )
-    except Exception as exc:  # turbine-models absent
-        pytest.skip(f"turbine-models unavailable: {type(exc).__name__}")
+    _require_optional_package("turbine_models")
+    iea = fetch_turbine_models_curve(
+        "IEA_Reference_10MW_198", key="iea", manufacturer="IEA"
+    )
     assert iea.rated_capacity_kw == pytest.approx(10638, rel=0.02)
     assert iea.thrust_coeffs is not None
     assert len(iea.thrust_coeffs) == len(iea.wind_speeds_ms)
@@ -217,7 +220,7 @@ def test_turbine_models_fetch_captures_thrust_when_present():
     assert nrel.thrust_coeffs is None
 
 
-def test_to_yaml_block_emits_thrust_curve_only_when_present():
+def test_to_yaml_block_emits_thrust_curve_only_when_present() -> None:
     with_ct = PowerCurve(
         key="k",
         manufacturer="M",
@@ -242,7 +245,7 @@ def test_to_yaml_block_emits_thrust_curve_only_when_present():
     assert "thrust_curve" not in without_ct.to_yaml_block()["k"]
 
 
-def test_validate_flags_bad_thrust():
+def test_validate_flags_bad_thrust() -> None:
     bad_len = PowerCurve(
         "k",
         "M",
@@ -265,7 +268,7 @@ def test_validate_flags_bad_thrust():
     assert any("thrust coefficients" in i for i in validate_power_curve(bad_range))
 
 
-def test_reference_10mw_curves_in_canonical_store():
+def test_reference_10mw_curves_in_canonical_store() -> None:
     """The three real 10 MW reference curves are wired into power_curves.yaml."""
     store = yaml.safe_load(DEFAULT_STORE.read_text())
     for key in ("iea_reference_10mw", "dtu_reference_10mw", "nrel_reference_10mw"):
@@ -293,16 +296,14 @@ def test_reference_10mw_curves_in_canonical_store():
     assert "thrust_curve" not in store["nrel_reference_10mw"]
 
 
-def test_fetch_turbine_models_if_available():
+def test_fetch_turbine_models_if_available() -> None:
     from wind_resource.power_curve_sourcing import (
         fetch_turbine_models_curve,
         list_turbine_models,
     )
 
-    try:
-        names = list_turbine_models()
-    except ImportError:
-        pytest.skip("turbine-models not installed")
+    _require_optional_package("turbine_models")
+    names = list_turbine_models()
     assert any("15MW" in n for n in names)
     pc = fetch_turbine_models_curve("IEA_Reference_15MW_240")
     assert pc.rated_capacity_kw == pytest.approx(15000, rel=0.01)

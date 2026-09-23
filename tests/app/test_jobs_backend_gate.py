@@ -8,6 +8,9 @@ rather than silently when the extra is absent.
 
 from __future__ import annotations
 
+import sys
+from types import ModuleType
+
 import pytest
 
 import app.api.jobs_router as jr
@@ -20,7 +23,12 @@ def test_default_backend_is_memory() -> None:
     assert JOBS_BACKEND == "memory"
 
 
-def test_build_default_store_memory_is_inmemory() -> None:
+def test_build_default_store_memory_is_inmemory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Memory storage remains available with both optional jobs imports blocked."""
+    monkeypatch.setitem(sys.modules, "arq", None)
+    monkeypatch.setitem(sys.modules, "redis", None)
     assert isinstance(jr._build_default_store(), InMemoryJobStore)
 
 
@@ -32,30 +40,52 @@ def test_get_store_is_lazily_cached() -> None:
     assert isinstance(first, InMemoryJobStore)
 
 
-def test_redis_backend_fails_loud_without_jobs_extra(monkeypatch) -> None:
-    """With JOBS_BACKEND='redis' but the [jobs] extra absent (arq/redis not installed),
-    resolving the store RAISES an actionable error rather than degrading silently."""
-    pytest.importorskip  # noqa: B018 — sentinel; we assert the ABSENCE path below
-    try:
-        import arq  # noqa: F401
-    except ImportError:
-        pass
-    else:
-        pytest.skip("[jobs] extra installed — the fail-loud path is not exercised")
+@pytest.fixture(params=["arq", "redis"])
+def missing_jobs_dependency(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> str:
+    """Block one jobs import while making its companion independently available."""
+    missing = str(request.param)
+    for name in ("arq", "redis"):
+        monkeypatch.setitem(
+            sys.modules, name, None if name == missing else ModuleType(name)
+        )
+    return missing
 
+
+def _assert_jobs_dependency_error(error: RuntimeError, missing: str) -> None:
+    """Require installation guidance and the original missing-module cause."""
+    assert "[jobs] extra" in str(error)
+    assert "pip install -e '.[jobs]'" in str(error)
+    assert isinstance(error.__cause__, ModuleNotFoundError)
+    assert error.__cause__.name == missing
+    assert "None in sys.modules" in str(error.__cause__)
+
+
+def test_redis_backend_fails_loud_without_jobs_extra(
+    monkeypatch: pytest.MonkeyPatch, missing_jobs_dependency: str
+) -> None:
+    """Redis storage fails at the real call-time guard for either missing import."""
     monkeypatch.setattr(jr, "JOBS_BACKEND", "redis")
-    with pytest.raises(RuntimeError, match=r"\[jobs\] extra"):
+    with pytest.raises(RuntimeError) as exc_info:
         jr._build_default_store()
+    _assert_jobs_dependency_error(exc_info.value, missing_jobs_dependency)
 
 
-def test_require_jobs_extra_message_is_actionable(monkeypatch) -> None:
-    try:
-        import arq  # noqa: F401
-    except ImportError:
-        with pytest.raises(RuntimeError, match="pip install"):
-            jr._require_jobs_extra()
-    else:
-        jr._require_jobs_extra()  # installed → no-op
+def test_require_jobs_extra_message_is_actionable(missing_jobs_dependency: str) -> None:
+    """The real guard identifies either missing dependency with actionable guidance."""
+    with pytest.raises(RuntimeError) as exc_info:
+        jr._require_jobs_extra()
+    _assert_jobs_dependency_error(exc_info.value, missing_jobs_dependency)
+
+
+def test_require_jobs_extra_accepts_available_imports(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both available import seams make the guard a no-op without live Redis."""
+    for name in ("arq", "redis"):
+        monkeypatch.setitem(sys.modules, name, ModuleType(name))
+    jr._require_jobs_extra()
 
 
 def test_config_redis_defaults() -> None:
