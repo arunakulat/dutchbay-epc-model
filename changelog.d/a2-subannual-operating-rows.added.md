@@ -2,7 +2,11 @@ Added `finance.subannual_rows_v14`, which allocates the annual cashflow rows ont
 operating grid A1 introduced (Sprint 20, dolphin A2). `cashflow.resolution: quarterly` now builds
 rows rather than being refused: A2 widened `ENGINE_SUPPORTED_RESOLUTIONS` exactly as A1's two-seam
 split anticipated, and the resolver itself was not touched in either dolphin. An optional
-`cashflow.within_year_profile` shapes the split; absent, it is an even one.
+`cashflow.within_year_profile` shapes the split; absent, it is an even one. The same weight contract
+now governs `build_subannual_rows(profile=...)`, the programmatic entry point A3 will call: it
+previously checked only length, so weights summing to 2 produced a negative closing quarter whose
+parts still re-aggregated exactly to the annual figure — a corruption no reconciliation test could
+see.
 
 These rows are the annual engine's output **allocated**, not an independent sub-annual computation,
 and the module docstring says so rather than leaving a reader to assume otherwise. Degradation, opex
@@ -31,9 +35,11 @@ ULP count rather than a relative tolerance that could absorb a genuine allocatio
 straddle case is pinned as a regression.
 
 `finance.period_grid_v14.aggregate_flows_to_annual` now sums with `math.fsum` instead of the builtin
-`sum`. Exact rounding makes the aggregate independent of summation order, which is what lets the
-1-ULP bound be a real bound rather than an artefact of accumulation sequence; under the annual grid
-each chunk holds one value and the result is unchanged.
+`sum`, so the aggregate does not depend on summation order. Measured rather than assumed, the change
+is small: with the builtin `sum` the even-profile result is still exact on all 540 cells and the
+seasonal result moves only from 510/30 to 509/31, never worse. So order-independence is what `fsum`
+buys — a property A3 can rely on — not the 1-ULP bound itself, which holds either way. Under the
+annual grid each chunk holds one value and the result is unchanged.
 
 The change is inert on every committed path: no scenario sets `cashflow.resolution`, so nothing
 builds sub-annual rows, and the canonical lender KPI vector is unchanged. It confers no grade,

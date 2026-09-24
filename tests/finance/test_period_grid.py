@@ -11,12 +11,14 @@ that matter more than the arithmetic:
    module could move canon. The test asserts identity on the *float objects*, not
    merely on equal values.
 
-2. :func:`test_quarterly_resolves_but_the_engine_gate_rejects_it` — the fail-loud gate.
-   ``quarterly`` is a describable resolution today but not a buildable one, and the
-   dangerous failure mode is not a crash: it is a scenario labelled ``quarterly``
-   silently receiving ANNUAL rows. The gate must reject rather than degrade, and it
-   must reject at a DIFFERENT seam from config validation, since the config is
-   genuinely valid. When A2 lands, this test flips to asserting acceptance.
+2. :func:`test_the_engine_gate_still_rejects_a_describable_but_unbuilt_resolution` —
+   the fail-loud gate. The dangerous failure mode here is not a crash: it is a scenario
+   labelled with a sub-annual resolution silently receiving ANNUAL rows. The gate must
+   reject rather than degrade, and it must reject at a DIFFERENT seam from config
+   validation, since such a config is genuinely valid. ``quarterly`` was the resolution
+   behind that gate in A1; A2 made it buildable and the gate opened, so the mechanism is
+   now asserted against a synthetic resolution instead, to keep the test from decaying
+   into a tautology.
 
 The remaining tests pin the partition and inverse properties that A2 will rely on to
 prove ``aggregate(quarterly) == annual``, and the hostile config cases that a committed
@@ -170,7 +172,7 @@ def test_the_engine_gate_still_rejects_a_describable_but_unbuilt_resolution() ->
     unbuilt = PeriodGrid(resolution="fortnightly", periods_per_year=26)
     assert unbuilt.resolution not in ENGINE_SUPPORTED_RESOLUTIONS
 
-    with pytest.raises(ValueError, match="does not yet build sub-annual rows"):
+    with pytest.raises(ValueError, match="cannot build rows at it"):
         require_engine_support(unbuilt)
 
 
@@ -362,3 +364,59 @@ def test_period_grid_is_frozen_and_comparable() -> None:
     assert PeriodGrid("annual", 1) == ANNUAL
     with pytest.raises(dataclasses.FrozenInstanceError):
         ANNUAL.periods_per_year = 4  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# Shape errors in the config, not just value errors
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "node",
+    ["quarterly", ["quarterly"], 4, ("cashflow",)],
+    ids=["str", "list", "int", "tuple"],
+)
+def test_a_malformed_cashflow_node_fails_loud_rather_than_resolving_to_annual(
+    node: object,
+) -> None:
+    """A shape error must not read as an absent key.
+
+    ``get_nested`` returns its default the moment a path node is not a dict, so before
+    this guard a scenario written ``cashflow: quarterly`` resolved silently to
+    :data:`ANNUAL` — precisely the "config that lies" outcome the two-seam design exists
+    to prevent, and one :func:`require_engine_support` cannot catch, because by then the
+    grid has already resolved to annual.
+    """
+    with pytest.raises(ValueError, match="must be a mapping"):
+        resolve_period_grid({"cashflow": node})
+
+
+def test_an_absent_cashflow_node_is_still_the_annual_default() -> None:
+    """The guard must not turn the committed canon into an error."""
+    assert resolve_period_grid({}) is ANNUAL
+    assert resolve_period_grid({"cashflow": None}) is ANNUAL
+    assert resolve_period_grid({"other": {"resolution": "quarterly"}}) is ANNUAL
+
+
+# ---------------------------------------------------------------------------
+# The grid defends its own documented invariant
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("bad", [0, -4, -1])
+def test_period_grid_rejects_a_periods_per_year_below_one(bad: int) -> None:
+    """Direct construction is sanctioned, so the invariant cannot rest on the resolver.
+
+    Without this, ``0`` raised a bare ``ZeroDivisionError`` from
+    :func:`year_index_for_period` and a negative count returned a silently negative
+    :func:`period_count`, voiding the partition property the tests above prove.
+    """
+    with pytest.raises(ValueError, match="must be >= 1"):
+        PeriodGrid(resolution="rogue", periods_per_year=bad)
+
+
+@pytest.mark.parametrize("bad", [1.0, "4", True, None])
+def test_period_grid_rejects_a_non_integer_periods_per_year(bad: object) -> None:
+    """A float or a bool would divide and compare without ever raising."""
+    with pytest.raises(ValueError, match="must be an int"):
+        PeriodGrid(resolution="rogue", periods_per_year=bad)  # type: ignore[arg-type]

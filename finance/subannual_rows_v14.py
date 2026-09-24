@@ -70,7 +70,12 @@ import math
 from typing import Any, Dict, List, Mapping, Sequence, Tuple
 
 from .cashflow_v14_utils import get_nested
-from .period_grid_v14 import ANNUAL, PeriodGrid, require_engine_support
+from .period_grid_v14 import (
+    ANNUAL,
+    PeriodGrid,
+    require_engine_support,
+    require_mapping_node,
+)
 
 __all__ = [
     "FLOW_KEYS",
@@ -81,6 +86,7 @@ __all__ = [
     "build_subannual_rows",
     "even_profile",
     "resolve_within_year_profile",
+    "validate_profile_weights",
 ]
 
 WITHIN_YEAR_PROFILE_KEY = "cashflow.within_year_profile"
@@ -166,43 +172,69 @@ def resolve_within_year_profile(
 
     Raises:
         ValueError: If the profile is not a sequence of the right length, or carries a
-            non-numeric, negative or non-finite weight, or does not sum to 1.
+            non-numeric, negative or non-finite weight, or does not sum to 1; or if the
+            ``cashflow`` node itself is present but is not a mapping.
     """
     if config is None:
         return even_profile(grid)
 
+    require_mapping_node(config, _PROFILE_PATH, WITHIN_YEAR_PROFILE_KEY)
     raw = get_nested(dict(config), _PROFILE_PATH)
     if raw is None:
         return even_profile(grid)
 
+    return validate_profile_weights(raw, grid, WITHIN_YEAR_PROFILE_KEY)
+
+
+def validate_profile_weights(
+    raw: Any, grid: PeriodGrid, label: str
+) -> Tuple[float, ...]:
+    """Validate a within-year profile and return it as a tuple of floats.
+
+    One contract for every way a profile can arrive. :func:`resolve_within_year_profile`
+    reads one from a config and :func:`build_subannual_rows` takes one as an argument;
+    before this was shared, the argument path checked only length, so a programmatic
+    caller could pass weights that do not sum to 1, or a negative or NaN weight, and
+    receive corrupt rows. Such rows still re-aggregate exactly to the annual figure, so
+    no reconciliation check can see them — the validation has to happen here.
+
+    Args:
+        raw: The candidate profile.
+        grid: The resolved operating-period grid.
+        label: How to name the profile in errors, e.g. the config key or ``"profile"``.
+
+    Returns:
+        The weights, in period order.
+
+    Raises:
+        ValueError: If the profile is not a sequence of the right length, or carries a
+            non-numeric, negative or non-finite weight, or does not sum to 1.
+    """
     if isinstance(raw, (str, bytes, Mapping)) or not isinstance(raw, Sequence):
         raise ValueError(
-            f"{WITHIN_YEAR_PROFILE_KEY} must be a sequence of "
+            f"{label} must be a sequence of "
             f"{grid.periods_per_year} weights; got {type(raw).__name__}."
         )
 
     if len(raw) != grid.periods_per_year:
         raise ValueError(
-            f"{WITHIN_YEAR_PROFILE_KEY} has {len(raw)} weights but the "
+            f"{label} has {len(raw)} weights but the "
             f"{grid.resolution!r} grid has {grid.periods_per_year} periods per year. "
-            "Supply one weight per period, or omit the key for an even split."
+            "Supply one weight per period, or omit it for an even split."
         )
 
     weights: List[float] = []
     for position, value in enumerate(raw):
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValueError(
-                f"{WITHIN_YEAR_PROFILE_KEY}[{position}] must be a number; "
-                f"got {type(value).__name__}."
+                f"{label}[{position}] must be a number; got {type(value).__name__}."
             )
         weight = float(value)
         if not math.isfinite(weight):
-            raise ValueError(
-                f"{WITHIN_YEAR_PROFILE_KEY}[{position}] must be finite; got {weight!r}."
-            )
+            raise ValueError(f"{label}[{position}] must be finite; got {weight!r}.")
         if weight < 0.0:
             raise ValueError(
-                f"{WITHIN_YEAR_PROFILE_KEY}[{position}] must be >= 0; got {weight!r}. "
+                f"{label}[{position}] must be >= 0; got {weight!r}. "
                 "A negative share would move cash between periods rather than split it."
             )
         weights.append(weight)
@@ -210,7 +242,7 @@ def resolve_within_year_profile(
     total = math.fsum(weights)
     if abs(total - 1.0) > _PROFILE_SUM_TOL:
         raise ValueError(
-            f"{WITHIN_YEAR_PROFILE_KEY} weights sum to {total!r}, not 1.0. The profile "
+            f"{label} weights sum to {total!r}, not 1.0. The profile "
             "splits a year's flow into shares, so a sum other than 1 would silently "
             "scale every allocated figure."
         )
@@ -276,18 +308,18 @@ def build_subannual_rows(
         ``period_index``, ``period_in_year`` and ``is_year_end``.
 
     Raises:
-        ValueError: If the grid is not one the engine supports, if ``profile`` has the
-            wrong length, or if any row carries a key that is neither a declared flow
-            nor a declared year-level key.
+        ValueError: If the grid is not one the engine supports, if ``profile`` is not a
+            sequence of ``grid.periods_per_year`` non-negative finite weights summing to
+            1, or if any row carries a key that is neither a declared flow nor a
+            declared year-level key.
     """
     require_engine_support(grid)
 
-    weights = tuple(profile) if profile is not None else even_profile(grid)
-    if len(weights) != grid.periods_per_year:
-        raise ValueError(
-            f"profile has {len(weights)} weights but the {grid.resolution!r} grid has "
-            f"{grid.periods_per_year} periods per year."
-        )
+    weights = (
+        validate_profile_weights(profile, grid, "profile")
+        if profile is not None
+        else even_profile(grid)
+    )
 
     rows: List[Dict[str, float]] = []
     for year_index, annual in enumerate(annual_rows):

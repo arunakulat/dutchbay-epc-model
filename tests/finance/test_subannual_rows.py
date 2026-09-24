@@ -56,6 +56,7 @@ from finance.subannual_rows_v14 import (
     build_subannual_rows,
     even_profile,
     resolve_within_year_profile,
+    validate_profile_weights,
 )
 
 QUARTERLY = PeriodGrid(resolution="quarterly", periods_per_year=4)
@@ -393,7 +394,7 @@ def test_profile_length_mismatch_at_build_fails_loud() -> None:
 def test_an_unsupported_grid_is_refused_before_any_allocation() -> None:
     """build_subannual_rows must not build rows on a grid the engine cannot serve."""
     unbuilt = PeriodGrid(resolution="fortnightly", periods_per_year=26)
-    with pytest.raises(ValueError, match="does not yet build sub-annual rows"):
+    with pytest.raises(ValueError, match="cannot build rows at it"):
         build_subannual_rows([{"year": 1.0}], unbuilt)
 
 
@@ -407,3 +408,74 @@ def test_quarterly_config_now_resolves_end_to_end() -> None:
     )
     assert len(rows) == 4
     assert sum(row["cfads_final_lkr"] for row in rows) == 100.0
+
+
+# ---------------------------------------------------------------------------
+# The programmatic entry point answers to the same contract as the config one
+# ---------------------------------------------------------------------------
+#
+# ``build_subannual_rows(profile=...)`` used to check only length. The gap was invisible
+# to every reconciliation test in this file, and that is the point: a profile summing to
+# 2 yields ``[50.0, 50.0, 50.0, -50.0]`` on a 100.0 flow, whose parts still re-aggregate
+# to 100.0 exactly. No firewall can see a corruption that reconciles. A3 calls this
+# function, so the validation has to live at the parameter, not at the config seam.
+
+
+@pytest.mark.parametrize(
+    ("bad", "match"),
+    [
+        ([0.5, 0.5, 0.5, 0.5], "sum to"),
+        ([0.5, 0.5, 0.5, -0.5], "must be >= 0"),
+        ([0.25, 0.25, 0.25, float("nan")], "must be finite"),
+        ([0.25, 0.25, 0.25, float("inf")], "must be finite"),
+        ([0.25, 0.25, 0.25, "0.25"], "must be a number"),
+        ([0.5, 0.5], "weights but the"),
+    ],
+    ids=["sums-to-2", "negative", "nan", "inf", "non-numeric", "wrong-length"],
+)
+def test_build_subannual_rows_validates_the_profile_argument(
+    bad: list[object], match: str
+) -> None:
+    """Every weight defect rejected on the config path is rejected here too."""
+    annual_rows = [{"year": 1.0, "revenue_lkr": 100.0}]
+    with pytest.raises(ValueError, match=match):
+        build_subannual_rows(annual_rows, QUARTERLY, profile=bad)  # type: ignore[arg-type]
+
+
+def test_a_corrupt_profile_would_otherwise_reconcile_and_hide_itself() -> None:
+    """Why length alone was not enough, stated as an executable fact.
+
+    This is the output the old code produced and no reconciliation test could catch. It
+    is asserted directly against :func:`allocate_flow` — which is contract-free by
+    design, taking whatever weights it is handed — so the demonstration does not depend
+    on the validation it motivates.
+    """
+    parts = allocate_flow(100.0, (0.5, 0.5, 0.5, 0.5))
+    assert parts == [50.0, 50.0, 50.0, -50.0]
+    assert math.fsum(parts) == 100.0  # reconciles exactly, and is still wrong
+
+
+def test_a_valid_profile_argument_still_passes() -> None:
+    """The guard must not narrow the legitimate surface."""
+    annual_rows = [{"year": 1.0, "revenue_lkr": 100.0}]
+    rows = build_subannual_rows(annual_rows, QUARTERLY, profile=[0.4, 0.2, 0.2, 0.2])
+    assert [row["revenue_lkr"] for row in rows] == pytest.approx(
+        [40.0, 20.0, 20.0, 20.0]
+    )
+
+
+def test_validate_profile_weights_names_the_caller_s_label() -> None:
+    """The shared validator must not report a config key to a programmatic caller."""
+    with pytest.raises(ValueError, match="^profile weights sum to"):
+        validate_profile_weights([0.5, 0.5, 0.5, 0.5], QUARTERLY, "profile")
+    with pytest.raises(ValueError, match=f"^{WITHIN_YEAR_PROFILE_KEY} weights sum to"):
+        validate_profile_weights(
+            [0.5, 0.5, 0.5, 0.5], QUARTERLY, WITHIN_YEAR_PROFILE_KEY
+        )
+
+
+def test_a_malformed_cashflow_node_fails_loud_on_the_profile_path_too() -> None:
+    """The second resolver shares the hole, so it shares the guard."""
+    with pytest.raises(ValueError, match="must be a mapping"):
+        resolve_within_year_profile({"cashflow": "quarterly"}, QUARTERLY)
+    assert resolve_within_year_profile({}, QUARTERLY) == even_profile(QUARTERLY)

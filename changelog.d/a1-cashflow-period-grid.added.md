@@ -9,12 +9,15 @@ any cashflow depends on it.
 The new `cashflow.resolution` key accepts `annual` (the default) or `quarterly`, resolving to a
 frozen `PeriodGrid` carrying the canonical name and its periods-per-year. Resolution and engine
 support are deliberately two separate seams: `resolve_period_grid` validates that a resolution is
-*describable*, while `require_engine_support` asserts it is *buildable*. `quarterly` passes the first
-and fails the second today, because the dangerous failure mode here is not a crash but a scenario
-labelled `quarterly` silently receiving annual rows — a config that lies. A2 widens
-`ENGINE_SUPPORTED_RESOLUTIONS` rather than changing the resolver. An unrecognised, blank or
-non-string value fails loud rather than falling back to annual, and the resolver never mutates the
-caller's config.
+*describable*, while `require_engine_support` asserts it is *buildable*. The dangerous failure mode
+here is not a crash but a scenario labelled with a resolution it silently does not receive — a config
+that lies. `quarterly` sat behind that gate in A1 alone; it ships buildable here, because A2 widened
+`ENGINE_SUPPORTED_RESOLUTIONS` in the same change, and the resolver itself was not touched in either
+dolphin. An unrecognised, blank or non-string value fails loud rather than falling back to annual; so
+does a malformed `cashflow` node, which would otherwise be read as an absent key and demoted to the
+annual grid. The resolver never mutates the caller's config, and `PeriodGrid` enforces its own
+documented `periods_per_year >= 1` invariant rather than relying on the resolver being its only
+caller.
 
 Aggregation back to the annual axis is split by variable kind, because getting it wrong is a silent
 value error rather than a crash: `aggregate_flows_to_annual` sums quantities measured over a period
@@ -28,12 +31,17 @@ The module docstring names the three index spaces now in the model and the sanct
 alignment chain between them. The operating sub-period space subdivides operating years *only* — it
 carries no construction periods, no bridge and no padding — so aligning a sub-period to a debt period
 goes through the operating row and then `annual_row_debt_period_map`, never directly onto a debt
-series. This is stated explicitly because the debt layer already documents a live collision between
-its compacted `dscr_series` and its positional `raw_dscr_series`, and a third axis added carelessly
-would compound it.
+series. The section is written against the debt layer as it stands: there is now exactly one DSCR
+index space, `dscr_periods` is the canonical labelled surface, and `raw_dscr_series` is a deprecated
+alias new code must not use. An earlier revision of this text described a live collision between a
+compacted and a positional series, which `finance.debt_v14` has since unified; it is corrected here
+rather than shipped, because a docstring the next dolphin is told to follow is the one artefact in
+this change that future work obeys.
 
 The change is inert on every committed path: no scenario sets `cashflow.resolution` (pinned by a test
 that reads the scenarios rather than asserting the claim), so every run resolves to the annual grid,
-under which each helper is an identity or an order-preserving regrouping — asserted at float-object
-identity, not merely at equal values. Nothing imports the module yet beyond its tests, and the
-canonical lender KPI vector is unchanged. It confers no grade, release, lender or Board authority.
+under which each helper is an identity or an order-preserving regrouping. The identity claim is
+asserted on the float objects themselves wherever a helper returns its input unchanged, and on equal
+values where a regrouping rebuilds the list. Outside this lane nothing imports the module —
+`finance.subannual_rows_v14`, which ships alongside it here, does — and the canonical lender KPI
+vector is unchanged. It confers no grade, release, lender or Board authority.

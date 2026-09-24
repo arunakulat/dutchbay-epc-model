@@ -22,17 +22,16 @@ fails to change, an output).
 
 The three index spaces — read this before aligning anything
 -----------------------------------------------------------
-The model now carries three distinct axes. They are NOT interchangeable, and the debt
-layer already documents a live index-space collision between two of its own series
-(see the ``plan_debt`` docstring in :mod:`finance.debt_v14`). This module deliberately
-does not add a fourth ambiguous space:
+The model now carries three distinct axes. They are NOT interchangeable, and this module
+deliberately does not add a fourth ambiguous space:
 
-1. **Debt PERIOD space** (owned by :mod:`finance.debt_v14`, the F-6 taxonomy) —
+1. **Debt PERIOD space** (owned by :mod:`finance.debt_v14`) —
    ``[construction] * construction_periods`` + an optional synthetic ``bridge`` period +
-   one period per operating row + post-tenor padding. ``raw_dscr_series`` and the debt
-   service / outstanding series are positional in this space.
+   one period per operating row + post-tenor padding. ``dscr_series`` and the debt
+   service / outstanding series are positional in this space, each of length
+   ``timeline_periods``.
 2. **Operating YEAR space** — the annual cashflow rows, ``year`` 1..``project_life_years``.
-   ``dscr_by_year`` is keyed here.
+   ``dscr_by_year`` is keyed here, with the bridge period's service folded into year 1.
 3. **Operating SUB-PERIOD space** (this module, new) — a subdivision of space 2 **only**.
 
 Space 3 subdivides operating years and nothing else: it has no construction periods and
@@ -45,9 +44,21 @@ hops, and never one::
     sub-period p  --year_index_for_period-->  operating row index
                   --debt_result["annual_row_debt_period_map"]-->  debt period
 
-Do not index any debt series with a value from this module. In particular, never index
-``debt_result["dscr_series"]`` positionally at all — it is the COMPACTED lender-facing
-series and carries no period or year meaning (again, see the ``plan_debt`` docstring).
+Do not index any debt series with a value from this module directly. Once you hold a
+debt period, the canonical surface is ``debt_result["dscr_periods"]``, which labels each
+entry with its ``operating_year`` and ``annual_row_index`` so a consumer filters rather
+than indexing blindly; ``debt_result["dscr_series"]`` is the positional series on the
+same axis. Do **not** reach for ``raw_dscr_series``: it is a DEPRECATED exact alias of
+``dscr_series`` retained for one release under ``REFACTOR-04``, and its own docstring
+says new code must not use it.
+
+.. note::
+   An earlier revision of this section described a live collision between a "compacted"
+   ``dscr_series`` and a positional ``raw_dscr_series``. That was accurate when this
+   module was first written and is no longer: ``finance.debt_v14`` has since unified the
+   two, and its ``plan_debt`` docstring now states that there is exactly ONE DSCR index
+   space — the PERIOD space. Read ``plan_debt`` for the current contract; where this
+   summary and that docstring ever disagree, that docstring governs.
 
 Flows versus balances
 ---------------------
@@ -78,6 +89,7 @@ __all__ = [
     "period_count",
     "periods_for_year",
     "require_engine_support",
+    "require_mapping_node",
     "resolve_period_grid",
     "year_index_for_period",
 ]
@@ -119,6 +131,33 @@ class PeriodGrid:
     resolution: str
     periods_per_year: int
 
+    def __post_init__(self) -> None:
+        """Enforce the documented ``periods_per_year >= 1`` invariant.
+
+        Direct construction is a sanctioned pattern — the class is exported and the
+        tests build it directly — so the invariant cannot rest on
+        :func:`resolve_period_grid` being the only caller. Without this, ``0`` raises a
+        bare ``ZeroDivisionError`` instead of this module's explanatory ``ValueError``,
+        and a negative count returns a silently negative :func:`period_count` while
+        voiding the partition property the module's own tests prove.
+
+        Raises:
+            ValueError: If ``periods_per_year`` is not an integer ``>= 1``.
+        """
+        if isinstance(self.periods_per_year, bool) or not isinstance(
+            self.periods_per_year, int
+        ):
+            raise ValueError(
+                "PeriodGrid.periods_per_year must be an int >= 1; got "
+                f"{type(self.periods_per_year).__name__}."
+            )
+        if self.periods_per_year < 1:
+            raise ValueError(
+                "PeriodGrid.periods_per_year must be >= 1; got "
+                f"{self.periods_per_year!r}. A grid with no periods per year cannot "
+                "partition an operating year."
+            )
+
     @property
     def is_annual(self) -> bool:
         """True when this grid is the degenerate one-period-per-year case."""
@@ -127,6 +166,40 @@ class PeriodGrid:
 
 #: The default grid. Every committed scenario resolves to exactly this.
 ANNUAL = PeriodGrid(resolution="annual", periods_per_year=1)
+
+
+def require_mapping_node(
+    config: Mapping[str, Any], path: Sequence[str], dotted_key: str
+) -> None:
+    """Fail loud when a container on ``path`` is present but is not a mapping.
+
+    ``get_nested`` returns its default as soon as a path node is not a dict, so a
+    scenario written as ``cashflow: quarterly`` — a shape error rather than a value
+    error — would otherwise be read as "the key is absent" and silently resolve to the
+    annual grid. That is the exact outcome the two-seam design exists to prevent, and
+    :func:`require_engine_support` cannot catch it, because by then the grid has already
+    resolved to :data:`ANNUAL`.
+
+    Args:
+        config: The raw scenario config.
+        path: The key sequence to ``dotted_key``; only its container nodes are checked.
+        dotted_key: The dotted key, for the error message.
+
+    Raises:
+        ValueError: If a container node on ``path`` is present and is not a mapping.
+    """
+    node: Any = config
+    for depth, key in enumerate(path[:-1]):
+        node = node.get(key) if isinstance(node, Mapping) else None
+        if node is None:
+            return
+        if not isinstance(node, Mapping):
+            prefix = ".".join(path[: depth + 1])
+            raise ValueError(
+                f"{prefix} must be a mapping containing {dotted_key!r}; got "
+                f"{type(node).__name__}. A malformed node here would otherwise read as "
+                "an absent key and silently fall back to the annual grid."
+            )
 
 
 def resolve_period_grid(config: Mapping[str, Any] | None) -> PeriodGrid:
@@ -145,11 +218,13 @@ def resolve_period_grid(config: Mapping[str, Any] | None) -> PeriodGrid:
 
     Raises:
         ValueError: If ``cashflow.resolution`` is present but is not a string, is
-            blank, or names a resolution outside :data:`SUPPORTED_RESOLUTIONS`.
+            blank, or names a resolution outside :data:`SUPPORTED_RESOLUTIONS`; or if
+            the ``cashflow`` node itself is present but is not a mapping.
     """
     if config is None:
         return ANNUAL
 
+    require_mapping_node(config, _RESOLUTION_PATH, CASHFLOW_RESOLUTION_KEY)
     raw = get_nested(dict(config), _RESOLUTION_PATH)
     if raw is None:
         return ANNUAL
@@ -192,10 +267,11 @@ def require_engine_support(grid: PeriodGrid) -> None:
     if grid.resolution in ENGINE_SUPPORTED_RESOLUTIONS:
         return
     raise ValueError(
-        f"{CASHFLOW_RESOLUTION_KEY}={grid.resolution!r} is a valid resolution but the "
-        "cashflow engine does not yet build sub-annual rows, so the run would silently "
-        "produce ANNUAL output under a sub-annual label. Engine-supported today: "
-        f"{sorted(ENGINE_SUPPORTED_RESOLUTIONS)}. Omit the key for the annual grid."
+        f"{CASHFLOW_RESOLUTION_KEY}={grid.resolution!r} is a describable resolution but "
+        "the cashflow engine cannot build rows at it, so the run would silently produce "
+        "ANNUAL output under a sub-annual label. Engine-supported today: "
+        f"{sorted(ENGINE_SUPPORTED_RESOLUTIONS)}. Name one of those, or omit the key "
+        "for the annual grid."
     )
 
 
