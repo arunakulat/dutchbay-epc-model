@@ -250,7 +250,7 @@ pyomo==6.10.1
 pyparsing==3.3.2
 pypdfium2==5.13.0
 pyphen==0.18.1
-pyproj==3.7.2
+pyproj==3.8.0
 pyproject_hooks==1.2.0
 pytest-cov==7.1.0
 pytest-html==4.2.0
@@ -317,7 +317,7 @@ traitlets==5.16.1
 turbine-models==0.2.2
 typeguard==4.6.0
 typer==0.27.1
-types-openpyxl==3.1.5.20260807
+types-openpyxl==3.1.5.20260827
 types-pytz==2026.3.1.20260727
 types-PyYAML==6.0.12.20260815
 typing-inspect==0.9.0
