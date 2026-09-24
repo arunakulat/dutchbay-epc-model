@@ -71,7 +71,7 @@ cfgv==3.5.0
 cftime==1.6.5
 chardet==7.6.0
 charset-normalizer==3.5.1
-click==8.4.2
+click==8.5.0
 colorama==0.4.6
 comm==0.2.3
 condeltri==0.0.5
