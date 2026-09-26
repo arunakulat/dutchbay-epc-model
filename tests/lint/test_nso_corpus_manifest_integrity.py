@@ -102,6 +102,12 @@ OFFERS_MANIFEST = NSO_PACKAGES / "NSO250MW_Commercial_Offers_2026-09-03.MANIFEST
 OEM_SUPPLY_MANIFEST = NSO_PACKAGES / "NSO250MW_oem_supply_2026-08-27.MANIFEST.sha256"
 CHECKLIST_MANIFEST = NSO_PACKAGES / "NSO250MW_checklist_2026-08-21.MANIFEST.sha256"
 
+KALPITIYA_CORPUS = SOURCE_MATERIALS / "kalpitiya_60mw_2026"
+KALPITIYA_PACKAGES = KALPITIYA_CORPUS / "source_packages"
+KALPITIYA_WIND_MANIFEST = (
+    KALPITIYA_PACKAGES / "Kalpitiya60MW_Envision_Wind_2026-09-07.MANIFEST.sha256"
+)
+
 # Which NESTED manifests record files that live in this repository, and which record files held
 # outside it. Declared rather than inferred: inferring "external" from "the file is missing"
 # would make a genuinely missing file indistinguishable from a by-design absent one, which is
@@ -118,6 +124,8 @@ NESTED_EXTERNAL: tuple[Path, ...] = (
     # The commercial offers: held in the private DutchBay_RAG corpus. Their recorded paths are
     # relative to a root that does not exist here, so they are never resolved against this tree.
     OFFERS_MANIFEST,
+    # The Envision EN-206 wind package: held in the private DutchBay_RAG corpus, same route.
+    KALPITIYA_WIND_MANIFEST,
 )
 
 # Files that live in a corpus area but are not themselves evidence, so the area's manifest does
@@ -138,6 +146,14 @@ HANDLING_ANCHORS: dict[str, tuple[Path, tuple[Path, ...]]] = {
             NSO_CORPUS / "README.md",
             NSO_PACKAGES / "README.md",
             REPO_ROOT / "changelog.d" / "nso-commercial-offer-resupply.fixed.md",
+        ),
+    ),
+    "KALPITIYA60MW-WIND-HANDLING-2026-09-21": (
+        KALPITIYA_WIND_MANIFEST,
+        (
+            KALPITIYA_CORPUS / "README.md",
+            KALPITIYA_PACKAGES / "README.md",
+            KALPITIYA_PACKAGES / "Kalpitiya60MW_2026-09-20_DEDUPLICATION_RECEIPT.md",
         ),
     ),
 }
