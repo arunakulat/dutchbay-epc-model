@@ -85,34 +85,56 @@ changelog erratum records what happens when that goes wrong.
 
 ## Merging
 
-1. **Collect the merge-boundary conditions before anything else.** A review record or reconciled
-   disposition can put conditions on the merge itself: a squash message that must name
-   something or cite particular pull requests, or a merge commit instead of a squash.
-   #1231's assurance finding F-09 is the worked example: the message must name the A1 restore
-   and reference #1225 and #1232.
-   - Read every review record and disposition on the pull request, including conditions carried
-     forward from earlier cycles and re-imposed unchanged, and list them.
+1. **Collect the merge-boundary conditions before anything else.** A merge-boundary condition is
+   any finding or disposition that blocks at the merge itself. Examples: a squash message that
+   must name something or cite particular pull requests, a required merge method, a corrected
+   pull-request body, or a rebind after a base refresh. #1231's assurance finding F-09 is the
+   worked example: the squash message must name the A1 restore and reference #1225 and #1232, or
+   the pull request must merge with a merge commit.
+   - Look in the pull-request body, its comments and review threads, and the durable records they
+     cite. List every condition, including ones carried forward from earlier cycles and re-imposed
+     unchanged.
+   - Count only records from the project owner, the coordinator and the reviewers the coordinator
+     recruited on record. Drop a condition that a later record withdrew or discharged, citing
+     that record.
+   - Confirm that no veto is outstanding. Confirm that each required disposition is non-blocking
+     and bound to the exact head, or carried to it under `RECRUIT-01` module 3 §7.
    - A condition set by a review overrides the defaults in step 2.
-   - If a condition cannot be met, do not merge. Say what blocks and who can clear it.
-2. **Merge.** Pin the expected head SHA so a late push cannot slip in.
+   - If a condition cannot be met, do not merge. The same applies if a record it depends on cannot
+     be read, for example one held on the owner's Mac. State on the pull request what blocks and
+     who can clear it.
+2. **Merge.** Record the protected `main` SHA, and pin the expected head SHA so that a late push
+   cannot slip in.
    - The default is a squash merge titled as the pull-request title followed by
      ` (#<number>)`.
    - The message body must carry:
      - the text each merge-boundary condition requires, verbatim where the condition names
        words or references;
-     - every `HOLD` the latest reconciled disposition carries forward, quoted, so that the
-       `HOLD` survives in `main`'s history rather than only in a pull-request comment.
-   - Use a merge commit instead of a squash when a condition requires it.
+     - every `HOLD` that survives the merge, quoted, so that it survives in `main`'s history
+       rather than only in a pull-request comment. Take them from the latest reconciled
+       disposition. Where there is none, take them from each review record and from the writer's
+       `HOLD`s (module 3 §2). A condition that the merge itself discharges is not a surviving
+       `HOLD`.
+   - `main`'s history is public and cannot be redacted. A `HOLD` that cites withheld or
+     restricted material (`AGENTS.md` "Four ways a corpus commit goes wrong", items 2 and 3)
+     must not be quoted. State it abstractly, and cite the record's URL and content SHA-256.
+   - Use a two-parent merge commit instead of a squash when a condition requires it. A merge
+     commit brings every branch commit into `main`. Check their subjects against `R18` first,
+     and prefer a squash that meets the condition wherever the condition allows one.
    - Before submitting, re-read each condition against the final message text.
-3. **Verify.** Confirm that the merge commit's tree equals the pull-request head's tree and
-   that its first parent is the previous `main`:
+3. **Verify against the SHA the merge returned.** The commit the merge created must have the
+   head's tree, and its first parent must be the `main` SHA recorded in step 2. A two-parent merge
+   commit must also have the head as its second parent:
 
    ```bash
    git fetch origin main
-   test "$(git rev-parse origin/main^{tree})" = "$(git rev-parse <head-sha>^{tree})"
-   test "$(git rev-parse origin/main^)" = "<previous-main-sha>"
+   test "$(git rev-parse <merge-sha>^{tree})" = "$(git rev-parse <head-sha>^{tree})"
+   test "$(git rev-parse <merge-sha>^1)" = "<main-sha-recorded-in-step-2>"
+   test "$(git rev-parse <merge-sha>^2)" = "<head-sha>"   # two-parent merge commit only
    ```
 
+   If any test fails, stop. Report the mismatch on the pull request and take no further action on
+   it until the mismatch is resolved (`RECRUIT-01` module 3 §7).
 4. Retire only branches and worktrees you own.
 
 Merging is delivery authority only. Under `MERGE-01`'s boundary, it lifts no `HOLD` and
