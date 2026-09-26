@@ -6,6 +6,12 @@
 # is left unset (permissive development posture), so no secrets are required for the
 # smoke test — a throwaway DUTCHBAY_JWT_SECRET is supplied only so the app imports
 # cleanly.
+#
+# It also gates one thing /health cannot reach: that WeasyPrint's HarfBuzz-Subset path is
+# live INSIDE the image. WeasyPrint 70.0 dlopens libharfbuzz-subset0 by name with
+# allow_fail=True, so a missing runtime library degrades silently onto a deprecated
+# fontTools path rather than failing, on the lender-facing PDF surface. /health renders no
+# PDF, so only a real render inside the image can see it.
 name: docker-build
 
 on:
@@ -17,6 +23,7 @@ on:
       - requirements.txt
       - constraints.txt
       - app/**
+      - scripts/check_image_harfbuzz_subset.py
       - .github/workflows/docker-build.yml
   # `push` removed: the same paths-scoped build already ran on the PR against an
   # up-to-date branch, so the post-merge rebuild duplicated it. Use workflow_dispatch
@@ -44,6 +51,22 @@ jobs:
           tags: dutchbay-epc-model:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Prove WeasyPrint takes the HarfBuzz-Subset path inside the image
+        # The build above proves libharfbuzz-subset0 RESOLVES AND INSTALLS on bookworm --
+        # a fact about the build host's package index. It does not prove the LOADER FINDS
+        # IT AT RUN TIME, from the runtime stage, under the non-root account, with the
+        # venv's interpreter, and WeasyPrint 70.0 dlopens it with allow_fail=True: absent,
+        # it does not fail, it silently subsets every face with fontTools on its own
+        # deprecated path. The /health boot check below cannot see that either, because
+        # /health renders no PDF. This is the gap PR #1266 deferred; the script closes it.
+        #
+        # Piped over stdin rather than executed from the image, so the gate keeps working
+        # if .dockerignore ever stops shipping scripts/ into the runtime layer.
+        run: |
+          set -euo pipefail
+          docker run --rm -i dutchbay-epc-model:ci python - \
+            < scripts/check_image_harfbuzz_subset.py
 
       - name: Boot the web process and poll /health
         run: |

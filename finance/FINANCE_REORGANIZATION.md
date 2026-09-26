@@ -510,29 +510,27 @@ from finance.tax import TaxCalculatorV14
 
 ## Framework Compliance
 
-### GWTF (Go-With-The-Flow)
+The three framework rules below are quoted from `go_with_the_flow_rules_v3_0_clean.csv`
+at the repository root, which is canonical. They are peers, not parts of one another.
 
-✅ **Single source of truth:** Core files remain at root  
-✅ **Clear delegation:** Packages re-export, don't redefine  
-✅ **Predictable imports:** Old and new both work
+### FRAMEWORK-01 — CASPER (Clear API Surfaces with Predictable Error Responses)
 
-### CESSPIT (Comprehensive Error Handling)
+✅ **Unchanged public surface:** the reorganization re-exports; no caller's import breaks  
+✅ **Explicit surface:** `__all__` declarations in all `__init__.py` files, no wildcard magic  
+✅ **Predictable failures:** import errors are immediate and name the missing symbol
 
-✅ **Fail-fast:** Import errors are immediate and clear  
-✅ **Clear messages:** Validation errors specify exact issue  
-✅ **Type safety:** All re-exports preserve type annotations
+### FRAMEWORK-02 — CESSPIT (Config Explicit, Schema Strict, Pre-flight Integrity Tests)
 
-### CASPER (Contract-First Design)
+✅ **Type safety preserved:** all re-exports keep their annotations, so mypy still fences them  
+✅ **Validation errors specify the exact issue** rather than degrading to a default
 
-✅ **Frozen APIs:** Public APIs unchanged  
-✅ **Explicit contracts:** `__all__` declarations in all `__init__.py` files  
-✅ **No magic:** All re-exports explicit
+### FRAMEWORK-03 — CCCDIR (Contracts Centralized, Compliance Documented, Import Relationships explicit)
 
-### CCCDIR (Clear, Complete, Consistent Documentation)
-
-✅ **Package-level:** README.md in all packages  
-✅ **Module-level:** Comprehensive docstrings  
-✅ **Function-level:** Google-style docs throughout  
+✅ **Contracts centralized:** core files remain at root as the single source of truth; packages
+re-export and never redefine  
+✅ **Import relationships explicit:** old and new import paths both resolve, each declared  
+✅ **Compliance documented:** README.md in all packages, module docstrings, Google-style
+function docs throughout  
 ✅ **Usage examples:** Practical code samples included
 
 ---

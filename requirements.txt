@@ -34,7 +34,7 @@
 # the accepted-advisory allowlist is currently EMPTY (no known vulnerabilities).
 # ─────────────────────────────────────────────────────────────────────────────
 absl-py==2.5.0
-affine==3.0.0
+affine==3.0.1
 altair==6.2.2
 andes==2.0.0
 annotated-doc==0.0.5
@@ -71,7 +71,7 @@ cfgv==3.5.0
 cftime==1.6.5
 chardet==7.6.0
 charset-normalizer==3.5.1
-click==8.4.2
+click==8.5.0
 colorama==0.4.6
 comm==0.2.3
 condeltri==0.0.5
@@ -119,7 +119,7 @@ httpx==0.28.1
 hybgensea==0.1.1
 hydra-core==1.3.5
 hyperframe==6.1.0
-hypothesis==6.165.10
+hypothesis==6.167.1
 identify==2.6.19
 idna==3.19
 immutabledict==4.3.1
@@ -149,7 +149,7 @@ jupyterlab_widgets==3.0.17
 jupyter_builder==1.2.2
 jupyter_client==8.9.1
 jupyter_core==5.9.1
-jupyter_server==2.20.0
+jupyter_server==2.21.0
 jupyter_server_terminals==0.5.4
 kiwisolver==1.5.0
 kvxopt==1.3.3.1
@@ -250,7 +250,7 @@ pyomo==6.10.1
 pyparsing==3.3.2
 pypdfium2==5.13.0
 pyphen==0.18.1
-pyproj==3.7.2
+pyproj==3.8.0
 pyproject_hooks==1.2.0
 pytest-cov==7.1.0
 pytest-html==4.2.0
@@ -317,7 +317,7 @@ traitlets==5.16.1
 turbine-models==0.2.2
 typeguard==4.6.0
 typer==0.27.1
-types-openpyxl==3.1.5.20260807
+types-openpyxl==3.1.5.20260827
 types-pytz==2026.3.1.20260727
 types-PyYAML==6.0.12.20260815
 typing-inspect==0.9.0
@@ -331,7 +331,7 @@ uvicorn==0.52.4
 virtualenv==21.7.4
 watchdog==6.0.0
 wcwidth==0.8.2
-weasyprint==69.0
+weasyprint==70.0
 webcolors==25.10.0
 webencodings==0.6.1
 websocket-client==1.9.2

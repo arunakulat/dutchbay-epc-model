@@ -24,12 +24,34 @@ branch or a nonexistent ruleset filename.
 
 ## Session continuity
 
-Before starting work, read the newest record in `docs/SESSION_HANDOVER_*.md` — currently
-`docs/SESSION_HANDOVER_2026-09-07.md` — and execute its **Bootstrap — run this first**
-section before substantive work. Each record names its predecessor and states which parts
-of it still stand, so read the newest first and follow the chain back only as far as it
-tells you to. These are the PERSIST-01 durable records: they carry the canonical KPI set,
-the traps that have already cost a session real time, and the open-item list.
+Do not trust or copy a concrete handover filename into this gateway. Run the resolver,
+read the first record it prints, and follow that record's own declaration of the startup
+record and required actions. If the resolver fails, stop rather than guessing a pointer.
+
+```bash
+python scripts/list_session_handover_records.py
+```
+
+The resolver orders by each record's introduction commit, so correcting an older record
+later cannot make it appear to be the newest successor. It fails loudly when the
+matching record sets in `HEAD`, the index and the worktree differ (including ignored
+records), when history is shallow or contains repeated additions, when a descendant is
+backdated before its predecessor, when introduction commits are incomparable, or when the
+newest introduction timestamp is ambiguous. A rename from outside a supported handover
+family is dated when it enters the family; a rename within the family preserves the first
+entry. Supported suffixes use ASCII letters, digits, underscore, dot, hyphen and space;
+near-family names outside that display-safe grammar fail before history is interpreted.
+Git path inventories, followed-commit metadata and per-commit changes use NUL
+framing. Equal timestamps among older displayed records are ordered by path for display
+only.
+
+The model product owner must optimize and review the resolver before its canonical-corpus
+runtime exceeds 60 seconds or before the handover corpus reaches 100 records.
+Each record names its predecessor and states which parts of it still stand, so read the
+newest first and follow the chain back only as far as it tells you to.
+
+These are the PERSIST-01 durable records: they carry the canonical KPI set, the traps that
+have already cost a session real time, and the open-item list.
 
 The handover bootstrap is an executable startup checklist, not an independent governance
 source. Where a handover and this file disagree about environment or governance, this file
@@ -190,9 +212,19 @@ be enumerated or softened. The table above is reconstructed from the manifest's 
 sharded suite skips any PR whose diff is only `*.md`, `changelog.d/` and `docs/`, which a corpus
 edit easily is — and it fails loudly on: a recorded entry that is absent or hash-mismatched; a
 **tracked file absent from the manifest**, the direction `sha256sum -c` is structurally blind to; a
-stale parent pin; a nested manifest nobody classified; a referrer that has stopped citing the
-handling note; and clause 6 of the offers quoted outside its single home. What it cannot judge is
-**whether a new disclosure should have been made at all** — item 2 below is still yours.
+stale parent pin; a nested manifest nobody classified; **a corpus area carrying no manifest at
+all**; a handling note nobody registered; a referrer that has stopped citing the handling note;
+a restricted clause quoted outside its single home; and **anything tracked directly under
+`docs/source_materials` that belongs to no area** — a loose file, or an area held as a symlink or
+a submodule, each of which git stores as a single entry that area-based discovery would otherwise
+walk straight past. It derives its coverage from the tree —
+every immediate child of `docs/source_materials` holding tracked files is a corpus area — so a
+**new** corpus area is checked from its first commit and nobody has to remember to enlist it,
+provided it is committed as a directory of files rather than linked or vendored in. Read
+that last point precisely: what is automatic is that the guard will **fail** until the area's
+nested manifests are classified and its handling note is registered. It forces the declaration; it
+does not write it for you, and CI stays red until you do. What it cannot judge is **whether a new
+disclosure should have been made at all** — item 2 below is still yours.
 
 **1. A nested manifest's parent pin goes stale the moment you edit the child.**
 `docs/source_materials/**/MANIFEST.sha256` records the SHA-256 of the *other* manifests beneath it.

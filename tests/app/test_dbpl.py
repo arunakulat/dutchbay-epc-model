@@ -14,6 +14,7 @@ from collections import Counter
 import pytest
 from jinja2 import Environment, FileSystemLoader
 
+from app.ops import extras as ops_extras
 from app.ops.extras import ExtraStatus, PackageStatus
 from app.reports.dbpl import print_core as pc
 from app.reports.dbpl.print_core import (
@@ -291,6 +292,57 @@ def test_uninstalled_project_raises_rather_than_rendering_unverified(
     )
     with pytest.raises(DbplDependencyError, match="declares no packages"):
         require_dbpl_stack()
+
+
+# ── The pins are read from the tree that is executing ────────────────────────
+#
+# These two exercise the REAL resolution rather than stubbing `probe_extra`, because the
+# 2026-09-14 defect lived in the resolution itself. `app/` is not a packaged directory, so
+# this print core always runs from a checkout, while the installed distribution in the shared
+# governed venv was built from whichever checkout last ran `pip install` -- one build serving
+# eighteen worktrees at differing commits.
+
+
+def test_a_stale_installed_build_does_not_veto_the_locked_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Observed 2026-09-14: nine DbplDependencyError failures on the version the lock requires.
+
+    The venv held a build declaring `weasyprint<70,>=69`, from a pyproject predating #1256's
+    `>=70,<71` bump for PYSEC-2026-3940. Reconciling the venv to the pinned 70.0 made the guard
+    reject it -- the deliverable blocked by metadata describing a tree that was not running.
+    """
+
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        lambda name: ['weasyprint<70,>=69; extra == "report"'],
+    )
+
+    status = require_dbpl_stack(deep=False)
+    assert status.spec_source == "pyproject"
+    assert status.available is True
+    assert status.broken == ()
+
+
+def test_an_absent_project_distribution_does_not_block_the_deliverable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A venv built by ./setup_venv.sh alone installs no project distribution at all.
+
+    The `[report]` packages themselves are in requirements.txt, so they ARE present; only the
+    project's own metadata is missing. Reading the checkout's declaration means the extra is
+    still fully described, so the PDF renders instead of failing on an unverifiable stack.
+    """
+
+    def absent(name: str):
+        raise ops_extras.importlib_metadata.PackageNotFoundError(name)
+
+    monkeypatch.setattr(ops_extras.importlib_metadata, "requires", absent)
+
+    status = require_dbpl_stack(deep=False)
+    assert status.spec_source == "pyproject"
+    assert status.available is True
 
 
 # ── Font provenance ──────────────────────────────────────────────────────────

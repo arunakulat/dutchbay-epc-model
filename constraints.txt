@@ -35,7 +35,7 @@ pre-commit==4.6.2
 # Retained report/jobs capabilities are production and audit surfaces. These exact
 # versions were migrated from the retiring 3.11 environment and cleared together
 # under Python 3.12; their transitive closure is pinned in requirements.txt.
-weasyprint==69.0
+weasyprint==70.0
 arq==0.28.0
 brotli==1.2.0
 hiredis==3.4.1
