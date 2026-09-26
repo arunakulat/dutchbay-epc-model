@@ -93,20 +93,33 @@ def test_no_committed_scenario_sets_the_resolution_key() -> None:
     import yaml
 
     scenarios = pathlib.Path(__file__).resolve().parents[2] / "scenarios"
+    checked = 0
     offenders = []
     for path in sorted(scenarios.rglob("*.y*ml")):
         try:
-            loaded = yaml.safe_load(path.read_text()) or {}
+            # safe_load_all, not safe_load: one committed scenario is a multi-document
+            # stream, which safe_load refuses. Reading only the first document — or
+            # skipping the file on the resulting YAMLError — would quietly drop it from
+            # a claim that is supposed to cover every scenario, which is the same silent
+            # exclusion this module's guard exists to prevent.
+            documents = list(yaml.safe_load_all(path.read_text()))
         except yaml.YAMLError:
             continue  # deliberately-malformed fixtures exist; not this test's concern
-        if not isinstance(loaded, dict):
-            continue
-        try:
-            if resolve_period_grid(loaded) != ANNUAL:
-                offenders.append(path.name)
-        except ValueError as exc:  # pragma: no cover - no committed scenario does this
-            offenders.append(f"{path.name}: {exc}")
+        for document in documents:
+            if not isinstance(document, dict):
+                continue  # an empty or scalar document sets no key
+            checked += 1
+            try:
+                if resolve_period_grid(document) != ANNUAL:
+                    offenders.append(path.name)
+            except (
+                ValueError
+            ) as exc:  # pragma: no cover - no committed scenario does this
+                offenders.append(f"{path.name}: {exc}")
     assert offenders == []
+    # Guard the guard: a glob or loader change that silently stops finding scenarios
+    # would make the assertion above pass vacuously.
+    assert checked >= 40, f"expected to check 40+ scenario documents, checked {checked}"
 
 
 @pytest.mark.parametrize(
