@@ -1,0 +1,14 @@
+event_id,severity,channel,start,end,interval_count,finding,analysis_treatment
+QC-001,high,multiple,2025-03-20 23:40:00,2025-03-21 17:50:00,109,"commissioning/start-up block: missing averages and -40.9 C, 0% RH, and 49.48 kPa sentinels",excluded from assessment window; raw bytes retained
+QC-011,medium,timestamp,2025-03-21 06:50:00,2025-03-21 06:50:00,1,timestamp intervals absent from export,reported as missing; not interpolated
+QC-012,medium,timestamp,2025-10-28 00:00:00,2025-10-28 16:00:00,97,timestamp intervals absent from export,reported as missing; not interpolated
+QC-020,high,Speed 120 m Avg [m/s],2025-10-13 02:20:00,2025-10-27 23:50:00,2146,channel is null while the export has records for other channels,excluded per channel; no imputation in reported observations
+QC-021,medium,Direction 120 m Avg [°],2025-10-13 02:20:00,2025-10-27 14:20:00,2089,channel is null while the export has records for other channels,excluded per channel; no imputation in reported observations
+QC-022,medium,Direction 120 m Avg [°],2025-10-27 15:40:00,2025-10-27 23:50:00,50,channel is null while the export has records for other channels,excluded per channel; no imputation in reported observations
+QC-023,medium,Direction 120 m Avg [°],2025-10-28 16:10:00,2025-11-01 04:40:00,508,channel is null while the export has records for other channels,excluded per channel; no imputation in reported observations
+QC-024,medium,Direction 120 m Avg [°],2025-11-01 07:50:00,2025-11-07 08:50:00,871,channel is null while the export has records for other channels,excluded per channel; no imputation in reported observations
+QC-025,high,Temp 120 m Avg [℃],2025-10-21 16:40:00,2025-10-27 15:10:00,856,channel is null while the export has records for other channels,excluded per channel; no imputation in reported observations
+QC-030,high,Temp 10 m,2025-10-27 15:10:00,2025-10-27 15:30:00,3,three reset/glitch rows include -40.92 C and maxima above 130 C,excluded from temperature interpretation; raw bytes retained
+QC-031,high,Temp 120 m,2025-10-21 16:30:00,2025-11-07 10:30:00,4,non-null transition/glitch rows include -40.92 C and a 133.24 C maximum,excluded from temperature interpretation; raw bytes retained
+QC-040,high,Direction 120 m Min [°]; Direction 120 m Max [°]; Direction 80 m Min [°]; Direction 80 m Max [°]; Direction 30 m Min [°]; Direction 30 m Max [°]; Temp 0 m Avg [℃]; Pressure 120 m Avg [kPa],2025-03-20 23:40:00,2025-11-08 23:50:00,8,eight channels are entirely empty,retained and profiled as unusable; never silently dropped
+QC-041,high,Temp 0 m Min [℃]; Temp 0 m Max [℃]; Temp 0 m SD [℃]; Pressure 120 m Min [kPa]; Pressure 120 m Max [kPa]; Pressure 120 m SD [kPa],2025-03-20 23:40:00,2025-03-21 06:40:00,43,"six channels have only 43 commissioning rows, containing invalid -40.9 C or 49.47 kPa values",retained and profiled as unusable
