@@ -85,10 +85,27 @@ changelog erratum records what happens when that goes wrong.
 
 ## Merging
 
-1. Squash merge, titled as the pull-request title followed by ` (#<number>)`, with the
-   expected head SHA pinned so a late push cannot slip in.
-2. Afterwards, confirm the squash commit's tree equals the pull-request head's tree and that
-   its parent is the previous `main`:
+1. **Collect the merge-boundary conditions before anything else.** A review record or reconciled
+   disposition can put conditions on the merge itself: a squash message that must name
+   something or cite particular pull requests, or a merge commit instead of a squash.
+   #1231's assurance finding F-09 is the worked example: the message must name the A1 restore
+   and reference #1225 and #1232.
+   - Read every review record and disposition on the pull request, including conditions carried
+     forward from earlier cycles and re-imposed unchanged, and list them.
+   - A condition set by a review overrides the defaults in step 2.
+   - If a condition cannot be met, do not merge. Say what blocks and who can clear it.
+2. **Merge.** Pin the expected head SHA so a late push cannot slip in.
+   - The default is a squash merge titled as the pull-request title followed by
+     ` (#<number>)`.
+   - The message body must carry:
+     - the text each merge-boundary condition requires, verbatim where the condition names
+       words or references;
+     - every `HOLD` the latest reconciled disposition carries forward, quoted, so that the
+       `HOLD` survives in `main`'s history rather than only in a pull-request comment.
+   - Use a merge commit instead of a squash when a condition requires it.
+   - Before submitting, re-read each condition against the final message text.
+3. **Verify.** Confirm that the merge commit's tree equals the pull-request head's tree and
+   that its first parent is the previous `main`:
 
    ```bash
    git fetch origin main
@@ -96,7 +113,7 @@ changelog erratum records what happens when that goes wrong.
    test "$(git rev-parse origin/main^)" = "<previous-main-sha>"
    ```
 
-3. Retire only branches and worktrees you own.
+4. Retire only branches and worktrees you own.
 
 Merging is delivery authority only. Under `MERGE-01`'s boundary, it lifts no `HOLD` and
 confers no grade, release, lender or Board authority.
