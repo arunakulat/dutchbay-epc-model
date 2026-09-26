@@ -38,6 +38,7 @@ profile validation.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 
 import pytest
 
@@ -476,6 +477,43 @@ def test_validate_profile_weights_names_the_caller_s_label() -> None:
 
 def test_a_malformed_cashflow_node_fails_loud_on_the_profile_path_too() -> None:
     """The second resolver shares the hole, so it shares the guard."""
-    with pytest.raises(ValueError, match="must be a mapping"):
+    with pytest.raises(ValueError, match="must be a dict"):
         resolve_within_year_profile({"cashflow": "quarterly"}, QUARTERLY)
     assert resolve_within_year_profile({}, QUARTERLY) == even_profile(QUARTERLY)
+
+
+def test_the_profile_resolver_shares_both_navigation_fixes_too() -> None:
+    """Both halves of the guard/read drift reached this resolver as well (N-1).
+
+    The two resolvers call one guard, so a fix applied to only one of them would leave
+    the profile path demoting silently to the even split while the resolution path
+    failed loud — and an even split is not a visible error either. Both shapes are
+    asserted here rather than assumed to be covered by the grid test.
+    """
+
+    class MappingNotDict(Mapping):
+        def __init__(self, data: dict) -> None:
+            self._data = dict(data)
+
+        def __getitem__(self, key: str) -> object:
+            return self._data[key]
+
+        def __iter__(self):
+            return iter(self._data)
+
+        def __len__(self) -> int:
+            return len(self._data)
+
+    # Case: mixed-case container key, malformed node.
+    with pytest.raises(ValueError, match="must be a dict"):
+        resolve_within_year_profile({"Cashflow": "oops"}, QUARTERLY)
+
+    # Type: a non-dict mapping carrying a well-formed profile. Silently even before.
+    node = MappingNotDict({"within_year_profile": [0.4, 0.3, 0.2, 0.1]})
+    with pytest.raises(ValueError, match="mapping but not a dict"):
+        resolve_within_year_profile({"cashflow": node}, QUARTERLY)
+
+    # And the fix does not refuse a config that already worked.
+    assert resolve_within_year_profile(
+        {"Cashflow": {"within_year_profile": [0.4, 0.3, 0.2, 0.1]}}, QUARTERLY
+    ) == (0.4, 0.3, 0.2, 0.1)

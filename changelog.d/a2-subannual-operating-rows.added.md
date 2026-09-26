@@ -1,7 +1,9 @@
 Added `finance.subannual_rows_v14`, which allocates the annual cashflow rows onto the sub-annual
 operating grid A1 introduced (Sprint 20, dolphin A2). `cashflow.resolution: quarterly` now builds
 rows rather than being refused: A2 widened `ENGINE_SUPPORTED_RESOLUTIONS` exactly as A1's two-seam
-split anticipated, and the resolver itself was not touched in either dolphin. An optional
+split anticipated, with no change to how a resolution name is validated or normalised. (The resolver
+body is touched, to call the shared container guard; an earlier revision of this line claimed it "was
+not touched in either dolphin", which was wrong.) An optional
 `cashflow.within_year_profile` shapes the split; absent, it is an even one. The same weight contract
 now governs `build_subannual_rows(profile=...)`, the programmatic entry point A3 will call: it
 previously checked only length, so weights summing to 2 produced a negative closing quarter whose

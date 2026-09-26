@@ -12,10 +12,19 @@ support are deliberately two separate seams: `resolve_period_grid` validates tha
 *describable*, while `require_engine_support` asserts it is *buildable*. The dangerous failure mode
 here is not a crash but a scenario labelled with a resolution it silently does not receive — a config
 that lies. `quarterly` sat behind that gate in A1 alone; it ships buildable here, because A2 widened
-`ENGINE_SUPPORTED_RESOLUTIONS` in the same change, and the resolver itself was not touched in either
-dolphin. An unrecognised, blank or non-string value fails loud rather than falling back to annual; so
-does a malformed `cashflow` node, which would otherwise be read as an absent key and demoted to the
-annual grid. The resolver never mutates the caller's config, and `PeriodGrid` enforces its own
+`ENGINE_SUPPORTED_RESOLUTIONS` in the same change. That is the two-seam split working as designed:
+opening the gate required no change to how a resolution name is validated or normalised. The claim is
+about that seam only — the resolver body itself *is* touched here, to call the shared container guard
+described next. (An earlier revision said the resolver "was not touched in either dolphin", which the
+same paragraph then contradicted.) An unrecognised, blank or non-string value fails loud rather than
+falling back to annual; so does a `cashflow` node that is present but is not a `dict`, which would
+otherwise be read as an absent key and demoted to the annual grid. That guard walks the config with
+`get_nested` itself rather than re-implementing the walk, because its first version did
+re-implement it and drifted: it matched keys exactly where the read matches case-insensitively, and
+accepted any `Mapping` where the read requires a `dict`. Each gap reinstated the silent demotion the
+guard exists to stop, and the second was the worse one — a non-`dict` mapping such as
+`omegaconf.DictConfig`, carrying a well-formed value, resolved to annual with nothing about the
+config looking wrong. The resolver never mutates the caller's config, and `PeriodGrid` enforces its own
 documented `periods_per_year >= 1` invariant rather than relying on the resolver being its only
 caller.
 

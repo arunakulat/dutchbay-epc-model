@@ -10,15 +10,29 @@ scenario — :func:`resolve_period_grid` returns :data:`ANNUAL` (``periods_per_y
 under which every helper here is an identity or a no-op regrouping. Nothing in the
 committed canon changes by shipping this module.
 
-Sub-annual is NOT yet consumed by the engine
---------------------------------------------
-``cashflow.resolution: quarterly`` parses and validates here, but the cashflow engine is
-still annual by construction (``finance.cashflow_v14.build_annual_rows``). Rather than
-accept the flag and silently produce annual output — a config that lies — the engine-side
-gate :func:`require_engine_support` raises. The sub-annual operating rows land in A2, at
-which point ``quarterly`` joins :data:`ENGINE_SUPPORTED_RESOLUTIONS`. Until then the
-strictest honest behaviour is to fail loud (CESSPIT: no silent default that changes, or
-fails to change, an output).
+Describable is not the same as buildable
+----------------------------------------
+:data:`SUPPORTED_RESOLUTIONS` is what this grid can describe arithmetically;
+:data:`ENGINE_SUPPORTED_RESOLUTIONS` is what the cashflow engine can actually produce
+rows for. The two are deliberately separate, so that a resolution can be describable
+here before anything can build it, and a config naming such a resolution fails loud via
+:func:`require_engine_support` rather than quietly receiving annual output under a
+sub-annual label (CESSPIT: no silent default that changes, or fails to change, an
+output).
+
+``quarterly`` is in **both** sets as of A2, which added
+:func:`finance.subannual_rows_v14.build_subannual_rows`, so
+``cashflow.resolution: quarterly`` is accepted and built rather than refused. The gate
+still guards every future entry in :data:`SUPPORTED_RESOLUTIONS` that no builder has
+caught up with yet, and its teeth are kept honest by a test that uses a synthetic
+unbuilt resolution rather than a real one.
+
+.. note::
+   This section previously said ``quarterly`` would join
+   :data:`ENGINE_SUPPORTED_RESOLUTIONS` in A2 and that the gate raised for it "until
+   then". A2 is this commit, so that text described the state the same change had
+   already left behind — a docstring is the one artefact here that future work obeys,
+   which is precisely why it is corrected rather than left to be discovered.
 
 The three index spaces — read this before aligning anything
 -----------------------------------------------------------
@@ -171,14 +185,36 @@ ANNUAL = PeriodGrid(resolution="annual", periods_per_year=1)
 def require_mapping_node(
     config: Mapping[str, Any], path: Sequence[str], dotted_key: str
 ) -> None:
-    """Fail loud when a container on ``path`` is present but is not a mapping.
+    """Fail loud when a container on ``path`` is present but is not readable as one.
 
-    ``get_nested`` returns its default as soon as a path node is not a dict, so a
+    ``get_nested`` returns its default as soon as a path node is not a ``dict``, so a
     scenario written as ``cashflow: quarterly`` — a shape error rather than a value
     error — would otherwise be read as "the key is absent" and silently resolve to the
     annual grid. That is the exact outcome the two-seam design exists to prevent, and
     :func:`require_engine_support` cannot catch it, because by then the grid has already
     resolved to :data:`ANNUAL`.
+
+    **This guard walks the path with** :func:`get_nested` **itself**, over the same
+    ``dict(config)`` the read uses, rather than re-implementing the walk. That is
+    deliberate and it is the fix for a defect this guard shipped with: a second
+    navigation implementation drifted from the read it was guarding in two ways, and
+    each gap reinstated the silent demotion the guard exists to stop.
+
+    * **Key case.** ``get_nested`` resolves keys exactly first and case-insensitively
+      second. An exact-match guard therefore saw nothing in ``Cashflow: quarterly``
+      while the read resolved ``Cashflow`` and demoted to annual. Mixed-case top-level
+      keys are house style here — ``Financing_Terms`` is one in most committed
+      scenarios — so this was reachable, not hypothetical.
+    * **Container type.** ``get_nested`` requires a ``dict``; a guard testing
+      :class:`~collections.abc.Mapping` admitted any mapping. A non-``dict`` mapping
+      carrying a *well-formed* ``{"resolution": "quarterly"}`` passed the guard and then
+      resolved to annual — strictly worse than the malformed config the guard was
+      written for, because nothing about the config looked wrong.
+      ``omegaconf.DictConfig`` has exactly that shape, is a pinned dependency, and is
+      what a Hydra entry point hands you; both it and its nested nodes are mappings and
+      neither is a ``dict``. Such a config now raises rather than resolving to annual —
+      convert it at the boundary with
+      ``OmegaConf.to_container(cfg, resolve=True)``.
 
     Args:
         config: The raw scenario config.
@@ -186,20 +222,30 @@ def require_mapping_node(
         dotted_key: The dotted key, for the error message.
 
     Raises:
-        ValueError: If a container node on ``path`` is present and is not a mapping.
+        ValueError: If a container node on ``path`` is present but is not a ``dict``,
+            and so is not readable by the resolver that follows this guard.
     """
-    node: Any = config
-    for depth, key in enumerate(path[:-1]):
-        node = node.get(key) if isinstance(node, Mapping) else None
+    root = dict(config)
+    for depth in range(1, len(path)):
+        node = get_nested(root, path[:depth])
         if node is None:
+            # Genuinely absent. The annual default is the documented, correct outcome.
             return
-        if not isinstance(node, Mapping):
-            prefix = ".".join(path[: depth + 1])
-            raise ValueError(
-                f"{prefix} must be a mapping containing {dotted_key!r}; got "
-                f"{type(node).__name__}. A malformed node here would otherwise read as "
-                "an absent key and silently fall back to the annual grid."
-            )
+        if isinstance(node, dict):
+            continue
+        prefix = ".".join(path[:depth])
+        detail = (
+            "a mapping but not a dict, which this module's resolver cannot read — "
+            "convert it with OmegaConf.to_container(cfg, resolve=True) at the "
+            "boundary"
+            if isinstance(node, Mapping)
+            else "not a mapping at all"
+        )
+        raise ValueError(
+            f"{prefix} must be a dict containing {dotted_key!r}; got "
+            f"{type(node).__name__}, which is {detail}. Left unchecked this node "
+            "reads as an absent key and silently falls back to the annual grid."
+        )
 
 
 def resolve_period_grid(config: Mapping[str, Any] | None) -> PeriodGrid:

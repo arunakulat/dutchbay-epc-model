@@ -1,9 +1,9 @@
 """Contract tests for the operating-period grid (:mod:`finance.period_grid_v14`).
 
 Dolphin A1. The grid is the resolver that answers "how many cashflow periods are in an
-operating year, and which year owns period *p*?". It ships one dolphin ahead of the
-sub-annual operating rows (A2) that will consume it, so the tests here carry two jobs
-that matter more than the arithmetic:
+operating year, and which year owns period *p*?". It was authored one dolphin ahead of
+the sub-annual operating rows (A2) that consume it, and lands together with them, so the
+tests here carry two jobs that matter more than the arithmetic:
 
 1. :func:`test_annual_grid_is_the_identity_on_every_helper` — the byte-identity claim.
    Every committed scenario resolves to :data:`ANNUAL`, so if any helper is not an
@@ -20,14 +20,15 @@ that matter more than the arithmetic:
    now asserted against a synthetic resolution instead, to keep the test from decaying
    into a tautology.
 
-The remaining tests pin the partition and inverse properties that A2 will rely on to
-prove ``aggregate(quarterly) == annual``, and the hostile config cases that a committed
+The remaining tests pin the partition and inverse properties A2 relies on to prove
+``aggregate(quarterly) == annual``, and the hostile config cases that a committed
 scenario can never reach because no committed scenario sets the key at all.
 """
 
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Mapping
 
 import pytest
 from hypothesis import given
@@ -73,10 +74,19 @@ def test_absent_resolution_defaults_to_annual(config) -> None:
 
 
 def test_no_committed_scenario_sets_the_resolution_key() -> None:
-    """The default-off claim, checked against the scenarios rather than asserted.
+    """The default-off claim, checked through the resolver rather than re-implemented.
 
     If a committed scenario ever sets the key, the "every committed scenario resolves
     to ANNUAL" premise behind the byte-identity argument silently stops holding.
+
+    This asks :func:`resolve_period_grid` itself rather than reading the key by hand.
+    An earlier version of this test read ``loaded.get("cashflow")`` with an exact
+    lower-case key and a non-recursive glob, which shared a root cause with the guard
+    defect the resolver was fixed for: a second, laxer implementation of the same lookup
+    means a scenario written ``Cashflow:`` — mixed case is house style here — could set
+    the key while this test reported no offenders. Anything that does not resolve to
+    :data:`ANNUAL` is an offender, a raise included, since a scenario the resolver
+    refuses also falsifies the claim.
     """
     import pathlib
 
@@ -84,15 +94,18 @@ def test_no_committed_scenario_sets_the_resolution_key() -> None:
 
     scenarios = pathlib.Path(__file__).resolve().parents[2] / "scenarios"
     offenders = []
-    for path in sorted(scenarios.glob("*.yaml")):
+    for path in sorted(scenarios.rglob("*.y*ml")):
         try:
             loaded = yaml.safe_load(path.read_text()) or {}
         except yaml.YAMLError:
             continue  # deliberately-malformed fixtures exist; not this test's concern
-        if isinstance(loaded, dict):
-            section = loaded.get("cashflow")
-            if isinstance(section, dict) and section.get("resolution") is not None:
+        if not isinstance(loaded, dict):
+            continue
+        try:
+            if resolve_period_grid(loaded) != ANNUAL:
                 offenders.append(path.name)
+        except ValueError as exc:  # pragma: no cover - no committed scenario does this
+            offenders.append(f"{path.name}: {exc}")
     assert offenders == []
 
 
@@ -387,7 +400,7 @@ def test_a_malformed_cashflow_node_fails_loud_rather_than_resolving_to_annual(
     to prevent, and one :func:`require_engine_support` cannot catch, because by then the
     grid has already resolved to annual.
     """
-    with pytest.raises(ValueError, match="must be a mapping"):
+    with pytest.raises(ValueError, match="must be a dict"):
         resolve_period_grid({"cashflow": node})
 
 
@@ -396,6 +409,87 @@ def test_an_absent_cashflow_node_is_still_the_annual_default() -> None:
     assert resolve_period_grid({}) is ANNUAL
     assert resolve_period_grid({"cashflow": None}) is ANNUAL
     assert resolve_period_grid({"other": {"resolution": "quarterly"}}) is ANNUAL
+
+
+# ---------------------------------------------------------------------------
+# The guard must navigate by the same rules as the read it guards (N-1)
+# ---------------------------------------------------------------------------
+#
+# The first version of the guard re-implemented the walk instead of using get_nested,
+# and drifted from it twice. Each gap silently reinstated the annual demotion the guard
+# exists to stop, so each one gets a test that fails against that implementation.
+
+
+@pytest.mark.parametrize("container_key", ["Cashflow", "CASHFLOW", "cashFlow"])
+def test_a_malformed_node_under_a_mixed_case_key_still_fails_loud(
+    container_key: str,
+) -> None:
+    """``get_nested`` resolves keys case-insensitively; the guard must too.
+
+    An exact-match guard saw nothing under ``Cashflow`` and returned, after which the
+    read resolved the key case-insensitively, found a string where it wanted a dict, and
+    fell back to :data:`ANNUAL`. Mixed-case top-level keys are house style in this
+    repository — ``Financing_Terms`` is one in most committed scenarios — so this shape
+    is reachable rather than hypothetical.
+    """
+    with pytest.raises(ValueError, match="must be a dict"):
+        resolve_period_grid({container_key: "quarterly"})
+
+
+@pytest.mark.parametrize("container_key", ["cashflow", "Cashflow"])
+def test_a_well_formed_node_under_a_mixed_case_key_is_still_honoured(
+    container_key: str,
+) -> None:
+    """The case fix must not over-reach into refusing configs that already worked."""
+    grid = resolve_period_grid({container_key: {"resolution": "quarterly"}})
+    assert grid == PeriodGrid(resolution="quarterly", periods_per_year=4)
+
+
+def test_a_non_dict_mapping_container_fails_loud_rather_than_resolving_to_annual() -> (
+    None
+):
+    """A mapping that is not a ``dict`` is the *worse* case, and it must not pass.
+
+    ``get_nested`` requires a ``dict``, so a non-``dict`` mapping carrying a perfectly
+    well-formed ``{"resolution": "quarterly"}`` resolved to :data:`ANNUAL` while nothing
+    about the config looked wrong — strictly worse than the malformed string the guard
+    was originally written for, because there is no shape error for a reader to notice.
+    """
+
+    class MappingNotDict(Mapping):
+        """The shape ``omegaconf.DictConfig`` has: a Mapping, not a dict."""
+
+        def __init__(self, data: dict) -> None:
+            self._data = dict(data)
+
+        def __getitem__(self, key: str) -> object:
+            return self._data[key]
+
+        def __iter__(self):
+            return iter(self._data)
+
+        def __len__(self) -> int:
+            return len(self._data)
+
+    node = MappingNotDict({"resolution": "quarterly"})
+    assert isinstance(node, Mapping) and not isinstance(node, dict)
+    with pytest.raises(ValueError, match="mapping but not a dict"):
+        resolve_period_grid({"cashflow": node})
+
+
+def test_an_omegaconf_dictconfig_fails_loud_rather_than_resolving_to_annual() -> None:
+    """The same case with the real dependency, not a stand-in for it.
+
+    ``omegaconf`` is pinned and a Hydra entry point hands you a :class:`DictConfig`, so
+    this is the live instance of the class above rather than a theoretical one. Both the
+    root and its nested nodes are mappings and neither is a ``dict``.
+    """
+    omegaconf = pytest.importorskip("omegaconf")
+
+    cfg = omegaconf.OmegaConf.create({"cashflow": {"resolution": "quarterly"}})
+    assert not isinstance(cfg, dict) and not isinstance(cfg["cashflow"], dict)
+    with pytest.raises(ValueError, match="OmegaConf.to_container"):
+        resolve_period_grid(cfg)
 
 
 # ---------------------------------------------------------------------------
