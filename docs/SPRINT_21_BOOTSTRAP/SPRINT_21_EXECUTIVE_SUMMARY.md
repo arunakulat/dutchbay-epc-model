@@ -2,8 +2,8 @@
 
 **Subject:** the platform development plan received from the project owner on 26 September 2026,
 recorded verbatim at `docs/source_materials/platform_strategy_2026/`.
-**Base:** `main` at `b87ee32`. **Status:** evaluation draft, not independently reviewed; it adopts,
-schedules and authorizes nothing.
+**Base:** `main` at `b87ee32`. **Status:** evaluation draft. The project owner decided D1, D2 and
+D4 on 26 September 2026 (see "Decisions"); the record itself authorizes nothing.
 
 ## Verdict
 
@@ -62,19 +62,24 @@ For the owner's decision:
   Act text for the interest-limitation dolphin; reserve requirements from the term sheet and
   LTSA; measured wind data (#1290).
 
-Everything else in the plan is deferred to later sprints, each behind a named decision.
+Everything else in the plan is deferred to later sprints, each behind a named decision. The owner
+accepted this direction (D1). The dolphin list above is still a proposal: each dolphin needs its
+own branch, independent oracle and `RECRUIT-01` review chain.
 
-## Decisions required
+## Decisions
 
-| ID | Decision |
-|---|---|
-| D1 | Sprint 21 direction: finding-led bankability work with Lane A (recommended), or the rebuild |
-| D2 | Web product scope: known clients, or a multi-tenant service. This alone decides database, client framework and orchestration |
-| D3 | Whether to add a second jurisdiction, which one, and who owns its sources and review |
-| D4 | Keep the plan text public in the corpus, or reduce it to manifest-only before merge |
-| D5 | Recruit the `RECRUIT-01` domain and assurance reviewers for this pull request |
-| D6 | Confirm the sprint number, assumed to be 21 |
-| D7 | Whether a lender-auditable formula workbook is wanted, scoped as an independent oracle |
+The owner answered D1, D2, D4 and D5 in the session on 26 September 2026. The quoted words are
+the owner's replies.
+
+| ID | Decision | Status |
+|---|---|---|
+| D1 | Sprint 21 direction: finding-led bankability work with Lane A (recommended), or the rebuild | **Decided:** finding-led work with Lane A ("yes") |
+| D2 | Web product scope: known clients, or a multi-tenant service. This alone decides database, client framework and orchestration | **Decided:** known clients now; multi-tenant is the planned extension ("known clients currently - plan to extend to multi-tenant"). Sprint 21 builds no database, client framework or orchestration; new work must not foreclose multi-tenancy (analysis, section 5.7) |
+| D3 | Whether to add a second jurisdiction, which one, and who owns its sources and review | Open |
+| D4 | Keep the plan text public in the corpus, or reduce it to manifest-only before merge | **Decided:** keep public ("keep on public branch"); recorded as the publication authority in the handling note |
+| D5 | Recruit the `RECRUIT-01` domain and assurance reviewers for this pull request | **Decided:** review under the repository's rules, the harness and the framework principles ("follow repo rules, harness, frameworks") |
+| D6 | Confirm the sprint number, assumed to be 21 | Open |
+| D7 | Whether a lender-auditable formula workbook is wanted, scoped as an independent oracle | Open |
 
 ## What this session did
 
@@ -82,4 +87,6 @@ Everything else in the plan is deferred to later sprints, each behind a named de
   note, `PLATFORM-PLAN-HANDLING-2026-09-26`, registered in the corpus guard.
 - Wrote this bootstrap: the comprehensive analysis, these notes and the research notes.
 - Wrote a successor handover record so the next session finds this work.
+- Recorded the owner's decisions D1, D2, D4 and D5 here, in the analysis, in the handover record
+  and, for D4, in the handling note.
 - Changed no finance code, configuration, scenario or KPI.

@@ -263,8 +263,9 @@ content-addressed files recorded in a manifest. A database is the right tool for
 multi-user state — accounts, job history, audit logs — which today is a provisioned secret and
 Redis. TimescaleDB is dual-licensed: an Apache 2.0 core and Community features under the Timescale
 License, which is free for self-hosting but restricts offering the database as a service; whether
-a given host supports the extension must be checked. Decision D2 decides whether any of this is
-needed.
+a given host supports the extension must be checked. The owner decided D2 as known clients now,
+with multi-tenant as the planned extension, which makes a database a future need rather than a
+present one (section 5.7).
 
 ### 5.3 Frontend
 
@@ -279,8 +280,8 @@ product scope as a small set of known clients, which does not require a client f
 ### 5.4 Orchestration
 
 `fly.toml` already separates a public `web` process from a private `worker` process that drains
-the arq queue, and machines start on demand. Heavy Monte Carlo work can scale out by adding worker
-machines. Kubernetes adds cluster operation with no requirement that the current topology fails to
+the arq queue, and web machines start on demand. Heavy Monte Carlo work can scale out by adding
+worker machines. Kubernetes adds cluster operation with no requirement that the current topology fails to
 meet. Measure the Monte Carlo fan-out first.
 
 ### 5.5 Polars
@@ -298,6 +299,24 @@ limitations and review records, with a state of `unsupported`, `supported` or `a
 silent inheritance of Sri Lankan rules. A `Tax_Regimes` table holding rates and schedules without
 statute, effective date and review would bypass every one of those controls. The same contract
 lists "authorize a Python or native-language rewrite" among its non-goals.
+
+### 5.7 Multi-tenant readiness
+
+Added after the owner decided D2: known clients now, multi-tenant as the planned extension.
+
+What exists today. Every compute route under `/v1` requires an authenticated subject; only
+`/health` and `/v1/token` are public, and the sensitivity surface is composed as gated routes
+rather than a mounted sub-app so it inherits the gate (`app/api/main.py:112-131`). Each job
+record carries its owner for per-client isolation (`app/jobs/models.py:81-83`).
+
+What a multi-tenant service would add first: a tenant (organisation) model above the user; a
+persistent account and tenant store in place of the static `DUTCHBAY_API_USERS` secret
+(`app/api/auth.py:409`); per-tenant limits on Monte Carlo fan-out; and a durable audit trail.
+That is the point at which a database becomes warranted (section 5.2).
+
+Until then, new work keeps the extension open: bind every job and result to an owner identity,
+hold no client data in process-global state, and settle the tenant model in a decision record
+before choosing a database or client framework.
 
 ## 6. Fit with the governing rules
 
@@ -390,7 +409,8 @@ dolphin worth preparing, with its oracle.
 - A formula workbook as an independent oracle (D7).
 - Floating-rate debt and interest-rate swaps, if the term sheet requires them.
 - Per-line native-currency inputs, after F5-02.
-- Database, client framework and orchestration changes (D2).
+- Database, client framework and orchestration changes: the planned multi-tenant extension
+  (D2), preceded by a decision record on the tenant model (section 5.7).
 
 ## 9. What the plan gets right
 
@@ -409,15 +429,20 @@ The evaluation is not a rejection of the plan's direction. The plan correctly id
 
 ## 10. Decisions required from the owner
 
-| ID | Decision | Recommendation |
-|---|---|---|
-| D1 | Sprint 21 direction: finding-led bankability work plus Lane A, or the plan's rebuild | Finding-led work plus Lane A |
-| D2 | Web product scope: a small set of known clients, or a multi-tenant service | Keep the current scope until a client need is stated; D2 alone decides database, client framework and orchestration |
-| D3 | A second jurisdiction: whether, which, and who owns its sources and review | Decide before any tax or depreciation generalisation |
-| D4 | Keep the plan text public in the corpus, or reduce it to manifest-only before merge | Keep public; it contains no restricted content |
-| D5 | Recruit the `RECRUIT-01` review pair for this pull request | Required before merge |
-| D6 | Confirm the sprint number | "Sprint 21" |
-| D7 | Whether a lender-auditable formula workbook is wanted | If yes, scope it as an independent oracle |
+| ID | Decision | Recommendation | Owner's decision, 26 September 2026 |
+|---|---|---|---|
+| D1 | Sprint 21 direction: finding-led bankability work plus Lane A, or the plan's rebuild | Finding-led work plus Lane A | Finding-led work plus Lane A ("yes") |
+| D2 | Web product scope: a small set of known clients, or a multi-tenant service | Keep the current scope until a client need is stated; D2 alone decides database, client framework and orchestration | Known clients now; multi-tenant is the planned extension ("known clients currently - plan to extend to multi-tenant") |
+| D3 | A second jurisdiction: whether, which, and who owns its sources and review | Decide before any tax or depreciation generalisation | Open |
+| D4 | Keep the plan text public in the corpus, or reduce it to manifest-only before merge | Keep public; it contains no restricted content | Keep public ("keep on public branch") |
+| D5 | Recruit the `RECRUIT-01` review pair for this pull request | Required before merge | Review under the repository's rules, the harness and the framework principles ("follow repo rules, harness, frameworks") |
+| D6 | Confirm the sprint number | "Sprint 21" | Open |
+| D7 | Whether a lender-auditable formula workbook is wanted | If yes, scope it as an independent oracle | Open |
+
+The owner's decisions were given in the session that wrote this record, as replies to the
+recommendations; the quoted words are the replies. They set direction, scope and publication.
+They do not authorize any dolphin's implementation, which still needs its own branch, independent
+oracle and review chain, and they lift no `HOLD`.
 
 ## 11. Assumptions
 

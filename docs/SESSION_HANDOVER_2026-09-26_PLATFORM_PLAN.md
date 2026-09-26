@@ -26,17 +26,23 @@ memorize, add to corpus and discuss" for the next sprint. This session:
 2. Evaluated it in `docs/SPRINT_21_BOOTSTRAP/`. The verdict is not to adopt the plan as the Sprint
    21 plan but to take its goals as finding-mapped dolphins and continue Sprint 20 Lane A. Read
    the executive summary first.
-3. Changed no finance code, configuration, scenario, KPI, `VERSION` or ruleset row.
+3. Recorded the owner's decisions, given in this session as replies to the recommendations:
+   **D1** finding-led work with Lane A, not the rebuild ("yes"); **D2** known clients now,
+   multi-tenant as the planned extension ("known clients currently - plan to extend to
+   multi-tenant"); **D4** keep the plan text public ("keep on public branch"), now the recorded
+   publication authority in the handling note; **D5** review under the repository's rules, the
+   harness and the framework principles ("follow repo rules, harness, frameworks").
+4. Changed no finance code, configuration, scenario, KPI, `VERSION` or ruleset row.
 
 ## Open items for this workstream
 
-1. **Owner decisions D1 to D7** (executive summary, "Decisions required"). D1 decides Sprint 21's
-   direction; D2 decides whether any database, client-framework or orchestration work is wanted;
-   D4 decides whether the plan text stays public; D6 confirms the sprint number.
+1. **Open owner decisions: D3, D6 and D7** (executive summary, "Decisions"): a second
+   jurisdiction; the sprint number, assumed to be 21; a formula workbook as an independent oracle.
 2. **`RECRUIT-01` review.** The pull request is `R2_LOAD_BEARING` (data ingestion, a guard-test
    registration, a planning record). It needs a project-finance domain reviewer and a separate
-   assurance reviewer before merge. None has been recruited. Do not merge on green CI alone; the
-   A1 revert (#1232) is the precedent.
+   assurance reviewer before merge, recruited under D5. The pull request and the review records
+   bound to its head are the authority on whether that is done. Do not merge on green CI alone;
+   the A1 revert (#1232) is the precedent.
 3. **Evidence to request before the finance dolphins** (analysis, Lane C): F5-02 lender and legal
    evidence; the Inland Revenue Act No. 24 of 2017 and amendments, for interest limitation; the
    term-sheet reserve requirements; measured wind data (#1290).

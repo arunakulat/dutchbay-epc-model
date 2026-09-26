@@ -14,8 +14,11 @@
   consequential being that the plan's debt-capacity formula sizes at 1.00x coverage and oversizes
   debt by the target DSCR factor, checked against `finance/debt_v14.py`. Eleven items touch
   audit findings that block Board and lender release under #1110. The recommendation is to take
-  the plan's goals into Sprint 21 as finding-mapped dolphins alongside Sprint 20 Lane A, with
-  seven decisions left to the owner.
+  the plan's goals into Sprint 21 as finding-mapped dolphins alongside Sprint 20 Lane A.
+- **The owner decided four of the seven decisions the evaluation raised**, on 26 September 2026:
+  that finding-led direction (D1); known clients now with multi-tenant as the planned extension
+  (D2); keeping the plan text public, now the recorded publication authority in the handling
+  note (D4); and review under the repository's rules (D5). D3, D6 and D7 remain open.
 - **A scoped successor handover record**, `docs/SESSION_HANDOVER_2026-09-26_PLATFORM_PLAN.md`,
   carries the open items. It leaves H08 and the startup pointer unchanged.
 - No finance code, configuration, scenario, KPI or `VERSION` changes. Not independently reviewed:

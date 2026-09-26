@@ -10,9 +10,11 @@ The plan itself is not here. It is recorded verbatim in the evidence corpus at
 and how it is handled — its fidelity, its publication and its status — is stated once, under
 `PLATFORM-PLAN-HANDLING-2026-09-26` in that area's `MANIFEST.sha256`.
 
-**Status:** evaluation draft. Not independently reviewed. It adopts, schedules and authorizes
-nothing; Sprint 21's scope is for the owner to decide (decision D1). It confers no grade, release,
-audit, lender or Board authority and lifts no `HOLD`.
+**Status:** evaluation draft. On 26 September 2026 the owner decided the direction (D1:
+finding-led work with Lane A, not the rebuild), the product scope (D2: known clients now,
+multi-tenant later), publication (D4: keep public) and review (D5: under the repository's rules).
+D3, D6 and D7 remain open, and the dolphin list remains a proposal. This package authorizes no
+implementation, confers no grade, release, audit, lender or Board authority, and lifts no `HOLD`.
 
 ## Reading order
 
