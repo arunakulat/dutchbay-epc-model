@@ -23,10 +23,11 @@ Method:
 3. Each finance item was cross-checked against the August 2026 audit findings register
    (`docs/audit/2026-08-controlled-successor/registers/findings_register.v2.json`) and its
    current-main overlay (`findings_current_state_overlay.v1.json`).
-4. Every external factual claim the plan makes, or this evaluation makes, about law, reference
-   rates, licensing or methods was checked against a source. Sources, access dates and the
-   claims that could not be verified are in
-   [`SPRINT_21_RESEARCH_NOTES.md`](SPRINT_21_RESEARCH_NOTES.md).
+4. External factual claims about law, reference rates and licensing were checked against
+   sources; the level of each check, and the claims that could not be verified, are in
+   [`SPRINT_21_RESEARCH_NOTES.md`](SPRINT_21_RESEARCH_NOTES.md). Statements of engineering or
+   finance practice are attributed to the repository record that states them where one exists;
+   otherwise they are framed as questions or recommendations rather than asserted as fact.
 5. One numerical check was run against the repository's own debt-sizing function (section 4, C1).
 
 Reading rule: "exists" means code on `main` implements the item, not that the implementation is
@@ -68,7 +69,7 @@ technically wrong, see section 4).
 | 2 | Polars with NumPy | NumPy throughout; pandas pinned `>=2.0,<3.0` (`pyproject.toml:23`) pending a KPI-oracle-verified migration (#593); no Polars | Gap, not a need | Do not migrate the engine. `docs/ARCHITECTURE.md` records about 0.05 s for a full run on a frozen AEP (not re-measured here); the costly stages are the producers, not dataframe operations. Admit Polars only inside a new module where profiling shows a need, behind an optional extra (`FRAMEWORK-01`) |
 | 3 | PostgreSQL with TimescaleDB | No database. API users are a provisioned secret (`fly.toml`), job state is Redis (`app/jobs/redis_store.py`) | Gap, not a need at current scope | See section 5.2. Keep time series as content-addressed, hash-pinned files; add a database when the product needs persistent multi-user state (decision D2) |
 | 4 | React/Next.js, Tailwind, AG Grid, Recharts | Server-rendered Jinja wizard (`app/web/routes.py:107`) with HTML, PDF and XLSX report downloads | Gap, not a need at current scope | See section 5.3; decision D2 |
-| 5 | Docker with Kubernetes | `Dockerfile`; `docker-compose.yml` (Redis, web, worker); `fly.toml` (separate `web` and `worker` processes, machines auto-start) | Partial: containers and a separately scalable worker exist; no Kubernetes | See section 5.4; no change without a measured scaling need |
+| 5 | Docker with Kubernetes | `Dockerfile`; `docker-compose.yml` (Redis, web, worker); `fly.toml` (separate `web` and `worker` processes; web machines auto-start) | Partial: containers and a separately scalable worker exist; no Kubernetes | See section 5.4; no change without a measured scaling need |
 | 6 | `Projects` / `Assets` tables, multi-technology | Scenario YAML with `generation.technologies`; type registry `finance/tech_types.py:25-44`; aggregation `analytics/portfolio/generation_aggregator.py`; shared-POI curtailment `analytics/portfolio/poi_curtailment.py:33` | Exists within a project; no multi-project portfolio consolidation was found | Keep configuration in YAML (`ARCH-01`, `FRAMEWORK-02`). A portfolio view is a separate, later decision |
 | 7 | `Macro_Curves`: FX forwards, LIBOR/SOFR curves, inflation | FX curve explicit or parametric (`finance/cashflow_v14_fx.py:43`); interest-parity forward hedge (`finance/cashflow_v14_contracts.py:8`); CNY and EUR curve slots (`analytics/fx/fx_builder.py:52`, `:400`); FX calibration and history (`analytics/fx/`). Debt carries fixed rates per tranche; no floating-rate or swap logic | Partial; **Incorrect** on LIBOR (C2) | Floating-rate debt is a real gap, but material only if the term sheet specifies floating debt. Evidence first (F5-02), then a floating-rate tranche option on a current benchmark |
 | 8 | `Tax_Regimes` table | Sri Lanka regime in `finance/cashflow_v14_tax.py`; `docs/FEASIBILITY_REPORT_CONTRACT.md` section 3.1 specifies versioned jurisdiction packs | Gap in form; **Incorrect** on "WDAT for EU" (C3) | Implement jurisdictions as packs under DBAY-FRC-001 (statute, effective date, sources, review), not as table rows (section 5.6; decision D3) |
@@ -78,7 +79,7 @@ technically wrong, see section 4).
 | # | Plan item | State on `main` (evidence) | Assessment | Recommendation |
 |---|---|---|---|---|
 | 9 | Solar with pvlib: irradiance, tilt, clipping | `solar_resource/pv_producer.py`: clear-sky scaled to measured GHI or a frozen hourly TMY; Erbs/DISC decomposition; Hay-Davies transposition; PVWatts DC; inverter clipping at AC nameplate; Faiman cell temperature | Exists | None |
-| 10 | Solar tracking, single- and dual-axis | Fixed tilt only (`solar_resource/pv_producer.py`, module docstring) | Gap | Single-axis tracking is a bounded producer dolphin. Dual-axis is rare at utility scale; low priority |
+| 10 | Solar tracking, single- and dual-axis | Fixed tilt only (`solar_resource/pv_producer.py`, module docstring) | Gap | Single-axis tracking is a bounded producer dolphin. Dual-axis only if a project specifies it |
 | 11 | Wind power curves, Weibull, wake, air density | `wind_resource/bankable_aep.py:66` (IEC 61400-12-1 density correction), `:219` (PyWake wake, Bastankhah-Porte-Agel default); `weibull_fit.py`, `mcp.py`, `era5_*.py`, `power_curve_sourcing.py`, `layout_optimizer.py` (TopFarm) | Exists; a Weibull fit cannot drive hourly dispatch (C5) | No model build. The binding constraint is resource evidence: #1110 records that without on-site mast and MCP evidence there is no bankable resource claim (#1290 is in flight). The off-path AEP cluster in `docs/ARCHITECTURE.md` still awaits its wire-or-retire decision |
 | 12 | 8760-hour dispatch replacing annual P50/P90 | Finance engine is annual (`analytics/aep_reconciliation.py:3`). Hourly series exist in producers (frozen TMY), shared-POI curtailment and grid QSTS (8,760-step records in `analytics/contracts_v14.py`). Sub-annual finance is Sprint 20 Lane A: A1 merged as #1225, reverted by #1232 for missing review, re-proposed with A2 in draft #1231 | Partial; **Incorrect** as a replacement for P50/P90 (C5) | Section 5.1. Continue Lane A. Keep hourly resolution in the producer and dispatch layer and aggregate it onto the finance period grid |
 | 13 | BESS non-linear degradation by DoD and C-rate | `finance/bess_revenue.py`: geometric model and an NREL BLAST-style separable calendar-plus-cycle model driven by equivalent full cycles (DoD-dependent); SoH floor 0.70 (`:121`); models registry (`:132`) | Partial: DoD dependence exists (linear); no C-rate term | Calibrate to OEM warranty degradation tables before adding model forms. The NSO corpus holds an OEM warranty policy and LTSA workbook |
@@ -168,11 +169,11 @@ Action 4 recommends a fixed-ratio rule within a corridor of 10% to 30% of EBITDA
 group-ratio rule (OECD, 2016 update). The fixed 30% is the EU Anti-Tax Avoidance Directive,
 Article 4, which also permits a EUR 3 million safe harbour and an exclusion for loans funding
 long-term public infrastructure projects; that exclusion can be material for a generation project.
-"Thin capitalisation" traditionally means a debt-to-equity limit, which is a different mechanism
-from an earnings-based limit. For Sri Lanka, secondary sources describe section 18 of the Inland
-Revenue Act No. 24 of 2017 as a debt-to-capital-and-reserves limit with carry-forward of disallowed
-interest; the primary text was not ingested in this session and must be before any code relies on
-it. Audit finding P2-F4-04 already specifies a design with modes `none | debt_to_equity |
+A debt-to-equity limit ("thin capitalisation" in the narrow sense) is a different mechanism from
+an earnings-based limit, and the Sri Lankan rule appears to be the former: secondary sources
+describe section 18 of the Inland Revenue Act No. 24 of 2017 as a debt-to-capital-and-reserves
+limit with carry-forward of disallowed interest. The primary text was not ingested in this
+session and must be before any code relies on it. Audit finding P2-F4-04 already specifies a design with modes `none | debt_to_equity |
 ebitda_ratio` and requires that confirmation first.
 
 **C5 — Distributions cannot drive chronological dispatch.** The plan combines an 8760-hour dispatch
@@ -181,22 +182,25 @@ Weibull fit and a flow duration curve are frequency distributions; they discard 
 events. Dispatch, storage state of charge, curtailment against an export limit and seasonal
 hydro all depend on sequence. Hourly dispatch needs chronological series: long-term-corrected
 hourly wind (ERA5 adjusted by MCP to on-site measurement), a measured or typical-year irradiance
-series, and a daily flow series for hydro. Hourly modelling also does not replace P50/P90: the
-exceedance framework (IEC 61400-15-2 for wind) is about uncertainty and inter-annual variability,
-which a single repeated year understates.
+series, and a daily flow series for hydro. Hourly modelling also does not replace P50/P90.
+Exceedance levels express uncertainty and inter-annual variability, which a single repeated year
+understates; the open audit finding P5-WIND-003 concerns exactly the P50-to-P90 step.
 
-**C6 — Probability labels.** "P90 Generation + High Inflation + High Capex" combines independent
-downsides whose joint probability is far below 10%. It is a legitimate combined stress case and
-should be labelled as one, not as a P90. For equity IRR, "P10/P50/P90" is ambiguous because the
+**C6 — Probability labels.** "P90 Generation + High Inflation + High Capex" stacks downsides. Their
+joint probability cannot exceed the 10% of the generation leg alone, and for largely independent
+drivers such as wind resource, inflation and capex it is far below it. It is a legitimate
+combined stress case and should be labelled as one, not as a P90. For equity IRR, "P10/P50/P90" is ambiguous because the
 energy-yield convention reads P90 as a 90% exceedance level; state the percentile and its
 direction. Trials with no defined IRR must be reported as undefined, not as zero (`FIN-01`).
 
 **C7 — "Maintaining all formulas".** The engine is Python; the workbooks it writes hold values.
 There are no spreadsheet formulas to maintain. A formula-bearing workbook is a second
-implementation of the model. That has real value, because lenders' model auditors often work in
-spreadsheets and an independently built model is exactly the kind of oracle `TEST-01` asks for,
-but it is a model build with its own reconciliation tests, not an export option. A formula
-workbook written by Python also needs a recalculation step before its values can be compared.
+implementation of the model. The plan's premise that lenders want to audit a spreadsheet is not
+disputed here, and an independently built model is exactly the kind of oracle `TEST-01` asks
+for; but it is a model build with its own reconciliation tests, not an export option. A formula
+workbook written by Python also needs a recalculation step before its values can be compared:
+openpyxl 3.1.5 stores `=A1*A2` and reads back no cached value until the workbook is recalculated
+(research notes, section 2.5).
 
 **C8 — United States tax scope.** The plan names MACRS as the US example. US renewable project
 finance is dominated by the technology-neutral credits (sections 45Y and 48E) and the tax-equity
@@ -208,9 +212,10 @@ fit for purpose.
 **C9 — BESS arbitrage.** Arbitrage earns revenue only where a market or tariff pays for moving
 energy in time. In the committed CEB capacity-charge structure the buyer dispatches the asset and
 pays an availability-based charge (`finance/bess_revenue.py`, module docstring), so an arbitrage
-optimiser has no revenue basis there. Negative prices do not arise in a single-buyer structure.
-What can matter in Sri Lanka is shifting solar energy into the paid night-peak window and
-absorbing energy that would otherwise be curtailed, and only where the tariff pays for it.
+optimiser has no revenue basis there, and a single buyer paying contracted tariffs publishes no
+spot price that could turn negative. What can matter in Sri Lanka is shifting solar energy into
+the paid night-peak window and absorbing energy that would otherwise be curtailed, and only where
+the tariff pays for it.
 
 ## 5. Architecture evaluation
 
@@ -225,18 +230,22 @@ Hourly resolution matters for:
 - grid studies (already 8,760-step QSTS records under `analytics/grid/`);
 - capture prices in merchant markets.
 
-It does not matter for debt service (quarterly or semi-annual under lender convention), tax
-(annual) or depreciation (annual). The sound architecture is therefore:
+It does not matter for debt service, which follows the lender's payment period (the #1225 record
+states lender convention as at least quarterly), nor for tax or depreciation, which are annual.
+The sound architecture is therefore:
 
 1. hourly producers (wind, solar, hydro) emitting chronological series;
 2. an hourly dispatch step only where a contract pays for dispatch;
 3. aggregation onto the finance period grid, with flows summed and balances taken at period end;
 4. the finance engine at the period resolution lenders use.
 
-Step 3 is what Sprint 20 Lane A is building. Its A1 contract already states the aggregation rule
-by variable kind, and it routes sub-periods to debt periods through `annual_row_debt_period_map`
-rather than directly. The plan's "25 years × 8760 hours" finance grid would bypass that
-contract and multiply the debt layer's index-space problems that A1 documents.
+Step 3 is what Sprint 20 Lane A is building. The A1 contract (merged as #1225, reverted by #1232,
+re-proposed in draft #1231) states the aggregation rule by variable kind — flows sum, balances
+take the period-end value, and there is deliberately no generic aggregate — and routes
+sub-periods to debt periods through `annual_row_debt_period_map` rather than directly. The #1225
+record warns that the debt layer already has a collision between two DSCR index spaces and that a
+third axis added carelessly would compound it. A "25 years × 8760 hours" finance grid is that
+third axis.
 
 Volume and compute: one 25-year hourly series is 219,000 values, about 1.75 MB as 64-bit floats.
 Data volume is not the constraint. Compute is, once dispatch is optimised inside a Monte Carlo:
@@ -299,8 +308,8 @@ lists "authorize a Python or native-language rewrite" among its non-goals.
 | `TEST-01` | A rewritten engine has no oracle except the engine it replaces | Keep the current engine as the reference; each finance change answers to an independent oracle |
 | `DOC-02` | Phases 3 and 4 move IRR, DSCR and NPV | `VERSION`, `CHANGELOG.md` and regression pins per KPI-moving dolphin |
 | `ARCH-01`, `FRAMEWORK-02` | Rules and curves in database tables | Configuration in YAML, validated strictly before use |
-| `FRAMEWORK-03`, `ARCH-04` | A new backend would define its own result types | Results through `analytics.contracts_v14` and `evaluate_with_overrides()` |
-| `ARCH-02`, `R7` | A Polars rewrite would re-implement IRR and NPV | IRR, XIRR and NPV stay in `finance/irr.py` |
+| `FRAMEWORK-03`, `ARCH-04` | A new backend risks a second set of result types | Results through `analytics.contracts_v14` and `evaluate_with_overrides()` |
+| `ARCH-02`, `R7` | A rewrite risks a second IRR and NPV implementation | IRR, XIRR and NPV stay in `finance/irr.py` |
 | `DATA-01`, `DOC-03` | Tax and rate data without sources | Sourced packs, uncertainty marked |
 | `MRM-01`, `MRM-02` | Mutable inputs | Seeds recorded; content-addressed inputs |
 | `RECRUIT-01` | No review model | Finance dolphins are `R3_CONSEQUENTIAL`; each needs its review chain before merge, as #1232 shows |
@@ -367,8 +376,9 @@ mapped to existing seams and to the findings above. Proposed for the owner's dec
 - Reserve requirements (DSRA months and form, maintenance reserve) from the term sheet and the LTSA.
 - Measured wind data (#1290).
 
-A realistic Sprint 21 core is Lane A (A2, A3), B2 and B3, which are KPI-neutral or default-off, and
-the Lane C evidence requests; B1 is the one KPI-moving dolphin worth preparing, with its oracle.
+A realistic Sprint 21 core is Lane A (A2, A3), B2 and B3, each designed to leave the committed
+canon unchanged or to default to off, and the Lane C evidence requests; B1 is the one KPI-moving
+dolphin worth preparing, with its oracle.
 
 **Deferred, each gated by a decision.**
 

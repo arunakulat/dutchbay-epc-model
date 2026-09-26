@@ -81,6 +81,25 @@ and every other cited finding as `open_current_state_not_examined`.
 | Three statements rendered in the lender report | `app/reports/report_model.py`, `app/reports/templates/report.html.j2` |
 | Sub-annual modules absent from `main` | `ls finance/period_grid_v14.py finance/subannual_rows_v14.py` reports both missing; reverted by #1232, re-proposed in draft #1231 |
 
+### 2.5 Formula workbooks carry no computed values (correction C7)
+
+Run in a scratch directory outside the repository; the file was deleted afterwards.
+
+```text
+$ .venv/bin/python - <<'PY'
+import openpyxl
+wb = openpyxl.Workbook(); ws = wb.active
+ws["A1"], ws["A2"], ws["A3"] = 2, 3, "=A1*A2"
+wb.save("f.xlsx")
+print("openpyxl", openpyxl.__version__)
+print("formula view:", openpyxl.load_workbook("f.xlsx")["Sheet"]["A3"].value)
+print("cached value view:", openpyxl.load_workbook("f.xlsx", data_only=True)["Sheet"]["A3"].value)
+PY
+openpyxl 3.1.5
+formula view: =A1*A2
+cached value view: None
+```
+
 ## 3. External sources
 
 The session's network policy blocked direct retrieval of `eur-lex.europa.eu`, `www.fca.org.uk`,

@@ -48,6 +48,10 @@ memorize, add to corpus and discuss" for the next sprint. This session:
   Sprint 20 A1 as landed is stale.
 - `SPRINT_BOOTSTRAP_PROC_R1` requires a "5-pass analysis" that no file in the repository defines.
   The bootstrap README records the passes actually performed rather than inventing a definition.
+- `scripts/list_session_handover_records.py` took 50.3 s of wall time in this container with this
+  record committed (`time` around the resolver). `AGENTS.md` requires the owner to optimise and
+  review the resolver before its runtime exceeds 60 seconds. The figure is from a cloud container,
+  not the owner's workstation, and was not repeated.
 - This container's network policy blocked `eur-lex.europa.eu`, `www.fca.org.uk`,
   `www.ag-grid.com` and `www.gov.uk`, so external claims were verified at the level recorded in
   the research notes. PDFs must go through the governed MarkItDown workflow in any case (`R26`).
