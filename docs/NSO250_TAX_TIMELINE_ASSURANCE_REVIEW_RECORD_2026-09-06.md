@@ -188,3 +188,39 @@ multiplier.
 `build_ltl_case_dbpl_2026-09-06.py:293` — that Addendum 01 and the 21 August clarifications are
 "held in the public corpus" — is the same class of defect this PR was vetoed for, is still live
 in the other repository, and should not be allowed to age.
+
+---
+
+## SUPERSEDED IN PART — corrected 2026-09-07
+
+**This record certified a false claim.** It graded #1240's withdrawal of an "Addendum 01" citation
+as *"correct, and the replacement is honest… Good practice"*, and its provenance ledger marked the
+RFP Clarifications of 21-Aug-2026 **"unverifiable — no clarifications document is held"** on the
+strength of a search described as *exhaustive*.
+
+Both are wrong. Addendum 01 of 07-Aug-2026 and the clarifications are held in the PUBLIC
+repository at `docs/source_materials/nso_bess_250mw_2026/rfp/`, ingressed by **#1180 on
+27 August 2026** — ten days before this review — and present in the base tree `93aefbb` this
+record was bound to (`git ls-tree -r 93aefbb | grep -c 'Addendum_01\|Clarifications_2026-08-21'`
+returns 5). The search was scoped to `/home/user/dutchbay_rag/`, which holds Volumes I–III but not
+the Addendum, and so returned a plausible-looking partial answer.
+
+Two consequences this record got backwards, both now reversed:
+
+1. **The register at `build_ltl_case_dbpl_2026-09-06.py:293` is CLEARED.** This record flagged its
+   claim that the tender documents are "held in the public corpus" as false provenance "of the
+   same class this PR was vetoed for". The register was right. It needs no correction.
+2. **Addendum 01 item 13 is held**, and is the instrument that repeals the Volume II Section 4
+   "(excluding VAT)" rate table and replaces it with one carrying SSCL and VAT-18% lines — exactly
+   what the original scenario comment cited it for.
+
+The corrective change is `arunakulat/dutchbay-epc-model#1241`, reviewed by the same two reviewers,
+both of whom rebuilt their ledgers and stated plainly which of their own markings were wrong.
+
+**The diagnosis, which matters more than the fact.** Not "we searched the wrong repository": the
+private corpus *also* carried the governing schedule, tabulated three days before the withdrawal.
+The failure was never grepping for "Addendum 01" by name in either corpus before declaring it
+unheld. Independence protects against reasoning errors, not against a shared failure to search.
+
+Everything else in this record stands, including its blocking findings on the enhanced capital
+allowance, which were correct and were acted on.

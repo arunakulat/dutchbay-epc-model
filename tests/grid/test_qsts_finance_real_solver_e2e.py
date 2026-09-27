@@ -189,6 +189,10 @@ def test_deemed_paid_is_separate_through_the_real_solver(tmp_path: Path) -> None
 
 
 @pytest.mark.skipif(not _HAS_ANDES, reason="requires the [grid] extra (andes)")
+@pytest.mark.grid
+@pytest.mark.filterwarnings(
+    "error:This process .* is multi-threaded.*:DeprecationWarning"
+)
 def test_andes_ride_through_runs_and_is_finance_neutral() -> None:
     """The andes-backed ride-through study is advisory: it must not touch the canon.
 
@@ -199,11 +203,13 @@ def test_andes_ride_through_runs_and_is_finance_neutral() -> None:
     """
     from analytics.grid import ride_through
 
+    baseline = _run_kpis(_lender_config())
+    before_params = _build_cashflow_params(_lender_config())
     result = ride_through.run_ride_through_case("lvrt", run_dynamics=True)
-    assert result is not None
+    assert result.ran is True, result.detail
+    assert result.n_devices > 0
+    assert result.bankable is False
 
-    # The canonical params are unchanged by having run a dynamics study.
-    baseline = _build_cashflow_params(_lender_config())
-    assert baseline.curtailment_pct == pytest.approx(
-        _build_cashflow_params(_lender_config()).curtailment_pct
-    )
+    # Retain a real baseline from BEFORE dynamics, then recompute the same scenario.
+    assert _run_kpis(_lender_config()) == baseline
+    assert _build_cashflow_params(_lender_config()) == before_params
