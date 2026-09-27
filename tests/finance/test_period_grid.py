@@ -1,0 +1,529 @@
+"""Contract tests for the operating-period grid (:mod:`finance.period_grid_v14`).
+
+Dolphin A1. The grid is the resolver that answers "how many cashflow periods are in an
+operating year, and which year owns period *p*?". It was authored one dolphin ahead of
+the sub-annual operating rows (A2) that consume it, and lands together with them, so the
+tests here carry two jobs that matter more than the arithmetic:
+
+1. :func:`test_annual_grid_is_the_identity_on_every_helper` — the byte-identity claim.
+   Every committed scenario resolves to :data:`ANNUAL`, so if any helper is not an
+   exact identity (or an order-preserving regrouping) under that grid, shipping this
+   module could move canon. The test asserts identity on the *float objects*, not
+   merely on equal values.
+
+2. :func:`test_the_engine_gate_still_rejects_a_describable_but_unbuilt_resolution` —
+   the fail-loud gate. The dangerous failure mode here is not a crash: it is a scenario
+   labelled with a sub-annual resolution silently receiving ANNUAL rows. The gate must
+   reject rather than degrade, and it must reject at a DIFFERENT seam from config
+   validation, since such a config is genuinely valid. ``quarterly`` was the resolution
+   behind that gate in A1; A2 made it buildable and the gate opened, so the mechanism is
+   now asserted against a synthetic resolution instead, to keep the test from decaying
+   into a tautology.
+
+The remaining tests pin the partition and inverse properties A2 relies on to prove
+``aggregate(quarterly) == annual``, and the hostile config cases that a committed
+scenario can never reach because no committed scenario sets the key at all.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+from collections.abc import Mapping
+
+import pytest
+from hypothesis import given
+from hypothesis import strategies as st
+
+from finance.period_grid_v14 import (
+    ANNUAL,
+    CASHFLOW_RESOLUTION_KEY,
+    ENGINE_SUPPORTED_RESOLUTIONS,
+    SUPPORTED_RESOLUTIONS,
+    PeriodGrid,
+    aggregate_balances_to_annual,
+    aggregate_flows_to_annual,
+    period_count,
+    periods_for_year,
+    require_engine_support,
+    resolve_period_grid,
+    year_index_for_period,
+)
+
+QUARTERLY = PeriodGrid(resolution="quarterly", periods_per_year=4)
+
+
+# ---------------------------------------------------------------------------
+# Resolution — the default-off contract
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        None,
+        {},
+        {"project": {"life_years": 20}},
+        {"cashflow": {}},
+        {"cashflow": {"resolution": None}},
+    ],
+    ids=["none", "empty", "unrelated-keys", "empty-section", "explicit-null"],
+)
+def test_absent_resolution_defaults_to_annual(config) -> None:
+    """No ``cashflow.resolution`` -> ANNUAL. This is the committed-canon path."""
+    assert resolve_period_grid(config) == ANNUAL
+
+
+def test_no_committed_scenario_sets_the_resolution_key() -> None:
+    """The default-off claim, checked through the resolver rather than re-implemented.
+
+    If a committed scenario ever sets the key, the "every committed scenario resolves
+    to ANNUAL" premise behind the byte-identity argument silently stops holding.
+
+    This asks :func:`resolve_period_grid` itself rather than reading the key by hand.
+    An earlier version of this test read ``loaded.get("cashflow")`` with an exact
+    lower-case key and a non-recursive glob, which shared a root cause with the guard
+    defect the resolver was fixed for: a second, laxer implementation of the same lookup
+    means a scenario written ``Cashflow:`` — mixed case is house style here — could set
+    the key while this test reported no offenders. Anything that does not resolve to
+    :data:`ANNUAL` is an offender, a raise included, since a scenario the resolver
+    refuses also falsifies the claim.
+    """
+    import pathlib
+
+    import yaml
+
+    scenarios = pathlib.Path(__file__).resolve().parents[2] / "scenarios"
+    checked = 0
+    offenders = []
+    for path in sorted(scenarios.rglob("*.y*ml")):
+        try:
+            # safe_load_all, not safe_load: one committed scenario is a multi-document
+            # stream, which safe_load refuses. Reading only the first document — or
+            # skipping the file on the resulting YAMLError — would quietly drop it from
+            # a claim that is supposed to cover every scenario, which is the same silent
+            # exclusion this module's guard exists to prevent.
+            documents = list(yaml.safe_load_all(path.read_text()))
+        except yaml.YAMLError:
+            continue  # deliberately-malformed fixtures exist; not this test's concern
+        for document in documents:
+            if not isinstance(document, dict):
+                continue  # an empty or scalar document sets no key
+            checked += 1
+            try:
+                if resolve_period_grid(document) != ANNUAL:
+                    offenders.append(path.name)
+            except (
+                ValueError
+            ) as exc:  # pragma: no cover - no committed scenario does this
+                offenders.append(f"{path.name}: {exc}")
+    assert offenders == []
+    # Guard the guard: a glob or loader change that silently stops finding scenarios
+    # would make the assertion above pass vacuously.
+    assert checked >= 40, f"expected to check 40+ scenario documents, checked {checked}"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected_periods"),
+    [("annual", 1), ("quarterly", 4), ("QUARTERLY", 4), ("  Annual  ", 1)],
+)
+def test_recognised_resolutions_normalise(raw: str, expected_periods: int) -> None:
+    """Case and surrounding whitespace normalise to the canonical lower-case name."""
+    grid = resolve_period_grid({"cashflow": {"resolution": raw}})
+    assert grid.periods_per_year == expected_periods
+    assert grid.resolution == raw.strip().lower()
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["monthly", "daily", "weekly", "semiannual", "yearly", "1", "annual "[:-1] + "x"],
+)
+def test_unknown_resolution_fails_loud(raw: str) -> None:
+    """An unrecognised name must raise, never fall back to annual.
+
+    Silent demotion to annual is the failure this rejects: the run would produce
+    annual numbers under a label promising something else.
+    """
+    with pytest.raises(ValueError, match=CASHFLOW_RESOLUTION_KEY):
+        resolve_period_grid({"cashflow": {"resolution": raw}})
+
+
+@pytest.mark.parametrize("raw", [4, 4.0, True, ["quarterly"], {"name": "quarterly"}])
+def test_non_string_resolution_fails_loud(raw) -> None:
+    """A non-string value names no resolution and must not be coerced into one."""
+    with pytest.raises(ValueError, match="must be a string"):
+        resolve_period_grid({"cashflow": {"resolution": raw}})
+
+
+@pytest.mark.parametrize("raw", ["", "   ", "\t"])
+def test_blank_resolution_fails_loud(raw: str) -> None:
+    """Blank is distinct from absent: absent means default, blank means malformed."""
+    with pytest.raises(ValueError, match="is empty"):
+        resolve_period_grid({"cashflow": {"resolution": raw}})
+
+
+def test_resolver_does_not_mutate_the_caller_config() -> None:
+    """The resolver reads; it must not write back a normalised value."""
+    config = {"cashflow": {"resolution": "QUARTERLY"}}
+    resolve_period_grid(config)
+    assert config == {"cashflow": {"resolution": "QUARTERLY"}}
+
+
+# ---------------------------------------------------------------------------
+# The engine gate — fail loud rather than silently degrade
+# ---------------------------------------------------------------------------
+
+
+def test_quarterly_now_resolves_and_passes_the_engine_gate() -> None:
+    """``quarterly`` became buildable in A2, so the gate that rejected it now admits it.
+
+    In A1 this test asserted the opposite half: ``quarterly`` resolved but
+    ``require_engine_support`` raised, because no code could build sub-annual rows yet.
+    A2 added :func:`finance.subannual_rows_v14.build_subannual_rows`, so the resolution
+    joined ENGINE_SUPPORTED_RESOLUTIONS and the gate opened — exactly the seam the split
+    was designed for. The resolver itself was not touched in either dolphin.
+    """
+    grid = resolve_period_grid({"cashflow": {"resolution": "quarterly"}})
+    assert grid == QUARTERLY
+    require_engine_support(grid)  # must not raise
+
+
+def test_the_engine_gate_still_rejects_a_describable_but_unbuilt_resolution() -> None:
+    """The gate must keep its teeth once quarterly passes it.
+
+    The mechanism is what matters, not the one resolution that happened to be behind it:
+    a resolution the grid can describe but the engine cannot build must still fail rather
+    than be served as annual. Asserted against a synthetic grid so the test does not
+    decay into a tautology the moment every named resolution is buildable.
+    """
+    unbuilt = PeriodGrid(resolution="fortnightly", periods_per_year=26)
+    assert unbuilt.resolution not in ENGINE_SUPPORTED_RESOLUTIONS
+
+    with pytest.raises(ValueError, match="cannot build rows at it"):
+        require_engine_support(unbuilt)
+
+
+def test_annual_passes_the_engine_gate() -> None:
+    """The committed path must not be gated."""
+    require_engine_support(ANNUAL)  # must not raise
+
+
+def test_engine_support_is_a_subset_of_describable_resolutions() -> None:
+    """The engine can never claim support for a resolution the grid cannot describe."""
+    assert ENGINE_SUPPORTED_RESOLUTIONS <= set(SUPPORTED_RESOLUTIONS)
+
+
+# ---------------------------------------------------------------------------
+# The byte-identity claim
+# ---------------------------------------------------------------------------
+
+
+def test_annual_grid_is_the_identity_on_every_helper() -> None:
+    """Under ANNUAL every helper is an identity or an order-preserving regroup.
+
+    Asserted with ``is`` on the float objects rather than ``==`` on their values: an
+    aggregation that reconstructed equal-but-new floats would still be a re-computation,
+    and the point of this test is that the annual path performs none.
+    """
+    values = [1.5, -2.25, 0.0, 1e18, 3.3]
+
+    assert ANNUAL.periods_per_year == 1
+    assert ANNUAL.is_annual is True
+    assert period_count(20, ANNUAL) == 20
+    assert [year_index_for_period(i, ANNUAL) for i in range(5)] == [0, 1, 2, 3, 4]
+    assert [periods_for_year(i, ANNUAL) for i in range(3)] == [[0], [1], [2]]
+
+    flows = aggregate_flows_to_annual(values, ANNUAL)
+    balances = aggregate_balances_to_annual(values, ANNUAL)
+    assert flows == values
+    assert balances == values
+    # Order-preserving AND value-preserving at object identity.
+    assert all(a is b for a, b in zip(balances, values, strict=True))
+
+
+def test_helper_defaults_are_the_annual_grid() -> None:
+    """A caller that never mentions a grid gets the committed behaviour."""
+    assert period_count(7) == 7
+    assert year_index_for_period(3) == 3
+    assert periods_for_year(3) == [3]
+    assert aggregate_flows_to_annual([1.0, 2.0]) == [1.0, 2.0]
+    assert aggregate_balances_to_annual([1.0, 2.0]) == [1.0, 2.0]
+
+
+# ---------------------------------------------------------------------------
+# Sub-period arithmetic and the partition properties A2 will lean on
+# ---------------------------------------------------------------------------
+
+
+def test_quarterly_period_count_and_mapping() -> None:
+    """20 operating years -> 80 quarters, four consecutive quarters per year."""
+    assert period_count(20, QUARTERLY) == 80
+    assert [year_index_for_period(p, QUARTERLY) for p in range(8)] == [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+    ]
+    assert periods_for_year(0, QUARTERLY) == [0, 1, 2, 3]
+    assert periods_for_year(3, QUARTERLY) == [12, 13, 14, 15]
+
+
+def test_period_count_of_zero_years_is_zero() -> None:
+    assert period_count(0, QUARTERLY) == 0
+
+
+@pytest.mark.parametrize(
+    ("fn", "kwargs"),
+    [
+        (period_count, {"project_life_years": -1}),
+        (year_index_for_period, {"period_index": -1}),
+        (periods_for_year, {"year_index": -1}),
+    ],
+)
+def test_negative_indices_fail_loud(fn, kwargs) -> None:
+    """Negative indices are a caller bug, not a wrap-around."""
+    with pytest.raises(ValueError, match=">= 0"):
+        fn(**kwargs, grid=QUARTERLY)
+
+
+@given(
+    years=st.integers(min_value=0, max_value=60),
+    per_year=st.sampled_from(sorted(set(SUPPORTED_RESOLUTIONS.values()))),
+)
+def test_periods_for_year_partitions_the_axis_exactly(
+    years: int, per_year: int
+) -> None:
+    """The per-year period lists tile the axis with no gap, overlap or overrun.
+
+    This is the property A2 needs: if the lists did not partition the axis, an
+    aggregation could double-count or drop a sub-period while still summing to a
+    plausible-looking annual figure.
+    """
+    grid = PeriodGrid(resolution="synthetic", periods_per_year=per_year)
+    collected: list[int] = []
+    for year in range(years):
+        collected.extend(periods_for_year(year, grid))
+    assert collected == list(range(period_count(years, grid)))
+
+
+@given(
+    period=st.integers(min_value=0, max_value=5000),
+    per_year=st.sampled_from(sorted(set(SUPPORTED_RESOLUTIONS.values()))),
+)
+def test_year_index_and_periods_for_year_are_inverses(
+    period: int, per_year: int
+) -> None:
+    """``periods_for_year(year_index_for_period(p))`` always contains ``p``."""
+    grid = PeriodGrid(resolution="synthetic", periods_per_year=per_year)
+    year = year_index_for_period(period, grid)
+    assert period in periods_for_year(year, grid)
+
+
+# ---------------------------------------------------------------------------
+# Aggregation — flows sum, balances close, ragged series are rejected
+# ---------------------------------------------------------------------------
+
+
+def test_flows_sum_within_each_year() -> None:
+    quarters = [1.0, 2.0, 3.0, 4.0, 10.0, 20.0, 30.0, 40.0]
+    assert aggregate_flows_to_annual(quarters, QUARTERLY) == [10.0, 100.0]
+
+
+def test_balances_take_the_period_end_value() -> None:
+    """A balance closes the year at its last sub-period; summing it would be nonsense."""
+    quarters = [100.0, 90.0, 80.0, 70.0, 60.0, 50.0, 40.0, 30.0]
+    assert aggregate_balances_to_annual(quarters, QUARTERLY) == [70.0, 30.0]
+
+
+def test_empty_series_aggregate_to_empty() -> None:
+    assert aggregate_flows_to_annual([], QUARTERLY) == []
+    assert aggregate_balances_to_annual([], QUARTERLY) == []
+
+
+@pytest.mark.parametrize("length", [1, 2, 3, 5, 6, 7, 9])
+def test_ragged_series_fail_loud(length: int) -> None:
+    """A partial year means the caller's axis disagrees with the grid.
+
+    Truncating or zero-padding here would silently misattribute or drop cash, so a
+    length that is not a whole number of years is rejected outright.
+    """
+    values = [1.0] * length
+    with pytest.raises(ValueError, match="not a whole number of operating years"):
+        aggregate_flows_to_annual(values, QUARTERLY)
+    with pytest.raises(ValueError, match="not a whole number of operating years"):
+        aggregate_balances_to_annual(values, QUARTERLY)
+
+
+@given(
+    annual_values=st.lists(
+        st.floats(min_value=-1e9, max_value=1e9, allow_nan=False, allow_infinity=False),
+        min_size=0,
+        max_size=40,
+    )
+)
+def test_splitting_an_annual_flow_into_quarters_round_trips(
+    annual_values: list[float],
+) -> None:
+    """Quarters that carry a year's whole flow in one period aggregate back to it.
+
+    The A2 acceptance criterion in miniature: a sub-annual series whose within-year
+    parts are known must re-aggregate to the annual figure exactly.
+    """
+    quarters: list[float] = []
+    for value in annual_values:
+        quarters.extend([value, 0.0, 0.0, 0.0])
+    assert aggregate_flows_to_annual(quarters, QUARTERLY) == pytest.approx(
+        annual_values, rel=0, abs=0
+    )
+
+
+# ---------------------------------------------------------------------------
+# The grid value object
+# ---------------------------------------------------------------------------
+
+
+def test_period_grid_is_frozen_and_comparable() -> None:
+    """Immutability keeps a mid-pipeline consumer from re-deriving a different grid."""
+    assert PeriodGrid("annual", 1) == ANNUAL
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        ANNUAL.periods_per_year = 4  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# Shape errors in the config, not just value errors
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "node",
+    ["quarterly", ["quarterly"], 4, ("cashflow",)],
+    ids=["str", "list", "int", "tuple"],
+)
+def test_a_malformed_cashflow_node_fails_loud_rather_than_resolving_to_annual(
+    node: object,
+) -> None:
+    """A shape error must not read as an absent key.
+
+    ``get_nested`` returns its default the moment a path node is not a dict, so before
+    this guard a scenario written ``cashflow: quarterly`` resolved silently to
+    :data:`ANNUAL` — precisely the "config that lies" outcome the two-seam design exists
+    to prevent, and one :func:`require_engine_support` cannot catch, because by then the
+    grid has already resolved to annual.
+    """
+    with pytest.raises(ValueError, match="must be a dict"):
+        resolve_period_grid({"cashflow": node})
+
+
+def test_an_absent_cashflow_node_is_still_the_annual_default() -> None:
+    """The guard must not turn the committed canon into an error."""
+    assert resolve_period_grid({}) is ANNUAL
+    assert resolve_period_grid({"cashflow": None}) is ANNUAL
+    assert resolve_period_grid({"other": {"resolution": "quarterly"}}) is ANNUAL
+
+
+# ---------------------------------------------------------------------------
+# The guard must navigate by the same rules as the read it guards (N-1)
+# ---------------------------------------------------------------------------
+#
+# The first version of the guard re-implemented the walk instead of using get_nested,
+# and drifted from it twice. Each gap silently reinstated the annual demotion the guard
+# exists to stop, so each one gets a test that fails against that implementation.
+
+
+@pytest.mark.parametrize("container_key", ["Cashflow", "CASHFLOW", "cashFlow"])
+def test_a_malformed_node_under_a_mixed_case_key_still_fails_loud(
+    container_key: str,
+) -> None:
+    """``get_nested`` resolves keys case-insensitively; the guard must too.
+
+    An exact-match guard saw nothing under ``Cashflow`` and returned, after which the
+    read resolved the key case-insensitively, found a string where it wanted a dict, and
+    fell back to :data:`ANNUAL`. Mixed-case top-level keys are house style in this
+    repository — ``Financing_Terms`` is one in most committed scenarios — so this shape
+    is reachable rather than hypothetical.
+    """
+    with pytest.raises(ValueError, match="must be a dict"):
+        resolve_period_grid({container_key: "quarterly"})
+
+
+@pytest.mark.parametrize("container_key", ["cashflow", "Cashflow"])
+def test_a_well_formed_node_under_a_mixed_case_key_is_still_honoured(
+    container_key: str,
+) -> None:
+    """The case fix must not over-reach into refusing configs that already worked."""
+    grid = resolve_period_grid({container_key: {"resolution": "quarterly"}})
+    assert grid == PeriodGrid(resolution="quarterly", periods_per_year=4)
+
+
+def test_a_non_dict_mapping_container_fails_loud_rather_than_resolving_to_annual() -> (
+    None
+):
+    """A mapping that is not a ``dict`` is the *worse* case, and it must not pass.
+
+    ``get_nested`` requires a ``dict``, so a non-``dict`` mapping carrying a perfectly
+    well-formed ``{"resolution": "quarterly"}`` resolved to :data:`ANNUAL` while nothing
+    about the config looked wrong — strictly worse than the malformed string the guard
+    was originally written for, because there is no shape error for a reader to notice.
+    """
+
+    class MappingNotDict(Mapping):
+        """The shape ``omegaconf.DictConfig`` has: a Mapping, not a dict."""
+
+        def __init__(self, data: dict) -> None:
+            self._data = dict(data)
+
+        def __getitem__(self, key: str) -> object:
+            return self._data[key]
+
+        def __iter__(self):
+            return iter(self._data)
+
+        def __len__(self) -> int:
+            return len(self._data)
+
+    node = MappingNotDict({"resolution": "quarterly"})
+    assert isinstance(node, Mapping) and not isinstance(node, dict)
+    with pytest.raises(ValueError, match="mapping but not a dict"):
+        resolve_period_grid({"cashflow": node})
+
+
+def test_an_omegaconf_dictconfig_fails_loud_rather_than_resolving_to_annual() -> None:
+    """The same case with the real dependency, not a stand-in for it.
+
+    ``omegaconf`` is pinned and a Hydra entry point hands you a :class:`DictConfig`, so
+    this is the live instance of the class above rather than a theoretical one. Both the
+    root and its nested nodes are mappings and neither is a ``dict``.
+    """
+    omegaconf = pytest.importorskip("omegaconf")
+
+    cfg = omegaconf.OmegaConf.create({"cashflow": {"resolution": "quarterly"}})
+    assert not isinstance(cfg, dict) and not isinstance(cfg["cashflow"], dict)
+    with pytest.raises(ValueError, match="OmegaConf.to_container"):
+        resolve_period_grid(cfg)
+
+
+# ---------------------------------------------------------------------------
+# The grid defends its own documented invariant
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("bad", [0, -4, -1])
+def test_period_grid_rejects_a_periods_per_year_below_one(bad: int) -> None:
+    """Direct construction is sanctioned, so the invariant cannot rest on the resolver.
+
+    Without this, ``0`` raised a bare ``ZeroDivisionError`` from
+    :func:`year_index_for_period` and a negative count returned a silently negative
+    :func:`period_count`, voiding the partition property the tests above prove.
+    """
+    with pytest.raises(ValueError, match="must be >= 1"):
+        PeriodGrid(resolution="rogue", periods_per_year=bad)
+
+
+@pytest.mark.parametrize("bad", [1.0, "4", True, None])
+def test_period_grid_rejects_a_non_integer_periods_per_year(bad: object) -> None:
+    """A float or a bool would divide and compare without ever raising."""
+    with pytest.raises(ValueError, match="must be an int"):
+        PeriodGrid(resolution="rogue", periods_per_year=bad)  # type: ignore[arg-type]
