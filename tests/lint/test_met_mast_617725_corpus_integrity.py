@@ -47,7 +47,7 @@ def test_public_manifest_is_complete_and_hash_correct() -> None:
     """Pin every public derivative and reject unrecorded package artifacts."""
     entries = _manifest_entries(MANIFEST)
     on_disk = {
-        f"./{path.relative_to(PACKAGE).as_posix()}"
+        path.relative_to(PACKAGE).as_posix()
         for path in PACKAGE.rglob("*")
         if path.is_file() and path != MANIFEST
     }
