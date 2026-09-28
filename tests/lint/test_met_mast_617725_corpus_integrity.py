@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 
@@ -18,6 +19,19 @@ PRIVATE_COMMIT = "52ae2fecb05f84497a68d00affbd95f4b0c18986"
 PRIVATE_SOURCE_PATH = "corpus/met_mast_617725_2025/raw/617725数据导出.txt"
 SOURCE_SHA256 = "a19963698f6d7e1085f8c66bb1810ecc1e8937e7f004ab25b81539bfd2e2cd46"
 SOURCE_ENV = "DUTCHBAY_MET_MAST_617725_SOURCE"
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Independent great-circle distance oracle for comparator regression checks."""
+    radius_km = 6_371.0088
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    a = (
+        math.sin(delta_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+    )
+    return radius_km * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 def _sha256(path: Path) -> str:
@@ -95,6 +109,58 @@ def test_derived_metadata_binds_to_the_private_source() -> None:
     assert summary["source_identity"]["repository"] == PRIVATE_REPOSITORY
     assert summary["source_identity"]["commit"] == PRIVATE_COMMIT
     assert summary["source_identity"]["relative_path"] == PRIVATE_SOURCE_PATH
+
+
+def test_comparator_lineage_and_degree_minute_distances() -> None:
+    """Pin comparator sources and independently reject decimal-degree misreading."""
+    summary = json.loads((PACKAGE / "extracted" / "analysis_summary.json").read_text())
+    lineage = summary["comparison_reference_lineage"]
+
+    proposal = lineage["envision_kalpitiya_60mw_proposal"]
+    assert proposal["source_commit"] == "179e43676b6e619ef6fb4d41521de6f6760f0882"
+    assert proposal["source_blob_sha1"] == "b4111978fe974f08c11bf9ade2372abc63fb8b84"
+    assert proposal["source_sha256"] == (
+        "507ca41cbe360d43693d885920af3502e08882b2fbc5f32a18cd1c76a97c707d"
+    )
+    assert proposal["original_document_sha256"] == (
+        "845d3df5c0310b39e42ca4ff729f3eb8c11691aa76c77f7a5416c0dc6adc6d19"
+    )
+
+    centroid = lineage["dutchbay_model_centroid"]
+    assert centroid["source_commit"] == "071df78b7879af930558e211cb8112d54f690b4a"
+    assert centroid["source_blob_sha1"] == "871db05fbd26400b02a413484777d588547ba400"
+    assert centroid["source_sha256"] == (
+        "6916e13b6f8b11bb062a81c6508edf4438a7a23d17c1372c6170888adeb0fe72"
+    )
+
+    nrel = lineage["nrel_2003_measurement_sites"]
+    assert nrel["source_location"].endswith("printed page 27")
+    assert nrel["source_sha256"] == (
+        "be0b54d3b4af53dcb0bf00557fe8868ed13bc7e0d03a57ffb34ca461f08ab633"
+    )
+    expected_sites = {
+        "narakkalliya": ("8 01 N", "79 43 E", 8 + 1 / 60, 79 + 43 / 60),
+        "puttalam_met": ("8 02 N", "79 50 E", 8 + 2 / 60, 79 + 50 / 60),
+        "karathivu": ("8 13 N", "79 48 E", 8 + 13 / 60, 79 + 48 / 60),
+        "wellammalal": ("8 14 N", "79 44 E", 8 + 14 / 60, 79 + 44 / 60),
+    }
+    source_lat = summary["source_identity"]["coordinates"]["latitude_deg_n"]
+    source_lon = summary["source_identity"]["coordinates"]["longitude_deg_e"]
+    distances = summary["distance_context"]
+    for site, (raw_lat, raw_lon, lat, lon) in expected_sites.items():
+        record = nrel["sites"][site]
+        assert record["source_lat_deg_min"] == raw_lat
+        assert record["source_lon_deg_min"] == raw_lon
+        assert record["latitude_deg_n"] == pytest.approx(lat)
+        assert record["longitude_deg_e"] == pytest.approx(lon)
+        assert distances[f"nrel_{site}_km"] == pytest.approx(
+            _haversine_km(source_lat, source_lon, lat, lon), abs=1e-12
+        )
+
+    assert distances["nrel_narakkalliya_km"] == pytest.approx(4.507646354441646)
+    assert distances["nrel_puttalam_met_km"] == pytest.approx(14.017744852902524)
+    assert distances["nrel_karathivu_km"] == pytest.approx(20.4970629004495)
+    assert distances["nrel_wellammalal_km"] == pytest.approx(19.87746913562162)
 
 
 def test_reproducer_requires_an_explicit_private_source() -> None:

@@ -64,6 +64,89 @@ SECTOR_LABELS = (
     "NW",
     "NNW",
 )
+COMPARISON_REFERENCES: dict[str, Any] = {
+    "envision_kalpitiya_60mw_proposal": {
+        "latitude_deg_n": 8.203515,
+        "longitude_deg_e": 79.701195,
+        "mean_wind_speed_130m_ms": 8.97,
+        "source_repository": "arunakulat/DutchBay_RAG",
+        "source_commit": "179e43676b6e619ef6fb4d41521de6f6760f0882",
+        "source_path": (
+            "corpus/kalpitiya_60mw_2026_envision_wind/extracted/"
+            "doc_b_proposal_document.json"
+        ),
+        "source_blob_sha1": "b4111978fe974f08c11bf9ade2372abc63fb8b84",
+        "source_sha256": (
+            "507ca41cbe360d43693d885920af3502e08882b2fbc5f32a18cd1c76a97c707d"
+        ),
+        "source_fields": [
+            "table_solution_summary.Average wind speed (m/s)",
+            "site_summary.centre_latitude_n",
+            "site_summary.centre_longitude_e",
+        ],
+        "original_document_sha256": (
+            "845d3df5c0310b39e42ca4ff729f3eb8c11691aa76c77f7a5416c0dc6adc6d19"
+        ),
+        "original_document_locations": {
+            "mean_wind_speed_130m_ms": "PDF page 4",
+            "centre_coordinates": "PDF page 5",
+        },
+    },
+    "dutchbay_model_centroid": {
+        "latitude_deg_n": 8.27,
+        "longitude_deg_e": 79.75,
+        "source_repository": "arunakulat/dutchbay-epc-model",
+        "source_commit": "071df78b7879af930558e211cb8112d54f690b4a",
+        "source_path": "wind_resource/config/era5_request_kalpitiya.yaml",
+        "source_blob_sha1": "871db05fbd26400b02a413484777d588547ba400",
+        "source_sha256": (
+            "6916e13b6f8b11bb062a81c6508edf4438a7a23d17c1372c6170888adeb0fe72"
+        ),
+        "source_fields": ["project.latitude", "project.longitude"],
+    },
+    "nrel_2003_measurement_sites": {
+        "source_document": (
+            "Wind Energy Resource Atlas of Sri Lanka and the Maldives, "
+            "NREL/TP-500-34518, August 2003"
+        ),
+        "source_location": (
+            "Table 5.1, Ceylon Electricity Board Wind Measurement Sites, printed page 27"
+        ),
+        "source_url": "https://docs.nrel.gov/docs/fy03osti/34518.pdf",
+        "source_sha256": (
+            "be0b54d3b4af53dcb0bf00557fe8868ed13bc7e0d03a57ffb34ca461f08ab633"
+        ),
+        "coordinate_notation": (
+            "table values are degrees and whole minutes; converted to decimal degrees"
+        ),
+        "sites": {
+            "narakkalliya": {
+                "source_lat_deg_min": "8 01 N",
+                "source_lon_deg_min": "79 43 E",
+                "latitude_deg_n": 8 + 1 / 60,
+                "longitude_deg_e": 79 + 43 / 60,
+            },
+            "puttalam_met": {
+                "source_lat_deg_min": "8 02 N",
+                "source_lon_deg_min": "79 50 E",
+                "latitude_deg_n": 8 + 2 / 60,
+                "longitude_deg_e": 79 + 50 / 60,
+            },
+            "karathivu": {
+                "source_lat_deg_min": "8 13 N",
+                "source_lon_deg_min": "79 48 E",
+                "latitude_deg_n": 8 + 13 / 60,
+                "longitude_deg_e": 79 + 48 / 60,
+            },
+            "wellammalal": {
+                "source_lat_deg_min": "8 14 N",
+                "source_lon_deg_min": "79 44 E",
+                "latitude_deg_n": 8 + 14 / 60,
+                "longitude_deg_e": 79 + 44 / 60,
+            },
+        },
+    },
+}
 
 
 def resolve_source_path() -> Path:
@@ -531,6 +614,11 @@ def outage_adjusted_sensitivity(
 
     observed_130 = speed_120.dropna() * (130 / 120) ** median_alpha
     proxy_130 = proxy_120.dropna() * (130 / 120) ** median_alpha
+    proposal_mean = float(
+        COMPARISON_REFERENCES["envision_kalpitiya_60mw_proposal"][
+            "mean_wind_speed_130m_ms"
+        ]
+    )
     return {
         "purpose": "sensitivity only; no source values are replaced",
         "concurrent_high_wind_median_120_to_100_ratio": ratio,
@@ -548,8 +636,8 @@ def outage_adjusted_sensitivity(
             "post_return_mae_ms": post_error.abs().mean(),
             "post_return_rmse_ms": np.sqrt((post_error**2).mean()),
         },
-        "envision_kalpitiya_proposal_mean_130m_ms": 8.97,
-        "proxy_vs_proposal_pct": 100 * (proxy_130.mean() / 8.97 - 1),
+        "envision_kalpitiya_proposal_mean_130m_ms": proposal_mean,
+        "proxy_vs_proposal_pct": 100 * (proxy_130.mean() / proposal_mean - 1),
     }
 
 
@@ -943,15 +1031,46 @@ def main() -> None:
 
     lat = float(metadata["latitude_deg_n"])
     lon = float(metadata["longitude_deg_e"])
+    proposal = COMPARISON_REFERENCES["envision_kalpitiya_60mw_proposal"]
+    centroid = COMPARISON_REFERENCES["dutchbay_model_centroid"]
+    nrel_sites = COMPARISON_REFERENCES["nrel_2003_measurement_sites"]["sites"]
     distances = {
         "envision_kalpitiya_60mw_proposal_centre_km": haversine_km(
-            lat, lon, 8.203515, 79.701195
+            lat,
+            lon,
+            float(proposal["latitude_deg_n"]),
+            float(proposal["longitude_deg_e"]),
         ),
-        "dutchbay_model_centroid_km": haversine_km(lat, lon, 8.27, 79.75),
-        "nrel_narakkalliya_km": haversine_km(lat, lon, 8.01, 79.43),
-        "nrel_karathivu_km": haversine_km(lat, lon, 8.13, 79.48),
-        "nrel_puttalam_met_km": haversine_km(lat, lon, 8.02, 79.50),
-        "nrel_wellammalal_km": haversine_km(lat, lon, 8.14, 79.44),
+        "dutchbay_model_centroid_km": haversine_km(
+            lat,
+            lon,
+            float(centroid["latitude_deg_n"]),
+            float(centroid["longitude_deg_e"]),
+        ),
+        "nrel_narakkalliya_km": haversine_km(
+            lat,
+            lon,
+            float(nrel_sites["narakkalliya"]["latitude_deg_n"]),
+            float(nrel_sites["narakkalliya"]["longitude_deg_e"]),
+        ),
+        "nrel_karathivu_km": haversine_km(
+            lat,
+            lon,
+            float(nrel_sites["karathivu"]["latitude_deg_n"]),
+            float(nrel_sites["karathivu"]["longitude_deg_e"]),
+        ),
+        "nrel_puttalam_met_km": haversine_km(
+            lat,
+            lon,
+            float(nrel_sites["puttalam_met"]["latitude_deg_n"]),
+            float(nrel_sites["puttalam_met"]["longitude_deg_e"]),
+        ),
+        "nrel_wellammalal_km": haversine_km(
+            lat,
+            lon,
+            float(nrel_sites["wellammalal"]["latitude_deg_n"]),
+            float(nrel_sites["wellammalal"]["longitude_deg_e"]),
+        ),
     }
     empty_columns = [column for column in frame.columns if frame[column].isna().all()]
     near_empty_columns = [
@@ -1000,6 +1119,7 @@ def main() -> None:
             "duration_days": (assessment_end - ASSESSMENT_START).total_seconds()
             / 86_400,
         },
+        "comparison_reference_lineage": COMPARISON_REFERENCES,
         "wind_speed_by_height": wind,
         "concurrent_vertical_profile": {
             "valid_count": len(common),

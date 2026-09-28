@@ -4,8 +4,12 @@
 
 **Initial validation base:** `071df78b7879af930558e211cb8112d54f690b4a`
 
-**Current delivery base:** `9a374862c02dc4557fcb2282f136cd2f86699371`; all 17
-subject blobs remained identical across the verified base update before the corrective review pass
+**Historical validation basis:** `9a374862c02dc4557fcb2282f136cd2f86699371`; the
+September 22–23 results below bind to that dated candidate and remain historical receipts.
+
+**Current correction base:** `d3157e0d733afc97c07348767a480276dafdf854`. The exact
+corrected head, tree, review disposition and hosted checks are recorded in the PR #1290 delivery
+receipt after they exist; no historical result is silently rebound to that successor object.
 
 **Scope:** `docs/source_materials/met_mast_617725_2025/**`
 
@@ -18,6 +22,7 @@ not retained.
 | Raw-copy identity | PASS | Attachment and private RAG source at commit `52ae2fecb05f84497a68d00affbd95f4b0c18986`, now delivered to private `main` by PR #9 as `f1666885bbad5382977e664ccc1f41912b9c5f5e`, both SHA-256 `a19963698f6d7e1085f8c66bb1810ecc1e8937e7f004ab25b81539bfd2e2cd46` |
 | Generator checks | PASS | Source size and hash, 33,456 × 57 raw shape, record bounds, 98 missing intervals and wind-speed ordering. Assessment dimensions and null-channel counts are reported, without separate assertions; the source hash fixes their input. |
 | Independent oracle | PASS | A separate standard-library parser reproduced shape, timestamp gaps, five mean-speed counts/means, 2,146-row 120 m outage, 71.50568267% SW+WSW occurrence and 1.016455696203 median 120/100 ratio |
+| External comparator lineage | PASS AFTER CORRECTION | Proposal and model-centroid inputs are pinned to repository commit, blob and SHA-256. NREL/CEB coordinates are pinned to NREL/TP-500-34518 Table 5.1, printed page 27, and converted from degrees-and-minutes; four draft distances were corrected without changing a mast-derived statistic |
 | Deterministic regeneration | PASS | Two consecutive generator runs produced byte-identical JSON, CSV and PNG outputs |
 | Static Python checks | PASS | Ruff, format and explicitly scoped mypy checks; source compiled with Python `compile()` without writing bytecode |
 | JSON syntax | PASS | Both JSON artifacts parsed successfully with Python's JSON parser |

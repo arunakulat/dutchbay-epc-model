@@ -164,16 +164,31 @@ The principal QC events are in `extracted/qc_events.csv`. Material findings are:
 
 ## 7. Relationship to Kalpitiya and Dutch Bay
 
-Great-circle distances from the source coordinates are:
+Great-circle distances from the source coordinates are shown below. The export does not state
+a coordinate reference system or datum; this screening calculation treats its latitude and
+longitude as WGS84 decimal degrees.
 
 | Reference | Distance |
 |---|---:|
 | Envision Kalpitiya 60 MW proposal centre | 16.39 km |
 | Dutch Bay model centroid | 24.20 km |
-| NREL Puttalam met point | 23.27 km |
-| NREL Karathivu point | 26.42 km |
-| NREL Wellammalal point | 30.95 km |
-| NREL Narakkalliya point | 31.06 km |
+| NREL Puttalam met point | 14.02 km |
+| NREL Karathivu point | 20.50 km |
+| NREL Wellammalal point | 19.88 km |
+| NREL Narakkalliya point | 4.51 km |
+
+The comparison inputs are pinned rather than left as unexplained literals:
+
+| Reference input | Source and exact anchor |
+|---|---|
+| Kalpitiya centre and 8.97 m/s at 130 m | `corpus/kalpitiya_60mw_2026_envision_wind/extracted/doc_b_proposal_document.json` at DutchBay_RAG commit `179e43676b6e619ef6fb4d41521de6f6760f0882`, blob `b4111978fe974f08c11bf9ade2372abc63fb8b84`, SHA-256 `507ca41c…c707d`; original proposal PDF SHA-256 `845d3df5…6d19`, pages 4–5 |
+| Dutch Bay model centroid | `wind_resource/config/era5_request_kalpitiya.yaml` at `arunakulat/dutchbay-epc-model` commit `071df78b7879af930558e211cb8112d54f690b4a`, blob `871db05fbd26400b02a413484777d588547ba400`, SHA-256 `6916e13b…fe72` |
+| NREL/CEB comparison sites | *Wind Energy Resource Atlas of Sri Lanka and the Maldives*, NREL/TP-500-34518, Table 5.1, printed page 27, PDF SHA-256 `be0b54d3…b633` |
+
+NREL Table 5.1 states latitude and longitude in degrees and whole minutes. The generator converts
+those values with `degrees + minutes / 60` before calculating distance. An earlier draft treated
+the degree-minute pairs as decimal numbers; the corrected distances above replace that draft and
+do not affect any statistic derived from the met-mast export.
 
 The outage-adjusted 130 m sensitivity of 8.628 m/s is 3.81% below the Kalpitiya proposal's
 8.97 m/s. That proximity is useful context, but the two locations are 16.4 km apart, the mast
