@@ -1,0 +1,11 @@
+# Met-mast export 617725 — confidential source identity
+#
+# The source file is intentionally absent from this public repository. It is held in the
+# private repository arunakulat/DutchBay_RAG at commit
+# 52ae2fecb05f84497a68d00affbd95f4b0c18986, relative path:
+# corpus/met_mast_617725_2025/raw/617725数据导出.txt
+#
+# Size: 8,758,675 bytes. Embedded creation: 2025-11-10 16:23, timezone not stated.
+# The focused EPC guard always verifies this pin and the absence of public raw bytes. When
+# DUTCHBAY_MET_MAST_617725_SOURCE is explicitly set, it also hashes the private source itself.
+a19963698f6d7e1085f8c66bb1810ecc1e8937e7f004ab25b81539bfd2e2cd46  corpus/met_mast_617725_2025/raw/617725数据导出.txt
