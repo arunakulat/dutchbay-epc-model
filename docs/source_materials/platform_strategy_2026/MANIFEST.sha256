@@ -1,0 +1,49 @@
+# Platform strategy 2026 — platform development plan received 26 September 2026
+#
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+# HANDLING NOTE — PLATFORM-PLAN-HANDLING-2026-09-26
+#
+# This block is the ONLY statement of how this object is handled. The corpus README and the
+# Sprint 21 bootstrap README cite the identifier above rather than restating it.
+# `tests/lint/test_nso_corpus_manifest_integrity.py` fails loudly if a registered citation goes
+# stale or if this definition moves.
+#
+# 1. WHAT THE OBJECT IS.
+#    PLATFORM_DEVELOPMENT_PLAN_2026-09-26.txt is a proposed five-phase, twenty-week plan to
+#    rebuild this repository as a multi-technology, multi-jurisdiction web platform. The project
+#    owner supplied it in a Claude Code cloud session on 26 September 2026 with the instruction
+#    "analyze, evaluate, memorize, add to corpus and discuss", for the next sprint. The supplier
+#    did not state its author or origin, and this record does not infer one.
+#
+# 2. FIDELITY.
+#    The file holds the plan text as the session received it, from "To transform" to "project
+#    finance platform.". The owner's instruction, which preceded the plan in the same message, is
+#    quoted in section 1 rather than stored in the file. One terminal newline was added. Nothing
+#    else was changed: wording, errors, list markers, the five en dashes, the six multiplication
+#    signs and the inline formula are preserved as received. The chat transport may have
+#    normalised whitespace or list markers relative to the author's original, which this
+#    repository cannot see. The hash below pins the bytes that were received and evaluated.
+#
+# 3. PUBLICATION.
+#    The full text is published in this public repository, because the owner asked for it to be
+#    added to the corpus. Before commit it was read in full for restricted content. It carries no
+#    confidentiality marking, no third-party commercial terms or prices, no counterparty names
+#    and no personal data. A push to this repository is effectively irreversible. The owner was
+#    then offered the manifest-only route used for the NSO commercial offers and the Kalpitiya
+#    wind package, and on 26 September 2026, in the same session, decided to keep the full text
+#    public, replying "keep on public branch". That reply is the recorded authority for this
+#    publication (decision D4 of the Sprint 21 bootstrap).
+#
+# 4. STATUS: RECORDED, NOT ACCEPTED.
+#    The plan is a proposal, not evidence of any fact about this model, its projects, or the law
+#    and methods it describes. Its statements about the repository, tax law, reference rates and
+#    debt sizing were checked in the evaluation, and several are wrong. Nothing in it is adopted,
+#    scheduled or authorized by this record. The evaluation is in docs/SPRINT_21_BOOTSTRAP/.
+#
+# ═════════════════════════════════════════════════════════════════════════════════════════════
+#
+# Every file in this area except this manifest, relative to this directory. Verify from here
+# with: sha256sum -c MANIFEST.sha256
+#
+a1be78037cc4bc662541b8e9e6f1b167bb2451c2fe88f68d411fb6b6245bf444  PLATFORM_DEVELOPMENT_PLAN_2026-09-26.txt
+95b835508f70b0aeeee4a234985fdc463c617496f53e5c494bd931212192cd3a  README.md

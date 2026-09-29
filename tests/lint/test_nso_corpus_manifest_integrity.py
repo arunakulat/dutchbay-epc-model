@@ -108,6 +108,11 @@ KALPITIYA_WIND_MANIFEST = (
     KALPITIYA_PACKAGES / "Kalpitiya60MW_Envision_Wind_2026-09-07.MANIFEST.sha256"
 )
 
+# Owner-supplied strategy proposals. The first area whose handling note lives in its PARENT
+# manifest: it holds its one object in full, so there is no nested package manifest to carry it.
+PLATFORM_CORPUS = SOURCE_MATERIALS / "platform_strategy_2026"
+PLATFORM_MANIFEST = PLATFORM_CORPUS / PARENT_MANIFEST_NAME
+
 # Which NESTED manifests record files that live in this repository, and which record files held
 # outside it. Declared rather than inferred: inferring "external" from "the file is missing"
 # would make a genuinely missing file indistinguishable from a by-design absent one, which is
@@ -154,6 +159,13 @@ HANDLING_ANCHORS: dict[str, tuple[Path, tuple[Path, ...]]] = {
             KALPITIYA_CORPUS / "README.md",
             KALPITIYA_PACKAGES / "README.md",
             KALPITIYA_PACKAGES / "Kalpitiya60MW_2026-09-20_DEDUPLICATION_RECEIPT.md",
+        ),
+    ),
+    "PLATFORM-PLAN-HANDLING-2026-09-26": (
+        PLATFORM_MANIFEST,
+        (
+            PLATFORM_CORPUS / "README.md",
+            REPO_ROOT / "docs" / "SPRINT_21_BOOTSTRAP" / "README.md",
         ),
     ),
 }

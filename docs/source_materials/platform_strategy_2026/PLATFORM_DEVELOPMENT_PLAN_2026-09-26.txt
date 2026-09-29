@@ -1,0 +1,81 @@
+To transform the `dutchbay-epc-model` from a localized, single-asset repository into an institutional-grade, multi-technology, globally responsive EPC (Engineering, Procurement, and Construction) platform, we need to move beyond simple Python/Excel scripts. The target state is a full-stack, API-driven platform capable of running bankable project finance scenarios (Monte Carlo simulations, 8760-hour dispatch, complex debt waterfalls) across multiple jurisdictions.
+Here is the detailed, holistic, step-by-step development plan to architect and build this platform.
+Phase 1: Foundation & System Architecture (Weeks 1–4)
+A global EPC financial model requires a robust backend to handle millions of data points (e.g., 25 years × 8760 hours × multiple assets) and complex matrix math for debt and tax structuring.
+1.1. Core Tech Stack Selection
+
+* Backend Engine: Python (FastAPI) for API routing, with `Polars` and `NumPy` for high-performance vectorized financial and generation math.
+* Database: PostgreSQL with TimescaleDB extension (crucial for storing 8760-hour meteorological and dispatch time-series data).
+* Frontend: React (Next.js) with Tailwind CSS, utilizing `AG Grid` for Excel-like financial statement rendering and `Recharts` for generation profiles.
+* Infrastructure: Dockerized containers orchestrated via Kubernetes, allowing independent scaling of the heavy Monte Carlo calculation workers.
+
+1.2. Domain-Driven Database Schema
+You must design the database to natively support multiple currencies and technologies from day one.
+
+* `Projects Table`: Core metadata, target DSCR (Debt Service Coverage Ratio), base reporting currency.
+* `Assets Table`: One-to-many relationship with Projects. Fields for `tech_type` (WIND, SOLAR, BESS, HYDRO), capacity, COD (Commercial Operation Date), and specific technical specs.
+* `Macro_Curves Table`: Time-series data for FX forward rates, LIBOR/SOFR yield curves, and local inflation expectations.
+* `Tax_Regimes Table`: Country-specific rules, corporate tax rates, depreciation schedules (e.g., MACRS for US, WDAT for EU).
+
+Phase 2: The Multi-Technology Generation Engine (Weeks 5–8)
+The platform must move away from static P50/P90 annual generation assumptions and implement an 8760-hour (hourly) dispatch model.
+2.1. Wind & Solar Modules
+
+* Solar PV: Integrate algorithms (like pvlib-python) to calculate irradiance based on location, tilt, tracking (single-axis/dual-axis), and inverter clipping.
+* Wind: Implement power curve matrices. Combine hub-height wind speed data (Weibull distributions) with wake loss models and air density corrections.
+
+2.2. BESS (Battery Energy Storage Systems) Module
+
+* Degradation Math: Implement non-linear degradation curves based on DoD (Depth of Discharge) and C-rates.
+* Augmentation Logic: Build a financial trigger that automatically injects Capex for battery augmentation when the state of health (SoH) drops below a contractual threshold (e.g., 70%).
+* Arbitrage Dispatch: Write an optimizer that charges the BESS during negative/low-pricing or high-curtailment hours and discharges during peak tariff hours.
+
+2.3. Mini-Hydro Module
+
+* Implement Flow Duration Curves (FDC).
+* Calculate generation using $P = \eta \cdot \rho \cdot g \cdot Q \cdot H$ (Efficiency × Density × Gravity × Flow Rate × Head). Add logic for dry/wet season seasonal variations.
+
+Phase 3: The Global Fiscal & Multi-Currency Engine (Weeks 9–12)
+This is the most critical phase for international bankability. An EPC model is useless globally if it cannot handle FX exposure and local tax nuances.
+3.1. Dual-Currency Cash Flow Architecture
+
+* Input Layer: Allow Capex, Opex, and Tariffs to be defined in their native currencies (e.g., Turbines in EUR, Civil Works in LKR, Tariff pegged to USD).
+* Translation Layer: Apply forecasted FX forward curves to translate all operational cash flows into the project's Base Currency for debt sizing.
+* FX Hedging: Build a module to model Cross-Currency Swaps (CCS) and Forward Contracts, calculating the cost of the hedge and its impact on the cash waterfall.
+
+3.2. Global Tax & Depreciation Framework
+
+* Depreciation Waterfall: Build engines for Straight-Line, Declining Balance, and Accelerated Depreciation (like US MACRS).
+* Tax Holidays & Carried Forward Losses: Implement logic where Net Operating Losses (NOLs) can be carried forward indefinitely or capped at a certain number of years based on the jurisdiction.
+* Thin Capitalization Rules: Ensure the model can cap tax-deductible interest (e.g., EBITDA 30% rule under OECD BEPS Action 4).
+
+Phase 4: Dynamic Project Finance Structuring (Weeks 13–16)
+Static debt sizing (e.g., 70% Debt / 30% Equity) is insufficient for project finance. The platform must dynamically size debt based on cash flows.
+4.1. Goal-Seeked Debt Sculpting
+
+* Implement algorithms to calculate CFADS (Cash Flow Available for Debt Service).
+* Dynamically sculpt principal repayments to hit a target DSCR (e.g., 1.30x) in every period.
+* Calculate maximum debt capacity based on the NPV of CFADS discounted at the debt interest rate.
+
+4.2. Cash Waterfall & Reserve Accounts
+Implement a strict cash waterfall:
+
+1. Revenues
+2. Opex & Taxes
+3. Senior Debt Interest & Principal
+4. DSRA (Debt Service Reserve Account): Automatically sweep cash to fill a 6-month debt service reserve.
+5. MRA (Maintenance Reserve Account): Sweep cash for major overhauls (e.g., inverter replacement in Year 10).
+6. Shareholder Distributions (Equity IRR).
+
+Phase 5: Bankability & Interface (Weeks 17–20)
+5.1. Sensitivity & Scenario Manager
+
+* Build a "Scenario Matrix" runner that allows users to test combinations (e.g., Base Case, P90 Generation + High Inflation + High Capex).
+* Implement Monte Carlo simulations for P10/P50/P90 probabilistic distributions of the Equity IRR.
+
+5.2. Frontend Dashboarding
+
+* Create an interactive, web-based Three-Statement Financial Model (Income Statement, Balance Sheet, Cash Flow).
+* Provide export-to-Excel functionality using libraries like `openpyxl`, maintaining all formulas so banks can audit the outputs natively.
+
+By moving the logic from flat scripts to a structured, vectorized backend (Polars/FastAPI) and adding granular, hour-by-hour dispatch modeling combined with global tax compliance, the `dutchbay-epc-model` will evolve into an enterprise-grade renewable energy project finance platform.
