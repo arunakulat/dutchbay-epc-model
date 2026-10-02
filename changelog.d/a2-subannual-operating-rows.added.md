@@ -37,11 +37,19 @@ ULP count rather than a relative tolerance that could absorb a genuine allocatio
 straddle case is pinned as a regression.
 
 `finance.period_grid_v14.aggregate_flows_to_annual` now sums with `math.fsum` instead of the builtin
-`sum`, so the aggregate does not depend on summation order. Measured rather than assumed, the change
-is small: with the builtin `sum` the even-profile result is still exact on all 540 cells and the
-seasonal result moves only from 510/30 to 509/31, never worse. So order-independence is what `fsum`
-buys — a property A3 can rely on — not the 1-ULP bound itself, which holds either way. Under the
-annual grid each chunk holds one value and the result is unchanged.
+`sum`, so the aggregate does not depend on summation order. Order-independence is what `fsum` buys —
+a property A3 can rely on — not the 1-ULP bound itself, which holds either way. Under the annual grid
+each chunk holds one value and the result is unchanged.
+
+**Correction.** This paragraph previously read "with the builtin `sum` the even-profile result is
+still exact on all 540 cells and the seasonal result moves only from 510/30 to 509/31, never worse".
+The 509/31 figure is **false on the runtime this repository pins** and is withdrawn. Measured on
+Python 3.12.3 with the pinned dependency set, the seasonal distribution is 510/30 under both `fsum`
+and the builtin, and the even profile is 540/540 under both — the distribution does not move at all.
+The 509/31 shift is a Python 3.11 measurement, and `requirements.txt` cannot be installed on 3.11
+(`scipy==1.18.1` requires `>=3.12`), so it was never the project's dependency set. CPython 3.12's
+builtin `sum` uses compensated summation for floats, which is why. The paragraph's load-bearing
+conclusion is unaffected and in fact holds more strongly than the withdrawn figure suggested.
 
 The change is inert on every committed path: no scenario sets `cashflow.resolution`, so nothing
 builds sub-annual rows, and the canonical lender KPI vector is unchanged. It confers no grade,
