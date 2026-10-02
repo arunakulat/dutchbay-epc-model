@@ -295,7 +295,7 @@ six==1.17.0
 sortedcontainers==2.4.0
 soupsieve==2.9.2
 stack-data==0.6.3
-starlette==1.6.0
+starlette==1.7.0
 stevedore==5.9.1
 streamlit==1.62.0
 svg.py==1.10.0
