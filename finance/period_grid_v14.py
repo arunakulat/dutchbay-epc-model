@@ -410,10 +410,16 @@ def aggregate_flows_to_annual(
     """
     chunks = _whole_years(values, grid, kind="flow")
     # math.fsum, not the builtin sum: fsum is exactly rounded, so the result does not
-    # depend on summation order. A2's allocator computes each year's closing residual
-    # against this function, and with a left-to-right sum the two disagreed by one ULP on
-    # the live lendercase — enough to break the exact round-trip the allocation promises.
-    # Under the annual grid each chunk holds one value and fsum returns it unchanged.
+    # depend on summation order. That is the whole of the claim, and two earlier sentences
+    # here asserted more than it and were false. The allocator does not call this function
+    # at all -- subannual_rows_v14.allocate_flow sums its own parts with math.fsum
+    # directly -- and a left-to-right sum does not shift the live lendercase distribution:
+    # it is 510/30 either way on the runtime this repository pins, because CPython 3.12's
+    # builtin sum is itself compensated for floats. So no test can distinguish fsum from
+    # the builtin here on that runtime; test_period_grid.py pins the exactly-rounded
+    # result and the order-independence instead, which is the contract rather than the
+    # implementation. Under the annual grid each chunk holds one value and fsum returns it
+    # unchanged.
     return [float(math.fsum(chunk)) for chunk in chunks]
 
 

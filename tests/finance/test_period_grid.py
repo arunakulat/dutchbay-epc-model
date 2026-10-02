@@ -28,7 +28,10 @@ scenario can never reach because no committed scenario sets the key at all.
 from __future__ import annotations
 
 import dataclasses
+import itertools
+import math
 from collections.abc import Mapping
+from fractions import Fraction
 
 import pytest
 from hypothesis import given
@@ -527,3 +530,72 @@ def test_period_grid_rejects_a_non_integer_periods_per_year(bad: object) -> None
     """A float or a bool would divide and compare without ever raising."""
     with pytest.raises(ValueError, match="must be an int"):
         PeriodGrid(resolution="rogue", periods_per_year=bad)  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# The summation contract, pinned against an exact oracle rather than against
+# an implementation
+# ---------------------------------------------------------------------------
+
+# A year whose quarters make a naive left-to-right float sum disagree with the exactly
+# rounded result. Found by search over wide-magnitude quadruples, then pinned: a running
+# `total += x` loop gives 1992399947214407.5, while the exactly rounded sum -- and
+# `math.fsum` -- give 1992399947214407.2. Permuting these four values changes the naive
+# loop's answer and does not change `math.fsum`'s.
+_ORDER_SENSITIVE_YEAR = [
+    1992361699057010.2,
+    -72131.07755343095,
+    0.0018191888693611501,
+    38248229528.153435,
+]
+
+
+def _exactly_rounded(values: list[float]) -> float:
+    """Sum ``values`` with no intermediate rounding, then round once.
+
+    An independent oracle: :class:`~fractions.Fraction` is exact over the binary floats,
+    so this is the correctly rounded sum by construction rather than by agreement with
+    whatever the module under test happens to call.
+    """
+    return float(sum(Fraction(value) for value in values))
+
+
+def test_aggregate_flows_is_the_exactly_rounded_sum_of_each_year() -> None:
+    """The aggregate is the correctly rounded sum, not merely a close one.
+
+    `TEST-01` oracle: the expected value comes from exact rational arithmetic, which did
+    not originate in this module and cannot drift with it. The pinned year is chosen so a
+    naive accumulation loop fails this assertion, which is the regression that matters --
+    `aggregate_flows_to_annual` is what A3 will re-aggregate against.
+
+    This does **not** fail if `math.fsum` is replaced by the builtin `sum` on Python 3.12,
+    because that builtin is itself compensated for floats. That is a real limitation and
+    is the reason this test pins the contract rather than the call: no test can separate
+    the two on the runtime this repository pins, so asserting the contract is the only
+    thing that keeps the promise honest for a future implementation that is neither.
+    """
+    quarters = _ORDER_SENSITIVE_YEAR
+    expected = _exactly_rounded(quarters)
+
+    (actual,) = aggregate_flows_to_annual(quarters, QUARTERLY)
+
+    assert actual == expected
+    assert actual == math.fsum(quarters)
+
+
+def test_aggregate_flows_does_not_depend_on_within_year_order() -> None:
+    """Order-independence is the whole of what `fsum` buys here, so it is asserted.
+
+    The module's own comment claims exactly this and nothing stronger. Every permutation
+    of a year's periods must aggregate to the identical float -- not merely an approximately
+    equal one -- or a reordering of the allocator's periods would move the annual figure.
+    """
+    quarters = _ORDER_SENSITIVE_YEAR
+    results = {
+        aggregate_flows_to_annual(list(order), QUARTERLY)[0]
+        for order in itertools.permutations(quarters)
+    }
+
+    detail = f"aggregate depends on within-year order; got {sorted(results)}"
+    assert len(results) == 1, detail
+    assert results.pop() == _exactly_rounded(quarters)
