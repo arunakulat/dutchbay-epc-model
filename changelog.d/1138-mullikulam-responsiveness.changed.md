@@ -1,1 +1,0 @@
-- Pair the Mullikulam financial-KPI fixture with tariff and operating-cost responsiveness guards plus frozen and non-finite output negative controls.
