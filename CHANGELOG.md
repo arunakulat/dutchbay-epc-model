@@ -4,6 +4,8 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v15.6.0 - 2026-10-03
+
 ### Added
 - Require enabled utility/site QSTS modes to present an externally pinned evidence
   manifest that binds the feeder graph, generation profile, operator-instruction schedule,

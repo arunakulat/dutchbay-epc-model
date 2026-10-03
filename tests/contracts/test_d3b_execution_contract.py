@@ -41,6 +41,9 @@ from analytics.feasibility_report_contract import (
     ProjectCaseMaterialCategory,
     resolved_config_sha256,
 )
+from analytics.feasibility_report_contract.engine_identity import (
+    ENGINE_VERSION_IDENTITY,
+)
 from analytics.scenario_loader import ScenarioConfigError, load_scenario_config
 from tests.contracts.test_assessment_scope_contract import (
     _add_storage_technology,
@@ -874,7 +877,7 @@ def _gateway_result(
         evaluated.setdefault("run", {}).update(overrides["run"])
     manifest = {
         "config_sha256": resolved_config_sha256(evaluated),
-        "engine_version": "15.5.0",
+        "engine_version": ENGINE_VERSION_IDENTITY,
         "git_sha": "a" * 40,
         "generated_at": "2026-08-31T00:00:00+00:00",
         "seed": None,
@@ -1010,7 +1013,7 @@ def test_constructive_path_is_one_call_and_returns_immutable_complete_result(
     emitted[0]["annual_rows"][0]["nullable"] = "mutated"
     emitted[0]["run_manifest"]["engine_version"] = "mutated"
     assert result.full_result["annual_rows"][0]["nullable"] is None
-    assert result.run_manifest["engine_version"] == "15.5.0"
+    assert result.run_manifest["engine_version"] == ENGINE_VERSION_IDENTITY
     with pytest.raises(TypeError):
         result.full_result["new"] = "forbidden"  # type: ignore[index]
     with pytest.raises(ValueError, match="recursively frozen"):
@@ -1086,7 +1089,7 @@ def test_success_constructor_detaches_caller_owned_proxy_backings(
 
     assert detached.model_dump() == before
     assert detached.full_result["annual_rows"][0]["nullable"] is None
-    assert detached.run_manifest["engine_version"] == "15.5.0"
+    assert detached.run_manifest["engine_version"] == ENGINE_VERSION_IDENTITY
     assert detached.full_result["run_manifest"] is detached.run_manifest
 
 
