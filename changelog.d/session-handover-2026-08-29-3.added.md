@@ -1,1 +1,0 @@
-- Record the protected #1191 delivery, the post-merge synchronization state and the corrected `AGENTS.md` bootstrap pointer in a PERSIST-01 successor.

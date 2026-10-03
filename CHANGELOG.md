@@ -4,7 +4,203 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Added
+Added `app/ops/extras.py` — an optional-extra availability probe that reads declared pins from
+the installed distribution's own metadata, so a running instance can report which extras it
+actually has without shell or deploy access to the machine. Distinguishes `installed` (metadata)
+from `importable` (opt-in deep probe), because a package can be installed yet fail to import — a
+WeasyPrint missing pango/cairo is the case that matters. Degrades on every runtime failure rather
+than raising, since a health probe that can crash is worse than none.
+- **A platform development plan supplied by the project owner is now recorded** —
+  `docs/source_materials/platform_strategy_2026/`, a new corpus area for owner-supplied strategy
+  proposals. The plan proposes rebuilding this repository over five phases and twenty weeks as a
+  multi-technology, multi-jurisdiction web platform. It is held in full, verbatim as received,
+  as plain text so that it is never edited to fit this repository's style rules. Handling is
+  stated once, at `PLATFORM-PLAN-HANDLING-2026-09-26` in the area manifest, and cited by the area
+  README and the Sprint 21 bootstrap README.
+- **The handling anchor is registered in the corpus guard**, the first to live in an area's
+  parent manifest rather than a nested package manifest. Before registration
+  `test_every_handling_note_in_the_tree_is_registered` failed on the new area; with a registered
+  citation removed, `test_handling_notes_are_stated_once` failed; both pass once declared.
+- **The plan is evaluated, not adopted** — `docs/SPRINT_21_BOOTSTRAP/`. Of 38 line items, 14 are
+  already implemented and 11 partly. Nine technical corrections are recorded, the most
+  consequential being that the plan's debt-capacity formula sizes at 1.00x coverage and oversizes
+  debt by the target DSCR factor, checked against `finance/debt_v14.py`. Eleven items touch
+  audit findings that block Board and lender release under #1110. The recommendation is to take
+  the plan's goals into Sprint 21 as finding-mapped dolphins alongside Sprint 20 Lane A.
+- **The owner decided four of the seven decisions the evaluation raised**, on 26 September 2026:
+  that finding-led direction (D1); known clients now with multi-tenant as the planned extension
+  (D2); keeping the plan text public, now the recorded publication authority in the handling
+  note (D4); and review under the repository's rules (D5). D3, D6 and D7 remain open.
+- **A scoped successor handover record**, `docs/SESSION_HANDOVER_2026-09-26_PLATFORM_PLAN.md`,
+  carries the open items. It leaves H08 and the startup pointer unchanged.
+- No finance code, configuration, scenario, KPI or `VERSION` changes. Not independently reviewed:
+  the `RECRUIT-01` domain and assurance review is pending.
+- Add the immutable, transport-neutral `ProjectCase` v1 input contract with a truthful
+  single-site boundary; declared jurisdiction and technology bindings; typed shared or
+  dedicated electrical topology and storage charging sources; AC/DC and usable/nameplate
+  capacity bases; a schema-visible 72-digit/36-decimal numeric domain with
+  ambient-context-independent ingress and arithmetic; exact bounded-completion validation for
+  partially missing generation, storage, cost, and FX equations; exact allocation closure; and
+  allocation-derived source/assumption/missing-input provenance for numeric, price-basis, and
+  currency-conversion propositions. Anchored plain-ASCII strings are the sole JSON representation
+  for material Decimals and counts; normalized Python-native Decimal and integer inputs emit those
+  same deterministic strings. Every cost line that consumes a missing currency-conversion rate
+  constrains one shared positive quote-grid variable, including exact half-even reporting targets
+  and missing-report domain bounds, and the schedule requires one common witness. A cost/FX chain
+  with an underdetermined native amount and missing reporting amount fails closed instead of relying
+  on sampled or independent per-line witnesses. Dedicated electrical arrangements reject a
+  grid-interconnection or electrical-collection facility used or materially connected to multiple
+  technology assets while preserving shared non-electrical facilities and distinct one-user
+  electrical paths; the untyped `connected_to` relationship is not part of the v1 link vocabulary.
+  Stable identifiers are now exact, non-normalizing 1-160 character ASCII tokens whose runtime and
+  Draft 2020-12 grammars share an absolute-end assertion. Jurisdiction and technology contract-pack
+  versions use a D3A-local portable ASCII SemVer grammar without leading-zero core or numeric
+  prerelease components, leaving the inherited Dolphin 2 vocabulary unchanged. Resolved
+  Runtime semantic validation now admits `MW`, `MWac`, `MWdc`, `MWp`, or `MVA` for
+  `electrical_collection` capacity, while `grid_interconnection` remains limited to `MW`, `MWac`,
+  or `MVA` and non-electrical shared-infrastructure roles retain their deliberately open unit
+  boundary. The generated Draft 2020-12 schema is structural and does not encode this role/unit
+  conditional; schema-only acceptance is therefore insufficient and a future web/API adapter must
+  invoke `ProjectCase` domain validation.
+`GET /health/readiness` now also reports the CASPER availability of the optional extras the
+deployed image installs (`[api,jobs,report]`) and the runtime identity, so a deployed instance
+can be verified without shell or deploy access. `?deep=true` additionally import-checks each
+package, catching the installed-but-unimportable case — WeasyPrint present while pango/cairo
+are missing from the image. Purely additive: `ready` keeps its original meaning as the AND of
+the environment checks only, and a probe failure degrades to an explicit `extras_error` rather
+than a 5xx.
+- Add GWTF `RECRUIT-01` (Recruitment & Review), codifying the delegation and review policy previously carried only in the D3B execution charter: recruit every delegated worker to a written capability profile; keep exactly one sole-writer coordinator; forbid implementation self-approval; hold the domain and assurance reviewers strictly read-only until the tree is frozen and require each to bind its disposition to an exact candidate commit/tree/base SHA; scale reviewer depth with risk (two independent reviewers for code, contracts and finance/KPI-touching work, one for documentation); mandate the writer-lease state machine (`READ_ONLY` -> SHA-bound lease -> preflight -> one bounded allowlisted patch -> diff and focused verification -> verified durable checkpoint -> `WAIT_FOR_REVIEW`, with any interruption or drift revoking continuity and requiring a fresh lease); and fix the worker ingress order, in which every prior assistant, handover or memory statement is a claim to verify rather than an authority. The ruleset is now 74 active v3.0 rules; the CSV diff is append-only (+1/-0) and no executable code or test pinned the previous count or digest.
+- `docs/dutchbay-epc-model-brief.md`: a dated orientation brief for the repository — what the
+  model is, how the tree is laid out, how it is run and tested, the GWTF conventions a
+  contributor has to follow, what was in flight on 2026-09-21, and the standing maintenance
+  chores with the cadence the project owner set.
+- The brief is explicitly a snapshot rather than normative text: every count carries the command
+  that produced it, and the header states that `go_with_the_flow_rules_v3_0_clean.csv` and
+  `AGENTS.md` win wherever the brief disagrees. Its filename sits outside every handover family
+  `scripts/list_session_handover_records.py` recognises, so it cannot enter the `PERSIST-01`
+  chain.
+- It records two traps that are silent when hit: the remote container clones shallow, so the
+  handover resolver fails closed until `git fetch --unshallow` has run, and the repository
+  ruleset rejects a merge once the branch is behind `main`, so batches serialize one CI cycle
+  at a time.
+- Financial impact: none. Documentation only; no engine, scenario, configuration or test
+  behaviour is touched.
+Recorded the #1141 audit-control erratum closure, current open-item state and
+the low-disk boundary for the next governed worktree.
+Add session handover successor 8 after protected P03 delivery, preserving the OPEN/HOLD
+boundary and correcting the next-step order: P04/P05 execution remains dependency-blocked
+until genuinely independent P01/P02/P03 decisions are hash-bound.
+- **Session handover for 2026-08-23/24** — `docs/SESSION_HANDOVER_2026-08-24.md`, the PERSIST-01
+  durable record for the governance/corpus session that added `VERIFY-01`, amended `TEST-01`,
+  and opened the agentic-delivery corpus strand. Records the unchanged canon, the new
+  `PR Receipts` gate a successor will hit immediately, the formatter and worktree traps this
+  session paid for, and the four open issues. `AGENTS.md` now points at it.
+Document the verified post-merge worktree, branch, issue and operational-hold cleanup state for the #1110 programme.
+- Add a fail-closed next-session bootstrap and final post-cleanup PERSIST-01 handover.
+- Record the protected #1191 delivery, the post-merge synchronization state and the corrected `AGENTS.md` bootstrap pointer in a PERSIST-01 successor.
+- Record the local governed session in a PERSIST-01 successor: the Dolphin 3B-0 recovery from an uncommitted worktree to a green pull request with full gate receipts, the loss of its independent review chain declared rather than omitted, the five-condition Dolphin 3A worktree and branch retirement, the MERGE-01 scope finding on the two behind-and-red dependabot pull requests, and the blocked external memory write that leaves a withdrawn merge freeze pinned in the operator's global memory.
+- Record the remote-session close-out in a PERSIST-01 successor: six protected merges, the MERGE-01 standing authorization, the Dolphin 3B/3C naming reconciliation, the D3B execution charter ingress and its verification receipts, and an executable bootstrap for resuming in the governed local environment.
+Added `app/reports/tender_gap_dossier_emit.py` and its template — a vendor-neutral presentation
+surface that renders a tender evidence gap register as a query pack a bidder can send to an OEM.
+Follows the #884 grid-screening idiom: frozen dataclasses, a pure builder, a standalone Jinja2
+template, un-suppressible caveats, and surfaced provenance (per-source SHA-256 and extraction
+route) plus a verification-discipline statement. The module hard-codes no tender, OEM, bidder or
+finding — the register is supplied by the caller and the bidder is referred to by the neutral
+role label "Bidder", so one pack serves any bidding entity. Malformed registers fail loud.
+- **`VERIFY-01` (GWTF rule 72, new *Verification* category)** — a claimed check without a
+  receipt is not a check. Verification claims carry the command and its result; a check that
+  was **not** run is declared as `not run — <reason>` rather than left silent. The rule
+  generalises `TEST-03`/`TEST-04`/`TEST-05` and the audit reproduction registers and carries
+  an explicit yield clause: where it appears to conflict with any of them, the *specific*
+  rule wins, keeping `TEST-05` undiluted.
+- **`PR Receipts` CI check** — `.github/workflows/pr-receipts.yml` +
+  `scripts/ci/check_pr_receipts.py` fail a pull request whose receipts table is absent,
+  empty, or carries a silent Result cell; a declared `not run — <reason>` passes and bot
+  authors are exempt. The pull-request body is passed through the environment, never
+  interpolated into `run:`, and that is pinned by test. Promoting the job to a *required*
+  status check is a repository-ruleset setting and remains an owner decision.
+Added `scripts/verify_deployment.py` — verifies a running deployment from outside using only its
+public health surface, so confirming what an instance actually has installed no longer requires
+`flyctl` access to the machine. Checks liveness and contract version, that runtime-critical
+config is present, and that every optional extra the image installs is present, satisfies its
+declared pin and (with `--deep`) actually imports. Exits non-zero on failure so it works as a
+post-deploy CI gate, and emits `--json` for machine consumption.
+
 ### Changed
+Reconciled `R18` and `R21` with the convention `main` actually follows, and retracted a false
+enforcement claim in `REFACTOR-03`. Remediates audit pointer `RS-F4`, which names both rows as
+enforcement-drift.
+`R18` now sanctions the eleven-type Conventional Commits set (as enumerated by commitlint
+`config-conventional`), records `deploy` as unsanctioned, makes scope *expected* with an explicit
+carve-out for cross-cutting changes and `REFACTOR-03` Dolphin Strategy commits, and restates its
+test-status clause as a `VERIFY-01` receipt.
+**No cell this rule touches carries a frozen figure.** `R18` drifted because it pinned one example
+commit; a pinned percentage decays identically. Two review rounds were needed to get this right: the
+first draft froze five fresh measurements into normative text, one of them overstated ~15x and
+self-contradicting; the second removed three of four and left a stale commit count in the description.
+Conformance is **computed** by `tests/lint/test_commit_message_conformance.py`, measured against
+`origin/main` rather than the current branch, so its verdict describes shared history and not whichever
+branch a runner stands on. Its binding to `R18`'s type list is a set comparison in both directions —
+substring presence bound nothing, since `ci` matches inside "explicit" — and that binding runs
+everywhere including CI, because it reads the CSV rather than git history. Only the measurement itself
+needs full history and skips without it.
+**No scope floor is gated.** An earlier draft asserted one, which was a category error: `R18` makes
+scope *expected*, not required, and explicitly sanctions unscoped commits. That floor was also authored
+at exactly the observed value, 170/200 with zero headroom, and would have failed on the next sanctioned
+unscoped commit — on a check that `R21` makes mandatory before every push.
+`R21` step (5) now requires the narrowest meaningful check before each commit and the full suite before
+pushing. No test-count figure is pinned; the one first drafted had been lifted from a stale workflow
+comment and was wrong by ~1.7x.
+`REFACTOR-03` enforcement claimed a pre-commit hook that warns on `refactor:` commits touching more than
+one file. No such hook exists or ever did. Left unamended, the CSV would have asserted both that this
+repository has no commit-message linter and that it has one.
+Rule count unchanged at 74; no row added, removed or reordered. 19 negative controls, each verified to
+fire from its own assertion.
+- Amend GWTF `RECRUIT-01` with a **base fast-forward carve-out**. As originally written the rule was categorical — acceptance never transfers to another commit, tree or base — which meant that in a repository requiring up-to-date branches, merging any pull request invalidated every disposition on every other open pull request. That was demonstrated on F-6: a change confined to `analytics/grid/` screening code, with no import path in either direction to the debt engine, lapsed two independent dispositions and cost two reviewer round-trips. The carve-out permits a disposition to be carried across a base fast-forward **only** on three mandatory, recorded proofs: blob-hash identity for every reviewed file (an empty `git diff` is explicitly not sufficient), bidirectional import isolation between the delta's modules and the reviewed modules, and the complete reviewed-to-updated diff shown in full. Absent or failing any of the three, the disposition lapses and a fresh SHA-bound disposition is required. A reviewer's or coordinator's judgement that a delta "cannot matter" is never a substitute for the proof. The carve-out covers a base fast-forward only; any change to the candidate's own tree still requires fresh review with no exception. Ruleset stays at 74 active v3.0 rules; the CSV diff is a single amended row.
+- Refactor GWTF `RECRUIT-01` into a repository-wide pointer for every relevant future task and four canonical operational modules covering capability/risk classification, writer leases and recovery, independent exact-object review/attestation, and capacity-aware staged delegation/ingress; pin the global scope and module controls through the repository gateway and focused policy tests.
+- **`TEST-01` gains an independent-oracle clause** — a pin proves only that a number has not
+  changed, never that it is still being *derived*, so a pinned-constant oracle must be paired
+  with a responsiveness guard, and finance-material code must answer to an oracle that did
+  not originate in the same change that introduced it (a pre-existing test, an external
+  benchmark, a closed-form check, an independent implementation, or a property/invariant). A
+  change whose only evidence is tests written alongside it is unverified, however green. The
+  clause is echoed in `AGENTS.md` under "Financial-model changes" and both surfaces are
+  pinned by `tests/lint/test_gwtf_canonical_source.py` so they cannot separate silently.
+Bound ordinary full-suite Monte Carlo model evaluations to 200 and route larger scale/performance tests through an explicit, separately labelled stochastic qualification target. This changes test-harness execution only; production Monte Carlo defaults and financial outputs are unchanged.
+Separate report/API transport contracts from live supplemental-sensitivity and PDF-backend qualification tests, preserving one ordinary live finance-to-report HTTP path while preventing response-only tests from rerunning the full report compute stack.
+Upgrade the governed typed-surface pair to pandas-stubs 2.3.3.260113 and requests 2.34.2 after resolver, mypy, security, and regression validation.
+- **`VERIFY-01` is safe to promote to a required status check, and honest about what it
+  proves** — two changes ahead of the #1139 ruleset decision. (1) The job name
+  `Verification receipts (VERIFY-01)` is now pinned by
+  `tests/lint/test_pr_receipts_policy.py`. A branch ruleset matches a required check by the
+  job's rendered name, stored as a plain string; nothing asserted that string, so renaming
+  the job would have made the required check stop reporting and blocked **every** merge to
+  `main` until an admin edited the ruleset — silent at review time, discovered in
+  production. The pin also asserts the workflow name (`PR Receipts`) is *not* that string,
+  since requiring the workflow name matches nothing and enforces nothing, silently.
+  (2) The gate's real limit is now stated where contributors meet it — the rule text, the
+  workflow header and the PR template all record that it checks whether a Result cell
+  **says** something, not whether it is **true**. A table of plausible but stale numbers
+  passes; green means "nothing was left silent", never "the checks were verified". This is
+  not a hypothetical: #1128 passed the gate carrying two figures measured before its own
+  merge. Disclosure is what the gate buys, and silence is the failure that cannot be caught
+  downstream.
+- **`VERIFY-01` fails closed — PR Receipts is a required status check** (#1139) — the rule
+  text, the workflow header and `docs/AGENTIC_DELIVERY_PRACTICE.md` §5.6 all previously
+  recorded the promotion as an outstanding owner decision, and all three now record that it
+  is done: a pull request without receipts cannot merge to `main`. `VERIFY-01` therefore has
+  the same fail-closed character as `TEST-05` rather than being enforced by a visible failing
+  check plus review. The ruleset matches the job's rendered name, pinned by
+  `tests/lint/test_pr_receipts_policy.py`, so a rename cannot silently stop the check
+  reporting and block every merge. Bot authors are exempted inside the checker rather than by
+  a job-level condition, so the job still reports and dependency bumps are unaffected. The
+  limit is unchanged and still stated: the gate checks that a Result cell *says* something,
+  never that it is *true*.
+- **Changelog fragments can be folded in deterministic batches.**
+  ``scripts/compile_changelog.py --batch-size=N`` consumes a sorted suffix so
+  repeated batches produce the same entry order as a single full compilation;
+  invalid and ambiguous option combinations now fail loudly.
 - **F2/F3 debt and covenant contract (15.5.0).** `plan_debt.dscr_series` is
   positional and `dscr_periods` publishes explicit operating-year labels and per-year
   folded coverage. Covenant breach years use those labels and folded coverage;
@@ -12,6 +208,207 @@ All notable changes to this project will be documented here.
   minimum and `dscr_by_year` fold. This changes covenant reporting and the public
   series shape; it does not authorize a canon rebaseline or a release. The deprecated
   raw alias and compact `ScenarioResult.dscr_series` remain compatible.
+
+### Fixed
+- Make `tests/lint/test_extra_pin_consistency.py` say why it cannot run, instead of dying with a
+  bare `KeyError`. Its extras-driven control is parametrized from `[project.optional-dependencies]`
+  at *collection* time, so a pyproject missing that section did not fail one control -- it raised
+  `KeyError: 'optional-dependencies'` as a collection error that took all twenty-one controls with
+  it, naming neither the file it read nor what it expected to find there. A missing `[project]`
+  table behaved the same way. Both now raise an `AssertionError` naming the path, the absent key and
+  the consequence.
+- Close the quieter half of the same hole: a section that exists but declares nothing. That
+  parametrizes zero cases, which pytest reports as "got empty parameter set" and scores as a SKIP,
+  so the control went *green-adjacent* rather than red -- the exact silent-pass failure mode the
+  rest of this file exists to catch. It is now refused explicitly.
+- Give `test_every_dbpl_package_is_locked_and_within_its_declared_pin` the same treatment: a
+  pyproject without a `[report]` extra raised `KeyError: 'report'` mid-body rather than saying that
+  DBPL-01's stack is declared nowhere.
+- Exercise all three refusals. The parsing was split from the file read (`_extras_from`) so the
+  failure paths can be driven with synthetic TOML, because a guard whose failure path is never run
+  is a guard nobody has seen work; a fourth control asserts the live `pyproject.toml` still passes
+  the same gate, so the refusals cannot pass by rejecting everything. Twenty-one controls become
+  twenty-five. No production code is touched and no existing control changed behaviour.
+Governed setup now installs the configured git pre-commit hooks, activating GOV-02's local
+`no-commit-to-branch` defence and the formatting, lint, import-order and file checks.
+Hooks live in `.git/hooks`, which git does not track, so a fresh clone has none
+until installation; this repository was found on 2026-09-13 without a pre-commit hook.
+The configured set does not include mypy even though R10 names it. This change does not
+claim to close that mismatch; issue #1270 owns its governed resolution, while `make type`
+and CI remain mandatory. `./setup_venv.sh` (and therefore `make setup`) installs the
+configured set, `make hooks` safely handles an external environment path containing spaces,
+and `DUTCHBAY_SKIP_HOOKS=1` explicitly opts out. Setup now fails closed if mandatory hook
+installation fails. `tests/lint/test_precommit_hook_installation.py` pins those behaviours
+and carries hostile negative controls; behavioral reachability remains tracked in #1262.
+- **Python 3.12 made an enforced local prerequisite** — active bootstrap and environment
+  checks now reject Python 3.11 and unqualified later minor releases, stale setup examples
+  use `python3.12`, and `.python-version` anchors version-aware developer tooling. A separate
+  evidence-backed Python 3.13 assessment records the conditions for a future dual-version
+  compatibility phase without changing the qualified baseline.
+- Added a governed Python 3.12 document-ingestion extra with MarkItDown PDF
+  conversion, pdfplumber extraction, and PyMuPDF inspection/rendering; added the
+  pre-commit runner to the declared development toolchain.
+- Made the lock recipe preserve its controlled header and pinned the cleared
+  ingestion and hook versions so a clean environment reconstructs the same tools.
+- Financial impact: none. This changes environment and document-ingestion tooling only; financial
+  logic, scenario inputs, and canonical KPI calculations are unchanged.
+- Added the retained report and async-job extras to the governed Python 3.12 lock,
+  including WeasyPrint 69.0 (raised to 70.0 in this same release for PYSEC-2026-3940,
+  so 70.0 is the version that ships), arq 0.28.0, Redis/hiredis, and the Brotli/Zopfli
+  compression backends.
+- Closed the deployment audit gap in which production report/job dependencies were
+  installed outside the reproducibility lock and therefore outside `pip-audit`.
+- Financial impact: none. This changes report rendering, worker provisioning, and dependency governance
+  only; financial logic, scenario inputs, and canonical KPI calculations are unchanged.
+- Migrated active GWTF developer and PDF-ingestion rules from the retired Python
+  3.11 environment to the governed, reconstructable Python 3.12 `.venv`.
+- Removed the legacy venv name from the active bootstrap and aligned Docker
+  documentation with the deployed Python 3.12 image and governed dependency lock.
+- Financial impact: none. This changes developer governance, bootstrap discovery, ingestion provenance,
+  and deployment documentation only; financial logic and canonical inputs are unchanged.
+- **The session-start hook no longer grows `PATH` by one entry per resume** — the hook
+  appends to `CLAUDE_ENV_FILE`, which every shell re-sources, so its unconditional
+  `export PATH="$VENV/bin:$PATH"` accumulated a duplicate on each session start. A live
+  session was observed carrying **18 copies** of `.venv/bin` (32 entries, 15 unique).
+  First match wins, so the duplicates were harmless — but unbounded, and the hook is
+  documented in `CHANGELOG.md` as "idempotent via a manifest-hash stamp", which guards the
+  *install* and never guarded this export. The emitted line is now a `case` guard that
+  prepends only when absent. Covered by two tests that source the real emitted line in a
+  shell: one asserts five sourcings yield exactly one entry, the other is the negative
+  control — it asserts the guard still **prepends when absent** (a guard collapsed to a
+  no-op would look equally idempotent while silently breaking the venv resolution the
+  export exists to provide) and that the unguarded form it replaced genuinely accumulates.
+- `./setup_venv.sh` now reconciles an already-provisioned environment against
+  `requirements.txt` instead of only validating it. GWTF R21 step (2) is "create or
+  reconcile", but the existing-environment branch installed nothing and the health
+  contract checks that the governed distributions are *present*, not that they match
+  the lock -- so a pin raised on `main` survived indefinitely in a shared local
+  environment while the script still reported `Environment ready` and exited 0.
+  Observed on 2026-09-14: weasyprint stayed at 69.0 for a day after #1256 raised it to
+  70.0 for PYSEC-2026-3940, failing
+  `tests/integration/test_report_jobs_tooling.py::test_governed_report_jobs_versions_are_installed`
+  in every local worktree and leaving the advisory open locally; `scipy-stubs` and
+  `websocket-client` had drifted too, silently, because no test asserts their versions.
+  CI was never affected -- it installs fresh from the lock. No runtime, financial
+  formula, scenario or KPI change.
+- Stop `.github/SPRINT_WORKFLOW_CHECKLIST.md` defining CASPER, CESSPIT and CCCDIR in terms the
+  canonical ruleset does not contain. Its "CCCDIR Framework Checklist" filed the three as a
+  five-part `C1`-`C5` structure with CASPER at `C2` and CESSPIT at `C3`, inverting the sibling
+  relationship: `go_with_the_flow_rules_v3_0_clean.csv` carries them as three peer rows,
+  `FRAMEWORK-01`, `FRAMEWORK-02` and `FRAMEWORK-03`, in category "Framework Principles". The
+  expansions were wrong too -- CASPER as "Clean Architecture" against the CSV's "Clear API
+  Surfaces with Predictable Error Responses", CESSPIT as "Core-Easy-Simple" against "Config
+  Explicit, Schema Strict, Pre-flight Integrity Tests" -- and `C4` "LIBsct" and `C5` "CDIR" appear
+  nowhere in the ruleset at all. An audit run off this file checks properties that do not exist and
+  reports a clean result against them, which is what happened during the PR #1274 review. The
+  section now summarises the three `FRAMEWORK-0x` rows by rule id and says to read the CSV for the
+  full statement; the PR-template, pre-merge and scorecard blocks that echoed `C1`-`C5` follow it.
+- Stop the same file contradicting `FRAMEWORK-02` on fallbacks. Its `ARCH-01` block asked for
+  "Fallback logic defined if config sections missing" and its `VAL-01` block for "Fallback behavior
+  documented for `strict=False`", where the CSV's CESSPIT row requires no silent defaults or
+  fallbacks for FX, tax or debt terms and no `strict=False` bypass in production code. Both lines
+  now state the rule the CSV actually carries.
+- Declare the file derived. It now names `go_with_the_flow_rules_v3_0_clean.csv` as canonical and
+  says the CSV wins where the two disagree, matching how `AGENTS.md` describes itself as "a concise
+  Codex gateway, not a replacement copy". Note for a follow-up: `FRAMEWORK-01`'s enforcement cell
+  in the CSV cites `analytics/gis/netcdf_utils.py` as its guard example, and no such file exists in
+  the tree, so this checklist cites `analytics/sensitivity/global_sa.py::_require_salib` instead.
+  Documentation only -- no code, config or KPI is touched.
+- **Stale test-count claims removed from CI comments and docs.** The `test:` job comment
+  in `.github/workflows/test-suite.yml` described a "~3,600-test tree" against a measured
+  8,448 (CI, `28f5ee31`) / 8,420 (local collection) — understating it by ~2.3x. The figure
+  was an active source of error, not a cosmetic one: it was copied verbatim into a draft
+  `R21` amendment and shipped into a pull request, where review caught it as a material
+  finding. Three sibling claims of the same class are corrected together — `~3,500-test
+  suite` in `ci_v14_fastlane.yml`, `2,683 tests` in `docs/ARCHITECTURE.md`, and `~88 tests
+  collected` in `tests/integration/README.md` (measured 219). Rather than re-pin figures
+  that would drift again, each site now describes the tree qualitatively and, where useful,
+  names the command that measures it. Nothing derives a count: shard balancing is by
+  duration sum, and `TOTAL_SHARDS` is a literal pinned by
+  `tests/lint/test_coverage_gate_policy.py`. Comment- and prose-only; both workflow files
+  parse to identical trees before and after.
+- **Steward skill honours merge-boundary conditions set by review.** The Merging section of
+  `.claude/skills/steward/SKILL.md` no longer tells a merging session to squash with the
+  pull-request title alone. A session now first collects every condition that review records and
+  reconciled dispositions put on the merge itself. It reads these from the pull-request body,
+  comments, review threads and cited records, and counts only the owner, the coordinator and the
+  recruited reviewers. Conditions carried forward from earlier cycles count, and so do the
+  requirements that no veto is outstanding and that each required disposition is bound to the
+  exact head. The session honours these conditions over the default, and does not merge if one
+  cannot be met or its record cannot be read.
+  - The merge message quotes every `HOLD` that survives the merge. A `HOLD` that cites withheld or
+    restricted material is stated abstractly instead, with the record's URL and SHA-256, because
+    `main`'s history cannot be redacted.
+  - Verification now runs against the returned merge SHA. It checks the tree, the first parent
+    recorded before merging and, for a two-parent merge commit, the second parent, and it fails
+    closed on any mismatch.
+  - The cycle-3 assurance review of #1231 found (C3-A-10) that the previous default, followed
+    literally, would have broken that pull request's F-09 condition. F-09 requires one of two
+    routes: a squash message that names the A1 restore and references #1225 and #1232, or a merge
+    commit.
+- Raise the `[report]` extra's WeasyPrint pin from 69.0 to 70.0, closing PYSEC-2026-3940, and add the
+  CESSPIT pre-flight controls that make a half-applied pin bump fail fast rather than at render time
+  or deep in a slow shard. The advisory is a `url_fetcher` bypass: `write_pdf(xmp_metadata=[url])` and
+  `write_pdf(stylesheets=[url])` built a fresh default `URLFetcher()` instead of the document's, so a
+  restrictive fetcher was silently ignored, giving arbitrary local file read and a transitive SSRF
+  through the `@import`/`url()` graph. Only the URL form of `stylesheets=` was ever fetcher-mediated;
+  a bare path went to `open()` in both versions. Reproduced against the pinned 69.0 on both channels
+  and confirmed fixed on 70.0, alongside a control showing the same sheet loaded via
+  `<link rel=stylesheet>` was correctly blocked on both — so the difference is the patched channel,
+  not a misconfigured fetcher. This repository was not exposed: no `url_fetcher` is configured
+  anywhere, so there is no restriction to bypass; `xmp_metadata` is never passed; and the single
+  `stylesheets=` call site in `app/reports/dbpl/print_core.py` passes already-constructed `CSS`
+  objects, which skips the vulnerable branch. The bump was taken because the advisory is real and the
+  fix is cheap, not because an exploit path was found — though it is not discretionary either: the
+  pre-bump lock fails `make security` outright, so this restores a mandatory CI gate.
+- The pin lives in **five** places, and the count was wrong twice before it was right. Three are the
+  dependency files — `requirements.txt`, `constraints.txt` and the `pyproject.toml` `[report]` extra —
+  which must move together because the third is executable: it is baked into distribution metadata
+  that `app.ops.extras.probe_extra` reads back as `declared_spec`, so leaving it behind would not be a
+  paperwork mismatch but a `DbplDependencyError` from `require_dbpl_stack()` on every DBPL PDF, per
+  DBPL-01. The fourth is a string literal in an integration guard,
+  `tests/integration/test_report_jobs_tooling.py`, which broke CI on this change's first push. The
+  fifth is prose in `docs/MODULE_REFERENCE.md`, a lender/DFI due-diligence surface that is kept in
+  sync with `pyproject` — its `[jobs]` and `[grid]` entries match exactly — so `[report]` alone was
+  left contradicting. All five are updated here.
+- Operational note for anyone pulling this: re-run `pip install -e '.[report]'`. An editable install
+  does not refresh `METADATA` when `pyproject.toml` changes, so refreshing only the lock leaves stale
+  metadata and `require_dbpl_stack()` raises on every DBPL PDF until the reinstall. CI is unaffected —
+  every workflow installs the lock and then the editable extras, which regenerates it.
+- Rendering is equivalent, not identical, and the difference is a fix. Across the DBPL call surface
+  the two versions agree on `%PDF-1.7`, PDF/UA marking, `/StructTreeRoot`, `/Lang`, page count,
+  MediaBoxes portrait and landscape, the structure-tree tag sequence and the embedded font subsets.
+  They necessarily differ in `/Producer` and the XMP packet, because WeasyPrint stamps its own version
+  into both — an earlier draft of this note claimed "identical output" off an equal byte *count*,
+  which holds only because "69.0" and "70.0" are the same length. The one layout difference found is a
+  line-breaking bug fix in 70.0: 69.0 subtracted an offset twice against an already-sliced
+  `log_attrs`, so it stopped hyphenating a line early. Page and line counts were unchanged across
+  every configuration tested.
+- `weasyprint` 70.0 declares requirements byte-identical to 69.0, so no transitive pin moves and every
+  existing lock line still satisfies it.
+- The controls, and what they do not reach. `tests/lint/test_extra_pin_consistency.py` asserts that
+  constraints never contradict the lock — ceilings such as `pandas<3` included, not only `==` pins —
+  that every declared extra specifier is satisfied by the locked version, that the complete DBPL stack
+  is locked and within its pin, and that no integration guard asserts a version the lock contradicts.
+  Parsing goes through `packaging` and PEP 503 normalisation, and a line it cannot parse is a hard
+  failure: a first version matched only `^name==version$`, and three independent reviewers defeated it
+  with an environment marker, an extras group, a `--hash=` suffix, spaces around `==`, a `-r` include,
+  and a name respelling — each hiding a real disagreement while every control passed. Integration
+  literals are read with `ast` rather than a regex, so a comment mentioning an old version no longer
+  turns the suite red and a stale assert followed by a correct one no longer hides behind it. Two
+  extras, `[pareto]` and `[solar]`, check nothing because their packages are deliberately absent from
+  the lock; that gap is now declared in the control and fails in both directions rather than
+  presenting as two passing checks. The prose declaration in `docs/MODULE_REFERENCE.md` is outside any
+  automated check and stays a review responsibility.
+- Each control was observed to fail before being relied on. Reverting `requirements.txt` alone fails
+  four controls, `constraints.txt` alone one, the `pyproject` extra alone two, and the integration
+  literal alone one; nineteen further mutants drawn from three independent reviews are each killed,
+  and two guard-the-guard controls reject a parser or scanner that has gone blind.
+
+### Security
+- Update the pinned JupyterLab, PyJWT, Tornado, urllib3, and virtualenv releases to
+  remediate the dependency advisories detected by the mandatory security gate, with
+  the python-discovery pin advanced to satisfy virtualenv's runtime constraint.
 
 ## v15.4.0 - 2026-08-18
 

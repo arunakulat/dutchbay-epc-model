@@ -1,1 +1,0 @@
-Separate report/API transport contracts from live supplemental-sensitivity and PDF-backend qualification tests, preserving one ordinary live finance-to-report HTTP path while preventing response-only tests from rerunning the full report compute stack.
