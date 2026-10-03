@@ -5,6 +5,198 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- Add a lender-fillable F5-02 transaction-evidence YAML, protected internal decision and private-ingress manifest templates, and a fail-closed private-return validator with complete evidence-metadata/byte binding, real date and frozen current ISO-4217 controls, cross-worktree path isolation, environment-only private paths, exact Hydra arguments, and minimal redacted receipts. The #1110 QA/re-ingress checklist keeps F5-02 separate from F5-01 and retains the Board/lender release HOLD.
+- Add a fail-closed, clean-room P01 audit-checkpoint materializer, exact recovery
+  descriptor, private-evidence boundary, adversarial controls and hash-bound implementer
+  self-check. Structural recovery can pass, but P01 remains pending independent review,
+  issue #1110 remains OPEN and Board/lender circulation remains on HOLD.
+- Add a deterministic, fail-closed 111-row P02 current-state overlay that preserves the exact audited findings register, positively binds only five evidenced current-main implementation deliveries, keeps F5-02 separately external-evidence-blocked, records the accepted unsigned v15.4.0 exception without claiming a signature, and leaves P02, issue #1110 and Board/lender release on HOLD pending independent review.
+- Add a byte-frozen OPEN issue #1110 source snapshot, immutable 23-row
+  remediation/release plan, deterministic JSON/CSV ledger, fail-closed validation and
+  adversarial controls. All source checkboxes and generated gates remain pending,
+  unreviewed, completion-hash-free, closure-disabled and Board/lender HOLD-blocking.
+- Pin the agreement between the two analytic gross-AEP integrators. WIND-3 recorded that
+  `analytics.wind.aep_tornado.gross_aep_farm_gwh` (the production path) and
+  `wind_resource.bankable_aep.gross_aep_weibull` (no production caller) "were verified to
+  agree to < 0.1%", but nothing executed the comparison — and the second integrator's whole
+  value is being an independently written oracle for the first, which an unchecked oracle is
+  not. `tests/analytics/test_gross_aep_integrator_parity.py` now pins the agreement at 0.05%
+  across every curve in the store and a sweep of the plausible site resource range. Also
+  states in both modules which one the lender path actually calls, so a reviewer looking for
+  the live gross-AEP maths is not sent to the module whose name implies it.
+Present governed synthetic QSTS counterfactuals with an un-suppressible non-site-evidence warning, complete eligibility flags, manifest identity, and limitations while canonical finance remains blocked.
+- Add Dolphin #923-B1: a deterministic, manifest-bound synthetic OpenDSS feeder and
+  8,760-hour generation-profile generator, exposed through the governed Hydra entry
+  point under `scripts/`, for software-wiring tests while the real CEB feeder is
+  unavailable. Every file is explicitly generated, non-observed,
+  non-site-representative, non-bankable, noncanonical, and zero-weight for issue or
+  finding closure. The seeded hourly chronology is calibrated only to a hashed
+  ERA5-derived summary, is machine-labelled `synthetic_era5_summary_calibrated`, and is
+  not represented as actual 2021 ERA5 data. Its controlled user-authorisation addendum is
+  hash-bound in the manifest. This slice does not run finance, change canon, prove
+  convergence, publish lender results, or close #923.
+- Verify an enabled path-backed Issue #923 synthetic feeder package at the QSTS runtime
+  boundary against an externally pinned manifest SHA-256, bind the exact packaged
+  `feeder/Master.dss`, and propagate the verified digest without enabling finance,
+  claiming convergence, upgrading evidence grade, or closing Issue #923.
+- **`wind_resource/mcp.py` now has a production consumer, inside the governed synthetic lane
+  (#961)** — measure-correlate-predict has been implemented but unwired since it was written,
+  because DutchBay has no on-site mast to correlate against. A new
+  `wind_resource/synthetic_mcp_measurement.py` supplies a deterministically generated one, so
+  the MCP path is exercised, typed and tested before the blocked real-evidence chain
+  (#1075 → #1076 → #1078) lands. The generated series is not a measurement and carries a
+  config-declared planted bias rather than any discovered site property. Output is a
+  `SyntheticMCPMeasurementRecord`, which is finance-ineligible by contract: it cannot be
+  relabelled canonical, cannot shed the mandatory synthetic warning, shares no field name
+  with the canonical wind interface, and is refused by `require_canonical_wind_measurement`.
+Added `finance.period_grid_v14`, the single resolver for cashflow resolution and the first slice of
+optional sub-annual cashflow (Sprint 20, dolphin A1). The engine is annual by construction —
+`build_annual_cfads` / `build_annual_rows` produce one row per operating year — so an annual series
+cannot show an intra-year DSCR trough, while lender convention is at least quarterly debt service.
+This module lands the period arithmetic that a sub-annual layer needs, one dolphin ahead of the
+sub-annual operating rows (A2) that will consume it, so the aggregation contract can be pinned before
+any cashflow depends on it.
+The new `cashflow.resolution` key accepts `annual` (the default) or `quarterly`, resolving to a
+frozen `PeriodGrid` carrying the canonical name and its periods-per-year. Resolution and engine
+support are deliberately two separate seams: `resolve_period_grid` validates that a resolution is
+*describable*, while `require_engine_support` asserts it is *buildable*. The dangerous failure mode
+here is not a crash but a scenario labelled with a resolution it silently does not receive — a config
+that lies. `quarterly` sat behind that gate in A1 alone; it ships buildable here, because A2 widened
+`ENGINE_SUPPORTED_RESOLUTIONS` in the same change. That is the two-seam split working as designed:
+opening the gate required no change to how a resolution name is validated or normalised. The claim is
+about that seam only — the resolver body itself *is* touched here, to call the shared container guard
+described next. (An earlier revision said the resolver "was not touched in either dolphin", which the
+same paragraph then contradicted.) An unrecognised, blank or non-string value fails loud rather than
+falling back to annual; so does a `cashflow` node that is present but is not a `dict`, which would
+otherwise be read as an absent key and demoted to the annual grid. That guard walks the config with
+`get_nested` itself rather than re-implementing the walk, because its first version did
+re-implement it and drifted: it matched keys exactly where the read matches case-insensitively, and
+accepted any `Mapping` where the read requires a `dict`. Each gap reinstated the silent demotion the
+guard exists to stop, and the second was the worse one — a non-`dict` mapping such as
+`omegaconf.DictConfig`, carrying a well-formed value, resolved to annual with nothing about the
+config looking wrong. The resolver never mutates the caller's config, and `PeriodGrid` enforces its own
+documented `periods_per_year >= 1` invariant rather than relying on the resolver being its only
+caller.
+Aggregation back to the annual axis is split by variable kind, because getting it wrong is a silent
+value error rather than a crash: `aggregate_flows_to_annual` sums quantities measured over a period
+(revenue, opex, CFADS, debt service) and `aggregate_balances_to_annual` takes the period-end value of
+quantities measured at an instant (debt outstanding, reserve balances). There is deliberately no
+generic `aggregate` — the caller must say which kind it holds. A series whose length is not a whole
+number of operating years is rejected outright, since truncating or zero-padding a ragged tail would
+misattribute or drop cash.
+The module docstring names the three index spaces now in the model and the sanctioned two-hop
+alignment chain between them. The operating sub-period space subdivides operating years *only* — it
+carries no construction periods, no bridge and no padding — so aligning a sub-period to a debt period
+goes through the operating row and then `annual_row_debt_period_map`, never directly onto a debt
+series. The section is written against the debt layer as it stands: there is now exactly one DSCR
+index space, `dscr_periods` is the canonical labelled surface, and `raw_dscr_series` is a deprecated
+alias new code must not use. An earlier revision of this text described a live collision between a
+compacted and a positional series, which `finance.debt_v14` has since unified; it is corrected here
+rather than shipped, because a docstring the next dolphin is told to follow is the one artefact in
+this change that future work obeys.
+The change is inert on every committed path: no scenario sets `cashflow.resolution` (pinned by a test
+that reads the scenarios rather than asserting the claim), so every run resolves to the annual grid,
+under which each helper is an identity or an order-preserving regrouping. The identity claim is
+asserted on the float objects themselves wherever a helper returns its input unchanged, and on equal
+values where a regrouping rebuilds the list. Outside this lane nothing imports the module —
+`finance.subannual_rows_v14`, which ships alongside it here, does — and the canonical lender KPI
+vector is unchanged. It confers no grade, release, lender or Board authority.
+Added `finance.subannual_rows_v14`, which allocates the annual cashflow rows onto the sub-annual
+operating grid A1 introduced (Sprint 20, dolphin A2). `cashflow.resolution: quarterly` now builds
+rows rather than being refused: A2 widened `ENGINE_SUPPORTED_RESOLUTIONS` exactly as A1's two-seam
+split anticipated, with no change to how a resolution name is validated or normalised. (The resolver
+body is touched, to call the shared container guard; an earlier revision of this line claimed it "was
+not touched in either dolphin", which was wrong.) An optional
+`cashflow.within_year_profile` shapes the split; absent, it is an even one. The same weight contract
+now governs `build_subannual_rows(profile=...)`, the programmatic entry point A3 will call: it
+previously checked only length, so weights summing to 2 produced a negative closing quarter whose
+parts still re-aggregated exactly to the annual figure — a corruption no reconciliation test could
+see.
+These rows are the annual engine's output **allocated**, not an independent sub-annual computation,
+and the module docstring says so rather than leaving a reader to assume otherwise. Degradation, opex
+escalation and FX are annual series in the engine, so every sub-period of a year inherits that
+year's single rate; tax, depreciation and the loss carry-forward are computed annually and then
+spread, which A4 will formalise; and `bess_augmentation_capex_lkr` is a discrete event that spreads
+like any other flow, so its within-year dip is smoothed and therefore understated. What the
+allocation does buy is a shaped within-year series that A3 can lay quarterly debt service onto to
+expose an intra-year DSCR trough the annual series structurally cannot show.
+Every one of the engine's 33 row keys is classified as either a FLOW (allocated across the year) or
+YEAR-LEVEL (a rate, flag or year-end stock, carried unchanged), and a key in neither set raises
+rather than being guessed at. Silently dropping an unclassified key loses cash and silently
+allocating one would divide a rate; both yield plausible, wrong numbers, which is the single failure
+this module's output could not reveal. A companion test reads the live lendercase's row keys and
+asserts the two sets partition them, so the classification cannot quietly fall behind the engine.
+Reconciliation is **exact under the default even profile** — 540 of 540 allocated flow-years on the
+committed lendercase — and **within one unit in the last place** for an arbitrary profile (510 of
+540 exact, 30 at one ULP, never worse, on a 0.35/0.15/0.15/0.35 seasonal split). The first draft
+claimed exactness unconditionally; the firewall test disproved it on its first run against the live
+scenario, where year-2 CFADS straddles a rounding boundary that no closing residual reaches and an
+attempted correction merely oscillates between the two neighbouring floats. The contract was
+narrowed to what is true rather than the test loosened to fit the claim, the bound is asserted as an
+ULP count rather than a relative tolerance that could absorb a genuine allocation bug, and the
+straddle case is pinned as a regression.
+`finance.period_grid_v14.aggregate_flows_to_annual` now sums with `math.fsum` instead of the builtin
+`sum`, so the aggregate does not depend on summation order. Order-independence is what `fsum` buys —
+a property A3 can rely on — not the 1-ULP bound itself, which holds either way. Under the annual grid
+each chunk holds one value and the result is unchanged.
+**Correction.** This paragraph previously read "with the builtin `sum` the even-profile result is
+still exact on all 540 cells and the seasonal result moves only from 510/30 to 509/31, never worse".
+The 509/31 figure is **false on the runtime this repository pins** and is withdrawn. Measured on
+Python 3.12.3 with the pinned dependency set, the seasonal distribution is 510/30 under both `fsum`
+and the builtin, and the even profile is 540/540 under both — the distribution does not move at all.
+The 509/31 shift is a Python 3.11 measurement, and `requirements.txt` cannot be installed on 3.11
+(`scipy==1.18.1` requires `>=3.12`), so it was never the project's dependency set. CPython 3.12's
+builtin `sum` uses compensated summation for floats, which is why. The paragraph's load-bearing
+conclusion is unaffected and in fact holds more strongly than the withdrawn figure suggested.
+The change is inert on every committed path: no scenario sets `cashflow.resolution`, so nothing
+builds sub-annual rows, and the canonical lender KPI vector is unchanged. It confers no grade,
+release, lender or Board authority.
+- **Agentic-delivery practice evidence ingressed** — `docs/AGENTIC_DELIVERY_PRACTICE.md`
+  opens a second corpus strand covering how the model is *produced* (not what it models),
+  with a graded source register, a critical evaluation, and an explicit adopted/rejected
+  split. First source: a practitioner retrospective on one month of unmetered agentic
+  coding (`AGP-SRC-001`, tier `practitioner testimony`).
+- **`tests/finance/test_canon_vector_is_computed.py`** — states directly, for the first
+  time, that the canonical lender KPI vector must be *computed* rather than *returned*:
+  three economic drivers are perturbed through the canonical gateway and every value KPI
+  must move materially. A pipeline short-circuited to emit the pinned canon passes the
+  value oracle and fails this guard (verified by negative control). Asserts
+  responsiveness only — never a magnitude or direction — so it is KPI-neutral and must
+  not be re-baselined when the canon moves.
+- **Pull-request template now collects verification receipts** rather than self-attested
+  checkboxes: the command and its result for each check, with an explicit place to
+  declare a check that was *not* run.
+- Add strict, frozen, transport-neutral Dolphin 3B assessment-scope and evaluation-request v1
+  contracts. The request binds one exact `ProjectCase` revision to explicit assessment intent, a
+  hash-identified authored v14 scenario, a declared validation receipt, closed subject/technology
+  authorities, all authored-domain dispositions, and a complete typed compatibility policy. Exact
+  identifiers, jurisdiction/currency codes, units, SemVer tokens, and bounded human text do not
+  normalize input. Cross-request subject, technology, authority-source, retained-domain,
+  price-basis, unit/selector, and non-overlapping cost-line axes fail closed. Authored technology
+  capabilities distinguish wind-turbine, solar-PV, generic-generation, and storage routes; solar DC
+  MWdc/MWp binds only to authored solar-resource DC capacity and never to an AC/MW or turbine
+  selector. Every assertion for one generation or storage asset must preserve that asset's single
+  electrical/capacity basis across all redundant values. ProjectCase material cannot bypass
+  compatibility through a base-retention label, and one semantic authority route cannot have
+  multiple owners. The resolved-config digest rejects
+  non-finite values, non-JSON-native types or subclasses, shared/cyclic containers, and
+  bounded-resource violations with canonical JSON-pointer errors before delegating to the public v14
+  run-manifest hash. D3B-local exact identifier and SemVer aliases isolate its fresh-emitting,
+  immutable schema metadata from mutable dependency metadata; declaration-ordered errors keep the
+  public contract deterministic across process state and hash seeds. This slice
+  does not execute the engine, assemble a report package, infer an achieved grade, grant
+  review/release authority, or lift any `HOLD`.
+- **P03 primary-source control remains fail-closed and review-pending** — adds a
+  deterministic population-exact plan for all 42 claim rows and all 74 retained source
+  objects, a Hydra-only retained-source verifier, and a path-free implementer self-check.
+  The preflight verifies 50,938,825 retained bytes plus the two separately governed
+  artifact routes, but explicitly records zero independent semantic reviews, zero
+  publication-rights reviews, `completion_authorized=false`, and release `HOLD`.
+  Evidence status, analyst-judgment boundaries, CSV/JSON parity, manifest population,
+  traversal/collision/symlink controls, and stale-code receipt laundering are covered by
+  adversarial tests. P03 remains pending until a genuinely independent reviewer supplies
+  a hash-bound decision; this change does not authorize source republication or Board/lender
+  circulation.
 Claude Code now has a repository entry point. `CLAUDE.md` routes Claude sessions to the canonical ruleset and `AGENTS.md`. It states what differs in a cloud session: the checkout-local `.venv` fallback that `THREAD-01` and `ENV-01` permit on container hosts, how to provision it when the session-start hook did not run, the released native-reservation protocol, and the history and tag fetch the handover resolver and the audit overlay test need. It also points to the rules and formats that govern the repository: how to load the GWTF ruleset, the three framework principles by rule ID (`FRAMEWORK-01` to `FRAMEWORK-03`), and where the receipts, changelog, handover, review, corpus and DBPL formats are defined. `.claude/skills/steward/SKILL.md` records this repository's pull-request conventions for sessions that watch, fix or merge a pull request. It covers base currency, what green means under `MERGE-01`, Grid Study classification, `VERIFY-01` receipts, changelog fragments, corpus manifests and squash-merge verification. Both files cite the ruleset rather than restating it, and neither adds or changes a rule.
 - **Dolphin 3B-1 governed v14 execution seam** — adds a held, preflighted transition from one exact
   `ProjectCase` and `EvaluationRequest` to exactly one call of the public
@@ -582,6 +774,137 @@ declared pin and (with `--deep`) actually imports. Exits non-zero on failure so 
 post-deploy CI gate, and emits `--json` for machine consumption.
 
 ### Changed
+- Pair both CAPEX-case financial-KPI fixtures with tariff and operating-cost responsiveness guards plus a frozen-output negative control.
+- Pair the Kalpitiya 5 US-cent pinned financial oracle with economic-driver responsiveness and frozen-output negative controls.
+- Pair the lender-case financial-KPI fixture with a tariff responsiveness guard and a frozen-output negative control, so pinned values cannot pass by being returned without computation.
+- Pair the Mullikulam financial-KPI fixture with tariff and operating-cost responsiveness guards plus frozen and non-finite output negative controls.
+- **`markitdown` 0.1.6 → 0.1.7 and `pymupdf` 1.28.0 → 1.28.2 — ingestion surface re-cleared;
+  `magika` held, upstream-blocked** (#1167) — both are frozen by name in `constraints.txt` as
+  document-ingestion reproducibility surfaces held "until a dedicated upgrade dolphin revalidates
+  conversion, extraction, rendering, hooks, audit, and the suite", so this is a migration dolphin
+  rather than the bot chore #1064 proposed. As with #1168, the freeze turned out to be enforced in
+  **three** places — `constraints.txt`, `requirements.txt`, and hardcoded `version()` assertions in
+  `tests/integration/test_ingestion_tooling.py` — and the third fired first, catching the install
+  before the pins were updated. `pyproject.toml`'s ranges (`markitdown[pdf]>=0.1.6,<0.2`,
+  `pymupdf>=1.28,<1.29`) already admit both targets and are unchanged. Re-clearance exercised the
+  three surfaces the freeze names on one generated PDF: conversion through `MarkItDown().convert()`,
+  extraction through `pdfplumber.extract_text()`, and rendering through `pymupdf.get_pixmap()`.
+  **`magika` stays at 0.6.3**: every published markitdown release, 0.1.2 through the current latest
+  0.1.7, pins `magika~=0.6.1`, so magika 1.x cannot enter the lock at any markitdown version — the
+  half of #1064 that was never mergeable. It is now blocked at source by a Dependabot ceiling rule.
+- **`hiredis` 3.4.0 → 3.4.1 — the jobs surface re-cleared, not just re-pinned** (#1168) —
+  `hiredis` is frozen by name in `constraints.txt` as part of the report/jobs closure
+  "cleared together under Python 3.12", so lifting it is a migration dolphin rather than a
+  bot chore. The freeze is enforced in **three** places, not the two the issue anticipated:
+  `constraints.txt`, `requirements.txt`, and a hardcoded `version("hiredis") == "3.4.0"`
+  assertion in `tests/integration/test_report_jobs_tooling.py` — which is what caught the
+  install before the pins were updated. All three now agree. Re-clearance exercised the
+  surface the freeze names rather than asserting it: the async job store, worker, backend
+  gate and analysis router all pass against a live Redis, and a real round-trip confirms
+  `_HiredisParser` is the parser actually serving the connection, so the accelerated C path
+  is genuinely in use rather than silently falling back to pure Python. `redis==5.3.1` still
+  satisfies arq's `redis[hiredis]<6,>=4.2.0` ceiling and the pinned transitive closure does
+  not move — the resolver plan is `hiredis-3.4.1` alone.
+- **The corpus manifest guard now covers every corpus area, not one hard-coded path** —
+  `tests/lint/test_nso_corpus_manifest_integrity.py`. Every path in it named
+  `docs/source_materials/nso_bess_250mw_2026`, so the *next* corpus area would have landed
+  covered by nothing at all: the exact condition that let manifest defects reach `main` six
+  times, reproduced one directory across. A **corpus area** is now derived from the tree —
+  any immediate child of `docs/source_materials` holding tracked files — and both directions
+  of the gate, the parent pins and the classification completeness check run per area.
+- **An area with no manifest is a finding, not a skip.** Discovery reads `git ls-files`, so an
+  area with no `MANIFEST.sha256` has nothing to disagree with and every other check would pass
+  it in silence. `test_every_corpus_area_has_a_parent_manifest` fails on it by name and says
+  how to write one. What stays **declared** is the one thing that must not be inferred: whether
+  a nested manifest's subject lives in this repository or outside it.
+- **Each guard now ships the negative control that proves it fires**, per `VERIFY-01` clause 5.
+  The checks are helpers returning what they found; each has a paired `test_negative_control_*`
+  that builds a small valid corpus in a throwaway git repository, asserts the helper reports
+  nothing, introduces exactly one defect, and asserts the same helper the live tests call
+  reports it. `test_every_guard_has_a_negative_control` fails if a guard is ever added without
+  one, if a control no guard claims is left behind, or if the mapping names something that no
+  longer exists. No count is stated here on purpose: the first draft of this entry claimed six
+  controls for eight guards and three guards had none, so `GUARD_CONTROLS` is the mapping and
+  the test is the count. A guard whose two halves fail independently carries one control per
+  half.
+- **The declaration tables are now forced complete, not trusted.** Nested-manifest
+  classification was already forced; the single-source handling note and the restricted-clause
+  check were keyed by hand-maintained tables that nothing checked, so a new corpus area's
+  manifests were gated in both directions while its handling note was gated by nothing, silently.
+  Both tables are now checked against the tree: a `HANDLING NOTE` or a verbatim quotation block
+  that no entry claims fails by name. Two independent reviewers found this gap; one built the
+  next corpus area with its anchor unregistered, stripped every citation and added a sixth
+  restated copy of the handling statement, and the suite stayed green.
+- **A restricted clause could reach a public CI log through a failing assertion.** `addopts`
+  carries `--showlocals`, which prints every frame local on a failing stack into GitHub Actions,
+  and this repository's logs are public. The module reasoned about that for the span search and
+  stopped one function short: a reviewer forced the assertion and measured three of four clause
+  lines printed, against a docstring claiming the text never left. The parse now returns its
+  defects from a frame that has been popped before anything raises, failures name line numbers
+  and never quote the line, and the clause guards drop their own frames. Verified with a
+  synthetic sentinel: zero occurrences in a forced failure.
+- **The module keeps its `nso` filename deliberately.** Four things name it: the `fastlane` job
+  invokes it by literal path, `AGENTS.md` cites it by path, the offers manifest cites it by
+  filename — so a rename would also mean editing a nested manifest and refreshing the parent pin
+  in the same commit — and two `RECRUIT-01` review records discuss it by path. Those two records
+  are **both REJECT** and both bind only to the superseded `3e4b79f`; they are bindings to break,
+  not endorsement. An earlier draft of this entry called them "accepted", which was false.
+- **A second corpus area would have switched off the first area's clause guard, silently.**
+  The restricted-clause registry was keyed by the quotation heading — a section number and a
+  clause name that every offers manifest carries, which is boilerplate and not an identifier.
+  A second area quoting its own clause 6 under the same heading evicted the first entry, and
+  the tree scan meant to catch an unregistered quotation was keyed the same way and collapsed
+  with it, so the two cancelled out and alphabetical order decided which area kept its guard.
+  Both are now keyed by `(heading, manifest)`, the pair that is actually unique, and the check
+  reports every occurrence rather than one per identifier. The guard this would have dropped is
+  the one that already caught a confidentiality leak into a public Actions log.
+- **Discovery could be defeated by not being a directory.** An area is the first path segment
+  below `docs/source_materials`, so a tracked entry with no segment beneath it belonged to no
+  area and was checked, and reported, by nothing. Three shapes land that way and all three are
+  plausible in an evidence corpus: a loose file at the root, an area held as a **symlink**, and
+  an area vendored as a **submodule** — the last two being the obvious shapes for material held
+  elsewhere, which is what this corpus is for. `_loose_entries` now names all three and
+  distinguishes them by index mode.
+- **The clause guard's search half had never been observed to fire.** Its control covered
+  reading the spans out of the manifest and said nothing about whether the search then finds a
+  copy; narrowing its pathspec to the manifest alone left it unable to detect a duplicate
+  anywhere while every test in the module stayed green. The search is now a separate helper
+  with its own control that plants a span in two tracked files and requires both to come back.
+  Its `git grep` also passes `-z`, so a path with a space or a non-ASCII character is returned
+  unquoted instead of C-escaped, which would have made the home-path comparison fail to match.
+- **`AGENTS.md` session continuity is resolver-only** — the gateway no longer contains a
+  concrete record token, glob, illustration, or duplicate Markdown interpretation. It tells
+  the reader to execute the resolver and follow the first record's own declaration. A simple
+  structural test prevents either supported family prefix from returning to that section.
+  Hostile temporary-repository tests prove that
+  correcting an older record does not outrank a newer successor and that shallow history,
+  backdated descendants, incomparable histories, ambiguous latest timestamps, repeated
+  family entries, and any matching path difference across HEAD, index and worktree stop
+  resolution, including ignored files. File lineage is dated when it first enters a
+  supported handover family, while later renames within that family retain the entry date.
+  Git path inventories, followed-commit metadata and per-commit changes use NUL framing;
+  unsafe near-family names fail before history interpretation.
+  The display-safe suffix grammar is explicit, and the model product owner must optimize
+  and review the resolver before runtime exceeds 60 seconds or the corpus reaches 100 records.
+- **Web sessions now provision FULLY and automatically** — `.claude/settings.json` gains an
+  `env` block setting `DUTCHBAY_EXTRAS=dev,feasibility,jobs,solar,pareto`, which the harness
+  injects before the SessionStart hook runs, so grid, micro-siting, redis, solar and pareto
+  are present with no flag to remember and `redis-server` starts on :6379.
+  The hook's own fallback is now the **same full set** rather than a bare `dev`: relying on
+  the env alone would leave a silently under-provisioned session if injection ever failed,
+  and that fails LATE (a missing import halfway through a run) instead of loudly at start.
+  `DUTCHBAY_EXTRAS=dev` still selects the fast tests-and-linters path explicitly. All three
+  paths verified — env-supplied, fallback, and explicit-fast.
+  Cost of the full default is roughly a gigabyte (JAX/numba/openmdao via TopFarm) and a few
+  minutes at session start, paid deliberately: this repo's work needs grid, micro-siting and
+  the job path far more often than a fast start, and a half-provisioned environment is the
+  more expensive failure. CI is unaffected — the hook is remote-session-only.
+Removed the post-merge `push: main` duplication from the Test Suite and docker-build workflows,
+and reduced the full-suite backstop from nightly to weekly. The ruleset enforces
+`strict_required_status_checks_policy`, so a PR validates a tree byte-identical to the one that
+lands and the post-merge re-run tested nothing new. Post-merge health on main is still covered by
+`CI - v14 fastlane` and `Regression Smoke` (~5 minutes combined, against ~63 for the full suite).
+All three required checks — `Test Summary`, `fastlane`, `smoke` — still run on every PR.
 Rebuilt the DBPL stylesheet against the benchmark study. Table rules now follow **Vignelli over
 Tufte** — a graded 2 pt / 1 pt / 0.5 pt hierarchy with type hanging from the rule above — and row
 shading follows **Urban over Tufte**, adopted deliberately because row-tracking across a wide
@@ -690,6 +1013,186 @@ Upgrade the governed typed-surface pair to pandas-stubs 2.3.3.260113 and request
   raw alias and compact `ScenarioResult.dscr_series` remain compatible.
 
 ### Fixed
+Recorded an additive audit-pack erratum for stale fixed GWTF rule-count
+instructions while preserving the dated control record and architecture pointer.
+- **Dependabot ignore rules now cover transitive-consumer ceilings, not just declared majors** —
+  four weekly PRs (#1064, #1066, #1067, #1068/#1166) were opened, went red, and sat for a week
+  because each crossed a ceiling declared by a package *other* than the one being bumped. The
+  existing rules were major-only, and three of the four breaches were **minor** bumps, so nothing
+  could have caught them. Now encoded, each with the specifier that sets it: `magika` capped
+  `~=0.6.1` by markitdown (every release 0.1.2–0.1.7), `openmdao` capped `==3.39.*` by topfarm,
+  `numpy` capped `<2.5` by pandapower — the existing major-only numpy rule is extended to minors —
+  `websockets` capped `<17` and `starlette` capped `<2`, both by streamlit. Blocking level is set
+  per specifier rather than uniformly: `magika`, `openmdao` and `numpy` break at minor, while
+  `websockets` and `starlette` remain free to take minors inside their ceilings. Verified against
+  all four historical bumps plus six controls — every real breach blocked, every safe bump still
+  permitted. Also corrects the `pandapower` rationale, which still described the retired
+  `==3.3.0` / `scipy==1.17.1` state; the lock carries 3.5.4 against scipy 1.18.1, and it is
+  pandapower's `numpy<2.5` that blocks #1169.
+Upgrade scipy-stubs from 1.18.0.1 to 1.18.1.0 and read the named KS-test
+`pvalue` field in both Weibull diagnostics. This preserves the existing SciPy
+1.18.1 calls and numerical outputs while keeping the strict mypy gate compatible
+with the new stubs. No runtime dependency, financial formula or scenario changes.
+- **DBPL tables survive page breaks under PDF/UA** — WeasyPrint's PDF/UA tag builder raised
+  `ValueError: Table wrapper without a table` whenever a captioned table straddled a page boundary
+  (a caption-only wrapper fragment was left on the previous page with no rows), so any DBPL document
+  with a page-spanning table failed to render — and the print core fails loud, so there was no
+  fallback. Every table (document control, revision history and each section table) is now wrapped in
+  a `.dbpl-keep` block with `break-inside: avoid`, which WeasyPrint honours on that real block box
+  where it ignores the same rule on the anonymous table-wrapper box, moving the table and its caption
+  to the next page as a unit. A table taller than a page still splits normally, which the tag builder
+  handles correctly. Regression-guarded in `tests/app/test_dbpl.py` and documented in
+  `docs/dbpl_styleguide.md`.
+- Check downloaded shard coverage files against the workflow-level `TOTAL_SHARDS`
+  before combining them. Missing or unexpected counts and invalid shard configuration
+  fail without reporting a misleading coverage percentage. Complete inputs still enforce
+  the existing 95% floor. The literal shard matrix is checked against `TOTAL_SHARDS`.
+  Test Summary distinguishes a gate that did not reach the floor from a floor/reporting
+  failure. A cancelled test matrix is reported by the earlier Test gate; successful tests
+  with missing artifacts reach the coverage diagnosis. File presence alone does not prove
+  test completion, so the existing test-result gate remains necessary.
+  Policy tests execute the actual workflow scripts, including incomplete inputs, complete
+  coverage above/below 95%, and summary failures; deliberate workflow mutations must fail.
+- Derive the NSO 250 MW LTL scenario capex from a sourced equipment price instead of an
+  assumed all-in figure. The generator previously hard-coded USD 78/95/125 per kWh and
+  inverted the stack to produce the "equipment USD 63.50/kWh CIF" its own file headers
+  quoted as provenance, and claimed the base supported "roughly a 15% equity return" when
+  the same derivation puts USD 95/kWh at about 9.7%. Equipment is now the input, taken from
+  the OEM offers held in the private corpus and restated onto the contracted-capacity
+  denominator the scenarios use. Adds a fourth `bidimplied` variant carrying the capex the
+  winning bids can support, so the bid-implied ceiling sits alongside the quoted prices.
+- Stop deducting SSCL from NSO 250 MW scenario revenue. ESA Volume III Article 5(o) adds
+  "any applicable Value Added Tax or similar Sales Taxes" to payments, and the Section 4
+  bid form quotes the Capacity Charge Rate excluding VAT with SSCL as a separate line on
+  top, so the levy is recovered from the offtaker rather than borne by the project.
+- State the NSO 250 MW import-levy position explicitly with a `taxes_indirect` block. The
+  block was absent, which `finance.import_levies` treats as every line zero — silently the
+  most favourable tax corner available. Bonded Warehousing relief is now asserted on three
+  variants and withheld on `stress`, matching RFP Clarifications cl. 8/13/47/48, under
+  which the relief is real but conditional and the bidder's own responsibility to obtain.
+- Erratum, recorded rather than rewritten: the squashed commit `4affe66c` (#1241) asserts "Both
+  RECRUIT-01 reviewers returned ACCEPT WITH AMENDMENTS on a4257a0, with no blocking defect" and
+  "Verified by both reviewers independently", but #1241 carries **zero** reviews on GitHub and no
+  reviewer payload among its two comments, and its own pull-request body states that the change
+  did not receive independent RECRUIT-01 review because the attempts terminated early. The merge
+  itself was authorised — the project owner waived review on #1241 explicitly — so what is wrong
+  is the durable record, not the delivery. History on a protected branch is not rewritten to
+  correct it; this entry is the correction. Nothing in the tree, no engine, scenario,
+  configuration, test or KPI is touched by this change.
+- Range-validate the four KPI-moving AEP-summary config knobs at config consumption
+  (`resource.uncertainty.p50_haircut_pct`, `correlation`, `life_years` and the
+  `resource.power_curve` air-density pair), so each fails loud instead of being applied
+  out of band, silently clamped, or silently skipped. A negative `p50_haircut_pct`
+  previously inflated the bankable P50 by 12.2%, an out-of-range `correlation` was clamped
+  to rho=1.0 while the summary echoed the raw value into provenance, and a half-declared
+  density pair skipped the IEC 61400-12-1 correction for a +4.33% headline move. The
+  summary's reported `uncertainty` block is now by construction the values the maths used.
+  Every committed scenario regenerates unchanged.
+- Correct the AEP headline figure named in the wind drift-detection docstrings. Both
+  VALIDATE-mode checkers (`wind_resource/weibull_fit.py`, `wind_resource/arco_assessment.py`)
+  described 483.6 GWh as "the auditable headline" and the Monte-Carlo AEP note called
+  402.6 GWh "the canonical"; both were retired by the ERA5 re-baseline, and the committed
+  headline is the bankable net P50 464.3 GWh. Calibrating an acceptable drift against a
+  superseded baseline inverts the purpose of the modules that detect drift. Also adds the
+  missing `synthetic_mcp_measurement.py` row to `docs/MODULE_REFERENCE.md`, the only one of
+  the 17 `wind_resource/` modules that was undocumented, with a guard so a module can no
+  longer go undescribed unnoticed. Docs-only; no behaviour change.
+- Rewrite `wind_resource/README.md`, which had described the package as it stood in
+  December 2025: four of its seventeen modules listed as `(TODO)` after nine months of
+  production use, a "Quick Start (Planned)" section, and a "Key Validated Results" table
+  presenting the retired 15 x EN-171/6.5 case (318.1 GWh P50 / 286.3 P75) as the lender base
+  case with its monthly profile and revenue projections. The committed case is 15 x IEA-10MW
+  at 464.3 GWh bankable P50. The replacement points rather than repeats: it maps the lender
+  path against the diagnostic path and the validate-only side branches, gives the real CLI
+  and extras, and cites the one authoritative location for every number instead of copying
+  any of them.
+- **Typed QSTS feeder provenance and canonical-finance refusal (#923-A).** An existing
+  `feeder_model_path` is no longer treated as proof of a real feeder. Every enabled
+  path-backed QSTS declares `input_kind` as a utility/site model, synthetic placeholder, or
+  test fixture; the shared `CurtailmentShareResult` carries generated/observed/site and
+  canonical-finance eligibility flags. Synthetic/test feeders may execute advisory solver
+  diagnostics, but the finance seam fails loudly if one is presented for canonical KPI
+  movement. The committed lender case remains default-off and its canon is unchanged.
+- **`BANKABLE_MIN_CONCURRENT` no longer claims bankability at a third of the required
+  campaign (#961)** — the ~4-month (2880-sample) constant was named for bankability while
+  its own docstring conceded that a bankable campaign needs at least 12 months, so the name
+  overclaimed against MEASNET v3.1 / IEC 61400-15-1:2025 by a factor of three. It is now
+  `LENDER_DISCLOSURE_MIN_CONCURRENT` — the floor below which an estimate must not be shown
+  to a lender at all — with the deprecated name kept as an alias. The real standard is now
+  a named constant, `IEC_BANKABLE_MIN_CONCURRENT = 8760`. `MCPResult` gained
+  `campaign_adequacy` and `concurrent_shortfall_to_iec_bankable`, so a campaign that clears
+  the disclosure floor but falls short of the standards says so on the result and in
+  `as_dict()` instead of passing silently. Gate behaviour is unchanged.
+- **Retracted a fabricated met-mast provenance claim from the lender-facing scenario set
+  (#961)** — ten tracked files asserted
+  `data_confidence: "Medium (5-year ERA5 validated against 1-year met mast)"`, describing a
+  one-year on-site measurement campaign that has never existed, and
+  `docs/WIND_AEP_CHAIN_OF_CUSTODY.md` quoted that string back as corroborating evidence in a
+  lender-DD register. All ten now record the true screening-grade / pre-measurement basis: no
+  on-site met mast or IEC-accepted LiDAR/SoDAR, and the MCP long-term correction present in
+  `wind_resource/mcp.py` but unwired. The register's red flag R5 is corrected — it had cited
+  "no MCP module" as evidence, which was false in the opposite direction — and regraded
+  Medium to High to match the `high` severity `config/report_defaults.yaml` already assigns
+  the same Resource risk. No numeric value changed anywhere; the canonical KPIs are unmoved.
+Corrected two false statements about `math.fsum` that landed with A1/A2 in #1231, and pinned the
+summation contract they were describing.
+`changelog.d/a2-subannual-operating-rows.added.md` claimed that replacing `math.fsum` with the
+builtin `sum` in `finance.period_grid_v14.aggregate_flows_to_annual` moves the seasonal
+reconciliation distribution from 510/30 to 509/31. That figure is false on the runtime this
+repository pins. Measured on Python 3.12.3 with the pinned dependency set, the distribution is
+510/30 under both, and the even profile is 540/540 under both: it does not move at all. CPython 3.12
+uses compensated summation for floats in the builtin, which is the cause. The 509/31 shift is a
+Python 3.11 measurement, and `requirements.txt` cannot be installed on 3.11 at all, because
+`scipy==1.18.1` requires `>=3.12`.
+The same function's inline comment asserted two things that are also false: that A2's allocator
+computes each year's closing residual against `aggregate_flows_to_annual`, and that a left-to-right
+sum made the two disagree by one ULP on the live lendercase. The allocator does not call that
+function; `finance.subannual_rows_v14.allocate_flow` sums its own parts with `math.fsum` directly.
+Both sentences are withdrawn in place rather than deleted, and the surviving claim -- that `fsum` is
+exactly rounded, so the aggregate does not depend on summation order -- is the one the code actually
+earns.
+A consequence of the first correction is that the `math.fsum` call was pinned by no test on the
+runtime CI uses: reverting it to the builtin leaves all 1440 tests in `tests/finance` passing. Two
+contract tests now pin the promise rather than the call. One asserts the aggregate equals the
+correctly rounded sum of each year, computed independently with `fractions.Fraction`, and the other
+asserts that every permutation of a year's periods aggregates to a bit-identical float. Both fail
+when the implementation is replaced by a naive accumulation loop and neither fails when it is
+replaced by the 3.12 builtin, which is stated in the tests themselves as the limitation it is.
+No financial behaviour changes: no committed scenario sets `cashflow.resolution`, the annual engine
+is untouched, and the canonical lender KPI vector is unchanged. Confers no grade, release, audit,
+lender or Board authority.
+- Stop changelog fragments smuggling markdown headings into `CHANGELOG.md`, and reject them at
+  the boundary rather than repairing them. `fold` splices every non-blank fragment line into
+  `[Unreleased]` verbatim, so a heading in a fragment became a heading in the compiled changelog.
+  Eight pending fragments carried eleven of them: four `# Added`, one `### Added`, and three pairs
+  of `## Fixed` plus `## Financial impact` in the `python312-*` fragments. All eleven are removed;
+  the `Financial impact` prose is kept as a bullet, and the category headings are dropped outright
+  because the filename already carries the category.
+- The damage was structural, not cosmetic. Compiling `main` put four `# Added` headings at the
+  same level as the document's own `# Changelog` title, and the first `## Fixed` ended the
+  `[Unreleased]` window at line 1258 as far as `_section_end` was concerned — so the ~110 lines of
+  fragment content after it, including three more `## Fixed` and three `## Financial impact`
+  headings, fell outside the block that every later compile inserts into. It also produced a
+  duplicate `### Added` subsection. After this change the window runs to the real `## v15.4.0`
+  boundary and holds exactly three subsections in Keep-a-Changelog order, with no duplicates.
+- `validate_body` in `scripts/compile_changelog.py` now refuses any fragment whose body contains a
+  heading, at every depth from `#` to `######`, and `_collect` calls it, so a fold fails loudly
+  instead of corrupting the file. `changelog.d/README.md` states the rule it already implied.
+- Nothing else about fragment bodies is constrained. Flush-left prose paragraphs and two-space
+  continuation lines stay legal, because 841 continuation lines and 350 prose lines across the
+  pending corpus already use them; only headings are rejected.
+- Each control was observed to fail before being relied on. Reinstating a single `## Fixed` reds
+  `tests/lint/test_compile_changelog.py` and makes `compile_changelog.py --dry-run` refuse to run;
+  the negative control covers all six heading depths; a wiring control proves `_collect` itself
+  raises rather than only the validator in isolation; and the repo-wide scan asserts it saw a
+  non-zero number of fragments, so an empty or mis-globbed `changelog.d` cannot pass vacuously.
+- Financial impact: none. This changes developer changelog tooling and its fragment prose only;
+  financial logic, scenario inputs, and canonical KPI calculations are untouched.
+- **`Test Summary` no longer blames the wrong gate for a superseded run** — the
+  required check hardcoded a failure cause per job, so a `lint` job *cancelled* by a
+  newer push reported itself as `mypy gate failed`. A cause is now attributed only
+  when the result is actually `failure`; `cancelled`/`skipped` say so and name the
+  usual reason. Which results block the merge is unchanged.
 - **An agent worktree no longer dirties the tree or trips a governance test** — when a
   Claude Code subagent runs with worktree isolation the harness leaves a full nested
   checkout under `.claude/worktrees/` and registers it in `git worktree list`. Two
