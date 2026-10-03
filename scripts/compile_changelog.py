@@ -19,6 +19,7 @@ Keep-a-Changelog sections). Each file contains one or more markdown bullet lines
 Usage (on-demand flush — run when you want to batch pending entries in)::
 
     python scripts/compile_changelog.py            # fold fragments into CHANGELOG.md, delete them
+    python scripts/compile_changelog.py --batch-size=40  # fold the next deterministic batch
     python scripts/compile_changelog.py --check     # list pending fragments; exit 1 if any (CI-friendly)
     python scripts/compile_changelog.py --dry-run   # print the would-be CHANGELOG.md, change nothing
 
@@ -111,6 +112,18 @@ def fragments() -> list[Path]:
     ]
 
 
+def select_batch(frags: list[Path], batch_size: int | None) -> list[Path]:
+    """Select a deterministic suffix so repeated batches equal one full fold.
+
+    ``fold`` prepends new entries within each category. Processing the sorted suffix
+    first means every later batch is prepended ahead of it, preserving the exact
+    ordering produced by a single all-fragment compile.
+    """
+    if batch_size is None or batch_size >= len(frags):
+        return frags
+    return frags[-batch_size:]
+
+
 def _find_unreleased(lines: list[str]) -> int:
     for i, line in enumerate(lines):
         if line.strip() == UNRELEASED:
@@ -180,10 +193,10 @@ def fold(changelog_text: str, bullets_by_category: dict[str, list[str]]) -> str:
     return "\n".join(lines)
 
 
-def _collect() -> dict[str, list[str]]:
-    """Read all fragments into ``{category: [bullet lines]}`` (fragment order preserved)."""
+def _collect(selected: list[Path] | None = None) -> dict[str, list[str]]:
+    """Read selected fragments into categories (fragment order preserved)."""
     by_cat: dict[str, list[str]] = {}
-    for frag in fragments():
+    for frag in fragments() if selected is None else selected:
         cat = category_of(frag.name)
         body = frag.read_text(encoding="utf-8").strip("\n")
         frag_lines = [ln for ln in body.split("\n") if ln.strip() != ""]
@@ -193,11 +206,49 @@ def _collect() -> dict[str, list[str]]:
     return by_cat
 
 
+def parse_options(argv: list[str]) -> tuple[bool, bool, int | None]:
+    """Return ``(check, dry_run, batch_size)`` or reject ambiguous input."""
+    check = False
+    dry_run = False
+    batch_size: int | None = None
+
+    for arg in argv[1:]:
+        if arg == "--check":
+            if check:
+                raise ValueError("--check may be supplied only once")
+            check = True
+        elif arg == "--dry-run":
+            if dry_run:
+                raise ValueError("--dry-run may be supplied only once")
+            dry_run = True
+        elif arg.startswith("--batch-size="):
+            if batch_size is not None:
+                raise ValueError("--batch-size may be supplied only once")
+            raw = arg.partition("=")[2]
+            try:
+                batch_size = int(raw)
+            except ValueError as exc:
+                raise ValueError("--batch-size must be a positive integer") from exc
+            if batch_size <= 0:
+                raise ValueError("--batch-size must be a positive integer")
+        else:
+            raise ValueError(f"unknown option: {arg}")
+
+    if check and (dry_run or batch_size is not None):
+        raise ValueError("--check cannot be combined with --dry-run or --batch-size")
+    return check, dry_run, batch_size
+
+
 def main(argv: list[str]) -> int:
-    flags = set(argv[1:])
+    try:
+        check, dry_run, batch_size = parse_options(argv)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
     frags = fragments()
 
-    if "--check" in flags:
+    if check:
         if frags:
             print(f"{len(frags)} pending changelog fragment(s):")
             for f in frags:
@@ -210,19 +261,20 @@ def main(argv: list[str]) -> int:
         print("no pending changelog fragments — CHANGELOG.md unchanged")
         return 0
 
-    by_cat = _collect()
+    selected = select_batch(frags, batch_size)
+    by_cat = _collect(selected)
     new_text = fold(CHANGELOG.read_text(encoding="utf-8"), by_cat)
 
-    if "--dry-run" in flags:
+    if dry_run:
         sys.stdout.write(new_text)
         return 0
 
     CHANGELOG.write_text(new_text, encoding="utf-8")
-    for frag in frags:
+    for frag in selected:
         frag.unlink()
     n = sum(len(v) for v in by_cat.values())
     print(
-        f"folded {len(frags)} fragment(s) ({n} bullet line(s)) into "
+        f"folded {len(selected)} fragment(s) ({n} bullet line(s)) into "
         f"{CHANGELOG.name} [Unreleased] and removed them"
     )
     return 0
