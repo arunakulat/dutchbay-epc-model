@@ -5,6 +5,17 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- Require enabled utility/site QSTS modes to present an externally pinned evidence
+  manifest that binds the feeder graph, generation profile, operator-instruction schedule,
+  export cap, timestep, and referenced payload hashes. Execute accepted packages from an
+  immutable private snapshot, propagate a typed non-bankable run receipt, and route
+  generated QSTS reports only through the `synthetic_process_provenance` namespace with the
+  exact warning `based on synthetic data - non-bankable - only for process provenance
+  purposes`.
+Added a fail-closed 56-row pre-execution architecture examination plan and deterministic HOLD-blocking ledger for issue #1110.
+- Add a digest-pinned, portless GitHub Codespaces environment for sequential,
+  private P02/P03 independent audit review while preserving the #1110 release
+  HOLD and requiring separate additive semantic-review decisions.
 - Add a lender-fillable F5-02 transaction-evidence YAML, protected internal decision and private-ingress manifest templates, and a fail-closed private-return validator with complete evidence-metadata/byte binding, real date and frozen current ISO-4217 controls, cross-worktree path isolation, environment-only private paths, exact Hydra arguments, and minimal redacted receipts. The #1110 QA/re-ingress checklist keeps F5-02 separate from F5-01 and retains the Board/lender release HOLD.
 - Add a fail-closed, clean-room P01 audit-checkpoint materializer, exact recovery
   descriptor, private-evidence boundary, adversarial controls and hash-bound implementer
@@ -1013,6 +1024,30 @@ Upgrade the governed typed-surface pair to pandas-stubs 2.3.3.260113 and request
   raw alias and compact `ScenarioResult.dscr_series` remain compatible.
 
 ### Fixed
+- Bind path-backed synthetic QSTS generation and export-cap inputs to the same
+  manifest-verified package identity used at runtime. Reject substituted config or caller
+  overrides before solving or accounting while retaining the synthetic, noncanonical,
+  finance-disabled evidence boundary.
+- Stop two ordinary-suite controls for `scripts/prove_1110_candidate_codespace.sh` from
+  racing on the machine-global `/tmp/dutchbay-1110-candidate-codespace.lock`. One test
+  reaches `mkdir -- "$CREATE_LOCK"` and legitimately holds the lock while the other
+  asserts it is absent, so under `-n auto` the observer failed for a reason unrelated to
+  the code under test. Both now drive a copy of the control bound to a per-test lock,
+  keeping every behavioural assertion exact and removing the shared path from the suite.
+- Replace the #1110 Codespaces sandbox's failing create-time SSH Feature with a
+  repository-owned, digest-pinned Docker build that installs the required SSH
+  transport from Debian-only sources, attests its package/configuration
+  identity and runtime-generated host public keys, enforces the effective SSH
+  policy, starts transport before the Codespaces post-create lifecycle, and
+  distinguishes inherited base-image Feature metadata from an empty
+  repository-configured Feature surface. Create the disposable environment
+  without eager SSH status, enforce a monotonic five-minute transport watchdog,
+  and carry its immutable name into the private-ingress control.
+- Restore the governed #1110 Codespaces SSH transport through the digest-locked
+  official Dev Container SSH feature, retain the repository-owned serialized
+  hardening/recovery control, distinguish hosted emulation from real-Codespaces
+  provenance, and surface an exact-SHA, authenticated, attested real-Codespaces
+  candidate lifecycle as a reviewer-controlled pre-merge prerequisite.
 Recorded an additive audit-pack erratum for stale fixed GWTF rule-count
 instructions while preserving the dated control record and architecture pointer.
 - **Dependabot ignore rules now cover transitive-consumer ceilings, not just declared majors** —
