@@ -1,1 +1,0 @@
-Bound ordinary full-suite Monte Carlo model evaluations to 200 and route larger scale/performance tests through an explicit, separately labelled stochastic qualification target. This changes test-harness execution only; production Monte Carlo defaults and financial outputs are unchanged.

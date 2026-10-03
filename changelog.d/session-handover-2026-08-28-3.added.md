@@ -1,1 +1,0 @@
-- Add a fail-closed next-session bootstrap and final post-cleanup PERSIST-01 handover.
