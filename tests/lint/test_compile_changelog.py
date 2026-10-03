@@ -143,6 +143,47 @@ def test_collect_fails_closed_on_a_heading_fragment(
         CL._collect()
 
 
+def test_select_batch_takes_sorted_suffix() -> None:
+    frags = [Path(name) for name in ["a.added.md", "b.fixed.md", "c.changed.md"]]
+    assert CL.select_batch(frags, 2) == frags[1:]
+    assert CL.select_batch(frags, None) == frags
+    assert CL.select_batch(frags, 99) == frags
+
+
+def test_repeated_suffix_batches_equal_one_full_fold(tmp_path: Path) -> None:
+    frags = []
+    for name, body in [
+        ("a.added.md", "- a\n"),
+        ("b.fixed.md", "- b\n"),
+        ("c.added.md", "- c\n"),
+        ("d.fixed.md", "- d\n"),
+    ]:
+        frag = tmp_path / name
+        frag.write_text(body, encoding="utf-8")
+        frags.append(frag)
+
+    one_shot = CL.fold(_BASE, CL._collect(frags))
+    tail = CL.select_batch(frags, 2)
+    batched = CL.fold(_BASE, CL._collect(tail))
+    batched = CL.fold(batched, CL._collect(frags[:2]))
+    assert batched == one_shot
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["compile_changelog.py", "--batch-size=0"],
+        ["compile_changelog.py", "--batch-size=nope"],
+        ["compile_changelog.py", "--batch-size=1", "--batch-size=2"],
+        ["compile_changelog.py", "--check", "--batch-size=1"],
+        ["compile_changelog.py", "--unknown"],
+    ],
+)
+def test_parse_options_rejects_invalid_or_ambiguous_input(argv: list[str]) -> None:
+    with pytest.raises(ValueError):
+        CL.parse_options(argv)
+
+
 def test_every_repo_fragment_body_is_heading_free() -> None:
     # The live gate: no pending fragment may carry a heading. A fragment that does
     # folds it into [Unreleased] verbatim, where '##' truncates the window that every
