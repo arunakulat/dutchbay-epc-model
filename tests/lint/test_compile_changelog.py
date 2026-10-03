@@ -188,10 +188,12 @@ def test_every_repo_fragment_body_is_heading_free() -> None:
     # The live gate: no pending fragment may carry a heading. A fragment that does
     # folds it into [Unreleased] verbatim, where '##' truncates the window that every
     # later compile inserts into (observed on main before #1275).
-    checked = 0
+    expected_dir = Path(__file__).resolve().parents[2] / "changelog.d"
+    assert CL.FRAG_DIR.resolve() == expected_dir.resolve()
+    assert expected_dir.is_dir()
     for frag in CL.fragments():
         body = frag.read_text(encoding="utf-8").strip("\n")
         CL.validate_body(frag.name, [ln for ln in body.split("\n") if ln.strip()])
-        checked += 1
-    # Guard-the-guard: an empty or mis-globbed changelog.d must not pass vacuously.
-    assert checked > 0, "no fragments were scanned - the shape check is inert"
+    # Zero fragments is the expected post-compile release state. The negative controls
+    # above prove that the validator and collection path still reject headings, while
+    # the directory assertions keep a misplaced or missing corpus from passing.
