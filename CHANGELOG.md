@@ -5,6 +5,270 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+- **Gated canon-movers register** — `docs/STANDARDS_WATCH.md` gains a hard-items section
+  giving every gated KPI-moving change an owner, a gate and a **calendar review date**
+  (2026-11-30), populated from a sweep of the open issue queue rather than from memory.
+  `DELIVERY-01` governs how *big* an increment is; nothing governed how *hard* it is, and
+  all five gated items were condition-gated with no calendar review — the state in which a
+  live deferral quietly stops being asked about. The gates themselves are unchanged and
+  remain correct; only the review dates are new. KPI-neutral.
+- **n-sampling for generation** recorded in `docs/AGENTIC_DELIVERY_PRACTICE.md` §5.5 as an
+  available technique rather than a rule, with its preconditions (declared scalar objective,
+  explicit seed, whole sample set retained) and a hard boundary: never on finance logic,
+  where correctness is not a scalar and "best of *k*" selects the most plausible-looking
+  implementation.
+- Add the Global Feasibility Report Master Template v1: a controlled, prose-first authoring
+  architecture for all 20 canonical feasibility sections, with explicit evidence, grade,
+  jurisdiction, review, release, reconciliation, accessibility and DBPL writing controls.
+- **The image gate now proves WeasyPrint takes the HarfBuzz-Subset path, inside the image.**
+  `docker-build` renders a PDF in the built image and fails unless
+  `scripts/check_image_harfbuzz_subset.py` finds the HarfBuzz path live. This is the gap
+  [#1266](https://github.com/arunakulat/dutchbay-epc-model/pull/1266) deferred rather than loaded
+  onto a one-package change.
+- What the gate proved before: that `libharfbuzz-subset0` **resolves and installs** on bookworm.
+  That is a fact about the build host's package index, not about the runtime stage. It did not
+  prove the loader finds the library **at run time** -- from a different stage, under the non-root
+  account, with the venv's interpreter -- and nothing else could, because WeasyPrint 70.0 `dlopen`s
+  the library with `allow_fail=True`. Absent, it does not fail: it warns once, subsets every face
+  with fontTools on its own deprecated path, and keeps emitting valid PDFs. `/health` renders no
+  PDF, so the boot check could not see it either.
+- Four checks, each with its own receipt: `weasyprint.text.ffi.harfbuzz_subset` is not `None`;
+  a subset symbol called through that handle returns a live object (the handle binds the ABI, not
+  merely a file that opened); `hb_version_atleast(4, 1, 0)`, the other half of the gate in
+  `Font.subset`; and a real `write_pdf()` that reaches `Font.subset` with glyphs and logs neither
+  the fontTools fallback nor an `Unable to subset` failure. The first three say the path is
+  **available**; the fourth says it was **taken**.
+- The fourth check counts `Font.subset` calls as well as reading the log. `Font.subset` returns
+  early on an empty glyph set, so a render that embedded no font would log no warning and let a
+  warnings-only check pass while proving nothing. Both halves were exercised against WeasyPrint
+  70.0 on a host with and without `libharfbuzz-subset0`: the check passes only with the library
+  present, fails on check 1 without it, and its fourth check fires on a forced fallback.
+- The script is piped into the image over stdin rather than executed from it, so the gate does not
+  depend on `.dockerignore` continuing to ship `scripts/` into the runtime layer.
+- **The Kalpitiya 60 MW Envision wind package is now recorded** —
+  `docs/source_materials/kalpitiya_60mw_2026/`. A proposal and energy yield study for a 63.0 MW
+  wind farm, and the turbine performance document behind it, both received 20 September 2026 and
+  dated 7 September. It is the first wind material in the source corpora; everything else under
+  `docs/source_materials/` is the NSO 250 MW BESS programme.
+- **The record is manifest-only, and the documents are not here.** They are held in the private
+  repository `arunakulat/DutchBay_RAG`. One is marked Confidential on every page of a Released
+  controlled document; the other carries an express bar on reproduction without written
+  permission. No authorization instrument is held for either, this repository is public, and a
+  push to it cannot be taken back. Route already set twice in this corpus, for the 21 August
+  checklist dossier and the 3 September commercial offers.
+- **Handling is stated once**, at `KALPITIYA60MW-WIND-HANDLING-2026-09-21` in the package
+  manifest header, and cited — never restated — by the two READMEs and the deduplication receipt.
+  Unlike the offers manifest, this one recites no figure from either document. What the filenames
+  alone still disclose is written down rather than glossed over.
+- **The 20 September re-supply carried zero new payload.** Two PDFs, both byte-identical to copies
+  already held. The receipt records it, and records that the as-supplied filename is the only
+  place a version token exists for the proposal — the document itself carries no number and no
+  revision. This issuer has already supplied substantively revised documents under an unchanged
+  version and date, so a hash is the only identifier that holds.
+- **Recorded is not accepted.** Nothing here has entered a scenario, a model input, a baseline or
+  a report, and it should not until the issuer answers in writing which power curve produced the
+  energy yield appendix and what the wind data provenance and uncertainty basis are.
+- **Two declarations, both forced by the guard rather than trusted.** The package manifest is
+  registered in `NESTED_EXTERNAL` — its subject is held elsewhere, so its recorded paths are never
+  resolved against this tree — and its handling anchor in `HANDLING_ANCHORS` with the three files
+  that cite it. Since #1289 neither is optional: forgetting the first fails
+  `test_every_nested_manifest_is_classified`, forgetting the second fails
+  `test_every_handling_note_in_the_tree_is_registered`. Both were removed in turn and observed to
+  fail before this landed.
+- Add `MERGE-01` to the canonical GWTF ruleset: merging a pull request is standing-authorized once every required check is green on the exact current head, with no per-PR go-ahead, and `AGENTS.md` updated to match.
+Add the hash-pinned 2025 met-mast 617725 evidence package: aggregate QC and wind-resource
+statistics, evaluation, visual summary, manifests, reproducibility register and fail-closed
+corpus guards. The confidential interval series remains only in private DutchBay_RAG; annual,
+project-site, P50/P75/P90 and lender use remain HOLD.
+Ingressed the three controlling NSO documents for tender `TR/REP&PM/ICB/2026/001/C` that the
+21 August dossier evaluation recorded as still required: **Addendum No. 01** (7 Aug 2026),
+**Annex A Functional & Performance Requirement**, and the **76-item clarification register**
+(21 Aug 2026). Added the sources, their extracts and a full ingress evaluation, and refreshed the
+package README, the OEM compliance-evidence register and the corpus index.
+The clarification register is an image-only scan with no text layer: the governed MarkItDown pass
+returned an empty document and tesseract scrambled its two-column Q&A table, so all 15 content
+pages were read as page images to produce the verified transcript that is now the only searchable
+record of the register. The unreliable tesseract output is retained beside it, marked do-not-cite.
+The evaluation **corrects three findings** in the 21 August review. Annex A A.05.17(i) *requires*
+the BESS to support both grid-following and grid-forming modes with online switching, so the
+instruction to delete the supplier's dual-mode language is withdrawn — acting on it would have
+deleted evidence of compliance with a mandatory clause. Annex A A.05.23(d) makes the SCR 1/3/5/10
+sweep the *alternative* to submitting both PSS(R)E and PSCAD models, so it leaves the bid-stage
+critical path and becomes a post-award obligation due within one month of ESA execution with the
+Performance Security forfeitable. The closing date is 4 September 2026, not 2 September, and the
+clarification window closed on 25 August.
+It also records that the RTE guarantee is materially worse than the previously recorded zero
+headroom — a measurement-error tolerance was requested and refused, auxiliary and HVAC load is
+confirmed inside the RTE basis, and standby-regulation and ancillary-service energy are both
+counted in it with no annual reconciliation — and that there is no aggregate cap on liquidated
+damages while the capacity charge can be reduced to LKR 0 in a month missing 97 % availability,
+outside that cap.
+- **Advisory issue of the NSO 250 MW gap register** —
+  `docs/source_materials/nso_bess_250mw_2026/registers/render_advisory_issue_2026-08-27.py` renders
+  a second, bidder-neutral issue of the same register for release to a bidder other than the one it
+  was raised for. It imports the register unchanged and applies exactly three changes: the raising
+  label becomes the advisory group; two statements true only of the original recipient are
+  de-attributed (gap A6's "the bidder asked ... at clarification 64", and the closure pathway's
+  "the bidder holds both models"); and an *Issue and reliance* section is added. The two documents
+  are rendered from one source and cannot drift. The script **fails loudly** if either de-attributed
+  passage moves, rather than silently emitting a document that misattributes a clarification
+  question — a guard that has already fired in anger. The rendered issue is committed beside the
+  internal dossier.
+- **Session archive** — `reviews/NSO250MW_Session_Archive_2026-08-29.md` records the state at close,
+  the findings that matter before the 4 September deadline, the recorded publication reversal, and
+  three stated limitations: two OCR extract gaps, five sandbox-only watchdog test failures that CI
+  cannot warn about, and the fact that **neither corpus manifest is covered by a test** — a stale or
+  incomplete manifest passes CI silently, and two such defects were found and repaired by hand.
+  Corpus manifest: 108 -> 111 entries, all verifying.
+Ingressed the 21 August 2026 the bidder / Envision supplier evidence dossier for NSO tender
+`TR/REP&PM/ICB/2026/001/C` (72 files, 58 unique). Added the package evaluation, a manifest-only
+source-package record with its handling classification, and refreshed the OEM compliance-evidence
+register. The dossier establishes that the 250 MW / 1000 MWh programme is procured from
+10 MW / 40 MWh AC-capacity projects, and surfaces a three-way grid-forming contradiction, a
+silently superseding design calculation that lands year-15 RTE exactly on the 85 % floor, and a
+45 degrees C cell cycle-life finding that challenges the no-augmentation declaration. Source
+binaries are held outside the repository.
+- **The NSO evidence corpus now has a test** — `tests/lint/test_nso_corpus_manifest_integrity.py`.
+  Manifest defects have reached `main` in two classes because nothing covered either corpus
+  manifest: an **incomplete** manifest across five commits from `637aad3` to `782c958`, closed at
+  #1211, and one **impossible** entry introduced by #1226 and fixed by #1234. This repository's own
+  session archive had recorded the gap twice without closing it.
+- **It runs the gate in both directions, which `sha256sum -c` does not.** `-c` walks the *recorded*
+  entries and checks each is present and hashes as recorded; it is structurally blind to a file
+  that is tracked in git but absent from the manifest. At `782c958` the corpus held **119 recorded
+  / 130 tracked / 11 unrecorded** and `sha256sum -c` returned `119/119 OK`, exit 0 — a green check
+  on a corpus missing eleven files. The guard adds the tracked→recorded direction, the
+  nested-manifest parent pin whose staleness reported `FAILED` on a *present* file twice on one
+  branch, and a completeness check so a new nested manifest cannot sit unclassified and unchecked.
+- **It is wired into `fastlane`, not the sharded suite.** `test-suite.yml` skips its pytest shard
+  for PRs whose diff is only `*.md`, `changelog.d/` and `docs/` — and two of the six defective
+  commits carried nothing else. A guard that skips on exactly the changes it exists to catch is not
+  a guard, so it runs in the one lane that runs unconditionally on every PR. It costs about two
+  seconds, roughly half of that pytest collection, and needs the `[dev]` install and git.
+- **Every guard is proved against its own defect.** Each failure mode was reproduced in the working
+  tree and confirmed to fail the corresponding assertion, then reverted — including the parent-pin
+  guard, which caught a scripted revert that silently undid part of this change while it was being
+  written.
+- **The clause-6 guard caught itself, on its first CI run.** Its search terms were originally
+  hard-coded, which made the test file a second copy of the clause in a public repository — the
+  exact thing it forbids. It passed locally only because the file was still untracked and `git
+  grep` could not see it. The terms are now **read out of the manifest at run time**, so no copy
+  exists to drift, and a liveness assertion requires each derived span to match its own source:
+  a malformed search term fails loudly instead of matching nothing and passing.
+Added `scripts/analysis/extract_oem_dynamic_models.py`, which reads OEM dynamic-model deliverables
+without running PSCAD or PSS(R)E, and used it to close two findings that had been carried as
+UNVERIFIED.
+PSCAD and PSS(R)E are commercial, Windows-only, licensed tools, and PSCAD additionally needs an
+Intel Fortran compiler to build the supplied `.obj`/`.lib` interface objects, so the models cannot
+be executed in this repository's CI. They can still be read: a `.dyr` is ASCII and a `.pscx` is
+XML. The extractor parses both and reports compiled `.dll`/`.obj`/`.lib` artifacts as metadata
+only, stating explicitly that the control law in them is not recoverable.
+Two register findings move off UNVERIFIED as a result:
+- **B2, protection envelope — verified, and wider than recorded.** The delivered `.dyr` sets
+  47.5 Hz / 1800 s and 46.9 Hz / 0.04 s under-frequency, and 51.5 Hz / 1800 s and 52.1 Hz / 0.04 s
+  over-frequency. The PSS(R)E UDM manual confirms these CONs are trip thresholds, and the ENPCS2520
+  specification states the same behaviour in words, including separation from the grid within 0.2 s
+  inside the 47-47.5 Hz band where Annex A A.05.04 requires continuous operation. The specification
+  also states the parameters are adjustable to the local grid code, so this is a settings defect
+  with a vendor-stated remedy rather than a hardware limit.
+- **B3, reactive capability — checked and cleared.** The concern rested on the 10 MW figure of
+  +/-3.29 Mvar. The 11 MW design calculation states +/-3.62 Mvar, which exceeds the +/-3.3 Mvar
+  implied at a declared 11 MW. The finding is withdrawn and retained as a closed item.
+One new CRITICAL finding is added. **A6**: the ENPCS2520 specification states 110 % overload for
+10 minutes at 45 degrees C, 110 % continuous only at 40 degrees C, and 120 % for 1 minute at
+35 degrees C, against Annex A A.05.02(a)'s requirement of 110 % continuous and 120 % for at least
+two minutes. Unlike the frequency settings, no adjustability note attaches — these are thermal
+ratings. Clarification 64 requested exactly this relief and was refused.
+The register now carries 22 gaps and **no finding marked UNVERIFIED**: every item is anchored to a
+primary source held in the corpus.
+Ingressed the OEM supply tranche received 27 August 2026 for NSO tender
+`TR/REP&PM/ICB/2026/001/C`: **50 unique files** from 53 uploaded in the tranche, after de-duplication.
+De-duplication by SHA-256 did real work. Six uploads were byte-identical repeats within the tranche
+(the ENPCS 2520 specification, the electrical primary diagram and the Standards Compliance List were
+each supplied twice). One file, the 11 MW / 44 MWh design calculation, is byte-identical to a copy
+already committed and was not re-committed. Twenty-one files match hashes recorded in the
+21 August dossier manifest — material previously held by manifest only is now actually in hand,
+including the **superseding 5 August 10 MW / 40 MWh design calculation**, whose hash `5c619a2c…`
+matches exactly what the 21 August evaluation recorded for a document it could identify but never
+held.
+Extraction followed GWTF R26. Thirty-seven files carried complete text layers and went through
+governed MarkItDown 0.1.7; one certificate cover page was image-only and went through the OCR
+branch; one file was a 39-byte plain-text note carried verbatim. One extract initially came back
+empty and was re-run rather than accepted — it was a timeout artifact, not an image-only source.
+Committed: 25 Envision-authored product, commercial and compliance documents plus the superseding
+design calculation, with extracts. Withheld by manifest: 14 certification-body certificates and test
+reports (certification-body and IECEE CB scheme copyright, per the 21 August policy) and 11 compiled
+model binaries (publish never). One non-Envision third-party file is held separately with its
+handling question recorded rather than resolved.
+**No analysis or evaluation has been performed.** The gap register and the corpus reviews are
+untouched, and this tranche has not been assessed against the tender.
+- **Draft Envision proposal build chain** — `docs/source_materials/nso_bess_250mw_2026/proposal/`
+  now holds the generator, the Word renderer and the v0.1-v0.3 drafts, committed on the project
+  owner's explicit instruction. Committing it **closed a defect**: `make_docx.js` consumed a
+  `proposal.json` that nothing produced, so the Word issue had no reproducible source and the two
+  formats could drift silently. The generator now exports that document model itself, deliberately
+  **without** the PDF render-provenance lines, which describe how the PDF was rasterised and would
+  read in a Word file as claims about a document they do not describe. Verified against the
+  delivered v0.3: 474 text runs, 82 red gap-fill runs, **zero differing runs — exact text match**.
+  The directory README records the red-text convention (black = sourced, red = drafted gap-fill and
+  not a representation about the offered product) and the `make_docx.js` spread-order bug that once
+  produced 1 red run instead of 83, presenting every drafted gap-fill as sourced.
+Added the NSO 250 MW gap register and the tender evidence gap dossier it renders. This is the
+first caller of `app/reports/tender_gap_dossier_emit.py`, which until now had none — the emitter
+was vendor-neutral machinery with no register to instantiate it, so the corpus findings lived only
+as prose.
+The register carries 21 gaps (5 critical, 6 high, 7 medium, 2 low, 1 informational) against the
+controlling documents, and renders through the DutchBay Presentation Layer to a 25-page PDF written
+to be sent to Envision as-is: each gap states the controlling clause, what the bid pack contains,
+why that does not close it, the question to put to the OEM, and the objective closure test.
+It supersedes parts of the 31 July detailed gap statement and the 21 August checklist evaluation:
+the instruction to delete the supplier's dual-mode grid-forming language is withdrawn (Annex A
+A.05.17(i) requires it), the SCR sweep moves off the bid-stage critical path (A.05.23(d) makes it
+the alternative to submitting both models), and the recorded 20 % monthly liquidated-damages cap is
+corrected — clarification 54 establishes no aggregate cap over the term and puts availability
+deductions outside the monthly cap, so the capacity charge can fall to LKR 0.
+Closure pathways are researched and referenced, covering grid-forming stability at SCR 1.0, the
+UL 9540A sixth-edition test route, the 45 degrees C thermal case that governs both the cycle-life
+and round-trip-efficiency exposures, and the clarification-62 product-family equivalence route for
+uncertified standards. One null result is stated rather than papered over: no published equivalence
+mapping between IEEE 2800-2022 or UL 1741-SB and EN 50549-2 or G99 was found, so that argument must
+be constructed clause by clause.
+Two findings are marked UNVERIFIED and state their basis in their own text — the `.dyr` protection
+envelope (B2) and the reactive capability at a declared 11 MW (B3). Both are checks to run against
+the delivered artifacts, not established facts.
+The bidding entity is named in the dossier on the project owner's direction of 27 August 2026,
+consistent with the corpus index and the 30 July gap review, which already name it.
+- **Gap A7, CRITICAL, critical path** — the OEM availability guarantee stops at year 2 of a
+  15-year obligation. The Envision Product Warranty Policy V1.0 sets a *single* two-year period
+  across every listed item (battery pack, BMS, HVAC, rack protection, fire detection and
+  suppression, cables, combiner panel, PCS, step-up transformer, RMU, electrical cabinets and
+  EMS/SCADA), with the client bearing removal and re-installation and liability capped at the
+  product price. The LTSA Solution matrix does offer Availability, RTE and Usable-capacity
+  guarantees — but only Full Scope carries availability to year 15. Under the default
+  `warranty 0-2` + `3-15` split, availability is marked `-`, which the sheet's own legend
+  defines as *not included*, while RTE and usable capacity continue. So availability lapses at
+  year 2 and the Project Company carries gap A4's uncapped, unfloored 97 % exposure alone for
+  thirteen further years. Full Scope carries no price, no guarantee level, no term, no response
+  times and no signature; its BESS tab is labelled `100225-Draft` and the workbook's other tab
+  is a **wind turbine** service catalogue. This is the direct answer to gap A4's second
+  question, and it does not close it. The register now carries **23 gaps** (CRITICAL 7, HIGH 5,
+  MEDIUM 7, LOW 2, INFORMATIONAL 2), five of them on the critical path: A1, A2, A5, A6, A7.
+- **NSO 250 MW BESS — LTL consolidated case scenarios** — six v14 scenario configs for
+  tender TR/REP&PM/ICB/2026/001/C (250 MW / 1,000 MWh standalone BESS, BOO, 15-year term)
+  under the owner premise of 6 September 2026 that Ceylex Engineering and Lakdhanavi are
+  one LTL Holdings entity holding 24 of the 25 awarded projects. A 2x3 matrix: the
+  264 MW / 1,056 MWh 24-project portfolio and the 11 MW / 44 MWh single-substation unit,
+  each at upside / base / stress capex (USD 78 / 95 / 125 per kWh all-in). Revenue is a
+  flat, unindexed capacity charge of LKR 1,752,500/MW/month — the capacity-weighted
+  average of the 24 LTL-controlled winning bids — with no energy payment, per Volume I
+  cl. 2.8. Each config carries a seeded 5,000-trial Monte Carlo block over capex, opex,
+  bid-window FX spot, availability factor and the LKR credit spread.
+- **Base-case portfolio Monte Carlo (5,000 trials, LHS, seed 42)** — project NPV is
+  negative in every trial (mean -USD 45.6M, best -USD 21.9M) because project IRR
+  (mean 4.95%) sits far below the 12.68% build-up WACC. The fold-corrected annual
+  covenant DSCR holds at 0.868 across the whole sample, breaching the 1.30 covenant in
+  100% of trials, while the per-period sculpt floor stays pinned at 1.30 — the known
+  #806 year-1 bridge/interest-only fold, not a new divergence.
 Added `app/ops/extras.py` — an optional-extra availability probe that reads declared pins from
 the installed distribution's own metadata, so a running instance can report which extras it
 actually has without shell or deploy access to the machine. Distinguishes `installed` (metadata)
@@ -128,6 +392,14 @@ declared pin and (with `--deep`) actually imports. Exits non-zero on failure so 
 post-deploy CI gate, and emits `--json` for machine consumption.
 
 ### Changed
+- **New session handover record for 2026-08-20** — `docs/SESSION_HANDOVER_2026-08-20.md`
+  succeeds the 2026-08-17/18 record. It corrects the stale "66 active rules" count to 70,
+  points bootstrap at `AGENTS.md` rather than restating it, and records the container
+  environment receipt (`selection_source: portable_fallback`) against the new shared-venv
+  contract.
+- Replace the blanket "NO LICENSE IS GRANTED" proprietary licence with a proprietary licence carrying an explicit **evaluation and audit grant**. The previous text barred "evaluation use" on a public repository, which made the independent verification that DOC-03 (lender-DD-grade documentation) and VERIFY-01 (evidence over assertion) both depend on a breach of the licence's own terms. The Software stays proprietary and all commercial rights are reserved: production use, redistribution, derivative works, and competing products still require a separate written licence. What is now permitted is reading, running, testing, locally modifying for evaluation, and — critically — publishing findings, including criticism, since an evaluation grant that forbids stating what was found cannot serve an audit purpose. Also declares the licence in `pyproject.toml` so packaging metadata and repository scanners stop reporting it as unknown, and drops a hardcoded, already-stale version number from the README licence section in favour of the `VERSION` single source of truth.
+- Advance the governed MarkItDown ingestion toolchain to 0.1.8 and keep its
+  executable version contract aligned with the pinned runtime.
 Reconciled `R18` and `R21` with the convention `main` actually follows, and retracted a false
 enforcement claim in `REFACTOR-03`. Remediates audit pointer `RS-F4`, which names both rows as
 enforcement-drift.
@@ -210,6 +482,357 @@ Upgrade the governed typed-surface pair to pandas-stubs 2.3.3.260113 and request
   raw alias and compact `ScenarioResult.dscr_series` remain compatible.
 
 ### Fixed
+Fixed a false pin in the grid-screening report's dependency provenance. `GRID_EXTRA_PINS` was a
+hand-kept copy of pyproject that had drifted — it read `pandapower ==3.3.0` while the project
+declared `>=3.5,<4` and the environment ran 3.5.4 — so the report surfaced a version the study
+was never built against. The pins are now read from the installed distribution's own metadata,
+with the static table demoted to a fallback for uninstalled source checkouts and held to the
+declared value by a drift-guard test. The test that rendered the pin was itself asserting
+`==3.3.0`, locking in the drift, and now asserts against the resolved pin set.
+- Stop `app/reports/grid_screening_emit.py` describing its `[grid]` pin provenance as metadata. It
+  resolves through `app.ops.extras.declared_extras`, which #1263 changed to read the governing
+  `pyproject.toml` first and the installed distribution's metadata only behind it -- and metadata
+  is specifically *not* authoritative any more, because it describes whichever tree last built it
+  rather than the tree executing. Four claims in this module said otherwise: the fallback constant
+  called metadata "AUTHORITATIVE", `_grid_extra_pins`'s summary said it "prefer[s] the installed
+  distribution's own recorded metadata", its CASPER note said an uninstalled source tree "has no
+  metadata to read" (it has the pyproject that answers), and `GRID_EXTRA_PINS` said it resolved
+  "from metadata (authoritative)". Verified live: `probe_extra("grid").spec_source` is `pyproject`.
+- The same staleness had spread to the controls' own names. `..._are_read_from_distribution_metadata`
+  and `..._fallback_matches_declared_metadata` assert against `declared_extras`, which no longer
+  means metadata; `..._degrade_to_the_fallback_without_metadata` documents an uninstalled checkout
+  as the degradation trigger, which stopped being one. Renamed to say what they check. Their skip
+  reason -- "project not installed as distribution metadata" -- named a condition that can no longer
+  arise in a checkout, so it is now "no `[grid]` extra in pyproject or in distribution metadata".
+- Correct the rationale for comparing specifier clause *sets* rather than strings. It said "metadata
+  normalises their order", which is true only of the path that now answers second; pyproject returns
+  its own text verbatim. The set comparison is still right, and now for the stated reason: the same
+  pin reads `>=70,<71` from pyproject and `<71,>=70` from metadata, so a string compare would pass
+  or fail on which artifact answered.
+- Fix a citation that pointed nowhere. The fallback constant credited
+  `test_grid_extra_pins_match_declared_metadata` with holding it to the declared value. No such name
+  has ever existed -- the control is real but spelled differently -- so a reader following the
+  reference to check the claim found nothing. Added a control that derives both sides (citations by
+  scanning the module's source, definitions from pytest-collectable module functions and `Test*`
+  class methods) and fails when a cited name is only nested, belongs to a non-collected class, or is
+  misspelled.
+- Add typed source and resolution-status provenance to the grid report and render it structurally.
+  A complete declaration records `pyproject` or `metadata`; a genuinely absent declaration is
+  labelled `static_fallback`. Resolution exceptions, malformed requirements, duplicate normalized
+  names and partial dependency sets now fail loudly instead of appearing as resolved provenance.
+- Read the declarations and their source through one atomic `ExtraDeclarations` observation, so a
+  source-tree change between two lookups cannot relabel one artifact's dependency values as the
+  other's. An explicit empty `[grid]` declaration is rejected as partial rather than treated as an
+  absent declaration. PEP 508 extras, markers and direct URLs are rejected rather than stripped
+  from the lender-facing representation. Production parsing now uses the declared runtime
+  `packaging.Requirement` implementation, so valid PEP 508 whitespace is normalized and accepted
+  rather than falsely classified as malformed.
+- Preserve complete PEP 508 markers from pyproject. Installed metadata now removes only a marker
+  whose entire expression is one `extra == ...` association; conjunctive, repeated, disjunctive and
+  nested selectors remain complete on the declaration and therefore fail the strict lender
+  resolver instead of being simplified. Unsupported `extra` operators produce a retained
+  resolution diagnostic. A present-but-falsy non-table `project.optional-dependencies` value is
+  malformed, never equivalent to an absent declaration. A present `project.name` is likewise
+  type-checked and validated as a distribution name before comparison; invalid identity blocks a
+  trusted metadata fallback, while a valid different project remains ordinary absence. The atomic
+  observation is deeply immutable and distinguishes a missing or foreign pyproject from
+  present-but-malformed/unreadable input. Health probes retain their degrade behavior, while the
+  lender-facing resolver fails loudly on that diagnostic.
+- Strengthen the fallback drift oracle: it parses the governing `pyproject.toml` directly with TOML
+  and PEP 508 tooling, rejects duplicates and malformed declarations, and compares the complete
+  bidirectional normalized name/specifier mapping. A hostile declaration-only dependency is a
+  negative control. This is provenance-only and changes no finance or project KPI.
+- Disable pandapower's numba JIT at both `runpp` call sites (`analytics/grid/reactive_screen.py`, `analytics/grid/harmonics.py`). pandapower defaults to `numba=True`, which JIT-compiles Newton-Raphson matrix generation through numba to llvmlite; inside a full pytest run that LLVM JIT intermittently took the entire process down with a native fatal, observed in `tests/app/test_grid_screening_emit.py` once ~212 extension modules were co-resident (the file passes standalone). A native abort produces no pytest failure output and would intermittently red-light unrelated pull requests. The JIT is a pure acceleration of matrix generation, not a different algorithm: `numba=True` versus `numba=False` was verified **bit-identical** on `vm_pu`, `va_degree` and `p_from_mw` (max|diff| = 0.0), and pandapower ships the supported pure-numpy path (`pandapower/pf/no_numba.py`) that the flag selects. These are screening-sized networks where JIT compilation costs more than it saves, so the change is both safer and faster. KPI-neutral by construction — no finance, cashflow, debt or scenario code is touched.
+- `docs/deploy/DEPLOY.md` listed the image's WeasyPrint runtime libraries and omitted
+  `libharfbuzz-subset0`, which the runtime stage has installed since
+  [#1266](https://github.com/arunakulat/dutchbay-epc-model/pull/1266). It is now documented.
+- It is called out in its own paragraph rather than appended to the existing list, because
+  appending it would have made the surrounding sentence false. That sentence says dropping one of
+  those libraries leaves the package importable but failing "at the first PDF request", which is
+  true of pango/cairo and not of this one: WeasyPrint `dlopen`s it with `allow_fail=True`, so
+  dropping it fails nothing and silently moves every render onto the deprecated fontTools subsetter.
+  The paragraph says so, and says which gate catches it, since neither `verify_deployment.py
+  --deep` nor `/health` can.
+- Add `libharfbuzz-subset0` to the image's WeasyPrint runtime library set. WeasyPrint 70.0 dlopens
+  it by name at import with `allow_fail=True`; without it the import emits a `DeprecationWarning`
+  that the library "will be required by future versions", and every subsequent render falls back to
+  fontTools and logs, once per font face:
+      Using fontTools instead of HarfBuzz-Subset for font "Source Serif 4". This will be
+      unsupported in future versions of WeasyPrint. Please install HarfBuzz-Subset >= 4.1.0
+      with your package manager.
+  Six of those on a small DBPL page, none with the library present. The Dockerfile comment calls its
+  list "the exact bookworm set", so the omission was a claim as well as a gap.
+- Nothing is broken today and this is not a security fix. fontTools is a hard WeasyPrint dependency,
+  so the fallback is always available; output without the library is a valid, correctly tagged
+  PDF/UA-1 document. It is taken now because the warning is a deprecation notice, and the version
+  that removes the fallback would otherwise land as a surprise on whoever runs the next bump, on the
+  lender-facing PDF path.
+- **The deliverable does not change; the container bytes do.** Rendered pages, extracted text,
+  structure, tagging, page geometry and `pdf/ua-1` marking are identical either way. What differs is
+  the embedded font programs: fontTools passes through tables HarfBuzz drops -- `BASE` on the
+  variable house faces, `FFTM` on DejaVu -- and produced a larger program in every face measured
+  (four faces, +44 to +88 bytes each). **Glyph coverage never differs.** Both subsetters are driven
+  by the same shaped GID set, and outlined-glyph counts and cmap codepoint counts matched exactly in
+  every face, both ways: this change cannot drop a glyph from a lender document. The direction of
+  the size effect is consistent, but its magnitude depends on which faces and glyphs a document
+  uses, so no figure is quoted here as if it were a property of the change.
+- No byte-level receipt is published, because the fontTools path is not byte-stable: three renders
+  of one fixed document on one host gave two distinct hashes and two distinct sizes on that path
+  while the HarfBuzz path gave one. An earlier draft of this fragment quoted a single pair of byte
+  counts as a receipt; they do not reproduce, and a figure a reviewer cannot re-run is not a receipt.
+- Retracted from an earlier draft: the assertion that "the byte-identical-output expectation for
+  DBPL PDFs does not survive this commit". There is no such expectation and there never was. DBPL
+  output is already not byte-reproducible run to run, with or without this change -- four renders of
+  one document through `app.reports.dbpl.print_core.render_dbpl_pdf` gave four distinct hashes and
+  three distinct sizes, because fontTools restamps `head.modified` with wall-clock time when it
+  instantiates the variable house fonts, and that runs on both paths. Nothing in the tree asserts a
+  PDF hash, size or byte-identity; the only byte assertions on a PDF are `pdf[:5] == b"%PDF-"`.
+- The CI image build proves that `libharfbuzz-subset0` **resolves and installs** on bookworm
+  (`6.0.0+dfsg-3`) -- the `RUN` line changed, so its layer cache key changed and the install genuinely
+  re-executed. It does not prove WeasyPrint can use it: `/health` renders no PDF. The library is
+  nonetheless reachable there rather than inert, because WeasyPrint gates the HarfBuzz path on
+  `hb_version_atleast(4, 1, 0)` and bookworm's 6.0.0 clears it. Asserting the HarfBuzz path inside
+  the built image is a real gap in the image gate, but it predates this change and belongs in its
+  own commit rather than loaded onto a one-package change.
+ANDES ride-through studies now prepare missing or stale generated model code serially
+before applying disturbances. Valid generated calls are reused incrementally, while an
+incomplete importable cache falls back to serial full regeneration. This avoids
+constructor-time multiprocessing pools while preserving the advisory study and finance
+boundaries. Lifecycle controls exercise cold, warm, stale, incomplete, broken and
+process-contained threaded loads; the finance-neutrality control retains and recomputes a
+real pre-study KPI baseline.
+Make jobs, PDF renderer and lender-risk-table dependency error tests deterministic
+by controlling test-local import/dependency seams. Exercise both jobs dependencies
+and WeasyPrint package/native loader failures, assert actionable errors and causes,
+and retain memory, PDF and DataFrame success controls. No runtime or financial
+behavior changes.
+Restore the committed base-case FX integration test and replace two retired-field
+mock oracles with responsive live-rate checks. Compare baseline, three sensitivity
+coefficients and sweep variance shares with canonical gateway evaluations and
+independent scalar statistics. Preserve the spread sweep's full-hedge reference;
+mean fit R-squared and mixed-regime variance shares are not a stochastic risk
+decomposition. Production calculations and scenario assumptions are unchanged.
+Canonical periodic IRR now detects finite cashflow coefficient normalization that
+would overflow NumPy's companion matrix and fail its finite-matrix check, routing
+directly through the existing numerical-failure fallback. Subnormal inputs,
+caller bounds, residual validation, successful polynomial root selection and
+bisection semantics are preserved. The property-test introduction now describes
+the existing residual validation accurately. Unrelated reciprocal-overflow
+warnings remain outside this narrowly scoped repair.
+Avoid eager division for undefined legacy V12 research DSCR rows. Masked NumPy
+division preserves the strict debt-service threshold and NaN values; historical
+model assumptions and canonical finance are unchanged.
+Explicitly exclude the Hypothesis database from pytest collection and bind the
+class-scoped FX calibration fixture to its class, resolving both compatibility
+warnings while preserving test collection, qualification controls and fixture values.
+Wind power-curve sourcing tests now skip only when an optional package is absent.
+Unexpected imports, loading errors and failed curve assertions fail normally.
+Executable regression probes preserve valid controls and detect assertion-to-skip masking.
+List windpowerlib turbines through its public unfiltered API with explicit missing-value
+and dtype handling. Preserve the filtered table's outer-merge ordering, duplicate-key
+contributions, labels, values, dtypes and malformed-flag errors without pandas downcasting
+warnings. Turbine curves, physics and manufacturer filtering remain unchanged.
+The executive workbook explicitly aligns an entirely missing ratio or covenant
+Value column with a populated floating-point peer before concatenation, avoiding
+the pandas concat deprecation warning while retaining row order, dtypes and missing
+values, including undefined breach-year disclosures. Temporal missing sentinels
+retain their existing dtype and representation. Financial calculations are unchanged.
+- Raise the locked `jupyter_server` pin from 2.20.0 to 2.21.0, closing CVE-2026-86049. `pip-audit`
+  reports the advisory against the pinned lock, so it failed `make security` on `main` and on every
+  open pull request at once, independently of what any branch changed: `PIP_AUDIT_IGNORES` is empty
+  by policy, which makes any advisory against a pinned version a hard gate failure rather than a
+  warning. The gate is restored here, not suppressed.
+- The bump moves nothing else. `jupyter_server` 2.21.0 declares requirements byte-identical to
+  2.20.0 — the same 43 specifiers, with `Requires-Python >=3.10` unchanged — so no transitive pin
+  moves and every existing lock line still satisfies it. The package is transitive: it appears in no
+  `pyproject.toml` extra, no application module imports it, and it reaches the tree through the
+  JupyterLab stack, whose only relevant declaration is `jupyterlab==4.6.3` requiring
+  `jupyter-server<3,>=2.19.0`. That range admits 2.21.0, so the notebook stack resolves unchanged.
+- Each half of the claim was observed, not assumed. `pip-audit` against the pre-bump pin reproduces
+  `jupyter-server 2.20.0 CVE-2026-86049` with `2.21.0` named as the fix; the same audit on 2.21.0
+  reports no vulnerability; and a full audit of the edited lock reports none either, so this one
+  line is sufficient to return the gate to green rather than merely clearing one row of several.
+- KPI-neutral. This moves a locked notebook/development dependency only; financial logic, scenario
+  inputs, and canonical KPI calculations are untouched.
+- **`docs/MODULE_REFERENCE.md` no longer cites one machine's filesystem** — the two
+  "Files referenced/read" provenance lines listed every path as
+  `/Users/<user>/Downloads/dutchbay-epc-model/...`, an absolute path from the machine the
+  document was generated on. Anyone else reading it was pointed at a directory that does
+  not exist for them, and the paths silently went stale the moment that clone moved.
+  Now repo-relative, which is what the rest of the document already uses.
+- **`docs/MODULE_REFERENCE.md` pointed at the wrong path for the local CI
+  orchestrator** — it listed `go_with_the_flow_ci.py` among the `scripts/ci/`
+  guards and gave its path as `scripts/ci/go_with_the_flow_ci.py`. The file is
+  and has always been at `scripts/go_with_the_flow_ci.py`; nothing was ever
+  committed under `scripts/ci/` by that name. Corrected in both places. The
+  module's description was verified against the file and is unchanged.
+- **`n`-sampling framing corrected in `docs/AGENTIC_DELIVERY_PRACTICE.md` §5.5** — the section
+  described the technique as sampling the *same* task *k* times, which is how the retrospective
+  frames it. Following that claim back to its own primary source shows the reported unlock was
+  ***k* genuinely different attempts**, not ***k* retries of one*; iterating on a single
+  candidate is the strategy recorded as having *failed*. Diversity sampling searches the
+  solution space, repeat sampling buys more tickets on one point in it. Preconditions now
+  require materially different candidates, and a new "what it does not promise" paragraph
+  records that the source experiment discarded the great majority of its output and had not
+  produced a usable artifact. The finance-logic boundary is unchanged.
+- **Secondary sources registered** — `AGP-SRC-002` (the 100-designs experiment, provenance for
+  the correction) and `AGP-SRC-003` (the prior instalment, which carries the fabricated-progress
+  finding as logged numbers: 88% → 60% → 92% → 70%). The §1 row claiming the sibling post was
+  "not retrieved" is retired, having stopped being true when it was followed.
+- **Corpus manifest repaired** — `MANIFEST.sha256` recorded a `registers/__pycache__/*.pyc`
+  bytecode file, added by #1226. `__pycache__/` is gitignored, so the file was never in the tree
+  and never can be: `sha256sum -c` failed on `main` with `138 OK, 1 FAILED`, exit 1. Removed; the
+  manifest verifies at `138/138 OK`, exit 0. It reached `main` unnoticed because **no test covers
+  either corpus manifest** — a stale, incomplete or impossible entry passes CI silently. It is one of
+  two classes of manifest defect that have reached `main`: an incomplete manifest across five commits
+  from `637aad3` to `782c958`, closed at #1211, and this impossible entry, introduced by #1226.
+- **The coupling behind it** — the parent manifest pins the SHA-256 of the nested
+  `NSO250MW_Commercial_Offers_2026-09-03.MANIFEST.sha256`, so an edit to the nested file
+  invalidates the parent unless the same commit refreshes it. One committed tree on this branch
+  failed that way, and it failed in the worse manner: `FAILED` on a *present* file, which in an
+  evidence corpus is the signal reserved for content having been altered, rather than the absent
+  file the base defect described. It is the direct argument for the test above, and it is now
+  written up as a pre-commit checklist in `AGENTS.md`.
+- **Envision commercial offers silently revised, 4 September 2026** — both budgetary offers were
+  supplied again carrying the **same version and date** as the 3 September copies ("Version: 01",
+  "Date of Submission: August 31, 2026"), but their text **differs substantively**. Verified by
+  extracting both pairs with governed MarkItDown 0.1.7 and confirming each finding by direct
+  string search across all four documents, not by reading a diff.
+  - the **10 MW offer's BESS warranty was cut from 5 years to 2 years**, while the 11 MW offer's
+    stayed at 5 years. The edit did not reach the 10 MW executive summary, which still promises
+    "5 years' BESS Warranty", so that document is now internally inconsistent;
+  - the scope note *"PCS and AC equipment are not included in supply scope"* was **removed from
+    both** offers, resolving a contradiction against their own price tables, which charge
+    separately for "PCS & MV Transformers";
+  - **both headline prices are unchanged**, so on the 10 MW offer the price held while the
+    warranty was reduced;
+  - this repeats a pattern already on the record for this OEM, whose 5 August design calculation
+    silently revised the 29 July one while both were labelled V1.0.
+- **Handling of that finding, now stated once** — the offer documents are not in this public
+  repository and never have been; both sets of hashes are recorded and the comparison establishing
+  the revisions is pinned by SHA-256, so the analysis cannot be revised without trace. Neither
+  issue automatically supersedes the other. Everything else about how the package is handled —
+  what this repository does and does not disclose about the offers, on whose decision, and why
+  that route was chosen — is stated in exactly one place: the header of
+  `docs/source_materials/nso_bess_250mw_2026/source_packages/NSO250MW_Commercial_Offers_2026-09-03.MANIFEST.sha256`,
+  under the identifier `NSO250MW-OFFERS-HANDLING-2026-09-04`. It had been written out in five
+  places and the five copies disagreed with each other; one of the three blocking findings of the
+  RECRUIT-01 review of this change was that disagreement. The READMEs and this fragment now cite the
+  identifier instead of restating it.
+- **A withdrawal, itself withdrawn: Addendum 01 exists, is held, and governs the delivery
+  timeline.** On 2026-09-06 the NSO 250 MW scenario headers withdrew their own citation of a
+  two-month SCOD extension in "Addendum 01", on the stated ground that no such addendum was held
+  in the corpus. That was wrong, and the way it was wrong is the useful part. Addendum 01 of
+  07-Aug-2026 and the RFP Clarifications of 21-Aug-2026 are both held in **this repository**, at
+  `docs/source_materials/nso_bess_250mw_2026/rfp/` — ingressed by #1180 on **27 August 2026**, ten
+  days before the withdrawal, and present in the very base tree the withdrawal was reviewed
+  against.
+  **Two things this is not.** It is not "we searched the wrong repository". The private corpus
+  *also* carried the governing schedule, tabulated in full in an evaluation dated **three days
+  before** the withdrawal, and the public repository had carried a complete Addendum ingress
+  review since 27 August. Both corpora already discussed the document. The failure was never
+  grepping for "Addendum 01" by name in either of them before declaring it unheld.
+  And it is not "the error survived a double veto", which flatters the review. That veto was of a
+  *different* defect — an enhanced capital allowance. The Addendum withdrawal was **introduced by
+  the remediation of that veto** and then **affirmatively certified**: the assurance record graded
+  it "correct, and the replacement is honest… Good practice". Being certified is a worse failure
+  than being missed, and both reviewers said so on re-review.
+  Addendum 01 item 01 revises RFP Volume I clause 1.4 **in full**. The governing schedule is
+  Letter of Award 06-Nov-2026, acceptance 13-Nov-2026, ESA signing 14-Dec-2026, Financial Closure
+  15-Mar-2027 (three months from signing) and COD 16-Aug-2027 (eight months from signing).
+  Financial close to COD is **five months**, not the four the headers asserted from a schedule
+  that never governed. The decisive check is the closing date: Volume I says 14-Aug-2026,
+  Addendum 01 says 04-Sep-2026, and the bids were opened on **04-Sep-2026**.
+  Clarification 47 states that "the Scheduled Commercial Operation Date (SCOD) has been extended
+  by two (2) months" — a second document, but **not** a second source, since it derives its
+  authority from the Addendum it points to. Nor is its "two months" the same measure as the
+  102-day absolute move from 06-May to 16-Aug-2027. Two months is the ESA-relative milestone, and
+  it is verbatim in both documents — Volume I clause 1.4 says "Within 06 months from the date of
+  signing of ESA", the Addendum says "Within 08 months". The absolute 102 days, measured
+  consistently at the COD end, is 39 days the whole ESA chain moved when signing went from 06-Nov
+  to 14-Dec-2026, plus 61 days of extension, plus a 2-day roll because eight months from signing
+  falls on Saturday 14-Aug-2027 and the tabulated date is Monday the 16th. They reconcile; they
+  are not one number.
+  **No KPI moves.** `Financing_Terms.construction_years` stays 1 — 154 days is 0.42 years and
+  rounds to the same integer as the 0.33 the superseded schedule implied — and `cod_year` stays
+  2027, because 16-Aug-2027 is still 2027. The oracle at
+  `tests/integration/test_nso250_ltl_scenarios.py` passes unchanged, which is what says the
+  correction is documentary rather than economic. The headers now carry the governing dates and
+  record the superseded ones as superseded.
+  Two further claims are corrected. The clarifications were labelled UNVERIFIABLE; they are held
+  and every clause cited is now verified verbatim — item 13 leaves import SSCL to "the prevailing
+  laws and regulations in effect at the time of importation", item 47 places responsibility for
+  the bonded facility on the bidder, and item 48 restricts the facility to "imported equipment
+  that forms part of the BESS facility" with transmission-line materials and external
+  interconnection works "not eligible". The clause 48 carve-out, still deliberately unmodelled,
+  is now quoted from the transcript rather than cited at second hand.
+  The finding that prompted this was raised as a defect in the *other* direction: a register in
+  the private corpus asserts these documents are "held in the public corpus", and that assertion
+  was queued for correction as false provenance. Checking it showed the register was right and
+  the scenarios were wrong.
+- **The NSO 250MW BESS scenarios were relieving a levy the bonded scheme does not reach and
+  running a delivery timeline the RFP does not state.** Two sourced corrections, plus the guard
+  that should have existed before either was claimed.
+  `relief.bonded_scheme: true` zeroes CID, PAL **and** SSCL as one line in
+  `finance/import_levies.py`. The bonded warehousing scheme — Customs Ordinance, Gazette
+  Extraordinary 2083/33 of 10-Aug-2018, amended from 15-Oct-2025 by Gazette Extraordinary
+  2458/38 — relieves Customs Import Duty, PAL, CESS and VAT on approved capital goods during
+  construction. It does not reach SSCL: only raw materials imported for processing and re-export
+  are exempt, and capital goods pay. The flag is now `false` on every variant and relief is
+  expressed on the lines the scheme actually covers, so the 2.5% import SSCL stands where it
+  always should have — USD 59,773 on the unit case, previously nothing. The gazette *citations*
+  are corpus-verified (the ESA names both verbatim); their *content*, and the SSCL rule itself,
+  are external to this repository and are now marked as such in the headers rather than asserted
+  in the same register as the held documents.
+  `cod_year` was 2028 and `Financing_Terms.construction_years` was absent, which
+  `finance/debt_v14.py` silently defaults to **2** — and
+  `finance/equity_distribution_v14_hydra.py` turns into two zero years at the head of the equity
+  return vector. RFP Volume I clause 1.4 states ESA signing 06-Nov-2026, Financial Closure
+  06-Jan-2027 and COD 06-May-2027 — **superseded; see the correction fragment beside this one,
+  which is part of the same release.** Addendum 01 item 01 revises that clause in full and gives
+  ESA signing 14-Dec-2026, Financial Closure 15-Mar-2027 and COD 16-Aug-2027, five months rather
+  than four. The key is now explicit, and the header states 1 as a **conservative rounding** of
+  0.42 years rather than a figure read off the schedule — 0 would zero IDC, which is wrong for a four-month build on drawn debt, while 1
+  overstates it by about eight months. The choice is worth roughly 2pp of project IRR. The
+  headers also cited an "Addendum 01" two-month SCOD extension, and elsewhere "Addendum 01 item
+  13" as live authority. **Both withdrawals were wrong and are themselves withdrawn in the
+  correction fragment beside this one.** Addendum 01 is held, in this repository, ingressed by
+  #1180 on 2026-08-27 and present in the base tree this change was reviewed against. Both original
+  citations were correct.
+  **An enhanced capital allowance was proposed with these corrections and withdrawn under
+  review.** Switching it on at a multiple of 2.0 assumed each site's depreciable base sits inside
+  the Second Schedule's USD 250,000–3,000,000 band. It does not. On the plant-only share of the
+  levy-inclusive depreciable base — the narrowest reading the claim itself invoked — the cheapest
+  variant is USD 3.17m against a USD 3.00m ceiling and the others run 1.80×–1.99× over, while per
+  portfolio the same measure runs **25.4× to 47.8×** over. `project.boi_approved` is false in the same files, and nothing in `finance/`
+  reads that key, so the contradiction failed silent. The Second Schedule is not held in this
+  repository or its corpus, making the citation circular. Two independent `RECRUIT-01` reviewers
+  vetoed it on the same ground and it is out — the allowance would have supplied about 64% of the
+  headline improvement, on an entitlement not established.
+  `tests/integration/test_nso250_ltl_scenarios.py` and
+  `tests/fixtures/finance/nso250_ltl_expected_kpis.json` close the gap both reviewers named:
+  these eight scenarios had **no test coverage at all**, so every KPI claim about them rested on
+  author self-report. The oracle pins a seven-KPI vector per scenario, the unit/portfolio scaling
+  identity, and two negative controls — that the allowance stays off and that bonded relief is
+  never re-encoded through the flag that would zero SSCL with it. Both controls were observed to
+  fire before being relied on.
+  KPI effect against the previous head, direction positive: `bidimplied` project IRR 8.02% to
+  9.00% and equity IRR 5.60% to 6.72%; `base` 1.75% to 1.80%; `upside` 1.82% to 1.88%; `stress`
+  0.68% to 0.76%. `min_dscr_period` is unmoved at 1.300 — the sculpt floor still binds. Distinct
+  from it, `min_dscr` (the #790/#806 fold-corrected annual covenant minimum) sits at 0.867–0.869
+  throughout, before and after; that is pre-existing and is now pinned so the distinction cannot
+  be lost. The three OEM-priced variants stay at a negative equity IRR, which is the finding
+  rather than a defect: the awarded capacity charges do not support those equipment prices.
+  **One thing "positive" does not mean.** The direction of every KPI move here is positive, and
+  that is a statement about the delta and not about viability. Read against the Sri Lankan cost of
+  equity of 18.00% that LTL's own IPO advisers apply to every Sri Lankan valuation in the group
+  (NDB IB / CT CLSA, 31 July 2024, s.8.1.4 — a 12.00% risk-free rate plus a 6.00% power-sector
+  risk premium), `bidimplied` returns 6.72% against an 18.00% hurdle, a shortfall of 11.3pp — and
+  `bidimplied` is the best case in the family, explicitly a bid-implied ceiling rather than a cost
+  estimate. The other three are negative. **No variant in this family clears.** Lifting
+  `wacc.cost_of_equity` from 0.15 to the sourced 0.18 is a separate change and is deliberately not
+  made here; it was verified to move none of the seven pinned KPIs, so it is orthogonal to this
+  one rather than merely deferred.
 - Make `tests/lint/test_extra_pin_consistency.py` say why it cannot run, instead of dying with a
   bare `KeyError`. Its extras-driven control is parametrized from `[project.optional-dependencies]`
   at *collection* time, so a pyproject missing that section did not fail one control -- it raised
