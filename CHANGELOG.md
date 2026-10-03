@@ -5,6 +5,196 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Added
+Claude Code now has a repository entry point. `CLAUDE.md` routes Claude sessions to the canonical ruleset and `AGENTS.md`. It states what differs in a cloud session: the checkout-local `.venv` fallback that `THREAD-01` and `ENV-01` permit on container hosts, how to provision it when the session-start hook did not run, the released native-reservation protocol, and the history and tag fetch the handover resolver and the audit overlay test need. It also points to the rules and formats that govern the repository: how to load the GWTF ruleset, the three framework principles by rule ID (`FRAMEWORK-01` to `FRAMEWORK-03`), and where the receipts, changelog, handover, review, corpus and DBPL formats are defined. `.claude/skills/steward/SKILL.md` records this repository's pull-request conventions for sessions that watch, fix or merge a pull request. It covers base currency, what green means under `MERGE-01`, Grid Study classification, `VERIFY-01` receipts, changelog fragments, corpus manifests and squash-merge verification. Both files cite the ruleset rather than restating it, and neither adds or changes a rule.
+- **Dolphin 3B-1 governed v14 execution seam** — adds a held, preflighted transition from one exact
+  `ProjectCase` and `EvaluationRequest` to exactly one call of the public
+  `analytics.evaluation_v14.evaluate_with_overrides()` gateway. The seam binds authored source
+  bytes, digests, jurisdiction and technology authority, cutoff and valuation facts, ProjectCase
+  material values, exact numeric projections and result origins before handing D3C an owned,
+  recursively immutable full-result snapshot. The production scenario-authority catalogue remains
+  intentionally empty, so this change authorizes no committed production scenario.
+- Adds the downstream D3C implementation acceptance ledger: D3C-0 assembly authority first, all
+  twenty report sections in SSOT order, all six reconciliation families, every D2 register,
+  explicit unperformed human roles, a partial-engine-manifest bridge, and static field/unit/precision
+  mappings. D3C may consume one accepted result but may not rerun finance or recompute KPIs.
+- This engineering seam changes no finance mathematics or canonical KPI baseline. `VERSION` remains
+  `15.4.0`; achieved grade remains `ungraded`; package release and Board/lender circulation remain
+  `HOLD`; issue `#1110` and all professional, lender, Board, release and deployment authorities are
+  unchanged.
+- **D3C next-thread handover** — add the executable successor bootstrap, freshly reconciled
+  D3B-1/D3C-0 state, writer retraining and review boundary, held package-assembly acceptance scope,
+  explicit deferrals and safe worktree-retirement instructions.
+- Add the strict, code-owned Dolphin 3C-0 assembly-authority contract for exact report/run identity,
+  upstream digests, runtime facts, D2 packs, governed result-byte artifacts, actor/source provenance
+  and held non-reliance distribution controls, with pre-normalization wire checks, one pack per
+  technology axis, taxonomy/supersession guards and exact held-scope circulation. The production
+  graph also enforces downstream evidence-cutoff parity, acyclic source lineage, exact
+  disclosure-to-artifact provenance, bounded/duplicate-free pack defaults, pre-normalization
+  canonical values, governed D3B scope reciprocity, exact source/pack axes, non-package result
+  artifacts, bounded compatible versions and one closed held-distribution profile whose
+  internal-engineering audience/use intent IDs and statements are code-owned. The production
+  catalogue remains empty, package assembly and finance execution remain excluded, and no grade,
+  release or `HOLD` state changes.
+Added a strict, immutable, explicitly non-authoritative D3C-1a projection for one accepted
+`D3BExecutionSuccess`. Before mapping any scalar, the pure adapter independently revalidates the
+bounded frozen D3B origin graph, exact duplicated result surfaces, evaluated-config digest,
+manifest, warning/FX coherence and ordered numeric projection receipts. It preserves exact
+binary64 identity, uses route-specific zero policy, reconciles balloon percentage to the explicit
+IDC-inclusive principal basis, assigns every inspected result path one reviewed disposition, and
+uses checksum-guarded import-safe taxonomy and engine identities without runtime filesystem I/O.
+Origin ingress is deterministic and bounded before mapping allocation; valid empty DSCR, exact
+bounded Unicode-scalar warning/FX-reason text, and numeric-receipt source surfaces retain the D3B
+contract's projectable distinctions and limits. JSON-escapable controls remain exact; surrogate
+code points are refused before facade construction instead of failing later during serialization.
+Revision and manifest-seed integer bounds are preserved in validation and serialization schemas
+and are rechecked during serialization, including after an unsafe Pydantic copy. It emits only
+static twenty-section route candidates plus unresolved dependencies; it does not assemble D2
+records, rerun finance, infer report completeness, or confer grade, release, lender, Board or
+publication authority.
+Add a strict D3C-1b context binder that reciprocally verifies one exact ProjectCase, evaluation
+request, accepted D3B success, D3C-1a projection, code-selected D3C-0 authority and three governed
+artifact byte payloads before emitting only unresolved, ungraded and held candidate D2 records.
+Retain the bounded accepted-success content-identity witness so authenticated Python/JSON
+re-ingress reselects the code-owned authority, rehashes fresh artifact bytes, reconciles the exact
+request origin, and reproduces the projection and directed FX derivations. Preserve complete
+MissingValue and cost/conversion context, and make the historical analytics facades lazy so
+importing the contract performs no evaluation, finance or taxonomy file I/O. No production
+authority or HOLD is added or lifted.
+- Add the Dolphin 3D independent disposition record: REJECTED by both reviewers, 25 findings of which 6 are blocking and 9 high. Two genuinely separate reviewers were dispatched in parallel, each bound to an exact SHA, neither the charter's author, which is the first D3-family disposition whose independence is structural rather than self-declared. The domain reviewer found that grade-specific materiality is unrepresentable in the proposed design although the normative contract requires it where necessary, that the charter's central "profiles may only narrow" safety claim is vacuous on the five requirement axes its profile vocabulary cannot express, and that de-materialisation removes a section from the blocker set as well as the aggregation domain because the blocker stem gates on a material claim. The assurance reviewer found that the charter's central factual premise is false, since the evidence and review axes are grade-agnostic where the aggregation rule is grade-relative, that lender grade remains self-awardable because the inherited authority guard performs no independence test and admits the model owner, and that the charter's own central mechanism is unobservable inside its own increment and could ship green having never been demonstrated. The coordinator re-verified three claims rather than accepting them, and all held, the sharpest being that the grade enums are string-based so a native minimum returns decision_grade and the fail-closed sentinel sorts above every real grade. Two live defects in merged code were surfaced in passing: a package with zero material sections validates today because the materiality field is read by no validator, and the mis-ordered enums are wrong for any consumer calling min, max or sorted. The record is deliberately kept separate from any charter edit, because the Dolphin 3C disposition lapsed on arrival when its own pull request edited the object it was disposing.
+The DBPL base template now emits a mandatory **document-control block** — control table plus a
+revision history with a `Status / Reason for issue` field and a four-eyes
+Prepared/Checked/Reviewed/Approved chain, following the Outer Dowsing and Arup convention. Draft
+versus final is that status field, never a watermark. Sections can be marked `landscape: True` to
+render on a **Lazard** A4 landscape page where a portrait column cannot carry the table width.
+Output is produced at **PDF/UA-1** and now reports `Tagged: yes`, correcting the DBPL's own former
+defect. GWTF `DBPL-01` gains the stylesheet pointer and records each contested decision.
+Added `app/reports/dbpl/fonts.py` and bundled the DBPL house superfamily — Source Serif 4 (body),
+Source Sans 3 (tables and furniture) and Source Code Pro (identifiers), all SIL OFL and all
+verified tabular by default, which is what aligns a column of DSCRs without decimal tabs.
+Resolution is bundled → system → web (opt-in) → metric-compatible fallback, and the tier that
+answered is surfaced: WeasyPrint renders happily with a substituted face, so a successful render
+is no evidence the house font was used.
+Added the DutchBay Presentation Layer (`app/reports/dbpl/`) and GWTF rule **DBPL-01**. DBPL now
+names a print contract, not a look: any PDF described as a DutchBay Presentation Layer / dbpl
+document must be produced through `render_dbpl_pdf`, which requires the complete `[report]` extra
+(weasyprint, reportlab, geopandas, contextily) plus the DBPL font stack, applies the house style,
+and surfaces font provenance. The style tokens were measured from
+`DUTCHBAY_ANALYST_GENERATED_SYNTHETIC_LENDER_TERM_SHEET_2026-08-18.pdf`, not invented. The image
+now installs `fonts-liberation` so the house families resolve natively. Documented in
+`docs/dbpl_styleguide.md` and `AGENTS.md`.
+Documented post-deploy verification in `docs/deploy/DEPLOY.md`: how to confirm a running
+instance's extras, pins and importability without `flyctl` access, when `--deep` matters (any
+change to the image or its system libraries — WeasyPrint imports as metadata but fails at the
+first PDF request if pango/cairo are dropped from the runtime stage), and the exit codes that
+make it a CI gate. Amended the Limitations section, which previously left "what a running
+instance contains" unverifiable, and added the honest boundary that the check reports what the
+instance says about itself and is not a substitute for the `docker-build` workflow.
+- Ingress the Dolphin 3B assessment and v14-binding execution charter verbatim from the D3B worktree, restoring the cross-reference the Dolphin 3C charter previously had to leave unlinked. Its pinned ruleset SHA, framework expansions, delegation target and stated import direction were each verified against this repository.
+- Add the Dolphin 3B-0 independent review record, binding a NO BLOCKER disposition to the exact reviewed commit. It replaces a review chain that existed only in the authoring session's context and left no durable artefact. 89 probes were independently executed rather than taken on trust: the resolved-config digest guard refuses all 28 probed coercion, subclass, aliasing, non-finite and resource-bound attacks with deterministic RFC 6901 paths and passes negative controls in both directions; error ordering and the digest are identical across five PYTHONHASHSEED values; all five identifier grammars reject the Python trailing-newline anchor trap and homoglyph substitution; and the solar DC capacity binding is implemented as a stricter biconditional than the charter claims. Two non-blocking observations are recorded, one cosmetic __all__ ordering drift that no enabled ruff rule catches and one downstream control-code-point caveat for emitters. Two charter gates remain declared not executed, the Draft 2020-12 dual-mode agreement and the second independent reviewer the owner's reviewer-depth policy requires for complex scripts, and three reviewer probe errors are recorded rather than dropped.
+- Execute the cross-runtime ECMAScript gate the Dolphin 3B-0 review record had declared not run, against Node v25.2.1: all six lexical patterns compile in ECMAScript and 44 of 44 matrix cases agree with Python, so the absolute-end anchor is portable. The predicted divergence is real but sits in maxLength code-point counting rather than in the pattern layer, lives in a downstream JavaScript validator rather than in this contract, and fails closed by rejecting a valid value instead of admitting an invalid one.
+- Add the Dolphin 3B-0 second-pass review record, the second reviewer the owner's reviewer-depth policy requires for a complex script, reviewing the merged contract against the ingested D0, D1, D2 and D3A corpus rather than against the D3B charter alone. Disposition ACCEPTED. D3B-0 does not repeat any of the confirmed D3A defect classes: versioned models carry no default schema_id or contract_version, the contract holds zero float or Decimal material fields so the binary-float precision class is unreachable by construction, capacity bases are typed with a solar DC biconditional stricter than the charter claims, storage carries all three routes, the scope requires exactly one site jurisdiction, and the validation receipt names itself a declaration rather than asserting assurance. One medium finding, D3B-2P-01: neither material assessment date is closed. The valuation date is protected only incidentally by a second copy inside the price-basis assertion, so moving both copies together accepts any date, and the evidence cutoff has no second copy and is unconstrained across the whole representable range, which reproduces the D3A-DOM-03 failure shape one layer up and currently belongs to no dolphin because D3B-1 reconciles capacity, AEP, turbine, cost and FX but never dates. It is latent because nothing consumes the scope yet, and it should be assigned to D3B-1 before that slice is implemented. The record also corrects two errors in the first-pass review, which had declared the cross-runtime ECMAScript gate and the Draft 2020-12 dual-mode gate not executed when the implementer's own suite already covered both, including a real node subprocess using the code-point-correct length idiom; the first record is left unedited under the D2 convention that review records are immutable dated receipts corrected through successors.
+- Add the Dolphin 3C result-facade contracts disposition record and mark the charter accepted, unblocking D3C's remaining scope, which the charter gated on acceptance of these contracts. The disposition is ACCEPTED subject to four required amendments, produced by separate domain and assurance passes with every load-bearing charter claim independently executed against the repository rather than read. Three amendments bind before implementation: nothing currently requires precision to be declared, since the Dolphin 2 CanonicalValue leaves it optional and the control list only checks that a declared precision does not exceed the reviewed rule, so the canonical project IRR can be carried with a unit and no precision while satisfying every listed control and defeating the charter's central per-field precision thesis; the engine-less sections are asserted once as a count and never enumerated, which contradicts the charter's own hazard forbidding inferred section binding, and the always-applicable citation understates the normative contract by naming two sections where it marks five; and the independent oracle must be captured with return_full_result=True rather than reusing the existing expected_kpis fixtures, which are flat scenario-to-KPI vectors sitting downstream of the normalize_kpi_dict loss the charter's own hazard identifies, so an oracle built on them would certify the very loss the design exists to prevent. A fourth amendment is deferred to its own dolphin: the gateway's KPI drop emits logger.debug while its docstring claims it logs warnings, making the drop less observable than its own documentation. The record also preserves two reviewer errors that the probes corrected, and states plainly that one agent applying two lenses is weaker than the two independent reviewers the three-role separation requires.
+- Add the Dolphin 3C result-facade charter: the proposed design for typed per-section result and disposition contracts carrying v14 outputs into the Dolphin 2 package, for independent domain and assurance review before implementation. It covers the outbound half of DBAY-FRC-001 12.3(2); the inbound `ProjectCase`-to-gateway binding is Dolphin 3B.
+- Add the Dolphin 3D grade, materiality and release policy charter, giving DBAY-FRC-001 section 12.3 item 3 an owner for the first time. That item was orphaned by a naming collision: the Dolphin 2 charter deferred both item 2 and item 3 to the same "Dolphin 3" label, the Dolphin 3 programme then chartered only item 2 as 3A, 3B and 3C, and every one of those three explicitly excludes grade inference, so item 3 sat inside Dolphin 3 work by assignment and outside every Dolphin 3 charter by exclusion. The charter records that history so it cannot recur, and takes the 3D lettering rather than a new integer because renumbering would break the existing Dolphin 4 reference to item 4 and invite a second collision. The charter designs no policy: D1 section 7 already fixes the four grades, the aggregation rule as a minimum across applicable material sections that is never an average, and eight report-level blockers, while section 12.1 item 8 forbids the producing process, CI, model owner or evidence score from self-clearing a hold, review or release. What is missing is the typed contract and evaluator that make the existing policy machine-enforceable, plus the materiality determination the Dolphin 2 charter lists as an open semantic hole. Because Dolphin 2's SectionRecord already carries every input the rule consumes, the increment is blocked on nothing and runs in full parallel with the orchestration family rather than queueing behind it. The central risk is recorded as the half-policy hazard: Dolphin 2 removed a partial grade policy as actively unsafe and hard-pinned the package to ungraded pending a typed grade-policy receipt, so this increment ships whole or not at all. Ten fail-closed hazards and their negative controls are specified, including target copied into achieved, averaging, a computed proposal mistaken for an achievement, self-clearing, self-awarded lender grade which D1 prohibits absolutely, blocker summarization, empty-set vacuity, and ungraded treated as a fifth grade.
+The tender gap dossier now renders its PDF through the DutchBay Presentation Layer (GWTF
+DBPL-01). `as_dbpl_document()` projects the register into the DBPL document model — one section
+per gap, each a field/value table under a caveat band, which is the house shape and also the
+shape of a gap. The derived-register warning now appears in the running banner on every page
+rather than only on the cover.
+- Extend the governed environment health contract to compare every pin in
+  `requirements.txt` against what the selected environment actually has installed.
+  The contract previously asserted only that the seven distributions named in
+  `config/development_environment.json` were present, so a drifted environment still
+  reported `Environment validation PASS`: of the lock's 311 pins only nine carried a
+  version assertion anywhere under `tests/`, leaving the rest to drift unseen.
+  A version disagreement is now fatal for any locked distribution and names the
+  remedy (`./setup_venv.sh`); a locked distribution that is merely absent stays fatal
+  only for the required set and is otherwise recorded in the receipt, because which
+  optional extras a host must carry is owned by the guards at the point of use.
+Added the debt period taxonomy to `finance.debt_v14.plan_debt`'s public result, which previously
+omitted it: `_resolve_construction_periods` returns 2 for the lender case while
+`debt_result.get("construction_periods")` returned `None` — the key was absent and the value reached
+callers only under the different name `construction_years` — the bridge index was reachable only as
+`cfads_bridge_debt_period`, and the first operating period had no published name at all. Nothing was
+underivable — `annual_row_debt_period_map` was already public, so the boundary could be recovered as
+`min(entry["debt_period"] for entry in map)` — but recovering it required knowing the engine's
+internal synthetic-bridge convention and open-coding it at every call site, with no agreed name and
+nothing holding the derivations in step, so a consumer holding a `debt_result` could not simply read
+which debt periods are operating. The result now carries `construction_periods: int`,
+`bridge_debt_period: int | None` and `first_operating_period: int` unconditionally, on every config
+path, with an explicit `None` where a bridge does not exist rather than a plausible substitute. The
+count is read from the value the engine already resolved through the shared resolver inside
+`apply_debt_layer` rather than re-derived with a second default — the divergent defaults were the
+cause of the omission — and is read after the balloon treatment, so an `amortize` resize is
+reflected. `first_operating_period` takes the row-to-period map as its definitional source and falls
+back to the timeline layout only where no operating row exists. The `plan_debt` docstring now states
+the index space of every published series and warns that the compacted `dscr_series` and the
+positional `raw_dscr_series` are in incompatible spaces while `annual_row_debt_period_map` indexes
+the raw one, so `debt_result["dscr_series"][debt_period]` reads a different period than intended;
+that collision is documented and pinned by a test, deliberately not fixed here. The change is purely
+additive: the three keys are appended after every pre-existing key, so the existing 40-key mapping
+survives untouched as a prefix, verified byte-identical across all 21 evaluable committed scenarios
+with the canonical lender KPI vector unchanged. It confers no grade, release, lender or Board
+authority.
+- Add the normative Global Feasibility Report Contract v1 and its primary-source design ledger,
+  separating run posture, completeness, evidence, independent assurance and release authority
+  while preserving the existing 20-section taxonomy as the single source of section identity.
+- Add the strict, frozen DBAY-FRC-001 v1 feasibility-report package contract, typed registries,
+  discriminated capability dispositions, exact 20-section SSOT parity and fail-closed contract
+  controls. Independent domain and assurance vetoes drove durable negative controls for
+  sentinel-only grades, exact authority/review subjects, reciprocal graph integrity, supported and
+  assured pack structure, source/evidence scope, N/A, reconciliation, human responsibility and
+  public-disclosure boundaries. Second-pass veto controls add lifecycle snapshot chronology, exact
+  performed-role authority, producer-independent pack assurance, exact-pack evidence, six-family
+  reconciliation totality, typed governed-jurisdiction resolution and truthful single-axis
+  jurisdiction/technology packs. Third-pass veto controls add an honest typed unsupported-
+  jurisdiction disposition, responsibility/validation/artifact/review/assurance snapshot
+  chronology, and exact release-to-distribution-control binding. Independent final exact-tree
+  domain and assurance review accepted the bounded Dolphin 2 contract. The additive contract
+  changes no calculation, grade aggregation, delivery adapter, audit gate or release `HOLD`.
+- Add the founding-dolphin ingress brief and governance errata, salvaging 109 binding constraints and 39 traps that a RECRUIT-01 recruited pod extracted by freshly ingressing D0, D1 and the D3 family from source. Three of six workers were cut off by an account session limit, so the record declares what is missing rather than implying coverage: D2 was never freshly ingressed and both D3D dispositions failed, leaving that charter undisposed. It records three governance defects found by independent reviewers against this programme's own records. The Dolphin 3C contracts disposition lapsed on arrival, because the pull request carrying it also edited the charter it was disposing, so the disposition names the parent state and not the merged head, which RECRUIT-01 says is not a disposition; the four required amendments were never applied either, so Dolphin 3C currently has neither a live disposition nor its amendments. The RECRUIT-01 base fast-forward carve-out that operator memory asserts is current is not in the ruleset at this SHA, so the unqualified rule governs and no disposition may cross a base fast-forward. And four amendment flags stand against the Dolphin 3D charter, which claims to design no policy but in places strengthens beyond the normative text, most materially by generalising a lender-grade-specific self-award prohibition into a universal human-decision gate that collapses two of the seven orthogonal truths the normative contract keeps separate.
+- Add `docs/Framework_Compliance_Review_2026-09-20.md`, the compliance review of the 20 September
+  2026 work against GWTF, CASPER, CESSPIT and CCCDIR. It records per framework what the rule
+  requires, what was followed and what was not, and it clears both merged pull requests
+  (#1272 and #1273) and four of the five open drafts.
+- The review's substantive finding is that four tracked files contradict the canonical ruleset on
+  what the frameworks mean. `go_with_the_flow_rules_v3_0_clean.csv` rows `FRAMEWORK-01/02/03` are
+  canonical and test-pinned; `.github/SPRINT_WORKFLOW_CHECKLIST.md`, `docs/AUDIT_CASHFLOW_V14_FINAL.md`,
+  `docs/SPRINT_16_REORGANIZATION_COMPLETE.md` and a `Full Dolphin Rules` file in the DutchBay_RAG
+  repository each give different expansions. The last of those states a CASPER expansion that
+  appears nowhere in the canonical source. Recorded here; the reconciliation is its own change.
+- Also recorded: `DOC-02` states its enforcement as a CI check verifying VERSION and CHANGELOG for
+  pull requests touching `analytics/` or `finance/`, and no such check exists.
+- Documentation only. No code, configuration or scenario input is touched, and no KPI is reachable
+  from this change.
+- Add `tests/lint/test_framework_expansions_match_csv.py`, a guard binding every tracked file's
+  spelling of CASPER, CESSPIT and CCCDIR to `go_with_the_flow_rules_v3_0_clean.csv`. Nothing
+  guarded this direction before: `tests/lint/test_gwtf_canonical_source.py` checks the ruleset's
+  own cells cell by cell, but a derived file could define the three acronyms however it liked and
+  stay green. That is how the sprint workflow checklist filed two of them as sub-items of the
+  third from December 2025 until #1283, and how five live-guidance files each carried a different
+  invented triple until #1286.
+- Two fences, because neither alone suffices. A regression guard over the exact strings #1283 and
+  #1286 removed catches a copy-paste return. A general guard reads any phrase that follows one of
+  the acronyms and whose word-initials SPELL it as a definition, and fails when the ruleset does
+  not contain it -- which catches expansions nobody has seen yet. Keying on the initials is what
+  makes the general fence safe to run repository-wide: the hundreds of inline compliance notes
+  (`CASPER-guarded`, `CESSPIT - fail loud`) are usages, not definitions, and none of them spells
+  the acronym out.
+- The guard found two files the manual sweep behind #1283 and #1286 had missed, each carrying a
+  further invented triple: `docs/INTERNAL_HARDENING_AUDIT_20251219.md` and
+  `analytics/sensitivity/REORGANIZATION.md`. Both are dated records, so both join the thirteen
+  audits, retrospectives and sprint completion reports the guard exempts by explicit path rather
+  than by glob -- correcting a dated receipt would falsify it, and a new file cannot drift into
+  the exemption without someone adding it. `changelog.d/` and `CHANGELOG.md` are exempt for a
+  different reason: an entry recording that an expansion was removed has to name it.
+- The regression guard matches an acronym and a retired expansion on the same LINE, not anywhere
+  in the same file. Every occurrence #1283 and #1286 removed had them on one line, while a
+  document that REPORTS the defect tabulates the filename in one column and the wrong wording in
+  another. Checked against the compliance review on open PR #1285: five pairs match somewhere in
+  that document and none on a shared line, so whole-file matching would have failed the write-up
+  that corrects the problem. Both directions ship with controls that observe them firing and not
+  firing. Tests only -- no production code, configuration or KPI is touched.
 - **Gated canon-movers register** — `docs/STANDARDS_WATCH.md` gains a hard-items section
   giving every gated KPI-moving change an owner, a gate and a **calendar review date**
   (2026-11-30), populated from a sweep of the open issue queue rather than from memory.
@@ -392,6 +582,24 @@ declared pin and (with `--deep`) actually imports. Exits non-zero on failure so 
 post-deploy CI gate, and emits `--json` for machine consumption.
 
 ### Changed
+Rebuilt the DBPL stylesheet against the benchmark study. Table rules now follow **Vignelli over
+Tufte** — a graded 2 pt / 1 pt / 0.5 pt hierarchy with type hanging from the rule above — and row
+shading follows **Urban over Tufte**, adopted deliberately because row-tracking across a wide
+covenant table matters more than data-ink ratio. Table note blocks follow the **ADB** order
+verbatim (abbreviations → notes → footnotes → sources, 9 pt, immediately below the table), with
+superscript lowercase footnote indicators and the ADB **Key Symbols** set so "not available" and
+"zero" can never render identically. Adds a **Lazard landscape** page for tables portrait cannot
+carry — a page size, not a second design. Measure is capped at 66 characters for prose only.
+- Resolve all five Dolphin 3C result-facade design questions against DBAY-FRC-001, the Dolphin 2 validator and the v14 gateway, and record the evidence in the charter; four were mis-posed, and the research surfaced a new hazard — the gateway's default path silently discards non-numeric KPIs before any facade can observe them.
+- **F2/F3 DSCR contract:** `plan_debt.dscr_series` now spans the full debt
+  timeline; `dscr_periods` associates each period with its operating year and
+  folded per-year covenant coverage. The raw alias and compact ScenarioResult
+  series remain compatible. Missing or invalid published labels fail loudly.
+  Headline DSCR preserves both the operating-period minimum and the per-year
+  fold. Covenant breach years/counts and status can change; the CEB capacity-charge
+  case now reports FAIL after recognizing its year-one folded breach. Model
+  version 15.5.0 records this public-contract and covenant-reporting change.
+  No canon rebaseline, release, or existing HOLD is authorized by this change.
 - **New session handover record for 2026-08-20** — `docs/SESSION_HANDOVER_2026-08-20.md`
   succeeds the 2026-08-17/18 record. It corrects the stale "66 active rules" count to 70,
   points bootstrap at `AGENTS.md` rather than restating it, and records the container
@@ -482,6 +690,157 @@ Upgrade the governed typed-surface pair to pandas-stubs 2.3.3.260113 and request
   raw alias and compact `ScenarioResult.dscr_series` remain compatible.
 
 ### Fixed
+- **An agent worktree no longer dirties the tree or trips a governance test** — when a
+  Claude Code subagent runs with worktree isolation the harness leaves a full nested
+  checkout under `.claude/worktrees/` and registers it in `git worktree list`. Two
+  consequences, both fixed here. (1) `.claude/` is a tracked directory
+  (`hooks/session-start.sh`, `settings.json`), so the untracked scaffolding appeared in
+  every `git status` and invited someone to commit a second checkout into the repository;
+  it is now ignored by an **anchored**, directory-only rule that cannot repeat the
+  unanchored `lib/` rule which silently swallowed committed files until #1040 — verified
+  by re-listing all 1,249 tracked files against `git check-ignore` and confirming none is
+  matched. (2) `tests/lint/test_irr_location_v14.py` walks the tree with `rglob` rather
+  than `git ls-files`, so `.gitignore` does not reach it: the worktree's copy of
+  `finance/irr.py` was reported as an out-of-home **R7 violation**, a false architectural
+  alarm for any maintainer running a subagent. `.claude` joins `SKIP_DIR_NAMES`. The guard
+  was re-proved against a planted `npv` in `analytics/`, so it is fixed, not silenced.
+Fixed two environment-sensitive failures in `tests/lint/test_cloud_audit_review_sandbox.py`. Neither
+was a defect in the code under test: the create wrapper's transport watchdog and the sandbox identity
+controls both behave correctly.
+The watchdog test probed the hung child with `os.kill(pid, 0)`, which **succeeds for a zombie** —
+a PID stays in the process table until its parent reaps it. The wrapper does escalate SIGTERM to
+SIGKILL correctly, but where PID 1 does not reap orphans promptly (the common container case) the
+correctly-killed child lingers as `Z`/defunct and the probe read it as alive. The probe now reads the
+process state from `/proc`, treating a killed-but-unreaped process as dead, and falls back to the
+signal probe where `/proc` is unavailable. Verified the test still fails when the SIGKILL escalation
+is removed from the script, so the control keeps its teeth.
+The sshd policy test shelled out to `ssh-keygen` as an independent oracle corroborating the
+repository's own rejection of a malformed host key. That binary ships in the sandbox image but is not
+guaranteed on the machine running the lint suite, where its absence raised `FileNotFoundError`
+instead of returning non-zero. The cross-check is now guarded on availability; the repository-owned
+validation is asserted unconditionally as before.
+- **Corpus manifest verifies again** — `docs/source_materials/nso_bess_250mw_2026/MANIFEST.sha256`
+  recorded `registers/__pycache__/build_ltl_comparative_recommendation_2026-09-03.cpython-312.pyc`,
+  added by #1226. `__pycache__/` is gitignored, so that file has never been in the tree and never
+  can be, and `sha256sum -c` has been failing on `main` ever since with `138 OK, 1 FAILED`, exit 1.
+  The single entry is removed; the manifest verifies at `138/138 OK`, exit 0. Deletion is the only
+  correct remedy: the cached source is a register held deliberately in the private corpus because
+  it carries price tables as source literals, a `.pyc` retains those literals in `co_consts`, and a
+  `.pyc` hash is not reproducible from its source anyway, so the entry was permanently
+  unsatisfiable. Nothing leaked — the file was gitignored and never committed to any branch.
+- **What a manifest gate would actually need** — **no test covers either corpus manifest**, so
+  defects here reach `main` in silence. A `sha256sum -c` gate alone is **not** sufficient, and an
+  earlier draft of this entry wrongly said it was: `-c` checks *recorded → present and matching*
+  and is structurally blind to *tracked → unrecorded*. Demonstrated on this repository's own
+  history — at `782c958` the manifest omitted **11 tracked files** and `sha256sum -c` still
+  returned `119/119 OK`, exit 0. A useful gate therefore needs **two** checks: `sha256sum -c` for
+  recorded entries, and a set comparison of tracked corpus files against recorded paths. The
+  existing audit-pack manifest tests are a working precedent for both.
+- Close the complete internally visible compatibility-assertion graph directly in the public,
+  versioned `V14BindingPolicy` root. Standalone policies now refuse contradictory technology
+  ownership, one-to-one technology and jurisdiction binding identities, capacity basis/key/kind,
+  jurisdiction subject/domain admissibility, route completeness and cost/price identity before they
+  can be masked by a containing `EvaluationRequest`. Child failures, including duplicate-ID key
+  collisions, are validated in a canonical category/identity/outcome order; invalid-child errors
+  expose a bounded stable input token rather than caller-ordered raw input or context, and raw
+  ordering consumes only fresh exact-string-keyed payloads, never the caller's rejected dictionary
+  or model state. Hash-colliding non-exact dictionary keys receive bounded constant-input errors
+  before the child adapter or ordering path can invoke caller equality or hashing. Identity-only
+  trusted-model checks never dispatch to Python collection-subclass methods, class equality or
+  instance-resolved model serialization. Non-exact collections, accepted model subclasses and
+  exact model instances with non-field state receive bounded constant-input errors; clean exact
+  instances are revalidated and serialized through their trusted class-owned serializer. Successful
+  authored-order serialization is unchanged. D3B v1 explicitly fails closed when multiple physical
+  assets reuse one technology binding; supporting that valid D3A topology requires a later
+  allocation design. Strict Python child ingress now refuses every non-built-in mapping or other
+  untrusted raw shape before discriminated-union delegation, so caller `get`, inherited
+  `get`/`__getitem__`, iteration and representation hooks cannot affect refusal. Sanitized exact
+  dictionaries and trusted-model field payloads must declare an exact built-in-string `kind` from
+  the eight closed tags before delegation; missing, non-exact and unknown tags receive one bounded
+  constant-input discriminator error with fallback diagnostic ordering.
+- Correct normalize_kpi_dict's docstring, which claimed it "logs warnings for skipped entries" while the code emitted logger.debug, and pin the corrected behaviour with controls that were each observed to fail. Raising the log level was rejected on evidence rather than preference: the function sits on the return_full_result=False default path of evaluate_with_overrides, which the Monte Carlo engine, five sensitivity modules, the tornado builder and two optimizers call per iteration, and the drop set is type-structural and data-invariant, so a warning per dropped entry would emit the same constants thousands of times per run. Note that analytics.evaluate_scenario exports a different function of the same name, and that is the one analytics.core.parameter_solvers imports; it does not reach this code, so neither the flood argument nor anything else documented here applies to it. The docstring now states the actual drop predicate (float() raising TypeError or ValueError, with other exception classes propagating), that the drop is DEBUG-only and therefore silent in ordinary operation, that a dropped entry is absent rather than defaulted or zero-filled, that a bool is coerced rather than dropped so a boolean KPI such as wacc_is_real arrives downstream as a finite 0.0, and that return_full_result=True is a remedy on evaluate_with_overrides only, since evaluate_scenario_from_dict and evaluate_with_casper_tail_risk have no such parameter. The divergence from analytics.casper.casper_payload is stated as what it is rather than as bool-only: that normalizer admits a key only when isinstance(v, (int, float)) and not isinstance(v, bool), so the two also disagree on every value float() accepts that is neither int nor float. A scenario whose name is numeric is the reachable case, arriving here as the phantom KPI scenario_name=2030.0 and absent from the CASPER payload; the disagreement runs one way only, so the risk is a phantom KPI rather than a lost one. No scenario in scenarios/ currently has a numeric name, so the path is reachable by configuration rather than presently instantiated.
+- What the controls establish, stated at the strength they actually hold. The emitted level, the caught exception tuple, the caller boundary and CASPER's admission rule are derived from source by AST; CASPER's rule is additionally compared against the docstring's own restatement of it, as trees rather than as text, so prose and source must agree rather than merely coexist. A sentence mentioning a warning is admitted only when a rejection marker sits within three tokens of the warn token and no emission verb appears. These pin the code's behaviour and reject every phrasing that three rounds of independent review produced, but they do not pin the polarity of a prose claim in general, and one known residue survives: a double negative such as "operators are not left without a warning" satisfies the proximity rule while asserting the opposite of the truth. Twenty-five mutants drawn from the three rounds are run against them, of which two survive by design -- that double negative, and an unrelated comprehension added to CASPER, which the controls now correctly ignore rather than failing on with a misleading diagnosis. Review remains the backstop; these controls narrow what review must catch and do not replace it.
+- Addresses D3C-ASR-02 from the Dolphin 3C contracts disposition; the disposition record itself is unchanged, since a merged pull request carries no finding-closure authority.
+Fixed a silent wiring gap in the DBPL: the `@font-face` rules loaded the bundled Source
+superfamily while `DBPL_FONT_STACKS` still named Liberation, so every document embedded Times New
+Roman and Arial — and the provenance reported "substituted: none", because it verified that fonts
+had been *provisioned* rather than that the stylesheet had *asked* for them. The stacks are now
+derived from the same declaration the `@font-face` rules come from, and `render_dbpl_pdf`
+inspects the finished PDF to confirm which families were actually embedded. That check is
+tri-state: `None` (unverifiable) is a different claim from `False` (a fallback happened).
+Fixed a silent content loss in DBPL-rendered documents. The v2 template reads `row.cells` /
+`row.group`, but the gap-dossier adapter still emitted bare lists, so every table row rendered as
+nothing — the regenerated dossier kept all 38 gap headings while losing roughly 85% of its body
+text, which made the output look complete. The adapter now emits the v2 shape, and the template
+raises on a malformed row instead of dropping it.
+- Correct `app.ops.extras.PackageStatus.declared_spec`'s field docstring, which still said the
+  specifier comes "verbatim from metadata". That stopped being true when the pins began to be read
+  from the governing `pyproject.toml` first and metadata only as the fallback: the module docstring
+  and `declared_extras` were both updated then, and this one field description was not. It is the
+  field that carries a declared pin inside the module rewritten to fix a provenance bug, so a stale
+  provenance claim on it is worth more than its size. The docstring now names both possible sources
+  and points at `ExtraStatus.spec_source`, which is where the answer actually lives. It also spells
+  out what "verbatim" costs a caller: the two sources render one pin as two different strings
+  (`>=70,<71` from `pyproject.toml`, `<71,>=70` once metadata has round-tripped it), so testing this
+  field against a literal needs a `SpecifierSet`, not a string compare. The stale `<70,>=69` example
+  is replaced by both real forms rather than by one of them, since naming a single form would have
+  reintroduced the same provenance mismatch the change exists to remove. No behaviour change -- this
+  is the prose catching up with the code.
+Split Python dependency automation into capability-sized Dolphins and hold known-unresolvable cachebox, Redis, and protobuf majors without suppressing security updates.
+- **`.envrc` no longer activates a retired environment** — it sourced
+  `~/.venvs/dutchbay-epc-model-venv311/bin/activate`, a path that does not exist on any
+  host and a `.venv311` name THREAD-01 and R21 prohibit, so `direnv` either failed or
+  bound a `cd` to an ungoverned Python 3.11 tree. It now resolves, validates, and
+  activates through `scripts/development_environment.sh` — the same config-first contract
+  `check_venv.sh` and `scripts/venv_up.sh` use — and deliberately does **not** provision:
+  entering a directory must never create a checkout-local `.venv` in place of the
+  persistent `DUTCHBAY_VENV` environment. A lint guard keeps it on the contract.
+- `app.ops.extras.declared_extras` now reads declared pins from whichever artifact governs
+  the code that is actually *executing* -- the `pyproject.toml` beside the package when there
+  is one, and the installed distribution's recorded metadata otherwise -- instead of metadata
+  alone. `app/` is deliberately not a packaged directory, so the print core always loads from
+  a checkout, and ENV-01 puts the active checkout first on `PYTHONPATH` so `analytics` and
+  `finance` do too; one non-editable install in the shared governed venv was therefore serving
+  eighteen worktrees at differing commits, reporting pins that described whichever checkout
+  last built it. Observed on 2026-09-14: a build declaring `weasyprint<70,>=69` outlived
+  #1256's `>=70,<71` bump, so reconciling the venv to the pinned 70.0 produced nine
+  `DbplDependencyError` failures in `tests/app/test_dbpl.py` -- the guard rejecting the exact
+  version the lock requires -- and a venv built by `./setup_venv.sh` alone, which installs no
+  project distribution at all, made the `[report]` extra declare nothing and failed every DBPL
+  PDF outright. Both are fixed without installing anything, so no build byproduct lands in a
+  checkout and no single install has to be correct for every worktree. `ExtraStatus` gains a
+  `spec_source` field (`pyproject` / `metadata` / `none`), surfaced on `/health/readiness`, so
+  the provenance of a pin is recorded rather than inferred. Deployed behaviour is unchanged:
+  in the image the editable install's source and `/app/pyproject.toml` are the same tree. CI
+  never saw either failure, because it installs with `pip install -e`, whose metadata is
+  rebuilt at every install. No runtime, financial formula, scenario or KPI change.
+- Re-file the framework-compliance sections of five live-guidance files onto the rules the
+  canonical ruleset actually defines. `go_with_the_flow_rules_v3_0_clean.csv` carries CASPER,
+  CESSPIT and CCCDIR as three peer rows -- `FRAMEWORK-01`, `FRAMEWORK-02`, `FRAMEWORK-03` -- and
+  every one of these files restated them differently. `analytics/contracts/README.md` and
+  `finance/FINANCE_REORGANIZATION.md` carried the same invented triple verbatim: CESSPIT as
+  "Comprehensive Error Handling", CASPER as "Contract-First Design", CCCDIR as "Clear, Complete,
+  Consistent Documentation". `docs/policy/discount_rate_policy.md` gave CCCDIR as "Configuration in
+  Config DIRectory"; `docs/FX_FLAG_TRACKING_GUIDELINES.md` gave CESSPIT as "Evidence-based tracking
+  (not config-based)", which inverts a rule whose whole content is that config is explicit; and
+  `docs/DEBT_NAMING_CONVENTIONS_v14.md` gave CCCDIR as "Comprehensive documentation standards".
+- The contracts README is the sharpest case, because it is the package README for `contracts_v14`,
+  the module `FRAMEWORK-03` governs, so it sits exactly where a reader verifying CCCDIR compliance
+  looks. Its bullets were accurate; they were filed under the wrong rules. They are re-filed rather
+  than rewritten: Pydantic validation and error messages under `FRAMEWORK-01`, schema strictness
+  and frozen models under `FRAMEWORK-02`, and the single canonical definition plus the import
+  guards under `FRAMEWORK-03`. `finance/FINANCE_REORGANIZATION.md` gets the same treatment.
+- Correct one claim about the import guards while re-filing it. An earlier draft of this change
+  said a LibCST test bans every import from `analytics.evaluation_v14` except
+  `evaluate_with_overrides()`. It does not: `tests/lint/test_contracts_gateway_imports.py` fails a
+  module-level import of a PRIVATE, underscore-prefixed name from that module, and the module
+  boundary itself is guarded separately by `tests/lint/test_no_direct_finance_pipeline_imports.py`.
+  The README now names both guards and says what each one checks.
+- Thirteen further tracked files carry divergent expansions inside dated audits, retrospectives and
+  sprint completion records -- `docs/AUDIT_CASHFLOW_V14_FINAL.md`,
+  `docs/SPRINT_16_REORGANIZATION_COMPLETE.md`, `docs/archive/` and `legacy/sprint_snapshots/` among
+  them. Those are receipts of what was believed on a date and are deliberately left as written;
+  correcting them would falsify the record. Documentation only -- no code, config or KPI is touched.
 Fixed a false pin in the grid-screening report's dependency provenance. `GRID_EXTRA_PINS` was a
 hand-kept copy of pyproject that had drifted — it read `pandapower ==3.3.0` while the project
 declared `>=3.5,<4` and the environment ran 3.5.4 — so the report surfaced a version the study
