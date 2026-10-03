@@ -27,7 +27,7 @@ reconstructed from the manifest's state at every ``main`` commit that touched it
    written out in five places at once. The five copies disagreed, and *every* blocking finding
    of two ``RECRUIT-01`` reviews was one of the disagreements. The statement now lives once, in
    the offers manifest header under ``NSO250MW-OFFERS-HANDLING-2026-09-04``; the READMEs and
-   the changelog fragment cite that identifier. A sixth copy, a stale citation, or clause 6 of
+   the compiled changelog entry cite that identifier. A sixth copy, a stale citation, or clause 6 of
    the offers quoted anywhere but its single home fails here rather than in a third review.
 
 **Why this iterates over corpus areas rather than naming one.** Until #1289 every path in this
@@ -150,7 +150,7 @@ HANDLING_ANCHORS: dict[str, tuple[Path, tuple[Path, ...]]] = {
         (
             NSO_CORPUS / "README.md",
             NSO_PACKAGES / "README.md",
-            REPO_ROOT / "changelog.d" / "nso-commercial-offer-resupply.fixed.md",
+            REPO_ROOT / "CHANGELOG.md",
         ),
     ),
     "KALPITIYA60MW-WIND-HANDLING-2026-09-21": (
