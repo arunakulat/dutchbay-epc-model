@@ -4,6 +4,12 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+## v15.6.1 - 2026-10-04
+
+### Fixed
+- Fetch complete Git history in the release workflow so the base/candidate physical
+  receipt can archive its pinned historical commit before artifact publication.
+
 ## v15.6.0 - 2026-10-03
 
 ### Added
