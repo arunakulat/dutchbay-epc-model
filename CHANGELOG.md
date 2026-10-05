@@ -4,6 +4,9 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Added
+- Record the v15.6.1 release receipts, completed fragment/branch cleanup, surviving Board/lender reliance HOLD, and clean-thread startup checklist in the successor session handover.
+
 ## v15.6.1 - 2026-10-04
 
 ### Fixed
