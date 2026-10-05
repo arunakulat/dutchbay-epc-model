@@ -174,6 +174,50 @@ reproducibility properties.
 6. Explicit numerical tolerances, convergence receipts, and solver diagnostics.
 7. Dependency graphs mapping each external datum and assumption to affected KPIs.
 
+## Disposition of the KIMI Q4 2026 comparison
+
+A third-party KIMI report was supplied after the initial research checkpoint. It is treated as a
+claim set, not as a source. Its useful themes and material corrections are preserved here so later
+work does not silently inherit either its conclusions or its errors.
+
+### Retained as directionally useful
+
+- Cost of capital, execution quality, offtake, curtailment, and capture price can dominate a
+  technology-level LCOE comparison.
+- Hybrid generation and storage require explicit revenue-stack, charging-cost, degradation,
+  augmentation, and dispatch assumptions; an LCOS headline alone does not establish bankability.
+- OpenOA-style operational reconciliation remains the clearest post-COD capability opportunity.
+- IFRS S1/S2 can be relevant to investor reporting when the applicable reporting perimeter and
+  jurisdiction are established.
+- Current IEA evidence strengthens the market-direction conclusion: *Renewables 2025* projects
+  global renewable capacity to double from 2025 to 2030, with solar PV providing almost 80% of the
+  increase, while *Electricity 2026* reports that renewable generation virtually matched coal in
+  2025 and expects renewables and nuclear together to supply around half of global electricity by
+  2030.
+
+### Corrected or rejected
+
+| KIMI claim | Disposition |
+|---|---|
+| DutchBay has no BESS modelling | **False.** The repository contains `finance/bess_revenue.py`, `finance/bess_lcos.py`, `finance/bess_project_economics.py`, grid BESS capabilities, dedicated scenarios, and focused tests. Dispatch/arbitrage breadth can still be assessed, but the capability is not absent. |
+| Add PySAM to create a BESS module | **Not a gap statement.** PySAM may be a useful independent comparator or dispatch/technology engine, but adopting it requires a bounded interface and oracle assessment against the existing BESS implementation. |
+| Add Cambium/ERA5 price data for merchant forecasting | **Category error and jurisdiction mismatch.** ERA5 is meteorological reanalysis, not a power-price dataset; Cambium is a United States power-sector dataset and is not a Sri Lankan merchant-price source. |
+| PyWake is canonical for a bankable AEP and open-source tools are bankable alternatives | **Overstated.** These are calculation engines. Bankability comes from site evidence, calibrated methods, loss and uncertainty boundaries, independent review, and professional reliance—not the package name. |
+| DutchBay is lender-grade | **Authority overreach.** The repository's architecture and controls can be compared, but issue #1110 and the Board/lender reliance `HOLD` prohibit that conclusion. |
+| BESS LCOS is below USD 80/MWh | **Not a general benchmark.** The report itself gives incompatible ranges. LCOS depends on duration, cycles, charging cost, augmentation, financing, residual value, and included revenue/cost boundaries. |
+| Contracted renewable DSCR is universally 1.20–1.25x against P90 | **Too broad.** DSCR convention varies by technology, resource case, contract, tenor, jurisdiction, and lender. The existing knowledge base records contracted-solar and contracted-wind ranges separately and distinguishes P50 operating cases from downside debt sizing. |
+| IFRS S2 mandates fixed 1.5°C and 4°C scenarios | **Too prescriptive.** IFRS S2 requires climate-resilience disclosure informed by climate-related scenario analysis using an approach commensurate with the entity's circumstances; any fixed scenario pair needs a separate applicable basis. |
+| PyWake 2.6.8, FLORIS 4.0, and TopFarm 2.6.1 are the current comparison versions | **Stale on the research date.** Public PyPI metadata returned PyWake 2.6.20, FLORIS 4.6.6, and TopFarm 2.6.2. Versions remain mutable observations, not upgrade instructions. |
+| `PYDANTIC_V2_RUNTIME_RISKS.md` is a DutchBay control | **False at the reviewed head.** No such repository file exists. Pydantic v2 is declared, but a fabricated filename is not evidence of a control. |
+| A naive 1,000-trial Monte Carlo is categorically insufficient for lenders | **Unsupported as a universal threshold.** Adequacy depends on the estimator, tail metric, convergence evidence, dependence structure, and decision. DutchBay correctly separates bounded regression tests from explicit stochastic qualification. |
+| The cited 800 GW of 2025 capacity additions and detailed country splits are established by the cited IEA material | **Not reproduced from the accessible primary IEA pages reviewed here.** Do not use those figures until the exact table, unit, vintage, and primary source are retrieved. |
+| Lazard v19 values and year-on-year percentages in the supplied table | **Not independently admitted.** Lazard returned HTTP 403 in this cloud session and KIMI's opaque search markers are not reproducible citations. Retain the existing verified v18/v10 knowledge-base figures until the primary v19 objects are ingressed. |
+
+The report's United States tax-credit discussion may be useful for a United States project but is
+not a DutchBay scenario input. Any OBBBA credit, prohibited-foreign-entity, transferability, PPA,
+swap-rate, or regional WACC claim requires a dated primary legal or market source and an explicit
+jurisdiction before it enters a model or benchmark table.
+
 ## Qualified conclusion
 
 DutchBay is broader in project finance than the specialist production and grid libraries, and more
@@ -186,6 +230,9 @@ other professional authority.
 
 - International Energy Agency, [*Renewables 2024*](https://www.iea.org/reports/renewables-2024),
   especially the executive-summary capacity forecast.
+- International Energy Agency, [*Renewables 2025*](https://www.iea.org/reports/renewables-2025)
+  and [*Electricity 2026*](https://www.iea.org/reports/electricity-2026), used for the current
+  market-direction statements in the KIMI disposition.
 - International Renewable Energy Agency,
   [*Renewable Power Generation Costs in 2024*](https://www.irena.org/Publications/2025/Jul/Renewable-power-generation-costs-in-2024).
 - IFRS Foundation,
