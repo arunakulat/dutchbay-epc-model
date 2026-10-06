@@ -41,13 +41,20 @@ Green means every check on the exact head succeeded, or was skipped for a stated
   dispatch, so they skip on pull requests.
 - `Grid Study` may skip only when `Classify changed paths` classified the diff as unrelated to
   the governed QSTS/grid surface. When the diff touches that surface, Grid Study must *run and
-  pass* on the exact head (see `AGENTS.md` "Verification"). Predict the classification locally:
+  pass* on the exact head (see `AGENTS.md` "Verification").
+- Predict the classification locally against the base the workflow uses: the pull request's
+  `base.sha`, diffed as `<base.sha>...HEAD`, not `origin/main...HEAD`. The two differ after a
+  base-advance merge whenever `base.sha` is older than the `main` that was merged in. The older
+  base then pulls `main`'s own grid and workflow changes into the diff, and Grid Study can run
+  where the `origin/main` prediction says it will skip. If the two predictions disagree, plan
+  for Grid Study to run.
 
   ```bash
-  .venv/bin/python - <<'PY'
-  import subprocess
+  BASE=$(gh api repos/arunakulat/dutchbay-epc-model/pulls/<number> --jq .base.sha)
+  .venv/bin/python - "$BASE" <<'PY'
+  import subprocess, sys
   from scripts.ci.classify_grid_study_paths import requires_grid_study
-  paths = subprocess.check_output(["git", "diff", "--name-only", "origin/main...HEAD"], text=True).split()
+  paths = subprocess.check_output(["git", "diff", "--name-only", f"{sys.argv[1]}...HEAD"], text=True).split()
   print("Grid Study required:", requires_grid_study(paths))
   PY
   ```
@@ -71,9 +78,10 @@ Green means every check on the exact head succeeded, or was skipped for a stated
   `scripts/analysis/refresh_corpus_manifest.py`.
 - **Financial-model changes.** Follow `AGENTS.md` "Financial-model changes": regression tests,
   impact disclosure, `VERSION` and `CHANGELOG.md`, and `TEST-01`'s independent oracle.
-- **Local runs.** Use `PYTHONDONTWRITEBYTECODE=1` and `-p no:cacheprovider`. Five failures in
-  `tests/lint/test_cloud_audit_review_sandbox.py` are local to cloud containers and
-  pre-existing (see `CLAUDE.md`). Declare them in your receipts; never skip a test.
+- **Local runs.** Use `PYTHONDONTWRITEBYTECODE=1` and `-p no:cacheprovider`. Up to five failures
+  in `tests/lint/test_cloud_audit_review_sandbox.py` are local to cloud containers and
+  pre-existing (see `CLAUDE.md`). The count varies with timing: 3, 4 and 5 have all been
+  observed on the same bytes. Declare the count you observed in your receipts; never skip a test.
 - **Size.** Keep each fix minimal. One validated push beats several speculative ones
   (`DELIVERY-01`).
 
@@ -94,15 +102,29 @@ changelog erratum records what happens when that goes wrong.
    - Look in the pull-request body, its comments and review threads, and the durable records they
      cite. List every condition, including ones carried forward from earlier cycles and re-imposed
      unchanged.
-   - Count only records from the project owner, the coordinator and the reviewers the coordinator
-     recruited on record. Drop a condition that a later record withdrew or discharged, citing
-     that record.
-   - Confirm that no veto is outstanding. Confirm that each required disposition is non-blocking
-     and bound to the exact head, or carried to it under `RECRUIT-01` module 3 §7.
+   - More than one review chain may have reviewed the same head; #1231 had two. Take the union
+     of every chain's conditions. One veto in any chain blocks.
+   - Count only records from the project owner, any coordinator on record, and the reviewers any
+     of them recruited on record.
+   - **A login is not an identity.** In this repository the owner, coordinators, writers and review
+     threads all post as `arunakulat` or `claude[bot]`. Attribute a record by the session it
+     names, checked against a recruitment, lease or reconciliation record. Count nothing you
+     cannot attribute.
+   - Drop a condition that a later record withdrew or discharged, citing that record. Only the
+     party that set a condition, or a reviewer other than whoever made the fix, can discharge it.
+   - Confirm that no veto is outstanding. Confirm that each required disposition (each lane
+     `RECRUIT-01` requires for the risk class, unless declared `not run - <reason>` under the
+     owner's authority) is non-blocking and bound to the exact head, or carried to it under
+     module 3 §7.
+   - The head you merge must equal the head the dispositions are bound to. A later push or base
+     merge, by anyone, voids the binding until new §7 proofs and rebinds exist.
+   - Re-verify each rebind at merge (module 3 §6). Its comment must be unedited since it was
+     posted (`updated_at` equals `created_at`), or its content SHA-256 must still match its
+     durable record.
    - A condition set by a review overrides the defaults in step 2.
-   - If a condition cannot be met, do not merge. The same applies if a record it depends on cannot
-     be read, for example one held on the owner's Mac. State on the pull request what blocks and
-     who can clear it.
+   - If a condition cannot be met, do not merge. The same applies if a record it depends on, or a
+     durable record a condition cites, cannot be read (for example, one held on the owner's Mac).
+     State on the pull request what blocks and who can clear it.
 2. **Merge.** Record the protected `main` SHA, and pin the expected head SHA so that a late push
    cannot slip in.
    - The default is a squash merge titled as the pull-request title followed by
@@ -110,17 +132,25 @@ changelog erratum records what happens when that goes wrong.
    - The message body must carry:
      - the text each merge-boundary condition requires, verbatim where the condition names
        words or references;
-     - every `HOLD` that survives the merge, quoted, so that it survives in `main`'s history
-       rather than only in a pull-request comment. Take them from the latest reconciled
-       disposition. Where there is none, take them from each review record and from the writer's
-       `HOLD`s (module 3 §2). A condition that the merge itself discharges is not a surviving
-       `HOLD`.
-   - `main`'s history is public and cannot be redacted. A `HOLD` that cites withheld or
-     restricted material (`AGENTS.md` "Four ways a corpus commit goes wrong", items 2 and 3)
-     must not be quoted. State it abstractly, and cite the record's URL and content SHA-256.
+     - every `HOLD` that survives the merge, and every item carried past it as a gate on later
+       work, quoted, so that each survives in `main`'s history rather than only in a pull-request
+       comment. Take them from the latest reconciled disposition of *each* review chain on
+       record, and quote the union. Where a chain has no reconciled disposition, take them from
+       its review records and from the writer's `HOLD`s (module 3 §2). A condition that the
+       merge itself discharges is not a surviving `HOLD`.
+   - `main`'s history is public and cannot be redacted. That applies to the title and to every
+     word of the message, not only to `HOLD` quotes. Text that cites withheld or restricted
+     material (`AGENTS.md` "Four ways a corpus commit goes wrong", items 2 and 3) must not be
+     quoted.
+     - State it abstractly instead. Cite the record's URL and the SHA-256 of the record's file or
+       comment body.
+     - Check that the cited record does not itself quote the material.
+     - If you cannot tell whether text is restricted, treat it as restricted.
    - Use a two-parent merge commit instead of a squash when a condition requires it. A merge
-     commit brings every branch commit into `main`. Check their subjects against `R18` first,
-     and prefer a squash that meets the condition wherever the condition allows one.
+     commit brings every branch commit into `main`. Check the subjects of its non-merge commits
+     against `R18` first; `R18`'s own measurement excludes merge commits. If a non-merge subject
+     fails and the condition allows only a merge commit, do not merge; state it as a blocker.
+     Otherwise prefer a squash that meets the condition.
    - Before submitting, re-read each condition against the final message text.
 3. **Verify against the SHA the merge returned.** The commit the merge created must have the
    head's tree, and its first parent must be the `main` SHA recorded in step 2. A two-parent merge
