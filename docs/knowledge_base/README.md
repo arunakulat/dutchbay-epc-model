@@ -11,6 +11,7 @@ Consolidated, technical reference documentation for the renewable-energy project
 | [`03_kalpitiya_60mw_and_esia.md`](03_kalpitiya_60mw_and_esia.md) | The Kalpitiya 60 MW (Kandakkuliya) wind project, its flat-LKR PPA, and the lender-grade ESIA framework and E&S risk register. |
 | [`04_bess_technology_pricing_revenue.md`](04_bess_technology_pricing_revenue.md) | Battery storage technology, 2026 pricing benchmarks, and the distinct utility BESS revenue models (capacity-charge vs single-site vs solar-plus-storage). |
 | [`05_project_finance_methodology.md`](05_project_finance_methodology.md) | DFI / lender project-finance methodology — debt sizing & covenants, P50/P90 bankability, FX & currency-mismatch, the Sri Lankan tax regime, grid-curtailment and multi-technology modelling. |
+| [`06_finance_python_renewables_comparative_review.md`](06_finance_python_renewables_comparative_review.md) | Dated comparative review of renewable-project finance, scientific Python, and specialist production/grid programs, including qualified implications for DutchBay. |
 | [`../renewable_energy_corpus_index.md`](../renewable_energy_corpus_index.md) | Index of the underlying source-document corpus (EIAs, tenders, PPAs, technical studies, GIS data). |
 
 ## Relationship to the financial model
