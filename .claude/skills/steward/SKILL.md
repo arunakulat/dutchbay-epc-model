@@ -52,18 +52,24 @@ Green means every check on the exact head succeeded, or was skipped for a stated
 - To predict that job, diff against the base the workflow uses: the pull request's `base.sha`,
   as `<base.sha>...HEAD`, at the pushed head. GitHub sets `base.sha` at each push to the pull
   request, not when `main` moves, so read it after you push. Before a push that merges `main`
-  in, the API still holds the previous base. That older base pulls `main`'s own grid and
-  workflow changes into the diff, so the prediction can say Grid Study will run where CI will
-  skip it. An older base only widens the diff: it can over-predict, never under-predict.
+  in, the API still holds the previous base. That older base usually pulls `main`'s own grid and
+  workflow changes into the diff, so the prediction tends to say Grid Study will run where CI
+  will skip it. It can also under-predict: for example when the branch reverts a change `main`
+  made, or when its own diff is empty. Either way, the `Classify changed paths` job decides.
+  The snippet refuses to predict unless the checkout is at the pull request's head.
 
   ```bash
-  BASE=$(gh api repos/arunakulat/dutchbay-epc-model/pulls/<number> --jq .base.sha)
-  .venv/bin/python - "$BASE" <<'PY'
+  PR=$(gh api repos/arunakulat/dutchbay-epc-model/pulls/<number> --jq '.base.sha + " " + .head.sha')
+  .venv/bin/python - "$PR" <<'PY'
   import re, subprocess, sys
   from scripts.ci.classify_grid_study_paths import requires_grid_study
-  base = sys.argv[1]
-  if not re.fullmatch(r"[0-9a-f]{40}", base):
-      sys.exit(f"not a base.sha: {base[:80]!r}; check the pull-request number and the gh call")
+  parts = sys.argv[1].split()
+  if len(parts) != 2 or not all(re.fullmatch(r"[0-9a-f]{40}", p) for p in parts):
+      sys.exit(f"no base.sha/head.sha: {sys.argv[1][:80]!r}; check the pull-request number and the gh call")
+  base, head = parts
+  local = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+  if local != head:
+      sys.exit(f"checkout is at {local}, not the pull request's head {head}")
   out = subprocess.check_output(["git", "diff", "--name-only", "-z", f"{base}...HEAD"])
   paths = [p.decode() for p in out.split(b"\0") if p]
   print("base.sha:", base, "changed paths:", len(paths))
@@ -129,36 +135,51 @@ changelog erratum records what happens when that goes wrong.
    - **Attribution decides what can clear a condition, never what can raise one.** A record you
      cannot attribute can never withdraw, discharge or waive a condition, and can never supply a
      disposition, a §7 proof or a rebind. It never removes a block: a veto, `HOLD`, condition or
-     stated blocker in it stands until the owner or a coordinator on record attributes or
-     withdraws it. State it on the pull request as a blocker.
+     stated blocker in it stands until a coordinator on record attributes it, after which the
+     next rule applies, or until the owner withdraws it. State it on the pull request as a
+     blocker.
    - Drop a condition that a later record withdrew or discharged, citing that record. Only the
-     party whose finding it is, or a reviewer other than whoever made the fix, can discharge it.
-     Restating a reviewer's finding in a reconciliation does not make it the coordinator's
-     finding, and nobody discharges a condition on their own fix.
+     party whose finding it is, or the owner, can withdraw it, and only the party whose finding
+     it is, or a reviewer other than whoever made the fix, can discharge it. A reviewer's record
+     that a coordinator posts stays the reviewer's: posting it does not make its findings the
+     coordinator's. Restating a reviewer's finding in a reconciliation does not either, and
+     nobody discharges a condition on their own fix.
    - The owner may also withdraw or waive a condition, or decide that a lane need not run.
-     `RECRUIT-01` contains no such waiver, so it rests on the owner's own authority. It counts
-     only on record, as above. It lifts no `HOLD`, and the merge message quotes it.
+     `RECRUIT-01` contains no such waiver, so it rests on the owner's own authority.
+     - A waiver names each condition or lane it waives. A general instruction to merge, such as
+       "merge on CI green", restates `MERGE-01`, whose boundary says it does not replace a
+       required review, so it waives nothing.
+     - It counts only on record, as above. The relaying session must have received the owner's
+       words directly, and quotes them exactly with when and where it received them. A
+       second-hand relay counts only once the owner confirms it.
+     - It lifts no `HOLD`, and the merge message quotes it.
    - Confirm that no veto is outstanding. Confirm that each required disposition is non-blocking
      and bound to the exact head, or carried to it under module 3 §7. A required disposition is
      one from each reviewer role that `RECRUIT-01` module 1 requires for the risk class.
-     Handovers, review records, governance and any code are `R2` there. A required lane that has
+     Handovers, review records, governance and any code, dependency bumps included, are `R2`
+     there. A required lane that has
      not run, and that the owner has not waived on record, is a stated blocker, not a silent hold
      (`MERGE-01`): say on the pull request which lane is missing.
    - The head you merge must equal the head the dispositions are bound to. A later push or base
      merge, by anyone, voids the binding. A base update needs module 3 §7's three proofs and a
-     rebind. A documentation-only receipt commit needs §6's proofs and a rebind. Any change to
-     a subject byte restarts both reviews.
+     rebind. A documentation-only receipt commit needs §6's proofs and a rebind, and so does any
+     other push that changes no file, such as a reworded commit message. Any change to a subject
+     byte restarts both reviews.
    - At merge, re-verify every disposition the merge relies on, whether a rebind or a review
      bound directly to the final head (module 3 §6). All of these must hold:
      - the comment you cite still exists at the URL or ID you recorded;
-     - it is unedited: `updated_at` equals `created_at`;
+     - it is unedited: `updated_at` equals `created_at`. Record dispositions as issue comments:
+       a pull-request review shows no edit time, so it cannot pass this check;
      - the SHA-256 of the record it transcribes equals both the digest it states and its
-       durable record. Hash the bytes between the `8<` markers, drop the blank line next to
-       each marker, and end with one LF. A hash of the whole comment body does not match;
+       durable record, which is the file the comment names and hashes. Hash the bytes between
+       the `8<` markers, drop the blank line next to each marker, and end with one LF. A hash of
+       the whole comment body does not match;
      - it names the reviewer, the exact commit, tree and base, and the subject-manifest digest.
 
      An edit, deletion or mismatch invalidates the disposition until the reviewer issues a new
-     one.
+     one. So does a comment that states no content digest, and a durable record you cannot
+     read: ask the reviewer to reissue the record, or merge from where the durable record is
+     kept. Name in every record you post where its durable record is kept.
    - A condition set by a review overrides the defaults in step 2, except the restricted-material
      rule. Publishing restricted material is the owner's decision (`AGENTS.md` "Four ways a
      corpus commit goes wrong", item 2), so a review condition cannot authorise it. If a
