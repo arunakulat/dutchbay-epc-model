@@ -91,7 +91,9 @@ Watching, fixing or merging a pull request follows `.claude/skills/steward/SKILL
 
 ## Known local-only failures
 
-In cloud containers, five tests in `tests/lint/test_cloud_audit_review_sandbox.py` (the
-sandbox watchdog and process-reaping cases) fail identically on an unmodified `main` and pass
-in CI (recorded on #1289 and #1292). Declare them in your receipts as pre-existing and local;
-do not skip them, and do not treat them as caused by your change.
+In cloud containers, up to five tests in `tests/lint/test_cloud_audit_review_sandbox.py` (the
+sandbox watchdog and process-reaping cases) fail on an unmodified `main` and pass in CI
+(recorded on #1289 and #1292). The count varies with timing: 3, 4 and 5 have all been
+observed on the same bytes, always from that same family. Declare the count you observed in
+your receipts as pre-existing and local; do not skip them, and do not treat them as caused by
+your change.
