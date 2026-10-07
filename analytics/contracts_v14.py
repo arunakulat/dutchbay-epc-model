@@ -140,6 +140,15 @@ from analytics.feasibility_report_contract.vocabulary import (
     ValueType,
 )
 from analytics.fx.fx_contracts import FXCurveOutput, FXRiskProfile, FXStructuredBlock
+from analytics.operational.contracts import (
+    OPERATIONAL_EVIDENCE_SCHEMA,
+    OPERATIONAL_REQUIRED_DATASET_KINDS,
+    OPERATIONAL_REQUIRED_ROLES,
+    OperationalAssessmentInput,
+    OperationalColumnBinding,
+    OperationalDatasetEvidence,
+    OperationalEvidenceError,
+)
 from analytics.resource_contracts import ResourceAssessment
 
 # Canonical CASPER contract version string. Unified Sprint 18D (D.X+5) to
@@ -4688,6 +4697,13 @@ __all__ = [
     "CovenantConstraint",
     "CapitalStructureOptimizationResult",
     "ResourceAssessment",
+    "OPERATIONAL_EVIDENCE_SCHEMA",
+    "OPERATIONAL_REQUIRED_DATASET_KINDS",
+    "OPERATIONAL_REQUIRED_ROLES",
+    "OperationalAssessmentInput",
+    "OperationalColumnBinding",
+    "OperationalDatasetEvidence",
+    "OperationalEvidenceError",
     "CANONICAL_WIND_INTERFACE_FIELDS",
     "SyntheticMCPMeasurementRecord",
     "require_canonical_wind_measurement",

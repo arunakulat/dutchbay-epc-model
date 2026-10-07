@@ -6,12 +6,16 @@ import pytest
 
 from analytics.contracts import ScenarioResult as PackageScenarioResult
 from analytics.contracts_v14 import (
+    OPERATIONAL_EVIDENCE_SCHEMA,
     CashflowResult,
     CasperResult,
     DebtCovenantSnapshot,
     EquityPerformance,
     IrrBridgeComponent,
     MonteCarloResult,
+    OperationalAssessmentInput,
+    OperationalColumnBinding,
+    OperationalDatasetEvidence,
     ParameterRangeConfig,
     ProjectEquityIrrBridge,
     ResourceAssessment,
@@ -63,6 +67,10 @@ def test_contracts_v14_pipeline_surface_is_importable() -> None:
     assert payload["wacc"]["prudential_rate"] == 0.11
     assert result.model_dump()["project_irr"] == 0.12
     assert PackageScenarioResult is ScenarioResult
+    assert OPERATIONAL_EVIDENCE_SCHEMA == "dutchbay.operational_evidence.v1"
+    assert OperationalAssessmentInput.__name__ == "OperationalAssessmentInput"
+    assert OperationalColumnBinding.__name__ == "OperationalColumnBinding"
+    assert OperationalDatasetEvidence.__name__ == "OperationalDatasetEvidence"
 
     # ResourceAssessment is re-exported through contracts_v14 (#996 D4) and
     # self-validates on construction; its model_dump() matches the ContractMixin surface.
