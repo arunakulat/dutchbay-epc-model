@@ -291,6 +291,19 @@ def test_named_zone_treatment_binds_zone_and_dst_policies() -> None:
     assert dataset.ambiguous_time_policy == "fold_1"
 
 
+@pytest.mark.parametrize("source_timezone", ["UTC", "Etc/UTC", "Asia/Colombo"])
+def test_portable_iana_timezone_keys_are_accepted(source_timezone: str) -> None:
+    dataset = _dataset(
+        "revenue_meter",
+        {"timestamp_utc", "energy_kwh"},
+        timezone_treatment="named_zone_to_utc",
+        source_timezone=source_timezone,
+        ambiguous_time_policy="reject",
+        nonexistent_time_policy="reject",
+    )
+    assert dataset.source_timezone == source_timezone
+
+
 @pytest.mark.parametrize(
     "overrides,match",
     [
@@ -310,6 +323,51 @@ def test_named_zone_treatment_binds_zone_and_dst_policies() -> None:
                 "nonexistent_time_policy": "reject",
             },
             "IANA timezone",
+        ),
+        (
+            {
+                "timezone_treatment": "named_zone_to_utc",
+                "source_timezone": "localtime",
+                "ambiguous_time_policy": "reject",
+                "nonexistent_time_policy": "reject",
+            },
+            "special TZPATH",
+        ),
+        (
+            {
+                "timezone_treatment": "named_zone_to_utc",
+                "source_timezone": "posixrules",
+                "ambiguous_time_policy": "reject",
+                "nonexistent_time_policy": "reject",
+            },
+            "special TZPATH",
+        ),
+        (
+            {
+                "timezone_treatment": "named_zone_to_utc",
+                "source_timezone": "posix/America/New_York",
+                "ambiguous_time_policy": "reject",
+                "nonexistent_time_policy": "reject",
+            },
+            "special TZPATH",
+        ),
+        (
+            {
+                "timezone_treatment": "named_zone_to_utc",
+                "source_timezone": "right/America/New_York",
+                "ambiguous_time_policy": "reject",
+                "nonexistent_time_policy": "reject",
+            },
+            "special TZPATH",
+        ),
+        (
+            {
+                "timezone_treatment": "named_zone_to_utc",
+                "source_timezone": "CET",
+                "ambiguous_time_policy": "reject",
+                "nonexistent_time_policy": "reject",
+            },
+            "multi-component IANA",
         ),
         (
             {
@@ -356,6 +414,38 @@ def test_derived_curtailment_evidence_requires_bound_lineage() -> None:
         replace(dataset, lineage_source_sha256=())
     with pytest.raises(OperationalEvidenceError, match="derivation_method_sha256"):
         replace(dataset, derivation_method_sha256=None)
+
+
+@pytest.mark.parametrize(
+    "overrides,match",
+    [
+        (
+            {"lineage_source_sha256": (_SHA,)},
+            "source_sha256 must not equal",
+        ),
+        (
+            {"derivation_method_sha256": _SHA},
+            "derived artifact's source_sha256",
+        ),
+        (
+            {"derivation_method_sha256": "b" * 64},
+            "must not equal an upstream",
+        ),
+    ],
+)
+def test_derived_provenance_digest_roles_are_mutually_disjoint(
+    overrides: dict[str, object], match: str
+) -> None:
+    dataset = _dataset(
+        "curtailment",
+        {
+            "timestamp_utc",
+            "availability_loss_kwh",
+            "curtailment_loss_kwh",
+        },
+    )
+    with pytest.raises(OperationalEvidenceError, match=match):
+        replace(dataset, **overrides)
 
 
 def test_derived_status_is_bounded_and_mixed_status_is_prohibited() -> None:

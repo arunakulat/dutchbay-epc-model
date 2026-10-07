@@ -20,25 +20,32 @@ OpenOA `PlantData` object or run an analysis.
   review rejected the frozen candidate.
 - Semantic-provenance lease: `L-1331-D1-003`; the same sole writer, opened after the refreshed
   domain review rejected insufficient timezone-policy and derived-lineage declarations.
+- Portable-provenance lease: `L-1331-D1-004`; the same sole writer, opened after round-three
+  reviews rejected special TZPATH keys and cross-role digest identity.
 - Worktree: `/workspace/dutchbay-operational-contract`.
 - Branch: `feature/operational-evidence-contract-1331`.
 - Current base after the recorded origin/main refresh:
   `3b352034f74254af8b8baeb4d8cf9181ad252cb2`.
 - Risk: `R2_LOAD_BEARING`; two independent reviews are required after freeze.
-- Durable lease receipts: issue #1331 comments `6031969446`, `6032236120`, and `6043958655`.
+- Durable lease receipts: issue #1331 comments `6031969446`, `6032236120`, `6043958655`, and
+  `6044190023`.
 - Historical predecessor reviews: `docs/PR1336_D1_DOMAIN_REVIEW_R1.md` and
   `docs/PR1336_D1_ASSURANCE_REVIEW_R1.md`. The first disposition was `REJECT`; both review lanes
   must restart on the successor because remediation changes subject bytes.
 - Refreshed historical reviews: `docs/PR1336_D1_DOMAIN_REVIEW_R2.md` and
   `docs/PR1336_D1_ASSURANCE_REVIEW_R2.md`. Assurance accepted with two D2 deferrals; domain made
   those same representational gaps blocking, so the union disposition was `REJECT`.
+- Round-three reviews: `docs/PR1336_D1_DOMAIN_REVIEW_R3.md` and
+  `docs/PR1336_D1_ASSURANCE_REVIEW_R3.md`. Both rejected the candidate on distinct bounded
+  provenance defects.
 
 ## Invariants
 
 1. Dataset kind, analysis purpose, evidence class, timezone treatment, observation status,
    interval basis, semantic role and unit vocabularies are closed and runtime validated.
-   Named-zone treatment also binds an available IANA timezone and explicit ambiguous/nonexistent
-   local-time policies; other treatment classes reject those inapplicable declarations.
+   Named-zone treatment also binds an available portable region-style IANA timezone (or `UTC`) and
+   explicit ambiguous/nonexistent local-time policies. Host-relative/special TZPATH keys and
+   inapplicable declarations fail closed.
 2. Every source is bound to a lowercase SHA-256, a non-empty locator and an explicit UTC coverage
    interval. Timeseries evidence declares either a positive fixed-seconds interval or an explicit
    calendar-month basis; asset metadata declares both time treatment and sampling as not applicable.
@@ -51,8 +58,9 @@ OpenOA `PlantData` object or run an analysis.
    products or digests cannot be unioned to manufacture a complete input.
 6. Epistemic status is independent where the domain requires it. Curtailment evidence may be
    observed, operator-declared or a derived estimate. A derived estimate binds both upstream source
-   digests and a derivation-method digest. Mixed-status logical datasets are not representable and
-   must be split or normalized into one explicitly derived artifact before satisfying D1.
+   digests and a derivation-method digest; output, upstream and method digest roles are mutually
+   disjoint. Mixed-status logical datasets are not representable and must be split or normalized
+   into one explicitly derived artifact before satisfying D1.
 7. Raw evidence is hard-fenced from canonical finance, bankability, lender and Board eligibility.
 8. The contract is immutable, serializable and dependency-free. It performs no I/O, conversion,
    imputation, resampling, estimation, reporting or finance mutation.

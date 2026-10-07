@@ -348,6 +348,9 @@ OPERATIONAL_CALENDAR_MONTH_ALLOWED: Mapping[str, frozenset[str]] = MappingProxyT
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$")
+_IANA_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_+.-]+$")
+_SPECIAL_TIMEZONE_KEYS = frozenset({"localtime", "posixrules"})
+_SPECIAL_TIMEZONE_PREFIXES = ("posix/", "right/")
 
 
 class OperationalEvidenceError(ValueError):
@@ -386,6 +389,39 @@ def _parse_utc(value: object, field_name: str) -> datetime:
     if parsed.tzinfo != timezone.utc:
         raise OperationalEvidenceError(f"{field_name} must resolve to UTC.")
     return parsed
+
+
+def _require_portable_iana_timezone(value: object) -> str:
+    if not isinstance(value, str) or not value or value.strip() != value:
+        raise OperationalEvidenceError(
+            "named_zone_to_utc requires source_timezone as a non-empty portable "
+            "IANA timezone name without surrounding whitespace."
+        )
+    if value in _SPECIAL_TIMEZONE_KEYS or value.startswith(_SPECIAL_TIMEZONE_PREFIXES):
+        raise OperationalEvidenceError(
+            f"source_timezone must not use a host-relative or special TZPATH key; "
+            f"got {value!r}."
+        )
+    components = value.split("/")
+    if value != "UTC" and (
+        len(components) < 2
+        or any(
+            component in {"", ".", ".."}
+            or _IANA_COMPONENT_RE.fullmatch(component) is None
+            for component in components
+        )
+    ):
+        raise OperationalEvidenceError(
+            "source_timezone must be 'UTC' or a portable multi-component IANA "
+            f"timezone key; got {value!r}."
+        )
+    try:
+        ZoneInfo(value)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise OperationalEvidenceError(
+            f"source_timezone must identify an available IANA timezone; got {value!r}."
+        ) from exc
+    return value
 
 
 @dataclass(frozen=True)
@@ -453,6 +489,13 @@ class OperationalDatasetEvidence:
                 f"kind {self.kind!r} requires source_class {expected_class!r}; "
                 f"got {self.source_class!r}."
             )
+        if (
+            not isinstance(self.source_sha256, str)
+            or _SHA256_RE.fullmatch(self.source_sha256) is None
+        ):
+            raise OperationalEvidenceError(
+                "source_sha256 must be exactly 64 lowercase hexadecimal characters."
+            )
         _require_closed_string(
             self.timezone_treatment, "timezone_treatment", _TIMEZONE_TREATMENTS
         )
@@ -476,22 +519,7 @@ class OperationalDatasetEvidence:
             _NONEXISTENT_TIME_POLICIES,
         )
         if self.timezone_treatment == "named_zone_to_utc":
-            if (
-                not isinstance(self.source_timezone, str)
-                or not self.source_timezone
-                or self.source_timezone.strip() != self.source_timezone
-            ):
-                raise OperationalEvidenceError(
-                    "named_zone_to_utc requires source_timezone as a non-empty "
-                    "IANA timezone name without surrounding whitespace."
-                )
-            try:
-                ZoneInfo(self.source_timezone)
-            except (ZoneInfoNotFoundError, ValueError) as exc:
-                raise OperationalEvidenceError(
-                    f"source_timezone must identify an available IANA timezone; "
-                    f"got {self.source_timezone!r}."
-                ) from exc
+            _require_portable_iana_timezone(self.source_timezone)
             if self.ambiguous_time_policy == "not_applicable":
                 raise OperationalEvidenceError(
                     "named_zone_to_utc requires an explicit ambiguous_time_policy."
@@ -550,6 +578,21 @@ class OperationalDatasetEvidence:
                     "derived_estimate evidence requires derivation_method_sha256 as "
                     "a 64-character lowercase SHA-256 digest."
                 )
+            if self.source_sha256 in self.lineage_source_sha256:
+                raise OperationalEvidenceError(
+                    "derived evidence source_sha256 must not equal an upstream "
+                    "lineage_source_sha256 digest."
+                )
+            if self.derivation_method_sha256 == self.source_sha256:
+                raise OperationalEvidenceError(
+                    "derivation_method_sha256 must not equal the derived artifact's "
+                    "source_sha256."
+                )
+            if self.derivation_method_sha256 in self.lineage_source_sha256:
+                raise OperationalEvidenceError(
+                    "derivation_method_sha256 must not equal an upstream "
+                    "lineage_source_sha256 digest."
+                )
         elif self.lineage_source_sha256 or self.derivation_method_sha256 is not None:
             raise OperationalEvidenceError(
                 "derivation lineage fields apply only to "
@@ -562,13 +605,6 @@ class OperationalDatasetEvidence:
         ):
             raise OperationalEvidenceError(
                 "source_locator must be a non-empty string without surrounding whitespace."
-            )
-        if (
-            not isinstance(self.source_sha256, str)
-            or _SHA256_RE.fullmatch(self.source_sha256) is None
-        ):
-            raise OperationalEvidenceError(
-                "source_sha256 must be exactly 64 lowercase hexadecimal characters."
             )
         start = _parse_utc(self.coverage_start_utc, "coverage_start_utc")
         end = _parse_utc(self.coverage_end_utc, "coverage_end_utc")
