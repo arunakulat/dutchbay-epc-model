@@ -15,24 +15,39 @@ OpenOA `PlantData` object or run an analysis.
 
 ## Writer lease
 
-- Lease: `L-1331-D1-001`; coordinator and sole writer `/root`.
+- Initial lease: `L-1331-D1-001`; coordinator and sole writer `/root`.
+- Remediation lease: `L-1331-D1-002`; the same sole writer, opened after the initial domain
+  review rejected the frozen candidate.
 - Worktree: `/workspace/dutchbay-operational-contract`.
 - Branch: `feature/operational-evidence-contract-1331`.
 - Base: `93823d55d60496a74936643c5038714b0df876f9`.
 - Risk: `R2_LOAD_BEARING`; two independent reviews are required after freeze.
-- Durable lease receipt: issue #1331 comment `6031969446`.
+- Durable lease receipts: issue #1331 comments `6031969446` and `6032236120`.
+- Historical predecessor reviews: `docs/PR1336_D1_DOMAIN_REVIEW_R1.md` and
+  `docs/PR1336_D1_ASSURANCE_REVIEW_R1.md`. The first disposition was `REJECT`; both review lanes
+  must restart on the successor because remediation changes subject bytes.
 
 ## Invariants
 
-1. Dataset kind, analysis purpose, evidence class, semantic role and unit vocabularies are closed.
+1. Dataset kind, analysis purpose, evidence class, timezone treatment, observation status,
+   interval basis, semantic role and unit vocabularies are closed and runtime validated.
 2. Every source is bound to a lowercase SHA-256, a non-empty locator and an explicit UTC coverage
-   interval. Timeseries intervals and row counts are positive real integers; asset metadata has no
-   fabricated sampling interval.
-3. Purpose-specific dataset and role minima follow the tagged OpenOA v3.2 requirements.
+   interval. Timeseries evidence declares either a positive fixed-seconds interval or an explicit
+   calendar-month basis; asset metadata declares both time treatment and sampling as not applicable.
+   A calendar month is never misrepresented as a fixed number of seconds.
+3. Purpose-specific dataset, role and cadence minima follow the tagged OpenOA v3.2 requirements:
+   long-term AEP is monthly or finer; turbine gross energy is daily or finer; electrical-loss SCADA
+   is daily or finer and meter data monthly or finer; wake-loss inputs are hourly or finer.
 4. The declared assessment window must lie inside every required dataset's coverage.
-5. Raw evidence is hard-fenced from canonical finance, bankability, lender and Board eligibility.
-6. The contract is immutable, serializable and dependency-free. It performs no I/O, conversion,
+5. Every required kind has at least one individually complete logical dataset. Roles from unrelated
+   products or digests cannot be unioned to manufacture a complete input.
+6. Raw evidence is hard-fenced from canonical finance, bankability, lender and Board eligibility.
+7. The contract is immutable, serializable and dependency-free. It performs no I/O, conversion,
    imputation, resampling, estimation, reporting or finance mutation.
+
+The fixed-seconds monthly ceiling is 31 days only as a declared maximum cadence. D2 must inspect
+actual timestamps and reject gaps, duplicates, misleading cadence declarations or incomplete
+calendar coverage; D1 does not infer a real calendar from metadata.
 
 ## Authority and remaining work
 

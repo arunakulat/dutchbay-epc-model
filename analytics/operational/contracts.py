@@ -43,6 +43,22 @@ OperationalSourceClass: TypeAlias = Literal[
     "reference_reanalysis",
     "declared_asset",
 ]
+OperationalTimezoneTreatment: TypeAlias = Literal[
+    "source_utc",
+    "offset_aware_to_utc",
+    "named_zone_to_utc",
+    "not_applicable",
+]
+OperationalObservationStatus: TypeAlias = Literal[
+    "observed",
+    "reference_reanalysis",
+    "declared_metadata",
+]
+OperationalIntervalBasis: TypeAlias = Literal[
+    "fixed_seconds",
+    "calendar_month",
+    "not_applicable",
+]
 
 _DATASET_KINDS = frozenset(
     {
@@ -74,6 +90,32 @@ _SOURCE_CLASS_BY_KIND: Mapping[str, str] = MappingProxyType(
         "reanalysis": "reference_reanalysis",
         "asset": "declared_asset",
     }
+)
+_SOURCE_CLASSES = frozenset(_SOURCE_CLASS_BY_KIND.values())
+_TIMEZONE_TREATMENTS = frozenset(
+    {
+        "source_utc",
+        "offset_aware_to_utc",
+        "named_zone_to_utc",
+        "not_applicable",
+    }
+)
+_TIMESERIES_TIMEZONE_TREATMENTS = _TIMEZONE_TREATMENTS - {"not_applicable"}
+_OBSERVATION_STATUS_BY_KIND: Mapping[str, str] = MappingProxyType(
+    {
+        "scada": "observed",
+        "revenue_meter": "observed",
+        "met_tower": "observed",
+        "status": "observed",
+        "curtailment": "observed",
+        "reanalysis": "reference_reanalysis",
+        "asset": "declared_metadata",
+    }
+)
+_OBSERVATION_STATUSES = frozenset(_OBSERVATION_STATUS_BY_KIND.values())
+_INTERVAL_BASES = frozenset({"fixed_seconds", "calendar_month", "not_applicable"})
+_CALENDAR_MONTH_CAPABLE_KINDS = frozenset(
+    {"revenue_meter", "curtailment", "reanalysis"}
 )
 
 # Canonical semantic roles and the only units D1 admits.  D2 may convert source
@@ -234,6 +276,50 @@ OPERATIONAL_REQUIRED_ROLES: Mapping[str, Mapping[str, frozenset[str]]] = (
     )
 )
 
+# Maximum declared cadence for each required purpose/kind pair. Calendar-month
+# inputs are admitted only for pairs listed separately below because a calendar
+# month has no single truthful duration in seconds. D2 validates actual timestamps.
+OPERATIONAL_MAX_INTERVAL_SECONDS: Mapping[str, Mapping[str, int | None]] = (
+    MappingProxyType(
+        {
+            "long_term_aep": MappingProxyType(
+                {
+                    "revenue_meter": 31 * 86_400,
+                    "curtailment": 31 * 86_400,
+                    "reanalysis": 31 * 86_400,
+                }
+            ),
+            "turbine_gross_energy": MappingProxyType(
+                {"scada": 86_400, "reanalysis": 86_400, "asset": None}
+            ),
+            "electrical_losses": MappingProxyType(
+                {"scada": 86_400, "revenue_meter": 31 * 86_400}
+            ),
+            "wake_losses_scada": MappingProxyType(
+                {"scada": 3_600, "reanalysis": 3_600, "asset": None}
+            ),
+            "wake_losses_tower": MappingProxyType(
+                {
+                    "scada": 3_600,
+                    "met_tower": 3_600,
+                    "reanalysis": 3_600,
+                    "asset": None,
+                }
+            ),
+        }
+    )
+)
+
+OPERATIONAL_CALENDAR_MONTH_ALLOWED: Mapping[str, frozenset[str]] = MappingProxyType(
+    {
+        "long_term_aep": frozenset({"revenue_meter", "curtailment", "reanalysis"}),
+        "turbine_gross_energy": frozenset(),
+        "electrical_losses": frozenset({"revenue_meter"}),
+        "wake_losses_scada": frozenset(),
+        "wake_losses_tower": frozenset(),
+    }
+)
+
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$")
@@ -247,6 +333,16 @@ def _require_identifier(value: object, field_name: str) -> str:
     if not isinstance(value, str) or _IDENTIFIER_RE.fullmatch(value) is None:
         raise OperationalEvidenceError(
             f"{field_name} must match {_IDENTIFIER_RE.pattern!r}; got {value!r}."
+        )
+    return value
+
+
+def _require_closed_string(
+    value: object, field_name: str, allowed: frozenset[str]
+) -> str:
+    if not isinstance(value, str) or value not in allowed:
+        raise OperationalEvidenceError(
+            f"{field_name} must be one of {sorted(allowed)}; got {value!r}."
         )
     return value
 
@@ -276,11 +372,7 @@ class OperationalColumnBinding:
     unit: str
 
     def __post_init__(self) -> None:
-        if self.role not in _ROLE_UNITS:
-            raise OperationalEvidenceError(
-                f"Unsupported operational column role {self.role!r}; "
-                f"choose from {sorted(_ROLE_UNITS)}."
-            )
+        _require_closed_string(self.role, "role", frozenset(_ROLE_UNITS))
         if (
             not isinstance(self.source_column, str)
             or not self.source_column
@@ -289,9 +381,10 @@ class OperationalColumnBinding:
             raise OperationalEvidenceError(
                 "source_column must be a non-empty string without surrounding whitespace."
             )
-        if self.unit not in _ROLE_UNITS[self.role]:
+        allowed_units = _ROLE_UNITS[self.role]
+        if not isinstance(self.unit, str) or self.unit not in allowed_units:
             raise OperationalEvidenceError(
-                f"Role {self.role!r} requires one of {sorted(_ROLE_UNITS[self.role])}; "
+                f"Role {self.role!r} requires one of {sorted(allowed_units)}; "
                 f"got unit {self.unit!r}."
             )
 
@@ -309,25 +402,47 @@ class OperationalDatasetEvidence:
     logical_id: str
     kind: OperationalDatasetKind
     source_class: OperationalSourceClass
+    timezone_treatment: OperationalTimezoneTreatment
+    observation_status: OperationalObservationStatus
     source_locator: str
     source_sha256: str
     coverage_start_utc: str
     coverage_end_utc: str
+    interval_basis: OperationalIntervalBasis
     interval_seconds: int | None
     row_count: int
     columns: tuple[OperationalColumnBinding, ...]
 
     def __post_init__(self) -> None:
         _require_identifier(self.logical_id, "logical_id")
-        if self.kind not in _DATASET_KINDS:
-            raise OperationalEvidenceError(
-                f"kind must be one of {sorted(_DATASET_KINDS)}; got {self.kind!r}."
-            )
+        _require_closed_string(self.kind, "kind", _DATASET_KINDS)
         expected_class = _SOURCE_CLASS_BY_KIND[self.kind]
+        _require_closed_string(self.source_class, "source_class", _SOURCE_CLASSES)
         if self.source_class != expected_class:
             raise OperationalEvidenceError(
                 f"kind {self.kind!r} requires source_class {expected_class!r}; "
                 f"got {self.source_class!r}."
+            )
+        _require_closed_string(
+            self.timezone_treatment, "timezone_treatment", _TIMEZONE_TREATMENTS
+        )
+        if self.kind == "asset":
+            if self.timezone_treatment != "not_applicable":
+                raise OperationalEvidenceError(
+                    "asset metadata requires timezone_treatment='not_applicable'."
+                )
+        elif self.timezone_treatment not in _TIMESERIES_TIMEZONE_TREATMENTS:
+            raise OperationalEvidenceError(
+                "timeseries evidence requires an explicit UTC normalization treatment."
+            )
+        expected_status = _OBSERVATION_STATUS_BY_KIND[self.kind]
+        _require_closed_string(
+            self.observation_status, "observation_status", _OBSERVATION_STATUSES
+        )
+        if self.observation_status != expected_status:
+            raise OperationalEvidenceError(
+                f"kind {self.kind!r} requires observation_status "
+                f"{expected_status!r}; got {self.observation_status!r}."
             )
         if (
             not isinstance(self.source_locator, str)
@@ -350,15 +465,35 @@ class OperationalDatasetEvidence:
             raise OperationalEvidenceError(
                 "coverage_start_utc must be earlier than coverage_end_utc."
             )
+        _require_closed_string(self.interval_basis, "interval_basis", _INTERVAL_BASES)
         if self.kind == "asset":
-            if self.interval_seconds is not None:
+            if (
+                self.interval_basis != "not_applicable"
+                or self.interval_seconds is not None
+            ):
                 raise OperationalEvidenceError(
                     "asset metadata is non-timeseries evidence and requires "
-                    "interval_seconds=None."
+                    "interval_basis='not_applicable' and interval_seconds=None."
                 )
-        elif type(self.interval_seconds) is not int or self.interval_seconds <= 0:
+        elif self.interval_basis == "fixed_seconds":
+            if type(self.interval_seconds) is not int or self.interval_seconds <= 0:
+                raise OperationalEvidenceError(
+                    "fixed_seconds evidence requires interval_seconds as a real integer > 0."
+                )
+        elif self.interval_basis == "calendar_month":
+            if self.kind not in _CALENDAR_MONTH_CAPABLE_KINDS:
+                raise OperationalEvidenceError(
+                    f"kind {self.kind!r} does not admit calendar-month evidence."
+                )
+            if self.interval_seconds is not None:
+                raise OperationalEvidenceError(
+                    "calendar_month evidence requires interval_seconds=None because "
+                    "calendar months have variable duration."
+                )
+        else:
             raise OperationalEvidenceError(
-                "timeseries interval_seconds must be a real integer > 0."
+                "timeseries evidence requires interval_basis='fixed_seconds' or "
+                "'calendar_month'."
             )
         if type(self.row_count) is not int or self.row_count <= 0:
             raise OperationalEvidenceError("row_count must be a real integer > 0.")
@@ -424,11 +559,7 @@ class OperationalAssessmentInput:
             )
         _require_identifier(self.project_id, "project_id")
         _require_identifier(self.assessment_id, "assessment_id")
-        if self.purpose not in _ANALYSIS_PURPOSES:
-            raise OperationalEvidenceError(
-                f"purpose must be one of {sorted(_ANALYSIS_PURPOSES)}; "
-                f"got {self.purpose!r}."
-            )
+        _require_closed_string(self.purpose, "purpose", _ANALYSIS_PURPOSES)
         start = _parse_utc(self.assessment_start_utc, "assessment_start_utc")
         end = _parse_utc(self.assessment_end_utc, "assessment_end_utc")
         if start >= end:
@@ -459,14 +590,30 @@ class OperationalAssessmentInput:
         required_roles = OPERATIONAL_REQUIRED_ROLES[self.purpose]
         for kind, roles in required_roles.items():
             matching = [item for item in self.datasets if item.kind == kind]
-            available = frozenset().union(*(item.roles for item in matching))
-            missing_roles = sorted(roles - available)
-            if missing_roles:
+            complete = [item for item in matching if roles.issubset(item.roles)]
+            if not complete:
                 raise OperationalEvidenceError(
-                    f"purpose {self.purpose!r}, kind {kind!r} is missing roles "
-                    f"{missing_roles}."
+                    f"purpose {self.purpose!r}, kind {kind!r} requires at least one "
+                    f"individually complete logical dataset with roles {sorted(roles)}."
                 )
             for dataset in matching:
+                max_interval = OPERATIONAL_MAX_INTERVAL_SECONDS[self.purpose][kind]
+                if dataset.interval_basis == "calendar_month":
+                    if kind not in OPERATIONAL_CALENDAR_MONTH_ALLOWED[self.purpose]:
+                        raise OperationalEvidenceError(
+                            f"purpose {self.purpose!r}, kind {kind!r} does not admit "
+                            "calendar-month evidence."
+                        )
+                elif (
+                    max_interval is not None
+                    and dataset.interval_seconds is not None
+                    and dataset.interval_seconds > max_interval
+                ):
+                    raise OperationalEvidenceError(
+                        f"purpose {self.purpose!r}, kind {kind!r} requires "
+                        f"interval_seconds <= {max_interval}; got "
+                        f"{dataset.interval_seconds}."
+                    )
                 dataset_start = _parse_utc(
                     dataset.coverage_start_utc, "coverage_start_utc"
                 )
@@ -499,7 +646,9 @@ class OperationalAssessmentInput:
 
 
 __all__ = [
+    "OPERATIONAL_CALENDAR_MONTH_ALLOWED",
     "OPERATIONAL_EVIDENCE_SCHEMA",
+    "OPERATIONAL_MAX_INTERVAL_SECONDS",
     "OPERATIONAL_REQUIRED_DATASET_KINDS",
     "OPERATIONAL_REQUIRED_ROLES",
     "OperationalAnalysisPurpose",
@@ -508,5 +657,8 @@ __all__ = [
     "OperationalDatasetEvidence",
     "OperationalDatasetKind",
     "OperationalEvidenceError",
+    "OperationalIntervalBasis",
+    "OperationalObservationStatus",
     "OperationalSourceClass",
+    "OperationalTimezoneTreatment",
 ]

@@ -9,7 +9,9 @@ from typing import Any
 import pytest
 
 from analytics.operational.contracts import (
+    OPERATIONAL_CALENDAR_MONTH_ALLOWED,
     OPERATIONAL_EVIDENCE_SCHEMA,
+    OPERATIONAL_MAX_INTERVAL_SECONDS,
     OPERATIONAL_REQUIRED_ROLES,
     OperationalAssessmentInput,
     OperationalColumnBinding,
@@ -56,14 +58,26 @@ def _dataset(kind: str, roles: set[str] | frozenset[str], **overrides: Any):
         "reanalysis": "reference_reanalysis",
         "asset": "declared_asset",
     }
+    observation_statuses = {
+        "scada": "observed",
+        "revenue_meter": "observed",
+        "met_tower": "observed",
+        "status": "observed",
+        "curtailment": "observed",
+        "reanalysis": "reference_reanalysis",
+        "asset": "declared_metadata",
+    }
     data = dict(
         logical_id=f"{kind}-primary",
         kind=kind,
         source_class=source_classes.get(kind, "observed_plant"),
+        timezone_treatment="not_applicable" if kind == "asset" else "source_utc",
+        observation_status=observation_statuses.get(kind, "observed"),
         source_locator=f"evidence/{kind}.parquet",
         source_sha256=_SHA,
         coverage_start_utc=_START,
         coverage_end_utc=_END,
+        interval_basis="not_applicable" if kind == "asset" else "fixed_seconds",
         interval_seconds=None if kind == "asset" else 600,
         row_count=15 if kind == "asset" else 52_560,
         columns=tuple(_binding(role) for role in sorted(roles)),
@@ -165,6 +179,21 @@ def test_asset_metadata_refuses_a_fabricated_interval() -> None:
         _dataset("asset", {"asset_id", "rated_power_kw"}, interval_seconds=600)
 
 
+def test_asset_metadata_requires_explicit_not_applicable_time_treatment() -> None:
+    with pytest.raises(OperationalEvidenceError, match="timezone_treatment"):
+        _dataset(
+            "asset",
+            {"asset_id", "rated_power_kw"},
+            timezone_treatment="source_utc",
+        )
+    with pytest.raises(OperationalEvidenceError, match="interval_basis"):
+        _dataset(
+            "asset",
+            {"asset_id", "rated_power_kw"},
+            interval_basis="fixed_seconds",
+        )
+
+
 @pytest.mark.parametrize("bad", [0, -1, 1.5, True])
 def test_row_count_is_a_positive_real_integer(bad: object) -> None:
     with pytest.raises(OperationalEvidenceError, match="row_count"):
@@ -172,7 +201,7 @@ def test_row_count_is_a_positive_real_integer(bad: object) -> None:
 
 
 def test_unknown_role_and_wrong_unit_are_rejected() -> None:
-    with pytest.raises(OperationalEvidenceError, match="Unsupported"):
+    with pytest.raises(OperationalEvidenceError, match="role"):
         _binding("price_usd_mwh")
     with pytest.raises(OperationalEvidenceError, match="requires"):
         _binding("power_kw", unit="MW")
@@ -183,10 +212,13 @@ def test_dataset_rejects_duplicate_roles_and_source_columns() -> None:
         logical_id="meter",
         kind="revenue_meter",
         source_class="observed_plant",
+        timezone_treatment="source_utc",
+        observation_status="observed",
         source_locator="meter.parquet",
         source_sha256=_SHA,
         coverage_start_utc=_START,
         coverage_end_utc=_END,
+        interval_basis="fixed_seconds",
         interval_seconds=600,
         row_count=2,
     )
@@ -217,6 +249,25 @@ def test_kind_requires_the_correct_evidence_class() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "kind,bad_status",
+    [
+        ("scada", "reference_reanalysis"),
+        ("reanalysis", "observed"),
+        ("asset", "observed"),
+    ],
+)
+def test_kind_requires_explicit_observation_status(kind: str, bad_status: str) -> None:
+    roles = next(
+        roles
+        for requirements in OPERATIONAL_REQUIRED_ROLES.values()
+        for candidate_kind, roles in requirements.items()
+        if candidate_kind == kind
+    )
+    with pytest.raises(OperationalEvidenceError, match="observation_status"):
+        _dataset(kind, roles, observation_status=bad_status)
+
+
 def test_kind_refuses_semantically_wrong_but_globally_valid_roles() -> None:
     with pytest.raises(OperationalEvidenceError, match="does not admit"):
         _dataset(
@@ -239,7 +290,7 @@ def test_missing_kind_and_missing_role_are_distinct_failures() -> None:
         )
 
 
-def test_roles_may_be_satisfied_across_multiple_same_kind_artifacts() -> None:
+def test_roles_cannot_be_combined_across_unrelated_same_kind_artifacts() -> None:
     datasets = [d for d in _datasets_for("long_term_aep") if d.kind != "reanalysis"]
     datasets.extend(
         [
@@ -256,7 +307,78 @@ def test_roles_may_be_satisfied_across_multiple_same_kind_artifacts() -> None:
             ),
         ]
     )
-    assert _envelope(datasets=tuple(datasets)).purpose == "long_term_aep"
+    with pytest.raises(OperationalEvidenceError, match="individually complete"):
+        _envelope(datasets=tuple(datasets))
+
+
+@pytest.mark.parametrize(
+    "purpose,kind,max_seconds",
+    [
+        (purpose, kind, max_seconds)
+        for purpose, requirements in OPERATIONAL_MAX_INTERVAL_SECONDS.items()
+        for kind, max_seconds in requirements.items()
+        if max_seconds is not None
+    ],
+)
+def test_purpose_kind_fixed_interval_boundary_is_inclusive_and_fail_loud(
+    purpose: str, kind: str, max_seconds: int
+) -> None:
+    datasets = list(_datasets_for(purpose))
+    index = next(i for i, dataset in enumerate(datasets) if dataset.kind == kind)
+    datasets[index] = replace(datasets[index], interval_seconds=max_seconds)
+    assert _envelope(purpose, datasets=tuple(datasets)).purpose == purpose
+
+    datasets[index] = replace(datasets[index], interval_seconds=max_seconds + 1)
+    with pytest.raises(OperationalEvidenceError, match="interval_seconds <="):
+        _envelope(purpose, datasets=tuple(datasets))
+
+
+@pytest.mark.parametrize(
+    "purpose,kind",
+    [
+        (purpose, kind)
+        for purpose, kinds in OPERATIONAL_CALENDAR_MONTH_ALLOWED.items()
+        for kind in sorted(kinds)
+    ],
+)
+def test_calendar_month_is_explicit_and_only_allowed_for_monthly_minima(
+    purpose: str, kind: str
+) -> None:
+    datasets = list(_datasets_for(purpose))
+    index = next(i for i, dataset in enumerate(datasets) if dataset.kind == kind)
+    datasets[index] = replace(
+        datasets[index], interval_basis="calendar_month", interval_seconds=None
+    )
+    assert _envelope(purpose, datasets=tuple(datasets)).purpose == purpose
+
+
+@pytest.mark.parametrize(
+    "purpose,kind",
+    [
+        ("turbine_gross_energy", "reanalysis"),
+        ("wake_losses_scada", "reanalysis"),
+    ],
+)
+def test_calendar_month_is_rejected_for_daily_and_hourly_purposes(
+    purpose: str, kind: str
+) -> None:
+    datasets = list(_datasets_for(purpose))
+    index = next(i for i, dataset in enumerate(datasets) if dataset.kind == kind)
+    datasets[index] = replace(
+        datasets[index], interval_basis="calendar_month", interval_seconds=None
+    )
+    with pytest.raises(OperationalEvidenceError, match="does not admit calendar-month"):
+        _envelope(purpose, datasets=tuple(datasets))
+
+
+def test_calendar_month_cannot_claim_a_fixed_seconds_duration() -> None:
+    with pytest.raises(OperationalEvidenceError, match="variable duration"):
+        _dataset(
+            "revenue_meter",
+            {"timestamp_utc", "energy_kwh"},
+            interval_basis="calendar_month",
+            interval_seconds=2_592_000,
+        )
 
 
 def test_duplicate_logical_id_is_rejected() -> None:
@@ -297,3 +419,34 @@ def test_unknown_schema_purpose_and_kind_are_rejected_at_runtime() -> None:
         _envelope(purpose="merchant_price")
     with pytest.raises(OperationalEvidenceError, match="kind"):
         _dataset("price", {"timestamp_utc", "energy_kwh"})
+
+
+@pytest.mark.parametrize(
+    "field,bad",
+    [
+        ("kind", []),
+        ("source_class", []),
+        ("timezone_treatment", {}),
+        ("observation_status", []),
+        ("interval_basis", {}),
+    ],
+)
+def test_unhashable_dataset_vocabulary_inputs_use_contract_error(
+    field: str, bad: object
+) -> None:
+    dataset = _dataset("revenue_meter", {"timestamp_utc", "energy_kwh"})
+    with pytest.raises(OperationalEvidenceError, match=field):
+        replace(dataset, **{field: bad})
+
+
+@pytest.mark.parametrize("field,bad", [("role", []), ("unit", {})])
+def test_unhashable_column_vocabulary_inputs_use_contract_error(
+    field: str, bad: object
+) -> None:
+    with pytest.raises(OperationalEvidenceError):
+        replace(_binding("power_kw"), **{field: bad})
+
+
+def test_unhashable_purpose_uses_contract_error() -> None:
+    with pytest.raises(OperationalEvidenceError, match="purpose"):
+        replace(_envelope(), purpose=[])

@@ -141,13 +141,21 @@ from analytics.feasibility_report_contract.vocabulary import (
 )
 from analytics.fx.fx_contracts import FXCurveOutput, FXRiskProfile, FXStructuredBlock
 from analytics.operational.contracts import (
+    OPERATIONAL_CALENDAR_MONTH_ALLOWED,
     OPERATIONAL_EVIDENCE_SCHEMA,
+    OPERATIONAL_MAX_INTERVAL_SECONDS,
     OPERATIONAL_REQUIRED_DATASET_KINDS,
     OPERATIONAL_REQUIRED_ROLES,
+    OperationalAnalysisPurpose,
     OperationalAssessmentInput,
     OperationalColumnBinding,
     OperationalDatasetEvidence,
+    OperationalDatasetKind,
     OperationalEvidenceError,
+    OperationalIntervalBasis,
+    OperationalObservationStatus,
+    OperationalSourceClass,
+    OperationalTimezoneTreatment,
 )
 from analytics.resource_contracts import ResourceAssessment
 
@@ -4697,13 +4705,21 @@ __all__ = [
     "CovenantConstraint",
     "CapitalStructureOptimizationResult",
     "ResourceAssessment",
+    "OPERATIONAL_CALENDAR_MONTH_ALLOWED",
     "OPERATIONAL_EVIDENCE_SCHEMA",
+    "OPERATIONAL_MAX_INTERVAL_SECONDS",
     "OPERATIONAL_REQUIRED_DATASET_KINDS",
     "OPERATIONAL_REQUIRED_ROLES",
+    "OperationalAnalysisPurpose",
     "OperationalAssessmentInput",
     "OperationalColumnBinding",
     "OperationalDatasetEvidence",
+    "OperationalDatasetKind",
     "OperationalEvidenceError",
+    "OperationalIntervalBasis",
+    "OperationalObservationStatus",
+    "OperationalSourceClass",
+    "OperationalTimezoneTreatment",
     "CANONICAL_WIND_INTERFACE_FIELDS",
     "SyntheticMCPMeasurementRecord",
     "require_canonical_wind_measurement",
