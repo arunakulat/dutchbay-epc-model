@@ -63,7 +63,7 @@ def _dataset(kind: str, roles: set[str] | frozenset[str], **overrides: Any):
         "revenue_meter": "observed",
         "met_tower": "observed",
         "status": "observed",
-        "curtailment": "observed",
+        "curtailment": "derived_estimate",
         "reanalysis": "reference_reanalysis",
         "asset": "declared_metadata",
     }
@@ -72,7 +72,12 @@ def _dataset(kind: str, roles: set[str] | frozenset[str], **overrides: Any):
         kind=kind,
         source_class=source_classes.get(kind, "observed_plant"),
         timezone_treatment="not_applicable" if kind == "asset" else "source_utc",
+        source_timezone=None,
+        ambiguous_time_policy="not_applicable",
+        nonexistent_time_policy="not_applicable",
         observation_status=observation_statuses.get(kind, "observed"),
+        lineage_source_sha256=(("b" * 64,) if kind == "curtailment" else ()),
+        derivation_method_sha256=("c" * 64 if kind == "curtailment" else None),
         source_locator=f"evidence/{kind}.parquet",
         source_sha256=_SHA,
         coverage_start_utc=_START,
@@ -213,7 +218,12 @@ def test_dataset_rejects_duplicate_roles_and_source_columns() -> None:
         kind="revenue_meter",
         source_class="observed_plant",
         timezone_treatment="source_utc",
+        source_timezone=None,
+        ambiguous_time_policy="not_applicable",
+        nonexistent_time_policy="not_applicable",
         observation_status="observed",
+        lineage_source_sha256=(),
+        derivation_method_sha256=None,
         source_locator="meter.parquet",
         source_sha256=_SHA,
         coverage_start_utc=_START,
@@ -266,6 +276,105 @@ def test_kind_requires_explicit_observation_status(kind: str, bad_status: str) -
     )
     with pytest.raises(OperationalEvidenceError, match="observation_status"):
         _dataset(kind, roles, observation_status=bad_status)
+
+
+def test_named_zone_treatment_binds_zone_and_dst_policies() -> None:
+    dataset = _dataset(
+        "revenue_meter",
+        {"timestamp_utc", "energy_kwh"},
+        timezone_treatment="named_zone_to_utc",
+        source_timezone="America/New_York",
+        ambiguous_time_policy="fold_1",
+        nonexistent_time_policy="shift_forward",
+    )
+    assert dataset.source_timezone == "America/New_York"
+    assert dataset.ambiguous_time_policy == "fold_1"
+
+
+@pytest.mark.parametrize(
+    "overrides,match",
+    [
+        (
+            {
+                "timezone_treatment": "named_zone_to_utc",
+                "ambiguous_time_policy": "reject",
+                "nonexistent_time_policy": "reject",
+            },
+            "source_timezone",
+        ),
+        (
+            {
+                "timezone_treatment": "named_zone_to_utc",
+                "source_timezone": "Not/A_Real_Zone",
+                "ambiguous_time_policy": "reject",
+                "nonexistent_time_policy": "reject",
+            },
+            "IANA timezone",
+        ),
+        (
+            {
+                "timezone_treatment": "named_zone_to_utc",
+                "source_timezone": "Asia/Colombo",
+                "nonexistent_time_policy": "reject",
+            },
+            "ambiguous_time_policy",
+        ),
+        (
+            {
+                "timezone_treatment": "named_zone_to_utc",
+                "source_timezone": "Asia/Colombo",
+                "ambiguous_time_policy": "reject",
+            },
+            "nonexistent_time_policy",
+        ),
+        ({"source_timezone": "Asia/Colombo"}, "apply only"),
+        ({"ambiguous_time_policy": "reject"}, "apply only"),
+        ({"nonexistent_time_policy": "reject"}, "apply only"),
+    ],
+)
+def test_timezone_policy_combinations_fail_loud(
+    overrides: dict[str, object], match: str
+) -> None:
+    with pytest.raises(OperationalEvidenceError, match=match):
+        _dataset("revenue_meter", {"timestamp_utc", "energy_kwh"}, **overrides)
+
+
+def test_derived_curtailment_evidence_requires_bound_lineage() -> None:
+    dataset = _dataset(
+        "curtailment",
+        {
+            "timestamp_utc",
+            "availability_loss_kwh",
+            "curtailment_loss_kwh",
+        },
+    )
+    assert dataset.observation_status == "derived_estimate"
+    assert dataset.lineage_source_sha256 == ("b" * 64,)
+    assert dataset.derivation_method_sha256 == "c" * 64
+
+    with pytest.raises(OperationalEvidenceError, match="upstream"):
+        replace(dataset, lineage_source_sha256=())
+    with pytest.raises(OperationalEvidenceError, match="derivation_method_sha256"):
+        replace(dataset, derivation_method_sha256=None)
+
+
+def test_derived_status_is_bounded_and_mixed_status_is_prohibited() -> None:
+    meter = _dataset("revenue_meter", {"timestamp_utc", "energy_kwh"})
+    with pytest.raises(OperationalEvidenceError, match="admits observation_status"):
+        replace(
+            meter,
+            observation_status="derived_estimate",
+            lineage_source_sha256=("b" * 64,),
+            derivation_method_sha256="c" * 64,
+        )
+    with pytest.raises(OperationalEvidenceError, match="observation_status"):
+        replace(meter, observation_status="mixed")
+
+
+def test_non_derived_evidence_rejects_derivation_lineage() -> None:
+    meter = _dataset("revenue_meter", {"timestamp_utc", "energy_kwh"})
+    with pytest.raises(OperationalEvidenceError, match="only to"):
+        replace(meter, lineage_source_sha256=("b" * 64,))
 
 
 def test_kind_refuses_semantically_wrong_but_globally_valid_roles() -> None:
@@ -427,6 +536,9 @@ def test_unknown_schema_purpose_and_kind_are_rejected_at_runtime() -> None:
         ("kind", []),
         ("source_class", []),
         ("timezone_treatment", {}),
+        ("source_timezone", {}),
+        ("ambiguous_time_policy", []),
+        ("nonexistent_time_policy", {}),
         ("observation_status", []),
         ("interval_basis", {}),
     ],

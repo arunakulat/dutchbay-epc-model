@@ -16,12 +16,14 @@ from analytics.contracts_v14 import (
     EquityPerformance,
     IrrBridgeComponent,
     MonteCarloResult,
+    OperationalAmbiguousTimePolicy,
     OperationalAnalysisPurpose,
     OperationalAssessmentInput,
     OperationalColumnBinding,
     OperationalDatasetEvidence,
     OperationalDatasetKind,
     OperationalIntervalBasis,
+    OperationalNonexistentTimePolicy,
     OperationalObservationStatus,
     OperationalSourceClass,
     OperationalTimezoneTreatment,
@@ -85,8 +87,11 @@ def test_contracts_v14_pipeline_surface_is_importable() -> None:
     assert OperationalColumnBinding.__name__ == "OperationalColumnBinding"
     assert OperationalDatasetEvidence.__name__ == "OperationalDatasetEvidence"
     assert "wake_losses_tower" in get_args(OperationalAnalysisPurpose)
+    assert "fold_1" in get_args(OperationalAmbiguousTimePolicy)
     assert "reanalysis" in get_args(OperationalDatasetKind)
     assert "calendar_month" in get_args(OperationalIntervalBasis)
+    assert "shift_forward" in get_args(OperationalNonexistentTimePolicy)
+    assert "derived_estimate" in get_args(OperationalObservationStatus)
     assert "reference_reanalysis" in get_args(OperationalObservationStatus)
     assert "declared_asset" in get_args(OperationalSourceClass)
     assert "named_zone_to_utc" in get_args(OperationalTimezoneTreatment)

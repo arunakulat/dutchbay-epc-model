@@ -18,19 +18,27 @@ OpenOA `PlantData` object or run an analysis.
 - Initial lease: `L-1331-D1-001`; coordinator and sole writer `/root`.
 - Remediation lease: `L-1331-D1-002`; the same sole writer, opened after the initial domain
   review rejected the frozen candidate.
+- Semantic-provenance lease: `L-1331-D1-003`; the same sole writer, opened after the refreshed
+  domain review rejected insufficient timezone-policy and derived-lineage declarations.
 - Worktree: `/workspace/dutchbay-operational-contract`.
 - Branch: `feature/operational-evidence-contract-1331`.
-- Base: `93823d55d60496a74936643c5038714b0df876f9`.
+- Current base after the recorded origin/main refresh:
+  `3b352034f74254af8b8baeb4d8cf9181ad252cb2`.
 - Risk: `R2_LOAD_BEARING`; two independent reviews are required after freeze.
-- Durable lease receipts: issue #1331 comments `6031969446` and `6032236120`.
+- Durable lease receipts: issue #1331 comments `6031969446`, `6032236120`, and `6043958655`.
 - Historical predecessor reviews: `docs/PR1336_D1_DOMAIN_REVIEW_R1.md` and
   `docs/PR1336_D1_ASSURANCE_REVIEW_R1.md`. The first disposition was `REJECT`; both review lanes
   must restart on the successor because remediation changes subject bytes.
+- Refreshed historical reviews: `docs/PR1336_D1_DOMAIN_REVIEW_R2.md` and
+  `docs/PR1336_D1_ASSURANCE_REVIEW_R2.md`. Assurance accepted with two D2 deferrals; domain made
+  those same representational gaps blocking, so the union disposition was `REJECT`.
 
 ## Invariants
 
 1. Dataset kind, analysis purpose, evidence class, timezone treatment, observation status,
    interval basis, semantic role and unit vocabularies are closed and runtime validated.
+   Named-zone treatment also binds an available IANA timezone and explicit ambiguous/nonexistent
+   local-time policies; other treatment classes reject those inapplicable declarations.
 2. Every source is bound to a lowercase SHA-256, a non-empty locator and an explicit UTC coverage
    interval. Timeseries evidence declares either a positive fixed-seconds interval or an explicit
    calendar-month basis; asset metadata declares both time treatment and sampling as not applicable.
@@ -41,13 +49,18 @@ OpenOA `PlantData` object or run an analysis.
 4. The declared assessment window must lie inside every required dataset's coverage.
 5. Every required kind has at least one individually complete logical dataset. Roles from unrelated
    products or digests cannot be unioned to manufacture a complete input.
-6. Raw evidence is hard-fenced from canonical finance, bankability, lender and Board eligibility.
-7. The contract is immutable, serializable and dependency-free. It performs no I/O, conversion,
+6. Epistemic status is independent where the domain requires it. Curtailment evidence may be
+   observed, operator-declared or a derived estimate. A derived estimate binds both upstream source
+   digests and a derivation-method digest. Mixed-status logical datasets are not representable and
+   must be split or normalized into one explicitly derived artifact before satisfying D1.
+7. Raw evidence is hard-fenced from canonical finance, bankability, lender and Board eligibility.
+8. The contract is immutable, serializable and dependency-free. It performs no I/O, conversion,
    imputation, resampling, estimation, reporting or finance mutation.
 
 The fixed-seconds monthly ceiling is 31 days only as a declared maximum cadence. D2 must inspect
 actual timestamps and reject gaps, duplicates, misleading cadence declarations or incomplete
-calendar coverage; D1 does not infer a real calendar from metadata.
+calendar coverage; perform and verify the declared timezone/DST policy; and verify the declared
+source/derivation lineage. D1 does not infer or execute those operations from metadata.
 
 ## Authority and remaining work
 

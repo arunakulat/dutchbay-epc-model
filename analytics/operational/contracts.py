@@ -19,6 +19,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any, Final, Literal, Mapping, TypeAlias
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 OPERATIONAL_EVIDENCE_SCHEMA: Final = "dutchbay.operational_evidence.v1"
 
@@ -49,8 +50,22 @@ OperationalTimezoneTreatment: TypeAlias = Literal[
     "named_zone_to_utc",
     "not_applicable",
 ]
+OperationalAmbiguousTimePolicy: TypeAlias = Literal[
+    "not_applicable",
+    "reject",
+    "fold_0",
+    "fold_1",
+]
+OperationalNonexistentTimePolicy: TypeAlias = Literal[
+    "not_applicable",
+    "reject",
+    "shift_forward",
+    "shift_backward",
+]
 OperationalObservationStatus: TypeAlias = Literal[
     "observed",
+    "operator_declared",
+    "derived_estimate",
     "reference_reanalysis",
     "declared_metadata",
 ]
@@ -101,18 +116,28 @@ _TIMEZONE_TREATMENTS = frozenset(
     }
 )
 _TIMESERIES_TIMEZONE_TREATMENTS = _TIMEZONE_TREATMENTS - {"not_applicable"}
-_OBSERVATION_STATUS_BY_KIND: Mapping[str, str] = MappingProxyType(
+_AMBIGUOUS_TIME_POLICIES = frozenset({"not_applicable", "reject", "fold_0", "fold_1"})
+_NONEXISTENT_TIME_POLICIES = frozenset(
+    {"not_applicable", "reject", "shift_forward", "shift_backward"}
+)
+_ALLOWED_OBSERVATION_STATUSES_BY_KIND: Mapping[str, frozenset[str]] = MappingProxyType(
     {
-        "scada": "observed",
-        "revenue_meter": "observed",
-        "met_tower": "observed",
-        "status": "observed",
-        "curtailment": "observed",
-        "reanalysis": "reference_reanalysis",
-        "asset": "declared_metadata",
+        "scada": frozenset({"observed"}),
+        "revenue_meter": frozenset({"observed"}),
+        "met_tower": frozenset({"observed"}),
+        "status": frozenset({"observed", "operator_declared"}),
+        "curtailment": frozenset({"observed", "operator_declared", "derived_estimate"}),
+        "reanalysis": frozenset({"reference_reanalysis"}),
+        "asset": frozenset({"declared_metadata"}),
     }
 )
-_OBSERVATION_STATUSES = frozenset(_OBSERVATION_STATUS_BY_KIND.values())
+_OBSERVATION_STATUSES = frozenset(
+    {
+        status
+        for statuses in _ALLOWED_OBSERVATION_STATUSES_BY_KIND.values()
+        for status in statuses
+    }
+)
 _INTERVAL_BASES = frozenset({"fixed_seconds", "calendar_month", "not_applicable"})
 _CALENDAR_MONTH_CAPABLE_KINDS = frozenset(
     {"revenue_meter", "curtailment", "reanalysis"}
@@ -403,7 +428,12 @@ class OperationalDatasetEvidence:
     kind: OperationalDatasetKind
     source_class: OperationalSourceClass
     timezone_treatment: OperationalTimezoneTreatment
+    source_timezone: str | None
+    ambiguous_time_policy: OperationalAmbiguousTimePolicy
+    nonexistent_time_policy: OperationalNonexistentTimePolicy
     observation_status: OperationalObservationStatus
+    lineage_source_sha256: tuple[str, ...]
+    derivation_method_sha256: str | None
     source_locator: str
     source_sha256: str
     coverage_start_utc: str
@@ -435,14 +465,95 @@ class OperationalDatasetEvidence:
             raise OperationalEvidenceError(
                 "timeseries evidence requires an explicit UTC normalization treatment."
             )
-        expected_status = _OBSERVATION_STATUS_BY_KIND[self.kind]
+        _require_closed_string(
+            self.ambiguous_time_policy,
+            "ambiguous_time_policy",
+            _AMBIGUOUS_TIME_POLICIES,
+        )
+        _require_closed_string(
+            self.nonexistent_time_policy,
+            "nonexistent_time_policy",
+            _NONEXISTENT_TIME_POLICIES,
+        )
+        if self.timezone_treatment == "named_zone_to_utc":
+            if (
+                not isinstance(self.source_timezone, str)
+                or not self.source_timezone
+                or self.source_timezone.strip() != self.source_timezone
+            ):
+                raise OperationalEvidenceError(
+                    "named_zone_to_utc requires source_timezone as a non-empty "
+                    "IANA timezone name without surrounding whitespace."
+                )
+            try:
+                ZoneInfo(self.source_timezone)
+            except (ZoneInfoNotFoundError, ValueError) as exc:
+                raise OperationalEvidenceError(
+                    f"source_timezone must identify an available IANA timezone; "
+                    f"got {self.source_timezone!r}."
+                ) from exc
+            if self.ambiguous_time_policy == "not_applicable":
+                raise OperationalEvidenceError(
+                    "named_zone_to_utc requires an explicit ambiguous_time_policy."
+                )
+            if self.nonexistent_time_policy == "not_applicable":
+                raise OperationalEvidenceError(
+                    "named_zone_to_utc requires an explicit nonexistent_time_policy."
+                )
+        elif (
+            self.source_timezone is not None
+            or self.ambiguous_time_policy != "not_applicable"
+            or self.nonexistent_time_policy != "not_applicable"
+        ):
+            raise OperationalEvidenceError(
+                "source_timezone and DST policies apply only to "
+                "timezone_treatment='named_zone_to_utc'."
+            )
         _require_closed_string(
             self.observation_status, "observation_status", _OBSERVATION_STATUSES
         )
-        if self.observation_status != expected_status:
+        allowed_statuses = _ALLOWED_OBSERVATION_STATUSES_BY_KIND[self.kind]
+        if self.observation_status not in allowed_statuses:
             raise OperationalEvidenceError(
-                f"kind {self.kind!r} requires observation_status "
-                f"{expected_status!r}; got {self.observation_status!r}."
+                f"kind {self.kind!r} admits observation_status values "
+                f"{sorted(allowed_statuses)}; got {self.observation_status!r}."
+            )
+        if not isinstance(self.lineage_source_sha256, tuple):
+            raise OperationalEvidenceError(
+                "lineage_source_sha256 must be a tuple of lowercase SHA-256 digests."
+            )
+        invalid_lineage = [
+            digest
+            for digest in self.lineage_source_sha256
+            if not isinstance(digest, str) or _SHA256_RE.fullmatch(digest) is None
+        ]
+        if invalid_lineage:
+            raise OperationalEvidenceError(
+                "lineage_source_sha256 must contain only 64-character lowercase "
+                "SHA-256 digests."
+            )
+        if len(self.lineage_source_sha256) != len(set(self.lineage_source_sha256)):
+            raise OperationalEvidenceError(
+                "lineage_source_sha256 must not contain duplicate digests."
+            )
+        if self.observation_status == "derived_estimate":
+            if not self.lineage_source_sha256:
+                raise OperationalEvidenceError(
+                    "derived_estimate evidence requires at least one upstream "
+                    "lineage_source_sha256 digest."
+                )
+            if (
+                not isinstance(self.derivation_method_sha256, str)
+                or _SHA256_RE.fullmatch(self.derivation_method_sha256) is None
+            ):
+                raise OperationalEvidenceError(
+                    "derived_estimate evidence requires derivation_method_sha256 as "
+                    "a 64-character lowercase SHA-256 digest."
+                )
+        elif self.lineage_source_sha256 or self.derivation_method_sha256 is not None:
+            raise OperationalEvidenceError(
+                "derivation lineage fields apply only to "
+                "observation_status='derived_estimate'."
             )
         if (
             not isinstance(self.source_locator, str)
@@ -652,12 +763,14 @@ __all__ = [
     "OPERATIONAL_REQUIRED_DATASET_KINDS",
     "OPERATIONAL_REQUIRED_ROLES",
     "OperationalAnalysisPurpose",
+    "OperationalAmbiguousTimePolicy",
     "OperationalAssessmentInput",
     "OperationalColumnBinding",
     "OperationalDatasetEvidence",
     "OperationalDatasetKind",
     "OperationalEvidenceError",
     "OperationalIntervalBasis",
+    "OperationalNonexistentTimePolicy",
     "OperationalObservationStatus",
     "OperationalSourceClass",
     "OperationalTimezoneTreatment",
