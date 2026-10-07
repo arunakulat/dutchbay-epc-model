@@ -61,10 +61,12 @@ jobs:
     # The diff is taken from the event's `pull_request.base.sha`. GitHub refreshes that
     # field on every push to the PR head, so it is the base-branch tip at push time (#1231's
     # base-advance run classified against the refreshed base; #1323). The result depends on
-    # that base: against an older one the three-dot diff usually widens to take in main's
-    # own changes, but it can also narrow, for example when the head reverts a change main
-    # made. The step therefore records the base, merge base, path count and result in its
-    # job summary so a reviewer can see which base classified the run (#1323).
+    # that base. Against an older one the three-dot diff usually widens to take in main's
+    # own changes, which usually turns Grid Study on, but an older base can also turn it
+    # off: for example when the head reverts a grid change main made, or when the head's
+    # own diff is empty (an empty diff requires Grid Study). The step therefore records the
+    # base, merge base, head, path count and result in its log and its job summary, so a
+    # reviewer can see which base classified the run (#1323).
     name: Classify changed paths
     runs-on: ubuntu-latest
     outputs:
@@ -111,7 +113,8 @@ jobs:
         echo "grid classification: $grid_classification"
         echo "code_changed=$code" >> "$GITHUB_OUTPUT"
         echo "classification: code_changed=$code"
-        # #1323: record which base classified this run, so CI evidence shows it.
+        # #1323: record which base classified this run, in the log (readable through the
+        # API) and in the job summary (readable in the web UI).
         {
           echo "### Changed-path classification"
           echo "- Event \`pull_request.base.sha\`: \`$base_sha\`"
@@ -119,7 +122,7 @@ jobs:
           echo "- PR head: \`$(git rev-parse HEAD)\`"
           echo "- code_changed: $code"
           echo "- Grid Study classifier: \`$grid_classification\`"
-        } >> "$GITHUB_STEP_SUMMARY"
+        } | tee -a "$GITHUB_STEP_SUMMARY"
 
   test:
     # Sharded matrix: the tests/ tree (several thousand tests) is split into TOTAL_SHARDS
@@ -715,7 +718,9 @@ jobs:
                 if case.get("classname", "").endswith("test_base_candidate_physical_receipt")
                 and case.get("name", "").startswith("test_base_candidate_physical_numerical_receipt")
             ]
-            if not receipt_cases:
+            if receipt_path.exists() or receipt_path.is_symlink():
+                cause = "the path exists but is empty or not a regular file"
+            elif not receipt_cases:
                 cause = "its test, test_base_candidate_physical_numerical_receipt, is absent from the JUnit evidence"
             elif receipt_cases[0].find("skipped") is not None:
                 reason = receipt_cases[0].find("skipped").get("message", "").strip()

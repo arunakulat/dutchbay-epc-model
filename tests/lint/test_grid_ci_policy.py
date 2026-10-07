@@ -6,6 +6,7 @@ import csv
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -150,22 +151,47 @@ def _git(repo: Path, *args: str) -> str:
     ).stdout.strip()
 
 
+def _hermetic_env(**extra: str) -> dict[str, str]:
+    """Environment whose ``python`` is the interpreter running these tests (#1324 G-A1-06)."""
+    path = os.pathsep.join(
+        [str(Path(sys.executable).parent), os.environ.get("PATH", "")]
+    )
+    return {**os.environ, "PATH": path, "PYTHONDONTWRITEBYTECODE": "1", **extra}
+
+
+def _run_like_ci(
+    script: str, cwd: Path, env: dict[str, str], tmp_path: Path, name: str
+) -> subprocess.CompletedProcess[str]:
+    """Run a ``run:`` block the way the runner does: ``bash -e {0}`` on a script file."""
+    script_path = tmp_path / f"{name}.sh"
+    script_path.write_text(script, encoding="utf-8")
+    return subprocess.run(
+        ["bash", "-e", str(script_path)],
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+
 def test_classify_step_records_its_base_merge_base_and_result() -> None:
-    """The run's own summary must show which base classified it (#1323)."""
+    """The run's log and summary must show which base classified it (#1323)."""
     run = _workflow_step_run("changes", "Classify diff against the PR base")
 
     assert 'base_sha="${{ github.event.pull_request.base.sha }}"' in run
     assert 'git diff --name-only -z "${base_sha}...HEAD"' in run
     assert 'merge_base="$(git merge-base "$base_sha" HEAD' in run
     assert "### Changed-path classification" in run
-    assert '>> "$GITHUB_STEP_SUMMARY"' in run
+    assert '} | tee -a "$GITHUB_STEP_SUMMARY"' in run
+    block = run.split("### Changed-path classification", 1)[1]
     for recorded in (
         "$base_sha",
         "$merge_base",
         "git rev-parse HEAD",
+        "- code_changed: $code",
         "$grid_classification",
     ):
-        assert recorded in run.split("### Changed-path classification", 1)[1]
+        assert recorded in block
 
 
 def _render_classify_step(base_sha: str) -> str:
@@ -198,42 +224,46 @@ def _classify_repo(tmp_path: Path) -> tuple[Path, str]:
 
 def _run_classify_step(
     repo: Path, tmp_path: Path, bases: dict[str, str]
-) -> dict[str, tuple[str, str]]:
-    """Run the real classify step at the repository's HEAD against each named base."""
+) -> dict[str, tuple[str, str, str]]:
+    """Run the real classify step at HEAD against each base: (outputs, summary, log)."""
     results = {}
     for label, base in bases.items():
         output = tmp_path / f"{label}.output"
         summary = tmp_path / f"{label}.summary"
-        env = {
-            **os.environ,
-            "GITHUB_OUTPUT": str(output),
-            "GITHUB_STEP_SUMMARY": str(summary),
-            "RUNNER_TEMP": str(tmp_path),
-            "PYTHONDONTWRITEBYTECODE": "1",
-        }
-        completed = subprocess.run(
-            ["bash", "-eo", "pipefail", "-c", _render_classify_step(base)],
-            cwd=repo,
-            env=env,
-            capture_output=True,
-            text=True,
+        env = _hermetic_env(
+            GITHUB_OUTPUT=str(output),
+            GITHUB_STEP_SUMMARY=str(summary),
+            RUNNER_TEMP=str(tmp_path),
+        )
+        completed = _run_like_ci(
+            _render_classify_step(base), repo, env, tmp_path, f"classify-{label}"
         )
         assert completed.returncode == 0, completed.stderr
+        summary_text = summary.read_text(encoding="utf-8")
+        # The block reaches the log as well as the summary (#1324 G-D1-01).
+        assert summary_text in completed.stdout
         results[label] = (
             output.read_text(encoding="utf-8"),
-            summary.read_text(encoding="utf-8"),
+            summary_text,
+            completed.stdout,
         )
     return results
+
+
+def _recorded(label: str, sha: str) -> str:
+    return f"- {label}: `{sha}`"
 
 
 def test_classify_step_runs_and_a_stale_base_can_widen_the_diff(
     tmp_path: Path,
 ) -> None:
-    """Execute the real classify step against a fresh and a stale base (#1323).
+    """Execute the real classify step against fresh, stale and unmerged bases (#1323).
 
     The PR head merges a ``main`` that changed the grid surface, then adds one doc.
     Against the fresh base only the doc is in the diff and Grid Study is not required.
     Against a stale base, ``main``'s grid change is swept in and Grid Study is required.
+    Against a base the head has not merged, the merge base differs from the base, and the
+    log and summary record both.
     """
     repo, stale_base = _classify_repo(tmp_path)
 
@@ -251,21 +281,40 @@ def test_classify_step_runs_and_a_stale_base_can_widen_the_diff(
     _git(repo, "add", ".")
     _git(repo, "commit", "-q", "-m", "docs")
     _git(repo, "merge", "-q", "--no-ff", "-m", "merge main", "main")
+    head = _git(repo, "rev-parse", "HEAD")
+
+    _git(repo, "checkout", "-q", "main")
+    (repo / "later.md").write_text("later\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "main moves on")
+    unmerged_base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "pr")
 
     results = _run_classify_step(
-        repo, tmp_path, {"fresh": fresh_base, "stale": stale_base}
+        repo,
+        tmp_path,
+        {"fresh": fresh_base, "stale": stale_base, "unmerged": unmerged_base},
     )
 
-    fresh_output, fresh_summary = results["fresh"]
+    fresh_output, fresh_summary, fresh_log = results["fresh"]
     assert "qsts_execution_changed=false" in fresh_output
     assert "code_changed=false" in fresh_output
-    assert f"`{fresh_base}`" in fresh_summary
+    assert "- code_changed: false" in fresh_summary
     assert '"changed_path_count": 1' in fresh_summary
+    assert _recorded("Merge base with the PR head", fresh_base) in fresh_log
+    assert _recorded("PR head", head) in fresh_log
 
-    stale_output, stale_summary = results["stale"]
+    stale_output, stale_summary, stale_log = results["stale"]
     assert "qsts_execution_changed=true" in stale_output
-    assert f"`{stale_base}`" in stale_summary
+    assert _recorded("Event `pull_request.base.sha`", stale_base) in stale_summary
+    assert _recorded("Merge base with the PR head", stale_base) in stale_log
     assert '"changed_path_count": 2' in stale_summary
+
+    unmerged_output, unmerged_summary, unmerged_log = results["unmerged"]
+    assert "qsts_execution_changed=false" in unmerged_output
+    assert _recorded("Event `pull_request.base.sha`", unmerged_base) in unmerged_log
+    assert _recorded("Merge base with the PR head", fresh_base) in unmerged_log
+    assert '"changed_path_count": 1' in unmerged_summary
 
 
 def test_classify_step_a_stale_base_can_also_narrow_the_diff(tmp_path: Path) -> None:
@@ -303,44 +352,106 @@ def test_classify_step_a_stale_base_can_also_narrow_the_diff(tmp_path: Path) -> 
         repo, tmp_path, {"fresh": fresh_base, "stale": stale_base}
     )
 
-    fresh_output, fresh_summary = results["fresh"]
+    fresh_output, fresh_summary, fresh_log = results["fresh"]
     assert "qsts_execution_changed=true" in fresh_output
     assert '"changed_path_count": 2' in fresh_summary
+    assert _recorded("Merge base with the PR head", fresh_base) in fresh_log
 
-    stale_output, stale_summary = results["stale"]
+    stale_output, stale_summary, stale_log = results["stale"]
+    assert "qsts_execution_changed=false" in stale_output
+    assert '"changed_path_count": 1' in stale_summary
+    assert _recorded("Merge base with the PR head", stale_base) in stale_log
+
+
+def test_classify_step_an_empty_own_diff_requires_grid_study(tmp_path: Path) -> None:
+    """An empty diff fails closed, and a stale base can still skip it (#1324 G-A1-09).
+
+    The PR head is exactly ``main`` after ``main`` added one doc. Against the fresh base
+    the diff is empty, so both the full gate and Grid Study are required. Against the
+    stale base the diff widens to the doc, and neither is required.
+    """
+    repo, stale_base = _classify_repo(tmp_path)
+    (repo / "docs").mkdir()
+    (repo / "docs" / "a.md").write_text("a\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "main adds a doc")
+    fresh_base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "-b", "pr", fresh_base)
+
+    results = _run_classify_step(
+        repo, tmp_path, {"fresh": fresh_base, "stale": stale_base}
+    )
+
+    fresh_output, fresh_summary, _ = results["fresh"]
+    assert "code_changed=true" in fresh_output
+    assert "qsts_execution_changed=true" in fresh_output
+    assert '"changed_path_count": 0' in fresh_summary
+
+    stale_output, stale_summary, _ = results["stale"]
+    assert "code_changed=false" in stale_output
     assert "qsts_execution_changed=false" in stale_output
     assert '"changed_path_count": 1' in stale_summary
 
 
-def _run_evidence_validator(
-    workdir: Path, junit_xml: str, receipt: dict[str, object] | None, head_sha: str
-) -> subprocess.CompletedProcess[str]:
-    """Execute the evidence step's real Python against a constructed workspace."""
-    run = _workflow_step_run("grid-study", "Validate complete Grid Study evidence")
-    assert "python - <<'PY'\n" in run
-    validator = run.split("python - <<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
-    (workdir / "grid-study-results.xml").write_text(junit_xml, encoding="utf-8")
-    if receipt is not None:
-        (workdir / "outputs").mkdir(exist_ok=True)
-        (workdir / "outputs" / "grid_base_candidate_numerical_receipt.json").write_text(
-            json.dumps(receipt), encoding="utf-8"
-        )
-    env = {
-        **os.environ,
-        "EXPECTED_HEAD_SHA": head_sha,
-        "GITHUB_STEP_SUMMARY": str(workdir / "summary.md"),
-    }
-    return subprocess.run(
-        ["python", "-c", validator],
-        cwd=workdir,
-        env=env,
-        capture_output=True,
-        text=True,
+def test_classify_step_fails_when_the_classifier_crashes(tmp_path: Path) -> None:
+    """A classifier crash fails the step instead of yielding a skip (#1324 G-A1-05)."""
+    repo, base = _classify_repo(tmp_path)
+    (repo / "config" / "grid_ci_policy.json").write_text("{}", encoding="utf-8")
+    (repo / "note.md").write_text("note\n", encoding="utf-8")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "break the policy")
+
+    output = tmp_path / "crash.output"
+    env = _hermetic_env(
+        GITHUB_OUTPUT=str(output),
+        GITHUB_STEP_SUMMARY=str(tmp_path / "crash.summary"),
+        RUNNER_TEMP=str(tmp_path),
     )
+    completed = _run_like_ci(
+        _render_classify_step(base), repo, env, tmp_path, "classify-crash"
+    )
+
+    assert completed.returncode != 0
+    assert "grid CI policy keys must be exact" in completed.stderr
+    # Under an ``|| true`` mask the step would succeed with no Grid Study output, and
+    # the grid-study job would skip. Failing the step is what keeps that closed.
+    written = output.read_text(encoding="utf-8") if output.exists() else ""
+    assert "qsts_execution_changed=" not in written
+
+
+def _run_evidence_step(
+    workdir: Path,
+    junit_xml: str | None,
+    receipt: dict[str, object] | bytes | None,
+    head_sha: str,
+) -> subprocess.CompletedProcess[str]:
+    """Execute the whole evidence step, shell guard included, in a constructed workspace."""
+    run = _workflow_step_run("grid-study", "Validate complete Grid Study evidence")
+    workspace = workdir / "workspace"
+    workspace.mkdir()
+    if junit_xml is not None:
+        (workspace / "grid-study-results.xml").write_text(junit_xml, encoding="utf-8")
+    if receipt is not None:
+        receipt_path = (
+            workspace / "outputs" / "grid_base_candidate_numerical_receipt.json"
+        )
+        receipt_path.parent.mkdir()
+        if isinstance(receipt, bytes):
+            receipt_path.write_bytes(receipt)
+        else:
+            receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+    env = _hermetic_env(
+        EXPECTED_HEAD_SHA=head_sha,
+        GITHUB_STEP_SUMMARY=str(workdir / "summary.md"),
+    )
+    return _run_like_ci(run, workspace, env, workdir, "evidence")
 
 
 _RECEIPT_CLASS = "tests.grid.test_base_candidate_physical_receipt"
 _RECEIPT_NAME = "test_base_candidate_physical_numerical_receipt"
+_PASSED_RECEIPT_CASE = (
+    f'<testcase classname="{_RECEIPT_CLASS}" name="{_RECEIPT_NAME}"/>'
+)
 
 
 def _junit(receipt_case: str) -> str:
@@ -352,34 +463,8 @@ def _junit(receipt_case: str) -> str:
     )
 
 
-def test_evidence_step_names_a_skipped_receipt_test(tmp_path: Path) -> None:
-    """A skipped receipt test is named, with the andes cause, not a bare exit (#1323)."""
-    skipped = (
-        f'<testcase classname="{_RECEIPT_CLASS}" name="{_RECEIPT_NAME}">'
-        "<skipped message=\"could not import 'andes': No module named 'andes'\"/>"
-        "</testcase>"
-    )
-    completed = _run_evidence_validator(tmp_path, _junit(skipped), None, "a" * 40)
-
-    assert completed.returncode != 0
-    assert "paired receipt" in completed.stderr
-    assert "its test was skipped" in completed.stderr
-    assert "could not import 'andes'" in completed.stderr
-    assert "[grid] extra must install andes" in completed.stderr
-
-
-def test_evidence_step_names_an_absent_receipt_test(tmp_path: Path) -> None:
-    """A receipt test missing from the JUnit evidence is named as absent (#1323)."""
-    completed = _run_evidence_validator(tmp_path, _junit(""), None, "a" * 40)
-
-    assert completed.returncode != 0
-    assert "is absent from the JUnit evidence" in completed.stderr
-
-
-def test_evidence_step_still_accepts_a_complete_receipt(tmp_path: Path) -> None:
-    """Positive control: the diagnosis does not reject valid evidence (#1323)."""
-    head = "b" * 40
-    receipt = {
+def _complete_receipt(head: str) -> dict[str, object]:
+    return {
         "candidate_commit": head,
         "base_commit": "4da2a82352d532138ee7f2483b82dfbf5a1d9c2b",
         "case_count": 6,
@@ -395,8 +480,58 @@ def test_evidence_step_still_accepts_a_complete_receipt(tmp_path: Path) -> None:
             )
         ],
     }
-    passed = f'<testcase classname="{_RECEIPT_CLASS}" name="{_RECEIPT_NAME}"/>'
-    completed = _run_evidence_validator(tmp_path, _junit(passed), receipt, head)
+
+
+def test_evidence_step_names_a_skipped_receipt_test(tmp_path: Path) -> None:
+    """A skipped receipt test is named, with the andes cause, not a bare exit (#1323)."""
+    skipped = (
+        f'<testcase classname="{_RECEIPT_CLASS}" name="{_RECEIPT_NAME}">'
+        "<skipped message=\"could not import 'andes': No module named 'andes'\"/>"
+        "</testcase>"
+    )
+    completed = _run_evidence_step(tmp_path, _junit(skipped), None, "a" * 40)
+
+    assert completed.returncode != 0
+    assert "paired receipt" in completed.stderr
+    assert "its test was skipped" in completed.stderr
+    assert "could not import 'andes'" in completed.stderr
+    assert "[grid] extra must install andes" in completed.stderr
+
+
+def test_evidence_step_names_an_absent_receipt_test(tmp_path: Path) -> None:
+    """A receipt test missing from the JUnit evidence is named as absent (#1323)."""
+    completed = _run_evidence_step(tmp_path, _junit(""), None, "a" * 40)
+
+    assert completed.returncode != 0
+    assert "is absent from the JUnit evidence" in completed.stderr
+
+
+def test_evidence_step_names_a_receipt_test_that_wrote_nothing(tmp_path: Path) -> None:
+    """A receipt test that passed without writing its file is named (#1324 G-D1-02)."""
+    completed = _run_evidence_step(
+        tmp_path, _junit(_PASSED_RECEIPT_CASE), None, "a" * 40
+    )
+
+    assert completed.returncode != 0
+    assert "its test passed without writing the receipt" in completed.stderr
+
+
+def test_evidence_step_names_an_empty_receipt_file(tmp_path: Path) -> None:
+    """An empty receipt file is not reported as never written (#1324 G-D1-05)."""
+    completed = _run_evidence_step(
+        tmp_path, _junit(_PASSED_RECEIPT_CASE), b"", "a" * 40
+    )
+
+    assert completed.returncode != 0
+    assert "the path exists but is empty or not a regular file" in completed.stderr
+
+
+def test_evidence_step_still_accepts_a_complete_receipt(tmp_path: Path) -> None:
+    """Positive control: the diagnosis does not reject valid evidence (#1323)."""
+    head = "b" * 40
+    completed = _run_evidence_step(
+        tmp_path, _junit(_PASSED_RECEIPT_CASE), _complete_receipt(head), head
+    )
 
     assert completed.returncode == 0, completed.stderr
     assert "six cases and exact head validated" in (tmp_path / "summary.md").read_text(
@@ -404,10 +539,32 @@ def test_evidence_step_still_accepts_a_complete_receipt(tmp_path: Path) -> None:
     )
 
 
-def test_evidence_step_names_a_missing_junit_file() -> None:
-    """The bare ``test -s`` on the JUnit file is replaced by a named error (#1323)."""
-    run = _workflow_step_run("grid-study", "Validate complete Grid Study evidence")
+def test_evidence_step_rejects_a_failed_grid_test(tmp_path: Path) -> None:
+    """A failure in the JUnit evidence fails the step even with a receipt (#1324 G-A1-05)."""
+    head = "b" * 40
+    failed = (
+        '<testcase classname="tests.grid.test_other" name="test_fails">'
+        '<failure message="boom"/></testcase>'
+        f"{_PASSED_RECEIPT_CASE}"
+    )
+    completed = _run_evidence_step(
+        tmp_path, _junit(failed), _complete_receipt(head), head
+    )
 
+    assert completed.returncode != 0
+    assert "contains a failure or error" in completed.stderr
+
+
+def test_evidence_step_names_a_missing_junit_file(tmp_path: Path) -> None:
+    """A missing JUnit file fails the step with a named error, not a bare exit (#1323)."""
+    run = _workflow_step_run("grid-study", "Validate complete Grid Study evidence")
     assert "test -s grid-study-results.xml" not in run
     assert "test -s outputs/grid_base_candidate_numerical_receipt.json" not in run
-    assert "Grid Study JUnit evidence grid-study-results.xml is missing or empty" in run
+
+    completed = _run_evidence_step(tmp_path, None, None, "a" * 40)
+
+    assert completed.returncode != 0
+    assert (
+        "::error::Grid Study JUnit evidence grid-study-results.xml is missing or empty"
+        in completed.stdout
+    )
