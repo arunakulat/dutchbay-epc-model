@@ -73,10 +73,10 @@ reliance HOLD remains active.
 
 | Check | Exact command | Result |
 |---|---|---|
-| Focused contract tests | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_evidence_contract.py tests/contracts/test_contracts_v14_import_surface.py` | 78 passed in 1.28 s |
-| Shared contract regression | same governed pytest invocation against `tests/contracts` | 1,471 passed in 106.71 s |
+| Focused contract tests | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_evidence_contract.py tests/contracts/test_contracts_v14_import_surface.py` | 92 passed in 1.40 s |
+| Shared contract regression | same governed pytest invocation against `tests/contracts` | 1,485 passed in 116.53 s |
 | Strict types | `/workspace/dutchbay-epc-model/.venv/bin/python -m mypy analytics/operational/contracts.py analytics/operational/__init__.py` | success; no issues in two source files |
-| Changed-file hooks | `/workspace/dutchbay-epc-model/.venv/bin/pre-commit run --files <nine allowlisted paths>` | passed |
+| Changed-file hooks | `/workspace/dutchbay-epc-model/.venv/bin/pre-commit run --files <eleven allowlisted paths>` | passed |
 | Changelog | `/workspace/dutchbay-epc-model/.venv/bin/python scripts/compile_changelog.py --dry-run` | passed; rendered the #1331 fragment under Unreleased / Added |
 | Whitespace / conflict check | `git diff --check` | passed |
 
