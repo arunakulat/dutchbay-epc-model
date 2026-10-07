@@ -58,6 +58,15 @@ jobs:
     # allowlist (or an empty/undeterminable diff) classifies as code and the full gate
     # runs; a false negative can only ever run MORE tests, never fewer. Non-PR events
     # (push-to-main, nightly, dispatch) always classify as code.
+    # The diff is taken from the event's `pull_request.base.sha`. GitHub refreshes that
+    # field on every push to the PR head, so it is the base-branch tip at push time (#1231's
+    # base-advance run classified against the refreshed base; #1323). The result depends on
+    # that base. Against an older one the three-dot diff usually widens to take in main's
+    # own changes, which usually turns Grid Study on, but an older base can also turn it
+    # off: for example when the head reverts a grid change main made, or when the head's
+    # own diff is empty (an empty diff requires Grid Study). The step therefore records the
+    # base, merge base, head, path count and result in its log and its job summary, so a
+    # reviewer can see which base classified the run (#1323).
     name: Classify changed paths
     runs-on: ubuntu-latest
     outputs:
@@ -82,7 +91,9 @@ jobs:
           exit 0
         fi
         changed_files="$RUNNER_TEMP/changed-files.z"
-        git diff --name-only -z "${{ github.event.pull_request.base.sha }}...HEAD" > "$changed_files"
+        base_sha="${{ github.event.pull_request.base.sha }}"
+        merge_base="$(git merge-base "$base_sha" HEAD 2>/dev/null || echo undeterminable)"
+        git diff --name-only -z "${base_sha}...HEAD" > "$changed_files"
         files=$(tr '\0' '\n' < "$changed_files")
         echo "changed files:"; echo "$files"
         code=false
@@ -98,9 +109,20 @@ jobs:
         done <<< "$files"
         # TEST-05: the strict classifier writes qsts_execution_changed directly to
         # GITHUB_OUTPUT. Empty/unsafe/indeterminate input requires Grid Study.
-        python scripts/ci/classify_grid_study_paths.py < "$changed_files"
+        grid_classification="$(python scripts/ci/classify_grid_study_paths.py < "$changed_files")"
+        echo "grid classification: $grid_classification"
         echo "code_changed=$code" >> "$GITHUB_OUTPUT"
         echo "classification: code_changed=$code"
+        # #1323: record which base classified this run, in the log (readable through the
+        # API) and in the job summary (readable in the web UI).
+        {
+          echo "### Changed-path classification"
+          echo "- Event \`pull_request.base.sha\`: \`$base_sha\`"
+          echo "- Merge base with the PR head: \`$merge_base\`"
+          echo "- PR head: \`$(git rev-parse HEAD)\`"
+          echo "- code_changed: $code"
+          echo "- Grid Study classifier: \`$grid_classification\`"
+        } | tee -a "$GITHUB_STEP_SUMMARY"
 
   test:
     # Sharded matrix: the tests/ tree (several thousand tests) is split into TOTAL_SHARDS
@@ -669,12 +691,15 @@ jobs:
         EXPECTED_HEAD_SHA: ${{ env.EXPECTED_HEAD_SHA }}
       run: |
         set -euo pipefail
-        test -s grid-study-results.xml
-        test -s outputs/grid_base_candidate_numerical_receipt.json
+        if [ ! -s grid-study-results.xml ]; then
+          echo "::error::Grid Study JUnit evidence grid-study-results.xml is missing or empty: the grid-marked pytest run did not complete (#1323)"
+          exit 1
+        fi
         python - <<'PY'
         import json
         import os
         import xml.etree.ElementTree as ET
+        from pathlib import Path
 
         junit = ET.parse("grid-study-results.xml").getroot()
         testcases = list(junit.iter("testcase"))
@@ -684,6 +709,29 @@ jobs:
             raise SystemExit("Grid Study JUnit evidence contains a failure or error")
         if not any(case.find("skipped") is None for case in testcases):
             raise SystemExit("Grid Study JUnit evidence contains only skipped testcases")
+        receipt_path = Path("outputs/grid_base_candidate_numerical_receipt.json")
+        if not receipt_path.is_file() or receipt_path.stat().st_size == 0:
+            # #1323: name the cause instead of failing on a bare `test -s`.
+            receipt_cases = [
+                case
+                for case in testcases
+                if case.get("classname", "").endswith("test_base_candidate_physical_receipt")
+                and case.get("name", "").startswith("test_base_candidate_physical_numerical_receipt")
+            ]
+            if receipt_path.exists() or receipt_path.is_symlink():
+                cause = "the path exists but is empty or not a regular file"
+            elif not receipt_cases:
+                cause = "its test, test_base_candidate_physical_numerical_receipt, is absent from the JUnit evidence"
+            elif receipt_cases[0].find("skipped") is not None:
+                reason = receipt_cases[0].find("skipped").get("message", "").strip()
+                cause = (
+                    "its test was skipped"
+                    + (f" ({reason})" if reason else "")
+                    + "; it skips when andes cannot be imported, and the [grid] extra must install andes"
+                )
+            else:
+                cause = "its test passed without writing the receipt"
+            raise SystemExit(f"paired receipt {receipt_path} is missing: {cause}")
         with open("outputs/grid_base_candidate_numerical_receipt.json", encoding="utf-8") as stream:
             receipt = json.load(stream)
         if receipt.get("candidate_commit") != os.environ["EXPECTED_HEAD_SHA"]:
