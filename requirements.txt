@@ -117,7 +117,7 @@ httpcore==1.0.9
 httptools==0.8.0
 httpx==0.28.1
 hybgensea==0.1.1
-hydra-core==1.3.5
+hydra-core==1.3.6
 hyperframe==6.1.0
 hypothesis==6.167.1
 identify==2.6.19
