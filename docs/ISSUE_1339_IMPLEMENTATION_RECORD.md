@@ -3,9 +3,11 @@
 ## Scope
 
 The mandatory dependency audit began rejecting the reproducibility lock on 7 October 2026 because
-`hydra-core==1.3.5` was newly associated with CVE-2026-106441 and CVE-2026-106442. Both advisories
-identify 1.3.6 as the first stable fixed version. This dolphin changes only the abstract Hydra
-security floor, exact lock pin, a regression guard, and its changelog/evidence records.
+`hydra-core==1.3.5` was newly associated with CVE-2026-106441 and CVE-2026-106442. The first
+candidate used their stated stable fix, 1.3.6; the exact audit then identified CVE-2026-106439 in
+that release. Hydra 1.3.7 is the smallest stable release reported to fix all three advisories. This
+dolphin changes only the abstract Hydra security floor, exact lock pin, a regression guard, and its
+changelog/evidence records.
 
 No advisory is allowlisted. No other dependency is refreshed. No application, scenario, model,
 finance, report, configuration value or KPI path changes.
@@ -25,4 +27,17 @@ Issue #1110 remains open and unaffected.
 
 ## Verification receipt
 
-To be completed on the frozen candidate after all checks pass.
+| Check | Exact surface | Result |
+|---|---|---|
+| Governed environment | `DUTCHBAY_VENV=/workspace/dutchbay-epc-model/.venv ./check_venv.sh` on the frozen branch | PASS on Python 3.12.14 with the complete 311-distribution lock, including Hydra 1.3.7 and IPython 9.17.1 |
+| Dependency policy | `tests/lint/test_extra_pin_consistency.py` under governed Python 3.12 | 26 passed in 2.21 s; both 1.3.5 and 1.3.6 are excluded by the abstract floor and the exact lock is 1.3.7 |
+| Mandatory security gate | governed `PATH` + `make security` | Bandit: no medium/high findings over 92,354 lines; `pip-audit`: `No known vulnerabilities found` |
+| Hydra runtime | reconciled governed environment plus a prior isolated `--target` probe of `hydra-core==1.3.7` | both selected and imported Hydra 1.3.7 exactly |
+| Hydra CLI composition | reconciled governed environment, `tests/integration/test_sensitivity_cli_smoke.py` | passed together with the 26 policy tests (27 passed in 10.43 s); canonical sensitivity CLI completed successfully |
+| Complete lock resolution | governed pip, `--dry-run --ignore-installed --no-cache-dir -r requirements.txt` | exit 0; resolved Hydra 1.3.7, retained IPython 9.17.1 from current main and produced no conflict |
+| Changed-file hooks | pre-commit over all six implementation paths | all applicable hooks passed on the final 1.3.7 candidate |
+| Changelog / whitespace | changelog dry run and `git diff --check` | both passed on the final 1.3.7 candidate |
+
+The first candidate, Hydra 1.3.6, was explicitly rejected when the mandatory audit identified
+CVE-2026-106439. This record retains that failed attempt so 1.3.6 cannot later be mistaken for an
+audit-clean floor.
