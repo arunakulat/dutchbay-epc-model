@@ -168,11 +168,16 @@ def test_hydra_security_floor_is_consistent() -> None:
     """Reject Hydra releases affected by CVE-2026-106439/106441/106442.
 
     The reproducibility lock is the audited CI input, while the project dependency
-    is what an ordinary package install resolves. Both must exclude 1.3.5 rather
-    than relying on the other declaration to supply the security floor.
+    is what an ordinary package install resolves. Both must exclude the affected
+    stable releases, and the abstract dependency must also reject the affected
+    1.4 prereleases even when prerelease matching is explicitly enabled.
     """
     fixed = Version("1.3.7")
-    vulnerable = (Version("1.3.5"), Version("1.3.6"))
+    vulnerable = (
+        Version("1.3.5"),
+        Version("1.3.6"),
+        *(Version(f"1.4.0.dev{number}") for number in range(4, 10)),
+    )
 
     lock = _read_pins("requirements.txt")
     assert Version(lock["hydra-core"]) >= fixed
@@ -184,7 +189,10 @@ def test_hydra_security_floor_is_consistent() -> None:
         if _canonical(Requirement(item).name) == "hydra-core"
     )
     assert hydra.specifier.contains(fixed)
-    assert all(not hydra.specifier.contains(version) for version in vulnerable)
+    assert all(
+        not hydra.specifier.contains(version, prereleases=True)
+        for version in vulnerable
+    )
 
 
 def test_the_constraints_file_is_not_empty() -> None:
