@@ -31,9 +31,9 @@ dependencies = [
   # analytics.cli.*_hydra modules import hydra at module scope, so regenerating the
   # requirements.txt lock from pyproject alone must not drop it. Maintenance-risk
   # ADR (stalled upstream cadence + OmegaConf fallback): docs/HYDRA_MAINTENANCE_DECISION.md (#609).
-  # Security floor: 1.3.7 fixes CVE-2026-106439/106441/106442. CVE-2026-106439 also
-  # affects the later 1.4.0.dev4-dev9 prereleases, so exclude them explicitly.
-  "hydra-core>=1.3.7,!=1.4.0.dev4,!=1.4.0.dev5,!=1.4.0.dev6,!=1.4.0.dev7,!=1.4.0.dev8,!=1.4.0.dev9",
+  # Security floor: 1.3.7 fixes CVE-2026-106439/106441/106442. Across all three
+  # advisories, the later 1.4.0.dev0-dev9 prereleases are affected too.
+  "hydra-core>=1.3.7,!=1.4.0.dev0,!=1.4.0.dev1,!=1.4.0.dev2,!=1.4.0.dev3,!=1.4.0.dev4,!=1.4.0.dev5,!=1.4.0.dev6,!=1.4.0.dev7,!=1.4.0.dev8,!=1.4.0.dev9",
   "pydantic>=2.0",
   "jinja2>=3.1",          # drives the base HTML report (app.reports.renderer); PDF (weasyprint) is the [report] extra
   # Direct runtime dependency: lender-facing dependency provenance parses PEP 508 declarations

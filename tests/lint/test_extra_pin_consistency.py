@@ -176,7 +176,7 @@ def test_hydra_security_floor_is_consistent() -> None:
     vulnerable = (
         Version("1.3.5"),
         Version("1.3.6"),
-        *(Version(f"1.4.0.dev{number}") for number in range(4, 10)),
+        *(Version(f"1.4.0.dev{number}") for number in range(10)),
     )
 
     lock = _read_pins("requirements.txt")
