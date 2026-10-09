@@ -43,7 +43,8 @@ review_scope:
 checks_executed_and_exact_results:
   - identity: PASS; exact head, tree, base, merge base and six changed paths matched
   - manifest: PASS; independently reconstructed 417-byte canonical digest matched
-  - primary_advisories: PASS; affected union is 1.3.5, 1.3.6 and 1.4.0.dev0-dev9
+  - primary_advisories: PASS; CVE-2026-106439 affects stable >=1.3.4,<1.3.7 and dev4-dev9; CVE-2026-106441 affects stable <1.3.6 and dev0-dev8; CVE-2026-106442 affects stable >=1.3.4,<1.3.6 and dev0-dev8
+  - tested_predecessor_candidates: 1.3.5, 1.3.6 and the combined dev0-dev9 development interval are rejected
   - dependency_policy_tests: PASS; 26 passed in 8.69s
   - governed_environment: PASS; Python 3.12.14 and all 311 locked distributions
   - runtime_metadata: PASS; Hydra 1.3.7, OmegaConf 2.3.1 and ANTLR 4.9.3 compatible
