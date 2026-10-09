@@ -164,6 +164,44 @@ def test_the_lock_is_not_empty() -> None:
     assert "weasyprint" in pins
 
 
+def test_hydra_security_floor_is_consistent() -> None:
+    """Reject Hydra releases affected by CVE-2026-106439/106441/106442.
+
+    The reproducibility lock is the audited CI input, while the project dependency
+    is what an ordinary package install resolves. Both must exclude the affected
+    stable releases, and the abstract dependency must also reject the affected
+    1.4 prereleases even when prerelease matching is explicitly enabled.
+    """
+    fixed_stable = Version("1.3.7")
+    fixed_development = Version("1.4.0.dev10")
+    vulnerable = (
+        Version("1.3.5"),
+        Version("1.3.6"),
+        *(Version(f"1.4.0.dev{number}") for number in range(10)),
+    )
+
+    lock = _read_pins("requirements.txt")
+    lock_version = Version(lock["hydra-core"])
+    assert lock_version >= fixed_stable
+
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"]
+    hydra = next(
+        Requirement(item)
+        for item in project["dependencies"]
+        if _canonical(Requirement(item).name) == "hydra-core"
+    )
+
+    def lock_candidate_is_allowed(version: Version) -> bool:
+        return version >= fixed_stable and hydra.specifier.contains(
+            version, prereleases=True
+        )
+
+    assert lock_candidate_is_allowed(lock_version)
+    assert lock_candidate_is_allowed(fixed_stable)
+    assert lock_candidate_is_allowed(fixed_development)
+    assert all(not lock_candidate_is_allowed(version) for version in vulnerable)
+
+
 def test_the_constraints_file_is_not_empty() -> None:
     """The same floor for ``constraints.txt``, which had only ``assert constraints``.
 
