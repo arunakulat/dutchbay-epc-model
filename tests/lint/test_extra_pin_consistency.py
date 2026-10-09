@@ -172,7 +172,8 @@ def test_hydra_security_floor_is_consistent() -> None:
     stable releases, and the abstract dependency must also reject the affected
     1.4 prereleases even when prerelease matching is explicitly enabled.
     """
-    fixed = Version("1.3.7")
+    fixed_stable = Version("1.3.7")
+    fixed_development = Version("1.4.0.dev10")
     vulnerable = (
         Version("1.3.5"),
         Version("1.3.6"),
@@ -180,7 +181,8 @@ def test_hydra_security_floor_is_consistent() -> None:
     )
 
     lock = _read_pins("requirements.txt")
-    assert Version(lock["hydra-core"]) >= fixed
+    lock_version = Version(lock["hydra-core"])
+    assert lock_version >= fixed_stable
 
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"]
     hydra = next(
@@ -188,11 +190,16 @@ def test_hydra_security_floor_is_consistent() -> None:
         for item in project["dependencies"]
         if _canonical(Requirement(item).name) == "hydra-core"
     )
-    assert hydra.specifier.contains(fixed)
-    assert all(
-        not hydra.specifier.contains(version, prereleases=True)
-        for version in vulnerable
-    )
+
+    def lock_candidate_is_allowed(version: Version) -> bool:
+        return version >= fixed_stable and hydra.specifier.contains(
+            version, prereleases=True
+        )
+
+    assert lock_candidate_is_allowed(lock_version)
+    assert lock_candidate_is_allowed(fixed_stable)
+    assert lock_candidate_is_allowed(fixed_development)
+    assert all(not lock_candidate_is_allowed(version) for version in vulnerable)
 
 
 def test_the_constraints_file_is_not_empty() -> None:

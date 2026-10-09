@@ -34,11 +34,11 @@ Issue #1110 remains open and unaffected.
 | Check | Exact surface | Result |
 |---|---|---|
 | Governed environment | `DUTCHBAY_VENV=/workspace/dutchbay-epc-model/.venv ./check_venv.sh` on the frozen branch | PASS on Python 3.12.14 with the complete 311-distribution lock, including Hydra 1.3.7 and IPython 9.17.1 |
-| Dependency policy | `tests/lint/test_extra_pin_consistency.py` under governed Python 3.12 | 26 passed in 1.64 s; 1.3.5, 1.3.6 and 1.4.0.dev0-dev9 are excluded by the abstract dependency and the exact lock is 1.3.7 |
-| Hostile prerelease oracle | parse the project requirement with `packaging` and enable prerelease matching explicitly | 1.4.0.dev0-dev9 rejected; fixed 1.4.0.dev10 accepted |
+| Dependency policy | `tests/lint/test_extra_pin_consistency.py` under governed Python 3.12 | 26 passed in 4.51 s; the exact lock must satisfy the abstract requirement; 1.3.5, 1.3.6 and 1.4.0.dev0-dev9 fail that same lock-admissibility predicate |
+| Hostile prerelease oracle | parse the project requirement with `packaging` and enable prerelease matching explicitly | affected 1.4.0.dev0-dev9 rejected; stable 1.3.7 and fixed 1.4.0.dev10 admitted and pinned as positive test boundaries |
 | Mandatory security gate | governed `PATH` + `make security` | Bandit: no medium/high findings over 92,354 lines; `pip-audit`: `No known vulnerabilities found` |
 | Hydra runtime | reconciled governed environment plus a prior isolated `--target` probe of `hydra-core==1.3.7` | both selected and imported Hydra 1.3.7 exactly |
-| Hydra CLI composition | reconciled governed environment, `tests/integration/test_sensitivity_cli_smoke.py` | passed together with the 26 policy tests (27 passed in 6.21 s); canonical sensitivity CLI completed successfully |
+| Hydra CLI composition | reconciled governed environment, `tests/integration/test_sensitivity_cli_smoke.py` | passed together with the 26 policy tests (27 passed in 47.04 s); canonical sensitivity CLI completed successfully |
 | Complete lock resolution | governed pip, `--dry-run --ignore-installed --no-cache-dir -r requirements.txt` | exit 0; resolved Hydra 1.3.7, retained IPython 9.17.1 from current main and produced no conflict |
 | Changed-file hooks | pre-commit over all six implementation paths | all applicable hooks passed on the final 1.3.7 candidate |
 | Changelog / whitespace | changelog dry run and `git diff --check` | both passed on the final 1.3.7 candidate |
