@@ -1,17 +1,32 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+from typing import get_args
 
 import pytest
 
 from analytics.contracts import ScenarioResult as PackageScenarioResult
 from analytics.contracts_v14 import (
+    OPERATIONAL_CALENDAR_MONTH_ALLOWED,
+    OPERATIONAL_EVIDENCE_SCHEMA,
+    OPERATIONAL_MAX_INTERVAL_SECONDS,
     CashflowResult,
     CasperResult,
     DebtCovenantSnapshot,
     EquityPerformance,
     IrrBridgeComponent,
     MonteCarloResult,
+    OperationalAmbiguousTimePolicy,
+    OperationalAnalysisPurpose,
+    OperationalAssessmentInput,
+    OperationalColumnBinding,
+    OperationalDatasetEvidence,
+    OperationalDatasetKind,
+    OperationalIntervalBasis,
+    OperationalNonexistentTimePolicy,
+    OperationalObservationStatus,
+    OperationalSourceClass,
+    OperationalTimezoneTreatment,
     ParameterRangeConfig,
     ProjectEquityIrrBridge,
     ResourceAssessment,
@@ -63,6 +78,23 @@ def test_contracts_v14_pipeline_surface_is_importable() -> None:
     assert payload["wacc"]["prudential_rate"] == 0.11
     assert result.model_dump()["project_irr"] == 0.12
     assert PackageScenarioResult is ScenarioResult
+    assert OPERATIONAL_EVIDENCE_SCHEMA == "dutchbay.operational_evidence.v1"
+    assert OPERATIONAL_MAX_INTERVAL_SECONDS["wake_losses_scada"]["scada"] == 3_600
+    assert OPERATIONAL_CALENDAR_MONTH_ALLOWED["electrical_losses"] == frozenset(
+        {"revenue_meter"}
+    )
+    assert OperationalAssessmentInput.__name__ == "OperationalAssessmentInput"
+    assert OperationalColumnBinding.__name__ == "OperationalColumnBinding"
+    assert OperationalDatasetEvidence.__name__ == "OperationalDatasetEvidence"
+    assert "wake_losses_tower" in get_args(OperationalAnalysisPurpose)
+    assert "fold_1" in get_args(OperationalAmbiguousTimePolicy)
+    assert "reanalysis" in get_args(OperationalDatasetKind)
+    assert "calendar_month" in get_args(OperationalIntervalBasis)
+    assert "shift_forward" in get_args(OperationalNonexistentTimePolicy)
+    assert "derived_estimate" in get_args(OperationalObservationStatus)
+    assert "reference_reanalysis" in get_args(OperationalObservationStatus)
+    assert "declared_asset" in get_args(OperationalSourceClass)
+    assert "named_zone_to_utc" in get_args(OperationalTimezoneTreatment)
 
     # ResourceAssessment is re-exported through contracts_v14 (#996 D4) and
     # self-validates on construction; its model_dump() matches the ContractMixin surface.
