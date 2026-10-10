@@ -65,6 +65,15 @@ updates:
       # it. The engine-numerics major cap is unchanged and still applies (pandas 3.0 = #593).
       - dependency-name: "numpy"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      # mpmath is capped <1.4 by sympy (sympy 1.14.0 requires mpmath<1.4,>=1.1.0 -- PyPI
+      # requires_dist, read 2026-10-10), and 1.3->1.4 is a semver-MINOR bump, so a major-only
+      # rule could never catch it. The numerics group proposed mpmath 1.3.0->1.4.1 in #1325
+      # alongside the numpy-typing-compat bump below; both died together at the install step
+      # with 0 tests run, which is why #1325 reports two install conflicts rather than one.
+      # Block minors too so mpmath stays within sympy's ceiling (1.3.x patches stay welcome).
+      # Lift only in lockstep with a sympy release that raises it.
+      - dependency-name: "mpmath"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
       - dependency-name: "scipy"
         update-types: ["version-update:semver-major"]
       - dependency-name: "scipy-stubs"
