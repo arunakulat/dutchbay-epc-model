@@ -1,8 +1,4 @@
-"""Post-COD operational-assessment contracts.
-
-The package starts with a dependency-free evidence envelope.  Parsers, estimators,
-OpenOA adapters, report rendering, and finance wiring belong to later dolphins.
-"""
+"""Post-COD operational evidence and deterministic normalization contracts."""
 
 from analytics.operational.contracts import (
     OPERATIONAL_CALENDAR_MONTH_ALLOWED,
@@ -23,23 +19,55 @@ from analytics.operational.contracts import (
     OperationalSourceClass,
     OperationalTimezoneTreatment,
 )
+from analytics.operational.normalization import (
+    OPERATIONAL_AGGREGATION_SCHEMA,
+    OPERATIONAL_NORMALIZATION_SCHEMA,
+    OperationalAggregationMethod,
+    OperationalAggregationReceipt,
+    OperationalAggregationResult,
+    OperationalAggregationSpec,
+    OperationalColumnExclusion,
+    OperationalExcludedRowReceipt,
+    OperationalNormalizationError,
+    OperationalNormalizationErrorCode,
+    OperationalNormalizationResult,
+    OperationalQualityReceipt,
+    OperationalRowExclusion,
+    aggregate_operational_series,
+    normalize_operational_csv,
+)
 
 __all__ = [
+    "OPERATIONAL_AGGREGATION_SCHEMA",
     "OPERATIONAL_CALENDAR_MONTH_ALLOWED",
     "OPERATIONAL_EVIDENCE_SCHEMA",
     "OPERATIONAL_MAX_INTERVAL_SECONDS",
+    "OPERATIONAL_NORMALIZATION_SCHEMA",
     "OPERATIONAL_REQUIRED_DATASET_KINDS",
     "OPERATIONAL_REQUIRED_ROLES",
     "OperationalAmbiguousTimePolicy",
     "OperationalAnalysisPurpose",
+    "OperationalAggregationMethod",
+    "OperationalAggregationReceipt",
+    "OperationalAggregationResult",
+    "OperationalAggregationSpec",
     "OperationalAssessmentInput",
     "OperationalColumnBinding",
+    "OperationalColumnExclusion",
     "OperationalDatasetEvidence",
     "OperationalDatasetKind",
     "OperationalEvidenceError",
+    "OperationalExcludedRowReceipt",
     "OperationalIntervalBasis",
     "OperationalNonexistentTimePolicy",
+    "OperationalNormalizationError",
+    "OperationalNormalizationErrorCode",
+    "OperationalNormalizationResult",
     "OperationalObservationStatus",
     "OperationalSourceClass",
     "OperationalTimezoneTreatment",
+    "OperationalQualityReceipt",
+    "OperationalRowExclusion",
+    "aggregate_operational_series",
+    "normalize_operational_csv",
 ]
