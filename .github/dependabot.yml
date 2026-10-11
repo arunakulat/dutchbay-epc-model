@@ -131,15 +131,29 @@ updates:
       # stay welcome). Lift only in lockstep with a streamlit release that raises the ceiling.
       - dependency-name: "pyarrow"
         update-types: ["version-update:semver-major"]
-      # numpy-typing-compat is capped <20251207 by optype[numpy] (optype[numpy] 0.17.1 requires
-      # numpy-typing-compat<20251207,>=20250818.1.25), so a bot bump to the 2026 datestamp desyncs
-      # the lock. #986/#988 post-mortem: the weekly group bumped numpy-typing-compat
-      # 20251206->20260602 -> ResolutionImpossible (numpy-typing-compat==20260602.2.4 vs
-      # optype[numpy]'s <20251207). Its YYYYMMDD datestamp is the semver-MAJOR segment; block
-      # majors so it stays within optype's ceiling (patches within 20251206 stay welcome). Lift
-      # only in lockstep with an optype[numpy] release that raises the ceiling.
+      # numpy-typing-compat carries its target numpy range in the PATCH segment, so no bot bump
+      # is safe while numpy is capped. Its version is YYYYMMDD.MAJOR.MINOR of the numpy it tracks:
+      # 20260602.2.4 requires numpy<2.5,>=2.4 and 20260602.2.5 requires numpy<2.6,>=2.5rc1 (both
+      # from PyPI requires_dist, read 2026-10-07). numpy is held at 2.4.6 by pandapower 3.5.4
+      # (numpy<2.5,>=1.26 -- see the pandapower and numpy entries above and #1169), so the .2.5
+      # datestamp-patch bump is a ResolutionImpossible at pip install.
+      #
+      # The earlier major-only rule could not catch that. #986/#988 added it for a datestamp jump
+      # (20251206->20260602) against the THEN-current optype[numpy] 0.17.1 ceiling of <20251207;
+      # that ceiling has since lifted -- the lock now carries optype 0.18.0, which requires
+      # numpy-typing-compat<20260603,>=20260602.2.0, so optype admits .2.5 and no longer binds.
+      # With the datestamp unchanged at 20260602, 2.4->2.5 is a semver-PATCH bump, which the
+      # major-only rule let straight through: the numerics group regenerated the identical
+      # unmergeable pull request three times (#1249 closed 2026-09-23, #1301 closed 2026-10-02,
+      # #1325 2026-10-07 -- all from branch dependabot/pip/numerics-1a7835728b, each dying at the
+      # install step in well under a minute with 0 tests run).
+      #
+      # Freeze ALL bot bumps, mirroring pydantic-core and mypy above: there is no finer segment
+      # than the patch, so within a datestamp every bump moves the numpy floor. Lift in lockstep
+      # with numpy -- which means in lockstep with a pandapower release that raises numpy<2.5 --
+      # and pick the numpy-typing-compat whose patch segment matches the numpy then in the lock.
       - dependency-name: "numpy-typing-compat"
-        update-types: ["version-update:semver-major"]
+        update-types: ["version-update:semver-major", "version-update:semver-minor", "version-update:semver-patch"]
       # magika is capped ~=0.6.1 by markitdown -- EVERY published markitdown release, 0.1.2
       # through the current latest 0.1.7, declares it -- so magika 1.x cannot enter the lock at
       # any markitdown version. #1064/#1167: the weekly ingestion group proposed magika
