@@ -4,7 +4,8 @@
 
 This is a scoped successor to `docs/SESSION_HANDOVER_2026-10-07_MERGE_COORDINATION.md` (#1337). Its window
 starts where that record's ends, with `main` at `7dce2a67` (#1327) on 2026-10-07, and ends on 2026-10-11 with
-`main` at `702c9ea8` (#1343). Later events belong to the next successor. In this window:
+`main` at `702c9ea8` (#1343). Later events belong to the next successor; #1349 and #1350 merged after the
+window closed. In this window:
 - the `hydra-core` advisories were answered: #1340 (1.3.6) was vetoed, and #1341 (1.3.7, closing #1339) merged
   on its own chain's reviews;
 - #1337 (the 10-07 record), #1328 (`cftime`) and #1329 (`fqdn`) merged after review;
@@ -26,6 +27,9 @@ and the surviving `HOLD`s. A session that reads this record first should:
 1. read `docs/SESSION_HANDOVER_2026-10-05_RELEASE_15_6_1.md` next and follow its chain;
 2. come back here only for the merge-coordination workstream.
 
+The resolver prints five records. Once this record is merged, the 10-05 record is the fifth, and the next
+successor will push it off the list. Follow the path named here.
+
 This record is documentation only. It changes no model, KPI, rule or release, and lifts no `HOLD`.
 
 ## Authority
@@ -36,20 +40,26 @@ This record is documentation only. It changes no model, KPI, rule or release, an
 - **Owner instructions given to this session in this window.** All were given in that session's chat, not on
   GitHub. This record was written by that session, which received them first-hand.
   - 2026-10-10, about 18:50Z: "Hold for the moment please". The coordinator stopped its running reviewer, the
-    #1329 lane, and disabled its own scheduled check-in. The hold was not posted on GitHub at the time; this
-    record is its first written trace.
+    #1329 lane, and disabled its own scheduled check-in. The hold was not posted on GitHub while it was in
+    force. Its time and effect are recorded in the #1329 review record 6101626657, posted at 20:01:39Z; this
+    record is the first written trace of the owner's words.
   - 2026-10-10, about 19:50Z: "Go please and restart 1329 and let sweep session merge". Recorded on #1329 in
     6101535224.
-  - 2026-10-11, about 08:40Z: "Go ahead and act audaciously - work autonomously and merge your work." Cited on
-    #1338 in 6107248211.
+  - 2026-10-11, about 08:40Z: "Go ahead and act audaciously - work autonomously and merge your work."
+    6107248211 on #1338 quotes only "work autonomously", with no time; this record is the first written trace
+    of the full words and the time. It is a general instruction: under the steward skill it waives no review
+    lane or condition (D1343-03(ii)).
 - **Owner instructions relayed by another session.** This session did not receive these first-hand. The
   weekday open-PR sweep session, `session_01MBEFm7ND7rb5e7Exc5vuAw`, records them:
   - 2026-10-10, 18:37Z: "Start clearing the drafts sequentially please and merging" (6106421292). Under it the
     sweep session holds the merge lease for #1329 and #1338, in that order, with #1343 after them.
+    6101033393 dates the same instruction "2026-10-07"; that is a slip, and 6100894680, 6100938239 and
+    6106421292 support 2026-10-10.
   - 2026-10-11, 06:43Z: "1329 is yours to merge now" (6106373419).
 - **What the lease means here.** The lease holder merges. The coordinator recruits and posts the review, and
   merges only what the lease does not cover. The sweep session wrote #1343, so it does not hold #1343's lease
-  and handed it to a coordinator (6101033393).
+  and handed it to a coordinator (6101033393). The lease covered #1329 and #1338. No lease is recorded for any
+  later pull request.
 
 ## What landed
 
@@ -62,7 +72,7 @@ This record is documentation only. It changes no model, KPI, rule or release, an
 | #1329, `fqdn` 1.5.1 → 1.6.0 (Dependabot) | `1be1d168a83476549704de7d653acca7d94e1062` | Merged by the lease holder at 2026-10-11T06:45:40Z. Its tree `b4c8398d` equals the reviewed head `68bd94c7`, and its single parent is `c43e7250`. One review, on the owner's decision. Post-merge record: 6106373419 (the lease holder's) |
 | #1338, Dependabot ignore for `numpy-typing-compat` | `f3b674c873b85be629f33ae21a30a6cd74361726` | Merged by the lease holder at 2026-10-11T09:07:23Z. Its tree `fc6c581d` equals the reviewed head `373b8fc3`, its single parent is `1be1d168`, and its message is the confirmed body `c637c6b3…`, byte for byte. One review, on the owner's decision. Post-merge record: 6107436412 (the lease holder's) |
 | #1348, capability and assurance roadmap | `7c3fa562038b6a79e9fa3246c833236b3e24e080` | Not coordinated by this session. Merged on its own chain's reviews (6108591808, 6108581591) |
-| #1343, Dependabot ignore for `mpmath` | `702c9ea8964a843579da7fc40a3ddd80e50f090f` | Merged by this session at about 12:05Z. Its tree `8dbc7250` equals the reviewed head `4a3fd125`, its single parent is `7c3fa562`, and its message is the confirmed body `528eae2b…`, byte for byte. One review, on this session's reading of the owner's decision, which the lane judged sound (D1343-03). Post-merge record: 6108833262 |
+| #1343, Dependabot ignore for `mpmath` | `702c9ea8964a843579da7fc40a3ddd80e50f090f` | Merged by this session at about 12:05Z. Its tree `8dbc7250` equals the reviewed head `4a3fd125`, its single parent is `7c3fa562`, and its message is the confirmed body `528eae2b…`, byte for byte. One review, on this session's reading of the owner's decision, which the lane judged sound (D1343-03). No owner record names #1343, so its one-lane posture rests on this session's reading (D1343-03, limit (i)); the owner can still ask for a second lane. Post-merge record: 6108833262 |
 
 **Closed unmerged.**
 - #1340 (`hydra-core` 1.3.6). Both lanes vetoed it, and Dependabot closed it at 2026-10-09T21:15:30Z once
@@ -71,7 +81,8 @@ This record is documentation only. It changes no model, KPI, rule or release, an
   merged: "Looks like these dependencies are no longer being updated by Dependabot". The owner's open question
   about closing it is moot.
 - #1344 (`mpmath` 1.3.0 → 1.4.1 alone, the group's regeneration after #1338). Dependabot closed it at
-  12:05:06Z, as #1343 merged: "Looks like mpmath is no longer being updated by Dependabot".
+  12:05:06Z, as #1343 merged: "Looks like mpmath is no longer being updated by Dependabot". This answers
+  D1343-12.
 
 **Still open, not in any coordinated sequence** (open item 14).
 - #1326 (`llvmlite` 0.50.0) cannot install. Whether to close it unmerged is still the owner's question.
@@ -92,10 +103,14 @@ None of these is in `.claude/skills/steward/SKILL.md` yet. They are the coordina
 - **Green means every required check succeeded** (`MERGE-01`). A skipped or failed non-required job neither
   blocks a merge nor stands in for a required one. The skill's stricter "every check" reading defers to the
   CSV and `AGENTS.md` where they disagree (D1328-04).
-- **Review records carry no model name or identifier.** One draft record did. The reviewer revised it before
-  it was posted, and every later brief says so.
-- **The squash message is part of the review subject.** Three of the five squash drafts reviewed in this
-  window needed a reviewer's correction before merge. #1338's and #1343's were confirmed unchanged:
+- **Review records carry no model name or identifier.** In this window one draft did, #1340's assurance
+  record; its reviewer revised it before it was posted, and every later brief says so. Two earlier records in
+  the mirror below name one in their reviewer-identity field and stay as posted: 6044276512 (#1327) and
+  6044258242 (#1337 cycle 1).
+- **The squash message is part of the review subject.** Four of the seven squash drafts reviewed in this
+  window were vetoed or needed a reviewer's correction: #1340's (`e34cd5e4…`, D1340-A-02, withdrawn unused)
+  and the three below. #1341's (`65b7bf80…`) was confirmed but not used, and #1338's and #1343's were
+  confirmed unchanged:
   - #1328: "carried forward" (`3ac4bd0d…`);
   - #1329: D1329-09, a false "before review" (`8f2a5576…`);
   - #1337: the H-D2-02 gate quoted in full (`0d0a0cfe…`).
@@ -140,7 +155,8 @@ digest it states and its durable file.
   not restore a disposition's support for a merge (the skill's step 1).
 - **Scope.** This mirror covers every review record this session recruited in the window, #1327's record, and
   both cycles of #1337, as the 10-07 record's gate requires (H-A1-11, H-D2-01, H-A2-02). It does not cover
-  the #1339 chain's records for #1341 or any record for #1336, which other chains hold.
+  the #1339 chain's records for #1341, any record for #1336, or #1348's (6108581591, 6108591808), which other
+  chains hold.
 
 ## Open items
 
@@ -177,7 +193,8 @@ record's, with additions. Items 8 to 14 are new.
        it was shown since its disposition." 6024313300 answered it for #1322 only;
      - H-A1-06 from #1337's review: the skill's two-parent merge-commit route cannot run on `main`, whose
        ruleset requires linear history;
-     - new, D1328-04: the skill's "every check succeeded or was skipped for a stated reason" is stricter than
+     - new, D1328-04: the skill's "every check on the exact head succeeded, or was skipped for a stated
+       reason" is stricter than
        `MERGE-01`'s required checks. Align it with the CSV, or state why it is stricter;
      - new, from this window's practice: the stale-audit re-run (D1340-A-04), the same-package search before
        recruiting, and the squash message as part of the subject.
@@ -213,8 +230,8 @@ record's, with additions. Items 8 to 14 are new.
    - **Contents:** the Makefile-mode `pip-audit` skips the `packaging`, `setuptools` and `wheel` pins; `bandit`
      and `pip-audit` are unpinned in the gate; and the required check names Test Summary, fastlane and smoke
      are not bound to the GitHub Actions app in ruleset 17414541.
-   - **Until it lands:** the coordinator re-runs the audit on the exact head before every dependency merge
-     (D1340-A-04).
+   - **Until it lands:** whoever merges a dependency change re-runs the audit on the exact head before
+     merging (D1340-A-04). #1329's lease-holder merge (6106373419) records no such re-run.
    - **Owner:** the owner or the coordinator; the ruleset change is the owner's.
    - **Gate** (6089422158): `make security` audits every lock pin, with a negative control on one of the
      three; the security tooling is pinned or hash-locked; and the required checks are bound to the GitHub
@@ -227,12 +244,20 @@ record's, with additions. Items 8 to 14 are new.
       - D1341-A-04 (and D1340-A-03): the publisher moved from `facebookresearch/hydra` to
         `hydra-ecosystem/hydra`, with the same repository id, 191632914. Nothing in the repository records it;
       - D1341-A-09: the Hydra comment in `.github/dependabot.yml` still names `hydra-core` 1.3.4.
-    - **Owner:** the coordinator. **Gate:** one review. **`HOLD` effect:** none.
+    - **Owner:** the coordinator.
+    - **Gate:** the independent review that `RECRUIT-01` module 1 requires for the change's risk class,
+      stated in its profile receipt. The Hydra ADR is an accepted decision record, so a change to its
+      evidence, triggers or security statement is governance and `R2`: a domain lane and an assurance lane,
+      unless the owner waives one on record for that change.
+    - **`HOLD` effect:** none.
 11. **#1339's implementation record** (D1341-A-01 to D1341-A-03): its lease line, its "changes only" sentence
-    and its risk label. **Owner:** the #1339 chain, or the coordinator if the owner asks. **`HOLD` effect:**
-    none.
+    and its risk label. 6089422158 gives the exact corrections, "for the next touch of the record or a
+    PERSIST-01 successor". **Owner:** the #1339 chain, or the coordinator if the owner asks. **Gate:** those
+    corrections applied at the record's next touch. **`HOLD` effect:** none.
 12. **The legacy wind-download runner** (D1340-D-06). `scripts/legacy_runners/run_wind_download_v14.py` sets
-    `config_path="conf"`, and that directory does not exist, so the runner fails under every Hydra version.
+    `config_path="conf"`, which Hydra resolves against the script's own directory, and
+    `scripts/legacy_runners/conf` does not exist (the repository-root `conf/` is not used), so the runner fails
+    under every Hydra version.
     **Owner:** the owner decides between a fix and retirement. **`HOLD` effect:** none.
 13. **Dependabot configuration follow-ups** (6107382734, 6108825432).
     - D1338-01 and D1338-02: two wordings in the `numpy-typing-compat` comment, to correct when the entry is
@@ -248,7 +273,13 @@ record's, with additions. Items 8 to 14 are new.
     - D1343-02: `changelog.d/1325-mpmath-ignore-minor.fixed.md` says the rule "now blocks minor bumps as well
       as majors", but no `mpmath` rule existed before. Apply the record's replacement body before the fragment
       is folded into `CHANGELOG.md`.
-    - **Owner:** the coordinator. **Gate:** one review of the change that makes them. **`HOLD` effect:** none.
+    - **Owner:** the coordinator.
+    - **Gate:** the independent review that `RECRUIT-01` module 1 requires for the change's risk class,
+      stated in its profile receipt. Dependabot configuration is `R2` (6044254165, question 3; 6107248211,
+      6107434772; D1343-03), and a D1338-06 guard is code: each needs a domain lane and an assurance lane
+      unless the owner waives one on record for that change. The owner's one-review decision in 6044254165
+      covered #1338, and #1343 on this session's reading; it names no later change.
+    - **`HOLD` effect:** none.
 14. **The open Dependabot pull requests.**
     - #1326: `llvmlite` 0.50.0 is above `numba` 0.67.0's `llvmlite<0.50`, so it cannot install. Whether to
       close it unmerged was asked on 2026-10-07 and is unanswered. **Owner:** the owner.
@@ -267,6 +298,7 @@ record's, with additions. Items 8 to 14 are new.
 - **H-D2-02.** D1327-04 is now open item 8, with H-D2-02's gate quoted.
 - **The owner's 2026-10-07 Dependabot decisions** (6044254165). Both ignores landed, through #1338 and #1343.
   Dependabot closed #1325 and #1344, so the question of closing #1325 is moot.
+- **D1343-12.** Dependabot closed #1344 at 12:05:06Z, as #1343 merged.
 - **The #1325 cause.** Two of this session's records disagreed about it (H-A2-06). 6089871064 corrects
   6043929273 and qualifies 6044254165.
 
@@ -290,6 +322,9 @@ stand in its place:
   fix" (H-A2-01, H-D2-04(b)). Item 6 above carries all three.
 - **The mirror's scope.** "as 6024313300 scoped it": 6024313300 scoped the #1322 records only (H-A2-05(g)).
   #1327's record, which the 10-07 record cited without a digest (H-A2-03), is mirrored above.
+- **Its changelog fragment.** It says the record gives "every review record with its comment ID and SHA-256";
+  that is true of the #1322 and #1324 records only (H-A2-03). Narrow it to "every #1322 and #1324 review
+  record" before `changelog.d` is folded.
 
 ## Lessons worth keeping
 
@@ -298,8 +333,9 @@ stand in its place:
 - **Usage limits stopped reviewers five times in this window, and this session once.** Every reviewer that
   returned was the same reviewer, resumed, told what had changed, and made to re-run its load-bearing checks,
   so no disposition rests on a stale check:
-  - #1328's lane, which started on 2026-10-07 and stopped before any disposition; it resumed at
-    2026-10-09T21:26Z on a re-frozen subject and reviewed it afresh;
+  - #1328's lane and both #1337 cycle-2 lanes, stopped on 2026-10-07 before any disposition (the #1337
+    lanes at about 18:36Z). All three resumed at about 21:26Z on 2026-10-09 on re-frozen subjects
+    (6089527964, 6089516617); #1328's lane reviewed afresh;
   - #1340's domain lane and both #1341 lanes, from about 09:58Z on 2026-10-08 to about 09:16Z on 2026-10-09;
   - #1341's domain lane again, from about 10:00Z on 2026-10-09; it never returned before #1341 merged;
   - #1337's cycle-2 confirmation, from about 21:55Z on 2026-10-09 to about 04:24Z on 2026-10-10;
@@ -315,8 +351,9 @@ stand in its place:
     #1343 (6106421292).
   - A base update by one session can move another session's review subject. The lease holder brought `main`
     into #1329 at 18:43:52Z while its lane was running, and the lane bound directly to the new head
-    `68bd94c7`. Post the frozen subject with the receipt, and ask the lease holder to hold updates until the
-    record is posted.
+    `68bd94c7`. This coordinator's note 6100894680 had offered that route: "If you update the branch, the same
+    lane can supply the §7 proofs for the new head." Post the frozen subject with the receipt, and ask the
+    lease holder to hold updates until the record is posted.
   - Cite comment IDs in full. A truncated ID can match a different record (D1329-06).
 - **A non-required job can go red for reasons outside the repository.** A Docker Hub outage from about 21:15Z
   on 2026-10-09 turned `build image and smoke /health` red on #1328's head `6d3a96a3`. This session's note
