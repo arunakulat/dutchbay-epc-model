@@ -41,7 +41,7 @@ brotli==1.2.0
 hiredis==3.4.2
 zopfli==0.4.3
 # antlr4-python3-runtime: hard-capped by the Hydra stack, NOT a gate-cleared freeze.
-# hydra-core 1.3.4 and omegaconf 2.3.1 both require antlr4-python3-runtime==4.9.* (the
+# hydra-core 1.3.7 and omegaconf 2.3.1 both require antlr4-python3-runtime==4.9.* (the
 # grammar runtime their config parsers were generated against), so 4.10+ is an
 # unconditional ResolutionImpossible against those pins (#939 post-mortem: the weekly
 # group bumped it to 4.13.2 and made the lock uninstallable). Lift only in lockstep
