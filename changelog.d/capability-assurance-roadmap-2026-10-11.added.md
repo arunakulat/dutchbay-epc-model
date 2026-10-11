@@ -1,0 +1,1 @@
+Added a source-grounded capability and assurance roadmap that reconciles the live PR queue, finance and evidence gaps, and conditional platform expansion without changing model behaviour or release authority.
