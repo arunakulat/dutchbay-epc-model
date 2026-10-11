@@ -18,7 +18,7 @@ The [global feasibility report contract](FEASIBILITY_REPORT_CONTRACT.md) (`DBAY-
 
 ### First delivery sequence
 
-1. Resolve the five queued PRs through their existing owners and review lanes; remove install-incompatible dependency proposals from the active merge path only on an explicit recorded disposition. In parallel, optimize the handover resolver under [#1342](https://github.com/arunakulat/dutchbay-epc-model/issues/1342), because [#1342](https://github.com/arunakulat/dutchbay-epc-model/issues/1342) records an approximately 150-second governed run and a prior 71-second warning, already above the 60-second threshold; this review's approximately 47-second run was a separate faster observation.
+1. Resolve the five queued PRs through their existing owners and review lanes; remove install-incompatible dependency proposals from the active merge path only on an explicit recorded disposition. In parallel, address the already-exceeded 60-second handover-resolver threshold under [#1342](https://github.com/arunakulat/dutchbay-epc-model/issues/1342): that issue records an approximately 150-second governed run and a prior 71-second warning; this review's approximately 47-second run was a separate faster observation.
 2. Finish A3/A4 period and event-calendar semantics and the F-03 schema gate. Keep F-5 in force until independent financial review supports a specific use of quarterly figures.
 3. Address the highest-impact finance findings as separate reversible PRs, starting with maturity/partial-sweep analysis and levered-tax CFADS basis. Request transaction, reserve, tax, mast, and feeder evidence concurrently; those requests must not be converted into assumed values.
 4. Build the operational evidence path already sequenced in [#1330](https://github.com/arunakulat/dutchbay-epc-model/issues/1330). Use its results to challenge pre-construction AEP when real post-COD data exist.
@@ -154,7 +154,7 @@ An implementation can be merged while a programme `HOLD` persists. A merged PR c
 
 **Dolphins.** Inventory the applicability and evidence state of every `DBAY-FRC-001` section for one bounded project case; link issuer-signed land, permits, grid connection, EPC/O&M/LTSA, insurance, tax/legal and E&S records to the report contract; reconcile priced and unpriced scope to capex/opex and contingencies; record professional and authority owners for each unresolved topic. Keep confidential evidence in its governed location and publish only authorized summaries/digests.
 
-**Acceptance.** Report output identifies each section as run, limited, unsupported or not applicable with evidence and reviewer basis. Cost and construction interfaces reconcile to the finance input manifest. An absent ESIA, consent, legal opinion or utility study is visible and caps the claimed completeness; a successful model run does not fill it.
+**Acceptance.** Report output retains `DBAY-FRC-001`'s separate applicability, production, evidence, review and release axes for every section, plus a centrally derived human-facing status that does not collapse failure, intentional deferral or missing input/dependency into inapplicability. Evidence, reviewer basis and the consequence for achieved grade remain visible. Cost and construction interfaces reconcile to the finance input manifest. An absent ESIA, consent, legal opinion or utility study caps the claimed completeness; a successful model run does not fill it.
 
 ### P2 — improve lender usability and reduce change cost
 

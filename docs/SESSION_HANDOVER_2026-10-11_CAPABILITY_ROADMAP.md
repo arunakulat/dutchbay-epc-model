@@ -4,7 +4,7 @@
 
 This is a scoped successor to `docs/SESSION_HANDOVER_2026-10-07_MERGE_COORDINATION.md`. It adds the source-grounded planning record `docs/CAPABILITY_AND_ASSURANCE_ROADMAP_2026-10-11.md` and a changelog fragment. The 10-07 record's open items and the 10-06 wording it delegates to remain controlling. The 10-05 v15.6.1 record remains the startup record for a new session: read it and follow its bootstrap. This handover changes no model, KPI, governance rule, grade, release, issue state or `HOLD`.
 
-The roadmap is a prioritised to-do document, not authority to implement every item. Its live GitHub observations are bounded to 11 October 2026 around 11:05 UTC and must be refreshed before PR action. The governing source hierarchy remains `AGENTS.md`, the canonical GWTF CSV, applicable `RECRUIT-01` modules, current contracts and evidence, then this planning record.
+The roadmap is a prioritised to-do document, not authority to implement every item. Its live GitHub observations are bounded to 11 October 2026 around 11:05 UTC and must be refreshed before PR action. The canonical GWTF CSV is the project governance authority; `AGENTS.md` is its Codex gateway. Apply the relevant `RECRUIT-01` modules, current contracts and evidence before this planning record.
 
 ## Verified startup and live state
 
