@@ -31,7 +31,7 @@ def _references(body: str, number: int) -> bool:
     """Recognize an exact issue reference, not a numeric substring."""
     return bool(
         re.search(rf"(?<![\w#])#{number}\b", body)
-        or re.search(rf"/issues/{number}(?![0-9])", body)
+        or re.search(rf"/issues/{number}(?![A-Za-z0-9_-])", body)
     )
 
 
@@ -40,16 +40,32 @@ def _timestamp(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def _is_bot(login: str, actor_type: str) -> bool:
+    """Use GitHub's actor type, with a login fallback for unlisted bots."""
+    return (
+        actor_type == "Bot" or login.lower().endswith("[bot]") or login in BOT_AUTHORS
+    )
+
+
 def _human_comment(comment: dict[str, Any]) -> bool:
     """Distinguish a human/agent intake record from a bot-created reference."""
     user = comment.get("user") or {}
     login = user.get("login") or ""
-    return bool(login) and user.get("type") != "Bot" and login not in BOT_AUTHORS
+    return bool(login) and not _is_bot(login, user.get("type") or "")
+
+
+def _specific(text: str) -> bool:
+    """Reject empty and obvious placeholder fields in a direct tracker record."""
+    value = text.strip().lower()
+    return len(value) >= 12 and not value.startswith(
+        ("tbd", "todo", "n/a", "unknown", "select later", "decide later", "placeholder")
+    )
 
 
 def evaluate(
     body: str,
     author: str,
+    author_type: str,
     created_at: str,
     pr_number: int,
     issue: dict[str, Any] | None,
@@ -61,6 +77,7 @@ def evaluate(
     """Return a fail-closed intake result for already-fetched GitHub objects."""
     work_issue = _ISSUE.search(body)
     direct_comment = _TRACKER_COMMENT.search(body)
+    bot_author = _is_bot(author, author_type)
     if len(_ISSUE.findall(body)) + len(_TRACKER_COMMENT.findall(body)) != 1:
         return (
             1,
@@ -91,13 +108,22 @@ def evaluate(
             _references(tracker.get("body") or "", issue_number) or linked_comments
         ):
             return 1, "INTAKE-01: the focused issue is not recorded on tracker #1353."
-        if author in BOT_AUTHORS and not any(
-            _human_comment(comment) for comment in linked_comments
-        ):
-            return 1, "INTAKE-01: a bot PR needs a non-bot tracker triage comment."
-        if author not in BOT_AUTHORS and not _references(
-            tracker.get("body") or "", issue_number
-        ):
+        if bot_author:
+            try:
+                triaged = any(
+                    _human_comment(comment)
+                    and _references(comment.get("body") or "", pr_number)
+                    and _timestamp(comment["created_at"]) >= _timestamp(created_at)
+                    for comment in linked_comments
+                )
+            except (KeyError, TypeError, ValueError):
+                return 1, "INTAKE-01: bot triage timestamp is invalid."
+            if not triaged:
+                return (
+                    1,
+                    "INTAKE-01: a bot PR needs post-creation non-bot triage naming this PR.",
+                )
+        if not bot_author and not _references(tracker.get("body") or "", issue_number):
             try:
                 if not any(
                     _timestamp(comment["created_at"]) <= _timestamp(created_at)
@@ -111,6 +137,9 @@ def evaluate(
     else:
         assert direct_comment is not None
         comment_id = int(direct_comment.group(1))
+        comment_body = (work_comment or {}).get("body") or ""
+        deliverable = re.search(r"^Work item:\s*(.+)$", comment_body, re.MULTILINE)
+        done_when = re.search(r"^Done when:\s*(.+)$", comment_body, re.MULTILINE)
         if (
             work_comment is None
             or work_comment.get("id") != comment_id
@@ -118,13 +147,26 @@ def evaluate(
                 f"/issues/{TRACKER_NUMBER}"
             )
             or not _human_comment(work_comment)
-            or not (work_comment.get("body") or "").strip().startswith("Work item:")
-            or len((work_comment.get("body") or "").strip()) < 30
+            or deliverable is None
+            or done_when is None
+            or not _specific(deliverable.group(1))
+            or not _specific(done_when.group(1))
         ):
             return 1, "INTAKE-01: tracker comment is missing, unscoped or bot-authored."
+        if bot_author:
+            try:
+                if not _references(comment_body, pr_number) or _timestamp(
+                    work_comment["created_at"]
+                ) < _timestamp(created_at):
+                    return (
+                        1,
+                        "INTAKE-01: bot tracker comment must triage this PR after creation.",
+                    )
+            except (KeyError, TypeError, ValueError):
+                return 1, "INTAKE-01: bot tracker comment timestamp is invalid."
         item_name = f"tracker comment {comment_id}"
         item_created_at = work_comment.get("created_at")
-    if author not in BOT_AUTHORS:
+    if not bot_author:
         try:
             if _timestamp(str(item_created_at)) > _timestamp(created_at):
                 return (
@@ -160,7 +202,7 @@ def evaluate(
     if not citation_ok:
         return 1, "INTAKE-01: 'Recorded before edits' must cite the work record."
     return 0, (
-        f"INTAKE-01: scoped {item_name}, base SHA, pre-edit citation and "
+        f"INTAKE-01: scoped {item_name}, base SHA, work-record citation and "
         f"{len(open_prs) - int(any(pr['number'] == pr_number for pr in open_prs))} "
         "other open PR(s) recorded. Semantic overlap and pre-edit timing require review."
     )
@@ -241,6 +283,7 @@ def main() -> int:
                 code, message = evaluate(
                     body,
                     os.environ.get("PR_AUTHOR", ""),
+                    os.environ.get("PR_AUTHOR_TYPE", ""),
                     os.environ.get("PR_CREATED_AT", ""),
                     int(os.environ.get("PR_NUMBER", "0")),
                     issue,

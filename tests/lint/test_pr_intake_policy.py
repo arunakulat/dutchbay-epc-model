@@ -41,7 +41,7 @@ TRACKER_COMMENTS = [
 ]
 DIRECT_COMMENT = {
     "id": 6119665270,
-    "body": "Work item: Add a strict F-03 schema preflight with negative test.",
+    "body": "Work item: Add a strict F-03 schema preflight.\nDone when: Invalid profiles fail before evaluation.",
     "issue_url": "https://api.github.com/repos/arunakulat/dutchbay-epc-model/issues/1353",
     "created_at": "2026-10-12T06:30:00Z",
     "user": {"login": "arunakulat", "type": "User"},
@@ -62,6 +62,7 @@ def _evaluate(body: str, **kwargs: Any) -> tuple[int, str]:
     arguments = {
         "body": body,
         "author": "human",
+        "author_type": "User",
         "created_at": "2026-10-12T07:00:00Z",
         "pr_number": 1355,
         "issue": ISSUE,
@@ -119,6 +120,16 @@ def test_unlinked_issue_fails() -> None:
     assert "not recorded on tracker" in message
 
 
+def test_malformed_issue_url_does_not_link_to_tracker() -> None:
+    code, message = _evaluate(
+        _body(),
+        tracker={**TRACKER, "body": "See /issues/1354abc"},
+        tracker_comments=[],
+    )
+    assert code == 1
+    assert "not recorded on tracker" in message
+
+
 def test_tracker_comment_added_after_human_pr_fails() -> None:
     late = [{**TRACKER_COMMENTS[0], "created_at": "2026-10-12T08:00:00Z"}]
     code, message = _evaluate(_body(), tracker_comments=late)
@@ -136,10 +147,17 @@ def test_issue_created_after_human_pr_fails() -> None:
 
 def test_bot_pr_requires_triage_but_can_link_issue_after_creation() -> None:
     late_issue = {**ISSUE, "created_at": "2026-10-12T08:00:00Z"}
-    assert _evaluate("", author="dependabot[bot]", issue=late_issue)[0] == 1
+    assert (
+        _evaluate("", author="dependabot[bot]", author_type="Bot", issue=late_issue)[0]
+        == 1
+    )
     assert (
         _evaluate(
-            _body(), author="dependabot[bot]", issue=late_issue, tracker_comments=[]
+            _body(),
+            author="dependabot[bot]",
+            author_type="Bot",
+            issue=late_issue,
+            tracker_comments=[],
         )[0]
         == 1
     )
@@ -153,12 +171,41 @@ def test_bot_pr_requires_triage_but_can_link_issue_after_creation() -> None:
         _evaluate(
             _body(),
             author="dependabot[bot]",
+            author_type="Bot",
             issue=late_issue,
             tracker_comments=bot_only,
         )[0]
         == 1
     )
-    assert _evaluate(_body(), author="dependabot[bot]", issue=late_issue)[0] == 0
+    assert (
+        _evaluate(
+            _body(), author="dependabot[bot]", author_type="Bot", issue=late_issue
+        )[0]
+        == 1
+    )
+    triage = [
+        {
+            **TRACKER_COMMENTS[0],
+            "body": "Human triage of bot PR #1355 for focused issue #1354; proceed after checks.",
+            "created_at": "2026-10-12T08:30:00Z",
+        }
+    ]
+    assert (
+        _evaluate(
+            _body(),
+            author="dependabot[bot]",
+            author_type="Bot",
+            issue=late_issue,
+            tracker_comments=triage,
+        )[0]
+        == 0
+    )
+
+
+def test_unlisted_bot_does_not_take_human_path() -> None:
+    code, message = _evaluate(_body(), author="snyk[bot]", author_type="Bot")
+    assert code == 1
+    assert "bot PR needs" in message
 
 
 def test_scoped_direct_tracker_comment_passes_without_child_issue() -> None:
@@ -194,6 +241,51 @@ def test_wrong_unscoped_or_bot_direct_comment_fails(comment: dict[str, Any]) -> 
     assert _evaluate(body, issue=None, work_comment=comment)[0] == 1
 
 
+def test_generic_direct_comment_fails() -> None:
+    url = "https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6119665270"
+    body = (
+        _body()
+        .replace("Work item: #1354", f"Work item: {url}")
+        .replace("Recorded before edits: #1354", f"Recorded before edits: {url}")
+    )
+    generic = {
+        **DIRECT_COMMENT,
+        "body": "Work item: TBD - select later after development starts.\nDone when: TBD later",
+    }
+    assert _evaluate(body, issue=None, work_comment=generic)[0] == 1
+
+
+def test_bot_direct_comment_must_name_the_new_pr() -> None:
+    url = "https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6119665270"
+    body = (
+        _body()
+        .replace("Work item: #1354", f"Work item: {url}")
+        .replace("Recorded before edits: #1354", f"Recorded before edits: {url}")
+    )
+    assert (
+        _evaluate(
+            body,
+            author="snyk[bot]",
+            author_type="Bot",
+            issue=None,
+            work_comment=DIRECT_COMMENT,
+        )[0]
+        == 1
+    )
+    triage = {
+        **DIRECT_COMMENT,
+        "body": DIRECT_COMMENT["body"]
+        + "\nTriage: PR #1355 was reviewed by a non-bot actor.",
+        "created_at": "2026-10-12T08:30:00Z",
+    }
+    assert (
+        _evaluate(
+            body, author="snyk[bot]", author_type="Bot", issue=None, work_comment=triage
+        )[0]
+        == 0
+    )
+
+
 def test_direct_comment_created_after_human_pr_fails() -> None:
     url = "https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6119665270"
     body = (
@@ -213,6 +305,7 @@ def test_pull_request_number_cannot_be_work_item() -> None:
 
 def test_exact_issue_references_do_not_match_larger_numbers() -> None:
     assert not check._references("#13540 /issues/13540", 1354)
+    assert not check._references("/issues/1354abc", 1354)
     assert check._references("See #1354", 1354)
 
 
@@ -223,6 +316,7 @@ def test_workflow_keeps_required_job_and_uses_env_for_untrusted_body() -> None:
     assert "run: python scripts/ci/check_pr_intake.py" in workflow
     assert parsed["permissions"]["issues"] == "read"
     assert parsed["permissions"]["pull-requests"] == "read"
+    assert "PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}" in workflow
     assert workflow.count("PR_BODY: ${{ github.event.pull_request.body }}") == 2
     assert "run: ${{ github.event.pull_request.body }}" not in workflow
     template = TEMPLATE.read_text(encoding="utf-8")

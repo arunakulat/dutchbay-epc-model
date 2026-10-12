@@ -23,7 +23,9 @@ blocker and revisit trigger; they do not freeze unrelated work. Refresh the swee
 Its body names the focused issue, base SHA and overlap disposition; the required receipts
 job checks their presence and issue linkage. It cannot prove when editing began or decide
 whether two PRs overlap, so the reviewer still checks chronology and scope. For an
-automatically opened PR, complete this intake before follow-up changes or merge.
+automatically opened PR, require a non-bot tracker comment posted after creation and
+naming the exact PR and work item before follow-up changes or merge. A direct tracker
+comment work item has `Work item:` and `Done when:` lines, not placeholders.
 
 This skill confers no merge authority. Merge when the session has been asked to deliver or
 merge the pull request. Once it has been asked, `MERGE-01` means you merge on green without
