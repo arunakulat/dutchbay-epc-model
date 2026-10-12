@@ -43,6 +43,24 @@ class Introduction:
     path: str
 
 
+@dataclass(frozen=True)
+class CommitChange:
+    """Describe one NUL-framed name-status entry from a commit."""
+
+    status: str
+    names: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CommitDelta:
+    """Bind commit metadata to its whole-tree name-status entries."""
+
+    epoch_text: str
+    iso_date: str
+    commit_sha: str
+    changes: tuple[CommitChange, ...]
+
+
 def _git(*args: str) -> str:
     """Run Git in the active worktree and return stdout.
 
@@ -72,6 +90,21 @@ def _git_bytes(*args: str) -> bytes:
     """Run Git and return unmodified bytes for filename-safe parsing."""
     completed = subprocess.run(
         ["git", *args],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if completed.returncode != 0:
+        detail = os.fsdecode(completed.stderr).strip() or "no diagnostic returned"
+        raise ResolutionError(f"git {' '.join(args)} failed: {detail}")
+    return completed.stdout
+
+
+def _git_bytes_input(stdin: bytes, *args: str) -> bytes:
+    """Run Git with byte input and return unmodified byte output."""
+    completed = subprocess.run(
+        ["git", *args],
+        input=stdin,
         check=False,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -138,83 +171,122 @@ def _looks_like_near_family(path: str) -> bool:
     )
 
 
-def _introduction(path: str) -> Introduction:
-    """Resolve the unique entry of a file lineage into the handover family.
-
-    Args:
-        path: Repository-relative handover path.
-
-    Returns:
-        The record's first durable introduction.
-
-    Raises:
-        ResolutionError: History is incomplete, ambiguous, or malformed.
-    """
+def _history_headers(paths: set[str]) -> tuple[tuple[str, str, str], ...]:
+    """Return commit metadata for every commit touching any requested path."""
     history = _git_bytes(
         "log",
-        "--follow",
-        "--find-renames=1%",
+        "--full-history",
         "-z",
         "--format=%H%x00%ct%x00%cI",
+        "HEAD",
         "--",
-        path,
+        *sorted(paths),
     )
     metadata = history.split(b"\0")
     if metadata and metadata[-1] == b"":
         metadata.pop()
     if len(metadata) % 3:
-        raise ResolutionError(f"malformed NUL-framed history metadata for {path}")
-    entries: list[tuple[str, str, str]] = []
-    current_path = path
+        raise ResolutionError("malformed NUL-framed batched history metadata")
+    headers: list[tuple[str, str, str]] = []
     for offset in range(0, len(metadata), 3):
         try:
-            commit_sha, epoch_text, iso_date = (
-                field.decode("ascii") for field in metadata[offset : offset + 3]
-            )
+            fields = [field.decode("ascii") for field in metadata[offset : offset + 3]]
+            headers.append((fields[0], fields[1], fields[2]))
         except UnicodeDecodeError as exc:
-            raise ResolutionError(f"malformed lineage header for {path}") from exc
-        header = (epoch_text, iso_date, commit_sha)
-        changes = [
-            field
-            for field in _git_bytes(
-                "diff-tree",
-                "--root",
-                "-r",
-                "-M1%",
-                "-C1%",
-                "--find-copies-harder",
-                "--name-status",
-                "-z",
-                "--no-commit-id",
-                commit_sha,
-            ).split(b"\0")
-            if field
-        ]
-        cursor = 0
-        copied_entry = False
-        while cursor < len(changes):
+            raise ResolutionError("malformed batched lineage header") from exc
+    return tuple(headers)
+
+
+def _commit_deltas(
+    headers: tuple[tuple[str, str, str], ...],
+) -> dict[str, CommitDelta]:
+    """Resolve whole-tree changes for many commits in one Git subprocess."""
+    if not headers:
+        return {}
+    stdin = b"".join(f"{sha}\n".encode("ascii") for sha, _, _ in headers)
+    output = _git_bytes_input(
+        stdin,
+        "diff-tree",
+        "--stdin",
+        "--root",
+        "-r",
+        "-M1%",
+        "-C1%",
+        "--find-copies-harder",
+        "--name-status",
+        "-z",
+        "--pretty=format:%x00%H%x00",
+    )
+    header_by_sha = {sha: (epoch, iso) for sha, epoch, iso in headers}
+    tokens = output.split(b"\0")
+    deltas: dict[str, CommitDelta] = {}
+    cursor = 0
+    while cursor < len(tokens):
+        if tokens[cursor] != b"":
+            raise ResolutionError("malformed NUL-framed batched lineage")
+        while cursor < len(tokens) and tokens[cursor] == b"":
+            cursor += 1
+        if cursor == len(tokens):
+            break
+        try:
+            commit_sha = tokens[cursor].decode("ascii")
+        except (IndexError, UnicodeDecodeError) as exc:
+            raise ResolutionError("malformed batched lineage commit header") from exc
+        cursor += 1
+        changes: list[CommitChange] = []
+        while cursor < len(tokens) and tokens[cursor] != b"":
+            status_field = tokens[cursor]
+            if status_field.startswith(b"\n"):
+                status_field = status_field[1:]
             try:
-                status = changes[cursor].decode("ascii", errors="strict")
+                status = status_field.decode("ascii", errors="strict")
             except UnicodeDecodeError as exc:
-                raise ResolutionError(f"malformed lineage status for {path}") from exc
+                raise ResolutionError("malformed batched lineage status") from exc
             width = 3 if status.startswith(("R", "C")) else 2
-            if cursor + width > len(changes):
-                raise ResolutionError(f"malformed NUL-framed lineage for {path}")
-            names = [
-                os.fsdecode(field) for field in changes[cursor + 1 : cursor + width]
-            ]
+            if not status or cursor + width > len(tokens):
+                raise ResolutionError("malformed NUL-framed batched lineage")
+            names = tuple(
+                os.fsdecode(field) for field in tokens[cursor + 1 : cursor + width]
+            )
+            changes.append(CommitChange(status, names))
             cursor += width
-            if status == "A":
+        if commit_sha not in header_by_sha or commit_sha in deltas:
+            raise ResolutionError(f"unexpected batched lineage commit: {commit_sha}")
+        epoch_text, iso_date = header_by_sha[commit_sha]
+        deltas[commit_sha] = CommitDelta(
+            epoch_text, iso_date, commit_sha, tuple(changes)
+        )
+    for commit_sha in header_by_sha.keys() - deltas.keys():
+        # ``diff-tree`` emits no record for an ordinary merge without ``-m``;
+        # the former per-commit invocation likewise returned no changes.
+        epoch_text, iso_date = header_by_sha[commit_sha]
+        deltas[commit_sha] = CommitDelta(epoch_text, iso_date, commit_sha, ())
+    return deltas
+
+
+def _lineage_entries(
+    path: str,
+    deltas: list[CommitDelta],
+    queried_paths: set[str],
+) -> tuple[list[tuple[str, str, str]], set[str]]:
+    """Trace one path through already-batched whole-tree commit changes."""
+    entries: list[tuple[str, str, str]] = []
+    missing_paths: set[str] = set()
+    current_path = path
+    for delta in deltas:
+        copied_entry = False
+        for change in delta.changes:
+            names = change.names
+            header = (delta.epoch_text, delta.iso_date, delta.commit_sha)
+            if change.status == "A":
                 if names[0] == current_path and RECORD_PATTERN.fullmatch(current_path):
                     entries.append(header)
-            elif status.startswith("C"):
+            elif change.status.startswith("C"):
                 if names[1] == current_path and RECORD_PATTERN.fullmatch(current_path):
                     entries.append(header)
-                    # A copy introduces a distinct record; its source is not an
-                    # earlier incarnation of the copied destination.
                     copied_entry = True
                     break
-            elif status.startswith("R"):
+            elif change.status.startswith("R"):
                 if names[1] != current_path:
                     continue
                 old_matches = RECORD_PATTERN.fullmatch(names[0]) is not None
@@ -222,25 +294,57 @@ def _introduction(path: str) -> Introduction:
                 if not old_matches and new_matches:
                     entries.append(header)
                 current_path = names[0]
+                if current_path not in queried_paths:
+                    missing_paths.add(current_path)
         if copied_entry:
             break
-    if not entries:
-        raise ResolutionError(
-            f"no handover-family entry found for {path}; "
-            "fetch complete history before retrying"
+    return entries, missing_paths
+
+
+def _introductions(paths: set[str]) -> list[Introduction]:
+    """Resolve all handover introductions with batched history traversal."""
+    commit_order = _git("rev-list", "HEAD").splitlines()
+    queried_paths: set[str] = set()
+    pending_paths = set(paths)
+    deltas_by_sha: dict[str, CommitDelta] = {}
+    while pending_paths:
+        batch = pending_paths - queried_paths
+        if not batch:
+            break
+        headers = _history_headers(batch)
+        new_headers = tuple(
+            header for header in headers if header[0] not in deltas_by_sha
         )
-    if len(entries) != 1:
-        raise ResolutionError(
-            f"multiple handover-family entries found for {path}; lineage is ambiguous"
-        )
-    fields = entries[0]
-    try:
-        epoch = int(fields[0])
-    except ValueError as exc:
-        raise ResolutionError(
-            f"non-numeric introduction timestamp for {path}: {fields[0]!r}"
-        ) from exc
-    return Introduction(epoch, fields[1], fields[2], path)
+        deltas_by_sha.update(_commit_deltas(new_headers))
+        queried_paths.update(batch)
+        ordered = [deltas_by_sha[sha] for sha in commit_order if sha in deltas_by_sha]
+        pending_paths = set()
+        for path in paths:
+            _, missing = _lineage_entries(path, ordered, queried_paths)
+            pending_paths.update(missing - queried_paths)
+
+    ordered = [deltas_by_sha[sha] for sha in commit_order if sha in deltas_by_sha]
+    introductions: list[Introduction] = []
+    for path in paths:
+        entries, _ = _lineage_entries(path, ordered, queried_paths)
+        if not entries:
+            raise ResolutionError(
+                f"no handover-family entry found for {path}; "
+                "fetch complete history before retrying"
+            )
+        if len(entries) != 1:
+            raise ResolutionError(
+                f"multiple handover-family entries found for {path}; lineage is ambiguous"
+            )
+        epoch_text, iso_date, commit_sha = entries[0]
+        try:
+            epoch = int(epoch_text)
+        except ValueError as exc:
+            raise ResolutionError(
+                f"non-numeric introduction timestamp for {path}: {epoch_text!r}"
+            ) from exc
+        introductions.append(Introduction(epoch, iso_date, commit_sha, path))
+    return introductions
 
 
 def _worktree_candidates(root: Path) -> set[str]:
@@ -408,7 +512,7 @@ def main() -> int:
         _reject_uncommitted_records(root, committed)
         if not committed:
             raise ResolutionError("no committed session-handover records found")
-        resolved = [_introduction(path) for path in committed]
+        resolved = _introductions(committed)
         _validate_introduction_topology(resolved)
         _reject_ambiguous_newest(resolved)
         introductions = sorted(

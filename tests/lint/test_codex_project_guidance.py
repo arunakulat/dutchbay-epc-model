@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import re
 import subprocess
@@ -75,6 +76,18 @@ def test_codex_guidance_preserves_required_safety_and_quality_gates() -> None:
 
 
 RESOLVER_SCRIPT = REPO_ROOT / "scripts/list_session_handover_records.py"
+
+
+def _load_resolver_module() -> object:
+    """Load the resolver so a test can count its Git history subprocesses."""
+    spec = importlib.util.spec_from_file_location(
+        "handover_resolver_test", RESOLVER_SCRIPT
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 def _session_continuity_section() -> str:
@@ -161,6 +174,54 @@ def test_handover_resolver_orders_by_introduction_not_last_touch(
         "docs/H04_DELIVERY_RECORD.md",
         "docs/SESSION_HANDOVER_2026-01-01.md",
     ]
+
+
+def test_handover_resolver_batches_history_subprocesses(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """Many records must share one history query and one diff-tree traversal."""
+    repo = tmp_path / "repo"
+    docs = repo / "docs"
+    docs.mkdir(parents=True)
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "Resolver Test")
+    _git(repo, "config", "user.email", "resolver@example.invalid")
+    for index in range(8):
+        record = docs / f"SESSION_HANDOVER_2026-01-{index + 1:02d}.md"
+        record.write_text(f"record {index}\n", encoding="utf-8")
+        _git(repo, "add", record.relative_to(repo).as_posix())
+        _commit(
+            repo,
+            f"docs: add handover {index}",
+            f"2026-01-{index + 1:02d}T00:00:00+00:00",
+        )
+
+    resolver = _load_resolver_module()
+    byte_calls: list[tuple[str, ...]] = []
+    input_calls: list[tuple[str, ...]] = []
+    original_bytes = resolver._git_bytes
+    original_input = resolver._git_bytes_input
+
+    def counted_bytes(*args: str) -> bytes:
+        byte_calls.append(args)
+        return original_bytes(*args)
+
+    def counted_input(stdin: bytes, *args: str) -> bytes:
+        input_calls.append(args)
+        return original_input(stdin, *args)
+
+    monkeypatch.setattr(resolver, "_git_bytes", counted_bytes)
+    monkeypatch.setattr(resolver, "_git_bytes_input", counted_input)
+    monkeypatch.chdir(repo)
+
+    assert resolver.main() == 0
+    capsys.readouterr()
+    history_calls = [args for args in byte_calls if args[0] == "log"]
+    diff_calls = [args for args in input_calls if args[0] == "diff-tree"]
+    assert len(history_calls) == 1
+    assert "--follow" not in history_calls[0]
+    assert len(diff_calls) == 1
+    assert "--stdin" in diff_calls[0]
 
 
 def test_handover_resolver_rejects_untracked_and_staged_records(
