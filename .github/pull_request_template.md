@@ -1,6 +1,17 @@
 ## Summary
 <!-- One or two sentences: what changed, and why. -->
 
+### Work intake (`INTAKE-01`)
+
+Work item: #<!-- focused issue number, not #1353 alone -->
+Base SHA: <!-- 40-character origin/main SHA observed before work -->
+Open PR sweep: <!-- list all open PR numbers and overlap/blocker dispositions; write "none" if none -->
+Recorded before edits: <!-- link to the focused issue or tracker comment, with date -->
+
+The work item must be a scoped issue recorded in or linked to #1353. A blocked,
+unrelated PR does not stop this work; say why it is unrelated and when it will be
+revisited. Bot-created PRs need this intake completed before follow-up or merge.
+
 ### Scope
 - [ ] One focused, independently revertable change (`DELIVERY-01` — a dolphin, not a whale)
 - [ ] KPI impact: **none** / **stated in "Financial impact" below** *(delete one)*
