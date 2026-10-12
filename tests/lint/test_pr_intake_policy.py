@@ -84,6 +84,22 @@ def test_duplicate_work_items_fail() -> None:
 
 
 @pytest.mark.parametrize(
+    "old,new",
+    [
+        ("Work item: #1354", "Work item:\n#1354"),
+        (f"Base SHA: {BASE}", f"Base SHA:\n{BASE}"),
+        (
+            "Open PR sweep: #1346 blocked; revisit bitarray 3.12.1",
+            "Open PR sweep:\n#1346 blocked; revisit bitarray 3.12.1",
+        ),
+        ("Recorded before edits: #1354", "Recorded before edits:\n#1354"),
+    ],
+)
+def test_blank_pr_field_cannot_borrow_next_line(old: str, new: str) -> None:
+    assert _evaluate(_body().replace(old, new))[0] == 1
+
+
+@pytest.mark.parametrize(
     "body, expected",
     [
         (_body().replace("Work item: #1354", ""), "name one focused issue"),
@@ -227,6 +243,10 @@ def test_scoped_direct_tracker_comment_passes_without_child_issue() -> None:
             **DIRECT_COMMENT,
             "issue_url": "https://api.github.com/repos/example/repo/issues/1",
         },
+        {
+            **DIRECT_COMMENT,
+            "issue_url": "https://api.github.com/repos/example/repo/issues/1353",
+        },
         {**DIRECT_COMMENT, "body": "hello"},
         {**DIRECT_COMMENT, "user": {"login": "dependabot[bot]", "type": "Bot"}},
     ],
@@ -253,6 +273,20 @@ def test_generic_direct_comment_fails() -> None:
         "body": "Work item: TBD - select later after development starts.\nDone when: TBD later",
     }
     assert _evaluate(body, issue=None, work_comment=generic)[0] == 1
+
+
+def test_blank_direct_deliverable_cannot_borrow_done_when_line() -> None:
+    url = "https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6119665270"
+    body = (
+        _body()
+        .replace("Work item: #1354", f"Work item: {url}")
+        .replace("Recorded before edits: #1354", f"Recorded before edits: {url}")
+    )
+    blank = {
+        **DIRECT_COMMENT,
+        "body": "Work item:\nDone when: Invalid profiles fail before evaluation.",
+    }
+    assert _evaluate(body, issue=None, work_comment=blank)[0] == 1
 
 
 def test_bot_direct_comment_must_name_the_new_pr() -> None:

@@ -19,9 +19,10 @@ Before editing or taking over a PR, fetch and verify `origin/main`; consult the 
 and enumerate **all** open PRs. Match the proposed work to a scoped tracker item or a
 focused issue linked from it, recording a new item before edits if none exists. Advance
 an actionable overlapping PR first. Record blocked or owner-deferred PRs with their
-blocker and revisit trigger; they do not freeze unrelated work. Refresh the sweep before opening a PR.
-Its body names the focused issue, base SHA and overlap disposition; the required receipts
-job checks their presence and issue linkage. It cannot prove when editing began or decide
+blocker and revisit trigger; they do not freeze unrelated work. Refresh the sweep before
+opening a PR. Its body names the scoped issue or tracker comment, base SHA and overlap
+disposition; the required receipts job checks their presence and tracker linkage. It cannot
+prove when editing began or decide
 whether two PRs overlap, so the reviewer still checks chronology and scope. For an
 automatically opened PR, require a non-bot tracker comment posted after creation and
 naming the exact PR and work item before follow-up changes or merge. A direct tracker

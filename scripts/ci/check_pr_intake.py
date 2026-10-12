@@ -15,15 +15,15 @@ TRACKER_NUMBER = 1353
 BOT_AUTHORS = frozenset(
     {"dependabot[bot]", "github-actions[bot]", "copilot[bot]", "renovate[bot]"}
 )
-_ISSUE = re.compile(r"^Work item:\s*#([1-9][0-9]*)\s*$", re.MULTILINE)
+_ISSUE = re.compile(r"^Work item:[ \t]*#([1-9][0-9]*)[ \t]*$", re.MULTILINE)
 _TRACKER_COMMENT = re.compile(
-    r"^Work item:\s*https://github\.com/arunakulat/dutchbay-epc-model/"
-    r"issues/1353#issuecomment-([1-9][0-9]*)\s*$",
+    r"^Work item:[ \t]*https://github\.com/arunakulat/dutchbay-epc-model/"
+    r"issues/1353#issuecomment-([1-9][0-9]*)[ \t]*$",
     re.MULTILINE,
 )
-_BASE = re.compile(r"^Base SHA:\s*([0-9a-f]{40})\s*$", re.MULTILINE)
-_SWEEP = re.compile(r"^Open PR sweep:\s*(.+)$", re.MULTILINE)
-_RECORDED = re.compile(r"^Recorded before edits:\s*(.+)$", re.MULTILINE)
+_BASE = re.compile(r"^Base SHA:[ \t]*([0-9a-f]{40})[ \t]*$", re.MULTILINE)
+_SWEEP = re.compile(r"^Open PR sweep:[ \t]*([^\r\n]+)$", re.MULTILINE)
+_RECORDED = re.compile(r"^Recorded before edits:[ \t]*([^\r\n]+)$", re.MULTILINE)
 _REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
@@ -138,14 +138,17 @@ def evaluate(
         assert direct_comment is not None
         comment_id = int(direct_comment.group(1))
         comment_body = (work_comment or {}).get("body") or ""
-        deliverable = re.search(r"^Work item:\s*(.+)$", comment_body, re.MULTILINE)
-        done_when = re.search(r"^Done when:\s*(.+)$", comment_body, re.MULTILINE)
+        deliverable = re.search(
+            r"^Work item:[ \t]*([^\r\n]+)$", comment_body, re.MULTILINE
+        )
+        done_when = re.search(
+            r"^Done when:[ \t]*([^\r\n]+)$", comment_body, re.MULTILINE
+        )
         if (
             work_comment is None
             or work_comment.get("id") != comment_id
-            or not (work_comment.get("issue_url") or "").endswith(
-                f"/issues/{TRACKER_NUMBER}"
-            )
+            or work_comment.get("issue_url")
+            != "https://api.github.com/repos/arunakulat/dutchbay-epc-model/issues/1353"
             or not _human_comment(work_comment)
             or deliverable is None
             or done_when is None
