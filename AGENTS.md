@@ -94,6 +94,20 @@ one, because the next session acts on it.
 
 ## Start every task safely
 
+After the branch/worktree preflight below and before any file edit or PR opening, apply
+`INTAKE-01`: fetch and verify `origin/main`, read the
+live [capability tracker](https://github.com/arunakulat/dutchbay-epc-model/issues/1353),
+and enumerate all open PRs. Record a scoped item in that tracker or a focused issue linked
+from it **before editing**. Advance an actionable overlapping PR first; record a blocked
+or owner-deferred PR and its revisit trigger without freezing unrelated work. Refresh this
+sweep before opening a PR and put the work-item link, base SHA and overlap disposition in
+the PR body. A direct tracker comment needs a named deliverable and done-when criterion.
+Automated PRs need a non-bot tracker comment naming the exact PR after it opens, before
+follow-up modification or merge.
+Anyone may propose an item by issue or tracker comment; the tracker maintainer reconciles
+the index. The required PR intake check verifies receipts, not the truth of a semantic
+overlap judgment or the time the first edit occurred.
+
 1. Run `git status --short --branch` and `git worktree list` before any mutation.
 2. Confirm the active branch and worktree. Treat `main` and `master` as protected and
    read-only.

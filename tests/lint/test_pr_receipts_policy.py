@@ -144,4 +144,5 @@ def test_workflow_passes_the_body_through_the_environment() -> None:
         for line in workflow.splitlines()
         if "github.event.pull_request.body" in line
     ]
-    assert references == ["PR_BODY: ${{ github.event.pull_request.body }}"], references
+    expected = ["PR_BODY: ${{ github.event.pull_request.body }}"] * 2
+    assert references == expected, references

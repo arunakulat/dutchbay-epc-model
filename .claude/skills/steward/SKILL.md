@@ -12,6 +12,22 @@ and `AGENTS.md`, and where they disagree with this file, they win.
 Load the ruleset and the three framework principles before acting. `CLAUDE.md` "Rules and
 formats that govern this repository" has the command and the rule IDs.
 
+## Tracker-first intake (`INTAKE-01`)
+
+Before editing or taking over a PR, fetch and verify `origin/main`; consult the live
+[capability tracker](https://github.com/arunakulat/dutchbay-epc-model/issues/1353)
+and enumerate **all** open PRs. Match the proposed work to a scoped tracker item or a
+focused issue linked from it, recording a new item before edits if none exists. Advance
+an actionable overlapping PR first. Record blocked or owner-deferred PRs with their
+blocker and revisit trigger; they do not freeze unrelated work. Refresh the sweep before
+opening a PR. Its body names the scoped issue or tracker comment, base SHA and overlap
+disposition; the required receipts job checks their presence and tracker linkage. It cannot
+prove when editing began or decide
+whether two PRs overlap, so the reviewer still checks chronology and scope. For an
+automatically opened PR, require a non-bot tracker comment posted after creation and
+naming the exact PR and work item before follow-up changes or merge. A direct tracker
+comment work item has `Work item:` and `Done when:` lines, not placeholders.
+
 This skill confers no merge authority. Merge when the session has been asked to deliver or
 merge the pull request. Once it has been asked, `MERGE-01` means you merge on green without
 asking again.

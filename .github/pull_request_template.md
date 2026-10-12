@@ -1,6 +1,21 @@
 ## Summary
 <!-- One or two sentences: what changed, and why. -->
 
+### Work intake (`INTAKE-01`)
+
+Work item: <!-- #<focused issue number> OR full URL to a scoped #1353 comment -->
+Base SHA: <!-- 40-character origin/main SHA observed before work -->
+Open PR sweep: <!-- list all open PR numbers and overlap/blocker dispositions; write "none" if none -->
+Recorded before edits: <!-- cite that issue number or exact tracker comment URL, with date -->
+
+The work item must be a scoped issue recorded on #1353 or a scoped tracker comment
+with `Work item: <deliverable>` and `Done when: <acceptance criterion>` lines. A bare
+`#1353` or a child issue that only mentions #1353
+does not pass. A blocked,
+unrelated PR does not stop this work; say why it is unrelated and when it will be
+revisited. Bot-created PRs need a non-bot comment on #1353, posted after the bot PR
+was opened and naming that exact PR and work item, before follow-up or merge.
+
 ### Scope
 - [ ] One focused, independently revertable change (`DELIVERY-01` — a dolphin, not a whale)
 - [ ] KPI impact: **none** / **stated in "Financial impact" below** *(delete one)*

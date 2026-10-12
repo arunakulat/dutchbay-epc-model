@@ -176,6 +176,32 @@ def test_verify_01_requires_receipts_for_claimed_checks() -> None:
         assert required in policy
 
 
+def test_intake_01_binds_tracker_first_work_to_required_pr_check() -> None:
+    """Keep the owner-requested sequencing rule and executable echo aligned."""
+    intake_01 = _rules_by_id()["INTAKE-01"]
+    policy = " ".join(
+        (intake_01["title"], intake_01["description"], intake_01["enforcement"])
+    )
+    assert intake_01["status"] == "active"
+    for required in (
+        "origin/main",
+        "#1353",
+        "every open PR",
+        "before editing",
+        "actionable overlapping PR",
+        "blocked",
+        "scripts/ci/check_pr_intake.py",
+        "Verification receipts (VERIFY-01)",
+    ):
+        assert required in policy
+    agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    steward = (REPO_ROOT / ".claude/skills/steward/SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert "INTAKE-01" in agents
+    assert "INTAKE-01" in steward
+
+
 def test_recruit_01_routes_all_relevant_tasks_to_canonical_modules() -> None:
     """Keep recruitment global, risk-scaled, and backed by tracked modules."""
     recruit_01 = _rules_by_id()["RECRUIT-01"]
