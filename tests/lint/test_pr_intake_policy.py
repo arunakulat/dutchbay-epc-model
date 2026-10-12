@@ -30,7 +30,22 @@ ISSUE = {
     "body": "Parent tracker: #1353",
     "created_at": "2026-10-12T06:00:00Z",
 }
-TRACKER = {"number": 1353, "body": "Current work: #1354"}
+TRACKER = {"number": 1353, "body": "The roadmap index."}
+TRACKER_COMMENTS = [
+    {
+        "id": 6119665269,
+        "body": "Intake recorded before edits: #1354 is the tracker-first rule.",
+        "created_at": "2026-10-12T06:30:00Z",
+        "user": {"login": "arunakulat", "type": "User"},
+    }
+]
+DIRECT_COMMENT = {
+    "id": 6119665270,
+    "body": "Work item: Add a strict F-03 schema preflight with negative test.",
+    "issue_url": "https://api.github.com/repos/arunakulat/dutchbay-epc-model/issues/1353",
+    "created_at": "2026-10-12T06:30:00Z",
+    "user": {"login": "arunakulat", "type": "User"},
+}
 OPEN_PRS = [{"number": 1346}, {"number": 1355}]
 
 
@@ -51,6 +66,8 @@ def _evaluate(body: str, **kwargs: Any) -> tuple[int, str]:
         "pr_number": 1355,
         "issue": ISSUE,
         "tracker": TRACKER,
+        "tracker_comments": TRACKER_COMMENTS,
+        "work_comment": None,
         "open_prs": OPEN_PRS,
     }
     arguments.update(kwargs)
@@ -61,10 +78,14 @@ def test_valid_scoped_record_and_complete_sweep_pass() -> None:
     assert _evaluate(_body())[0] == 0
 
 
+def test_duplicate_work_items_fail() -> None:
+    assert _evaluate(_body() + "Work item: #1354\n")[0] == 1
+
+
 @pytest.mark.parametrize(
     "body, expected",
     [
-        (_body().replace("Work item: #1354", ""), "Work item"),
+        (_body().replace("Work item: #1354", ""), "name one focused issue"),
         (_body().replace("Work item: #1354", "Work item: #1353"), "generic index"),
         (_body().replace(f"Base SHA: {BASE}", "Base SHA: short"), "Base SHA"),
         (
@@ -91,11 +112,18 @@ def test_missing_or_generic_intake_fails(body: str, expected: str) -> None:
 def test_unlinked_issue_fails() -> None:
     code, message = _evaluate(
         _body(),
-        issue={**ISSUE, "body": "No parent"},
-        tracker={**TRACKER, "body": "No child"},
+        issue={**ISSUE, "body": "Parent tracker: #1353"},
+        tracker_comments=[],
     )
     assert code == 1
-    assert "not cross-linked" in message
+    assert "not recorded on tracker" in message
+
+
+def test_tracker_comment_added_after_human_pr_fails() -> None:
+    late = [{**TRACKER_COMMENTS[0], "created_at": "2026-10-12T08:00:00Z"}]
+    code, message = _evaluate(_body(), tracker_comments=late)
+    assert code == 1
+    assert "tracker link was added after" in message
 
 
 def test_issue_created_after_human_pr_fails() -> None:
@@ -109,7 +137,72 @@ def test_issue_created_after_human_pr_fails() -> None:
 def test_bot_pr_requires_triage_but_can_link_issue_after_creation() -> None:
     late_issue = {**ISSUE, "created_at": "2026-10-12T08:00:00Z"}
     assert _evaluate("", author="dependabot[bot]", issue=late_issue)[0] == 1
+    assert (
+        _evaluate(
+            _body(), author="dependabot[bot]", issue=late_issue, tracker_comments=[]
+        )[0]
+        == 1
+    )
+    bot_only = [
+        {
+            **TRACKER_COMMENTS[0],
+            "user": {"login": "dependabot[bot]", "type": "Bot"},
+        }
+    ]
+    assert (
+        _evaluate(
+            _body(),
+            author="dependabot[bot]",
+            issue=late_issue,
+            tracker_comments=bot_only,
+        )[0]
+        == 1
+    )
     assert _evaluate(_body(), author="dependabot[bot]", issue=late_issue)[0] == 0
+
+
+def test_scoped_direct_tracker_comment_passes_without_child_issue() -> None:
+    url = "https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6119665270"
+    body = (
+        _body()
+        .replace("Work item: #1354", f"Work item: {url}")
+        .replace("Recorded before edits: #1354", f"Recorded before edits: {url}")
+    )
+    code, message = _evaluate(body, issue=None, work_comment=DIRECT_COMMENT)
+    assert code == 0, message
+    assert "tracker comment" in message
+
+
+@pytest.mark.parametrize(
+    "comment",
+    [
+        {
+            **DIRECT_COMMENT,
+            "issue_url": "https://api.github.com/repos/example/repo/issues/1",
+        },
+        {**DIRECT_COMMENT, "body": "hello"},
+        {**DIRECT_COMMENT, "user": {"login": "dependabot[bot]", "type": "Bot"}},
+    ],
+)
+def test_wrong_unscoped_or_bot_direct_comment_fails(comment: dict[str, Any]) -> None:
+    url = "https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6119665270"
+    body = (
+        _body()
+        .replace("Work item: #1354", f"Work item: {url}")
+        .replace("Recorded before edits: #1354", f"Recorded before edits: {url}")
+    )
+    assert _evaluate(body, issue=None, work_comment=comment)[0] == 1
+
+
+def test_direct_comment_created_after_human_pr_fails() -> None:
+    url = "https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6119665270"
+    body = (
+        _body()
+        .replace("Work item: #1354", f"Work item: {url}")
+        .replace("Recorded before edits: #1354", f"Recorded before edits: {url}")
+    )
+    late = {**DIRECT_COMMENT, "created_at": "2026-10-12T08:00:00Z"}
+    assert _evaluate(body, issue=None, work_comment=late)[0] == 1
 
 
 def test_pull_request_number_cannot_be_work_item() -> None:

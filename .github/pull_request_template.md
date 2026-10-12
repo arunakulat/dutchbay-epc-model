@@ -3,12 +3,14 @@
 
 ### Work intake (`INTAKE-01`)
 
-Work item: #<!-- focused issue number, not #1353 alone -->
+Work item: <!-- #<focused issue number> OR full URL to a scoped #1353 comment -->
 Base SHA: <!-- 40-character origin/main SHA observed before work -->
 Open PR sweep: <!-- list all open PR numbers and overlap/blocker dispositions; write "none" if none -->
-Recorded before edits: <!-- link to the focused issue or tracker comment, with date -->
+Recorded before edits: <!-- cite that issue number or exact tracker comment URL, with date -->
 
-The work item must be a scoped issue recorded in or linked to #1353. A blocked,
+The work item must be a scoped issue recorded on #1353 or a scoped tracker comment
+beginning `Work item:`. A bare `#1353` or a child issue that only mentions #1353
+does not pass. A blocked,
 unrelated PR does not stop this work; say why it is unrelated and when it will be
 revisited. Bot-created PRs need this intake completed before follow-up or merge.
 
