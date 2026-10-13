@@ -1,0 +1,83 @@
+# Issue #1342 handover-resolver performance implementation record
+
+## Scope and authority
+
+This record covers the bounded governance-runtime repair in issue #1342 on base
+`160f25d5d625436caa4c8c6ae47fab518c0eb87f`. The change affects only the session-handover
+resolver, its hostile test suite, this record, and one changelog fragment. It changes no finance
+formula, model input, KPI, evidence status, release decision, professional conclusion, or `HOLD`.
+
+## Diagnosis and implementation
+
+The canonical tree contains 44 current handover-family records. The prior resolver ran one
+`git log --follow` for every record and then ran a whole-tree
+`git diff-tree -M1% -C1% --find-copies-harder` subprocess for every commit returned by every
+lineage. Overlapping lineages therefore repeated both history traversal and expensive whole-tree
+copy detection. On the exact base and governed cloud Python 3.12 environment, the pre-change
+canonical command completed successfully in 207.646 seconds.
+
+The repair preserves the existing whole-tree rename/copy classification, NUL framing, family-entry
+rules, topology checks, timestamp checks, index/worktree parity, and fail-loud errors while batching
+the work:
+
+1. one multi-path `git log --full-history` returns metadata for commits touching all current record
+   paths;
+2. one `git diff-tree --stdin` applies the existing whole-tree rename/copy options to those commits;
+3. lineage tracing reuses those immutable deltas for every record; and
+4. a rename to a predecessor path outside the first batch triggers a bounded follow-up batch, so
+   entry from outside the family and delete/re-add ambiguity semantics are retained.
+
+Every dynamically discovered predecessor is passed under Git's global
+`--literal-pathspecs` option. This prevents a valid filename such as `:(exclude)*` from changing
+the query rather than identifying its own history. Batched name-status parsing also rejects empty
+pathname fields, so a truncated add, rename, or copy frame cannot consume the stream terminator as
+a filename.
+
+The parser accepts only the status grammar emitted by the selected `diff-tree --name-status`
+options: single-letter `A`, `D`, `M`, `T`, `U`, `X`, or `B`, and fixed-width scored `C`/`R` values
+from `001` through `100`. An expected commit absent from batched stdout is represented as an empty
+delta only after a separate `rev-list --parents` query proves that commit has at least two distinct
+full object-ID parents in the active repository format. Missing non-merge frames and malformed or
+incomplete topology fail closed. History headers likewise require a full object ID, a canonical
+numeric epoch (`0` or a nonzero value without leading zeros, up to 12 digits), the exact Git `%cI`
+form (UTC `Z` or a nonzero signed `HH:MM` offset), and equality between the epoch and parsed ISO
+instant before they enter the lineage graph. Duplicate commit headers fail before delta mapping.
+The four-digit ISO year and 12-digit epoch cap explicitly define the supported timestamp domain.
+
+An ordinary merge omitted by `diff-tree` without `-m` is represented as the same empty change set
+returned by the former per-commit invocation.
+
+## Evidence
+
+- Pre-change canonical resolver: exit 0, 207.646 seconds.
+- Initial optimized candidate: exit 0, 23.237 seconds. After the independent assurance
+  counterexamples were remediated, the first successor completed in 21.156 seconds. After the R2
+  status/topology counterexamples were closed and the exact grammar/header controls added, the
+  final successor completed in 21.406 seconds (9.7 times faster than baseline and below the
+  repository's 60-second intervention threshold).
+- Both runs emitted the same five records, fields, order, and values, headed by
+  `docs/SESSION_HANDOVER_2026-10-12_THREAD_TODO.md` at commit
+  `160f25d5d625436caa4c8c6ae47fab518c0eb87f`.
+- The resolver and changelog-focused suite: 93 passed. Existing hostile cases cover correction of
+  an old record, staged/untracked/deleted/ignored records, delete/re-add ambiguity, rename into and
+  within the family, copies, hostile filenames, newest timestamp ties, backdated descendants,
+  incomparable introductions, and shallow history.
+- The new deterministic regression creates eight separately introduced records and proves the
+  successful resolver uses one shared history query and one `diff-tree --stdin` traversal. The
+  previous per-record implementation violates both bounds, so the check is a non-wall-clock
+  negative control rather than a timing assertion vulnerable to shared-runner noise.
+- Independent assurance counterexamples are retained as regressions: a
+  family-to-literal-pathspec-to-family lineage must remain ambiguous, and truncated `A`, `R`, and
+  `C` NUL-framed records must fail closed. The exact type check covers both changed Python files:
+  `mypy scripts/list_session_handover_records.py tests/lint/test_codex_project_guidance.py`.
+- The R2 assurance counterexamples are also regressions: malformed nonempty statuses are rejected;
+  an omitted non-merge frame fails closed; and a proven ordinary merge omitted by `diff-tree`
+  remains an explicit empty delta.
+
+## Limitations
+
+The measured timing is an environment observation, not a permanent wall-clock guarantee. Git copy
+detection still depends on repository history and storage performance. Repositories with many
+successive renames to previously unqueried predecessor paths require additional bounded batches;
+the test suite retains the semantic controls for those paths. This engineering repair grants no
+release, audit, lender, Board, professional, publication, issue-closure, or `HOLD` authority.
