@@ -14,7 +14,7 @@ import subprocess
 import sys
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 RECORD_PREFIX_EXPRESSION = r"(?:SESSION_HANDOVER_|H[0-9]+_(?:HANDOVER|DELIVERY_))"
@@ -32,6 +32,7 @@ SINGLE_PATH_STATUSES = frozenset({"A", "D", "M", "T", "U", "X", "B"})
 GIT_STRICT_ISO_PATTERN = re.compile(
     r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:Z|[+-][0-9]{2}:[0-9]{2})$"
 )
+GIT_EPOCH_PATTERN = re.compile(r"^(?:0|[1-9][0-9]{0,11})$")
 
 
 class ResolutionError(RuntimeError):
@@ -233,12 +234,7 @@ def _history_headers(paths: set[str]) -> tuple[tuple[str, str, str], ...]:
             raise ResolutionError("malformed batched lineage header") from exc
         if not _valid_object_id(commit_sha, object_id_length):
             raise ResolutionError("malformed batched lineage commit object ID")
-        if (
-            not epoch_text
-            or len(epoch_text) > 12
-            or not epoch_text.isascii()
-            or not epoch_text.isdigit()
-        ):
+        if GIT_EPOCH_PATTERN.fullmatch(epoch_text) is None:
             raise ResolutionError("malformed batched lineage epoch")
         if GIT_STRICT_ISO_PATTERN.fullmatch(iso_date) is None:
             raise ResolutionError("malformed batched lineage ISO timestamp")
@@ -248,6 +244,8 @@ def _history_headers(paths: set[str]) -> tuple[tuple[str, str, str], ...]:
             epoch = int(epoch_text)
         except (OSError, OverflowError, ValueError) as exc:
             raise ResolutionError("malformed batched lineage ISO timestamp") from exc
+        if not iso_date.endswith("Z") and parsed_date.utcoffset() == timedelta(0):
+            raise ResolutionError("malformed batched lineage ISO timestamp")
         if iso_epoch != epoch:
             raise ResolutionError(
                 "malformed batched lineage timestamps: contradictory epoch and ISO"

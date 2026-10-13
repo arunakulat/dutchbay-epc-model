@@ -38,10 +38,11 @@ options: single-letter `A`, `D`, `M`, `T`, `U`, `X`, or `B`, and fixed-width sco
 from `001` through `100`. An expected commit absent from batched stdout is represented as an empty
 delta only after a separate `rev-list --parents` query proves that commit has at least two distinct
 full object-ID parents in the active repository format. Missing non-merge frames and malformed or
-incomplete topology fail closed. History headers likewise require a full object ID, a bounded
-numeric epoch, the exact Git `%cI` form (UTC `Z` or signed `HH:MM` offset), and equality between the
-epoch and parsed ISO instant before they enter the lineage graph. Duplicate commit headers fail
-before delta mapping.
+incomplete topology fail closed. History headers likewise require a full object ID, a canonical
+numeric epoch (`0` or a nonzero value without leading zeros, up to 12 digits), the exact Git `%cI`
+form (UTC `Z` or a nonzero signed `HH:MM` offset), and equality between the epoch and parsed ISO
+instant before they enter the lineage graph. Duplicate commit headers fail before delta mapping.
+The four-digit ISO year and 12-digit epoch cap explicitly define the supported timestamp domain.
 
 An ordinary merge omitted by `diff-tree` without `-m` is represented as the same empty change set
 returned by the former per-commit invocation.
@@ -52,12 +53,12 @@ returned by the former per-commit invocation.
 - Initial optimized candidate: exit 0, 23.237 seconds. After the independent assurance
   counterexamples were remediated, the first successor completed in 21.156 seconds. After the R2
   status/topology counterexamples were closed and the exact grammar/header controls added, the
-  final successor completed in 22.666 seconds (9.2 times faster than baseline and below the
+  final successor completed in 21.406 seconds (9.7 times faster than baseline and below the
   repository's 60-second intervention threshold).
 - Both runs emitted the same five records, fields, order, and values, headed by
   `docs/SESSION_HANDOVER_2026-10-12_THREAD_TODO.md` at commit
   `160f25d5d625436caa4c8c6ae47fab518c0eb87f`.
-- The resolver and changelog-focused suite: 88 passed. Existing hostile cases cover correction of
+- The resolver and changelog-focused suite: 93 passed. Existing hostile cases cover correction of
   an old record, staged/untracked/deleted/ignored records, delete/re-add ambiguity, rename into and
   within the family, copies, hostile filenames, newest timestamp ties, backdated descendants,
   incomparable introductions, and shallow history.
