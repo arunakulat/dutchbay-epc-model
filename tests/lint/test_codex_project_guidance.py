@@ -8,6 +8,9 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Callable, Protocol, cast
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 AGENTS_FILE = REPO_ROOT / "AGENTS.md"
@@ -78,7 +81,21 @@ def test_codex_guidance_preserves_required_safety_and_quality_gates() -> None:
 RESOLVER_SCRIPT = REPO_ROOT / "scripts/list_session_handover_records.py"
 
 
-def _load_resolver_module() -> object:
+class _ResolverModule(Protocol):
+    """Typed surface used from the dynamically loaded resolver module."""
+
+    ResolutionError: type[RuntimeError]
+    _git_bytes: Callable[..., bytes]
+    _git_bytes_input: Callable[..., bytes]
+
+    def _commit_deltas(
+        self, headers: tuple[tuple[str, str, str], ...]
+    ) -> dict[str, object]: ...
+
+    def main(self) -> int: ...
+
+
+def _load_resolver_module() -> _ResolverModule:
     """Load the resolver so a test can count its Git history subprocesses."""
     spec = importlib.util.spec_from_file_location(
         "handover_resolver_test", RESOLVER_SCRIPT
@@ -87,7 +104,7 @@ def _load_resolver_module() -> object:
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    return module
+    return cast(_ResolverModule, module)
 
 
 def _session_continuity_section() -> str:
@@ -177,7 +194,9 @@ def test_handover_resolver_orders_by_introduction_not_last_touch(
 
 
 def test_handover_resolver_batches_history_subprocesses(
-    tmp_path: Path, monkeypatch, capsys
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """Many records must share one history query and one diff-tree traversal."""
     repo = tmp_path / "repo"
@@ -216,12 +235,83 @@ def test_handover_resolver_batches_history_subprocesses(
 
     assert resolver.main() == 0
     capsys.readouterr()
-    history_calls = [args for args in byte_calls if args[0] == "log"]
+    history_calls = [args for args in byte_calls if "log" in args]
     diff_calls = [args for args in input_calls if args[0] == "diff-tree"]
     assert len(history_calls) == 1
     assert "--follow" not in history_calls[0]
     assert len(diff_calls) == 1
     assert "--stdin" in diff_calls[0]
+
+
+def test_handover_resolver_treats_discovered_paths_as_literal(tmp_path: Path) -> None:
+    """Pathspec-magic predecessors must not hide repeated family entry."""
+    repo = tmp_path / "repo"
+    docs = repo / "docs"
+    docs.mkdir(parents=True)
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "Resolver Test")
+    _git(repo, "config", "user.email", "resolver@example.invalid")
+
+    first = docs / "H01_HANDOVER.md"
+    first.write_text("lineage\n", encoding="utf-8")
+    _git(repo, "add", first.relative_to(repo).as_posix())
+    _commit(repo, "docs: add first family entry", "2026-01-01T00:00:00+00:00")
+
+    magic = repo / ":(exclude)*"
+    first.rename(magic)
+    _git(
+        repo,
+        "--literal-pathspecs",
+        "add",
+        "-A",
+        "--",
+        "docs/H01_HANDOVER.md",
+        magic.name,
+    )
+    _commit(repo, "docs: leave family", "2026-01-02T00:00:00+00:00")
+
+    returned = docs / "H02_HANDOVER.md"
+    magic.rename(returned)
+    _git(
+        repo,
+        "--literal-pathspecs",
+        "add",
+        "-A",
+        "--",
+        magic.name,
+        returned.relative_to(repo).as_posix(),
+    )
+    _commit(repo, "docs: re-enter family", "2026-01-03T00:00:00+00:00")
+
+    result = _run_resolver(repo)
+    assert result.returncode == 2
+    assert "multiple handover-family entries found" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("status", "fields"),
+    ((b"A", ()), (b"R100", (b"docs/old.md",)), (b"C100", (b"docs/old.md",))),
+)
+def test_handover_resolver_rejects_truncated_name_status_frames(
+    monkeypatch: pytest.MonkeyPatch,
+    status: bytes,
+    fields: tuple[bytes, ...],
+) -> None:
+    """A/R/C records must contain every non-empty pathname before termination."""
+    resolver = _load_resolver_module()
+    commit_sha = "a" * 40
+    malformed = b"\0" + commit_sha.encode("ascii") + b"\0\n" + status + b"\0"
+    malformed += b"\0".join(fields) + (b"\0" if fields else b"")
+
+    def injected_output(stdin: bytes, *args: str) -> bytes:
+        assert stdin == f"{commit_sha}\n".encode("ascii")
+        assert "diff-tree" in args
+        return malformed
+
+    monkeypatch.setattr(resolver, "_git_bytes_input", injected_output)
+    headers = ((commit_sha, "0", "1970-01-01T00:00:00+00:00"),)
+    with pytest.raises(resolver.ResolutionError, match="malformed NUL-framed"):
+        resolver._commit_deltas(headers)
 
 
 def test_handover_resolver_rejects_untracked_and_staged_records(

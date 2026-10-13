@@ -27,18 +27,25 @@ the work:
 4. a rename to a predecessor path outside the first batch triggers a bounded follow-up batch, so
    entry from outside the family and delete/re-add ambiguity semantics are retained.
 
+Every dynamically discovered predecessor is passed under Git's global
+`--literal-pathspecs` option. This prevents a valid filename such as `:(exclude)*` from changing
+the query rather than identifying its own history. Batched name-status parsing also rejects empty
+pathname fields, so a truncated add, rename, or copy frame cannot consume the stream terminator as
+a filename.
+
 An ordinary merge omitted by `diff-tree` without `-m` is represented as the same empty change set
 returned by the former per-commit invocation.
 
 ## Evidence
 
 - Pre-change canonical resolver: exit 0, 207.646 seconds.
-- Post-change canonical resolver: exit 0, 23.237 seconds (8.9 times faster and below the repository's
-  60-second intervention threshold).
+- Initial optimized candidate: exit 0, 23.237 seconds. After the independent assurance
+  counterexamples were remediated, the successor completed in 21.156 seconds (9.8 times faster
+  than baseline and below the repository's 60-second intervention threshold).
 - Both runs emitted the same five records, fields, order, and values, headed by
   `docs/SESSION_HANDOVER_2026-10-12_THREAD_TODO.md` at commit
   `160f25d5d625436caa4c8c6ae47fab518c0eb87f`.
-- `tests/lint/test_codex_project_guidance.py`: 16 passed. Existing hostile cases cover correction of
+- `tests/lint/test_codex_project_guidance.py`: 20 passed. Existing hostile cases cover correction of
   an old record, staged/untracked/deleted/ignored records, delete/re-add ambiguity, rename into and
   within the family, copies, hostile filenames, newest timestamp ties, backdated descendants,
   incomparable introductions, and shallow history.
@@ -46,6 +53,10 @@ returned by the former per-commit invocation.
   successful resolver uses one shared history query and one `diff-tree --stdin` traversal. The
   previous per-record implementation violates both bounds, so the check is a non-wall-clock
   negative control rather than a timing assertion vulnerable to shared-runner noise.
+- Independent assurance counterexamples are retained as regressions: a
+  family-to-literal-pathspec-to-family lineage must remain ambiguous, and truncated `A`, `R`, and
+  `C` NUL-framed records must fail closed. The exact type check covers both changed Python files:
+  `mypy scripts/list_session_handover_records.py tests/lint/test_codex_project_guidance.py`.
 
 ## Limitations
 

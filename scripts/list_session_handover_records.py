@@ -174,6 +174,7 @@ def _looks_like_near_family(path: str) -> bool:
 def _history_headers(paths: set[str]) -> tuple[tuple[str, str, str], ...]:
     """Return commit metadata for every commit touching any requested path."""
     history = _git_bytes(
+        "--literal-pathspecs",
         "log",
         "--full-history",
         "-z",
@@ -245,9 +246,10 @@ def _commit_deltas(
             width = 3 if status.startswith(("R", "C")) else 2
             if not status or cursor + width > len(tokens):
                 raise ResolutionError("malformed NUL-framed batched lineage")
-            names = tuple(
-                os.fsdecode(field) for field in tokens[cursor + 1 : cursor + width]
-            )
+            name_fields = tokens[cursor + 1 : cursor + width]
+            if any(not field for field in name_fields):
+                raise ResolutionError("malformed NUL-framed batched lineage")
+            names = tuple(os.fsdecode(field) for field in name_fields)
             changes.append(CommitChange(status, names))
             cursor += width
         if commit_sha not in header_by_sha or commit_sha in deltas:
