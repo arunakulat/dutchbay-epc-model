@@ -14,6 +14,7 @@ import subprocess
 import sys
 import unicodedata
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 RECORD_PREFIX_EXPRESSION = r"(?:SESSION_HANDOVER_|H[0-9]+_(?:HANDOVER|DELIVERY_))"
@@ -66,10 +67,28 @@ def _valid_name_status(status: str) -> bool:
     """Return whether status matches this command's name-status grammar."""
     if status in SINGLE_PATH_STATUSES:
         return True
-    if status[:1] not in {"C", "R"}:
+    if len(status) != 4 or status[:1] not in {"C", "R"}:
         return False
     score = status[1:]
-    return score.isascii() and score.isdigit() and 0 <= int(score) <= 100
+    return score.isascii() and score.isdigit() and 1 <= int(score) <= 100
+
+
+def _object_id_length() -> int:
+    """Return the full object-ID length for the active repository."""
+    object_format = _git("rev-parse", "--show-object-format").strip()
+    try:
+        return {"sha1": 40, "sha256": 64}[object_format]
+    except KeyError as exc:
+        raise ResolutionError(
+            f"unsupported Git object format: {object_format!r}"
+        ) from exc
+
+
+def _valid_object_id(value: str, expected_length: int) -> bool:
+    """Return whether value is a full lowercase hexadecimal object ID."""
+    return len(value) == expected_length and all(
+        character in "0123456789abcdef" for character in value
+    )
 
 
 def _git(*args: str) -> str:
@@ -199,13 +218,31 @@ def _history_headers(paths: set[str]) -> tuple[tuple[str, str, str], ...]:
         metadata.pop()
     if len(metadata) % 3:
         raise ResolutionError("malformed NUL-framed batched history metadata")
+    object_id_length = _object_id_length()
     headers: list[tuple[str, str, str]] = []
     for offset in range(0, len(metadata), 3):
         try:
-            fields = [field.decode("ascii") for field in metadata[offset : offset + 3]]
-            headers.append((fields[0], fields[1], fields[2]))
+            commit_sha, epoch_text, iso_date = (
+                field.decode("ascii") for field in metadata[offset : offset + 3]
+            )
         except UnicodeDecodeError as exc:
             raise ResolutionError("malformed batched lineage header") from exc
+        if not _valid_object_id(commit_sha, object_id_length):
+            raise ResolutionError("malformed batched lineage commit object ID")
+        if (
+            not epoch_text
+            or len(epoch_text) > 20
+            or not epoch_text.isascii()
+            or not epoch_text.isdigit()
+        ):
+            raise ResolutionError("malformed batched lineage epoch")
+        try:
+            parsed_date = datetime.fromisoformat(iso_date)
+        except ValueError as exc:
+            raise ResolutionError("malformed batched lineage ISO timestamp") from exc
+        if not iso_date or parsed_date.tzinfo is None:
+            raise ResolutionError("malformed batched lineage ISO timestamp")
+        headers.append((commit_sha, epoch_text, iso_date))
     return tuple(headers)
 
 
@@ -230,6 +267,12 @@ def _commit_deltas(
         "--pretty=format:%x00%H%x00",
     )
     header_by_sha = {sha: (epoch, iso) for sha, epoch, iso in headers}
+    object_id_length = _object_id_length()
+    if any(
+        not _valid_object_id(commit_sha, object_id_length)
+        for commit_sha in header_by_sha
+    ):
+        raise ResolutionError("malformed batched lineage commit object ID")
     tokens = output.split(b"\0")
     deltas: dict[str, CommitDelta] = {}
     cursor = 0
@@ -284,7 +327,16 @@ def _commit_deltas(
             fields = line.split()
             if not fields or fields[0] in parent_counts:
                 raise ResolutionError("malformed missing-commit topology")
-            parent_counts[fields[0]] = len(fields) - 1
+            subject, *parents = fields
+            if (
+                not _valid_object_id(subject, object_id_length)
+                or any(
+                    not _valid_object_id(parent, object_id_length) for parent in parents
+                )
+                or len(set(parents)) != len(parents)
+            ):
+                raise ResolutionError("malformed missing-commit topology")
+            parent_counts[subject] = len(parents)
         if parent_counts.keys() != missing_commits:
             raise ResolutionError("incomplete missing-commit topology")
     for commit_sha in missing_commits:

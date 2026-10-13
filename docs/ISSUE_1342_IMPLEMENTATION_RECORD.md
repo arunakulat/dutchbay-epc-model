@@ -34,10 +34,12 @@ pathname fields, so a truncated add, rename, or copy frame cannot consume the st
 a filename.
 
 The parser accepts only the status grammar emitted by the selected `diff-tree --name-status`
-options: single-letter `A`, `D`, `M`, `T`, `U`, `X`, or `B`, and scored `C`/`R` values from 0 through
-100. An expected commit absent from batched stdout is represented as an empty delta only after a
-separate `rev-list --parents` query proves that commit has at least two parents. Missing non-merge
-frames and incomplete topology fail closed.
+options: single-letter `A`, `D`, `M`, `T`, `U`, `X`, or `B`, and fixed-width scored `C`/`R` values
+from `001` through `100`. An expected commit absent from batched stdout is represented as an empty
+delta only after a separate `rev-list --parents` query proves that commit has at least two distinct
+full object-ID parents in the active repository format. Missing non-merge frames and malformed or
+incomplete topology fail closed. History headers likewise require a full object ID, a bounded
+numeric epoch, and a parseable timezone-aware ISO timestamp before they enter the lineage graph.
 
 An ordinary merge omitted by `diff-tree` without `-m` is represented as the same empty change set
 returned by the former per-commit invocation.
@@ -47,12 +49,13 @@ returned by the former per-commit invocation.
 - Pre-change canonical resolver: exit 0, 207.646 seconds.
 - Initial optimized candidate: exit 0, 23.237 seconds. After the independent assurance
   counterexamples were remediated, the first successor completed in 21.156 seconds. After the R2
-  status/topology counterexamples were closed, the final successor completed in 14.895 seconds
-  (13.9 times faster than baseline and below the repository's 60-second intervention threshold).
+  status/topology counterexamples were closed and the exact grammar/header controls added, the
+  final successor completed in 20.541 seconds (10.1 times faster than baseline and below the
+  repository's 60-second intervention threshold).
 - Both runs emitted the same five records, fields, order, and values, headed by
   `docs/SESSION_HANDOVER_2026-10-12_THREAD_TODO.md` at commit
   `160f25d5d625436caa4c8c6ae47fab518c0eb87f`.
-- The resolver and changelog-focused suite: 54 passed. Existing hostile cases cover correction of
+- The resolver and changelog-focused suite: 81 passed. Existing hostile cases cover correction of
   an old record, staged/untracked/deleted/ignored records, delete/re-add ambiguity, rename into and
   within the family, copies, hostile filenames, newest timestamp ties, backdated descendants,
   incomparable introductions, and shallow history.

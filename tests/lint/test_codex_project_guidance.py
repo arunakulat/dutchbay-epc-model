@@ -95,6 +95,10 @@ class _ResolverModule(Protocol):
     _git_bytes: Callable[..., bytes]
     _git_bytes_input: Callable[..., bytes]
 
+    def _history_headers(self, paths: set[str]) -> tuple[tuple[str, str, str], ...]: ...
+
+    def _valid_name_status(self, status: str) -> bool: ...
+
     def _commit_deltas(
         self, headers: tuple[tuple[str, str, str], ...]
     ) -> dict[str, _CommitDeltaView]: ...
@@ -321,7 +325,23 @@ def test_handover_resolver_rejects_truncated_name_status_frames(
         resolver._commit_deltas(headers)
 
 
-@pytest.mark.parametrize("status", (b"A100", b"Rabc", b"R101", b"C999", b"Q"))
+@pytest.mark.parametrize(
+    "status",
+    (
+        b"A100",
+        b"Rabc",
+        b"R0",
+        b"R00",
+        b"R000",
+        b"R0000",
+        b"R0100",
+        b"R101",
+        b"C0001",
+        b"C999",
+        b"Q",
+        b"R" + b"9" * 5000,
+    ),
+)
 def test_handover_resolver_rejects_malformed_nonempty_statuses(
     monkeypatch: pytest.MonkeyPatch,
     status: bytes,
@@ -343,6 +363,15 @@ def test_handover_resolver_rejects_malformed_nonempty_statuses(
         resolver._commit_deltas(headers)
 
 
+@pytest.mark.parametrize(
+    "status", ("A", "D", "M", "T", "U", "X", "B", "C001", "C100", "R001", "R100")
+)
+def test_handover_resolver_accepts_exact_name_status_grammar(status: str) -> None:
+    """Selected diff-tree status forms have fixed width and bounded scores."""
+    resolver = _load_resolver_module()
+    assert resolver._valid_name_status(status)
+
+
 def test_handover_resolver_rejects_missing_nonmerge_commit_frame(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -354,11 +383,13 @@ def test_handover_resolver_rejects_missing_nonmerge_commit_frame(
     visible = b"\0" + new_sha.encode() + b"\0\nA\0docs/H02_HANDOVER.md\0\0"
 
     monkeypatch.setattr(resolver, "_git_bytes_input", lambda stdin, *args: visible)
-    monkeypatch.setattr(
-        resolver,
-        "_git",
-        lambda *args: f"{old_sha} {parent_sha}\n",
-    )
+
+    def injected_git(*args: str) -> str:
+        if args[:2] == ("rev-parse", "--show-object-format"):
+            return "sha1\n"
+        return f"{old_sha} {parent_sha}\n"
+
+    monkeypatch.setattr(resolver, "_git", injected_git)
     headers = (
         (new_sha, "2", "1970-01-01T00:00:02+00:00"),
         (old_sha, "1", "1970-01-01T00:00:01+00:00"),
@@ -376,14 +407,81 @@ def test_handover_resolver_allows_missing_proven_merge_frame(
     parent_one = "b" * 40
     parent_two = "c" * 40
     monkeypatch.setattr(resolver, "_git_bytes_input", lambda stdin, *args: b"")
-    monkeypatch.setattr(
-        resolver,
-        "_git",
-        lambda *args: f"{merge_sha} {parent_one} {parent_two}\n",
-    )
+
+    def injected_git(*args: str) -> str:
+        if args[:2] == ("rev-parse", "--show-object-format"):
+            return "sha1\n"
+        return f"{merge_sha} {parent_one} {parent_two}\n"
+
+    monkeypatch.setattr(resolver, "_git", injected_git)
     headers = ((merge_sha, "0", "1970-01-01T00:00:00+00:00"),)
     deltas = resolver._commit_deltas(headers)
     assert deltas[merge_sha].changes == ()
+
+
+@pytest.mark.parametrize("topology_kind", ("nonhex", "duplicate", "extra"))
+def test_handover_resolver_rejects_malformed_merge_topology(
+    monkeypatch: pytest.MonkeyPatch,
+    topology_kind: str,
+) -> None:
+    """Only distinct full object IDs can prove an omitted merge frame."""
+    resolver = _load_resolver_module()
+    merge_sha = "a" * 40
+    parent_one = "b" * 40
+    parent_two = "c" * 40
+    topology = {
+        "nonhex": f"{merge_sha} x y\n",
+        "duplicate": f"{merge_sha} {parent_one} {parent_one}\n",
+        "extra": f"{merge_sha} {parent_one} {parent_two} junk\n",
+    }[topology_kind]
+    monkeypatch.setattr(resolver, "_git_bytes_input", lambda stdin, *args: b"")
+
+    def injected_git(*args: str) -> str:
+        if args[:2] == ("rev-parse", "--show-object-format"):
+            return "sha1\n"
+        return topology
+
+    monkeypatch.setattr(resolver, "_git", injected_git)
+    headers = ((merge_sha, "0", "1970-01-01T00:00:00+00:00"),)
+    with pytest.raises(
+        resolver.ResolutionError, match="malformed missing-commit topology"
+    ):
+        resolver._commit_deltas(headers)
+
+
+@pytest.mark.parametrize(
+    ("commit_sha", "epoch", "iso_date"),
+    (
+        ("", "1", "1970-01-01T00:00:00+00:00"),
+        ("abc", "1", "1970-01-01T00:00:00+00:00"),
+        ("a" * 40, "", "1970-01-01T00:00:00+00:00"),
+        ("a" * 40, "not-a-number", "1970-01-01T00:00:00+00:00"),
+        ("a" * 40, "1", ""),
+        ("a" * 40, "1", "1970-01-01T00:00:00"),
+    ),
+)
+def test_handover_resolver_rejects_malformed_history_headers(
+    monkeypatch: pytest.MonkeyPatch,
+    commit_sha: str,
+    epoch: str,
+    iso_date: str,
+) -> None:
+    """History metadata must be complete before it can authorize output."""
+    resolver = _load_resolver_module()
+    payload = (
+        b"\0".join(
+            (
+                commit_sha.encode("ascii"),
+                epoch.encode("ascii"),
+                iso_date.encode("ascii"),
+            )
+        )
+        + b"\0"
+    )
+    monkeypatch.setattr(resolver, "_git_bytes", lambda *args: payload)
+    monkeypatch.setattr(resolver, "_git", lambda *args: "sha1\n")
+    with pytest.raises(resolver.ResolutionError, match="malformed batched lineage"):
+        resolver._history_headers({"docs/H01_HANDOVER.md"})
 
 
 def test_handover_resolver_rejects_untracked_and_staged_records(
