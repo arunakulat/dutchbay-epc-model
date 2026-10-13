@@ -27,6 +27,7 @@ NEAR_FAMILY_SHAPE = re.compile(
     re.DOTALL,
 )
 DISPLAY_LIMIT = 5
+SINGLE_PATH_STATUSES = frozenset({"A", "D", "M", "T", "U", "X", "B"})
 
 
 class ResolutionError(RuntimeError):
@@ -59,6 +60,16 @@ class CommitDelta:
     iso_date: str
     commit_sha: str
     changes: tuple[CommitChange, ...]
+
+
+def _valid_name_status(status: str) -> bool:
+    """Return whether status matches this command's name-status grammar."""
+    if status in SINGLE_PATH_STATUSES:
+        return True
+    if status[:1] not in {"C", "R"}:
+        return False
+    score = status[1:]
+    return score.isascii() and score.isdigit() and 0 <= int(score) <= 100
 
 
 def _git(*args: str) -> str:
@@ -243,6 +254,8 @@ def _commit_deltas(
                 status = status_field.decode("ascii", errors="strict")
             except UnicodeDecodeError as exc:
                 raise ResolutionError("malformed batched lineage status") from exc
+            if not _valid_name_status(status):
+                raise ResolutionError(f"malformed batched lineage status: {status!r}")
             width = 3 if status.startswith(("R", "C")) else 2
             if not status or cursor + width > len(tokens):
                 raise ResolutionError("malformed NUL-framed batched lineage")
@@ -258,9 +271,29 @@ def _commit_deltas(
         deltas[commit_sha] = CommitDelta(
             epoch_text, iso_date, commit_sha, tuple(changes)
         )
-    for commit_sha in header_by_sha.keys() - deltas.keys():
-        # ``diff-tree`` emits no record for an ordinary merge without ``-m``;
-        # the former per-commit invocation likewise returned no changes.
+    missing_commits = header_by_sha.keys() - deltas.keys()
+    parent_counts: dict[str, int] = {}
+    if missing_commits:
+        topology = _git(
+            "rev-list",
+            "--parents",
+            "--no-walk=unsorted",
+            *sorted(missing_commits),
+        )
+        for line in topology.splitlines():
+            fields = line.split()
+            if not fields or fields[0] in parent_counts:
+                raise ResolutionError("malformed missing-commit topology")
+            parent_counts[fields[0]] = len(fields) - 1
+        if parent_counts.keys() != missing_commits:
+            raise ResolutionError("incomplete missing-commit topology")
+    for commit_sha in missing_commits:
+        # ``diff-tree`` emits no record for a merge without ``-m``. Prove the
+        # topology before representing that known omission as an empty delta.
+        if parent_counts[commit_sha] < 2:
+            raise ResolutionError(
+                f"missing non-merge batched lineage commit: {commit_sha}"
+            )
         epoch_text, iso_date = header_by_sha[commit_sha]
         deltas[commit_sha] = CommitDelta(epoch_text, iso_date, commit_sha, ())
     return deltas

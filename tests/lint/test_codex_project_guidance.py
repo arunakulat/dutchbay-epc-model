@@ -81,16 +81,23 @@ def test_codex_guidance_preserves_required_safety_and_quality_gates() -> None:
 RESOLVER_SCRIPT = REPO_ROOT / "scripts/list_session_handover_records.py"
 
 
+class _CommitDeltaView(Protocol):
+    """Test-visible portion of one dynamically loaded commit delta."""
+
+    changes: tuple[object, ...]
+
+
 class _ResolverModule(Protocol):
     """Typed surface used from the dynamically loaded resolver module."""
 
     ResolutionError: type[RuntimeError]
+    _git: Callable[..., str]
     _git_bytes: Callable[..., bytes]
     _git_bytes_input: Callable[..., bytes]
 
     def _commit_deltas(
         self, headers: tuple[tuple[str, str, str], ...]
-    ) -> dict[str, object]: ...
+    ) -> dict[str, _CommitDeltaView]: ...
 
     def main(self) -> int: ...
 
@@ -312,6 +319,71 @@ def test_handover_resolver_rejects_truncated_name_status_frames(
     headers = ((commit_sha, "0", "1970-01-01T00:00:00+00:00"),)
     with pytest.raises(resolver.ResolutionError, match="malformed NUL-framed"):
         resolver._commit_deltas(headers)
+
+
+@pytest.mark.parametrize("status", (b"A100", b"Rabc", b"R101", b"C999", b"Q"))
+def test_handover_resolver_rejects_malformed_nonempty_statuses(
+    monkeypatch: pytest.MonkeyPatch,
+    status: bytes,
+) -> None:
+    """Unexpected status grammar must not silently erase an introduction."""
+    resolver = _load_resolver_module()
+    commit_sha = "a" * 40
+    width = 2 if status.startswith((b"R", b"C")) else 1
+    names = b"\0".join(f"docs/name-{index}.md".encode() for index in range(width))
+    malformed = (
+        b"\0" + commit_sha.encode("ascii") + b"\0\n" + status + b"\0" + names + b"\0\0"
+    )
+
+    monkeypatch.setattr(resolver, "_git_bytes_input", lambda stdin, *args: malformed)
+    headers = ((commit_sha, "0", "1970-01-01T00:00:00+00:00"),)
+    with pytest.raises(
+        resolver.ResolutionError, match="malformed batched lineage status"
+    ):
+        resolver._commit_deltas(headers)
+
+
+def test_handover_resolver_rejects_missing_nonmerge_commit_frame(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing expected frame is empty only after merge topology is proven."""
+    resolver = _load_resolver_module()
+    old_sha = "a" * 40
+    new_sha = "b" * 40
+    parent_sha = "c" * 40
+    visible = b"\0" + new_sha.encode() + b"\0\nA\0docs/H02_HANDOVER.md\0\0"
+
+    monkeypatch.setattr(resolver, "_git_bytes_input", lambda stdin, *args: visible)
+    monkeypatch.setattr(
+        resolver,
+        "_git",
+        lambda *args: f"{old_sha} {parent_sha}\n",
+    )
+    headers = (
+        (new_sha, "2", "1970-01-01T00:00:02+00:00"),
+        (old_sha, "1", "1970-01-01T00:00:01+00:00"),
+    )
+    with pytest.raises(resolver.ResolutionError, match="missing non-merge"):
+        resolver._commit_deltas(headers)
+
+
+def test_handover_resolver_allows_missing_proven_merge_frame(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ordinary merges omitted by diff-tree remain explicit empty deltas."""
+    resolver = _load_resolver_module()
+    merge_sha = "a" * 40
+    parent_one = "b" * 40
+    parent_two = "c" * 40
+    monkeypatch.setattr(resolver, "_git_bytes_input", lambda stdin, *args: b"")
+    monkeypatch.setattr(
+        resolver,
+        "_git",
+        lambda *args: f"{merge_sha} {parent_one} {parent_two}\n",
+    )
+    headers = ((merge_sha, "0", "1970-01-01T00:00:00+00:00"),)
+    deltas = resolver._commit_deltas(headers)
+    assert deltas[merge_sha].changes == ()
 
 
 def test_handover_resolver_rejects_untracked_and_staged_records(
