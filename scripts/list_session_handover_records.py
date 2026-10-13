@@ -29,6 +29,9 @@ NEAR_FAMILY_SHAPE = re.compile(
 )
 DISPLAY_LIMIT = 5
 SINGLE_PATH_STATUSES = frozenset({"A", "D", "M", "T", "U", "X", "B"})
+GIT_STRICT_ISO_PATTERN = re.compile(
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:Z|[+-][0-9]{2}:[0-9]{2})$"
+)
 
 
 class ResolutionError(RuntimeError):
@@ -220,6 +223,7 @@ def _history_headers(paths: set[str]) -> tuple[tuple[str, str, str], ...]:
         raise ResolutionError("malformed NUL-framed batched history metadata")
     object_id_length = _object_id_length()
     headers: list[tuple[str, str, str]] = []
+    seen_commits: set[str] = set()
     for offset in range(0, len(metadata), 3):
         try:
             commit_sha, epoch_text, iso_date = (
@@ -231,17 +235,26 @@ def _history_headers(paths: set[str]) -> tuple[tuple[str, str, str], ...]:
             raise ResolutionError("malformed batched lineage commit object ID")
         if (
             not epoch_text
-            or len(epoch_text) > 20
+            or len(epoch_text) > 12
             or not epoch_text.isascii()
             or not epoch_text.isdigit()
         ):
             raise ResolutionError("malformed batched lineage epoch")
-        try:
-            parsed_date = datetime.fromisoformat(iso_date)
-        except ValueError as exc:
-            raise ResolutionError("malformed batched lineage ISO timestamp") from exc
-        if not iso_date or parsed_date.tzinfo is None:
+        if GIT_STRICT_ISO_PATTERN.fullmatch(iso_date) is None:
             raise ResolutionError("malformed batched lineage ISO timestamp")
+        try:
+            parsed_date = datetime.strptime(iso_date, "%Y-%m-%dT%H:%M:%S%z")
+            iso_epoch = int(parsed_date.timestamp())
+            epoch = int(epoch_text)
+        except (OSError, OverflowError, ValueError) as exc:
+            raise ResolutionError("malformed batched lineage ISO timestamp") from exc
+        if iso_epoch != epoch:
+            raise ResolutionError(
+                "malformed batched lineage timestamps: contradictory epoch and ISO"
+            )
+        if commit_sha in seen_commits:
+            raise ResolutionError(f"duplicate batched lineage commit: {commit_sha}")
+        seen_commits.add(commit_sha)
         headers.append((commit_sha, epoch_text, iso_date))
     return tuple(headers)
 

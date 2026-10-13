@@ -458,6 +458,11 @@ def test_handover_resolver_rejects_malformed_merge_topology(
         ("a" * 40, "not-a-number", "1970-01-01T00:00:00+00:00"),
         ("a" * 40, "1", ""),
         ("a" * 40, "1", "1970-01-01T00:00:00"),
+        ("a" * 40, "1", "2099-01-01T00:00:00+00:00"),
+        ("a" * 40, "1", "1970-01-01 00:00:01+00:00"),
+        ("a" * 40, "1", "1970-01-01T00:00:01+0000"),
+        ("a" * 40, "1", "1970-01-01T00:00:01.999999+00:00"),
+        ("a" * 40, "99999999999999999999", "1970-01-01T00:00:01+00:00"),
     ),
 )
 def test_handover_resolver_rejects_malformed_history_headers(
@@ -481,6 +486,35 @@ def test_handover_resolver_rejects_malformed_history_headers(
     monkeypatch.setattr(resolver, "_git_bytes", lambda *args: payload)
     monkeypatch.setattr(resolver, "_git", lambda *args: "sha1\n")
     with pytest.raises(resolver.ResolutionError, match="malformed batched lineage"):
+        resolver._history_headers({"docs/H01_HANDOVER.md"})
+
+
+def test_handover_resolver_accepts_reconciled_strict_history_header(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Canonical Git epoch and strict ISO representations identify one instant."""
+    resolver = _load_resolver_module()
+    commit_sha = "a" * 40
+    payload = commit_sha.encode() + b"\0" + b"1\0" + b"1970-01-01T00:00:01+00:00\0"
+    monkeypatch.setattr(resolver, "_git_bytes", lambda *args: payload)
+    monkeypatch.setattr(resolver, "_git", lambda *args: "sha1\n")
+    assert resolver._history_headers({"docs/H01_HANDOVER.md"}) == (
+        (commit_sha, "1", "1970-01-01T00:00:01+00:00"),
+    )
+
+
+def test_handover_resolver_rejects_duplicate_history_subjects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repeated headers must not collapse before omitted-frame validation."""
+    resolver = _load_resolver_module()
+    commit_sha = "a" * 40
+    header = commit_sha.encode() + b"\0" + b"1\0" + b"1970-01-01T00:00:01+00:00\0"
+    monkeypatch.setattr(resolver, "_git_bytes", lambda *args: header + header)
+    monkeypatch.setattr(resolver, "_git", lambda *args: "sha1\n")
+    with pytest.raises(
+        resolver.ResolutionError, match="duplicate batched lineage commit"
+    ):
         resolver._history_headers({"docs/H01_HANDOVER.md"})
 
 
