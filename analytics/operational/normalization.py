@@ -553,6 +553,27 @@ class OperationalNormalizationResult:
             raise ValueError(
                 "normalization method digest does not match retained inputs."
             )
+        replay = _normalize_operational_csv_artifacts(
+            self.source_bytes,
+            self.evidence,
+            lineage_source_bytes=self.lineage_source_bytes,
+            derivation_method_bytes=self.derivation_method_bytes,
+            timezone_rules=self.timezone_rules,
+            group_universe=self.group_universe,
+            column_exclusions=self.receipt.column_exclusions,
+            row_exclusions=tuple(
+                OperationalRowExclusion(item.source_row_number, item.reason)
+                for item in self.receipt.row_exclusions
+            ),
+        )
+        if (
+            self.normalized_csv_bytes != replay.normalized_csv_bytes
+            or self.normalized_rows != replay.normalized_rows
+            or self.receipt != replay.receipt
+        ):
+            raise ValueError(
+                "normalization result does not reproduce from retained source inputs."
+            )
 
 
 @dataclass(frozen=True)
@@ -861,6 +882,15 @@ class _ParsedRow:
     group_key: str
 
 
+@dataclass(frozen=True)
+class _NormalizationArtifacts:
+    """Internal deterministic output replayed by result construction."""
+
+    normalized_csv_bytes: bytes
+    normalized_rows: tuple[tuple[str, ...], ...]
+    receipt: OperationalQualityReceipt
+
+
 def _require_closed_text(value: object, field_name: str) -> str:
     if (
         not isinstance(value, str)
@@ -942,7 +972,13 @@ def _normalization_method_sha(
 
 def _format_utc(value: datetime) -> str:
     value = value.astimezone(timezone.utc)
-    base = value.strftime("%Y-%m-%dT%H:%M:%S")
+    # ``strftime("%Y")`` is platform-dependent for years below 1000.  D1
+    # admits the complete RFC 3339 four-digit year range, so render every
+    # component explicitly instead of relying on the host C library.
+    base = (
+        f"{value.year:04d}-{value.month:02d}-{value.day:02d}T"
+        f"{value.hour:02d}:{value.minute:02d}:{value.second:02d}"
+    )
     if value.microsecond:
         base += f".{value.microsecond:06d}".rstrip("0")
     return base + "Z"
@@ -1283,10 +1319,19 @@ def _timeseries_group_quality(
                     "TIMEZONE_NORMALIZATION_FAILED",
                     "calendar-month named-zone QA requires supplied TZif rules.",
                 )
-            declared_start_wall = declared_start.astimezone(named_zone).replace(
-                tzinfo=None
-            )
-            declared_end_wall = declared_end.astimezone(named_zone).replace(tzinfo=None)
+            try:
+                declared_start_wall = declared_start.astimezone(named_zone).replace(
+                    tzinfo=None
+                )
+                declared_end_wall = declared_end.astimezone(named_zone).replace(
+                    tzinfo=None
+                )
+            except (OverflowError, ValueError) as exc:
+                raise OperationalNormalizationError(
+                    "TIMEZONE_NORMALIZATION_FAILED",
+                    "declared calendar coverage falls outside the supplied "
+                    "timezone's representable datetime range.",
+                ) from exc
         else:
             declared_start_wall = declared_start.replace(tzinfo=None)
             declared_end_wall = declared_end.replace(tzinfo=None)
@@ -1437,7 +1482,7 @@ def _initial_receipt(
     )
 
 
-def normalize_operational_csv(
+def _normalize_operational_csv_artifacts(
     source_bytes: bytes,
     evidence: OperationalDatasetEvidence,
     *,
@@ -1447,8 +1492,8 @@ def normalize_operational_csv(
     group_universe: OperationalGroupUniverse | None = None,
     column_exclusions: tuple[OperationalColumnExclusion, ...] = (),
     row_exclusions: tuple[OperationalRowExclusion, ...] = (),
-) -> OperationalNormalizationResult:
-    """Verify and normalize one D1-bound UTF-8 CSV artifact.
+) -> _NormalizationArtifacts:
+    """Compute verified normalization artifacts without constructing a result.
 
     Quality failures raise ``OperationalNormalizationError`` with a completed
     receipt.  The caller therefore cannot accidentally consume a defective
@@ -1802,6 +1847,42 @@ def normalize_operational_csv(
             receipt=receipt,
         )
     assert normalized_bytes is not None
+    return _NormalizationArtifacts(
+        normalized_csv_bytes=normalized_bytes,
+        normalized_rows=normalized_rows,
+        receipt=receipt,
+    )
+
+
+def normalize_operational_csv(
+    source_bytes: bytes,
+    evidence: OperationalDatasetEvidence,
+    *,
+    lineage_source_bytes: tuple[bytes, ...] = (),
+    derivation_method_bytes: bytes | None = None,
+    timezone_rules: OperationalTimezoneRules | None = None,
+    group_universe: OperationalGroupUniverse | None = None,
+    column_exclusions: tuple[OperationalColumnExclusion, ...] = (),
+    row_exclusions: tuple[OperationalRowExclusion, ...] = (),
+) -> OperationalNormalizationResult:
+    """Verify and normalize one D1-bound UTF-8 CSV artifact.
+
+    Quality failures raise ``OperationalNormalizationError`` with a completed
+    receipt when tabular inspection is possible.  Successful results replay
+    this deterministic computation during construction so their normalized
+    measurements cannot be substituted independently of retained source bytes.
+    """
+
+    artifacts = _normalize_operational_csv_artifacts(
+        source_bytes,
+        evidence,
+        lineage_source_bytes=lineage_source_bytes,
+        derivation_method_bytes=derivation_method_bytes,
+        timezone_rules=timezone_rules,
+        group_universe=group_universe,
+        column_exclusions=column_exclusions,
+        row_exclusions=row_exclusions,
+    )
     return OperationalNormalizationResult(
         evidence=evidence,
         source_bytes=source_bytes,
@@ -1809,9 +1890,9 @@ def normalize_operational_csv(
         derivation_method_bytes=derivation_method_bytes,
         timezone_rules=timezone_rules,
         group_universe=group_universe,
-        normalized_csv_bytes=normalized_bytes,
-        normalized_rows=normalized_rows,
-        receipt=receipt,
+        normalized_csv_bytes=artifacts.normalized_csv_bytes,
+        normalized_rows=artifacts.normalized_rows,
+        receipt=artifacts.receipt,
         _factory_token=_NORMALIZATION_RESULT_TOKEN,
     )
 

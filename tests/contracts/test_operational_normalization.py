@@ -525,6 +525,47 @@ def test_named_zone_calendar_month_uses_source_wall_calendar() -> None:
     assert result.receipt.interval_drift_count == 0
 
 
+def test_named_zone_lower_year_fixed_cadence_renders_four_digit_utc_year() -> None:
+    data = b"when,energy\n0001-01-01T00:00:00,10\n0001-01-01T00:01:00,11\n"
+    evidence = _meter_evidence(
+        data,
+        start="0001-01-01T00:01:15Z",
+        end="0001-01-01T00:02:15Z",
+        row_count=2,
+        interval_basis="fixed_seconds",
+        interval_seconds=60,
+        timezone_treatment="named_zone_to_utc",
+        source_timezone="Europe/London",
+        ambiguous="reject",
+        nonexistent="reject",
+    )
+    result = normalize_operational_csv(data, evidence, timezone_rules=_timezone_rules())
+    assert result.normalized_rows == (
+        ("0001-01-01T00:01:15Z", "10"),
+        ("0001-01-01T00:02:15Z", "11"),
+    )
+
+
+def test_named_zone_lower_year_calendar_range_failure_is_closed() -> None:
+    data = b"when,energy\n0001-01-01T00:00:00,10\n0001-02-01T00:00:00,11\n"
+    evidence = _meter_evidence(
+        data,
+        start="0001-01-01T00:00:00Z",
+        end="0001-02-01T00:01:15Z",
+        row_count=2,
+        interval_basis="calendar_month",
+        interval_seconds=None,
+        timezone_treatment="named_zone_to_utc",
+        source_timezone="Europe/London",
+        ambiguous="reject",
+        nonexistent="reject",
+    )
+    with pytest.raises(OperationalNormalizationError) as raised:
+        normalize_operational_csv(data, evidence, timezone_rules=_timezone_rules())
+    assert raised.value.code == "TIMEZONE_NORMALIZATION_FAILED"
+    assert raised.value.receipt is None
+
+
 def test_declared_coverage_and_row_count_are_bound_to_receipt_and_method() -> None:
     data = b"when,energy\n2025-01-01T00:00:00Z,1\n2025-01-01T00:00:01Z,2\n"
     first_evidence = _meter_evidence(
@@ -1201,6 +1242,14 @@ def test_normalization_result_rejects_method_and_row_substitution(
             normalized_rows=forged_rows,
             normalized_csv_bytes=forged_bytes,
             receipt=replace(result.receipt, normalized_sha256=_digest(forged_bytes)),
+        )
+    with pytest.raises(ValueError, match="does not reproduce from retained source"):
+        replace(
+            result,
+            normalized_rows=forged_rows,
+            normalized_csv_bytes=forged_bytes,
+            receipt=replace(result.receipt, normalized_sha256=_digest(forged_bytes)),
+            _factory_token=operational_normalization._NORMALIZATION_RESULT_TOKEN,
         )
 
 

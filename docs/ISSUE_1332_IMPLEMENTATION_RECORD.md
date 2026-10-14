@@ -11,8 +11,8 @@ OpenOA v3.2 at commit `35e8a52c4cd8f43223f8181153d4e3f083f090d2` was used only a
 methodological comparator. OpenOA's exploratory frequency inference, gap handling and timezone
 conveniences are intentionally not imported into this fail-closed boundary.
 
-The active sole-writer remediation lease is `L-1332-D2-004`, recorded in issue #1332 comment
-`6177007894`. It succeeds the rejected freeze under `L-1332-D2-003` and retains that lease's narrow
+The active sole-writer remediation lease is `L-1332-D2-005`, recorded in issue #1332 comment
+`6177298823`. It succeeds the rejected freeze under `L-1332-D2-004` and retains the earlier narrow
 D1 amendment (`6161711223`): portable timezone-key validation avoids host TZPATH lookup, and
 calendar-month evidence rejects an offset-only frame that the evidence envelope cannot reconstruct.
 The protected base is
@@ -37,14 +37,19 @@ The protected base is
    Empty and all-excluded included populations cannot pass.
 6. Named-zone conversion requires immutable caller-supplied TZif bytes. D2 uses
    `ZoneInfo.from_file`; the payload SHA-256, declared zone and locator are bound into the method and
-   receipt. Host TZPATH is not consulted. The zone-to-payload relationship is explicitly
+   receipt. Host TZPATH is not consulted. Four-digit RFC 3339 years are rendered independently of
+   host `strftime` behavior, and timezone conversions outside Python's representable datetime range
+   fail under the closed timezone-normalization code. The zone-to-payload relationship is explicitly
    `caller_attested_zone_payload`: D2 proves which bytes were used, not that an arbitrary payload is
    an authoritative publication for the declared IANA label.
 7. RFC 3339's `-00:00` unknown-offset sentinel is rejected. Folds and nonexistent local times use
    only the D1-declared policy and the supplied TZif bytes; resolutions are counted.
 8. Successful normalized rows, canonical LF CSV bytes, D1 evidence, source/lineage bytes, group
    universe, timezone rules, QA receipt and normalization-method digest reconcile at result
-   construction. Results are factory-only frozen artifacts.
+   construction. Construction deterministically replays normalization from those retained inputs,
+   so possession of the private factory token plus a self-consistent replacement digest cannot
+   substitute a measurement that contradicts the source artifact. Results are factory-only frozen
+   artifacts.
 9. Aggregation is a separate opt-in contract for complete fixed-cadence data. Interval energy uses
    exact rational summation. Interval-average power uses an explicit 12-decimal, signed
    round-half-even policy. The selected policy and bound are part of the method digest.
@@ -85,14 +90,14 @@ superseded.
 
 | Check | Exact command | Final result |
 |---|---|---|
-| D1+D2 focused integration | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_evidence_contract.py tests/contracts/test_operational_normalization.py tests/contracts/test_contracts_v14_import_surface.py` | 162 passed in 3.55 s on the committed remediation candidate |
-| Shared contract regression | same governed pytest invocation against `tests/contracts` | 1,555 passed in 253.52 s |
-| Strict source types | `/workspace/dutchbay-epc-model/.venv/bin/python -m mypy --no-incremental analytics/operational/normalization.py analytics/operational/contracts.py analytics/operational/__init__.py analytics/contracts_v14.py` | success; no issues in four source files |
-| Scoped Ruff and formatting | governed Ruff check and format-check against the seven changed Python paths | passed; seven files formatted |
-| Changed-file hooks | `/workspace/dutchbay-epc-model/.venv/bin/pre-commit run --files <nine allowlisted paths>` | passed; first run applied only expected isort ordering to the import-surface test, second run passed |
+| D1+D2 focused integration | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_evidence_contract.py tests/contracts/test_operational_normalization.py tests/contracts/test_contracts_v14_import_surface.py` | 164 passed in 3.89 s; repeated after final receipt commit before freeze |
+| Shared contract regression | same governed pytest invocation against `tests/contracts` | 1,557 passed in 275.49 s on the final source/test content; the only subsequent mutation was this verification-receipt text |
+| Strict source types | `/workspace/dutchbay-epc-model/.venv/bin/python -m mypy --no-incremental analytics/operational/normalization.py analytics/operational/contracts.py analytics/operational/__init__.py analytics/contracts_v14.py` | success; no issues in four source files; repeated after final receipt commit before freeze |
+| Scoped Ruff and formatting | governed Ruff check and format-check against the seven changed Python paths | passed; seven files formatted; repeated after final receipt commit before freeze |
+| Changed-file hooks | `/workspace/dutchbay-epc-model/.venv/bin/pre-commit run --files <nine allowlisted paths>` | passed; repeated after final receipt commit before freeze |
 | Changelog | `/workspace/dutchbay-epc-model/.venv/bin/python scripts/compile_changelog.py --dry-run` | passed; D2 fragment rendered under Unreleased / Added |
-| Rules bootstrap | `DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python dutchbay_bootstrap_rules.py` | passed; 75/75 active rules |
-| Whitespace/conflict check | `git diff --check` | passed |
+| Rules bootstrap | `DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python dutchbay_bootstrap_rules.py` | passed; 75/75 active rules; repeated after final receipt commit before freeze |
+| Whitespace/conflict check | `git diff --check` | passed; repeated after final receipt commit before freeze |
 | Ordinary full suite + coverage | `make test PY=/workspace/dutchbay-epc-model/.venv/bin/python` | predecessor freeze `3b47a8a`: interrupted after 2,369 passed / 3 skipped / 2 failed in 929.05 s because both failures are shared-venv distribution-metadata assumptions; the same two isolated tests fail unchanged on protected `main`. Not represented as an exact-final-candidate green receipt; hosted CI is required |
 
 The full-suite exceptions are `tests/app/test_ops_extras.py::test_an_unparseable_pyproject_degrades_to_metadata`
