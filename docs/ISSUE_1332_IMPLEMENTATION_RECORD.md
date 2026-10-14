@@ -85,7 +85,7 @@ superseded.
 
 | Check | Exact command | Final result |
 |---|---|---|
-| D1+D2 focused integration | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_evidence_contract.py tests/contracts/test_operational_normalization.py tests/contracts/test_contracts_v14_import_surface.py` | 162 passed in 3.17 s |
+| D1+D2 focused integration | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_evidence_contract.py tests/contracts/test_operational_normalization.py tests/contracts/test_contracts_v14_import_surface.py` | 162 passed in 3.55 s on the committed remediation candidate |
 | Shared contract regression | same governed pytest invocation against `tests/contracts` | 1,555 passed in 253.52 s |
 | Strict source types | `/workspace/dutchbay-epc-model/.venv/bin/python -m mypy --no-incremental analytics/operational/normalization.py analytics/operational/contracts.py analytics/operational/__init__.py analytics/contracts_v14.py` | success; no issues in four source files |
 | Scoped Ruff and formatting | governed Ruff check and format-check against the seven changed Python paths | passed; seven files formatted |
