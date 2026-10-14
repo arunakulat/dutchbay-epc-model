@@ -11,10 +11,11 @@ OpenOA v3.2 at commit `35e8a52c4cd8f43223f8181153d4e3f083f090d2` was used only a
 methodological comparator. OpenOA's exploratory frequency inference, gap handling and timezone
 conveniences are intentionally not imported into this fail-closed boundary.
 
-The active sole-writer lease is `L-1332-D2-003`, recorded in issue #1332 comment `6150407891` and
-narrowly amended by comment `6161711223`. The amendment permits D1's portable timezone-key
-validator to avoid host TZPATH lookup so that D2 can be end-to-end independent of the executing
-machine's timezone database. The protected base is
+The active sole-writer remediation lease is `L-1332-D2-004`, recorded in issue #1332 comment
+`6177007894`. It succeeds the rejected freeze under `L-1332-D2-003` and retains that lease's narrow
+D1 amendment (`6161711223`): portable timezone-key validation avoids host TZPATH lookup, and
+calendar-month evidence rejects an offset-only frame that the evidence envelope cannot reconstruct.
+The protected base is
 `a1961ca26188645136723659fca4d3f12d67159c`.
 
 ## Contract invariants
@@ -28,7 +29,9 @@ machine's timezone database. The protected base is
    literals are rendered losslessly with bounded representation length.
 4. Fixed and calendar cadence QA is population-based and invariant to row order. Duplicate
    occurrences, expected-grid gaps, off-grid occurrences and source-order violations are reported
-   separately. QA continues after unrelated measurement-value defects.
+   separately. Calendar-month declared and observed populations use the same source-wall frame:
+   UTC for `source_utc`, or the supplied TZif rules for `named_zone_to_utc`. QA continues after
+   unrelated measurement-value defects.
 5. Grouped time series require an `OperationalGroupUniverse` derived from a successfully normalized
    D1 asset roster. Missing, unexpected, incomplete and misaligned asset populations fail QA.
    Empty and all-excluded included populations cannot pass.
@@ -70,7 +73,9 @@ Findings identify rows, roles and groups but never echo measurement values.
 - A single fold policy cannot distinguish repeated identical wall-time strings. Such evidence must
   carry offsets or be split under separately evidenced policies.
 - Aggregation admits complete fixed-second buckets only. Calendar aggregation, interpolation, gap
-  repair and irregular time weighting are outside D2.
+  repair and irregular time weighting are outside D2. Calendar-month normalization supports
+  source-UTC and supplied named-zone frames; offset-aware-only monthly evidence is rejected because
+  D1 carries no stable named calendar frame.
 - OpenOA remains a future optional adapter, not a dependency or authority.
 
 ## Verification receipt
@@ -80,15 +85,15 @@ superseded.
 
 | Check | Exact command | Final result |
 |---|---|---|
-| D1+D2 focused integration | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_evidence_contract.py tests/contracts/test_operational_normalization.py tests/contracts/test_contracts_v14_import_surface.py` | 158 passed in 2.27 s |
-| Shared contract regression | same governed pytest invocation against `tests/contracts` | 1,551 passed in 203.51 s |
+| D1+D2 focused integration | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_evidence_contract.py tests/contracts/test_operational_normalization.py tests/contracts/test_contracts_v14_import_surface.py` | 162 passed in 3.17 s |
+| Shared contract regression | same governed pytest invocation against `tests/contracts` | 1,555 passed in 253.52 s |
 | Strict source types | `/workspace/dutchbay-epc-model/.venv/bin/python -m mypy --no-incremental analytics/operational/normalization.py analytics/operational/contracts.py analytics/operational/__init__.py analytics/contracts_v14.py` | success; no issues in four source files |
 | Scoped Ruff and formatting | governed Ruff check and format-check against the seven changed Python paths | passed; seven files formatted |
 | Changed-file hooks | `/workspace/dutchbay-epc-model/.venv/bin/pre-commit run --files <nine allowlisted paths>` | passed; first run applied only expected isort ordering to the import-surface test, second run passed |
 | Changelog | `/workspace/dutchbay-epc-model/.venv/bin/python scripts/compile_changelog.py --dry-run` | passed; D2 fragment rendered under Unreleased / Added |
 | Rules bootstrap | `DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python dutchbay_bootstrap_rules.py` | passed; 75/75 active rules |
 | Whitespace/conflict check | `git diff --check` | passed |
-| Ordinary full suite + coverage | `make test PY=/workspace/dutchbay-epc-model/.venv/bin/python` | interrupted after 2,369 passed / 3 skipped / 2 failed in 929.05 s because both failures are shared-venv distribution-metadata assumptions; the same two isolated tests fail unchanged on protected `main` |
+| Ordinary full suite + coverage | `make test PY=/workspace/dutchbay-epc-model/.venv/bin/python` | predecessor freeze `3b47a8a`: interrupted after 2,369 passed / 3 skipped / 2 failed in 929.05 s because both failures are shared-venv distribution-metadata assumptions; the same two isolated tests fail unchanged on protected `main`. Not represented as an exact-final-candidate green receipt; hosted CI is required |
 
 The full-suite exceptions are `tests/app/test_ops_extras.py::test_an_unparseable_pyproject_degrades_to_metadata`
 and `test_a_foreign_pyproject_does_not_answer_for_this_distribution`. In this managed shared venv,

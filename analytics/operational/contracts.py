@@ -630,6 +630,12 @@ class OperationalDatasetEvidence:
                     "calendar_month evidence requires interval_seconds=None because "
                     "calendar months have variable duration."
                 )
+            if self.timezone_treatment == "offset_aware_to_utc":
+                raise OperationalEvidenceError(
+                    "calendar_month evidence cannot use offset_aware_to_utc because "
+                    "the D1 envelope does not declare a reconstructible calendar frame; "
+                    "use source_utc or named_zone_to_utc."
+                )
         else:
             raise OperationalEvidenceError(
                 "timeseries evidence requires interval_basis='fixed_seconds' or "

@@ -215,6 +215,9 @@ class OperationalQualityReceipt:
     timezone_rule_attestation: Literal["caller_attested_zone_payload"] | None
     interval_basis: str
     interval_seconds: int | None
+    coverage_start_utc: str
+    coverage_end_utc: str
+    declared_row_count: int
     raw_row_count: int
     included_row_count: int
     excluded_row_count: int
@@ -271,6 +274,7 @@ class OperationalQualityReceipt:
             raise ValueError("lineage_verified must be the exact boolean True.")
         counts = (
             self.raw_row_count,
+            self.declared_row_count,
             self.included_row_count,
             self.excluded_row_count,
             self.empty_dataset_count,
@@ -288,6 +292,14 @@ class OperationalQualityReceipt:
             raise ValueError("quality receipt counts must be non-negative integers.")
         if self.raw_row_count != self.included_row_count + self.excluded_row_count:
             raise ValueError("raw rows must reconcile to included plus excluded rows.")
+        if self.raw_row_count != self.declared_row_count:
+            raise ValueError("raw row count must match the D1 declared row count.")
+        declared_start = _parse_canonical_utc(
+            self.coverage_start_utc, "coverage_start_utc"
+        )
+        declared_end = _parse_canonical_utc(self.coverage_end_utc, "coverage_end_utc")
+        if declared_start >= declared_end:
+            raise ValueError("declared coverage start must be before its end.")
         if self.excluded_row_count != len(self.row_exclusions):
             raise ValueError("excluded row count must match its receipt tuple.")
         if sum(item.included_row_count for item in self.group_receipts) != (
@@ -490,6 +502,9 @@ class OperationalNormalizationResult:
             ),
             (self.receipt.interval_basis, self.evidence.interval_basis),
             (self.receipt.interval_seconds, self.evidence.interval_seconds),
+            (self.receipt.coverage_start_utc, self.evidence.coverage_start_utc),
+            (self.receipt.coverage_end_utc, self.evidence.coverage_end_utc),
+            (self.receipt.declared_row_count, self.evidence.row_count),
             (self.receipt.column_bindings, self.evidence.columns),
         )
         if any(actual != expected for actual, expected in evidence_receipt_pairs):
@@ -769,6 +784,13 @@ class OperationalAggregationResult:
             != self.normalized.receipt.normalized_sha256
         ):
             raise ValueError("aggregate source digest does not match normalized input.")
+        if self.receipt.input_row_count != len(self.normalized.normalized_rows):
+            raise ValueError("aggregate input count does not match normalized rows.")
+        if (
+            self.receipt.source_interval_seconds
+            != self.normalized.evidence.interval_seconds
+        ):
+            raise ValueError("aggregate source interval does not match D1 evidence.")
         receipt_spec_pairs = (
             (self.receipt.value_role, self.spec.value_role),
             (self.receipt.method, self.spec.method),
@@ -885,6 +907,9 @@ def _normalization_method_sha(
             "nonexistent_time_policy": evidence.nonexistent_time_policy,
             "interval_basis": evidence.interval_basis,
             "interval_seconds": evidence.interval_seconds,
+            "coverage_start_utc": evidence.coverage_start_utc,
+            "coverage_end_utc": evidence.coverage_end_utc,
+            "row_count": evidence.row_count,
             "columns": [binding.model_dump() for binding in evidence.columns],
             "column_exclusions": [item.model_dump() for item in column_exclusions],
             "row_exclusions": [
@@ -1171,6 +1196,7 @@ def _timeseries_group_quality(
     group_key: str,
     rows: list[_ParsedRow],
     findings: list[str],
+    named_zone: ZoneInfo | None,
 ) -> OperationalGroupQualityReceipt:
     valid_rows = [row for row in rows if row.timestamp_utc is not None]
     timestamps = [row.timestamp_utc for row in valid_rows]
@@ -1251,13 +1277,28 @@ def _timeseries_group_quality(
             for row in valid_rows
             if row.source_wall_time is not None
         ]
-        declared_start_index = declared_start.year * 12 + declared_start.month - 1
-        declared_end_index = declared_end.year * 12 + declared_end.month - 1
+        if evidence.timezone_treatment == "named_zone_to_utc":
+            if named_zone is None:
+                raise OperationalNormalizationError(
+                    "TIMEZONE_NORMALIZATION_FAILED",
+                    "calendar-month named-zone QA requires supplied TZif rules.",
+                )
+            declared_start_wall = declared_start.astimezone(named_zone).replace(
+                tzinfo=None
+            )
+            declared_end_wall = declared_end.astimezone(named_zone).replace(tzinfo=None)
+        else:
+            declared_start_wall = declared_start.replace(tzinfo=None)
+            declared_end_wall = declared_end.replace(tzinfo=None)
+        declared_start_index = (
+            declared_start_wall.year * 12 + declared_start_wall.month - 1
+        )
+        declared_end_index = declared_end_wall.year * 12 + declared_end_wall.month - 1
         if (
-            declared_start.day != 1
-            or declared_start.time() != datetime.min.time()
-            or declared_end.day != 1
-            or declared_end.time() != datetime.min.time()
+            declared_start_wall.day != 1
+            or declared_start_wall.time() != datetime.min.time()
+            or declared_end_wall.day != 1
+            or declared_end_wall.time() != datetime.min.time()
         ):
             drift_count += 1
             findings.append(f"group={group_key};declared_calendar_coverage_off_grid")
@@ -1363,6 +1404,9 @@ def _initial_receipt(
         ),
         interval_basis=evidence.interval_basis,
         interval_seconds=evidence.interval_seconds,
+        coverage_start_utc=evidence.coverage_start_utc,
+        coverage_end_utc=evidence.coverage_end_utc,
+        declared_row_count=evidence.row_count,
         raw_row_count=raw_row_count,
         included_row_count=included_row_count,
         excluded_row_count=len(row_exclusions),
@@ -1411,6 +1455,10 @@ def normalize_operational_csv(
     normalized artifact while retaining the evidence needed to remediate it.
     """
 
+    if not isinstance(evidence, OperationalDatasetEvidence):
+        raise OperationalNormalizationError(
+            "INVALID_VALUE", "evidence must be OperationalDatasetEvidence."
+        )
     if not isinstance(source_bytes, bytes):
         raise OperationalNormalizationError(
             "INVALID_CSV", "source_bytes must be bytes."
@@ -1685,7 +1733,11 @@ def normalize_operational_csv(
         )
         group_receipts = tuple(
             _timeseries_group_quality(
-                evidence, group_key, groups.get(group_key, []), findings
+                evidence,
+                group_key,
+                groups.get(group_key, []),
+                findings,
+                named_zone,
             )
             for group_key in quality_group_keys
         )
@@ -1917,6 +1969,16 @@ def aggregate_operational_series(
 ) -> OperationalAggregationResult:
     """Aggregate a complete fixed-cadence series by UTC elapsed-time buckets."""
 
+    if not isinstance(normalized, OperationalNormalizationResult):
+        raise OperationalNormalizationError(
+            "AGGREGATION_CONTRACT_FAILED",
+            "normalized must be OperationalNormalizationResult.",
+        )
+    if not isinstance(spec, OperationalAggregationSpec):
+        raise OperationalNormalizationError(
+            "AGGREGATION_CONTRACT_FAILED",
+            "spec must be OperationalAggregationSpec.",
+        )
     try:
         header, rows, source_interval = _aggregate_rows(normalized, spec)
         csv_bytes = _encode_csv(header, rows)

@@ -9,6 +9,7 @@ from zoneinfo import reset_tzpath
 
 import pytest
 
+import analytics.operational.normalization as operational_normalization
 from analytics.operational.contracts import (
     OperationalColumnBinding,
     OperationalDatasetEvidence,
@@ -434,15 +435,18 @@ def _meter_evidence(
     interval_basis: str,
     interval_seconds: int | None,
     timezone_treatment: str = "source_utc",
+    source_timezone: str | None = None,
+    ambiguous: str = "not_applicable",
+    nonexistent: str = "not_applicable",
 ) -> OperationalDatasetEvidence:
     return OperationalDatasetEvidence(
         logical_id="meter.primary",
         kind="revenue_meter",
         source_class="observed_plant",
         timezone_treatment=timezone_treatment,  # type: ignore[arg-type]
-        source_timezone=None,
-        ambiguous_time_policy="not_applicable",
-        nonexistent_time_policy="not_applicable",
+        source_timezone=source_timezone,
+        ambiguous_time_policy=ambiguous,  # type: ignore[arg-type]
+        nonexistent_time_policy=nonexistent,  # type: ignore[arg-type]
         observation_status="observed",
         lineage_source_sha256=(),
         derivation_method_sha256=None,
@@ -494,6 +498,54 @@ def test_calendar_month_gap_is_receipted() -> None:
         normalize_operational_csv(data, evidence)
     assert raised.value.receipt is not None
     assert raised.value.receipt.gap_count == 1
+
+
+def test_named_zone_calendar_month_uses_source_wall_calendar() -> None:
+    data = (
+        b"when,energy\n"
+        b"2025-04-01T00:00:00,10\n"
+        b"2025-05-01T00:00:00,11\n"
+        b"2025-06-01T00:00:00,12\n"
+    )
+    evidence = _meter_evidence(
+        data,
+        start="2025-03-31T23:00:00Z",
+        end="2025-05-31T23:00:00Z",
+        row_count=3,
+        interval_basis="calendar_month",
+        interval_seconds=None,
+        timezone_treatment="named_zone_to_utc",
+        source_timezone="Europe/London",
+        ambiguous="reject",
+        nonexistent="reject",
+    )
+    result = normalize_operational_csv(data, evidence, timezone_rules=_timezone_rules())
+    assert result.receipt.coverage_mismatch_count == 0
+    assert result.receipt.gap_count == 0
+    assert result.receipt.interval_drift_count == 0
+
+
+def test_declared_coverage_and_row_count_are_bound_to_receipt_and_method() -> None:
+    data = b"when,energy\n2025-01-01T00:00:00Z,1\n2025-01-01T00:00:01Z,2\n"
+    first_evidence = _meter_evidence(
+        data,
+        start="2025-01-01T00:00:00Z",
+        end="2025-01-01T00:00:01Z",
+        row_count=2,
+        interval_basis="fixed_seconds",
+        interval_seconds=1,
+    )
+    second_evidence = replace(
+        first_evidence,
+        coverage_start_utc="2025-01-01T00:00:00.0Z",
+        coverage_end_utc="2025-01-01T00:00:01.000000Z",
+    )
+    first = normalize_operational_csv(data, first_evidence)
+    second = normalize_operational_csv(data, second_evidence)
+    assert first.receipt.coverage_start_utc == first_evidence.coverage_start_utc
+    assert first.receipt.coverage_end_utc == first_evidence.coverage_end_utc
+    assert first.receipt.declared_row_count == first_evidence.row_count
+    assert first.receipt.method_sha256 != second.receipt.method_sha256
 
 
 def test_energy_aggregation_is_an_explicit_sum() -> None:
@@ -1152,6 +1204,38 @@ def test_normalization_result_rejects_method_and_row_substitution(
         )
 
 
+def test_public_apis_close_invalid_runtime_types() -> None:
+    data = b"when,energy\n2025-01-01T00:00:00Z,1\n2025-01-01T00:00:01Z,2\n"
+    evidence = _meter_evidence(
+        data,
+        start="2025-01-01T00:00:00Z",
+        end="2025-01-01T00:00:01Z",
+        row_count=2,
+        interval_basis="fixed_seconds",
+        interval_seconds=1,
+    )
+    normalized = normalize_operational_csv(data, evidence)
+    spec = OperationalAggregationSpec(
+        value_role="energy_kwh",
+        method="sum",
+        target_interval_seconds=2,
+        anchor_utc="2025-01-01T00:00:00Z",
+        source_timestamp_position="interval_start",
+        value_basis="interval_energy",
+        arithmetic_policy="exact_decimal_sum_v1",
+        rounding_decimal_places=None,
+    )
+    with pytest.raises(OperationalNormalizationError) as bad_evidence:
+        normalize_operational_csv(data, None)  # type: ignore[arg-type]
+    assert bad_evidence.value.code == "INVALID_VALUE"
+    with pytest.raises(OperationalNormalizationError) as bad_normalized:
+        aggregate_operational_series(None, spec)  # type: ignore[arg-type]
+    assert bad_normalized.value.code == "AGGREGATION_CONTRACT_FAILED"
+    with pytest.raises(OperationalNormalizationError) as bad_spec:
+        aggregate_operational_series(normalized, None)  # type: ignore[arg-type]
+    assert bad_spec.value.code == "AGGREGATION_CONTRACT_FAILED"
+
+
 def test_aggregation_result_rejects_source_method_and_row_substitution() -> None:
     data = b"when,energy\n2025-01-01T00:00:00Z,1\n2025-01-01T00:00:01Z,2\n"
     normalized = normalize_operational_csv(
@@ -1186,6 +1270,27 @@ def test_aggregation_result_rejects_source_method_and_row_substitution() -> None
             replace(result, receipt=forged_receipt)
     with pytest.raises(ValueError, match="constructed by"):
         replace(result, rows=(("2025-01-01T00:00:00Z", "999"),))
+
+    with pytest.raises(ValueError, match="input count"):
+        replace(
+            result,
+            receipt=replace(result.receipt, input_row_count=999),
+            _factory_token=operational_normalization._AGGREGATION_RESULT_TOKEN,
+        )
+    forged_interval = 2
+    forged_method = operational_normalization._aggregation_method_sha(
+        result.normalized, result.spec, forged_interval
+    )
+    with pytest.raises(ValueError, match="source interval"):
+        replace(
+            result,
+            receipt=replace(
+                result.receipt,
+                source_interval_seconds=forged_interval,
+                method_sha256=forged_method,
+            ),
+            _factory_token=operational_normalization._AGGREGATION_RESULT_TOKEN,
+        )
 
 
 def test_resource_bounds_fail_with_closed_errors() -> None:

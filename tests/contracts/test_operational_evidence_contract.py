@@ -589,6 +589,19 @@ def test_calendar_month_cannot_claim_a_fixed_seconds_duration() -> None:
         )
 
 
+def test_calendar_month_rejects_unreconstructible_offset_aware_frame() -> None:
+    with pytest.raises(
+        OperationalEvidenceError, match="reconstructible calendar frame"
+    ):
+        _dataset(
+            "revenue_meter",
+            {"timestamp_utc", "energy_kwh"},
+            timezone_treatment="offset_aware_to_utc",
+            interval_basis="calendar_month",
+            interval_seconds=None,
+        )
+
+
 def test_duplicate_logical_id_is_rejected() -> None:
     datasets = list(_datasets_for("electrical_losses"))
     datasets[1] = replace(datasets[1], logical_id=datasets[0].logical_id)
