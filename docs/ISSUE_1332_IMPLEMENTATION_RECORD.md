@@ -1,104 +1,102 @@
 # Issue #1332 D2 implementation record
 
-## Scope and source hierarchy
+## Scope and authority
 
-This dolphin implements the deterministic normalization and data-quality boundary between the D1
-operational-evidence envelope (#1331) and later post-COD analyses. It is governed by issue #1332,
-the current GWTF rules and RECRUIT-01 modules, and the repository's CASPER, CESSPIT and CCCDIR
-definitions. It neither calculates operational AEP or losses nor mutates canonical finance,
-scenario, KPI, report, lender or Board state.
+D2 is the deterministic normalization and data-quality boundary between the D1 operational-
+evidence envelope (#1331) and later post-COD analysis. It produces raw-evidence artifacts and QA
+receipts; it does not calculate AEP, losses, availability-adjusted revenue, finance, lender or Board
+outputs. Issue #1110 remains open and its reliance HOLD remains active.
 
-OpenOA v3.2 at commit `35e8a52c4cd8f43223f8181153d4e3f083f090d2` was inspected as a
-methodological comparator. Its `openoa.utils.timeseries` and `openoa.utils.qa` helpers admit inferred
-frequencies, gap filling and DST ambiguity shortcuts that are useful in exploratory analysis but do
-not satisfy this repository's fail-closed evidence boundary. D2 therefore has no OpenOA import or
-adapter. It uses Python's standard-library CSV, `Decimal`, `datetime` and PEP 495/`zoneinfo`
-semantics, with an installed, versioned `tzdata` distribution required for named-zone conversion.
+OpenOA v3.2 at commit `35e8a52c4cd8f43223f8181153d4e3f083f090d2` was used only as a
+methodological comparator. OpenOA's exploratory frequency inference, gap handling and timezone
+conveniences are intentionally not imported into this fail-closed boundary.
 
-## Writer lease
+The active sole-writer lease is `L-1332-D2-003`, recorded in issue #1332 comment `6150407891` and
+narrowly amended by comment `6161711223`. The amendment permits D1's portable timezone-key
+validator to avoid host TZPATH lookup so that D2 can be end-to-end independent of the executing
+machine's timezone database. The protected base is
+`a1961ca26188645136723659fca4d3f12d67159c`.
 
-- Lease: `L-1332-D2-001`; coordinator and sole writer `/root`.
-- Worktree: `/workspace/dutchbay-operational-normalization`.
-- Branch: `feature/operational-normalization-1332`.
-- Initial base: `c43e7250dfa9f21398421f18650e4a0923910925`, tree
-  `6d8c544477c8d5ab9d333b012ec5f489c5b25ab9`.
-- Risk: `R2_LOAD_BEARING`; two distinct independent review lanes are required after subject freeze.
-- Durable lease receipt: issue #1332 comment `6094158031`.
-- Allowlist: the D2 module and tests, the operational and v14 export surfaces, this record, and the
-  D2 changelog fragment. D1 contracts, analytical estimators, finance, reports and release state are
-  outside the writer lease.
+## Contract invariants
 
-## Invariants
-
-1. The caller supplies immutable UTF-8 CSV bytes and a valid D1 envelope. The source bytes are
-   SHA-256 checked before parsing and are retained unchanged in a successful frozen result.
-2. Derived-estimate inputs additionally supply the actual ordered upstream artifacts and derivation
-   method bytes. Their hashes must exactly match the D1 lineage tuple and method digest. Observed or
-   declared evidence cannot smuggle in derivation bytes.
-3. Every source header is unique and accounted for exactly once by either a D1 column binding or an
-   explicit, reason-bearing exclusion. D1 bindings carry the only admitted role/unit combinations;
-   D2 performs no unit conversion.
-4. Explicit row exclusions identify one-based data rows, carry reasons, and receive deterministic
-   parsed-row hashes. Raw, included and excluded row counts reconcile exactly. Exclusions do not
-   waive coverage or cadence QA.
-5. UTC source timestamps use strict RFC 3339 `Z` form. Offset-aware timestamps must carry an
-   explicit offset. Named-zone wall times require the D1 ambiguous/nonexistent policy and a recorded
-   `tzdata` version; PEP 495 folds and round trips distinguish ambiguous from nonexistent times.
-   Ambiguity is never silently forced to one side.
-6. Canonical rows retain input order. Duplicate keys, non-monotonic observations, declared-versus-
-   actual coverage, gaps, fixed-interval drift, calendar-month drift, non-finite numbers and invalid
-   values produce a deterministic failed receipt. No defective normalized artifact is returned.
-7. Calendar cadence is checked by year/month progression at local midnight on day one. A month is
-   never reduced to 31 days. Fixed cadence and aggregation use exact integer-microsecond arithmetic,
-   not floating elapsed-time comparisons.
-8. Successful normalized CSV is deterministic: D1 role order, LF line endings, canonical UTC,
-   canonical finite decimal spelling and a separate SHA-256 digest. The normalization-method digest
-   binds all timezone, cadence, mapping, exclusion, lineage and timezone-database choices.
-9. Aggregation is a separate opt-in function for already-passing fixed-cadence data. The caller must
-   declare interval-start timestamps and either interval energy (summed) or interval-average power
-   (arithmetic mean). Targets are exact integer multiples, UTC anchored, and every per-asset bucket
-   must be complete and aligned; partial buckets fail.
-10. Receipts and results are frozen and runtime self-validating. Authority flags are exact booleans:
-    raw evidence only, never canonical-finance, bankable, lender or Board eligible.
+1. Source CSV, ordered lineage artifacts and derivation-method bytes are immutable inputs. Their
+   SHA-256 identities must reconcile with the D1 envelope before parsing.
+2. Every source column is mapped once or explicitly excluded with a reason. Every excluded row is
+   identified, reasoned and hashed. D2 performs no inferred mapping, unit conversion, imputation,
+   exclusion, sorting or resampling.
+3. Numeric parsing is independent of the process `Decimal` context. Accepted finite decimal
+   literals are rendered losslessly with bounded representation length.
+4. Fixed and calendar cadence QA is population-based and invariant to row order. Duplicate
+   occurrences, expected-grid gaps, off-grid occurrences and source-order violations are reported
+   separately. QA continues after unrelated measurement-value defects.
+5. Grouped time series require an `OperationalGroupUniverse` derived from a successfully normalized
+   D1 asset roster. Missing, unexpected, incomplete and misaligned asset populations fail QA.
+   Empty and all-excluded included populations cannot pass.
+6. Named-zone conversion requires immutable caller-supplied TZif bytes. D2 uses
+   `ZoneInfo.from_file`; the payload SHA-256, declared zone and locator are bound into the method and
+   receipt. Host TZPATH is not consulted. The zone-to-payload relationship is explicitly
+   `caller_attested_zone_payload`: D2 proves which bytes were used, not that an arbitrary payload is
+   an authoritative publication for the declared IANA label.
+7. RFC 3339's `-00:00` unknown-offset sentinel is rejected. Folds and nonexistent local times use
+   only the D1-declared policy and the supplied TZif bytes; resolutions are counted.
+8. Successful normalized rows, canonical LF CSV bytes, D1 evidence, source/lineage bytes, group
+   universe, timezone rules, QA receipt and normalization-method digest reconcile at result
+   construction. Results are factory-only frozen artifacts.
+9. Aggregation is a separate opt-in contract for complete fixed-cadence data. Interval energy uses
+   exact rational summation. Interval-average power uses an explicit 12-decimal, signed
+   round-half-even policy. The selected policy and bound are part of the method digest.
+10. Aggregate results retain and reconcile their normalized source and exact aggregation spec, then
+    recompute rows and method identity during construction. Partial or misaligned per-asset buckets
+    fail closed.
+11. Fixed/target intervals, numeric representations and bucket populations are bounded. Predictable
+    parsing, range and arithmetic failures cross the public boundary only as closed CASPER
+    `OperationalNormalizationError` codes.
+12. Every artifact remains `raw_evidence_only=True` and exactly false for canonical-finance,
+    bankable, lender and Board eligibility.
 
 ## Predictable failure surface
 
-`OperationalNormalizationError` exposes a closed code and, once tabular inspection is possible, the
-completed QA receipt. The codes distinguish source digest, lineage, CSV shape, column accounting,
-row accounting, timezone setup, quality and aggregation-contract failures. Receipt findings are
-stable row/role/group facts and never include source measurement values.
+The closed codes distinguish source and lineage digest mismatch, invalid CSV, column and row
+accounting, timezone normalization, group-universe failure, QA failure and aggregation-contract
+failure. Once tabular inspection is possible, QA failures carry their deterministic receipt.
+Findings identify rows, roles and groups but never echo measurement values.
 
-## Comparator differences and limitations
+## Deliberate limitations
 
-- OpenOA remains an optional future adapter owned outside D2. Adding one later requires call-time
-  dependency guards and differential/oracle tests; D2 itself remains dependency-free.
-- D2 accepts CSV bytes only and performs no filesystem or network I/O. Excel, Parquet, database and
-  telemetry transports require separately governed ingestion adapters.
-- A single named-zone fold policy cannot truthfully distinguish two identical repeated wall-time
-  strings. Such source data must carry explicit offsets (or be split under separately evidenced
-  policies); otherwise duplicate/coverage/cadence checks fail closed.
-- Aggregation supports complete fixed-second buckets only. Calendar-month inputs, time-weighted
-  irregular power, interpolation and gap repair are deliberately out of scope.
+- CSV bytes are the only transport. Filesystem, network, Excel, Parquet, database and telemetry
+  adapters remain separately governed work.
+- TZif zone semantics are caller-attested. A future authoritative zone/digest registry would require
+  its own governed source and lifecycle.
+- A single fold policy cannot distinguish repeated identical wall-time strings. Such evidence must
+  carry offsets or be split under separately evidenced policies.
+- Aggregation admits complete fixed-second buckets only. Calendar aggregation, interpolation, gap
+  repair and irregular time weighting are outside D2.
+- OpenOA remains a future optional adapter, not a dependency or authority.
 
-## Authority and remaining work
+## Verification receipt
 
-D2 emits evidence artifacts, not assessment results. D3 (#1333) owns non-canonical operational AEP
-and loss analysis, D4 (#1334) owns EYA reconciliation, and D5 (#1335) owns climate disclosure. Issue
-#1110 remains OPEN and the Board/lender reliance HOLD remains active. This change grants no merge,
-release, finance, professional-review or reliance authority.
+This table is updated only with results from the final frozen candidate. Earlier WIP claims are
+superseded.
 
-## Writer verification receipt
-
-| Check | Exact command | Result |
+| Check | Exact command | Final result |
 |---|---|---|
-| D1+D2 focused integration | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_evidence_contract.py tests/contracts/test_operational_normalization.py tests/contracts/test_contracts_v14_import_surface.py` | 132 passed in 2.13 s on the hook-normalized subject |
-| Shared contract regression | same governed pytest invocation against `tests/contracts` | 1,525 passed in 168.55 s on the hook-normalized final subject |
-| Strict types | `/workspace/dutchbay-epc-model/.venv/bin/python -m mypy analytics/operational/normalization.py analytics/operational/__init__.py` | success; no issues in two source files |
-| Changed-file hooks | `/workspace/dutchbay-epc-model/.venv/bin/pre-commit run --files <seven allowlisted paths>` | passed after isort normalized one test import block |
-| Changelog | `/workspace/dutchbay-epc-model/.venv/bin/python scripts/compile_changelog.py --dry-run` | passed; rendered the #1332 fragment under Unreleased / Added |
-| Rules bootstrap | `DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" /workspace/dutchbay-epc-model/.venv/bin/python dutchbay_bootstrap_rules.py` | passed; 74/74 active rules |
-| Whitespace / conflict check | `git diff --check` | passed |
+| D1+D2 focused integration | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_evidence_contract.py tests/contracts/test_operational_normalization.py tests/contracts/test_contracts_v14_import_surface.py` | 158 passed in 2.27 s |
+| Shared contract regression | same governed pytest invocation against `tests/contracts` | 1,551 passed in 203.51 s |
+| Strict source types | `/workspace/dutchbay-epc-model/.venv/bin/python -m mypy --no-incremental analytics/operational/normalization.py analytics/operational/contracts.py analytics/operational/__init__.py analytics/contracts_v14.py` | success; no issues in four source files |
+| Scoped Ruff and formatting | governed Ruff check and format-check against the seven changed Python paths | passed; seven files formatted |
+| Changed-file hooks | `/workspace/dutchbay-epc-model/.venv/bin/pre-commit run --files <nine allowlisted paths>` | passed; first run applied only expected isort ordering to the import-surface test, second run passed |
+| Changelog | `/workspace/dutchbay-epc-model/.venv/bin/python scripts/compile_changelog.py --dry-run` | passed; D2 fragment rendered under Unreleased / Added |
+| Rules bootstrap | `DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python dutchbay_bootstrap_rules.py` | passed; 75/75 active rules |
+| Whitespace/conflict check | `git diff --check` | passed |
+| Ordinary full suite + coverage | `make test PY=/workspace/dutchbay-epc-model/.venv/bin/python` | interrupted after 2,369 passed / 3 skipped / 2 failed in 929.05 s because both failures are shared-venv distribution-metadata assumptions; the same two isolated tests fail unchanged on protected `main` |
 
-The first changed-file hook run made only the expected isort normalization to the v14 import-surface
-test; the complete hook set then passed. No accepted verification failure is carried into the frozen
-candidate.
+The full-suite exceptions are `tests/app/test_ops_extras.py::test_an_unparseable_pyproject_degrades_to_metadata`
+and `test_a_foreign_pyproject_does_not_answer_for_this_distribution`. In this managed shared venv,
+neither checkout has installed DutchBay distribution metadata, so both return `spec_source="none"`
+instead of `"metadata"`. The failures were reproduced on untouched protected `main` with the same
+interpreter and are not changed or waived by D2. Hosted required CI remains authoritative and must
+be green on the exact PR head before merge.
+
+After these checks pass, the exact commit, tree, base and canonical Git-blob subject manifest are
+frozen for two independent RECRUIT-01 reviews. A review or merge does not lift #1110's HOLD or grant
+release, professional-review or reliance authority.

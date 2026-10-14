@@ -26,11 +26,14 @@ from analytics.contracts_v14 import (
     OperationalColumnExclusion,
     OperationalDatasetEvidence,
     OperationalDatasetKind,
+    OperationalGroupQualityReceipt,
+    OperationalGroupUniverse,
     OperationalIntervalBasis,
     OperationalNonexistentTimePolicy,
     OperationalNormalizationError,
     OperationalObservationStatus,
     OperationalSourceClass,
+    OperationalTimezoneRules,
     OperationalTimezoneTreatment,
     ParameterRangeConfig,
     ProjectEquityIrrBridge,
@@ -44,6 +47,13 @@ from analytics.contracts_v14 import (
     aggregate_operational_series,
     normalize_operational_csv,
 )
+from analytics.operational import (
+    OperationalGroupQualityReceipt as PackageOperationalGroupQualityReceipt,
+)
+from analytics.operational import (
+    OperationalGroupUniverse as PackageOperationalGroupUniverse,
+)
+from analytics.operational import OperationalTimezoneRules as PackageTimezoneRules
 
 
 def test_contracts_v14_pipeline_surface_is_importable() -> None:
@@ -95,6 +105,9 @@ def test_contracts_v14_pipeline_surface_is_importable() -> None:
     assert OperationalAssessmentInput.__name__ == "OperationalAssessmentInput"
     assert OperationalColumnBinding.__name__ == "OperationalColumnBinding"
     assert OperationalColumnExclusion.__name__ == "OperationalColumnExclusion"
+    assert OperationalGroupQualityReceipt is PackageOperationalGroupQualityReceipt
+    assert OperationalGroupUniverse is PackageOperationalGroupUniverse
+    assert OperationalTimezoneRules is PackageTimezoneRules
     assert OperationalAggregationSpec.__name__ == "OperationalAggregationSpec"
     assert OperationalNormalizationError.__name__ == "OperationalNormalizationError"
     assert normalize_operational_csv.__name__ == "normalize_operational_csv"

@@ -18,7 +18,7 @@ import hashlib
 import io
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import InitVar, asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from fractions import Fraction
@@ -40,6 +40,8 @@ _MAX_POINTS_PER_BUCKET: Final = 100_000
 _MAX_NUMERIC_CHARACTERS: Final = 4_096
 _POWER_MEAN_DECIMAL_PLACES: Final = 12
 _POWER_MEAN_ROUNDING: Final = "ROUND_HALF_EVEN"
+_NORMALIZATION_RESULT_TOKEN: Final = object()
+_AGGREGATION_RESULT_TOKEN: Final = object()
 _UTC_TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$")
 _OFFSET_TIMESTAMP_RE = re.compile(
     r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?" r"(?:Z|[+-]\d{2}:\d{2})$"
@@ -56,6 +58,7 @@ OperationalNormalizationErrorCode: TypeAlias = Literal[
     "ROW_ACCOUNTING_FAILED",
     "INVALID_VALUE",
     "TIMEZONE_NORMALIZATION_FAILED",
+    "GROUP_UNIVERSE_FAILED",
     "QUALITY_CHECK_FAILED",
     "AGGREGATION_CONTRACT_FAILED",
 ]
@@ -134,7 +137,9 @@ class OperationalTimezoneRules:
         if not isinstance(self.tzif_bytes, bytes) or not self.tzif_bytes.startswith(
             b"TZif"
         ):
-            raise ValueError("tzif_bytes must be immutable TZif data beginning with 'TZif'.")
+            raise ValueError(
+                "tzif_bytes must be immutable TZif data beginning with 'TZif'."
+            )
         if len(self.tzif_bytes) > 1_048_576:
             raise ValueError("tzif_bytes must not exceed 1 MiB.")
 
@@ -166,6 +171,7 @@ class OperationalGroupQualityReceipt:
     duplicate_key_count: int
     gap_count: int
     interval_drift_count: int
+    source_order_violation_count: int
 
     def __post_init__(self) -> None:
         _require_closed_text(self.group_key, "group_key")
@@ -175,6 +181,7 @@ class OperationalGroupQualityReceipt:
             "duplicate_key_count",
             "gap_count",
             "interval_drift_count",
+            "source_order_violation_count",
         ):
             value = getattr(self, field_name)
             if type(value) is not int or value < 0:
@@ -204,6 +211,8 @@ class OperationalQualityReceipt:
     ambiguous_time_policy: str
     nonexistent_time_policy: str
     timezone_database: str | None
+    timezone_source_locator: str | None
+    timezone_rule_attestation: Literal["caller_attested_zone_payload"] | None
     interval_basis: str
     interval_seconds: int | None
     raw_row_count: int
@@ -215,6 +224,10 @@ class OperationalQualityReceipt:
     column_bindings: tuple[OperationalColumnBinding, ...]
     column_exclusions: tuple[OperationalColumnExclusion, ...]
     row_exclusions: tuple[OperationalExcludedRowReceipt, ...]
+    group_universe_normalized_sha256: str | None
+    expected_group_keys: tuple[str, ...]
+    missing_group_keys: tuple[str, ...]
+    unexpected_group_keys: tuple[str, ...]
     group_receipts: tuple[OperationalGroupQualityReceipt, ...]
     actual_coverage_start_utc: str | None
     actual_coverage_end_utc: str | None
@@ -222,6 +235,7 @@ class OperationalQualityReceipt:
     duplicate_key_count: int
     gap_count: int
     interval_drift_count: int
+    source_order_violation_count: int
     nonfinite_value_count: int
     invalid_value_count: int
     ambiguous_time_resolution_count: int
@@ -264,6 +278,7 @@ class OperationalQualityReceipt:
             self.duplicate_key_count,
             self.gap_count,
             self.interval_drift_count,
+            self.source_order_violation_count,
             self.nonfinite_value_count,
             self.invalid_value_count,
             self.ambiguous_time_resolution_count,
@@ -284,6 +299,7 @@ class OperationalQualityReceipt:
             ("duplicate_key_count", "duplicate_key_count"),
             ("gap_count", "gap_count"),
             ("interval_drift_count", "interval_drift_count"),
+            ("source_order_violation_count", "source_order_violation_count"),
         ):
             if getattr(self, aggregate_name) != sum(
                 getattr(item, group_name) for item in self.group_receipts
@@ -295,15 +311,76 @@ class OperationalQualityReceipt:
             raise ValueError("normalized roles must match the ordered column bindings.")
         if len(self.source_columns) != len(set(self.source_columns)):
             raise ValueError("source columns must be unique.")
+        group_keys = tuple(item.group_key for item in self.group_receipts)
+        if len(group_keys) != len(set(group_keys)):
+            raise ValueError("group receipt keys must be unique.")
+        if tuple(sorted(self.expected_group_keys)) != self.expected_group_keys or len(
+            self.expected_group_keys
+        ) != len(set(self.expected_group_keys)):
+            raise ValueError("expected_group_keys must be sorted and unique.")
+        if tuple(sorted(self.missing_group_keys)) != self.missing_group_keys or len(
+            self.missing_group_keys
+        ) != len(set(self.missing_group_keys)):
+            raise ValueError("missing_group_keys must be sorted and unique.")
+        if tuple(
+            sorted(self.unexpected_group_keys)
+        ) != self.unexpected_group_keys or len(self.unexpected_group_keys) != len(
+            set(self.unexpected_group_keys)
+        ):
+            raise ValueError("unexpected_group_keys must be sorted and unique.")
+        if not set(self.missing_group_keys).issubset(self.expected_group_keys):
+            raise ValueError(
+                "missing groups must belong to the expected group universe."
+            )
+        if set(self.unexpected_group_keys).intersection(self.expected_group_keys):
+            raise ValueError(
+                "unexpected groups cannot belong to the expected universe."
+            )
+        if self.expected_group_keys:
+            if (
+                self.group_universe_normalized_sha256 is None
+                or _SHA256_RE.fullmatch(self.group_universe_normalized_sha256) is None
+            ):
+                raise ValueError(
+                    "grouped receipts require a normalized universe digest."
+                )
+        elif self.group_universe_normalized_sha256 is not None:
+            raise ValueError("ungrouped receipts cannot claim a group universe digest.")
+        for group in self.group_receipts:
+            if group.actual_coverage_start_utc is not None:
+                start = _parse_canonical_utc(
+                    group.actual_coverage_start_utc, "actual_coverage_start_utc"
+                )
+                end = _parse_canonical_utc(
+                    str(group.actual_coverage_end_utc), "actual_coverage_end_utc"
+                )
+                if start > end:
+                    raise ValueError("group coverage start cannot be after its end.")
+            elif group.actual_coverage_end_utc is not None:
+                raise ValueError(
+                    "group coverage bounds must both be null or both be set."
+                )
         if self.timezone_treatment == "named_zone_to_utc":
             if (
                 self.source_timezone is None
                 or self.timezone_database is None
-                or not self.timezone_database.startswith("tzif-sha256:")
+                or re.fullmatch(r"tzif-sha256:[0-9a-f]{64}", self.timezone_database)
+                is None
+                or self.timezone_source_locator is None
+                or self.timezone_rule_attestation != "caller_attested_zone_payload"
             ):
-                raise ValueError("named-zone receipts require hash-bound TZif identity.")
-        elif self.timezone_database is not None:
-            raise ValueError("non-named timezone treatments cannot claim TZif identity.")
+                raise ValueError(
+                    "named-zone receipts require hash-bound, caller-attested TZif rules."
+                )
+        elif any(
+            item is not None
+            for item in (
+                self.timezone_database,
+                self.timezone_source_locator,
+                self.timezone_rule_attestation,
+            )
+        ):
+            raise ValueError("non-named timezone treatments cannot claim TZif rules.")
         defects = any(
             (
                 self.coverage_mismatch_count,
@@ -311,8 +388,11 @@ class OperationalQualityReceipt:
                 self.duplicate_key_count,
                 self.gap_count,
                 self.interval_drift_count,
+                self.source_order_violation_count,
                 self.nonfinite_value_count,
                 self.invalid_value_count,
+                len(self.missing_group_keys),
+                len(self.unexpected_group_keys),
             )
         )
         if type(self.quality_passed) is not bool or self.quality_passed is defects:
@@ -353,11 +433,17 @@ class OperationalNormalizationResult:
     lineage_source_bytes: tuple[bytes, ...]
     derivation_method_bytes: bytes | None
     timezone_rules: OperationalTimezoneRules | None
+    group_universe: OperationalGroupUniverse | None
     normalized_csv_bytes: bytes
     normalized_rows: tuple[tuple[str, ...], ...]
     receipt: OperationalQualityReceipt
+    _factory_token: InitVar[object] = None
 
-    def __post_init__(self) -> None:
+    def __post_init__(self, _factory_token: object) -> None:
+        if _factory_token is not _NORMALIZATION_RESULT_TOKEN:
+            raise ValueError(
+                "normalization results must be constructed by normalize_operational_csv."
+            )
         if not self.receipt.quality_passed:
             raise ValueError("a normalization result requires a passing QA receipt.")
         if _sha256(self.source_bytes) != self.evidence.source_sha256:
@@ -407,16 +493,87 @@ class OperationalNormalizationResult:
             (self.receipt.column_bindings, self.evidence.columns),
         )
         if any(actual != expected for actual, expected in evidence_receipt_pairs):
-            raise ValueError("receipt identity does not match the D1 evidence envelope.")
+            raise ValueError(
+                "receipt identity does not match the D1 evidence envelope."
+            )
         if self.evidence.timezone_treatment == "named_zone_to_utc":
             if (
                 self.timezone_rules is None
                 or self.timezone_rules.source_timezone != self.evidence.source_timezone
                 or self.receipt.timezone_database != self.timezone_rules.identity
+                or self.receipt.timezone_source_locator
+                != self.timezone_rules.source_locator
             ):
-                raise ValueError("timezone rule bytes do not match the receipt/evidence.")
+                raise ValueError(
+                    "timezone rule bytes do not match the receipt/evidence."
+                )
         elif self.timezone_rules is not None:
             raise ValueError("timezone rules apply only to named-zone evidence.")
+        if (
+            "asset_id" in self.receipt.normalized_roles
+            and self.evidence.kind != "asset"
+        ):
+            if self.group_universe is None:
+                raise ValueError("grouped time series require an asset group universe.")
+            expected_keys = self.group_universe.group_keys
+            universe_sha = self.group_universe.normalized_sha256
+        else:
+            if self.group_universe is not None:
+                raise ValueError("group universes apply only to grouped time series.")
+            expected_keys = ()
+            universe_sha = None
+        if (
+            self.receipt.expected_group_keys != expected_keys
+            or self.receipt.group_universe_normalized_sha256 != universe_sha
+        ):
+            raise ValueError("group universe does not match the normalization receipt.")
+        expected_method_sha = _normalization_method_sha(
+            self.evidence,
+            self.receipt.column_exclusions,
+            self.receipt.row_exclusions,
+            self.timezone_rules,
+            self.group_universe,
+        )
+        if self.receipt.method_sha256 != expected_method_sha:
+            raise ValueError(
+                "normalization method digest does not match retained inputs."
+            )
+
+
+@dataclass(frozen=True)
+class OperationalGroupUniverse:
+    """A group universe derived from a verified normalized asset roster."""
+
+    asset_result: OperationalNormalizationResult
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.asset_result, OperationalNormalizationResult):
+            raise ValueError("asset_result must be a verified normalization result.")
+        if self.asset_result.evidence.kind != "asset":
+            raise ValueError(
+                "group universes must derive from normalized asset evidence."
+            )
+        if "asset_id" not in self.asset_result.receipt.normalized_roles:
+            raise ValueError("asset evidence must expose an asset_id role.")
+        if not self.group_keys:
+            raise ValueError("group universes require at least one asset key.")
+
+    @property
+    def group_keys(self) -> tuple[str, ...]:
+        index = self.asset_result.receipt.normalized_roles.index("asset_id")
+        return tuple(sorted(row[index] for row in self.asset_result.normalized_rows))
+
+    @property
+    def normalized_sha256(self) -> str:
+        digest = self.asset_result.receipt.normalized_sha256
+        assert digest is not None
+        return digest
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "normalized_sha256": self.normalized_sha256,
+            "group_keys": list(self.group_keys),
+        }
 
 
 @dataclass(frozen=True)
@@ -429,9 +586,7 @@ class OperationalAggregationSpec:
     anchor_utc: str
     source_timestamp_position: Literal["interval_start"]
     value_basis: Literal["interval_energy", "interval_average_power"]
-    arithmetic_policy: Literal[
-        "exact_decimal_sum_v1", "half_even_power_mean_v1"
-    ]
+    arithmetic_policy: Literal["exact_decimal_sum_v1", "half_even_power_mean_v1"]
     rounding_decimal_places: int | None
 
     def __post_init__(self) -> None:
@@ -453,6 +608,23 @@ class OperationalAggregationSpec:
             raise ValueError(
                 f"{self.value_role} requires value_basis={expected_basis!r}; "
                 f"got {self.value_basis!r}."
+            )
+        expected_arithmetic = (
+            "exact_decimal_sum_v1"
+            if self.value_role == "energy_kwh"
+            else "half_even_power_mean_v1"
+        )
+        expected_places = (
+            None if self.value_role == "energy_kwh" else _POWER_MEAN_DECIMAL_PLACES
+        )
+        if (
+            self.arithmetic_policy != expected_arithmetic
+            or self.rounding_decimal_places != expected_places
+        ):
+            raise ValueError(
+                f"{self.value_role} requires arithmetic_policy="
+                f"{expected_arithmetic!r} and rounding_decimal_places="
+                f"{expected_places!r}."
             )
         if (
             type(self.target_interval_seconds) is not int
@@ -484,6 +656,8 @@ class OperationalAggregationReceipt:
     anchor_utc: str
     source_timestamp_position: Literal["interval_start"]
     value_basis: Literal["interval_energy", "interval_average_power"]
+    arithmetic_policy: Literal["exact_decimal_sum_v1", "half_even_power_mean_v1"]
+    rounding_decimal_places: int | None
     input_row_count: int
     output_row_count: int
     timestamp_position: Literal["interval_start"] = "interval_start"
@@ -512,8 +686,8 @@ class OperationalAggregationReceipt:
                 raise ValueError(f"{field_name} must be a positive integer.")
         for field_name in ("input_row_count", "output_row_count"):
             value = getattr(self, field_name)
-            if type(value) is not int or value < 0:
-                raise ValueError(f"{field_name} must be a non-negative integer.")
+            if type(value) is not int or value < 1:
+                raise ValueError(f"{field_name} must be a positive integer.")
         if self.value_role not in {"energy_kwh", "power_kw"}:
             raise ValueError("aggregation value_role is not supported.")
         expected_method = "sum" if self.value_role == "energy_kwh" else "mean"
@@ -530,7 +704,9 @@ class OperationalAggregationReceipt:
             or self.source_timestamp_position != "interval_start"
             or self.timestamp_position != "interval_start"
         ):
-            raise ValueError("aggregation receipt semantics are internally inconsistent.")
+            raise ValueError(
+                "aggregation receipt semantics are internally inconsistent."
+            )
         expected_arithmetic = (
             "exact_decimal_sum_v1"
             if self.value_role == "energy_kwh"
@@ -571,25 +747,71 @@ class OperationalAggregationReceipt:
 
 @dataclass(frozen=True)
 class OperationalAggregationResult:
+    normalized: OperationalNormalizationResult
+    spec: OperationalAggregationSpec
     header: tuple[str, ...]
     rows: tuple[tuple[str, ...], ...]
     csv_bytes: bytes
     receipt: OperationalAggregationReceipt
+    _factory_token: InitVar[object] = None
 
-    def __post_init__(self) -> None:
+    def __post_init__(self, _factory_token: object) -> None:
+        if _factory_token is not _AGGREGATION_RESULT_TOKEN:
+            raise ValueError(
+                "aggregation results must be constructed by aggregate_operational_series."
+            )
+        if self.receipt.logical_id != self.normalized.evidence.logical_id:
+            raise ValueError(
+                "aggregate logical_id does not match its normalized source."
+            )
+        if (
+            self.receipt.source_normalized_sha256
+            != self.normalized.receipt.normalized_sha256
+        ):
+            raise ValueError("aggregate source digest does not match normalized input.")
+        receipt_spec_pairs = (
+            (self.receipt.value_role, self.spec.value_role),
+            (self.receipt.method, self.spec.method),
+            (self.receipt.target_interval_seconds, self.spec.target_interval_seconds),
+            (self.receipt.anchor_utc, self.spec.anchor_utc),
+            (
+                self.receipt.source_timestamp_position,
+                self.spec.source_timestamp_position,
+            ),
+            (self.receipt.value_basis, self.spec.value_basis),
+            (self.receipt.arithmetic_policy, self.spec.arithmetic_policy),
+            (
+                self.receipt.rounding_decimal_places,
+                self.spec.rounding_decimal_places,
+            ),
+        )
+        if any(actual != expected for actual, expected in receipt_spec_pairs):
+            raise ValueError("aggregation receipt does not match its retained spec.")
         if _sha256(self.csv_bytes) != self.receipt.aggregate_sha256:
             raise ValueError("aggregate bytes do not match the receipt digest.")
         if len(self.rows) != self.receipt.output_row_count:
             raise ValueError("aggregate row count does not match the receipt.")
         if _encode_csv(self.header, self.rows) != self.csv_bytes:
             raise ValueError("aggregate rows do not encode to csv_bytes.")
-        expected_header = ("timestamp_utc",) + (
-            self.header[1:-1] if len(self.header) == 3 else ()
-        ) + (self.receipt.value_role,)
+        expected_header = (
+            ("timestamp_utc",)
+            + (self.header[1:-1] if len(self.header) == 3 else ())
+            + (self.receipt.value_role,)
+        )
         if self.header != expected_header or (
             len(self.header) == 3 and self.header[1] != "asset_id"
         ):
             raise ValueError("aggregate header does not match receipt semantics.")
+        expected_method_sha = _aggregation_method_sha(
+            self.normalized, self.spec, self.receipt.source_interval_seconds
+        )
+        if self.receipt.method_sha256 != expected_method_sha:
+            raise ValueError(
+                "aggregation method digest does not match retained inputs."
+            )
+        expected_header, expected_rows, _ = _aggregate_rows(self.normalized, self.spec)
+        if self.header != expected_header or self.rows != expected_rows:
+            raise ValueError("aggregate rows do not match retained source and spec.")
 
 
 class OperationalNormalizationError(ValueError):
@@ -647,7 +869,8 @@ def _normalization_method_sha(
     evidence: OperationalDatasetEvidence,
     column_exclusions: tuple[OperationalColumnExclusion, ...],
     row_exclusions: tuple[OperationalRowExclusion | OperationalExcludedRowReceipt, ...],
-    timezone_database: str | None,
+    timezone_rules: OperationalTimezoneRules | None,
+    group_universe: OperationalGroupUniverse | None,
 ) -> str:
     return _method_sha(
         {
@@ -671,7 +894,19 @@ def _normalization_method_sha(
                 }
                 for item in row_exclusions
             ],
-            "timezone_database": timezone_database,
+            "timezone_rules": (
+                None
+                if timezone_rules is None
+                else {
+                    "source_timezone": timezone_rules.source_timezone,
+                    "source_locator": timezone_rules.source_locator,
+                    "tzif_sha256": timezone_rules.sha256,
+                    "attestation": "caller_attested_zone_payload",
+                }
+            ),
+            "group_universe": (
+                None if group_universe is None else group_universe.model_dump()
+            ),
             "numeric_policy": {
                 "max_characters": _MAX_NUMERIC_CHARACTERS,
                 "canonicalization": "decimal_tuple_lossless_v1",
@@ -733,6 +968,8 @@ def _parse_timestamp(
             )
         except ValueError as exc:
             raise ValueError("timestamp is not valid offset-aware ISO 8601") from exc
+        if value.endswith("-00:00"):
+            raise ValueError("RFC3339 unknown offset '-00:00' is not admitted")
         if parsed.tzinfo is None or parsed.utcoffset() is None:
             raise ValueError("offset-aware treatment requires an explicit UTC offset")
         return (
@@ -792,11 +1029,16 @@ def _canonical_decimal(value: str) -> str:
         raise ValueError("numeric value is not a strict decimal literal")
     if number == 0:
         return "0"
-    sign, digits_tuple, exponent = number.as_tuple()
+    sign, digits_tuple, exponent_value = number.as_tuple()
+    if not isinstance(exponent_value, int):
+        raise ArithmeticError("numeric value must have a finite integer exponent")
+    exponent = exponent_value
     digits = "".join(str(digit) for digit in digits_tuple)
     if exponent >= 0:
         if len(digits) + exponent > _MAX_NUMERIC_CHARACTERS:
-            raise ValueError("numeric value exceeds the bounded canonical representation")
+            raise ValueError(
+                "numeric value exceeds the bounded canonical representation"
+            )
         integer = digits + ("0" * exponent)
         fractional = ""
     else:
@@ -857,7 +1099,10 @@ def _exact_terminating_fraction(value: Fraction) -> str:
     if places > _MAX_NUMERIC_CHARACTERS:
         raise ValueError("aggregate exceeds the bounded canonical representation")
     scaled = value.numerator * (2 ** (places - twos)) * (5 ** (places - fives))
-    return _format_scaled_integer(scaled, places)
+    rendered = _format_scaled_integer(scaled, places)
+    if len(rendered) > _MAX_NUMERIC_CHARACTERS:
+        raise ValueError("aggregate exceeds the bounded canonical representation")
+    return rendered
 
 
 def _round_fraction_half_even(value: Fraction, decimal_places: int) -> str:
@@ -872,7 +1117,10 @@ def _round_fraction_half_even(value: Fraction, decimal_places: int) -> str:
         quotient += 1
     if negative:
         quotient = -quotient
-    return _format_scaled_integer(quotient, decimal_places)
+    rendered = _format_scaled_integer(quotient, decimal_places)
+    if len(rendered) > _MAX_NUMERIC_CHARACTERS:
+        raise ValueError("aggregate exceeds the bounded canonical representation")
+    return rendered
 
 
 def _encode_csv(header: tuple[str, ...], rows: tuple[tuple[str, ...], ...]) -> bytes:
@@ -915,11 +1163,7 @@ def _resolve_timezone_rules(
 
 
 def _elapsed_microseconds(delta: timedelta) -> int:
-    return (
-        delta.days * 86_400_000_000
-        + delta.seconds * 1_000_000
-        + delta.microseconds
-    )
+    return delta.days * 86_400_000_000 + delta.seconds * 1_000_000 + delta.microseconds
 
 
 def _timeseries_group_quality(
@@ -960,17 +1204,18 @@ def _timeseries_group_quality(
             )
         seen.add(row.timestamp_utc)
 
-    drift_count = 0
-    for previous, current in zip(valid_rows, valid_rows[1:]):
+    source_order_violation_count = 0
+    for previous, current in zip(valid_rows, valid_rows[1:], strict=False):
         assert previous.timestamp_utc is not None
         assert current.timestamp_utc is not None
         if current.timestamp_utc < previous.timestamp_utc:
-            drift_count += 1
+            source_order_violation_count += 1
             findings.append(
-                f"row={current.source_row_number};group={group_key};nonmonotonic"
+                f"row={current.source_row_number};group={group_key};source_order_violation"
             )
 
     gap_count = 0
+    drift_count = 0
     if evidence.interval_basis == "fixed_seconds":
         interval_us = int(evidence.interval_seconds or 0) * 1_000_000
         declared_span_us = _elapsed_microseconds(declared_end - declared_start)
@@ -981,7 +1226,9 @@ def _timeseries_group_quality(
         else:
             expected_count = declared_span_us // interval_us + 1
         on_grid: set[datetime] = set()
-        for timestamp in seen:
+        for row in valid_rows:
+            assert row.timestamp_utc is not None
+            timestamp = row.timestamp_utc
             offset_us = _elapsed_microseconds(timestamp - declared_start)
             if (
                 timestamp < declared_start
@@ -997,15 +1244,23 @@ def _timeseries_group_quality(
         if expected_count is not None:
             gap_count = max(0, expected_count - len(on_grid))
             if gap_count:
-                findings.append(
-                    f"group={group_key};missing_intervals={gap_count}"
-                )
+                findings.append(f"group={group_key};missing_intervals={gap_count}")
     elif evidence.interval_basis == "calendar_month":
         valid_walls = [
             row.source_wall_time
             for row in valid_rows
             if row.source_wall_time is not None
         ]
+        declared_start_index = declared_start.year * 12 + declared_start.month - 1
+        declared_end_index = declared_end.year * 12 + declared_end.month - 1
+        if (
+            declared_start.day != 1
+            or declared_start.time() != datetime.min.time()
+            or declared_end.day != 1
+            or declared_end.time() != datetime.min.time()
+        ):
+            drift_count += 1
+            findings.append(f"group={group_key};declared_calendar_coverage_off_grid")
         month_indices: set[int] = set()
         for wall in valid_walls:
             assert wall is not None
@@ -1015,15 +1270,16 @@ def _timeseries_group_quality(
                 findings.append(
                     f"group={group_key};wall_time={wall.isoformat()};calendar_month_drift"
                 )
-            elif month_index in month_indices:
-                drift_count += 1
-                findings.append(f"group={group_key};duplicate_calendar_month")
             month_indices.add(month_index)
-        if month_indices:
-            expected_months = max(month_indices) - min(month_indices) + 1
-            gap_count = max(0, expected_months - len(month_indices))
-            if gap_count:
-                findings.append(f"group={group_key};missing_months={gap_count}")
+        expected_months = declared_end_index - declared_start_index + 1
+        in_range = {
+            item
+            for item in month_indices
+            if declared_start_index <= item <= declared_end_index
+        }
+        gap_count = max(0, expected_months - len(in_range))
+        if gap_count:
+            findings.append(f"group={group_key};missing_months={gap_count}")
 
     return OperationalGroupQualityReceipt(
         group_key=group_key,
@@ -1034,6 +1290,7 @@ def _timeseries_group_quality(
         duplicate_key_count=duplicate_count,
         gap_count=gap_count,
         interval_drift_count=drift_count,
+        source_order_violation_count=source_order_violation_count,
     )
 
 
@@ -1045,6 +1302,11 @@ def _initial_receipt(
     column_exclusions: tuple[OperationalColumnExclusion, ...],
     method_sha256: str,
     timezone_database: str | None,
+    timezone_source_locator: str | None,
+    group_universe_normalized_sha256: str | None,
+    expected_group_keys: tuple[str, ...],
+    missing_group_keys: tuple[str, ...],
+    unexpected_group_keys: tuple[str, ...],
     raw_row_count: int,
     row_exclusions: tuple[OperationalExcludedRowReceipt, ...],
     included_row_count: int,
@@ -1057,6 +1319,7 @@ def _initial_receipt(
     duplicate_key_count: int,
     gap_count: int,
     interval_drift_count: int,
+    source_order_violation_count: int,
     nonfinite_value_count: int,
     invalid_value_count: int,
     ambiguous_count: int,
@@ -1070,8 +1333,11 @@ def _initial_receipt(
             duplicate_key_count,
             gap_count,
             interval_drift_count,
+            source_order_violation_count,
             nonfinite_value_count,
             invalid_value_count,
+            len(missing_group_keys),
+            len(unexpected_group_keys),
         )
     )
     return OperationalQualityReceipt(
@@ -1091,6 +1357,10 @@ def _initial_receipt(
         ambiguous_time_policy=evidence.ambiguous_time_policy,
         nonexistent_time_policy=evidence.nonexistent_time_policy,
         timezone_database=timezone_database,
+        timezone_source_locator=timezone_source_locator,
+        timezone_rule_attestation=(
+            "caller_attested_zone_payload" if timezone_database is not None else None
+        ),
         interval_basis=evidence.interval_basis,
         interval_seconds=evidence.interval_seconds,
         raw_row_count=raw_row_count,
@@ -1102,6 +1372,10 @@ def _initial_receipt(
         column_bindings=evidence.columns,
         column_exclusions=column_exclusions,
         row_exclusions=row_exclusions,
+        group_universe_normalized_sha256=group_universe_normalized_sha256,
+        expected_group_keys=expected_group_keys,
+        missing_group_keys=missing_group_keys,
+        unexpected_group_keys=unexpected_group_keys,
         group_receipts=group_receipts,
         actual_coverage_start_utc=actual_start,
         actual_coverage_end_utc=actual_end,
@@ -1109,6 +1383,7 @@ def _initial_receipt(
         duplicate_key_count=duplicate_key_count,
         gap_count=gap_count,
         interval_drift_count=interval_drift_count,
+        source_order_violation_count=source_order_violation_count,
         nonfinite_value_count=nonfinite_value_count,
         invalid_value_count=invalid_value_count,
         ambiguous_time_resolution_count=ambiguous_count,
@@ -1125,6 +1400,7 @@ def normalize_operational_csv(
     lineage_source_bytes: tuple[bytes, ...] = (),
     derivation_method_bytes: bytes | None = None,
     timezone_rules: OperationalTimezoneRules | None = None,
+    group_universe: OperationalGroupUniverse | None = None,
     column_exclusions: tuple[OperationalColumnExclusion, ...] = (),
     row_exclusions: tuple[OperationalRowExclusion, ...] = (),
 ) -> OperationalNormalizationResult:
@@ -1265,30 +1541,26 @@ def normalize_operational_csv(
         for number in sorted(requested_exclusions)
     )
     roles = tuple(binding.role for binding in evidence.columns)
+    grouped_timeseries = "asset_id" in roles and evidence.kind != "asset"
+    if grouped_timeseries:
+        if not isinstance(group_universe, OperationalGroupUniverse):
+            raise OperationalNormalizationError(
+                "GROUP_UNIVERSE_FAILED",
+                "grouped time series require a verified normalized asset universe.",
+            )
+    elif group_universe is not None:
+        raise OperationalNormalizationError(
+            "GROUP_UNIVERSE_FAILED",
+            "group universes apply only to grouped time-series evidence.",
+        )
     source_index = {name: index for index, name in enumerate(header)}
     timezone_database, named_zone = _resolve_timezone_rules(evidence, timezone_rules)
-    method_sha = _method_sha(
-        {
-            "version": _NORMALIZER_VERSION,
-            "source_sha256": evidence.source_sha256,
-            "lineage_source_sha256": list(evidence.lineage_source_sha256),
-            "derivation_method_sha256": evidence.derivation_method_sha256,
-            "logical_id": evidence.logical_id,
-            "timezone_treatment": evidence.timezone_treatment,
-            "source_timezone": evidence.source_timezone,
-            "ambiguous_time_policy": evidence.ambiguous_time_policy,
-            "nonexistent_time_policy": evidence.nonexistent_time_policy,
-            "interval_basis": evidence.interval_basis,
-            "interval_seconds": evidence.interval_seconds,
-            "columns": [binding.model_dump() for binding in evidence.columns],
-            "column_exclusions": [item.model_dump() for item in column_exclusions],
-            "row_exclusions": [item.model_dump() for item in row_exclusions],
-            "timezone_database": timezone_database,
-            "numeric_policy": {
-                "max_characters": _MAX_NUMERIC_CHARACTERS,
-                "canonicalization": "decimal_tuple_lossless_v1",
-            },
-        }
+    method_sha = _normalization_method_sha(
+        evidence,
+        column_exclusions,
+        row_exclusions,
+        timezone_rules,
+        group_universe,
     )
 
     parsed_rows: list[_ParsedRow] = []
@@ -1363,7 +1635,24 @@ def normalize_operational_csv(
     duplicate_count = 0
     gap_count = 0
     drift_count = 0
+    source_order_violation_count = 0
     coverage_mismatch = 0
+    expected_group_keys = (
+        group_universe.group_keys if group_universe is not None else ()
+    )
+    observed_group_keys = tuple(sorted(groups))
+    missing_group_keys = tuple(
+        sorted(set(expected_group_keys) - set(observed_group_keys))
+    )
+    unexpected_group_keys = (
+        tuple(sorted(set(observed_group_keys) - set(expected_group_keys)))
+        if grouped_timeseries
+        else ()
+    )
+    if missing_group_keys:
+        findings.append(f"missing_groups={','.join(missing_group_keys)}")
+    if unexpected_group_keys:
+        findings.append(f"unexpected_groups={','.join(unexpected_group_keys)}")
     if evidence.kind == "asset":
         asset_receipts: list[OperationalGroupQualityReceipt] = []
         for group_key in sorted(groups):
@@ -1384,20 +1673,29 @@ def normalize_operational_csv(
                     duplicate_key_count=group_duplicates,
                     gap_count=0,
                     interval_drift_count=0,
+                    source_order_violation_count=0,
                 )
             )
         group_receipts = tuple(asset_receipts)
     else:
+        quality_group_keys = (
+            tuple(sorted(set(expected_group_keys).union(observed_group_keys)))
+            if grouped_timeseries
+            else observed_group_keys
+        )
         group_receipts = tuple(
-            _timeseries_group_quality(evidence, group_key, groups[group_key], findings)
-            for group_key in sorted(groups)
+            _timeseries_group_quality(
+                evidence, group_key, groups.get(group_key, []), findings
+            )
+            for group_key in quality_group_keys
         )
-        coverage_mismatch = sum(
-            item.coverage_mismatch_count for item in group_receipts
-        )
+        coverage_mismatch = sum(item.coverage_mismatch_count for item in group_receipts)
         duplicate_count = sum(item.duplicate_key_count for item in group_receipts)
         gap_count = sum(item.gap_count for item in group_receipts)
         drift_count = sum(item.interval_drift_count for item in group_receipts)
+        source_order_violation_count = sum(
+            item.source_order_violation_count for item in group_receipts
+        )
 
     valid_times = [
         row.timestamp_utc for row in parsed_rows if row.timestamp_utc is not None
@@ -1417,6 +1715,15 @@ def normalize_operational_csv(
         column_exclusions=column_exclusions,
         method_sha256=method_sha,
         timezone_database=timezone_database,
+        timezone_source_locator=(
+            timezone_rules.source_locator if timezone_rules is not None else None
+        ),
+        group_universe_normalized_sha256=(
+            group_universe.normalized_sha256 if group_universe is not None else None
+        ),
+        expected_group_keys=expected_group_keys,
+        missing_group_keys=missing_group_keys,
+        unexpected_group_keys=unexpected_group_keys,
         raw_row_count=len(raw_rows),
         row_exclusions=excluded_receipts,
         included_row_count=len(parsed_rows),
@@ -1429,6 +1736,7 @@ def normalize_operational_csv(
         duplicate_key_count=duplicate_count,
         gap_count=gap_count,
         interval_drift_count=drift_count,
+        source_order_violation_count=source_order_violation_count,
         nonfinite_value_count=nonfinite_count,
         invalid_value_count=invalid_count,
         ambiguous_count=ambiguous_count,
@@ -1448,18 +1756,42 @@ def normalize_operational_csv(
         lineage_source_bytes=lineage_source_bytes,
         derivation_method_bytes=derivation_method_bytes,
         timezone_rules=timezone_rules,
+        group_universe=group_universe,
         normalized_csv_bytes=normalized_bytes,
         normalized_rows=normalized_rows,
         receipt=receipt,
+        _factory_token=_NORMALIZATION_RESULT_TOKEN,
     )
 
 
-def aggregate_operational_series(
+def _aggregation_method_sha(
     normalized: OperationalNormalizationResult,
     spec: OperationalAggregationSpec,
-) -> OperationalAggregationResult:
-    """Aggregate a complete fixed-cadence series by UTC elapsed-time buckets."""
+    source_interval: int,
+) -> str:
+    return _method_sha(
+        {
+            "version": _AGGREGATOR_VERSION,
+            "source_normalized_sha256": normalized.receipt.normalized_sha256,
+            "spec": spec.model_dump(),
+            "source_interval_seconds": source_interval,
+            "timestamp_position": "interval_start",
+            "utc_elapsed_time_basis": True,
+            "numeric_policy": {
+                "energy_sum": "exact_decimal_fraction_v1",
+                "power_mean_decimal_places": _POWER_MEAN_DECIMAL_PLACES,
+                "power_mean_rounding": _POWER_MEAN_ROUNDING,
+                "max_numeric_characters": _MAX_NUMERIC_CHARACTERS,
+                "max_points_per_bucket": _MAX_POINTS_PER_BUCKET,
+            },
+        }
+    )
 
+
+def _aggregate_rows(
+    normalized: OperationalNormalizationResult,
+    spec: OperationalAggregationSpec,
+) -> tuple[tuple[str, ...], tuple[tuple[str, ...], ...], int]:
     evidence = normalized.evidence
     if not normalized.receipt.quality_passed:
         raise OperationalNormalizationError(
@@ -1503,10 +1835,7 @@ def aggregate_operational_series(
     buckets: dict[tuple[str, int], list[tuple[datetime, Fraction]]] = {}
     for row in normalized.normalized_rows:
         timestamp = _parse_canonical_utc(row[timestamp_index], "timestamp_utc")
-        delta = timestamp - anchor
-        elapsed_microseconds = (
-            delta.days * 86_400_000_000 + delta.seconds * 1_000_000 + delta.microseconds
-        )
+        elapsed_microseconds = _elapsed_microseconds(timestamp - anchor)
         if elapsed_microseconds < 0 or elapsed_microseconds % 1_000_000:
             raise OperationalNormalizationError(
                 "AGGREGATION_CONTRACT_FAILED",
@@ -1516,8 +1845,17 @@ def aggregate_operational_series(
             spec.target_interval_seconds * 1_000_000
         )
         asset = row[asset_index] if asset_index is not None else "__dataset__"
-        buckets.setdefault((asset, bucket_number), []).append(
-            (timestamp, _fraction_from_canonical_decimal(row[value_index]))
+        bucket = buckets.setdefault((asset, bucket_number), [])
+        if len(bucket) >= _MAX_POINTS_PER_BUCKET:
+            raise OperationalNormalizationError(
+                "AGGREGATION_CONTRACT_FAILED",
+                f"aggregation buckets may contain at most {_MAX_POINTS_PER_BUCKET} points.",
+            )
+        bucket.append((timestamp, _fraction_from_canonical_decimal(row[value_index])))
+    if not buckets:
+        raise OperationalNormalizationError(
+            "AGGREGATION_CONTRACT_FAILED",
+            "aggregation requires at least one input row.",
         )
     output: list[tuple[str, ...]] = []
     for (asset, bucket_number), points in sorted(
@@ -1526,12 +1864,28 @@ def aggregate_operational_series(
         bucket_start = anchor + timedelta(
             seconds=bucket_number * spec.target_interval_seconds
         )
-        expected_times = {
-            bucket_start + timedelta(seconds=index * source_interval)
-            for index in range(expected_per_bucket)
-        }
-        actual_times = {point[0] for point in points}
-        if len(points) != expected_per_bucket or actual_times != expected_times:
+        slots: set[int] = set()
+        for timestamp, _ in points:
+            offset_us = _elapsed_microseconds(timestamp - bucket_start)
+            source_interval_us = source_interval * 1_000_000
+            if offset_us < 0 or offset_us % source_interval_us:
+                raise OperationalNormalizationError(
+                    "AGGREGATION_CONTRACT_FAILED",
+                    f"misaligned bucket at {_format_utc(bucket_start)} for {asset!r}.",
+                )
+            slot = offset_us // source_interval_us
+            if slot >= expected_per_bucket:
+                raise OperationalNormalizationError(
+                    "AGGREGATION_CONTRACT_FAILED",
+                    f"misaligned bucket at {_format_utc(bucket_start)} for {asset!r}.",
+                )
+            slots.add(slot)
+        if (
+            len(points) != expected_per_bucket
+            or len(slots) != expected_per_bucket
+            or min(slots) != 0
+            or max(slots) != expected_per_bucket - 1
+        ):
             raise OperationalNormalizationError(
                 "AGGREGATION_CONTRACT_FAILED",
                 f"partial or misaligned bucket at {_format_utc(bucket_start)} for {asset!r}.",
@@ -1541,7 +1895,7 @@ def aggregate_operational_series(
             _exact_terminating_fraction(total)
             if spec.method == "sum"
             else _round_fraction_half_even(
-                total / expected_per_bucket, _POWER_MEAN_DECIMAL_PLACES
+                total / expected_per_bucket, int(spec.rounding_decimal_places or 0)
             )
         )
         values = [_format_utc(bucket_start)]
@@ -1554,55 +1908,53 @@ def aggregate_operational_series(
         + (("asset_id",) if asset_index is not None else ())
         + (spec.value_role,)
     )
-    rows = tuple(output)
-    csv_bytes = _encode_csv(header, rows)
-    aggregate_sha = _sha256(csv_bytes)
-    method_sha = _method_sha(
-        {
-            "version": _AGGREGATOR_VERSION,
-            "source_normalized_sha256": normalized.receipt.normalized_sha256,
-            "spec": spec.model_dump(),
-            "source_interval_seconds": source_interval,
-            "timestamp_position": "interval_start",
-            "utc_elapsed_time_basis": True,
-            "numeric_policy": {
-                "energy_sum": "exact_decimal_fraction_v1",
-                "power_mean_decimal_places": _POWER_MEAN_DECIMAL_PLACES,
-                "power_mean_rounding": _POWER_MEAN_ROUNDING,
-                "max_points_per_bucket": _MAX_POINTS_PER_BUCKET,
-            },
-        }
-    )
-    receipt = OperationalAggregationReceipt(
-        schema=OPERATIONAL_AGGREGATION_SCHEMA,
-        logical_id=evidence.logical_id,
-        source_normalized_sha256=str(normalized.receipt.normalized_sha256),
-        aggregate_sha256=aggregate_sha,
-        method_sha256=method_sha,
-        value_role=spec.value_role,
-        value_unit="kWh" if spec.value_role == "energy_kwh" else "kW",
-        method=spec.method,
-        source_interval_seconds=source_interval,
-        target_interval_seconds=spec.target_interval_seconds,
-        anchor_utc=spec.anchor_utc,
-        source_timestamp_position=spec.source_timestamp_position,
-        value_basis=spec.value_basis,
-        arithmetic_policy=(
-            "exact_decimal_sum_v1"
-            if spec.value_role == "energy_kwh"
-            else "half_even_power_mean_v1"
-        ),
-        rounding_decimal_places=(
-            None
-            if spec.value_role == "energy_kwh"
-            else _POWER_MEAN_DECIMAL_PLACES
-        ),
-        input_row_count=len(normalized.normalized_rows),
-        output_row_count=len(rows),
-    )
-    return OperationalAggregationResult(
-        header=header, rows=rows, csv_bytes=csv_bytes, receipt=receipt
-    )
+    return header, tuple(output), source_interval
+
+
+def aggregate_operational_series(
+    normalized: OperationalNormalizationResult,
+    spec: OperationalAggregationSpec,
+) -> OperationalAggregationResult:
+    """Aggregate a complete fixed-cadence series by UTC elapsed-time buckets."""
+
+    try:
+        header, rows, source_interval = _aggregate_rows(normalized, spec)
+        csv_bytes = _encode_csv(header, rows)
+        receipt = OperationalAggregationReceipt(
+            schema=OPERATIONAL_AGGREGATION_SCHEMA,
+            logical_id=normalized.evidence.logical_id,
+            source_normalized_sha256=str(normalized.receipt.normalized_sha256),
+            aggregate_sha256=_sha256(csv_bytes),
+            method_sha256=_aggregation_method_sha(normalized, spec, source_interval),
+            value_role=spec.value_role,
+            value_unit="kWh" if spec.value_role == "energy_kwh" else "kW",
+            method=spec.method,
+            source_interval_seconds=source_interval,
+            target_interval_seconds=spec.target_interval_seconds,
+            anchor_utc=spec.anchor_utc,
+            source_timestamp_position=spec.source_timestamp_position,
+            value_basis=spec.value_basis,
+            arithmetic_policy=spec.arithmetic_policy,
+            rounding_decimal_places=spec.rounding_decimal_places,
+            input_row_count=len(normalized.normalized_rows),
+            output_row_count=len(rows),
+        )
+        return OperationalAggregationResult(
+            normalized=normalized,
+            spec=spec,
+            header=header,
+            rows=rows,
+            csv_bytes=csv_bytes,
+            receipt=receipt,
+            _factory_token=_AGGREGATION_RESULT_TOKEN,
+        )
+    except OperationalNormalizationError:
+        raise
+    except (ArithmeticError, OverflowError, ValueError) as exc:
+        raise OperationalNormalizationError(
+            "AGGREGATION_CONTRACT_FAILED",
+            f"aggregation could not be completed safely: {exc}",
+        ) from exc
 
 
 __all__ = [
@@ -1614,11 +1966,14 @@ __all__ = [
     "OperationalAggregationSpec",
     "OperationalColumnExclusion",
     "OperationalExcludedRowReceipt",
+    "OperationalGroupQualityReceipt",
+    "OperationalGroupUniverse",
     "OperationalNormalizationError",
     "OperationalNormalizationErrorCode",
     "OperationalNormalizationResult",
     "OperationalQualityReceipt",
     "OperationalRowExclusion",
+    "OperationalTimezoneRules",
     "aggregate_operational_series",
     "normalize_operational_csv",
 ]

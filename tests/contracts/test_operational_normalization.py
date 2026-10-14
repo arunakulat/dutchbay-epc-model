@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.resources
 from dataclasses import replace
+from decimal import Context, localcontext
+from typing import Any
+from zoneinfo import reset_tzpath
 
 import pytest
 
@@ -14,8 +18,11 @@ from analytics.operational.normalization import (
     OPERATIONAL_NORMALIZATION_SCHEMA,
     OperationalAggregationSpec,
     OperationalColumnExclusion,
+    OperationalGroupUniverse,
     OperationalNormalizationError,
+    OperationalNormalizationResult,
     OperationalRowExclusion,
+    OperationalTimezoneRules,
     aggregate_operational_series,
     normalize_operational_csv,
 )
@@ -23,6 +30,60 @@ from analytics.operational.normalization import (
 
 def _digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _asset_group_universe(*asset_ids: str) -> OperationalGroupUniverse:
+    data = (
+        "asset,rated\n" + "".join(f"{asset_id},5000\n" for asset_id in asset_ids)
+    ).encode()
+    evidence = OperationalDatasetEvidence(
+        logical_id="assets.primary",
+        kind="asset",
+        source_class="declared_asset",
+        timezone_treatment="not_applicable",
+        source_timezone=None,
+        ambiguous_time_policy="not_applicable",
+        nonexistent_time_policy="not_applicable",
+        observation_status="declared_metadata",
+        lineage_source_sha256=(),
+        derivation_method_sha256=None,
+        source_locator="evidence/assets.csv",
+        source_sha256=_digest(data),
+        coverage_start_utc="2025-01-01T00:00:00Z",
+        coverage_end_utc="2025-01-02T00:00:00Z",
+        interval_basis="not_applicable",
+        interval_seconds=None,
+        row_count=len(asset_ids),
+        columns=(
+            OperationalColumnBinding("asset_id", "asset", "1"),
+            OperationalColumnBinding("rated_power_kw", "rated", "kW"),
+        ),
+    )
+    return OperationalGroupUniverse(normalize_operational_csv(data, evidence))
+
+
+def _normalize_scada(
+    data: bytes,
+    evidence: OperationalDatasetEvidence,
+    *,
+    expected_assets: tuple[str, ...] = ("T01",),
+    **kwargs: Any,
+) -> OperationalNormalizationResult:
+    return normalize_operational_csv(
+        data,
+        evidence,
+        group_universe=_asset_group_universe(*expected_assets),
+        **kwargs,
+    )
+
+
+def _timezone_rules(zone: str = "Europe/London") -> OperationalTimezoneRules:
+    resource = importlib.resources.files("tzdata.zoneinfo").joinpath(*zone.split("/"))
+    return OperationalTimezoneRules(
+        source_timezone=zone,
+        tzif_bytes=resource.read_bytes(),
+        source_locator=f"python-package:tzdata/{zone}",
+    )
 
 
 def _scada_evidence(
@@ -80,8 +141,8 @@ def test_normalizes_deterministically_and_preserves_source_bytes(
     scada_csv: bytes,
 ) -> None:
     evidence = _scada_evidence(scada_csv)
-    first = normalize_operational_csv(scada_csv, evidence)
-    second = normalize_operational_csv(scada_csv, evidence)
+    first = _normalize_scada(scada_csv, evidence)
+    second = _normalize_scada(scada_csv, evidence)
 
     assert first == second
     assert first.source_bytes is scada_csv
@@ -123,7 +184,7 @@ def test_requires_complete_explicit_column_accounting(scada_csv: bytes) -> None:
         normalize_operational_csv(data, evidence)
     assert raised.value.code == "COLUMN_ACCOUNTING_FAILED"
 
-    result = normalize_operational_csv(
+    result = _normalize_scada(
         data,
         evidence,
         column_exclusions=(OperationalColumnExclusion("comment", "operator note"),),
@@ -152,7 +213,7 @@ def test_row_exclusion_is_hashed_and_quality_failure_is_receipted(
 ) -> None:
     evidence = _scada_evidence(scada_csv)
     with pytest.raises(OperationalNormalizationError) as raised:
-        normalize_operational_csv(
+        _normalize_scada(
             scada_csv,
             evidence,
             row_exclusions=(OperationalRowExclusion(2, "sensor maintenance"),),
@@ -182,7 +243,7 @@ def test_row_exclusion_is_hashed_and_quality_failure_is_receipted(
         (
             (b"2025-01-01T00:20:00Z", b"2025-01-01T00:25:00Z"),
             "interval_drift_count",
-            2,
+            1,
         ),
         ((b"3.000", b"NaN"), "nonfinite_value_count", 1),
         ((b"3.000", b"not-a-number"), "invalid_value_count", 1),
@@ -197,7 +258,7 @@ def test_quality_defects_fail_with_deterministic_receipt(
     data = scada_csv.replace(*replacement)
     evidence = _scada_evidence(data)
     with pytest.raises(OperationalNormalizationError) as raised:
-        normalize_operational_csv(data, evidence)
+        _normalize_scada(data, evidence)
     receipt = raised.value.receipt
     assert raised.value.code == "QUALITY_CHECK_FAILED"
     assert receipt is not None
@@ -210,7 +271,7 @@ def test_quality_defects_fail_with_deterministic_receipt(
 def test_coverage_is_recomputed_not_trusted(scada_csv: bytes) -> None:
     evidence = _scada_evidence(scada_csv, end="2025-01-01T00:40:00Z")
     with pytest.raises(OperationalNormalizationError) as raised:
-        normalize_operational_csv(scada_csv, evidence)
+        _normalize_scada(scada_csv, evidence)
     assert raised.value.receipt is not None
     assert raised.value.receipt.coverage_mismatch_count == 1
     assert raised.value.receipt.actual_coverage_end_utc == "2025-01-01T00:30:00Z"
@@ -222,7 +283,7 @@ def test_coverage_compares_utc_instants_not_string_spelling(scada_csv: bytes) ->
         start="2025-01-01T00:00:00.000Z",
         end="2025-01-01T00:30:00.000000Z",
     )
-    result = normalize_operational_csv(scada_csv, evidence)
+    result = _normalize_scada(scada_csv, evidence)
     assert result.receipt.coverage_mismatch_count == 0
 
 
@@ -243,11 +304,11 @@ def test_named_zone_ambiguous_fold_is_explicit_and_tzdb_is_receipted() -> None:
         ambiguous="fold_1",
         nonexistent="reject",
     )
-    result = normalize_operational_csv(data, evidence)
+    result = _normalize_scada(data, evidence, timezone_rules=_timezone_rules())
     assert result.normalized_rows[1][0] == "2025-10-26T01:30:00Z"
     assert result.receipt.ambiguous_time_resolution_count == 1
     assert result.receipt.timezone_database is not None
-    assert result.receipt.timezone_database.startswith("tzdata:")
+    assert result.receipt.timezone_database.startswith("tzif-sha256:")
 
 
 def test_named_zone_ambiguous_rejects() -> None:
@@ -268,7 +329,7 @@ def test_named_zone_ambiguous_rejects() -> None:
         nonexistent="reject",
     )
     with pytest.raises(OperationalNormalizationError) as raised:
-        normalize_operational_csv(data, evidence)
+        _normalize_scada(data, evidence, timezone_rules=_timezone_rules())
     assert raised.value.receipt is not None
     assert raised.value.receipt.invalid_value_count == 1
 
@@ -290,8 +351,77 @@ def test_named_zone_nonexistent_shift_is_explicit() -> None:
         ambiguous="reject",
         nonexistent="shift_forward",
     )
-    result = normalize_operational_csv(data, evidence)
+    result = _normalize_scada(data, evidence, timezone_rules=_timezone_rules())
     assert result.normalized_rows[1][0] == "2025-03-30T01:30:00Z"
+    assert result.receipt.nonexistent_time_resolution_count == 1
+
+
+def test_named_zone_fold_zero_and_shift_backward_are_explicit() -> None:
+    fold_data = (
+        b"timestamp,turbine,power\n"
+        b"2025-10-26T00:30:00,T01,1\n"
+        b"2025-10-26T01:30:00,T01,2\n"
+    )
+    fold_evidence = _scada_evidence(
+        fold_data,
+        row_count=2,
+        start="2025-10-25T23:30:00Z",
+        end="2025-10-26T00:30:00Z",
+        interval=3600,
+        timezone_treatment="named_zone_to_utc",
+        source_timezone="Europe/London",
+        ambiguous="fold_0",
+        nonexistent="reject",
+    )
+    folded = _normalize_scada(
+        fold_data, fold_evidence, timezone_rules=_timezone_rules()
+    )
+    assert folded.normalized_rows[1][0] == "2025-10-26T00:30:00Z"
+
+    gap_data = (
+        b"timestamp,turbine,power\n"
+        b"2025-03-30T01:30:00,T01,1\n"
+        b"2025-03-30T02:30:00,T01,2\n"
+    )
+    gap_evidence = _scada_evidence(
+        gap_data,
+        row_count=2,
+        start="2025-03-30T00:30:00Z",
+        end="2025-03-30T01:30:00Z",
+        interval=3600,
+        timezone_treatment="named_zone_to_utc",
+        source_timezone="Europe/London",
+        ambiguous="reject",
+        nonexistent="shift_backward",
+    )
+    shifted = _normalize_scada(gap_data, gap_evidence, timezone_rules=_timezone_rules())
+    assert shifted.normalized_rows[0][0] == "2025-03-30T00:30:00Z"
+    assert shifted.receipt.nonexistent_time_resolution_count == 1
+
+
+def test_non_hour_dst_gap_uses_supplied_tzif_rules() -> None:
+    data = (
+        b"timestamp,turbine,power\n"
+        b"2025-10-05T02:15:00,T01,1\n"
+        b"2025-10-05T03:15:00,T01,2\n"
+    )
+    evidence = _scada_evidence(
+        data,
+        row_count=2,
+        start="2025-10-04T15:45:00Z",
+        end="2025-10-04T16:15:00Z",
+        interval=1800,
+        timezone_treatment="named_zone_to_utc",
+        source_timezone="Australia/Lord_Howe",
+        ambiguous="reject",
+        nonexistent="shift_forward",
+    )
+    result = _normalize_scada(
+        data,
+        evidence,
+        timezone_rules=_timezone_rules("Australia/Lord_Howe"),
+    )
+    assert result.normalized_rows[0][0] == "2025-10-04T15:45:00Z"
     assert result.receipt.nonexistent_time_resolution_count == 1
 
 
@@ -392,6 +522,8 @@ def test_energy_aggregation_is_an_explicit_sum() -> None:
             anchor_utc="2025-01-01T00:00:00Z",
             source_timestamp_position="interval_start",
             value_basis="interval_energy",
+            arithmetic_policy="exact_decimal_sum_v1",
+            rounding_decimal_places=None,
         ),
     )
     assert result.rows == (("2025-01-01T00:00:00Z", "10"),)
@@ -415,7 +547,7 @@ def test_power_aggregation_across_dst_offsets_uses_utc_elapsed_time() -> None:
         interval=3600,
         timezone_treatment="offset_aware_to_utc",
     )
-    normalized = normalize_operational_csv(data, evidence)
+    normalized = _normalize_scada(data, evidence)
     result = aggregate_operational_series(
         normalized,
         OperationalAggregationSpec(
@@ -425,6 +557,8 @@ def test_power_aggregation_across_dst_offsets_uses_utc_elapsed_time() -> None:
             anchor_utc="2025-10-25T23:00:00Z",
             source_timestamp_position="interval_start",
             value_basis="interval_average_power",
+            arithmetic_policy="half_even_power_mean_v1",
+            rounding_decimal_places=12,
         ),
     )
     assert result.rows == (("2025-10-25T23:00:00Z", "T01", "4"),)
@@ -433,7 +567,7 @@ def test_power_aggregation_across_dst_offsets_uses_utc_elapsed_time() -> None:
 
 
 def test_aggregation_rejects_partial_bucket(scada_csv: bytes) -> None:
-    normalized = normalize_operational_csv(scada_csv, _scada_evidence(scada_csv))
+    normalized = _normalize_scada(scada_csv, _scada_evidence(scada_csv))
     with pytest.raises(OperationalNormalizationError) as raised:
         aggregate_operational_series(
             normalized,
@@ -444,6 +578,8 @@ def test_aggregation_rejects_partial_bucket(scada_csv: bytes) -> None:
                 anchor_utc="2025-01-01T00:00:00Z",
                 source_timestamp_position="interval_start",
                 value_basis="interval_average_power",
+                arithmetic_policy="half_even_power_mean_v1",
+                rounding_decimal_places=12,
             ),
         )
     assert raised.value.code == "AGGREGATION_CONTRACT_FAILED"
@@ -466,6 +602,12 @@ def test_aggregation_spec_refuses_dimensionally_wrong_method(
             value_basis=(
                 "interval_energy" if role == "energy_kwh" else "interval_average_power"
             ),
+            arithmetic_policy=(
+                "exact_decimal_sum_v1"
+                if role == "energy_kwh"
+                else "half_even_power_mean_v1"
+            ),
+            rounding_decimal_places=None if role == "energy_kwh" else 12,
         )
 
 
@@ -478,11 +620,13 @@ def test_aggregation_spec_requires_explicit_value_semantics() -> None:
             anchor_utc="2025-01-01T00:00:00Z",
             source_timestamp_position="interval_start",
             value_basis="interval_energy",
+            arithmetic_policy="half_even_power_mean_v1",
+            rounding_decimal_places=12,
         )
 
 
 def test_quality_receipt_refuses_authority_laundering(scada_csv: bytes) -> None:
-    result = normalize_operational_csv(scada_csv, _scada_evidence(scada_csv))
+    result = _normalize_scada(scada_csv, _scada_evidence(scada_csv))
     with pytest.raises(ValueError, match="canonical_finance_eligible"):
         replace(result.receipt, canonical_finance_eligible=True)
 
@@ -529,12 +673,12 @@ def test_method_digest_binds_explicit_exclusions() -> None:
         row_count=2,
         end="2025-01-01T00:10:00Z",
     )
-    first = normalize_operational_csv(
+    first = _normalize_scada(
         data,
         evidence,
         column_exclusions=(OperationalColumnExclusion("note", "not analytical"),),
     )
-    second = normalize_operational_csv(
+    second = _normalize_scada(
         data,
         evidence,
         column_exclusions=(OperationalColumnExclusion("note", "operator narrative"),),
@@ -594,3 +738,557 @@ def test_derived_evidence_rehashes_and_preserves_complete_lineage() -> None:
     assert result.derivation_method_bytes == method
     assert result.receipt.lineage_verified is True
     assert result.receipt.lineage_source_sha256 == (_digest(upstream),)
+
+
+def test_decimal_normalization_is_independent_of_decimal_context() -> None:
+    data = (
+        b"when,energy\n"
+        b"2025-01-01T00:00:00Z,1.2300e+2\n"
+        b"2025-01-01T00:00:01Z,0.0000000000000000000000001\n"
+    )
+    evidence = _meter_evidence(
+        data,
+        start="2025-01-01T00:00:00Z",
+        end="2025-01-01T00:00:01Z",
+        row_count=2,
+        interval_basis="fixed_seconds",
+        interval_seconds=1,
+    )
+    with localcontext(Context(prec=2)):
+        low_precision = normalize_operational_csv(data, evidence)
+    with localcontext(Context(prec=50)):
+        high_precision = normalize_operational_csv(data, evidence)
+    assert low_precision.normalized_csv_bytes == high_precision.normalized_csv_bytes
+    assert low_precision.normalized_rows == (
+        ("2025-01-01T00:00:00Z", "123"),
+        ("2025-01-01T00:00:01Z", "0.0000000000000000000000001"),
+    )
+
+
+def test_energy_sum_is_exact_under_long_decimal_cancellation() -> None:
+    data = (
+        b"when,energy\n"
+        b"2025-01-01T00:00:00Z,99999999999999999999.999999999999\n"
+        b"2025-01-01T00:00:01Z,-99999999999999999999.999999999998\n"
+    )
+    normalized = normalize_operational_csv(
+        data,
+        _meter_evidence(
+            data,
+            start="2025-01-01T00:00:00Z",
+            end="2025-01-01T00:00:01Z",
+            row_count=2,
+            interval_basis="fixed_seconds",
+            interval_seconds=1,
+        ),
+    )
+    result = aggregate_operational_series(
+        normalized,
+        OperationalAggregationSpec(
+            value_role="energy_kwh",
+            method="sum",
+            target_interval_seconds=2,
+            anchor_utc="2025-01-01T00:00:00Z",
+            source_timestamp_position="interval_start",
+            value_basis="interval_energy",
+            arithmetic_policy="exact_decimal_sum_v1",
+            rounding_decimal_places=None,
+        ),
+    )
+    assert result.rows == (("2025-01-01T00:00:00Z", "0.000000000001"),)
+
+
+@pytest.mark.parametrize(
+    ("second_value", "expected"),
+    [
+        ("0.000000000001", "0"),
+        ("0.000000000003", "0.000000000002"),
+        ("-0.000000000003", "-0.000000000002"),
+    ],
+)
+def test_power_mean_uses_bounded_signed_half_even_oracle(
+    second_value: str, expected: str
+) -> None:
+    data = (
+        "timestamp,turbine,power\n"
+        "2025-01-01T00:00:00Z,T01,0\n"
+        f"2025-01-01T00:00:01Z,T01,{second_value}\n"
+    ).encode()
+    normalized = _normalize_scada(
+        data,
+        _scada_evidence(
+            data,
+            row_count=2,
+            end="2025-01-01T00:00:01Z",
+            interval=1,
+        ),
+    )
+    result = aggregate_operational_series(
+        normalized,
+        OperationalAggregationSpec(
+            value_role="power_kw",
+            method="mean",
+            target_interval_seconds=2,
+            anchor_utc="2025-01-01T00:00:00Z",
+            source_timestamp_position="interval_start",
+            value_basis="interval_average_power",
+            arithmetic_policy="half_even_power_mean_v1",
+            rounding_decimal_places=12,
+        ),
+    )
+    assert result.rows == (("2025-01-01T00:00:00Z", "T01", expected),)
+
+
+@pytest.mark.parametrize(
+    ("role", "policy", "places"),
+    [
+        ("energy_kwh", "half_even_power_mean_v1", 12),
+        ("power_kw", "exact_decimal_sum_v1", None),
+        ("power_kw", "half_even_power_mean_v1", 7),
+    ],
+)
+def test_aggregation_spec_rejects_contradictory_arithmetic_policy(
+    role: str, policy: str, places: int | None
+) -> None:
+    with pytest.raises(ValueError, match="arithmetic_policy"):
+        OperationalAggregationSpec(
+            value_role=role,  # type: ignore[arg-type]
+            method="sum" if role == "energy_kwh" else "mean",
+            target_interval_seconds=3600,
+            anchor_utc="2025-01-01T00:00:00Z",
+            source_timestamp_position="interval_start",
+            value_basis=(
+                "interval_energy" if role == "energy_kwh" else "interval_average_power"
+            ),
+            arithmetic_policy=policy,  # type: ignore[arg-type]
+            rounding_decimal_places=places,
+        )
+
+
+def test_cadence_population_counts_are_order_independent() -> None:
+    ordered = (
+        b"timestamp,turbine,power\n"
+        b"2025-01-01T00:00:00Z,T01,1\n"
+        b"2025-01-01T00:10:00Z,T01,2\n"
+        b"2025-01-01T00:20:00Z,T01,3\n"
+        b"2025-01-01T00:30:00Z,T01,4\n"
+    )
+    reversed_rows = (
+        b"timestamp,turbine,power\n"
+        + b"\n".join(reversed(ordered.splitlines()[1:]))
+        + b"\n"
+    )
+    ordered_result = _normalize_scada(ordered, _scada_evidence(ordered))
+    with pytest.raises(OperationalNormalizationError) as reversed_error:
+        _normalize_scada(reversed_rows, _scada_evidence(reversed_rows))
+    receipt = reversed_error.value.receipt
+    assert receipt is not None
+    assert (
+        receipt.duplicate_key_count,
+        receipt.gap_count,
+        receipt.interval_drift_count,
+    ) == (
+        ordered_result.receipt.duplicate_key_count,
+        ordered_result.receipt.gap_count,
+        ordered_result.receipt.interval_drift_count,
+    )
+    assert receipt.source_order_violation_count == 3
+
+
+def test_duplicate_off_grid_rows_are_counted_by_occurrence_despite_bad_value() -> None:
+    data = (
+        b"timestamp,turbine,power\n"
+        b"2025-01-01T00:00:00Z,T01,1\n"
+        b"2025-01-01T00:05:00Z,T01,NaN\n"
+        b"2025-01-01T00:05:00Z,T01,3\n"
+        b"2025-01-01T00:30:00Z,T01,4\n"
+    )
+    with pytest.raises(OperationalNormalizationError) as raised:
+        _normalize_scada(data, _scada_evidence(data))
+    receipt = raised.value.receipt
+    assert receipt is not None
+    assert receipt.duplicate_key_count == 1
+    assert receipt.interval_drift_count == 2
+    assert receipt.gap_count == 2
+    assert receipt.nonfinite_value_count == 1
+
+
+def test_calendar_gaps_are_derived_from_declared_population_edges() -> None:
+    data = b"when,energy\n2024-02-01T00:00:00Z,11\n"
+    evidence = _meter_evidence(
+        data,
+        start="2024-01-01T00:00:00Z",
+        end="2024-03-01T00:00:00Z",
+        row_count=1,
+        interval_basis="calendar_month",
+        interval_seconds=None,
+    )
+    with pytest.raises(OperationalNormalizationError) as raised:
+        normalize_operational_csv(data, evidence)
+    assert raised.value.receipt is not None
+    assert raised.value.receipt.gap_count == 2
+
+
+def test_group_universe_detects_absent_unexpected_and_truncated_assets() -> None:
+    absent = (
+        b"timestamp,turbine,power\n"
+        b"2025-01-01T00:00:00Z,T01,1\n"
+        b"2025-01-01T00:10:00Z,T01,2\n"
+    )
+    with pytest.raises(OperationalNormalizationError) as missing:
+        _normalize_scada(
+            absent,
+            _scada_evidence(absent, row_count=2, end="2025-01-01T00:10:00Z"),
+            expected_assets=("T01", "T02"),
+        )
+    assert missing.value.receipt is not None
+    assert missing.value.receipt.missing_group_keys == ("T02",)
+
+    unexpected = absent.replace(b"T01,2", b"T02,2")
+    with pytest.raises(OperationalNormalizationError) as extra:
+        _normalize_scada(
+            unexpected,
+            _scada_evidence(unexpected, row_count=2, end="2025-01-01T00:10:00Z"),
+        )
+    assert extra.value.receipt is not None
+    assert extra.value.receipt.unexpected_group_keys == ("T02",)
+
+    truncated = (
+        b"timestamp,turbine,power\n"
+        b"2025-01-01T00:00:00Z,T01,1\n"
+        b"2025-01-01T00:10:00Z,T01,2\n"
+        b"2025-01-01T00:00:00Z,T02,3\n"
+    )
+    with pytest.raises(OperationalNormalizationError) as short:
+        _normalize_scada(
+            truncated,
+            _scada_evidence(truncated, row_count=3, end="2025-01-01T00:10:00Z"),
+            expected_assets=("T01", "T02"),
+        )
+    assert short.value.receipt is not None
+    t02 = next(
+        group
+        for group in short.value.receipt.group_receipts
+        if group.group_key == "T02"
+    )
+    assert t02.coverage_mismatch_count == 1
+    assert t02.gap_count == 1
+
+
+def test_grouped_timeseries_requires_verified_asset_universe(scada_csv: bytes) -> None:
+    with pytest.raises(OperationalNormalizationError) as raised:
+        normalize_operational_csv(scada_csv, _scada_evidence(scada_csv))
+    assert raised.value.code == "GROUP_UNIVERSE_FAILED"
+
+
+def test_all_rows_excluded_and_forged_empty_success_fail_closed(
+    scada_csv: bytes,
+) -> None:
+    with pytest.raises(OperationalNormalizationError) as excluded:
+        _normalize_scada(
+            scada_csv,
+            _scada_evidence(scada_csv),
+            row_exclusions=tuple(
+                OperationalRowExclusion(number, "test exclusion")
+                for number in range(1, 5)
+            ),
+        )
+    receipt = excluded.value.receipt
+    assert receipt is not None
+    assert receipt.empty_dataset_count == 1
+    assert receipt.included_row_count == 0
+    with pytest.raises(ValueError, match="quality_passed|passing QA requires"):
+        replace(
+            receipt,
+            quality_passed=True,
+            normalized_sha256="0" * 64,
+        )
+
+
+def test_named_zone_rules_are_host_independent_and_explicitly_attested() -> None:
+    data = (
+        b"timestamp,turbine,power\n"
+        b"2025-07-01T12:00:00,T01,1\n"
+        b"2025-07-01T13:00:00,T01,2\n"
+    )
+    evidence = _scada_evidence(
+        data,
+        row_count=2,
+        start="2025-07-01T11:00:00Z",
+        end="2025-07-01T12:00:00Z",
+        interval=3600,
+        timezone_treatment="named_zone_to_utc",
+        source_timezone="Europe/London",
+        ambiguous="reject",
+        nonexistent="reject",
+    )
+    rules = _timezone_rules()
+    original_tzpath = __import__("zoneinfo").TZPATH
+    try:
+        reset_tzpath(())
+        result = _normalize_scada(data, evidence, timezone_rules=rules)
+    finally:
+        reset_tzpath(original_tzpath)
+    assert result.normalized_rows[0][0] == "2025-07-01T11:00:00Z"
+    assert result.receipt.timezone_rule_attestation == "caller_attested_zone_payload"
+    assert result.receipt.timezone_source_locator == rules.source_locator
+    assert result.receipt.timezone_database == rules.identity
+
+
+def test_timezone_payload_and_locator_are_bound_but_zone_semantics_are_attested() -> (
+    None
+):
+    data = (
+        b"timestamp,turbine,power\n"
+        b"2025-07-01T12:00:00,T01,1\n"
+        b"2025-07-01T13:00:00,T01,2\n"
+    )
+    evidence = _scada_evidence(
+        data,
+        row_count=2,
+        start="2025-07-01T12:00:00Z",
+        end="2025-07-01T13:00:00Z",
+        interval=3600,
+        timezone_treatment="named_zone_to_utc",
+        source_timezone="Europe/London",
+        ambiguous="reject",
+        nonexistent="reject",
+    )
+    utc_bytes = (
+        importlib.resources.files("tzdata.zoneinfo").joinpath("Etc/UTC").read_bytes()
+    )
+    labelled_utc = OperationalTimezoneRules(
+        source_timezone="Europe/London",
+        tzif_bytes=utc_bytes,
+        source_locator="attested:test/utc-labelled-london",
+    )
+    first = _normalize_scada(data, evidence, timezone_rules=labelled_utc)
+    second = _normalize_scada(
+        data,
+        evidence,
+        timezone_rules=replace(labelled_utc, source_locator="attested:test/copy"),
+    )
+    assert first.receipt.timezone_rule_attestation == "caller_attested_zone_payload"
+    assert first.receipt.method_sha256 != second.receipt.method_sha256
+
+
+@pytest.mark.parametrize(
+    "bad_rules",
+    [
+        pytest.param(b"not-tzif", id="bad-magic"),
+        pytest.param(b"TZif" + b"0" * 1_048_573, id="oversized"),
+    ],
+)
+def test_timezone_rule_envelope_rejects_invalid_bytes(bad_rules: bytes) -> None:
+    with pytest.raises(ValueError, match="TZif|1 MiB"):
+        OperationalTimezoneRules("Europe/London", bad_rules, "test:bad")
+
+
+def test_failed_receipt_rejects_malformed_tzif_identity() -> None:
+    data = (
+        b"timestamp,turbine,power\n"
+        b"2025-10-26T00:30:00,T01,1\n"
+        b"2025-10-26T01:30:00,T01,2\n"
+    )
+    evidence = _scada_evidence(
+        data,
+        row_count=2,
+        start="2025-10-25T23:30:00Z",
+        end="2025-10-26T01:30:00Z",
+        interval=7200,
+        timezone_treatment="named_zone_to_utc",
+        source_timezone="Europe/London",
+        ambiguous="reject",
+        nonexistent="reject",
+    )
+    with pytest.raises(OperationalNormalizationError) as raised:
+        _normalize_scada(data, evidence, timezone_rules=_timezone_rules())
+    assert raised.value.receipt is not None
+    with pytest.raises(ValueError, match="hash-bound"):
+        replace(
+            raised.value.receipt,
+            timezone_database="tzif-sha256:not-a-digest",
+        )
+
+
+def test_unknown_negative_zero_offset_fails_with_receipt() -> None:
+    data = (
+        b"timestamp,turbine,power\n"
+        b"2025-01-01T00:00:00-00:00,T01,1\n"
+        b"2025-01-01T00:10:00-00:00,T01,2\n"
+    )
+    evidence = _scada_evidence(
+        data,
+        row_count=2,
+        end="2025-01-01T00:10:00Z",
+        timezone_treatment="offset_aware_to_utc",
+    )
+    with pytest.raises(OperationalNormalizationError) as raised:
+        _normalize_scada(data, evidence)
+    assert raised.value.receipt is not None
+    assert raised.value.receipt.invalid_value_count == 2
+
+
+def test_normalization_result_rejects_method_and_row_substitution(
+    scada_csv: bytes,
+) -> None:
+    result = _normalize_scada(scada_csv, _scada_evidence(scada_csv))
+    with pytest.raises(ValueError, match="constructed by"):
+        replace(result, receipt=replace(result.receipt, method_sha256="0" * 64))
+    forged_rows = result.normalized_rows[:-1] + (
+        ("2025-01-01T00:30:00Z", "T01", "999"),
+    )
+    forged_bytes = (
+        b"timestamp_utc,asset_id,power_kw\n"
+        + b"\n".join(",".join(row).encode() for row in forged_rows)
+        + b"\n"
+    )
+    with pytest.raises(ValueError, match="constructed by"):
+        replace(
+            result,
+            normalized_rows=forged_rows,
+            normalized_csv_bytes=forged_bytes,
+            receipt=replace(result.receipt, normalized_sha256=_digest(forged_bytes)),
+        )
+
+
+def test_aggregation_result_rejects_source_method_and_row_substitution() -> None:
+    data = b"when,energy\n2025-01-01T00:00:00Z,1\n2025-01-01T00:00:01Z,2\n"
+    normalized = normalize_operational_csv(
+        data,
+        _meter_evidence(
+            data,
+            start="2025-01-01T00:00:00Z",
+            end="2025-01-01T00:00:01Z",
+            row_count=2,
+            interval_basis="fixed_seconds",
+            interval_seconds=1,
+        ),
+    )
+    result = aggregate_operational_series(
+        normalized,
+        OperationalAggregationSpec(
+            value_role="energy_kwh",
+            method="sum",
+            target_interval_seconds=2,
+            anchor_utc="2025-01-01T00:00:00Z",
+            source_timestamp_position="interval_start",
+            value_basis="interval_energy",
+            arithmetic_policy="exact_decimal_sum_v1",
+            rounding_decimal_places=None,
+        ),
+    )
+    for forged_receipt in (
+        replace(result.receipt, source_normalized_sha256="0" * 64),
+        replace(result.receipt, method_sha256="0" * 64),
+    ):
+        with pytest.raises(ValueError, match="constructed by"):
+            replace(result, receipt=forged_receipt)
+    with pytest.raises(ValueError, match="constructed by"):
+        replace(result, rows=(("2025-01-01T00:00:00Z", "999"),))
+
+
+def test_resource_bounds_fail_with_closed_errors() -> None:
+    too_wide = b"when,energy\n2025-01-01T00:00:00Z,1\n2025-02-02T00:00:01Z,2\n"
+    with pytest.raises(OperationalNormalizationError) as wide:
+        normalize_operational_csv(
+            too_wide,
+            _meter_evidence(
+                too_wide,
+                start="2025-01-01T00:00:00Z",
+                end="2025-02-02T00:00:01Z",
+                row_count=2,
+                interval_basis="fixed_seconds",
+                interval_seconds=31 * 86_400 + 1,
+            ),
+        )
+    assert wide.value.code == "QUALITY_CHECK_FAILED"
+
+    two_points = b"when,energy\n2025-01-01T00:00:00Z,1\n2025-01-01T00:00:01Z,2\n"
+    normalized = normalize_operational_csv(
+        two_points,
+        _meter_evidence(
+            two_points,
+            start="2025-01-01T00:00:00Z",
+            end="2025-01-01T00:00:01Z",
+            row_count=2,
+            interval_basis="fixed_seconds",
+            interval_seconds=1,
+        ),
+    )
+    with pytest.raises(OperationalNormalizationError) as oversized_bucket:
+        aggregate_operational_series(
+            normalized,
+            OperationalAggregationSpec(
+                value_role="energy_kwh",
+                method="sum",
+                target_interval_seconds=100_001,
+                anchor_utc="2025-01-01T00:00:00Z",
+                source_timestamp_position="interval_start",
+                value_basis="interval_energy",
+                arithmetic_policy="exact_decimal_sum_v1",
+                rounding_decimal_places=None,
+            ),
+        )
+    assert oversized_bucket.value.code == "AGGREGATION_CONTRACT_FAILED"
+
+
+def test_aggregation_closes_date_overflow_and_oversized_result() -> None:
+    late = b"when,energy\n9999-12-30T00:00:00Z,1\n9999-12-31T00:00:00Z,2\n"
+    late_normalized = normalize_operational_csv(
+        late,
+        _meter_evidence(
+            late,
+            start="9999-12-30T00:00:00Z",
+            end="9999-12-31T00:00:00Z",
+            row_count=2,
+            interval_basis="fixed_seconds",
+            interval_seconds=86_400,
+        ),
+    )
+    with pytest.raises(OperationalNormalizationError) as late_error:
+        aggregate_operational_series(
+            late_normalized,
+            OperationalAggregationSpec(
+                value_role="energy_kwh",
+                method="sum",
+                target_interval_seconds=366 * 86_400,
+                anchor_utc="0001-01-01T00:00:00Z",
+                source_timestamp_position="interval_start",
+                value_basis="interval_energy",
+                arithmetic_policy="exact_decimal_sum_v1",
+                rounding_decimal_places=None,
+            ),
+        )
+    assert late_error.value.code == "AGGREGATION_CONTRACT_FAILED"
+
+    huge = "9" * 4_096
+    huge_data = (
+        f"when,energy\n2025-01-01T00:00:00Z,{huge}\n2025-01-01T00:00:01Z,{huge}\n"
+    ).encode()
+    huge_normalized = normalize_operational_csv(
+        huge_data,
+        _meter_evidence(
+            huge_data,
+            start="2025-01-01T00:00:00Z",
+            end="2025-01-01T00:00:01Z",
+            row_count=2,
+            interval_basis="fixed_seconds",
+            interval_seconds=1,
+        ),
+    )
+    with pytest.raises(OperationalNormalizationError) as huge_error:
+        aggregate_operational_series(
+            huge_normalized,
+            OperationalAggregationSpec(
+                value_role="energy_kwh",
+                method="sum",
+                target_interval_seconds=2,
+                anchor_utc="2025-01-01T00:00:00Z",
+                source_timestamp_position="interval_start",
+                value_basis="interval_energy",
+                arithmetic_policy="exact_decimal_sum_v1",
+                rounding_decimal_places=None,
+            ),
+        )
+    assert huge_error.value.code == "AGGREGATION_CONTRACT_FAILED"

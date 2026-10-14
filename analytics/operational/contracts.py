@@ -19,7 +19,6 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any, Final, Literal, Mapping, TypeAlias
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 OPERATIONAL_EVIDENCE_SCHEMA: Final = "dutchbay.operational_evidence.v1"
 
@@ -415,12 +414,6 @@ def _require_portable_iana_timezone(value: object) -> str:
             "source_timezone must be 'UTC' or a portable multi-component IANA "
             f"timezone key; got {value!r}."
         )
-    try:
-        ZoneInfo(value)
-    except (ZoneInfoNotFoundError, ValueError) as exc:
-        raise OperationalEvidenceError(
-            f"source_timezone must identify an available IANA timezone; got {value!r}."
-        ) from exc
     return value
 
 
