@@ -94,6 +94,7 @@ class OperationalColumnExclusion:
         _require_closed_text(self.reason, "reason")
 
     def model_dump(self) -> dict[str, Any]:
+        """Return a JSON-compatible representation of the exclusion."""
         return asdict(self)
 
 
@@ -110,16 +111,20 @@ class OperationalRowExclusion:
         _require_closed_text(self.reason, "reason")
 
     def model_dump(self) -> dict[str, Any]:
+        """Return a JSON-compatible representation of the exclusion."""
         return asdict(self)
 
 
 @dataclass(frozen=True)
 class OperationalExcludedRowReceipt:
+    """Hash-bound receipt for one excluded parsed source row."""
+
     source_row_number: int
     reason: str
     parsed_row_sha256: str
 
     def model_dump(self) -> dict[str, Any]:
+        """Return a JSON-compatible representation of the receipt."""
         return asdict(self)
 
 
@@ -147,13 +152,16 @@ class OperationalTimezoneRules:
 
     @property
     def sha256(self) -> str:
+        """Return the SHA-256 digest of the supplied TZif bytes."""
         return _sha256(self.tzif_bytes)
 
     @property
     def identity(self) -> str:
+        """Return the stable digest-qualified timezone-rule identity."""
         return f"tzif-sha256:{self.sha256}"
 
     def model_dump(self) -> dict[str, Any]:
+        """Return public timezone-rule provenance without embedding TZif bytes."""
         return {
             "source_timezone": self.source_timezone,
             "source_locator": self.source_locator,
@@ -190,6 +198,7 @@ class OperationalGroupQualityReceipt:
                 raise ValueError(f"{field_name} must be a non-negative integer.")
 
     def model_dump(self) -> dict[str, Any]:
+        """Return a JSON-compatible representation of the group receipt."""
         return asdict(self)
 
 
@@ -439,9 +448,11 @@ class OperationalQualityReceipt:
                 )
 
     def model_dump(self) -> dict[str, Any]:
+        """Return a JSON-compatible representation of the quality receipt."""
         return asdict(self)
 
     def dict(self) -> dict[str, Any]:
+        """Return the compatibility dictionary representation."""
         return self.model_dump()
 
 
@@ -605,16 +616,19 @@ class OperationalGroupUniverse:
 
     @property
     def group_keys(self) -> tuple[str, ...]:
+        """Return the sorted asset identifiers in the verified universe."""
         index = self.asset_result.receipt.normalized_roles.index("asset_id")
         return tuple(sorted(row[index] for row in self.asset_result.normalized_rows))
 
     @property
     def normalized_sha256(self) -> str:
+        """Return the digest of the normalized asset-roster artifact."""
         digest = self.asset_result.receipt.normalized_sha256
         assert digest is not None
         return digest
 
     def model_dump(self) -> dict[str, Any]:
+        """Return a JSON-compatible representation of the group universe."""
         return {
             "normalized_sha256": self.normalized_sha256,
             "group_keys": list(self.group_keys),
@@ -683,11 +697,14 @@ class OperationalAggregationSpec:
         _parse_canonical_utc(self.anchor_utc, "anchor_utc")
 
     def model_dump(self) -> dict[str, Any]:
+        """Return a JSON-compatible representation of the aggregation spec."""
         return asdict(self)
 
 
 @dataclass(frozen=True)
 class OperationalAggregationReceipt:
+    """Stable provenance and QA facts for one aggregate artifact."""
+
     schema: str
     logical_id: str
     source_normalized_sha256: str
@@ -787,11 +804,14 @@ class OperationalAggregationReceipt:
             raise ValueError("utc_elapsed_time_basis must be the exact boolean True.")
 
     def model_dump(self) -> dict[str, Any]:
+        """Return a JSON-compatible representation of the aggregate receipt."""
         return asdict(self)
 
 
 @dataclass(frozen=True)
 class OperationalAggregationResult:
+    """Immutable aggregate artifact bound to its normalized source and spec."""
+
     normalized: OperationalNormalizationResult
     spec: OperationalAggregationSpec
     header: tuple[str, ...]

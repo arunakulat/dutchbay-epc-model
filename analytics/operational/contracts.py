@@ -443,9 +443,11 @@ class OperationalColumnBinding:
             )
 
     def model_dump(self) -> dict[str, Any]:
+        """Return a JSON-compatible representation of the column binding."""
         return asdict(self)
 
     def dict(self) -> dict[str, Any]:
+        """Return the compatibility dictionary representation."""
         return self.model_dump()
 
 
@@ -667,12 +669,15 @@ class OperationalDatasetEvidence:
 
     @property
     def roles(self) -> frozenset[str]:
+        """Return the closed semantic roles mapped by this dataset."""
         return frozenset(item.role for item in self.columns)
 
     def model_dump(self) -> dict[str, Any]:
+        """Return a JSON-compatible representation of the dataset evidence."""
         return asdict(self)
 
     def dict(self) -> dict[str, Any]:
+        """Return the compatibility dictionary representation."""
         return self.model_dump()
 
 
@@ -785,9 +790,11 @@ class OperationalAssessmentInput:
                 )
 
     def model_dump(self) -> dict[str, Any]:
+        """Return a JSON-compatible representation of the assessment input."""
         return asdict(self)
 
     def dict(self) -> dict[str, Any]:
+        """Return the compatibility dictionary representation."""
         return self.model_dump()
 
 
