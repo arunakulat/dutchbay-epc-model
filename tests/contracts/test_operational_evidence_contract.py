@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import FrozenInstanceError, replace
 from typing import Any
+from zoneinfo import TZPATH, reset_tzpath
 
 import pytest
 
@@ -318,15 +319,6 @@ def test_portable_iana_timezone_keys_are_accepted(source_timezone: str) -> None:
         (
             {
                 "timezone_treatment": "named_zone_to_utc",
-                "source_timezone": "Not/A_Real_Zone",
-                "ambiguous_time_policy": "reject",
-                "nonexistent_time_policy": "reject",
-            },
-            "IANA timezone",
-        ),
-        (
-            {
-                "timezone_treatment": "named_zone_to_utc",
                 "source_timezone": "localtime",
                 "ambiguous_time_policy": "reject",
                 "nonexistent_time_policy": "reject",
@@ -395,6 +387,23 @@ def test_timezone_policy_combinations_fail_loud(
 ) -> None:
     with pytest.raises(OperationalEvidenceError, match=match):
         _dataset("revenue_meter", {"timestamp_utc", "energy_kwh"}, **overrides)
+
+
+def test_portable_timezone_key_validation_does_not_consult_host_tzpath() -> None:
+    original_tzpath = TZPATH
+    try:
+        reset_tzpath(())
+        dataset = _dataset(
+            "revenue_meter",
+            {"timestamp_utc", "energy_kwh"},
+            timezone_treatment="named_zone_to_utc",
+            source_timezone="Not/A_Host_Installed_Zone",
+            ambiguous_time_policy="reject",
+            nonexistent_time_policy="reject",
+        )
+    finally:
+        reset_tzpath(original_tzpath)
+    assert dataset.source_timezone == "Not/A_Host_Installed_Zone"
 
 
 def test_derived_curtailment_evidence_requires_bound_lineage() -> None:
@@ -577,6 +586,19 @@ def test_calendar_month_cannot_claim_a_fixed_seconds_duration() -> None:
             {"timestamp_utc", "energy_kwh"},
             interval_basis="calendar_month",
             interval_seconds=2_592_000,
+        )
+
+
+def test_calendar_month_rejects_unreconstructible_offset_aware_frame() -> None:
+    with pytest.raises(
+        OperationalEvidenceError, match="reconstructible calendar frame"
+    ):
+        _dataset(
+            "revenue_meter",
+            {"timestamp_utc", "energy_kwh"},
+            timezone_treatment="offset_aware_to_utc",
+            interval_basis="calendar_month",
+            interval_seconds=None,
         )
 
 

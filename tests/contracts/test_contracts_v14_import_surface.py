@@ -7,25 +7,33 @@ import pytest
 
 from analytics.contracts import ScenarioResult as PackageScenarioResult
 from analytics.contracts_v14 import (
+    OPERATIONAL_AGGREGATION_SCHEMA,
     OPERATIONAL_CALENDAR_MONTH_ALLOWED,
     OPERATIONAL_EVIDENCE_SCHEMA,
     OPERATIONAL_MAX_INTERVAL_SECONDS,
+    OPERATIONAL_NORMALIZATION_SCHEMA,
     CashflowResult,
     CasperResult,
     DebtCovenantSnapshot,
     EquityPerformance,
     IrrBridgeComponent,
     MonteCarloResult,
+    OperationalAggregationSpec,
     OperationalAmbiguousTimePolicy,
     OperationalAnalysisPurpose,
     OperationalAssessmentInput,
     OperationalColumnBinding,
+    OperationalColumnExclusion,
     OperationalDatasetEvidence,
     OperationalDatasetKind,
+    OperationalGroupQualityReceipt,
+    OperationalGroupUniverse,
     OperationalIntervalBasis,
     OperationalNonexistentTimePolicy,
+    OperationalNormalizationError,
     OperationalObservationStatus,
     OperationalSourceClass,
+    OperationalTimezoneRules,
     OperationalTimezoneTreatment,
     ParameterRangeConfig,
     ProjectEquityIrrBridge,
@@ -36,7 +44,16 @@ from analytics.contracts_v14 import (
     TrancheDebtProfile,
     WaccComponents,
     WaccResult,
+    aggregate_operational_series,
+    normalize_operational_csv,
 )
+from analytics.operational import (
+    OperationalGroupQualityReceipt as PackageOperationalGroupQualityReceipt,
+)
+from analytics.operational import (
+    OperationalGroupUniverse as PackageOperationalGroupUniverse,
+)
+from analytics.operational import OperationalTimezoneRules as PackageTimezoneRules
 
 
 def test_contracts_v14_pipeline_surface_is_importable() -> None:
@@ -79,12 +96,22 @@ def test_contracts_v14_pipeline_surface_is_importable() -> None:
     assert result.model_dump()["project_irr"] == 0.12
     assert PackageScenarioResult is ScenarioResult
     assert OPERATIONAL_EVIDENCE_SCHEMA == "dutchbay.operational_evidence.v1"
+    assert OPERATIONAL_NORMALIZATION_SCHEMA == "dutchbay.operational_normalization.v1"
+    assert OPERATIONAL_AGGREGATION_SCHEMA == "dutchbay.operational_aggregation.v1"
     assert OPERATIONAL_MAX_INTERVAL_SECONDS["wake_losses_scada"]["scada"] == 3_600
     assert OPERATIONAL_CALENDAR_MONTH_ALLOWED["electrical_losses"] == frozenset(
         {"revenue_meter"}
     )
     assert OperationalAssessmentInput.__name__ == "OperationalAssessmentInput"
     assert OperationalColumnBinding.__name__ == "OperationalColumnBinding"
+    assert OperationalColumnExclusion.__name__ == "OperationalColumnExclusion"
+    assert OperationalGroupQualityReceipt is PackageOperationalGroupQualityReceipt
+    assert OperationalGroupUniverse is PackageOperationalGroupUniverse
+    assert OperationalTimezoneRules is PackageTimezoneRules
+    assert OperationalAggregationSpec.__name__ == "OperationalAggregationSpec"
+    assert OperationalNormalizationError.__name__ == "OperationalNormalizationError"
+    assert normalize_operational_csv.__name__ == "normalize_operational_csv"
+    assert aggregate_operational_series.__name__ == "aggregate_operational_series"
     assert OperationalDatasetEvidence.__name__ == "OperationalDatasetEvidence"
     assert "wake_losses_tower" in get_args(OperationalAnalysisPurpose)
     assert "fold_1" in get_args(OperationalAmbiguousTimePolicy)

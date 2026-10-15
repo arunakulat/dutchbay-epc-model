@@ -19,7 +19,6 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any, Final, Literal, Mapping, TypeAlias
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 OPERATIONAL_EVIDENCE_SCHEMA: Final = "dutchbay.operational_evidence.v1"
 
@@ -415,12 +414,6 @@ def _require_portable_iana_timezone(value: object) -> str:
             "source_timezone must be 'UTC' or a portable multi-component IANA "
             f"timezone key; got {value!r}."
         )
-    try:
-        ZoneInfo(value)
-    except (ZoneInfoNotFoundError, ValueError) as exc:
-        raise OperationalEvidenceError(
-            f"source_timezone must identify an available IANA timezone; got {value!r}."
-        ) from exc
     return value
 
 
@@ -450,9 +443,11 @@ class OperationalColumnBinding:
             )
 
     def model_dump(self) -> dict[str, Any]:
+        """Return a JSON-compatible representation of the column binding."""
         return asdict(self)
 
     def dict(self) -> dict[str, Any]:
+        """Return the compatibility dictionary representation."""
         return self.model_dump()
 
 
@@ -637,6 +632,12 @@ class OperationalDatasetEvidence:
                     "calendar_month evidence requires interval_seconds=None because "
                     "calendar months have variable duration."
                 )
+            if self.timezone_treatment == "offset_aware_to_utc":
+                raise OperationalEvidenceError(
+                    "calendar_month evidence cannot use offset_aware_to_utc because "
+                    "the D1 envelope does not declare a reconstructible calendar frame; "
+                    "use source_utc or named_zone_to_utc."
+                )
         else:
             raise OperationalEvidenceError(
                 "timeseries evidence requires interval_basis='fixed_seconds' or "
@@ -668,12 +669,15 @@ class OperationalDatasetEvidence:
 
     @property
     def roles(self) -> frozenset[str]:
+        """Return the closed semantic roles mapped by this dataset."""
         return frozenset(item.role for item in self.columns)
 
     def model_dump(self) -> dict[str, Any]:
+        """Return a JSON-compatible representation of the dataset evidence."""
         return asdict(self)
 
     def dict(self) -> dict[str, Any]:
+        """Return the compatibility dictionary representation."""
         return self.model_dump()
 
 
@@ -786,9 +790,11 @@ class OperationalAssessmentInput:
                 )
 
     def model_dump(self) -> dict[str, Any]:
+        """Return a JSON-compatible representation of the assessment input."""
         return asdict(self)
 
     def dict(self) -> dict[str, Any]:
+        """Return the compatibility dictionary representation."""
         return self.model_dump()
 
 
