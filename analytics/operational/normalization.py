@@ -134,14 +134,16 @@ class OperationalTimezoneRules:
     def __post_init__(self) -> None:
         _require_closed_text(self.source_timezone, "source_timezone")
         _require_closed_text(self.source_locator, "source_locator")
-        if not isinstance(self.tzif_bytes, bytes) or not self.tzif_bytes.startswith(
-            b"TZif"
-        ):
-            raise ValueError(
-                "tzif_bytes must be immutable TZif data beginning with 'TZif'."
-            )
+        if not isinstance(self.tzif_bytes, bytes):
+            raise ValueError("tzif_bytes must be immutable bytes.")
         if len(self.tzif_bytes) > 1_048_576:
             raise ValueError("tzif_bytes must not exceed 1 MiB.")
+        try:
+            _validate_tzif_payload(self.tzif_bytes)
+        except ValueError as exc:
+            raise ValueError(
+                "tzif_bytes must contain one complete, structurally valid TZif file."
+            ) from exc
 
     @property
     def sha256(self) -> str:
@@ -906,6 +908,119 @@ def _require_closed_text(value: object, field_name: str) -> str:
     return value
 
 
+def _read_tzif_header(
+    payload: bytes, cursor: int
+) -> tuple[int, tuple[int, int, int, int, int, int], int]:
+    """Read one bounded RFC 8536/9636 header without invoking ``zoneinfo``."""
+
+    header_end = cursor + 44
+    if header_end > len(payload) or payload[cursor : cursor + 4] != b"TZif":
+        raise ValueError("TZif header is truncated or has invalid magic")
+    version_octet = payload[cursor + 4 : cursor + 5]
+    if version_octet == b"\x00":
+        version = 1
+    elif version_octet in {b"2", b"3", b"4"}:
+        version = int(version_octet)
+    else:
+        raise ValueError("TZif version is not supported")
+    if payload[cursor + 5 : cursor + 20] != b"\x00" * 15:
+        raise ValueError("TZif reserved header octets must be zero")
+    raw_counts = tuple(
+        int.from_bytes(payload[offset : offset + 4], "big", signed=True)
+        for offset in range(cursor + 20, cursor + 44, 4)
+    )
+    if len(raw_counts) != 6 or any(value < 0 for value in raw_counts):
+        raise ValueError("TZif counts must be non-negative")
+    isutcnt, isstdcnt, leapcnt, timecnt, typecnt, charcnt = raw_counts
+    counts = (isutcnt, isstdcnt, leapcnt, timecnt, typecnt, charcnt)
+    return version, counts, header_end
+
+
+def _read_tzif_data_block(
+    payload: bytes,
+    cursor: int,
+    counts: tuple[int, int, int, int, int, int],
+    *,
+    time_size: int,
+) -> int:
+    """Validate one complete TZif data block and return its exclusive end."""
+
+    isutcnt, isstdcnt, leapcnt, timecnt, typecnt, charcnt = counts
+    if not 1 <= typecnt <= 256 or charcnt < 1:
+        raise ValueError("TZif requires 1..256 local-time types and abbreviations")
+    if isutcnt not in {0, typecnt} or isstdcnt not in {0, typecnt}:
+        raise ValueError("TZif indicator counts must be zero or match typecnt")
+    transition_bytes = timecnt * time_size
+    index_start = cursor + transition_bytes
+    ttinfo_start = index_start + timecnt
+    abbreviation_start = ttinfo_start + typecnt * 6
+    leap_start = abbreviation_start + charcnt
+    isstd_start = leap_start + leapcnt * (time_size + 4)
+    isut_start = isstd_start + isstdcnt
+    block_end = isut_start + isutcnt
+    if block_end > len(payload):
+        raise ValueError("TZif data block is truncated")
+
+    previous_transition: int | None = None
+    for offset in range(cursor, index_start, time_size):
+        transition = int.from_bytes(
+            payload[offset : offset + time_size], "big", signed=True
+        )
+        if previous_transition is not None and transition <= previous_transition:
+            raise ValueError("TZif transition times must be strictly increasing")
+        previous_transition = transition
+    transition_indices = payload[index_start:ttinfo_start]
+    if any(index >= typecnt for index in transition_indices):
+        raise ValueError("TZif transition references an absent local-time type")
+    abbreviation_bytes = payload[abbreviation_start:leap_start]
+    for item in range(typecnt):
+        record = ttinfo_start + item * 6
+        utc_offset = int.from_bytes(payload[record : record + 4], "big", signed=True)
+        is_dst = payload[record + 4]
+        abbreviation_index = payload[record + 5]
+        if not -89_999 <= utc_offset <= 93_599 or is_dst not in {0, 1}:
+            raise ValueError("TZif local-time type is outside RFC bounds")
+        if (
+            abbreviation_index >= charcnt
+            or abbreviation_bytes.find(b"\x00", abbreviation_index) < 0
+        ):
+            raise ValueError("TZif abbreviation index is not NUL-terminated")
+    if any(octet != 0 and not 0x20 <= octet <= 0x7E for octet in abbreviation_bytes):
+        raise ValueError("TZif abbreviations must contain printable ASCII or NUL")
+    if any(octet not in {0, 1} for octet in payload[isstd_start:block_end]):
+        raise ValueError("TZif indicators must be zero or one")
+    return block_end
+
+
+def _validate_tzif_payload(payload: bytes) -> None:
+    """Bound and structurally validate a complete TZif container in linear time."""
+
+    if not isinstance(payload, bytes) or len(payload) > 1_048_576:
+        raise ValueError("TZif payload must be immutable bytes no larger than 1 MiB")
+    version, counts, cursor = _read_tzif_header(payload, 0)
+    cursor = _read_tzif_data_block(payload, cursor, counts, time_size=4)
+    if version == 1:
+        if cursor != len(payload):
+            raise ValueError("version-1 TZif data has trailing octets")
+        return
+
+    second_version, second_counts, cursor = _read_tzif_header(payload, cursor)
+    if second_version != version:
+        raise ValueError("TZif headers declare inconsistent versions")
+    cursor = _read_tzif_data_block(payload, cursor, second_counts, time_size=8)
+    if cursor >= len(payload) or payload[cursor : cursor + 1] != b"\n":
+        raise ValueError("TZif v2+ footer must begin with a newline")
+    if payload[-1:] != b"\n" or b"\n" in payload[cursor + 1 : -1]:
+        raise ValueError("TZif v2+ POSIX footer must end with one newline")
+    footer = payload[cursor + 1 : -1]
+    if b"\x00" in footer:
+        raise ValueError("TZif POSIX footer cannot contain NUL")
+    try:
+        footer.decode("ascii")
+    except UnicodeDecodeError as exc:
+        raise ValueError("TZif POSIX footer must be ASCII") from exc
+
+
 def _sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
@@ -1213,10 +1328,15 @@ def _resolve_timezone_rules(
             "declared source_timezone.",
         )
     try:
+        # Revalidate at the consumption boundary so even a forged/bypassed
+        # frozen dataclass cannot feed malformed bytes to the stdlib parser.
+        _validate_tzif_payload(timezone_rules.tzif_bytes)
         zone = ZoneInfo.from_file(
             io.BytesIO(timezone_rules.tzif_bytes), key=timezone_rules.source_timezone
         )
-    except (OSError, ValueError) as exc:
+    # The stdlib parser is an implementation boundary whose documented
+    # exception surface is not closed across supported Python versions.
+    except Exception as exc:  # noqa: BLE001
         raise OperationalNormalizationError(
             "TIMEZONE_NORMALIZATION_FAILED", "timezone_rules contain invalid TZif data."
         ) from exc
@@ -1684,6 +1804,16 @@ def _normalize_operational_csv_artifacts(
                     normalized = _require_closed_text(raw_value, binding.role)
                 else:  # D1 owns the closed role vocabulary.
                     raise ValueError(f"unsupported role {binding.role!r}")
+            except OverflowError as exc:
+                if binding.role == "timestamp_utc":
+                    raise OperationalNormalizationError(
+                        "TIMEZONE_NORMALIZATION_FAILED",
+                        "timestamp conversion falls outside the representable "
+                        "datetime range.",
+                    ) from exc
+                nonfinite_count += 1
+                findings.append(f"row={row_number};role={binding.role};nonfinite")
+                normalized = raw_value
             except ArithmeticError:
                 nonfinite_count += 1
                 findings.append(f"row={row_number};role={binding.role};nonfinite")

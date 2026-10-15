@@ -11,8 +11,9 @@ OpenOA v3.2 at commit `35e8a52c4cd8f43223f8181153d4e3f083f090d2` was used only a
 methodological comparator. OpenOA's exploratory frequency inference, gap handling and timezone
 conveniences are intentionally not imported into this fail-closed boundary.
 
-The active sole-writer remediation lease is `L-1332-D2-005`, recorded in issue #1332 comment
-`6177298823`. It succeeds the rejected freeze under `L-1332-D2-004` and retains the earlier narrow
+The sole-writer remediation lease governing this candidate is `L-1332-D2-006`, recorded in issue
+#1332 comment `6177697122`; it expires when the candidate is frozen. It succeeds the rejected freeze
+under `L-1332-D2-005` and retains the earlier narrow
 D1 amendment (`6161711223`): portable timezone-key validation avoids host TZPATH lookup, and
 calendar-month evidence rejects an offset-only frame that the evidence envelope cannot reconstruct.
 The protected base is
@@ -35,11 +36,15 @@ The protected base is
 5. Grouped time series require an `OperationalGroupUniverse` derived from a successfully normalized
    D1 asset roster. Missing, unexpected, incomplete and misaligned asset populations fail QA.
    Empty and all-excluded included populations cannot pass.
-6. Named-zone conversion requires immutable caller-supplied TZif bytes. D2 uses
-   `ZoneInfo.from_file`; the payload SHA-256, declared zone and locator are bound into the method and
-   receipt. Host TZPATH is not consulted. Four-digit RFC 3339 years are rendered independently of
-   host `strftime` behavior, and timezone conversions outside Python's representable datetime range
-   fail under the closed timezone-normalization code. The zone-to-payload relationship is explicitly
+6. Named-zone conversion requires immutable caller-supplied TZif bytes. D2 validates the complete
+   RFC 8536/9636 container in bounded linear time before using `ZoneInfo.from_file`, including both
+   v2+ data blocks and its newline-terminated POSIX footer; it revalidates at consumption to defend
+   bypassed object construction. Parser failures are contained by the closed timezone-normalization
+   code. The payload SHA-256, declared zone and locator are bound into the method and receipt. Host
+   TZPATH is not consulted. Four-digit RFC 3339 years are rendered independently of host `strftime`
+   behavior, and timezone conversions outside Python's representable datetime range fail under the
+   same closed code rather than being misclassified as non-finite measurements. The
+   zone-to-payload relationship is explicitly
    `caller_attested_zone_payload`: D2 proves which bytes were used, not that an arbitrary payload is
    an authoritative publication for the declared IANA label.
 7. RFC 3339's `-00:00` unknown-offset sentinel is rejected. Folds and nonexistent local times use
@@ -90,8 +95,8 @@ superseded.
 
 | Check | Exact command | Final result |
 |---|---|---|
-| D1+D2 focused integration | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_evidence_contract.py tests/contracts/test_operational_normalization.py tests/contracts/test_contracts_v14_import_surface.py` | 164 passed in 3.89 s; repeated after final receipt commit before freeze |
-| Shared contract regression | same governed pytest invocation against `tests/contracts` | 1,557 passed in 275.49 s on the final source/test content; the only subsequent mutation was this verification-receipt text |
+| D1+D2 focused integration | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_evidence_contract.py tests/contracts/test_operational_normalization.py tests/contracts/test_contracts_v14_import_surface.py` | 168 passed in 2.84 s; repeated after final receipt commit before freeze |
+| Shared contract regression | same governed pytest invocation against `tests/contracts` | 1,561 passed in 130.68 s on final source/test content; the only subsequent mutation was this verification-receipt text |
 | Strict source types | `/workspace/dutchbay-epc-model/.venv/bin/python -m mypy --no-incremental analytics/operational/normalization.py analytics/operational/contracts.py analytics/operational/__init__.py analytics/contracts_v14.py` | success; no issues in four source files; repeated after final receipt commit before freeze |
 | Scoped Ruff and formatting | governed Ruff check and format-check against the seven changed Python paths | passed; seven files formatted; repeated after final receipt commit before freeze |
 | Changed-file hooks | `/workspace/dutchbay-epc-model/.venv/bin/pre-commit run --files <nine allowlisted paths>` | passed; repeated after final receipt commit before freeze |

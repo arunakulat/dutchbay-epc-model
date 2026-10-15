@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import importlib.resources
+import subprocess
+import sys
 from dataclasses import replace
 from decimal import Context, localcontext
 from typing import Any
@@ -85,6 +87,17 @@ def _timezone_rules(zone: str = "Europe/London") -> OperationalTimezoneRules:
         tzif_bytes=resource.read_bytes(),
         source_locator=f"python-package:tzdata/{zone}",
     )
+
+
+def _unterminated_tzif2_payload() -> bytes:
+    counts = (0, 0, 0, 0, 1, 4)
+    header = (
+        b"TZif2"
+        + b"\x00" * 15
+        + b"".join(value.to_bytes(4, "big", signed=True) for value in counts)
+    )
+    block = b"\x00" * 6 + b"UTC\x00"
+    return header + block + header + block + b"\nUTC0"
 
 
 def _scada_evidence(
@@ -424,6 +437,96 @@ def test_non_hour_dst_gap_uses_supplied_tzif_rules() -> None:
     )
     assert result.normalized_rows[0][0] == "2025-10-04T15:45:00Z"
     assert result.receipt.nonexistent_time_resolution_count == 1
+
+
+def test_malformed_tzif_is_rejected_at_construction_and_normalization() -> None:
+    with pytest.raises(ValueError, match="complete, structurally valid TZif"):
+        OperationalTimezoneRules(
+            source_timezone="Etc/UTC",
+            tzif_bytes=b"TZif0",
+            source_locator="hostile:truncated",
+        )
+
+    forged = object.__new__(OperationalTimezoneRules)
+    object.__setattr__(forged, "source_timezone", "Europe/London")
+    object.__setattr__(forged, "tzif_bytes", b"TZif0")
+    object.__setattr__(forged, "source_locator", "hostile:bypassed-constructor")
+    data = b"when,energy\n2025-01-01T00:00:00,1\n2025-01-01T00:01:00,2\n"
+    evidence = _meter_evidence(
+        data,
+        start="2025-01-01T00:00:00Z",
+        end="2025-01-01T00:01:00Z",
+        row_count=2,
+        interval_basis="fixed_seconds",
+        interval_seconds=60,
+        timezone_treatment="named_zone_to_utc",
+        source_timezone="Europe/London",
+        ambiguous="reject",
+        nonexistent="reject",
+    )
+    with pytest.raises(OperationalNormalizationError) as raised:
+        normalize_operational_csv(data, evidence, timezone_rules=forged)
+    assert raised.value.code == "TIMEZONE_NORMALIZATION_FAILED"
+
+
+def test_unterminated_tzif2_footer_rejects_within_subprocess_bound() -> None:
+    payload_hex = _unterminated_tzif2_payload().hex()
+    script = f"""
+from analytics.operational.normalization import OperationalTimezoneRules
+try:
+    OperationalTimezoneRules('Etc/UTC', bytes.fromhex('{payload_hex}'), 'hostile:footer')
+except ValueError:
+    raise SystemExit(0)
+raise SystemExit(1)
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        check=False,
+        capture_output=True,
+        timeout=3,
+    )
+    assert completed.returncode == 0, completed.stderr.decode()
+
+
+@pytest.mark.parametrize(
+    ("zone", "first", "second", "start", "end"),
+    (
+        (
+            "Asia/Kathmandu",
+            "0001-01-01T00:00:00",
+            "0001-01-01T00:01:00",
+            "0001-01-01T00:00:00Z",
+            "0001-01-01T00:01:00Z",
+        ),
+        (
+            "America/New_York",
+            "9999-12-31T23:00:00",
+            "9999-12-31T23:01:00",
+            "9999-12-31T23:00:00Z",
+            "9999-12-31T23:01:00Z",
+        ),
+    ),
+)
+def test_named_zone_datetime_boundary_is_timezone_failure(
+    zone: str, first: str, second: str, start: str, end: str
+) -> None:
+    data = f"when,energy\n{first},1\n{second},2\n".encode()
+    evidence = _meter_evidence(
+        data,
+        start=start,
+        end=end,
+        row_count=2,
+        interval_basis="fixed_seconds",
+        interval_seconds=60,
+        timezone_treatment="named_zone_to_utc",
+        source_timezone=zone,
+        ambiguous="reject",
+        nonexistent="reject",
+    )
+    with pytest.raises(OperationalNormalizationError) as raised:
+        normalize_operational_csv(data, evidence, timezone_rules=_timezone_rules(zone))
+    assert raised.value.code == "TIMEZONE_NORMALIZATION_FAILED"
+    assert raised.value.receipt is None
 
 
 def _meter_evidence(
