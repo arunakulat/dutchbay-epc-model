@@ -100,6 +100,24 @@ def _unterminated_tzif2_payload() -> bytes:
     return header + block + header + block + b"\nUTC0"
 
 
+def _tzif1_payload(
+    *, utc_offset: int = 0, leap_records: tuple[tuple[int, int], ...] = ()
+) -> bytes:
+    counts = (0, 0, len(leap_records), 0, 1, 4)
+    header = (
+        b"TZif\x00"
+        + b"\x00" * 15
+        + b"".join(value.to_bytes(4, "big", signed=True) for value in counts)
+    )
+    local_time_type = utc_offset.to_bytes(4, "big", signed=True) + b"\x00\x00"
+    leaps = b"".join(
+        instant.to_bytes(4, "big", signed=True)
+        + correction.to_bytes(4, "big", signed=True)
+        for instant, correction in leap_records
+    )
+    return header + local_time_type + b"UTC\x00" + leaps
+
+
 def _scada_evidence(
     data: bytes,
     *,
@@ -486,6 +504,80 @@ raise SystemExit(1)
         timeout=3,
     )
     assert completed.returncode == 0, completed.stderr.decode()
+
+
+@pytest.mark.parametrize(
+    "leap_records",
+    (
+        pytest.param(((100, 1), (50, 2)), id="decreasing-instants"),
+        pytest.param(((100, 1), (200, 3)), id="correction-jump"),
+    ),
+)
+def test_invalid_tzif_leap_semantics_are_rejected(
+    leap_records: tuple[tuple[int, int], ...],
+) -> None:
+    with pytest.raises(ValueError, match="complete, structurally valid TZif"):
+        OperationalTimezoneRules(
+            source_timezone="Etc/UTC",
+            tzif_bytes=_tzif1_payload(leap_records=leap_records),
+            source_locator="hostile:leap-records",
+        )
+
+
+def test_runtime_incompatible_rfc_offset_is_timezone_failure() -> None:
+    rules = OperationalTimezoneRules(
+        source_timezone="Etc/UTC",
+        tzif_bytes=_tzif1_payload(utc_offset=86_400),
+        source_locator="hostile:rfc-offset-outside-python-datetime",
+    )
+    data = b"when,energy\n2025-01-01T00:00:00,1\n2025-01-01T00:01:00,2\n"
+    evidence = _meter_evidence(
+        data,
+        start="2025-01-01T00:00:00Z",
+        end="2025-01-01T00:01:00Z",
+        row_count=2,
+        interval_basis="fixed_seconds",
+        interval_seconds=60,
+        timezone_treatment="named_zone_to_utc",
+        source_timezone="Etc/UTC",
+        ambiguous="reject",
+        nonexistent="reject",
+    )
+    with pytest.raises(OperationalNormalizationError) as raised:
+        normalize_operational_csv(data, evidence, timezone_rules=rules)
+    assert raised.value.code == "TIMEZONE_NORMALIZATION_FAILED"
+    assert raised.value.receipt is None
+
+
+@pytest.mark.parametrize(
+    "invalid_locator",
+    (7, "", " leading", "line\nbreak"),
+)
+def test_forged_timezone_locator_fails_closed_at_consumption(
+    invalid_locator: object,
+) -> None:
+    valid = _timezone_rules()
+    forged = object.__new__(OperationalTimezoneRules)
+    object.__setattr__(forged, "source_timezone", valid.source_timezone)
+    object.__setattr__(forged, "tzif_bytes", valid.tzif_bytes)
+    object.__setattr__(forged, "source_locator", invalid_locator)
+    data = b"when,energy\n2025-01-01T00:00:00,1\n2025-01-01T00:01:00,2\n"
+    evidence = _meter_evidence(
+        data,
+        start="2025-01-01T00:00:00Z",
+        end="2025-01-01T00:01:00Z",
+        row_count=2,
+        interval_basis="fixed_seconds",
+        interval_seconds=60,
+        timezone_treatment="named_zone_to_utc",
+        source_timezone="Europe/London",
+        ambiguous="reject",
+        nonexistent="reject",
+    )
+    with pytest.raises(OperationalNormalizationError) as raised:
+        normalize_operational_csv(data, evidence, timezone_rules=forged)
+    assert raised.value.code == "TIMEZONE_NORMALIZATION_FAILED"
+    assert raised.value.receipt is None
 
 
 @pytest.mark.parametrize(
@@ -1305,6 +1397,12 @@ def test_failed_receipt_rejects_malformed_tzif_identity() -> None:
             raised.value.receipt,
             timezone_database="tzif-sha256:not-a-digest",
         )
+    for invalid_locator in (7, "", " padded", "line\nbreak"):
+        with pytest.raises(ValueError, match="closed timezone provenance"):
+            replace(
+                raised.value.receipt,
+                timezone_source_locator=invalid_locator,
+            )
 
 
 def test_unknown_negative_zero_offset_fails_with_receipt() -> None:

@@ -375,12 +375,19 @@ class OperationalQualityReceipt:
                     "group coverage bounds must both be null or both be set."
                 )
         if self.timezone_treatment == "named_zone_to_utc":
+            try:
+                _require_closed_text(self.source_timezone, "source_timezone")
+                _require_closed_text(
+                    self.timezone_source_locator, "timezone_source_locator"
+                )
+            except ValueError as exc:
+                raise ValueError(
+                    "named-zone receipts require closed timezone provenance text."
+                ) from exc
             if (
-                self.source_timezone is None
-                or self.timezone_database is None
+                self.timezone_database is None
                 or re.fullmatch(r"tzif-sha256:[0-9a-f]{64}", self.timezone_database)
                 is None
-                or self.timezone_source_locator is None
                 or self.timezone_rule_attestation != "caller_attested_zone_payload"
             ):
                 raise ValueError(
@@ -942,6 +949,7 @@ def _read_tzif_data_block(
     counts: tuple[int, int, int, int, int, int],
     *,
     time_size: int,
+    version: int,
 ) -> int:
     """Validate one complete TZif data block and return its exclusive end."""
 
@@ -987,6 +995,28 @@ def _read_tzif_data_block(
             raise ValueError("TZif abbreviation index is not NUL-terminated")
     if any(octet != 0 and not 0x20 <= octet <= 0x7E for octet in abbreviation_bytes):
         raise ValueError("TZif abbreviations must contain printable ASCII or NUL")
+    previous_leap_time: int | None = None
+    previous_correction = 0
+    for item in range(leapcnt):
+        record = leap_start + item * (time_size + 4)
+        leap_time = int.from_bytes(
+            payload[record : record + time_size], "big", signed=True
+        )
+        correction = int.from_bytes(
+            payload[record + time_size : record + time_size + 4],
+            "big",
+            signed=True,
+        )
+        if previous_leap_time is not None and leap_time <= previous_leap_time:
+            raise ValueError("TZif leap-second times must be strictly increasing")
+        correction_change = correction - previous_correction
+        terminal_v4_expiration = (
+            version == 4 and item == leapcnt - 1 and item > 0 and correction_change == 0
+        )
+        if correction_change not in {-1, 1} and not terminal_v4_expiration:
+            raise ValueError("TZif leap corrections must change by exactly one")
+        previous_leap_time = leap_time
+        previous_correction = correction
     if any(octet not in {0, 1} for octet in payload[isstd_start:block_end]):
         raise ValueError("TZif indicators must be zero or one")
     return block_end
@@ -998,7 +1028,9 @@ def _validate_tzif_payload(payload: bytes) -> None:
     if not isinstance(payload, bytes) or len(payload) > 1_048_576:
         raise ValueError("TZif payload must be immutable bytes no larger than 1 MiB")
     version, counts, cursor = _read_tzif_header(payload, 0)
-    cursor = _read_tzif_data_block(payload, cursor, counts, time_size=4)
+    cursor = _read_tzif_data_block(
+        payload, cursor, counts, time_size=4, version=version
+    )
     if version == 1:
         if cursor != len(payload):
             raise ValueError("version-1 TZif data has trailing octets")
@@ -1007,7 +1039,9 @@ def _validate_tzif_payload(payload: bytes) -> None:
     second_version, second_counts, cursor = _read_tzif_header(payload, cursor)
     if second_version != version:
         raise ValueError("TZif headers declare inconsistent versions")
-    cursor = _read_tzif_data_block(payload, cursor, second_counts, time_size=8)
+    cursor = _read_tzif_data_block(
+        payload, cursor, second_counts, time_size=8, version=second_version
+    )
     if cursor >= len(payload) or payload[cursor : cursor + 1] != b"\n":
         raise ValueError("TZif v2+ footer must begin with a newline")
     if payload[-1:] != b"\n" or b"\n" in payload[cursor + 1 : -1]:
@@ -1162,10 +1196,17 @@ def _parse_timestamp(
         raise ValueError("named-zone treatment requires hash-bound TZif rules")
     zone = named_zone
     candidates: list[tuple[int, datetime, datetime]] = []
-    for fold in (0, 1):
-        utc_value = wall.replace(tzinfo=zone, fold=fold).astimezone(timezone.utc)
-        roundtrip = utc_value.astimezone(zone).replace(tzinfo=None)
-        candidates.append((fold, utc_value, roundtrip))
+    try:
+        for fold in (0, 1):
+            utc_value = wall.replace(tzinfo=zone, fold=fold).astimezone(timezone.utc)
+            roundtrip = utc_value.astimezone(zone).replace(tzinfo=None)
+            candidates.append((fold, utc_value, roundtrip))
+    except (OverflowError, ValueError) as exc:
+        raise OperationalNormalizationError(
+            "TIMEZONE_NORMALIZATION_FAILED",
+            "supplied timezone rules cannot represent the timestamp in Python's "
+            "datetime range.",
+        ) from exc
     valid = [item for item in candidates if item[2] == wall]
     unique_valid = {item[1] for item in valid}
     if len(unique_valid) == 1:
@@ -1318,21 +1359,24 @@ def _resolve_timezone_rules(
                 "timezone_rules apply only to named_zone_to_utc evidence.",
             )
         return None, None
-    if (
-        timezone_rules is None
-        or timezone_rules.source_timezone != evidence.source_timezone
-    ):
+    if timezone_rules is None:
         raise OperationalNormalizationError(
             "TIMEZONE_NORMALIZATION_FAILED",
             "named-zone evidence requires caller-supplied TZif bytes for the exact "
             "declared source_timezone.",
         )
     try:
-        # Revalidate at the consumption boundary so even a forged/bypassed
-        # frozen dataclass cannot feed malformed bytes to the stdlib parser.
-        _validate_tzif_payload(timezone_rules.tzif_bytes)
+        # Reconstruct the complete value at the consumption boundary so even a
+        # forged/bypassed frozen dataclass cannot inject malformed provenance.
+        validated_rules = OperationalTimezoneRules(
+            source_timezone=timezone_rules.source_timezone,
+            tzif_bytes=timezone_rules.tzif_bytes,
+            source_locator=timezone_rules.source_locator,
+        )
+        if validated_rules.source_timezone != evidence.source_timezone:
+            raise ValueError("timezone rules do not match the declared source_timezone")
         zone = ZoneInfo.from_file(
-            io.BytesIO(timezone_rules.tzif_bytes), key=timezone_rules.source_timezone
+            io.BytesIO(validated_rules.tzif_bytes), key=validated_rules.source_timezone
         )
     # The stdlib parser is an implementation boundary whose documented
     # exception surface is not closed across supported Python versions.
@@ -1340,7 +1384,7 @@ def _resolve_timezone_rules(
         raise OperationalNormalizationError(
             "TIMEZONE_NORMALIZATION_FAILED", "timezone_rules contain invalid TZif data."
         ) from exc
-    return timezone_rules.identity, zone
+    return validated_rules.identity, zone
 
 
 def _elapsed_microseconds(delta: timedelta) -> int:
@@ -1804,6 +1848,8 @@ def _normalize_operational_csv_artifacts(
                     normalized = _require_closed_text(raw_value, binding.role)
                 else:  # D1 owns the closed role vocabulary.
                     raise ValueError(f"unsupported role {binding.role!r}")
+            except OperationalNormalizationError:
+                raise
             except OverflowError as exc:
                 if binding.role == "timestamp_utc":
                     raise OperationalNormalizationError(
