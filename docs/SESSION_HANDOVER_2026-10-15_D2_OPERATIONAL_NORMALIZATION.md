@@ -22,8 +22,9 @@ proof. The live v15.6.1 release remained public, non-draft, and non-prerelease.
 
 The merged D2 implementation provides deterministic operational time-series
 normalization and QA receipts. It also accepts the valid RFC 9636 v4 case in which the
-first POSIX-TZ correction is zero. A positive `zoneinfo.ZoneInfo.from_file` oracle covers
-the representative correction sequence `((1483228801, 0), (1600000000, 0))`.
+first TZif leap-second correction (`LEAPCORR`) is zero. A positive
+`zoneinfo.ZoneInfo.from_file` oracle covers the representative correction sequence
+`((1483228801, 0), (1600000000, 0))`.
 
 All six test shards and every required downstream check passed on the exact accepted
 head. The only skipped jobs were path- or schedule-advisory qualifications. Independent
@@ -34,6 +35,14 @@ The final merge receipt is
 [comment 6199107559](https://github.com/arunakulat/dutchbay-epc-model/issues/1332#issuecomment-6199107559),
 and the roadmap receipt is
 [comment 6199107676](https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6199107676).
+
+The first handover freeze was rejected. Writer lease `L-1332-PERSIST-011` was then
+explicitly revoked in
+[comment 6199200039](https://github.com/arunakulat/dutchbay-epc-model/issues/1332#issuecomment-6199200039).
+Corrective lease `L-1332-PERSIST-012`, recorded in
+[comment 6199200660](https://github.com/arunakulat/dutchbay-epc-model/issues/1332#issuecomment-6199200660),
+must expire at the next `CHECKPOINT_VERIFIED` freeze before fresh reviewers are
+dispatched. Any later mutation requires a new explicit writer lease.
 
 Issue #1332 remained open because the delivery action did not claim issue-closure
 authority. Issue #1110 remained `OPEN`, and its Board/lender reliance `HOLD` was
@@ -52,10 +61,11 @@ Use `AGENTS.md` and the canonical GWTF rules; run the handover resolver, read th
 October startup record it identifies, fetch `origin/main` and tags, inspect the complete
 open-PR list, and consult #1353 plus the relevant focused issue before any edit. Carry
 new work through its own authority, writer lease, exact-object review, CI, resync, and
-merge gates. A zero first POSIX-TZ correction is valid data, not an absent correction;
-retain the `ZoneInfo.from_file` interoperability oracle when changing TZif generation.
+merge gates. A zero first TZif leap-second correction (`LEAPCORR`) is valid data, not an
+absent correction; retain the `ZoneInfo.from_file` interoperability oracle when changing
+TZif generation.
 
 The owner's Mac-only runtime and confidential project evidence were not available in
-this cloud checkout. This record is a pre-delivery snapshot. Its eventual PR head,
-independent reviews, exact-head CI, protected merge, and tracker receipt, if achieved,
-are the delivery evidence; do not infer them from this file's existence.
+this cloud checkout. The D2 delivery and receipts described above are complete. This
+handover has its own exact-object review and delivery lifecycle, recorded on #1332; do
+not infer authority from this file's existence.
