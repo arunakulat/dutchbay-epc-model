@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import hashlib
 import importlib.resources
+import io
 import subprocess
 import sys
 from dataclasses import replace
 from decimal import Context, localcontext
 from typing import Any
-from zoneinfo import reset_tzpath
+from zoneinfo import ZoneInfo, reset_tzpath
 
 import pytest
 
@@ -587,6 +588,20 @@ def test_valid_tzif4_leap_table_is_accepted(
         source_locator="oracle:rfc9636-v4-leaps",
     )
     assert rules.tzif_bytes.startswith(b"TZif4")
+
+
+def test_tzif4_start_truncated_zero_correction_matches_zoneinfo_oracle() -> None:
+    payload = _tzif4_payload(((1_483_228_801, 0), (1_600_000_000, 0)))
+
+    oracle = ZoneInfo.from_file(io.BytesIO(payload), key="Etc/UTC-zero-correction")
+    rules = OperationalTimezoneRules(
+        source_timezone="Etc/UTC-zero-correction",
+        tzif_bytes=payload,
+        source_locator="oracle:zoneinfo-rfc9636-v4-zero-correction",
+    )
+
+    assert oracle.key == rules.source_timezone
+    assert rules.tzif_bytes is payload
 
 
 def test_valid_untruncated_tzif1_leaps_are_accepted() -> None:

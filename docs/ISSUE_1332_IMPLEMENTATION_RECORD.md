@@ -11,9 +11,9 @@ OpenOA v3.2 at commit `35e8a52c4cd8f43223f8181153d4e3f083f090d2` was used only a
 methodological comparator. OpenOA's exploratory frequency inference, gap handling and timezone
 conveniences are intentionally not imported into this fail-closed boundary.
 
-The sole-writer remediation lease governing this candidate is `L-1332-D2-008`, recorded in issue
-#1332 comment `6184523127`; it expires when the candidate is frozen. It succeeds the rejected freeze
-under `L-1332-D2-007` and retains the earlier narrow
+The sole-writer remediation lease governing this candidate is `L-1332-D2-009`, recorded in issue
+#1332 comment `6188078348`; it expires when the candidate is frozen. It succeeds rejected freeze 6
+at `672ab0bb7de81b998dd04d6ff77d4f62e5b560a0` and retains the earlier narrow
 D1 amendment (`6161711223`): portable timezone-key validation avoids host TZPATH lookup, and
 calendar-month evidence rejects an offset-only frame that the evidence envelope cannot reconstruct.
 The protected base is
@@ -41,7 +41,8 @@ The protected base is
    v2+ data blocks, transition/type/indicator references, the required UT-implies-standard relation,
    and its newline-terminated POSIX footer. Leap records require a non-negative first occurrence,
    actual leaps at UTC month ends, and unit correction steps; version 4 also admits start-truncated
-   initial corrections and a final equal-correction expiration record. At consumption D2
+   initial corrections, including zero as a negative step from an unspecified prior +1 correction,
+   and a final equal-correction expiration record. At consumption D2
    reconstructs the complete rules value to
    defend bypassed object construction, including closed zone/locator text and immutable bytes;
    receipts independently enforce closed provenance text. Parser and Python-datetime compatibility
@@ -101,8 +102,9 @@ superseded.
 
 | Check | Exact command | Final result |
 |---|---|---|
-| D1+D2 focused integration | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_evidence_contract.py tests/contracts/test_operational_normalization.py tests/contracts/test_contracts_v14_import_surface.py` | 182 passed in 2.69 s; repeated after final receipt commit before freeze |
-| Shared contract regression | same governed pytest invocation against `tests/contracts` | 1,575 passed in 182.21 s on final source/test content; the only subsequent mutation was this verification-receipt text |
+| D1+D2 focused integration | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_evidence_contract.py tests/contracts/test_operational_normalization.py tests/contracts/test_contracts_v14_import_surface.py` | 183 passed in 3.56 s; repeated after final receipt commit before freeze |
+| Shared contract regression | same governed pytest invocation against `tests/contracts` | 1,576 passed in 101.82 s on final source/test content; the only subsequent mutation was this verification-receipt text |
+| Installed TZif corpus oracle | governed Python enumerated every installed `tzdata.zoneinfo` file beginning with `TZif` and passed its bytes to `_validate_tzif_payload` | 598/598 accepted on final source/test content; the only subsequent mutation was this verification-receipt text |
 | Strict source types | `/workspace/dutchbay-epc-model/.venv/bin/python -m mypy --no-incremental analytics/operational/normalization.py analytics/operational/contracts.py analytics/operational/__init__.py analytics/contracts_v14.py` | success; no issues in four source files; repeated after final receipt commit before freeze |
 | Scoped Ruff and formatting | governed Ruff check and format-check against the seven changed Python paths | passed; seven files formatted; repeated after final receipt commit before freeze |
 | Changed-file hooks | `/workspace/dutchbay-epc-model/.venv/bin/pre-commit run --files <nine allowlisted paths>` | passed; repeated after final receipt commit before freeze |

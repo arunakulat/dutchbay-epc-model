@@ -1032,8 +1032,6 @@ def _read_tzif_data_block(
         if previous_leap_time is not None and leap_time <= previous_leap_time:
             raise ValueError("TZif leap-second times must be strictly increasing")
         if item == 0 and version == 4:
-            if correction == 0:
-                raise ValueError("TZif v4 first truncated correction must be nonzero")
             correction_change = 1 if correction > 0 else -1
             correction_before_occurrence = correction - correction_change
         else:
