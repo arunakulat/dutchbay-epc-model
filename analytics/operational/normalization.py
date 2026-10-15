@@ -943,6 +943,26 @@ def _read_tzif_header(
     return version, counts, header_end
 
 
+def _is_utc_month_boundary(unix_seconds: int) -> bool:
+    """Return whether an arbitrary-size UNIX timestamp begins a UTC month."""
+
+    days, seconds = divmod(unix_seconds, 86_400)
+    if seconds:
+        return False
+    shifted_days = days + 719_468
+    era = shifted_days // 146_097
+    day_of_era = shifted_days - era * 146_097
+    year_of_era = (
+        day_of_era - day_of_era // 1_460 + day_of_era // 36_524 - day_of_era // 146_096
+    ) // 365
+    day_of_year = day_of_era - (
+        365 * year_of_era + year_of_era // 4 - year_of_era // 100
+    )
+    month_prime = (5 * day_of_year + 2) // 153
+    day_of_month = day_of_year - (153 * month_prime + 2) // 5 + 1
+    return day_of_month == 1
+
+
 def _read_tzif_data_block(
     payload: bytes,
     cursor: int,
@@ -1007,18 +1027,40 @@ def _read_tzif_data_block(
             "big",
             signed=True,
         )
+        if item == 0 and leap_time < 0:
+            raise ValueError("TZif first leap-second occurrence must be non-negative")
         if previous_leap_time is not None and leap_time <= previous_leap_time:
             raise ValueError("TZif leap-second times must be strictly increasing")
-        correction_change = correction - previous_correction
+        if item == 0 and version == 4:
+            if correction == 0:
+                raise ValueError("TZif v4 first truncated correction must be nonzero")
+            correction_change = 1 if correction > 0 else -1
+            correction_before_occurrence = correction - correction_change
+        else:
+            correction_change = correction - previous_correction
+            correction_before_occurrence = previous_correction
         terminal_v4_expiration = (
             version == 4 and item == leapcnt - 1 and item > 0 and correction_change == 0
         )
         if correction_change not in {-1, 1} and not terminal_v4_expiration:
             raise ValueError("TZif leap corrections must change by exactly one")
+        if not terminal_v4_expiration and not _is_utc_month_boundary(
+            leap_time - correction_before_occurrence
+        ):
+            raise ValueError("TZif leap seconds must occur at a UTC month end")
         previous_leap_time = leap_time
         previous_correction = correction
-    if any(octet not in {0, 1} for octet in payload[isstd_start:block_end]):
+    standard_indicators = (
+        payload[isstd_start:isut_start] if isstdcnt else bytes(typecnt)
+    )
+    ut_indicators = payload[isut_start:block_end] if isutcnt else bytes(typecnt)
+    if any(octet not in {0, 1} for octet in standard_indicators + ut_indicators):
         raise ValueError("TZif indicators must be zero or one")
+    if any(
+        ut and not standard
+        for standard, ut in zip(standard_indicators, ut_indicators, strict=True)
+    ):
+        raise ValueError("TZif UT indicators require corresponding standard indicators")
     return block_end
 
 

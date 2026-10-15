@@ -5,7 +5,8 @@
   calendar/fixed cadence, coverage, duplicate, gap, drift, ordering and finite value checks; and
   explicit complete-bucket exact-energy-sum or bounded half-even average-power aggregation on a UTC
   elapsed-time basis. Caller-supplied TZif containers and provenance text are revalidated with
-  bounded parsing before standard-library use, including leap-record semantics; malformed parser
+  bounded parsing before standard-library use, including RFC 9636 indicator relationships,
+  month-end leap semantics, start-truncated v4 corrections and expiration records. Malformed parser
   inputs, Python-incompatible offsets and datetime-range failures are closed, and four-digit UTC
   years are host-independent. Results reconcile retained sources, methods, specs, canonical bytes
   and receipts at construction, including deterministic source replay that rejects substituted

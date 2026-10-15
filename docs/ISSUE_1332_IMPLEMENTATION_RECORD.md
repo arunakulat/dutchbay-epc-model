@@ -11,9 +11,9 @@ OpenOA v3.2 at commit `35e8a52c4cd8f43223f8181153d4e3f083f090d2` was used only a
 methodological comparator. OpenOA's exploratory frequency inference, gap handling and timezone
 conveniences are intentionally not imported into this fail-closed boundary.
 
-The sole-writer remediation lease governing this candidate is `L-1332-D2-007`, recorded in issue
-#1332 comment `6181581677`; it expires when the candidate is frozen. It succeeds the rejected freeze
-under `L-1332-D2-006` and retains the earlier narrow
+The sole-writer remediation lease governing this candidate is `L-1332-D2-008`, recorded in issue
+#1332 comment `6184523127`; it expires when the candidate is frozen. It succeeds the rejected freeze
+under `L-1332-D2-007` and retains the earlier narrow
 D1 amendment (`6161711223`): portable timezone-key validation avoids host TZPATH lookup, and
 calendar-month evidence rejects an offset-only frame that the evidence envelope cannot reconstruct.
 The protected base is
@@ -38,8 +38,11 @@ The protected base is
    Empty and all-excluded included populations cannot pass.
 6. Named-zone conversion requires immutable caller-supplied TZif bytes. D2 validates the complete
    RFC 8536/9636 container in bounded linear time before using `ZoneInfo.from_file`, including both
-   v2+ data blocks, transition/type/indicator references, leap ordering and correction steps, and
-   its newline-terminated POSIX footer. At consumption it reconstructs the complete rules value to
+   v2+ data blocks, transition/type/indicator references, the required UT-implies-standard relation,
+   and its newline-terminated POSIX footer. Leap records require a non-negative first occurrence,
+   actual leaps at UTC month ends, and unit correction steps; version 4 also admits start-truncated
+   initial corrections and a final equal-correction expiration record. At consumption D2
+   reconstructs the complete rules value to
    defend bypassed object construction, including closed zone/locator text and immutable bytes;
    receipts independently enforce closed provenance text. Parser and Python-datetime compatibility
    failures are contained by the closed timezone-normalization code. The payload SHA-256, declared
@@ -98,8 +101,8 @@ superseded.
 
 | Check | Exact command | Final result |
 |---|---|---|
-| D1+D2 focused integration | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_evidence_contract.py tests/contracts/test_operational_normalization.py tests/contracts/test_contracts_v14_import_surface.py` | 175 passed in 3.05 s; repeated after final receipt commit before freeze |
-| Shared contract regression | same governed pytest invocation against `tests/contracts` | 1,568 passed in 161.43 s on final source/test content; the only subsequent mutation was this verification-receipt text |
+| D1+D2 focused integration | `PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" /workspace/dutchbay-epc-model/.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_evidence_contract.py tests/contracts/test_operational_normalization.py tests/contracts/test_contracts_v14_import_surface.py` | 182 passed in 2.69 s; repeated after final receipt commit before freeze |
+| Shared contract regression | same governed pytest invocation against `tests/contracts` | 1,575 passed in 182.21 s on final source/test content; the only subsequent mutation was this verification-receipt text |
 | Strict source types | `/workspace/dutchbay-epc-model/.venv/bin/python -m mypy --no-incremental analytics/operational/normalization.py analytics/operational/contracts.py analytics/operational/__init__.py analytics/contracts_v14.py` | success; no issues in four source files; repeated after final receipt commit before freeze |
 | Scoped Ruff and formatting | governed Ruff check and format-check against the seven changed Python paths | passed; seven files formatted; repeated after final receipt commit before freeze |
 | Changed-file hooks | `/workspace/dutchbay-epc-model/.venv/bin/pre-commit run --files <nine allowlisted paths>` | passed; repeated after final receipt commit before freeze |

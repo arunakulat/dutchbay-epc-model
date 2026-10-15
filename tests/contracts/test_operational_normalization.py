@@ -101,9 +101,20 @@ def _unterminated_tzif2_payload() -> bytes:
 
 
 def _tzif1_payload(
-    *, utc_offset: int = 0, leap_records: tuple[tuple[int, int], ...] = ()
+    *,
+    utc_offset: int = 0,
+    leap_records: tuple[tuple[int, int], ...] = (),
+    standard_indicator: int | None = None,
+    ut_indicator: int | None = None,
 ) -> bytes:
-    counts = (0, 0, len(leap_records), 0, 1, 4)
+    counts = (
+        int(ut_indicator is not None),
+        int(standard_indicator is not None),
+        len(leap_records),
+        0,
+        1,
+        4,
+    )
     header = (
         b"TZif\x00"
         + b"\x00" * 15
@@ -115,7 +126,35 @@ def _tzif1_payload(
         + correction.to_bytes(4, "big", signed=True)
         for instant, correction in leap_records
     )
-    return header + local_time_type + b"UTC\x00" + leaps
+    indicators = bytes(
+        value for value in (standard_indicator, ut_indicator) if value is not None
+    )
+    return header + local_time_type + b"UTC\x00" + leaps + indicators
+
+
+def _tzif4_payload(leap_records: tuple[tuple[int, int], ...]) -> bytes:
+    def header(leap_count: int) -> bytes:
+        counts = (0, 0, leap_count, 0, 1, 4)
+        return (
+            b"TZif4"
+            + b"\x00" * 15
+            + b"".join(value.to_bytes(4, "big", signed=True) for value in counts)
+        )
+
+    local_time_type = b"\x00" * 6 + b"UTC\x00"
+    leaps = b"".join(
+        instant.to_bytes(8, "big", signed=True)
+        + correction.to_bytes(4, "big", signed=True)
+        for instant, correction in leap_records
+    )
+    return (
+        header(0)
+        + local_time_type
+        + header(len(leap_records))
+        + local_time_type
+        + leaps
+        + b"\nUTC0\n"
+    )
 
 
 def _scada_evidence(
@@ -509,8 +548,10 @@ raise SystemExit(1)
 @pytest.mark.parametrize(
     "leap_records",
     (
-        pytest.param(((100, 1), (50, 2)), id="decreasing-instants"),
-        pytest.param(((100, 1), (200, 3)), id="correction-jump"),
+        pytest.param(((94_694_400, 1), (78_796_801, 2)), id="decreasing-instants"),
+        pytest.param(((78_796_800, 1), (94_694_401, 3)), id="correction-jump"),
+        pytest.param(((-1, 1),), id="negative-first-occurrence"),
+        pytest.param(((78_883_200, 1),), id="not-utc-month-end"),
     ),
 )
 def test_invalid_tzif_leap_semantics_are_rejected(
@@ -521,6 +562,54 @@ def test_invalid_tzif_leap_semantics_are_rejected(
             source_timezone="Etc/UTC",
             tzif_bytes=_tzif1_payload(leap_records=leap_records),
             source_locator="hostile:leap-records",
+        )
+
+
+@pytest.mark.parametrize(
+    "leap_records",
+    (
+        pytest.param(
+            ((1_483_228_826, 27), (1_600_000_000, 27)),
+            id="start-truncated-plus-expiration",
+        ),
+        pytest.param(
+            ((78_796_800, 1), (100_000_000, 1)),
+            id="ordinary-plus-expiration",
+        ),
+    ),
+)
+def test_valid_tzif4_leap_table_is_accepted(
+    leap_records: tuple[tuple[int, int], ...],
+) -> None:
+    rules = OperationalTimezoneRules(
+        source_timezone="Etc/UTC",
+        tzif_bytes=_tzif4_payload(leap_records),
+        source_locator="oracle:rfc9636-v4-leaps",
+    )
+    assert rules.tzif_bytes.startswith(b"TZif4")
+
+
+def test_valid_untruncated_tzif1_leaps_are_accepted() -> None:
+    rules = OperationalTimezoneRules(
+        source_timezone="Etc/UTC",
+        tzif_bytes=_tzif1_payload(leap_records=((78_796_800, 1), (94_694_401, 2))),
+        source_locator="oracle:rfc9636-v1-leaps",
+    )
+    assert rules.tzif_bytes.startswith(b"TZif\x00")
+
+
+@pytest.mark.parametrize("standard_indicator", (None, 0))
+def test_ut_indicator_requires_standard_indicator(
+    standard_indicator: int | None,
+) -> None:
+    with pytest.raises(ValueError, match="complete, structurally valid TZif"):
+        OperationalTimezoneRules(
+            source_timezone="Etc/UTC",
+            tzif_bytes=_tzif1_payload(
+                standard_indicator=standard_indicator,
+                ut_indicator=1,
+            ),
+            source_locator="hostile:indicator-pair",
         )
 
 
