@@ -7,8 +7,8 @@ from analytics.operational.aep import (
     OperationalAEPInput,
     OperationalAEPReceipt,
     OperationalAEPResult,
-    OperationalAEPSpec,
     OperationalAEPSourceBinding,
+    OperationalAEPSpec,
     OperationalBoundaryEvidence,
     OperationalComponentStatus,
     OperationalEnergyComponent,
@@ -20,7 +20,6 @@ from analytics.operational.aep import (
     OperationalTemporalBasis,
     estimate_operational_aep,
 )
-
 from analytics.operational.contracts import (
     OPERATIONAL_CALENDAR_MONTH_ALLOWED,
     OPERATIONAL_EVIDENCE_SCHEMA,

@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import copy
 import hashlib
+import importlib.resources
+import json
+import subprocess
+import sys
 from dataclasses import FrozenInstanceError, replace
 from datetime import date, timedelta
 from decimal import Context, localcontext
@@ -8,7 +13,10 @@ from fractions import Fraction
 from typing import Any
 
 import pytest
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
+import analytics.operational.aep as aep_module
 from analytics.operational.aep import (
     OPERATIONAL_AEP_SCHEMA,
     OperationalAEPError,
@@ -28,6 +36,7 @@ from analytics.operational.contracts import (
 )
 from analytics.operational.normalization import (
     OperationalGroupUniverse,
+    OperationalTimezoneRules,
     normalize_operational_csv,
 )
 
@@ -48,16 +57,16 @@ def _evidence(
     interval_seconds: int | None = 900,
     status: str = "observed",
 ) -> OperationalDatasetEvidence:
+    if kind == "asset":
+        source_class = "declared_asset"
+    elif kind == "reanalysis":
+        source_class = "reference_reanalysis"
+    else:
+        source_class = "observed_plant"
     return OperationalDatasetEvidence(
         logical_id=logical_id,
         kind=kind,  # type: ignore[arg-type]
-        source_class=(
-            "declared_asset"
-            if kind == "asset"
-            else "reference_reanalysis"
-            if kind == "reanalysis"
-            else "observed_plant"
-        ),  # type: ignore[arg-type]
+        source_class=source_class,  # type: ignore[arg-type]
         timezone_treatment=("not_applicable" if kind == "asset" else "source_utc"),  # type: ignore[arg-type]
         source_timezone=None,
         ambiguous_time_policy="not_applicable",
@@ -84,6 +93,7 @@ def _fixture(
     curtailment_values: tuple[str, ...] = ("12.5",) * 4,
     interval_seconds: int = 900,
     supplements: bool = True,
+    scada_energy: str | None = None,
 ) -> tuple[OperationalAEPInput, OperationalAEPSpec]:
     timestamps = tuple(
         f"2025-01-01T00:{minute:02d}:00Z"
@@ -100,9 +110,13 @@ def _fixture(
         )
     ).encode()
     scada_data = (
-        "time,asset,power\n"
+        "time,asset,power"
+        + (",energy" if scada_energy is not None else "")
+        + "\n"
         + "".join(
-            f"{stamp},{asset},{turbine_power}\n"
+            f"{stamp},{asset},{turbine_power}"
+            + (f",{scada_energy}" if scada_energy is not None else "")
+            + "\n"
             for stamp in timestamps
             for asset in ("T01", "T02")
         )
@@ -153,6 +167,11 @@ def _fixture(
             OperationalColumnBinding("timestamp_utc", "time", "iso8601_utc"),
             OperationalColumnBinding("asset_id", "asset", "1"),
             OperationalColumnBinding("power_kw", "power", "kW"),
+        )
+        + (
+            (OperationalColumnBinding("energy_kwh", "energy", "kWh"),)
+            if scada_energy is not None
+            else ()
         ),
         end=end,
         interval_seconds=interval_seconds,
@@ -445,6 +464,58 @@ def _calendar_month_fixture() -> tuple[OperationalAEPInput, OperationalAEPSpec]:
     )
 
 
+def _named_calendar_fixture() -> tuple[OperationalAEPInput, OperationalAEPSpec]:
+    """Rebind calendar inputs to retained Europe/London TZif rules."""
+    inputs, spec = _calendar_month_fixture()
+    resource = importlib.resources.files("tzdata.zoneinfo").joinpath("Europe", "London")
+    rules = OperationalTimezoneRules(
+        source_timezone="Europe/London",
+        tzif_bytes=resource.read_bytes(),
+        source_locator="python-package:tzdata/Europe/London",
+    )
+    rebound_evidence: dict[str, OperationalDatasetEvidence] = {}
+    rebound_results = []
+    for result in inputs.normalized_results:
+        if result.evidence.interval_basis != "calendar_month":
+            rebound_results.append(result)
+            continue
+        source_bytes = result.source_bytes.replace(b"Z", b"")
+        evidence = replace(
+            result.evidence,
+            timezone_treatment="named_zone_to_utc",
+            source_timezone="Europe/London",
+            ambiguous_time_policy="fold_0",
+            nonexistent_time_policy="reject",
+            source_sha256=_digest(source_bytes),
+        )
+        rebound_evidence[evidence.logical_id] = evidence
+        rebound_results.append(
+            normalize_operational_csv(
+                source_bytes,
+                evidence,
+                timezone_rules=rules,
+            )
+        )
+    assessments = tuple(
+        replace(
+            assessment,
+            datasets=tuple(
+                rebound_evidence.get(dataset.logical_id, dataset)
+                for dataset in assessment.datasets
+            ),
+        )
+        for assessment in inputs.assessments
+    )
+    return (
+        replace(
+            inputs,
+            assessments=assessments,
+            normalized_results=tuple(rebound_results),
+        ),
+        spec,
+    )
+
+
 def test_hand_derived_matched_boundary_fixture() -> None:
     """Independently reproduce the four-interval OpenOA-comparator arithmetic."""
     inputs, spec = _fixture()
@@ -525,7 +596,10 @@ def test_input_order_and_decimal_context_do_not_change_result() -> None:
     baseline = estimate_operational_aep(inputs, spec)
     reordered = replace(
         inputs,
-        assessments=tuple(reversed(inputs.assessments)),
+        assessments=tuple(
+            replace(item, datasets=tuple(reversed(item.datasets)))
+            for item in reversed(inputs.assessments)
+        ),
         normalized_results=tuple(reversed(inputs.normalized_results)),
         supplemental_evidence=tuple(reversed(inputs.supplemental_evidence)),
     )
@@ -534,6 +608,33 @@ def test_input_order_and_decimal_context_do_not_change_result() -> None:
     assert observed.components == baseline.components
     assert observed.ratios == baseline.ratios
     assert observed.receipt == baseline.receipt
+
+
+def test_process_decimal_context_does_not_change_serialized_result() -> None:
+    """Reproduce the complete receipt in a fresh low-precision interpreter."""
+    inputs, spec = _fixture()
+    expected = json.dumps(
+        estimate_operational_aep(inputs, spec).model_dump(),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    script = """
+import json
+import runpy
+from decimal import getcontext
+namespace = runpy.run_path('tests/contracts/test_operational_aep.py')
+getcontext().prec = 2
+inputs, spec = namespace['_fixture']()
+result = namespace['estimate_operational_aep'](inputs, spec)
+print(json.dumps(result.model_dump(), sort_keys=True, separators=(',', ':')))
+"""
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.stdout.strip() == expected
 
 
 def test_split_merge_intervals_preserve_exact_totals() -> None:
@@ -577,6 +678,18 @@ def test_calendar_month_energy_and_daily_power_share_effective_bounds() -> None:
     assert _value(result, "turbine_known_gross") == 2864
 
 
+def test_named_zone_calendar_month_replays_retained_tzif_rules() -> None:
+    inputs, spec = _named_calendar_fixture()
+    result = estimate_operational_aep(inputs, spec)
+    assert _value(result, "net_meter_energy") == 2800
+    assert _value(result, "turbine_terminal_energy") == 2832
+    assert all(
+        item.timezone_rules is not None
+        for item in inputs.normalized_results
+        if item.evidence.interval_basis == "calendar_month"
+    )
+
+
 def test_exact_scale_metamorphism() -> None:
     baseline_inputs, baseline_spec = _fixture(supplements=False)
     scaled_inputs, scaled_spec = _fixture(
@@ -599,6 +712,83 @@ def test_exact_scale_metamorphism() -> None:
         assert _value(scaled, name) == 2 * _value(baseline, name)
 
 
+def _half_decimal(numerator: int) -> str:
+    """Render a non-negative integer count of half-units as a decimal."""
+    whole, remainder = divmod(numerator, 2)
+    return str(whole) if remainder == 0 else f"{whole}.5"
+
+
+@given(st.integers(min_value=1, max_value=20))
+@settings(max_examples=12, deadline=None)
+def test_exact_scale_property(factor: int) -> None:
+    """Exact totals and loss identities scale over a bounded integer domain."""
+    baseline_inputs, baseline_spec = _fixture(supplements=False)
+    scaled_inputs, scaled_spec = _fixture(
+        meter_values=(_half_decimal(475 * factor),) * 4,
+        turbine_power=str(500 * factor),
+        availability_values=(str(25 * factor),) * 4,
+        curtailment_values=(_half_decimal(25 * factor),) * 4,
+        supplements=False,
+    )
+    baseline = estimate_operational_aep(baseline_inputs, baseline_spec)
+    scaled = estimate_operational_aep(scaled_inputs, scaled_spec)
+    for name in (
+        "net_meter_energy",
+        "turbine_terminal_energy",
+        "availability_loss",
+        "electrical_loss",
+        "curtailment_loss",
+        "meter_loss_restored_gross",
+        "turbine_known_gross",
+    ):
+        assert _value(scaled, name) == factor * _value(baseline, name)
+
+
+def test_equal_meter_turbine_increment_preserves_electrical_loss() -> None:
+    baseline_inputs, baseline_spec = _fixture(supplements=False)
+    incremented_inputs, incremented_spec = _fixture(
+        meter_values=("262.5",) * 4,
+        turbine_power="550",
+        supplements=False,
+    )
+    baseline = estimate_operational_aep(baseline_inputs, baseline_spec)
+    incremented = estimate_operational_aep(incremented_inputs, incremented_spec)
+    assert _value(incremented, "electrical_loss") == _value(baseline, "electrical_loss")
+    assert (
+        _value(incremented, "net_meter_energy")
+        == _value(baseline, "net_meter_energy") + 100
+    )
+    assert (
+        _value(incremented, "turbine_terminal_energy")
+        == _value(baseline, "turbine_terminal_energy") + 100
+    )
+
+
+def test_named_loss_increment_changes_only_restored_gross() -> None:
+    baseline_inputs, baseline_spec = _fixture(supplements=False)
+    incremented_inputs, incremented_spec = _fixture(
+        availability_values=("35",) * 4,
+        supplements=False,
+    )
+    baseline = estimate_operational_aep(baseline_inputs, baseline_spec)
+    incremented = estimate_operational_aep(incremented_inputs, incremented_spec)
+    assert (
+        _value(incremented, "availability_loss")
+        == _value(baseline, "availability_loss") + 40
+    )
+    assert (
+        _value(incremented, "meter_loss_restored_gross")
+        == _value(baseline, "meter_loss_restored_gross") + 40
+    )
+    assert (
+        _value(incremented, "turbine_known_gross")
+        == _value(baseline, "turbine_known_gross") + 40
+    )
+    assert _value(incremented, "net_meter_energy") == _value(
+        baseline, "net_meter_energy"
+    )
+
+
 def test_selector_ambiguity_and_unselected_results_fail_closed() -> None:
     inputs, spec = _fixture()
     duplicate = replace(
@@ -607,6 +797,80 @@ def test_selector_ambiguity_and_unselected_results_fail_closed() -> None:
     )
     with pytest.raises(OperationalAEPError, match="SELECTOR_AMBIGUITY"):
         estimate_operational_aep(duplicate, spec)
+
+
+def test_missing_selector_and_duplicate_assessment_fail_closed() -> None:
+    inputs, spec = _fixture()
+    missing = replace(inputs, normalized_results=inputs.normalized_results[1:])
+    with pytest.raises(OperationalAEPError, match="SELECTOR_AMBIGUITY"):
+        estimate_operational_aep(missing, spec)
+    duplicate_assessment = replace(
+        inputs, assessments=inputs.assessments + (inputs.assessments[0],)
+    )
+    with pytest.raises(OperationalAEPError, match="SELECTOR_AMBIGUITY"):
+        estimate_operational_aep(duplicate_assessment, spec)
+
+
+def test_partial_loss_products_cannot_borrow_completeness_from_another_product() -> (
+    None
+):
+    inputs, spec = _fixture(supplements=False)
+    timestamps = tuple(f"2025-01-01T00:{minute:02d}:00Z" for minute in (0, 15, 30, 45))
+    availability_data = (
+        "time,availability\n" + "".join(f"{stamp},25\n" for stamp in timestamps)
+    ).encode()
+    curtailment_data = (
+        "time,curtailment\n" + "".join(f"{stamp},12.5\n" for stamp in timestamps)
+    ).encode()
+    availability_evidence = _evidence(
+        "losses.availability.partial",
+        "curtailment",
+        availability_data,
+        (
+            OperationalColumnBinding("timestamp_utc", "time", "iso8601_utc"),
+            OperationalColumnBinding("availability_loss_kwh", "availability", "kWh"),
+        ),
+    )
+    curtailment_evidence = _evidence(
+        "losses.curtailment.partial",
+        "curtailment",
+        curtailment_data,
+        (
+            OperationalColumnBinding("timestamp_utc", "time", "iso8601_utc"),
+            OperationalColumnBinding("curtailment_loss_kwh", "curtailment", "kWh"),
+        ),
+    )
+    availability_result = normalize_operational_csv(
+        availability_data, availability_evidence
+    )
+    curtailment_result = normalize_operational_csv(
+        curtailment_data, curtailment_evidence
+    )
+    long_term = next(
+        item for item in inputs.assessments if item.purpose == "long_term_aep"
+    )
+    long_term = replace(
+        long_term,
+        datasets=long_term.datasets + (availability_evidence, curtailment_evidence),
+    )
+    forged_inputs = replace(
+        inputs,
+        assessments=(inputs.assessments[0], long_term),
+        normalized_results=inputs.normalized_results[:2]
+        + (availability_result, curtailment_result),
+        boundary_evidence=replace(
+            inputs.boundary_evidence,
+            availability_logical_id=availability_evidence.logical_id,
+            curtailment_logical_id=curtailment_evidence.logical_id,
+        ),
+    )
+    forged_spec = replace(
+        spec,
+        availability_logical_id=availability_evidence.logical_id,
+        curtailment_logical_id=curtailment_evidence.logical_id,
+    )
+    with pytest.raises(OperationalAEPError, match="individually complete"):
+        estimate_operational_aep(forged_inputs, forged_spec)
 
 
 @pytest.mark.parametrize(
@@ -625,6 +889,19 @@ def test_boundary_mismatch_fails_closed(field: str, value: str) -> None:
         estimate_operational_aep(inputs, replace(spec, **{field: value}))
 
 
+def test_attested_window_cannot_override_d2_effective_bounds() -> None:
+    inputs, spec = _fixture()
+    end = "2025-01-01T01:15:00Z"
+    inputs = replace(
+        inputs,
+        boundary_evidence=replace(
+            inputs.boundary_evidence, effective_end_exclusive_utc=end
+        ),
+    )
+    with pytest.raises(OperationalAEPError, match="INTERVAL_MISMATCH"):
+        estimate_operational_aep(inputs, replace(spec, effective_end_exclusive_utc=end))
+
+
 def test_negative_electrical_loss_is_not_tolerance_masked() -> None:
     inputs, spec = _fixture(meter_values=("251",) * 4, supplements=False)
     spec = replace(spec, absolute_tolerance_kwh="1000000")
@@ -632,9 +909,24 @@ def test_negative_electrical_loss_is_not_tolerance_masked() -> None:
         estimate_operational_aep(inputs, spec)
 
 
+@pytest.mark.parametrize(
+    ("availability", "curtailment"),
+    [("-1", "0"), ("0", "-1")],
+)
+def test_negative_named_loss_is_rejected(availability: str, curtailment: str) -> None:
+    inputs, spec = _fixture(
+        availability_values=(availability,) * 4,
+        curtailment_values=(curtailment,) * 4,
+        supplements=False,
+    )
+    with pytest.raises(OperationalAEPError, match="positive-means-loss"):
+        estimate_operational_aep(inputs, spec)
+
+
 def test_negative_unknown_residual_is_not_absorbed() -> None:
     inputs, spec = _fixture()
     wake = replace(inputs.supplemental_evidence[1], value_kwh="101")
+    spec = replace(spec, absolute_tolerance_kwh="1000000")
     with pytest.raises(OperationalAEPError, match="residual is negative"):
         estimate_operational_aep(
             replace(
@@ -659,6 +951,20 @@ def test_provenance_digest_substitution_is_rejected() -> None:
         replace(inputs.supplemental_evidence[0], method_bytes=b"replacement")
 
 
+def test_d2_artifact_substitution_is_replayed_and_rejected() -> None:
+    inputs, spec = _fixture()
+    forged_meter = copy.deepcopy(inputs.normalized_results[0])
+    forged_rows = list(forged_meter.normalized_rows)
+    forged_rows[0] = forged_rows[0][:-1] + ("999",)
+    object.__setattr__(forged_meter, "normalized_rows", tuple(forged_rows))
+    forged_inputs = replace(
+        inputs,
+        normalized_results=(forged_meter,) + inputs.normalized_results[1:],
+    )
+    with pytest.raises(OperationalAEPError, match="PROVENANCE_MISMATCH"):
+        estimate_operational_aep(forged_inputs, spec)
+
+
 def test_factory_replay_immutability_and_authority_fences() -> None:
     inputs, spec = _fixture()
     result = estimate_operational_aep(inputs, spec)
@@ -669,6 +975,16 @@ def test_factory_replay_immutability_and_authority_fences() -> None:
             components=result.components,
             ratios=result.ratios,
             receipt=result.receipt,
+        )
+    substituted_receipt = replace(result.receipt, source_manifest_sha256="0" * 64)
+    with pytest.raises(ValueError, match="does not replay"):
+        OperationalAEPResult(
+            inputs=result.inputs,
+            spec=result.spec,
+            components=result.components,
+            ratios=result.ratios,
+            receipt=substituted_receipt,
+            _factory_token=aep_module._AEP_RESULT_TOKEN,
         )
     with pytest.raises(FrozenInstanceError):
         result.receipt.bankable = True  # type: ignore[misc]
@@ -691,6 +1007,92 @@ def test_temporal_and_uncertainty_laundering_is_rejected() -> None:
     result = estimate_operational_aep(inputs, spec)
     with pytest.raises(ValueError, match="uncertainty"):
         replace(result.receipt, annual_uncertainty_status="available")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="temporal_basis"):
+        replace(result.receipt, temporal_basis="long_term_average")  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="residual exceeds"):
+        replace(
+            result.receipt,
+            meter_to_turbine_residual=OperationalEnergyQuantity(1),
+        )
+
+
+def test_complete_utc_calendar_year_label_is_admitted() -> None:
+    _, spec = _fixture()
+    annual = replace(
+        spec,
+        effective_start_utc="2024-01-01T00:00:00Z",
+        effective_end_exclusive_utc="2025-01-01T00:00:00Z",
+        temporal_basis="actual_calendar_year",
+    )
+    assert annual.temporal_basis == "actual_calendar_year"
+
+
+def test_turbine_energy_column_cannot_override_required_power_role() -> None:
+    inputs, spec = _fixture(scada_energy="1", supplements=False)
+    result = estimate_operational_aep(inputs, spec)
+    assert _value(result, "turbine_terminal_energy") == 1000
+    assert _value(result, "electrical_loss") == 50
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("meter_energy_basis", "gross_import_energy"),
+        ("turbine_energy_basis", "partial_turbine_energy"),
+        ("loss_energy_basis", "overlapping_signed_energy"),
+        ("interval_boundary", "interval_end"),
+        ("excluded_flows", "imports_included"),
+        ("asset_universe_basis", "caller_guess"),
+    ],
+)
+def test_boundary_semantic_assertions_are_closed(field: str, value: str) -> None:
+    inputs, _ = _fixture()
+    with pytest.raises(ValueError, match=field):
+        replace(inputs.boundary_evidence, **{field: value})
+
+
+def test_zero_denominators_are_unavailable_while_zero_energy_is_available() -> None:
+    inputs, spec = _fixture(
+        meter_values=("0",) * 4,
+        turbine_power="0",
+        availability_values=("0",) * 4,
+        curtailment_values=("0",) * 4,
+    )
+    zero_supplements = tuple(
+        replace(item, value_kwh="0") for item in inputs.supplemental_evidence
+    )
+    result = estimate_operational_aep(
+        replace(inputs, supplemental_evidence=zero_supplements), spec
+    )
+    for name in (
+        "net_meter_energy",
+        "turbine_terminal_energy",
+        "availability_loss",
+        "electrical_loss",
+        "curtailment_loss",
+        "resource_gross_energy",
+        "wake_performance_loss",
+        "unknown_residual_loss",
+    ):
+        assert result.component(name).status == "available"  # type: ignore[arg-type]
+        assert _value(result, name) == 0
+    for ratio in result.ratios:
+        assert ratio.status == "unavailable"
+        assert ratio.unavailable_reason == "denominator_is_zero"
+
+
+def test_provenance_resource_bounds_and_binding_roles_fail_closed() -> None:
+    inputs, spec = _fixture()
+    oversized = b"x" * 1_048_577
+    with pytest.raises(ValueError, match="1 MiB"):
+        replace(
+            inputs.supplemental_evidence[0],
+            source_bytes=oversized,
+            source_sha256=_digest(oversized),
+        )
+    result = estimate_operational_aep(inputs, spec)
+    with pytest.raises(ValueError, match="role is not supported"):
+        replace(result.receipt.source_bindings[0], role="invented")
 
 
 def test_resource_without_wake_does_not_infer_unknown_zero() -> None:
@@ -702,6 +1104,31 @@ def test_resource_without_wake_does_not_infer_unknown_zero() -> None:
     assert result.component("resource_gross_energy").status == "available"
     assert result.component("wake_performance_loss").status == "unavailable"
     assert result.component("unknown_residual_loss").status == "unavailable"
+
+
+def test_wake_without_resource_remains_available_but_residual_does_not() -> None:
+    inputs, spec = _fixture()
+    wake_only = replace(inputs, supplemental_evidence=inputs.supplemental_evidence[1:])
+    result = estimate_operational_aep(wake_only, spec)
+    assert result.component("resource_gross_energy").status == "unavailable"
+    assert result.component("wake_performance_loss").status == "available"
+    assert result.component("unknown_residual_loss").status == "unavailable"
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "canonical_finance_eligible",
+        "bankable",
+        "lender_eligible",
+        "board_eligible",
+    ],
+)
+def test_authority_flags_cannot_be_laundered(field: str) -> None:
+    inputs, spec = _fixture()
+    result = estimate_operational_aep(inputs, spec)
+    with pytest.raises(ValueError, match="exact boolean False"):
+        replace(result.receipt, **{field: True})
 
 
 def test_model_dump_omits_retained_provenance_bytes() -> None:

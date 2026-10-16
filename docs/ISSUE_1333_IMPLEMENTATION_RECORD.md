@@ -7,11 +7,17 @@ artifacts. It does not change D1/D2 normalization, canonical AEP, scenarios, fin
 release state, or issue #1110. Every result is exactly false for canonical-finance,
 bankability, lender, and Board eligibility. The Board/lender reliance HOLD remains active.
 
-The controlling implementation lease is `L-1333-D3-001`, recorded in issue #1333 comment
-`6201589355`; the capability profile is comment `6201394718`. The writer independently read the
-contract/harness ingress (`6201512739`), renewable-energy ingress (`6201581582`), their named
-repository sources, the complete D1/D2 implementation records and predecessor reviews, and the
-OpenOA v3.2 sources at commit `35e8a52c4cd8f43223f8181153d4e3f083f090d2`:
+The initial writer lease `L-1333-D3-001` (comment `6201589355`) was revoked after interruption
+(comment `6212320900`), and its exact seven changed files were preserved without semantic edits in
+checkpoint `f292a07f335f1953d71349495726d6c85931e695` under persistence-only lease
+`L-1333-D3-P001` (comment `6212327630`). The controlling recovery lease is `L-1333-D3-002`, comment
+`6212341149`; it required the successor writer to treat the preserved code and 209 passing tests as
+claims rather than acceptance. The capability profile is comment `6201394718`. The recovery writer
+independently revalidated the checkpoint head/tree/base, merge base, clean state, eight allowlisted
+hashes, worktree import path, and sole-writer state before mutation. It then read the complete
+preserved D3 source, tests, and record; contract/harness ingress (`6201512739`); renewable-energy
+ingress (`6201581582`); their named repository sources; D1/D2 contracts and predecessor records; and
+the OpenOA v3.2 sources at commit `35e8a52c4cd8f43223f8181153d4e3f083f090d2`:
 
 | Comparator source | SHA-256 | Use |
 |---|---|---|
@@ -24,7 +30,8 @@ OpenOA v3.2 sources at commit `35e8a52c4cd8f43223f8181153d4e3f083f090d2`:
 
 OpenOA remains research software and a methodological comparator, not a runtime dependency,
 source-acceptance authority, professional opinion, or bankability claim. D3 imports no OpenOA
-code and adopts none of its stochastic paths.
+code and adopts none of its stochastic paths. The recovery ingress downloaded all six comparator
+files directly from that exact commit and independently reproduced every SHA-256 in the table.
 
 ## Evidence and equation contract
 
@@ -36,6 +43,15 @@ to the same start and end-exclusive effective interval. Fixed-second interval-av
 integrated as the exact rational `power_kw * interval_seconds / 3600`; interval energy is summed
 exactly. Source-UTC and supplied-TZif calendar-month energy can share a boundary with complete
 fixed-second turbine evidence.
+
+Role selection is closed rather than inferred: meter energy is always the D1-required
+`energy_kwh`, turbine energy is always integrated from the D1-required interval-average `power_kw`,
+and each selected availability or curtailment product must itself carry both D1 loss roles. An
+optional extra SCADA energy column cannot override turbine power, and partial loss products cannot
+borrow D1 completeness from an unselected product. Before use, every selected D2 result is replayed
+through `normalize_operational_csv` from its retained source, lineage, derivation, TZif, group
+universe, and exclusion inputs; any row, normalized-byte, receipt, method, or provenance
+substitution closes as `PROVENANCE_MISMATCH`.
 
 An immutable boundary attestation separately states that the meter is net export, SCADA covers the
 complete turbine-terminal asset universe, losses are non-overlapping positive reductions, rows are
@@ -62,6 +78,13 @@ participates. The explicit absolute kWh tolerance and exact residuals are method
 zero carries a value and evidence IDs; unavailable carries neither, so missing evidence can never
 be serialized as zero.
 
+Source bindings use a closed role vocabulary: the four mandatory D2 bindings require normalized
+artifact digests and no scalar claim, while optional `R`/`W` bindings require provenance-bound
+scalar-claim digests and no normalized artifact. Receipt construction independently validates
+temporal basis, complete-year bounds, exact quantity types, unique mandatory bindings, and every
+residual against tolerance. D1 assessment claim hashing sorts datasets by logical ID, so semantically
+equivalent tuple ordering cannot change the source manifest or method identity.
+
 ## Temporal, uncertainty, and authority boundaries
 
 Only `observed_period_total` and a strictly complete UTC `actual_calendar_year` are accepted
@@ -72,9 +95,11 @@ presence never creates resource gross, LTA, P50, P90, or uncertainty. A future L
 result requires a separately governed method, covariance/input contract, deterministic oracle,
 and new review.
 
-The result retains all inputs and is factory-only. Construction replays components, ratios,
-source-manifest identity, method identity, reconciliation residuals, uncertainty state, and hard
-authority flags. Model dumps omit retained source and method bytes.
+The result retains all inputs and is factory-only. Construction reconstructs the D3 specification,
+boundary attestation, and supplemental evidence at the consumption boundary, then replays D2 and
+all D3 components, ratios, source-manifest identity, method identity, reconciliation residuals,
+uncertainty state, and hard authority flags. Possession of the module-private factory token cannot
+authorize a substituted result. Model dumps omit retained source and method bytes.
 
 ## Independent fixture and hostile controls
 
@@ -84,12 +109,15 @@ intervals, meter energy 237.5 kWh per interval, availability 25 kWh per interval
 `T=1000`, `M=950`, `A=100`, `C=50`, `E=50`, meter loss-restored gross `1100`, turbine-known gross
 `1150`, and `U=20`. Exact ratios include `E/T=1/20`, `M/R=19/25`, and `U/R=2/125`.
 
-The focused suite also covers evidenced zero versus unavailable, calendar-month/fixed-day matched
-bounds, Decimal-context independence, input-order invariance, exact scaling, split/merge interval
-invariance, selector ambiguity, project/window/ID mismatch, negative electrical and residual loss,
-huge/non-finite/wrong-type tolerance values, provenance substitution, factory replay,
-serialization, temporal/LTA/uncertainty laundering, authority flags, and resource-without-wake
-anti-inference.
+The focused suite also covers evidenced zero versus unavailable; source-UTC and retained-TZif
+calendar-month/fixed-day matched bounds; same-process and fresh-process Decimal-context
+independence; assessment, dataset, D2-result, and supplemental input-order invariance; bounded
+property scaling; split/merge intervals; equal meter/turbine increments; named-loss increments;
+selector absence/duplication; partial-product completeness attacks; project/window/ID mismatch;
+attestation-versus-D2-bound conflict; negative electrical, named, and residual loss; huge,
+non-finite, and wrong-type tolerance values; D2 row replay and D3 result substitution; provenance
+size/digest/binding-role attacks; serialization; temporal/LTA/uncertainty laundering; hard authority
+flags; zero denominators; and resource-only, wake-only, and no-supplement anti-inference.
 
 ## Predecessor finding matrix
 
@@ -97,8 +125,8 @@ anti-inference.
 |---|---|
 | D1 product isolation, cadence/calendar declaration, timezone policy, epistemic status, derived lineage, portable zone keys, digest-role separation, runtime errors, and authority fences | `CLOSED` by consuming only exact D1 evidence objects retained in verified D2 results and matched D1 envelopes; D3 does not loosen D1 |
 | D2 context-independent numeric parsing and aggregation | `CLOSED` by retaining D2 objects and using a separate exact `Fraction` implementation; no float/global Decimal context |
-| D2 population/group completeness, row/byte replay, timezone/TZif binding, interval/resource bounds, and predictable failures | `CLOSED` for selected inputs by requiring successful factory-bound D2 results and a complete SCADA group universe |
-| D2 RFC 9636 leap/indicator/start-truncation chain, including first correction zero | `NOT_APPLICABLE_WITH_REASON`: D3 consumes normalized UTC rows and does not parse or alter TZif bytes; retained named-zone calendar rules are used only to establish the next end-exclusive month boundary |
+| D2 population/group completeness, row/byte replay, timezone/TZif binding, interval/resource bounds, and predictable failures | `CLOSED` for selected inputs by independently replaying every retained D2 result at D3 consumption and requiring the complete SCADA group universe |
+| D2 RFC 9636 leap/indicator/start-truncation chain, including first correction zero | `NOT_APPLICABLE_WITH_REASON`: D3 consumes normalized UTC rows and does not parse or alter TZif bytes; retained named-zone calendar rules are replayed by D2 and used only to establish the next end-exclusive month boundary |
 | Missing resource gross, wake/performance, unknown residual, LTA, and uncertainty evidence | `CLOSED` by explicit unavailable states; `R/W/U` become available only under the supplemental provenance rules above |
 | Canonical finance, lender, Board, release, professional, publication, issue-closure, and HOLD authority | `CLOSED` by hard-false flags and explicit non-authority; #1110 remains OPEN/HOLD |
 
@@ -111,6 +139,8 @@ anti-inference.
 - Combined wake/performance is one explicit scalar category. Separating wake, turbine performance,
   blade degradation, or resource-model bias needs new evidence and contracts.
 - Availability/curtailment exclusivity is attested, not inferred from status/event overlap.
+- Replaying selected D2 results is intentionally fail-closed and adds bounded CPU cost proportional
+  to the retained selected CSV artifacts; it performs no I/O.
 - The result is a matched observed-period energy account, not a canonical AEP, P-value, capacity
   factor, EYA reconciliation, finance input, or evidence-grade assessment.
 
@@ -121,15 +151,21 @@ independent R3 exact-object reviews remain coordinator-owned delivery gates.
 
 | Check | Exact command | Result |
 |---|---|---|
-| Initial D3/import focus | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_operational_aep.py tests/contracts/test_contracts_v14_import_surface.py` | 32 passed in 1.20 s after calendar fixture |
+| Recovery ingress focus | governed Python `-m pytest -p no:cacheprovider --no-cov -q` on D1, D2, preserved D3, and v14 import surface | 209 passed in 1.86 s; starting diagnostic only |
+| Final D1-D3 focus | same command on `test_operational_evidence_contract.py`, `test_operational_normalization.py`, `test_operational_aep.py`, and v14 import surface | 235 passed in 2.28 s |
+| Shared contract suite | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/contracts` | 1628 passed in 88.72 s |
+| Six-shard ordinary suite | CI-equivalent six `pytest-split` groups, `DUTCHBAY_TEST_MODE=full`, `-n auto`, `--no-cov` | shards 2/4/6 clean: 1515/1518/1516 passed; shards 1/3 each had one `test_ops_extras.py` installed-metadata failure independently reproduced on untouched main; shard 5 had exactly three documented cloud sandbox watchdog/process-reaping failures (within the declared 3–5 range); no candidate-related failure |
 | Strict source types | governed Python `-m mypy --no-incremental analytics/operational/aep.py analytics/operational/contracts.py analytics/operational/normalization.py analytics/operational/__init__.py analytics/contracts_v14.py` | success; no issues in five source files |
-| Final D1-D3 focus | pending final checkpoint | pending |
-| Shared contract suite | pending final checkpoint | pending |
-| Complete ordinary suite / six shards | pending final checkpoint | pending |
-| Public docstring ratchet | pending final checkpoint | pending |
-| Ruff lint/format | pending final checkpoint | pending |
-| Exact-file pre-commit | pending final checkpoint | pending |
-| Changelog dry-run | pending final checkpoint | pending |
-| GWTF bootstrap | initial preflight passed 75/75; final rerun pending | pending final rerun |
-| Diff/status hygiene | pending final checkpoint | pending |
+| Public docstring ratchet | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/lint/test_docstring_coverage.py` | 12 passed in 1.43 s |
+| Ruff lint/format | governed `ruff check` and `ruff format --check` over all six allowlisted Python paths | all checks passed; six files already formatted |
+| Exact-file pre-commit | governed `pre-commit run --files` over the exact eight-path allowlist | Black/isort/EOF hooks made allowlisted formatting changes on the first pass; second and final passes passed every hook |
+| Changelog dry-run | governed Python `scripts/compile_changelog.py --dry-run` | passed and rendered pending fragments without repository mutation |
+| GWTF bootstrap | `DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" PYTHONPATH="$PWD"` plus governed Python `dutchbay_bootstrap_rules.py` | final 75/75 active rules loaded |
+| Diff/status hygiene | `git diff --check`; allowlist/status inspection | passed; only allowlisted paths differ from the persistence checkpoint; final clean status follows checkpoint commit |
 
+The two `test_ops_extras.py` residuals are caused by the shared cloud `.venv` having no installed
+DutchBay distribution metadata when each test deliberately makes the repository `pyproject.toml`
+unusable; both exact tests fail identically on protected main. The shard-5 residuals are the
+container process-reaping family explicitly declared in `CLAUDE.md`. Hosted exact-head CI remains
+the independent clean-environment decision surface. Neither local residual changes #1110 OPEN/HOLD
+or any canonical, finance, release, lender, Board, professional, publication, or issue authority.

@@ -21,7 +21,12 @@ from typing import Any, Final, Literal, TypeAlias
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from analytics.operational.contracts import OperationalAssessmentInput
-from analytics.operational.normalization import OperationalNormalizationResult
+from analytics.operational.normalization import (
+    OperationalNormalizationError,
+    OperationalNormalizationResult,
+    OperationalRowExclusion,
+    normalize_operational_csv,
+)
 
 OPERATIONAL_AEP_SCHEMA: Final = "dutchbay.operational_aep.v1"
 _AEP_METHOD_VERSION: Final = "operational_energy_reconciliation_v1"
@@ -80,6 +85,15 @@ _COMPONENT_NAMES = frozenset(
     }
 )
 _SUPPLEMENTAL_COMPONENTS = frozenset({"resource_gross_energy", "wake_performance_loss"})
+_D2_SOURCE_ROLES = frozenset(
+    {
+        "net_meter_energy",
+        "turbine_terminal_energy",
+        "availability_loss",
+        "curtailment_loss",
+    }
+)
+_AEP_SOURCE_ROLES = _D2_SOURCE_ROLES | _SUPPLEMENTAL_COMPONENTS
 
 
 class OperationalAEPError(ValueError):
@@ -470,7 +484,8 @@ class OperationalAEPSourceBinding:
 
     def __post_init__(self) -> None:
         """Validate stable role identifiers and SHA-256 identities."""
-        _require_identifier(self.role, "role")
+        if not isinstance(self.role, str) or self.role not in _AEP_SOURCE_ROLES:
+            raise ValueError("source binding role is not supported.")
         _require_identifier(self.logical_id, "logical_id")
         for field_name in ("source_sha256", "method_sha256"):
             if _SHA256_RE.fullmatch(getattr(self, field_name)) is None:
@@ -483,6 +498,15 @@ class OperationalAEPSourceBinding:
             _SHA256_RE.fullmatch(self.claim_sha256) is None
         ):
             raise ValueError("claim_sha256 must be null or a lowercase digest.")
+        if self.role in _D2_SOURCE_ROLES:
+            if self.normalized_sha256 is None or self.claim_sha256 is not None:
+                raise ValueError(
+                    "D2 source bindings require a normalized digest and no scalar claim."
+                )
+        elif self.normalized_sha256 is not None or self.claim_sha256 is None:
+            raise ValueError(
+                "supplemental bindings require a scalar claim and no normalized digest."
+            )
 
     def model_dump(self) -> dict[str, Any]:
         """Return a JSON-compatible source binding."""
@@ -535,6 +559,62 @@ class OperationalAEPReceipt:
             for item in self.source_bindings
         ):
             raise ValueError("source_bindings contain an invalid object.")
+        binding_roles = tuple(item.role for item in self.source_bindings)
+        if len(binding_roles) != len(
+            set(binding_roles)
+        ) or not _D2_SOURCE_ROLES.issubset(binding_roles):
+            raise ValueError(
+                "source_bindings require unique roles and every mandatory D2 role."
+            )
+        if self.temporal_basis not in {
+            "observed_period_total",
+            "actual_calendar_year",
+        }:
+            raise ValueError("receipt temporal_basis is not an observed-period label.")
+        start = _parse_utc(self.effective_start_utc, "effective_start_utc")
+        end = _parse_utc(
+            self.effective_end_exclusive_utc, "effective_end_exclusive_utc"
+        )
+        if start >= end:
+            raise ValueError("receipt effective interval must be positive.")
+        if self.temporal_basis == "actual_calendar_year" and not (
+            start.month == 1
+            and start.day == 1
+            and start.time() == datetime.min.time()
+            and end.month == 1
+            and end.day == 1
+            and end.time() == datetime.min.time()
+            and end.year == start.year + 1
+        ):
+            raise ValueError(
+                "actual_calendar_year receipt requires one complete UTC year."
+            )
+        quantities = (
+            self.absolute_tolerance,
+            self.meter_to_turbine_residual,
+            self.known_gross_to_net_residual,
+        )
+        if not all(isinstance(item, OperationalEnergyQuantity) for item in quantities):
+            raise ValueError(
+                "receipt tolerances and residuals must be exact quantities."
+            )
+        if self.full_gross_to_net_residual is not None and not isinstance(
+            self.full_gross_to_net_residual, OperationalEnergyQuantity
+        ):
+            raise ValueError("full gross-to-net residual must be null or exact.")
+        tolerance = self.absolute_tolerance.as_fraction()
+        if tolerance < 0:
+            raise ValueError("receipt tolerance must be non-negative.")
+        residuals = (
+            self.meter_to_turbine_residual,
+            self.known_gross_to_net_residual,
+        ) + (
+            (self.full_gross_to_net_residual,)
+            if self.full_gross_to_net_residual is not None
+            else ()
+        )
+        if any(abs(item.as_fraction()) > tolerance for item in residuals):
+            raise ValueError("receipt energy residual exceeds its explicit tolerance.")
         for field_name in (
             "source_manifest_sha256",
             "boundary_source_sha256",
@@ -547,8 +627,7 @@ class OperationalAEPReceipt:
             self.annual_uncertainty_status != "unavailable_not_estimated"
             or self.annual_uncertainty_basis is not None
             or self.annual_exceedance_probabilities != ()
-            or self.long_term_average_uncertainty_status
-            != "unavailable_not_estimated"
+            or self.long_term_average_uncertainty_status != "unavailable_not_estimated"
             or self.long_term_average_uncertainty_basis is not None
             or self.long_term_average_exceedance_probabilities != ()
         ):
@@ -806,6 +885,43 @@ def _selected_results(
     return by_id
 
 
+def _replay_d2_result(result: OperationalNormalizationResult) -> None:
+    """Prove that retained D2 source, method, rows, and receipt still replay."""
+    try:
+        replay = normalize_operational_csv(
+            result.source_bytes,
+            result.evidence,
+            lineage_source_bytes=result.lineage_source_bytes,
+            derivation_method_bytes=result.derivation_method_bytes,
+            timezone_rules=result.timezone_rules,
+            group_universe=result.group_universe,
+            column_exclusions=result.receipt.column_exclusions,
+            row_exclusions=tuple(
+                OperationalRowExclusion(item.source_row_number, item.reason)
+                for item in result.receipt.row_exclusions
+            ),
+        )
+    except (OperationalNormalizationError, ValueError) as exc:
+        raise OperationalAEPError(
+            "PROVENANCE_MISMATCH",
+            f"D2 result {result.evidence.logical_id!r} no longer replays.",
+        ) from exc
+    if replay != result:
+        raise OperationalAEPError(
+            "PROVENANCE_MISMATCH",
+            f"D2 result {result.evidence.logical_id!r} differs from its replay.",
+        )
+
+
+def _assessment_claim(assessment: OperationalAssessmentInput) -> dict[str, Any]:
+    """Return an order-independent D1 assessment claim for method binding."""
+    claim = assessment.model_dump()
+    claim["datasets"] = tuple(
+        sorted(claim["datasets"], key=lambda item: item["logical_id"])
+    )
+    return claim
+
+
 def _validate_assessments(
     inputs: OperationalAEPInput,
     spec: OperationalAEPSpec,
@@ -981,8 +1097,56 @@ def _build_artifacts(
         raise OperationalAEPError(
             "INVALID_INPUT", "inputs and spec must use the public D3 contracts."
         )
+    # Frozen dataclasses reject ordinary mutation, while reconstruction here also
+    # closes object-level or untyped substitution before any arithmetic begins.
+    spec = OperationalAEPSpec(**spec.model_dump())
+    original_boundary = inputs.boundary_evidence
+    boundary = OperationalBoundaryEvidence(
+        project_id=original_boundary.project_id,
+        effective_start_utc=original_boundary.effective_start_utc,
+        effective_end_exclusive_utc=original_boundary.effective_end_exclusive_utc,
+        meter_logical_id=original_boundary.meter_logical_id,
+        turbine_logical_id=original_boundary.turbine_logical_id,
+        availability_logical_id=original_boundary.availability_logical_id,
+        curtailment_logical_id=original_boundary.curtailment_logical_id,
+        meter_energy_basis=original_boundary.meter_energy_basis,
+        turbine_energy_basis=original_boundary.turbine_energy_basis,
+        loss_energy_basis=original_boundary.loss_energy_basis,
+        interval_boundary=original_boundary.interval_boundary,
+        excluded_flows=original_boundary.excluded_flows,
+        asset_universe_basis=original_boundary.asset_universe_basis,
+        source_locator=original_boundary.source_locator,
+        source_bytes=original_boundary.source_bytes,
+        source_sha256=original_boundary.source_sha256,
+        method_bytes=original_boundary.method_bytes,
+        method_sha256=original_boundary.method_sha256,
+    )
+    supplements_validated = tuple(
+        OperationalSupplementalEnergyEvidence(
+            evidence_id=item.evidence_id,
+            component=item.component,
+            project_id=item.project_id,
+            effective_start_utc=item.effective_start_utc,
+            effective_end_exclusive_utc=item.effective_end_exclusive_utc,
+            value_kwh=item.value_kwh,
+            boundary=item.boundary,
+            source_locator=item.source_locator,
+            source_bytes=item.source_bytes,
+            source_sha256=item.source_sha256,
+            method_bytes=item.method_bytes,
+            method_sha256=item.method_sha256,
+        )
+        for item in inputs.supplemental_evidence
+    )
+    inputs = OperationalAEPInput(
+        assessments=inputs.assessments,
+        normalized_results=inputs.normalized_results,
+        boundary_evidence=boundary,
+        supplemental_evidence=supplements_validated,
+    )
     selected = _selected_results(inputs, spec)
-    boundary = inputs.boundary_evidence
+    for result in selected.values():
+        _replay_d2_result(result)
     boundary_pairs = (
         (boundary.project_id, spec.project_id),
         (boundary.effective_start_utc, spec.effective_start_utc),
@@ -1003,12 +1167,8 @@ def _build_artifacts(
     turbine = selected[spec.turbine_logical_id]
     availability = selected[spec.availability_logical_id]
     curtailment = selected[spec.curtailment_logical_id]
-    meter_role = (
-        "energy_kwh" if "energy_kwh" in meter.receipt.normalized_roles else "power_kw"
-    )
-    turbine_role = (
-        "energy_kwh" if "energy_kwh" in turbine.receipt.normalized_roles else "power_kw"
-    )
+    meter_role = "energy_kwh"
+    turbine_role = "power_kw"
     _validate_role(meter, kind="revenue_meter", role=meter_role, grouped=False)
     _validate_role(turbine, kind="scada", role=turbine_role, grouped=True)
     _validate_role(
@@ -1023,6 +1183,13 @@ def _build_artifacts(
         role="curtailment_loss_kwh",
         grouped=False,
     )
+    required_loss_roles = {"availability_loss_kwh", "curtailment_loss_kwh"}
+    for result in (availability, curtailment):
+        if not required_loss_roles.issubset(result.receipt.normalized_roles):
+            raise OperationalAEPError(
+                "UNSUPPORTED_EVIDENCE",
+                "selected loss evidence must be an individually complete D1 curtailment product.",
+            )
     expected_bounds = (spec.effective_start_utc, spec.effective_end_exclusive_utc)
     for result in {id(item): item for item in selected.values()}.values():
         if _effective_bounds(result) != expected_bounds:
@@ -1248,9 +1415,7 @@ def _build_artifacts(
             inputs.supplemental_evidence, key=lambda item: item.component
         )
     )
-    source_manifest: list[dict[str, Any]] = [
-        item.model_dump() for item in bindings
-    ]
+    source_manifest: list[dict[str, Any]] = [item.model_dump() for item in bindings]
     source_manifest.append(
         {
             "role": "boundary_attestation",
@@ -1262,7 +1427,7 @@ def _build_artifacts(
         {
             "role": "d1_assessment_envelope",
             "assessment_id": assessment.assessment_id,
-            "claim_sha256": _json_sha(assessment.model_dump()),
+            "claim_sha256": _json_sha(_assessment_claim(assessment)),
         }
         for assessment in sorted(
             inputs.assessments, key=lambda item: (item.purpose, item.assessment_id)
