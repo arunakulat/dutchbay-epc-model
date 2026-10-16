@@ -7,6 +7,7 @@ import pytest
 
 from analytics.contracts import ScenarioResult as PackageScenarioResult
 from analytics.contracts_v14 import (
+    OPERATIONAL_AEP_SCHEMA,
     OPERATIONAL_AGGREGATION_SCHEMA,
     OPERATIONAL_CALENDAR_MONTH_ALLOWED,
     OPERATIONAL_EVIDENCE_SCHEMA,
@@ -18,6 +19,9 @@ from analytics.contracts_v14 import (
     EquityPerformance,
     IrrBridgeComponent,
     MonteCarloResult,
+    OperationalAEPResult,
+    OperationalAEPSpec,
+    OperationalBoundaryEvidence,
     OperationalAggregationSpec,
     OperationalAmbiguousTimePolicy,
     OperationalAnalysisPurpose,
@@ -45,6 +49,7 @@ from analytics.contracts_v14 import (
     WaccComponents,
     WaccResult,
     aggregate_operational_series,
+    estimate_operational_aep,
     normalize_operational_csv,
 )
 from analytics.operational import (
@@ -96,6 +101,7 @@ def test_contracts_v14_pipeline_surface_is_importable() -> None:
     assert result.model_dump()["project_irr"] == 0.12
     assert PackageScenarioResult is ScenarioResult
     assert OPERATIONAL_EVIDENCE_SCHEMA == "dutchbay.operational_evidence.v1"
+    assert OPERATIONAL_AEP_SCHEMA == "dutchbay.operational_aep.v1"
     assert OPERATIONAL_NORMALIZATION_SCHEMA == "dutchbay.operational_normalization.v1"
     assert OPERATIONAL_AGGREGATION_SCHEMA == "dutchbay.operational_aggregation.v1"
     assert OPERATIONAL_MAX_INTERVAL_SECONDS["wake_losses_scada"]["scada"] == 3_600
@@ -109,9 +115,13 @@ def test_contracts_v14_pipeline_surface_is_importable() -> None:
     assert OperationalGroupUniverse is PackageOperationalGroupUniverse
     assert OperationalTimezoneRules is PackageTimezoneRules
     assert OperationalAggregationSpec.__name__ == "OperationalAggregationSpec"
+    assert OperationalAEPSpec.__name__ == "OperationalAEPSpec"
+    assert OperationalAEPResult.__name__ == "OperationalAEPResult"
+    assert OperationalBoundaryEvidence.__name__ == "OperationalBoundaryEvidence"
     assert OperationalNormalizationError.__name__ == "OperationalNormalizationError"
     assert normalize_operational_csv.__name__ == "normalize_operational_csv"
     assert aggregate_operational_series.__name__ == "aggregate_operational_series"
+    assert estimate_operational_aep.__name__ == "estimate_operational_aep"
     assert OperationalDatasetEvidence.__name__ == "OperationalDatasetEvidence"
     assert "wake_losses_tower" in get_args(OperationalAnalysisPurpose)
     assert "fold_1" in get_args(OperationalAmbiguousTimePolicy)

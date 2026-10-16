@@ -1,4 +1,25 @@
-"""Post-COD operational evidence and deterministic normalization contracts."""
+"""Post-COD operational evidence, normalization, and energy contracts."""
+
+from analytics.operational.aep import (
+    OPERATIONAL_AEP_SCHEMA,
+    OperationalAEPError,
+    OperationalAEPErrorCode,
+    OperationalAEPInput,
+    OperationalAEPReceipt,
+    OperationalAEPResult,
+    OperationalAEPSpec,
+    OperationalAEPSourceBinding,
+    OperationalBoundaryEvidence,
+    OperationalComponentStatus,
+    OperationalEnergyComponent,
+    OperationalEnergyComponentName,
+    OperationalEnergyQuantity,
+    OperationalRatio,
+    OperationalSupplementalComponent,
+    OperationalSupplementalEnergyEvidence,
+    OperationalTemporalBasis,
+    estimate_operational_aep,
+)
 
 from analytics.operational.contracts import (
     OPERATIONAL_CALENDAR_MONTH_ALLOWED,
@@ -41,6 +62,7 @@ from analytics.operational.normalization import (
 )
 
 __all__ = [
+    "OPERATIONAL_AEP_SCHEMA",
     "OPERATIONAL_AGGREGATION_SCHEMA",
     "OPERATIONAL_CALENDAR_MONTH_ALLOWED",
     "OPERATIONAL_EVIDENCE_SCHEMA",
@@ -49,6 +71,13 @@ __all__ = [
     "OPERATIONAL_REQUIRED_DATASET_KINDS",
     "OPERATIONAL_REQUIRED_ROLES",
     "OperationalAmbiguousTimePolicy",
+    "OperationalAEPError",
+    "OperationalAEPErrorCode",
+    "OperationalAEPInput",
+    "OperationalAEPReceipt",
+    "OperationalAEPResult",
+    "OperationalAEPSpec",
+    "OperationalAEPSourceBinding",
     "OperationalAnalysisPurpose",
     "OperationalAggregationMethod",
     "OperationalAggregationReceipt",
@@ -57,9 +86,13 @@ __all__ = [
     "OperationalAssessmentInput",
     "OperationalColumnBinding",
     "OperationalColumnExclusion",
+    "OperationalComponentStatus",
     "OperationalDatasetEvidence",
     "OperationalDatasetKind",
     "OperationalEvidenceError",
+    "OperationalEnergyComponent",
+    "OperationalEnergyComponentName",
+    "OperationalEnergyQuantity",
     "OperationalExcludedRowReceipt",
     "OperationalGroupQualityReceipt",
     "OperationalGroupUniverse",
@@ -72,8 +105,14 @@ __all__ = [
     "OperationalSourceClass",
     "OperationalTimezoneTreatment",
     "OperationalQualityReceipt",
+    "OperationalRatio",
     "OperationalRowExclusion",
     "OperationalTimezoneRules",
+    "OperationalTemporalBasis",
+    "OperationalBoundaryEvidence",
+    "OperationalSupplementalComponent",
+    "OperationalSupplementalEnergyEvidence",
     "aggregate_operational_series",
     "normalize_operational_csv",
+    "estimate_operational_aep",
 ]
