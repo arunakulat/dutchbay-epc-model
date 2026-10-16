@@ -1040,19 +1040,21 @@ def _validate_assessments(
     electrical = electrical_matches[0]
     long_term = long_term_matches[0]
 
-    def expected_window(logical_ids: tuple[str, ...]) -> tuple[datetime, datetime]:
-        # D1 bounds are inclusive interval-start labels.  For mixed cadences the
-        # earliest final label is the coarsest selected interval; every selected
-        # D2 result independently establishes that this label reaches the common
-        # D3 end-exclusive boundary.
-        final_labels = tuple(
-            _parse_utc(selected[logical_id].evidence.coverage_end_utc, "coverage_end_utc")
-            for logical_id in logical_ids
-        )
-        return (
-            _parse_utc(spec.effective_start_utc, "effective_start_utc"),
-            min(final_labels),
-        )
+    # D1 assessment bounds are inclusive interval-start labels, while D3 reports
+    # one end-exclusive population.  All selected D2 products have already proved
+    # the same effective start/end.  The earliest selected final label is therefore
+    # the coarsest interval family that reaches that common end-exclusive instant,
+    # and is the maximal common inclusive D1 authorization end.  Requiring both D1
+    # envelopes to use this one global window prevents either purpose from lending
+    # a narrow or shifted authorization to a broader D3 population.
+    selected_unique = {id(item): item for item in selected.values()}.values()
+    expected_window = (
+        _parse_utc(spec.effective_start_utc, "effective_start_utc"),
+        min(
+            _parse_utc(item.evidence.coverage_end_utc, "coverage_end_utc")
+            for item in selected_unique
+        ),
+    )
 
     electrical_window = (
         _parse_utc(electrical.assessment_start_utc, "assessment_start_utc"),
@@ -1062,19 +1064,9 @@ def _validate_assessments(
         _parse_utc(long_term.assessment_start_utc, "assessment_start_utc"),
         _parse_utc(long_term.assessment_end_utc, "assessment_end_utc"),
     )
-    expected_electrical = expected_window(
-        (spec.meter_logical_id, spec.turbine_logical_id)
-    )
-    expected_long_term = expected_window(
-        (
-            spec.meter_logical_id,
-            spec.availability_logical_id,
-            spec.curtailment_logical_id,
-        )
-    )
     if (
-        electrical_window != expected_electrical
-        or long_term_window != expected_long_term
+        electrical_window != expected_window
+        or long_term_window != expected_window
         or electrical_window != long_term_window
     ):
         raise OperationalAEPError(

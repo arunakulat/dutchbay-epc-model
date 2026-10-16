@@ -33,6 +33,19 @@ source-acceptance authority, professional opinion, or bankability claim. D3 impo
 code and adopts none of its stochastic paths. The recovery ingress downloaded all six comparator
 files directly from that exact commit and independently reproduced every SHA-256 in the table.
 
+Recovery lease `L-1333-D3-002` produced the first frozen candidate at commit
+`a852214e6954488b67af1ec394a2932ac739590c`. Independent exact-object review rejected that
+candidate with domain finding `D3-DOM-001` (comment `6213078877`, canonical receipt SHA-256
+`7b2c056992bf340c5b9f7548ec6bd541451fa4b9c2030712d0bf2976f46dca03`) and assurance finding
+`D3-ASSURANCE-001` (comment `6213083712`, canonical receipt SHA-256
+`d9514f805d3d0c07645742468874c32b2529d380b4cbbb96b19307d717507286`). The findings respectively
+showed that separate purpose windows could under-authorize the population emitted by D3 and that a
+malformed retained D2 nested contract could leak a raw `AttributeError` before replay. Corrective
+lease `L-1333-D3-003` was interrupted and revoked at comment `6219984076`; its exact partial source
+bytes were preserved without semantic edits at checkpoint `f899c94c841d505ecdbdfacf5f175c9d4f06142a`
+under persistence-only lease `L-1333-D3-P002` (comment `6219989366`). Lease `L-1333-D3-004`
+(comment `6219998423`) owns the bounded completion of those two findings and no other scope.
+
 ## Evidence and equation contract
 
 The factory requires explicit logical-ID selectors and exactly one selected D2 result per logical
@@ -52,6 +65,12 @@ borrow D1 completeness from an unselected product. Before use, every selected D2
 through `normalize_operational_csv` from its retained source, lineage, derivation, TZif, group
 universe, and exclusion inputs; any row, normalized-byte, receipt, method, or provenance
 substitution closes as `PROVENANCE_MISMATCH`.
+
+The replay boundary reconstructs and type-validates the retained D1 evidence, column bindings,
+quality receipt, and row exclusions before reading their identity fields or invoking D2 replay.
+Predictable malformed nested-object and validation failures are translated into the closed D3
+`PROVENANCE_MISMATCH` state; callers do not receive incidental `AttributeError`, `TypeError`, or
+`ValueError` exceptions from hostile retained objects.
 
 An immutable boundary attestation separately states that the meter is net export, SCADA covers the
 complete turbine-terminal asset universe, losses are non-overlapping positive reductions, rows are
@@ -85,6 +104,14 @@ temporal basis, complete-year bounds, exact quantity types, unique mandatory bin
 residual against tolerance. D1 assessment claim hashing sorts datasets by logical ID, so semantically
 equivalent tuple ordering cannot change the source manifest or method identity.
 
+D1 assessment bounds are inclusive interval-start labels, whereas the D3 population has one
+end-exclusive interval. All selected D2 products must first prove the same effective start and
+end-exclusive bound. The earliest retained selected-product final label is then the coarsest
+interval family that reaches that common end and therefore the maximal common inclusive D1
+authorization end. Both the `electrical_losses` and `long_term_aep` envelopes must exactly equal
+that single global window. Neither purpose can lend a narrow, shifted, or otherwise different
+authorization to the broader population emitted by D3.
+
 ## Temporal, uncertainty, and authority boundaries
 
 Only `observed_period_total` and a strictly complete UTC `actual_calendar_year` are accepted
@@ -114,6 +141,9 @@ calendar-month/fixed-day matched bounds; same-process and fresh-process Decimal-
 independence; assessment, dataset, D2-result, and supplemental input-order invariance; bounded
 property scaling; split/merge intervals; equal meter/turbine increments; named-loss increments;
 selector absence/duplication; partial-product completeness attacks; project/window/ID mismatch;
+under-authorizing or disagreeing D1 purpose windows for fixed-day, UTC calendar-month, and retained
+named-zone calendar populations; malformed nested D2 evidence, receipt, column, and row-exclusion
+objects before identity selection or replay;
 attestation-versus-D2-bound conflict; negative electrical, named, and residual loss; huge,
 non-finite, and wrong-type tolerance values; D2 row replay and D3 result substitution; provenance
 size/digest/binding-role attacks; serialization; temporal/LTA/uncertainty laundering; hard authority
@@ -129,6 +159,13 @@ flags; zero denominators; and resource-only, wake-only, and no-supplement anti-i
 | D2 RFC 9636 leap/indicator/start-truncation chain, including first correction zero | `NOT_APPLICABLE_WITH_REASON`: D3 consumes normalized UTC rows and does not parse or alter TZif bytes; retained named-zone calendar rules are replayed by D2 and used only to establish the next end-exclusive month boundary |
 | Missing resource gross, wake/performance, unknown residual, LTA, and uncertainty evidence | `CLOSED` by explicit unavailable states; `R/W/U` become available only under the supplemental provenance rules above |
 | Canonical finance, lender, Board, release, professional, publication, issue-closure, and HOLD authority | `CLOSED` by hard-false flags and explicit non-authority; #1110 remains OPEN/HOLD |
+
+The first frozen candidate's two D3-specific findings are separately replayed here:
+
+| Finding | Corrective disposition |
+|---|---|
+| `D3-DOM-001` | `CLOSED` in the corrective candidate by deriving one maximal common inclusive D1 interval-start window from the common D2 end-exclusive population and requiring both purpose envelopes to match it; hostile fixed-day and calendar tests reject narrow, shifted, and disagreeing authorization |
+| `D3-ASSURANCE-001` | `CLOSED` in the corrective candidate by reconstructing and validating exact nested D1/D2 contracts before any identity dereference or replay and translating predictable malformed-object failures to `PROVENANCE_MISMATCH`; hostile evidence, receipt, column, row-exclusion, and wrong-runtime-object tests exercise the boundary |
 
 ## Deliberate limitations
 
@@ -152,20 +189,22 @@ independent R3 exact-object reviews remain coordinator-owned delivery gates.
 | Check | Exact command | Result |
 |---|---|---|
 | Recovery ingress focus | governed Python `-m pytest -p no:cacheprovider --no-cov -q` on D1, D2, preserved D3, and v14 import surface | 209 passed in 1.86 s; starting diagnostic only |
-| Final D1-D3 focus | same command on `test_operational_evidence_contract.py`, `test_operational_normalization.py`, `test_operational_aep.py`, and v14 import surface | 235 passed in 2.28 s |
-| Shared contract suite | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/contracts` | 1628 passed in 88.72 s |
-| Six-shard ordinary suite | CI-equivalent six `pytest-split` groups, `DUTCHBAY_TEST_MODE=full`, `-n auto`, `--no-cov` | shards 2/4/6 clean: 1515/1518/1516 passed; shards 1/3 each had one `test_ops_extras.py` installed-metadata failure independently reproduced on untouched main; shard 5 had exactly three documented cloud sandbox watchdog/process-reaping failures (within the declared 3–5 range); no candidate-related failure |
+| Freeze-1 D1-D3 focus | same command on `test_operational_evidence_contract.py`, `test_operational_normalization.py`, `test_operational_aep.py`, and v14 import surface | 235 passed in 2.28 s; superseded by independent-review rejection |
+| Corrective D1-D3 focus | same command on those four contract modules after closing `D3-DOM-001` and `D3-ASSURANCE-001` | 244 passed in 2.37 s on the final source/test bytes |
+| Shared contract suite | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/contracts` | 1637 passed in 90.97 s |
+| Six-shard ordinary suite | CI-equivalent six `pytest-split` groups, `DUTCHBAY_TEST_MODE=full`, `-n auto`, `--no-cov` | 9103 passed and 30 skipped: shard 1 had 1515 passed/5 skipped plus one installed-metadata and one cloud process-reaping residual; shard 2 had 1512 passed/8 skipped plus two cloud process-reaping residuals; shard 3 had 1519 passed/4 skipped plus one installed-metadata residual; shard 4 was clean at 1521 passed/3 skipped; shard 5 had 1518 passed/4 skipped plus two cloud process-reaping residuals; shard 6 was clean at 1518 passed/6 skipped. The two metadata residuals are independently reproduced on untouched main, and the five timing-sensitive sandbox residuals equal the documented local upper bound; no candidate-related test failed |
 | Strict source types | governed Python `-m mypy --no-incremental analytics/operational/aep.py analytics/operational/contracts.py analytics/operational/normalization.py analytics/operational/__init__.py analytics/contracts_v14.py` | success; no issues in five source files |
 | Public docstring ratchet | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/lint/test_docstring_coverage.py` | 12 passed in 1.43 s |
 | Ruff lint/format | governed `ruff check` and `ruff format --check` over all six allowlisted Python paths | all checks passed; six files already formatted |
-| Exact-file pre-commit | governed `pre-commit run --files` over the exact eight-path allowlist | Black/isort/EOF hooks made allowlisted formatting changes on the first pass; second and final passes passed every hook |
+| Exact-file pre-commit | governed `pre-commit run --files` over the corrective three-path allowlist | Black formatted the corrective test on the first pass; the second and final pass passed every hook |
 | Changelog dry-run | governed Python `scripts/compile_changelog.py --dry-run` | passed and rendered pending fragments without repository mutation |
 | GWTF bootstrap | `DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" PYTHONPATH="$PWD"` plus governed Python `dutchbay_bootstrap_rules.py` | final 75/75 active rules loaded |
 | Diff/status hygiene | `git diff --check`; allowlist/status inspection | passed; only allowlisted paths differ from the persistence checkpoint; final clean status follows checkpoint commit |
 
 The two `test_ops_extras.py` residuals are caused by the shared cloud `.venv` having no installed
 DutchBay distribution metadata when each test deliberately makes the repository `pyproject.toml`
-unusable; both exact tests fail identically on protected main. The shard-5 residuals are the
-container process-reaping family explicitly declared in `CLAUDE.md`. Hosted exact-head CI remains
-the independent clean-environment decision surface. Neither local residual changes #1110 OPEN/HOLD
-or any canonical, finance, release, lender, Board, professional, publication, or issue authority.
+unusable; both exact tests fail identically on protected main. The five sandbox residuals are the
+timing-sensitive container process-reaping family explicitly declared in `CLAUDE.md`. Hosted
+exact-head CI remains the independent clean-environment decision surface. Neither local residual
+changes #1110 OPEN/HOLD or any canonical, finance, release, lender, Board, professional,
+publication, or issue authority.

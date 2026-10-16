@@ -690,6 +690,55 @@ def test_named_zone_calendar_month_replays_retained_tzif_rules() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("purpose", "start", "end"),
+    [
+        ("electrical_losses", "2025-01-01T00:15:00Z", "2025-01-01T00:30:00Z"),
+        ("electrical_losses", "2025-01-01T00:15:00Z", "2025-01-01T00:45:00Z"),
+        ("long_term_aep", "2025-01-01T00:00:00Z", "2025-01-01T00:30:00Z"),
+    ],
+)
+def test_d1_assessment_windows_cannot_under_authorize_d3_population(
+    purpose: str, start: str, end: str
+) -> None:
+    """Reject narrow, shifted, and disagreeing D1 authorization windows."""
+    inputs, spec = _fixture()
+    assessments = tuple(
+        (
+            replace(
+                assessment,
+                assessment_start_utc=start,
+                assessment_end_utc=end,
+            )
+            if assessment.purpose == purpose
+            else assessment
+        )
+        for assessment in inputs.assessments
+    )
+    with pytest.raises(OperationalAEPError, match="BOUNDARY_MISMATCH"):
+        estimate_operational_aep(replace(inputs, assessments=assessments), spec)
+
+
+@pytest.mark.parametrize(
+    "fixture_factory", [_calendar_month_fixture, _named_calendar_fixture]
+)
+def test_calendar_d1_window_must_authorize_the_complete_month_population(
+    fixture_factory: Any,
+) -> None:
+    """Map D1 inclusive month labels to the common D3 end-exclusive bound."""
+    inputs, spec = fixture_factory()
+    assessments = tuple(
+        (
+            replace(assessment, assessment_end_utc="2025-01-15T00:00:00Z")
+            if assessment.purpose == "electrical_losses"
+            else assessment
+        )
+        for assessment in inputs.assessments
+    )
+    with pytest.raises(OperationalAEPError, match="BOUNDARY_MISMATCH"):
+        estimate_operational_aep(replace(inputs, assessments=assessments), spec)
+
+
 def test_exact_scale_metamorphism() -> None:
     baseline_inputs, baseline_spec = _fixture(supplements=False)
     scaled_inputs, scaled_spec = _fixture(
@@ -963,6 +1012,59 @@ def test_d2_artifact_substitution_is_replayed_and_rejected() -> None:
     )
     with pytest.raises(OperationalAEPError, match="PROVENANCE_MISMATCH"):
         estimate_operational_aep(forged_inputs, spec)
+
+
+@pytest.mark.parametrize("nested_field", ["evidence", "receipt"])
+def test_d2_nested_contract_substitution_fails_closed(nested_field: str) -> None:
+    """Validate retained D2 nested contracts before any identity dereference."""
+    inputs, spec = _fixture()
+    forged = copy.deepcopy(inputs.normalized_results[0])
+    object.__setattr__(forged, nested_field, None)
+    forged_inputs = replace(
+        inputs,
+        normalized_results=(forged,) + inputs.normalized_results[1:],
+    )
+    with pytest.raises(OperationalAEPError) as error:
+        estimate_operational_aep(forged_inputs, spec)
+    assert error.value.code == "PROVENANCE_MISMATCH"
+
+
+def test_d2_nested_column_and_row_receipt_types_fail_closed() -> None:
+    """Reject adjacent malformed D1/D2 fields without leaking raw exceptions."""
+    inputs, spec = _fixture()
+
+    forged_columns = copy.deepcopy(inputs.normalized_results[0])
+    forged_evidence = copy.deepcopy(forged_columns.evidence)
+    object.__setattr__(forged_evidence, "columns", (object(),))
+    object.__setattr__(forged_columns, "evidence", forged_evidence)
+
+    forged_receipt = copy.deepcopy(inputs.normalized_results[0])
+    receipt = copy.deepcopy(forged_receipt.receipt)
+    object.__setattr__(receipt, "row_exclusions", (object(),))
+    object.__setattr__(forged_receipt, "receipt", receipt)
+
+    for forged in (forged_columns, forged_receipt):
+        forged_inputs = replace(
+            inputs,
+            normalized_results=(forged,) + inputs.normalized_results[1:],
+        )
+        with pytest.raises(OperationalAEPError) as error:
+            estimate_operational_aep(forged_inputs, spec)
+        assert error.value.code == "PROVENANCE_MISMATCH"
+
+
+def test_wrong_runtime_d2_result_fails_before_selection() -> None:
+    """Reject a non-D2 object before reading a logical identifier from it."""
+    inputs, spec = _fixture()
+    forged_inputs = copy.deepcopy(inputs)
+    object.__setattr__(
+        forged_inputs,
+        "normalized_results",
+        (object(),) + forged_inputs.normalized_results[1:],
+    )
+    with pytest.raises(OperationalAEPError) as error:
+        estimate_operational_aep(forged_inputs, spec)
+    assert error.value.code in {"INVALID_INPUT", "PROVENANCE_MISMATCH"}
 
 
 def test_factory_replay_immutability_and_authority_fences() -> None:
