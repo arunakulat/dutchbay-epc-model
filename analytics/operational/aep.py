@@ -20,10 +20,15 @@ from fractions import Fraction
 from typing import Any, Final, Literal, TypeAlias
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from analytics.operational.contracts import OperationalAssessmentInput
+from analytics.operational.contracts import (
+    OperationalAssessmentInput,
+    OperationalColumnBinding,
+    OperationalDatasetEvidence,
+)
 from analytics.operational.normalization import (
     OperationalNormalizationError,
     OperationalNormalizationResult,
+    OperationalQualityReceipt,
     OperationalRowExclusion,
     normalize_operational_csv,
 )
@@ -857,11 +862,114 @@ def _effective_bounds(result: OperationalNormalizationResult) -> tuple[str, str]
     return _format_utc(start), _format_utc(effective_end)
 
 
+def _reconstruct_d1_evidence(value: object) -> OperationalDatasetEvidence:
+    """Reconstruct one retained D1 envelope before D3 reads its identity."""
+    if type(value) is not OperationalDatasetEvidence:
+        raise OperationalAEPError(
+            "PROVENANCE_MISMATCH",
+            "a retained D2 result has invalid nested D1 evidence.",
+        )
+    try:
+        columns = value.columns
+        if not isinstance(columns, tuple):
+            raise TypeError("D1 columns are not an immutable tuple.")
+        reconstructed_columns = tuple(
+            OperationalColumnBinding(
+                role=item.role,
+                source_column=item.source_column,
+                unit=item.unit,
+            )
+            for item in columns
+            if type(item) is OperationalColumnBinding
+        )
+        if len(reconstructed_columns) != len(columns):
+            raise TypeError("D1 columns contain a wrong-runtime binding.")
+        reconstructed = OperationalDatasetEvidence(
+            logical_id=value.logical_id,
+            kind=value.kind,
+            source_class=value.source_class,
+            timezone_treatment=value.timezone_treatment,
+            source_timezone=value.source_timezone,
+            ambiguous_time_policy=value.ambiguous_time_policy,
+            nonexistent_time_policy=value.nonexistent_time_policy,
+            observation_status=value.observation_status,
+            lineage_source_sha256=value.lineage_source_sha256,
+            derivation_method_sha256=value.derivation_method_sha256,
+            source_locator=value.source_locator,
+            source_sha256=value.source_sha256,
+            coverage_start_utc=value.coverage_start_utc,
+            coverage_end_utc=value.coverage_end_utc,
+            interval_basis=value.interval_basis,
+            interval_seconds=value.interval_seconds,
+            row_count=value.row_count,
+            columns=reconstructed_columns,
+        )
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise OperationalAEPError(
+            "PROVENANCE_MISMATCH",
+            "a retained D2 result has invalid nested D1 evidence.",
+        ) from exc
+    if reconstructed != value:
+        raise OperationalAEPError(
+            "PROVENANCE_MISMATCH",
+            "retained D1 evidence differs from its reconstructed envelope.",
+        )
+    return reconstructed
+
+
+def _replay_d2_result(value: object) -> OperationalNormalizationResult:
+    """Reconstruct D1 evidence and replay D2 before any identity is selected."""
+    if type(value) is not OperationalNormalizationResult:
+        raise OperationalAEPError(
+            "PROVENANCE_MISMATCH", "a retained D2 result has the wrong runtime type."
+        )
+    evidence = _reconstruct_d1_evidence(value.evidence)
+    if type(value.receipt) is not OperationalQualityReceipt:
+        raise OperationalAEPError(
+            "PROVENANCE_MISMATCH",
+            f"D2 result {evidence.logical_id!r} has an invalid nested receipt.",
+        )
+    try:
+        replay = normalize_operational_csv(
+            value.source_bytes,
+            evidence,
+            lineage_source_bytes=value.lineage_source_bytes,
+            derivation_method_bytes=value.derivation_method_bytes,
+            timezone_rules=value.timezone_rules,
+            group_universe=value.group_universe,
+            column_exclusions=value.receipt.column_exclusions,
+            row_exclusions=tuple(
+                OperationalRowExclusion(item.source_row_number, item.reason)
+                for item in value.receipt.row_exclusions
+            ),
+        )
+    except (
+        ArithmeticError,
+        AttributeError,
+        OperationalNormalizationError,
+        OverflowError,
+        TypeError,
+        ValueError,
+        ZoneInfoNotFoundError,
+    ) as exc:
+        raise OperationalAEPError(
+            "PROVENANCE_MISMATCH",
+            f"D2 result {evidence.logical_id!r} no longer replays.",
+        ) from exc
+    if replay != value:
+        raise OperationalAEPError(
+            "PROVENANCE_MISMATCH",
+            f"D2 result {evidence.logical_id!r} differs from its replay.",
+        )
+    return replay
+
+
 def _selected_results(
     inputs: OperationalAEPInput, spec: OperationalAEPSpec
 ) -> dict[str, OperationalNormalizationResult]:
     by_id: dict[str, OperationalNormalizationResult] = {}
-    for result in inputs.normalized_results:
+    for retained in inputs.normalized_results:
+        result = _replay_d2_result(retained)
         logical_id = result.evidence.logical_id
         if logical_id in by_id:
             raise OperationalAEPError(
@@ -883,34 +991,6 @@ def _selected_results(
             f"explicit D2 selection mismatch; missing={missing}, unselected={extra}.",
         )
     return by_id
-
-
-def _replay_d2_result(result: OperationalNormalizationResult) -> None:
-    """Prove that retained D2 source, method, rows, and receipt still replay."""
-    try:
-        replay = normalize_operational_csv(
-            result.source_bytes,
-            result.evidence,
-            lineage_source_bytes=result.lineage_source_bytes,
-            derivation_method_bytes=result.derivation_method_bytes,
-            timezone_rules=result.timezone_rules,
-            group_universe=result.group_universe,
-            column_exclusions=result.receipt.column_exclusions,
-            row_exclusions=tuple(
-                OperationalRowExclusion(item.source_row_number, item.reason)
-                for item in result.receipt.row_exclusions
-            ),
-        )
-    except (OperationalNormalizationError, ValueError) as exc:
-        raise OperationalAEPError(
-            "PROVENANCE_MISMATCH",
-            f"D2 result {result.evidence.logical_id!r} no longer replays.",
-        ) from exc
-    if replay != result:
-        raise OperationalAEPError(
-            "PROVENANCE_MISMATCH",
-            f"D2 result {result.evidence.logical_id!r} differs from its replay.",
-        )
 
 
 def _assessment_claim(assessment: OperationalAssessmentInput) -> dict[str, Any]:
@@ -956,6 +1036,51 @@ def _validate_assessments(
             "SELECTOR_AMBIGUITY",
             "selected evidence must appear once in matched electrical-loss and "
             "long-term-AEP D1 envelopes.",
+        )
+    electrical = electrical_matches[0]
+    long_term = long_term_matches[0]
+
+    def expected_window(logical_ids: tuple[str, ...]) -> tuple[datetime, datetime]:
+        # D1 bounds are inclusive interval-start labels.  For mixed cadences the
+        # earliest final label is the coarsest selected interval; every selected
+        # D2 result independently establishes that this label reaches the common
+        # D3 end-exclusive boundary.
+        final_labels = tuple(
+            _parse_utc(selected[logical_id].evidence.coverage_end_utc, "coverage_end_utc")
+            for logical_id in logical_ids
+        )
+        return (
+            _parse_utc(spec.effective_start_utc, "effective_start_utc"),
+            min(final_labels),
+        )
+
+    electrical_window = (
+        _parse_utc(electrical.assessment_start_utc, "assessment_start_utc"),
+        _parse_utc(electrical.assessment_end_utc, "assessment_end_utc"),
+    )
+    long_term_window = (
+        _parse_utc(long_term.assessment_start_utc, "assessment_start_utc"),
+        _parse_utc(long_term.assessment_end_utc, "assessment_end_utc"),
+    )
+    expected_electrical = expected_window(
+        (spec.meter_logical_id, spec.turbine_logical_id)
+    )
+    expected_long_term = expected_window(
+        (
+            spec.meter_logical_id,
+            spec.availability_logical_id,
+            spec.curtailment_logical_id,
+        )
+    )
+    if (
+        electrical_window != expected_electrical
+        or long_term_window != expected_long_term
+        or electrical_window != long_term_window
+    ):
+        raise OperationalAEPError(
+            "BOUNDARY_MISMATCH",
+            "D1 assessment inclusive windows must agree and authorize the complete "
+            "selected D3 end-exclusive population.",
         )
 
 
@@ -1145,8 +1270,6 @@ def _build_artifacts(
         supplemental_evidence=supplements_validated,
     )
     selected = _selected_results(inputs, spec)
-    for result in selected.values():
-        _replay_d2_result(result)
     boundary_pairs = (
         (boundary.project_id, spec.project_id),
         (boundary.effective_start_utc, spec.effective_start_utc),
@@ -1161,6 +1284,13 @@ def _build_artifacts(
             "BOUNDARY_MISMATCH",
             "boundary evidence does not match the D3 specification.",
         )
+    expected_bounds = (spec.effective_start_utc, spec.effective_end_exclusive_utc)
+    for result in {id(item): item for item in selected.values()}.values():
+        if _effective_bounds(result) != expected_bounds:
+            raise OperationalAEPError(
+                "INTERVAL_MISMATCH",
+                f"{result.evidence.logical_id!r} does not share the exact effective interval.",
+            )
     _validate_assessments(inputs, spec, selected)
 
     meter = selected[spec.meter_logical_id]
@@ -1190,14 +1320,6 @@ def _build_artifacts(
                 "UNSUPPORTED_EVIDENCE",
                 "selected loss evidence must be an individually complete D1 curtailment product.",
             )
-    expected_bounds = (spec.effective_start_utc, spec.effective_end_exclusive_utc)
-    for result in {id(item): item for item in selected.values()}.values():
-        if _effective_bounds(result) != expected_bounds:
-            raise OperationalAEPError(
-                "INTERVAL_MISMATCH",
-                f"{result.evidence.logical_id!r} does not share the exact effective interval.",
-            )
-
     meter_value = _sum_energy(meter, meter_role)
     turbine_value = _sum_energy(turbine, turbine_role)
     availability_value = _sum_energy(availability, "availability_loss_kwh")
@@ -1493,7 +1615,14 @@ def estimate_operational_aep(
         )
     except OperationalAEPError:
         raise
-    except (ArithmeticError, OverflowError, ValueError, ZoneInfoNotFoundError) as exc:
+    except (
+        ArithmeticError,
+        AttributeError,
+        OverflowError,
+        TypeError,
+        ValueError,
+        ZoneInfoNotFoundError,
+    ) as exc:
         raise OperationalAEPError(
             "INVALID_INPUT", f"operational energy calculation failed closed: {exc}"
         ) from exc
