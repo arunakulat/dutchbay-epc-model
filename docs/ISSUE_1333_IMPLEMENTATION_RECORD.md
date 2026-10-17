@@ -55,6 +55,14 @@ reported 94.94% (35,965 statements, 1,819 missing) against the 95% floor; the D3
 allowlist is exactly `tests/contracts/test_operational_aep.py` and this record; production source,
 workflow, and configuration bytes remain frozen.
 
+The resulting coverage-corrected object received fresh domain ACCEPT at comment `6229844870`.
+Assurance comment `6229864725` accepted the coverage delta and confirmed
+`D3-ASSURANCE-001/002` closed, but rejected the checkpoint with `D3-ASSURANCE-003` because its
+first metadata repair had installed the candidate editably into the shared environment. Record-only
+lease `L-1333-D3-006-ENV` (comment `6229868457`) owns removal of that environment contamination,
+the governed isolation proof, and this truthful receipt correction; production and test bytes remain
+unchanged.
+
 ## Evidence and equation contract
 
 The factory requires explicit logical-ID selectors and exactly one selected D2 result per logical
@@ -202,7 +210,9 @@ independent R3 exact-object reviews remain coordinator-owned delivery gates.
 | Corrective D1-D3 focus | same command on those four contract modules after closing `D3-DOM-001` and `D3-ASSURANCE-001`, including the coverage-only hostile validation additions | 245 passed in 5.17 s on the final test bytes |
 | Shared contract suite | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/contracts` | 1638 passed in 103.50 s |
 | D3 targeted coverage | governed Python `pytest` on `tests/contracts/test_operational_aep.py` with coverage for `analytics/operational/aep.py` | 62 passed; D3 increased from 88.38% (73 missing) to 93.47% (41 missing), covering 32 additional source statements without production-source changes |
-| Fresh six-shard ordinary suite | exact CI `pytest-split` groups with `-n auto` and per-shard coverage data | shards 1 and 2 completed at 1516 passed/5 skipped and 1514 passed/7 skipped respectively, with only four known local-environment residual invocations; after the environment repair the exact residual family passed 6/6. Shards 3–6 then completed cleanly at 1519 passed/5 skipped, 1521 passed/3 skipped, 1520 passed/4 skipped, and 1517 passed/6 skipped. Shards 1–2 did not retain distinct coverage files, so no local combined-floor claim is made; hosted exact-head coverage is the decision receipt |
+| Fresh six-shard ordinary suite | exact CI `pytest-split` groups with `-n auto` and per-shard coverage data | shards 1 and 2 completed at 1516 passed/5 skipped and 1514 passed/7 skipped respectively, with only four known local-environment residual invocations. Shards 3–6 completed cleanly at 1519 passed/5 skipped, 1521 passed/3 skipped, 1520 passed/4 skipped, and 1517 passed/6 skipped. Shards 1–2 did not retain distinct coverage files, so no local combined-floor claim is made; hosted exact-head coverage is the decision receipt |
+| ENV-01 shared-environment proof | governed `scripts/verify_shared_venv_worktrees.py` over the clean candidate and a temporary clean named-branch protected-main worktree | PASS: both worktrees used the shared Python 3.12.14 prefix, imported their own checkout, passed the 75-rule bootstrap and focused environment tests, shared one Git common directory, and reported no editable or foreign-worktree contamination |
+| Environment residual replay | exact metadata case plus the five watchdog/process-reaping cases under the non-editable shared environment and workspace-local child subreaper | 6 passed in 9.05 s; only the affected cases were rerun |
 | Hosted pre-correction exact head | required checks on commit `9159ae2250689bc507e391e3006547f90075becd` | all six hosted shards, Grid Study, code quality, security, Fastlane, FX, and CodeQL passed; combined coverage alone failed at 94.94%, and Test Summary failed only as its aggregate consequence |
 | Strict source types | governed Python `-m mypy --no-incremental analytics/operational/aep.py analytics/operational/contracts.py analytics/operational/normalization.py analytics/operational/__init__.py analytics/contracts_v14.py` | success; no issues in five source files |
 | Public docstring ratchet | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/lint/test_docstring_coverage.py` | 12 passed in 3.38 s |
@@ -214,11 +224,19 @@ independent R3 exact-object reviews remain coordinator-owned delivery gates.
 | Main synchronization | compare live `refs/heads/main`, local `origin/main`, and candidate merge base | all three resolve to `03aab5e051e633d51b0d55bb93719ca17968adae` before the coverage-correction checkpoint |
 | Diff/status hygiene | `git diff --check`; allowlist/status inspection | passed; only allowlisted paths differ from the persistence checkpoint; final clean status follows checkpoint commit |
 
-The local environment residuals were removed without changing repository source or configuration.
-The current worktree was installed editable into the existing shared cloud `.venv`, restoring
-distribution metadata for tests that deliberately make the repository `pyproject.toml` unusable.
-A workspace-local Linux child-subreaper launcher now adopts and promptly reaps orphaned watchdog
-descendants in this container, whose PID 1 does not otherwise do so. The exact metadata case plus
-all five process-reaping cases pass together (`6 passed in 9.18 s`) under that repaired environment.
-Neither the repair nor the coverage-only tests change #1110 OPEN/HOLD or any canonical, finance,
-release, lender, Board, professional, publication, or issue authority.
+The first metadata repair was not acceptable evidence: it installed the candidate editably, added
+an ignored checkout `egg-info` directory, and thereby let the shared environment select candidate
+imports. `D3-ASSURANCE-003` caught that ENV-01 violation. The editable distribution, path mapping,
+and generated checkout metadata were removed. Equivalent distribution metadata and package bytes
+were then installed non-editably from a wheel built outside every worktree from a clean `git archive`.
+`check_venv.sh --no-bootstrap` now reports `editable_project_install: false`, no foreign checkout
+paths, and candidate imports from the explicitly active worktree; an invocation outside a repository
+imports the installed wheel from `site-packages`, not the candidate. The governed two-worktree proof
+then passed for the candidate and protected main. Its temporary worktree, branch, source archive,
+and wheel-build files were removed after the receipt.
+
+A workspace-local Linux child-subreaper launcher separately adopts and promptly reaps orphaned
+watchdog descendants in this container, whose PID 1 does not otherwise do so. The exact metadata
+case plus all five process-reaping cases pass together (`6 passed in 9.05 s`) under the corrected
+non-editable environment. Neither the repair nor the coverage-only tests change #1110 OPEN/HOLD or
+any canonical, finance, release, lender, Board, professional, publication, or issue authority.
