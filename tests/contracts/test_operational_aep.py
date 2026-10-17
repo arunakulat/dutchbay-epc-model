@@ -22,9 +22,12 @@ from analytics.operational.aep import (
     OperationalAEPError,
     OperationalAEPInput,
     OperationalAEPResult,
+    OperationalAEPSourceBinding,
     OperationalAEPSpec,
     OperationalBoundaryEvidence,
+    OperationalEnergyComponent,
     OperationalEnergyQuantity,
+    OperationalRatio,
     OperationalSupplementalEnergyEvidence,
     estimate_operational_aep,
 )
@@ -1195,6 +1198,98 @@ def test_provenance_resource_bounds_and_binding_roles_fail_closed() -> None:
     result = estimate_operational_aep(inputs, spec)
     with pytest.raises(ValueError, match="role is not supported"):
         replace(result.receipt.source_bindings[0], role="invented")
+
+
+def test_public_contract_validation_branches_fail_closed() -> None:
+    """Exercise hostile public-contract states before they can reach arithmetic."""
+    inputs, spec = _fixture()
+    result = estimate_operational_aep(inputs, spec)
+
+    quantity_cases = (
+        lambda: OperationalEnergyQuantity(True),
+        lambda: OperationalEnergyQuantity(1, 0),
+        lambda: OperationalEnergyQuantity(1, unit="MWh"),  # type: ignore[arg-type]
+        lambda: OperationalEnergyQuantity(1 << 16_384),
+        lambda: OperationalEnergyQuantity(2, 2),
+        lambda: OperationalEnergyQuantity.from_fraction("1"),  # type: ignore[arg-type]
+    )
+    for construct in quantity_cases:
+        with pytest.raises(ValueError):
+            construct()
+    quantity = OperationalEnergyQuantity(3, 2)
+    assert quantity.as_fraction() == Fraction(3, 2)
+    assert quantity.model_dump() == {"numerator": 3, "denominator": 2, "unit": "kWh"}
+
+    component = result.component("net_meter_energy")
+    component_cases = (
+        {"name": "invented"},
+        {"value": None},
+        {"unavailable_reason": "not unavailable"},
+        {"status": "unavailable"},
+        {"status": "invented"},
+        {"evidence_ids": ("bad id",)},
+    )
+    for changes in component_cases:
+        with pytest.raises(ValueError):
+            replace(component, **changes)
+
+    ratio = next(item for item in result.ratios if item.status == "available")
+    ratio_cases = (
+        {"numerator": None},
+        {"denominator": 0},
+        {"unavailable_reason": "not unavailable"},
+        {"status": "unavailable"},
+        {"status": "invented"},
+    )
+    for changes in ratio_cases:
+        with pytest.raises(ValueError):
+            replace(ratio, **changes)
+
+    with pytest.raises(ValueError, match="effective interval"):
+        replace(
+            inputs.boundary_evidence,
+            effective_end_exclusive_utc=inputs.boundary_evidence.effective_start_utc,
+        )
+
+    supplemental = inputs.supplemental_evidence[0]
+    supplemental_cases = (
+        {"component": "invented"},
+        {"boundary": "resource_to_turbine_combined_wake_performance"},
+        {"effective_end_exclusive_utc": supplemental.effective_start_utc},
+        {"value_kwh": "-1"},
+    )
+    for changes in supplemental_cases:
+        with pytest.raises(ValueError):
+            replace(supplemental, **changes)
+
+    with pytest.raises(ValueError, match="effective interval"):
+        replace(spec, effective_end_exclusive_utc=spec.effective_start_utc)
+    with pytest.raises(ValueError, match="assessments"):
+        replace(inputs, assessments=())
+    with pytest.raises(ValueError, match="boundary_evidence"):
+        replace(inputs, boundary_evidence=object())
+    with pytest.raises(ValueError, match="supplemental_evidence"):
+        replace(inputs, supplemental_evidence=[])
+
+    d2_binding = result.receipt.source_bindings[0]
+    supplemental_binding = next(
+        item
+        for item in result.receipt.source_bindings
+        if item.role == "resource_gross_energy"
+    )
+    binding_cases: tuple[tuple[OperationalAEPSourceBinding, dict[str, Any]], ...] = (
+        (d2_binding, {"source_sha256": "bad"}),
+        (d2_binding, {"normalized_sha256": "bad"}),
+        (d2_binding, {"claim_sha256": "bad"}),
+        (d2_binding, {"normalized_sha256": None}),
+        (supplemental_binding, {"normalized_sha256": "0" * 64}),
+    )
+    for binding, changes in binding_cases:
+        with pytest.raises(ValueError):
+            replace(binding, **changes)
+
+    assert isinstance(component, OperationalEnergyComponent)
+    assert isinstance(ratio, OperationalRatio)
 
 
 def test_resource_without_wake_does_not_infer_unknown_zero() -> None:

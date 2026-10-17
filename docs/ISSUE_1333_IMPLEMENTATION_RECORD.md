@@ -46,6 +46,15 @@ bytes were preserved without semantic edits at checkpoint `f899c94c841d505ecdbdf
 under persistence-only lease `L-1333-D3-P002` (comment `6219989366`). Lease `L-1333-D3-004`
 (comment `6219998423`) owns the bounded completion of those two findings and no other scope.
 
+The corrected exact object at commit `9159ae2250689bc507e391e3006547f90075becd` then received
+fresh domain ACCEPT comment `6220566413` and assurance ACCEPT comment `6220573637`. Hosted CI
+passed all six ordinary shards and the remaining required checks, but the combined coverage gate
+reported 94.94% (35,965 statements, 1,819 missing) against the 95% floor; the D3 module itself was
+88.38% (628 statements, 73 missing). Those accepts therefore lapsed when bounded corrective lease
+`L-1333-D3-005-COVERAGE` (comment `6220896152`) authorized a test-and-record-only correction. Its
+allowlist is exactly `tests/contracts/test_operational_aep.py` and this record; production source,
+workflow, and configuration bytes remain frozen.
+
 ## Evidence and equation contract
 
 The factory requires explicit logical-ID selectors and exactly one selected D2 result per logical
@@ -190,21 +199,26 @@ independent R3 exact-object reviews remain coordinator-owned delivery gates.
 |---|---|---|
 | Recovery ingress focus | governed Python `-m pytest -p no:cacheprovider --no-cov -q` on D1, D2, preserved D3, and v14 import surface | 209 passed in 1.86 s; starting diagnostic only |
 | Freeze-1 D1-D3 focus | same command on `test_operational_evidence_contract.py`, `test_operational_normalization.py`, `test_operational_aep.py`, and v14 import surface | 235 passed in 2.28 s; superseded by independent-review rejection |
-| Corrective D1-D3 focus | same command on those four contract modules after closing `D3-DOM-001` and `D3-ASSURANCE-001` | 244 passed in 2.37 s on the final source/test bytes |
-| Shared contract suite | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/contracts` | 1637 passed in 90.97 s |
-| Six-shard ordinary suite | CI-equivalent six `pytest-split` groups, `DUTCHBAY_TEST_MODE=full`, `-n auto`, `--no-cov` | 9103 passed and 30 skipped: shard 1 had 1515 passed/5 skipped plus one installed-metadata and one cloud process-reaping residual; shard 2 had 1512 passed/8 skipped plus two cloud process-reaping residuals; shard 3 had 1519 passed/4 skipped plus one installed-metadata residual; shard 4 was clean at 1521 passed/3 skipped; shard 5 had 1518 passed/4 skipped plus two cloud process-reaping residuals; shard 6 was clean at 1518 passed/6 skipped. The two metadata residuals are independently reproduced on untouched main, and the five timing-sensitive sandbox residuals equal the documented local upper bound; no candidate-related test failed |
+| Corrective D1-D3 focus | same command on those four contract modules after closing `D3-DOM-001` and `D3-ASSURANCE-001`, including the coverage-only hostile validation additions | 245 passed in 5.17 s on the final test bytes |
+| Shared contract suite | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/contracts` | 1638 passed in 103.50 s |
+| D3 targeted coverage | governed Python `pytest` on `tests/contracts/test_operational_aep.py` with coverage for `analytics/operational/aep.py` | 62 passed; D3 increased from 88.38% (73 missing) to 93.47% (41 missing), covering 32 additional source statements without production-source changes |
+| Fresh six-shard ordinary suite | exact CI `pytest-split` groups with `-n auto` and per-shard coverage data | shards 1 and 2 completed at 1516 passed/5 skipped and 1514 passed/7 skipped respectively, with only four known local-environment residual invocations; after the environment repair the exact residual family passed 6/6. Shards 3–6 then completed cleanly at 1519 passed/5 skipped, 1521 passed/3 skipped, 1520 passed/4 skipped, and 1517 passed/6 skipped. Shards 1–2 did not retain distinct coverage files, so no local combined-floor claim is made; hosted exact-head coverage is the decision receipt |
+| Hosted pre-correction exact head | required checks on commit `9159ae2250689bc507e391e3006547f90075becd` | all six hosted shards, Grid Study, code quality, security, Fastlane, FX, and CodeQL passed; combined coverage alone failed at 94.94%, and Test Summary failed only as its aggregate consequence |
 | Strict source types | governed Python `-m mypy --no-incremental analytics/operational/aep.py analytics/operational/contracts.py analytics/operational/normalization.py analytics/operational/__init__.py analytics/contracts_v14.py` | success; no issues in five source files |
-| Public docstring ratchet | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/lint/test_docstring_coverage.py` | 12 passed in 1.43 s |
+| Public docstring ratchet | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/lint/test_docstring_coverage.py` | 12 passed in 3.38 s |
 | Ruff lint/format | governed `ruff check` and `ruff format --check` over all six allowlisted Python paths | all checks passed; six files already formatted |
 | Exact-file pre-commit | governed `pre-commit run --files` over the corrective three-path allowlist | Black formatted the corrective test on the first pass; the second and final pass passed every hook |
+| Coverage-correction pre-commit | governed `pre-commit run --files tests/contracts/test_operational_aep.py docs/ISSUE_1333_IMPLEMENTATION_RECORD.md` | every hook passed; neither allowlisted file was rewritten |
 | Changelog dry-run | governed Python `scripts/compile_changelog.py --dry-run` | passed and rendered pending fragments without repository mutation |
 | GWTF bootstrap | `DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" PYTHONPATH="$PWD"` plus governed Python `dutchbay_bootstrap_rules.py` | final 75/75 active rules loaded |
+| Main synchronization | compare live `refs/heads/main`, local `origin/main`, and candidate merge base | all three resolve to `03aab5e051e633d51b0d55bb93719ca17968adae` before the coverage-correction checkpoint |
 | Diff/status hygiene | `git diff --check`; allowlist/status inspection | passed; only allowlisted paths differ from the persistence checkpoint; final clean status follows checkpoint commit |
 
-The two `test_ops_extras.py` residuals are caused by the shared cloud `.venv` having no installed
-DutchBay distribution metadata when each test deliberately makes the repository `pyproject.toml`
-unusable; both exact tests fail identically on protected main. The five sandbox residuals are the
-timing-sensitive container process-reaping family explicitly declared in `CLAUDE.md`. Hosted
-exact-head CI remains the independent clean-environment decision surface. Neither local residual
-changes #1110 OPEN/HOLD or any canonical, finance, release, lender, Board, professional,
-publication, or issue authority.
+The local environment residuals were removed without changing repository source or configuration.
+The current worktree was installed editable into the existing shared cloud `.venv`, restoring
+distribution metadata for tests that deliberately make the repository `pyproject.toml` unusable.
+A workspace-local Linux child-subreaper launcher now adopts and promptly reaps orphaned watchdog
+descendants in this container, whose PID 1 does not otherwise do so. The exact metadata case plus
+all five process-reaping cases pass together (`6 passed in 9.18 s`) under that repaired environment.
+Neither the repair nor the coverage-only tests change #1110 OPEN/HOLD or any canonical, finance,
+release, lender, Board, professional, publication, or issue authority.
