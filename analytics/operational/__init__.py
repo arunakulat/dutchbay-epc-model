@@ -39,6 +39,24 @@ from analytics.operational.contracts import (
     OperationalSourceClass,
     OperationalTimezoneTreatment,
 )
+from analytics.operational.eya_bridge import (
+    EYA_ACTUAL_BRIDGE_SCHEMA,
+    EYA_GAP_CATEGORIES,
+    EYAActualBoundaryEvidence,
+    EYAActualBridgeError,
+    EYAActualBridgeErrorCode,
+    EYAActualBridgeReceipt,
+    EYAActualBridgeResult,
+    EYAActualBridgeSpec,
+    EYAGapAttributionEvidence,
+    EYAGapCategory,
+    EYAGapComponent,
+    FinanceUpdateProposal,
+    ResourceAssessmentSnapshot,
+    build_eya_actual_bridge,
+    operational_aep_claim_sha256,
+    resource_assessment_claim_sha256,
+)
 from analytics.operational.normalization import (
     OPERATIONAL_AGGREGATION_SCHEMA,
     OPERATIONAL_NORMALIZATION_SCHEMA,
@@ -61,6 +79,18 @@ from analytics.operational.normalization import (
 )
 
 __all__ = [
+    "EYA_ACTUAL_BRIDGE_SCHEMA",
+    "EYA_GAP_CATEGORIES",
+    "EYAActualBoundaryEvidence",
+    "EYAActualBridgeError",
+    "EYAActualBridgeErrorCode",
+    "EYAActualBridgeReceipt",
+    "EYAActualBridgeResult",
+    "EYAActualBridgeSpec",
+    "EYAGapAttributionEvidence",
+    "EYAGapCategory",
+    "EYAGapComponent",
+    "FinanceUpdateProposal",
     "OPERATIONAL_AEP_SCHEMA",
     "OPERATIONAL_AGGREGATION_SCHEMA",
     "OPERATIONAL_CALENDAR_MONTH_ALLOWED",
@@ -111,7 +141,11 @@ __all__ = [
     "OperationalBoundaryEvidence",
     "OperationalSupplementalComponent",
     "OperationalSupplementalEnergyEvidence",
+    "ResourceAssessmentSnapshot",
     "aggregate_operational_series",
+    "build_eya_actual_bridge",
     "normalize_operational_csv",
     "estimate_operational_aep",
+    "operational_aep_claim_sha256",
+    "resource_assessment_claim_sha256",
 ]
