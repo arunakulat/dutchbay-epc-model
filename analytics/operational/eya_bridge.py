@@ -133,7 +133,10 @@ class ResourceAssessmentSnapshot:
             _float_from_canonical_hex(getattr(self, field_name), field_name)
         if type(self.n_turbines) is not int or self.n_turbines <= 0:
             raise ValueError("n_turbines must be a positive real integer.")
-        if self.selected_p_level not in P_LEVELS:
+        if (
+            type(self.selected_p_level) is not str
+            or self.selected_p_level not in P_LEVELS
+        ):
             raise ValueError("selected_p_level must be canonical P50/P75/P90 text.")
         _require_text(self.report_grade, "report_grade")
         for field_name in ("source_id", "power_curve_key"):
@@ -145,7 +148,8 @@ class ResourceAssessmentSnapshot:
                 raise ValueError("absent run manifest cannot carry a digest.")
         else:
             if (
-                not isinstance(self.run_manifest_sha256, str)
+                type(self.run_manifest_json) is not str
+                or type(self.run_manifest_sha256) is not str
                 or _sha256(self.run_manifest_json.encode("utf-8"))
                 != self.run_manifest_sha256
             ):
@@ -193,7 +197,7 @@ class EYAActualBridgeSpec:
     def __post_init__(self) -> None:
         """Validate closed selectors and expected claims."""
         _require_identifier(self.bridge_id, "bridge_id")
-        if self.eya_p_level not in P_LEVELS:
+        if type(self.eya_p_level) is not str or self.eya_p_level not in P_LEVELS:
             raise ValueError("eya_p_level must be P50, P75, or P90.")
         _require_digest(self.expected_eya_claim_sha256, "expected_eya_claim_sha256")
         _require_digest(
@@ -201,7 +205,10 @@ class EYAActualBridgeSpec:
             "expected_operational_claim_sha256",
         )
         _require_identifier(self.category_partition_id, "category_partition_id")
-        if self.arithmetic_policy != "binary64_hex_to_fraction_kwh_v1":
+        if (
+            type(self.arithmetic_policy) is not str
+            or self.arithmetic_policy != "binary64_hex_to_fraction_kwh_v1"
+        ):
             raise ValueError("arithmetic_policy is not supported.")
 
     def model_dump(self) -> dict[str, Any]:
@@ -231,14 +238,22 @@ class EYAActualBoundaryEvidence:
         """Validate exact semantics and retained provenance bytes."""
         _require_identifier(self.project_id, "project_id")
         _require_text(self.asset_identity, "asset_identity")
-        if self.delivery_boundary != "net_export_at_common_delivery_boundary":
+        if (
+            type(self.delivery_boundary) is not str
+            or self.delivery_boundary != "net_export_at_common_delivery_boundary"
+        ):
             raise ValueError("delivery_boundary must use the closed common boundary.")
         if (
-            self.temporal_comparison
+            type(self.temporal_comparison) is not str
+            or self.temporal_comparison
             != "frozen_standard_year_eya_to_actual_calendar_year"
         ):
             raise ValueError("temporal_comparison is not supported.")
-        if self.partition_semantics != "mutually_exclusive_named_net_effect_categories":
+        if (
+            type(self.partition_semantics) is not str
+            or self.partition_semantics
+            != "mutually_exclusive_named_net_effect_categories"
+        ):
             raise ValueError("partition_semantics is not supported.")
         _require_identifier(self.category_partition_id, "category_partition_id")
         _require_digest(self.eya_claim_sha256, "eya_claim_sha256")
@@ -290,7 +305,7 @@ class EYAGapAttributionEvidence:
     def __post_init__(self) -> None:
         """Validate a complete paired comparison and immutable provenance."""
         _require_identifier(self.evidence_id, "evidence_id")
-        if not isinstance(self.category, str) or self.category not in _CATEGORY_SET:
+        if type(self.category) is not str or self.category not in _CATEGORY_SET:
             raise ValueError("category is not supported.")
         _require_identifier(self.project_id, "project_id")
         _require_identifier(self.category_partition_id, "category_partition_id")
@@ -298,7 +313,10 @@ class EYAGapAttributionEvidence:
         _require_digest(self.operational_claim_sha256, "operational_claim_sha256")
         _fraction_from_decimal(self.eya_expected_net_effect_kwh)
         _fraction_from_decimal(self.operational_actual_net_effect_kwh)
-        if self.sign_convention != "positive_increases_actual_vs_eya":
+        if (
+            type(self.sign_convention) is not str
+            or self.sign_convention != "positive_increases_actual_vs_eya"
+        ):
             raise ValueError("sign_convention is not supported.")
         _validate_provenance(
             self.source_locator,
@@ -350,13 +368,15 @@ class EYAGapComponent:
 
     def __post_init__(self) -> None:
         """Keep evidenced zero distinct from missing paired evidence."""
-        if not isinstance(self.category, str) or self.category not in _CATEGORY_SET:
+        if type(self.category) is not str or self.category not in _CATEGORY_SET:
             raise ValueError("gap component category is not supported.")
         values = (
             self.signed_delta_kwh,
             self.eya_expected_net_effect_kwh,
             self.operational_actual_net_effect_kwh,
         )
+        if type(self.status) is not str:
+            raise ValueError("gap component status is not supported.")
         if self.status == "available":
             if not all(isinstance(item, OperationalEnergyQuantity) for item in values):
                 raise ValueError("available gap components require all exact values.")
@@ -417,7 +437,10 @@ class FinanceUpdateProposal:
         """Reject any candidate value, update, authority, or HOLD laundering."""
         _require_digest(self.eya_claim_sha256, "eya_claim_sha256")
         _require_digest(self.operational_claim_sha256, "operational_claim_sha256")
-        if self.decision != "retain_current_canonical_basis_pending_r3":
+        if (
+            type(self.decision) is not str
+            or self.decision != "retain_current_canonical_basis_pending_r3"
+        ):
             raise ValueError("finance proposal decision must retain the current basis.")
         if type(self.default_off) is not bool or self.default_off is not True:
             raise ValueError("finance proposal must be exactly default_off=True.")
@@ -438,7 +461,10 @@ class FinanceUpdateProposal:
             or self.requires_separate_r3_rebaseline is not True
         ):
             raise ValueError("a separate R3 re-baseline must remain required.")
-        if self.issue_1110_state != "OPEN_HOLD":
+        if (
+            type(self.issue_1110_state) is not str
+            or self.issue_1110_state != "OPEN_HOLD"
+        ):
             raise ValueError("issue_1110_state must remain OPEN_HOLD.")
         for field_name in (
             "apply_authorized",
@@ -485,7 +511,7 @@ class EYAActualBridgeReceipt:
 
     def __post_init__(self) -> None:
         """Validate reconciliation identity and non-authority fences."""
-        if self.schema != EYA_ACTUAL_BRIDGE_SCHEMA:
+        if type(self.schema) is not str or self.schema != EYA_ACTUAL_BRIDGE_SCHEMA:
             raise ValueError("bridge receipt schema is not supported.")
         _require_identifier(self.bridge_id, "bridge_id")
         _require_identifier(self.project_id, "project_id")
@@ -499,9 +525,15 @@ class EYAActualBridgeReceipt:
             "finance_proposal_sha256",
         ):
             _require_digest(getattr(self, field_name), field_name)
-        if self.arithmetic_policy != "binary64_hex_to_fraction_kwh_v1":
+        if (
+            type(self.arithmetic_policy) is not str
+            or self.arithmetic_policy != "binary64_hex_to_fraction_kwh_v1"
+        ):
             raise ValueError("bridge receipt arithmetic policy is not supported.")
-        if self.sign_convention != "positive_increases_actual_vs_eya":
+        if (
+            type(self.sign_convention) is not str
+            or self.sign_convention != "positive_increases_actual_vs_eya"
+        ):
             raise ValueError("bridge receipt sign convention is not supported.")
         if (
             not isinstance(
@@ -515,7 +547,10 @@ class EYAActualBridgeReceipt:
             or self.original_sources_preserved is not True
         ):
             raise ValueError("original source preservation must be exactly true.")
-        if self.issue_1110_state != "OPEN_HOLD":
+        if (
+            type(self.issue_1110_state) is not str
+            or self.issue_1110_state != "OPEN_HOLD"
+        ):
             raise ValueError("issue_1110_state must remain OPEN_HOLD.")
         for field_name in (
             "canonical_mutation_performed",
@@ -614,14 +649,14 @@ class _BridgeArtifacts:
 
 
 def _require_identifier(value: object, field_name: str) -> str:
-    if not isinstance(value, str) or _IDENTIFIER_RE.fullmatch(value) is None:
+    if type(value) is not str or _IDENTIFIER_RE.fullmatch(value) is None:
         raise ValueError(f"{field_name} must be a closed identifier.")
     return value
 
 
 def _require_text(value: object, field_name: str) -> str:
     if (
-        not isinstance(value, str)
+        type(value) is not str
         or not value
         or value.strip() != value
         or "\n" in value
@@ -632,7 +667,7 @@ def _require_text(value: object, field_name: str) -> str:
 
 
 def _require_digest(value: object, field_name: str) -> str:
-    if not isinstance(value, str) or _SHA256_RE.fullmatch(value) is None:
+    if type(value) is not str or _SHA256_RE.fullmatch(value) is None:
         raise ValueError(f"{field_name} must be a lowercase SHA-256 digest.")
     return value
 
@@ -656,7 +691,7 @@ def _claim_digest(domain: str, payload: object) -> str:
 
 
 def _float_from_canonical_hex(value: object, field_name: str) -> float:
-    if not isinstance(value, str):
+    if type(value) is not str:
         raise ValueError(f"{field_name} must be canonical binary64 hex text.")
     try:
         parsed = float.fromhex(value)
@@ -669,7 +704,7 @@ def _float_from_canonical_hex(value: object, field_name: str) -> float:
 
 def _fraction_from_decimal(value: object) -> Fraction:
     if (
-        not isinstance(value, str)
+        type(value) is not str
         or len(value) > _MAX_NUMERIC_CHARACTERS
         or _DECIMAL_RE.fullmatch(value) is None
     ):
@@ -706,9 +741,9 @@ def _validate_provenance(
         or len(method_bytes) > _MAX_PROVENANCE_BYTES
     ):
         raise ValueError("provenance artifacts must not exceed 1 MiB each.")
-    if not isinstance(source_sha256, str) or _sha256(source_bytes) != source_sha256:
+    if type(source_sha256) is not str or _sha256(source_bytes) != source_sha256:
         raise ValueError("source bytes do not match source_sha256.")
-    if not isinstance(method_sha256, str) or _sha256(method_bytes) != method_sha256:
+    if type(method_sha256) is not str or _sha256(method_bytes) != method_sha256:
         raise ValueError("method bytes do not match method_sha256.")
     if source_sha256 == method_sha256:
         raise ValueError("source and method artifacts must have distinct identities.")
@@ -808,7 +843,10 @@ def _snapshot_resource_assessment(value: object) -> ResourceAssessmentSnapshot:
         raise EYAActualBridgeError(
             "INVALID_INPUT", "ResourceAssessment.n_turbines must be a positive integer."
         )
-    if value.selected_p_level not in P_LEVELS:
+    if (
+        type(value.selected_p_level) is not str
+        or value.selected_p_level not in P_LEVELS
+    ):
         raise EYAActualBridgeError(
             "INVALID_INPUT", "ResourceAssessment selected P-level must be canonical."
         )
@@ -1080,7 +1118,10 @@ def _build_artifacts(
             "BOUNDARY_MISMATCH",
             "common project, partition, or source claims do not match the bridge.",
         )
-    if operational.receipt.temporal_basis != "actual_calendar_year":
+    if (
+        type(operational.receipt.temporal_basis) is not str
+        or operational.receipt.temporal_basis != "actual_calendar_year"
+    ):
         raise EYAActualBridgeError(
             "TEMPORAL_MISMATCH",
             "D4 requires a replayed D3 actual_calendar_year result.",
@@ -1208,7 +1249,7 @@ def _build_artifacts(
 
 
 def _parse_utc(value: object) -> datetime:
-    if not isinstance(value, str) or not value.endswith("Z"):
+    if type(value) is not str or not value.endswith("Z"):
         raise EYAActualBridgeError(
             "TEMPORAL_MISMATCH", "operational bounds must be RFC3339 UTC timestamps."
         )

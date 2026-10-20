@@ -12,10 +12,12 @@ remain false.
 
 The controlling capability profile is issue-comment `6246195424`. The interrupted
 writer lease was revoked by comment `6253522866`; recovery lease `L-1334-D4-002`, issue
-comment `6253524354`, is the sole implementation authority for this checkpoint. Its exact
-allowlist is the D4 module and test, both operational export facades, this record, the v14
-import-surface test, and the D4 changelog fragment. No environment, workflow, dependency,
-configuration, canonical-finance, or unrelated path is in scope.
+comment `6253524354`, produced the first checkpoint. Finance and assurance review then
+rejected that exact object, as reconciled in issue comment `6298875580`. Corrective lease
+`L-1334-D4-003` in that comment is the sole implementation authority for this successor.
+Its exact allowlist is the D4 module, the D4 test, and this record. No export facade,
+environment, workflow, dependency, configuration, canonical-finance, or unrelated path is
+in corrective scope.
 
 Before mutation, the recovery writer freshly read the complete current 75-row active
 GWTF CSV (SHA-256
@@ -41,6 +43,17 @@ and exact target hash/absence checks passed before the first edit.
 
 OpenOA is a methodological comparator, not a runtime dependency, source-acceptance
 authority, professional opinion, or bankability claim. D4 imports no OpenOA code.
+
+Before corrective mutation, the corrective writer independently repeated the complete
+governance, framework, steward, RECRUIT-01, resolver-selected handover-chain, live #1334,
+D1-D4 implementation-record, and relevant contract/test ingress. The exact leased
+predecessor was clean at commit `253b078474330a7032738de02607abdddb60c041`, tree
+`c9a1bfab11772883a29e5cf75a40d711dfdbba1d`; `origin/main` and the merge base were both
+`8c4d0761545d1c6073d92c45d7de989e12281a1b`. The governed environment passed with Python
+3.12.14, a non-editable installation, active-worktree imports, and no foreign checkout
+paths. GWTF bootstrap loaded 75/75 active rules. An initial bootstrap invocation omitted
+the required `DUTCHBAY_FLOW_RULESET_CSV` environment variable and failed loudly; the
+corrected exact invocation passed before any edit.
 
 ## Contract and exact equation
 
@@ -106,7 +119,9 @@ and exposes no target scenario, candidate capacity factor, P50, P90, debt, or ta
 has no apply method. Apply authorization and canonical-finance, bankability, lender,
 Board, and release eligibility are exact false booleans. A separate R3 is exact true and
 issue #1110 is exactly `OPEN_HOLD`. Construction and deterministic result replay reject
-candidate-value, flag, or issue-state laundering.
+candidate-value, flag, or issue-state laundering. Authority-bearing and other closed
+vocabulary text must be an exact built-in `str`, not a subclass whose equality or hashing
+can impersonate an allowed literal while serializing different text.
 
 ## Independent fixture and hostile controls
 
@@ -124,7 +139,11 @@ loss sign/value substitution; observed-period relabelling; EYA/actual hours mism
 boolean, NaN, and permissive resource numerics; cyclic and over-deep manifests; provenance
 digest substitution; source mutation and deep-snapshot independence; factory-only replay;
 serialization without source bytes; missing versus evidenced zero; and finance/HOLD
-authority laundering.
+authority laundering. The corrective suite additionally uses a hostile `str` subclass that
+renders forbidden text while overriding equality, inequality, and hashing to impersonate an
+allowed literal. Proposal, receipt, spec, boundary, attribution, component, snapshot, and
+source-resource construction must reject it before `model_dump()` can serialize the forged
+state.
 
 ## Predecessor and finding disposition
 
@@ -137,6 +156,9 @@ authority laundering.
 | Missing gap-category comparison evidence | `CLOSED` by unavailable-not-zero states; D4 never derives weather/resource, measurement/boundary, or method/model effects from D3 presence |
 | Temporal comparability and annualization | `CLOSED` for one complete actual calendar year with exact EYA-hour equality; all partial or mismatched periods fail |
 | Canonical finance, scenario mutation, issue closure, lender/Board/release authority | `CLOSED` by the structurally inert proposal, no apply path, hard-false flags, separate-R3 requirement, and #1110 `OPEN_HOLD` |
+| `D4-FIN-R1-01` hostile `str`-subclass decision/HOLD laundering | `CLOSED` in the corrective candidate by exact built-in-string validation across all D4 closed vocabularies plus serialization-path negative controls |
+| `D4-ASSURANCE-R1-001` governed Ruff formatting failure | `CLOSED` by applying governed Ruff 0.14.14 formatting and rerunning both lint and format checks on the corrected source/test bytes |
+| `D4-ASSURANCE-R1-002` false formatting and main-sync receipts | `CLOSED` by replacing both claims with the exact corrective results and distinguishing candidate HEAD from `origin/main`/merge base |
 
 ## Deliberate limitations
 
@@ -156,20 +178,21 @@ authority laundering.
 
 All commands use the governed shared Python 3.12.14 environment, import from this worktree,
 and run with no editable or foreign-worktree installation. Hosted CI and independent R3
-review remain coordinator-owned gates.
+review remain coordinator-owned gates. The rejected predecessor's receipts are not carried
+forward as corrective-candidate evidence.
 
 | Check | Exact command | Result |
 |---|---|---|
-| D1-D4/import focus | governed Python `-m pytest -p no:cacheprovider --no-cov -q` on D1, D2, D3, D4, and v14 import-surface modules | 271 passed in 6.80 s |
-| D4 independent/hostile focus | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_eya_actual_bridge.py -x` | 26 passed in 5.50 s |
-| D4 targeted coverage | governed Python `pytest` on `test_eya_actual_bridge.py` with coverage for `analytics.operational.eya_bridge` | 26 passed; 95.70% (604 statements, 26 missing) |
-| Strict source types | governed Python `-m mypy --no-incremental` over D4 and both export facades | success; no issues in three source files |
-| Ruff lint/format | governed `ruff check` and `ruff format --check` over all five allowlisted Python paths | all checks passed; all five files formatted |
-| Public docstring ratchet | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/lint/test_docstring_coverage.py` | 12 passed in 1.10 s |
-| Shared contract suite | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/contracts` | 1664 passed in 77.04 s |
+| D1-D4/import focus | governed Python `-m pytest -p no:cacheprovider --no-cov -q` on D1, D2, D3, D4, and v14 import-surface modules | 272 passed in 6.71 s |
+| D4 independent/hostile focus | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_eya_actual_bridge.py tests/contracts/test_contracts_v14_import_surface.py -x` | 33 passed in 5.87 s on the final source/test bytes |
+| D4 targeted coverage | governed Python `-m pytest -p no:cacheprovider -q tests/contracts/test_eya_actual_bridge.py --cov=analytics.operational.eya_bridge --cov-report=term-missing --cov-fail-under=95` | 27 passed in 37.88 s; 95.71% (606 statements, 26 missing) |
+| Strict source types | governed Python `-m mypy --no-incremental analytics/operational/eya_bridge.py` | success; no issues in one source file |
+| Ruff lint/format | governed `ruff check` and `ruff format --check` over the D4 source and test | all checks passed; both files formatted |
+| Public docstring ratchet | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/lint/test_docstring_coverage.py` | 12 passed in 1.11 s |
+| Shared contract suite | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/contracts` | 1665 passed in 76.84 s |
 | Changelog dry-run | governed Python `scripts/compile_changelog.py --dry-run` | passed; pending fragments rendered without repository mutation |
-| Framework fence and GWTF bootstrap | governed `pytest` on `test_framework_expansions_match_csv.py` plus governed bootstrap with the current CSV | 28 passed in 2.07 s; 75/75 active rules loaded |
+| Framework fence and GWTF bootstrap | governed `pytest` on `test_framework_expansions_match_csv.py` plus governed bootstrap with the current CSV | 28 passed in 2.02 s; 75/75 active rules loaded |
 | Governed environment | `DUTCHBAY_VENV=/workspace/dutchbay-epc-model/.venv bash check_venv.sh --no-bootstrap` | PASS; Python 3.12.14, non-editable install, no foreign checkout paths, imports from the D4 worktree |
-| Exact-file pre-commit | governed `pre-commit run --files` over the exact seven-path allowlist | every hook passed; no file rewritten on the final pass |
-| Main synchronization | fetch and compare `HEAD`, `origin/main`, and merge base immediately before freeze | all resolve to `8c4d0761545d1c6073d92c45d7de989e12281a1b`; no base drift |
-| Diff/status hygiene | `git diff --check` and exact allowlist inspection immediately before freeze | passed; exactly seven allowlisted paths differ; checkpoint commit/tree and final clean status are supplied in the recovery handoff |
+| Exact-file pre-commit | governed `pre-commit run --files` over the exact three-path corrective allowlist | final pass: every hook passed with no rewrite; the first pass exposed a Black/Ruff disagreement in one pre-existing nested ternary, resolved with an equivalent explicit branch before the final pass |
+| Main synchronization | compare the leased predecessor, `origin/main`, and merge base before corrective mutation | predecessor `253b078474330a7032738de02607abdddb60c041`; `origin/main` and merge base both `8c4d0761545d1c6073d92c45d7de989e12281a1b`; no base drift |
+| Diff/status hygiene | `git diff --check` and exact corrective-allowlist inspection immediately before freeze | passed; exactly the three corrective-allowlisted paths differ; successor commit/tree and clean status are supplied in the corrective handoff |

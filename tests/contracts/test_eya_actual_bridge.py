@@ -47,6 +47,24 @@ def _digest(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+class _EqualitySpoof(str):
+    """Render hostile text while comparing and hashing as an allowed literal."""
+
+    def __new__(cls, rendered_value: str, accepted_value: str) -> _EqualitySpoof:
+        instance = super().__new__(cls, rendered_value)
+        instance._accepted_value = accepted_value
+        return instance
+
+    def __eq__(self, other: object) -> bool:
+        return other == self._accepted_value
+
+    def __ne__(self, other: object) -> bool:
+        return not self == other
+
+    def __hash__(self) -> int:
+        return hash(self._accepted_value)
+
+
 def _evidence(
     logical_id: str,
     kind: str,
@@ -58,11 +76,12 @@ def _evidence(
     interval_seconds: int | None = 86_400,
     status: str = "observed",
 ) -> OperationalDatasetEvidence:
-    source_class = (
-        "declared_asset"
-        if kind == "asset"
-        else "reference_reanalysis" if kind == "reanalysis" else "observed_plant"
-    )
+    if kind == "asset":
+        source_class = "declared_asset"
+    elif kind == "reanalysis":
+        source_class = "reference_reanalysis"
+    else:
+        source_class = "observed_plant"
     return OperationalDatasetEvidence(
         logical_id=logical_id,
         kind=kind,  # type: ignore[arg-type]
@@ -667,6 +686,124 @@ def test_finance_constructor_rejects_hold_or_authority_laundering(
         FinanceUpdateProposal(**claims, issue_1110_state="CLOSED")  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="exact boolean False"):
         FinanceUpdateProposal(**claims, bankable=True)  # type: ignore[arg-type]
+
+
+def test_hostile_string_subclasses_fail_before_closed_state_serialization(
+    annual_sources: tuple[ResourceAssessment, OperationalAEPResult],
+) -> None:
+    resource, operational = annual_sources
+    result = _complete_bridge(resource, operational)
+    spec, boundary = _bridge_inputs(resource, operational)
+    evidence = _attribution("method_model", "0", spec)
+    component = result.component("method_model")
+
+    attacks: tuple[tuple[object, dict[str, object]], ...] = (
+        (
+            result.finance_proposal,
+            {
+                "decision": _EqualitySpoof(
+                    "adopt_actual", "retain_current_canonical_basis_pending_r3"
+                )
+            },
+        ),
+        (
+            result.finance_proposal,
+            {"issue_1110_state": _EqualitySpoof("CLOSED", "OPEN_HOLD")},
+        ),
+        (
+            result.receipt,
+            {"issue_1110_state": _EqualitySpoof("CLOSED", "OPEN_HOLD")},
+        ),
+        (
+            result.receipt,
+            {
+                "schema": _EqualitySpoof(
+                    "dutchbay.eya_actual_bridge.v0",
+                    "dutchbay.eya_actual_bridge.v1",
+                )
+            },
+        ),
+        (
+            result.receipt,
+            {
+                "arithmetic_policy": _EqualitySpoof(
+                    "rounded_decimal", "binary64_hex_to_fraction_kwh_v1"
+                )
+            },
+        ),
+        (
+            result.receipt,
+            {
+                "sign_convention": _EqualitySpoof(
+                    "positive_reduces_actual", "positive_increases_actual_vs_eya"
+                )
+            },
+        ),
+        (spec, {"eya_p_level": _EqualitySpoof("P10", "P50")}),
+        (
+            spec,
+            {
+                "arithmetic_policy": _EqualitySpoof(
+                    "rounded_decimal", "binary64_hex_to_fraction_kwh_v1"
+                )
+            },
+        ),
+        (
+            boundary,
+            {
+                "delivery_boundary": _EqualitySpoof(
+                    "gross", "net_export_at_common_delivery_boundary"
+                )
+            },
+        ),
+        (
+            boundary,
+            {
+                "temporal_comparison": _EqualitySpoof(
+                    "annualized_partial",
+                    "frozen_standard_year_eya_to_actual_calendar_year",
+                )
+            },
+        ),
+        (
+            boundary,
+            {
+                "partition_semantics": _EqualitySpoof(
+                    "overlapping", "mutually_exclusive_named_net_effect_categories"
+                )
+            },
+        ),
+        (evidence, {"category": _EqualitySpoof("other", "method_model")}),
+        (
+            evidence,
+            {
+                "sign_convention": _EqualitySpoof(
+                    "positive_reduces_actual", "positive_increases_actual_vs_eya"
+                )
+            },
+        ),
+        (component, {"category": _EqualitySpoof("other", "method_model")}),
+        (component, {"status": _EqualitySpoof("forged", "available")}),
+        (
+            result.resource_snapshot,
+            {"selected_p_level": _EqualitySpoof("P10", "P50")},
+        ),
+        (
+            result.resource_snapshot,
+            {"report_grade": _EqualitySpoof("forged-grade", "forged-grade")},
+        ),
+    )
+    for subject, changes in attacks:
+        with pytest.raises(ValueError):
+            replace(subject, **changes).model_dump()  # type: ignore[arg-type,union-attr]
+
+    hostile_resource = copy.copy(resource)
+    object.__setattr__(
+        hostile_resource, "selected_p_level", _EqualitySpoof("P10", "P50")
+    )
+    with pytest.raises(EYAActualBridgeError) as captured:
+        resource_assessment_claim_sha256(hostile_resource)
+    assert captured.value.code == "INVALID_INPUT"
 
 
 def test_public_value_objects_reject_hostile_closed_vocabulary_states(
