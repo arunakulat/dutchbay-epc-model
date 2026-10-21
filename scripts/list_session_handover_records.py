@@ -244,7 +244,14 @@ def _history_headers(paths: set[str]) -> tuple[tuple[str, str, str], ...]:
             epoch = int(epoch_text)
         except (OSError, OverflowError, ValueError) as exc:
             raise ResolutionError("malformed batched lineage ISO timestamp") from exc
-        if not iso_date.endswith("Z") and parsed_date.utcoffset() == timedelta(0):
+        # Git spells a ZERO offset two ways depending on its own version: `Z` from
+        # 2.45.0 onwards, `+00:00` before it (upstream 69e2bee1, released 2024-04-29).
+        # Accept both, because this guard exists to admit exactly what Git emits and
+        # the host Git version is not pinned anywhere. `-00:00` stays rejected: RFC 3339
+        # gives it a different meaning, an instant whose local offset is unknown.
+        if parsed_date.utcoffset() == timedelta(0) and not iso_date.endswith(
+            ("Z", "+00:00")
+        ):
             raise ResolutionError("malformed batched lineage ISO timestamp")
         if iso_epoch != epoch:
             raise ResolutionError(

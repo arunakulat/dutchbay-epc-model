@@ -465,7 +465,9 @@ def test_handover_resolver_rejects_malformed_merge_topology(
         ("a" * 40, "99999999999999999999", "1970-01-01T00:00:01+00:00"),
         ("a" * 40, "01", "1970-01-01T00:00:01Z"),
         ("a" * 40, "000", "1970-01-01T00:00:00Z"),
-        ("a" * 40, "1", "1970-01-01T00:00:01+00:00"),
+        # `-00:00` is not the zero offset `+00:00`: RFC 3339 reads it as an instant
+        # whose local offset is unknown, and Git never emits it for UTC. It stays
+        # rejected deliberately, where `+00:00` is now accepted.
         ("a" * 40, "1", "1970-01-01T00:00:01-00:00"),
     ),
 )
@@ -495,7 +497,15 @@ def test_handover_resolver_rejects_malformed_history_headers(
 
 @pytest.mark.parametrize(
     "iso_date",
-    ("1970-01-01T00:00:01Z", "1970-01-01T05:30:01+05:30"),
+    (
+        # Git >= 2.45.0 writes the zero offset as `Z`; every older Git writes it as
+        # `+00:00` (upstream 69e2bee1). No repository control pins the host Git, so
+        # both spellings are pinned here, through injected headers rather than through
+        # a commit, and therefore hold whichever Git is installed.
+        "1970-01-01T00:00:01Z",
+        "1970-01-01T00:00:01+00:00",
+        "1970-01-01T05:30:01+05:30",
+    ),
 )
 def test_handover_resolver_accepts_reconciled_strict_history_header(
     monkeypatch: pytest.MonkeyPatch,
