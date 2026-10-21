@@ -15,6 +15,7 @@ from analytics.operational.aep import (
     OperationalAEPResult,
     OperationalAEPSpec,
     OperationalBoundaryEvidence,
+    OperationalEnergyQuantity,
     OperationalSupplementalEnergyEvidence,
     estimate_operational_aep,
 )
@@ -63,6 +64,15 @@ class _EqualitySpoof(str):
 
     def __hash__(self) -> int:
         return hash(self._accepted_value)
+
+
+class _HostileEnergyQuantity(OperationalEnergyQuantity):
+    """Expose forged stored fields while reporting a zero fraction."""
+
+    reported_fraction: Fraction = Fraction(0)
+
+    def as_fraction(self) -> Fraction:
+        return self.reported_fraction
 
 
 def _evidence(
@@ -911,6 +921,149 @@ def test_gap_component_receipt_and_proposal_invariants_are_independent(
 
     with pytest.raises(KeyError):
         result.component("other")  # type: ignore[arg-type]
+
+
+def test_hostile_energy_quantity_subclasses_cannot_override_d4_arithmetic(
+    annual_sources: tuple[ResourceAssessment, OperationalAEPResult],
+) -> None:
+    result = _complete_bridge(*annual_sources)
+    component = result.component("method_model")
+
+    forged_nonzero = _HostileEnergyQuantity(999)
+    assert forged_nonzero.as_fraction() == 0
+    with pytest.raises(ValueError, match="exact OperationalEnergyQuantity"):
+        replace(
+            component,
+            signed_delta_kwh=forged_nonzero,
+            eya_expected_net_effect_kwh=forged_nonzero,
+            operational_actual_net_effect_kwh=forged_nonzero,
+        )
+
+    forged_residual = _HostileEnergyQuantity(1)
+    assert forged_residual.as_fraction() == 0
+    with pytest.raises(ValueError, match="exact OperationalEnergyQuantity"):
+        replace(
+            result.receipt,
+            full_reconciliation_residual_kwh=forged_residual,
+        )
+
+
+def test_public_model_dumps_revalidate_post_construction_mutation(
+    annual_sources: tuple[ResourceAssessment, OperationalAEPResult],
+) -> None:
+    resource, operational = annual_sources
+    result = _complete_bridge(resource, operational)
+    spec, boundary = _bridge_inputs(resource, operational)
+    attribution = _attribution("method_model", "0", spec)
+    attacks = (
+        (result.resource_snapshot, "selected_p_level", "P10"),
+        (spec, "arithmetic_policy", "rounded_decimal"),
+        (boundary, "delivery_boundary", "gross"),
+        (attribution, "category", "other"),
+        (result.component("method_model"), "status", "unavailable"),
+        (result.finance_proposal, "issue_1110_state", "CLOSED"),
+        (result.receipt, "bankable", True),
+    )
+
+    for original, field_name, hostile_value in attacks:
+        subject = copy.copy(original)
+        object.__setattr__(subject, field_name, hostile_value)
+        with pytest.raises(ValueError):
+            subject.model_dump()
+
+
+def test_hostile_quantity_serialized_field_mismatches_fail_closed(
+    annual_sources: tuple[ResourceAssessment, OperationalAEPResult],
+) -> None:
+    result = _complete_bridge(*annual_sources)
+    forged_component = copy.copy(result.component("method_model"))
+    object.__setattr__(
+        forged_component, "signed_delta_kwh", _HostileEnergyQuantity(999)
+    )
+    with pytest.raises(ValueError, match="exact OperationalEnergyQuantity"):
+        forged_component.model_dump()
+
+    forged_receipt = copy.copy(result.receipt)
+    object.__setattr__(
+        forged_receipt,
+        "full_reconciliation_residual_kwh",
+        _HostileEnergyQuantity(999),
+    )
+    with pytest.raises(ValueError, match="exact OperationalEnergyQuantity"):
+        forged_receipt.model_dump()
+
+
+@pytest.mark.parametrize(
+    ("nested_field", "mutated_field", "hostile_value"),
+    (
+        ("finance_proposal", "decision", "adopt_actual"),
+        ("finance_proposal", "issue_1110_state", "CLOSED"),
+        ("finance_proposal", "default_off", False),
+        ("finance_proposal", "proposed_updates", ("candidate_debt",)),
+        ("finance_proposal", "candidate_debt", 1),
+        ("finance_proposal", "canonical_finance_eligible", True),
+        ("receipt", "issue_1110_state", "CLOSED"),
+        ("receipt", "canonical_mutation_performed", True),
+        ("receipt", "full_reconciliation_residual_kwh", OperationalEnergyQuantity(1)),
+    ),
+)
+def test_complete_result_dump_replays_after_nested_authority_mutation(
+    annual_sources: tuple[ResourceAssessment, OperationalAEPResult],
+    nested_field: str,
+    mutated_field: str,
+    hostile_value: object,
+) -> None:
+    result = copy.copy(_complete_bridge(*annual_sources))
+    nested = copy.copy(getattr(result, nested_field))
+    object.__setattr__(nested, mutated_field, hostile_value)
+    object.__setattr__(result, nested_field, nested)
+
+    with pytest.raises(ValueError):
+        result.model_dump()
+
+
+def test_complete_result_dump_replays_component_and_quantity_state(
+    annual_sources: tuple[ResourceAssessment, OperationalAEPResult],
+) -> None:
+    baseline = _complete_bridge(*annual_sources)
+
+    forged_component = copy.copy(baseline.component("method_model"))
+    object.__setattr__(forged_component, "category", "weather_resource")
+    component_result = copy.copy(baseline)
+    object.__setattr__(
+        component_result,
+        "category_components",
+        baseline.category_components[:-1] + (forged_component,),
+    )
+    with pytest.raises(ValueError):
+        component_result.model_dump()
+
+    forged_arithmetic = copy.copy(baseline.component("method_model"))
+    object.__setattr__(
+        forged_arithmetic, "signed_delta_kwh", OperationalEnergyQuantity(1)
+    )
+    arithmetic_result = copy.copy(baseline)
+    object.__setattr__(
+        arithmetic_result,
+        "category_components",
+        baseline.category_components[:-1] + (forged_arithmetic,),
+    )
+    with pytest.raises(ValueError, match="do not reconcile"):
+        arithmetic_result.model_dump()
+
+    forged_quantity = copy.copy(baseline.unknown_residual_kwh)
+    object.__setattr__(forged_quantity, "denominator", 0)
+    quantity_result = copy.copy(baseline)
+    object.__setattr__(quantity_result, "unknown_residual_kwh", forged_quantity)
+    with pytest.raises(ValueError):
+        quantity_result.model_dump()
+
+    substituted_result = copy.copy(baseline)
+    object.__setattr__(
+        substituted_result, "actual_net_energy_kwh", OperationalEnergyQuantity(0)
+    )
+    with pytest.raises(ValueError, match="does not replay"):
+        substituted_result.model_dump()
 
 
 def test_manifest_and_provenance_resource_bounds_fail_closed(

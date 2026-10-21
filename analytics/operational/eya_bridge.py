@@ -178,6 +178,7 @@ class ResourceAssessmentSnapshot:
 
     def model_dump(self) -> dict[str, Any]:
         """Return the stable claim projection."""
+        self.__post_init__()
         return asdict(self)
 
 
@@ -213,6 +214,7 @@ class EYAActualBridgeSpec:
 
     def model_dump(self) -> dict[str, Any]:
         """Return a JSON-compatible specification."""
+        self.__post_init__()
         return asdict(self)
 
 
@@ -268,6 +270,7 @@ class EYAActualBoundaryEvidence:
 
     def model_dump(self) -> dict[str, Any]:
         """Return the attested claim without retained source bytes."""
+        self.__post_init__()
         return {
             "project_id": self.project_id,
             "asset_identity": self.asset_identity,
@@ -335,6 +338,7 @@ class EYAGapAttributionEvidence:
 
     def model_dump(self) -> dict[str, Any]:
         """Return the paired claim without retained source bytes."""
+        self.__post_init__()
         return {
             "evidence_id": self.evidence_id,
             "category": self.category,
@@ -378,17 +382,15 @@ class EYAGapComponent:
         if type(self.status) is not str:
             raise ValueError("gap component status is not supported.")
         if self.status == "available":
-            if not all(isinstance(item, OperationalEnergyQuantity) for item in values):
-                raise ValueError("available gap components require all exact values.")
+            fractions = tuple(
+                _exact_energy_fraction(item, "gap component value") for item in values
+            )
             _require_identifier(self.evidence_id, "evidence_id")
             _require_digest(self.evidence_claim_sha256, "evidence_claim_sha256")
             if self.unavailable_reason is not None:
                 raise ValueError("available gap components cannot carry a reason.")
-            expected = self.eya_expected_net_effect_kwh
-            actual = self.operational_actual_net_effect_kwh
-            delta = self.signed_delta_kwh
-            assert expected is not None and actual is not None and delta is not None
-            if actual.as_fraction() - expected.as_fraction() != delta.as_fraction():
+            delta, expected, actual = fractions
+            if actual - expected != delta:
                 raise ValueError("gap component values do not reconcile.")
         elif self.status == "unavailable":
             if any(item is not None for item in values) or any(
@@ -404,6 +406,7 @@ class EYAGapComponent:
 
     def model_dump(self) -> dict[str, Any]:
         """Return a JSON-compatible component."""
+        self.__post_init__()
         return asdict(self)
 
 
@@ -480,6 +483,7 @@ class FinanceUpdateProposal:
 
     def model_dump(self) -> dict[str, Any]:
         """Return an inert JSON-compatible proposal."""
+        self.__post_init__()
         return asdict(self)
 
 
@@ -536,10 +540,11 @@ class EYAActualBridgeReceipt:
         ):
             raise ValueError("bridge receipt sign convention is not supported.")
         if (
-            not isinstance(
-                self.full_reconciliation_residual_kwh, OperationalEnergyQuantity
+            _exact_energy_fraction(
+                self.full_reconciliation_residual_kwh,
+                "full_reconciliation_residual_kwh",
             )
-            or self.full_reconciliation_residual_kwh.as_fraction() != 0
+            != 0
         ):
             raise ValueError("full bridge reconciliation residual must be exact zero.")
         if (
@@ -566,6 +571,7 @@ class EYAActualBridgeReceipt:
 
     def model_dump(self) -> dict[str, Any]:
         """Return a JSON-compatible receipt."""
+        self.__post_init__()
         return asdict(self)
 
 
@@ -600,15 +606,25 @@ class EYAActualBridgeResult:
             self.boundary_evidence,
             self.attribution_evidence,
         )
-        if (
-            self.eya_net_energy_kwh != artifacts.eya_net_energy_kwh
-            or self.actual_net_energy_kwh != artifacts.actual_net_energy_kwh
-            or self.total_gap_kwh != artifacts.total_gap_kwh
-            or self.category_components != artifacts.category_components
-            or self.unknown_residual_kwh != artifacts.unknown_residual_kwh
-            or self.finance_proposal != artifacts.finance_proposal
-            or self.receipt != artifacts.receipt
-        ):
+        actual_outputs = _result_output_projection(
+            self.eya_net_energy_kwh,
+            self.actual_net_energy_kwh,
+            self.total_gap_kwh,
+            self.category_components,
+            self.unknown_residual_kwh,
+            self.finance_proposal,
+            self.receipt,
+        )
+        expected_outputs = _result_output_projection(
+            artifacts.eya_net_energy_kwh,
+            artifacts.actual_net_energy_kwh,
+            artifacts.total_gap_kwh,
+            artifacts.category_components,
+            artifacts.unknown_residual_kwh,
+            artifacts.finance_proposal,
+            artifacts.receipt,
+        )
+        if _canonical_json(actual_outputs) != _canonical_json(expected_outputs):
             raise ValueError(
                 "EYA-to-actual result does not replay from retained inputs."
             )
@@ -622,16 +638,23 @@ class EYAActualBridgeResult:
 
     def model_dump(self) -> dict[str, Any]:
         """Return bridge outputs without retained provenance or D3 source bytes."""
+        self.__post_init__(_BRIDGE_RESULT_TOKEN)
         return {
             "schema": self.receipt.schema,
             "resource_snapshot": self.resource_snapshot.model_dump(),
-            "eya_net_energy_kwh": self.eya_net_energy_kwh.model_dump(),
-            "actual_net_energy_kwh": self.actual_net_energy_kwh.model_dump(),
-            "total_gap_kwh": self.total_gap_kwh.model_dump(),
+            "eya_net_energy_kwh": _energy_payload(
+                self.eya_net_energy_kwh, "eya_net_energy_kwh"
+            ),
+            "actual_net_energy_kwh": _energy_payload(
+                self.actual_net_energy_kwh, "actual_net_energy_kwh"
+            ),
+            "total_gap_kwh": _energy_payload(self.total_gap_kwh, "total_gap_kwh"),
             "category_components": [
                 item.model_dump() for item in self.category_components
             ],
-            "unknown_residual_kwh": self.unknown_residual_kwh.model_dump(),
+            "unknown_residual_kwh": _energy_payload(
+                self.unknown_residual_kwh, "unknown_residual_kwh"
+            ),
             "finance_proposal": self.finance_proposal.model_dump(),
             "receipt": self.receipt.model_dump(),
         }
@@ -646,6 +669,69 @@ class _BridgeArtifacts:
     unknown_residual_kwh: OperationalEnergyQuantity
     finance_proposal: FinanceUpdateProposal
     receipt: EYAActualBridgeReceipt
+
+
+def _exact_energy_fraction(value: object, field_name: str) -> Fraction:
+    """Validate and return one exact built-in D3 quantity without dispatch."""
+    if type(value) is not OperationalEnergyQuantity:
+        raise ValueError(
+            f"{field_name} must use the exact OperationalEnergyQuantity contract."
+        )
+    numerator = value.numerator
+    denominator = value.denominator
+    unit = value.unit
+    if (
+        type(numerator) is not int
+        or type(denominator) is not int
+        or type(unit) is not str
+    ):
+        raise ValueError(f"{field_name} has a non-canonical stored representation.")
+    canonical = OperationalEnergyQuantity(numerator, denominator, unit)
+    return Fraction(canonical.numerator, canonical.denominator)
+
+
+def _energy_payload(value: object, field_name: str) -> dict[str, Any]:
+    """Return a validated quantity payload without calling overridable methods."""
+    _exact_energy_fraction(value, field_name)
+    assert type(value) is OperationalEnergyQuantity
+    return {
+        "numerator": value.numerator,
+        "denominator": value.denominator,
+        "unit": value.unit,
+    }
+
+
+def _result_output_projection(
+    eya_net_energy_kwh: object,
+    actual_net_energy_kwh: object,
+    total_gap_kwh: object,
+    category_components: object,
+    unknown_residual_kwh: object,
+    finance_proposal: object,
+    receipt: object,
+) -> dict[str, Any]:
+    """Return the revalidated D4-owned state used for replay comparison."""
+    if type(category_components) is not tuple or not all(
+        type(item) is EYAGapComponent for item in category_components
+    ):
+        raise ValueError("category_components must use the exact immutable contracts.")
+    if type(finance_proposal) is not FinanceUpdateProposal:
+        raise ValueError("finance_proposal must use the exact D4 contract.")
+    if type(receipt) is not EYAActualBridgeReceipt:
+        raise ValueError("receipt must use the exact D4 contract.")
+    return {
+        "eya_net_energy_kwh": _energy_payload(eya_net_energy_kwh, "eya_net_energy_kwh"),
+        "actual_net_energy_kwh": _energy_payload(
+            actual_net_energy_kwh, "actual_net_energy_kwh"
+        ),
+        "total_gap_kwh": _energy_payload(total_gap_kwh, "total_gap_kwh"),
+        "category_components": [item.model_dump() for item in category_components],
+        "unknown_residual_kwh": _energy_payload(
+            unknown_residual_kwh, "unknown_residual_kwh"
+        ),
+        "finance_proposal": finance_proposal.model_dump(),
+        "receipt": receipt.model_dump(),
+    }
 
 
 def _require_identifier(value: object, field_name: str) -> str:
