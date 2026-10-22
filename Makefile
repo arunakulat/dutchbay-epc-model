@@ -14,28 +14,18 @@ SURFACE := finance analytics api app wind_resource solar_resource analysis_tools
 ENTRYPOINTS := run_full_pipeline_v14.py run_scenario_analytics_v14.py \
 	dutchbay_bootstrap.py dutchbay_bootstrap_rules.py constants.py
 
-# pip-audit allowlist — EIGHT entries, all pillow, all capped by streamlit. Fixed only in
-# `pillow 13.0.0`, and every streamlit release up to 1.66.0 (the latest on PyPI) requires
-# `pillow<13`, with no pillow release between 12.3.0 and 13.0.0 to take instead — so no
-# installable pillow clears them while streamlit is in the lock. Each needs attacker-chosen
-# TIFF, GIF, PPM/PGM or EPS input, or a third-party PDF appended to via `Image.save(...,
-# format="PDF", append=True)`. No module in this repository imports PIL: pillow is transitive
-# only, the sole `pdfplumber.open` reads a PDF this repository just generated, and contextily
-# fetches PNG/JPEG basemap tiles, which no advisory touches. Drop these the moment streamlit
-# lifts the cap.
-# Earlier accepted advisories were all cleared by the coordinated major upgrade (fastapi
-# 0.121->0.137 + starlette 0.49->1.3.1, streamlit 1.51->1.54 + pyarrow 21->24, black 25->26
-# [+ pathspec/pytokens], curl-cffi 0.13->0.15). Prefer fixing over ignoring: add an entry here
-# only for a genuinely-capped CVE, with a one-line reason.
-PIP_AUDIT_IGNORES := \
-	--ignore-vuln CVE-2026-112395 \
-	--ignore-vuln CVE-2026-112397 \
-	--ignore-vuln CVE-2026-112400 \
-	--ignore-vuln CVE-2026-112404 \
-	--ignore-vuln CVE-2026-112895 \
-	--ignore-vuln CVE-2026-112896 \
-	--ignore-vuln CVE-2026-112897 \
-	--ignore-vuln CVE-2026-112899
+# pip-audit allowlist — EMPTY. The eight pillow advisories accepted in #1369 are gone, fixed
+# rather than suppressed: `streamlit 1.66.1` (PyPI, published 2026-10-21T17:02:55Z, twelve
+# minutes after #1369 merged) raises its cap from `pillow<13` to `pillow<14,>=9.2.0`, which was
+# the only thing holding `pillow` at 12.3.0. The lock now carries `pillow==13.0.0`, the release
+# that fixes all eight, and `streamlit==1.66.1`; PyPI reports no advisory against either. That
+# is the lift condition the #1369 block named, met four hours after it was written.
+# Earlier accepted advisories were cleared the same way, by the coordinated major upgrade
+# (fastapi 0.121->0.137 + starlette 0.49->1.3.1, streamlit 1.51->1.54 + pyarrow 21->24, black
+# 25->26 [+ pathspec/pytokens], curl-cffi 0.13->0.15). Keep this variable as the home for any
+# FUTURE genuinely-capped CVE (add `--ignore-vuln <ID>` with a one-line reason naming the cap
+# and the release that would lift it), and prefer fixing over ignoring.
+PIP_AUDIT_IGNORES :=
 
 # Coverage surface for the floor gate (#439, +solar_resource #456): the six engine
 # packages, mirroring the CI test step. The --cov-fail-under=95 floor is enforced in

@@ -9,7 +9,9 @@
   release between `12.3.0` and `13.0.0`. The entries carry their reason in the `Makefile` and come
   out the moment `streamlit` lifts the cap.
 - Each of the eight needs attacker-chosen TIFF, GIF, PPM/PGM or EPS input, or a third-party PDF
-  appended to through `Image.save(..., format="PDF", append=True)`. No module in this repository
-  imports PIL — pillow is transitive only — the one `pdfplumber.open` call reads a PDF this
-  repository generated itself, and `contextily` fetches PNG/JPEG basemap tiles, which no advisory
-  touches. The allowlist records a capped finding, not an accepted exposure.
+  appended to through `Image.save(..., format="PDF", append=True)`, and no untrusted-input path in
+  this repository reaches them. No module here imports PIL, and both `pdfplumber.open` calls read
+  PDFs this repository generated itself; `contextily` does decode fetched basemap tiles through
+  `PIL.Image.open`, which sniffs format from the response bytes, so that path depends on the tile
+  service rather than on the tile type. The allowlist records a capped finding, not an accepted
+  exposure.
