@@ -7,6 +7,24 @@ ran 2026-10-21 02:18Z to 2026-10-22 05:40Z and changed load-bearing state three 
 to `docs/SESSION_HANDOVER_2026-10-17_D3_OPERATIONAL_AEP.md`; `scripts/list_session_handover_records.py`
 orders the chain by committer lineage, so this record joins it when this change merges.
 
+**Startup record and carried-forward state**, which `AGENTS.md` "Session continuity" tells the
+next session to take from this record rather than from a filename in the gateway. This record
+carries forward, and does **not** replace:
+
+- the **v15.6.1 startup record**, `docs/SESSION_HANDOVER_2026-10-05_RELEASE_15_6_1.md` — still the
+  startup record, because nothing here changed `VERSION` or the release;
+- the declared work list `docs/SESSION_HANDOVER_2026-10-12_THREAD_TODO.md`;
+- the sibling 11 October capability handover,
+  `docs/SESSION_HANDOVER_2026-10-11_CAPABILITY_ROADMAP.md`;
+- its own predecessor, the 17 October D3 record, whose own declaration of these three this one
+  inherits unchanged.
+
+Run the resolver and read its newest result first; the resolver prints five records and refuses
+shallow history, so fetch `--unshallow --tags` before relying on it.
+
+This file grants no writer, merge, finance, evidence, professional, utility, release, lender,
+Board, publication, deployment, issue-closure or `HOLD` authority.
+
 `main` moved `8c4d0761` → `050fb56e` → `0255c1fd` → `2d56ed66` in under twelve hours. `VERSION` and
 the latest release tag are both `v15.6.1` and did not change: nothing here touches committed
 financial behaviour.
