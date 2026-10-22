@@ -28,6 +28,9 @@ if ! _DUTCHBAY_VENV=$(
   echo "ERR: unable to resolve DUTCHBAY_VENV" >&2
   return 1 2>/dev/null || exit 1
 fi
+if ! dutchbay_require_venv_lock "$_DUTCHBAY_VENV"; then
+  return 1 2>/dev/null || exit 1
+fi
 
 if [ ! -x "$_DUTCHBAY_VENV/bin/python" ]; then
   if ! "$_DUTCHBAY_REPO_ROOT/setup_venv.sh"; then
