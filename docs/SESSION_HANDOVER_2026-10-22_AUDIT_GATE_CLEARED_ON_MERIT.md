@@ -132,9 +132,11 @@ Open, all recorded on #1353, none owned:
   (`pyproject.toml:108` does declare `streamlit>=1.40`; the conclusion survives, the reason does
   not). Both fragments compile into the same `### Fixed` section. **Must close before the next
   release compiles `changelog.d/`.**
-- **P-8** (same comment) — `app/streamlit_app.py:68` and `:117` pass `use_container_width`, whose
-  announced removal date was 2025-12-31. It works in both 1.62.0 and 1.66.1, so nothing is urgent,
-  but a future minor can drop it. Migration is mechanical: `width="stretch"`.
+- **P-8** (same comment) — `analytics/dashboard/streamlit_app.py:68` and `:117` pass
+  `use_container_width`, whose announced removal date was 2025-12-31. It works in both 1.62.0 and
+  1.66.1, so nothing is urgent, but a future minor can drop it. Migration is mechanical:
+  `width="stretch"`. That is the only module in the tree importing `streamlit`; there is no
+  `app/streamlit_app.py`, which is what the #1353 item first said.
 - **#1359–#1363** — Dependabot's 2026-10-14 batch, still open, still red on `INTAKE-01` because no
   non-bot comment on #1353 names them. They fill `open-pull-requests-limit: 5`, so no further pip
   version-update PR can open until they clear. This needs an owner, not a decision.
