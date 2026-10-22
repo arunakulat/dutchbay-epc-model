@@ -818,10 +818,10 @@ def _validate_provenance(
     method_sha256: object,
 ) -> None:
     _require_text(source_locator, "source_locator")
-    if not isinstance(source_bytes, bytes) or not source_bytes:
-        raise ValueError("source_bytes must be non-empty immutable bytes.")
-    if not isinstance(method_bytes, bytes) or not method_bytes:
-        raise ValueError("method_bytes must be non-empty immutable bytes.")
+    if type(source_bytes) is not bytes or not source_bytes:
+        raise ValueError("source_bytes must be non-empty exact built-in bytes.")
+    if type(method_bytes) is not bytes or not method_bytes:
+        raise ValueError("method_bytes must be non-empty exact built-in bytes.")
     if (
         len(source_bytes) > _MAX_PROVENANCE_BYTES
         or len(method_bytes) > _MAX_PROVENANCE_BYTES
@@ -1129,7 +1129,7 @@ def _build_artifacts(
         raise EYAActualBridgeError(
             "INVALID_INPUT", "boundary evidence type is invalid."
         )
-    if not isinstance(attributions, tuple) or not all(
+    if type(attributions) is not tuple or not all(
         type(item) is EYAGapAttributionEvidence for item in attributions
     ):
         raise EYAActualBridgeError(

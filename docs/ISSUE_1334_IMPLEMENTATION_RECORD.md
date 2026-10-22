@@ -26,6 +26,15 @@ sole implementation authority for this second corrective successor. It retains t
 three-path allowlist above and confers no issue, pull-request, merge, release, reliance, or
 HOLD authority.
 
+The second corrective successor was rejected by assurance review in issue comment
+`6346129597` as `D4-ASSURANCE-R3-001`; domain review accepted its exact object and finance
+review passed its substantive controls but stopped on protected-main drift. Corrective lease
+`L-1334-D4-007` in that comment is the sole implementation authority for this third
+corrective successor. It authorizes rebasing the existing three D4 commits onto exact
+`origin/main` `86ca5732535850c9ab47253d37cbee29ba9fa276` and editing only the same
+three-path corrective allowlist. It grants no issue, pull-request, review, merge, release,
+reliance, or HOLD authority.
+
 Before mutation, the recovery writer freshly read the complete current 75-row active
 GWTF CSV (SHA-256
 `4b0d4c91ea9fcf0b2b12e41b37d68f4786175ebad342bd3c3f4950ccc3b5b668`), including the
@@ -74,6 +83,28 @@ both `8c4d0761545d1c6073d92c45d7de989e12281a1b`. A read-only live GitHub observa
 showed that remote `main` had subsequently advanced to
 `0255c1fd1bb7ec6ddc9a06cb90e8a3df1267a318`; no fetch or ref mutation was performed
 because this corrective lease is pinned to the recorded predecessor and local base.
+
+Before third-corrective mutation, the writer freshly read the complete current 75-row GWTF
+CSV (unchanged SHA-256 `4b0d4c91ea9fcf0b2b12e41b37d68f4786175ebad342bd3c3f4950ccc3b5b668`),
+including the exact CASPER, CESSPIT, and CCCDIR rows; complete `AGENTS.md`, `CLAUDE.md`,
+steward skill, and all four RECRUIT-01 modules; live issue #1334 and the controlling lease
+comment; the D1-D4/resource sources, tests, and implementation records; and the
+resolver-selected `docs/SESSION_HANDOVER_2026-10-22_AUDIT_GATE_CLEARED_ON_MERIT.md`
+plus its declared D3, D2, work-list, capability-roadmap, v15.6.1 startup, platform-plan,
+H08, and RECRUIT-01 recovery lineage. The resolver selected the 22 October record from
+current `origin/main`; the GWTF bootstrap loaded 75/75 active rules. The governed
+environment passed with Python 3.12.14, 311 locked distributions, non-editable package
+metadata, active-worktree imports, and no foreign checkout paths.
+
+The leased predecessor was clean at commit
+`c8f2692b5c4d7c042bf28c1e437865469f6eb91b`, tree
+`b2b1be295f467fd30e44ebb2b10e921437407204`. Its seven-path Git-blob manifest SHA-256
+was `c8f047fff01074df670bba0ed4e1cd265a3ba37ae487c567127e3d7d507844a5`.
+The authorized three-commit rebase onto `86ca5732535850c9ab47253d37cbee29ba9fa276`
+completed without conflict and produced commit `be5896719a6bd454ff0ec89d4a970aab9759184b`,
+tree `78406543c3b2ea5087c83c293bb31653cf5e1bf8`; every one of the seven D4
+Git blobs and the complete manifest digest remained byte-identical. The merge base then
+equalled the required protected base before any content edit.
 
 ## Contract and exact equation
 
@@ -183,6 +214,15 @@ proposal decision/HOLD/default/update/candidate/authority state, and receipt HOL
 authority, mutation, and residual state. Direct nested mutation followed by complete-result
 serialization must replay and fail closed.
 
+The third corrective suite adds a tuple subclass whose indexed stored attribution is a
+cross-project substitution while iteration exposes a valid attribution. D4 now requires
+`type(attribution_evidence) is tuple` before defensive reconstruction at the shared build
+and retained-result replay boundary, so the hostile object is rejected as `INVALID_INPUT`
+before attribution digest construction, result retention, or serialization. The same audit
+confirmed that D4-owned `category_components` and `proposed_updates` already require exact
+built-in tuples. Retained source and method artifacts now likewise require exact built-in
+`bytes`; representative tuple- and bytes-subclass controls pin each boundary.
+
 ## Predecessor and finding disposition
 
 | Finding family | D4 disposition |
@@ -199,6 +239,7 @@ serialization must replay and fail closed.
 | `D4-ASSURANCE-R1-002` false formatting and main-sync receipts | `CLOSED` by replacing both claims with the exact corrective results and distinguishing candidate HEAD from `origin/main`/merge base |
 | `D4-ASSURANCE-R2-001` subclass-overridable energy validation | `CLOSED` in the second corrective candidate by requiring exact `OperationalEnergyQuantity`, validating canonical stored fields without method dispatch, and adding hostile subclass construction and serialization controls |
 | `D4-FIN-R2-01` post-construction serialization laundering | `CLOSED` in the second corrective candidate by revalidating every public D4 dump, replaying retained sources immediately before complete-result output, and adding proposal, receipt, component, quantity, and complete-result mutation controls |
+| `D4-ASSURANCE-R3-001` tuple-subclass attribution substitution | `CLOSED` in the third corrective candidate by requiring an exact built-in attribution tuple at both construction and retained replay, rejecting divergent indexed/iterated values before digest or retention, and pinning the other D4-owned retained-container boundaries |
 
 ## Deliberate limitations
 
@@ -236,3 +277,24 @@ forward as corrective-candidate evidence.
 | Exact-file pre-commit | governed `pre-commit run --files` over the exact three-path second-corrective allowlist | every applicable hook passed with no rewrite; TOML and YAML hooks skipped because the allowlist contains neither file type |
 | Main synchronization | compare the leased predecessor, local `origin/main`, and merge base before second-corrective mutation; separately read live GitHub without mutating refs | predecessor `35bd90fefff2878813ba0190dbaeffb4f51f3507`; local `origin/main` and merge base both `8c4d0761545d1c6073d92c45d7de989e12281a1b`; live remote `main` observed at `0255c1fd1bb7ec6ddc9a06cb90e8a3df1267a318` |
 | Diff/status hygiene | `git diff --check` and exact corrective-allowlist inspection immediately before freeze | passed; exactly the three leased allowlist paths differ from the predecessor |
+
+### Third corrective verification (`L-1334-D4-007`)
+
+These receipts supersede earlier corrective results only where the third-corrective source,
+test, record, or protected base changed. Hosted CI and fresh independent R3 review remain
+coordinator-owned gates.
+
+| Check | Exact command | Result |
+|---|---|---|
+| Governed environment | `DUTCHBAY_VENV=/workspace/dutchbay-epc-model/.venv bash check_venv.sh --no-bootstrap` | PASS; Python 3.12.14, 311 locked distributions, non-editable install, no foreign checkout paths, and imports from this worktree |
+| GWTF bootstrap | `DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" PYTHONPATH="$PWD"` plus governed Python `dutchbay_bootstrap_rules.py` | 75/75 active v3.0 rules loaded |
+| Resolver | governed Python `scripts/list_session_handover_records.py` after the authorized rebase | exit 0; selected the 22 October PERSIST-01 record first at protected commit `86ca5732535850c9ab47253d37cbee29ba9fa276` |
+| Rebase continuity | compare the sorted seven-path `path<TAB>git-blob-SHA` manifest before and after `git rebase origin/main` | conflict-free; byte-identical manifest, SHA-256 `c8f047fff01074df670bba0ed4e1cd265a3ba37ae487c567127e3d7d507844a5`; merge base equals `86ca5732535850c9ab47253d37cbee29ba9fa276` |
+| D4/import focus | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_eya_actual_bridge.py tests/contracts/test_contracts_v14_import_surface.py -x` | 48 passed in 10.59 s |
+| D1-D4/resource/import focus | governed Python `-m pytest -p no:cacheprovider --no-cov -q` on the resource, D1, D2, D3, D4, and v14 import-surface modules | 309 passed in 11.65 s |
+| D4 targeted coverage | governed Python `-m pytest -p no:cacheprovider -q tests/contracts/test_eya_actual_bridge.py --cov=analytics.operational.eya_bridge --cov-report=term-missing --cov-fail-under=95` | 42 passed in 82.29 s; 95.43% (634 statements, 29 missing) |
+| Shared contract suite | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/contracts` | 1680 passed in 83.90 s |
+| Strict source types | governed Python `-m mypy --no-incremental analytics/operational/eya_bridge.py` | success; no issues in one source file |
+| Ruff lint/format | governed `ruff check` and `ruff format --check` over the D4 source and test | all checks passed; both files already formatted |
+| Exact-file pre-commit | governed `pre-commit run --files` over the exact three-path third-corrective allowlist | every applicable hook passed; TOML and YAML hooks skipped because the allowlist contains neither file type |
+| Protected-head and diff hygiene | `git ls-remote origin refs/heads/main`; `git diff --check`; exact corrective and branch allowlist comparisons | remote and local `origin/main` remain `86ca5732535850c9ab47253d37cbee29ba9fa276`; diff check passed; exactly three corrective paths and the expected seven total D4 paths |

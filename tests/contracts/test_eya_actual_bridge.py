@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+from collections.abc import Iterator
 from dataclasses import FrozenInstanceError, replace
 from datetime import date, timedelta
 from fractions import Fraction
@@ -73,6 +74,32 @@ class _HostileEnergyQuantity(OperationalEnergyQuantity):
 
     def as_fraction(self) -> Fraction:
         return self.reported_fraction
+
+
+class _DivergentAttributionTuple(tuple[EYAGapAttributionEvidence, ...]):
+    """Expose one stored attribution while iterating over another."""
+
+    iterated_value: EYAGapAttributionEvidence
+
+    def __new__(
+        cls,
+        stored_value: EYAGapAttributionEvidence,
+        iterated_value: EYAGapAttributionEvidence,
+    ) -> _DivergentAttributionTuple:
+        instance = super().__new__(cls, (stored_value,))
+        instance.iterated_value = iterated_value
+        return instance
+
+    def __iter__(self) -> Iterator[EYAGapAttributionEvidence]:
+        return iter((self.iterated_value,))
+
+
+class _TupleSubclass(tuple[object, ...]):
+    """Represent a non-exact immutable sequence for boundary controls."""
+
+
+class _BytesSubclass(bytes):
+    """Represent non-exact retained provenance bytes."""
 
 
 def _evidence(
@@ -564,6 +591,64 @@ def test_duplicate_category_and_cross_project_attribution_fail_closed(
     with pytest.raises(EYAActualBridgeError) as captured:
         build_eya_actual_bridge(resource, operational, spec, boundary, (hostile,))
     assert captured.value.code == "ATTRIBUTION_MISMATCH"
+
+
+def test_divergent_tuple_subclass_is_rejected_before_attribution_use(
+    annual_sources: tuple[ResourceAssessment, OperationalAEPResult],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    resource, operational = annual_sources
+    spec, boundary = _bridge_inputs(resource, operational)
+    valid = _attribution("method_model", "0", spec)
+    substituted = replace(valid, project_id="other-project")
+    hostile = _DivergentAttributionTuple(substituted, valid)
+
+    assert hostile[0] is substituted
+    assert tuple(hostile) == (valid,)
+
+    def unexpected_digest(_: EYAGapAttributionEvidence) -> str:
+        raise AssertionError("hostile attribution reached digest construction")
+
+    monkeypatch.setattr(bridge_module, "_attribution_claim_sha256", unexpected_digest)
+    with pytest.raises(EYAActualBridgeError) as captured:
+        build_eya_actual_bridge(resource, operational, spec, boundary, hostile)
+    assert captured.value.code == "INVALID_INPUT"
+
+
+def test_other_retained_containers_require_exact_built_in_types(
+    annual_sources: tuple[ResourceAssessment, OperationalAEPResult],
+) -> None:
+    resource, operational = annual_sources
+    result = _complete_bridge(resource, operational)
+    _, boundary = _bridge_inputs(resource, operational)
+
+    with pytest.raises(ValueError, match="exact built-in bytes"):
+        replace(boundary, source_bytes=_BytesSubclass(boundary.source_bytes))
+    with pytest.raises(ValueError, match="exact built-in bytes"):
+        replace(boundary, method_bytes=_BytesSubclass(boundary.method_bytes))
+    with pytest.raises(ValueError, match="empty tuple"):
+        replace(result.finance_proposal, proposed_updates=_TupleSubclass())
+
+    forged = copy.copy(result)
+    object.__setattr__(
+        forged,
+        "category_components",
+        _TupleSubclass(result.category_components),
+    )
+    with pytest.raises(ValueError, match="exact immutable contracts"):
+        forged.model_dump()
+
+    valid_attribution = result.attribution_evidence[0]
+    substituted_attribution = replace(valid_attribution, project_id="other-project")
+    retained_forgery = copy.copy(result)
+    object.__setattr__(
+        retained_forgery,
+        "attribution_evidence",
+        _DivergentAttributionTuple(substituted_attribution, valid_attribution),
+    )
+    with pytest.raises(EYAActualBridgeError) as captured:
+        retained_forgery.model_dump()
+    assert captured.value.code == "INVALID_INPUT"
 
 
 @pytest.mark.parametrize(
