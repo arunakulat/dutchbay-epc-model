@@ -402,12 +402,29 @@ for distribution_entry in metadata.distributions():
     if canonical not in installed:
         installed[canonical] = raw_version
 
+# Read the project's install record from the environment, never from the checkout.  An
+# editable install leaves a git-ignored ``<name>.egg-info`` in the checkout root, which
+# is first on sys.path here and carries no direct_url.json, so a plain lookup resolves
+# to it and silently reports "not editable" (#1376).  The environment may itself live
+# inside the checkout (the portable ``.venv`` fallback), so only paths under the
+# checkout but outside sys.prefix are skipped.
+prefix = Path(sys.prefix).resolve(strict=True)
+environment_path = []
+for raw_path in sys.path:
+    try:
+        candidate = Path(raw_path or os.getcwd()).resolve(strict=True)
+    except OSError:
+        continue
+    if candidate.is_relative_to(checkout) and not candidate.is_relative_to(prefix):
+        continue
+    environment_path.append(str(candidate))
+
 editable = False
 project_install_url = None
-try:
-    distribution = metadata.distribution(project_distribution)
-except metadata.PackageNotFoundError:
-    distribution = None
+distribution = next(
+    iter(metadata.distributions(name=project_distribution, path=environment_path)),
+    None,
+)
 if distribution is not None:
     direct_url_text = distribution.read_text("direct_url.json")
     if direct_url_text:
