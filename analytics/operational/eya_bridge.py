@@ -24,9 +24,29 @@ from typing import Any, Final, Literal, TypeAlias
 
 from analytics.operational.aep import (
     OperationalAEPError,
+    OperationalAEPInput,
     OperationalAEPResult,
+    OperationalAEPSpec,
+    OperationalBoundaryEvidence,
     OperationalEnergyQuantity,
+    OperationalSupplementalEnergyEvidence,
     estimate_operational_aep,
+)
+from analytics.operational.contracts import (
+    OperationalAssessmentInput,
+    OperationalColumnBinding,
+    OperationalDatasetEvidence,
+)
+from analytics.operational.normalization import (
+    OperationalColumnExclusion,
+    OperationalExcludedRowReceipt,
+    OperationalGroupUniverse,
+    OperationalNormalizationError,
+    OperationalNormalizationResult,
+    OperationalQualityReceipt,
+    OperationalRowExclusion,
+    OperationalTimezoneRules,
+    normalize_operational_csv,
 )
 from analytics.resource_contracts import (
     DEFAULT_IDENTITY_RTOL,
@@ -1014,6 +1034,241 @@ def resource_assessment_claim_sha256(value: ResourceAssessment) -> str:
         ) from exc
 
 
+def _exact_buffer_bytes(value: object, field_name: str) -> bytes:
+    """Detach one bytes-compatible retained artifact through its buffer."""
+    if not isinstance(value, bytes):
+        raise ValueError(f"{field_name} must be immutable bytes.")
+    return memoryview(value).tobytes()
+
+
+def _reconstruct_d1_evidence(value: object) -> OperationalDatasetEvidence:
+    """Reconstruct one exact D1 envelope and its exact tuple of columns."""
+    if (
+        type(value) is not OperationalDatasetEvidence
+        or type(value.columns) is not tuple
+    ):
+        raise ValueError("retained D1 evidence must use exact public contracts.")
+    columns = tuple(
+        OperationalColumnBinding(item.role, item.source_column, item.unit)
+        for item in value.columns
+        if type(item) is OperationalColumnBinding
+    )
+    if len(columns) != len(value.columns):
+        raise ValueError("retained D1 columns contain a non-exact binding.")
+    if type(value.lineage_source_sha256) is not tuple:
+        raise ValueError("retained D1 lineage must use an exact tuple.")
+    return OperationalDatasetEvidence(
+        logical_id=value.logical_id,
+        kind=value.kind,
+        source_class=value.source_class,
+        timezone_treatment=value.timezone_treatment,
+        source_timezone=value.source_timezone,
+        ambiguous_time_policy=value.ambiguous_time_policy,
+        nonexistent_time_policy=value.nonexistent_time_policy,
+        observation_status=value.observation_status,
+        lineage_source_sha256=tuple(value.lineage_source_sha256),
+        derivation_method_sha256=value.derivation_method_sha256,
+        source_locator=value.source_locator,
+        source_sha256=value.source_sha256,
+        coverage_start_utc=value.coverage_start_utc,
+        coverage_end_utc=value.coverage_end_utc,
+        interval_basis=value.interval_basis,
+        interval_seconds=value.interval_seconds,
+        row_count=value.row_count,
+        columns=columns,
+    )
+
+
+def _reconstruct_assessment(value: object) -> OperationalAssessmentInput:
+    """Reconstruct one exact D1 assessment before D3 replay."""
+    if (
+        type(value) is not OperationalAssessmentInput
+        or type(value.datasets) is not tuple
+    ):
+        raise ValueError("retained D1 assessments must use exact public contracts.")
+    return OperationalAssessmentInput(
+        schema=value.schema,
+        project_id=value.project_id,
+        assessment_id=value.assessment_id,
+        purpose=value.purpose,
+        assessment_start_utc=value.assessment_start_utc,
+        assessment_end_utc=value.assessment_end_utc,
+        datasets=tuple(_reconstruct_d1_evidence(item) for item in value.datasets),
+        raw_evidence_only=value.raw_evidence_only,
+        canonical_finance_eligible=value.canonical_finance_eligible,
+        bankable=value.bankable,
+        lender_eligible=value.lender_eligible,
+        board_eligible=value.board_eligible,
+    )
+
+
+def _reconstruct_timezone_rules(value: object) -> OperationalTimezoneRules | None:
+    """Detach retained TZif bytes before any parser receives them."""
+    if value is None:
+        return None
+    if type(value) is not OperationalTimezoneRules:
+        raise ValueError("retained timezone rules use the wrong runtime contract.")
+    return OperationalTimezoneRules(
+        source_timezone=value.source_timezone,
+        tzif_bytes=_exact_buffer_bytes(value.tzif_bytes, "tzif_bytes"),
+        source_locator=value.source_locator,
+    )
+
+
+def _replay_d2_with_exact_bytes(
+    value: object,
+    *,
+    active: set[int],
+) -> OperationalNormalizationResult:
+    """Replay D2 after detaching every retained byte-bearing input."""
+    if type(value) is not OperationalNormalizationResult:
+        raise ValueError("retained D2 result uses the wrong runtime contract.")
+    marker = id(value)
+    if marker in active:
+        raise ValueError("retained D2 result graph contains a cycle.")
+    active.add(marker)
+    try:
+        evidence = _reconstruct_d1_evidence(value.evidence)
+        if type(value.lineage_source_bytes) is not tuple:
+            raise ValueError("retained D2 lineage bytes must use an exact tuple.")
+        lineage = tuple(
+            _exact_buffer_bytes(item, "lineage_source_bytes")
+            for item in value.lineage_source_bytes
+        )
+        derivation = (
+            None
+            if value.derivation_method_bytes is None
+            else _exact_buffer_bytes(
+                value.derivation_method_bytes, "derivation_method_bytes"
+            )
+        )
+        timezone_rules = _reconstruct_timezone_rules(value.timezone_rules)
+        group_universe = value.group_universe
+        if group_universe is not None:
+            if type(group_universe) is not OperationalGroupUniverse:
+                raise ValueError("retained group universe uses the wrong contract.")
+            group_universe = OperationalGroupUniverse(
+                _replay_d2_with_exact_bytes(
+                    group_universe.asset_result,
+                    active=active,
+                )
+            )
+        receipt = value.receipt
+        if type(receipt) is not OperationalQualityReceipt:
+            raise ValueError("retained D2 receipt uses the wrong runtime contract.")
+        if (
+            type(receipt.column_exclusions) is not tuple
+            or type(receipt.row_exclusions) is not tuple
+        ):
+            raise ValueError("retained D2 exclusions must use exact tuples.")
+        column_exclusions = tuple(
+            OperationalColumnExclusion(item.source_column, item.reason)
+            for item in receipt.column_exclusions
+            if type(item) is OperationalColumnExclusion
+        )
+        row_exclusions = tuple(
+            OperationalRowExclusion(item.source_row_number, item.reason)
+            for item in receipt.row_exclusions
+            if type(item) is OperationalExcludedRowReceipt
+        )
+        if len(column_exclusions) != len(receipt.column_exclusions) or len(
+            row_exclusions
+        ) != len(receipt.row_exclusions):
+            raise ValueError("retained D2 exclusions contain non-exact contracts.")
+        return normalize_operational_csv(
+            _exact_buffer_bytes(value.source_bytes, "source_bytes"),
+            evidence,
+            lineage_source_bytes=lineage,
+            derivation_method_bytes=derivation,
+            timezone_rules=timezone_rules,
+            group_universe=group_universe,
+            column_exclusions=column_exclusions,
+            row_exclusions=row_exclusions,
+        )
+    finally:
+        active.remove(marker)
+
+
+def _reconstruct_operational_inputs(value: object) -> OperationalAEPInput:
+    """Reconstruct exact D1-D3 inputs before operational replay."""
+    if type(value) is not OperationalAEPInput:
+        raise ValueError("retained D3 inputs use the wrong runtime contract.")
+    for field_name in ("assessments", "normalized_results", "supplemental_evidence"):
+        if type(getattr(value, field_name)) is not tuple:
+            raise ValueError(f"retained D3 {field_name} must use an exact tuple.")
+    boundary = value.boundary_evidence
+    if type(boundary) is not OperationalBoundaryEvidence:
+        raise ValueError("retained D3 boundary uses the wrong runtime contract.")
+    reconstructed_boundary = OperationalBoundaryEvidence(
+        project_id=boundary.project_id,
+        effective_start_utc=boundary.effective_start_utc,
+        effective_end_exclusive_utc=boundary.effective_end_exclusive_utc,
+        meter_logical_id=boundary.meter_logical_id,
+        turbine_logical_id=boundary.turbine_logical_id,
+        availability_logical_id=boundary.availability_logical_id,
+        curtailment_logical_id=boundary.curtailment_logical_id,
+        meter_energy_basis=boundary.meter_energy_basis,
+        turbine_energy_basis=boundary.turbine_energy_basis,
+        loss_energy_basis=boundary.loss_energy_basis,
+        interval_boundary=boundary.interval_boundary,
+        excluded_flows=boundary.excluded_flows,
+        asset_universe_basis=boundary.asset_universe_basis,
+        source_locator=boundary.source_locator,
+        source_bytes=_exact_buffer_bytes(boundary.source_bytes, "source_bytes"),
+        source_sha256=boundary.source_sha256,
+        method_bytes=_exact_buffer_bytes(boundary.method_bytes, "method_bytes"),
+        method_sha256=boundary.method_sha256,
+    )
+    supplements: list[OperationalSupplementalEnergyEvidence] = []
+    for item in value.supplemental_evidence:
+        if type(item) is not OperationalSupplementalEnergyEvidence:
+            raise ValueError("retained D3 supplement uses the wrong runtime contract.")
+        supplements.append(
+            OperationalSupplementalEnergyEvidence(
+                evidence_id=item.evidence_id,
+                component=item.component,
+                project_id=item.project_id,
+                effective_start_utc=item.effective_start_utc,
+                effective_end_exclusive_utc=item.effective_end_exclusive_utc,
+                value_kwh=item.value_kwh,
+                boundary=item.boundary,
+                source_locator=item.source_locator,
+                source_bytes=_exact_buffer_bytes(item.source_bytes, "source_bytes"),
+                source_sha256=item.source_sha256,
+                method_bytes=_exact_buffer_bytes(item.method_bytes, "method_bytes"),
+                method_sha256=item.method_sha256,
+            )
+        )
+    active: set[int] = set()
+    return OperationalAEPInput(
+        assessments=tuple(_reconstruct_assessment(item) for item in value.assessments),
+        normalized_results=tuple(
+            _replay_d2_with_exact_bytes(item, active=active)
+            for item in value.normalized_results
+        ),
+        boundary_evidence=reconstructed_boundary,
+        supplemental_evidence=tuple(supplements),
+    )
+
+
+def _reconstruct_operational_spec(value: object) -> OperationalAEPSpec:
+    """Reconstruct the exact D3 specification without mapping dispatch."""
+    if type(value) is not OperationalAEPSpec:
+        raise ValueError("retained D3 spec uses the wrong runtime contract.")
+    return OperationalAEPSpec(
+        project_id=value.project_id,
+        assessment_id=value.assessment_id,
+        effective_start_utc=value.effective_start_utc,
+        effective_end_exclusive_utc=value.effective_end_exclusive_utc,
+        temporal_basis=value.temporal_basis,
+        meter_logical_id=value.meter_logical_id,
+        turbine_logical_id=value.turbine_logical_id,
+        availability_logical_id=value.availability_logical_id,
+        curtailment_logical_id=value.curtailment_logical_id,
+        absolute_tolerance_kwh=value.absolute_tolerance_kwh,
+    )
+
+
 def _replay_operational_result(value: object) -> OperationalAEPResult:
     if type(value) is not OperationalAEPResult:
         raise EYAActualBridgeError(
@@ -1021,8 +1276,18 @@ def _replay_operational_result(value: object) -> OperationalAEPResult:
             "operational result must use the exact D3 public contract.",
         )
     try:
-        replay = estimate_operational_aep(value.inputs, value.spec)
-    except (OperationalAEPError, AttributeError, TypeError, ValueError) as exc:
+        replay = estimate_operational_aep(
+            _reconstruct_operational_inputs(value.inputs),
+            _reconstruct_operational_spec(value.spec),
+        )
+    except (
+        OperationalAEPError,
+        OperationalNormalizationError,
+        AttributeError,
+        BufferError,
+        TypeError,
+        ValueError,
+    ) as exc:
         raise EYAActualBridgeError(
             "OPERATIONAL_PROVENANCE_MISMATCH",
             "operational result no longer replays from retained D1-D3 inputs.",

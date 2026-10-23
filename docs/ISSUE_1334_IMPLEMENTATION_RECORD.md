@@ -35,6 +35,15 @@ corrective successor. It authorizes rebasing the existing three D4 commits onto 
 three-path corrective allowlist. It grants no issue, pull-request, review, merge, release,
 reliance, or HOLD authority.
 
+The third corrective successor was accepted by the renewable-energy/domain and finance/KPI
+reviewers but rejected by software assurance in issue comment `6359540946` as
+`D4-ASSURANCE-R4-001`. The retained D2 boundary could hash the buffer of a `bytes` subclass
+while dispatching CSV parsing through its overridden `decode()` method, so D4's transitive
+D3 replay did not prove that the bytes named by the source digest were the measurements used.
+Corrective lease `L-1334-D4-008` in that comment is the sole implementation authority for
+this fourth corrective successor. Its exact allowlist is the D4 module, the D4 test, and
+this record. Lower-layer D1/D2/D3/resource source and tests remain forbidden.
+
 Before mutation, the recovery writer freshly read the complete current 75-row active
 GWTF CSV (SHA-256
 `4b0d4c91ea9fcf0b2b12e41b37d68f4786175ebad342bd3c3f4950ccc3b5b668`), including the
@@ -105,6 +114,25 @@ completed without conflict and produced commit `be5896719a6bd454ff0ec89d4a970aab
 tree `78406543c3b2ea5087c83c293bb31653cf5e1bf8`; every one of the seven D4
 Git blobs and the complete manifest digest remained byte-identical. The merge base then
 equalled the required protected base before any content edit.
+
+Before fourth-corrective mutation, the writer independently repeated the complete current
+governance, framework, steward, RECRUIT-01, resolver-selected handover-chain, live #1334 and
+#1110, D1-D4/resource implementation-record, and relevant source/test ingress. The current
+GWTF SHA-256 remained
+`4b0d4c91ea9fcf0b2b12e41b37d68f4786175ebad342bd3c3f4950ccc3b5b668`; bootstrap loaded
+75/75 active rules. The governed environment passed with Python 3.12.14, 311 locked
+distributions, non-editable package metadata, active-worktree imports, and no foreign
+checkout paths. The resolver selected the 22 October handover first and its complete
+declared D3, D2, work-list, capability-roadmap, v15.6.1 startup, platform-plan, H08, and
+RECRUIT-01 recovery lineage was read.
+
+The leased predecessor was clean at commit
+`7110fd213d08318fba2fcccaa23af018786f2f75`, tree
+`9eaa8b266a54e75447796cead0f3dd57a60904b2`; local `origin/main`, its merge base, and
+the first live remote observation all remained
+`86ca5732535850c9ab47253d37cbee29ba9fa276`. Issue #1334 and the capability tracker
+remained open, issue #1110 remained `OPEN` with its Board/lender `HOLD`, and the complete
+open-PR sweep contained no D4 overlap.
 
 ## Contract and exact equation
 
@@ -223,6 +251,15 @@ confirmed that D4-owned `category_components` and `proposed_updates` already req
 built-in tuples. Retained source and method artifacts now likewise require exact built-in
 `bytes`; representative tuple- and bytes-subclass controls pin each boundary.
 
+The fourth corrective suite adds a full D2-to-D3-to-D4 hostile control whose retained source
+is a `bytes` subclass with an invalid underlying buffer and an overridden `decode()` that
+returns the valid annual meter CSV. D2 construction and D3 estimation deliberately succeed,
+proving the negative control reaches the transitive boundary. Before either D4 claim
+construction or bridge retention, D4 now reconstructs every retained D1-D3 container and
+replays each D2 result from exact built-in bytes detached through the immutable buffer
+protocol. Hashing and UTF-8 parsing therefore consume the same non-overridable byte value;
+the hostile underlying buffer fails closed as `OPERATIONAL_PROVENANCE_MISMATCH`.
+
 ## Predecessor and finding disposition
 
 | Finding family | D4 disposition |
@@ -240,6 +277,7 @@ built-in tuples. Retained source and method artifacts now likewise require exact
 | `D4-ASSURANCE-R2-001` subclass-overridable energy validation | `CLOSED` in the second corrective candidate by requiring exact `OperationalEnergyQuantity`, validating canonical stored fields without method dispatch, and adding hostile subclass construction and serialization controls |
 | `D4-FIN-R2-01` post-construction serialization laundering | `CLOSED` in the second corrective candidate by revalidating every public D4 dump, replaying retained sources immediately before complete-result output, and adding proposal, receipt, component, quantity, and complete-result mutation controls |
 | `D4-ASSURANCE-R3-001` tuple-subclass attribution substitution | `CLOSED` in the third corrective candidate by requiring an exact built-in attribution tuple at both construction and retained replay, rejecting divergent indexed/iterated values before digest or retention, and pinning the other D4-owned retained-container boundaries |
+| `D4-ASSURANCE-R4-001` transitive D2 source-buffer/decode substitution | `CLOSED` in the fourth corrective candidate by rebuilding exact D1-D3 containers, detaching retained source, lineage, derivation, TZif, boundary, and supplemental artifacts from their immutable buffers before D2/D3 replay, and rejecting the full hostile D2→D3→D4 control before claim construction or retention |
 
 ## Deliberate limitations
 
@@ -298,3 +336,25 @@ coordinator-owned gates.
 | Ruff lint/format | governed `ruff check` and `ruff format --check` over the D4 source and test | all checks passed; both files already formatted |
 | Exact-file pre-commit | governed `pre-commit run --files` over the exact three-path third-corrective allowlist | every applicable hook passed; TOML and YAML hooks skipped because the allowlist contains neither file type |
 | Protected-head and diff hygiene | `git ls-remote origin refs/heads/main`; `git diff --check`; exact corrective and branch allowlist comparisons | remote and local `origin/main` remain `86ca5732535850c9ab47253d37cbee29ba9fa276`; diff check passed; exactly three corrective paths and the expected seven total D4 paths |
+
+### Fourth corrective verification (`L-1334-D4-008`)
+
+These are writer-side checkpoint receipts, not independent acceptance, hosted CI, canonical
+adoption, or authority to lift any `HOLD`.
+
+| Check | Exact command | Result |
+|---|---|---|
+| Governed environment | `DUTCHBAY_VENV=/workspace/dutchbay-epc-model/.venv PYTHONPATH="$PWD" ./check_venv.sh` | PASS; Python 3.12.14, 311 locked distributions, non-editable install, active-worktree imports, and no foreign checkout paths |
+| GWTF bootstrap | `DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" PYTHONPATH="$PWD"` plus governed Python `dutchbay_bootstrap_rules.py` | 75/75 active v3.0 rules loaded |
+| Resolver | governed Python `scripts/list_session_handover_records.py` | exit 0; selected the 22 October PERSIST-01 record first at protected commit `86ca5732535850c9ab47253d37cbee29ba9fa276` |
+| D4/import focus | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_eya_actual_bridge.py tests/contracts/test_contracts_v14_import_surface.py -x` | 50 passed in 20.16 s |
+| D1-D4/resource/import focus | governed Python `-m pytest -p no:cacheprovider --no-cov -q` on the resource, D1, D2, D3, D4, and v14 import-surface modules | 311 passed in 20.55 s |
+| D4 targeted coverage | governed Python `-m pytest -p no:cacheprovider -q tests/contracts/test_eya_actual_bridge.py --cov=analytics.operational.eya_bridge --cov-report=term-missing --cov-fail-under=95` | 44 passed in 132.88 s; 95.35% (710 statements, 33 missing) |
+| Shared contract suite | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/contracts` | 1682 passed in 100.70 s |
+| Strict source types | governed Python `-m mypy --no-incremental analytics/operational/eya_bridge.py` | success; no issues in one source file |
+| Ruff lint/format | governed `ruff check` and `ruff format --check` over the D4 source and test | all checks passed; both files already formatted after one governed formatting pass |
+| Transitive hostile control | focused D4 test constructs a D2 result from divergent buffer/`decode()` bytes, then constructs D3 and probes D4 claim/build | D2 and D3 accept the crafted object with `8395 kWh`; D4 claim construction and bridge construction both reject as `OPERATIONAL_PROVENANCE_MISMATCH` |
+| Exact hostile regression | governed Python `-m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_eya_actual_bridge.py::test_transitive_d2_bytes_decode_substitution_fails_before_d4_claim` | 1 passed in 1.08 s |
+| Exact-file pre-commit | governed `pre-commit run --files` over the exact three-path fourth-corrective allowlist | the first pass normalized source imports with `isort`; focused tests, Ruff, and mypy were repeated after that import-only rewrite, and the second pass completed with every applicable hook passed |
+| Changelog fragment compilation | governed Python `scripts/compile_changelog.py --dry-run` | exit 0; no file mutation |
+| Protected-head and diff hygiene | `git ls-remote origin refs/heads/main`; `git diff --check`; exact corrective and branch allowlist comparisons | live and local `origin/main` remain `86ca5732535850c9ab47253d37cbee29ba9fa276`; merge base is the same protected commit; diff check passed; exactly three corrective paths and the expected seven total D4 paths |

@@ -102,6 +102,20 @@ class _BytesSubclass(bytes):
     """Represent non-exact retained provenance bytes."""
 
 
+class _DivergentDecodedBytes(bytes):
+    """Hash one byte buffer while presenting different decoded CSV text."""
+
+    decoded: str
+
+    def __new__(cls, buffered: bytes, decoded: str) -> _DivergentDecodedBytes:
+        instance = super().__new__(cls, buffered)
+        instance.decoded = decoded
+        return instance
+
+    def decode(self, *_args: object, **_kwargs: object) -> str:
+        return self.decoded
+
+
 def _evidence(
     logical_id: str,
     kind: str,
@@ -557,6 +571,137 @@ def test_forged_d3_result_is_replayed_and_rejected(
     with pytest.raises(EYAActualBridgeError) as captured:
         build_eya_actual_bridge(resource, forged, spec, boundary)
     assert captured.value.code == "OPERATIONAL_PROVENANCE_MISMATCH"
+
+
+def test_transitive_d2_bytes_decode_substitution_fails_before_d4_claim(
+    annual_sources: tuple[ResourceAssessment, OperationalAEPResult],
+) -> None:
+    resource, operational = annual_sources
+    retained_meter = operational.inputs.normalized_results[0]
+    valid_meter_csv = retained_meter.source_bytes.decode("utf-8")
+    hostile_bytes = _DivergentDecodedBytes(
+        b"not the measurements used by D2/D3/D4\n",
+        valid_meter_csv,
+    )
+    hostile_evidence = replace(
+        retained_meter.evidence,
+        source_sha256=_digest(hostile_bytes),
+    )
+    hostile_meter = normalize_operational_csv(hostile_bytes, hostile_evidence)
+
+    assessments = tuple(
+        replace(
+            assessment,
+            datasets=tuple(
+                hostile_evidence if item == retained_meter.evidence else item
+                for item in assessment.datasets
+            ),
+        )
+        for assessment in operational.inputs.assessments
+    )
+    hostile_operational = estimate_operational_aep(
+        replace(
+            operational.inputs,
+            assessments=assessments,
+            normalized_results=(
+                hostile_meter,
+                *operational.inputs.normalized_results[1:],
+            ),
+        ),
+        operational.spec,
+    )
+    assert hostile_operational.component("net_meter_energy").value is not None
+    assert hostile_operational.component(
+        "net_meter_energy"
+    ).value.as_fraction() == Fraction(8_395)
+    assert _digest(hostile_bytes) == hostile_evidence.source_sha256
+    assert memoryview(hostile_bytes).tobytes() != valid_meter_csv.encode("utf-8")
+
+    with pytest.raises(EYAActualBridgeError) as captured:
+        operational_aep_claim_sha256(hostile_operational)
+    assert captured.value.code == "OPERATIONAL_PROVENANCE_MISMATCH"
+
+    eya_claim = resource_assessment_claim_sha256(resource)
+    spec = EYAActualBridgeSpec(
+        bridge_id="dutchbay.hostile-d2-bytes",
+        eya_p_level="P50",
+        expected_eya_claim_sha256=eya_claim,
+        expected_operational_claim_sha256="0" * 64,
+        category_partition_id="d4-gap-v1",
+    )
+    source = b"hostile operational provenance boundary"
+    method = b"hostile operational provenance negative control"
+    boundary = EYAActualBoundaryEvidence(
+        project_id="dutchbay",
+        asset_identity="Dutch Bay / T01 / common POC",
+        delivery_boundary="net_export_at_common_delivery_boundary",
+        temporal_comparison="frozen_standard_year_eya_to_actual_calendar_year",
+        partition_semantics="mutually_exclusive_named_net_effect_categories",
+        category_partition_id="d4-gap-v1",
+        eya_claim_sha256=eya_claim,
+        operational_claim_sha256="0" * 64,
+        source_locator="evidence/hostile-d2-boundary.txt",
+        source_bytes=source,
+        source_sha256=_digest(source),
+        method_bytes=method,
+        method_sha256=_digest(method),
+    )
+    with pytest.raises(EYAActualBridgeError) as captured:
+        build_eya_actual_bridge(resource, hostile_operational, spec, boundary)
+    assert captured.value.code == "OPERATIONAL_PROVENANCE_MISMATCH"
+
+
+def test_transitive_replay_rejects_non_exact_nested_contracts(
+    annual_sources: tuple[ResourceAssessment, OperationalAEPResult],
+) -> None:
+    _, operational = annual_sources
+    attacks: list[OperationalAEPResult] = []
+
+    def with_result(index: int, field_name: str, hostile: object) -> None:
+        result = copy.copy(operational.inputs.normalized_results[index])
+        object.__setattr__(result, field_name, hostile)
+        inputs = copy.copy(operational.inputs)
+        retained = list(inputs.normalized_results)
+        retained[index] = result
+        object.__setattr__(inputs, "normalized_results", tuple(retained))
+        forged = copy.copy(operational)
+        object.__setattr__(forged, "inputs", inputs)
+        attacks.append(forged)
+
+    with_result(0, "source_bytes", object())
+    with_result(0, "evidence", object())
+    with_result(0, "lineage_source_bytes", [])
+    with_result(0, "timezone_rules", object())
+    with_result(1, "group_universe", object())
+    with_result(0, "receipt", object())
+
+    receipt = copy.copy(operational.inputs.normalized_results[0].receipt)
+    object.__setattr__(receipt, "column_exclusions", [])
+    with_result(0, "receipt", receipt)
+
+    for field_name, hostile in (
+        ("assessments", (object(),)),
+        ("normalized_results", (object(),)),
+        ("supplemental_evidence", (object(),)),
+        ("boundary_evidence", object()),
+    ):
+        inputs = copy.copy(operational.inputs)
+        object.__setattr__(inputs, field_name, hostile)
+        forged = copy.copy(operational)
+        object.__setattr__(forged, "inputs", inputs)
+        attacks.append(forged)
+
+    wrong_inputs = copy.copy(operational)
+    object.__setattr__(wrong_inputs, "inputs", object())
+    attacks.append(wrong_inputs)
+    wrong_spec = copy.copy(operational)
+    object.__setattr__(wrong_spec, "spec", object())
+    attacks.append(wrong_spec)
+
+    for hostile in attacks:
+        with pytest.raises(EYAActualBridgeError) as captured:
+            operational_aep_claim_sha256(hostile)
+        assert captured.value.code == "OPERATIONAL_PROVENANCE_MISMATCH"
 
 
 def test_boundary_project_partition_and_claim_bindings_fail_closed(
