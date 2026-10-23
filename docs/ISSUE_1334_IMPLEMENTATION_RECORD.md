@@ -64,7 +64,7 @@ and exact target hash/absence checks passed before the first edit.
 | RECRUIT-01 module 2 | `3a3eb5b016ba32f14a5822aefcc287ea8e9b1d3a05e1d6f288974a231bc91406` | lease and recovery boundaries |
 | RECRUIT-01 module 3 | `2374dc23a0b40eb194766bcff05fa56d53c7c914b2e9164d59eef85cf2cb88f7` | independent review and attestation boundaries |
 | RECRUIT-01 module 4 | `15ba99012044709a9407a06161694a02a698d942dba27bb8d915e4b161a0d592` | staged delegation and ingress boundaries |
-| OpenOA `openoa/analysis/eya_gap_analysis.py` | commit `35e8a52c4cd8f43223f8181153d4e3f083f090d2`; SHA-256 `e0c161a34f2c1534d5613ff3341d6c4c72cc13a41950e8eef2dd8313d098d307` | category vocabulary and equation comparator only |
+| OpenOA `openoa/analysis/eya_gap_analysis.py` | commit `35e8a52c4cd8f43223f8181153d4e3f083f090d2`; SHA-256 `e0c161a34f6c1534d5613ff3341d6c4c72cc13a41950e8eef2dd8313d098d307` | category vocabulary and equation comparator only |
 
 OpenOA is a methodological comparator, not a runtime dependency, source-acceptance
 authority, professional opinion, or bankability claim. D4 imports no OpenOA code.
