@@ -12,4 +12,6 @@
   nothing caps it.
 - The `pip-audit` leg of the `Security Scan` gate now reports `No known vulnerabilities found`
   with the allowlist **empty**, so the gate is clean on merit and not by exception. No abstract
-  dependency changes: `pyproject.toml` constrains none of the three packages.
+  dependency changes: `pyproject.toml` does not mention `pillow` or `virtualenv`, and bounds
+  `streamlit` only by a `>=1.40` floor on the optional `dashboard` extra, which `1.66.1`
+  satisfies.

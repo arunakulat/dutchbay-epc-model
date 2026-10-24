@@ -5,13 +5,16 @@
 - Allowlist the eight advisories against `pillow==12.3.0` in `PIP_AUDIT_IGNORES`, the variable the
   `Makefile` reserves for a genuinely capped CVE, so the gate stops failing every pull request on
   a finding none of them can fix. The eight are fixed only in `pillow 13.0.0`; every `streamlit`
-  release up to `1.66.0`, the latest on PyPI, requires `pillow<13`; and PyPI has no `pillow`
-  release between `12.3.0` and `13.0.0`. The entries carry their reason in the `Makefile` and come
-  out the moment `streamlit` lifts the cap.
+  release up to `1.66.0` required `pillow<13`; and PyPI has no `pillow` release between `12.3.0`
+  and `13.0.0`. The entries carried their reason in the `Makefile`, to come out the moment
+  `streamlit` lifted the cap. **The cap lifted the same day, and the entries are already gone** —
+  `streamlit 1.66.1`, published 2026-10-21T17:02:55Z, raised it to `pillow<14,>=9.2.0`, so the
+  `pillow 13.0.0` bump and the removal of all eight entries land in this same release. See the
+  `pillow`/`streamlit`/`virtualenv` entry below.
 - Each of the eight needs attacker-chosen TIFF, GIF, PPM/PGM or EPS input, or a third-party PDF
   appended to through `Image.save(..., format="PDF", append=True)`, and no untrusted-input path in
   this repository reaches them. No module here imports PIL, and both `pdfplumber.open` calls read
   PDFs this repository generated itself; `contextily` does decode fetched basemap tiles through
   `PIL.Image.open`, which sniffs format from the response bytes, so that path depends on the tile
-  service rather than on the tile type. The allowlist records a capped finding, not an accepted
+  service rather than on the tile type. The allowlist recorded a capped finding, not an accepted
   exposure.
