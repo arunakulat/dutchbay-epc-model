@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -249,6 +251,55 @@ def test_editable_project_install_is_refused(
 
     with pytest.raises(environment.EnvironmentContractError, match="editable"):
         environment.validate_environment(resolved, environ={})
+
+
+def test_probe_sees_editable_install_behind_a_checkout_egg_info(tmp_path: Path) -> None:
+    """A checkout ``egg-info`` must not hide the environment's install record (#1376).
+
+    ``pip install -e`` leaves ``<name>.egg-info`` in the checkout root, which is first on
+    the probe's sys.path and has no ``direct_url.json``.  The probe runs for real here:
+    the checkout carries that egg-info and the "environment" carries the dist-info that
+    marks the install editable.
+    """
+    checkout = tmp_path / "checkout"
+    (checkout / "probe_target").mkdir(parents=True)
+    (checkout / "probe_target" / "__init__.py").write_text("", encoding="utf-8")
+    egg_info = checkout / "dutchbay_epc_model.egg-info"
+    egg_info.mkdir()
+    (egg_info / "PKG-INFO").write_text(
+        "Metadata-Version: 2.1\nName: dutchbay-epc-model\nVersion: 0.0.0\n",
+        encoding="utf-8",
+    )
+    dist_info = tmp_path / "site" / "dutchbay_epc_model-0.0.0.dist-info"
+    dist_info.mkdir(parents=True)
+    (dist_info / "METADATA").write_text(
+        "Metadata-Version: 2.1\nName: dutchbay-epc-model\nVersion: 0.0.0\n",
+        encoding="utf-8",
+    )
+    (dist_info / "direct_url.json").write_text(
+        json.dumps({"dir_info": {"editable": True}, "url": checkout.as_uri()}),
+        encoding="utf-8",
+    )
+
+    completed = subprocess.run(
+        [sys.executable, "-c", environment._PROBE],
+        cwd=checkout,
+        env={
+            **os.environ,
+            "DUTCHBAY_ACTIVE_CHECKOUT": str(checkout),
+            "DUTCHBAY_IMPORT_PROBE": "probe_target",
+            "DUTCHBAY_PROJECT_DISTRIBUTION": "dutchbay-epc-model",
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONPATH": os.pathsep.join([str(checkout), str(tmp_path / "site")]),
+        },
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    raw = json.loads(completed.stdout)
+
+    assert raw["editable_project_install"] is True
+    assert raw["project_install_url"] == checkout.as_uri()
 
 
 def test_foreign_checkout_path_is_refused(

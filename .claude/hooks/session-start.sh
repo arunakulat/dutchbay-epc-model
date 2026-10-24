@@ -100,13 +100,56 @@ DUTCHBAY_EXTRAS_DEFAULT="dev,feasibility,jobs,solar,pareto"
 DUTCHBAY_EXTRAS="${DUTCHBAY_EXTRAS:-${DUTCHBAY_INSTALL_FEASIBILITY:+dev,feasibility}}"
 DUTCHBAY_EXTRAS="${DUTCHBAY_EXTRAS:-$DUTCHBAY_EXTRAS_DEFAULT}"
 
-if [ -f "$STAMP" ] && [ "$(cat "$STAMP")" = "$(manifest_hash)|$DUTCHBAY_EXTRAS" ]; then
+# The project itself is NOT installed, editable or otherwise. The environment
+# contract (dutchbay_environment.py) refuses an editable DutchBay installation, so
+# this hook installs only the DEPENDENCIES of the selected extras and the checkout is
+# imported through PYTHONPATH (step 4), the same as the shared environment on the
+# owner's machine (scripts/development_environment.sh). A container that an earlier
+# version of this hook provisioned with `pip install -e` has that install and its
+# checkout egg-info removed; the "|no-project" stamp suffix forces that once (#1376).
+STAMP_VALUE="$(manifest_hash)|$DUTCHBAY_EXTRAS|no-project"
+if [ -f "$STAMP" ] && [ "$(cat "$STAMP")" = "$STAMP_VALUE" ]; then
   echo "session-start: dependencies already current — skipping install"
 else
-  echo "session-start: installing pinned lock + [$DUTCHBAY_EXTRAS] (a few minutes)"
+  echo "session-start: installing pinned lock + [$DUTCHBAY_EXTRAS] dependencies (a few minutes)"
   "$PY" -m pip install --quiet -r requirements.txt
-  "$PY" -m pip install --quiet -e ".[$DUTCHBAY_EXTRAS]"
-  printf '%s|%s' "$(manifest_hash)" "$DUTCHBAY_EXTRAS" > "$STAMP"
+  EXTRA_REQS="$VENV/.session-start-extras.txt"
+  # Expand the extras from pyproject, following self-references such as
+  # "dutchbay-epc-model[wind,grid]", and fail loudly on an unknown extra.
+  "$PY" - "$DUTCHBAY_EXTRAS" > "$EXTRA_REQS" <<'PYEOF'
+import sys
+import tomllib
+
+from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
+
+project = tomllib.load(open("pyproject.toml", "rb"))["project"]
+own_name = canonicalize_name(project["name"])
+optional = project.get("optional-dependencies", {})
+lines = list(project.get("dependencies", []))
+pending = [extra.strip() for extra in sys.argv[1].split(",") if extra.strip()]
+seen = set()
+while pending:
+    extra = pending.pop()
+    if extra in seen:
+        continue
+    if extra not in optional:
+        sys.exit(f"session-start: unknown extra {extra!r} in DUTCHBAY_EXTRAS")
+    seen.add(extra)
+    for line in optional[extra]:
+        requirement = Requirement(line)
+        if canonicalize_name(requirement.name) == own_name:
+            pending.extend(requirement.extras)
+        else:
+            lines.append(line)
+print("\n".join(dict.fromkeys(lines)))
+PYEOF
+  "$PY" -m pip install --quiet -r "$EXTRA_REQS"
+  if "$PY" -m pip show --quiet dutchbay-epc-model >/dev/null 2>&1; then
+    "$PY" -m pip uninstall --quiet --yes dutchbay-epc-model
+  fi
+  rm -rf "$REPO/dutchbay_epc_model.egg-info"
+  printf '%s' "$STAMP_VALUE" > "$STAMP"
 fi
 
 # Redis is needed by the async job path ([jobs]). The server binary ships in the
@@ -134,6 +177,9 @@ esac
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   {
     echo "export VIRTUAL_ENV=\"$VENV\""
+    # The checkout is not installed into the venv (step 3), so it is imported from
+    # PYTHONPATH, prepended only when absent for the same reason as PATH below.
+    printf 'case ":${PYTHONPATH:-}:" in *":%s:"*) ;; *) export PYTHONPATH="%s${PYTHONPATH:+:$PYTHONPATH}" ;; esac\n' "$REPO" "$REPO"
     # Prepend only when absent. This file is APPENDED to on every session start
     # and re-sourced by every shell, so an unconditional prepend accumulates one
     # duplicate per resume -- PATH was observed carrying 18 copies of .venv/bin
