@@ -7,6 +7,8 @@ import pytest
 
 from analytics.contracts import ScenarioResult as PackageScenarioResult
 from analytics.contracts_v14 import (
+    EYA_ACTUAL_BRIDGE_SCHEMA,
+    EYA_GAP_CATEGORIES,
     OPERATIONAL_AEP_SCHEMA,
     OPERATIONAL_AGGREGATION_SCHEMA,
     OPERATIONAL_CALENDAR_MONTH_ALLOWED,
@@ -17,6 +19,9 @@ from analytics.contracts_v14 import (
     CasperResult,
     DebtCovenantSnapshot,
     EquityPerformance,
+    EYAActualBridgeResult,
+    EYAActualBridgeSpec,
+    FinanceUpdateProposal,
     IrrBridgeComponent,
     MonteCarloResult,
     OperationalAEPResult,
@@ -42,6 +47,7 @@ from analytics.contracts_v14 import (
     ParameterRangeConfig,
     ProjectEquityIrrBridge,
     ResourceAssessment,
+    ResourceAssessmentSnapshot,
     ScenarioResult,
     SensitivityRequest,
     SensitivitySuite,
@@ -49,9 +55,13 @@ from analytics.contracts_v14 import (
     WaccComponents,
     WaccResult,
     aggregate_operational_series,
+    build_eya_actual_bridge,
     estimate_operational_aep,
     normalize_operational_csv,
+    operational_aep_claim_sha256,
+    resource_assessment_claim_sha256,
 )
+from analytics.operational import EYAActualBridgeResult as PackageEYAActualBridgeResult
 from analytics.operational import (
     OperationalGroupQualityReceipt as PackageOperationalGroupQualityReceipt,
 )
@@ -102,6 +112,16 @@ def test_contracts_v14_pipeline_surface_is_importable() -> None:
     assert PackageScenarioResult is ScenarioResult
     assert OPERATIONAL_EVIDENCE_SCHEMA == "dutchbay.operational_evidence.v1"
     assert OPERATIONAL_AEP_SCHEMA == "dutchbay.operational_aep.v1"
+    assert EYA_ACTUAL_BRIDGE_SCHEMA == "dutchbay.eya_actual_bridge.v1"
+    assert EYA_GAP_CATEGORIES == (
+        "measurement_boundary",
+        "weather_resource",
+        "availability",
+        "curtailment",
+        "electrical",
+        "wake_performance",
+        "method_model",
+    )
     assert OPERATIONAL_NORMALIZATION_SCHEMA == "dutchbay.operational_normalization.v1"
     assert OPERATIONAL_AGGREGATION_SCHEMA == "dutchbay.operational_aggregation.v1"
     assert OPERATIONAL_MAX_INTERVAL_SECONDS["wake_losses_scada"]["scada"] == 3_600
@@ -118,10 +138,20 @@ def test_contracts_v14_pipeline_surface_is_importable() -> None:
     assert OperationalAEPSpec.__name__ == "OperationalAEPSpec"
     assert OperationalAEPResult.__name__ == "OperationalAEPResult"
     assert OperationalBoundaryEvidence.__name__ == "OperationalBoundaryEvidence"
+    assert EYAActualBridgeSpec.__name__ == "EYAActualBridgeSpec"
+    assert EYAActualBridgeResult.__name__ == "EYAActualBridgeResult"
+    assert EYAActualBridgeResult is PackageEYAActualBridgeResult
+    assert FinanceUpdateProposal.__name__ == "FinanceUpdateProposal"
+    assert ResourceAssessmentSnapshot.__name__ == "ResourceAssessmentSnapshot"
     assert OperationalNormalizationError.__name__ == "OperationalNormalizationError"
     assert normalize_operational_csv.__name__ == "normalize_operational_csv"
     assert aggregate_operational_series.__name__ == "aggregate_operational_series"
     assert estimate_operational_aep.__name__ == "estimate_operational_aep"
+    assert build_eya_actual_bridge.__name__ == "build_eya_actual_bridge"
+    assert operational_aep_claim_sha256.__name__ == "operational_aep_claim_sha256"
+    assert resource_assessment_claim_sha256.__name__ == (
+        "resource_assessment_claim_sha256"
+    )
     assert OperationalDatasetEvidence.__name__ == "OperationalDatasetEvidence"
     assert "wake_losses_tower" in get_args(OperationalAnalysisPurpose)
     assert "fold_1" in get_args(OperationalAmbiguousTimePolicy)
