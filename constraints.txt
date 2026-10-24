@@ -37,7 +37,7 @@ pre-commit==4.6.2
 # under Python 3.12; their transitive closure is pinned in requirements.txt.
 weasyprint==70.0
 arq==0.28.0
-brotli==1.2.0
+brotli==1.2.1
 hiredis==3.4.2
 zopfli==0.4.3
 # antlr4-python3-runtime: hard-capped by the Hydra stack, NOT a gate-cleared freeze.
