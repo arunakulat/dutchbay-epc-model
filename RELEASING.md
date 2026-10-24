@@ -32,8 +32,21 @@ make lint type security test cov
 `requirements.txt` is the ONE pinned lock CI installs. `constraints.txt` holds the
 freeze-policy version caps (the versions the mandatory gates were cleared against) and
 is applied via `PIP_CONSTRAINT` when regenerating the lock, so the lock respects the
-caps (see the `constraints.txt` header). Regenerate from a CLEAN venv so the lock cannot
-drift or re-accrete non-dependencies:
+caps (see the `constraints.txt` header).
+
+**Before regenerating, re-check every suppressed advisory (GWTF `SECDEP-01`).** For each
+`--ignore-vuln` entry in the `Makefile`'s `PIP_AUDIT_IGNORES`, read its declaration in
+the comment block directly above the assignment and check the cap against the index. A
+cap that has lifted means the suppression comes OUT and the dependency or constraint
+input is updated to admit the fixed release before `make lock`; never regenerate first
+and carry the stale cap forward. The entry names the release that would lift it.
+`tests/lint/test_pip_audit_allowlist.py` fails the build on a non-canonical assignment,
+an invalid declaration or one left behind after its suppression, but it reads the
+declaration's shape, not the index. An advisory count from an earlier record is not
+evidence.
+
+After that review, regenerate from a CLEAN venv so the lock cannot drift or re-accrete
+non-dependencies, then run a fresh audit and quote its result:
 
 ```bash
 make lock     # PIP_CONSTRAINT=constraints.txt pip install -e ".[...]" + freeze -> requirements.txt
