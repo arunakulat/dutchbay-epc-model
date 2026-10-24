@@ -437,3 +437,57 @@ def test_commit_convention_guards_reject_retired_text_returning(
     monkeypatch.setitem(globals(), "_rules_by_id", lambda: mutated)
     with pytest.raises(AssertionError):
         guard()  # type: ignore[operator]
+
+
+SECDEP_01_REQUIRED_CONTROLS = (
+    "dated claim about the world",
+    "--ignore-vuln",
+    "PIP_AUDIT_IGNORES",
+    "no-fix-published",
+    "lifted-by",
+    "REMOVED rather than re-justified",
+    "is not evidence",
+    ".github/dependabot.yml",
+    "constraints.txt",
+    "SHAPE of the declaration",
+    "tests/lint/test_pip_audit_allowlist.py",
+    "RELEASING.md",
+    "negative control",
+)
+
+
+def test_secdep_01_binds_a_suppressed_advisory_to_its_lift_condition() -> None:
+    """Pin SECDEP-01 to its fence, its narrow scope and its stated limit."""
+    secdep_01 = _rules_by_id()["SECDEP-01"]
+    policy = _policy("SECDEP-01")
+
+    assert secdep_01["status"] == "active"
+    assert secdep_01["category"] == "Dependency Security"
+    for control in SECDEP_01_REQUIRED_CONTROLS:
+        assert control in policy
+
+    # The rule names two places a human reads it and one that enforces it. A rule citing
+    # an enforcement point that does not carry it is the P-10 shape, so bind all three.
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    releasing = (REPO_ROOT / "RELEASING.md").read_text(encoding="utf-8")
+
+    assert "SECDEP-01" in makefile
+    assert "ignore-vuln:" in makefile
+    assert "SECDEP-01" in releasing
+    assert (REPO_ROOT / "tests/lint/test_pip_audit_allowlist.py").is_file()
+
+
+@pytest.mark.parametrize("removed_control", SECDEP_01_REQUIRED_CONTROLS)
+def test_secdep_01_guard_rejects_control_loss(
+    monkeypatch: pytest.MonkeyPatch, removed_control: str
+) -> None:
+    """Observe every asserted SECDEP-01 control being load-bearing, one at a time."""
+    mutated = {key: dict(row) for key, row in _rules_by_id().items()}
+    for cell in ("title", "description", "enforcement"):
+        mutated["SECDEP-01"][cell] = mutated["SECDEP-01"][cell].replace(
+            removed_control, "REMOVED_CONTROL"
+        )
+
+    monkeypatch.setitem(globals(), "_rules_by_id", lambda: mutated)
+    with pytest.raises(AssertionError):
+        test_secdep_01_binds_a_suppressed_advisory_to_its_lift_condition()

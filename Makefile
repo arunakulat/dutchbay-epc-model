@@ -23,8 +23,24 @@ ENTRYPOINTS := run_full_pipeline_v14.py run_scenario_analytics_v14.py \
 # Earlier accepted advisories were cleared the same way, by the coordinated major upgrade
 # (fastapi 0.121->0.137 + starlette 0.49->1.3.1, streamlit 1.51->1.54 + pyarrow 21->24, black
 # 25->26 [+ pathspec/pytokens], curl-cffi 0.13->0.15). Keep this variable as the home for any
-# FUTURE genuinely-capped CVE (add `--ignore-vuln <ID>` with a one-line reason naming the cap
-# and the release that would lift it), and prefer fixing over ignoring.
+# FUTURE genuinely-capped CVE, and prefer fixing over ignoring.
+#
+# SECDEP-01. An accepted advisory is a dated claim about the world, not a property of this
+# repository, so it expires without anyone touching the lock: streamlit 1.66.1 lifted the
+# `pillow<13` cap TWELVE MINUTES after #1369 merged on the strength of it, and the same pin
+# carried eight advisories that evening and twenty-four by morning. So every entry added here
+# declares, on its own line in THIS comment block, the cap that forces it and the release that
+# would lift it:
+#
+#   ignore-vuln: <ADVISORY-ID> | package: <name>==<version> | cap: <dep><specifier> | \
+#       lifted-by: <release version|unknown> | reason: <why the suppression is defensible>
+#
+# written as ONE line, with `cap: no-fix-published` where upstream has published no fix at all.
+# tests/lint/test_pip_audit_allowlist.py fails the build on an entry that omits any field, and
+# on a declaration left behind after its entry goes. It reads the SHAPE of the declaration, not
+# the index: it cannot know that a cap has lifted, only that an entry failed to say what would
+# lift it. Re-checking the claim is RELEASING.md step 2 and the reviewer's job, and an advisory
+# count quoted from a record older than the current `make audit` run is not evidence.
 PIP_AUDIT_IGNORES :=
 
 # Coverage surface for the floor gate (#439, +solar_resource #456): the six engine
