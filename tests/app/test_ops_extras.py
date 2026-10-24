@@ -440,6 +440,11 @@ def test_an_unparseable_pyproject_degrades_to_metadata(
     broken = tmp_path / "pyproject.toml"
     broken.write_text("this is not [valid toml at all ===\n", encoding="utf-8")
     monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", broken)
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        _stale_metadata("weasyprint<70,>=69"),
+    )
 
     assert probe_extra("report").spec_source == "metadata"
     observation = ops_extras.resolve_declared_extras()
@@ -484,6 +489,11 @@ def test_a_foreign_pyproject_does_not_answer_for_this_distribution(
         encoding="utf-8",
     )
     monkeypatch.setattr(ops_extras, "GOVERNING_PYPROJECT", foreign)
+    monkeypatch.setattr(
+        ops_extras.importlib_metadata,
+        "requires",
+        _stale_metadata("weasyprint<70,>=69"),
+    )
 
     assert probe_extra("report").spec_source == "metadata"
     assert "nonsense" not in " ".join(declared_extras()["report"])
