@@ -23,9 +23,13 @@ field that must not.
 from __future__ import annotations
 
 import re
+import shlex
+import subprocess
 from pathlib import Path
 
 import pytest
+from packaging.requirements import InvalidRequirement, Requirement
+from packaging.version import InvalidVersion, Version
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE = REPO_ROOT / "Makefile"
@@ -41,34 +45,65 @@ ANNOTATION = re.compile(
     r"\|\s*lifted-by:\s*(?P<lifted_by>[^|]*)"
     r"\|\s*reason:\s*(?P<reason>.*)$"
 )
-SUPPRESSION = re.compile(r"--ignore-vuln[=\s]+([A-Za-z][-A-Za-z0-9_.]*)")
-ASSIGNMENT = re.compile(rf"^{VARIABLE}\s*[:?+]?=")
-PACKAGE_PIN = re.compile(r"^[A-Za-z0-9][-A-Za-z0-9_.]*==\S+$")
+ADVISORY_ID = re.compile(r"^[A-Za-z][-A-Za-z0-9_.]*$")
+ASSIGNMENT = re.compile(
+    rf"(?P<modifiers>(?:(?:override|export|private)\s+)*)"
+    rf"{VARIABLE}\s*(?P<operator>:::=|::=|:=|\?=|\+=|!=|=)\s*(?P<value>.*)$"
+)
+DEFINE_ASSIGNMENT = re.compile(rf"^\s*(?:override\s+)?define\s+{VARIABLE}(?:\s|$)")
 VERSION = re.compile(r"\d+(?:\.\d+)+")
-SPECIFIER = re.compile(r"[<>=!~]")
 # A cap with no published fix says so in these words rather than being left blank.
 NO_FIX = "no-fix-published"
 PLACEHOLDERS = frozenset({"", "-", "?", "n/a", "na", "none", "tbd", "todo", "unknown"})
-# The contract text the Makefile must carry where an entry would be added, so the next
-# author reads the shape at the switch rather than only in this test.
-CONTRACT = (
-    "SECDEP-01",
-    "ignore-vuln:",
-    "lifted-by:",
-    NO_FIX,
-    "tests/lint/test_pip_audit_allowlist.py",
+# The exact contiguous contract the Makefile must carry in the comment block directly
+# above the assignment. Token-presence checks are too weak: scattered words are not an
+# instruction and were the P-10 failure mode.
+CONTRACT_LINES = (
+    "# SECDEP-01 canonical grammar (the fence rejects every other assignment shape):",
+    "# Keep exactly one literal `PIP_AUDIT_IGNORES :=` assignment; do not use Make expansion or `+=`.",
+    "# Each suppression has one physical declaration line in this comment block:",
+    "# ignore-vuln: <ADVISORY-ID> | package: <name>==<version> | cap: <name><specifier> | lifted-by: <name> <version>|unknown | reason: <why the suppression is defensible>",
 )
 
 
-def _assignment_span(lines: list[str]) -> tuple[int, int] | None:
-    """Return the inclusive line span of the assignment, following continuations."""
-    for index, line in enumerate(lines):
-        if ASSIGNMENT.match(line):
-            end = index
-            while end + 1 < len(lines) and lines[end].rstrip().endswith("\\"):
-                end += 1
-            return index, end
-    return None
+def _assignments(lines: list[str]) -> list[tuple[int, int, str, str, str]]:
+    """Return every logical assignment, including append/override variants."""
+    assignments: list[tuple[int, int, str, str, str]] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if line.lstrip().startswith("#"):
+            index += 1
+            continue
+        if DEFINE_ASSIGNMENT.match(line):
+            assignments.append((index, index, "define", "define", ""))
+            index += 1
+            continue
+        match = ASSIGNMENT.search(line)
+        if match is None:
+            index += 1
+            continue
+
+        start = index
+        prefix = line[: match.start()].strip()
+        parts = [match.group("value")]
+        while parts[-1].rstrip().endswith("\\") and index + 1 < len(lines):
+            parts[-1] = parts[-1].rstrip()[:-1]
+            index += 1
+            parts.append(lines[index].strip())
+        assignments.append(
+            (
+                start,
+                index,
+                " ".join(
+                    part for part in (prefix, match.group("modifiers").strip()) if part
+                ),
+                match.group("operator"),
+                " ".join(part.strip() for part in parts),
+            )
+        )
+        index += 1
+    return assignments
 
 
 def _preceding_comment_block(lines: list[str], start: int) -> list[str]:
@@ -79,21 +114,145 @@ def _preceding_comment_block(lines: list[str], start: int) -> list[str]:
     return lines[first:start]
 
 
+def _has_contiguous_contract(comment_block: list[str]) -> bool:
+    """Return whether the exact SECDEP-01 authoring contract is contiguous."""
+    width = len(CONTRACT_LINES)
+    return any(
+        tuple(comment_block[index : index + width]) == CONTRACT_LINES
+        for index in range(len(comment_block) - width + 1)
+    )
+
+
+def _valid_exact_pin(value: str) -> bool:
+    """Require one valid PEP 440 exact pin on one ordinary package name."""
+    try:
+        requirement = Requirement(value)
+    except InvalidRequirement:
+        return False
+    if (
+        requirement.extras
+        or requirement.marker is not None
+        or requirement.url is not None
+    ):
+        return False
+    specifiers = list(requirement.specifier)
+    if len(specifiers) != 1 or specifiers[0].operator != "==":
+        return False
+    version = specifiers[0].version
+    if "*" in version:
+        return False
+    try:
+        Version(version)
+    except InvalidVersion:
+        return False
+    return True
+
+
+def _valid_named_cap(value: str) -> bool:
+    """Require a valid named requirement carrying a non-empty version specifier."""
+    try:
+        requirement = Requirement(value)
+    except InvalidRequirement:
+        return False
+    return (
+        not requirement.extras
+        and requirement.marker is None
+        and requirement.url is None
+        and bool(requirement.specifier)
+    )
+
+
+def _suppressed_ids(
+    assignments: list[tuple[int, int, str, str, str]],
+    violations: list[str],
+) -> list[str]:
+    """Parse effective literal ignore flags and fail closed on unsupported Make syntax."""
+    suppressed: list[str] = []
+    for start, _end, _modifiers, operator, value in assignments:
+        if operator == "define":
+            violations.append(
+                f"{VARIABLE}: `define` assignments are unsupported; use one literal `:=`"
+            )
+            continue
+        if "$" in value:
+            violations.append(
+                f"{VARIABLE} line {start + 1}: Make/shell expansion is not auditable; "
+                "use literal advisory IDs"
+            )
+            continue
+        try:
+            tokens = shlex.split(value, comments=True, posix=True)
+        except ValueError as exc:
+            violations.append(
+                f"{VARIABLE} line {start + 1}: invalid quoting in assignment: {exc}"
+            )
+            continue
+
+        index = 0
+        while index < len(tokens):
+            token = tokens[index]
+            advisory: str | None = None
+            if token == "--ignore-vuln":
+                if index + 1 >= len(tokens):
+                    violations.append(
+                        f"{VARIABLE} line {start + 1}: `--ignore-vuln` has no advisory ID"
+                    )
+                    index += 1
+                    continue
+                advisory = tokens[index + 1]
+                index += 2
+            elif token.startswith("--ignore-vuln="):
+                advisory = token.partition("=")[2]
+                index += 1
+            elif "--ignore-vuln" in token:
+                violations.append(
+                    f"{VARIABLE} line {start + 1}: malformed ignore flag {token!r}"
+                )
+                index += 1
+                continue
+            else:
+                index += 1
+                continue
+
+            if ADVISORY_ID.fullmatch(advisory) is None:
+                violations.append(
+                    f"{VARIABLE} line {start + 1}: invalid advisory ID {advisory!r}"
+                )
+                continue
+            if advisory in suppressed:
+                violations.append(f"{advisory}: suppressed more than once")
+            suppressed.append(advisory)
+    return suppressed
+
+
 def audit(makefile_text: str) -> list[str]:
     """Return one message per SECDEP-01 violation; an empty list means compliant."""
     lines = makefile_text.splitlines()
-    span = _assignment_span(lines)
-    if span is None:
+    assignments = _assignments(lines)
+    if not assignments:
         return [f"{VARIABLE} assignment not found in the Makefile"]
 
-    start, end = span
-    suppressed: list[str] = []
-    for line in lines[start : end + 1]:
-        suppressed.extend(SUPPRESSION.findall(line))
-
-    annotated: dict[str, re.Match[str]] = {}
     violations: list[str] = []
-    for line in _preceding_comment_block(lines, start):
+    if len(assignments) != 1:
+        violations.append(
+            f"{VARIABLE} must have exactly one assignment, got {len(assignments)}"
+        )
+    start, _end, modifiers, operator, _value = assignments[0]
+    if modifiers or operator != ":=":
+        shape = " ".join(part for part in (modifiers, operator) if part)
+        violations.append(
+            f"{VARIABLE} must use one unmodified literal `:=` assignment, got {shape!r}"
+        )
+
+    comment_block = _preceding_comment_block(lines, start)
+    if not _has_contiguous_contract(comment_block):
+        violations.append(
+            f"{VARIABLE}: contiguous SECDEP-01 authoring contract is missing or displaced"
+        )
+
+    suppressed = _suppressed_ids(assignments, violations)
+    annotated: dict[str, re.Match[str]] = {}
+    for line in comment_block:
         match = ANNOTATION.match(line.strip())
         if match is None:
             continue
@@ -124,18 +283,18 @@ def audit(makefile_text: str) -> list[str]:
         lifted_by = match.group("lifted_by").strip()
         reason = match.group("reason").strip()
 
-        if not PACKAGE_PIN.match(package):
+        if not _valid_exact_pin(package):
             violations.append(
-                f"{advisory}: package must name the pinned version as `name==version`, "
+                f"{advisory}: package must be a valid exact pin as `name==version`, "
                 f"got {package!r}"
             )
         if cap.casefold() in PLACEHOLDERS:
             violations.append(f"{advisory}: cap is empty or a placeholder, got {cap!r}")
-        elif cap != NO_FIX and not SPECIFIER.search(cap):
+        elif cap != NO_FIX and not _valid_named_cap(cap):
             violations.append(
-                f"{advisory}: cap must give the forcing constraint as a version "
-                f"specifier, or `{NO_FIX}` where upstream has published no fix, got "
-                f"{cap!r}"
+                f"{advisory}: cap must be a valid named requirement with a non-empty "
+                f"version specifier, or `{NO_FIX}` where upstream has published no "
+                f"fix, got {cap!r}"
             )
         if lifted_by.casefold() in PLACEHOLDERS - {"unknown"}:
             violations.append(
@@ -156,18 +315,31 @@ def audit(makefile_text: str) -> list[str]:
     return violations
 
 
-COMPLIANT = """\
-# pip-audit allowlist.
+CONTRACT_TEXT = "\n".join(CONTRACT_LINES)
+COMPLIANT = f"""\
+{CONTRACT_TEXT}
 # ignore-vuln: PYSEC-2026-4320 | package: certifi==2026.7.22 | cap: requests<2.33 | \
 lifted-by: certifi 2026.10.19 | reason: no installable certifi clears it under the cap
 PIP_AUDIT_IGNORES := --ignore-vuln PYSEC-2026-4320
 """
-EMPTY = "# pip-audit allowlist - EMPTY.\nPIP_AUDIT_IGNORES :=\n"
+EMPTY = f"{CONTRACT_TEXT}\nPIP_AUDIT_IGNORES :=\n"
 
 
 def _mutate(field: str, value: str) -> str:
     """Rewrite one field of the compliant fixture, leaving the entry otherwise intact."""
-    return re.sub(rf"(\| {field}: )[^|\n]*", rf"\g<1>{value} ", COMPLIANT, count=1)
+    return re.sub(
+        rf"(^# ignore-vuln: PYSEC-2026-4320 .*\| {field}: )[^|\n]*",
+        rf"\g<1>{value} ",
+        COMPLIANT,
+        count=1,
+        flags=re.MULTILINE,
+    )
+
+
+def _replace_empty_assignment(replacement: str) -> str:
+    """Replace the real assignment without touching its mention in the contract."""
+    prefix, suffix = EMPTY.rsplit("PIP_AUDIT_IGNORES :=", 1)
+    return prefix + replacement + suffix
 
 
 def test_the_live_allowlist_satisfies_secdep_01() -> None:
@@ -176,10 +348,8 @@ def test_the_live_allowlist_satisfies_secdep_01() -> None:
 
 
 def test_the_makefile_documents_the_declaration_shape() -> None:
-    """Keep the contract next to the switch, not only in this module."""
-    makefile = MAKEFILE.read_text(encoding="utf-8")
-    for control in CONTRACT:
-        assert control in makefile
+    """Keep the exact contiguous contract next to the switch."""
+    assert audit(MAKEFILE.read_text(encoding="utf-8")) == []
 
 
 def test_an_empty_allowlist_is_compliant() -> None:
@@ -209,9 +379,10 @@ def test_a_well_formed_entry_is_compliant() -> None:
         pytest.param(_mutate("cap", "TBD"), "cap is empty", id="cap placeholder"),
         pytest.param(
             _mutate("cap", "waiting on requests"),
-            "forcing constraint as a version specifier",
+            "valid named requirement",
             id="cap names no specifier",
         ),
+        pytest.param(_mutate("cap", "<"), "valid named requirement", id="cap invalid"),
         pytest.param(
             _mutate("lifted-by", ""), "lifted-by is empty", id="lifted-by blank"
         ),
@@ -223,13 +394,17 @@ def test_a_well_formed_entry_is_compliant() -> None:
         pytest.param(
             _mutate("package", "certifi"), "name==version", id="package not pinned"
         ),
+        pytest.param(
+            _mutate("package", "demo==???"),
+            "valid exact pin",
+            id="package version invalid",
+        ),
         pytest.param(_mutate("reason", "capped"), "reason must say", id="reason thin"),
         pytest.param(
-            EMPTY.replace(
-                "# pip-audit allowlist - EMPTY.",
-                "# ignore-vuln: PYSEC-2026-4320 | package: certifi==2026.7.22 | cap: "
-                "requests<2.33 | lifted-by: certifi 2026.10.19 | reason: left behind "
-                "when the entry went",
+            _replace_empty_assignment(
+                "# ignore-vuln: PYSEC-2026-4320 | package: certifi==2026.7.22 | "
+                "cap: requests<2.33 | lifted-by: certifi 2026.10.19 | reason: "
+                "left behind when the entry went\nPIP_AUDIT_IGNORES :=",
             ),
             "no longer suppressed",
             id="declaration outlives its entry",
@@ -238,6 +413,31 @@ def test_a_well_formed_entry_is_compliant() -> None:
             COMPLIANT.replace("PIP_AUDIT_IGNORES := ", "OTHER := "),
             "assignment not found",
             id="variable renamed away",
+        ),
+        pytest.param(
+            _replace_empty_assignment(
+                "PIP_AUDIT_IGNORES := --ignore-vuln='CVE-2026-999999'",
+            ),
+            "suppressed with no",
+            id="quoted effective id is still discovered",
+        ),
+        pytest.param(
+            _replace_empty_assignment(
+                "ADVISORY := CVE-2026-999999\n"
+                "PIP_AUDIT_IGNORES := --ignore-vuln $(ADVISORY)",
+            ),
+            "expansion is not auditable",
+            id="make indirection rejected",
+        ),
+        pytest.param(
+            EMPTY + "PIP_AUDIT_IGNORES += --ignore-vuln CVE-2026-999999\n",
+            "exactly one assignment",
+            id="later append rejected",
+        ),
+        pytest.param(
+            EMPTY + "audit: PIP_AUDIT_IGNORES += --ignore-vuln CVE-2026-999999\n",
+            "exactly one assignment",
+            id="target-specific append rejected",
         ),
     ],
 )
@@ -248,3 +448,51 @@ def test_the_fence_rejects_an_undeclared_suppression(
     violations = audit(makefile_text)
     assert violations, "the fence passed a non-compliant allowlist"
     assert any(expected in violation for violation in violations), violations
+
+
+def test_make_oracle_confirms_rejected_indirection_and_append_are_effective(
+    tmp_path: Path,
+) -> None:
+    """Make proves the rejected spellings would really suppress advisories."""
+    makefile_text = """\
+ADVISORY := CVE-2026-999999
+PIP_AUDIT_IGNORES := --ignore-vuln $(ADVISORY)
+PIP_AUDIT_IGNORES += --ignore-vuln=GHSA-abcd-1234-zzzz
+print:
+\t@printf '%s\\n' "$(PIP_AUDIT_IGNORES)"
+"""
+    makefile = tmp_path / "Makefile"
+    makefile.write_text(makefile_text, encoding="utf-8")
+    completed = subprocess.run(
+        ["make", "--no-print-directory", "-f", str(makefile), "print"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.stdout.strip() == (
+        "--ignore-vuln CVE-2026-999999 --ignore-vuln=GHSA-abcd-1234-zzzz"
+    )
+    violations = audit(makefile_text)
+    assert any("exactly one assignment" in item for item in violations)
+    assert any("expansion is not auditable" in item for item in violations)
+
+
+@pytest.mark.parametrize("removed_line", CONTRACT_LINES)
+def test_contract_guard_rejects_control_loss(removed_line: str) -> None:
+    """Every line of the authoring contract is load-bearing."""
+    mutated = EMPTY.replace(removed_line, "# REMOVED CONTRACT CONTROL", 1)
+    assert any("contract is missing or displaced" in item for item in audit(mutated))
+
+
+def test_contract_guard_rejects_reordering() -> None:
+    """The contract is one contiguous instruction, not a bag of tokens."""
+    first, second, *rest = CONTRACT_LINES
+    reordered = "\n".join((second, first, *rest))
+    mutated = EMPTY.replace(CONTRACT_TEXT, reordered, 1)
+    assert any("contract is missing or displaced" in item for item in audit(mutated))
+
+
+def test_contract_guard_rejects_displacement_from_the_switch() -> None:
+    """A blank line separating the contract from the switch fails closed."""
+    mutated = EMPTY.replace("\nPIP_AUDIT_IGNORES :=", "\n\nPIP_AUDIT_IGNORES :=", 1)
+    assert any("contract is missing or displaced" in item for item in audit(mutated))

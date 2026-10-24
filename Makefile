@@ -25,22 +25,18 @@ ENTRYPOINTS := run_full_pipeline_v14.py run_scenario_analytics_v14.py \
 # 25->26 [+ pathspec/pytokens], curl-cffi 0.13->0.15). Keep this variable as the home for any
 # FUTURE genuinely-capped CVE, and prefer fixing over ignoring.
 #
-# SECDEP-01. An accepted advisory is a dated claim about the world, not a property of this
-# repository, so it expires without anyone touching the lock: streamlit 1.66.1 lifted the
-# `pillow<13` cap TWELVE MINUTES after #1369 merged on the strength of it, and the same pin
-# carried eight advisories that evening and twenty-four by morning. So every entry added here
-# declares, on its own line in THIS comment block, the cap that forces it and the release that
-# would lift it:
+# An accepted advisory is a dated claim about the world, not a property of this repository:
+# streamlit 1.66.1 lifted the `pillow<13` cap twelve minutes after #1369 merged, and the
+# unchanged pin carried eight advisories that evening and twenty-four by morning. The fence
+# validates literal syntax and declaration shape, not the package index. RELEASING.md step 2
+# therefore re-checks the cap before lock regeneration; a lifted cap removes the suppression
+# and updates dependency inputs before `make lock`. Quote only a fresh `make audit` result.
 #
-#   ignore-vuln: <ADVISORY-ID> | package: <name>==<version> | cap: <dep><specifier> | \
-#       lifted-by: <release version|unknown> | reason: <why the suppression is defensible>
-#
-# written as ONE line, with `cap: no-fix-published` where upstream has published no fix at all.
-# tests/lint/test_pip_audit_allowlist.py fails the build on an entry that omits any field, and
-# on a declaration left behind after its entry goes. It reads the SHAPE of the declaration, not
-# the index: it cannot know that a cap has lifted, only that an entry failed to say what would
-# lift it. Re-checking the claim is RELEASING.md step 2 and the reviewer's job, and an advisory
-# count quoted from a record older than the current `make audit` run is not evidence.
+# Use `cap: no-fix-published` only when upstream has published no fixed release.
+# SECDEP-01 canonical grammar (the fence rejects every other assignment shape):
+# Keep exactly one literal `PIP_AUDIT_IGNORES :=` assignment; do not use Make expansion or `+=`.
+# Each suppression has one physical declaration line in this comment block:
+# ignore-vuln: <ADVISORY-ID> | package: <name>==<version> | cap: <name><specifier> | lifted-by: <name> <version>|unknown | reason: <why the suppression is defensible>
 PIP_AUDIT_IGNORES :=
 
 # Coverage surface for the floor gate (#439, +solar_resource #456): the six engine
