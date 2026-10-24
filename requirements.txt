@@ -55,12 +55,12 @@ bandit==1.9.4
 beautifulsoup4==4.15.0
 bidict==0.23.1
 bitarray==3.10.1
-black==26.5.1
+black==26.10.1
 bleach==6.4.0
 blinker==1.9.0
 blosc2==4.11.0
 boolean.py==5.0
-brotli==1.2.0
+brotli==1.2.1
 build==1.5.0
 cachebox==5.2.3
 CacheControl==0.14.4
@@ -98,7 +98,7 @@ execnet==2.1.2
 executing==2.2.1
 fastapi==0.141.1
 fastjsonschema==2.22.2
-filelock==3.32.3
+filelock==4.2.1
 flatbuffers==25.12.19
 fonttools==4.63.0
 fqdn==1.6.0
@@ -288,7 +288,7 @@ scikit-learn==1.9.0
 scipy-stubs==1.18.1.1
 scipy==1.18.1
 Send2Trash==2.1.0
-setuptools==84.0.0
+setuptools==84.1.0
 shapely==2.1.2
 shellingham==1.5.4
 six==1.17.0
