@@ -193,7 +193,7 @@ numpy-typing-compat==20260602.2.4
 numpy==2.4.6
 odfpy==1.4.1
 omegaconf==2.3.1
-onnxruntime==1.29.0
+onnxruntime==1.31.0
 opendssdirect.py==0.9.4
 openmdao==3.39.0
 openpyxl==3.1.5
