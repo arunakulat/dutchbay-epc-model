@@ -10,8 +10,15 @@ on:
   # Post-merge health on main is still covered, cheaply: "CI - v14 fastlane" (~2 min) and
   # "Regression Smoke" (~3 min) both still run on push to main, so a bad merge or a direct
   # push still raises a signal — at ~5 minutes instead of ~63.
+  #
+  # REVIEW-01: review comes before the full suite. While a pull request is a draft the
+  # `changes` job classifies it as needing no tests, so the shards, the Coverage Gate and
+  # Grid Study skip their work and only the fast gates (lint, Security Scan and the other
+  # workflows) run. Marking it ready for review (`ready_for_review`) runs the full suite
+  # once on the head the review lanes bound to.
   pull_request:
     branches: [ main, develop ]
+    types: [ opened, synchronize, reopened, ready_for_review ]
   schedule:
     # Weekly run (Mondays 03:17 UTC): the backstop that runs regardless of PR activity,
     # catching dependency drift and flakes on an otherwise unchanged tree. Reduced from
@@ -83,11 +90,28 @@ jobs:
 
     - name: Classify diff against the PR base
       id: classify
+      env:
+        # REVIEW-01: read through the environment rather than an inline expression so
+        # tests/lint/test_grid_ci_policy.py can run this step with either value.
+        PR_DRAFT: ${{ github.event.pull_request.draft }}
       run: |
         if [ "${{ github.event_name }}" != "pull_request" ]; then
           echo "code_changed=true" >> "$GITHUB_OUTPUT"
           echo "qsts_execution_changed=false" >> "$GITHUB_OUTPUT"
           echo "non-PR event: full gate"
+          exit 0
+        fi
+        if [ "${PR_DRAFT:-false}" = "true" ]; then
+          # REVIEW-01: a draft defers the full suite until it is marked ready for review.
+          # This is not a docs-only result: the summary job reports under a different
+          # name for a draft, so the required 'Test Summary' check never reads this run.
+          echo "code_changed=false" >> "$GITHUB_OUTPUT"
+          echo "qsts_execution_changed=false" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Changed-path classification"
+            echo "- Draft pull request: full suite deferred until ready for review (REVIEW-01)"
+            echo "- PR head: \`$(git rev-parse HEAD)\`"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
           exit 0
         fi
         changed_files="$RUNNER_TEMP/changed-files.z"
@@ -468,14 +492,23 @@ jobs:
       run: make security
 
   summary:
-    name: Test Summary
+    # REVIEW-01: a draft run reports under a different name, so the required
+    # 'Test Summary' check exists on a head only once a non-draft run has completed the
+    # full suite there. Without this, a draft's green summary would stand as the latest
+    # 'Test Summary' result in the minutes after the PR is marked ready for review.
+    name: "${{ github.event.pull_request.draft && 'Test Summary (draft: full suite deferred)' || 'Test Summary' }}"
     runs-on: ubuntu-latest
     needs: [changes, test, lint, security, coverage, grid-study]
     if: always()
 
     steps:
     - name: Check test status
+      env:
+        PR_DRAFT: ${{ github.event.pull_request.draft }}
       run: |
+        if [ "${PR_DRAFT:-false}" = "true" ]; then
+          echo "::notice::Draft pull request: the test shards, Coverage Gate and Grid Study are deferred until it is marked ready for review (REVIEW-01). Lint and Security Scan are still gated below."
+        fi
         echo "Test suite completed (test=${{ needs.test.result }}, lint=${{ needs.lint.result }}, coverage=${{ needs.coverage.result }}, grid-study=${{ needs.grid-study.result }})"
         echo "View detailed results in artifacts"
         # Gate the required 'Test Summary' check on the ACTUAL pytest-matrix
