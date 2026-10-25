@@ -65,7 +65,7 @@ DEFAULT_PARAMS = pd.DataFrame(
         },
     ]
 )
-params_df = st.data_editor(DEFAULT_PARAMS, num_rows="dynamic", use_container_width=True)
+params_df = st.data_editor(DEFAULT_PARAMS, num_rows="dynamic", width="stretch")
 
 
 def _build_params(df: pd.DataFrame) -> List[ParameterRangeConfig]:
@@ -114,7 +114,7 @@ if st.button("Run sensitivity", type="primary"):
                             "impact_abs",
                         ]
                     ],
-                    use_container_width=True,
+                    width="stretch",
                 )
                 st.bar_chart(df.set_index("parameter")["impact_abs"])
     except Exception as exc:  # surface engine/config errors in the UI, don't crash

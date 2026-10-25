@@ -1,0 +1,85 @@
+# Security Audit (main)
+#
+# Reports main's OWN security state. The `Security Scan` job in test-suite.yml is the merge
+# gate and runs on pull_request plus that workflow's weekly Monday schedule; it never runs on
+# a push to main. Between those Mondays nothing reported whether main still passed its own
+# audit, and nothing had to change here for the answer to flip: `make security` audits the
+# whole pinned lock against an advisory database that moves on upstream's clock, not on this
+# repository's commits.
+#
+# That window is not hypothetical. The last scheduled Test Suite run before 2026-10-25 was
+# Monday 2026-10-19 (run 39226566738, main 8c4d0761, success). Seven advisories (black,
+# brotli, filelock, setuptools) landed against the UNCHANGED lock on Friday 2026-10-23 and
+# Saturday 2026-10-24, and the next scheduled run was not due until Monday 2026-10-26. For
+# those days main was red on its own bytes and the only thing that said so was every open
+# pull request going red at once - the gate audits the whole lock, not the diff, so a single
+# new advisory reds the entire queue and arrives looking like somebody's change.
+#
+# Why a separate workflow rather than adding `push: main` to test-suite.yml: that workflow is
+# the most expensive in the repo (~63 billed minutes across a 6-shard matrix) and its own
+# `push: main` trigger was deliberately dropped as duplication, with the weekly schedule cut
+# back from nightly for the same reason. This job is bandit + pip-audit only, no project
+# install, so it costs a couple of minutes and can afford to run daily.
+#
+# What each trigger buys, honestly:
+#   schedule  - the one that closes the gap. Daily instead of weekly, so an advisory arriving
+#               against an unchanged lock is announced within a day by a red mark on main.
+#   push main - makes main's audit state visible as a status on main's own commits. On an
+#               up-to-date branch the pull-request run already audited a byte-identical tree,
+#               so this is close to redundant at merge time; it earns its ~2 minutes by
+#               covering a direct push, a bypassed merge, and the hours between merges when
+#               the database moves.
+#   dispatch  - re-check on demand without waiting for either.
+#
+# Deliberately NOT triggered on pull_request. `Security Scan` already gates every pull
+# request, and a second audit check reporting there would duplicate it and could only create
+# confusion about which one the ruleset requires.
+name: Security Audit
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    # Daily at 05:23 UTC. Off the hour so it is not queued behind the top-of-hour crowd,
+    # and clear of the Monday 03:17 Test Suite schedule.
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+
+# Never cancel: each run is a statement about one commit of main at one point in time, and a
+# superseded run is still the only record for its own commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    # Named distinctly from test-suite.yml's `Security Scan` so the two are never confused in
+    # the checks list or in the repository ruleset's required-check names.
+    name: Lock Advisory Audit
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: "3.12"
+        cache: 'pip'
+
+    - name: Install security tooling
+      # Same tooling and the same reasoning as test-suite.yml's security job: bandit does
+      # static analysis without importing, and pip-audit reads requirements.txt, so neither
+      # needs the project's dependencies installed. Keep this job fast enough to run daily.
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit pip-audit
+
+    - name: Run security gate (bandit SAST + pip-audit dependency CVEs)
+      # The SAME `make security` the merge gate runs, not a reduced variant: a weaker audit
+      # on main than on a pull request would report green on bytes the gate would reject.
+      # tests/lint/test_security_gate_coverage.py pins that equality.
+      run: make security
