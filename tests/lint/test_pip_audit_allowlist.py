@@ -22,9 +22,11 @@ field that must not.
 
 from __future__ import annotations
 
+import importlib
 import re
 import shlex
 import subprocess
+import warnings
 from pathlib import Path
 
 import pytest
@@ -51,6 +53,10 @@ ASSIGNMENT = re.compile(
     rf"{VARIABLE}\s*(?P<operator>:::=|::=|:=|\?=|\+=|!=|=)\s*(?P<value>.*)$"
 )
 DEFINE_ASSIGNMENT = re.compile(rf"^\s*(?:override\s+)?define\s+{VARIABLE}(?:\s|$)")
+GENERIC_ASSIGNMENT = re.compile(r"^(?P<lhs>.*?)(?P<operator>:::=|::=|:=|\?=|\+=|!=|=)")
+DYNAMIC_DEFINE = re.compile(r"^\s*(?:override\s+)?define\s+(?P<name>\S+)")
+INCLUDE_DIRECTIVE = re.compile(r"^\s*(?:-include|sinclude|include)\b")
+EVAL_FUNCTION = re.compile(r"\$(?:\(\s*eval(?:\s|,)|\{\s*eval(?:\s|,))")
 VERSION = re.compile(r"\d+(?:\.\d+)+")
 # A cap with no published fix says so in these words rather than being left blank.
 NO_FIX = "no-fix-published"
@@ -60,10 +66,49 @@ PLACEHOLDERS = frozenset({"", "-", "?", "n/a", "na", "none", "tbd", "todo", "unk
 # instruction and were the P-10 failure mode.
 CONTRACT_LINES = (
     "# SECDEP-01 canonical grammar (the fence rejects every other assignment shape):",
-    "# Keep exactly one literal `PIP_AUDIT_IGNORES :=` assignment; do not use Make expansion or `+=`.",
+    "# Keep exactly one literal `PIP_AUDIT_IGNORES :=` assignment; do not use computed names, includes, `eval`, expansion or `+=`.",
+    "# Use only exact `--ignore-vuln <ID>` or `--ignore-vuln=<ID>` tokens; abbreviations and other tokens are rejected.",
     "# Each suppression has one physical declaration line in this comment block:",
     "# ignore-vuln: <ADVISORY-ID> | package: <name>==<version> | cap: <name><specifier> | lifted-by: <name> <version>|unknown | reason: <why the suppression is defensible>",
 )
+
+
+def _source_shape_violations(lines: list[str]) -> list[str]:
+    """Reject Make features that can mutate the protected variable out of sight."""
+    violations: list[str] = []
+    for line_number, line in enumerate(lines, start=1):
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if INCLUDE_DIRECTIVE.match(line):
+            violations.append(
+                f"Makefile line {line_number}: include directives are not auditable; "
+                f"keep {VARIABLE} in this file"
+            )
+        if EVAL_FUNCTION.search(line):
+            violations.append(
+                f"Makefile line {line_number}: `eval` can synthesize assignments and "
+                "is not permitted by SECDEP-01"
+            )
+
+        dynamic_define = DYNAMIC_DEFINE.match(line)
+        if dynamic_define is not None and "$" in dynamic_define.group("name"):
+            violations.append(
+                f"Makefile line {line_number}: computed `define` names are not "
+                f"auditable for {VARIABLE}"
+            )
+
+        # A recipe line may contain shell assignments, not Make assignment names.
+        # `eval` above remains forbidden in recipes because Make expands it first.
+        if line.startswith("\t"):
+            continue
+        assignment = GENERIC_ASSIGNMENT.match(line)
+        if assignment is not None and "$" in assignment.group("lhs"):
+            violations.append(
+                f"Makefile line {line_number}: computed assignment names are not "
+                f"auditable for {VARIABLE}"
+            )
+    return violations
 
 
 def _assignments(lines: list[str]) -> list[tuple[int, int, str, str, str]]:
@@ -162,6 +207,42 @@ def _valid_named_cap(value: str) -> bool:
     )
 
 
+def _parse_ignore_tokens(
+    tokens: list[str],
+    location: str,
+    violations: list[str],
+) -> list[str]:
+    """Parse only the two canonical spellings; every other token fails closed."""
+    suppressed: list[str] = []
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        advisory: str | None = None
+        if token == "--ignore-vuln":
+            if index + 1 >= len(tokens):
+                violations.append(f"{location}: `--ignore-vuln` has no advisory ID")
+                index += 1
+                continue
+            advisory = tokens[index + 1]
+            index += 2
+        elif token.startswith("--ignore-vuln="):
+            advisory = token.partition("=")[2]
+            index += 1
+        else:
+            violations.append(
+                f"{location}: unsupported token {token!r}; use only exact "
+                "`--ignore-vuln <ID>` or `--ignore-vuln=<ID>` forms"
+            )
+            index += 1
+            continue
+
+        if ADVISORY_ID.fullmatch(advisory) is None:
+            violations.append(f"{location}: invalid advisory ID {advisory!r}")
+            continue
+        suppressed.append(advisory)
+    return suppressed
+
+
 def _suppressed_ids(
     assignments: list[tuple[int, int, str, str, str]],
     violations: list[str],
@@ -188,37 +269,10 @@ def _suppressed_ids(
             )
             continue
 
-        index = 0
-        while index < len(tokens):
-            token = tokens[index]
-            advisory: str | None = None
-            if token == "--ignore-vuln":
-                if index + 1 >= len(tokens):
-                    violations.append(
-                        f"{VARIABLE} line {start + 1}: `--ignore-vuln` has no advisory ID"
-                    )
-                    index += 1
-                    continue
-                advisory = tokens[index + 1]
-                index += 2
-            elif token.startswith("--ignore-vuln="):
-                advisory = token.partition("=")[2]
-                index += 1
-            elif "--ignore-vuln" in token:
-                violations.append(
-                    f"{VARIABLE} line {start + 1}: malformed ignore flag {token!r}"
-                )
-                index += 1
-                continue
-            else:
-                index += 1
-                continue
-
-            if ADVISORY_ID.fullmatch(advisory) is None:
-                violations.append(
-                    f"{VARIABLE} line {start + 1}: invalid advisory ID {advisory!r}"
-                )
-                continue
+        parsed = _parse_ignore_tokens(
+            tokens, f"{VARIABLE} line {start + 1}", violations
+        )
+        for advisory in parsed:
             if advisory in suppressed:
                 violations.append(f"{advisory}: suppressed more than once")
             suppressed.append(advisory)
@@ -229,10 +283,11 @@ def audit(makefile_text: str) -> list[str]:
     """Return one message per SECDEP-01 violation; an empty list means compliant."""
     lines = makefile_text.splitlines()
     assignments = _assignments(lines)
+    violations = _source_shape_violations(lines)
     if not assignments:
-        return [f"{VARIABLE} assignment not found in the Makefile"]
+        violations.append(f"{VARIABLE} assignment not found in the Makefile")
+        return violations
 
-    violations: list[str] = []
     if len(assignments) != 1:
         violations.append(
             f"{VARIABLE} must have exactly one assignment, got {len(assignments)}"
@@ -325,6 +380,20 @@ PIP_AUDIT_IGNORES := --ignore-vuln PYSEC-2026-4320
 EMPTY = f"{CONTRACT_TEXT}\nPIP_AUDIT_IGNORES :=\n"
 
 
+def _live_audit_command_tokens() -> list[str]:
+    """Return GNU Make's effective dry-run command for the real audit target."""
+    completed = subprocess.run(
+        ["make", "--no-print-directory", "-n", "audit"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    commands = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+    assert len(commands) == 1, commands
+    return shlex.split(commands[0], comments=False, posix=True)
+
+
 def _mutate(field: str, value: str) -> str:
     """Rewrite one field of the compliant fixture, leaving the entry otherwise intact."""
     return re.sub(
@@ -360,6 +429,27 @@ def test_an_empty_allowlist_is_compliant() -> None:
 def test_a_well_formed_entry_is_compliant() -> None:
     """Positive control: the fence must be able to PASS with a populated allowlist."""
     assert audit(COMPLIANT) == []
+
+
+def test_live_make_expansion_matches_the_canonical_source_allowlist() -> None:
+    """GNU Make's effective audit command cannot carry an unseen suppression."""
+    makefile_text = MAKEFILE.read_text(encoding="utf-8")
+    assert audit(makefile_text) == []
+
+    source_violations: list[str] = []
+    source_ids = _suppressed_ids(
+        _assignments(makefile_text.splitlines()), source_violations
+    )
+    assert source_violations == []
+
+    command = _live_audit_command_tokens()
+    assert command[:3] == ["pip-audit", "-r", "requirements.txt"]
+    effective_violations: list[str] = []
+    effective_ids = _parse_ignore_tokens(
+        command[3:], "GNU Make-expanded audit command", effective_violations
+    )
+    assert effective_violations == []
+    assert effective_ids == source_ids
 
 
 @pytest.mark.parametrize(
@@ -439,6 +529,30 @@ def test_a_well_formed_entry_is_compliant() -> None:
             "exactly one assignment",
             id="target-specific append rejected",
         ),
+        pytest.param(
+            EMPTY
+            + "SUFFIX := IGNORES\n"
+            + "PIP_AUDIT_$(SUFFIX) := --ignore-vuln CVE-2026-999999\n",
+            "computed assignment names",
+            id="computed assignment name rejected",
+        ),
+        pytest.param(
+            _replace_empty_assignment(
+                "PIP_AUDIT_IGNORES := --ignore-v CVE-2026-999999"
+            ),
+            "unsupported token",
+            id="pip-audit option abbreviation rejected",
+        ),
+        pytest.param(
+            EMPTY + "include dependency-audit-overrides.mk\n",
+            "include directives are not auditable",
+            id="include-driven assignments rejected",
+        ),
+        pytest.param(
+            EMPTY + "$(eval PIP_AUDIT_IGNORES := --ignore-vuln CVE-2026-999999)\n",
+            "`eval` can synthesize assignments",
+            id="eval-driven assignments rejected",
+        ),
     ],
 )
 def test_the_fence_rejects_an_undeclared_suppression(
@@ -475,6 +589,43 @@ print:
     violations = audit(makefile_text)
     assert any("exactly one assignment" in item for item in violations)
     assert any("expansion is not auditable" in item for item in violations)
+
+
+def test_make_oracle_confirms_a_computed_assignment_name_is_effective(
+    tmp_path: Path,
+) -> None:
+    """GNU Make proves a computed left-hand side can replace the protected value."""
+    computed_assignment = """\
+SUFFIX := IGNORES
+PIP_AUDIT_$(SUFFIX) := --ignore-vuln CVE-2026-999999
+print:
+\t@printf '%s\\n' "$(PIP_AUDIT_IGNORES)"
+"""
+    makefile_text = EMPTY + computed_assignment
+    makefile = tmp_path / "Makefile"
+    makefile.write_text(makefile_text, encoding="utf-8")
+    completed = subprocess.run(
+        ["make", "--no-print-directory", "-f", str(makefile), "print"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.stdout.strip() == "--ignore-vuln CVE-2026-999999"
+    assert any("computed assignment names" in item for item in audit(makefile_text))
+
+
+def test_pip_audit_parser_oracle_confirms_an_abbreviated_option_is_effective() -> None:
+    """pip-audit proves `--ignore-v` is a real suppression, so the fence rejects it."""
+    advisory = "CVE-2026-999999"
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        pip_audit_cli = importlib.import_module("pip_audit._cli")
+    parsed = pip_audit_cli._parser().parse_args(["--ignore-v", advisory])
+    assert parsed.ignore_vulns == [advisory]
+    makefile_text = _replace_empty_assignment(
+        f"PIP_AUDIT_IGNORES := --ignore-v {advisory}"
+    )
+    assert any("unsupported token" in item for item in audit(makefile_text))
 
 
 @pytest.mark.parametrize("removed_line", CONTRACT_LINES)

@@ -34,7 +34,8 @@ ENTRYPOINTS := run_full_pipeline_v14.py run_scenario_analytics_v14.py \
 #
 # Use `cap: no-fix-published` only when upstream has published no fixed release.
 # SECDEP-01 canonical grammar (the fence rejects every other assignment shape):
-# Keep exactly one literal `PIP_AUDIT_IGNORES :=` assignment; do not use Make expansion or `+=`.
+# Keep exactly one literal `PIP_AUDIT_IGNORES :=` assignment; do not use computed names, includes, `eval`, expansion or `+=`.
+# Use only exact `--ignore-vuln <ID>` or `--ignore-vuln=<ID>` tokens; abbreviations and other tokens are rejected.
 # Each suppression has one physical declaration line in this comment block:
 # ignore-vuln: <ADVISORY-ID> | package: <name>==<version> | cap: <name><specifier> | lifted-by: <name> <version>|unknown | reason: <why the suppression is defensible>
 PIP_AUDIT_IGNORES :=
