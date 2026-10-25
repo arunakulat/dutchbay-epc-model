@@ -1,4 +1,4 @@
-.PHONY: setup hooks lint type security audit test test-stochastic-qualification test-report-qualification cov html package lock clean
+.PHONY: setup hooks lint type security audit audit-declared test test-stochastic-qualification test-report-qualification cov html package lock clean
 
 PY ?= python
 PIP ?= pip
@@ -61,14 +61,53 @@ type:
 	mypy $(SURFACE) $(ENTRYPOINTS)
 
 # Security gate (mirrors CI). SAST over own code (fail on MEDIUM+ severity/confidence) +
-# dependency CVE audit of the pinned lock (fail on any non-allowlisted advisory).
+# dependency CVE audit of the pinned lock in BOTH of pip-audit's coverage modes (fail on
+# any non-allowlisted advisory). The same $(PIP_AUDIT_IGNORES) applies to both passes, so a
+# suppression can never hold in one mode and not the other.
+#
+# TWO passes, because neither alone audits the whole lock. Measured 2026-10-25 against
+# requirements.txt at main 9b2b51e0 (312 pins), pip-audit 2.10.1, Python 3.12.3:
+#
+#   resolve mode   pip-audit -r requirements.txt                          -> 310 audited
+#   declared mode  pip-audit --no-deps --disable-pip -r requirements.txt  -> 312 audited
+#
+# RESOLVE mode builds a temporary venv, dry-run resolves the file and audits the resolve
+# report, so it is authoritative for what an install really pulls in and is the ONLY pass
+# that sees a package the lock does not pin - that is how `cloudpickle` was audited in the
+# window before #1387 pinned it. What it cannot see is a pin its own scaffolding already
+# satisfies: pip-audit's `VirtualEnv.post_setup` runs `pip install --upgrade pip wheel
+# setuptools` inside that venv BEFORE the `pip install --dry-run --report` resolve, and that
+# prologue lands `packaging` and `wheel` at exactly the versions this lock pins, so pip
+# reports neither as to-install and pip-audit audits neither. `packaging==26.3` and
+# `wheel==0.48.0` were therefore unaudited lock pins, and the omission is VERSION-
+# COINCIDENTAL - it appears and disappears as upstream moves, with nothing announcing either
+# way. Nobody wrote a rule excluding them; the auditor's own environment hid them.
+#
+# DECLARED mode closes that. `--no-deps --disable-pip` takes pip-audit's pre-resolved path,
+# skipping the venv entirely, and audits every requirement the file declares, so no pin can
+# hide behind the auditor's environment. It costs under a second and needs no resolve. It is
+# a COMPLEMENT, not a replacement: it audits only what is written down, which is why both
+# passes run and neither is dropped.
+#
+# Out of scope in both passes, stated rather than implied: `pip` itself, which this lock
+# deliberately does not pin - it is the resolver, and the one unpinned entry the lock-closure
+# check of #1359/#1387 expects to see. Tracked as a residual on #1353.
 security:
 	bandit -c pyproject.toml -r $(SURFACE) --severity-level medium --confidence-level medium
 	pip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)
+	pip-audit --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)
 
-# Convenience alias for the dependency audit alone.
+# Convenience alias for the resolve-mode audit alone. Deliberately ONE recipe line carrying
+# no flags beyond the lock and the allowlist: this is the canonical spelling of the effective
+# suppression set, and #1386 proposes a SECDEP-01 fence that reads `make -n audit` as its
+# oracle for it. Added coverage belongs in `audit-declared` and `security`, not here.
 audit:
 	pip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)
+
+# The declared-pin pass on its own: audits every pin in the lock, including the ones resolve
+# mode skips, in under a second and with no network resolve. The fast local pre-flight.
+audit-declared:
+	pip-audit --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)
 
 # The real test gate: pytest (xdist-parallel) with the coverage floor (#439). The floor
 # is enforced HERE and in the CI test step, not in pyproject addopts.
