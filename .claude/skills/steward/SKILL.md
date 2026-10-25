@@ -125,6 +125,22 @@ Where `RECRUIT-01` independent review was not run, record it in the receipts as
 `not run - <reason>`. Never assert a reviewer's acceptance that is not on record; the #1292
 changelog erratum records what happens when that goes wrong.
 
+**Review comes before the full suite (`REVIEW-01`).**
+
+1. Open the pull request as a draft and freeze its head.
+2. Post one comment headed `Evidence pack`. It carries the base and head SHAs, the subject
+   manifest with blob hashes, the complete diff or its exact range, your local receipts, and a
+   local run of `scripts/ci/check_pr_receipts.py` and `scripts/ci/check_pr_intake.py` against
+   the exact body. Lanes verify the pack at the objects; it is a claim, never a disposition.
+3. The lanes bind to that draft head. Only then mark the pull request ready for review, so the
+   full suite runs once.
+4. If that run forces a change to a subject blob, both reviews restart (module 3 §6). A base
+   advance needs §7's three proofs and a rebind, as before.
+
+The lane count follows the risk class. The three bounded low-risk classes in module 1 §3.1
+are `R1` and take one lane: presentation-only code, test-only guard tightening, and record
+corrections. Everything else takes the domain and assurance pair. When unsure, it is `R2`.
+
 ## Merging
 
 1. **Collect the merge-boundary conditions before anything else.** A merge-boundary condition is
@@ -172,8 +188,9 @@ changelog erratum records what happens when that goes wrong.
    - Confirm that no veto is outstanding. Confirm that each required disposition is non-blocking
      and bound to the exact head, or carried to it under module 3 §7. A required disposition is
      one from each reviewer role that `RECRUIT-01` module 1 requires for the risk class.
-     Handovers, review records, governance and any code, dependency bumps included, are `R2`
-     there. A required lane that has
+     Handovers, review records, governance, dependency bumps and any code outside module 1
+     §3.1's bounded low-risk classes are `R2` there; those classes are `R1` and take one lane
+     (`REVIEW-01`). A required lane that has
      not run, and that the owner has not waived on record, is a stated blocker, not a silent hold
      (`MERGE-01`): say on the pull request which lane is missing.
    - The head you merge must equal the head the dispositions are bound to. A later push or base
