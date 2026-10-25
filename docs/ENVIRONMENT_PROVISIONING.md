@@ -110,9 +110,13 @@ The container is **ephemeral**: the venv does not survive it. The hook is the
 recipe that makes the environment reproducible rather than persistent — do not try
 to persist a venv, and never commit one (`.venv` is correctly gitignored).
 
-The remote hook's checkout-local editable install is isolated to that disposable checkout.
-It is not permitted in the persistent shared environment, where it would bind every worktree
-to whichever checkout happened to provision the environment.
+The remote hook does not install the project itself. It installs the lock and the
+dependencies of the selected extras, and exports `PYTHONPATH` to the checkout, the same
+way activation does for the shared environment. An editable install is refused by the
+environment contract everywhere, because in the shared environment it would bind every
+worktree to whichever checkout happened to provision it. Before #1376 the hook ran
+`pip install -e`, and the probe missed it because the checkout's `egg-info` hid the
+environment's install record; the hook now removes such an install once on its next run.
 
 ---
 
