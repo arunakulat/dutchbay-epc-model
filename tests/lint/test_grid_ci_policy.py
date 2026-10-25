@@ -223,9 +223,12 @@ def _classify_repo(tmp_path: Path) -> tuple[Path, str]:
 
 
 def _run_classify_step(
-    repo: Path, tmp_path: Path, bases: dict[str, str]
+    repo: Path, tmp_path: Path, bases: dict[str, str], *, draft: str = "false"
 ) -> dict[str, tuple[str, str, str]]:
-    """Run the real classify step at HEAD against each base: (outputs, summary, log)."""
+    """Run the real classify step at HEAD against each base: (outputs, summary, log).
+
+    ``draft`` is the step's ``PR_DRAFT`` value, ``github.event.pull_request.draft`` in CI.
+    """
     results = {}
     for label, base in bases.items():
         output = tmp_path / f"{label}.output"
@@ -234,6 +237,7 @@ def _run_classify_step(
             GITHUB_OUTPUT=str(output),
             GITHUB_STEP_SUMMARY=str(summary),
             RUNNER_TEMP=str(tmp_path),
+            PR_DRAFT=draft,
         )
         completed = _run_like_ci(
             _render_classify_step(base), repo, env, tmp_path, f"classify-{label}"
@@ -315,6 +319,37 @@ def test_classify_step_runs_and_a_stale_base_can_widen_the_diff(
     assert _recorded("Event `pull_request.base.sha`", unmerged_base) in unmerged_log
     assert _recorded("Merge base with the PR head", fresh_base) in unmerged_log
     assert '"changed_path_count": 1' in unmerged_summary
+
+
+def test_classify_step_defers_the_full_suite_on_a_draft(tmp_path: Path) -> None:
+    """REVIEW-01: a draft classifies as no tests and no Grid Study, whatever it changes.
+
+    The head changes the grid surface, so the same step run for a non-draft event must
+    require both. That second run is the negative control: without it, a step that always
+    printed ``false`` would pass.
+    """
+    repo, base = _classify_repo(tmp_path)
+    (repo / "analytics" / "grid").mkdir(parents=True)
+    (repo / "analytics" / "grid" / "ride_through.py").write_text(
+        "X = 1\n", encoding="utf-8"
+    )
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "change the grid surface")
+    head = _git(repo, "rev-parse", "HEAD")
+
+    draft_output, draft_summary, draft_log = _run_classify_step(
+        repo, tmp_path, {"draft": base}, draft="true"
+    )["draft"]
+    assert "code_changed=false" in draft_output
+    assert "qsts_execution_changed=false" in draft_output
+    assert "full suite deferred until ready for review (REVIEW-01)" in draft_summary
+    assert _recorded("PR head", head) in draft_log
+
+    ready_output, _, _ = _run_classify_step(
+        repo, tmp_path, {"ready": base}, draft="false"
+    )["ready"]
+    assert "code_changed=true" in ready_output
+    assert "qsts_execution_changed=true" in ready_output
 
 
 def test_classify_step_a_stale_base_can_also_narrow_the_diff(tmp_path: Path) -> None:

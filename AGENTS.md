@@ -144,6 +144,13 @@ overlap judgment or the time the first edit occurred.
   and semantic-risk classification, one-active-writer leases and recovery, independent exact-object
   review/attestation, and capacity-aware staged delegation/ingress. Load-bearing documentation is
   reviewed by semantic consequence rather than downgraded because it is prose.
+- `REVIEW-01`: review comes before the full suite. Open the PR as a draft, freeze the head, post
+  one `Evidence pack` comment, and let the lanes the risk class requires bind to that draft head
+  before marking it ready for review, so the full suite runs once. The three bounded low-risk
+  classes in `RECRUIT-01` module 1 §3.1 take one lane; everything else keeps the domain and
+  assurance pair, and a subject change after review restarts both reviews (module 3 §6).
+  `test-suite.yml` defers the shards, the Coverage Gate and Grid Study on a draft, so the
+  required `Test Summary` check exists only after the ready run.
 
 ## Runtime logging and evidence retention
 
