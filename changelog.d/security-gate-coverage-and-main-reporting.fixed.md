@@ -34,9 +34,13 @@
   select the pre-resolved path and that the venv prologue is still the reason resolve mode
   skipped those pins. Both guards also reject the shapes that honour what is written and
   neuter what runs, each found by an independent review lane probing the guard rather than
-  the delivery: an `if:` or `continue-on-error` on the `make security` job or step, which
-  would silence the daily cadence or let a red audit report success on `main`; and, in the
-  `Makefile`, a suppression or a `|| true` appended to one audit pass alone, which no
-  `make -n` expansion can detect because the expansion only agrees with the source. Both
-  `security` audit lines are therefore pinned by equality to their canonical spelling. No
-  runtime, financial formula, scenario or KPI change.
+  the delivery: an `if:` or a `continue-on-error` on the `make security` job or step, which
+  would silence the daily cadence or let a red audit report success on `main`; a `paths:`
+  filter on the push trigger, which leaves `main` in `branches` and silences the run anyway;
+  and, in the `Makefile`, a suppression or a `|| true` appended to one audit pass alone,
+  which no `make -n` expansion can detect because the expansion only agrees with the source.
+  Both `security` audit lines are therefore pinned by equality to their canonical spelling,
+  and both conditional checks fail closed on any value that is not provably harmless, rather
+  than enumerating the bad literals — `continue-on-error: ${{ github.event_name ==
+  'schedule' }}` would otherwise have neutered the daily run alone. No runtime, financial
+  formula, scenario or KPI change.

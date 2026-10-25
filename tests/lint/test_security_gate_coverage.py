@@ -32,10 +32,11 @@ request's receipts and in the ``Makefile``'s own comment, where a reviewer reads
 
 Per VERIFY-01(5) every assertion in the ``Makefile`` and workflow guards ships the negative
 control that observes it firing: both are pure functions over text, exercised against mutated
-copies rather than trusted - 25 controls, 10 over the ``Makefile`` and 15 over the workflow.
-The three remaining tests are oracles against live objects rather than parsers, so they carry
-no mutation control and the claim is deliberately not made of them: one re-runs ``make -n``,
-and two interrogate the installed ``pip_audit``.
+copies rather than trusted - 31 controls, 10 over the ``Makefile`` and 21 over the workflow.
+The claim is deliberately not made of the other five tests, which have no text to mutate:
+three are oracles against live objects (one re-runs ``make -n``, two interrogate the installed
+``pip_audit``), one asserts an equality across two workflow files, and one asserts that the
+two fail-closed checks still accept the values that mean "always run".
 
 That claim was once wider than the set. #1388's independent domain lane probed
 ``audit_workflow`` key by key and found six shapes it passed: ``continue-on-error: true`` on
@@ -54,7 +55,23 @@ It is not, and the claim is withdrawn: that test asks GNU Make what ``security``
 checks the answer agrees with the source, so a weakening WRITTEN INTO the source passes both
 sides of the comparison. ``make -n audit`` is untouched by any of it, so #1386's fence does not
 see it either. Both ``security`` audit lines are therefore pinned by equality to their
-canonical spelling, with the lane's two shapes and a third as their controls.
+canonical spelling, with the lane's two shapes and a third as their controls. One nuance from
+that lane is worth keeping: ``make -n`` is no backstop against an appended token, but it is
+not inert - a duplicated ``security:`` target (Make honours the LAST recipe while ``_recipe``
+returns on the first) and an extra ``exit 0`` recipe line are caught there and nowhere else.
+Asking the tool what it will do, rather than out-parsing the file, still earns its place.
+
+The same lane then found the sixth and seventh shapes, in the two checks written to close its
+fifth. ``continue-on-error`` was an allowlist of two bad literals, so ``${{ true }}``,
+``"True"`` and ``${{ github.event_name == 'schedule' }}`` all passed - the last of which
+neuters the daily run while the push run keeps failing normally, which is gap 2 reopened
+behind a healthy-looking workflow. And a ``paths:`` filter on the ``push`` trigger left
+``main`` in ``branches`` while silencing the run for any commit that missed it. Both now fail
+CLOSED: a value is rejected unless it can be proved harmless, which is the shape the ``if``
+check had from the start. The lesson, recorded because it has now recurred four times on this
+repository in two days: controls drawn from the list of shapes a reviewer handed over will
+cover exactly those shapes. Derive them from the construct's grammar instead - every value
+GitHub Actions accepts in that field, every key it accepts in that trigger.
 """
 
 from __future__ import annotations
@@ -214,6 +231,16 @@ def audit_workflow(workflow: Workflow) -> list[str]:
             "must trigger on `push` to `main` so main carries its own audit status, got "
             f"{push!r}"
         )
+    # A path filter leaves `main` in `branches` and silences the run for every commit
+    # that misses the filter. `schedule:` cannot carry one, so the daily cadence would
+    # survive, but the push run would be present in the YAML and absent in fact.
+    for key in ("paths", "paths-ignore"):
+        if isinstance(push, dict) and key in push:
+            violations.append(
+                f"the `push` trigger must not carry `{key}`: the audit is about the "
+                f"whole lock, not the diff, so no commit to `main` is out of its scope, "
+                f"got {push[key]!r}"
+            )
 
     schedule = triggers.get("schedule")
     if not isinstance(schedule, list) or not schedule:
@@ -280,10 +307,20 @@ def audit_workflow(workflow: Workflow) -> list[str]:
                     f"the `make security` {owner} must not be conditional — an `if:` can "
                     f"silence the daily run the triggers promise, got {node['if']!r}"
                 )
-            if node.get("continue-on-error") in (True, "true"):
+            # Fails CLOSED, like the `if` check above: only a value that can be proved
+            # harmless is accepted. Actions takes an expression here, so an allowlist of
+            # bad literals missed `${{ true }}`, `"True"` and
+            # `${{ github.event_name == 'schedule' }}` — the last of which neuters the
+            # DAILY run while the push run keeps failing normally, so the workflow looks
+            # healthy and gap 2 reopens with every assertion here still green.
+            cont = node.get("continue-on-error")
+            if cont is not None and str(cont).strip().lower() not in {
+                "false",
+                "${{ false }}",
+            }:
                 violations.append(
                     f"the `make security` {owner} must not set `continue-on-error` — a "
-                    "red audit would report success on main"
+                    f"red audit would report success on main, got {cont!r}"
                 )
 
     names = {job.get("name") for job in jobs.values() if isinstance(job, dict)}
@@ -343,6 +380,23 @@ def test_make_expansion_agrees_with_the_makefile_source() -> None:
     declared = _make_commands("audit-declared")
     assert len(declared) == 1
     assert set(DECLARED_FLAGS) <= set(declared[0])
+
+
+def test_the_conditional_checks_do_not_over_reject() -> None:
+    """Both fail-closed checks must still accept the values that mean "always run".
+
+    A check that rejects everything is as useless as one that rejects nothing, and the
+    `continue-on-error` rule was tightened from an allowlist of bad literals to a
+    denylist-by-default. These are the spellings a maintainer may legitimately write.
+    """
+    for allowed in (False, "false", "${{ false }}"):
+        assert audit_workflow(_mutate_gate_step(**{"continue-on-error": allowed})) == []
+        assert audit_workflow(_mutate_job(**{"continue-on-error": allowed})) == []
+    for allowed in (True, "true", "${{ true }}"):
+        assert audit_workflow(_mutate_gate_step(**{"if": allowed})) == []
+    assert (
+        audit_workflow(_with_trigger("push", {"branches": ["main", "release/*"]})) == []
+    )
 
 
 def test_the_merge_gate_and_the_main_audit_run_the_same_command() -> None:
@@ -587,6 +641,42 @@ def _mutate_gate_step(**changes: Any) -> Workflow:
             lambda: _mutate_gate_step(**{"continue-on-error": True}),
             "step must not set `continue-on-error`",
             id="step continue-on-error lets a red audit report success",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(**{"continue-on-error": "${{ true }}"}),
+            "step must not set `continue-on-error`",
+            id="step continue-on-error written as an expression",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(**{"continue-on-error": "True"}),
+            "step must not set `continue-on-error`",
+            id="step continue-on-error written as a capitalised string",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(
+                **{"continue-on-error": "${{ github.event_name == 'schedule' }}"}
+            ),
+            "step must not set `continue-on-error`",
+            id="step continue-on-error silences only the daily run",
+        ),
+        pytest.param(
+            lambda: _mutate_job(**{"continue-on-error": "${{ true }}"}),
+            "job must not set `continue-on-error`",
+            id="job continue-on-error written as an expression",
+        ),
+        pytest.param(
+            lambda: _with_trigger(
+                "push", {"branches": ["main"], "paths": ["docs/never-touched/**"]}
+            ),
+            "must not carry `paths`",
+            id="push to main narrowed by a path filter",
+        ),
+        pytest.param(
+            lambda: _with_trigger(
+                "push", {"branches": ["main"], "paths-ignore": ["**"]}
+            ),
+            "must not carry `paths-ignore`",
+            id="push to main emptied by a paths-ignore filter",
         ),
         pytest.param(
             lambda: _mutate_job(**{"if": False}),
