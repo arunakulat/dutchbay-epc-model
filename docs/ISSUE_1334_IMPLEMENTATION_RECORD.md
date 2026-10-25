@@ -388,7 +388,7 @@ stays true however the branch is later rebased or merged:
 | Path | SHA-256 of the file bytes |
 |---|---|
 | `analytics/operational/eya_bridge.py` | `174e7a7ee753fdea8e70637725ec02a5449ec2c45f4742b2f236d055fe4bfda4` |
-| `tests/contracts/test_eya_actual_bridge.py` | `0c521493401eae60c390b00b95575455926d21bab15a99ebb774f3dc0edf5a32` |
+| `tests/contracts/test_eya_actual_bridge.py` | `17cb034c452dcfa896fb6b7fefb09a9e8f4eb30ebeb9b53c0b79591312fbcd32` |
 
 Environment: Claude Code cloud container, checkout-local `.venv`, Python **3.12.3** — not the
 owner's 3.12.14 host, which is unreachable from a container. The interpreter differs from the
@@ -431,6 +431,16 @@ such rather than as a pass.
 
 Module digest before and after the whole battery:
 `174e7a7ee753fdea8e70637725ec02a5449ec2c45f4742b2f236d055fe4bfda4`, unchanged.
+
+One correction worth recording rather than hiding, since `VERIFY-01` is about the record
+being true and not about it being flattering. The first push of these controls failed CI's
+`Code Quality Checks`: `black --check` reformatted a conditional expression inside a
+generator that `ruff format` had accepted. `make lint` describes `black` as advisory, but
+`.github/workflows/test-suite.yml` runs `black --check --diff .` as a **mandatory** gate, so
+the Makefile's comment is stale and running `ruff format` alone is not enough. The file was
+reformatted with `black`, all four formatters now agree on it repo-wide (`black` 782 files
+unchanged, `isort --check-only`, `ruff check`, `ruff format --check`), the suite still
+reports `58 passed`, and the test-file digest above is the post-`black` one.
 
 One finding about the shape of the A-1 control is worth recording, because the obvious test
 would have been worthless. An end-to-end assertion through `build_eya_actual_bridge` does

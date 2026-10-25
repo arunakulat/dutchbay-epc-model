@@ -1420,15 +1420,17 @@ def _without_available_component(
     operational: OperationalAEPResult, name: str
 ) -> OperationalAEPResult:
     components = tuple(
-        OperationalEnergyComponent(
-            name=item.name,
-            status="unavailable",
-            value=None,
-            evidence_ids=(),
-            unavailable_reason=f"{name} withheld for this control",
+        (
+            OperationalEnergyComponent(
+                name=item.name,
+                status="unavailable",
+                value=None,
+                evidence_ids=(),
+                unavailable_reason=f"{name} withheld for this control",
+            )
+            if item.name == name
+            else item
         )
-        if item.name == name
-        else item
         for item in operational.components
     )
     forged = copy.copy(operational)
