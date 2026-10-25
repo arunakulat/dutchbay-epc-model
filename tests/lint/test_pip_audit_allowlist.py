@@ -23,6 +23,7 @@ field that must not.
 from __future__ import annotations
 
 import importlib
+import os
 import re
 import shlex
 import subprocess
@@ -57,6 +58,10 @@ GENERIC_ASSIGNMENT = re.compile(r"^(?P<lhs>.*?)(?P<operator>:::=|::=|:=|\?=|\+=|
 DYNAMIC_DEFINE = re.compile(r"^\s*(?:override\s+)?define\s+(?P<name>\S+)")
 INCLUDE_DIRECTIVE = re.compile(r"^\s*(?:-include|sinclude|include)\b")
 EVAL_FUNCTION = re.compile(r"\$(?:\(\s*eval(?:\s|,)|\{\s*eval(?:\s|,))")
+ONESHELL_DIRECTIVE = re.compile(r"^\s*\.ONESHELL\s*:")
+SHELL_ASSIGNMENT = re.compile(
+    r"(?<![-A-Za-z0-9_.])(?:SHELL|\.SHELLFLAGS)\s*" r"(?:::=|::=|:=|\?=|\+=|!=|=)"
+)
 # A literal ignore option is legitimate only inside the one canonical assignment.
 # Match the exact option and argparse-style abbreviations such as ``--ignore-v``;
 # the assignment parser below then applies the narrower two-spelling grammar.
@@ -65,6 +70,13 @@ VERSION = re.compile(r"\d+(?:\.\d+)+")
 # A cap with no published fix says so in these words rather than being left blank.
 NO_FIX = "no-fix-published"
 PLACEHOLDERS = frozenset({"", "-", "?", "n/a", "na", "none", "tbd", "todo", "unknown"})
+GOVERNED_SOURCE_RECIPES = {
+    "audit": ("\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)",),
+    "security": (
+        "\tbandit -c pyproject.toml -r $(SURFACE) --severity-level medium --confidence-level medium",
+        "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)",
+    ),
+}
 # The exact contiguous contract the Makefile must carry in the comment block directly
 # above the assignment. Token-presence checks are too weak: scattered words are not an
 # instruction and were the P-10 failure mode.
@@ -74,6 +86,8 @@ CONTRACT_LINES = (
     "# Use only exact `--ignore-vuln <ID>` or `--ignore-vuln=<ID>` tokens; abbreviations and other tokens are rejected.",
     "# Ignore-option tokens may appear only in that assignment; direct recipe flags and other variables are rejected.",
     "# Both `make security` and `make audit` are live-checked against the canonical advisory IDs.",
+    "# The complete recipes are fixed: `audit` is only canonical pip-audit; `security` is exact Bandit then that pip-audit.",
+    "# `.ONESHELL`, `SHELL`, `.SHELLFLAGS`, shell preambles, aliases, functions, wrappers and extra commands are rejected; runtime sentinels prove both binaries are reached.",
     "# Each suppression has one physical declaration line in this comment block:",
     "# ignore-vuln: <ADVISORY-ID> | package: <name>==<version> | cap: <name><specifier> | lifted-by: <name> <version>|unknown | reason: <why the suppression is defensible>",
 )
@@ -100,6 +114,17 @@ def _source_shape_violations(
                 f"Makefile line {line_number}: ignore options may appear only in the "
                 f"canonical {VARIABLE} assignment, never directly in recipes or "
                 "other variables"
+            )
+        if ONESHELL_DIRECTIVE.match(code):
+            violations.append(
+                f"Makefile line {line_number}: `.ONESHELL` can carry shell state "
+                "into a governed command and is not permitted by SECDEP-01"
+            )
+        if SHELL_ASSIGNMENT.search(code):
+            violations.append(
+                f"Makefile line {line_number}: `SHELL` and `.SHELLFLAGS` overrides "
+                "can change governed command resolution and are not permitted by "
+                "SECDEP-01"
             )
         if INCLUDE_DIRECTIVE.match(line):
             violations.append(
@@ -170,6 +195,42 @@ def _assignments(lines: list[str]) -> list[tuple[int, int, str, str, str]]:
         )
         index += 1
     return assignments
+
+
+def _governed_recipe_violations(lines: list[str]) -> list[str]:
+    """Require the complete source recipe for every governed target present."""
+    violations: list[str] = []
+    for target, expected_recipe in GOVERNED_SOURCE_RECIPES.items():
+        declaration = re.compile(rf"^[ ]*{re.escape(target)}\s*::?(?:\s|$)")
+        definitions = [
+            index for index, line in enumerate(lines) if declaration.match(line)
+        ]
+        if not definitions:
+            continue
+        if len(definitions) != 1:
+            violations.append(
+                f"{target} must have exactly one target declaration, got "
+                f"{len(definitions)}"
+            )
+            continue
+
+        start = definitions[0]
+        if lines[start] != f"{target}:":
+            violations.append(
+                f"{target} target declaration must be exactly `{target}:`, got "
+                f"{lines[start]!r}"
+            )
+        recipe: list[str] = []
+        index = start + 1
+        while index < len(lines) and lines[index].startswith("\t"):
+            recipe.append(lines[index])
+            index += 1
+        if tuple(recipe) != expected_recipe:
+            violations.append(
+                f"{target} complete source recipe must be exactly "
+                f"{expected_recipe!r}, got {tuple(recipe)!r}"
+            )
+    return violations
 
 
 def _preceding_comment_block(lines: list[str], start: int) -> list[str]:
@@ -305,6 +366,7 @@ def audit(makefile_text: str) -> list[str]:
     lines = makefile_text.splitlines()
     assignments = _assignments(lines)
     violations = _source_shape_violations(lines, assignments)
+    violations.extend(_governed_recipe_violations(lines))
     if not assignments:
         violations.append(f"{VARIABLE} assignment not found in the Makefile")
         return violations
@@ -401,6 +463,23 @@ PIP_AUDIT_IGNORES := --ignore-vuln PYSEC-2026-4320
 EMPTY = f"{CONTRACT_TEXT}\nPIP_AUDIT_IGNORES :=\n"
 GOVERNED_TARGETS = ("audit", "security")
 PIP_AUDIT_PREFIX = ["pip-audit", "-r", "requirements.txt"]
+BANDIT_COMMAND = [
+    "bandit",
+    "-c",
+    "pyproject.toml",
+    "-r",
+    "finance",
+    "analytics",
+    "api",
+    "app",
+    "wind_resource",
+    "solar_resource",
+    "analysis_tools",
+    "--severity-level",
+    "medium",
+    "--confidence-level",
+    "medium",
+]
 
 
 def _dry_run_target_commands(
@@ -432,50 +511,91 @@ def _dry_run_target_commands(
 def _effective_target_violations(
     target: str, source_ids: list[str], makefile_text: str | None = None
 ) -> list[str]:
-    """Bind each target's sole pip-audit command to the canonical source IDs."""
+    """Require each governed target's complete canonical command sequence."""
     violations: list[str] = []
+    source_text = (
+        MAKEFILE.read_text(encoding="utf-8") if makefile_text is None else makefile_text
+    )
+    assignments = _assignments(source_text.splitlines())
+    if len(assignments) != 1:
+        return [
+            f"cannot derive the canonical command from {len(assignments)} "
+            f"{VARIABLE} assignments"
+        ]
+    try:
+        ignore_tokens = shlex.split(assignments[0][4], comments=True, posix=True)
+    except ValueError as exc:
+        return [f"cannot parse the canonical {VARIABLE} assignment: {exc}"]
+    parsed_source_ids = _parse_ignore_tokens(
+        ignore_tokens, f"canonical {VARIABLE} assignment", violations
+    )
+    if parsed_source_ids != source_ids:
+        violations.append(
+            f"canonical assignment IDs {parsed_source_ids!r} do not match source "
+            f"IDs {source_ids!r}"
+        )
+    if violations:
+        return violations
+
     try:
         commands = _dry_run_target_commands(target, makefile_text)
     except (AssertionError, ValueError) as exc:
         return [str(exc)]
 
-    # Count wrapped, path-qualified and ``python -m pip_audit`` spellings too. They
-    # are not canonical, but overlooking a second invocation would be fail-open.
-    pip_audit_commands = [
-        command
-        for command in commands
-        if any(
-            token == "pip_audit"
-            or token == "pip-audit"
-            or token.endswith("/pip-audit")
-            or "pip-audit " in token
-            for token in command
+    pip_audit_command = [*PIP_AUDIT_PREFIX, *ignore_tokens]
+    expected = {
+        "audit": [pip_audit_command],
+        "security": [BANDIT_COMMAND, pip_audit_command],
+    }.get(target)
+    if expected is None:
+        return [f"{target!r} is not a governed SECDEP-01 target"]
+    if commands != expected:
+        return [
+            f"make -n {target} complete command sequence must be exactly "
+            f"{expected!r}, got {commands!r}"
+        ]
+    return []
+
+
+def _run_target_with_sentinels(
+    tmp_path: Path, target: str, makefile_text: str
+) -> tuple[subprocess.CompletedProcess[str], dict[str, list[str]]]:
+    """Execute a target with harmless binaries that record their exact arguments."""
+    binary_dir = tmp_path / "bin"
+    receipt_dir = tmp_path / "receipts"
+    binary_dir.mkdir()
+    receipt_dir.mkdir()
+    for executable in ("bandit", "pip-audit"):
+        stub = binary_dir / executable
+        stub.write_text(
+            "#!/bin/sh\n"
+            "set -eu\n"
+            f'printf \'%s\\n\' "$@" > "$SECDEP_SENTINEL_DIR/{executable}.argv"\n',
+            encoding="utf-8",
         )
-    ]
-    if len(pip_audit_commands) != 1:
-        return [
-            f"make -n {target} must emit exactly one pip-audit command, got "
-            f"{len(pip_audit_commands)}: {commands!r}"
-        ]
+        stub.chmod(0o755)
 
-    command = pip_audit_commands[0]
-    if command[: len(PIP_AUDIT_PREFIX)] != PIP_AUDIT_PREFIX:
-        return [
-            f"make -n {target} pip-audit command must begin exactly "
-            f"{PIP_AUDIT_PREFIX!r}, got {command!r}"
-        ]
+    environment = os.environ.copy()
+    environment["PATH"] = f"{binary_dir}{os.pathsep}{environment['PATH']}"
+    environment["SECDEP_SENTINEL_DIR"] = str(receipt_dir)
+    for variable in ("BASH_ENV", "ENV", "MAKEFLAGS", "MFLAGS", "SHELL"):
+        environment.pop(variable, None)
 
-    effective_ids = _parse_ignore_tokens(
-        command[len(PIP_AUDIT_PREFIX) :],
-        f"GNU Make-expanded {target} command",
-        violations,
+    completed = subprocess.run(
+        ["make", "--no-print-directory", "-f", "-", target],
+        cwd=REPO_ROOT,
+        env=environment,
+        input=makefile_text,
+        check=False,
+        capture_output=True,
+        text=True,
     )
-    if effective_ids != source_ids:
-        violations.append(
-            f"make -n {target} effective advisory IDs {effective_ids!r} do not "
-            f"match canonical source IDs {source_ids!r}"
-        )
-    return violations
+    receipts = {
+        executable: receipt.read_text(encoding="utf-8").splitlines()
+        for executable in ("bandit", "pip-audit")
+        if (receipt := receipt_dir / f"{executable}.argv").is_file()
+    }
+    return completed, receipts
 
 
 def _mutate(field: str, value: str) -> str:
@@ -532,6 +652,34 @@ def test_live_make_expansion_matches_the_canonical_source_allowlist(
     assert _effective_target_violations(target, source_ids) == []
 
 
+@pytest.mark.parametrize(
+    ("target", "expected_receipts"),
+    [
+        pytest.param(
+            "audit",
+            {"pip-audit": PIP_AUDIT_PREFIX[1:]},
+            id="audit invokes pip-audit",
+        ),
+        pytest.param(
+            "security",
+            {
+                "bandit": BANDIT_COMMAND[1:],
+                "pip-audit": PIP_AUDIT_PREFIX[1:],
+            },
+            id="security invokes bandit then pip-audit",
+        ),
+    ],
+)
+def test_governed_targets_execute_the_expected_binaries(
+    tmp_path: Path, target: str, expected_receipts: dict[str, list[str]]
+) -> None:
+    """Runtime sentinels prove the printed commands resolve to real executables."""
+    makefile_text = MAKEFILE.read_text(encoding="utf-8")
+    completed, receipts = _run_target_with_sentinels(tmp_path, target, makefile_text)
+    assert completed.returncode == 0, completed.stderr
+    assert receipts == expected_receipts
+
+
 def test_security_recipe_cannot_carry_an_undeclared_direct_suppression() -> None:
     """F-1S control: the required CI target cannot diverge from ``audit``."""
     makefile_text = MAKEFILE.read_text(encoding="utf-8")
@@ -560,28 +708,57 @@ def test_security_recipe_cannot_carry_an_undeclared_direct_suppression() -> None
     assert rejected_injected_id, effective_violations
 
 
+def test_oneshell_alias_cannot_intercept_the_security_audit(tmp_path: Path) -> None:
+    """F-1W control: printed command text cannot stand in for runtime identity."""
+    makefile_text = MAKEFILE.read_text(encoding="utf-8")
+    canonical_recipe = "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)"
+    hostile_recipe = (
+        f"\talias pip-audit='echo SECURITY-AUDIT-INTERCEPTED'\n{canonical_recipe}"
+    )
+    mutated = ".ONESHELL:\n" + makefile_text.replace(
+        canonical_recipe, hostile_recipe, 1
+    )
+
+    source_violations = audit(mutated)
+    assert any(".ONESHELL" in item for item in source_violations), source_violations
+    rejected_source_recipe = any(
+        "complete source recipe" in item for item in source_violations
+    )
+    assert rejected_source_recipe, source_violations
+    effective_violations = _effective_target_violations("security", [], mutated)
+    rejected_interposition = any(
+        "complete command sequence" in item for item in effective_violations
+    )
+    assert rejected_interposition, effective_violations
+
+    completed, receipts = _run_target_with_sentinels(tmp_path, "security", mutated)
+    assert completed.returncode == 0, completed.stderr
+    assert "SECURITY-AUDIT-INTERCEPTED" in completed.stdout
+    assert receipts == {"bandit": BANDIT_COMMAND[1:]}
+
+
 @pytest.mark.parametrize(
     ("recipe", "expected"),
     [
         pytest.param(
             "\tpip-audit -r requirements.txt --ignore-v CVE-2026-999999\n",
-            "unsupported token",
+            "complete command sequence",
             id="abbreviated option",
         ),
         pytest.param(
             "\tpip-audit -r requirements.txt || true\n",
-            "unsupported token",
+            "complete command sequence",
             id="shell success override",
         ),
         pytest.param(
             "\tenv pip-audit -r requirements.txt\n",
-            "must begin exactly",
+            "complete command sequence",
             id="alternate command wrapper",
         ),
         pytest.param(
             "\tpip-audit -r requirements.txt\n"
             "\tpython -m pip_audit -r requirements.txt\n",
-            "exactly one pip-audit command",
+            "complete command sequence",
             id="second invocation",
         ),
     ],
@@ -697,6 +874,21 @@ def test_effective_target_oracle_rejects_noncanonical_commands(
             EMPTY + "EXTRA_AUDIT_FLAGS := --ignore-v CVE-2026-999999\n",
             "ignore options may appear only",
             id="abbreviated suppression in another variable rejected",
+        ),
+        pytest.param(
+            EMPTY + ".ONESHELL:\n",
+            ".ONESHELL",
+            id="one-shell state sharing rejected",
+        ),
+        pytest.param(
+            EMPTY + "SHELL := /bin/bash\n",
+            "SHELL",
+            id="shell override rejected",
+        ),
+        pytest.param(
+            EMPTY + ".SHELLFLAGS := -ec\n",
+            ".SHELLFLAGS",
+            id="shell flags override rejected",
         ),
         pytest.param(
             EMPTY + "include dependency-audit-overrides.mk\n",

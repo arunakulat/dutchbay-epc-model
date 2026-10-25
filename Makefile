@@ -38,6 +38,8 @@ ENTRYPOINTS := run_full_pipeline_v14.py run_scenario_analytics_v14.py \
 # Use only exact `--ignore-vuln <ID>` or `--ignore-vuln=<ID>` tokens; abbreviations and other tokens are rejected.
 # Ignore-option tokens may appear only in that assignment; direct recipe flags and other variables are rejected.
 # Both `make security` and `make audit` are live-checked against the canonical advisory IDs.
+# The complete recipes are fixed: `audit` is only canonical pip-audit; `security` is exact Bandit then that pip-audit.
+# `.ONESHELL`, `SHELL`, `.SHELLFLAGS`, shell preambles, aliases, functions, wrappers and extra commands are rejected; runtime sentinels prove both binaries are reached.
 # Each suppression has one physical declaration line in this comment block:
 # ignore-vuln: <ADVISORY-ID> | package: <name>==<version> | cap: <name><specifier> | lifted-by: <name> <version>|unknown | reason: <why the suppression is defensible>
 PIP_AUDIT_IGNORES :=
