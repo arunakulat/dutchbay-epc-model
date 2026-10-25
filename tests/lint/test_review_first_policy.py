@@ -51,7 +51,9 @@ REVIEW_01_REQUIRED_CONTROLS = (
     "never what voids a binding",
     "section 7's three proofs",
     "R1_ROUTINE work takes one role-appropriate independent lane",
-    "keep the separate task-domain and assurance pair",
+    # Pinned with its subject, like R1's count above: the bare tail would survive a
+    # rewrite that lets R2 take one lane (#1390 assurance C-1).
+    "R2_LOAD_BEARING and R3_CONSEQUENTIAL keep the separate task-domain and assurance pair",
     "module 1 section 3.1",
     "presentation-only code",
     "test-only guard tightening",
@@ -215,6 +217,23 @@ def test_review_01_guard_fails_if_automation_is_described_as_pending_again() -> 
     """Negative control: restoring the pending wording beside the new text fails."""
     rule = dict(_rules_by_id()["REVIEW-01"])
     rule["enforcement"] += " AUTOMATION PENDING: a draft still runs the full suite."
+    with pytest.raises(AssertionError):
+        _assert_review_01(rule)
+
+
+def test_review_01_guard_fails_if_r2_is_allowed_one_lane() -> None:
+    """Negative control: R2 relaxed to one lane fails, with the pair's wording left in place.
+
+    This is the exact rewrite that passed the guard when only the tail of the R2/R3 clause
+    was pinned (#1390 assurance C-1).
+    """
+    rule = dict(_rules_by_id()["REVIEW-01"])
+    rule["description"] = rule["description"].replace(
+        "R2_LOAD_BEARING and R3_CONSEQUENTIAL keep the separate task-domain and assurance pair",
+        "R2_LOAD_BEARING may take one lane where the coordinator judges it safe; "
+        "R3_CONSEQUENTIAL keep the separate task-domain and assurance pair",
+    )
+    assert "keep the separate task-domain and assurance pair" in rule["description"]
     with pytest.raises(AssertionError):
         _assert_review_01(rule)
 
