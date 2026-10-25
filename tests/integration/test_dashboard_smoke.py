@@ -17,23 +17,50 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DASHBOARD = REPO_ROOT / "analytics" / "dashboard" / "streamlit_app.py"
 
-# Names the OLD dashboard imported that no longer exist — must never reappear.
+# Names the dashboard must not reference — must never reappear. Two kinds, one check:
+# symbols the OLD dashboard imported from analytics.sensitivity that no longer exist,
+# and parameters Streamlit has removed. Both fail the same way, a traceback on
+# `streamlit run`, and both are visible only in the source text.
 _DEAD_SYMBOLS = (
     "SensitivityRequest",
     "plot_spider_chart",
     "run_multi_metric_tornado",
     "run_tornado_sensitivity",
     "tornado_suite_to_dataframe",
+    # Streamlit's announced removal date for use_container_width was 2025-12-31;
+    # width="stretch" replaces it. The pinned 1.66.1 still accepts it, so nothing but
+    # this guard stops it returning before a minor release drops it (#1353 P-8, P-9).
+    "use_container_width",
 )
 
 
+def _removed_api_offenders(src: str) -> list[str]:
+    """Dead names appearing in ``src``. Shared by the guard and its negative control."""
+    return [s for s in _DEAD_SYMBOLS if re.search(rf"\b{s}\b", src)]
+
+
 def test_dashboard_does_not_reference_removed_api() -> None:
-    src = DASHBOARD.read_text()
-    offenders = [s for s in _DEAD_SYMBOLS if re.search(rf"\b{s}\b", src)]
+    offenders = _removed_api_offenders(DASHBOARD.read_text())
     assert not offenders, (
         "Dashboard references removed sensitivity API symbols (the rot returned): "
         + ", ".join(offenders)
     )
+
+
+def test_removed_api_guard_fails_on_source_that_carries_a_dead_name() -> None:
+    """Negative control for the guard above: it must be able to fail.
+
+    Without this, a clean dashboard and a guard that reads nothing look identical.
+    That was the defect recorded as #1353 P-9: the acceptance test named for the
+    ``use_container_width`` migration could not fail whether or not the migration
+    happened, because the name was in no check at all.
+    """
+    assert _removed_api_offenders("st.dataframe(df, use_container_width=True)") == [
+        "use_container_width"
+    ]
+    # One control per dead name, so the tuple cannot be quietly emptied either.
+    for symbol in _DEAD_SYMBOLS:
+        assert _removed_api_offenders(f"value = {symbol}") == [symbol]
 
 
 def test_dashboard_engine_imports_resolve() -> None:
