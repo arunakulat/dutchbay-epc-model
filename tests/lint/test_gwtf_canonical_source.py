@@ -437,3 +437,132 @@ def test_commit_convention_guards_reject_retired_text_returning(
     monkeypatch.setitem(globals(), "_rules_by_id", lambda: mutated)
     with pytest.raises(AssertionError):
         guard()  # type: ignore[operator]
+
+
+SECDEP_01_REQUIRED_CONTROLS = (
+    "dated claim about the world",
+    "--ignore-vuln",
+    "PIP_AUDIT_IGNORES",
+    "exactly one literal :=",
+    "computed variable names",
+    "option abbreviations",
+    "direct recipe flags",
+    "make -n security",
+    "make -n audit",
+    "security-only recipe suppression",
+    "pip-audit's own parser",
+    "ambiguous prefixes",
+    "every emitted command",
+    "each command on its own",
+    "two audit passes",
+    "complete command sequence",
+    ".ONESHELL alias interception",
+    "discards a governed exit status",
+    ".IGNORE",
+    "MAKEFLAGS",
+    "GNUMAKEFLAGS",
+    "form-independently",
+    "dash-prefixed",
+    "runtime sentinels",
+    "sentinels forced to fail",
+    "no-fix-published",
+    "release that would lift it",
+    "REMOVED rather than re-justified",
+    "is not evidence",
+    ".github/dependabot.yml",
+    "constraints.txt",
+    "SHAPE of the declaration",
+    "caller-supplied make -i",
+    "command-line variable override",
+    "CI surface",
+    "environment-selected vulnerability service",
+    "asserted clean against the committed Makefile",
+    "No expectation assumes the allowlist is empty",
+    "packaging primitives",
+    "tests/lint/test_pip_audit_allowlist.py",
+    "RELEASING.md",
+    "hostile controls",
+    "before make lock",
+    "partial delivery of P-1",
+)
+
+SECDEP_01_RELEASING_CONTROLS = (
+    "**Before regenerating, re-check every suppressed advisory",
+    "PIP_AUDIT_IGNORES",
+    "check the cap against the index",
+    "dependency or constraint",
+    "input is updated to admit",
+    "before `make lock`",
+    "never regenerate first",
+    "tests/lint/test_pip_audit_allowlist.py",
+    "make audit",
+)
+
+
+def _assert_secdep_01_release_order(releasing: str) -> None:
+    """Bind the substantive cap check and require it before lock regeneration."""
+    section = releasing.split("## 2) Refresh the dependency lock", 1)[1].split(
+        "## 3) Verify the wheel builds", 1
+    )[0]
+    section = " ".join(section.split())
+    for control in SECDEP_01_RELEASING_CONTROLS:
+        assert control in section
+    assert section.index("**Before regenerating") < section.index("make lock")
+
+
+def test_secdep_01_binds_a_suppressed_advisory_to_its_lift_condition() -> None:
+    """Pin SECDEP-01 to its fence, its narrow scope and its stated limit."""
+    secdep_01 = _rules_by_id()["SECDEP-01"]
+    policy = _policy("SECDEP-01")
+
+    assert secdep_01["status"] == "active"
+    assert secdep_01["category"] == "Dependency Security"
+    for control in SECDEP_01_REQUIRED_CONTROLS:
+        assert control in policy
+
+    # The rule names two places a human reads it and one that enforces it. A rule citing
+    # an enforcement point that does not carry it is the P-10 shape, so bind all three.
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    releasing = (REPO_ROOT / "RELEASING.md").read_text(encoding="utf-8")
+
+    assert "SECDEP-01" in makefile
+    assert "ignore-vuln:" in makefile
+    _assert_secdep_01_release_order(releasing)
+    assert (REPO_ROOT / "tests/lint/test_pip_audit_allowlist.py").is_file()
+
+
+@pytest.mark.parametrize("removed_control", SECDEP_01_REQUIRED_CONTROLS)
+def test_secdep_01_guard_rejects_control_loss(
+    monkeypatch: pytest.MonkeyPatch, removed_control: str
+) -> None:
+    """Observe every asserted SECDEP-01 control being load-bearing, one at a time."""
+    mutated = {key: dict(row) for key, row in _rules_by_id().items()}
+    for cell in ("title", "description", "enforcement"):
+        mutated["SECDEP-01"][cell] = mutated["SECDEP-01"][cell].replace(
+            removed_control, "REMOVED_CONTROL"
+        )
+
+    monkeypatch.setitem(globals(), "_rules_by_id", lambda: mutated)
+    with pytest.raises(AssertionError):
+        test_secdep_01_binds_a_suppressed_advisory_to_its_lift_condition()
+
+
+@pytest.mark.parametrize("removed_control", SECDEP_01_RELEASING_CONTROLS)
+def test_secdep_01_release_guard_rejects_control_loss(
+    removed_control: str,
+) -> None:
+    """A label-only release note cannot satisfy the cross-surface binding."""
+    releasing = (REPO_ROOT / "RELEASING.md").read_text(encoding="utf-8")
+    mutated = releasing.replace(removed_control, "REMOVED_RELEASE_CONTROL", 1)
+    with pytest.raises(AssertionError):
+        _assert_secdep_01_release_order(mutated)
+
+
+def test_secdep_01_release_guard_rejects_lock_before_recheck() -> None:
+    """The cap/index decision must precede, not follow, lock regeneration."""
+    releasing = (REPO_ROOT / "RELEASING.md").read_text(encoding="utf-8")
+    heading = "## 2) Refresh the dependency lock"
+    insertion = releasing.index(heading) + len(heading)
+    reordered = releasing[:insertion] + "\nmake lock\n" + releasing[insertion:]
+    with pytest.raises(AssertionError):
+        _assert_secdep_01_release_order(reordered)
