@@ -23,8 +23,26 @@ ENTRYPOINTS := run_full_pipeline_v14.py run_scenario_analytics_v14.py \
 # Earlier accepted advisories were cleared the same way, by the coordinated major upgrade
 # (fastapi 0.121->0.137 + starlette 0.49->1.3.1, streamlit 1.51->1.54 + pyarrow 21->24, black
 # 25->26 [+ pathspec/pytokens], curl-cffi 0.13->0.15). Keep this variable as the home for any
-# FUTURE genuinely-capped CVE (add `--ignore-vuln <ID>` with a one-line reason naming the cap
-# and the release that would lift it), and prefer fixing over ignoring.
+# FUTURE genuinely-capped CVE, and prefer fixing over ignoring.
+#
+# An accepted advisory is a dated claim about the world, not a property of this repository:
+# streamlit 1.66.1 lifted the `pillow<13` cap twelve minutes after #1369 merged, and the
+# unchanged pin carried eight advisories that evening and twenty-four by morning. The fence
+# validates literal syntax and declaration shape, not the package index. RELEASING.md step 2
+# therefore re-checks the cap before lock regeneration; a lifted cap removes the suppression
+# and updates dependency inputs before `make lock`. Quote only a fresh `make audit` result.
+#
+# Use `cap: no-fix-published` only when upstream has published no fixed release.
+# SECDEP-01 canonical grammar (the fence rejects every other assignment shape):
+# Keep exactly one literal `PIP_AUDIT_IGNORES :=` assignment; do not use computed names, includes, `eval`, expansion or `+=`.
+# Use only exact `--ignore-vuln <ID>` or `--ignore-vuln=<ID>` tokens; abbreviations and other tokens are rejected.
+# Ignore-option tokens may appear only in that assignment; direct recipe flags and other variables are rejected.
+# Both `make security` and `make audit` are live-checked against the canonical advisory IDs.
+# The complete recipes are fixed: `audit` is only canonical resolve-mode pip-audit; `security` is exact Bandit then canonical resolve and declared-pin pip-audit passes.
+# `.ONESHELL`, `SHELL`, `.SHELLFLAGS`, shell preambles, aliases, functions, wrappers and extra commands are rejected; runtime sentinels prove all three invocations reach the expected binaries.
+# `.IGNORE`, Make flag variable assignments (`MAKEFLAGS`, `GNUMAKEFLAGS`, `MFLAGS`) and `-` recipe prefixes are rejected: a failing audit must fail the target, and sentinels forced to fail prove it does.
+# Each suppression has one physical declaration line in this comment block:
+# ignore-vuln: <ADVISORY-ID> | package: <name>==<version> | cap: <name><specifier> | lifted-by: <name> <version>|unknown | reason: <why the suppression is defensible>
 PIP_AUDIT_IGNORES :=
 
 # Coverage surface for the floor gate (#439, +solar_resource #456): the six engine
