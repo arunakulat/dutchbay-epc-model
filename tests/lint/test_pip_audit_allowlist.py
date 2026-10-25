@@ -22,6 +22,7 @@ field that must not.
 
 from __future__ import annotations
 
+import argparse
 import importlib
 import re
 import shlex
@@ -57,10 +58,84 @@ GENERIC_ASSIGNMENT = re.compile(r"^(?P<lhs>.*?)(?P<operator>:::=|::=|:=|\?=|\+=|
 DYNAMIC_DEFINE = re.compile(r"^\s*(?:override\s+)?define\s+(?P<name>\S+)")
 INCLUDE_DIRECTIVE = re.compile(r"^\s*(?:-include|sinclude|include)\b")
 EVAL_FUNCTION = re.compile(r"\$(?:\(\s*eval(?:\s|,)|\{\s*eval(?:\s|,))")
-# A literal ignore option is legitimate only inside the one canonical assignment.
-# Match the exact option and argparse-style abbreviations such as ``--ignore-v``;
-# the assignment parser below then applies the narrower two-spelling grammar.
-IGNORE_OPTION_TOKEN = re.compile(r"(?<![-A-Za-z0-9_])--ignore(?:-[^\s#]*)?")
+# Any long option, so each one can be judged against pip-audit's own grammar below.
+LONG_OPTION = re.compile(r"(?<![-A-Za-z0-9_])--[A-Za-z0-9][-A-Za-z0-9]*")
+# pip-audit's suppression options, read from its own parser. F-1A got in because this
+# control keyed on the literal text ``--ignore``: argparse accepts any unambiguous
+# PREFIX of a long option, so ``--ig`` and ``--ign`` suppress exactly as
+# ``--ignore-vuln`` does while never containing the word the scan looked for.
+IGNORE_OPTION_DESTS = frozenset({"ignore_vulns"})
+CANONICAL_IGNORE_OPTIONS = frozenset({"--ignore-vuln"})
+
+
+def _ignore_option_names() -> frozenset[str]:
+    """Return pip-audit's own suppression option spellings.
+
+    Derived from the installed parser rather than hard-coded, so a renamed or added
+    suppression option is covered without editing this file. The canonical spelling is
+    unioned in so an import failure cannot leave the fence with nothing to match.
+    """
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            pip_audit_cli = importlib.import_module("pip_audit._cli")
+        actions = pip_audit_cli._parser()._actions
+    except Exception:  # pragma: no cover - the fence must never fail open
+        return CANONICAL_IGNORE_OPTIONS
+    return frozenset(
+        {
+            option
+            for action in actions
+            if action.dest in IGNORE_OPTION_DESTS
+            for option in action.option_strings
+            if option.startswith("--")
+        }
+        | set(CANONICAL_IGNORE_OPTIONS)
+    )
+
+
+IGNORE_OPTION_NAMES = _ignore_option_names()
+
+
+def _is_ignore_option(token: str) -> bool:
+    """Return True for any token pip-audit would read as a suppression option.
+
+    Every prefix of a suppression option is rejected, ambiguous ones included: an
+    ambiguous prefix such as ``--i`` makes pip-audit exit 2 instead of suppressing, so
+    rejecting it costs nothing and keeps the rule the shape of argparse's own matching
+    rather than a list of spellings someone has to remember to extend.
+    """
+    name = token.split("=", 1)[0]
+    if not name.startswith("--") or name == "--":
+        return False
+    if any(option.startswith(name) for option in IGNORE_OPTION_NAMES):
+        return True
+    # An unknown ``--ignore-*`` spelling is not a pip-audit option at all, so it would
+    # fail the audit rather than suppress. It is still rejected: a token that reads as a
+    # suppression has no business in a governed recipe.
+    return name.startswith("--ignore")
+
+
+def _line_has_ignore_option(code: str) -> bool:
+    """Return True when any long option on this Makefile line is a suppression option."""
+    return any(_is_ignore_option(match.group()) for match in LONG_OPTION.finditer(code))
+
+
+def _command_ignore_tokens(command: list[str]) -> list[str]:
+    """Return one command's suppression tokens, each with its attached advisory ID."""
+    tokens: list[str] = []
+    index = 0
+    while index < len(command):
+        token = command[index]
+        if _is_ignore_option(token):
+            tokens.append(token)
+            if "=" not in token and index + 1 < len(command):
+                tokens.append(command[index + 1])
+                index += 1
+        index += 1
+    return tokens
+
+
 VERSION = re.compile(r"\d+(?:\.\d+)+")
 # A cap with no published fix says so in these words rather than being left blank.
 NO_FIX = "no-fix-published"
@@ -95,7 +170,7 @@ def _source_shape_violations(
             continue
         source_index = line_number - 1
         code = line.split("#", 1)[0]
-        if source_index not in assignment_lines and IGNORE_OPTION_TOKEN.search(code):
+        if source_index not in assignment_lines and _line_has_ignore_option(code):
             violations.append(
                 f"Makefile line {line_number}: ignore options may appear only in the "
                 f"canonical {VARIABLE} assignment, never directly in recipes or "
@@ -465,30 +540,26 @@ def _effective_suppression_violations(
     except (AssertionError, ValueError) as exc:
         return [str(exc)]
 
-    # Every emitted token is read, not the commands that look like an audit. A
-    # suppression that reaches the audit from a line this fence never anticipated is
-    # still a suppression, and filtering for recognizable lines is what let F-1
-    # through. Both spellings are collected and then parsed under the same narrow
-    # grammar as the source, so an abbreviation fails closed here too.
-    suppression_tokens: list[str] = []
-    for command in commands:
-        index = 0
-        while index < len(command):
-            token = command[index]
-            if IGNORE_OPTION_TOKEN.match(token):
-                suppression_tokens.append(token)
-                if "=" not in token and index + 1 < len(command):
-                    suppression_tokens.append(command[index + 1])
-                    index += 1
-            index += 1
-    effective_ids = _parse_ignore_tokens(
-        suppression_tokens, f"effective `make -n {target}` commands", violations
-    )
-    if effective_ids != source_ids:
-        violations.append(
-            f"make -n {target} effective suppressions {effective_ids!r} do not match "
-            f"the declared allowlist {source_ids!r}"
+    # Every emitted command is read, not the ones that look like an audit: a suppression
+    # reaching the audit from a line this fence never anticipated is still a suppression,
+    # and filtering for recognizable lines is what let F-1 through.
+    #
+    # Each command is compared ON ITS OWN. The mandatory target passes the allowlist to
+    # two audits, as #1388 requires, so pooling their tokens makes one correct
+    # declaration look like two suppressions - the F-1 defect the assurance lane found,
+    # invisible while the live allowlist is empty.
+    for position, command in enumerate(commands, start=1):
+        tokens = _command_ignore_tokens(command)
+        if not tokens:
+            continue
+        parsed = _parse_ignore_tokens(
+            tokens, f"`make -n {target}` command {position}", violations
         )
+        if parsed != source_ids:
+            violations.append(
+                f"make -n {target} command {position} suppresses {parsed!r}, not the "
+                f"declared allowlist {source_ids!r}"
+            )
     return violations
 
 
@@ -748,18 +819,114 @@ print:
     assert any("computed assignment names" in item for item in audit(makefile_text))
 
 
-def test_pip_audit_parser_oracle_confirms_an_abbreviated_option_is_effective() -> None:
-    """pip-audit proves `--ignore-v` is a real suppression, so the fence rejects it."""
-    advisory = "CVE-2026-999999"
+ABBREVIATIONS = ("--ignore-v", "--igno", "--ign", "--ig")
+
+
+def _pip_audit_parser() -> argparse.ArgumentParser:
+    """Return pip-audit's own argument parser, the authority on what suppresses."""
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         pip_audit_cli = importlib.import_module("pip_audit._cli")
-    parsed = pip_audit_cli._parser().parse_args(["--ignore-v", advisory])
-    assert parsed.ignore_vulns == [advisory]
-    makefile_text = _replace_empty_assignment(
-        f"PIP_AUDIT_IGNORES := --ignore-v {advisory}"
+    parser = pip_audit_cli._parser()
+    assert isinstance(parser, argparse.ArgumentParser)
+    return parser
+
+
+@pytest.mark.parametrize("abbreviation", ABBREVIATIONS)
+@pytest.mark.parametrize("attached", [False, True], ids=["spaced", "equals"])
+def test_pip_audit_parser_oracle_confirms_abbreviations_are_effective(
+    abbreviation: str, attached: bool
+) -> None:
+    """pip-audit proves each abbreviation suppresses, so the fence rejects each one.
+
+    F-1A: the earlier control matched the literal text ``--ignore``, which ``--ig`` and
+    ``--ign`` never contain even though argparse resolves them to ``--ignore-vuln``.
+    The grammar is now derived from this parser instead of a spelling.
+    """
+    advisory = "CVE-2026-999999"
+    argv = [f"{abbreviation}={advisory}"] if attached else [abbreviation, advisory]
+    assert _pip_audit_parser().parse_args(argv).ignore_vulns == [advisory]
+
+    assignment = f"PIP_AUDIT_IGNORES := {' '.join(argv)}"
+    violations = audit(_replace_empty_assignment(assignment))
+    assert any("unsupported token" in item for item in violations), violations
+
+
+def test_an_ambiguous_abbreviation_is_rejected_although_it_cannot_suppress() -> None:
+    """`--i` matches two options, so pip-audit exits; the fence still fails closed."""
+    with pytest.raises(SystemExit):
+        _pip_audit_parser().parse_args(["--i", "CVE-2026-999999"])
+    assert _is_ignore_option("--i")
+
+
+@pytest.mark.parametrize("abbreviation", ABBREVIATIONS)
+def test_an_abbreviated_recipe_suppression_is_effective_and_is_rejected(
+    abbreviation: str,
+) -> None:
+    """Prove the recipe really suppresses before proving the fence rejects it."""
+    makefile_text = MAKEFILE.read_text(encoding="utf-8")
+    canonical_recipe = "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)"
+    hostile_recipe = (
+        f"\tpip-audit -r requirements.txt {abbreviation} CVE-2026-999999 "
+        "$(PIP_AUDIT_IGNORES)"
     )
-    assert any("unsupported token" in item for item in audit(makefile_text))
+    mutated = makefile_text.replace(canonical_recipe, hostile_recipe, 1)
+    assert mutated != makefile_text
+
+    # The suppression really reaches the audit: it is in the emitted command, and
+    # pip-audit's own parser reads it as an ignore flag.
+    commands = _dry_run_target_commands("security", mutated)
+    assert any(abbreviation in command for command in commands), commands
+
+    source_violations = audit(mutated)
+    assert any(
+        "ignore options may appear only" in item for item in source_violations
+    ), source_violations
+    effective_violations = _effective_suppression_violations("security", [], mutated)
+    assert effective_violations, "the live oracle passed an abbreviated suppression"
+
+
+POPULATED_TARGETS = COMPLIANT + (
+    "audit:\n\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
+    "security:\n\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
+    "\tpip-audit --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
+)
+DECLARED_IDS = ["PYSEC-2026-4320"]
+
+
+@pytest.mark.parametrize("target", GOVERNED_TARGETS)
+def test_the_oracle_passes_one_declaration_carried_by_every_audit_pass(
+    target: str,
+) -> None:
+    """Positive control: a real declaration must pass, on both audit passes.
+
+    F-1: the oracle pooled the tokens of every emitted command, so the mandatory
+    target - which passes the allowlist to two audits, as #1388 requires - made one
+    correct declaration look like two suppressions. The empty live allowlist hid it.
+    Each command is now compared on its own.
+    """
+    assert audit(POPULATED_TARGETS) == []
+    assert (
+        _effective_suppression_violations(target, DECLARED_IDS, POPULATED_TARGETS) == []
+    )
+
+
+def test_the_oracle_rejects_an_extra_suppression_on_one_audit_pass() -> None:
+    """Per-command comparison must still catch a divergence between the two passes."""
+    declared_pass = (
+        "\tpip-audit --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
+    )
+    hostile_pass = (
+        "\tpip-audit --no-deps --disable-pip -r requirements.txt "
+        "--ignore-vuln CVE-2026-999999 $(PIP_AUDIT_IGNORES)\n"
+    )
+    mutated = POPULATED_TARGETS.replace(declared_pass, hostile_pass, 1)
+    assert mutated != POPULATED_TARGETS
+
+    violations = _effective_suppression_violations("security", DECLARED_IDS, mutated)
+    assert any("CVE-2026-999999" in item for item in violations), violations
+    # The untouched resolve-mode pass is not blamed for its neighbour's divergence.
+    assert not any("command 1" in item for item in violations), violations
 
 
 @pytest.mark.parametrize("removed_line", CONTRACT_LINES)
