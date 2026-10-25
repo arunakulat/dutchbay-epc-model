@@ -101,8 +101,16 @@ defects in the generated bash, zsh and fish `activate` scripts, fixed across 21.
 | `pip install --dry-run --ignore-installed -r requirements.txt` | exit 0, 312 packages, only the three targets moved |
 | `pip check` | `No broken requirements found.` |
 | `make lint` | exit 0 — `All checks passed!`, black `777 files would be left unchanged`, isort skipped |
-| CI on `96cf5bb1` | 20 checks success, 2 skipped by their own path filters; all six shards, 9 126 tests, 0 failures |
+| CI on `96cf5bb1` | 23 check runs: 20 success, 2 skipped by their own path filters, and one `Verification receipts (VERIFY-01)` failure (job 119557766204) re-run green (job 119558170473); all six shards, 9 126 tests, 0 failures |
 | `scripts/list_session_handover_records.py` at git 2.43.0 | `exit=0`, five records in order |
+
+*Correction, 2026-10-25.* The `96cf5bb1` row first read "20 checks success, 2 skipped by their own
+path filters", which accounts for 22 of the 23 runs that head carried and omits the
+`Verification receipts (VERIFY-01)` failure that #1372's merge record discloses. Raised as
+**D-6** on #1353 ([comment 6334450058](https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6334450058))
+and corrected above against the check runs themselves, not against the review's wording. The row
+was incomplete, not false: the failure was re-run green before the merge, and the merge decision
+it supports is unchanged.
 
 ### Review and merge governance
 
