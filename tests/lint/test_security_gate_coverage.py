@@ -44,6 +44,7 @@ import subprocess
 import tempfile
 import warnings
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -62,6 +63,10 @@ DECLARED_FLAGS = ("--no-deps", "--disable-pip")
 UNAUDITED_IN_RESOLVE_MODE = ("packaging", "wheel")
 # PyYAML parses a bare `on:` key as the boolean True (YAML 1.1 truthiness).
 ON_KEYS = (True, "on")
+
+# A parsed workflow is genuinely heterogeneous - PyYAML hands back a bool for the `on`
+# key alongside string keys - so the mapping is not narrowable to anything useful.
+Workflow = dict[Any, Any]
 
 
 def _recipe(makefile_text: str, target: str) -> list[str]:
@@ -145,7 +150,7 @@ def audit_makefile(makefile_text: str) -> list[str]:
     return violations
 
 
-def audit_workflow(workflow: dict[object, object]) -> list[str]:
+def audit_workflow(workflow: Workflow) -> list[str]:
     """Return one message per main-branch-reporting violation; empty means compliant."""
     violations: list[str] = []
 
@@ -235,8 +240,9 @@ def _make_commands(target: str) -> list[list[str]]:
     ]
 
 
-def _workflow() -> dict[object, object]:
-    return yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+def _workflow() -> Workflow:
+    loaded: Workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    return loaded
 
 
 def test_the_live_security_gate_audits_every_pin_in_the_lock() -> None:
@@ -385,7 +391,7 @@ def test_the_makefile_guard_rejects_narrowed_coverage(
     assert any(expected in violation for violation in violations), violations
 
 
-def _without(key: object) -> dict[object, object]:
+def _without(key: object) -> Workflow:
     workflow = _workflow()
     triggers = dict(next(workflow[k] for k in ON_KEYS if k in workflow))
     triggers.pop(key, None)
@@ -395,7 +401,7 @@ def _without(key: object) -> dict[object, object]:
     return workflow
 
 
-def _with_trigger(key: object, value: object) -> dict[object, object]:
+def _with_trigger(key: object, value: object) -> Workflow:
     workflow = _workflow()
     triggers = dict(next(workflow[k] for k in ON_KEYS if k in workflow))
     triggers[key] = value
@@ -405,11 +411,9 @@ def _with_trigger(key: object, value: object) -> dict[object, object]:
     return workflow
 
 
-def _mutate_job(**changes: object) -> dict[object, object]:
+def _mutate_job(**changes: Any) -> Workflow:
     workflow = _workflow()
-    jobs = {
-        name: {**job, **changes} for name, job in workflow["jobs"].items()  # type: ignore[union-attr]
-    }
+    jobs = {name: {**job, **changes} for name, job in workflow["jobs"].items()}
     workflow["jobs"] = jobs
     return workflow
 
