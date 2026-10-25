@@ -36,6 +36,8 @@ ENTRYPOINTS := run_full_pipeline_v14.py run_scenario_analytics_v14.py \
 # SECDEP-01 canonical grammar (the fence rejects every other assignment shape):
 # Keep exactly one literal `PIP_AUDIT_IGNORES :=` assignment; do not use computed names, includes, `eval`, expansion or `+=`.
 # Use only exact `--ignore-vuln <ID>` or `--ignore-vuln=<ID>` tokens; abbreviations and other tokens are rejected.
+# Ignore-option tokens may appear only in that assignment; direct recipe flags and other variables are rejected.
+# Both `make security` and `make audit` are live-checked against the canonical advisory IDs.
 # Each suppression has one physical declaration line in this comment block:
 # ignore-vuln: <ADVISORY-ID> | package: <name>==<version> | cap: <name><specifier> | lifted-by: <name> <version>|unknown | reason: <why the suppression is defensible>
 PIP_AUDIT_IGNORES :=

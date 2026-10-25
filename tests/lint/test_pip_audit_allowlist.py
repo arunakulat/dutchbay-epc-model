@@ -57,6 +57,10 @@ GENERIC_ASSIGNMENT = re.compile(r"^(?P<lhs>.*?)(?P<operator>:::=|::=|:=|\?=|\+=|
 DYNAMIC_DEFINE = re.compile(r"^\s*(?:override\s+)?define\s+(?P<name>\S+)")
 INCLUDE_DIRECTIVE = re.compile(r"^\s*(?:-include|sinclude|include)\b")
 EVAL_FUNCTION = re.compile(r"\$(?:\(\s*eval(?:\s|,)|\{\s*eval(?:\s|,))")
+# A literal ignore option is legitimate only inside the one canonical assignment.
+# Match the exact option and argparse-style abbreviations such as ``--ignore-v``;
+# the assignment parser below then applies the narrower two-spelling grammar.
+IGNORE_OPTION_TOKEN = re.compile(r"(?<![-A-Za-z0-9_])--ignore(?:-[^\s#]*)?")
 VERSION = re.compile(r"\d+(?:\.\d+)+")
 # A cap with no published fix says so in these words rather than being left blank.
 NO_FIX = "no-fix-published"
@@ -68,18 +72,35 @@ CONTRACT_LINES = (
     "# SECDEP-01 canonical grammar (the fence rejects every other assignment shape):",
     "# Keep exactly one literal `PIP_AUDIT_IGNORES :=` assignment; do not use computed names, includes, `eval`, expansion or `+=`.",
     "# Use only exact `--ignore-vuln <ID>` or `--ignore-vuln=<ID>` tokens; abbreviations and other tokens are rejected.",
+    "# Ignore-option tokens may appear only in that assignment; direct recipe flags and other variables are rejected.",
+    "# Both `make security` and `make audit` are live-checked against the canonical advisory IDs.",
     "# Each suppression has one physical declaration line in this comment block:",
     "# ignore-vuln: <ADVISORY-ID> | package: <name>==<version> | cap: <name><specifier> | lifted-by: <name> <version>|unknown | reason: <why the suppression is defensible>",
 )
 
 
-def _source_shape_violations(lines: list[str]) -> list[str]:
+def _source_shape_violations(
+    lines: list[str], assignments: list[tuple[int, int, str, str, str]]
+) -> list[str]:
     """Reject Make features that can mutate the protected variable out of sight."""
     violations: list[str] = []
+    assignment_lines = {
+        line_number
+        for start, end, _modifiers, _operator, _value in assignments
+        for line_number in range(start, end + 1)
+    }
     for line_number, line in enumerate(lines, start=1):
         stripped = line.lstrip()
         if not stripped or stripped.startswith("#"):
             continue
+        source_index = line_number - 1
+        code = line.split("#", 1)[0]
+        if source_index not in assignment_lines and IGNORE_OPTION_TOKEN.search(code):
+            violations.append(
+                f"Makefile line {line_number}: ignore options may appear only in the "
+                f"canonical {VARIABLE} assignment, never directly in recipes or "
+                "other variables"
+            )
         if INCLUDE_DIRECTIVE.match(line):
             violations.append(
                 f"Makefile line {line_number}: include directives are not auditable; "
@@ -283,7 +304,7 @@ def audit(makefile_text: str) -> list[str]:
     """Return one message per SECDEP-01 violation; an empty list means compliant."""
     lines = makefile_text.splitlines()
     assignments = _assignments(lines)
-    violations = _source_shape_violations(lines)
+    violations = _source_shape_violations(lines, assignments)
     if not assignments:
         violations.append(f"{VARIABLE} assignment not found in the Makefile")
         return violations
@@ -378,20 +399,83 @@ lifted-by: certifi 2026.10.19 | reason: no installable certifi clears it under t
 PIP_AUDIT_IGNORES := --ignore-vuln PYSEC-2026-4320
 """
 EMPTY = f"{CONTRACT_TEXT}\nPIP_AUDIT_IGNORES :=\n"
+GOVERNED_TARGETS = ("audit", "security")
+PIP_AUDIT_PREFIX = ["pip-audit", "-r", "requirements.txt"]
 
 
-def _live_audit_command_tokens() -> list[str]:
-    """Return GNU Make's effective dry-run command for the real audit target."""
+def _dry_run_target_commands(
+    target: str, makefile_text: str | None = None
+) -> list[list[str]]:
+    """Return GNU Make's effective dry-run commands for one governed target."""
+    command = ["make", "--no-print-directory", "-n"]
+    if makefile_text is not None:
+        command.extend(["-f", "-"])
+    command.append(target)
     completed = subprocess.run(
-        ["make", "--no-print-directory", "-n", "audit"],
+        command,
         cwd=REPO_ROOT,
-        check=True,
+        input=makefile_text,
+        check=False,
         capture_output=True,
         text=True,
     )
-    commands = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
-    assert len(commands) == 1, commands
-    return shlex.split(commands[0], comments=False, posix=True)
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise AssertionError(f"make -n {target} failed: {detail}")
+    return [
+        shlex.split(line.strip(), comments=False, posix=True)
+        for line in completed.stdout.splitlines()
+        if line.strip()
+    ]
+
+
+def _effective_target_violations(
+    target: str, source_ids: list[str], makefile_text: str | None = None
+) -> list[str]:
+    """Bind each target's sole pip-audit command to the canonical source IDs."""
+    violations: list[str] = []
+    try:
+        commands = _dry_run_target_commands(target, makefile_text)
+    except (AssertionError, ValueError) as exc:
+        return [str(exc)]
+
+    # Count wrapped, path-qualified and ``python -m pip_audit`` spellings too. They
+    # are not canonical, but overlooking a second invocation would be fail-open.
+    pip_audit_commands = [
+        command
+        for command in commands
+        if any(
+            token == "pip_audit"
+            or token == "pip-audit"
+            or token.endswith("/pip-audit")
+            or "pip-audit " in token
+            for token in command
+        )
+    ]
+    if len(pip_audit_commands) != 1:
+        return [
+            f"make -n {target} must emit exactly one pip-audit command, got "
+            f"{len(pip_audit_commands)}: {commands!r}"
+        ]
+
+    command = pip_audit_commands[0]
+    if command[: len(PIP_AUDIT_PREFIX)] != PIP_AUDIT_PREFIX:
+        return [
+            f"make -n {target} pip-audit command must begin exactly "
+            f"{PIP_AUDIT_PREFIX!r}, got {command!r}"
+        ]
+
+    effective_ids = _parse_ignore_tokens(
+        command[len(PIP_AUDIT_PREFIX) :],
+        f"GNU Make-expanded {target} command",
+        violations,
+    )
+    if effective_ids != source_ids:
+        violations.append(
+            f"make -n {target} effective advisory IDs {effective_ids!r} do not "
+            f"match canonical source IDs {source_ids!r}"
+        )
+    return violations
 
 
 def _mutate(field: str, value: str) -> str:
@@ -431,8 +515,11 @@ def test_a_well_formed_entry_is_compliant() -> None:
     assert audit(COMPLIANT) == []
 
 
-def test_live_make_expansion_matches_the_canonical_source_allowlist() -> None:
-    """GNU Make's effective audit command cannot carry an unseen suppression."""
+@pytest.mark.parametrize("target", GOVERNED_TARGETS)
+def test_live_make_expansion_matches_the_canonical_source_allowlist(
+    target: str,
+) -> None:
+    """Every governed effective command must reproduce the canonical allowlist."""
     makefile_text = MAKEFILE.read_text(encoding="utf-8")
     assert audit(makefile_text) == []
 
@@ -442,14 +529,70 @@ def test_live_make_expansion_matches_the_canonical_source_allowlist() -> None:
     )
     assert source_violations == []
 
-    command = _live_audit_command_tokens()
-    assert command[:3] == ["pip-audit", "-r", "requirements.txt"]
-    effective_violations: list[str] = []
-    effective_ids = _parse_ignore_tokens(
-        command[3:], "GNU Make-expanded audit command", effective_violations
+    assert _effective_target_violations(target, source_ids) == []
+
+
+def test_security_recipe_cannot_carry_an_undeclared_direct_suppression() -> None:
+    """F-1S control: the required CI target cannot diverge from ``audit``."""
+    makefile_text = MAKEFILE.read_text(encoding="utf-8")
+    canonical_recipe = "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)"
+    hostile_recipe = (
+        "\tpip-audit -r requirements.txt --ignore-vuln CVE-2026-999999 "
+        "$(PIP_AUDIT_IGNORES)"
     )
-    assert effective_violations == []
-    assert effective_ids == source_ids
+    assert makefile_text.count(canonical_recipe) == 2
+    mutated = makefile_text.replace(canonical_recipe, hostile_recipe, 1)
+
+    source_violations = audit(mutated)
+    assert any(
+        "ignore options may appear only" in violation for violation in source_violations
+    ), source_violations
+
+    # The convenience target stays clean: this is specifically a mandatory-target
+    # divergence, not a fixture that poisons both recipes.
+    assert _dry_run_target_commands("audit", mutated) == [PIP_AUDIT_PREFIX]
+    security_commands = _dry_run_target_commands("security", mutated)
+    assert any("CVE-2026-999999" in command for command in security_commands)
+    effective_violations = _effective_target_violations("security", [], mutated)
+    rejected_injected_id = any(
+        "CVE-2026-999999" in violation for violation in effective_violations
+    )
+    assert rejected_injected_id, effective_violations
+
+
+@pytest.mark.parametrize(
+    ("recipe", "expected"),
+    [
+        pytest.param(
+            "\tpip-audit -r requirements.txt --ignore-v CVE-2026-999999\n",
+            "unsupported token",
+            id="abbreviated option",
+        ),
+        pytest.param(
+            "\tpip-audit -r requirements.txt || true\n",
+            "unsupported token",
+            id="shell success override",
+        ),
+        pytest.param(
+            "\tenv pip-audit -r requirements.txt\n",
+            "must begin exactly",
+            id="alternate command wrapper",
+        ),
+        pytest.param(
+            "\tpip-audit -r requirements.txt\n"
+            "\tpython -m pip_audit -r requirements.txt\n",
+            "exactly one pip-audit command",
+            id="second invocation",
+        ),
+    ],
+)
+def test_effective_target_oracle_rejects_noncanonical_commands(
+    recipe: str, expected: str
+) -> None:
+    """The live oracle fails closed on options, wrappers and extra commands."""
+    makefile_text = f"{EMPTY}\naudit:\n{recipe}"
+    violations = _effective_target_violations("audit", [], makefile_text)
+    assert any(expected in violation for violation in violations), violations
 
 
 @pytest.mark.parametrize(
@@ -542,6 +685,18 @@ def test_live_make_expansion_matches_the_canonical_source_allowlist() -> None:
             ),
             "unsupported token",
             id="pip-audit option abbreviation rejected",
+        ),
+        pytest.param(
+            EMPTY
+            + "security:\n"
+            + "\tpip-audit -r requirements.txt --ignore-vuln CVE-2026-999999\n",
+            "ignore options may appear only",
+            id="direct recipe suppression rejected",
+        ),
+        pytest.param(
+            EMPTY + "EXTRA_AUDIT_FLAGS := --ignore-v CVE-2026-999999\n",
+            "ignore options may appear only",
+            id="abbreviated suppression in another variable rejected",
         ),
         pytest.param(
             EMPTY + "include dependency-audit-overrides.mk\n",
