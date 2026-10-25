@@ -4,9 +4,10 @@
   expansion, later assignments and appends fail closed. Only exact `--ignore-vuln` spellings
   are accepted; pip-audit option abbreviations and every other token are rejected. Literal ignore
   options outside that assignment, including direct recipe flags, also fail. The complete
-  `audit` and `security` command sequences are exact; `.ONESHELL`, shell overrides, preambles,
-  aliases, functions, wrappers and extra commands fail rather than being filtered out, and
-  controlled runtime sentinels prove the expected binaries receive the exact arguments. Every
+  `audit` and `security` command sequences are exact, including `security`'s resolve-mode and
+  declared-pin audit passes; `.ONESHELL`, shell overrides, preambles, aliases, functions,
+  wrappers and extra commands fail rather than being filtered out, and controlled runtime
+  sentinels prove all three invocations receive the exact arguments. Every
   entry must declare a valid exact package pin, a valid named cap requirement, the release that
   would lift it and a defensible reason; a malformed declaration or one left behind after its
   entry now fails the build. `RELEASING.md` step 2 re-checks each cap against the index before

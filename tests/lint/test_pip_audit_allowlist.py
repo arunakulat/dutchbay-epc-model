@@ -75,6 +75,7 @@ GOVERNED_SOURCE_RECIPES = {
     "security": (
         "\tbandit -c pyproject.toml -r $(SURFACE) --severity-level medium --confidence-level medium",
         "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)",
+        "\tpip-audit --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)",
     ),
 }
 # The exact contiguous contract the Makefile must carry in the comment block directly
@@ -86,8 +87,8 @@ CONTRACT_LINES = (
     "# Use only exact `--ignore-vuln <ID>` or `--ignore-vuln=<ID>` tokens; abbreviations and other tokens are rejected.",
     "# Ignore-option tokens may appear only in that assignment; direct recipe flags and other variables are rejected.",
     "# Both `make security` and `make audit` are live-checked against the canonical advisory IDs.",
-    "# The complete recipes are fixed: `audit` is only canonical pip-audit; `security` is exact Bandit then that pip-audit.",
-    "# `.ONESHELL`, `SHELL`, `.SHELLFLAGS`, shell preambles, aliases, functions, wrappers and extra commands are rejected; runtime sentinels prove both binaries are reached.",
+    "# The complete recipes are fixed: `audit` is only canonical resolve-mode pip-audit; `security` is exact Bandit then canonical resolve and declared-pin pip-audit passes.",
+    "# `.ONESHELL`, `SHELL`, `.SHELLFLAGS`, shell preambles, aliases, functions, wrappers and extra commands are rejected; runtime sentinels prove all three invocations reach the expected binaries.",
     "# Each suppression has one physical declaration line in this comment block:",
     "# ignore-vuln: <ADVISORY-ID> | package: <name>==<version> | cap: <name><specifier> | lifted-by: <name> <version>|unknown | reason: <why the suppression is defensible>",
 )
@@ -463,6 +464,13 @@ PIP_AUDIT_IGNORES := --ignore-vuln PYSEC-2026-4320
 EMPTY = f"{CONTRACT_TEXT}\nPIP_AUDIT_IGNORES :=\n"
 GOVERNED_TARGETS = ("audit", "security")
 PIP_AUDIT_PREFIX = ["pip-audit", "-r", "requirements.txt"]
+PIP_AUDIT_DECLARED_PREFIX = [
+    "pip-audit",
+    "--no-deps",
+    "--disable-pip",
+    "-r",
+    "requirements.txt",
+]
 BANDIT_COMMAND = [
     "bandit",
     "-c",
@@ -543,9 +551,14 @@ def _effective_target_violations(
         return [str(exc)]
 
     pip_audit_command = [*PIP_AUDIT_PREFIX, *ignore_tokens]
+    pip_audit_declared_command = [*PIP_AUDIT_DECLARED_PREFIX, *ignore_tokens]
     expected = {
         "audit": [pip_audit_command],
-        "security": [BANDIT_COMMAND, pip_audit_command],
+        "security": [
+            BANDIT_COMMAND,
+            pip_audit_command,
+            pip_audit_declared_command,
+        ],
     }.get(target)
     if expected is None:
         return [f"{target!r} is not a governed SECDEP-01 target"]
@@ -559,7 +572,7 @@ def _effective_target_violations(
 
 def _run_target_with_sentinels(
     tmp_path: Path, target: str, makefile_text: str
-) -> tuple[subprocess.CompletedProcess[str], dict[str, list[str]]]:
+) -> tuple[subprocess.CompletedProcess[str], dict[str, list[list[str]]]]:
     """Execute a target with harmless binaries that record their exact arguments."""
     binary_dir = tmp_path / "bin"
     receipt_dir = tmp_path / "receipts"
@@ -570,7 +583,10 @@ def _run_target_with_sentinels(
         stub.write_text(
             "#!/bin/sh\n"
             "set -eu\n"
-            f'printf \'%s\\n\' "$@" > "$SECDEP_SENTINEL_DIR/{executable}.argv"\n',
+            "{\n"
+            "  printf '%s\\n' '__SECDEP_CALL__'\n"
+            "  printf '%s\\n' \"$@\"\n"
+            f'}} >> "$SECDEP_SENTINEL_DIR/{executable}.argv"\n',
             encoding="utf-8",
         )
         stub.chmod(0o755)
@@ -590,11 +606,20 @@ def _run_target_with_sentinels(
         capture_output=True,
         text=True,
     )
-    receipts = {
-        executable: receipt.read_text(encoding="utf-8").splitlines()
-        for executable in ("bandit", "pip-audit")
-        if (receipt := receipt_dir / f"{executable}.argv").is_file()
-    }
+    receipts: dict[str, list[list[str]]] = {}
+    for executable in ("bandit", "pip-audit"):
+        receipt = receipt_dir / f"{executable}.argv"
+        if not receipt.is_file():
+            continue
+        calls: list[list[str]] = []
+        for line in receipt.read_text(encoding="utf-8").splitlines():
+            if line == "__SECDEP_CALL__":
+                calls.append([])
+            elif not calls:
+                raise AssertionError(f"malformed runtime receipt for {executable}")
+            else:
+                calls[-1].append(line)
+        receipts[executable] = calls
     return completed, receipts
 
 
@@ -657,21 +682,24 @@ def test_live_make_expansion_matches_the_canonical_source_allowlist(
     [
         pytest.param(
             "audit",
-            {"pip-audit": PIP_AUDIT_PREFIX[1:]},
+            {"pip-audit": [PIP_AUDIT_PREFIX[1:]]},
             id="audit invokes pip-audit",
         ),
         pytest.param(
             "security",
             {
-                "bandit": BANDIT_COMMAND[1:],
-                "pip-audit": PIP_AUDIT_PREFIX[1:],
+                "bandit": [BANDIT_COMMAND[1:]],
+                "pip-audit": [
+                    PIP_AUDIT_PREFIX[1:],
+                    PIP_AUDIT_DECLARED_PREFIX[1:],
+                ],
             },
-            id="security invokes bandit then pip-audit",
+            id="security invokes bandit then both pip-audit passes",
         ),
     ],
 )
 def test_governed_targets_execute_the_expected_binaries(
-    tmp_path: Path, target: str, expected_receipts: dict[str, list[str]]
+    tmp_path: Path, target: str, expected_receipts: dict[str, list[list[str]]]
 ) -> None:
     """Runtime sentinels prove the printed commands resolve to real executables."""
     makefile_text = MAKEFILE.read_text(encoding="utf-8")
@@ -734,7 +762,7 @@ def test_oneshell_alias_cannot_intercept_the_security_audit(tmp_path: Path) -> N
     completed, receipts = _run_target_with_sentinels(tmp_path, "security", mutated)
     assert completed.returncode == 0, completed.stderr
     assert "SECURITY-AUDIT-INTERCEPTED" in completed.stdout
-    assert receipts == {"bandit": BANDIT_COMMAND[1:]}
+    assert receipts == {"bandit": [BANDIT_COMMAND[1:]]}
 
 
 @pytest.mark.parametrize(
