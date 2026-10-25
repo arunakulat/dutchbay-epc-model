@@ -886,9 +886,16 @@ def test_an_abbreviated_recipe_suppression_is_effective_and_is_rejected(
     assert effective_violations, "the live oracle passed an abbreviated suppression"
 
 
+# The governed targets exactly as the committed Makefile writes them, so this fixture
+# stays a faithful stand-in for the real file rather than a simplified one.
 POPULATED_TARGETS = COMPLIANT + (
-    "audit:\n\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
-    "security:\n\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
+    "SURFACE := finance\n"
+    "audit:\n"
+    "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
+    "security:\n"
+    "\tbandit -c pyproject.toml -r $(SURFACE) --severity-level medium"
+    " --confidence-level medium\n"
+    "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
     "\tpip-audit --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
 )
 DECLARED_IDS = ["PYSEC-2026-4320"]
