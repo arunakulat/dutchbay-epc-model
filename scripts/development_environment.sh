@@ -37,6 +37,28 @@ dutchbay_validate_venv() {
     "$venv/bin/python" "$repo_root/dutchbay_environment.py"
 }
 
+dutchbay_require_venv_lock() {
+  local selected_venv=$1
+  local locked_venv=${DUTCHBAY_VENV_LOCK-}
+
+  # The lock is a local-host control. Portable developer and CI hosts leave it
+  # unset and continue to use the config-first fallback contract.
+  if [ -z "$locked_venv" ]; then
+    return 0
+  fi
+  case "$locked_venv" in
+    /*) ;;
+    *)
+      echo "ERR: DUTCHBAY_VENV_LOCK must be an absolute path: $locked_venv" >&2
+      return 1
+      ;;
+  esac
+  if [ "$selected_venv" != "$locked_venv" ]; then
+    echo "ERR: selected environment $selected_venv differs from DUTCHBAY_VENV_LOCK $locked_venv" >&2
+    return 1
+  fi
+}
+
 dutchbay_activate_checkout() {
   local repo_root=$1
   local venv=$2

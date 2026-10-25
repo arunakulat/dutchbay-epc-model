@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import tomllib
@@ -146,6 +147,52 @@ def test_envrc_activation_reuses_the_shared_contract_without_provisioning() -> N
         assert helper in envrc
     for prohibited in (".venv311", "~/.venvs", "./setup_venv.sh", "pip install"):
         assert prohibited not in envrc
+
+
+def _run_venv_lock(
+    selected: str, locked: str | None
+) -> subprocess.CompletedProcess[str]:
+    """Call the portable shell lock with an isolated environment."""
+
+    environ = dict(os.environ)
+    if locked is None:
+        environ.pop("DUTCHBAY_VENV_LOCK", None)
+    else:
+        environ["DUTCHBAY_VENV_LOCK"] = locked
+    return subprocess.run(
+        [
+            "bash",
+            "-c",
+            '. "$1"; dutchbay_require_venv_lock "$2"',
+            "venv-lock-probe",
+            str(SHELL_ENVIRONMENT_HELPER),
+            selected,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=environ,
+    )
+
+
+def test_interactive_activation_lock_is_fail_closed_and_portable() -> None:
+    """Reject local-path drift while preserving unconfigured-host portability."""
+
+    expected = "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"
+    assert _run_venv_lock(expected, expected).returncode == 0
+    assert _run_venv_lock(expected, None).returncode == 0
+
+    relative = _run_venv_lock(expected, "relative/.venv")
+    assert relative.returncode != 0
+    assert "must be an absolute path" in relative.stderr
+
+    mismatch = _run_venv_lock("/tmp/other-venv", expected)
+    assert mismatch.returncode != 0
+    assert "/tmp/other-venv" in mismatch.stderr
+    assert expected in mismatch.stderr
+
+    activation = SOURCED_SETUP_SCRIPT.read_text(encoding="utf-8")
+    assert 'dutchbay_require_venv_lock "$_DUTCHBAY_VENV"' in activation
 
 
 def _emitted_path_line() -> str:
