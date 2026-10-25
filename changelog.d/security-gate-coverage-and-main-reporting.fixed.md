@@ -31,5 +31,8 @@
   shared allowlist, the untouched `audit` alias, the daily cadence, and the equality between
   what `main` audits and what the merge gate audits — with a negative control per assertion
   plus two hermetic pip-audit oracles proving the flags select the pre-resolved path and that
-  the venv prologue is still the reason resolve mode skipped those pins. No runtime, financial
+  the venv prologue is still the reason resolve mode skipped those pins. The workflow half
+  also rejects the shapes that honour the triggers and neuter the run: an `if:` on the
+  `make security` job or step, which would silence the daily cadence, and
+  `continue-on-error`, which would let a red audit report success on `main`. No runtime, financial
   formula, scenario or KPI change.

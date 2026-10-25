@@ -31,7 +31,20 @@ coverage - that needs the network and a resolve - so the numbers above stay in t
 request's receipts and in the ``Makefile``'s own comment, where a reviewer reads them.
 
 Per VERIFY-01(5) every assertion here ships the negative control that observes it firing: the
-checks are pure functions over text, exercised against mutated copies rather than trusted.
+checks are pure functions over text, exercised against mutated copies rather than trusted. 22
+controls, 7 over the ``Makefile`` and 15 over the workflow.
+
+That claim was once wider than the set. #1388's independent domain lane probed
+``audit_workflow`` key by key and found six shapes it passed: ``continue-on-error: true`` on
+the job or on the gate step, and an ``if:`` on either — ``if: false`` or a real condition like
+``if: github.event_name == 'push'``, which honours the triggers in the YAML and silences the
+daily run they promise, while every other assertion here stays green. ``continue-on-error``
+was worse than silence: it would let a RED audit report success, so the status on ``main``
+would say the opposite of what it measured. Both are now rejected, each with the lane's own
+probe as its control. The ``Makefile`` half had a backstop the workflow half cannot have —
+``test_make_expansion_agrees_with_the_makefile_source`` re-runs ``make -n security``, which
+catches a ``|| true`` or an appended weaker target that the text function alone would pass;
+a workflow has no ``make -n`` to interrogate, so its shapes must be named here explicitly.
 """
 
 from __future__ import annotations
@@ -162,7 +175,11 @@ def audit_workflow(workflow: Workflow) -> list[str]:
         return ["security-audit.yml: no `on:` trigger mapping"]
 
     push = triggers.get("push")
-    if not isinstance(push, dict) or push.get("branches") != ["main"]:
+    # `main` must be among the pushed branches. Deliberately not exact equality: adding
+    # `release/*` later is legitimate and should not red this guard, while dropping
+    # `main` — the branch whose audit state is the point — still fails closed.
+    branches = push.get("branches") if isinstance(push, dict) else None
+    if not isinstance(branches, list) or "main" not in branches:
         violations.append(
             "must trigger on `push` to `main` so main carries its own audit status, got "
             f"{push!r}"
@@ -201,18 +218,43 @@ def audit_workflow(workflow: Workflow) -> list[str]:
     if not isinstance(jobs, dict) or not jobs:
         return [*violations, "security-audit.yml: no jobs"]
 
-    commands = [
-        step.get("run", "")
+    # Locate the gate step with its job. Exact equality, so `make security || true` and
+    # any reduced variant are not the gate.
+    gate_steps = [
+        (job, step)
         for job in jobs.values()
         if isinstance(job, dict)
         for step in (job.get("steps") or [])
-        if isinstance(step, dict)
+        if isinstance(step, dict) and step.get("run", "").strip() == "make security"
     ]
-    if not any(command.strip() == "make security" for command in commands):
+    if not gate_steps:
         violations.append(
             "must run `make security` itself, not a reduced variant: a weaker audit on "
             "main than on a pull request reports green on bytes the gate would reject"
         )
+
+    # A conditional or non-failing audit is not an audit. Without these, the triggers
+    # above can be honoured in the YAML and neutered in the job: `if: false` or
+    # `if: github.event_name == 'push'` silences the daily run the triggers promise,
+    # and `continue-on-error: true` lets a RED audit report success — which would make
+    # the status on `main` say the opposite of what it measured. Both shapes leave every
+    # other assertion here passing, so the pinned remedy could be undone in silence.
+    for owner, holder in (("job", 0), ("step", 1)):
+        for gate in gate_steps:
+            node = gate[holder]
+            if "if" in node and str(node["if"]).strip().lower() not in {
+                "true",
+                "${{ true }}",
+            }:
+                violations.append(
+                    f"the `make security` {owner} must not be conditional — an `if:` can "
+                    f"silence the daily run the triggers promise, got {node['if']!r}"
+                )
+            if node.get("continue-on-error") in (True, "true"):
+                violations.append(
+                    f"the `make security` {owner} must not set `continue-on-error` — a "
+                    "red audit would report success on main"
+                )
 
     names = {job.get("name") for job in jobs.values() if isinstance(job, dict)}
     if "Security Scan" in names:
@@ -418,6 +460,21 @@ def _mutate_job(**changes: Any) -> Workflow:
     return workflow
 
 
+def _mutate_gate_step(**changes: Any) -> Workflow:
+    """Apply ``changes`` to the step that runs `make security`, leaving the rest alone."""
+    workflow = _workflow()
+    for job in workflow["jobs"].values():
+        job["steps"] = [
+            (
+                {**step, **changes}
+                if step.get("run", "").strip() == "make security"
+                else step
+            )
+            for step in job["steps"]
+        ]
+    return workflow
+
+
 @pytest.mark.parametrize(
     ("workflow_factory", "expected"),
     [
@@ -460,6 +517,45 @@ def _mutate_job(**changes: Any) -> Workflow:
             lambda: _mutate_job(name="Security Scan"),
             "must differ from test-suite.yml's `Security Scan`",
             id="name collides with the required check",
+        ),
+        # F-2 on #1388: the six shapes the domain lane probed and found this guard
+        # passing. Each one honours the triggers in the YAML and neuters the run.
+        pytest.param(
+            lambda: _mutate_job(**{"continue-on-error": True}),
+            "job must not set `continue-on-error`",
+            id="job continue-on-error lets a red audit report success",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(**{"continue-on-error": True}),
+            "step must not set `continue-on-error`",
+            id="step continue-on-error lets a red audit report success",
+        ),
+        pytest.param(
+            lambda: _mutate_job(**{"if": False}),
+            "job must not be conditional",
+            id="job if false silences the whole audit",
+        ),
+        pytest.param(
+            lambda: _mutate_job(**{"if": "github.event_name == 'push'"}),
+            "job must not be conditional",
+            id="job if drops the daily schedule",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(
+                **{"if": "github.event_name == 'workflow_dispatch'"}
+            ),
+            "step must not be conditional",
+            id="step if drops the daily schedule",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(**{"if": False}),
+            "step must not be conditional",
+            id="gate step if false silences the audit",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(run="make security || true"),
+            "must run `make security` itself",
+            id="gate swallowed by a shell or-true",
         ),
     ],
 )
