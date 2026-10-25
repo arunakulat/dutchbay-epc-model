@@ -1,5 +1,13 @@
 # Issue #1334 D4 implementation record
 
+**Record date: 2026-10-25.** Sections below up to and including "Fourth corrective
+verification" are the historical record of Codex's corrective candidates, each measured on
+the host and the bytes current at its own time. Their figures are kept as written because a
+superseded receipt is evidence of what was observed, not a claim about today. **The receipts
+that describe the bytes this record ships with are in "Receipts restated at the committed
+bytes (2026-10-25)" at the end of this file.** Read that section, not the earlier tables,
+for the committed state. Raised as O-2 by the task-domain lane on #1381 and closed here.
+
 ## Scope, authority, and fresh ingress
 
 D4 adds one additive EYA-to-actual reconciliation boundary over the frozen
@@ -293,7 +301,14 @@ the hostile underlying buffer fails closed as `OPERATIONAL_PROVENANCE_MISMATCH`.
 - The exact binary64 policy preserves source bits, not a human-intended decimal that was
   never stored in the source artifact.
 
-## Verification receipt
+## Verification receipt (second corrective candidate, superseded)
+
+> **Superseded, retained as history.** This table was measured on the owner's host against
+> the second-corrective candidate's bytes, not against the bytes committed here. Four of its
+> rows no longer describe the shipped artifact: the D1-D4/import focus, the D4
+> independent/hostile focus, the D4 targeted coverage and the GWTF active-rule count. The
+> current figures for all four are in "Receipts restated at the committed bytes
+> (2026-10-25)". Do not cite this table as evidence about the committed module.
 
 All commands use the governed shared Python 3.12.14 environment, import from this worktree,
 and run with no editable or foreign-worktree installation. Hosted CI and independent R3
@@ -358,3 +373,79 @@ adoption, or authority to lift any `HOLD`.
 | Exact-file pre-commit | governed `pre-commit run --files` over the exact three-path fourth-corrective allowlist | the first pass normalized source imports with `isort`; focused tests, Ruff, and mypy were repeated after that import-only rewrite, and the second pass completed with every applicable hook passed |
 | Changelog fragment compilation | governed Python `scripts/compile_changelog.py --dry-run` | exit 0; no file mutation |
 | Protected-head and diff hygiene | `git ls-remote origin refs/heads/main`; `git diff --check`; exact corrective and branch allowlist comparisons | live and local `origin/main` remain `86ca5732535850c9ab47253d37cbee29ba9fa276`; merge base is the same protected commit; diff check passed; exactly three corrective paths and the expected seven total D4 paths |
+
+
+## Receipts restated at the committed bytes (2026-10-25)
+
+Raised as O-2 by #1381's task-domain lane: the tables above report figures the committed
+bytes do not produce, which is exactly the receipt decay `VERIFY-01` exists to stop. Rather
+than edit history, the four drifted rows are re-measured here against the artifact this
+record ships with, and the earlier tables are labelled as superseded.
+
+Subject these figures describe, by content digest rather than by commit, so the statement
+stays true however the branch is later rebased or merged:
+
+| Path | SHA-256 of the file bytes |
+|---|---|
+| `analytics/operational/eya_bridge.py` | `174e7a7ee753fdea8e70637725ec02a5449ec2c45f4742b2f236d055fe4bfda4` |
+| `tests/contracts/test_eya_actual_bridge.py` | `0c521493401eae60c390b00b95575455926d21bab15a99ebb774f3dc0edf5a32` |
+
+Environment: Claude Code cloud container, checkout-local `.venv`, Python **3.12.3** — not the
+owner's 3.12.14 host, which is unreachable from a container. The interpreter differs from the
+one the tables above used, and that is stated rather than papered over.
+
+| Check | Exact command | Result at these bytes |
+|---|---|---|
+| D1-D4/import focus | `.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q` over `test_resource_assessment.py`, `test_operational_evidence_contract.py`, `test_operational_normalization.py`, `test_operational_aep.py`, `test_eya_actual_bridge.py`, `test_contracts_v14_import_surface.py` | `325 passed in 23.30s` (the superseded table said 285; the module set is named here because the earlier row did not name it) |
+| D4 independent/hostile focus | `.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts/test_eya_actual_bridge.py tests/contracts/test_contracts_v14_import_surface.py -x` | `64 passed in 21.84s` (superseded table: 46) |
+| D4 targeted coverage | `.venv/bin/python -m pytest -p no:cacheprovider -q tests/contracts/test_eya_actual_bridge.py --cov=analytics.operational.eya_bridge --cov-report=term-missing --cov-fail-under=95` | `58 passed in 157.42s`; **95.92%**, 710 statements, 29 missed (superseded table: 40 passed, 95.27%, 634 statements, 30 missing) |
+| GWTF bootstrap | `DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" PYTHONPATH="$PWD" .venv/bin/python dutchbay_bootstrap_rules.py` | `77 rules; versions: v3.0; latest = v3.0`, `Status breakdown: active=77`. The `75/75` figure stated in the prose above and in the superseded tables was true when observed and is superseded: the ruleset has since gained rows, `REVIEW-01` among them |
+| Framework fence | `.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/lint/test_framework_expansions_match_csv.py` | `28 passed in 3.52s` |
+| Public docstring ratchet | `.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/lint/test_docstring_coverage.py` | `12 passed in 1.68s` |
+| Shared contract suite | `.venv/bin/python -m pytest -p no:cacheprovider --no-cov -q tests/contracts` | `1696 passed in 116.63s` (superseded table: 1678) |
+| Strict source types | `.venv/bin/python -m mypy --no-incremental analytics/operational/eya_bridge.py analytics/operational/__init__.py` | `Success: no issues found in 2 source files` |
+| Ruff lint and format | `.venv/bin/ruff check` and `.venv/bin/ruff format --check` over the D4 source and test | `All checks passed!`; both files already formatted |
+| Changelog dry-run | `.venv/bin/python scripts/compile_changelog.py --dry-run` | exit 0 |
+| Governed environment | `./check_venv.sh --no-bootstrap` | `PASS`; `editable_project_install: false`, `project_install_url: null`, no absent locked distribution, no foreign checkout path |
+| Owner's host | — | not run — a cloud container cannot read `/Users/aruna/...`, so nothing about that host is asserted here |
+
+### Controls added for #1381's review conditions
+
+The assurance lane found that the module's refusal machinery carried no negative control: a
+twelve-mutation battery left five mutants alive. Four controls were added to
+`tests/contracts/test_eya_actual_bridge.py`. **No line of
+`analytics/operational/eya_bridge.py` changed**, which the digest above lets any reader
+confirm against the pre-condition head.
+
+Each control was proved non-vacuous by mutating the committed module, running the suite, and
+restoring and re-digesting the file. A mutation that did not change the file was reported as
+such rather than as a pass.
+
+| Condition | Mutation applied to the committed module | Test that fired | Result |
+|---|---|---|---|
+| A-1 (line 1353) | `_actual_net_energy`'s refusal on an unavailable D3 net-meter reading replaced by `return Fraction(0)` | `test_unavailable_d3_net_meter_energy_is_refused_and_never_zeroed` | `1 failed, 57 passed`; the intended control failed alone |
+| A-1 (line 1368) | `_validate_category_actual`'s refusal on a category lacking an available D3 component replaced by a bare `return` | `test_category_without_an_available_d3_component_is_refused` | `1 failed, 57 passed`; fired alone |
+| A-2 (domain separation) | `_claim_digest` drops `domain.encode("ascii") + b"\x00"` | `test_claim_digest_is_domain_separated_against_an_external_anchor` | `1 failed, 57 passed`; fired alone |
+| A-2 (key ordering) | `_canonical_json` sets `sort_keys=False` | `test_canonical_json_sorts_keys_and_closes_separators` and the anchor test | `2 failed, 56 passed` |
+| A-3 (digest length) | `_SHA256_RE` relaxed from `^[0-9a-f]{64}$` to `^[0-9a-f]+$` | `test_require_digest_enforces_length_and_lowercase_hex` | `4 failed, 54 passed`; the four short-hex cases |
+
+Module digest before and after the whole battery:
+`174e7a7ee753fdea8e70637725ec02a5449ec2c45f4742b2f236d055fe4bfda4`, unchanged.
+
+One finding about the shape of the A-1 control is worth recording, because the obvious test
+would have been worthless. An end-to-end assertion through `build_eya_actual_bridge` does
+raise `OPERATIONAL_PROVENANCE_MISMATCH` on a result whose components were edited — but for a
+different reason: the deterministic replay rejects the edited result before the actual energy
+is ever read (`"operational result differs from its deterministic replay"`). That test passes
+with the line-1353 refusal deleted, so it is not a control at all. The real control is at the
+helper, and `test_the_public_entry_point_cannot_be_the_control_for_that_refusal` pins the
+interception order so the reason stays next to the code.
+
+The task-domain lane's O-3 test was adopted as offered, closing the outermost fail-closed net
+at lines 1654-1661 through a well-formed decimal whose reduced denominator exceeds
+`_MAX_INTEGER_BITS`. Coverage moved from 33 missed / 95.35% to 29 missed / 95.92%; the four
+statements closed are lines 1353, 1368 and the `except`/`raise` pair at 1654-1661.
+
+Of the uncovered 29, the assurance lane's classification still holds: they are overwhelmingly
+`raise` statements and the `except` clauses that lead to them. The decisive fail-open path it
+identified is now controlled; the remainder are not, and this record does not claim they are.

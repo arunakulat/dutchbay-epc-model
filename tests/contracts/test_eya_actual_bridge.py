@@ -16,6 +16,7 @@ from analytics.operational.aep import (
     OperationalAEPResult,
     OperationalAEPSpec,
     OperationalBoundaryEvidence,
+    OperationalEnergyComponent,
     OperationalEnergyQuantity,
     OperationalSupplementalEnergyEvidence,
     estimate_operational_aep,
@@ -1386,3 +1387,147 @@ def test_even_private_token_cannot_authorize_substituted_result(
             receipt=result.receipt,
             _factory_token=bridge_module._BRIDGE_RESULT_TOKEN,
         )
+
+
+# len == 4009 <= _MAX_NUMERIC_CHARACTERS (4096); |exponent| == 4000 <= 4096;
+# scale == 4001 + 4000 == 8001, so the reduced denominator is 10**8001, whose
+# bit_length (~26,573) exceeds aep._MAX_INTEGER_BITS (16,384).
+_OVER_BOUNDED = "0." + "0" * 4_000 + "1" + "e-4000"
+
+# An external anchor for the attribution-manifest claim domain. The expected
+# bytes are written out here rather than built with the module's helpers, so a
+# digest assertion against them cannot be satisfied by the module agreeing with
+# itself. The pinned constant is the SHA-256 of exactly those bytes.
+_ANCHOR_DOMAIN = "dutchbay.eya_gap_attribution_manifest.v1"
+_ANCHOR_PAYLOAD: tuple[dict[str, str], ...] = (
+    {
+        "category": "availability",
+        "status": "available",
+        "evidence_claim_sha256": "0" * 64,
+    },
+)
+_ANCHOR_BYTES = (
+    b"dutchbay.eya_gap_attribution_manifest.v1"
+    b"\x00"
+    b'[{"category":"availability","evidence_claim_sha256":"'
+    + b"0" * 64
+    + b'","status":"available"}]'
+)
+_ANCHOR_DIGEST = "140545d067f1b7d85cdfe013435a7751d1d1819f16e50a54d785639eb6ae0403"
+
+
+def _without_available_component(
+    operational: OperationalAEPResult, name: str
+) -> OperationalAEPResult:
+    components = tuple(
+        OperationalEnergyComponent(
+            name=item.name,
+            status="unavailable",
+            value=None,
+            evidence_ids=(),
+            unavailable_reason=f"{name} withheld for this control",
+        )
+        if item.name == name
+        else item
+        for item in operational.components
+    )
+    forged = copy.copy(operational)
+    object.__setattr__(forged, "components", components)
+    return forged
+
+
+def test_unavailable_d3_net_meter_energy_is_refused_and_never_zeroed(
+    annual_sources: tuple[ResourceAssessment, OperationalAEPResult],
+) -> None:
+    _, operational = annual_sources
+    withheld = _without_available_component(operational, "net_meter_energy")
+    assert withheld.component("net_meter_energy").status == "unavailable"
+    with pytest.raises(EYAActualBridgeError) as captured:
+        bridge_module._actual_net_energy(withheld)
+    assert captured.value.code == "OPERATIONAL_PROVENANCE_MISMATCH"
+    assert "net meter energy must be available" in str(captured.value)
+
+
+def test_the_public_entry_point_cannot_be_the_control_for_that_refusal(
+    annual_sources: tuple[ResourceAssessment, OperationalAEPResult],
+) -> None:
+    # Recorded as a test so the reason stays with the code: the deterministic
+    # replay rejects a result whose components were edited before the actual
+    # energy is ever read, and it raises the same code for a different reason.
+    # An end-to-end assertion on the code alone would therefore pass with the
+    # refusal above removed, which is why the control is at the helper.
+    resource, operational = annual_sources
+    withheld = _without_available_component(operational, "net_meter_energy")
+    spec, boundary = _bridge_inputs(resource, operational)
+    with pytest.raises(EYAActualBridgeError) as captured:
+        build_eya_actual_bridge(resource, withheld, spec, boundary)
+    assert captured.value.code == "OPERATIONAL_PROVENANCE_MISMATCH"
+    assert "differs from its deterministic replay" in str(captured.value)
+
+
+def test_category_without_an_available_d3_component_is_refused(
+    annual_sources: tuple[ResourceAssessment, OperationalAEPResult],
+) -> None:
+    resource, operational = annual_sources
+    spec, _ = _bridge_inputs(resource, operational)
+    withheld = _without_available_component(operational, "availability_loss")
+    attribution = _attribution("availability", "-365", spec)
+    with pytest.raises(EYAActualBridgeError) as captured:
+        bridge_module._validate_category_actual(attribution, withheld)
+    assert captured.value.code == "ATTRIBUTION_MISMATCH"
+    assert "lacks an available D3 component" in str(captured.value)
+
+
+def test_canonical_json_sorts_keys_and_closes_separators() -> None:
+    assert bridge_module._canonical_json({"b": 1, "a": 2}) == b'{"a":2,"b":1}'
+    assert bridge_module._canonical_json(_ANCHOR_PAYLOAD[0]) == _ANCHOR_BYTES[
+        len(_ANCHOR_DOMAIN) + 1 :
+    ].removeprefix(b"[").removesuffix(b"]")
+
+
+def test_claim_digest_is_domain_separated_against_an_external_anchor() -> None:
+    assert hashlib.sha256(_ANCHOR_BYTES).hexdigest() == _ANCHOR_DIGEST
+    assert (
+        bridge_module._claim_digest(_ANCHOR_DOMAIN, list(_ANCHOR_PAYLOAD))
+        == _ANCHOR_DIGEST
+    )
+    undomained = hashlib.sha256(_ANCHOR_BYTES[len(_ANCHOR_DOMAIN) + 1 :]).hexdigest()
+    assert undomained != _ANCHOR_DIGEST
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "0" * 63,
+        "0" * 65,
+        "0" * 32,
+        "a",
+        "",
+        "0" * 63 + "A",
+        "0" * 63 + "g",
+    ],
+)
+def test_require_digest_enforces_length_and_lowercase_hex(value: str) -> None:
+    with pytest.raises(ValueError, match="lowercase SHA-256 digest"):
+        bridge_module._require_digest(value, "probe_digest")
+    assert bridge_module._require_digest("0" * 64, "probe_digest") == "0" * 64
+
+
+def test_the_numeric_bound_is_reachable_through_a_well_formed_decimal() -> None:
+    denominator = Fraction(1, 10**8_001).denominator
+    assert len(_OVER_BOUNDED) <= 4_096
+    assert denominator.bit_length() > 16_384
+
+
+def test_an_over_bounded_delta_surfaces_as_a_closed_invalid_input(
+    annual_sources: tuple[ResourceAssessment, OperationalAEPResult],
+) -> None:
+    resource, operational = annual_sources
+    spec, boundary = _bridge_inputs(resource, operational)
+    # method_model is not cross-checked to a named D3 component, so the paired
+    # comparison passes every guard and the quantity is built unguarded.
+    attribution = _attribution("method_model", _OVER_BOUNDED, spec)
+    with pytest.raises(EYAActualBridgeError) as captured:
+        build_eya_actual_bridge(resource, operational, spec, boundary, (attribution,))
+    assert captured.value.code == "INVALID_INPUT"
+    assert "failed closed" in str(captured.value)
