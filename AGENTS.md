@@ -149,6 +149,8 @@ overlap judgment or the time the first edit occurred.
   before marking it ready for review, so the full suite runs once. The three bounded low-risk
   classes in `RECRUIT-01` module 1 §3.1 take one lane; everything else keeps the domain and
   assurance pair, and a subject change after review restarts both reviews (module 3 §6).
+  `test-suite.yml` defers the shards, the Coverage Gate and Grid Study on a draft, so the
+  required `Test Summary` check exists only after the ready run.
 
 ## Runtime logging and evidence retention
 

@@ -12,6 +12,12 @@
   when unsure the class is `R2`. `AGENTS.md`, the steward skill and `RECRUIT-01`'s own lane
   statement route to it, and `tests/lint/test_review_first_policy.py` pins every control with a
   negative control per control.
-- The `test-suite.yml` gate that defers the sharded suite on draft pull requests is **not** in
-  this change. It follows once #1386 settles that workflow, and the rule says `AUTOMATION
-  PENDING` until then.
+- **`test-suite.yml` defers the full suite on draft pull requests** — the `pull_request`
+  trigger adds `ready_for_review`. While a pull request is a draft, the classify step reports no
+  code and no grid change, so the six test shards, the Coverage Gate and Grid Study skip their
+  work, and the summary job reports as `Test Summary (draft: full suite deferred)` while still
+  gating lint and Security Scan. The required `Test Summary` check therefore appears on a head
+  only after a non-draft run has completed the full suite there. Marking the pull request ready
+  for review runs it once. `tests/lint/test_grid_ci_policy.py` executes the classify step for a
+  draft and a non-draft event, and `tests/lint/test_review_first_policy.py` pins the trigger, the
+  summary job's name and the draft summary.

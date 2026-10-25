@@ -12,18 +12,24 @@ classes and their exclusions, the ``RECRUIT-01`` cross-reference, and the routin
 a pure function over text, so each pinned control has a negative control below that removes it
 and watches the guard fail. A guard that cannot fail would only look like a fence.
 
-Deliberately not pinned yet: the ``test-suite.yml`` draft gate. It lands as its own change once
-#1386 settles that workflow, and the row says ``AUTOMATION PENDING`` until then. That phrase is
-pinned so the rule cannot start claiming automation that is not on ``main``.
+The ``test-suite.yml`` draft gate is pinned here too: the ``ready_for_review`` trigger, the
+summary job's name, which is the required ``Test Summary`` only for a non-draft run, and the
+summary script run for a draft. ``tests/lint/test_grid_ci_policy.py`` executes the classify step
+for a draft and a non-draft event.
 """
 
 from __future__ import annotations
 
 import csv
+import os
+import re
+import subprocess
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CANONICAL_RULESET = REPO_ROOT / "go_with_the_flow_rules_v3_0_clean.csv"
@@ -32,6 +38,9 @@ MODULE_1 = (
 )
 AGENTS = REPO_ROOT / "AGENTS.md"
 STEWARD = REPO_ROOT / ".claude" / "skills" / "steward" / "SKILL.md"
+WORKFLOW = REPO_ROOT / ".github" / "workflows" / "test-suite.yml"
+REQUIRED_CHECK = "Test Summary"
+DRAFT_CHECK = "Test Summary (draft: full suite deferred)"
 
 REVIEW_01_REQUIRED_CONTROLS = (
     "opens its pull request as a draft",
@@ -60,7 +69,12 @@ REVIEW_01_REQUIRED_CONTROLS = (
     "does not change which checks are required",
     "what MERGE-01 means by green",
     "tests/lint/test_review_first_policy.py",
-    "AUTOMATION PENDING",
+    "Its pull_request trigger includes ready_for_review",
+    "emits code_changed=false and qsts_execution_changed=false",
+    "'Test Summary (draft: full suite deferred)'",
+    "while still gating Code Quality Checks and Security Scan",
+    "exists on a head only after a non-draft run has completed the full suite there",
+    "tests/lint/test_grid_ci_policy.py executes the classify step",
     "latest Test Summary ran on a non-draft event",
 )
 
@@ -105,6 +119,7 @@ STEWARD_REQUIRED_CONTROLS = (
     "both reviews restart (module 3 §6)",
     "When unsure, it is `R2`.",
     "§3.1's bounded low-risk classes are `R2` there",
+    "`Test Summary (draft: full suite deferred)`",
 )
 
 
@@ -126,6 +141,8 @@ def _assert_review_01(rule: dict[str, str]) -> None:
     policy = _policy_text(rule)
     missing = [c for c in REVIEW_01_REQUIRED_CONTROLS if c not in policy]
     assert not missing, f"REVIEW-01 lost controls: {missing}"
+    # The gate is on main now; the row must not go back to describing it as pending.
+    assert "AUTOMATION PENDING" not in policy
 
 
 def _normalize(text: str) -> str:
@@ -194,6 +211,14 @@ def test_review_01_guard_fails_when_a_control_is_removed(control: str) -> None:
         _assert_review_01(rule)
 
 
+def test_review_01_guard_fails_if_automation_is_described_as_pending_again() -> None:
+    """Negative control: restoring the pending wording beside the new text fails."""
+    rule = dict(_rules_by_id()["REVIEW-01"])
+    rule["enforcement"] += " AUTOMATION PENDING: a draft still runs the full suite."
+    with pytest.raises(AssertionError):
+        _assert_review_01(rule)
+
+
 @pytest.mark.parametrize("cell,value", [("status", "retired"), ("category", "Testing")])
 def test_review_01_guard_fails_on_a_demoted_row(cell: str, value: str) -> None:
     """Negative control: a retired or re-filed row does not pass as the live rule."""
@@ -246,3 +271,126 @@ def test_recruit_01_guard_fails_on_a_lost_or_contradicted_cross_reference(
     rule["enforcement"] = mutate(rule["enforcement"])
     with pytest.raises(AssertionError):
         _assert_recruit_01_cross_reference(rule)
+
+
+def _workflow() -> dict[Any, Any]:
+    loaded: dict[Any, Any] = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    return loaded
+
+
+_SUMMARY_NAME = re.compile(
+    r"^\$\{\{ github\.event\.pull_request\.draft && '([^']+)' \|\| '([^']+)' \}\}$"
+)
+
+
+def _summary_check_names(name: str) -> tuple[str, str]:
+    """Resolve the summary job's ``name`` for a draft and for any other event.
+
+    The expression is matched whole rather than evaluated, so any other shape fails here
+    instead of being guessed at. A schedule or dispatch event has no ``pull_request``, so it
+    takes the second name, as a non-draft pull request does.
+    """
+    match = _SUMMARY_NAME.match(name)
+    assert match, f"summary job name has an unexpected shape: {name!r}"
+    return match.group(1), match.group(2)
+
+
+def _assert_draft_gate(workflow: dict[Any, Any]) -> None:
+    """The trigger runs on ready_for_review, and only a non-draft run is 'Test Summary'."""
+    trigger = workflow[True]["pull_request"]  # PyYAML reads the bare key `on` as True.
+    assert set(trigger["types"]) >= {
+        "opened",
+        "synchronize",
+        "reopened",
+        "ready_for_review",
+    }
+    draft_name, other_name = _summary_check_names(workflow["jobs"]["summary"]["name"])
+    assert other_name == REQUIRED_CHECK
+    assert draft_name == DRAFT_CHECK
+    classify = next(
+        step
+        for step in workflow["jobs"]["changes"]["steps"]
+        if step.get("id") == "classify"
+    )
+    assert classify.get("env", {}).get("PR_DRAFT") == (
+        "${{ github.event.pull_request.draft }}"
+    )
+    assert '"${PR_DRAFT:-false}" = "true"' in classify["run"]
+
+
+def test_test_suite_defers_the_full_suite_on_drafts() -> None:
+    """The live workflow carries the REVIEW-01 draft gate."""
+    _assert_draft_gate(_workflow())
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda w: w[True]["pull_request"].update(
+            types=["opened", "synchronize", "reopened"]
+        ),
+        lambda w: w["jobs"]["summary"].update(name=REQUIRED_CHECK),
+        lambda w: w["jobs"]["summary"].update(
+            name="${{ github.event.pull_request.draft && 'Test Summary' || "
+            "'Test Summary (draft: full suite deferred)' }}"
+        ),
+        lambda w: w["jobs"]["changes"]["steps"][1].pop("env"),
+    ],
+    ids=["no-ready-trigger", "plain-name", "names-swapped", "classify-ignores-draft"],
+)
+def test_draft_gate_guard_fails_on_a_weakened_workflow(
+    mutate: Callable[[dict[Any, Any]], None],
+) -> None:
+    """Negative control: each way of losing the gate fails the guard."""
+    workflow = _workflow()
+    assert workflow["jobs"]["changes"]["steps"][1].get("id") == "classify"
+    mutate(workflow)
+    with pytest.raises(AssertionError):
+        _assert_draft_gate(workflow)
+
+
+def _run_summary(
+    tmp_path: Path, draft: str, lint: str
+) -> subprocess.CompletedProcess[str]:
+    """Run the real summary script as a draft run with every deferred job a success."""
+    steps = _workflow()["jobs"]["summary"]["steps"]
+    script = str(next(s for s in steps if s.get("name") == "Check test status")["run"])
+    values = {
+        "needs.test.result": "success",
+        "needs.lint.result": lint,
+        "needs.security.result": "success",
+        "needs.coverage.result": "success",
+        "needs.coverage.outputs.enforced": "",
+        "needs.changes.outputs.code_changed": "false",
+        "needs.changes.outputs.qsts_execution_changed": "false",
+        "needs.grid-study.result": "skipped",
+        "github.event_name": "pull_request",
+    }
+    for key, value in values.items():
+        script = script.replace("${{ " + key + " }}", value)
+    assert "${{" not in script
+    path = tmp_path / "summary.sh"
+    path.write_text(script, encoding="utf-8")
+    return subprocess.run(
+        ["bash", "-e", str(path)],
+        cwd=tmp_path,
+        env={**os.environ, "TOTAL_SHARDS": "6", "PR_DRAFT": draft},
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+
+def test_draft_summary_notes_the_deferral_and_still_gates_lint(tmp_path: Path) -> None:
+    """A draft summary says what it deferred, and a lint failure still blocks it."""
+    passed = _run_summary(tmp_path, draft="true", lint="success")
+    assert passed.returncode == 0, passed.stdout + passed.stderr
+    assert "deferred until it is marked ready for review (REVIEW-01)" in passed.stdout
+
+    blocked = _run_summary(tmp_path, draft="true", lint="failure")
+    assert blocked.returncode == 1
+    assert "Lint job failed" in blocked.stdout
+
+    ready = _run_summary(tmp_path, draft="false", lint="success")
+    assert ready.returncode == 0
+    assert "REVIEW-01" not in ready.stdout

@@ -133,7 +133,10 @@ changelog erratum records what happens when that goes wrong.
    local run of `scripts/ci/check_pr_receipts.py` and `scripts/ci/check_pr_intake.py` against
    the exact body. Lanes verify the pack at the objects; it is a claim, never a disposition.
 3. The lanes bind to that draft head. Only then mark the pull request ready for review, so the
-   full suite runs once.
+   full suite runs once. While it is a draft, `test-suite.yml` skips the shards, the Coverage
+   Gate and Grid Study and reports `Test Summary (draft: full suite deferred)`; the required
+   `Test Summary` appears only once the ready run finishes. A green draft summary is the fast
+   gates, never the suite.
 4. If that run forces a change to a subject blob, both reviews restart (module 3 §6). A base
    advance needs §7's three proofs and a rebind, as before.
 
