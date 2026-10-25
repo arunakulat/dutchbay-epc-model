@@ -62,15 +62,23 @@ EVAL_FUNCTION = re.compile(r"\$(?:\(\s*eval(?:\s|,)|\{\s*eval(?:\s|,))")
 ONESHELL_DIRECTIVE = re.compile(r"^\s*\.ONESHELL\s*:")
 # GNU Make discards a recipe's exit status under `.IGNORE` - globally when it has no
 # prerequisites, or for the targets it names - and under the `-i`/`--ignore-errors`
-# flag, which a Makefile can set for itself through MAKEFLAGS or MFLAGS. None of that
-# changes a command, its arguments or the dry-run output, so it is invisible to every
-# other control here; it is rejected outright instead.
+# flag, which a Makefile can set for itself through any of its flag variables. None of
+# that changes a command, its arguments or the dry-run output, so it is invisible to
+# every other control here; it is rejected outright instead.
+#
+# GNUMAKEFLAGS is in the alternation because Make reads `-i` from it exactly as from
+# MAKEFLAGS, and an in-file assignment takes effect in the current invocation: the
+# domain lane demonstrated `GNUMAKEFLAGS := -i` swallowing a forced audit failure at
+# rc=0 while this scan stayed silent. The runtime sentinels caught that form anyway,
+# because they measure the exit status rather than the spelling, which is the point of
+# having both controls; what was wrong was the author-facing diagnosis.
 IGNORE_ERROR_DIRECTIVE = re.compile(r"^\s*\.IGNORE\s*:")
 MAKEFLAGS_ASSIGNMENT = re.compile(
-    r"(?<![-A-Za-z0-9_.])(?:MAKEFLAGS|MFLAGS)\s*(?::::=|::=|:=|\?=|\+=|!=|=)"
+    r"(?<![-A-Za-z0-9_.])(?:MAKEFLAGS|GNUMAKEFLAGS|MFLAGS)\s*"
+    r"(?::::=|::=|:=|\?=|\+=|!=|=)"
 )
 SHELL_ASSIGNMENT = re.compile(
-    r"(?<![-A-Za-z0-9_.])(?:SHELL|\.SHELLFLAGS)\s*" r"(?:::=|::=|:=|\?=|\+=|!=|=)"
+    r"(?<![-A-Za-z0-9_.])(?:SHELL|\.SHELLFLAGS)\s*" r"(?::::=|::=|:=|\?=|\+=|!=|=)"
 )
 # Any long option, so each one can be judged against pip-audit's own grammar below.
 LONG_OPTION = re.compile(r"(?<![-A-Za-z0-9_])--[A-Za-z0-9][-A-Za-z0-9]*")
@@ -173,7 +181,8 @@ CONTRACT_LINES = (
     "# Both `make security` and `make audit` are live-checked against the canonical advisory IDs.",
     "# The complete recipes are fixed: `audit` is only canonical resolve-mode pip-audit; `security` is exact Bandit then canonical resolve and declared-pin pip-audit passes.",
     "# `.ONESHELL`, `SHELL`, `.SHELLFLAGS`, shell preambles, aliases, functions, wrappers and extra commands are rejected; runtime sentinels prove all three invocations reach the expected binaries.",
-    "# `.IGNORE`, `MAKEFLAGS`/`MFLAGS` assignments and `-` recipe prefixes are rejected: a failing audit must fail the target, and sentinels forced to fail prove it does.",
+    "# `.IGNORE`, Make flag variable assignments (`MAKEFLAGS`, `GNUMAKEFLAGS`,"
+    " `MFLAGS`) and `-` recipe prefixes are rejected: a failing audit must fail the target, and sentinels forced to fail prove it does.",
     "# Each suppression has one physical declaration line in this comment block:",
     "# ignore-vuln: <ADVISORY-ID> | package: <name>==<version> | cap: <name><specifier> | lifted-by: <name> <version>|unknown | reason: <why the suppression is defensible>",
 )
@@ -748,7 +757,23 @@ def _run_target_with_sentinels(
     environment = os.environ.copy()
     environment["PATH"] = f"{binary_dir}{os.pathsep}{environment['PATH']}"
     environment["SECDEP_SENTINEL_DIR"] = str(receipt_dir)
-    for variable in ("BASH_ENV", "ENV", "MAKEFLAGS", "MFLAGS", "SHELL"):
+    for variable in (
+        "BASH_ENV",
+        "ENV",
+        "GNUMAKEFLAGS",
+        "MAKEFLAGS",
+        "MFLAGS",
+        "SHELL",
+    ):
+        environment.pop(variable, None)
+    # pip-audit takes its vulnerability service and index URLs from the environment,
+    # which changes what an audit FINDS rather than its argv or exit status, so argv
+    # pinning and the dry-run comparison are blind to it by construction. The sentinel
+    # run is therefore given none of them (assurance W-4). pip-audit publishes no
+    # environment default for `--ignore-vuln`, so the direct suppression channel is
+    # closed; what the environment can still do to a REAL audit is named as a limit in
+    # the rule row rather than claimed closed.
+    for variable in [name for name in environment if name.startswith("PIP_AUDIT_")]:
         environment.pop(variable, None)
 
     completed = subprocess.run(
@@ -890,6 +915,24 @@ def test_live_make_expansion_matches_the_canonical_source_allowlist(
     assert _effective_suppression_violations(target, source_ids) == []
 
 
+@pytest.mark.parametrize("target", GOVERNED_TARGETS)
+def test_the_sequence_oracle_passes_the_committed_makefile(target: str) -> None:
+    """Positive control for the complete-sequence oracle on the real file.
+
+    W-10: the oracle had negatives and one positive on a crafted file, and was never
+    asserted clean against the committed `Makefile`. A guard with no positive control
+    on a real input is the absence that let F-1 through and then F-2, so it gets one:
+    whatever the live allowlist holds, the committed recipes must satisfy it.
+    """
+    makefile_text = MAKEFILE.read_text(encoding="utf-8")
+    assert (
+        _effective_target_violations(
+            target, _declared_source_ids(makefile_text), makefile_text
+        )
+        == []
+    )
+
+
 @pytest.mark.parametrize(
     ("target", "expected_receipts"),
     [
@@ -916,9 +959,19 @@ def test_governed_targets_execute_the_expected_binaries(
 ) -> None:
     """Runtime sentinels prove the printed commands resolve to real executables."""
     makefile_text = MAKEFILE.read_text(encoding="utf-8")
+    # The declared tokens are read from the subject and appended to each expected
+    # pip-audit argv. The parametrized prefixes carry none, and the sentinel records
+    # the real argv, so hard-coding them asserted that the allowlist is empty (F-2).
+    declared = _declared_ignore_tokens(makefile_text)
+    expected = {
+        name: [
+            [*argv, *declared] if name == "pip-audit" else argv for argv in invocations
+        ]
+        for name, invocations in expected_receipts.items()
+    }
     completed, receipts = _run_target_with_sentinels(tmp_path, target, makefile_text)
     assert completed.returncode == 0, completed.stderr
-    assert receipts == expected_receipts
+    assert receipts == expected
 
 
 @pytest.mark.parametrize(
@@ -972,7 +1025,9 @@ def test_a_failing_audit_also_fails_the_convenience_target(tmp_path: Path) -> No
         tmp_path, "audit", makefile_text, failing="pip-audit-resolve"
     )
     assert completed.returncode != 0, completed.stderr
-    assert receipts == {"pip-audit": [PIP_AUDIT_PREFIX[1:]]}
+    assert receipts == {
+        "pip-audit": [[*PIP_AUDIT_PREFIX[1:], *_declared_ignore_tokens(makefile_text)]]
+    }
 
 
 @pytest.mark.parametrize(
@@ -981,6 +1036,11 @@ def test_a_failing_audit_also_fails_the_convenience_target(tmp_path: Path) -> No
         pytest.param("global", ".IGNORE:\n", id="global .IGNORE"),
         pytest.param("governed target", ".IGNORE: security\n", id="target .IGNORE"),
         pytest.param("make flags", "MAKEFLAGS += -i\n", id="MAKEFLAGS ignore-errors"),
+        pytest.param(
+            "GNU make flags",
+            "GNUMAKEFLAGS := -i\n",
+            id="GNUMAKEFLAGS ignore-errors",
+        ),
     ],
 )
 def test_ignore_error_state_is_an_effective_bypass_and_is_rejected(
@@ -1004,11 +1064,17 @@ def test_ignore_error_state_is_an_effective_bypass_and_is_rejected(
     )
     assert len(receipts["pip-audit"]) == 2, receipts
 
-    # The commands themselves are unchanged, so nothing but this guard sees it.
+    # The commands themselves are unchanged, so nothing but this guard sees it. The
+    # declared set is read from the subject rather than hard-coded empty, or the oracle
+    # returns early on a declared-set mismatch and this assertion stops meaning
+    # "the oracle is blind to it" as soon as the allowlist holds an entry (F-2).
     assert _dry_run_target_commands("security", mutated) == _dry_run_target_commands(
         "security", makefile_text
     )
-    assert _effective_target_violations("security", [], mutated) == []
+    assert (
+        _effective_target_violations("security", _declared_source_ids(mutated), mutated)
+        == []
+    )
 
     violations = audit(mutated)
     assert violations, "the fence passed an ignore-error Makefile"
@@ -1085,7 +1151,12 @@ def test_oneshell_alias_cannot_intercept_the_security_audit(tmp_path: Path) -> N
         "complete source recipe" in item for item in source_violations
     )
     assert rejected_source_recipe, source_violations
-    effective_violations = _effective_target_violations("security", [], mutated)
+    # Declared set from the subject, for the same reason: with a literal empty list the
+    # declared-set mismatch alone satisfies the assertion below, so the control stops
+    # proving the oracle catches the interposition (F-2).
+    effective_violations = _effective_target_violations(
+        "security", _declared_source_ids(mutated), mutated
+    )
     rejected_interposition = any(
         "complete command sequence" in item for item in effective_violations
     )

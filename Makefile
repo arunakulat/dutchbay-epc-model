@@ -40,7 +40,7 @@ ENTRYPOINTS := run_full_pipeline_v14.py run_scenario_analytics_v14.py \
 # Both `make security` and `make audit` are live-checked against the canonical advisory IDs.
 # The complete recipes are fixed: `audit` is only canonical resolve-mode pip-audit; `security` is exact Bandit then canonical resolve and declared-pin pip-audit passes.
 # `.ONESHELL`, `SHELL`, `.SHELLFLAGS`, shell preambles, aliases, functions, wrappers and extra commands are rejected; runtime sentinels prove all three invocations reach the expected binaries.
-# `.IGNORE`, `MAKEFLAGS`/`MFLAGS` assignments and `-` recipe prefixes are rejected: a failing audit must fail the target, and sentinels forced to fail prove it does.
+# `.IGNORE`, Make flag variable assignments (`MAKEFLAGS`, `GNUMAKEFLAGS`, `MFLAGS`) and `-` recipe prefixes are rejected: a failing audit must fail the target, and sentinels forced to fail prove it does.
 # Each suppression has one physical declaration line in this comment block:
 # ignore-vuln: <ADVISORY-ID> | package: <name>==<version> | cap: <name><specifier> | lifted-by: <name> <version>|unknown | reason: <why the suppression is defensible>
 PIP_AUDIT_IGNORES :=
