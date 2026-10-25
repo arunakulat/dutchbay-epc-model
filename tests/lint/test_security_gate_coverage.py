@@ -30,9 +30,12 @@ and a daily main-branch workflow running the same ``make security``. It cannot r
 coverage - that needs the network and a resolve - so the numbers above stay in the pull
 request's receipts and in the ``Makefile``'s own comment, where a reviewer reads them.
 
-Per VERIFY-01(5) every assertion here ships the negative control that observes it firing: the
-checks are pure functions over text, exercised against mutated copies rather than trusted. 22
-controls, 7 over the ``Makefile`` and 15 over the workflow.
+Per VERIFY-01(5) every assertion in the ``Makefile`` and workflow guards ships the negative
+control that observes it firing: both are pure functions over text, exercised against mutated
+copies rather than trusted - 25 controls, 10 over the ``Makefile`` and 15 over the workflow.
+The three remaining tests are oracles against live objects rather than parsers, so they carry
+no mutation control and the claim is deliberately not made of them: one re-runs ``make -n``,
+and two interrogate the installed ``pip_audit``.
 
 That claim was once wider than the set. #1388's independent domain lane probed
 ``audit_workflow`` key by key and found six shapes it passed: ``continue-on-error: true`` on
@@ -41,10 +44,17 @@ the job or on the gate step, and an ``if:`` on either — ``if: false`` or a rea
 daily run they promise, while every other assertion here stays green. ``continue-on-error``
 was worse than silence: it would let a RED audit report success, so the status on ``main``
 would say the opposite of what it measured. Both are now rejected, each with the lane's own
-probe as its control. The ``Makefile`` half had a backstop the workflow half cannot have —
-``test_make_expansion_agrees_with_the_makefile_source`` re-runs ``make -n security``, which
-catches a ``|| true`` or an appended weaker target that the text function alone would pass;
-a workflow has no ``make -n`` to interrogate, so its shapes must be named here explicitly.
+probe as its control.
+
+The ``Makefile`` half had the same reach problem, and the independent assurance lane found it:
+appending ``--ignore-vuln`` to ``security``'s resolve line, or ``|| true`` to either pass, left
+every containment check passing. An earlier draft of this docstring claimed
+``test_make_expansion_agrees_with_the_makefile_source`` was a backstop against exactly that.
+It is not, and the claim is withdrawn: that test asks GNU Make what ``security`` expands to and
+checks the answer agrees with the source, so a weakening WRITTEN INTO the source passes both
+sides of the comparison. ``make -n audit`` is untouched by any of it, so #1386's fence does not
+see it either. Both ``security`` audit lines are therefore pinned by equality to their
+canonical spelling, with the lane's two shapes and a third as their controls.
 """
 
 from __future__ import annotations
@@ -135,6 +145,26 @@ def audit_makefile(makefile_text: str) -> list[str]:
             )
         if f"-r {LOCK}" not in line:
             violations.append(f"audit pass must read {LOCK}, got {line!r}")
+
+    # Pinned by EQUALITY, not by containment. #1388's independent assurance lane
+    # demonstrated the hole the containment checks above leave: append
+    # `--ignore-vuln GHSA-...` to `security`'s resolve line, or `|| true` to either pass,
+    # and there is still exactly one line of each mode, each carrying the lock and the
+    # shared allowlist. A suppression added to one pass alone is a suppression that holds
+    # in one mode and not the other, which is the whole point of sharing
+    # $(PIP_AUDIT_IGNORES); `|| true` makes a RED audit green. Neither `make -n` oracle
+    # sees either shape - `make -n security` only agrees with whatever the source says,
+    # and `make -n audit` is untouched - so equality here is the only check that does.
+    for mode, lines, canonical in (
+        ("resolve-mode", resolve, RESOLVE_RECIPE),
+        ("declared-pin", declared, DECLARED_RECIPE),
+    ):
+        if lines and lines != [canonical]:
+            violations.append(
+                f"`security`'s {mode} pass must be exactly `{canonical}` - an appended "
+                "flag suppresses in one mode only and an appended `|| true` reports a red "
+                f"audit as green, both invisible to `make -n`; got {lines!r}"
+            )
 
     # `make audit` stays the canonical one-command spelling of the effective suppression
     # set. #1386 proposes a SECDEP-01 fence that reads `make -n audit` as its oracle, and
@@ -417,6 +447,34 @@ _LIVE_MAKEFILE = MAKEFILE.read_text(encoding="utf-8")
             ),
             "bandit SAST pass",
             id="bandit pass commented out",
+        ),
+        pytest.param(
+            lambda text: text.replace(
+                f"\t{RESOLVE_RECIPE}\n\t{DECLARED_RECIPE}",
+                f"\t{RESOLVE_RECIPE} --ignore-vuln GHSA-0000-0000-0000"
+                f"\n\t{DECLARED_RECIPE}",
+                1,
+            ),
+            "resolve-mode pass must be exactly",
+            id="suppression added to the resolve pass alone",
+        ),
+        pytest.param(
+            lambda text: text.replace(
+                f"\t{RESOLVE_RECIPE}\n\t{DECLARED_RECIPE}",
+                f"\t{RESOLVE_RECIPE} || true\n\t{DECLARED_RECIPE}",
+                1,
+            ),
+            "resolve-mode pass must be exactly",
+            id="resolve pass made non-failing",
+        ),
+        pytest.param(
+            lambda text: text.replace(
+                f"\t{DECLARED_RECIPE}\n\n# Convenience",
+                f"\t{DECLARED_RECIPE} || true\n\n# Convenience",
+                1,
+            ),
+            "declared-pin pass must be exactly",
+            id="declared pass made non-failing",
         ),
         pytest.param(
             lambda text: text.replace(" audit-declared test", " test", 1),

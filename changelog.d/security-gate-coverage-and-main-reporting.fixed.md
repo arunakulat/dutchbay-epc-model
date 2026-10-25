@@ -29,10 +29,14 @@
   deliberately not triggered on `pull_request`, where `Security Scan` already gates every
   change. `tests/lint/test_security_gate_coverage.py` pins both remedies — both passes, the
   shared allowlist, the untouched `audit` alias, the daily cadence, and the equality between
-  what `main` audits and what the merge gate audits — with a negative control per assertion
-  plus two hermetic pip-audit oracles proving the flags select the pre-resolved path and that
-  the venv prologue is still the reason resolve mode skipped those pins. The workflow half
-  also rejects the shapes that honour the triggers and neuter the run: an `if:` on the
-  `make security` job or step, which would silence the daily cadence, and
-  `continue-on-error`, which would let a red audit report success on `main`. No runtime, financial
-  formula, scenario or KPI change.
+  what `main` audits and what the merge gate audits — with a negative control for every
+  assertion in its two text guards, plus two hermetic pip-audit oracles proving the flags
+  select the pre-resolved path and that the venv prologue is still the reason resolve mode
+  skipped those pins. Both guards also reject the shapes that honour what is written and
+  neuter what runs, each found by an independent review lane probing the guard rather than
+  the delivery: an `if:` or `continue-on-error` on the `make security` job or step, which
+  would silence the daily cadence or let a red audit report success on `main`; and, in the
+  `Makefile`, a suppression or a `|| true` appended to one audit pass alone, which no
+  `make -n` expansion can detect because the expansion only agrees with the source. Both
+  `security` audit lines are therefore pinned by equality to their canonical spelling. No
+  runtime, financial formula, scenario or KPI change.
