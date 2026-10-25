@@ -504,6 +504,37 @@ def _dry_run_target_commands(
     ]
 
 
+def _declared_ignore_tokens(makefile_text: str) -> list[str]:
+    """Return the literal tokens Make substitutes for ``$(PIP_AUDIT_IGNORES)``."""
+    assignments = _assignments(makefile_text.splitlines())
+    assert len(assignments) == 1, assignments
+    return shlex.split(assignments[0][4], comments=True, posix=True)
+
+
+def _declared_source_ids(makefile_text: str) -> list[str]:
+    """Return the advisory IDs the subject's own declaration carries."""
+    violations: list[str] = []
+    ids = _suppressed_ids(_assignments(makefile_text.splitlines()), violations)
+    assert violations == [], violations
+    return ids
+
+
+def _recipe_lines(makefile_text: str, target: str) -> list[str]:
+    """Return one target's literal recipe lines, tab prefix included."""
+    lines = makefile_text.splitlines()
+    starts = [
+        index for index, line in enumerate(lines) if line.startswith(f"{target}:")
+    ]
+    assert len(starts) == 1, f"{target}: {len(starts)} target lines"
+    recipe: list[str] = []
+    for line in lines[starts[0] + 1 :]:
+        if not line.startswith("\t"):
+            break
+        recipe.append(line)
+    assert recipe, f"{target}: no recipe lines"
+    return recipe
+
+
 def _effective_suppression_violations(
     target: str, source_ids: list[str], makefile_text: str | None = None
 ) -> list[str]:
@@ -634,11 +665,21 @@ def test_security_recipe_cannot_carry_an_undeclared_direct_suppression() -> None
     ), source_violations
 
     # The convenience target stays clean: this is specifically a mandatory-target
-    # divergence, not a fixture that poisons both recipes.
-    assert _dry_run_target_commands("audit", mutated) == [PIP_AUDIT_PREFIX]
+    # divergence, not a fixture that poisons both recipes. Expected against the
+    # declared tokens rather than the bare prefix, so the claim stays true once the
+    # allowlist holds an entry - the case the rule exists to govern (F-1R).
+    assert _dry_run_target_commands("audit", mutated) == [
+        PIP_AUDIT_PREFIX + _declared_ignore_tokens(mutated)
+    ]
     security_commands = _dry_run_target_commands("security", mutated)
     assert any("CVE-2026-999999" in command for command in security_commands)
-    effective_violations = _effective_suppression_violations("security", [], mutated)
+    # The declared set is read from the subject too, for the same reason: hard-coding
+    # the empty allowlist made the oracle short-circuit on "canonical assignment IDs do
+    # not match source IDs" as soon as a real entry existed, so the injected ID was
+    # never reached. That is the second half of F-1R, in this same test.
+    effective_violations = _effective_suppression_violations(
+        "security", _declared_source_ids(mutated), mutated
+    )
     rejected_injected_id = any(
         "CVE-2026-999999" in violation for violation in effective_violations
     )
@@ -882,8 +923,16 @@ def test_an_abbreviated_recipe_suppression_is_effective_and_is_rejected(
     assert any(
         "ignore options may appear only" in item for item in source_violations
     ), source_violations
-    effective_violations = _effective_suppression_violations("security", [], mutated)
-    assert effective_violations, "the live oracle passed an abbreviated suppression"
+    # Against the subject's own declared set, so the rejection must NAME the injected
+    # ID. A hard-coded empty allowlist would make this assertion a tautology the moment
+    # a real entry existed: the oracle would report the declaration mismatch and the
+    # abbreviation could go unnoticed (F-1R, third site).
+    effective_violations = _effective_suppression_violations(
+        "security", _declared_source_ids(mutated), mutated
+    )
+    assert any(
+        "CVE-2026-999999" in item for item in effective_violations
+    ), f"the live oracle passed an abbreviated suppression: {effective_violations}"
 
 
 # The governed targets exactly as the committed Makefile writes them, so this fixture
@@ -916,6 +965,22 @@ def test_the_oracle_passes_one_declaration_carried_by_every_audit_pass(
     assert (
         _effective_suppression_violations(target, DECLARED_IDS, POPULATED_TARGETS) == []
     )
+
+
+def test_the_positive_control_fixture_tracks_the_committed_recipes() -> None:
+    """The fixture that drives the oracle must not drift from the real recipes.
+
+    W-8: the fixture's fidelity to the committed ``Makefile`` was true but asserted
+    nowhere, so a later change to an audit pass would leave the only test that reaches
+    the oracle with a populated allowlist running against a stale shape - the F-1
+    lesson one level up, where the fixtures agreed with the author's model and the
+    committed file did not.
+    """
+    makefile_text = MAKEFILE.read_text(encoding="utf-8")
+    for target in GOVERNED_TARGETS:
+        assert _recipe_lines(POPULATED_TARGETS, target) == _recipe_lines(
+            makefile_text, target
+        ), target
 
 
 def test_the_oracle_rejects_an_extra_suppression_on_one_audit_pass() -> None:
