@@ -21,8 +21,11 @@ What is asserted here
   ``SUPPORTED_RESOLUTIONS`` and ``ENGINE_SUPPORTED_RESOLUTIONS`` are the same set today;
 * both fields are registered in the v14 field specs, at the paths their resolvers own.
 
-Every negative case here passes if ``_validate_cashflow_period_fields`` is removed from
-``validate_config_for_v14``; that is what makes them controls rather than decoration.
+Remove the ``_validate_cashflow_period_fields`` call from ``validate_config_for_v14``
+and twelve of the negative cases below FAIL, because the bad config each one feeds in is
+accepted again. That measured number, not the mere presence of assertions, is what makes
+them controls rather than decoration. The thirteenth calls the helper directly, so the
+wiring is not its subject and it survives that mutation by design.
 """
 
 from __future__ import annotations

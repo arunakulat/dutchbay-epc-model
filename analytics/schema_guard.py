@@ -347,10 +347,11 @@ def _validate_cashflow_period_fields(
       ``ANNUAL``: the fallback would add a second, misleading error about profile
       length on top of the real one.
     * ``require_engine_support`` rejects a resolution this grid can describe but the
-      cashflow engine cannot build rows for. Both sets are ``{annual, quarterly}``
-      today, so this cannot fire on a real config; it is here so that the refusal
-      happens at pre-flight rather than mid-run for the next entry to
-      ``SUPPORTED_RESOLUTIONS`` that outruns its builder.
+      cashflow engine cannot build rows for. ``SUPPORTED_RESOLUTIONS`` and
+      ``ENGINE_SUPPORTED_RESOLUTIONS`` are the same set as this is written -- read them
+      rather than trust this sentence -- so it cannot fire on a real config today. It is
+      here so that the refusal happens at pre-flight rather than mid-run for the next
+      entry to ``SUPPORTED_RESOLUTIONS`` that outruns its builder.
     * ``resolve_within_year_profile`` rejects a profile whose length does not match the
       resolved grid, or that carries a non-numeric, negative or non-finite weight, or
       that does not sum to 1.

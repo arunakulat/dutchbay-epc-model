@@ -11,7 +11,8 @@
   refused. The grid is resolved first so the profile can be measured against it, which
   catches the cross-field mistake most likely to reach a real config: a four-weight profile
   with no declared resolution is now refused rather than quietly ignored under the default
-  annual grid. An unusable grid suppresses the profile error, so one mistake yields one
+  annual grid -- recorded under Changed, since that is where an operator holding such a file
+  will look. An unusable grid suppresses the profile error, so one mistake yields one
   message instead of a second, misleading one about length. The registered specs deliberately
   carry no validator — a flat predicate can express neither field, since the accepted
   resolution set lives in the resolver and a profile's required length depends on the sibling
