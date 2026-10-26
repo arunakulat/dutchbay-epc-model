@@ -6,8 +6,9 @@
   verdict; the cost-of-equity sweep carries `None`; and the capex Monte Carlo refuses
   rather than take a percentile over it. On the API, `KpiCard.value` and the values of
   `CaseResult.kpis` may now be `null` for such a KPI (an absent key still means "not
-  computed"), which retypes two response fields; the contract-version consequence is
-  recorded in `app/api/responses.py`. Defined equity IRRs, and the canonical KPI vector,
+  computed"). That retypes two response fields, so the public contract version moves from
+  1.2 to **2.0** (MAJOR, per the policy in `app/api/responses.py`; owner decision), still
+  served under `/v1`. Defined equity IRRs, and the canonical KPI vector,
   are unchanged.
 - Known consequence, tracked separately on #1353: the Monte Carlo aggregator excludes a
   trial with any missing metric from every metric, so a trial with an undefined equity IRR

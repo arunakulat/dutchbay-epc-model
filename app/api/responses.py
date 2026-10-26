@@ -22,12 +22,14 @@ from pydantic import BaseModel, Field
 #: 1.2 (#993 PR-B): added the ``AnalysisResult`` envelope for async analysis jobs
 #: (MC / sensitivity / global-SA) — additive, a new response shape (no existing model
 #: changed).
-#: 1.3 (#1436): ``KpiCard.value`` may be ``null`` (with ``display`` "undefined") for a
-#: KPI the engine reports as undefined, e.g. an equity IRR with no root. Such a KPI was
-#: previously sent as a false ``0.0``. ``CaseResult.kpis`` is retyped the same way, to
-#: ``Dict[str, Optional[float]]``: an undefined KPI keeps its key with value ``null``, so a
-#: missing key still means "not computed" and ``null`` means "undefined".
-API_CONTRACT_VERSION = "1.3"
+#: 2.0 (#1436): MAJOR, because two fields are RETYPED. ``KpiCard.value`` becomes
+#: ``Optional[float]`` (``null``, with ``display`` "undefined") and ``CaseResult.kpis``
+#: becomes ``Dict[str, Optional[float]]`` for a KPI the engine reports as undefined, e.g.
+#: an equity IRR with no root. Such a KPI was previously sent as a false ``0.0``; an
+#: undefined KPI keeps its key with ``null``, so a missing key still means "not computed".
+#: Owner decision 2026-10-26 ("Bump to 2.0"): the bump follows the policy above, and the
+#: URL surface stays ``/v1`` because no client consumes it yet, so it was not re-cut.
+API_CONTRACT_VERSION = "2.0"
 
 
 class WindAssessment(BaseModel):

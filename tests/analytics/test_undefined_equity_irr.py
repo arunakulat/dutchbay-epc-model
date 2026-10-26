@@ -156,7 +156,7 @@ def test_wacc_sweep_carries_an_undefined_equity_irr_as_none(
 
 
 def test_api_kpi_card_carries_an_undefined_value_as_null() -> None:
-    """The API surface projects the report row; ``value`` is null, never 0.0 (contract 1.3)."""
+    """The API surface projects the report row; ``value`` is null, never 0.0 (contract 2.0)."""
     from app.api.surface import KpiCard
 
     rows = _build_kpi_rows({"equity_irr": None}, _report_config())
