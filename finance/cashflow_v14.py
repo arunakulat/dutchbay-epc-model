@@ -1044,6 +1044,10 @@ def _register_cashflow_schema() -> None:
 
     This gives schema_guard a precise view of what cashflow_v14 expects.
     """
+    # Imported inside the registration so the engine keeps no module-level dependency
+    # on the period-grid modules, which import nothing from the engine in return.
+    from finance.period_grid_v14 import CASHFLOW_RESOLUTION_KEY
+    from finance.subannual_rows_v14 import WITHIN_YEAR_PROFILE_KEY
 
     specs = [
         RequiredFieldSpec(
@@ -1172,6 +1176,50 @@ def _register_cashflow_schema() -> None:
             validator=lambda v: isinstance(v, (int, float))
             and v is not None
             and float(v) > 0.0,
+        ),
+        # F-03 (#1394): the two A3 period fields. Declared here so the v14 field-spec
+        # surface LISTS them -- `build_schema_dataframe` and anyone reading the schema
+        # now sees both -- while their RULES stay in their owning resolvers, which
+        # `analytics.schema_guard._validate_cashflow_period_fields` delegates to at
+        # pre-flight.
+        #
+        # Deliberately `validator=None`, which is the one thing a reader will query.
+        # A flat predicate cannot express either field: the accepted resolution set
+        # lives in `finance.period_grid_v14.SUPPORTED_RESOLUTIONS` and is intersected
+        # with what the engine can build, and a profile's required LENGTH depends on
+        # the grid the sibling key resolves to, which a single-value predicate never
+        # sees. A partial copy here would be a second authority to drift from -- the
+        # failure mode `require_mapping_node` was written to undo -- so enforcement is
+        # left in one place and this spec carries the declaration only. Same reasoning
+        # as the `irr` module registering no specs at all.
+        #
+        # Paths are derived from the resolvers' own public dotted keys, so renaming a
+        # key cannot leave this registration pointing at the old path.
+        RequiredFieldSpec(
+            module="cashflow",
+            name="cashflow_resolution",
+            paths=(tuple(CASHFLOW_RESOLUTION_KEY.split(".")),),
+            required=False,
+            severity="error",
+            description=(
+                "Operating-period resolution (opt-in; absent means the annual grid). "
+                "Validated at pre-flight by finance.period_grid_v14.resolve_period_grid "
+                "and require_engine_support, which name the accepted values."
+            ),
+            validator=None,
+        ),
+        RequiredFieldSpec(
+            module="cashflow",
+            name="cashflow_within_year_profile",
+            paths=(tuple(WITHIN_YEAR_PROFILE_KEY.split(".")),),
+            required=False,
+            severity="error",
+            description=(
+                "Within-year allocation weights, one per period of the resolved grid "
+                "(opt-in; absent means an even split). Validated at pre-flight by "
+                "finance.subannual_rows_v14.resolve_within_year_profile."
+            ),
+            validator=None,
         ),
     ]
 

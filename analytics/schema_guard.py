@@ -319,6 +319,65 @@ def _validate_taxes_indirect(raw_config: Mapping[str, Any], errors: list[str]) -
         errors.append(str(exc))
 
 
+def _validate_cashflow_period_fields(
+    raw_config: Mapping[str, Any], errors: list[str]
+) -> None:
+    """Validate the A3 period fields at pre-flight (F-03, #1394).
+
+    ``cashflow.resolution`` and ``cashflow.within_year_profile`` are both OPT-IN: with
+    neither declared the config resolves to the annual grid and an even profile, which
+    is what every committed scenario already does, so an absent pair is byte-identical.
+    A PRESENT-but-unsupported value is refused HERE, before evaluation begins, naming
+    the config path and the accepted values (``FRAMEWORK-02``).
+
+    The rules are not restated. Each field is delegated verbatim to its owning
+    resolver -- :func:`finance.period_grid_v14.resolve_period_grid`,
+    :func:`finance.period_grid_v14.require_engine_support` and
+    :func:`finance.subannual_rows_v14.resolve_within_year_profile` -- the same pattern
+    as ``_validate_run_mode`` (#733a) and ``_validate_taxes_indirect`` (#738): a guard
+    must reuse the engine's exact resolution, or pre-flight and call time drift apart.
+
+    Three delegations, in dependency order, because each needs the one before it to
+    have succeeded:
+
+    * ``resolve_period_grid`` rejects a non-string, blank or unrecognised resolution,
+      and a ``cashflow`` node that is a mapping but not a ``dict`` -- the silent
+      demotion to annual that resolver documents. Without a grid there is nothing to
+      measure a profile against, so a failure here RETURNS rather than falling back to
+      ``ANNUAL``: the fallback would add a second, misleading error about profile
+      length on top of the real one.
+    * ``require_engine_support`` rejects a resolution this grid can describe but the
+      cashflow engine cannot build rows for. ``SUPPORTED_RESOLUTIONS`` and
+      ``ENGINE_SUPPORTED_RESOLUTIONS`` are the same set as this is written -- read them
+      rather than trust this sentence -- so it cannot fire on a real config today. It is
+      here so that the refusal happens at pre-flight rather than mid-run for the next
+      entry to ``SUPPORTED_RESOLUTIONS`` that outruns its builder.
+    * ``resolve_within_year_profile`` rejects a profile whose length does not match the
+      resolved grid, or that carries a non-numeric, negative or non-finite weight, or
+      that does not sum to 1.
+
+    The cross-field consequence is the reason the grid is resolved first, and it is the
+    mistake most likely to reach a real config: a four-weight
+    ``cashflow.within_year_profile`` with no ``cashflow.resolution`` is REFUSED, because
+    the default annual grid has one period per year. Previously that config ran, and the
+    profile was never consulted.
+    """
+    from finance.period_grid_v14 import require_engine_support, resolve_period_grid
+    from finance.subannual_rows_v14 import resolve_within_year_profile
+
+    try:
+        grid = resolve_period_grid(raw_config)
+        require_engine_support(grid)
+    except ValueError as exc:
+        errors.append(str(exc))
+        return
+
+    try:
+        resolve_within_year_profile(raw_config, grid)
+    except ValueError as exc:
+        errors.append(str(exc))
+
+
 def _validate_grid_conditionals(
     raw_config: Mapping[str, Any], errors: list[str]
 ) -> None:
@@ -402,6 +461,12 @@ def validate_config_for_v14(
     # `generation.technologies.<name>.grid` interface. Opt-in / present-only, so
     # grid-absent scenarios are byte-identical.
     _validate_grid_conditionals(raw_config, errors)
+
+    # 1f. Validate any declared cashflow.resolution / cashflow.within_year_profile
+    # against the A3 contract (F-03, #1394). Opt-in: both absent -> the annual grid and
+    # an even profile, no error, byte-identical. A present-but-unsupported value fails
+    # here, before evaluation begins, naming the path and the accepted values.
+    _validate_cashflow_period_fields(raw_config, errors)
 
     # 2. Ensure modules are imported so they can register field specs
     module_list = list(modules) if modules is not None else []
