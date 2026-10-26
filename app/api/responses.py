@@ -22,7 +22,10 @@ from pydantic import BaseModel, Field
 #: 1.2 (#993 PR-B): added the ``AnalysisResult`` envelope for async analysis jobs
 #: (MC / sensitivity / global-SA) — additive, a new response shape (no existing model
 #: changed).
-API_CONTRACT_VERSION = "1.2"
+#: 1.3 (#1436): ``KpiCard.value`` may be ``null`` (with ``display`` "undefined") for a
+#: KPI the engine reports as undefined, e.g. an equity IRR with no root. Such a KPI was
+#: previously sent as a false ``0.0``; no other field changed.
+API_CONTRACT_VERSION = "1.3"
 
 
 class WindAssessment(BaseModel):

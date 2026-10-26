@@ -153,3 +153,22 @@ def test_wacc_sweep_carries_an_undefined_equity_irr_as_none(
     )
     rows = wacc_sensitivity.ke_band_npv("unused.yaml", [0.12])
     assert rows[0]["equity_irr"] is None
+
+
+def test_api_kpi_card_carries_an_undefined_value_as_null() -> None:
+    """The API surface projects the report row; ``value`` is null, never 0.0 (contract 1.3)."""
+    from app.api.surface import KpiCard
+
+    rows = _build_kpi_rows({"equity_irr": None}, _report_config())  # type: ignore[dict-item]
+    card = KpiCard(
+        key=rows[0].key,
+        label=rows[0].label,
+        value=rows[0].value,
+        display=rows[0].display,
+    )
+    assert card.model_dump(mode="json") == {
+        "key": "equity_irr",
+        "label": "Equity IRR",
+        "value": None,
+        "display": "undefined",
+    }

@@ -166,7 +166,7 @@ def test_contract_version_value_is_pinned() -> None:
     """Pin the literal so a reverted/fat-fingered constant is caught — the stamping
     tests above are self-referential (== API_CONTRACT_VERSION) and would stay green.
     Bump this together with API_CONTRACT_VERSION on any deliberate contract change."""
-    assert API_CONTRACT_VERSION == "1.2"
+    assert API_CONTRACT_VERSION == "1.3"
 
 
 # --------------------------------------------------------------------------- #
