@@ -19,7 +19,7 @@ def ke_band_npv(
     ke_values: Sequence[float],
     *,
     base_overrides: Optional[Mapping[str, Any]] = None,
-) -> List[Dict[str, float]]:
+) -> List[Dict[str, Optional[float]]]:
     """Project/equity NPV + WACC across a cost-of-equity band (build_up mode).
 
     Args:
@@ -29,9 +29,10 @@ def ke_band_npv(
 
     Returns:
         One row per ke with ``ke``, ``wacc`` (achieved discount rate), ``project_npv``,
-        ``equity_npv``, ``project_irr``, ``equity_irr`` — all floats.
+        ``equity_npv``, ``project_irr``, ``equity_irr`` — all floats, except that
+        ``equity_irr`` is ``None`` when no rate solves the equity cashflows (#1436).
     """
-    rows: List[Dict[str, float]] = []
+    rows: List[Dict[str, Optional[float]]] = []
     for ke in ke_values:
         overrides: Dict[str, Any] = dict(base_overrides or {})
         overrides["wacc.mode"] = "build_up"
@@ -45,7 +46,12 @@ def ke_band_npv(
                 "project_npv": float(kpis.get("project_npv", 0.0)),
                 "equity_npv": float(kpis.get("equity_npv", 0.0)),
                 "project_irr": float(kpis.get("project_irr", 0.0)),
-                "equity_irr": float(kpis.get("equity_irr", 0.0)),
+                # #1436: None when the equity IRR is undefined, never a 0.0 stand-in.
+                "equity_irr": (
+                    None
+                    if kpis.get("equity_irr", 0.0) is None
+                    else float(kpis.get("equity_irr", 0.0))
+                ),
             }
         )
     return rows
