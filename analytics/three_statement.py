@@ -164,6 +164,7 @@ def build_three_statement(
     currency: str = "USD",
     opening_cash: float = 0.0,
     tolerance: float = DEFAULT_TIEOUT_TOLERANCE,
+    balloon_interest: Optional[Sequence[float]] = None,
 ) -> ThreeStatementResult:
     """Assemble the three statements from the engine's enriched annual rows.
 
@@ -184,6 +185,10 @@ def build_three_statement(
         currency: Presentation currency label (default ``"USD"``).
         opening_cash: Cash on the balance sheet at COD (e.g. a funded DSRA), in ``currency``.
         tolerance: Absolute (``currency``) tolerance for the tie-out checks.
+        balloon_interest: Per-row interest INSIDE ``balloon_resolution`` (``currency``).
+            Non-zero only for a refinanced balloon, whose level payments are interest plus
+            principal (#1396); that interest is an expense and only the remainder retires
+            debt. ``None`` (every other treatment) treats the whole row as principal.
 
     Returns:
         A :class:`ThreeStatementResult` with the three statements and the tie-out status.
@@ -212,10 +217,16 @@ def build_three_statement(
             fx = rate if rate > 0 else 1.0
 
         # ---- debt (per-row, engine-mapped; already in `currency`) ------------
-        interest = _f(row, "interest_usd")
+        scheduled_interest = _f(row, "interest_usd")
         service = _f(row, "debt_service_total")
-        principal = service - interest
-        balloon = _f(row, "balloon_resolution")
+        principal = service - scheduled_interest
+        refi_interest = (
+            float(balloon_interest[t])
+            if balloon_interest is not None and t < len(balloon_interest)
+            else 0.0
+        )
+        balloon = _f(row, "balloon_resolution") - refi_interest
+        interest = scheduled_interest + refi_interest
         total_debt_repaid = principal + balloon
 
         # ---- P&L (LKR lines -> currency via fx; EBIT = EBITDA − depreciation) -
@@ -409,7 +420,36 @@ def build_three_statement_from_run(
         fx_rates=fx_rates,
         currency="USD",
         tolerance=tolerance,
+        balloon_interest=_refinance_interest_by_row(debt_result, len(annual_rows)),
     )
+
+
+def _refinance_interest_by_row(
+    debt_result: Mapping[str, Any], n_rows: int
+) -> Optional[List[float]]:
+    """Per-row interest inside a refinanced balloon's payments, or ``None`` (#1396).
+
+    Read from the engine's ``debt_result["refinance"]`` disclosure (period-indexed) and
+    placed on rows through ``annual_row_debt_period_map``, the same map the pipeline uses
+    to put ``balloon_resolution`` on rows, so the split lands on the row that carries the
+    payment.
+    """
+    refinance = debt_result.get("refinance")
+    if not isinstance(refinance, Mapping):
+        return None
+    by_period = {
+        int(c["period"]): float(c["interest_usd"])
+        for c in refinance.get("coverage_by_period") or []
+    }
+    out = [0.0] * n_rows
+    for mapping in debt_result.get("annual_row_debt_period_map") or []:
+        try:
+            row, period = int(mapping["annual_row_index"]), int(mapping["debt_period"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if 0 <= row < n_rows:
+            out[row] = by_period.get(period, 0.0)
+    return out
 
 
 @dataclass(frozen=True)

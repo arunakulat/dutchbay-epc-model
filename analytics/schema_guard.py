@@ -378,6 +378,23 @@ def _validate_cashflow_period_fields(
         errors.append(str(exc))
 
 
+def _validate_refinance_terms(raw_config: Mapping[str, Any], errors: list[str]) -> None:
+    """Refuse a balloon refinance whose terms are not in YAML (#1396).
+
+    Present-only: nothing is checked unless ``Financing_Terms.balloon_treatment``
+    resolves to ``refinance``. Delegates to
+    :func:`finance.debt_v14.resolve_refinance_terms`, the engine's own resolver, so
+    pre-flight and the debt engine cannot disagree (the ``_validate_run_mode``
+    pattern). There is no code default for either term.
+    """
+    from finance.debt_v14 import resolve_refinance_terms
+
+    try:
+        resolve_refinance_terms(raw_config)
+    except ValueError as exc:
+        errors.append(str(exc))
+
+
 def _validate_grid_conditionals(
     raw_config: Mapping[str, Any], errors: list[str]
 ) -> None:
@@ -461,6 +478,10 @@ def validate_config_for_v14(
     # `generation.technologies.<name>.grid` interface. Opt-in / present-only, so
     # grid-absent scenarios are byte-identical.
     _validate_grid_conditionals(raw_config, errors)
+
+    # 1f. A balloon refinance takes both of its terms from YAML; there is no code
+    # default (#1396). Present-only: other treatments are untouched.
+    _validate_refinance_terms(raw_config, errors)
 
     # 1f. Validate any declared cashflow.resolution / cashflow.within_year_profile
     # against the A3 contract (F-03, #1394). Opt-in: both absent -> the annual grid and
