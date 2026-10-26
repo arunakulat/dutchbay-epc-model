@@ -292,3 +292,170 @@ def test_codex_environment_exposes_safe_project_actions() -> None:
     assert all(action["command"].lstrip().startswith("set -e") for action in actions)
     assert "--reload" in by_name["Run API"]["command"]
     assert "app.api.main:app" in by_name["Run API"]["command"]
+
+
+def _emitted_checkout_pth_lines() -> str:
+    """The two lines the hook uses to write the checkout ``.pth``, as a snippet."""
+
+    hook = SESSION_HOOK.read_text(encoding="utf-8")
+    match = re.search(
+        r"^(CHECKOUT_PTH=.*\nprintf '%s\\n' \"\$REPO\" > \"\$CHECKOUT_PTH\")$",
+        hook,
+        re.MULTILINE,
+    )
+    assert match is not None, "the hook no longer writes a recognisable checkout .pth"
+    return match.group(1)
+
+
+def test_session_hook_writes_the_checkout_pth_outside_the_env_file_guard() -> None:
+    """A hand-run hook must still make the checkout importable.
+
+    The env-file block cannot do this job at all: a hook is a subprocess and cannot
+    export into the shell that started it, and the manual invocation documented in
+    CLAUDE.md sets no CLAUDE_ENV_FILE, so anything inside that guard is skipped
+    entirely. Placement is the whole fix, which is why it is asserted rather than
+    assumed.
+    """
+
+    hook = SESSION_HOOK.read_text(encoding="utf-8")
+
+    assert hook.index("CHECKOUT_PTH=") < hook.index('if [ -n "${CLAUDE_ENV_FILE:-}" ]')
+
+
+def test_session_hook_checkout_pth_is_one_line_and_rewritten(tmp_path: Path) -> None:
+    """Running the hook twice must leave one path, not two.
+
+    The appended PATH export next to this one accumulated a duplicate per session
+    until it was guarded, so the same hazard is checked here by running the real
+    snippet twice against a real venv rather than by reading the redirection
+    operator and trusting it.
+    """
+
+    import venv
+
+    venv_dir = tmp_path / "venv"
+    venv.create(venv_dir, with_pip=False)
+    repo = tmp_path / "checkout"
+    repo.mkdir()
+    snippet = _emitted_checkout_pth_lines()
+    script = f'PY="{venv_dir}/bin/python"\nREPO="{repo}"\n{snippet}\n'
+
+    for _ in range(2):
+        subprocess.run(["bash", "-euo", "pipefail", "-c", script], check=True)
+
+    written = sorted(venv_dir.rglob("dutchbay-checkout.pth"))
+    assert len(written) == 1
+    assert written[0].read_text(encoding="utf-8").splitlines() == [str(repo)]
+
+
+def test_session_hook_checkout_pth_lands_in_the_venv_not_the_checkout(
+    tmp_path: Path,
+) -> None:
+    """The negative control on *where* it lands.
+
+    A ``.pth`` written into the checkout does nothing — only ``site-packages`` is
+    scanned at startup — and a path computed from the interpreter running the hook
+    rather than from ``$PY`` would land in whichever environment launched it. Both
+    mistakes would leave the test above green if it only checked the contents.
+
+    The destination is asserted against the venv this test created, never against
+    this runner's own ``site-packages``: in a container the hook has legitimately
+    written that file there, so an assertion about it would pass or fail on how the
+    machine was provisioned rather than on the hook.
+    """
+
+    import venv
+
+    venv_dir = tmp_path / "venv"
+    venv.create(venv_dir, with_pip=False)
+    repo = tmp_path / "checkout"
+    repo.mkdir()
+    script = (
+        f'PY="{venv_dir}/bin/python"\nREPO="{repo}"\n{_emitted_checkout_pth_lines()}\n'
+    )
+
+    subprocess.run(["bash", "-euo", "pipefail", "-c", script], check=True)
+
+    written = sorted(venv_dir.rglob("dutchbay-checkout.pth"))
+    assert len(written) == 1
+    assert written[0].parent.name == "site-packages"
+    assert written[0].is_relative_to(venv_dir)
+    assert not (repo / "dutchbay-checkout.pth").exists()
+    assert '"$PY" -c' in _emitted_checkout_pth_lines()
+
+
+def _hook_line(prefix: str) -> str:
+    """The hook's own line beginning *prefix*, so no test restates its wording."""
+
+    hook = SESSION_HOOK.read_text(encoding="utf-8")
+    matches = [
+        line.strip() for line in hook.splitlines() if line.strip().startswith(prefix)
+    ]
+    assert len(matches) == 1, f"expected exactly one hook line starting {prefix!r}"
+    return matches[0]
+
+
+def _cached_start_region() -> str:
+    """The hook's real bytes from the stamp decision through the ``.pth`` write."""
+
+    hook = SESSION_HOOK.read_text(encoding="utf-8")
+    start = hook.index(_hook_line("STAMP_VALUE="))
+    tail = 'printf \'%s\\n\' "$REPO" > "$CHECKOUT_PTH"'
+    assert hook.count(tail) == 1, "the hook no longer writes the checkout .pth once"
+    end = hook.index(tail) + len(tail)
+    assert start < end, "the .pth write now precedes the stamp decision"
+    return hook[start:end]
+
+
+def test_session_hook_writes_the_checkout_pth_on_a_cached_start(
+    tmp_path: Path,
+) -> None:
+    """The write must be unconditional, not merely above the env-file guard.
+
+    Most sessions are *warm*: the manifest stamp matches, the install branch is
+    skipped entirely, and only the unconditional statements run. Asserting that the
+    write appears before the ``CLAUDE_ENV_FILE`` guard does not establish that,
+    because the whole install branch also lies above that guard -- move the write
+    into it and every other test here still passes while a warm start writes
+    nothing and imports fail from any directory but the checkout root (assurance
+    C-1 on #1393).
+
+    So this runs the hook's real bytes, from the stamp decision through the write,
+    against a seeded stamp, and requires both that the cached branch was taken and
+    that the file exists afterwards. The stamp is seeded with the hook's own two
+    lines, so the stamp's format lives in one place.
+    """
+
+    import venv
+
+    venv_dir = tmp_path / "venv"
+    venv.create(venv_dir, with_pip=False)
+    repo = tmp_path / "checkout"
+    repo.mkdir()
+    prelude = (
+        "manifest_hash() { echo stub-manifest; }\n"
+        f'PY="{venv_dir}/bin/python"\n'
+        f'REPO="{repo}"\n'
+        f'VENV="{venv_dir}"\n'
+        f'STAMP="{venv_dir}/.session-start-stamp"\n'
+        'DUTCHBAY_EXTRAS="dev"\n'
+    )
+    stamp_value_line = _hook_line("STAMP_VALUE=")
+    stamp_write_line = _hook_line("printf '%s' ")
+    seed = f"{prelude}{stamp_value_line}\n{stamp_write_line}\n"
+    subprocess.run(["bash", "-euo", "pipefail", "-c", seed], check=True)
+
+    completed = subprocess.run(
+        ["bash", "-euo", "pipefail", "-c", f"{prelude}{_cached_start_region()}"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "skipping install" in completed.stdout, (
+        "the cached branch was not taken, so this run proves nothing about a warm "
+        f"start: {completed.stdout!r}"
+    )
+    written = sorted(venv_dir.rglob("dutchbay-checkout.pth"))
+    assert len(written) == 1
+    assert written[0].read_text(encoding="utf-8").splitlines() == [str(repo)]

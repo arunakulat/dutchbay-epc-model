@@ -589,3 +589,159 @@ def test_lock_outside_the_checkout_is_refused(tmp_path: Path, configured: str) -
 
     with pytest.raises(environment.EnvironmentContractError, match="relative path"):
         environment.load_environment_policy(path)
+
+
+def _probe_in_venv(
+    venv_dir: Path, checkout: Path, cwd: Path, probe_module: str
+) -> subprocess.CompletedProcess[str]:
+    """Run the real probe with a venv's own interpreter and no ``PYTHONPATH``.
+
+    ``PYTHONPATH`` is removed rather than emptied: the whole point of the cases below
+    is what the environment resolves on its own, and inheriting this test runner's
+    ``PYTHONPATH`` would answer the question for it.
+    """
+
+    env = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+    env.update(
+        {
+            "DUTCHBAY_ACTIVE_CHECKOUT": str(checkout),
+            "DUTCHBAY_IMPORT_PROBE": probe_module,
+            "DUTCHBAY_PROJECT_DISTRIBUTION": "dutchbay-epc-model",
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+    )
+    return subprocess.run(
+        [str(venv_dir / "bin" / "python"), "-c", environment._PROBE],
+        cwd=cwd,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _checkout_with_markers(root: Path, probe_module: str) -> Path:
+    """A directory the contract recognises as a DutchBay checkout.
+
+    Both marker files matter: the foreign-checkout scan only flags a path carrying
+    ``pyproject.toml`` *and* the ruleset CSV, so without them
+    ``foreign_checkout_paths == []`` would pass for the wrong reason.
+    """
+
+    checkout = root / "checkout"
+    (checkout / probe_module).mkdir(parents=True)
+    (checkout / probe_module / "__init__.py").write_text("", encoding="utf-8")
+    (checkout / "pyproject.toml").write_text("", encoding="utf-8")
+    (checkout / "go_with_the_flow_rules_v3_0_clean.csv").write_text(
+        "", encoding="utf-8"
+    )
+    return checkout
+
+
+def test_the_checkout_is_not_importable_from_elsewhere_without_help(
+    tmp_path: Path,
+) -> None:
+    """The regression control, measured rather than assumed.
+
+    This is the state a hand-run hook used to leave: a venv with no project install
+    and no ``PYTHONPATH``.  From inside the checkout the import succeeds on the
+    implicit working-directory entry, which is why the defect hid; from anywhere
+    else it cannot resolve at all.
+    """
+
+    import venv
+
+    checkout = _checkout_with_markers(tmp_path, "probe_target")
+    venv_dir = tmp_path / "venv"
+    venv.create(venv_dir, with_pip=False)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+
+    from_root = _probe_in_venv(venv_dir, checkout, checkout, "probe_target")
+    from_elsewhere = _probe_in_venv(venv_dir, checkout, elsewhere, "probe_target")
+
+    assert from_root.returncode == 0, from_root.stderr
+    assert from_elsewhere.returncode != 0
+    assert "probe_target" in from_elsewhere.stderr
+
+
+def test_a_checkout_pth_makes_the_project_importable_and_stays_uninstalled(
+    tmp_path: Path,
+) -> None:
+    """What the hook writes must fix the import *without* becoming an install.
+
+    A path-only ``.pth`` naming this checkout is the one mechanism that survives a
+    subprocess: the hook cannot export into the shell that started it.  The contract
+    must therefore see the project importable from any directory while still
+    reporting no install record and no foreign checkout.
+    """
+
+    import venv
+
+    checkout = _checkout_with_markers(tmp_path, "probe_target")
+    venv_dir = tmp_path / "venv"
+    venv.create(venv_dir, with_pip=False)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    purelib = subprocess.run(
+        [
+            str(venv_dir / "bin" / "python"),
+            "-c",
+            'import sysconfig; print(sysconfig.get_paths()["purelib"])',
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    (Path(purelib) / "dutchbay-checkout.pth").write_text(
+        f"{checkout}\n", encoding="utf-8"
+    )
+
+    completed = _probe_in_venv(venv_dir, checkout, elsewhere, "probe_target")
+
+    assert completed.returncode == 0, completed.stderr
+    raw = json.loads(completed.stdout)
+    assert raw["import_path"] == str(checkout / "probe_target" / "__init__.py")
+    assert raw["editable_project_install"] is False
+    assert raw["project_install_url"] is None
+    assert raw["foreign_checkout_paths"] == []
+
+
+def test_a_pth_naming_another_checkout_is_reported_as_foreign(
+    tmp_path: Path,
+) -> None:
+    """The guard above must not become a blanket exemption for ``.pth`` files.
+
+    This pins the outcome, not the mechanism, and the difference was measured
+    rather than assumed. Dropping the ``candidate != checkout`` test reds this case
+    and the one above, so that guard is controlled. Replacing the probe's
+    ``.pth`` scan with a no-op does **not** red it: ``site`` has already appended
+    an existing ``.pth`` path to ``sys.path``, where the first scan finds it. So
+    this test is a real behavioural pin on "a second checkout is reported", and the
+    ``.pth`` scan's own redundancy is recorded for review rather than papered over.
+    """
+
+    import venv
+
+    checkout = _checkout_with_markers(tmp_path, "probe_target")
+    other = _checkout_with_markers(tmp_path / "second", "probe_target")
+    venv_dir = tmp_path / "venv"
+    venv.create(venv_dir, with_pip=False)
+    purelib = subprocess.run(
+        [
+            str(venv_dir / "bin" / "python"),
+            "-c",
+            'import sysconfig; print(sysconfig.get_paths()["purelib"])',
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    (Path(purelib) / "dutchbay-checkout.pth").write_text(
+        f"{checkout}\n{other}\n", encoding="utf-8"
+    )
+
+    completed = _probe_in_venv(venv_dir, checkout, checkout, "probe_target")
+
+    assert completed.returncode == 0, completed.stderr
+    raw = json.loads(completed.stdout)
+    assert raw["foreign_checkout_paths"] == [str(other)]
