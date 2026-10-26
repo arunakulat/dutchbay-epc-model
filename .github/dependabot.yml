@@ -62,14 +62,20 @@ updates:
       # post-mortem: the weekly numerics group proposed numpy 2.4.6->2.5.2 -> ResolutionImpossible
       # against pandapower. Block minors too so numpy stays within the grid stack's ceiling
       # (2.4.x patches stay welcome). Lift only in lockstep with a pandapower release that raises
-      # it. The engine-numerics major cap is unchanged and still applies (pandas 3.0 = #593).
+      # it -- and move numpy-typing-compat in the SAME step, because its patch segment carries the
+      # numpy range it requires, so lifting numpy without it desyncs the lock (see its entry
+      # below). The engine-numerics major cap is unchanged and still applies (pandas 3.0 = #593).
       - dependency-name: "numpy"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
       # mpmath is capped <1.4 by sympy (sympy 1.14.0 requires mpmath<1.4,>=1.1.0 -- PyPI
       # requires_dist, read 2026-10-10), and 1.3->1.4 is a semver-MINOR bump, so a major-only
-      # rule could never catch it. The numerics group proposed mpmath 1.3.0->1.4.1 in #1325
-      # alongside the numpy-typing-compat bump below; both died together at the install step
-      # with 0 tests run, which is why #1325 reports two install conflicts rather than one.
+      # rule could never catch it -- and before #1343 there was no mpmath ignore entry at all,
+      # major-only or otherwise, so nothing filtered the proposal. The numerics group proposed
+      # mpmath 1.3.0->1.4.1 in #1325 alongside the numpy-typing-compat bump below, and the group
+      # died at the install step with 0 tests run. #1325's logs name only the numpy-typing-compat
+      # conflict: pip reported that one and stopped, so ONE install conflict was observed, not
+      # two, and mpmath's own unmergeability rests on sympy's published cap rather than on
+      # anything those logs show (#1405, D1343-01/02).
       # Block minors too so mpmath stays within sympy's ceiling (1.3.x patches stay welcome).
       # Lift only in lockstep with a sympy release that raises it.
       - dependency-name: "mpmath"
@@ -147,15 +153,17 @@ updates:
       # (numpy<2.5,>=1.26 -- see the pandapower and numpy entries above and #1169), so the .2.5
       # datestamp-patch bump is a ResolutionImpossible at pip install.
       #
-      # The earlier major-only rule could not catch that. #986/#988 added it for a datestamp jump
-      # (20251206->20260602) against the THEN-current optype[numpy] 0.17.1 ceiling of <20251207;
+      # The earlier major-only rule could not catch that. #990 added it (commit f6075686), for a
+      # datestamp jump (20251206->20260602) seen in the #986/#988 post-mortem, against the
+      # THEN-current optype[numpy] 0.17.1 ceiling of <20251207;
       # that ceiling has since lifted -- the lock now carries optype 0.18.0, which requires
       # numpy-typing-compat<20260603,>=20260602.2.0, so optype admits .2.5 and no longer binds.
       # With the datestamp unchanged at 20260602, 2.4->2.5 is a semver-PATCH bump, which the
       # major-only rule let straight through: the numerics group regenerated the identical
       # unmergeable pull request three times (#1249 closed 2026-09-23, #1301 closed 2026-10-02,
       # #1325 2026-10-07 -- all from branch dependabot/pip/numerics-1a7835728b, each dying at the
-      # install step in well under a minute with 0 tests run).
+      # install step with 0 tests run; it is that install STEP which failed in well under a
+      # minute, not the job as a whole).
       #
       # Freeze ALL bot bumps, mirroring pydantic-core and mypy above: there is no finer segment
       # than the patch, so within a datestamp every bump moves the numpy floor. Lift in lockstep
