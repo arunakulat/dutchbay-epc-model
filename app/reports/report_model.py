@@ -129,7 +129,8 @@ class KpiRow(BaseModel):
 
     key: str
     label: str
-    value: float
+    #: None only for a KPI the engine reports as undefined (an IRR with no root, #1436).
+    value: Optional[float]
     display: str
 
 
@@ -924,13 +925,23 @@ class ReportContext(BaseModel):
     manifest: Dict[str, Any]
 
 
-def _build_kpi_rows(kpis: Dict[str, float], config: ReportConfig) -> List[KpiRow]:
+def _build_kpi_rows(
+    kpis: Mapping[str, Optional[float]], config: ReportConfig
+) -> List[KpiRow]:
     """Render the configured KPI table; silently skip KPIs absent from the run."""
     rows: List[KpiRow] = []
     for spec in config.kpi_table:
         if spec.key not in kpis:
             continue
-        value = float(kpis[spec.key])
+        raw = kpis[spec.key]
+        if raw is None:
+            # #1436: present but None is the engine saying "undefined" (an IRR with no
+            # root), not absent; show it as such rather than crash or print 0.00%.
+            rows.append(
+                KpiRow(key=spec.key, label=spec.label, value=None, display="undefined")
+            )
+            continue
+        value = float(raw)
         rows.append(
             KpiRow(
                 key=spec.key,
@@ -942,7 +953,9 @@ def _build_kpi_rows(kpis: Dict[str, float], config: ReportConfig) -> List[KpiRow
     return rows
 
 
-def _build_verdict(kpis: Dict[str, float], covenants: Covenants) -> Verdict:
+def _build_verdict(
+    kpis: Mapping[str, Optional[float]], covenants: Covenants
+) -> Verdict:
     """Derive covenant/return flags and a headline from the run and config.
 
     Reads the hurdle from the run (``discount_rate_used``); compares the minimum
@@ -1004,6 +1017,11 @@ def _build_verdict(kpis: Dict[str, float], covenants: Covenants) -> Verdict:
         else:
             desc = "positive to sponsors"
         notes.append(f"Equity IRR {equity_irr * 100:.2f}% — {desc}.")
+    elif "equity_irr" in kpis:
+        # #1436: the waterfall ran and no rate solves the equity cashflows.
+        notes.append(
+            "Equity IRR is undefined — no discount rate solves the equity cashflows."
+        )
     if min_dscr is not None:
         rel = "meets" if dscr_covenant_met else "breaches"
         notes.append(
@@ -1052,7 +1070,7 @@ def _build_verdict(kpis: Dict[str, float], covenants: Covenants) -> Verdict:
 
 
 def _build_ic_summary(
-    kpis: Dict[str, float],
+    kpis: Mapping[str, Optional[float]],
     verdict: Verdict,
     scenario_config: Optional[Mapping[str, Any]],
     readiness_rows: Sequence[ReadinessRow],

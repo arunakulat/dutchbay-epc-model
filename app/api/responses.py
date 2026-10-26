@@ -22,7 +22,14 @@ from pydantic import BaseModel, Field
 #: 1.2 (#993 PR-B): added the ``AnalysisResult`` envelope for async analysis jobs
 #: (MC / sensitivity / global-SA) — additive, a new response shape (no existing model
 #: changed).
-API_CONTRACT_VERSION = "1.2"
+#: 2.0 (#1436): MAJOR, because two fields are RETYPED. ``KpiCard.value`` becomes
+#: ``Optional[float]`` (``null``, with ``display`` "undefined") and ``CaseResult.kpis``
+#: becomes ``Dict[str, Optional[float]]`` for a KPI the engine reports as undefined, e.g.
+#: an equity IRR with no root. Such a KPI was previously sent as a false ``0.0``; an
+#: undefined KPI keeps its key with ``null``, so a missing key still means "not computed".
+#: Owner decision 2026-10-26 ("Bump to 2.0"): the bump follows the policy above, and the
+#: URL surface stays ``/v1`` because no client consumes it yet, so it was not re-cut.
+API_CONTRACT_VERSION = "2.0"
 
 
 class WindAssessment(BaseModel):
@@ -73,9 +80,13 @@ class CaseResult(BaseModel):
 
     status: str = Field(..., description="'success' or an error status.")
     scenario_variant: str = Field(..., description="Base variant the run started from.")
-    kpis: Dict[str, float] = Field(
+    kpis: Dict[str, Optional[float]] = Field(
         default_factory=dict,
-        description="Flat lender KPIs (project_irr, equity_irr, min_dscr, ...).",
+        description=(
+            "Flat lender KPIs (project_irr, equity_irr, min_dscr, ...). A KPI the engine "
+            "reports as undefined (e.g. an equity IRR with no root) is null, never 0.0; an "
+            "absent key means the KPI was not computed (#1436)."
+        ),
     )
     run_manifest: Optional[Dict[str, Any]] = Field(
         default=None,
@@ -106,10 +117,12 @@ class CaseResult(BaseModel):
         wind-job runner) has one; it defaults to ``None`` for plain finance cases.
         """
         raw_kpis = result.get("kpis") or {}
-        kpis = {
-            str(k): float(v)
+        # Numeric KPIs, plus any the engine reports as undefined (``None``) carried as
+        # null so they stay distinguishable from "not computed" (absent) (#1436).
+        kpis: Dict[str, Optional[float]] = {
+            str(k): (None if v is None else float(v))
             for k, v in raw_kpis.items()
-            if isinstance(v, (int, float)) and not isinstance(v, bool)
+            if v is None or (isinstance(v, (int, float)) and not isinstance(v, bool))
         }
         manifest = result.get("run_manifest")
         return cls(

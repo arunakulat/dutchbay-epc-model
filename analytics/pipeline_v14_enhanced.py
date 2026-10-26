@@ -722,6 +722,13 @@ def _update_kpis_with_equity_distribution(
         if value is not None:
             kpis[target_key] = value
 
+    # #1436: the waterfall ran, so a None equity IRR means no rate solves the equity
+    # cashflows (IRR undefined), not "not computed". Overwrite the metrics 0.0 sentinel
+    # with None rather than leave it: a 0.0 here reads as break-even (#782) and was
+    # reported for the worst cases, e.g. a long balloon refinance.
+    if summary_raw.get("equity_irr") is None:
+        kpis["equity_irr"] = None
+
     return EquityPerformance(
         equity_irr=summary_raw.get("equity_irr"),
         equity_npv=summary_raw.get("equity_npv"),
