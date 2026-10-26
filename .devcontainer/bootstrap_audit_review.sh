@@ -167,7 +167,9 @@ if [ ! -f "$MARKER" ]; then
     "setuptools==$REQUIRED_SETUPTOOLS_VERSION" \
     "wheel==$REQUIRED_WHEEL_VERSION"
   "$VENV_ROOT/bin/python" -m pip install --requirement requirements.txt
-  "$VENV_ROOT/bin/python" -m pip install --no-deps --editable .
+  # The checkout is not installed. devcontainer.json, the sshd SetEnv and every
+  # sandbox command put it on PYTHONPATH, and an editable install would bind
+  # site-packages to one checkout, which check_venv.sh refuses below.
   package_content_digest=$(package_content_fingerprint)
   printf '%s\n' "$input_digest" > "$MARKER"
   printf '%s\n' "$image_digest" > "$IMAGE_MARKER"
