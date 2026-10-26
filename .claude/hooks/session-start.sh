@@ -172,6 +172,23 @@ case ",$DUTCHBAY_EXTRAS," in
 esac
 
 # --- 4. Session environment ---------------------------------------------------
+# The checkout must import from ANY working directory, not only the repository root.
+# The env-file exports below cannot deliver that: a hook is a subprocess and cannot
+# export into the shell that started it, and CLAUDE.md's manual invocation sets no
+# CLAUDE_ENV_FILE at all, so a hand-run hook left `import analytics` working only
+# from the checkout root (#1377, assurance O-1).
+#
+# A path-only .pth naming THIS checkout is not an installation. It writes no
+# dist-info, no direct_url.json and no checkout egg-info, so dutchbay_environment.py
+# still reports editable_project_install false and project_install_url null; that
+# contract collects a .pth into foreign_checkout_paths only when the path names a
+# DIFFERENT checkout, so naming this one is exactly what it permits. Written with
+# `>`, never `>>`: one path, one line, rewritten on every start, so it cannot
+# accumulate the way the appended PATH export once did, and a moved or renamed
+# checkout self-corrects on the next session.
+CHECKOUT_PTH="$("$PY" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')/dutchbay-checkout.pth"
+printf '%s\n' "$REPO" > "$CHECKOUT_PTH"
+
 # Put the venv first on PATH so `python`, `pytest` and `ruff` resolve to it
 # without every command needing an explicit .venv/bin/ prefix.
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then

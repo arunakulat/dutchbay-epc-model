@@ -292,3 +292,93 @@ def test_codex_environment_exposes_safe_project_actions() -> None:
     assert all(action["command"].lstrip().startswith("set -e") for action in actions)
     assert "--reload" in by_name["Run API"]["command"]
     assert "app.api.main:app" in by_name["Run API"]["command"]
+
+
+def _emitted_checkout_pth_lines() -> str:
+    """The two lines the hook uses to write the checkout ``.pth``, as a snippet."""
+
+    hook = SESSION_HOOK.read_text(encoding="utf-8")
+    match = re.search(
+        r"^(CHECKOUT_PTH=.*\nprintf '%s\\n' \"\$REPO\" > \"\$CHECKOUT_PTH\")$",
+        hook,
+        re.MULTILINE,
+    )
+    assert match is not None, "the hook no longer writes a recognisable checkout .pth"
+    return match.group(1)
+
+
+def test_session_hook_writes_the_checkout_pth_outside_the_env_file_guard() -> None:
+    """A hand-run hook must still make the checkout importable.
+
+    The env-file block cannot do this job at all: a hook is a subprocess and cannot
+    export into the shell that started it, and the manual invocation documented in
+    CLAUDE.md sets no CLAUDE_ENV_FILE, so anything inside that guard is skipped
+    entirely. Placement is the whole fix, which is why it is asserted rather than
+    assumed.
+    """
+
+    hook = SESSION_HOOK.read_text(encoding="utf-8")
+
+    assert hook.index("CHECKOUT_PTH=") < hook.index('if [ -n "${CLAUDE_ENV_FILE:-}" ]')
+
+
+def test_session_hook_checkout_pth_is_one_line_and_rewritten(tmp_path: Path) -> None:
+    """Running the hook twice must leave one path, not two.
+
+    The appended PATH export next to this one accumulated a duplicate per session
+    until it was guarded, so the same hazard is checked here by running the real
+    snippet twice against a real venv rather than by reading the redirection
+    operator and trusting it.
+    """
+
+    import venv
+
+    venv_dir = tmp_path / "venv"
+    venv.create(venv_dir, with_pip=False)
+    repo = tmp_path / "checkout"
+    repo.mkdir()
+    snippet = _emitted_checkout_pth_lines()
+    script = f'PY="{venv_dir}/bin/python"\nREPO="{repo}"\n{snippet}\n'
+
+    for _ in range(2):
+        subprocess.run(["bash", "-euo", "pipefail", "-c", script], check=True)
+
+    written = sorted(venv_dir.rglob("dutchbay-checkout.pth"))
+    assert len(written) == 1
+    assert written[0].read_text(encoding="utf-8").splitlines() == [str(repo)]
+
+
+def test_session_hook_checkout_pth_lands_in_the_venv_not_the_checkout(
+    tmp_path: Path,
+) -> None:
+    """The negative control on *where* it lands.
+
+    A ``.pth`` written into the checkout does nothing — only ``site-packages`` is
+    scanned at startup — and a path computed from the interpreter running the hook
+    rather than from ``$PY`` would land in whichever environment launched it. Both
+    mistakes would leave the test above green if it only checked the contents.
+
+    The destination is asserted against the venv this test created, never against
+    this runner's own ``site-packages``: in a container the hook has legitimately
+    written that file there, so an assertion about it would pass or fail on how the
+    machine was provisioned rather than on the hook.
+    """
+
+    import venv
+
+    venv_dir = tmp_path / "venv"
+    venv.create(venv_dir, with_pip=False)
+    repo = tmp_path / "checkout"
+    repo.mkdir()
+    script = (
+        f'PY="{venv_dir}/bin/python"\nREPO="{repo}"\n{_emitted_checkout_pth_lines()}\n'
+    )
+
+    subprocess.run(["bash", "-euo", "pipefail", "-c", script], check=True)
+
+    written = sorted(venv_dir.rglob("dutchbay-checkout.pth"))
+    assert len(written) == 1
+    assert written[0].parent.name == "site-packages"
+    assert written[0].is_relative_to(venv_dir)
+    assert not (repo / "dutchbay-checkout.pth").exists()
+    assert '"$PY" -c' in _emitted_checkout_pth_lines()

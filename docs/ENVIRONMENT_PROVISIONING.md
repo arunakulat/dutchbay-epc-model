@@ -118,6 +118,19 @@ worktree to whichever checkout happened to provision it. Before #1376 the hook r
 `pip install -e`, and the probe missed it because the checkout's `egg-info` hid the
 environment's install record; the hook now removes such an install once on its next run.
 
+That `PYTHONPATH` export is written to `CLAUDE_ENV_FILE`, which only the harness sets, and
+a hook is a subprocess that cannot export into the shell that started it. So the hook also
+writes a path-only `dutchbay-checkout.pth` naming the active checkout into the selected
+environment's `site-packages`, outside that guard. This is what makes the project importable
+from any working directory, including after the manual invocation documented in `CLAUDE.md`,
+which sets no env file and would otherwise leave `import analytics` working only from the
+repository root. The `.pth` is **not** an install: it writes no `dist-info`, no
+`direct_url.json` and no checkout `egg-info`, so the contract still reports
+`editable_project_install` false and `project_install_url` null, and it collects a `.pth`
+into `foreign_checkout_paths` only when the path names a *different* checkout. The file
+holds one path on one line and is rewritten rather than appended on every session start, so
+it cannot accumulate entries and a moved checkout self-corrects.
+
 ---
 
 ## 4. Where the lock and the extras disagree
