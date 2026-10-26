@@ -54,7 +54,9 @@ class KpiCard(BaseModel):
 
     key: str
     label: str
-    value: float
+    #: ``None`` only for a KPI the engine reports as undefined (an IRR with no root);
+    #: ``display`` then reads ``"undefined"`` (#1436, contract 2.0).
+    value: Optional[float]
     display: str
 
 
