@@ -99,7 +99,7 @@ def _report_config() -> ReportConfig:
 
 
 def test_report_kpi_table_shows_undefined_not_zero() -> None:
-    rows = _build_kpi_rows({"equity_irr": None}, _report_config())  # type: ignore[dict-item]
+    rows = _build_kpi_rows({"equity_irr": None}, _report_config())
     assert [(r.key, r.value, r.display) for r in rows] == [
         ("equity_irr", None, "undefined")
     ]
@@ -112,7 +112,7 @@ def test_report_kpi_table_still_formats_a_defined_irr() -> None:
 
 def test_report_verdict_says_undefined_and_never_break_even() -> None:
     covenants = _report_config().covenants
-    verdict = _build_verdict({"equity_irr": None}, covenants)  # type: ignore[dict-item]
+    verdict = _build_verdict({"equity_irr": None}, covenants)
     assert any("Equity IRR is undefined" in note for note in verdict.notes)
     assert not any("break-even" in note for note in verdict.notes)
     assert _build_verdict({}, covenants).notes == []
@@ -159,7 +159,7 @@ def test_api_kpi_card_carries_an_undefined_value_as_null() -> None:
     """The API surface projects the report row; ``value`` is null, never 0.0 (contract 1.3)."""
     from app.api.surface import KpiCard
 
-    rows = _build_kpi_rows({"equity_irr": None}, _report_config())  # type: ignore[dict-item]
+    rows = _build_kpi_rows({"equity_irr": None}, _report_config())
     card = KpiCard(
         key=rows[0].key,
         label=rows[0].label,
@@ -174,15 +174,19 @@ def test_api_kpi_card_carries_an_undefined_value_as_null() -> None:
     }
 
 
-def test_case_result_omits_an_undefined_equity_irr_rather_than_sending_zero() -> None:
-    """``CaseResult.kpis`` stays numbers-only: the undefined KPI is absent, not 0.0."""
+def test_case_result_carries_an_undefined_equity_irr_as_null() -> None:
+    """``/v1/cases`` keeps the key: null is "undefined", an absent key is "not computed"."""
     from app.api.responses import CaseResult
 
     result = CaseResult.from_pipeline_result(
-        {"status": "success", "kpis": {"equity_irr": None, "project_irr": -0.0012}},
+        {
+            "status": "success",
+            "kpis": {"equity_irr": None, "project_irr": -0.0012, "wacc_label": "base"},
+        },
         scenario_variant="lender",
     )
-    assert "equity_irr" not in result.kpis
-    assert result.kpis == {"project_irr": -0.0012}
-    body = result.model_dump(mode="json")
-    assert "equity_irr" not in body["kpis"]
+    assert result.kpis == {"equity_irr": None, "project_irr": -0.0012}
+    assert result.model_dump(mode="json")["kpis"] == {
+        "equity_irr": None,
+        "project_irr": -0.0012,
+    }

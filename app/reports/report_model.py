@@ -925,7 +925,9 @@ class ReportContext(BaseModel):
     manifest: Dict[str, Any]
 
 
-def _build_kpi_rows(kpis: Dict[str, float], config: ReportConfig) -> List[KpiRow]:
+def _build_kpi_rows(
+    kpis: Mapping[str, Optional[float]], config: ReportConfig
+) -> List[KpiRow]:
     """Render the configured KPI table; silently skip KPIs absent from the run."""
     rows: List[KpiRow] = []
     for spec in config.kpi_table:
@@ -951,7 +953,9 @@ def _build_kpi_rows(kpis: Dict[str, float], config: ReportConfig) -> List[KpiRow
     return rows
 
 
-def _build_verdict(kpis: Dict[str, float], covenants: Covenants) -> Verdict:
+def _build_verdict(
+    kpis: Mapping[str, Optional[float]], covenants: Covenants
+) -> Verdict:
     """Derive covenant/return flags and a headline from the run and config.
 
     Reads the hurdle from the run (``discount_rate_used``); compares the minimum
@@ -1066,7 +1070,7 @@ def _build_verdict(kpis: Dict[str, float], covenants: Covenants) -> Verdict:
 
 
 def _build_ic_summary(
-    kpis: Dict[str, float],
+    kpis: Mapping[str, Optional[float]],
     verdict: Verdict,
     scenario_config: Optional[Mapping[str, Any]],
     readiness_rows: Sequence[ReadinessRow],
