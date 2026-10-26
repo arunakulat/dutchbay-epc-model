@@ -139,6 +139,9 @@ changelog erratum records what happens when that goes wrong.
    gates, never the suite.
 4. If that run forces a change to a subject blob, both reviews restart (module 3 §6). A base
    advance needs §7's three proofs and a rebind, as before.
+5. Treat a reviewer's snippet as a description of the gap, never as code to commit: reimplement
+   it in your own terms, so the lane that found the gap is still reviewing work it did not write
+   (module 3 §1).
 
 The lane count follows the risk class. The three bounded low-risk classes in module 1 §3.1
 are `R1` and take one lane: presentation-only code, test-only guard tightening, and record
