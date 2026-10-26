@@ -24,7 +24,9 @@ from pydantic import BaseModel, Field
 #: changed).
 #: 1.3 (#1436): ``KpiCard.value`` may be ``null`` (with ``display`` "undefined") for a
 #: KPI the engine reports as undefined, e.g. an equity IRR with no root. Such a KPI was
-#: previously sent as a false ``0.0``; no other field changed.
+#: previously sent as a false ``0.0``. ``CaseResult.kpis`` keeps its type (numbers only)
+#: and so OMITS an undefined KPI, as it already omitted any non-numeric KPI; before 1.3
+#: that same KPI arrived there as ``0.0``.
 API_CONTRACT_VERSION = "1.3"
 
 
@@ -78,7 +80,11 @@ class CaseResult(BaseModel):
     scenario_variant: str = Field(..., description="Base variant the run started from.")
     kpis: Dict[str, float] = Field(
         default_factory=dict,
-        description="Flat lender KPIs (project_irr, equity_irr, min_dscr, ...).",
+        description=(
+            "Flat lender KPIs (project_irr, equity_irr, min_dscr, ...). Numeric only: a "
+            "KPI the engine reports as undefined (e.g. an equity IRR with no root) is "
+            "omitted, never sent as 0.0 (#1436)."
+        ),
     )
     run_manifest: Optional[Dict[str, Any]] = Field(
         default=None,

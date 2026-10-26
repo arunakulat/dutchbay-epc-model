@@ -172,3 +172,17 @@ def test_api_kpi_card_carries_an_undefined_value_as_null() -> None:
         "value": None,
         "display": "undefined",
     }
+
+
+def test_case_result_omits_an_undefined_equity_irr_rather_than_sending_zero() -> None:
+    """``CaseResult.kpis`` stays numbers-only: the undefined KPI is absent, not 0.0."""
+    from app.api.responses import CaseResult
+
+    result = CaseResult.from_pipeline_result(
+        {"status": "success", "kpis": {"equity_irr": None, "project_irr": -0.0012}},
+        scenario_variant="lender",
+    )
+    assert "equity_irr" not in result.kpis
+    assert result.kpis == {"project_irr": -0.0012}
+    body = result.model_dump(mode="json")
+    assert "equity_irr" not in body["kpis"]
