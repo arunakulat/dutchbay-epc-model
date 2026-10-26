@@ -8,6 +8,15 @@ An implementation worker does not self-approve. Required reviewers must be disti
 coordinator, and each other; one worker cannot supply both required dispositions. A repeated pass by
 the same worker may correct or deepen its own record but does not become a second independent review.
 
+A reviewer supplies findings, not subject bytes. Where a reviewer demonstrates a gap with code — a
+test, a patch, a command — that snippet is a description of the gap, and the writer reimplements it
+in its own terms rather than committing the reviewer's lines. A writer that adopts them verbatim
+makes that reviewer a co-author of the subject, so that lane's disposition on those bytes is a pass
+over its own work rather than an independent review. Reimplementing is what keeps the lane eligible
+to review the result, which is the point: the reviewer who found the gap is usually best placed to
+judge whether the writer's own version closes it. The finding stays credited to the reviewer; the
+implementation is the writer's.
+
 Reviewers remain read-only: no file, index, ref, branch, worktree, PR, issue, release, or other
 external-state mutation. Each reviewer returns an initial disposition independently before being
 shown or anchored by the other reviewer's conclusion. The coordinator reconciles disagreement only
