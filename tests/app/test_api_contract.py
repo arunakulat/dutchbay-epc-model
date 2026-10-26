@@ -49,7 +49,12 @@ def test_case_result_field_types_are_pinned() -> None:
     ann = {k: str(f.annotation) for k, f in CaseResult.model_fields.items()}
     assert ann["status"] == "<class 'str'>"
     assert ann["scenario_variant"] == "<class 'str'>"
-    assert "Dict[str, float]" in ann["kpis"] or "dict[str, float]" in ann["kpis"]
+    # #1436: values are Optional so an undefined KPI is null (absent = not computed).
+    assert ann["kpis"] in (
+        "typing.Dict[str, typing.Optional[float]]",
+        "dict[str, typing.Optional[float]]",
+        "dict[str, float | None]",
+    ), ann["kpis"]
     assert ann["contract_version"] == "<class 'str'>"
     assert "WindAssessment" in ann["wind_assessment"]  # Optional[WindAssessment] (#993)
 
@@ -166,7 +171,7 @@ def test_contract_version_value_is_pinned() -> None:
     """Pin the literal so a reverted/fat-fingered constant is caught — the stamping
     tests above are self-referential (== API_CONTRACT_VERSION) and would stay green.
     Bump this together with API_CONTRACT_VERSION on any deliberate contract change."""
-    assert API_CONTRACT_VERSION == "1.2"
+    assert API_CONTRACT_VERSION == "2.0"
 
 
 # --------------------------------------------------------------------------- #

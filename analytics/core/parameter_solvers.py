@@ -102,7 +102,10 @@ def _require_kpi_present(kpis: Mapping[str, Any], kpi_key: str, *, lever: str) -
     """
     if kpi_key not in kpis or kpis[kpi_key] is None:
         if kpi_key.startswith("equity_"):
-            hint = f"{kpi_key} is only present when an equity distribution is computed"
+            hint = (
+                f"{kpi_key} is only present when an equity distribution is computed, "
+                "and is None when no rate solves the equity cashflows (#1436)"
+            )
         else:
             hint = f"the scenario's KPI surface does not include {kpi_key}"
         raise ValueError(
