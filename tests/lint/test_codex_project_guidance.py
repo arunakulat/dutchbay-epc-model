@@ -139,6 +139,37 @@ def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> str:
     return completed.stdout
 
 
+def _stage_raw_path(repo: Path, raw_path: bytes, content: bytes = b"hostile\n") -> None:
+    """Stage a record whose filename bytes the filesystem may refuse to create.
+
+    Darwin rejects a filename that is not valid UTF-8 with ``EILSEQ``, so an
+    invalid-byte near-family name cannot be written into the worktree there at all.
+    Git stores path bytes verbatim, so staging the blob directly presents the same
+    bytes to the resolver on every platform. The resolver validates the committed
+    ``ls-tree`` view before it reconciles HEAD against the worktree, so a record that
+    exists only in the index still reaches the display-character check.
+    """
+    blob = subprocess.run(
+        ["git", "hash-object", "-w", "--stdin"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        input=content,
+    ).stdout.strip()
+    subprocess.run(
+        [
+            b"git",
+            b"update-index",
+            b"--add",
+            b"--cacheinfo",
+            b"100644," + blob + b"," + raw_path,
+        ],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+
+
 def _commit(repo: Path, message: str, iso_date: str) -> None:
     """Commit the complete hostile-oracle index at a controlled timestamp."""
     env = {
@@ -790,12 +821,15 @@ def test_handover_resolver_rejects_control_character_filenames(
         docs / "SESSION?_HANDOVER_masked.md",
         docs / "H\u0661_HANDOVER.md",
         docs / "H0\u200b1_HANDOVER.md",
-        docs / "H0\udcff1_HANDOVER.md",
         docs / "SESSION\u200b_HANDOVER_hidden.md",
     ]
     for path in hostile:
+        # Every on-disk name must be encodable, or this fixture cannot run on Darwin.
+        path.name.encode("utf-8")
         path.write_text("hostile\n", encoding="utf-8")
     _git(repo, "add", "docs")
+    # The invalid-byte name is staged rather than written; see _stage_raw_path.
+    _stage_raw_path(repo, b"docs/H0\xff1_HANDOVER.md")
     _commit(repo, "docs: add control names", "2026-01-01T00:00:00+00:00")
 
     result = _run_resolver(repo)
@@ -804,6 +838,7 @@ def test_handover_resolver_rejects_control_character_filenames(
     assert "\\t" in result.stderr
     assert "\\n" in result.stderr
     assert "\\x1e" in result.stderr
+    assert "\\udcff" in result.stderr
     assert result.stdout == ""
 
 
