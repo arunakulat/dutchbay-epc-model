@@ -20,7 +20,15 @@
   assumes the allowlist is empty: every expected command, sentinel receipt and declared set is
   read from the subject under test, so the first declared suppression does not red the guard
   that exists to govern it. Stated limit: this binds the committed file under a clean
-  invocation, which is all a Makefile can promise about itself; a caller's `make -i`, a
-  command-line `PIP_AUDIT_IGNORES` override and an environment-selected vulnerability service
-  all win over any in-file guard, and closing that class means pinning the invocation on the CI
-  surface. No runtime, financial formula, scenario or KPI change.
+  invocation, which is all a Makefile can promise about itself; a caller's `make -i` and a
+  command-line `PIP_AUDIT_IGNORES` override both win over any in-file guard, and closing that
+  class means pinning the invocation on the CI surface. The environment is a third channel of
+  the same kind, stated here as the `SECDEP-01` row states it rather than lumped in with those
+  two: `pip-audit` takes its vulnerability service and index URLs from the environment, and an
+  environment-selected service changes what an audit **finds** rather than its arguments or its
+  exit status, so argument pinning, dry-run comparison and the forced-fail sentinels are blind
+  to it by construction. The direct suppression channel through the environment is nonetheless
+  closed: the sentinel runs clear every `PIP_AUDIT_` variable and `pip-audit` publishes no
+  environment default for `--ignore-vuln`. What a hostile vulnerability service would do to a
+  real audit is not something this file can guard. No runtime, financial formula, scenario or
+  KPI change.

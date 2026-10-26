@@ -67,8 +67,12 @@ HOOK_PY := $(if $(DUTCHBAY_VENV),$(DUTCHBAY_VENV)/bin/python,$(VENV_PY))
 hooks:
 	$(if $(HOOK_PY),"$(HOOK_PY)" -m pre_commit install,pre-commit install)
 
-# Mandatory gates: ruff. Advisory (matches CI): black --check (the committed tree is
-# style-drifted vs the current formatter, so black is non-blocking by design).
+# Mandatory gates, all three: ruff, black --check and isort --check. This matches CI --
+# .github/workflows/test-suite.yml runs each of them in the 'Code Quality Checks' job with no
+# `|| true`, and the Test Summary gate blocks the merge on that job, so an un-black'd file fails
+# the merge. The earlier note here called black advisory because of a 210-file style-drift
+# backlog; the repo-wide reformat cleared that backlog and black became blocking with it
+# (#1405, #1381 work item 3).
 lint:
 	ruff check .
 	black --check .

@@ -62,14 +62,24 @@ updates:
       # post-mortem: the weekly numerics group proposed numpy 2.4.6->2.5.2 -> ResolutionImpossible
       # against pandapower. Block minors too so numpy stays within the grid stack's ceiling
       # (2.4.x patches stay welcome). Lift only in lockstep with a pandapower release that raises
-      # it. The engine-numerics major cap is unchanged and still applies (pandas 3.0 = #593).
+      # it -- and move numpy-typing-compat in the SAME step, because its patch segment carries the
+      # numpy range it requires, so lifting numpy without it desyncs the lock (see its entry
+      # below). The engine-numerics major cap is unchanged and still applies (pandas 3.0 = #593).
       - dependency-name: "numpy"
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
       # mpmath is capped <1.4 by sympy (sympy 1.14.0 requires mpmath<1.4,>=1.1.0 -- PyPI
       # requires_dist, read 2026-10-10), and 1.3->1.4 is a semver-MINOR bump, so a major-only
-      # rule could never catch it. The numerics group proposed mpmath 1.3.0->1.4.1 in #1325
-      # alongside the numpy-typing-compat bump below; both died together at the install step
-      # with 0 tests run, which is why #1325 reports two install conflicts rather than one.
+      # rule could never catch it -- and before #1343 there was no mpmath ignore entry at all,
+      # major-only or otherwise, so nothing filtered the proposal. The numerics group proposed
+      # mpmath 1.3.0->1.4.1 in #1325 alongside the numpy-typing-compat bump below, and the group
+      # died at the install step with 0 tests run. mpmath is absent from pip's CONFLICT REPORT,
+      # not from the logs: in run 38119252017 (head 3efc1ec4) pip logs "looking at multiple
+      # versions of numpy-typing-compat", then one ResolutionImpossible whose "Cannot install"
+      # list names numpy==2.4.6 and twenty-one requirements.txt lines -- line 173, which is
+      # mpmath, is not among them. mpmath appears in those logs only as "Collecting
+      # mpmath==1.4.1" and its Downloading line, the proposed bump being fetched. So ONE install
+      # conflict was reported, not two, and mpmath's own unmergeability rests on sympy's
+      # published cap rather than on anything those logs show (#1405, D1343-01/02).
       # Block minors too so mpmath stays within sympy's ceiling (1.3.x patches stay welcome).
       # Lift only in lockstep with a sympy release that raises it.
       - dependency-name: "mpmath"
@@ -147,15 +157,27 @@ updates:
       # (numpy<2.5,>=1.26 -- see the pandapower and numpy entries above and #1169), so the .2.5
       # datestamp-patch bump is a ResolutionImpossible at pip install.
       #
-      # The earlier major-only rule could not catch that. #986/#988 added it for a datestamp jump
-      # (20251206->20260602) against the THEN-current optype[numpy] 0.17.1 ceiling of <20251207;
+      # The earlier major-only rule could not catch that. #990 added it (commit f6075686), for a
+      # datestamp jump (20251206->20260602) seen in the #986/#988 post-mortem, against the
+      # THEN-current optype[numpy] 0.17.1 ceiling of <20251207;
       # that ceiling has since lifted -- the lock now carries optype 0.18.0, which requires
       # numpy-typing-compat<20260603,>=20260602.2.0, so optype admits .2.5 and no longer binds.
       # With the datestamp unchanged at 20260602, 2.4->2.5 is a semver-PATCH bump, which the
       # major-only rule let straight through: the numerics group regenerated the identical
       # unmergeable pull request three times (#1249 closed 2026-09-23, #1301 closed 2026-10-02,
-      # #1325 2026-10-07 -- all from branch dependabot/pip/numerics-1a7835728b, each dying at the
-      # install step in well under a minute with 0 tests run).
+      # #1325 2026-10-07 -- all from branch dependabot/pip/numerics-1a7835728b, each dying in the
+      # shard jobs' "Install dependencies" step with 0 tests run. Measured from the Actions API
+      # rather than recalled, at each pull request's own head commit, because dependabot
+      # force-pushes this one branch and it carries further runs belonging to no open pull
+      # request: #1249 head 2f219616 run 35810200835, #1301 head 94fcd522 run 36659705032,
+      # #1325 head 3efc1ec4 run 38119252017. That step took 11-24s in every shard of all three
+      # runs, and the shard jobs themselves took 24-40s on #1249 and #1325 and 56-77s on #1301 --
+      # where the extra time is not a slower install but the "Set up Python 3.12" step, 33-48s
+      # (about 47s in five of the six shards) against 15-21s for the install itself. So on two of
+      # the three the JOB also ended in well under a minute, on the third the install was no
+      # slower than elsewhere, and there is no step-versus-job contrast to draw. The figure in
+      # minutes is the Test Suite workflow run: 1m46s for #1325, 1m55s for #1249, 3m09s for
+      # #1301).
       #
       # Freeze ALL bot bumps, mirroring pydantic-core and mypy above: there is no finer segment
       # than the patch, so within a datestamp every bump moves the numpy floor. Lift in lockstep
