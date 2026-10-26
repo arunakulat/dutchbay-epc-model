@@ -171,10 +171,13 @@ updates:
       # force-pushes this one branch and it carries further runs belonging to no open pull
       # request: #1249 head 2f219616 run 35810200835, #1301 head 94fcd522 run 36659705032,
       # #1325 head 3efc1ec4 run 38119252017. That step took 11-24s in every shard of all three
-      # runs, and the shard jobs themselves took 24-40s on #1249 and #1325 and 56-77s on #1301,
-      # so on two of the three the JOB also ended in well under a minute and there is no
-      # step-versus-job contrast to draw. The figure in minutes is the Test Suite workflow run:
-      # 1m46s for #1325, 1m55s for #1249, 3m09s for #1301).
+      # runs, and the shard jobs themselves took 24-40s on #1249 and #1325 and 56-77s on #1301 --
+      # where the extra time is not a slower install but the "Set up Python 3.12" step, 33-48s
+      # (about 47s in five of the six shards) against 15-21s for the install itself. So on two of
+      # the three the JOB also ended in well under a minute, on the third the install was no
+      # slower than elsewhere, and there is no step-versus-job contrast to draw. The figure in
+      # minutes is the Test Suite workflow run: 1m46s for #1325, 1m55s for #1249, 3m09s for
+      # #1301).
       #
       # Freeze ALL bot bumps, mirroring pydantic-core and mypy above: there is no finer segment
       # than the patch, so within a datestamp every bump moves the numpy floor. Lift in lockstep
