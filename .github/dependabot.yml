@@ -161,9 +161,13 @@ updates:
       # With the datestamp unchanged at 20260602, 2.4->2.5 is a semver-PATCH bump, which the
       # major-only rule let straight through: the numerics group regenerated the identical
       # unmergeable pull request three times (#1249 closed 2026-09-23, #1301 closed 2026-10-02,
-      # #1325 2026-10-07 -- all from branch dependabot/pip/numerics-1a7835728b, each dying at the
-      # install step with 0 tests run; it is that install STEP which failed in well under a
-      # minute, not the job as a whole).
+      # #1325 2026-10-07 -- all from branch dependabot/pip/numerics-1a7835728b, each dying in the
+      # shard jobs' "Install dependencies" step with 0 tests run. Measured from the Actions API
+      # rather than recalled: that step took 11-24s in every shard of all three runs, and the
+      # shard jobs themselves took 24-40s on #1249 and #1325 and 56-77s on #1301, so on two of
+      # the three the JOB also ended in well under a minute and there is no step-versus-job
+      # contrast to draw. The figure in minutes is the Test Suite workflow run: 1m46s for #1325,
+      # 1m55s for #1249, 3m09s for #1301).
       #
       # Freeze ALL bot bumps, mirroring pydantic-core and mypy above: there is no finer segment
       # than the patch, so within a datestamp every bump moves the numpy floor. Lift in lockstep

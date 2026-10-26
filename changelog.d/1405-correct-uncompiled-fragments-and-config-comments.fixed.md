@@ -5,8 +5,13 @@
   logs name only the `numpy-typing-compat` conflict -- `pip` reported that one and stopped --
   so one conflict was observed, and `mpmath`'s unmergeability rests on `sympy`'s published cap
   instead; the `numpy-typing-compat` entry credited #986/#988 with adding the major-only rule,
-  which #990 added (commit `f6075686`) after that post-mortem; the same entry attributed "well
-  under a minute" to whole jobs rather than to the install step that failed; and the `numpy`
+  which #990 added (commit `f6075686`) after that post-mortem; the same entry's "well under a
+  minute" was left unattributed, and measurement shows no step-versus-job contrast to draw: the
+  `Install dependencies` step took 11-24s in every shard of all three runs while the shard jobs
+  took 24-40s on #1249 and #1325 and 56-77s on #1301, and the minutes belong to the Test Suite
+  workflow run (1m46s, 1m55s, 3m09s). The entry now carries those measured figures instead, which
+  is not the correction #1405's D1338-02 asked for -- its "the install steps, not whole jobs"
+  framing is itself unsupported. And the `numpy`
   entry's lift instruction now cross-references `numpy-typing-compat`, which must move in the
   same step because its patch segment carries the `numpy` range it requires. In the `Makefile`,
   the comment above `lint` called `black --check` advisory and "non-blocking by design"; CI runs
