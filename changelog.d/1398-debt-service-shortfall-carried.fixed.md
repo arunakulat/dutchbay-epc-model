@@ -13,6 +13,7 @@
   shortfall year. Project IRR, project NPV, CFADS and DSCR are upstream of the waterfall and
   do not move. The canonical lender case has no shortfall year and is byte-identical; 13
   other committed scenarios with a DSCR<1 year report lower equity returns, the largest
-  being `edge_extreme_stress` (equity IRR -11.69% to -33.27%) and
-  `dutchbay_pessimistic_2025Q4` (-5.67% to -25.09%). The `F-5` bar and #1110's `HOLD` are
-  untouched.
+  being `dutchbay_pessimistic_2025Q4` (equity IRR -7.43% to -54.39%) and
+  `edge_extreme_stress` (-12.77% to undefined: its equity never receives a positive
+  distribution once the shortfalls are cured, so no rate solves its cash flows). The `F-5`
+  bar and #1110's `HOLD` are untouched.

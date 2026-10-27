@@ -43,7 +43,7 @@ Re-baselined by P2-F3-01 (#1398): ``equity_irr`` only, on all eight variants. Ea
 operating year whose CFADS falls short of scheduled debt service (the same fold that sets
 ``min_dscr`` at 0.867). The equity waterfall used to clamp that shortfall to zero; it now
 draws the DSRA, then SPV-held cash, then a sponsor cure, so equity bears it. Equity IRR moves
-down by 0.14-0.41 points (``bidimplied`` 6.72% to 6.31%), and the other six KPIs are
+down by 0.14-0.41 points (``bidimplied`` 6.73% to 6.32% at 27e0cb10), and the other six KPIs are
 unchanged to the last bit.
 """
 

@@ -158,5 +158,7 @@ def test_basecase_returns_regression_pins(base_config):
     # F5-01 binds the parametric operating FX path to COD (two years after close),
     # while keeping the authored close spot for tax basis. The steeper operating
     # conversion makes this fixed-70%-geared basecase loss-making for equity.
-    assert -0.03 < base["equity_irr"] < -0.01
+    # P2-F3-01 (#1398) moved the band down: the basecase's sub-1.0x years now cost equity
+    # their shortfall instead of being clamped to zero (-2.90% -> -3.14% at 27e0cb10).
+    assert -0.04 < base["equity_irr"] < -0.02
     assert 0.03 < base["project_irr"] < 0.05
