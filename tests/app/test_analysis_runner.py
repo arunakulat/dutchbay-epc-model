@@ -488,9 +488,9 @@ def test_tornado_refuses_an_undefined_equity_irr_over_assessed_lendercase() -> N
     This was the ``equity_irr`` arm of the test above until P2-F3-01 (#1398). At a 22.8%
     screening CF the case runs short of debt service in its last operating years. The
     equity waterfall used to clamp those shortfalls to zero and reported an equity IRR of
-    -18.76%. Carried as sponsor cures (USD 1.48M), they put negative flows at the END of an
-    equity vector that has already lost USD 154M of USD 172M invested, so its NPV is
-    negative at both ends of the solver's bracket and no rate solves it. The pipeline
+    -19.12% (at main 27e0cb10). Carried as sponsor cures (USD 1.58M), they put negative flows
+    at the END of an equity vector that has already lost USD 154M of USD 171M invested, so its
+    NPV is negative at both ends of the solver's bracket and no rate solves it. The pipeline
     reports that as ``None`` (#1436), the KPI surface drops it, and the sensitivity engine
     refuses rather than draw a tornado of a number that does not exist.
     """
