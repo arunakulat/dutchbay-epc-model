@@ -58,7 +58,11 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     # takes levered equity IRR to ~-4.12% (the costlier LKR tranche); project IRR is upstream
     # of the equity waterfall.
     assert kpis["project_irr"] == pytest.approx(0.01524, abs=0.005)
-    assert kpis["equity_irr"] == pytest.approx(-0.06249, abs=0.005)
+    # #1397 sizes debt on levered-tax CFADS. On this case the shield's benefit to
+    # equity outruns the extra leverage's drag, so equity IRR EASES -0.0625 ->
+    # -0.0547 (the opposite sign of the move on the wind lendercase, where the
+    # larger facility absorbs most of the shield).
+    assert kpis["equity_irr"] == pytest.approx(-0.05467, abs=0.005)
     assert (
         kpis["equity_irr"] < kpis["project_irr"]
     )  # levered equity below the project return

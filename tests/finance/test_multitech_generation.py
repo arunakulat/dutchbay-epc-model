@@ -289,7 +289,23 @@ def test_canonical_lendercase_economics_unchanged() -> None:
 
     lender = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
     kpis = run_v14_pipeline(config=lender, validation_mode="strict")["kpis"]
-    # Re-baselined by F5-01 (2026-08-16): the first operating cashflow row now
+    # Re-baselined by #1397 (2026-10-27, audit P2-F4-01): the facility is sized, and
+    # DSCR/LLCR/PLCR reported, on CFADS bearing the levered tax the SPV actually pays.
+    # The sizing pass changed in the interest alone -- the senior fee still enters only
+    # the reporting rebuild -- so a scenario with interest_deductibility off is
+    # byte-identical to the pre-change engine, pinned by
+    # tests/finance/test_levered_cfads_debt_sizing.py. The facility grows $59.59M ->
+    # $63.37M (nine 0.0025 gearing steps) and the structural balloon falls $31.55M ->
+    # $28.63M. Knock-on: project IRR -0.1166% -> -0.1421%, equity IRR -7.85% -> -9.99%,
+    # NPV -91.81M -> -91.57M, prudential rate 11.2858% -> 11.1772%, prudential NPV
+    # -96.44M -> -96.23M, total CFADS 166.08M -> 165.69M. Project IRR and total CFADS
+    # move DOWN through the senior credit-support fee on the larger facility, which the
+    # project rows bear; the project pass itself keeps its unlevered tax basis, because
+    # the shield already sits inside the after-tax WACC it is discounted at. Headline
+    # min_dscr 1.30 -> 1.2196 (the conservative annual fold in operating year 1;
+    # min_dscr_period stays pinned at the 1.30 sculpt target -- see tests/_canon.py for
+    # why the two now differ and for the owner decision behind it).
+    # Prior: re-baselined by F5-01 (2026-08-16): the first operating cashflow row now
     # starts at COD after the canonical two-period construction window while capex,
     # levies and IDC remain translated at the 333.79 financial-close tax basis.
     # Reports reuse the exact row FX path. Net versus the #738 baseline: project IRR

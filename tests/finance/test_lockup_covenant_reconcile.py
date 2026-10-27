@@ -46,12 +46,26 @@ def test_falls_back_to_125_when_neither_declared() -> None:
     assert _build_distribution_config(cfg).min_dscr_threshold == pytest.approx(1.25)
 
 
-def test_reconcile_is_kpi_neutral_on_the_sculpted_canonical() -> None:
-    """The COD-aligned 1.30 sculpt produces no canonical distribution lockup."""
+def test_reconcile_locks_only_the_year_1_fold_on_the_sculpted_canonical() -> None:
+    """The 1.30 sculpt locks exactly one canonical year, and only through the year-1 fold.
+
+    This asserted zero until #1397. Sizing on levered-tax CFADS buys nine 0.0025 gearing
+    steps, and the extra service takes the conservative annual fold for operating year 1
+    to 1.2196, under the 1.30 threshold the reconcile tests. Only that folded figure is
+    under the target: every other operating year reads 1.30, and every individual period
+    reads at or above it. The fold combines the stub/bridge period (1.3056) with the
+    first full operating period (2.4392) and the orphaned bridge service drags the
+    combination below both parts -- the artifact tracked at #1353,
+    issuecomment-6433557550. Owner informed 2026-10-27.
+
+    The point of the guard is unchanged: the reconcile must not lock years it has no
+    reason to. The companion test below proves it still engages on a genuine breach.
+    """
     from analytics.evaluation_v14 import evaluate_with_overrides
 
     kpis = evaluate_with_overrides(str(LENDER), overrides={})
-    assert kpis["equity_covenant_locked_years"] == 0
+    assert kpis["equity_covenant_locked_years"] == 1
+    assert kpis["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
 
 
 def test_reconcile_genuinely_engages_on_a_real_sub_covenant_breach() -> None:

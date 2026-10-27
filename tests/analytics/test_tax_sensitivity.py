@@ -78,42 +78,29 @@ def test_corporate_tax_rate_has_material_impact(base_config):
     assert tornado.impact_abs > 0.0
 
 
-def test_corporate_tax_rate_direction_on_levered_equity_follows_the_carried_shortfall(
+def test_corporate_tax_rate_direction_on_levered_equity_is_shield_dominated(
     base_config,
 ):
-    """With the debt-service shortfall carried, the levered equity IRR no longer RISES with
-    the corporate tax rate at the basecase.
+    """At the realistic 5.9% FX-drift baseline the LEVERED equity IRR RISES with the
+    corporate tax rate: more tax costs equity.
 
-    This test used to assert the opposite ("interest-shield dominated": equity IRR -2.19% at
-    15% vs -1.90% at 45%). P2-F3-01 (#1398) showed that rise was manufactured by the equity
-    waterfall's clamp. The basecase has sub-1.0x years late in the tenor, and a higher tax
-    rate re-sizes the debt so those years' shortfall grows (USD 2.10M across years 13-14 at
-    15%, USD 3.14M across years 12-14 at 45%). The clamp dropped that shortfall, so the
-    extra burden of a high-tax debt profile never reached equity. Carried through the DSRA,
-    it does: equity IRR is -2.780% at 15% and -2.787% at 45%, a fall of under one basis
-    point, so the shield and the shortfall now roughly offset.
-
-    Both halves are pinned: the high-tax case carries the larger shortfall, and its equity
-    IRR is no higher than the low-tax case's.
+    This asserted the OPPOSITE until #1397, and the reversal it recorded turns out to
+    have been an artifact of the sizing basis rather than of the shields. The debt
+    schedule was sized on CFADS carrying tax computed with no interest deducted, so a
+    higher rate shrank the sized debt service and flattered equity enough to outweigh
+    the extra tax on its profit share. With the shield priced correctly on both the
+    sizing and the equity path, the conventional direction returns: equity IRR is
+    -0.02865 at 15% against -0.02938 at 45%. The UNLEVERED project IRR falls with tax
+    too (see test_corporate_tax_rate_also_moves_project_irr), so the two surfaces now
+    agree on the sign instead of disagreeing.
     """
     shock = (
         _one_way(base_config, "tax.corporate_tax_rate", 0.30)
         .tornado_results[0]
         .shock_results[0]
     )
-    assert shock.high_case <= shock.low_case
-
-    def _shortfall(rate: float) -> float:
-        out = evaluate_with_overrides(
-            config_path=None,
-            raw_config=copy.deepcopy(base_config),
-            overrides={"tax.corporate_tax_rate": rate},
-            return_full_result=True,
-        )
-        summary = out["equity_distribution"]["equity_summary"]
-        return float(summary["total_debt_service_shortfall_usd"])
-
-    assert _shortfall(0.45) > _shortfall(0.15)
+    # higher tax (high_case) -> LOWER levered equity IRR
+    assert shock.high_case < shock.low_case
 
 
 def test_corporate_tax_rate_also_moves_project_irr(base_config):
@@ -124,18 +111,37 @@ def test_corporate_tax_rate_also_moves_project_irr(base_config):
     assert tornado.impact_abs > 0.0
 
 
-def test_tax_holiday_reduces_equity_irr_wasted_depreciation(base_config):
-    """At the realistic 5.9% FX-drift baseline MORE tax-holiday years REDUCE equity IRR.
+def test_tax_holiday_is_inert_where_interest_already_shelters_the_income(base_config):
+    """On this basecase a tax holiday changes nothing, and that is the correct answer.
 
-    Direction REVERSED by the 5.9% FX-drift re-baseline. A tax holiday wastes the
-    early-year depreciation (and interest) tax shields — they fall in years with no tax
-    to offset and cannot be carried far enough forward, while the steeper LKR depreciation
-    has already thinned the later (taxed) years' USD income. Net: equity IRR ~0.0581 at
-    0 holiday years vs ~0.0496 at 10. (At the old 3% drift more holiday improved equity
-    IRR — 0.1014 vs 0.0925 — the conventional direction.)
+    This used to assert that more holiday years REDUCED equity IRR, through wasted
+    early-year depreciation. #1397 showed that conclusion was an artifact: the holiday
+    was reaching the KPIs through a debt schedule sized on CFADS that carried tax
+    computed with no interest deducted. Size on the tax the SPV actually pays and the
+    first eleven operating years of this scenario carry ZERO tax whether or not a
+    holiday is declared -- interest plus depreciation already shelter all of it --
+    measured directly on the sizing rows. A holiday over years 1-10 therefore shelters
+    nothing that was not already sheltered, and the equity IRR is bit-identical.
+
+    A test that asserts "no change" is worthless without a control, so the second half
+    turns the shield off. With interest non-deductible there IS tax in the early years,
+    and the holiday then moves equity IRR by 350bps, in the conventional direction.
     """
-    assert _equity_irr(base_config, {"tax.tax_holiday_years": 10}) < _equity_irr(
-        base_config, {"tax.tax_holiday_years": 0}
+    assert _equity_irr(base_config, {"tax.tax_holiday_years": 10}) == pytest.approx(
+        _equity_irr(base_config, {"tax.tax_holiday_years": 0}), abs=1e-12
+    )
+
+    sheltered = _equity_irr(
+        base_config,
+        {"tax.tax_holiday_years": 10, "tax.interest_deductibility": False},
+    )
+    taxed = _equity_irr(
+        base_config,
+        {"tax.tax_holiday_years": 0, "tax.interest_deductibility": False},
+    )
+    assert sheltered > taxed + 0.01, (
+        "the holiday is inert even where there is tax to shelter, so the first "
+        "assertion above is passing vacuously"
     )
 
 
