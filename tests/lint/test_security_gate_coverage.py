@@ -26,13 +26,17 @@ once, arriving as though it were somebody's change.
 
 What this module pins is the REMEDY, not the measurements: both audit passes present and
 sharing one suppression list, ``make audit`` left as the canonical single-command spelling,
-and a daily main-branch workflow running the same ``make security``. It cannot re-measure
-coverage - that needs the network and a resolve - so the numbers above stay in the pull
-request's receipts and in the ``Makefile``'s own comment, where a reviewer reads them.
+and a daily main-branch workflow running the same ``make security``. Command equality alone
+is not execution equality: workflow or job environment, run defaults, a job container, or a
+step shell or working directory can skip or interpose the gate while leaving ``run: make
+security`` unchanged. The shared workflow guard therefore pins those declarative context
+channels for both committed invocations. It cannot re-measure coverage - that needs the
+network and a resolve - so the numbers above stay in the pull request's receipts and in the
+``Makefile``'s own comment, where a reviewer reads them.
 
 Per VERIFY-01(5) every assertion in the ``Makefile`` and workflow guards ships the negative
 control that observes it firing: both are pure functions over text, exercised against mutated
-copies rather than trusted - 31 controls, 10 over the ``Makefile`` and 21 over the workflow.
+copies rather than trusted - 39 controls, 10 over the ``Makefile`` and 29 over the workflow.
 The claim is deliberately not made of the other five tests, which have no text to mutate:
 three are oracles against live objects (one re-runs ``make -n``, two interrogate the installed
 ``pip_audit``), one asserts an equality across two workflow files, and one asserts that the
@@ -103,10 +107,95 @@ DECLARED_FLAGS = ("--no-deps", "--disable-pip")
 UNAUDITED_IN_RESOLVE_MODE = ("packaging", "wheel")
 # PyYAML parses a bare `on:` key as the boolean True (YAML 1.1 truthiness).
 ON_KEYS = (True, "on")
+TEST_SUITE_WORKFLOW_ENV = {"DUTCHBAY_TEST_MODE": "full", "TOTAL_SHARDS": 6}
 
 # A parsed workflow is genuinely heterogeneous - PyYAML hands back a bool for the `on`
 # key alongside string keys - so the mapping is not narrowable to anything useful.
 Workflow = dict[Any, Any]
+
+
+def _gate_steps(workflow: Workflow) -> list[tuple[Workflow, Workflow]]:
+    """Return each job and step that invokes the exact security gate."""
+    jobs = workflow.get("jobs")
+    if not isinstance(jobs, dict):
+        return []
+    return [
+        (job, step)
+        for job in jobs.values()
+        if isinstance(job, dict)
+        for step in (job.get("steps") or [])
+        if isinstance(step, dict) and step.get("run", "").strip() == "make security"
+    ]
+
+
+def _gate_context_violations(
+    workflow: Workflow,
+    job: Workflow,
+    step: Workflow,
+    *,
+    expected_workflow_env: Workflow,
+    label: str,
+) -> list[str]:
+    """Reject declarative context that can bypass an unchanged gate command."""
+    violations: list[str] = []
+    actual_env = workflow.get("env") or {}
+    if actual_env != expected_workflow_env:
+        violations.append(
+            f"{label}: workflow environment must be exactly "
+            f"{expected_workflow_env!r}, got {actual_env!r}"
+        )
+    if "defaults" in workflow:
+        violations.append(
+            f"{label}: workflow `defaults` can replace the gate shell or working "
+            "directory and are not permitted"
+        )
+    if "env" in job:
+        violations.append(
+            f"{label}: security job must not set `env`; Make and shell control "
+            f"variables can neuter the gate, got {job['env']!r}"
+        )
+    if "defaults" in job:
+        violations.append(
+            f"{label}: security job must not set `defaults`; an alternate shell or "
+            f"working directory can skip the gate, got {job['defaults']!r}"
+        )
+    if "container" in job:
+        violations.append(
+            f"{label}: security job must not replace the governed runner with a "
+            f"container, got {job['container']!r}"
+        )
+
+    # These checks already protected the daily main audit. Keeping them in the shared
+    # context helper gives the pull-request gate the same fail-closed semantics.
+    for owner, node in (("job", job), ("step", step)):
+        if "if" in node and str(node["if"]).strip().lower() not in {
+            "true",
+            "${{ true }}",
+        }:
+            violations.append(
+                f"{label}: the `make security` {owner} must not be conditional; an "
+                f"`if:` can silence the gate, got {node['if']!r}"
+            )
+        continue_on_error = node.get("continue-on-error")
+        if continue_on_error is not None and str(
+            continue_on_error
+        ).strip().lower() not in {
+            "false",
+            "${{ false }}",
+        }:
+            violations.append(
+                f"{label}: the `make security` {owner} must not set "
+                "`continue-on-error`; a red audit would report success, got "
+                f"{continue_on_error!r}"
+            )
+
+    for key in ("env", "shell", "working-directory"):
+        if key in step:
+            violations.append(
+                f"{label}: `make security` step must not set `{key}`; its committed "
+                f"execution context must stay clean, got {step[key]!r}"
+            )
+    return violations
 
 
 def _recipe(makefile_text: str, target: str) -> list[str]:
@@ -277,51 +366,23 @@ def audit_workflow(workflow: Workflow) -> list[str]:
 
     # Locate the gate step with its job. Exact equality, so `make security || true` and
     # any reduced variant are not the gate.
-    gate_steps = [
-        (job, step)
-        for job in jobs.values()
-        if isinstance(job, dict)
-        for step in (job.get("steps") or [])
-        if isinstance(step, dict) and step.get("run", "").strip() == "make security"
-    ]
-    if not gate_steps:
+    gate_steps = _gate_steps(workflow)
+    if len(gate_steps) != 1:
         violations.append(
-            "must run `make security` itself, not a reduced variant: a weaker audit on "
-            "main than on a pull request reports green on bytes the gate would reject"
+            "must run `make security` itself exactly once, not a reduced or duplicated "
+            "variant: main must audit the same gate as a pull request, got "
+            f"{len(gate_steps)} exact steps"
         )
-
-    # A conditional or non-failing audit is not an audit. Without these, the triggers
-    # above can be honoured in the YAML and neutered in the job: `if: false` or
-    # `if: github.event_name == 'push'` silences the daily run the triggers promise,
-    # and `continue-on-error: true` lets a RED audit report success — which would make
-    # the status on `main` say the opposite of what it measured. Both shapes leave every
-    # other assertion here passing, so the pinned remedy could be undone in silence.
-    for owner, holder in (("job", 0), ("step", 1)):
-        for gate in gate_steps:
-            node = gate[holder]
-            if "if" in node and str(node["if"]).strip().lower() not in {
-                "true",
-                "${{ true }}",
-            }:
-                violations.append(
-                    f"the `make security` {owner} must not be conditional — an `if:` can "
-                    f"silence the daily run the triggers promise, got {node['if']!r}"
-                )
-            # Fails CLOSED, like the `if` check above: only a value that can be proved
-            # harmless is accepted. Actions takes an expression here, so an allowlist of
-            # bad literals missed `${{ true }}`, `"True"` and
-            # `${{ github.event_name == 'schedule' }}` — the last of which neuters the
-            # DAILY run while the push run keeps failing normally, so the workflow looks
-            # healthy and gap 2 reopens with every assertion here still green.
-            cont = node.get("continue-on-error")
-            if cont is not None and str(cont).strip().lower() not in {
-                "false",
-                "${{ false }}",
-            }:
-                violations.append(
-                    f"the `make security` {owner} must not set `continue-on-error` — a "
-                    f"red audit would report success on main, got {cont!r}"
-                )
+    for job, step in gate_steps:
+        violations.extend(
+            _gate_context_violations(
+                workflow,
+                job,
+                step,
+                expected_workflow_env={},
+                label="security-audit.yml",
+            )
+        )
 
     names = {job.get("name") for job in jobs.values() if isinstance(job, dict)}
     if "Security Scan" in names:
@@ -400,10 +461,38 @@ def test_the_conditional_checks_do_not_over_reject() -> None:
 
 
 def test_the_merge_gate_and_the_main_audit_run_the_same_command() -> None:
-    """Both workflows must invoke `make security`, so neither can drift weaker."""
-    test_suite = TEST_SUITE_WORKFLOW.read_text(encoding="utf-8")
-    assert "run: make security" in test_suite
-    assert "run: make security" in WORKFLOW.read_text(encoding="utf-8")
+    """Both workflows must invoke the gate from their pinned clean contexts."""
+    test_suite: Workflow = yaml.safe_load(
+        TEST_SUITE_WORKFLOW.read_text(encoding="utf-8")
+    )
+    test_suite_gates = _gate_steps(test_suite)
+    assert len(test_suite_gates) == 1, test_suite_gates
+    job, step = test_suite_gates[0]
+    assert (
+        _gate_context_violations(
+            test_suite,
+            job,
+            step,
+            expected_workflow_env=TEST_SUITE_WORKFLOW_ENV,
+            label="test-suite.yml",
+        )
+        == []
+    )
+
+    main_audit = _workflow()
+    main_gates = _gate_steps(main_audit)
+    assert len(main_gates) == 1, main_gates
+    job, step = main_gates[0]
+    assert (
+        _gate_context_violations(
+            main_audit,
+            job,
+            step,
+            expected_workflow_env={},
+            label="security-audit.yml",
+        )
+        == []
+    )
 
 
 def test_declared_mode_really_audits_the_pins_resolve_mode_skips() -> None:
@@ -565,6 +654,10 @@ def _with_trigger(key: object, value: object) -> Workflow:
     return workflow
 
 
+def _mutate_workflow(**changes: Any) -> Workflow:
+    return {**_workflow(), **changes}
+
+
 def _mutate_job(**changes: Any) -> Workflow:
     workflow = _workflow()
     jobs = {name: {**job, **changes} for name, job in workflow["jobs"].items()}
@@ -704,6 +797,46 @@ def _mutate_gate_step(**changes: Any) -> Workflow:
             lambda: _mutate_gate_step(run="make security || true"),
             "must run `make security` itself",
             id="gate swallowed by a shell or-true",
+        ),
+        pytest.param(
+            lambda: _mutate_workflow(env={"MAKEFLAGS": "-n"}),
+            "workflow environment must be exactly",
+            id="workflow makeflags skips command execution",
+        ),
+        pytest.param(
+            lambda: _mutate_workflow(defaults={"run": {"shell": "/bin/true {0}"}}),
+            "workflow `defaults`",
+            id="workflow default shell discards the gate",
+        ),
+        pytest.param(
+            lambda: _mutate_job(env={"GNUMAKEFLAGS": "-i"}),
+            "security job must not set `env`",
+            id="job gnumakeflags ignores command failures",
+        ),
+        pytest.param(
+            lambda: _mutate_job(defaults={"run": {"working-directory": "/tmp"}}),
+            "security job must not set `defaults`",
+            id="job default working directory leaves the checkout",
+        ),
+        pytest.param(
+            lambda: _mutate_job(container="attacker/example:latest"),
+            "must not replace the governed runner",
+            id="job replaces the governed runner",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(env={"PATH": "/tmp/interposed"}),
+            "step must not set `env`",
+            id="step path interposes the governed binaries",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(shell="/bin/true {0}"),
+            "step must not set `shell`",
+            id="step shell discards the gate",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(**{"working-directory": "/tmp"}),
+            "step must not set `working-directory`",
+            id="step runs outside the checkout",
         ),
     ],
 )

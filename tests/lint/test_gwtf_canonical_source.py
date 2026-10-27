@@ -475,6 +475,16 @@ SECDEP_01_REQUIRED_CONTROLS = (
     "caller-supplied make -i",
     "command-line variable override",
     "CI surface",
+    "two committed workflows",
+    "authoritative gate receipts",
+    "clean execution context",
+    "workflow environment",
+    "job environment and container",
+    "step environment, shell and working directory",
+    "Arbitrary local Make callers",
+    "committed declarative keys",
+    "runner-host state",
+    "runtime environment files",
     "environment-selected vulnerability service",
     "asserted clean against the committed Makefile",
     "No expectation assumes the allowlist is empty",
@@ -511,7 +521,7 @@ def _assert_secdep_01_release_order(releasing: str) -> None:
 
 
 def test_secdep_01_binds_a_suppressed_advisory_to_its_lift_condition() -> None:
-    """Pin SECDEP-01 to its fence, its narrow scope and its stated limit."""
+    """Pin SECDEP-01 to its fence, workflow boundary, scope and stated limits."""
     secdep_01 = _rules_by_id()["SECDEP-01"]
     policy = _policy("SECDEP-01")
 
@@ -529,6 +539,7 @@ def test_secdep_01_binds_a_suppressed_advisory_to_its_lift_condition() -> None:
     assert "ignore-vuln:" in makefile
     _assert_secdep_01_release_order(releasing)
     assert (REPO_ROOT / "tests/lint/test_pip_audit_allowlist.py").is_file()
+    assert (REPO_ROOT / "tests/lint/test_security_gate_coverage.py").is_file()
 
 
 @pytest.mark.parametrize("removed_control", SECDEP_01_REQUIRED_CONTROLS)
