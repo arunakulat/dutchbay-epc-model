@@ -83,7 +83,8 @@ entrypoint therefore takes the explicit lifecycle-recovery path, while a real
 start or banner failure still fails setup closed. The Python environment is rebuilt from the
 repository's exact `requirements.txt`, `constraints.txt` and
 `pyproject.toml` inputs at `/workspaces/.dutchbay-audit-review-venv`, outside the
-checkout. The retained P03 corpus is copied only to
+checkout. The checkout itself is not installed into that environment, editable or
+otherwise; it is imported from `PYTHONPATH`. The retained P03 corpus is copied only to
 `/workspaces/.dutchbay-private/p03/sources`, also outside the checkout and with
 owner-only directory permissions. The post-create bootstrap uses non-interactive
 sudo only to assign the fixed `/workspaces` parent to `vscode`, immediately
