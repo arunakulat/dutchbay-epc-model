@@ -15,6 +15,9 @@ precision. When the canon legitimately re-baselines, update the number here and 
 one-line "Re-baselined by ..." note in the oracle docstring — nothing else.
 
 Provenance of the current vector (see the oracle docstring for the full history):
+#1396 (2026-10-26) resolves the lender case's scheduled-maturity balloon by refinance on
+assumed YAML terms (3 years, +2%) instead of a cash sweep that left USD 13.03m unpaid;
+only the equity IRR moves (-7.85% -> -34.71%).
 F5-01 (2026-08-16) aligned the first operating cashflow row to COD after the
 two-period construction window while preserving financial-close FX for capex,
 levies and IDC tax basis; reports now reuse those exact annual-row FX rates.
@@ -33,7 +36,7 @@ from typing import Final
 
 # Base-case (undiscounted / as-modelled) economics.
 LENDER_PROJECT_IRR: Final[float] = -0.001166233356501311
-LENDER_EQUITY_IRR: Final[float] = -0.07853839579881439
+LENDER_EQUITY_IRR: Final[float] = -0.3470845018490095
 LENDER_PROJECT_NPV: Final[float] = -91810995.06051566
 
 # Debt-service coverage. ``min_dscr`` is the #790 conservative fold-corrected covenant

@@ -289,7 +289,13 @@ def test_canonical_lendercase_economics_unchanged() -> None:
 
     lender = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
     kpis = run_v14_pipeline(config=lender, validation_mode="strict")["kpis"]
-    # Re-baselined by F5-01 (2026-08-16): the first operating cashflow row now
+    # Re-baselined by #1396 (2026-10-26, owner decision): the USD 31.55m scheduled-
+    # maturity balloon is refinanced on the YAML terms constraints.refinancing (3
+    # years, +2% over the 10.18% average debt rate; an assumption, no term sheet)
+    # instead of cash-swept, which retired USD 18.52m and left USD 13.03m unpaid.
+    # Equity IRR -7.85% -> -34.71% (equity NPV -93.17M -> -96.24M); project IRR, NPV,
+    # min_dscr and CFADS are unchanged because balloon resolution sits below CFADS
+    # and outside scheduled service. Prior: re-baselined by F5-01 (2026-08-16): the first operating cashflow row now
     # starts at COD after the canonical two-period construction window while capex,
     # levies and IDC remain translated at the 333.79 financial-close tax basis.
     # Reports reuse the exact row FX path. Net versus the #738 baseline: project IRR
