@@ -739,6 +739,11 @@ for _path, _disposition in (
             "funding",
             "principal_schedule",
             "interest_schedule",
+            # #1396 refinanced-tranche disclosure: YAML-assumed terms, their basis,
+            # the per-period interest/principal split and a coverage test. It is
+            # None unless the balloon is refinanced, and this facade routes none of
+            # its period-indexed rows, so the whole container stays opaque.
+            "refinance",
         )
     ),
     (

@@ -32,7 +32,10 @@ logger = logging.getLogger(__name__)
 #       before any equity distribution (prudent-lender cash-sweep covenant).
 #   - "refinance":  refinance the balloon over ``refinance_tenor_years`` at
 #       ``avg_debt_rate + refinance_rate_premium``; the refi service reduces
-#       equity (and may require a sponsor cash call if it exceeds CFADS).
+#       equity (and may require a sponsor cash call if it exceeds CFADS). Both
+#       terms are REQUIRED YAML inputs under ``constraints.refinancing`` (#1396):
+#       there is no code fallback, and a refinance that would run past the
+#       modelled timeline is refused rather than compressed into its last period.
 #   - "bullet":     single lump repayment at maturity (cash call if > CFADS).
 #   - "amortize":   resize debt DOWN so the sculpt fully amortises within tenor
 #       (no balloon); reported == honest, lowest leverage.
@@ -66,8 +69,9 @@ _AMORT_VALID_STYLES = _AMORT_ANNUITY_STYLES + _AMORT_SCULPTED_STYLES
 _AMORT_DEFAULT_STYLE = "sculpted"
 _BALLOON_TOL = 1.0  # USD; outstanding balances below this are treated as repaid
 _SERVICE_TOL = 1.0  # USD; scheduled service above this marks an active debt period
-_REFINANCE_TENOR_DEFAULT = 3
-_REFINANCE_PREMIUM_DEFAULT = 0.02
+#: Published label for the refinanced tranche's terms: they are a modelling
+#: assumption read from YAML, not a lender term sheet (#1396, P3-COV-03).
+REFINANCE_TERMS_BASIS = "assumption_no_term_sheet"
 
 # #683 warn-once dedup for the A1/#91 placeholder-substitution WARNs. The engine's
 # iterative layers (the _solve_gearing_for_dscr stepped search, the range(40)
@@ -1453,15 +1457,74 @@ def _maturity_period_index(
     return (max(nonzero) + 1) if nonzero else int(construction_periods)
 
 
-def _refinance_terms(config: Dict[str, Any]) -> Tuple[int, float]:
-    """(tenor_years, rate_premium) for a balloon refinance, from config with fallbacks."""
-    refi = {}
-    constraints = _section_case_insensitive(config, "constraints") or {}
-    if isinstance(constraints.get("refinancing"), Mapping):
-        refi = dict(constraints["refinancing"])
-    tenor = int(_as_float(refi.get("refinance_tenor_years"), _REFINANCE_TENOR_DEFAULT))
-    premium = _as_float(refi.get("refinance_rate_premium"), _REFINANCE_PREMIUM_DEFAULT)
-    return max(1, tenor), premium
+def resolve_balloon_treatment(config: Mapping[str, Any]) -> str:
+    """The balloon treatment the engine applies (unknown values WARN and fall back).
+
+    The single resolution of ``Financing_Terms.balloon_treatment``, shared by
+    :func:`plan_debt` and :func:`resolve_refinance_terms` (and through it the v14
+    pre-flight), so the gate and the engine cannot disagree on which path runs.
+    """
+    fin = _section_case_insensitive(dict(config), "Financing_Terms") or {}
+    treatment = str(
+        fin.get("balloon_treatment", _BALLOON_DEFAULT_TREATMENT)
+        or _BALLOON_DEFAULT_TREATMENT
+    ).lower()
+    if treatment not in _BALLOON_VALID_TREATMENTS:
+        logger.warning(
+            "Unknown balloon_treatment %r; falling back to %s",
+            treatment,
+            _BALLOON_DEFAULT_TREATMENT,
+        )
+        treatment = _BALLOON_DEFAULT_TREATMENT
+    return treatment
+
+
+def resolve_refinance_terms(config: Mapping[str, Any]) -> Optional[Tuple[int, float]]:
+    """``(tenor_years, rate_premium)`` for a balloon refinance, read from YAML only.
+
+    Returns ``None`` unless the resolved treatment is ``refinance``. When it is, both
+    ``constraints.refinancing.refinance_tenor_years`` (a whole number of years >= 1)
+    and ``constraints.refinancing.refinance_rate_premium`` (a finite decimal added to
+    the average debt rate) must be present: there is no code default (#1396, owner
+    decision 2026-10-26 "should never be hardcoded"). A missing or malformed value
+    raises ``ValueError`` naming the config path, which the v14 pre-flight reuses.
+    """
+    if resolve_balloon_treatment(config) != "refinance":
+        return None
+    constraints = _section_case_insensitive(dict(config), "constraints") or {}
+    refi = constraints.get("refinancing")
+    refi_map: Mapping[str, Any] = refi if isinstance(refi, Mapping) else {}
+    tenor_raw = refi_map.get("refinance_tenor_years")
+    premium_raw = refi_map.get("refinance_rate_premium")
+    problems: List[str] = []
+    if tenor_raw is None:
+        problems.append("constraints.refinancing.refinance_tenor_years is missing")
+    elif (
+        isinstance(tenor_raw, bool)
+        or not _finite_number(tenor_raw)
+        or float(tenor_raw) < 1
+        or float(tenor_raw) != int(float(tenor_raw))
+    ):
+        problems.append(
+            "constraints.refinancing.refinance_tenor_years must be a whole number of "
+            f"years >= 1, got {tenor_raw!r}"
+        )
+    if premium_raw is None:
+        problems.append("constraints.refinancing.refinance_rate_premium is missing")
+    elif isinstance(premium_raw, bool) or not _finite_number(premium_raw):
+        problems.append(
+            "constraints.refinancing.refinance_rate_premium must be a finite decimal, "
+            f"got {premium_raw!r}"
+        )
+    if problems:
+        raise ValueError(
+            "Financing_Terms.balloon_treatment is 'refinance', so its terms must come "
+            "from YAML (no default): " + "; ".join(problems)
+        )
+    assert (
+        tenor_raw is not None and premium_raw is not None
+    )  # narrowed by the checks above
+    return int(float(tenor_raw)), float(premium_raw)
 
 
 def _balloon_resolution_stream(
@@ -1504,14 +1567,21 @@ def _balloon_resolution_stream(
     if treatment == "refinance":
         rate = max(0.0, float(avg_rate) + float(refi_rate_premium))
         periods = max(1, int(refi_tenor_years))
+        if maturity + periods > n:
+            # #1396: this used to compress the overrun annuities into the final period,
+            # silently (a 3-year refinance with 2 periods left booked a double payment).
+            raise ValueError(
+                f"refinance tenor of {periods} years runs past the modelled timeline: the "
+                f"balloon falls due in period {maturity} of {n}, leaving {n - maturity} "
+                "periods; shorten constraints.refinancing.refinance_tenor_years"
+            )
         if rate > 0.0:
             factor = (rate * (1.0 + rate) ** periods) / ((1.0 + rate) ** periods - 1.0)
             annuity = float(balloon) * factor
         else:
             annuity = float(balloon) / periods
         for j in range(periods):
-            p = maturity + j
-            resolution[min(p, n - 1)] += annuity  # tail compresses into final period
+            resolution[maturity + j] = annuity
         return resolution, 0.0
 
     # Default: cash_sweep — trap post-maturity CFADS until the balloon clears.
@@ -1530,6 +1600,78 @@ def _balloon_resolution_stream(
         if remaining <= _BALLOON_TOL:
             return resolution, 0.0
     return resolution, remaining
+
+
+def _refinance_disclosure(
+    *,
+    config: Mapping[str, Any],
+    terms: Tuple[int, float],
+    balloon: float,
+    resolution: Sequence[float],
+    cfads_ext: Sequence[float],
+    senior_fee_usd: Sequence[float],
+    avg_rate: float,
+) -> Dict[str, Any]:
+    """The refinanced tranche as published: its YAML terms, their basis, and a coverage test.
+
+    Coverage is tested per refinance-service period as cash available after the senior
+    credit-support fee divided by that period's refinance service, which is the same
+    sweepable headroom :func:`_balloon_resolution_stream` uses for ``cash_sweep``. The
+    floor is the scenario's own DSCR covenant through the shared resolver
+    (:func:`analytics.mc.covenant.resolve_min_dscr_covenant`), so this test and the Monte
+    Carlo breach test cannot measure against different floors. Balloon service stays
+    outside ``min_dscr``, which tests scheduled senior service only (#1396).
+    """
+    from analytics.mc.covenant import resolve_min_dscr_covenant
+
+    tenor, premium = terms
+    rate = max(0.0, float(avg_rate) + premium)
+    outstanding = float(balloon)
+    coverage: List[Dict[str, Any]] = []
+    for period, service in enumerate(resolution):
+        if service <= _SERVICE_TOL:
+            continue
+        cash = _as_float(cfads_ext[period], 0.0) if period < len(cfads_ext) else 0.0
+        fee = (
+            _as_float(senior_fee_usd[period], 0.0)
+            if period < len(senior_fee_usd)
+            else 0.0
+        )
+        # Each level payment is interest on the opening refinanced balance plus
+        # principal; the three statements need the split (interest is an expense,
+        # only principal retires debt).
+        interest = outstanding * rate
+        principal = float(service) - interest
+        outstanding -= principal
+        coverage.append(
+            {
+                "period": period,
+                "service_usd": float(service),
+                "interest_usd": interest,
+                "principal_usd": principal,
+                "cash_available_usd": cash - fee,
+                "coverage": (cash - fee) / float(service),
+            }
+        )
+    floor = float(resolve_min_dscr_covenant(dict(config)))
+    min_coverage = min((c["coverage"] for c in coverage), default=None)
+    return {
+        "terms_basis": REFINANCE_TERMS_BASIS,
+        "terms_source": {
+            "tenor_years": "constraints.refinancing.refinance_tenor_years",
+            "rate_premium": "constraints.refinancing.refinance_rate_premium",
+        },
+        "tenor_years": tenor,
+        "rate_premium": premium,
+        "rate": rate,
+        "principal_usd": float(balloon),
+        "total_service_usd": float(sum(resolution)),
+        "total_interest_usd": float(sum(c["interest_usd"] for c in coverage)),
+        "coverage_by_period": coverage,
+        "min_coverage": min_coverage,
+        "coverage_floor": floor,
+        "coverage_breach": min_coverage is not None and min_coverage < floor,
+    }
 
 
 def _resize_for_amortization(
@@ -1787,24 +1929,16 @@ def plan_debt(
     core = apply_debt_layer(params=config, annual_rows=rows)
 
     # ── Balloon treatment ──────────────────────────────────────────────────
-    fin = _section_case_insensitive(config, "Financing_Terms") or {}
-    treatment = str(
-        fin.get("balloon_treatment", _BALLOON_DEFAULT_TREATMENT)
-        or _BALLOON_DEFAULT_TREATMENT
-    ).lower()
-    if treatment not in _BALLOON_VALID_TREATMENTS:
-        logger.warning(
-            "Unknown balloon_treatment %r; falling back to %s",
-            treatment,
-            _BALLOON_DEFAULT_TREATMENT,
-        )
-        treatment = _BALLOON_DEFAULT_TREATMENT
+    treatment = resolve_balloon_treatment(config)
+    refi_terms = resolve_refinance_terms(config)  # None unless treatment == refinance
 
     if treatment == "amortize":
         config, core = _resize_for_amortization(config, rows, core)
 
     structural_balloon = _as_float(core.get("balloon_remaining"), 0.0)
-    refi_tenor, refi_premium = _refinance_terms(config)
+    # Non-refinance treatments never read the terms; 0/0.0 here is a placeholder the
+    # stream ignores, not a refinance default.
+    refi_tenor, refi_premium = refi_terms if refi_terms is not None else (0, 0.0)
     balloon_resolution, balloon_residual = _balloon_resolution_stream(
         treatment=treatment,
         balloon=structural_balloon,
@@ -1816,6 +1950,19 @@ def plan_debt(
         avg_rate=_as_float(core.get("avg_debt_rate"), 0.0),
         refi_tenor_years=refi_tenor,
         refi_rate_premium=refi_premium,
+    )
+    refinance_disclosure = (
+        _refinance_disclosure(
+            config=config,
+            terms=refi_terms,
+            balloon=structural_balloon,
+            resolution=balloon_resolution,
+            cfads_ext=core.get("cfads_extended", []) or [],
+            senior_fee_usd=core.get("senior_fee_usd", []) or [],
+            avg_rate=_as_float(core.get("avg_debt_rate"), 0.0),
+        )
+        if refi_terms is not None and structural_balloon > _BALLOON_TOL
+        else None
     )
     # balloon_remaining is the residual of the IDC-INCLUSIVE amortizing principal
     # (sum of principal_after_idc), so the fraction must use that same base — not the
@@ -1978,6 +2125,11 @@ def plan_debt(
         # fold-applied `covenant_dscr`. Consumers FILTER on `operating_year`;
         # they never index a compacted list whose positions carry no meaning.
         "dscr_periods": dscr_periods,
+        # ── Refinanced tranche (#1396; additive, appended last) ─────────────
+        # None unless the balloon is refinanced. Its terms are a YAML assumption
+        # with no term-sheet basis, and its coverage is tested separately from
+        # the scheduled-service min_dscr.
+        "refinance": refinance_disclosure,
     }
 
 
