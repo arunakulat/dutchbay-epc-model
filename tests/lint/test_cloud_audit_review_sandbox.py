@@ -167,6 +167,13 @@ INDEPENDENT_DEPENDENCY_INPUT_RELATIVES = (
     "scripts/run_1110_cloud_review_verification.sh",
     "scripts/prove_1110_candidate_codespace.sh",
 )
+# The files check_venv.sh executes during the bootstrap. A change to any of them
+# can break the image without touching a dependency input, as #1377 did.
+ENVIRONMENT_CONTRACT_RELATIVES = (
+    "scripts/development_environment.sh",
+    "dutchbay_environment.py",
+    "config/development_environment.json",
+)
 INDEPENDENT_CONTROLLED_INPUT_RELATIVES = (
     "docs/audit/2026-08-controlled-successor/PUBLICATION_MANIFEST.sha256",
     "docs/audit/2026-08-controlled-successor/registers/programme_gate_ledger.v1.json",
@@ -1470,7 +1477,9 @@ def test_cloud_sandbox_path_classifier_fails_closed(tmp_path: Path) -> None:
     assert result.stdout.strip() == "true"
 
     dependency_base = deletion
-    for index, relative in enumerate(INDEPENDENT_DEPENDENCY_INPUT_RELATIVES):
+    for index, relative in enumerate(
+        (*INDEPENDENT_DEPENDENCY_INPUT_RELATIVES, *ENVIRONMENT_CONTRACT_RELATIVES)
+    ):
         dependency_path = tmp_path / relative
         dependency_path.parent.mkdir(parents=True, exist_ok=True)
         dependency_path.write_text(f"dependency-{index}\n", encoding="utf-8")
@@ -1492,6 +1501,29 @@ def test_cloud_sandbox_path_classifier_fails_closed(tmp_path: Path) -> None:
     assert result.returncode == 2
     assert result.stdout == ""
     assert "head commit is unavailable" in result.stderr
+
+
+def test_bootstrap_installs_no_project_into_the_sandbox_environment() -> None:
+    """check_venv.sh refuses an editable install, so the bootstrap must make none."""
+    bootstrap = BOOTSTRAP.read_text(encoding="utf-8")
+    commands = [
+        " ".join(command.split())
+        for command in bootstrap.replace("\\\n", " ").splitlines()
+    ]
+    installs = [command for command in commands if "-m pip install" in command]
+    assert installs == [
+        '"$VENV_ROOT/bin/python" -m pip install "pip==$REQUIRED_PIP_VERSION" '
+        '"setuptools==$REQUIRED_SETUPTOOLS_VERSION" "wheel==$REQUIRED_WHEEL_VERSION"',
+        '"$VENV_ROOT/bin/python" -m pip install --requirement requirements.txt',
+    ]
+    assert "--editable" not in bootstrap
+
+    # Without an install, the checkout reaches the contract only from PYTHONPATH.
+    validations = [command for command in commands if "./check_venv.sh" in command]
+    assert validations == [
+        'PYTHONDONTWRITEBYTECODE=1 DUTCHBAY_VENV="$VENV_ROOT" PYTHONPATH="$PWD" '
+        "./check_venv.sh --no-bootstrap"
+    ]
 
 
 def test_scripts_keep_private_inputs_outside_checkout_and_hold_side() -> None:
