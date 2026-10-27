@@ -1807,10 +1807,27 @@ def _build_funding(config: Dict[str, Any], core: Dict[str, Any]) -> Dict[str, An
 
     uses_total = capex + total_idc + initial_dsra
     sources_total = senior_debt + equity_total
+    # P3-COV-05 (#1399 part A): state the reserve and payment-support basis outright. With
+    # fund_at_close off (the committed scenarios) the DSRA at close is ZERO and the
+    # target_months reserve is built from operating cash in the equity waterfall.
+    # use_revenue_guarantee only loads a guarantee fee into the cost of debt
+    # (analytics.pipeline_v14_enhanced._debt_fee_rate); no payment-support cash flow
+    # exists anywhere in the engine, whichever way the flag is set.
+    payment_support = {
+        # The same reading _debt_fee_rate applies, so the disclosure cannot disagree with
+        # whether the fee was charged.
+        "use_revenue_guarantee": bool(fin.get("use_revenue_guarantee", False)),
+        "treatment": "fee_in_cost_of_debt_only",
+        "payment_support_cash_flow_modelled": False,
+    }
     return {
         "fund_at_close": fund_at_close,
         "dsra_target_months": round(target_months, 2),
         "initial_dsra_usd": round(initial_dsra, 2),
+        "dsra_at_close_basis": (
+            "funded_at_close" if fund_at_close else "none_built_from_operating_cash"
+        ),
+        "payment_support": payment_support,
         "financing_fees_in_capex_usd": round(financing_fees, 2),
         "sources_and_uses": {
             "uses": {

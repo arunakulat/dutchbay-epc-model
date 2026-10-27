@@ -50,13 +50,16 @@ EXPECTED_PAYLOAD_SHA256 = {
     "profile/generation_profile.csv": "cefa4b9e37f85e5f7774a14727bf35a43c9c3bd8b3219bd730a35aff4f36ab76",
 }
 EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
-    # Re-pinned for 15.7.0. The manifest digest rolls up the pinned source
-    # digests, and VERSION is one of those sources.
+    # Re-pinned for #1399 part A, which removed the dead
+    # receivables_guarantee_months key from the pinned lender scenario and so
+    # changed that source's digest. Previously re-pinned for 15.7.0, when VERSION
+    # (another pinned source) moved. The manifest digest rolls up the pinned
+    # source digests.
     # The per-file artefact digests above are UNCHANGED - the generated feeder
     # and profile are byte-identical - so this moved only because the manifest
     # records which sources produced them, which is the guard working, not
     # drifting. Verified deterministic across repeated runs (MRM-01).
-    "c6778909625625cd91c54bcb7b37856d9846cde62aed2ad4831e3b92cbd76c1e"
+    "7d871e2cad80972aecab0a6d7522d6493b273a603f0186f4ac93a0b0f41c73ab"
 )
 
 MASTER_REDIRECT_MUTATIONS = [

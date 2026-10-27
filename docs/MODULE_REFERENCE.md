@@ -749,6 +749,15 @@ examined in full in the separately delivered deep-research credibility report.
 - **Default breach probability.** Because debt is sculpted to the covenant floor, the default
   DSCR-breach probability is structurally near zero; the honest breach distribution requires
   the opt-in `monte_carlo.fixed_debt_stress` path.
+- **Payment support.** No receivables guarantee, standby letter of credit or other
+  payment-support cash flow is modelled. `Financing_Terms.use_revenue_guarantee` only adds
+  `guarantee_revenue_pct` to the cost of debt, and the committed scenarios leave it off.
+  `receivables_guarantee_months` had no consumer and is refused at v14 pre-flight. The
+  committed scenarios also leave `Financing_Terms.dsra.fund_at_close` off, so the DSRA at
+  close is zero and the six-month target is built from operating cash. `debt_result.funding`
+  records both bases (`dsra_at_close_basis`, `payment_support`). Sri Lanka payment-security
+  precedents, such as CEB's escrow and standby letter of credit, are not DSRA requirements.
+  Actual reserve and support terms await an authenticated term sheet (#920).
 - **Statutory and structural levers.** Several levers (dividend withholding, interest
   withholding gross-up, senior credit-support fees, import levies, P90 debt binding, FX
   hedging) default off. Confirm which are enabled before citing headline KPIs.
