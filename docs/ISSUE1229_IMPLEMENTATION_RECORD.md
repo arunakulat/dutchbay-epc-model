@@ -1,7 +1,7 @@
 # Issue #1229 screening adapter implementation record
 
 Status: DELIVERY_IN_PROGRESS as draft PR #1449; both fresh reviews ACCEPT_WITH_NITS on the
-rebased subject, nits repaired in a follow-up commit; five-run campaign, final-head rebinds,
+rebased subject; N1, F1, N5 and F7 repaired in follow-up commits; five-run campaign, final-head rebinds,
 hosted Grid Study and merge pending (see "Delivery as PR #1449").
 Controlling authority and both verbatim owner instructions are in
 `ISSUE1229_IMPLEMENTATION_PROFILE.md`, copied from the coordinator's profile.
@@ -211,6 +211,23 @@ subprocess test shows ending an orphaned worker without its parent. A mutant wit
 the deadline hangs. N5 and F7, in this record. N2, N3, F3, F4, F5 and F6 are recorded
 as accepted limits or follow-ups, not fixed here. The repaired subject is a new object,
 so both reviewers must rebind to its exact SHA.
+
+**Hosted Grid Study finding, and the oracle change.** The first hosted Grid Study run
+(Linux x86_64) failed a single assertion. The worker's charter SCR was
+`0x1.e186c84e283bep-1` against the macOS-measured constant `0x1.e186c84e283bdp-1`, one
+ulp apart. Everything else passed, including the same-platform stock-against-adapted
+comparison in `test_sparse_oos_aliases_and_late_import_match_vendor`. The charter
+constants are a macOS arm64 measurement, not a portable bit-identity oracle. The test
+now runs the unmodified vendor path in its own child through the same process boundary,
+and requires hex equality with it on whichever platform the suite runs on. It keeps the
+charter values as an absolute 1e-14 check on SCR and 1e-11 on fault levels. The branch
+was also brought up to date with main `becb634a`. None of the commits main gained
+touches `analytics/grid/`, `tests/grid/` or `constraints.txt`.
+
+The first local five-run attempt also stopped on run 1. Two `tests/lint/test_pip_audit_allowlist.py`
+cases fail identically on an unmodified archive of base `50d72d44`, because macOS ships
+GNU Make 3.81 and CI runs make 4.x. The streak therefore deselects exactly those two node
+ids, and declares that it does so.
 
 ## Limits and authority
 
