@@ -1,7 +1,9 @@
 - **The sensitivity dashboard stops passing `use_container_width`** — both call sites in
-  `analytics/dashboard/streamlit_app.py` now pass `width="stretch"`. Streamlit's announced
-  removal date for the parameter was 2025-12-31; the pinned `1.66.1` still accepts it, so this
-  is pre-emptive rather than a repair, and any later minor release may drop it. (#1353 P-8.)
+  `analytics/dashboard/streamlit_app.py` now pass `width="stretch"`, the replacement Streamlit's
+  own deprecation notice prescribes. The pinned `1.66.1` still accepts the old parameter, so
+  nothing was broken, but it warned on every render and its announced removal date, 2025-12-31,
+  had already passed; a later minor release may drop it outright. (#1353 P-8, with the reason
+  corrected under D-9 before this fragment compiled.)
 - **The dashboard's removed-API guard now covers that name, and has a negative control** —
   `tests/integration/test_dashboard_smoke.py` reads the dashboard text against one tuple of dead
   names, which `use_container_width` now joins, and a second test demonstrates the guard failing
