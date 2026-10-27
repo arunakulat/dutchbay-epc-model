@@ -40,6 +40,15 @@ GRID = {
     "connection_x_ohm": 3.5,
     "harmonic_spectrum": [[1, 100.0], [5, 2.4], [7, 1.5], [11, 0.9], [13, 0.7]],
 }
+# The production worker with the adaptation skipped: the unmodified vendor
+# (Numba) path, contained in its own process.
+STOCK_COMMAND = [
+    sys.executable,
+    "-c",
+    "from analytics.grid import _pandapower_worker as worker\n"
+    "worker._install_python_helpers = lambda: None\n"
+    "worker.main()",
+]
 
 
 def guard_command(mode: str, receipt: Path) -> list[str]:
@@ -182,9 +191,22 @@ def test_public_screens_complete_without_compilation(
         "global_disable_jit": 0,
     }
     if kind == "strength":
-        assert result.scr.hex() == float(0.9404814334303563).hex()
-        assert result.fault_level_poc_mva.hex() == float(150.10083677548485).hex()
-        assert result.fault_level_poc_max_mva.hex() == float(162.7411166572655).hex()
+        # Bit identity is against the unmodified vendor on THIS platform: the
+        # charter constants were measured on macOS arm64, and Linux x86_64 CI
+        # computes the stock SCR one ulp away. The stock control runs in its own
+        # crash-contained child, through the same process boundary, without the
+        # Python-helper adaptation.
+        monkeypatch.setattr(adapter, "_worker_command", lambda: STOCK_COMMAND)
+        stock = invoke("strength")
+        for field in ("scr", "fault_level_poc_mva", "fault_level_poc_max_mva"):
+            assert getattr(result, field).hex() == getattr(stock, field).hex()
+        assert result.scr == pytest.approx(0.9404814334303563, abs=1e-14, rel=0)
+        assert result.fault_level_poc_mva == pytest.approx(
+            150.10083677548485, abs=1e-11, rel=0
+        )
+        assert result.fault_level_poc_max_mva == pytest.approx(
+            162.7411166572655, abs=1e-11, rel=0
+        )
         assert result.bankable is False and result.method == "pandapower_iec60909"
 
 
