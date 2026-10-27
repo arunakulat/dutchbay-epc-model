@@ -865,6 +865,11 @@ for _path, _disposition in (
             "interest_usd",
             "balloon_resolution",
             "cf_after_debt",
+            # #1397: the levered-tax basis the facility was sized and covenanted
+            # on. ``cfads_usd`` stays the carried predicate operand because it is
+            # what the project NPV/IRR path discounts; this one is published
+            # alongside it so a reader can see both bases on the same row.
+            "cfads_coverage_usd",
         )
     ),
 ):

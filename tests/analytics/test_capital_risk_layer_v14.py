@@ -424,11 +424,18 @@ def test_canonical_mc_end_to_end_feeds_capital_risk_report(tmp_path) -> None:
         result, tmp_path, config_path=LENDER_CONFIG
     )
     assert rep.n_trials == 30 and rep.npv_distribution_png.exists()
-    # F5-01 removes the former one-year fold gap in the deterministic case. The
-    # seeded MC still records genuine driver-stressed DSCR breaches: 24 of the 30
-    # canonical trials fall below the authored 1.30 covenant. LLCR remains clear.
+    # #1397 reopens the one-year fold gap F5-01 had closed: sizing on levered-tax
+    # CFADS supports nine more gearing steps, and the extra service drags the
+    # operating-year-1 fold to 1.2196, under the authored 1.30 covenant, in the
+    # DETERMINISTIC case. Every driver-stressed trial therefore breaches too, so the
+    # probability goes 0.8 (24 of 30) -> 1.0. That is the accepted consequence of the
+    # re-baseline, not a stressed-tail finding.
+    #
+    # At 1.0 the DSCR figure can no longer distinguish a real regression, so LLCR is
+    # the live control: it is computed from the same trials and stays clear of its
+    # covenant, which a fabricated or all-breaching tail report would not manage.
     cb = rep.tail_report.covenant_breaches
-    assert cb.dscr_breach_probability == pytest.approx(0.8)
+    assert cb.dscr_breach_probability == pytest.approx(1.0)
     assert cb.llcr_breach_probability == pytest.approx(0.0)
 
 

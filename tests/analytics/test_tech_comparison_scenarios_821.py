@@ -45,7 +45,10 @@ HYBRID_BESS_SCENARIO = SCEN / "dutchbay_hybrid_bess_2025Q4.yaml"
 
 #: The frozen committed 5th-gen wind lendercase canon (tests/_canon.py, #955 — the
 #: KPI-neutrality gate). Gearing is not part of the canonical KPI vector, so it stays local.
-_CANON_GEARING = 0.355
+#: #1397 re-baseline: sizing on levered-tax CFADS supports nine more 0.0025 solver
+#: steps on the wind lendercase, 0.355 -> 0.3775. Solar is unchanged at 0.1775 (its
+#: binding period is not the one the extra shield relieves).
+_CANON_GEARING = 0.3775
 
 
 # --------------------------------------------------------------------------- #

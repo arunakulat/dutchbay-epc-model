@@ -131,9 +131,18 @@ def test_covenant_pinned_dscr_period_tornado_is_flagged_flat() -> None:
 
 def test_fold_headline_min_dscr_tornado_is_not_flat() -> None:
     """#790: the min_dscr HEADLINE (fold-corrected) responds to real shocks — a
-    lender's DSCR tornado is no longer an all-zero chart on the lender case."""
+    lender's DSCR tornado is no longer an all-zero chart on the lender case.
+
+    #1397 shrank the response without removing it, and the threshold moves with the
+    measurement rather than the measurement being argued away. Largest bar: 0.0051,
+    against 0.01 before. The headline now sits on the year-1 fold, which combines the
+    stub/bridge period with the first operating period; the bridge service in that fold
+    is fixed, so a CFADS shock moves the folded ratio less than it moved the previously
+    binding year (#1353, issuecomment-6433557550). It is still two orders of magnitude
+    above the covenant-pinned per-period metric above, which is what this test
+    contrasts it with."""
     suite = run_sensitivity_analysis(str(LENDER), metric="min_dscr")
-    assert max(abs(t.impact_abs) for t in suite.tornado_results) > 0.01
+    assert max(abs(t.impact_abs) for t in suite.tornado_results) > 0.001
     assert suite.metadata.get("flat_metric") is False
 
 
