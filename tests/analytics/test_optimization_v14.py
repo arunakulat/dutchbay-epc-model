@@ -358,3 +358,185 @@ def test_grid_vs_bounded_cross_check_dscr_sculpt() -> None:
     # Both localize the same optimum: the lower boundary of the bracket.
     assert grid.best.value == pytest.approx(0.30, abs=1e-9)
     assert bounded.best.value == pytest.approx(0.30, abs=5e-3)
+
+
+# ---------------------------------------------------------------------------
+# Undefined KPIs mid-sweep (#1397) — a swept point the pipeline cannot score
+# ---------------------------------------------------------------------------
+
+# ``evaluate_with_overrides`` normalizes through ``normalize_kpi_dict``, which
+# DROPS any entry ``float()`` refuses. ``equity_irr`` is set to ``None`` on
+# purpose when the waterfall ran and no rate solves the equity cashflows
+# (#1436), so a deeply geared candidate whose every operating year is
+# covenant-locked arrives here with the key simply absent. These fakes
+# reproduce that shape -- an absent key, not a ``None`` -- which is what the
+# optimizer actually receives.
+
+
+def _make_partially_undefined_eval(
+    threshold: float,
+) -> Callable[..., Dict[str, Any]]:
+    """Gateway whose objective key vanishes at and above ``threshold``."""
+
+    def _fake(
+        config_path: str,
+        *,
+        overrides: Optional[Mapping[str, Any]] = None,
+        **_kwargs: Any,
+    ) -> Dict[str, Any]:
+        x = float((overrides or {})["Financing_Terms.debt_ratio"])
+        kpis: Dict[str, Any] = {"min_dscr": 2.0}
+        if x < threshold:
+            kpis["equity_irr"] = x  # rises with gearing, so "max" wants the top
+        return kpis
+
+    return _fake
+
+
+def test_grid_skips_points_whose_objective_is_undefined(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A candidate with no equity IRR is excluded, not fatal.
+
+    Before #1397 this raised ``KeyError: 'equity_irr'`` out of the sweep: one
+    undefined candidate killed the whole optimization, and the caller got a
+    traceback instead of a curve. It surfaced on the solar assessment report,
+    whose gearing sweep runs to 0.75 on a scenario that locks every year.
+    """
+    monkeypatch.setattr(
+        opt_mod, "evaluate_with_overrides", _make_partially_undefined_eval(0.6)
+    )
+    res = optimize_parameter(
+        config_path=LENDER_CONFIG,
+        param_path="Financing_Terms.debt_ratio",
+        objective_key="equity_irr",
+        direction="max",
+        lower=0.3,
+        upper=0.8,
+        n_steps=6,  # 0.3 0.4 0.5 0.6 0.7 0.8 -> the last three are undefined
+    )
+    assert len(res.curve) == 6
+    defined = [p for p in res.curve if math.isfinite(p.objective)]
+    undefined = [p for p in res.curve if not math.isfinite(p.objective)]
+    assert [p.value for p in defined] == pytest.approx([0.3, 0.4, 0.5])
+    assert len(undefined) == 3
+    # An unscorable point is never a feasible one, whatever the constraint says.
+    assert all(not p.feasible for p in undefined)
+    assert all(p.feasible for p in defined)
+    # ... and the optimum is the best point that COULD be scored.
+    assert res.best is not None
+    assert res.best.value == pytest.approx(0.5)
+
+
+def test_an_undefined_objective_is_not_reported_as_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``nan``, never 0.0: a 0.0 equity IRR reads as break-even (#782).
+
+    Here every point below the threshold is negative, so substituting 0.0 for
+    the undefined ones would make them the reported optimum -- the worst
+    candidates presented as the best.
+    """
+
+    def _fake(
+        config_path: str,
+        *,
+        overrides: Optional[Mapping[str, Any]] = None,
+        **_kwargs: Any,
+    ) -> Dict[str, Any]:
+        x = float((overrides or {})["Financing_Terms.debt_ratio"])
+        return {} if x >= 0.6 else {"equity_irr": -x}
+
+    monkeypatch.setattr(opt_mod, "evaluate_with_overrides", _fake)
+    res = optimize_parameter(
+        config_path=LENDER_CONFIG,
+        param_path="Financing_Terms.debt_ratio",
+        objective_key="equity_irr",
+        direction="max",
+        lower=0.3,
+        upper=0.8,
+        n_steps=6,
+    )
+    assert res.best is not None
+    assert res.best.objective == pytest.approx(-0.3)
+    assert all(math.isnan(p.objective) for p in res.curve if p.value >= 0.6 - 1e-12)
+
+
+def test_undefined_everywhere_returns_no_best_with_diagnostics(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No scorable candidate at all is an infeasible search, not a crash."""
+    monkeypatch.setattr(
+        opt_mod, "evaluate_with_overrides", _make_partially_undefined_eval(0.0)
+    )
+    res = optimize_parameter(
+        config_path=LENDER_CONFIG,
+        param_path="Financing_Terms.debt_ratio",
+        objective_key="equity_irr",
+        lower=0.3,
+        upper=0.8,
+        n_steps=4,
+    )
+    assert res.best is None
+    assert res.diagnostics is not None
+    assert res.diagnostics.n_feasible == 0
+    # Nothing finite to range over, so the range is absent rather than (0, 0).
+    assert res.diagnostics.objective_range is None
+
+
+def test_bounded_undefined_objective_is_penalized_not_fatal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The bounded path treats an undefined point like any other non-finite
+    objective: penalized, steered away from, never selected."""
+    monkeypatch.setattr(
+        opt_mod, "evaluate_with_overrides", _make_partially_undefined_eval(0.6)
+    )
+    res = optimize_parameter(
+        config_path=LENDER_CONFIG,
+        param_path="Financing_Terms.debt_ratio",
+        objective_key="equity_irr",
+        direction="max",
+        lower=0.3,
+        upper=0.8,
+        method="bounded",
+        bounded_xatol=1e-4,
+    )
+    assert res.best is not None
+    assert res.best.feasible
+    assert math.isfinite(res.best.objective)
+    assert res.best.value < 0.6
+
+
+def test_an_undefined_constraint_cannot_be_proved_compliant(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A covenant KPI that did not compute is infeasible, not unconstrained."""
+
+    def _fake(
+        config_path: str,
+        *,
+        overrides: Optional[Mapping[str, Any]] = None,
+        **_kwargs: Any,
+    ) -> Dict[str, Any]:
+        x = float((overrides or {})["Financing_Terms.debt_ratio"])
+        kpis: Dict[str, Any] = {"equity_irr": x}
+        if x < 0.6:
+            kpis["min_dscr"] = 2.0
+        return kpis
+
+    monkeypatch.setattr(opt_mod, "evaluate_with_overrides", _fake)
+    res = optimize_parameter(
+        config_path=LENDER_CONFIG,
+        param_path="Financing_Terms.debt_ratio",
+        objective_key="equity_irr",
+        direction="max",
+        lower=0.3,
+        upper=0.8,
+        n_steps=6,
+        constraint_key="min_dscr",
+        constraint_min=1.30,
+    )
+    assert res.best is not None
+    # 0.8 has the highest objective but no provable covenant, so 0.5 wins.
+    assert res.best.value == pytest.approx(0.5)

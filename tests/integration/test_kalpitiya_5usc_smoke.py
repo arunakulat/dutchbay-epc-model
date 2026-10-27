@@ -36,12 +36,22 @@ EXPECTED_KPIS = (
 )
 
 # ``min_dscr`` is excluded because the debt sizer solves to its covenant target.
-# Every other value KPI pinned by the fixture must remain responsive.
+#
+# ``avg_dscr`` is excluded for the same reason since #1397, and it is a weaker
+# exclusion than it looks. It is the mean of the annual DSCRs, and the sculpt
+# pins the binding periods at the target, so the only thing that can move it is
+# the tail — against which the SIZER moves the other way. Sizing on levered-tax
+# CFADS tightened that offset to a near-cancellation at +-10%: an opex +10%
+# shock cuts CFADS 5.5% and the facility 2.1% (48.76M -> 47.73M, four solver
+# steps) and leaves avg_dscr moving 4.3e-05, under this floor. It was 4.4e-03
+# on the pre-#1397 basis. The quantity is still computed, not returned, which
+# ``test_avg_dscr_is_solved_not_frozen`` proves on a shock large enough to clear
+# the cancellation; the floor below is not the instrument for it. The sizer's
+# own response stays asserted on ``max_debt_usd`` in the driver test.
 RESPONSIVE_KPIS = (
     "project_irr",
     "equity_irr",
     "project_npv",
-    "avg_dscr",
     "llcr",
     "plcr",
 )
@@ -220,8 +230,9 @@ def test_pipeline_runs_config_driven_and_is_uneconomic(cfg: dict) -> None:
     assert kpis["project_irr"] == pytest.approx(-0.0518, abs=0.005)
     assert kpis["project_irr"] < 0.0  # NEGATIVE — below break-even even undiscounted
     assert kpis["equity_irr"] == pytest.approx(
-        -0.1562, abs=0.005
-    )  # PR-B UIP LKR rate deepens it further
+        -0.16183, abs=0.005
+    )  # PR-B UIP LKR rate deepens it; #1397's levered-tax sizing deepens it again
+    # (the facility grows 48.24M -> 48.76M and absorbs more than the shield returns)
     assert kpis["equity_irr"] < 0.0  # NEGATIVE — the headline finding
     assert kpis["project_npv"] == pytest.approx(
         -148.63e6, rel=0.05
@@ -229,8 +240,8 @@ def test_pipeline_runs_config_driven_and_is_uneconomic(cfg: dict) -> None:
     assert kpis["project_npv"] < 0.0  # deeply underwater
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     assert kpis["max_debt_usd"] == pytest.approx(
-        48.24375e6, rel=0.02
-    )  # PR-B UIP LKR rate de-levers
+        48.7625e6, rel=0.02
+    )  # PR-B UIP LKR rate de-levers; #1397's levered-tax basis adds two steps back
 
 
 def test_expected_results_match_live_engine(cfg: dict) -> None:
@@ -304,3 +315,26 @@ def test_kalpitiya_responsiveness_guard_rejects_non_finite_output(
         corrupted[key] = bad_value
     with pytest.raises(AssertionError, match="non-finite value"):
         _assert_kpis_respond(gateway_kpis, corrupted, "non-finite stub")
+
+
+def test_avg_dscr_is_solved_not_frozen(
+    raw_config: dict[str, Any], gateway_kpis: dict[str, Any]
+) -> None:
+    """TEST-01 for the KPI ``RESPONSIVE_KPIS`` can no longer carry.
+
+    ``avg_dscr`` sits under the +-10% driver floor only because the sizer offsets
+    the shock almost exactly (see the note on ``RESPONSIVE_KPIS``). That is a
+    cancellation, not a frozen vector, and a shock big enough to outrun the
+    sizer's 0.0025 gearing granularity separates the two: at opex +30% the
+    facility drops 48.76M -> 43.06M and avg_dscr moves ~1.1%, three orders of
+    magnitude more than at +10%. A returned vector would not move at either.
+    """
+    shocked = _evaluate_kpis(raw_config, {"opex.usd_per_year": 4_563_000.0})
+
+    base_dscr = float(gateway_kpis["avg_dscr"])
+    shocked_dscr = float(shocked["avg_dscr"])
+    assert math.isfinite(base_dscr) and math.isfinite(shocked_dscr)
+    assert abs(shocked_dscr - base_dscr) / abs(base_dscr) > 1e-2
+
+    # ... and it moved because the sizer re-solved, which is the mechanism.
+    assert float(shocked["max_debt_usd"]) < float(gateway_kpis["max_debt_usd"])

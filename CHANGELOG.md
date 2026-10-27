@@ -4,6 +4,33 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Fixed
+- **Debt is sized, and coverage reported, on levered-tax CFADS (15.7.0).** `plan_debt`
+  was handed rows built with `interest_expense=0`, so the facility was sculpted against —
+  and DSCR, LLCR and PLCR published from — CFADS carrying tax computed with no interest
+  deduction (LKR 36.76bn of interest deducted nowhere on the lender case, worth USD
+  16.44M of coverage CFADS: the sizer saw $175.55M before and sees $191.99M now). Sizing now runs as a fixed point over the levered-tax CFADS
+  series and refuses a schedule it has not settled. The interest is the only input that
+  changed: the senior credit-support fee still enters only the reporting rebuild, so a
+  scenario with interest deductibility off is byte-identical to the previous engine. The
+  project pass keeps its unlevered basis against the after-tax WACC; rows publish both
+  `cfads_usd` and `cfads_coverage_usd`. Canon re-baseline: facility $59.59M -> $63.37M,
+  balloon $31.55M -> $28.63M, equity IRR -7.85% -> -9.99%, project NPV -$91.81M ->
+  -$91.57M, project IRR -0.1166% -> -0.1421% and total CFADS $166.08M -> $165.69M (both
+  down, through the larger facility's credit-support fee). Headline `min_dscr` 1.30 ->
+  1.2196 — the conservative annual fold in operating year 1; `min_dscr_period` stays at
+  the 1.30 sculpt target. Owner decision 2026-10-27: correct the basis and report year 1
+  honestly rather than constrain the gearing solver. Mullikulam, the 5 US-cent case, the
+  two capex sensitivities and the eight NSO250 LTL variants re-baseline on coverage as
+  well. This re-baselines the committed canonical KPI vector; it does not change the
+  Board/lender circulation HOLD.
+- **`optimization_v14` survives a candidate it cannot score.** The KPI surface drops
+  `equity_irr` where the equity waterfall ran and no rate solves its cashflows (#1436),
+  and the sweep read it with `kpis[key]`, so one deeply geared, fully covenant-locked
+  candidate raised `KeyError` and killed the whole optimization. Such a point now reads
+  `nan`, is marked infeasible, and logs which KPI and which parameter value — never a
+  substituted 0.0, which would read as break-even (#782).
+
 ### Added
 - Record the v15.6.1 release receipts, completed fragment/branch cleanup, surviving Board/lender reliance HOLD, and clean-thread startup checklist in the successor session handover.
 
