@@ -717,6 +717,9 @@ def _update_kpis_with_equity_distribution(
         ("total_equity_distributed_usd", "total_equity_distributed_usd"),
         ("average_cash_on_cash", "average_equity_cash_on_cash"),
         ("covenant_locked_years", "equity_covenant_locked_years"),
+        # P2-F3-01 (#1398): a DSCR<1 year's shortfall and the sponsor cure that funded it.
+        ("debt_service_shortfall_years", "equity_debt_service_shortfall_years"),
+        ("total_sponsor_cure_usd", "equity_sponsor_cure_usd"),
     ):
         value = summary_raw.get(source_key)
         if value is not None:

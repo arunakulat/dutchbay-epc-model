@@ -534,7 +534,44 @@ def build_equity_distribution_schedule(
             if distribution_config.wht_gross_up
             else 0.0
         )
-        cf_after_debt = max(0.0, cf_pre_debt - debt_service - wht_cost)
+        # P2-F3-01 (#1398): a debt-service shortfall is CARRIED, never clamped away. When
+        # CFADS cannot meet scheduled service (plus any grossed-up interest WHT), the gap
+        # must be met by cash that exists somewhere, so it is funded in a fixed, disclosed
+        # order: (1) a DSRA draw, which is what the reserve is for; (2) cash the SPV already
+        # holds for the sponsor (lockup-trapped cash, then retained holdback/un-swept cash);
+        # (3) a sponsor cure, a negative equity cash flow in that year, the same cash-call
+        # treatment a balloon shortfall already gets. Previously the gap was clamped to
+        # zero, so a DSCR<1 year cost equity nothing. cf_after_debt_usd is published signed
+        # (negative in a shortfall year); every step of the cure is a row field. A year that
+        # covers its service is untouched, so no committed scenario with DSCR>=1 moves.
+        cf_after_debt = cf_pre_debt - debt_service - wht_cost
+        shortfall = max(0.0, -cf_after_debt)
+        dsra_draw = min(shortfall, reserve_balance)
+        reserve_balance -= dsra_draw
+        uncovered = shortfall - dsra_draw
+        locked_applied = min(uncovered, locked_cash_balance)
+        locked_cash_balance -= locked_applied
+        uncovered -= locked_applied
+        retained_applied = min(uncovered, retained_balance)
+        retained_balance -= retained_applied
+        sponsor_cure = uncovered - retained_applied
+        spv_cash_applied = locked_applied + retained_applied
+        if shortfall > 0.0:
+            logger.warning(
+                "Equity distribution year %s: debt-service shortfall of USD %.2f "
+                "(CFADS %.2f < service %.2f + interest WHT %.2f) funded by DSRA draw "
+                "%.2f, SPV-held cash %.2f and sponsor cure %.2f.",
+                year,
+                shortfall,
+                cf_pre_debt,
+                debt_service,
+                wht_cost,
+                dsra_draw,
+                spv_cash_applied,
+                sponsor_cure,
+            )
+        # Cash left for the reserve top-up and equity after the shortfall is funded.
+        cash_after_service = max(0.0, cf_after_debt)
         dscr = _extract_dscr(row, cf_pre_debt, debt_service)
 
         # Reserve: top up toward the requirement; RELEASE the excess back to equity as the
@@ -543,7 +580,7 @@ def build_equity_distribution_schedule(
             float(distribution_config.min_reserve_months) / 12.0
         )
         if reserve_required >= reserve_balance:
-            reserve_funded = min(cf_after_debt, reserve_required - reserve_balance)
+            reserve_funded = min(cash_after_service, reserve_required - reserve_balance)
             reserve_balance += reserve_funded
             reserve_released = 0.0
         else:
@@ -551,7 +588,9 @@ def build_equity_distribution_schedule(
             reserve_released = reserve_balance - reserve_required
             reserve_balance = reserve_required
 
-        cash_after_reserve = max(0.0, cf_after_debt - reserve_funded) + reserve_released
+        cash_after_reserve = (
+            max(0.0, cash_after_service - reserve_funded) + reserve_released
+        )
 
         # Balloon repayment (cash_sweep / refinance / bullet) is senior to equity
         # but is NOT scheduled senior debt service, so it never enters the DSCR.
@@ -604,6 +643,10 @@ def build_equity_distribution_schedule(
             retained_cash = available - distribution_pre_wht
             retained_balance += retained_cash
 
+        # The sponsor cure is new equity paid IN this year, on top of whatever the branch
+        # above decided about distributions (a cured year is usually also covenant-locked).
+        equity_distribution -= sponsor_cure
+
         debt_outstanding = (
             _as_float(debt_outstanding_series[index])
             if index < len(debt_outstanding_series)
@@ -618,6 +661,10 @@ def build_equity_distribution_schedule(
                 "wht_on_interest_usd": wht_cost,
                 "wht_on_dividends_usd": dividend_wht,
                 "cf_after_debt_usd": cf_after_debt,
+                "debt_service_shortfall_usd": shortfall,
+                "dsra_draw_usd": dsra_draw,
+                "spv_cash_applied_usd": spv_cash_applied,
+                "sponsor_cure_usd": sponsor_cure,
                 "balloon_resolution_usd": balloon_resolution,
                 "dscr": dscr,
                 "covenant_locked": covenant_locked,
@@ -773,6 +820,12 @@ def calculate_equity_distribution_from_pipeline(
     covenant_locked_years = sum(
         1 for row in annual_distributions if bool(row.get("covenant_locked"))
     )
+    # P2-F3-01 (#1398): disclose every debt-service shortfall and how it was funded.
+    debt_service_shortfall_years = sum(
+        1
+        for row in annual_distributions
+        if float(row.get("debt_service_shortfall_usd") or 0.0) > 0.0
+    )
     status = "defaulted" if investment_source == "defaulted" else "computed"
 
     return {
@@ -794,6 +847,19 @@ def calculate_equity_distribution_from_pipeline(
             "annual_cash_on_cash": cash_on_cash,
             "average_cash_on_cash": average_cash_on_cash,
             "covenant_locked_years": covenant_locked_years,
+            "debt_service_shortfall_years": debt_service_shortfall_years,
+            "total_debt_service_shortfall_usd": float(
+                sum(row["debt_service_shortfall_usd"] for row in annual_distributions)
+            ),
+            "total_dsra_draw_usd": float(
+                sum(row["dsra_draw_usd"] for row in annual_distributions)
+            ),
+            "total_spv_cash_applied_usd": float(
+                sum(row["spv_cash_applied_usd"] for row in annual_distributions)
+            ),
+            "total_sponsor_cure_usd": float(
+                sum(row["sponsor_cure_usd"] for row in annual_distributions)
+            ),
             "min_dscr_threshold": distribution_config.min_dscr_threshold,
             "min_reserve_months": distribution_config.min_reserve_months,
         },

@@ -446,9 +446,8 @@ def test_assessed_seam_feeds_fresh_cf_to_real_engine() -> None:
 # through the AnalysisResult envelope. A regression in _DEFAULT_DRIVERS, the config
 # schema, or the strict-resolve path would fail here rather than shipping green.
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("metric", ["project_irr", "equity_irr", "project_npv"])
-def test_tornado_real_engine_over_assessed_lendercase(metric: str) -> None:
-    export = {
+def _assessed_export() -> Dict[str, Any]:
+    return {
         "scenario": "P75",
         "annual_generation_mwh": 300_000.0,
         "capacity_factor_percent": 22.8,  # fresh screening CF, far from the form's 0.339
@@ -461,7 +460,11 @@ def test_tornado_real_engine_over_assessed_lendercase(metric: str) -> None:
         "tariff_lkr_per_kwh": 20.3,
         "exchange_rate_lkr_usd": 300.0,
     }
-    assessed = _build_assessed_scenario(_wind(), export)
+
+
+@pytest.mark.parametrize("metric", ["project_irr", "project_npv"])
+def test_tornado_real_engine_over_assessed_lendercase(metric: str) -> None:
+    assessed = _build_assessed_scenario(_wind(), _assessed_export())
     # #993: tornado sweeps the FRESH assessed CF (0.228), not the stale form 0.339.
     assert assessed["project"]["capacity_factor"] == pytest.approx(0.228)
 
@@ -477,6 +480,27 @@ def test_tornado_real_engine_over_assessed_lendercase(metric: str) -> None:
     assert len(engine_result["tornado_results"]) >= 7
     # A supported metric is genuinely sensitive — never a silent all-flat table.
     assert engine_result["metadata"].get("flat_metric") is False
+
+
+def test_tornado_refuses_an_undefined_equity_irr_over_assessed_lendercase() -> None:
+    """At this assessed case the equity IRR is undefined, and the tornado says so loudly.
+
+    This was the ``equity_irr`` arm of the test above until P2-F3-01 (#1398). At a 22.8%
+    screening CF the case runs short of debt service in its last operating years. The
+    equity waterfall used to clamp those shortfalls to zero and reported an equity IRR of
+    -18.76%. Carried as sponsor cures (USD 1.48M), they put negative flows at the END of an
+    equity vector that has already lost USD 154M of USD 172M invested, so its NPV is
+    negative at both ends of the solver's bracket and no rate solves it. The pipeline
+    reports that as ``None`` (#1436), the KPI surface drops it, and the sensitivity engine
+    refuses rather than draw a tornado of a number that does not exist.
+    """
+    assessed = _build_assessed_scenario(_wind(), _assessed_export())
+    with pytest.raises(KeyError, match="equity_irr"):
+        default_analysis(
+            _request(analysis_type="tornado", metric="equity_irr"),
+            assessed,
+            lambda _step, _message: None,
+        )
 
 
 # --------------------------------------------------------------------------- #

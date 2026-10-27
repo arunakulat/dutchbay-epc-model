@@ -78,27 +78,42 @@ def test_corporate_tax_rate_has_material_impact(base_config):
     assert tornado.impact_abs > 0.0
 
 
-def test_corporate_tax_rate_direction_on_levered_equity_is_shield_dominated(
+def test_corporate_tax_rate_direction_on_levered_equity_follows_the_carried_shortfall(
     base_config,
 ):
-    """At the realistic 5.9% FX-drift baseline the LEVERED equity IRR RISES with the
-    corporate tax rate — the interest tax shield dominates.
+    """With the debt-service shortfall carried, the levered equity IRR no longer RISES with
+    the corporate tax rate at the basecase.
 
-    Direction REVERSED by the 5.9% FX-drift re-baseline (fx.annual_depr 3% -> 5.89%):
-    at the old 3% drift the conventional direction held (lower tax -> higher equity IRR,
-    e.g. 0.1050 at 15% vs 0.0819 at 45%). The steeper LKR depreciation shrinks the USD
-    value of the flat-LKR revenue (and taxable income), so the debt-interest deduction's
-    value to equity now OUTWEIGHS the higher tax on equity's profit share: equity IRR is
-    0.0540 at 15% vs 0.0712 at 45%. The UNLEVERED project IRR still falls with tax (the
-    conventional direction — see test_corporate_tax_rate_also_moves_project_irr).
+    This test used to assert the opposite ("interest-shield dominated": equity IRR -2.19% at
+    15% vs -1.90% at 45%). P2-F3-01 (#1398) showed that rise was manufactured by the equity
+    waterfall's clamp. The basecase has sub-1.0x years late in the tenor, and a higher tax
+    rate re-sizes the debt so those years' shortfall grows (USD 2.10M across years 13-14 at
+    15%, USD 3.14M across years 12-14 at 45%). The clamp dropped that shortfall, so the
+    extra burden of a high-tax debt profile never reached equity. Carried through the DSRA,
+    it does: equity IRR is -2.780% at 15% and -2.787% at 45%, a fall of under one basis
+    point, so the shield and the shortfall now roughly offset.
+
+    Both halves are pinned: the high-tax case carries the larger shortfall, and its equity
+    IRR is no higher than the low-tax case's.
     """
     shock = (
         _one_way(base_config, "tax.corporate_tax_rate", 0.30)
         .tornado_results[0]
         .shock_results[0]
     )
-    # higher tax (high_case) -> HIGHER levered equity IRR (interest-shield dominated)
-    assert shock.high_case > shock.low_case
+    assert shock.high_case <= shock.low_case
+
+    def _shortfall(rate: float) -> float:
+        out = evaluate_with_overrides(
+            config_path=None,
+            raw_config=copy.deepcopy(base_config),
+            overrides={"tax.corporate_tax_rate": rate},
+            return_full_result=True,
+        )
+        summary = out["equity_distribution"]["equity_summary"]
+        return float(summary["total_debt_service_shortfall_usd"])
+
+    assert _shortfall(0.45) > _shortfall(0.15)
 
 
 def test_corporate_tax_rate_also_moves_project_irr(base_config):
