@@ -19,6 +19,9 @@ from pathlib import Path
 
 import pytest
 
+from tests._canon import LENDER_MIN_DSCR as _CANON_MIN_DSCR
+from tests._canon import LENDER_MIN_DSCR_PERIOD as _CANON_MIN_DSCR_PERIOD
+
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIG = _REPO / "scenarios" / "dutchbay_lendercase_2025Q4.yaml"
 _PARAMS_EXAMPLE = _REPO / "scenarios" / "sensitivity_parameters_examples.yaml"
@@ -255,8 +258,13 @@ def test_preset_dscr_targets_min_dscr_kpi(tmp_path: Path):
     # target_dscr moves min_dscr 1:1 (covenant sculpt target); it must be a non-flat bar.
     target_row = df[df["variable_name"] == "Financing_Terms.target_dscr"].iloc[0]
     assert target_row["impact_abs"] > 0
-    # base_case is the pinned covenant DSCR (~1.30).
-    assert target_row["base_case"] == pytest.approx(1.30, abs=0.02)
+    # base_case is the headline min_dscr, which is the fold-corrected annual
+    # minimum (#790), not the per-period sculpt target. Since #1397 the two differ
+    # on this scenario: the per-period floor still pins at 1.30 while operating
+    # year 1, which also carries the orphaned bridge service, folds to ~1.2196.
+    # Read from the canon so the next re-baseline moves one file, not this pin.
+    assert target_row["base_case"] == pytest.approx(_CANON_MIN_DSCR, abs=1e-6)
+    assert _CANON_MIN_DSCR_PERIOD == pytest.approx(1.30, abs=0.02)
 
 
 def test_preset_and_parameters_are_mutually_exclusive(tmp_path: Path, capsys):

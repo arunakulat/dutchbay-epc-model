@@ -219,8 +219,14 @@ def test_lendercase_paid_in_equity_ties_to_sources_and_uses_with_levies() -> Non
     on the SAME levy-inclusive financed-capex base the debt sizing, NPV, equity
     distribution and Sources & Uses use, so paid-in equity ties out natively (no
     reconciliation footnote). The lendercase's financed capex is $167,859,300
-    (= $159.6M pre-levy + $8,259,300 import duties/unrecoverable VAT) and its S&U
-    equity is $108,269,248.50 — exactly what the three-statement paid-in equity must equal.
+    (= $159.6M pre-levy + $8,259,300 import duties/unrecoverable VAT), and the
+    three-statement paid-in equity must equal that base less the sized facility.
+
+    #1397 re-baseline: the facility is now sized on levered-tax CFADS, which is
+    larger, so it funds $3,776,834.25 more of the same capex and paid-in equity
+    falls by exactly that much, $108,269,248.50 -> $104,492,414.25. The capex base
+    is unchanged. The identity is asserted against the run's own ``debt_total``
+    first, so the next re-sizing moves one pin rather than breaking the tie-out.
     """
     from pathlib import Path
 
@@ -239,10 +245,13 @@ def test_lendercase_paid_in_equity_ties_to_sources_and_uses_with_levies() -> Non
     result = run_v14_pipeline(config=lender, validation_mode="strict")
     ts = build_three_statement_from_run(result, config)
     assert ts is not None
-    # Paid-in equity ties EXACTLY to the Sources & Uses equity (levy-inclusive).
-    assert float(ts.balance_sheet[0].paid_in_equity) == pytest.approx(
-        108_269_248.5, abs=1e-6
-    )
+    # Paid-in equity ties EXACTLY to the Sources & Uses equity (levy-inclusive):
+    # the same levy-inclusive capex base, less the facility actually sized.
+    debt_total = float((result["debt_result"] or {})["debt_total"])
+    assert debt_total == pytest.approx(63_366_885.75, abs=1e-6)
+    paid_in_equity = float(ts.balance_sheet[0].paid_in_equity)
+    assert paid_in_equity == pytest.approx(167_859_300.0 - debt_total, abs=1e-6)
+    assert paid_in_equity == pytest.approx(104_492_414.25, abs=1e-6)
     # And the balance sheet still articulates: every tie-out passes.
     assert ts.tie_outs.balance_sheet_balances
     assert ts.tie_outs.debt_retires_to_residual

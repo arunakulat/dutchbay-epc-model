@@ -34,6 +34,7 @@ from analytics.evaluation_v14 import evaluate_with_overrides
 from tests._canon import (
     LENDER_EQUITY_IRR,
     LENDER_MIN_DSCR,
+    LENDER_MIN_DSCR_PERIOD,
     LENDER_PROJECT_IRR,
     LENDER_PROJECT_NPV,
     LENDER_TOTAL_CFADS_USD,
@@ -42,7 +43,7 @@ from tests._canon import (
 LENDERCASE = Path("scenarios/dutchbay_lendercase_2025Q4.yaml")
 
 #: KPIs that must respond to an economic driver. ``min_dscr`` and ``min_dscr_period``
-#: are deliberately absent — see :func:`test_min_dscr_is_held_at_the_sculpt_target`.
+#: are deliberately absent — see :func:`test_the_sculpt_target_is_held_per_period`.
 RESPONSIVE_KPIS: tuple[str, ...] = (
     "project_irr",
     "equity_irr",
@@ -159,19 +160,33 @@ def test_responsiveness_guard_rejects_frozen_output(
     [d for d in DRIVERS if not d[0].startswith("capex")],
     ids=[d[0] for d in DRIVERS if not d[0].startswith("capex")],
 )
-def test_min_dscr_is_held_at_the_sculpt_target(
+def test_the_sculpt_target_is_held_per_period(
     lendercase: dict[str, Any], label: str, overrides: dict[str, float]
 ) -> None:
-    """``min_dscr`` is a solved target, so it must NOT move with revenue or opex.
+    """The sculpt target is a solved input, so it must NOT move with revenue or opex.
 
-    Debt is sculpted to the 1.30 covenant target, so the two DSCR entries in the canon
+    Debt is sculpted to the 1.30 covenant target, so the DSCR entries in the canon
     vector are *inputs the sizer solves to*, not outputs that vary — which is why they
     are excluded from :data:`RESPONSIVE_KPIS`. Recorded explicitly so a later reader
     does not "fix" this guard by making them responsive.
 
     The target does give way when the case cannot support it: a +10% capex shock drives
-    ``min_dscr`` below 1.30, which is why that driver is excluded here.
+    the sculpt below 1.30, which is why that driver is excluded here.
+
+    #1397 split the two halves of this guard, and the test is renamed to say so.
+    ``min_dscr_period`` is still pinned exactly, because that IS what
+    ``_solve_gearing_for_dscr`` solves to. The headline ``min_dscr`` is the conservative
+    annual ``dscr_by_year`` fold, which the solver does not bind (#1353,
+    issuecomment-6433557550), so it now drifts a little under a shock instead of being
+    held: measured 1.2216 under tariff +10% and 1.2345 under opex +25%, against a canon
+    of 1.2196. The bound below keeps it a near-solved quantity — a free output would
+    move by far more than a hundredth — while stating honestly that it is no longer
+    pinned. Tighten it to an equality again only together with the solver fix.
     """
     shocked = _kpis(lendercase, overrides)
-    assert shocked["min_dscr"] == pytest.approx(LENDER_MIN_DSCR, abs=1e-9)
-    assert shocked["min_dscr_period"] == pytest.approx(LENDER_MIN_DSCR, abs=1e-9)
+    assert shocked["min_dscr_period"] == pytest.approx(LENDER_MIN_DSCR_PERIOD, abs=1e-9)
+    assert abs(shocked["min_dscr"] - LENDER_MIN_DSCR) < 0.02, (
+        f"{label}: the annual DSCR fold moved {shocked['min_dscr'] - LENDER_MIN_DSCR:+.4f} "
+        "from the canon — that is more than solver drift, so the sculpt is no longer "
+        "binding this case"
+    )

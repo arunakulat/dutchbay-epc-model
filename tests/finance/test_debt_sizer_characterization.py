@@ -56,21 +56,39 @@ def test_no_phantom_covenant_lockup() -> None:
     Guards the debt-service alignment fix: debt_service_total is period-indexed
     (offset by construction + bridge periods), and indexing it by annual-row index
     had spuriously collapsed the achieved DSCR ~3 years out of phase, locking 13
-    years of equity distributions. The corrected period mapping plus F5-01's
-    COD-aligned operating FX now leave every annual covenant row at or above the
-    1.30 lockup threshold; the phase bug this guards would lock about 13 years.
+    years of equity distributions. The phase bug this guards would lock about 13
+    years.
+
+    #1397 changed what this test can claim, and it is worth reading carefully. Sizing on
+    levered-tax CFADS buys nine 0.0025 gearing steps, and the extra service pushes the
+    conservative annual fold for operating YEAR 1 to 1.2196, below the 1.30 lockup
+    threshold — so the lender case now locks exactly ONE year. That is not the phase bug:
+    the fold for year 1 combines the stub/bridge period (per-period DSCR 1.3056) with the
+    first full operating period (2.4392), and the orphaned bridge service drags the
+    combination below both of its parts. Every other annual row sits at the 1.30 target,
+    and every PERIOD sits at or above it. So the guard is now "one year, year 1, and for
+    that reason" rather than "none", which still fails loudly if the phase bug returns.
+    The year-1 fold itself is tracked at #1353, issuecomment-6433557550.
     """
     kpis = evaluate_with_overrides(LENDER_CONFIG, overrides={})
-    assert kpis["equity_covenant_locked_years"] == 0
-    # The reported covenant DSCR is genuinely achieved (sculpted to target).
-    assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
+    assert kpis["equity_covenant_locked_years"] == 1
+    # Every PERIOD is still genuinely sculpted to the target; only the year-1 fold is
+    # under it, and only by the bridge-service artifact described above.
+    assert kpis["min_dscr_period"] == pytest.approx(1.30, abs=0.02)
 
 
 def test_min_dscr_holds_sculpt_target_across_gearing() -> None:
-    """Sculpted debt: min DSCR sits at the 1.30 target for every gearing."""
+    """Sculpted debt: the per-period DSCR sits at the 1.30 target for every gearing.
+
+    #1397: this reads ``min_dscr_period``, not the headline ``min_dscr``. The sizer
+    solves to the per-period floor; the headline is the conservative annual fold, and
+    from the solved cap upward that fold reads 1.2196 because of the year-1 bridge
+    service (see :func:`test_no_phantom_covenant_lockup`). Asserting the fold here would
+    be asserting something the sizer does not control.
+    """
     for dr in GEARINGS:
         k = _kpis(dr)
-        assert k["min_dscr"] == pytest.approx(1.30, abs=0.02), f"dr={dr}"
+        assert k["min_dscr_period"] == pytest.approx(1.30, abs=0.02), f"dr={dr}"
         # The DSCR *series* is not flat — the max exceeds the floor.
         assert k["dscr_max"] > k["min_dscr"] + 0.1, f"dr={dr}"
 
@@ -86,12 +104,17 @@ def test_equity_irr_stays_negative_and_plateaus_at_the_dscr_cap() -> None:
     """Equity IRR stays negative and plateaus at the DSCR-solved cap.
 
     The project return remains below the cost of debt and equity IRR is negative.
-    The dual_dscr sizer caps actual gearing near 0.355, so higher requests clamp to
-    the same structure and the canonical -7.85% equity IRR. Below the cap the response
-    is not strictly monotonic: the negative project
-    IRR + DSCR sculpt/balloon interaction make it U-shaped, and F5-01 moves the 0.35
-    point below the clamped plateau. We therefore assert the negative economics, the
-    observed U-turn and the supra-cap clamp rather than an invalid monotonic claim.
+    The dual_dscr sizer caps actual gearing, so higher requests clamp to the same
+    structure and the same equity IRR.
+
+    #1397 moved the cap and straightened the curve. Sizing on levered-tax CFADS lifts
+    the solved cap from ~0.355 to at most 0.40, so every point from 0.40 up now clamps
+    to the canonical -9.99%, and the 0.35 point (-6.65%) sits ABOVE the plateau rather
+    than below it. The U-turn the previous version asserted is gone: with a negative
+    project IRR, more leverage straightforwardly costs equity, and the old trough at
+    0.35 was an artifact of the smaller, unlevered-tax facility. So this now asserts
+    the negative economics, that gearing moves equity IRR in the direction leverage
+    should move it, and the supra-cap clamp.
     """
     import math
 
@@ -100,21 +123,19 @@ def test_equity_irr_stays_negative_and_plateaus_at_the_dscr_cap() -> None:
     ]  # [0.35,0.40,0.45,0.50,0.60,0.70]
     for dr, irr in zip(GEARINGS, irrs):
         assert math.isfinite(irr) and -0.5 < irr < 0.5, f"dr={dr}: irr={irr}"
-    # Above the F5-01 DSCR-solved cap (~0.355; ~0.41 after #738, 0.4275 post-#737,
-    # ~0.45 post-PR-B, ~0.588 before) the sizer
-    # clamps to the solved gearing -> equity IRR plateaus at the canonical clamped value
-    # (-0.0785 after the F5-01 re-baseline; requested 0.45 also clamps now, so the
-    # plateau slice below is conservative).
+    # Above the DSCR-solved cap (<=0.40 after #1397; ~0.355 under F5-01, ~0.41 after
+    # #738, 0.4275 post-#737, ~0.45 post-PR-B, ~0.588 before) the sizer clamps to the
+    # solved gearing -> equity IRR plateaus at the canonical clamped value.
     plateau = irrs[3:]
     assert (
         max(plateau) - min(plateau) < 1e-6
     ), f"supra-cap equity_irr not flat (clamped): {plateau}"
-    assert plateau[0] == pytest.approx(-0.0785, abs=0.002)
+    assert plateau[0] == pytest.approx(-0.0999, abs=0.002)
     assert all(irr < 0.0 for irr in irrs), f"equity unexpectedly profitable: {irrs}"
-    # The pre-cap 0.35 point is the local trough and the cap/balloon interaction then
-    # turns slightly upward before flattening.
-    assert irrs[0] < plateau[0], f"expected pre-cap U-turn missing: {irrs}"
-    assert plateau[0] - irrs[0] > 0.001, f"gearing barely moves equity_irr: {irrs}"
+    # The sub-cap 0.35 point is ABOVE the clamped plateau: the project IRR is negative,
+    # so the extra leverage the cap allows costs equity rather than paying it.
+    assert irrs[0] > plateau[0], f"leverage did not cost equity below the cap: {irrs}"
+    assert irrs[0] - plateau[0] > 0.001, f"gearing barely moves equity_irr: {irrs}"
 
 
 def test_interest_rate_nominal_is_noop_on_schedule() -> None:

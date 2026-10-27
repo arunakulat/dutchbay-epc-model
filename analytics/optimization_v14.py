@@ -47,6 +47,7 @@ Context:
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional
@@ -60,6 +61,8 @@ from analytics.infeasibility_diagnostics import (
     OptimizationAuditLog,
     build_parameter_diagnostics,
 )
+
+logger = logging.getLogger(__name__)
 
 _DIRECTIONS = ("max", "min")
 _METHODS = ("grid", "bounded")
@@ -86,9 +89,73 @@ def _bound_slack(bound: float) -> float:
     return max(_FEASIBILITY_ABS_TOL, _FEASIBILITY_REL_TOL * abs(bound))
 
 
+def _read_kpi(
+    kpis: Mapping[str, Any],
+    key: str,
+    *,
+    param_path: str,
+    value: float,
+) -> float:
+    """Read one KPI off a swept point, returning ``nan`` when it is undefined.
+
+    ``evaluate_with_overrides`` returns the surface through
+    :func:`analytics.evaluation_v14.normalize_kpi_dict`, which **drops** any
+    entry ``float()`` refuses -- a ``None`` among them. The live pipeline sets
+    ``equity_irr`` to ``None`` on purpose when the waterfall ran and no rate
+    solves the equity cashflows (#1436: IRR undefined, as distinct from "not
+    computed", for which ``analytics.core.metrics`` leaves the 0.0 sentinel in
+    place). A deeply geared point whose every operating year is covenant-locked
+    distributes nothing, so it reaches here with no ``equity_irr`` key at all,
+    and ``kpis[key]`` raised ``KeyError`` mid-sweep -- one undefined candidate
+    killed the whole optimization.
+
+    ``nan`` is the vocabulary the rest of this module already speaks for an
+    unusable point: the bounded path penalizes a non-finite objective, the grid
+    path never selects an infeasible one, and
+    :func:`analytics.infeasibility_diagnostics.build_parameter_diagnostics`
+    filters non-finite objectives and constraints out of its ranges. The caller
+    therefore sees the point marked infeasible and excluded, never a crash and
+    never a fabricated 0.0 (#782: a 0.0 equity IRR reads as break-even).
+
+    A missing key is also what a mistyped ``objective_key`` looks like, which
+    would otherwise disappear into "no feasible optimum". Hence the warning: it
+    fires once per affected candidate, and a sweep is tens of points, not the
+    thousands that keep :func:`normalize_kpi_dict` at ``DEBUG``.
+    """
+    raw = kpis.get(key)
+    if raw is None:
+        logger.warning(
+            "KPI %r is not available at %s=%r (undefined, or dropped by KPI "
+            "normalization); treating this candidate as infeasible.",
+            key,
+            param_path,
+            value,
+        )
+        return math.nan
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        logger.warning(
+            "KPI %r is not numeric at %s=%r (%r); treating this candidate as "
+            "infeasible.",
+            key,
+            param_path,
+            value,
+            raw,
+        )
+        return math.nan
+
+
 @dataclass(frozen=True)
 class OptimizationPoint:
-    """One evaluated point: the parameter value and the resulting KPIs."""
+    """One evaluated point: the parameter value and the resulting KPIs.
+
+    ``objective`` (and ``constraint``, when one is set) is ``nan`` where the
+    pipeline could not define that KPI at this candidate -- see
+    :func:`_read_kpi`. Such a point always carries ``feasible=False``, so it is
+    never selected; read ``math.isfinite(point.objective)`` before plotting or
+    aggregating a ``curve``.
+    """
 
     value: float
     objective: float
@@ -177,17 +244,21 @@ def _evaluate_point(
 
     Returns:
         The evaluated :class:`OptimizationPoint` (``feasible`` reflects the
-        constraint bounds within ``_bound_slack`` tolerance).
+        constraint bounds within ``_bound_slack`` tolerance, and is ``False``
+        whenever the objective or the constrained KPI came back undefined --
+        see :func:`_read_kpi`).
     """
     overrides = dict(base)
     overrides[param_path] = float(value)
     kpis = evaluate_with_overrides(config_path, overrides=overrides)
 
-    objective = float(kpis[objective_key])
+    objective = _read_kpi(kpis, objective_key, param_path=param_path, value=value)
     constraint: Optional[float] = None
-    feasible = True
+    feasible = math.isfinite(objective)
     if constraint_key is not None:
-        constraint = float(kpis[constraint_key])
+        constraint = _read_kpi(kpis, constraint_key, param_path=param_path, value=value)
+        if not math.isfinite(constraint):
+            feasible = False
         if constraint_min is not None and constraint < constraint_min - _bound_slack(
             constraint_min
         ):
