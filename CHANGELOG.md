@@ -16,11 +16,13 @@ All notable changes to this project will be documented here.
   project pass keeps its unlevered basis against the after-tax WACC; rows publish both
   `cfads_usd` and `cfads_coverage_usd`. Canon re-baseline: facility $59.59M -> $63.37M,
   balloon $31.55M -> $28.63M, equity IRR -7.85% -> -9.99%, project NPV -$91.81M ->
-  -$91.57M, project IRR -0.1166% -> -0.1421% and total CFADS $166.08M -> $165.69M (both
-  down, through the larger facility's credit-support fee). Headline `min_dscr` 1.30 ->
-  1.2196 — the conservative annual fold in operating year 1; `min_dscr_period` stays at
-  the 1.30 sculpt target. Owner decision 2026-10-27: correct the basis and report year 1
-  honestly rather than constrain the gearing solver. Mullikulam, the 5 US-cent case, the
+  -$91.57M, project IRR -0.1166% -> -0.1421%, total CFADS $166.08M -> $165.69M (both
+  down, through the larger facility's credit-support fee), total equity distributed
+  $44.49M -> $32.64M and equity MOIC 0.4109 -> 0.3124. Headline `min_dscr` 1.30 ->
+  1.2196 — the conservative annual fold in operating year 1, which needs both the larger
+  facility and the fee it costs (zero the fee at the same facility and it reads 1.30);
+  `min_dscr_period` stays at the 1.30 sculpt target. Owner decision 2026-10-27: correct
+  the basis and report year 1 honestly rather than constrain the gearing solver. Mullikulam, the 5 US-cent case, the
   two capex sensitivities and the eight NSO250 LTL variants re-baseline on coverage as
   well. This re-baselines the committed canonical KPI vector; it does not change the
   Board/lender circulation HOLD.

@@ -26,9 +26,11 @@
   (nine 0.0025 gearing steps), structural balloon $31.55M → $28.63M (fraction 0.458 →
   0.391), equity IRR -7.85% → -9.99%, project NPV -$91.81M → -$91.57M, prudential rate
   11.2858% → 11.1772%, prudential NPV -$96.44M → -$96.23M, project IRR -0.1166% →
-  -0.1421%, total CFADS $166.08M → $165.69M. The last two move **down**, and through the
-  senior fee rather than the tax: a larger facility costs a larger credit-support fee, and
-  the project rows bear it. The headline `total_cfads_usd` stays on the project basis;
+  -0.1421%, total CFADS $166.08M → $165.69M, total equity distributed $44.49M → $32.64M
+  and equity MOIC 0.4109 → 0.3124. Project IRR and total CFADS move **down**, and through
+  the senior fee rather than the tax: a larger facility costs a larger credit-support fee,
+  and the project rows bear it. The equity figures fall for the same reason compounded by
+  the larger debt service the extra leverage carries. The headline `total_cfads_usd` stays on the project basis;
   emitting the coverage total as a KPI of its own would change the KPI contract and is not
   done here.
 - Other committed scenarios move too, all through coverage rather than tax, because none
@@ -45,7 +47,13 @@
   conservative annual `dscr_by_year` fold in operating year 1, which also carries the
   orphaned bridge service. The gearing solver `_solve_gearing_for_dscr` targets the
   per-period floor and does not bind that fold, so the nine steps the extra capacity buys
-  all clear the floor while year 1 sits below it. The owner's decision was to correct the
+  all clear the floor while year 1 sits below it. The steps alone are not the whole
+  account: the dip needs the senior credit-support fee too. At the pre-change facility
+  with the fee the fold reads 1.30, and at the new larger facility with the guarantee and
+  PRI rates zeroed it reads 1.30 again — only the larger facility together with the larger
+  fee it costs drops it. That is the RS-A8 pre-fee/post-fee seam: the solve sculpts on
+  pre-fee coverage CFADS while the year-1 fold nets the fee out of the cash and divides by
+  that year's service plus the orphaned bridge period's. The owner's decision was to correct the
   CFADS basis and report the year-1 figure honestly rather than hold 1.30 by constraining
   the solver. The gap is pre-existing: `tests/finance/test_senior_fees.py` already recorded
   year 1 reading ~1.288 for the same reason.

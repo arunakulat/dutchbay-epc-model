@@ -46,9 +46,19 @@ LENDER_PROJECT_NPV: Final[float] = -91574282.40505882
 # orphaned bridge service. ``_solve_gearing_for_dscr`` targets ``min_dscr_period`` and
 # does not bind the ``dscr_by_year`` fold, so the nine 0.0025 gearing steps the larger
 # levered-CFADS capacity buys all clear the per-period floor while pushing year 1 below
-# it. The gap is a pre-existing gearing-policy hole that #1397 made visible rather than
-# created -- ``tests/finance/test_senior_fees.py`` already recorded year 1 reading ~1.288
-# for the same reason -- and it is tracked as its own work item (#1353,
+# it.
+#
+# The steps are only half the account, and a four-way control says so. At the pre-change
+# 59,590,051.50 facility WITH the credit-support fee the fold reads 1.30; at this
+# change's larger 63,366,885.75 facility with the guarantee and PRI rates zeroed it reads
+# 1.30 again, at BOTH trees. Only the larger facility TOGETHER WITH the fee it costs
+# drops the fold below the floor. The mechanism is the RS-A8 pre-fee/post-fee seam: the
+# solve sculpts on pre-fee coverage CFADS, while the year-1 fold nets that year's senior
+# fee out of the cash and divides by the year's service PLUS the orphaned bridge period's
+# (see ``finance/debt_v14.py``'s ``dscr_by_year``), so a fee that scales with the facility
+# eats the slack that fold had. The hole is pre-existing and #1397 made it visible rather
+# than created it -- ``tests/finance/test_senior_fees.py`` already recorded year 1 reading
+# ~1.288 for the same reason -- and it is tracked as its own work item (#1353,
 # issuecomment-6433557550). Owner decision 2026-10-27: correct the CFADS basis and report
 # the year-1 figure honestly rather than hold 1.30 by constraining the solver.
 LENDER_MIN_DSCR: Final[float] = 1.2196047509679255
