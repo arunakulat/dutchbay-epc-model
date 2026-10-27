@@ -1,6 +1,8 @@
 # Issue #1229 screening adapter implementation record
 
-Status: REPAIRED_AFTER_REJECTION; fresh independent reviews, full campaign and delivery pending.
+Status: DELIVERY_IN_PROGRESS as draft PR #1449; both fresh reviews ACCEPT_WITH_NITS on the
+rebased subject, nits repaired in a follow-up commit; five-run campaign, final-head rebinds,
+hosted Grid Study and merge pending (see "Delivery as PR #1449").
 Controlling authority and both verbatim owner instructions are in
 `ISSUE1229_IMPLEMENTATION_PROFILE.md`, copied from the coordinator's profile.
 
@@ -17,9 +19,9 @@ The detached ingress origin `61c5956d0ec23d03b1ac472abf735d6172ef4dbd` is histor
 Lease `ISSUE1229-WRITER-001` and its append-only base clarification bind initial exact
 paths, original hashes, preflight and expiry. After the app pause, lease002 freshly
 reconciled source/runtime ownership and safely fast-forwarded to H03 main
-`71d3c138bd6043d7434b4cfacbfc3e39d3d16cec`, preserving all12 candidate paths.
+`71d3c138bd6043d7434b4cfacbfc3e39d3d16cec`, preserving all 12 candidate paths.
 After H04 merged, another disjoint ff-only step reached protected main
-`446d595fe526541c549ee90aca61c4698ac0876b`, again preserving all12 paths.
+`446d595fe526541c549ee90aca61c4698ac0876b`, again preserving all 12 paths.
 Its append-only preflight clarification separates inherited historical fields
 from the actual fresh resume/preflight and post-FF head. Risk is `R3_CONSEQUENTIAL`.
 
@@ -78,18 +80,18 @@ alias and a late import match the unmodified vendor control.
 Exact writer commands and original results live in the external evidence package.
 The expanded native/lifecycle/app-emitter focused run passed **106 tests in
 211.05 seconds**, exit 0. Subsequent grid-free transport/optional/import tests,
-including an injected Python interruption, passed **171 tests in19.61
+including an injected Python interruption, passed **171 tests in 19.61
 seconds**, with three existing SWIG DeprecationWarnings. A fresh parent also executed an existing unrelated Numba specialization before
 and after the real screen, then compiled and executed a new float specialization.
 The dispatcher method, vendor helper and global JIT setting stayed unchanged.
 Scoped five-source mypy and Ruff pass. The first pre-commit pass normalized the copied profile's terminal
-newline and returned1; both verbatim owner instructions are unchanged. An earlier
+newline and returned 1; both verbatim owner instructions are unchanged. An earlier
 isort check reported the new native test's import order; its formatter corrected it.
 The final scoped pre-commit rerun passed all applicable hooks.
 
 Earlier failures remain in the receipt chain: two initial mypy errors were fixed;
 two test collections failed on a reserved parameter name and its incomplete
-rename. The initial focused run then passed69 tests before the optional-Numba and
+rename. The initial focused run then passed 69 tests before the optional-Numba and
 sparse/OOS extensions. These runs are dated focused evidence, never five-run or
 independent acceptance.
 
@@ -99,25 +101,25 @@ each, after parent imports and warmed font cache) were:
 | Public screen | Unmodified vendor | Process adapter |
 |---|---:|---:|
 | SC min/max | 0.1201 | 2.5217 |
-| Reactive15-corner sweep | 1.0623 | 3.5426 |
-| Harmonic5-order sweep | 0.3360 | 2.7617 |
+| Reactive 15-corner sweep | 1.0623 | 3.5426 |
+| Harmonic 5-order sweep | 0.3360 | 2.7617 |
 
 The actual unchanged report builder's pre-existing fixture rose from **1.2247 to
 6.0310 seconds** median. With an explicit harmonic spectrum it rose from **1.6306
-to8.7791 seconds**. Each source completed one warm-up and three measured calls for
-each fixture. The approximately2.4-second interpreter/import cost is paid per
+to 8.7791 seconds**. Each source completed one warm-up and three measured calls for
+each fixture. The approximately 2.4-second interpreter/import cost is paid per
 whole screen, never per solve. Results and the existing degradation categories
 remain equal. These are measured workloads, not a performance improvement or SLA.
 
 **Writer cost disposition, subject to both independent reviews:** accept the
-approximately5–7 added seconds for explicitly requested batch/async advisory
+approximately 5–7 added seconds for explicitly requested batch/async advisory
 reports to isolate compatibility state and native death while preserving vendor
 mathematics. The existing source and pre-change tests prohibit grid execution in
 the synchronous HTTP route; no numeric opt-in batch budget was found in the
-inspected policy/source/cited issue645. The120-second new lifecycle timeout is not
+inspected policy/source/cited issue #645. The 120-second new lifecycle timeout is not
 an existing performance budget. No default finance path cost is introduced.
-Overhead accumulates in multi-scenario batches:20 serial harmonic-enabled reports
-would add roughly143 seconds by extrapolation, not a measured20-report benchmark.
+Overhead accumulates in multi-scenario batches: 20 serial harmonic-enabled reports
+would add roughly 143 seconds by extrapolation, not a measured 20-report benchmark.
 A shared persistent worker would add lifetime/ownership hazards; broader report
 orchestration is outside this bounded adapter. Both reviewers must explicitly
 assess this tradeoff and the measured complete-suite walltimes.
@@ -125,7 +127,7 @@ assess this tradeoff and the measured complete-suite walltimes.
 Baseline caches were disposable containment for diagnostic writes, shared and
 warmed for the measurement pair; they are not an avoidance mechanism and do not
 define the native full-suite campaign. No JIT disabling was used. The original
-cold19.34-second SC call included font-cache construction and is excluded from
+cold 19.34-second SC call included font-cache construction and is excluded from
 latency comparisons. `baseline_comparison_receipt.json` status PASS denotes
 successful controls/measurement collection and numeric identity, not performance
 acceptance. See `report_latency_receipt.json` and `latency_disposition.json`.
@@ -134,10 +136,10 @@ The first independent domain and assurance reviews both **REJECTED** commit
 `dd9d7521ad58256027d35e11be9bb50900762032`. GDR-001 found that numeric mapping
 spectra supported by the original harmonic parser could abort both harmonic and
 mandatory reactive/report calls. A1229-001 reproduced three real SIGINT cases in
-which Python3.12 killed the worker but left it unreaped. The earlier injected
+which Python 3.12 killed the worker but left it unreaped. The earlier injected
 KeyboardInterrupt test bypassed the standard library's actual signal bookkeeping;
 its passing result never proved real-signal cleanup. Original complete dispositions
-and44 selected execution events remain byte-preserved under programme
+and 44 selected execution events remain byte-preserved under programme
 `issue1229_review_rejections_001/`; their manifest and exact rejected subject remain
 unchanged. No acceptance was transferred from this rejected subject.
 
@@ -145,10 +147,10 @@ Fresh lease003 authorizes these bounded repairs. Numeric spectrum mappings at bo
 supported locations become ordered pairs, preserving key types, original parser
 semantics, top-level/nested precedence and caller data. Process cleanup now uses
 explicit Popen kill-and-wait after communication interruption. Twelve focused repair
-tests passed in79.15s: actual mapping/list/nested/empty precedence comparisons,
-real report-core/harmonic calls and three actual caller SIGINT cases. The expanded focused regression passed **236 tests in271.29s**, exit0. The same
-eight real-signal and supported-input regression tests failed8/8 on the rejected
-Git archive and passed8/8 on the repaired source. Exact commands and concise
+tests passed in 79.15s: actual mapping/list/nested/empty precedence comparisons,
+real report-core/harmonic calls and three actual caller SIGINT cases. The expanded focused regression passed **236 tests in 271.29s**, exit 0. The same
+eight real-signal and supported-input regression tests failed 8/8 on the rejected
+Git archive and passed 8/8 on the repaired source. Exact commands and concise
 original-fails/repaired-passes evidence are recorded externally.
 Both reviewers must review the freshly frozen substantive subject again.
 
@@ -160,9 +162,55 @@ verify stable empty owned-process scans, and fail closed on unresolved ownership
 Their actual positive/hostile controls and exact hashes require independent review.
 These external harness findings are separate from the production-source findings.
 
-Required-not-run at this checkpoint: five consecutive full suites, fresh independent
-grid-domain and assurance acceptance, exact-head hosted CI/Grid Study, PR merge and
-issue closure. Every remaining gate must bind the eventual exact frozen object.
+Required-not-run at this (September) checkpoint: five consecutive full suites, fresh
+independent grid-domain and assurance acceptance, exact-head hosted CI/Grid Study, PR
+merge and issue closure. Every remaining gate must bind the eventual exact frozen object.
+The section below records what happened to each of them after delivery resumed.
+
+## Delivery as PR #1449 (resumed 2026-10-27)
+
+The September writer left this work as the unmerged local branch
+`codex/1229-pandapower-screening`. On 2026-10-27, at the owner's request, a Claude Code
+session (the new sole writer) cherry-picked its two commits unchanged and without
+conflicts onto protected main `50d72d44ac54d11a7d0a2b44fa2531ce1b673d56` as
+`claude/1229-pandapower-screening`. It opened draft PR #1449 and recorded the work item on
+#1229 before pushing. The identity, worktree and base facts in "Identity and bounded
+ownership" above describe the September writer and are historical. The governing CSV
+at this base holds 77 rules, not the 74 recorded above.
+
+**Reviewer model: waived by the owner, not silently substituted.** The profile's
+acceptance step 5 requires reviewers recruited with explicit Astra/xhigh. The fresh
+reviews ran on Claude Opus 5.5. The owner waived the Astra/xhigh clause for this PR on
+2026-10-27 ("opus 5.5 is fine"), and that waiver covers the final-head rebinds too.
+
+**Fresh reviews of the rebased subject** (head `25cb4e81e2ecef9dc01d0d282f099a5ff1891513`,
+tree `070762c8db0b386604995cfeb134b2a87b3cf06b`, base `50d72d44`):
+
+- Grid domain, ACCEPT_WITH_NITS. The reviewer checked compile avoidance by running it.
+  A hook on llvmlite's `link_in` (the `link_modules` crash site) recorded 0 links and no
+  compiled dispatchers on the strength, reactive and harmonic paths through the worker,
+  against 34, 1 and 1 links on stock pandapower. The 190 recorded floats across 20
+  result groups are bit-identical to base. Nits: the `[grid]` extra's declared range
+  allows pandapower versions the policy refuses (N1); numpy integer scalars are now
+  rejected (N2); errors raised inside the worker surface as `ScreeningProcessError`
+  (N3); each screen costs about 2.4 s more, accepted for the advisory callers (N4); and
+  spacing typos in this record (N5).
+- Assurance, ACCEPT_WITH_NITS. Lifecycle cleanup, the JSON channel and the test oracles
+  held under hostile probes. Findings: a worker whose caller is killed by SIGTERM or
+  SIGKILL is orphaned with no time limit, because the timeout lived only in the parent
+  (F1). Strict serialisation rejects unusual unused grid fields (F3). The crash-text
+  pattern is broad (F4). Some negative tests are missing (F5). There is per-screen CI
+  cost and no `.test_durations` entries for the new tests (F6). This record held stale
+  claims (F7).
+
+**Repairs in the follow-up commit:** N1, by pinning `pandapower==3.5.4` in
+`constraints.txt`, which the documented `[grid]` install applies, so a fresh install
+cannot resolve a version the policy refuses. F1, with an in-worker
+`faulthandler.dump_traceback_later(timeout + 5 s, exit=True)` deadline that a real
+subprocess test shows ending an orphaned worker without its parent. A mutant without
+the deadline hangs. N5 and F7, in this record. N2, N3, F3, F4, F5 and F6 are recorded
+as accepted limits or follow-ups, not fixed here. The repaired subject is a new object,
+so both reviewers must rebind to its exact SHA.
 
 ## Limits and authority
 
