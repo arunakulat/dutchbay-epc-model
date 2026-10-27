@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import faulthandler
 import importlib
 import json
 import logging
@@ -20,6 +21,10 @@ from analytics.grid.pandapower_screening import (
 )
 
 _owner_pid: int | None = None
+# The parent kills the worker at the policy timeout. This later, in-worker
+# deadline covers the case the parent cannot: a caller killed by SIGTERM or
+# SIGKILL leaves the worker orphaned, and macOS offers no parent-death signal.
+_ORPHAN_GRACE_SECONDS = 5.0
 
 
 def _install_python_helpers() -> None:
@@ -102,6 +107,9 @@ def main() -> None:
 
     Errors are reported on stderr with a nonzero exit. A missing/broken dependency,
     an unsupported version, and a solver error cannot become a fallback result.
+    The worker also ends itself, with a traceback and a nonzero exit, once the
+    policy timeout plus a grace period has passed, so an orphaned worker cannot
+    run unbounded.
     """
     global _owner_pid
     try:
@@ -114,6 +122,12 @@ def main() -> None:
             parameters, dict
         ):
             raise ValueError("Invalid screening operation or arguments.")
+        timeout, _versions = _policy()
+        # Write the deadline traceback to the process's own stderr descriptor; the
+        # parent captures it, and a replaced sys.stderr may have no file number.
+        faulthandler.dump_traceback_later(
+            timeout + _ORPHAN_GRACE_SECONDS, exit=True, file=2
+        )
         # Preserve warnings/errors, keeping stdout exclusively for the JSON result.
         logging.getLogger().setLevel(logging.WARNING)
         with contextlib.redirect_stdout(sys.stderr):
@@ -128,4 +142,5 @@ def main() -> None:
         sys.stderr.write(f"{type(exc).__name__}: {exc}\n")
         raise SystemExit(1) from exc
     finally:
+        faulthandler.cancel_dump_traceback_later()
         _owner_pid = None

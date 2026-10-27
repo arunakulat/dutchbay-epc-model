@@ -451,6 +451,63 @@ def test_worker_main_owns_only_the_batch(
     assert worker._owner_pid is None
 
 
+def test_worker_main_arms_and_cancels_its_own_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, object]] = []
+    monkeypatch.setattr(
+        sys, "stdin", io.StringIO('{"kind":"strength","parameters":{}}')
+    )
+    monkeypatch.setattr(worker, "_policy", lambda: (7.0, ["3.5.4"]))
+    monkeypatch.setattr(worker, "_install_python_helpers", lambda: None)
+    monkeypatch.setattr(worker, "_execute", lambda kind, parameters: _strength())
+    monkeypatch.setattr(
+        worker.faulthandler,
+        "dump_traceback_later",
+        lambda seconds, exit, file: calls.append(("arm", (seconds, exit, file))),
+    )
+    monkeypatch.setattr(
+        worker.faulthandler,
+        "cancel_dump_traceback_later",
+        lambda: calls.append(("cancel", None)),
+    )
+    worker.main()
+    assert calls == [
+        ("arm", (7.0 + worker._ORPHAN_GRACE_SECONDS, True, 2)),
+        ("cancel", None),
+    ]
+
+
+def test_orphaned_worker_ends_itself_without_its_parent() -> None:
+    # Run the real worker main() with no parent-side timeout at all: only the
+    # worker's own deadline can stop a solve that never returns.
+    source = textwrap.dedent("""
+        import io, sys, time
+        from analytics.grid import _pandapower_worker as worker
+        worker._policy = lambda: (0.2, ["3.5.4"])
+        worker._ORPHAN_GRACE_SECONDS = 0.3
+        worker._install_python_helpers = lambda: None
+        worker._execute = lambda kind, parameters: time.sleep(60)
+        sys.stdin = io.StringIO('{"kind":"strength","parameters":{}}')
+        worker.main()
+        """)
+    env = dict(os.environ)
+    env["PYTHONPATH"] = os.pathsep.join(
+        filter(None, [str(adapter._ROOT), env.get("PYTHONPATH", "")])
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", source],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        cwd=adapter._ROOT,
+        env=env,
+    )
+    assert completed.returncode != 0
+    assert completed.stdout == ""
+    assert "Timeout" in completed.stderr
+
+
 @pytest.mark.parametrize(
     "wire_request",
     [
