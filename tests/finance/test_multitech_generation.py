@@ -289,7 +289,15 @@ def test_canonical_lendercase_economics_unchanged() -> None:
 
     lender = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
     kpis = run_v14_pipeline(config=lender, validation_mode="strict")["kpis"]
-    # Re-baselined by #1397 (2026-10-27, audit P2-F4-01): the facility is sized, and
+    # Re-baselined by #1396 (2026-10-27, owner decision 1A): the USD 28.63m scheduled-
+    # maturity balloon is refinanced on the YAML terms constraints.refinancing (3 years,
+    # +2% over the average debt rate; an assumption, no term sheet) instead of
+    # cash-swept, which retired USD 18.83m and left USD 9.80m unpaid. The refinanced
+    # tranche covers 0.28-0.34x against the 1.30 floor, so equity funds the shortfall.
+    # Equity IRR -9.99% -> -30.54% (equity NPV -93.09M -> -95.64M); project IRR, NPV,
+    # min_dscr and CFADS are unchanged because balloon resolution sits below CFADS and
+    # outside scheduled service.
+    # Prior: re-baselined by #1397 (2026-10-27, audit P2-F4-01): the facility is sized, and
     # DSCR/LLCR/PLCR reported, on CFADS bearing the levered tax the SPV actually pays.
     # The sizing pass changed in the interest alone -- the senior fee still enters only
     # the reporting rebuild -- so a scenario with interest_deductibility off is
