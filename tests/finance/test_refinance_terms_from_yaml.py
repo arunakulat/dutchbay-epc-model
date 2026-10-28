@@ -128,8 +128,9 @@ def test_preflight_passes_the_lender_case_refinanced_on_its_yaml_terms() -> None
 
 def test_preflight_ignores_missing_terms_when_not_refinancing() -> None:
     raw = _lender_raw()
+    # The committed case refinances since #1396 part B; pin a non-refinance treatment.
+    raw["Financing_Terms"]["balloon_treatment"] = "cash_sweep"
     del raw["constraints"]["refinancing"]
-    assert raw["Financing_Terms"]["balloon_treatment"] == "cash_sweep"
     validate_config_for_v14(raw, "lendercase", ["cashflow", "debt"])
 
 

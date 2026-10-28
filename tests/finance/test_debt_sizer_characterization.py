@@ -115,6 +115,10 @@ def test_equity_irr_stays_negative_and_plateaus_at_the_dscr_cap() -> None:
     0.35 was an artifact of the smaller, unlevered-tax facility. So this now asserts
     the negative economics, that gearing moves equity IRR in the direction leverage
     should move it, and the supra-cap clamp.
+
+    #1396 part B moved the plateau, not its shape: the committed case refinances its
+    balloon, so the clamped value is now the canonical -30.54% and the 0.35 point
+    (-7.14%) sits further above it.
     """
     import math
 
@@ -130,7 +134,7 @@ def test_equity_irr_stays_negative_and_plateaus_at_the_dscr_cap() -> None:
     assert (
         max(plateau) - min(plateau) < 1e-6
     ), f"supra-cap equity_irr not flat (clamped): {plateau}"
-    assert plateau[0] == pytest.approx(-0.0999, abs=0.002)
+    assert plateau[0] == pytest.approx(-0.3054, abs=0.002)
     assert all(irr < 0.0 for irr in irrs), f"equity unexpectedly profitable: {irrs}"
     # The sub-cap 0.35 point is ABOVE the clamped plateau: the project IRR is negative,
     # so the extra leverage the cap allows costs equity rather than paying it.

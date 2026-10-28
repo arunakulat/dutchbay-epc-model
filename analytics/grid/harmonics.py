@@ -55,13 +55,14 @@ uses the closed-form fallback.
 from __future__ import annotations
 
 import math
-from typing import Any, Mapping, Sequence, TypeGuard
+from typing import Any, Mapping, Sequence, TypeGuard, cast
 
 from analytics.contracts_v14 import HarmonicComplianceResult
 from analytics.grid.frequency_response import (
     FrequencyResponseHeadroom,
     size_frequency_response_headroom,
 )
+from analytics.grid.pandapower_screening import in_screening_worker, run_screening
 
 _HARMONIC_SCREEN_PROVENANCE = (
     "In-house Python design-stage harmonics/flicker screen (SCR-coupled Zbus(h) "
@@ -113,7 +114,7 @@ def _require_pandapower() -> Any:
     except ImportError as exc:  # pragma: no cover - optional dependency
         raise ImportError(
             "Grid harmonics screening requires the [grid] extra: "
-            "pip install 'pandapower>=3.3,<3.4'  (or  PIP_CONSTRAINT=constraints.txt "
+            "pip install 'pandapower==3.5.4'  (or  PIP_CONSTRAINT=constraints.txt "
             "pip install -e '.[grid]'). It is an OPTIONAL dependency — the base finance "
             "install never needs it (a closed-form fallback is used instead)."
         ) from exc
@@ -390,15 +391,8 @@ def _pandapower_zbus_pu_by_order(  # pragma: no cover - requires [grid] extra
         # 1 MW-equivalent probe injection at the POC as a load; the driving-point
         # impedance is read as the POC voltage deviation per unit injected current.
         pp.create_load(net, b_poc, p_mw=0.0, q_mvar=1.0, name="probe")
-        # numba=False (#segfault): pandapower defaults to ``numba=True``, which JIT-compiles
-        # the Newton-Raphson matrix generation through numba -> llvmlite. Inside a full
-        # pytest run that LLVM JIT intermittently takes the whole process down with a native
-        # fatal (observed in tests/app/test_grid_screening_emit.py once ~212 extension modules
-        # are co-resident; it passes standalone). The JIT is a pure ACCELERATION of matrix
-        # generation, not a different algorithm: numba=True vs numba=False was verified
-        # BIT-IDENTICAL on vm_pu, va_degree and p_from_mw (max|diff| = 0.0). These are
-        # screening-sized networks where JIT compilation costs more than it saves, so the
-        # pure-numpy path pandapower ships (pf/no_numba.py) is both safer and faster here.
+        # The isolated worker adapts the unconditional auxiliary dispatchers too;
+        # retain numba=False for the remaining power-flow acceleration switches.
         pp.runpp(net, calculate_voltage_angles=True, init="flat", numba=False)
         v_poc = float(net.res_bus.at[b_poc, "vm_pu"])
         # Driving-point proxy: the pu voltage change under the fixed probe is proportional
@@ -496,6 +490,21 @@ def screen_harmonics(
             except ImportError:
                 pp = None
         if pp is not None:  # pragma: no cover - requires [grid] extra
+            if not in_screening_worker():
+                return cast(
+                    HarmonicComplianceResult,
+                    run_screening(
+                        "harmonics",
+                        {
+                            "grid": grid,
+                            "scr": scr,
+                            "plant_rating_mva": plant_rating_mva,
+                            "poc_voltage_kv": poc_voltage_kv,
+                            "capacity_factor": capacity_factor,
+                            "provenance": provenance,
+                        },
+                    ),
+                )
             collector = grid.get("collector_equivalent")
             collector_c_nf = (
                 float(collector.get("c_nf", 0.0))
