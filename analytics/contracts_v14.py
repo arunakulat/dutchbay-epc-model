@@ -1383,7 +1383,9 @@ class MonteCarloScenario(ContractMixin):
 class MonteCarloResult(ContractMixin):
     summary: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
-    trials: dict[str, list[float]] = field(default_factory=dict)
+    # Every position retains its original trial identity. An undefined/missing
+    # metric is None, not zero and not grounds to remove the trial from other KPIs.
+    trials: dict[str, list[float | None]] = field(default_factory=dict)
     percentiles: dict[int, dict[str, float]] = field(default_factory=dict)
     scenario_name: str | None = None
     iterations: int = 0
