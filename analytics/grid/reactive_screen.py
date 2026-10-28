@@ -26,9 +26,10 @@ cleanly; the base finance engine never needs it.
 from __future__ import annotations
 
 import math
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Sequence, cast
 
 from analytics.contracts_v14 import PowerFlowResult, ReactiveCapabilityResult
+from analytics.grid.pandapower_screening import in_screening_worker, run_screening
 
 #: Provenance stamped on the reactive/power-flow screen results. Mirrors the string the
 #: contract dataclasses default to; kept here so the screen module owns its own provenance.
@@ -56,7 +57,7 @@ def _require_pandapower() -> Any:
     except ImportError as exc:  # pragma: no cover - optional dependency
         raise ImportError(
             "Grid reactive/voltage screening requires the [grid] extra: "
-            "pip install 'pandapower>=3.3,<3.4'  (or  PIP_CONSTRAINT=constraints.txt "
+            "pip install 'pandapower==3.5.4'  (or  PIP_CONSTRAINT=constraints.txt "
             "pip install -e '.[grid]'). It is an OPTIONAL dependency — the base finance "
             "install never needs it."
         ) from exc
@@ -297,15 +298,8 @@ def _poc_pf_and_voltage(  # pragma: no cover - requires [grid] extra
     injection through the transformer), so the pf is the pf *seen by the grid* at the POC.
     """
     try:
-        # numba=False (#segfault): pandapower defaults to ``numba=True``, which JIT-compiles
-        # the Newton-Raphson matrix generation through numba -> llvmlite. Inside a full
-        # pytest run that LLVM JIT intermittently takes the whole process down with a native
-        # fatal (observed in tests/app/test_grid_screening_emit.py once ~212 extension modules
-        # are co-resident; it passes standalone). The JIT is a pure ACCELERATION of matrix
-        # generation, not a different algorithm: numba=True vs numba=False was verified
-        # BIT-IDENTICAL on vm_pu, va_degree and p_from_mw (max|diff| = 0.0). These are
-        # screening-sized networks where JIT compilation costs more than it saves, so the
-        # pure-numpy path pandapower ships (pf/no_numba.py) is both safer and faster here.
+        # Keep the vendor's NumPy solver path. The isolated screening worker also
+        # adapts the unconditional auxiliary dispatchers that this flag does not cover.
         pp.runpp(net, calculate_voltage_angles=True, init="flat", numba=False)
     except Exception:  # pragma: no cover - non-convergence path
         return False, float("nan"), 0.0, 0.0
@@ -383,6 +377,15 @@ def screen_reactive_capability(
             pp = _require_pandapower()
         except ImportError:
             pp = None
+
+    if pp is not None and not in_screening_worker():
+        return cast(
+            tuple[ReactiveCapabilityResult, PowerFlowResult | None],
+            run_screening(
+                "reactive",
+                {"grid": grid, "p_steps": p_steps, "provenance": provenance},
+            ),
+        )
 
     poc_transformer = grid.get("poc_transformer")
     collector = grid.get("collector_equivalent")
