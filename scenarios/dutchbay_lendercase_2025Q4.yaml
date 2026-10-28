@@ -462,12 +462,16 @@ Financing_Terms:
   dscr_p99_downside_factor: 0.80   # P99 CFADS = 80% of P50 (~P90 AEP) for the dual-DSCR (P50/P99) capacity detail
   # The dual-DSCR sculpt over a fixed tenor leaves an unamortised BALLOON at
   # maturity. balloon_treatment governs how the equity waterfall resolves it
-  # (cash_sweep | refinance | bullet | amortize | legacy_ignore). cash_sweep is
-  # the prudent-lender default: post-maturity CFADS is trapped to retire the
-  # balloon before any equity distribution. NB: this structure carries a ~58%
-  # balloon (was ~36% before the 5.9% FX-drift re-baseline lowered CFADS; still
-  # breaches constraints.max_balloon_pct 10%) — see optimisation work.
-  balloon_treatment: cash_sweep
+  # (cash_sweep | refinance | bullet | amortize | legacy_ignore). This structure
+  # carries a ~39% balloon (USD 28.63m since #1397) that breaches
+  # constraints.max_balloon_pct 10%. cash_sweep retires only USD 18.83m of it and
+  # leaves USD 9.80m unpaid at project end, so the owner chose refinance (#1396,
+  # P3-COV-03, 2026-10-26): the balloon is
+  # refinanced at maturity on constraints.refinancing below (3 years, +2% over the
+  # average debt rate). Those terms are an ASSUMPTION with no term-sheet basis; the
+  # engine has no default for either, and publishes them under debt_result.refinance
+  # with a coverage test of the refinanced tranche.
+  balloon_treatment: refinance
   tenor_years: 15
   interest_only_years: 2
   amortization_style: auto
@@ -535,7 +539,13 @@ constraints:
   warn_balloon_pct: 0.05
   refinancing:
     enabled: true
-    max_refinance_pct: 0.1
+    # Raised 0.10 -> 0.50 (#1396, owner "raise and flag", 2026-10-26) so the cap admits
+    # the ~39% balloon this case now refinances (0.50 leaves headroom without
+    # admitting a majority-of-principal refinance). An ASSUMPTION, no term-sheet
+    # basis. NOT ENFORCED: no engine code reads this key yet (follow-up on #1353).
+    max_refinance_pct: 0.5
+    # REQUIRED when balloon_treatment is refinance (#1396). Assumed terms, no
+    # term-sheet basis: premium over the average debt rate (decimal) and tenor.
     refinance_rate_premium: 0.02
     refinance_tenor_years: 3
     requires_documentation: true
