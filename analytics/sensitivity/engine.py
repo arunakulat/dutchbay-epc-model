@@ -107,6 +107,12 @@ def _read_sweep_metric(kpis: Mapping[str, Any], metric_key: str, *, case: str) -
     point as ``nan`` instead, the treatment ``optimization_v14._read_kpi`` gives the
     optimiser (#782). It never substitutes 0.0, which would read as break-even.
 
+    It sees only the absent-key path (a ``None`` that ``normalize_kpi_dict`` dropped),
+    plus a non-finite value. It cannot see a 0.0 the KPI surface substituted upstream:
+    ``analytics/core/metrics.py:494`` for an unsolvable ``project_irr`` (``:492`` for
+    ``project_npv``) and ``:466`` for an ``equity_irr`` with no equity-distribution
+    result. Such a point arrives as 0.0 and is recorded as defined.
+
     A missing key is also what a mistyped ``metric_key`` looks like, hence the warning
     naming the metric and the case. ``_extract_scalar_metric`` keeps raising for the
     interaction grid, whose base and marginal cells must fail loud.
@@ -142,7 +148,7 @@ def _flag_undefined_metric(
     n_evaluations: int,
     strict: bool,
 ) -> SensitivitySuite:
-    """Disclose where the metric was undefined, and refuse when it never was defined.
+    """Disclose where the metric arrived undefined; refuse when it never was defined.
 
     ``undefined_cases`` holds, per tornado in ``suite.tornado_results`` order, the case
     labels whose evaluation returned no value. Each such tornado carries them as
@@ -150,6 +156,10 @@ def _flag_undefined_metric(
     ``undefined_points`` (evaluations, the base included) and ``undefined_drivers``
     (bars whose swing is undefined because a low or high case was). An undefined base
     leaves ``base_metric`` as ``nan`` rather than a flat or zero bar.
+
+    The counts cover only the absent-key path :func:`_read_sweep_metric` sees. A 0.0 the
+    KPI surface substituted (``analytics/core/metrics.py:494`` and ``:466``) counts as
+    defined, so ``undefined_points == 0`` does not show that every point solved.
 
     When no evaluation at all defined the metric there is no tornado to draw, and the
     likeliest cause is a mistyped key, so strict mode raises ``ValueError``.
