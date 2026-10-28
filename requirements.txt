@@ -85,7 +85,7 @@ cssselect2==0.9.0
 cycler==0.12.1
 cyclonedx-python-lib==11.12.0
 darkdetect==0.8.0
-debugpy==1.8.21
+debugpy==1.8.22
 deepdiff==9.1.0
 defusedxml==0.7.1
 dill==0.4.1
