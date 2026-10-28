@@ -45,7 +45,8 @@ memorize, add to corpus and discuss" for the next sprint. This session:
    the A1 revert (#1232) is the precedent.
    *Update, 28 October 2026:* it merged on 29 September 2026 without the pair. The post-merge
    domain review returned REJECT, and its blocking findings are corrected through #1477 to #1483
-   (analysis, section 13). The assurance review is still owed under #1371.
+   (analysis, section 13). The post-merge assurance review also returned REJECT; its one blocking
+   finding is the trap below. Both records and their reconciliation are under `docs/PLATFORM_PLAN_*`.
 3. **Evidence to request before the finance dolphins** (analysis, Lane C): F5-02 lender and legal
    evidence; the Inland Revenue Act No. 24 of 2017 and amendments, for interest limitation; the
    term-sheet reserve requirements; measured wind data. (#1290 has since merged a partial
