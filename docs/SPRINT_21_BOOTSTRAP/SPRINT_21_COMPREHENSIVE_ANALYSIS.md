@@ -6,7 +6,7 @@
 | Subject SHA-256 | `a1be78037cc4bc662541b8e9e6f1b167bb2451c2fe88f68d411fb6b6245bf444` |
 | Repository base | `main` at `b87ee32`, 26 September 2026 |
 | Prepared by | Claude Code cloud session, acting as sole coordinator |
-| Review status | `RECRUIT-01` class `R2_LOAD_BEARING`. Merged on 29 September 2026 (#1296) without its review pair. The post-merge task-domain review (R-DOM-1) returned REJECT with seven blocking findings; the assurance review (R-ASR-1) has not reported. Both are tracked on #1371 |
+| Review status | `RECRUIT-01` class `R2_LOAD_BEARING`. Merged on 29 September 2026 (#1296) without its review pair. The post-merge task-domain review (R-DOM-1) returned REJECT with seven blocking findings; the post-merge assurance review (R-ASR-1) also returned REJECT, with one blocking finding (ASR-1, the same false handover trap as DOM-7). Both records and their reconciliation are in `docs/PLATFORM_PLAN_*_REVIEW*.md`, tracked on #1371 |
 | Corrections | 28 October 2026, for the domain review's findings DOM-1 to DOM-9. What changed, and why, is in section 13. Assessments still describe `main` at `b87ee32` unless a sentence says otherwise |
 | Authority | None. This record adopts, schedules and authorizes nothing, and lifts no `HOLD` |
 
@@ -522,9 +522,9 @@ oracle and review chain, and they lift no `HOLD`.
 
 - One coordinator produced this evaluation. Under `RECRUIT-01` it needs a domain reviewer
   (project finance and renewables) and a separate assurance reviewer before it can steer work.
-  The domain review ran after merge and returned REJECT; its blocking findings are corrected
-  here (section 13). The assurance review has not reported (#1371), and it may raise findings
-  that need further correction.
+  Both reviews ran after merge and returned REJECT; their blocking findings are corrected here
+  (section 13). The records and their reconciliation are in `docs/PLATFORM_PLAN_DOMAIN_REVIEW_001.md`,
+  `docs/PLATFORM_PLAN_ASSURANCE_REVIEW_001.md` and `docs/PLATFORM_PLAN_REVIEW_RECONCILIATION.md`.
 - Two external points rest on secondary sources: the Sri Lankan section 18 mechanism (primary text
   not ingested) and the United Kingdom allowance details (`gov.uk` was blocked by the session's
   network policy).
@@ -557,10 +557,15 @@ numbers.
 | DOM-7 (medium): statements false on `main` from the merge | #1483 | Items 11 and 12, section 5.1 and Lanes A and C; the trap in `docs/SESSION_HANDOVER_2026-09-26_PLATFORM_PLAN.md` withdrawn; research notes section 2.4 |
 | DOM-8 (low, accepted residual): C4 implied the 30% ratio is unique to ATAD | #1371 | C4 reworded |
 | DOM-9 (low, accepted residual): imprecise citations | #1371 | Item 7 (`fx_builder.py:395-397`), item 26 (`_build_cfads_timeline`, `:694`) and section 5.7's public routes |
+| ASR-1 (assurance review, blocking as delivered): the handover's period-grid trap is false on `main` | #1483 | As DOM-7; the "draft #1231" references in this analysis and the executive summary are dated |
 
 The assessment counts in section 3 changed with DOM-1 and DOM-4: item 25 moved from "premise does
 not apply" to "exists, opt-in", and item 30 from "partial" to "exists, with gaps".
 
-Two limits apply to this correction. The register states quoted in section 7.1 are the overlay's,
-and the overlay has not re-examined most rows against current `main`. The R-ASR-1 assurance
-review has not reported, and this correction was written without it.
+The post-merge assurance review (R-ASR-1) also returned REJECT. Its one blocking finding, ASR-1,
+is the trap DOM-7 names, and is corrected with it. Its non-blocking findings are tracked in #1485
+(ASR-2) and #1486 (ASR-5) or accepted as residuals (ASR-3, ASR-4); the findings ledger is in
+`docs/PLATFORM_PLAN_REVIEW_RECONCILIATION.md`.
+
+One limit applies to this correction. The register states quoted in section 7.1 are the
+overlay's, and the overlay has not re-examined most rows against current `main`.

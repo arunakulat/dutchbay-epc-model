@@ -14,4 +14,6 @@
   agree with the recorded decisions, and withdraws the 26 September handover's trap about
   `finance/period_grid_v14.py`, which has been on `main` since #1296 itself merged. The roadmap's
   P0.2 citation of the audit map is qualified. Documentation only: no runtime, financial formula,
-  scenario, model input or KPI change. The assurance review of #1296 has not reported.
+  scenario, model input or KPI change. The post-merge assurance review of #1296 also returned
+  REJECT; its one blocking finding is the same handover trap. Both review records and a
+  reconciliation record are now under `docs/PLATFORM_PLAN_*`.
