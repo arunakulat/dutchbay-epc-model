@@ -165,19 +165,23 @@ def test_the_lock_is_not_empty() -> None:
 
 
 def test_hydra_security_floor_is_consistent() -> None:
-    """Reject Hydra releases affected by CVE-2026-106439/106441/106442.
+    """Reject Hydra releases affected by CVE-2026-106439/106441/106442 and GHSA-wf6j-7hvr-gr93.
 
     The reproducibility lock is the audited CI input, while the project dependency
     is what an ordinary package install resolves. Both must exclude the affected
     stable releases, and the abstract dependency must also reject the affected
     1.4 prereleases even when prerelease matching is explicitly enabled.
+    GHSA-wf6j-7hvr-gr93 added 1.3.7, 1.4.0.dev10, 1.4.0rc1 and 1.4.0rc2.
     """
-    fixed_stable = Version("1.3.7")
-    fixed_development = Version("1.4.0.dev10")
+    fixed_stable = Version("1.3.8")
+    fixed_development = Version("1.4.0rc3")
     vulnerable = (
         Version("1.3.5"),
         Version("1.3.6"),
-        *(Version(f"1.4.0.dev{number}") for number in range(10)),
+        Version("1.3.7"),
+        *(Version(f"1.4.0.dev{number}") for number in range(11)),
+        Version("1.4.0rc1"),
+        Version("1.4.0rc2"),
     )
 
     lock = _read_pins("requirements.txt")
