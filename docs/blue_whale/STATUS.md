@@ -1,6 +1,6 @@
 # Blue Whale hybrid: project status
 
-Last updated: 2026-10-27. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
+Last updated: 2026-10-28. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
 
 ## Configuration under study
 
@@ -10,7 +10,11 @@ Last updated: 2026-10-27. Stage: **concept screening (skeleton model, owner inpu
 | Solar PV | 5 MWp | Fixed tilt assumed |
 | BESS | 10 MW x 4 h (40 MWh) base; 5 h (50 MWh) sensitivity | Revenue model not yet chosen |
 
-Model file: `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.1, placeholders only).
+Funding: **fully LKR funded** (owner, 2026-10-28). Revenue, costs and debt are all LKR, so the
+model runs with FX held flat and the USD columns are a constant-rate translation of LKR.
+
+Model file: `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.2, placeholders apart from
+the configuration and funding currency).
 Inputs register: [INPUTS_REQUIRED.md](INPUTS_REQUIRED.md).
 
 ## Site
@@ -41,6 +45,27 @@ record under `DATA-01`.
    Ltd to the project company has to be documented.
 6. **Revenue.** No tariff, offtake route or BESS revenue model is fixed yet. Results from
    the skeleton reflect DutchBay assumptions, not Blue Whale ones.
+
+## Latest run (v0.2, placeholders, 2026-10-28)
+
+Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR:
+
+| Case | Project IRR | Equity IRR |
+|---|---|---|
+| Base: 20.3 LKR/kWh, LKR debt 13.39%, BESS 4 h | 4.6% | 1.7% |
+| Tariff 30 LKR/kWh | 8.0% | 5.5% |
+| Tariff 45 LKR/kWh | 12.0% | 10.4% |
+| Tariff 45 LKR/kWh, LKR debt 10% | 12.0% | 13.2% |
+| No O&M escalation | 5.8% | 3.2% |
+| BESS contract 20 years instead of 15 | 5.6% | 3.1% |
+| BESS 5 h (50 MWh) | 4.1% | 1.3% |
+
+Drivers: capex of about LKR 8.1 bn for 15 MW plus 40 MWh; the BESS capacity revenue (a
+placeholder worth 44% of year-1 revenue) stopping after its 15-year contract; and LKR debt
+at 13.39%, which costs more than the project earns, so leverage lowers equity returns.
+The annual view reports a year-1 DSCR of 0.87 in every case, a first-year timing effect not
+yet traced; the debt-period DSCR is 1.30. None of these figures is a result until the
+priority-1 inputs replace the placeholders.
 
 ## Next steps
 

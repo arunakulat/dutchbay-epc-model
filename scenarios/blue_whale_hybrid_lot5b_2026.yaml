@@ -89,7 +89,9 @@ fx:
   rates:
     lkr_per_usd: 333.79
   start_lkr_per_usd: 333.79     # 2026-Q2 pinned rate shared with the DutchBay cases (input F25 to refresh)
-  annual_depr: 0.0589           # data-derived LKR depreciation (BIS 2005-2026 long-run, analytics.fx.fx_calibration)
+  annual_depr: 0.0              # held flat: the project is fully LKR funded (owner, 2026-10-28), so revenue, costs and
+                                # debt are all LKR and the USD columns are a constant-rate translation of LKR. The
+                                # BIS long-run 5.89%/yr drift applies only to USD exposure, which this project has none of.
   uncertainty_pct: 0.05
 
 capex:
@@ -102,7 +104,7 @@ opex:
   usd_per_year: 650000          # PLACEHOLDER (inputs B10, B16, B20, B28): wind 0.35M + solar 0.05M + BESS 0.10M
                                 # + insurance, land lease and SPV overhead 0.15M
   opex_per_kw_yr_usd: 43.3      # 650k / 15 MW; high because a single turbine carries full O&M overheads
-  escalation_pct: 0.0           # input B29
+  escalation_pct: 5.0           # PLACEHOLDER (input B29): LKR O&M inflation at the CBSL 5% inflation target
 
 tax:
   corporate_tax_rate: 0.30      # input F31
@@ -134,7 +136,7 @@ statutory:
 risk_adjustment:
   cfads_haircut_pct: 0.1
 
-Financing_Terms:                # every value here is a PLACEHOLDER pending the term sheet (inputs F10-F24)
+Financing_Terms:                # PLACEHOLDER pending the term sheet (inputs F11-F24); the 100% LKR mix is the owner's (F10)
   debt_ratio: 0.7
   debt_sizing: dual_dscr
   dscr_p99_downside_factor: 0.80
@@ -143,12 +145,12 @@ Financing_Terms:                # every value here is a PLACEHOLDER pending the 
   interest_only_years: 1
   amortization_style: auto
   interest_rate_nominal: 0.08
-  mix:
-    lkr_max: 0.45
-    dfi_max: 0.1
-    usd_commercial_min: 0.45
+  mix:                          # fully LKR funded (owner, 2026-10-28; input F10)
+    lkr_max: 1.0
+    dfi_max: 0.0
+    usd_commercial_min: 0.0
   rates:
-    lkr_nominal: 0.1339         # UIP-implied: USD 7.5% + 5.89% LKR drift (#3, PR B)
+    lkr_nominal: 0.1339         # PLACEHOLDER (input F11): UIP-implied DutchBay rate, not a quoted LKR project loan
     lkr_min: 0.1339
     dfi_nominal: 0.065
     dfi_min: 0.065
@@ -198,10 +200,11 @@ wacc:
   description: "Build-up WACC drives the project discount rate."
 
 metadata:
-  version: '0.1'
+  version: '0.2'
   last_updated: '2026-10-27'
   author: DutchBay V14 Financial Modeling Team
   review_status: SKELETON - screening placeholders pending owner inputs (docs/blue_whale/INPUTS_REQUIRED.md)
   assumptions_source: 'Scaled from dutchbay_hybrid_bess_2025Q4 and ceb_solar_bess_nightpeak_10mw'
   changes:
+    - 'v0.2: Fully LKR funded (owner, 2026-10-28): 100% LKR debt, FX drift 0, LKR O&M escalation 5% placeholder'
     - 'v0.1: Skeleton for the Blue Whale Lot 5B hybrid (1 x 10 MW wind, 5 MWp PV, 10 MW / 40 MWh BESS)'

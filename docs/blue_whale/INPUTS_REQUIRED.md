@@ -60,7 +60,7 @@ feasibility study. **3** refines the result.
 | B26 | Grid, civils, development and owner's costs | `capex.usd_total` | $2.0M | 1 |
 | B27 | Export limit at the connection point, and expected curtailment | `project.curtailment_pct` | 0% | 2 |
 | B28 | Insurance, security, SPV admin costs | `opex.usd_per_year` | $0.15M/yr with land | 2 |
-| B29 | O&M escalation basis | `opex.escalation_pct` | 0% | 3 |
+| B29 | O&M escalation in LKR (contract indexation) | `opex.escalation_pct` | 5%/yr (CBSL inflation target) | 2 |
 | B30 | Target COD and construction period | `project.cod_year`, `timeline.construction_years` | 2028, 1 year | 1 |
 | B31 | Permits status: SLSEA provisional approval, CC&CRMD, CEA (IEE/EIA), Pradeshiya Sabha, UDA, CAA (turbine height), Wildlife and Forest | feasibility chapter | none | 2 |
 
@@ -83,15 +83,15 @@ feasibility study. **3** refines the result.
 
 | ID | Input | Replaces (YAML field) | Placeholder now | Priority |
 |---|---|---|---|---|
-| F10 | Lenders being approached and the debt currency mix (LKR, USD commercial, DFI) | `Financing_Terms.mix` | 45% LKR / 10% DFI / 45% USD | 1 |
-| F11 | Interest rate per tranche: base rate and margin, fixed or floating | `Financing_Terms.rates` | LKR 13.39%, DFI 6.5%, USD 7.5% | 1 |
+| F10 | Lenders being approached. Currency is settled: fully LKR funded (owner, 2026-10-28) | `Financing_Terms.mix` | 100% LKR (owner) | 1 |
+| F11 | LKR loan rate: base (e.g. AWPR) and margin, fixed or floating, reset terms | `Financing_Terms.rates.lkr_nominal` | 13.39% (UIP-implied, not a quote) | 1 |
 | F12 | Maximum gearing | `Financing_Terms.debt_ratio` | 70% | 1 |
 | F13 | Tenor and grace (interest-only) period | `tenor_years`, `interest_only_years` | 12 years, 1 year | 1 |
 | F14 | Repayment profile: sculpted to DSCR or fixed annuity | `amortization_style` | auto (sculpted) | 2 |
 | F15 | Sizing and lock-up DSCR, default DSCR | `target_dscr`, `min_dscr` | 1.30, 1.20 | 1 |
 | F16 | Reserves: DSRA months, MRA for BESS augmentation | `reserves.dsra_months` | 6 months | 2 |
 | F17 | Fees: upfront, commitment, agency | `fees.upfront_pct` | 1% upfront | 2 |
-| F18 | Hedging: FX and interest-rate hedge cost | FX exposure | none | 2 |
+| F18 | Interest-rate hedge, if the LKR loan floats; FX cover only for USD-priced equipment during construction | debt cost | none | 2 |
 
 ### Equity and returns
 
@@ -99,12 +99,12 @@ feasibility study. **3** refines the result.
 |---|---|---|---|---|
 | F20 | Equity sponsors and shares; any shareholder loan | equity structure | none | 2 |
 | F21 | Land contributed as equity, and at what value | `capex.usd_total` | not included | 2 |
-| F27 | Target equity IRR (hurdle) | `returns.equity_discount_rate` | 12% | 1 |
+| F27 | Target equity IRR in LKR (hurdle) | `returns.equity_discount_rate`, `wacc.cost_of_equity` | 12% (a USD figure; an LKR hurdle is higher) | 1 |
 
 ### Macro, tax and incentives
 
 | ID | Input | Replaces (YAML field) | Placeholder now | Priority |
 |---|---|---|---|---|
-| F25 | FX basis: confirm the pinned USD/LKR or supply a newer one | `fx.start_lkr_per_usd` | 333.79 (2026-Q2) | 3 |
+| F25 | USD/LKR for converting USD-priced capex quotes (the model runs in constant LKR) | `fx.start_lkr_per_usd` | 333.79 (2026-Q2) | 2 |
 | F30 | BOI status and any tax holiday or concession | `tax.tax_holiday_*` | none | 2 |
 | F31 | Corporate tax rate and any special regime | `tax.corporate_tax_rate` | 30% | 3 |
