@@ -168,6 +168,7 @@ GOVERNED_SOURCE_RECIPES = {
         "\tbandit -c pyproject.toml -r $(SURFACE) --severity-level medium --confidence-level medium",
         "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)",
         "\tpip-audit --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)",
+        "\tpip-audit --vulnerability-service osv --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)",
     ),
 }
 # The exact contiguous contract the Makefile must carry in the comment block directly
@@ -179,8 +180,8 @@ CONTRACT_LINES = (
     "# Use only exact `--ignore-vuln <ID>` or `--ignore-vuln=<ID>` tokens; abbreviations and other tokens are rejected.",
     "# Ignore-option tokens may appear only in that assignment; direct recipe flags and other variables are rejected.",
     "# Both `make security` and `make audit` are live-checked against the canonical advisory IDs.",
-    "# The complete recipes are fixed: `audit` is only canonical resolve-mode pip-audit; `security` is exact Bandit then canonical resolve and declared-pin pip-audit passes.",
-    "# `.ONESHELL`, `SHELL`, `.SHELLFLAGS`, shell preambles, aliases, functions, wrappers and extra commands are rejected; runtime sentinels prove all three invocations reach the expected binaries.",
+    "# The complete recipes are fixed: `audit` is only canonical resolve-mode pip-audit; `security` is exact Bandit then the canonical resolve-mode, declared-pin and OSV cross-check pip-audit passes.",
+    "# `.ONESHELL`, `SHELL`, `.SHELLFLAGS`, shell preambles, aliases, functions, wrappers and extra commands are rejected; runtime sentinels prove all four invocations reach the expected binaries.",
     "# `.IGNORE`, Make flag variable assignments (`MAKEFLAGS`, `GNUMAKEFLAGS`,"
     " `MFLAGS`) and `-` recipe prefixes are rejected: a failing audit must fail the target, and sentinels forced to fail prove it does.",
     "# Each suppression has one physical declaration line in this comment block:",
@@ -577,6 +578,17 @@ PIP_AUDIT_DECLARED_PREFIX = [
     "-r",
     "requirements.txt",
 ]
+# The feed cross-check pass (#1353 D-10): declared-pin coverage asked of OSV rather than
+# PyPI's advisory API, which also keeps it off pip's HTTP cache (`use_pip=False`).
+PIP_AUDIT_OSV_PREFIX = [
+    "pip-audit",
+    "--vulnerability-service",
+    "osv",
+    "--no-deps",
+    "--disable-pip",
+    "-r",
+    "requirements.txt",
+]
 BANDIT_COMMAND = [
     "bandit",
     "-c",
@@ -689,12 +701,14 @@ def _effective_target_violations(
 
     pip_audit_command = [*PIP_AUDIT_PREFIX, *ignore_tokens]
     pip_audit_declared_command = [*PIP_AUDIT_DECLARED_PREFIX, *ignore_tokens]
+    pip_audit_osv_command = [*PIP_AUDIT_OSV_PREFIX, *ignore_tokens]
     expected = {
         "audit": [pip_audit_command],
         "security": [
             BANDIT_COMMAND,
             pip_audit_command,
             pip_audit_declared_command,
+            pip_audit_osv_command,
         ],
     }.get(target)
     if expected is None:
@@ -710,7 +724,12 @@ def _effective_target_violations(
 # Which governed invocation a sentinel run should make fail. A sentinel that can only
 # succeed cannot tell "the audit ran and passed" from "the audit ran, failed, and its
 # failure was discarded" - the gap F-1E was found in.
-FAILURE_POINTS = ("bandit", "pip-audit-resolve", "pip-audit-declared")
+FAILURE_POINTS = (
+    "bandit",
+    "pip-audit-resolve",
+    "pip-audit-declared",
+    "pip-audit-osv",
+)
 SENTINEL_EXIT = 23
 
 
@@ -728,14 +747,21 @@ def _sentinel_body(executable: str, failing: str | None) -> str:
         return record
     if executable == "bandit":
         return record + (f"exit {SENTINEL_EXIT}\n" if failing == "bandit" else "")
-    # The declared-pin pass is the one whose first argument is `--no-deps`; the
-    # resolve-mode pass is any other. Distinguishing them here is what lets each of
-    # the two pip-audit invocations be failed on its own.
+    # Each pip-audit pass is identified by its FIRST argument: the OSV cross-check
+    # leads with `--vulnerability-service`, the declared-pin pass with `--no-deps`, and
+    # the resolve-mode pass with neither. Distinguishing all three here is what lets
+    # each invocation be failed on its own; a two-way split would fail the OSV pass
+    # whenever the resolve-mode pass was the one asked for.
+    if failing == "pip-audit-osv":
+        return record + (
+            f'case "${{1-}}" in --vulnerability-service) exit {SENTINEL_EXIT} ;; esac\n'
+        )
     if failing == "pip-audit-declared":
         return record + f'case "${{1-}}" in --no-deps) exit {SENTINEL_EXIT} ;; esac\n'
     if failing == "pip-audit-resolve":
         return record + (
-            f'case "${{1-}}" in --no-deps) ;; *) exit {SENTINEL_EXIT} ;; esac\n'
+            f'case "${{1-}}" in --no-deps|--vulnerability-service) ;; '
+            f"*) exit {SENTINEL_EXIT} ;; esac\n"
         )
     return record
 
@@ -948,9 +974,10 @@ def test_the_sequence_oracle_passes_the_committed_makefile(target: str) -> None:
                 "pip-audit": [
                     PIP_AUDIT_PREFIX[1:],
                     PIP_AUDIT_DECLARED_PREFIX[1:],
+                    PIP_AUDIT_OSV_PREFIX[1:],
                 ],
             },
-            id="security invokes bandit then both pip-audit passes",
+            id="security invokes bandit then all three pip-audit passes",
         ),
     ],
 )
@@ -991,6 +1018,11 @@ def test_governed_targets_execute_the_expected_binaries(
             "pip-audit-declared",
             {"bandit": 1, "pip-audit": 2},
             id="a failing declared-pin audit stops the gate",
+        ),
+        pytest.param(
+            "pip-audit-osv",
+            {"bandit": 1, "pip-audit": 3},
+            id="a failing OSV cross-check stops the gate",
         ),
     ],
 )
@@ -1062,7 +1094,7 @@ def test_ignore_error_state_is_an_effective_bypass_and_is_rejected(
         f"{label} ignore-error state was expected to swallow the failure: "
         f"{completed.stderr}"
     )
-    assert len(receipts["pip-audit"]) == 2, receipts
+    assert len(receipts["pip-audit"]) == 3, receipts
 
     # The commands themselves are unchanged, so nothing but this guard sees it. The
     # declared set is read from the subject rather than hard-coded empty, or the oracle
@@ -1478,6 +1510,8 @@ POPULATED_TARGETS = COMPLIANT + (
     " --confidence-level medium\n"
     "\tpip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
     "\tpip-audit --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
+    "\tpip-audit --vulnerability-service osv --no-deps --disable-pip"
+    " -r requirements.txt $(PIP_AUDIT_IGNORES)\n"
 )
 DECLARED_IDS = ["PYSEC-2026-4320"]
 
@@ -1486,12 +1520,13 @@ DECLARED_IDS = ["PYSEC-2026-4320"]
 def test_the_oracle_passes_one_declaration_carried_by_every_audit_pass(
     target: str,
 ) -> None:
-    """Positive control: a real declaration must pass, on both audit passes.
+    """Positive control: a real declaration must pass, on every audit pass.
 
     F-1: the oracle pooled the tokens of every emitted command, so the mandatory
-    target - which passes the allowlist to two audits, as #1388 requires - made one
-    correct declaration look like two suppressions. The empty live allowlist hid it.
-    Each command is now compared on its own.
+    target - which passed the allowlist to two audits, as #1388 requires, and passes it
+    to three since #1464 added the OSV cross-check - made one correct declaration look
+    like several suppressions. The empty live allowlist hid it. Each command is now
+    compared on its own.
     """
     assert audit(POPULATED_TARGETS) == []
     assert (

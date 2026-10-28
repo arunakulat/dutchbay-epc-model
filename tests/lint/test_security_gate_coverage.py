@@ -1,7 +1,8 @@
 """VERIFY-01 guard: the security gate audits the whole lock, and main reports its own state.
 
-Two independent blind spots in the dependency audit, both measured at the objects on
-2026-10-25 against ``main`` ``9b2b51e0`` before anything was changed.
+Three independent blind spots in the dependency audit. The first two were measured at the
+objects on 2026-10-25 against ``main`` ``9b2b51e0``, the third on 2026-10-27 against the
+gate's own job logs, each before anything was changed.
 
 **1. Two lock pins were never audited.** ``make security`` ran a single
 ``pip-audit -r requirements.txt``. In that mode pip-audit builds a temporary virtual
@@ -24,19 +25,51 @@ on 2026-10-23/24 and the next run was not due until Monday 2026-10-26. The gate 
 whole lock rather than the diff, so the only signal was every open pull request going red at
 once, arriving as though it were somebody's change.
 
-What this module pins is the REMEDY, not the measurements: both audit passes present and
-sharing one suppression list, ``make audit`` left as the canonical single-command spelling,
-and a daily main-branch workflow running the same ``make security``. It cannot re-measure
+**3. The gate could answer from a cache and a single feed, and nothing showed it could
+fail.** ``pip_audit._service.pypi``
+builds its HTTP session with ``caching_session(cache_dir)``, taking the default
+``use_pip=True``, which ``pip_audit._cache._get_cache_dir`` resolves to
+``$(pip cache dir)/http``. Both jobs that run ``make security`` set
+``actions/setup-python``'s ``cache: 'pip'``, so each audit read advisory responses out of a
+restored cache whose key is the runner, the Python version and the lock hash - shared across
+branches. On 2026-10-27 a cache saved at 16:50:20Z by job 122331742996, 18 minutes before
+``GHSA-wf6j-7hvr-gr93`` published at 17:08:41Z, was restored byte-identical (31,413,483 B)
+by five later runs, and the required gate reported a lock pinning the vulnerable
+``hydra-core==1.3.7`` clean at 17:19:24Z (job 122348327291) two minutes after the same
+workflow redded the same two lock lines (jobs 122346893695, 122347443951); another run
+reported one of two live advisories (job 122353695670). The cause is NOT established: the
+same restored bytes gave both answers, and PyPI-side consistency or edge caching, a partial
+response accepted as complete, and runner egress remain open candidates beside the cache
+(residual D-10 on #1353). So the rest of the remedy does not depend on the cache. A single
+feed's answer, stale or partial for whatever reason, no longer decides the verdict alone,
+because the OSV pass asks a different database and ``pip_audit._service.osv`` passes
+``use_pip=False``; and a canary step makes every feed report two known advisories in the
+same job before its clean verdict is trusted. Both jobs also installed ``bandit pip-audit``
+UNPINNED, so the tool that decides a merge drifted with PyPI and its version reached no
+receipt. Hardened under #1464.
+
+What this module pins is the REMEDY, not the measurements: all three audit passes present
+and sharing one suppression list, ``make audit`` left as the canonical single-command
+spelling, a daily main-branch workflow running the same ``make security``, no cache key
+on either audit job, the audit canary running unconditionally before the gate in both, and
+both tools installed from one pins file held to the lock. The third blind spot's remedy is
+deliberately HARDENING and names no root cause: whether the cache caused any particular
+verdict is not asserted here. It cannot re-measure
 coverage - that needs the network and a resolve - so the numbers above stay in the pull
 request's receipts and in the ``Makefile``'s own comment, where a reviewer reads them.
 
 Per VERIFY-01(5) every assertion in the ``Makefile`` and workflow guards ships the negative
 control that observes it firing: both are pure functions over text, exercised against mutated
-copies rather than trusted - 31 controls, 10 over the ``Makefile`` and 21 over the workflow.
-The claim is deliberately not made of the other five tests, which have no text to mutate:
+copies rather than trusted - 66 controls: 15 over the ``Makefile``, 21 over the main-audit
+workflow, 24 over the two audit jobs' hygiene (twelve shapes against each workflow file:
+cache, pins and canary), and 6 over the tooling pins against the lock. The canary's own
+verdict function carries its negative controls inline in one test, against crafted
+pip-audit reports. The claim is deliberately not made of the tests with no text to mutate:
 three are oracles against live objects (one re-runs ``make -n``, two interrogate the installed
-``pip_audit``), one asserts an equality across two workflow files, and one asserts that the
-two fail-closed checks still accept the values that mean "always run".
+``pip_audit``), one asserts an equality across two workflow files, one asserts the live pins
+file agrees with the lock, and two assert that the fail-closed checks still accept what they
+must - the values that mean "always run", and an unrelated install standing beside the
+pinned tooling.
 
 That claim was once wider than the set. #1388's independent domain lane probed
 ``audit_workflow`` key by key and found six shapes it passed: ``continue-on-error: true`` on
@@ -77,7 +110,9 @@ GitHub Actions accepts in that field, every key it accepts in that trigger.
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import inspect
+import json
 import re
 import shlex
 import subprocess
@@ -88,16 +123,33 @@ from typing import Any
 
 import pytest
 import yaml
+from packaging.utils import canonicalize_name
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MAKEFILE = REPO_ROOT / "Makefile"
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "security-audit.yml"
 TEST_SUITE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "test-suite.yml"
+TOOLING_PINS = REPO_ROOT / ".github" / "requirements-security-tooling.txt"
+TOOLING_PINS_REF = ".github/requirements-security-tooling.txt"
+TOOLING_INSTALL = f"pip install -r {TOOLING_PINS_REF}"
+PINNED_TOOLS = ("bandit", "pip-audit")
+# Holds the auditor's transitive dependencies to the lock as well; pip resolves the path
+# relative to the pins file.
+TOOLING_CONSTRAINT = "-c ../requirements.txt"
+# Any pip invocation, however spelled: `pip install`, `pip3 install`, `python -m pip install`.
+PIP_INSTALL = re.compile(r"(?<![\w.-])pip3?\s+install(?![\w-])")
+# The negative control a clean verdict needs (#1464): every feed must report known
+# advisories, in the same job, before the gate's own verdict is trusted.
+CANARY_RUN = "python scripts/ci/check_audit_canary.py"
 
 LOCK = "requirements.txt"
 ALLOWLIST = "$(PIP_AUDIT_IGNORES)"
 RESOLVE_RECIPE = f"pip-audit -r {LOCK} {ALLOWLIST}"
 DECLARED_RECIPE = f"pip-audit --no-deps --disable-pip -r {LOCK} {ALLOWLIST}"
+# The feed cross-check: declared-pin coverage read from OSV instead of PyPI's API.
+OSV_FLAGS = ("--vulnerability-service", "osv")
+OSV_FLAG = " ".join(OSV_FLAGS)
+OSV_RECIPE = f"pip-audit {OSV_FLAG} --no-deps --disable-pip -r {LOCK} {ALLOWLIST}"
 # The two pins resolve mode omitted, and the flags that make them visible again.
 DECLARED_FLAGS = ("--no-deps", "--disable-pip")
 UNAUDITED_IN_RESOLVE_MODE = ("packaging", "wheel")
@@ -137,12 +189,19 @@ def audit_makefile(makefile_text: str) -> list[str]:
         violations.append("`security` must still run the bandit SAST pass")
 
     pip_audits = [line for line in security if line.startswith("pip-audit ")]
-    resolve = [
-        line for line in pip_audits if not any(f in line for f in DECLARED_FLAGS)
-    ]
-    declared = [
-        line for line in pip_audits if all(flag in line for flag in DECLARED_FLAGS)
-    ]
+    # Partition by FEED first. The OSV pass carries both declared flags too, so a
+    # coverage-only split would count it as a second declared pass and red this guard
+    # for the very line it is meant to pin.
+    osv = [line for line in pip_audits if OSV_FLAG in line]
+    pypi = [line for line in pip_audits if OSV_FLAG not in line]
+    resolve = [line for line in pypi if not any(f in line for f in DECLARED_FLAGS)]
+    declared = [line for line in pypi if all(flag in line for flag in DECLARED_FLAGS)]
+    if len(osv) != 1:
+        violations.append(
+            "`security` must run exactly one OSV cross-check pass "
+            f"(`{OSV_RECIPE}`) so one feed's stale or partial answer cannot produce a "
+            f"clean verdict on its own (#1353 D-10), got {osv!r}"
+        )
     if len(resolve) != 1:
         violations.append(
             "`security` must run exactly one resolve-mode pass "
@@ -175,6 +234,7 @@ def audit_makefile(makefile_text: str) -> list[str]:
     for mode, lines, canonical in (
         ("resolve-mode", resolve, RESOLVE_RECIPE),
         ("declared-pin", declared, DECLARED_RECIPE),
+        ("OSV cross-check", osv, OSV_RECIPE),
     ):
         if lines and lines != [canonical]:
             violations.append(
@@ -200,10 +260,16 @@ def audit_makefile(makefile_text: str) -> list[str]:
             f"{declared_alias!r}"
         )
 
+    osv_alias = _recipe(makefile_text, "audit-osv")
+    if osv_alias != [OSV_RECIPE]:
+        violations.append(
+            f"`audit-osv` must be exactly [{OSV_RECIPE!r}], got {osv_alias!r}"
+        )
+
     phony = next(
         (line for line in makefile_text.splitlines() if line.startswith(".PHONY:")), ""
     )
-    for target in ("security", "audit", "audit-declared"):
+    for target in ("security", "audit", "audit-declared", "audit-osv"):
         if target not in phony.split():
             violations.append(f".PHONY must list `{target}`")
 
@@ -333,6 +399,176 @@ def audit_workflow(workflow: Workflow) -> list[str]:
     return violations
 
 
+def audit_gate_hygiene(workflow: Workflow, label: str) -> list[str]:
+    """Return one message per audit-hygiene violation in a job that runs `make security`.
+
+    Two separate defects, both measured on 2026-10-27 and logged as residual D-10 on
+    #1353, and both outside everything ``audit_makefile`` and ``audit_workflow`` can see,
+    because neither lives in the Makefile or in a trigger.
+
+    **The cache.** ``pip_audit._service.pypi`` builds its session with
+    ``caching_session(cache_dir)``, taking the default ``use_pip=True``, which
+    ``pip_audit._cache._get_cache_dir`` resolves to ``$(pip cache dir)/http``. A job that
+    restores pip's cache therefore hands the auditor somebody else's advisory responses.
+    The key is the runner, the Python version and the lock hash, so it is shared across
+    branches: a cache saved at 16:50:20Z, 18 minutes before GHSA-wf6j-7hvr-gr93
+    published, was restored byte-identical by five later runs, and the gate reported a
+    lock pinning the vulnerable ``hydra-core==1.3.7`` clean (job 122348327291). Rejected
+    fail-CLOSED - the key must be absent, not merely unequal to ``'pip'`` - because the
+    field takes any value Actions accepts and a cache of any flavour is a directory the
+    auditor may read.
+
+    **The pins.** Both jobs installed ``bandit pip-audit`` unpinned, so the tool that
+    decides a merge drifted with whatever PyPI served that morning and its version
+    appeared in no receipt. Also fail-closed: any ``pip install`` naming either tool is a
+    violation unless it is exactly the shared pinned-file install, so a drifting pin
+    cannot be added beside the pinned one.
+    """
+    violations: list[str] = []
+
+    jobs = workflow.get("jobs")
+    if not isinstance(jobs, dict) or not jobs:
+        return [f"{label}: no jobs"]
+
+    gate_jobs = [
+        job
+        for job in jobs.values()
+        if isinstance(job, dict)
+        and any(
+            isinstance(step, dict) and "make security" in str(step.get("run", ""))
+            for step in (job.get("steps") or [])
+        )
+    ]
+    if not gate_jobs:
+        return [f"{label}: no job runs `make security`"]
+
+    for job in gate_jobs:
+        steps = [step for step in (job.get("steps") or []) if isinstance(step, dict)]
+        for step in steps:
+            if not str(step.get("uses", "")).startswith("actions/setup-python@"):
+                continue
+            configured = step.get("with")
+            if isinstance(configured, dict) and "cache" in configured:
+                violations.append(
+                    f"{label}: a job running `make security` must not set setup-python "
+                    "`cache` - pip-audit reads pip's HTTP cache by default, so a restored "
+                    "cache hands the audit advisory responses saved by another branch's "
+                    f"run (#1353 D-10, #1464), got {configured['cache']!r}"
+                )
+
+        runs = "\n".join(str(step.get("run", "")) for step in steps)
+        if TOOLING_INSTALL not in runs:
+            violations.append(
+                f"{label}: must install the audit tooling from {TOOLING_PINS_REF} so the "
+                "tool that decides a merge cannot drift with PyPI, and so both audit jobs "
+                "install the same one"
+            )
+        for line in runs.splitlines():
+            command = line.strip()
+            if not PIP_INSTALL.search(command) or command == TOOLING_INSTALL:
+                continue
+            named = [
+                tool
+                for tool in PINNED_TOOLS
+                if re.search(rf"(?<![\w.-]){re.escape(tool)}(?![\w.-])", command)
+            ]
+            if named:
+                violations.append(
+                    f"{label}: {named} must be installed only from {TOOLING_PINS_REF}, "
+                    f"so a pin cannot drift beside the pinned one, got {command!r}"
+                )
+
+        violations.extend(_canary_violations(steps, label))
+
+    return violations
+
+
+def _canary_violations(steps: list[Workflow], label: str) -> list[str]:
+    """Require the audit canary to run, unconditionally and failing, before the gate.
+
+    A clean audit is evidence about the lock only if the feeds could have reported a
+    finding at that moment. The canary step is that negative control: each service the
+    gate consults must report two known advisories or the job fails. It is held to the
+    same fail-closed `if` and `continue-on-error` rules as the gate step, because a canary
+    that cannot fail is the defect it exists to catch, and it must come BEFORE the gate so
+    a dead feed fails the job instead of being discovered after a green verdict.
+    """
+    violations: list[str] = []
+    runs = [str(step.get("run", "")).strip() for step in steps]
+    canaries = [index for index, run in enumerate(runs) if run == CANARY_RUN]
+    gates = [index for index, run in enumerate(runs) if run == "make security"]
+    if len(canaries) != 1:
+        violations.append(
+            f"{label}: a job running `make security` must run `{CANARY_RUN}` exactly "
+            "once, so every feed is shown able to report a known advisory before its "
+            f"clean verdict is trusted (#1464), got {len(canaries)}"
+        )
+        return violations
+    if gates and canaries[0] > gates[0]:
+        violations.append(
+            f"{label}: the audit canary must run before `make security`, so a feed that "
+            "cannot report fails the job rather than following a green verdict"
+        )
+    step = steps[canaries[0]]
+    if "if" in step and str(step["if"]).strip().lower() not in {"true", "${{ true }}"}:
+        violations.append(
+            f"{label}: the audit canary must not be conditional, got {step['if']!r}"
+        )
+    cont = step.get("continue-on-error")
+    if cont is not None and str(cont).strip().lower() not in {"false", "${{ false }}"}:
+        violations.append(
+            f"{label}: the audit canary must not set `continue-on-error` - a canary that "
+            f"cannot fail proves nothing, got {cont!r}"
+        )
+    return violations
+
+
+def audit_tooling_pins(pins_text: str, lock_text: str) -> list[str]:
+    """Return one message per tooling-pin violation; empty means compliant.
+
+    Both tools must be pinned exactly, to the same version the lock pins, and the file
+    must carry the constraint that holds their transitive dependencies to the lock. A
+    pure function over two texts, so each clause is observed failing on a mutated copy.
+    """
+    violations: list[str] = []
+    lines = [
+        line.strip()
+        for line in pins_text.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    ]
+    if TOOLING_CONSTRAINT not in lines:
+        violations.append(
+            f"{TOOLING_PINS_REF} must carry `{TOOLING_CONSTRAINT}` so the auditor's "
+            "transitive dependencies are held to the lock"
+        )
+    requirements = [line for line in lines if not line.startswith("-")]
+    pins: dict[str, str] = {}
+    for line in requirements:
+        name, separator, version = line.partition("==")
+        if not separator or not re.fullmatch(r"[0-9][0-9A-Za-z.!+\-]*", version):
+            violations.append(f"{TOOLING_PINS_REF}: `{line}` is not an exact pin")
+            continue
+        pins[canonicalize_name(name)] = version
+    if set(pins) != set(PINNED_TOOLS):
+        violations.append(
+            f"{TOOLING_PINS_REF} must pin exactly {list(PINNED_TOOLS)}, got {sorted(pins)}"
+        )
+
+    lock: dict[str, str] = {}
+    for line in lock_text.splitlines():
+        name, separator, version = line.split("#", 1)[0].strip().partition("==")
+        if separator:
+            lock[canonicalize_name(name)] = version.split(";", 1)[0].strip()
+    for tool, version in pins.items():
+        if tool in PINNED_TOOLS and lock.get(tool) != version:
+            violations.append(
+                f"{TOOLING_PINS_REF} pins {tool}=={version} but {LOCK} pins "
+                f"{tool}=={lock.get(tool)}: a local `make security` and CI would run "
+                "different analysers"
+            )
+    return violations
+
+
 def _make_commands(target: str) -> list[list[str]]:
     """Return GNU Make's effective commands for ``target``, as argv lists."""
     completed = subprocess.run(
@@ -368,18 +604,27 @@ def test_main_reports_its_own_audit_state() -> None:
 def test_make_expansion_agrees_with_the_makefile_source() -> None:
     """GNU Make's effective commands, not just the source text, carry both passes."""
     security = _make_commands("security")
-    assert len(security) == 3, security
+    assert len(security) == 4, security
     assert security[0][0] == "bandit"
     assert security[1][:3] == ["pip-audit", "-r", LOCK]
     assert security[2][0] == "pip-audit"
     assert set(DECLARED_FLAGS) <= set(security[2])
     assert security[2][-2:] == ["-r", LOCK]
+    # The feed cross-check: the same declared coverage, asked of OSV rather than PyPI.
+    assert security[3][0] == "pip-audit"
+    assert set(DECLARED_FLAGS) <= set(security[3])
+    assert set(OSV_FLAGS) <= set(security[3])
+    assert security[3][-2:] == ["-r", LOCK]
+    assert set(OSV_FLAGS).isdisjoint(security[1] + security[2])
 
     # The alias stays a single unflagged command; `make -n audit` is SECDEP-01's oracle.
     assert _make_commands("audit") == [["pip-audit", "-r", LOCK]]
     declared = _make_commands("audit-declared")
     assert len(declared) == 1
     assert set(DECLARED_FLAGS) <= set(declared[0])
+    osv = _make_commands("audit-osv")
+    assert len(osv) == 1
+    assert set(OSV_FLAGS) | set(DECLARED_FLAGS) <= set(osv[0])
 
 
 def test_the_conditional_checks_do_not_over_reject() -> None:
@@ -404,6 +649,84 @@ def test_the_merge_gate_and_the_main_audit_run_the_same_command() -> None:
     test_suite = TEST_SUITE_WORKFLOW.read_text(encoding="utf-8")
     assert "run: make security" in test_suite
     assert "run: make security" in WORKFLOW.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("path", [TEST_SUITE_WORKFLOW, WORKFLOW], ids=lambda p: p.name)
+def test_neither_audit_job_lets_a_cache_answer_for_the_feed(path: Path) -> None:
+    """Both live audit jobs must keep pip's cache out of the audit and pin the tools."""
+    loaded: Workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert audit_gate_hygiene(loaded, path.name) == []
+
+
+def test_the_audit_tooling_is_pinned_to_the_lock() -> None:
+    """The shared pins file must pin both tools to the lock's own versions."""
+    assert TOOLING_PINS.is_file(), f"missing {TOOLING_PINS}"
+    assert (
+        audit_tooling_pins(
+            TOOLING_PINS.read_text(encoding="utf-8"),
+            (REPO_ROOT / LOCK).read_text(encoding="utf-8"),
+        )
+        == []
+    )
+
+
+def test_the_audit_canary_runs_and_can_fail() -> None:
+    """The canary's verdict function passes a full report and fails every gap.
+
+    Hermetic: crafted pip-audit reports stand in for the network. The live run is the
+    workflow step itself and the pull request's receipts.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "check_audit_canary", REPO_ROOT / "scripts" / "ci" / "check_audit_canary.py"
+    )
+    assert spec is not None and spec.loader is not None
+    canary = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(canary)
+
+    def report(*found: tuple[str, str, list[str]]) -> str:
+        return json.dumps(
+            {
+                "dependencies": [
+                    {
+                        "name": name,
+                        "version": "0",
+                        "vulns": [{"id": vid, "aliases": al}],
+                    }
+                    for name, vid, al in found
+                ]
+            }
+        )
+
+    full = report(
+        ("hydra-core", "GHSA-wf6j-7hvr-gr93", []),
+        ("msgpack", "CVE-2026-114613", ["GHSA-j586-36cw-2gc2"]),
+    )
+    assert canary.missing_detections(1, full) == []
+    # Either name of the msgpack advisory is a detection.
+    assert (
+        canary.missing_detections(
+            1,
+            report(
+                ("hydra-core", "GHSA-wf6j-7hvr-gr93", []),
+                ("msgpack", "GHSA-j586-36cw-2gc2", []),
+            ),
+        )
+        == []
+    )
+    # Negative controls, one per way a feed can fail to answer.
+    partial = report(("hydra-core", "GHSA-wf6j-7hvr-gr93", []))
+    assert any("msgpack" in m for m in canary.missing_detections(1, partial))
+    assert canary.missing_detections(0, report())
+    assert canary.missing_detections(1, report())
+    assert canary.missing_detections(2, full)
+    assert canary.missing_detections(1, "not json")
+    assert canary.missing_detections(1, json.dumps({"dependencies": None}))
+    other = report(
+        ("hydra-core", "GHSA-0000-0000-0000", []),
+        ("msgpack", "CVE-2026-114613", []),
+    )
+    assert any("hydra-core" in m for m in canary.missing_detections(1, other))
+    assert canary.canary_requirements() == "hydra-core==1.3.7\nmsgpack==1.2.1\n"
 
 
 def test_declared_mode_really_audits_the_pins_resolve_mode_skips() -> None:
@@ -474,8 +797,9 @@ _LIVE_MAKEFILE = MAKEFILE.read_text(encoding="utf-8")
         ),
         pytest.param(
             lambda text: text.replace(
-                f"\t{DECLARED_RECIPE}\n\n# Convenience",
-                "\tpip-audit --no-deps --disable-pip -r requirements.txt\n\n# Convenience",
+                f"\t{DECLARED_RECIPE}\n\t{OSV_RECIPE}",
+                "\tpip-audit --no-deps --disable-pip -r requirements.txt\n"
+                f"\t{OSV_RECIPE}",
                 1,
             ),
             "must carry $(PIP_AUDIT_IGNORES)",
@@ -523,17 +847,56 @@ _LIVE_MAKEFILE = MAKEFILE.read_text(encoding="utf-8")
         ),
         pytest.param(
             lambda text: text.replace(
-                f"\t{DECLARED_RECIPE}\n\n# Convenience",
-                f"\t{DECLARED_RECIPE} || true\n\n# Convenience",
+                f"\t{DECLARED_RECIPE}\n\t{OSV_RECIPE}",
+                f"\t{DECLARED_RECIPE} || true\n\t{OSV_RECIPE}",
                 1,
             ),
             "declared-pin pass must be exactly",
             id="declared pass made non-failing",
         ),
         pytest.param(
-            lambda text: text.replace(" audit-declared test", " test", 1),
+            lambda text: text.replace(
+                " audit-declared audit-osv test", " audit-osv test", 1
+            ),
             ".PHONY must list `audit-declared`",
             id="target left off PHONY",
+        ),
+        pytest.param(
+            lambda text: text.replace(
+                f"\t{OSV_RECIPE}\n\n# Convenience", "\n# Convenience", 1
+            ),
+            "must run exactly one OSV cross-check pass",
+            id="feed cross-check dropped",
+        ),
+        pytest.param(
+            lambda text: text.replace(
+                f"\t{OSV_RECIPE}\n\n# Convenience",
+                f"\t{OSV_RECIPE} || true\n\n# Convenience",
+                1,
+            ),
+            "OSV cross-check pass must be exactly",
+            id="feed cross-check made non-failing",
+        ),
+        pytest.param(
+            lambda text: text.replace(
+                f"\t{OSV_RECIPE}\n\n# Convenience",
+                f"\t{OSV_RECIPE.replace(' ' + ALLOWLIST, '')}\n\n# Convenience",
+                1,
+            ),
+            "every audit pass must carry",
+            id="feed cross-check loses the shared allowlist",
+        ),
+        pytest.param(
+            lambda text: text.replace(
+                f"audit-osv:\n\t{OSV_RECIPE}", f"audit-osv:\n\t{OSV_RECIPE} --strict", 1
+            ),
+            "`audit-osv` must be exactly",
+            id="osv alias widened",
+        ),
+        pytest.param(
+            lambda text: text.replace(" audit-osv test", " test", 1),
+            ".PHONY must list `audit-osv`",
+            id="osv alias left off PHONY",
         ),
     ],
 )
@@ -713,6 +1076,232 @@ def test_the_workflow_guard_rejects_a_reopened_blind_spot(
     violations = audit_workflow(workflow_factory())  # type: ignore[operator]
     assert violations, "the guard passed a workflow that reopens the gap"
     assert any(expected in violation for violation in violations), violations
+
+
+def _hygiene_workflow(path: Path) -> Workflow:
+    loaded: Workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return loaded
+
+
+def _gate_jobs(workflow: Workflow) -> list[dict[str, Any]]:
+    return [
+        job
+        for job in workflow["jobs"].values()
+        if isinstance(job, dict)
+        and any(
+            "make security" in str(step.get("run", ""))
+            for step in (job.get("steps") or [])
+        )
+    ]
+
+
+def _with_python_cache(path: Path, value: object) -> Workflow:
+    """Give the audit job's setup-python step a cache again, as it had before #1353 D-10."""
+    workflow = _hygiene_workflow(path)
+    for job in _gate_jobs(workflow):
+        for step in job["steps"]:
+            if str(step.get("uses", "")).startswith("actions/setup-python@"):
+                step["with"] = {**(step.get("with") or {}), "cache": value}
+    return workflow
+
+
+def _with_tooling_install(path: Path, run: str) -> Workflow:
+    """Replace the pinned-tooling install in the audit job with ``run``."""
+    workflow = _hygiene_workflow(path)
+    for job in _gate_jobs(workflow):
+        for step in job["steps"]:
+            if TOOLING_INSTALL in str(step.get("run", "")):
+                step["run"] = run
+    return workflow
+
+
+def _mutate_canary(path: Path, **changes: Any) -> Workflow:
+    """Apply ``changes`` to the audit-canary step of the audit job."""
+    workflow = _hygiene_workflow(path)
+    for job in _gate_jobs(workflow):
+        job["steps"] = [
+            (
+                {**step, **changes}
+                if str(step.get("run", "")).strip() == CANARY_RUN
+                else step
+            )
+            for step in job["steps"]
+        ]
+    return workflow
+
+
+def _without_canary(path: Path) -> Workflow:
+    workflow = _hygiene_workflow(path)
+    for job in _gate_jobs(workflow):
+        job["steps"] = [
+            step
+            for step in job["steps"]
+            if str(step.get("run", "")).strip() != CANARY_RUN
+        ]
+    return workflow
+
+
+def _canary_after_gate(path: Path) -> Workflow:
+    workflow = _hygiene_workflow(path)
+    for job in _gate_jobs(workflow):
+        steps = job["steps"]
+        canary = [s for s in steps if str(s.get("run", "")).strip() == CANARY_RUN]
+        job["steps"] = [s for s in steps if s not in canary] + canary
+    return workflow
+
+
+@pytest.mark.parametrize("path", [TEST_SUITE_WORKFLOW, WORKFLOW], ids=lambda p: p.name)
+@pytest.mark.parametrize(
+    ("mutation", "expected"),
+    [
+        pytest.param(
+            _without_canary,
+            f"must run `{CANARY_RUN}` exactly once",
+            id="audit canary removed",
+        ),
+        pytest.param(
+            _canary_after_gate,
+            "must run before `make security`",
+            id="audit canary moved after the gate",
+        ),
+        pytest.param(
+            lambda path: _mutate_canary(path, **{"continue-on-error": True}),
+            "audit canary must not set `continue-on-error`",
+            id="audit canary allowed to fail",
+        ),
+        pytest.param(
+            lambda path: _mutate_canary(
+                path, **{"continue-on-error": "${{ github.event_name == 'schedule' }}"}
+            ),
+            "audit canary must not set `continue-on-error`",
+            id="audit canary allowed to fail by expression",
+        ),
+        pytest.param(
+            lambda path: _mutate_canary(path, **{"if": "github.event_name == 'push'"}),
+            "audit canary must not be conditional",
+            id="audit canary made conditional",
+        ),
+        pytest.param(
+            lambda path: _mutate_canary(path, run=f"{CANARY_RUN} || true"),
+            f"must run `{CANARY_RUN}` exactly once",
+            id="audit canary swallowed by a shell or-true",
+        ),
+        pytest.param(
+            lambda path: _with_tooling_install(
+                path,
+                f"{TOOLING_INSTALL}\npython -m pip install --upgrade pip-audit\n",
+            ),
+            "must be installed only from",
+            id="a drifting pin added through python -m pip",
+        ),
+        pytest.param(
+            lambda path: _with_python_cache(path, "pip"),
+            "must not set setup-python `cache`",
+            id="pip cache restored",
+        ),
+        pytest.param(
+            lambda path: _with_python_cache(path, "poetry"),
+            "must not set setup-python `cache`",
+            id="another cache flavour restored",
+        ),
+        pytest.param(
+            lambda path: _with_python_cache(path, ""),
+            "must not set setup-python `cache`",
+            id="empty cache value is still a cache key",
+        ),
+        pytest.param(
+            lambda path: _with_tooling_install(
+                path,
+                "python -m pip install --upgrade pip\npip install bandit pip-audit\n",
+            ),
+            "must install the audit tooling from",
+            id="tooling unpinned again",
+        ),
+        pytest.param(
+            lambda path: _with_tooling_install(
+                path, f"{TOOLING_INSTALL}\npip install --upgrade pip-audit\n"
+            ),
+            "must be installed only from",
+            id="a drifting pin added beside the pinned one",
+        ),
+    ],
+)
+def test_the_hygiene_guard_rejects_a_cached_or_unpinned_audit(
+    mutation: object, expected: str, path: Path
+) -> None:
+    violations = audit_gate_hygiene(mutation(path), path.name)  # type: ignore[operator]
+    assert violations, "the guard passed an audit job that can read a stale cache"
+    assert any(expected in violation for violation in violations), violations
+
+
+_LIVE_PINS = TOOLING_PINS.read_text(encoding="utf-8")
+_LIVE_LOCK = (REPO_ROOT / LOCK).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("pins", "lock", "expected"),
+    [
+        pytest.param(
+            _LIVE_PINS.replace("bandit==", "bandit>="),
+            _LIVE_LOCK,
+            "is not an exact pin",
+            id="bandit loosened to a floor",
+        ),
+        pytest.param(
+            _LIVE_PINS.replace("pip-audit==2.10.1", "pip-audit"),
+            _LIVE_LOCK,
+            "is not an exact pin",
+            id="pip-audit unpinned",
+        ),
+        pytest.param(
+            _LIVE_PINS.replace("pip-audit==2.10.1", "pip-audit==2.10.0"),
+            _LIVE_LOCK,
+            "but requirements.txt pins pip-audit",
+            id="pip-audit drifts from the lock",
+        ),
+        pytest.param(
+            _LIVE_PINS,
+            _LIVE_LOCK.replace("bandit==1.9.4", "bandit==1.9.5"),
+            "but requirements.txt pins bandit",
+            id="lock bumps bandit and the pins file stays behind",
+        ),
+        pytest.param(
+            _LIVE_PINS.replace(f"{TOOLING_CONSTRAINT}\n", ""),
+            _LIVE_LOCK,
+            f"must carry `{TOOLING_CONSTRAINT}`",
+            id="transitive constraint dropped",
+        ),
+        pytest.param(
+            _LIVE_PINS.replace("bandit==1.9.4\n", ""),
+            _LIVE_LOCK,
+            "must pin exactly",
+            id="bandit dropped from the pins file",
+        ),
+    ],
+)
+def test_the_tooling_pin_guard_rejects_drift(
+    pins: str, lock: str, expected: str
+) -> None:
+    assert pins != _LIVE_PINS or lock != _LIVE_LOCK, "the mutation did not apply"
+    violations = audit_tooling_pins(pins, lock)
+    assert violations, "the guard passed drifting audit tooling"
+    assert any(expected in violation for violation in violations), violations
+
+
+@pytest.mark.parametrize("path", [TEST_SUITE_WORKFLOW, WORKFLOW], ids=lambda p: p.name)
+def test_the_hygiene_guard_does_not_over_reject(path: Path) -> None:
+    """Installing something else alongside the pinned tooling is legitimate.
+
+    The pin check fails closed on the two audit tools by name; it must not object to an
+    unrelated install in the same job, or it would stop a maintainer adding one.
+    """
+    assert (
+        audit_gate_hygiene(
+            _with_tooling_install(path, f"{TOOLING_INSTALL}\npip install ruff\n"),
+            path.name,
+        )
+        == []
+    )
 
 
 if __name__ == "__main__":
