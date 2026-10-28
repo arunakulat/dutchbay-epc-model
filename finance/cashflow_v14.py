@@ -1229,9 +1229,11 @@ def _register_cashflow_schema() -> None:
             required=False,
             severity="error",
             description=(
-                "Within-year event dates for discrete items on a sub-annual grid "
-                "(opt-in; absent means every flow follows the profile). Validated at "
-                "pre-flight by finance.event_calendar_v14.resolve_event_calendar."
+                "Within-year event dates for discrete items on a sub-annual grid. An "
+                "undeclared kind takes an illustrative default date, flagged as an "
+                "assumption; 'profile' keeps a kind on the within-year profile. "
+                "Validated at pre-flight by "
+                "finance.event_calendar_v14.resolve_event_calendar."
             ),
             validator=None,
         ),

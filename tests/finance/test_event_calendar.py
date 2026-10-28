@@ -1,26 +1,30 @@
 """Contract tests for the within-year event calendar (:mod:`finance.event_calendar_v14`).
 
 A3 dolphin (b) of #1395. A2 spreads every annual flow by one within-year profile, which
-smooths a discrete payment's dip away. The calendar places a declared item on its
-declared sub-periods instead. Four properties carry the weight here:
+smooths a discrete payment's dip away. The calendar places such an item on its
+sub-periods instead. Five properties carry the weight here:
 
-1. Default-off. No committed scenario declares a calendar, an absent calendar resolves
-   to ``None``, and pre-flight passes the shape every scenario ships. The annual canon
-   cannot move by shipping the module.
+1. The annual canon cannot move. Every committed scenario is on the annual grid, where
+   the calendar resolves to ``None``, and none declares one.
 2. The dip is real. On the live committed BESS case, augmentation placed in Q1 of its
    year lands there in full, and that quarter's CFADS falls by the difference between
    the placed and the profile-spread payment.
 3. Reconciliation survives the move. Every placed and re-derived flow still sums back to
    the annual engine's figure within A2's 1-ULP bound, every untouched key is
    byte-identical to A2's output, and the per-period CFADS identities hold.
-4. Dates are declared, never assumed. A calendar on the annual grid, an unknown or
-   unmodelled kind (``working_capital``), and malformed periods or weights are refused,
-   at the resolver and through the full v14 pre-flight.
+4. Defaults are flagged. On a sub-annual grid an undeclared tax or augmentation payment
+   takes its illustrative default (last and first period), is listed in
+   ``EventCalendar.assumed`` and is named in a warning; a declared kind replaces its
+   default, ``profile`` keeps it on the profile, and bridge service has no default.
+5. Malformed input is refused. A calendar on the annual grid, an unknown or unmodelled
+   kind (``working_capital``), and malformed periods or weights are refused, at the
+   resolver and through the full v14 pre-flight.
 """
 
 from __future__ import annotations
 
 import glob
+import logging
 import math
 from typing import Any, Dict, List
 
@@ -30,6 +34,7 @@ import yaml
 from analytics.config_schema import get_required_fields
 from analytics.schema_guard import ConfigValidationError, validate_config_for_v14
 from finance.event_calendar_v14 import (
+    DEFAULT_EVENT_PERIODS,
     EVENT_CALENDAR_KEY,
     EVENT_KINDS,
     EventCalendar,
@@ -37,7 +42,12 @@ from finance.event_calendar_v14 import (
     build_bridge_service_events,
     resolve_event_calendar,
 )
-from finance.period_grid_v14 import ANNUAL, PeriodGrid, aggregate_flows_to_annual
+from finance.period_grid_v14 import (
+    ANNUAL,
+    PeriodGrid,
+    aggregate_flows_to_annual,
+    resolve_period_grid,
+)
 from finance.subannual_rows_v14 import (
     FLOW_KEYS,
     RECONCILIATION_ULP_TOLERANCE,
@@ -120,38 +130,118 @@ def _assert_identities(rows: List[Dict[str, float]], per_year: int) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Default-off
+# The annual canon cannot move
 # ---------------------------------------------------------------------------
 
 
-def test_no_config_or_no_calendar_resolves_to_none() -> None:
+def test_the_annual_grid_or_no_config_resolves_to_none() -> None:
     assert resolve_event_calendar(None, QUARTERLY) is None
-    assert resolve_event_calendar({}, QUARTERLY) is None
-    assert resolve_event_calendar({"cashflow": {}}, QUARTERLY) is None
+    assert resolve_event_calendar({}, ANNUAL) is None
     assert resolve_event_calendar({"cashflow": {}}, ANNUAL) is None
 
 
-def test_no_committed_scenario_declares_a_calendar() -> None:
-    """The default-off claim, read from the scenarios rather than asserted."""
+def _committed_documents() -> List[Any]:
     paths = sorted(glob.glob("scenarios/*.yaml"))
     assert len(paths) == 37  # guards the glob; update when a scenario is added
-    declaring = []
+    documents: List[Any] = []
     for path in paths:
         with open(path) as handle:
             # Some example scenarios carry more than one YAML document; read them all.
-            documents = list(yaml.safe_load_all(handle))
-        for config in documents:
-            cashflow = config.get("cashflow") if isinstance(config, dict) else None
-            if isinstance(cashflow, dict) and "event_calendar" in cashflow:
-                declaring.append(path)
+            documents.extend(yaml.safe_load_all(handle))
+    return documents
+
+
+def test_every_committed_scenario_is_annual_so_no_calendar_runs() -> None:
+    """The canon claim, read from the scenarios rather than asserted.
+
+    The illustrative defaults apply on any sub-annual grid, so the canon is safe only
+    while every committed scenario stays annual. This is the test that says so.
+    """
+    for config in _committed_documents():
+        if not isinstance(config, dict):
+            continue
+        grid = resolve_period_grid(config)
+        assert grid.is_annual
+        assert resolve_event_calendar(config, grid) is None
+
+
+def test_no_committed_scenario_declares_a_calendar() -> None:
+    declaring = [
+        config
+        for config in _committed_documents()
+        if isinstance(config, dict)
+        and isinstance(config.get("cashflow"), dict)
+        and "event_calendar" in config["cashflow"]
+    ]
     assert declaring == []
 
 
-def test_an_empty_calendar_changes_nothing(bess_annual_rows) -> None:
-    calendar = _resolve({})
-    assert calendar is not None and calendar.placements == {}
+# ---------------------------------------------------------------------------
+# Illustrative defaults, flagged
+# ---------------------------------------------------------------------------
+
+
+def test_an_absent_calendar_takes_the_flagged_defaults(caplog) -> None:
+    with caplog.at_level(logging.WARNING, logger="finance.event_calendar_v14"):
+        calendar = resolve_event_calendar({"cashflow": {}}, QUARTERLY)
+    assert calendar is not None
+    assert calendar.assumed == frozenset({"tax", "bess_augmentation_capex"})
+    assert calendar.placements == {
+        "tax": (0.0, 0.0, 0.0, 1.0),
+        "bess_augmentation_capex": (1.0, 0.0, 0.0, 0.0),
+    }
+    assert "bridge_service" not in DEFAULT_EVENT_PERIODS
+    message = caplog.text
+    assert "ASSUMED" in message and "#920" in message
+    assert "tax" in message and "bess_augmentation_capex" in message
+
+
+def test_a_declared_kind_replaces_its_default_and_is_not_assumed(caplog) -> None:
+    with caplog.at_level(logging.WARNING, logger="finance.event_calendar_v14"):
+        calendar = _resolve({"tax": {"periods": [2, 4]}})
+    assert calendar is not None
+    assert calendar.placements["tax"] == (0.0, 0.5, 0.0, 0.5)
+    assert calendar.assumed == frozenset({"bess_augmentation_capex"})
+    assert "bess_augmentation_capex" in caplog.text
+    assert "tax" not in caplog.text
+
+
+def test_fully_declared_calendar_assumes_nothing_and_warns_nothing(caplog) -> None:
+    with caplog.at_level(logging.WARNING, logger="finance.event_calendar_v14"):
+        calendar = _resolve(
+            {"tax": {"periods": [4]}, "bess_augmentation_capex": {"periods": [2]}}
+        )
+    assert calendar is not None and calendar.assumed == frozenset()
+    assert "ASSUMED" not in caplog.text
+
+
+def test_profile_keeps_every_kind_on_a2s_spread(bess_annual_rows) -> None:
+    calendar = _resolve({"tax": "profile", "bess_augmentation_capex": "profile"})
+    assert calendar is not None
+    assert calendar.placements == {} and calendar.assumed == frozenset()
     rows = build_subannual_rows(bess_annual_rows, QUARTERLY, SEASONAL)
     assert apply_event_calendar(rows, bess_annual_rows, calendar) == rows
+
+
+def test_the_defaults_show_the_dips_on_the_live_bess_case(bess_annual_rows) -> None:
+    """What the owner chose the defaults for: a quarterly run shows the dips unconfigured."""
+    annual = bess_annual_rows
+    calendar = resolve_event_calendar({"cashflow": {}}, QUARTERLY)
+    assert calendar is not None
+    placed = apply_event_calendar(
+        build_subannual_rows(annual, QUARTERLY, SEASONAL), annual, calendar
+    )
+    for year_index, row in enumerate(annual):
+        start = year_index * 4
+        assert placed[start]["bess_augmentation_capex_lkr"] == float(
+            row["bess_augmentation_capex_lkr"]
+        )
+        assert placed[start + 3]["tax_lkr"] == float(row["tax_lkr"])
+        for quarter in (1, 2):
+            assert placed[start + quarter]["bess_augmentation_capex_lkr"] == 0.0
+            assert placed[start + quarter]["tax_lkr"] == 0.0
+    _assert_reconciles(placed, annual, QUARTERLY)
+    _assert_identities(placed, 4)
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +258,8 @@ def test_bess_augmentation_lands_in_its_declared_quarter(bess_annual_rows) -> No
     assert aug_years, "the committed BESS case must carry an augmentation payment"
 
     profile_rows = build_subannual_rows(annual, QUARTERLY, SEASONAL)
-    calendar = _resolve({"bess_augmentation_capex": {"periods": [1]}})
+    # Tax stays on the profile, so Q1 moves by the augmentation alone.
+    calendar = _resolve({"bess_augmentation_capex": {"periods": [1]}, "tax": "profile"})
     assert calendar is not None
     placed = apply_event_calendar(profile_rows, annual, calendar)
 
@@ -306,7 +397,9 @@ def test_a_row_count_that_is_not_whole_years_is_refused(bess_annual_rows) -> Non
 
 
 def test_default_weights_are_equal_over_the_declared_periods() -> None:
-    calendar = _resolve({"tax": {"periods": [2, 4]}})
+    calendar = _resolve(
+        {"tax": {"periods": [2, 4]}, "bess_augmentation_capex": "profile"}
+    )
     assert calendar is not None
     assert calendar.placements["tax"] == (0.0, 0.5, 0.0, 0.5)
     assert calendar.placed_row_keys == {"tax_lkr": (0.0, 0.5, 0.0, 0.5)}
@@ -336,6 +429,7 @@ def test_working_capital_is_refused_as_not_modelled() -> None:
         (["tax"], "must be a mapping of event kind"),
         ({"vat": {"periods": [1]}}, "not a known event kind"),
         ({"tax": [1, 2]}, "must be a mapping with 'periods'"),
+        ({"tax": "even"}, "must be a mapping with 'periods'"),
         ({"tax": {"periods": [1], "dates": ["2027-03-31"]}}, "unknown field"),
         ({"tax": {}}, "non-empty list"),
         ({"tax": {"periods": []}}, "non-empty list"),

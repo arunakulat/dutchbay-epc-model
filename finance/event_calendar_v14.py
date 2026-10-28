@@ -7,29 +7,37 @@ BESS augmentation payment, a tax installment, the bridge period's debt service. 
 like a flow, a discrete payment's dip is smoothed away, which is the gap the F-5 bar
 names ("bess_augmentation_capex_lkr is a discrete event that A2 spreads like a flow").
 
-This module lets a scenario say *which sub-periods* such an item falls in, and places it
-there instead of spreading it. Everything else still follows the profile.
+This module places such an item on the sub-periods it falls in instead of spreading it.
+Everything else still follows the profile.
 
-Default-off and byte-identical
-------------------------------
-With ``cashflow.event_calendar`` absent, which is every committed scenario,
-:func:`resolve_event_calendar` returns ``None`` and nothing here runs. The annual engine
-never reads this module, so the annual canon cannot move by shipping it. A calendar is
-only meaningful on a sub-annual grid, so one declared on the annual grid is refused
-rather than ignored.
+The annual canon cannot move
+----------------------------
+A calendar only exists on a sub-annual grid. On the annual grid, which every committed
+scenario uses, :func:`resolve_event_calendar` returns ``None`` and nothing here runs, and
+a calendar declared there is refused rather than ignored. The annual engine never reads
+this module, so shipping it cannot move an annual figure.
 
-Dates are declared, never assumed
----------------------------------
-No placement has a default. When tax installments fall, when augmentation is paid and
-when the bridge loan is serviced are project and contract facts this repository does not
-hold evidence for (#920). A code default would be read as one. So an event kind is
-placed only when the scenario declares its periods, and an undeclared kind keeps A2's
-profile spread, exactly as before.
+Illustrative default dates, flagged as assumptions
+--------------------------------------------------
+When tax installments fall, when augmentation is paid and when the bridge loan is
+serviced are project and contract facts this repository does not hold evidence for
+(#920). The owner chose (#1395 (b), 2026-10-28) to ship illustrative defaults anyway, so
+that a quarterly run shows the discrete dips without extra configuration. On a
+sub-annual grid, a kind the scenario does not declare is placed on its default:
+
+* ``tax`` in the year's LAST period (one payment at year end);
+* ``bess_augmentation_capex`` in the year's FIRST period (paid when the work starts).
+
+These are assumptions, not evidence. Each kind placed by default is listed in
+:attr:`EventCalendar.assumed` and named in a warning at resolution, so a reader cannot
+mistake one for a declared date. A scenario replaces a default by declaring the kind's
+periods, or keeps a kind on A2's profile spread by declaring it as ``profile``.
+``bridge_service`` has no default: it is placed only when declared.
 
 What is placed, and what follows from it
 ----------------------------------------
-Three kinds, each with a declared list of 1-based periods within the year and optional
-weights across them:
+Three kinds, each declared as a list of 1-based periods within the year with optional
+weights across them, or as ``profile``:
 
 * ``bess_augmentation_capex`` places the row key ``bess_augmentation_capex_lkr``.
 * ``tax`` places the row key ``tax_lkr``, the tax CASH payment. ``taxable_income_lkr``
@@ -61,21 +69,23 @@ the earlier periods carry their computed values and the closing period takes
 service the same way.
 
 F-5 is untouched. A quarterly figure built with a calendar is still an allocation of the
-annual engine plus declared dates, and no quarterly CFADS or intra-year DSCR figure may
-support a covenant, lender or IC representation while that hold stands.
+annual engine plus declared or assumed dates, and no quarterly CFADS or intra-year DSCR
+figure may support a covenant, lender or IC representation while that hold stands.
 """
 
 from __future__ import annotations
 
+import logging
 import math
-from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from dataclasses import dataclass, field
+from typing import AbstractSet, Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from .cashflow_v14_utils import get_nested
 from .period_grid_v14 import PeriodGrid, require_mapping_node
 from .subannual_rows_v14 import allocate_flow, validate_profile_weights
 
 __all__ = [
+    "DEFAULT_EVENT_PERIODS",
     "EVENT_CALENDAR_KEY",
     "EVENT_KINDS",
     "EventCalendar",
@@ -83,6 +93,8 @@ __all__ = [
     "build_bridge_service_events",
     "resolve_event_calendar",
 ]
+
+logger = logging.getLogger(__name__)
 
 EVENT_CALENDAR_KEY = "cashflow.event_calendar"
 _CALENDAR_PATH: Sequence[str] = ("cashflow", "event_calendar")
@@ -94,6 +106,17 @@ EVENT_KINDS: Mapping[str, Optional[str]] = {
     "tax": "tax_lkr",
     "bridge_service": None,
 }
+
+#: ILLUSTRATIVE default placement for an undeclared kind on a sub-annual grid: the year's
+#: "first" or "last" period. Assumptions, not evidence (#920); see the module docstring.
+#: A kind absent here (``bridge_service``) is placed only when declared.
+DEFAULT_EVENT_PERIODS: Mapping[str, str] = {
+    "bess_augmentation_capex": "first",
+    "tax": "last",
+}
+
+#: The entry that keeps a kind on A2's profile spread instead of placing it.
+_PROFILE = "profile"
 
 #: Kinds a scenario might reasonably name that the engine has no flow for. Each is
 #: refused with its reason rather than lumped in with typos.
@@ -109,16 +132,20 @@ _EVENT_FIELDS = frozenset({"periods", "weights"})
 
 @dataclass(frozen=True)
 class EventCalendar:
-    """Resolved within-year placements, one weight vector per declared event kind.
+    """Resolved within-year placements, one weight vector per placed event kind.
 
     Attributes:
         grid: The sub-annual grid the placements are measured on.
         placements: Event kind -> weights over ALL of the grid's periods in a year
-            (zeros outside the declared periods), summing to 1.
+            (zeros outside the placed periods), summing to 1. A kind declared as
+            ``profile`` is absent and follows A2's profile spread.
+        assumed: The kinds placed on :data:`DEFAULT_EVENT_PERIODS` because the scenario
+            did not declare them. Their dates are illustrative assumptions.
     """
 
     grid: PeriodGrid
     placements: Mapping[str, Tuple[float, ...]]
+    assumed: AbstractSet[str] = field(default_factory=frozenset)
 
     @property
     def placed_row_keys(self) -> Dict[str, Tuple[float, ...]]:
@@ -140,12 +167,17 @@ def resolve_event_calendar(
         grid: The resolved operating-period grid.
 
     Returns:
-        ``None`` when no calendar is declared, otherwise the resolved calendar.
+        ``None`` on the annual grid, or when ``config`` is ``None``. Otherwise the
+        resolved calendar: declared kinds as declared, and undeclared kinds on
+        :data:`DEFAULT_EVENT_PERIODS`, listed in :attr:`EventCalendar.assumed` and named
+        in a warning. A calendar absent from a sub-annual config therefore resolves to
+        the defaults alone.
 
     Raises:
-        ValueError: If the calendar is declared on the annual grid; if it, or an event
-            entry, is not a mapping; if it names an unknown or unmodelled event kind, or
-            an unknown field; or if an entry's periods or weights are malformed.
+        ValueError: If the calendar is declared on the annual grid; if it is not a
+            mapping, or an entry is neither a mapping nor ``profile``; if it names an
+            unknown or unmodelled event kind, or an unknown field; or if an entry's
+            periods or weights are malformed.
     """
     if config is None:
         return None
@@ -153,7 +185,9 @@ def resolve_event_calendar(
     require_mapping_node(config, _CALENDAR_PATH, EVENT_CALENDAR_KEY)
     raw = get_nested(dict(config), _CALENDAR_PATH)
     if raw is None:
-        return None
+        if grid.is_annual:
+            return None
+        raw = {}
 
     if grid.is_annual:
         raise ValueError(
@@ -168,6 +202,7 @@ def resolve_event_calendar(
         )
 
     placements: Dict[str, Tuple[float, ...]] = {}
+    declared: set[str] = set()
     for kind, entry in raw.items():
         label = f"{EVENT_CALENDAR_KEY}.{kind}"
         if kind in _NOT_MODELLED:
@@ -180,17 +215,49 @@ def resolve_event_calendar(
                 f"{label} is not a known event kind. Known: "
                 f"{', '.join(sorted(EVENT_KINDS))}."
             )
-        placements[str(kind)] = _resolve_entry(entry, grid, label)
+        declared.add(str(kind))
+        weights = _resolve_entry(entry, grid, label)
+        if weights is not None:
+            placements[str(kind)] = weights
 
-    return EventCalendar(grid=grid, placements=placements)
+    assumed = frozenset(kind for kind in DEFAULT_EVENT_PERIODS if kind not in declared)
+    for kind in sorted(assumed):
+        placements[kind] = _default_placement(kind, grid)
+    if assumed:
+        logger.warning(
+            "%s: %s placed on ASSUMED default dates (%s). These are illustrative, not "
+            "evidenced (#920); declare the periods, or 'profile', to replace them.",
+            EVENT_CALENDAR_KEY,
+            ", ".join(sorted(assumed)),
+            "; ".join(
+                f"{kind}: {DEFAULT_EVENT_PERIODS[kind]} period"
+                for kind in sorted(assumed)
+            ),
+        )
+
+    return EventCalendar(grid=grid, placements=placements, assumed=assumed)
 
 
-def _resolve_entry(entry: Any, grid: PeriodGrid, label: str) -> Tuple[float, ...]:
-    """Turn one event entry into weights over all of a year's periods."""
+def _default_placement(kind: str, grid: PeriodGrid) -> Tuple[float, ...]:
+    """The whole of ``kind`` in the year's first or last period."""
+    full = [0.0] * grid.periods_per_year
+    full[0 if DEFAULT_EVENT_PERIODS[kind] == "first" else -1] = 1.0
+    return tuple(full)
+
+
+def _resolve_entry(
+    entry: Any, grid: PeriodGrid, label: str
+) -> Optional[Tuple[float, ...]]:
+    """Turn one event entry into weights over all of a year's periods.
+
+    Returns ``None`` for ``profile``: the kind stays on A2's profile spread.
+    """
+    if entry == _PROFILE:
+        return None
     if not isinstance(entry, dict):
         raise ValueError(
-            f"{label} must be a mapping with 'periods' (and optional 'weights'); got "
-            f"{type(entry).__name__}."
+            f"{label} must be a mapping with 'periods' (and optional 'weights'), or "
+            f"{_PROFILE!r}; got {entry!r}."
         )
     unknown = sorted(str(key) for key in entry if key not in _EVENT_FIELDS)
     if unknown:

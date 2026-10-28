@@ -357,7 +357,9 @@ def _validate_cashflow_period_fields(
       that does not sum to 1.
     * :func:`finance.event_calendar_v14.resolve_event_calendar` (#1395 (b)) rejects a
       ``cashflow.event_calendar`` declared on the annual grid, an unknown or unmodelled
-      event kind (``working_capital``), and malformed periods or weights.
+      event kind (``working_capital``), and malformed periods or weights. On a
+      sub-annual grid it also names, in a warning, any kind left on its illustrative
+      default date.
 
     The cross-field consequence is the reason the grid is resolved first, and it is the
     mistake most likely to reach a real config: a four-weight
