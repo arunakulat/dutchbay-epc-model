@@ -1046,6 +1046,7 @@ def _register_cashflow_schema() -> None:
     """
     # Imported inside the registration so the engine keeps no module-level dependency
     # on the period-grid modules, which import nothing from the engine in return.
+    from finance.event_calendar_v14 import EVENT_CALENDAR_KEY
     from finance.period_grid_v14 import CASHFLOW_RESOLUTION_KEY
     from finance.subannual_rows_v14 import WITHIN_YEAR_PROFILE_KEY
 
@@ -1218,6 +1219,19 @@ def _register_cashflow_schema() -> None:
                 "Within-year allocation weights, one per period of the resolved grid "
                 "(opt-in; absent means an even split). Validated at pre-flight by "
                 "finance.subannual_rows_v14.resolve_within_year_profile."
+            ),
+            validator=None,
+        ),
+        RequiredFieldSpec(
+            module="cashflow",
+            name="cashflow_event_calendar",
+            paths=(tuple(EVENT_CALENDAR_KEY.split(".")),),
+            required=False,
+            severity="error",
+            description=(
+                "Within-year event dates for discrete items on a sub-annual grid "
+                "(opt-in; absent means every flow follows the profile). Validated at "
+                "pre-flight by finance.event_calendar_v14.resolve_event_calendar."
             ),
             validator=None,
         ),
