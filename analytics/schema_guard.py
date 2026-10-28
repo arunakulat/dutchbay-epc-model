@@ -395,6 +395,49 @@ def _validate_refinance_terms(raw_config: Mapping[str, Any], errors: list[str]) 
         errors.append(str(exc))
 
 
+#: P3-COV-05 (#1399 part A): a declared receivables guarantee that nothing models.
+RECEIVABLES_GUARANTEE_KEY = "receivables_guarantee_months"
+
+
+def _validate_no_receivables_guarantee(
+    raw_config: Mapping[str, Any], errors: list[str]
+) -> None:
+    """Refuse ``receivables_guarantee_months``, which has no consumer (#1399 part A).
+
+    The key was declared in every committed scenario, usually as nine months of "CEB
+    payment risk", yet nothing in the engine read it: no receivables guarantee, standby
+    letter of credit or other payment-support cash flow is modelled, so the value changed
+    nothing while reading as a modelled protection (``FRAMEWORK-02``: no silent dead
+    config). Refused wherever it appears under ``Financing_Terms``, either directly or
+    under ``reserves``, until a consumer exists. The real support terms await an
+    authenticated term sheet (#920, #1399 part B).
+    """
+    if not isinstance(raw_config, Mapping):
+        return
+    for section_key, section in raw_config.items():
+        if not (
+            isinstance(section_key, str) and section_key.lower() == "financing_terms"
+        ):
+            continue
+        if not isinstance(section, Mapping):
+            continue
+        candidates = [(f"{section_key}.{RECEIVABLES_GUARANTEE_KEY}", section)]
+        reserves = section.get("reserves")
+        if isinstance(reserves, Mapping):
+            candidates.append(
+                (f"{section_key}.reserves.{RECEIVABLES_GUARANTEE_KEY}", reserves)
+            )
+        for path, node in candidates:
+            if RECEIVABLES_GUARANTEE_KEY in node:
+                errors.append(
+                    f"{path} is not modelled: nothing in the engine reads it, so no "
+                    "receivables guarantee, standby letter of credit or payment-support "
+                    "cash flow follows from it and the value would be silently ignored "
+                    "(FRAMEWORK-02, audit P3-COV-05). Remove the key. Receivables support "
+                    "awaits authenticated term-sheet terms (#920)."
+                )
+
+
 def _validate_grid_conditionals(
     raw_config: Mapping[str, Any], errors: list[str]
 ) -> None:
@@ -488,6 +531,10 @@ def validate_config_for_v14(
     # an even profile, no error, byte-identical. A present-but-unsupported value fails
     # here, before evaluation begins, naming the path and the accepted values.
     _validate_cashflow_period_fields(raw_config, errors)
+
+    # 1g. Refuse Financing_Terms receivables_guarantee_months, which nothing in the
+    # engine reads (P3-COV-05, #1399 part A). Present-only: an absent key is no error.
+    _validate_no_receivables_guarantee(raw_config, errors)
 
     # 2. Ensure modules are imported so they can register field specs
     module_list = list(modules) if modules is not None else []

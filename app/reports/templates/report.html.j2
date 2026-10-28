@@ -249,6 +249,8 @@
         <tr><td>Interest during construction (IDC)</td><td class="num">{{ fmt_usd(ctx.finance.funding.idc_usd) }}</td></tr>
         {% if ctx.finance.funding.initial_dsra_usd %}
         <tr><td>DSRA funded at close</td><td class="num">{{ fmt_usd(ctx.finance.funding.initial_dsra_usd) }}</td></tr>
+        {% else %}
+        <tr><td>DSRA funded at close</td><td class="num">None</td></tr>
         {% endif %}
         <tr><td><strong>Total uses</strong></td><td class="num"><strong>{{ fmt_usd(ctx.finance.funding.uses_total_usd) }}</strong></td></tr>
       </tbody>
@@ -261,6 +263,13 @@
         <tr><td><strong>Total sources</strong></td><td class="num"><strong>{{ fmt_usd(ctx.finance.funding.sources_total_usd) }}</strong></td></tr>
       </tbody>
     </table>
+    {# P3-COV-05 (#1399 part A): state the reserve and payment-support basis outright. #}
+    {% if not ctx.finance.funding.initial_dsra_usd %}
+    <p class="muted">No debt service reserve is funded at financial close.{% if ctx.finance.funding.dsra_target_months %} The
+      {{ ctx.finance.funding.dsra_target_months }}-month reserve target is built from operating cash in the equity waterfall.{% endif %}</p>
+    {% endif %}
+    <p class="muted">No payment-support cash flow is modelled. A revenue guarantee, where a scenario
+      enables one, adds only its fee to the cost of debt. Receivables support awaits the term sheet.</p>
     <p>Sources &amp; uses balance:
       {% if ctx.finance.funding.balanced %}<span class="badge pass">Balanced</span>
       {% elif ctx.finance.funding.balanced is none %}<span class="muted">not reported</span>

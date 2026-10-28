@@ -22,7 +22,8 @@ Financing_Terms:
     usd_nominal: 0.075
   reserves:
     dsra_months: 6
-    receivables_guarantee_months: 9
+    # receivables_guarantee_months removed (#1399): nothing in the engine reads it, and
+    # v14 pre-flight refuses it. Receivables support awaits the term sheet (#920).
   target_dscr: 1.3
   tenor_years: 15
   use_revenue_guarantee: false

@@ -500,7 +500,8 @@ Financing_Terms:
   # Reserves
   reserves:
     dsra_months: 6  # Debt Service Reserve Account
-    receivables_guarantee_months: 9  # CEB payment risk
+    # receivables_guarantee_months removed (#1399): nothing in the engine reads it, and
+    # v14 pre-flight refuses it. Receivables support awaits the term sheet (#920).
 
   use_revenue_guarantee: false
   guarantee_revenue_pct: 0.0075
