@@ -44,7 +44,10 @@ The rule makes all six phases mandatory and requires deviations to be stated wit
 
 - The sprint is numbered 21 on the assumption that Sprint 20 (Lane A, sub-annual cashflow) was
   the last numbered sprint; decision D6 confirms or renames it.
-- The package was written by one coordinator and has not been reviewed. Under `RECRUIT-01` it is
-  `R2_LOAD_BEARING` and needs a project-finance domain reviewer and a separate assurance reviewer
-  before it steers any work.
+- The package was written by one coordinator. Under `RECRUIT-01` it is `R2_LOAD_BEARING` and
+  needs a project-finance domain reviewer and a separate assurance reviewer before it steers any
+  work. It merged on 29 September 2026 (#1296) without them. The post-merge domain review returned
+  REJECT, and so did the post-merge assurance review. Their blocking findings were corrected on
+  28 October 2026 (comprehensive analysis, section 13), and the reconciliation of the two reviews is
+  in `docs/PLATFORM_PLAN_REVIEW_RECONCILIATION.md`.
 - The limitations of the evaluation itself are in section 12 of the comprehensive analysis.

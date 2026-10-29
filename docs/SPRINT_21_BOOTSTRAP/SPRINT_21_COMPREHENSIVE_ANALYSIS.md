@@ -6,7 +6,8 @@
 | Subject SHA-256 | `a1be78037cc4bc662541b8e9e6f1b167bb2451c2fe88f68d411fb6b6245bf444` |
 | Repository base | `main` at `b87ee32`, 26 September 2026 |
 | Prepared by | Claude Code cloud session, acting as sole coordinator |
-| Review status | Not independently reviewed. `RECRUIT-01` class `R2_LOAD_BEARING`; the review pair is pending |
+| Review status | `RECRUIT-01` class `R2_LOAD_BEARING`. Merged on 29 September 2026 (#1296) without its review pair. The post-merge task-domain review (R-DOM-1) returned REJECT with seven blocking findings; the post-merge assurance review (R-ASR-1) also returned REJECT, with one blocking finding (ASR-1, the same false handover trap as DOM-7). Both records and their reconciliation are in `docs/PLATFORM_PLAN_*_REVIEW*.md`, tracked on #1371 |
+| Corrections | 28 October 2026, for the domain review's findings DOM-1 to DOM-9. What changed, and why, is in section 13. Assessments still describe `main` at `b87ee32` unless a sentence says otherwise |
 | Authority | None. This record adopts, schedules and authorizes nothing, and lifts no `HOLD` |
 
 ## 1. Purpose, method and reading rule
@@ -28,7 +29,9 @@ Method:
    [`SPRINT_21_RESEARCH_NOTES.md`](SPRINT_21_RESEARCH_NOTES.md). Statements of engineering or
    finance practice are attributed to the repository record that states them where one exists;
    otherwise they are framed as questions or recommendations rather than asserted as fact.
-5. One numerical check was run against the repository's own debt-sizing function (section 4, C1).
+5. One numerical check was run against the repository's closed-form debt-capacity helper,
+   `size_debt_with_dual_dscr` (section 4, C1). That helper does not size the facility; the engine
+   sizes debt by solving gearing on the real schedule (items 25 and 28).
 
 Reading rule: "exists" means code on `main` implements the item, not that the implementation is
 reviewed, bankable or free of open findings. Where an audit finding touches an item, its state is
@@ -70,9 +73,9 @@ technically wrong, see section 4).
 | 3 | PostgreSQL with TimescaleDB | No database. API users are a provisioned secret (`fly.toml`), job state is Redis (`app/jobs/redis_store.py`) | Gap, not a need at current scope | See section 5.2. Keep time series as content-addressed, hash-pinned files; add a database when the product needs persistent multi-user state (decision D2) |
 | 4 | React/Next.js, Tailwind, AG Grid, Recharts | Server-rendered Jinja wizard (`app/web/routes.py:107`) with HTML, PDF and XLSX report downloads | Gap, not a need at current scope | See section 5.3; decision D2 |
 | 5 | Docker with Kubernetes | `Dockerfile`; `docker-compose.yml` (Redis, web, worker); `fly.toml` (separate `web` and `worker` processes; web machines auto-start) | Partial: containers and a separately scalable worker exist; no Kubernetes | See section 5.4; no change without a measured scaling need |
-| 6 | `Projects` / `Assets` tables, multi-technology | Scenario YAML with `generation.technologies`; type registry `finance/tech_types.py:25-44`; aggregation `analytics/portfolio/generation_aggregator.py`; shared-POI curtailment `analytics/portfolio/poi_curtailment.py:33` | Exists within a project; no multi-project portfolio consolidation was found | Keep configuration in YAML (`ARCH-01`, `FRAMEWORK-02`). A portfolio view is a separate, later decision |
-| 7 | `Macro_Curves`: FX forwards, LIBOR/SOFR curves, inflation | FX curve explicit or parametric (`finance/cashflow_v14_fx.py:43`); interest-parity forward hedge (`finance/cashflow_v14_contracts.py:8`); CNY and EUR curve slots (`analytics/fx/fx_builder.py:52`, `:400`); FX calibration and history (`analytics/fx/`). Debt carries fixed rates per tranche; no floating-rate or swap logic | Partial; **Incorrect** on LIBOR (C2) | Floating-rate debt is a real gap, but material only if the term sheet specifies floating debt. Evidence first (F5-02), then a floating-rate tranche option on a current benchmark |
-| 8 | `Tax_Regimes` table | Sri Lanka regime in `finance/cashflow_v14_tax.py`; `docs/FEASIBILITY_REPORT_CONTRACT.md` section 3.1 specifies versioned jurisdiction packs | Gap in form; **Incorrect** on "WDAT for EU" (C3) | Implement jurisdictions as packs under DBAY-FRC-001 (statute, effective date, sources, review), not as table rows (section 5.6; decision D3) |
+| 6 | `Projects` / `Assets` tables, multi-technology | Scenario YAML with `generation.technologies`; type registry `finance/tech_types.py:25-44`; aggregation `analytics/portfolio/generation_aggregator.py`; shared-POI curtailment `analytics/portfolio/poi_curtailment.py:33` | Exists within a project; no multi-project portfolio consolidation was found; P3-G7 open (section 7.1) | Keep configuration in YAML (`ARCH-01`, `FRAMEWORK-02`). A portfolio view is a separate, later decision |
+| 7 | `Macro_Curves`: FX forwards, LIBOR/SOFR curves, inflation | FX curve explicit or parametric (`finance/cashflow_v14_fx.py:43`); interest-parity forward hedge (`finance/cashflow_v14_contracts.py:8`); CNY and EUR curve reads (`analytics/fx/fx_builder.py:395-397`, `:400`); FX calibration and history (`analytics/fx/`). Debt carries fixed rates per tranche; no floating-rate or swap logic | Partial; **Incorrect** on LIBOR (C2) | Floating-rate debt is a real gap, but material only if the term sheet specifies floating debt. Evidence first (F5-02), then a floating-rate tranche option on a current benchmark |
+| 8 | `Tax_Regimes` table | Sri Lanka regime in `finance/cashflow_v14_tax.py`; `docs/FEASIBILITY_REPORT_CONTRACT.md` section 3.1 specifies versioned jurisdiction packs | Gap in form; **Incorrect** on "WDAT for EU" (C3); P2-F4-02 open (section 7.1) | Implement jurisdictions as packs under DBAY-FRC-001 (statute, effective date, sources, review), not as table rows (section 5.6; decision D3) |
 
 ### 3.2 Phase 2 — multi-technology generation
 
@@ -80,8 +83,8 @@ technically wrong, see section 4).
 |---|---|---|---|---|
 | 9 | Solar with pvlib: irradiance, tilt, clipping | `solar_resource/pv_producer.py`: clear-sky scaled to measured GHI or a frozen hourly TMY; Erbs/DISC decomposition; Hay-Davies transposition; PVWatts DC; inverter clipping at AC nameplate; Faiman cell temperature | Exists | None |
 | 10 | Solar tracking, single- and dual-axis | Fixed tilt only (`solar_resource/pv_producer.py`, module docstring) | Gap | Single-axis tracking is a bounded producer dolphin. Dual-axis only if a project specifies it |
-| 11 | Wind power curves, Weibull, wake, air density | `wind_resource/bankable_aep.py:66` (IEC 61400-12-1 density correction), `:219` (PyWake wake, Bastankhah-Porte-Agel default); `weibull_fit.py`, `mcp.py`, `era5_*.py`, `power_curve_sourcing.py`, `layout_optimizer.py` (TopFarm) | Exists; a Weibull fit cannot drive hourly dispatch (C5) | No model build. The binding constraint is resource evidence: #1110 records that without on-site mast and MCP evidence there is no bankable resource claim (#1290 is in flight). The off-path AEP cluster in `docs/ARCHITECTURE.md` still awaits its wire-or-retire decision |
-| 12 | 8760-hour dispatch replacing annual P50/P90 | Finance engine is annual (`analytics/aep_reconciliation.py:3`). Hourly series exist in producers (frozen TMY), shared-POI curtailment and grid QSTS (8,760-step records in `analytics/contracts_v14.py`). Sub-annual finance is Sprint 20 Lane A: A1 merged as #1225, reverted by #1232 for missing review, re-proposed with A2 in draft #1231 | Partial; **Incorrect** as a replacement for P50/P90 (C5) | Section 5.1. Continue Lane A. Keep hourly resolution in the producer and dispatch layer and aggregate it onto the finance period grid |
+| 11 | Wind power curves, Weibull, wake, air density | `wind_resource/bankable_aep.py:66` (IEC 61400-12-1 density correction), `:219` (PyWake wake, Bastankhah-Porte-Agel default); `weibull_fit.py`, `mcp.py`, `era5_*.py`, `power_curve_sourcing.py`, `layout_optimizer.py` (TopFarm) | Exists; a Weibull fit cannot drive hourly dispatch (C5); open findings include P3-G1 (critical) (section 7.1) | No model build. The binding constraint is resource evidence: #1110 records that without on-site mast and MCP evidence there is no bankable resource claim. #1290 was in flight at the base; it has since merged a partial met-mast export that is held under a `HOLD` on annual or lender-grade use, with its site identity undocumented, so it does not supply that claim. The off-path AEP cluster in `docs/ARCHITECTURE.md` still awaits its wire-or-retire decision |
+| 12 | 8760-hour dispatch replacing annual P50/P90 | Finance engine is annual (`analytics/aep_reconciliation.py:3`). Hourly series exist in producers (frozen TMY), shared-POI curtailment and grid QSTS (8,760-step records in `analytics/contracts_v14.py`). Sub-annual finance is Sprint 20 Lane A: A1 merged as #1225, reverted by #1232 for missing review, and re-proposed with A2 in #1231, a draft at the base. #1231 has since merged (`d3157e0d`), and #1296 carried it onto `main` (section 13) | Partial; **Incorrect** as a replacement for P50/P90 (C5) | Section 5.1. Continue Lane A. Keep hourly resolution in the producer and dispatch layer and aggregate it onto the finance period grid |
 | 13 | BESS non-linear degradation by DoD and C-rate | `finance/bess_revenue.py`: geometric model and an NREL BLAST-style separable calendar-plus-cycle model driven by equivalent full cycles (DoD-dependent); SoH floor 0.70 (`:121`); models registry (`:132`) | Partial: DoD dependence exists (linear); no C-rate term | Calibrate to OEM warranty degradation tables before adding model forms. The NSO corpus holds an OEM warranty policy and LTSA workbook |
 | 14 | SoH-triggered augmentation capex | Scheduled augmentation (`revenue.augmentation_schedule`; `finance/bess_revenue.py:741`) that restores SoH | Partial: scheduled, not triggered | A trigger mode that places the event in the year SoH crosses a configured threshold. Config-first, default unchanged |
 | 15 | Arbitrage dispatch optimiser | None. The module states that it does not run a dispatch simulation (`finance/bess_revenue.py:68`). Revenue models are `capacity_charge` and `energy_tariff` | Gap; not applicable to the committed contracts (C9) | Defer to a merchant-market jurisdiction pack. For Sri Lanka, model the dispatch a tariff actually pays for: night-peak shifting and absorption of curtailed energy |
@@ -95,7 +98,7 @@ technically wrong, see section 4).
 | 18 | Native-currency inputs per line (EUR turbines, LKR civils, USD tariff) | Capex in USD; tariff in LKR or converted from USD; debt tranches in LKR, USD and CNY (`analytics/fx/fx_builder.py:52`); EUR curve slot (`:400`) | Partial | A genuine extension. It must follow the migration path in `docs/CURRENCY_NUMERAIRE_DECISION.md` (alias, then one file per commit), and it waits on F5-02 |
 | 19 | Translation to a base currency for debt sizing | Debt sizing runs on USD-view CFADS (`finance/cashflow_v14_contracts.py:8` docstring); revenue is LKR-primary by decision (`docs/CURRENCY_NUMERAIRE_DECISION.md`) | Exists, with open findings | Close P2-F5-01 (delivered, review pending), P2-F5-02 (blocked on external evidence), P2-F5-03 and P3-MCFX-01 before extending |
 | 20 | FX hedging: forwards and cross-currency swaps | Forward hedge with hedge ratio, spread and parity forward curve (`finance/cashflow_v14_contracts.py:8`); hedging coverage (`analytics/fx/fx_builder.py:592`). No cross-currency swap | Partial; P3-COV-06 open | Design a swap only after F5-02 evidence fixes debt denomination and repayment numeraire. Whether an LKR hedge is obtainable at project tenor is a market-evidence question; the model must not assume a hedge that cannot be bought |
-| 21 | Depreciation: straight-line, declining balance, MACRS | Straight-line and split plant/civil straight-line (`finance/cashflow_v14_tax.py:359`, `:396`) | Partial; US scope incomplete (C8) | Add methods inside jurisdiction packs, each with statute and effective date |
+| 21 | Depreciation: straight-line, declining balance, MACRS | Straight-line and split plant/civil straight-line (`finance/cashflow_v14_tax.py:359`, `:396`); an enhanced capital allowance multiple is also wired (`tax.enhanced_capital_allowance_multiple`, `finance/cashflow_v14_tax.py:135-143`), set to 1.5 but switched off in the lender case (`enhanced_allowance_applies: false`) | Partial; US scope incomplete (C8); P2-F4-05 open (section 7.1) | Add methods inside jurisdiction packs, each with statute and effective date |
 | 22 | Loss carry-forward, finite or indefinite | Vintage-tracked ledger with an expiry window (`finance/cashflow_v14_tax.py:495`); `loss_carryforward_years` must be `>= 0` and `0` disables carry-forward | Partial: no explicit indefinite mode; P2-F3-05 records that `0` means two different things on two construction paths | Add an explicit indefinite mode rather than a sentinel number, and resolve P2-F3-05 in the same dolphin |
 | 23 | Tax holidays | `build_tax_holiday_map` (`finance/cashflow_v14_tax.py:460`); losses preserved through holiday years | Exists | None |
 | 24 | Interest limitation ("thin capitalization") | Binary `interest_deductibility` only (`finance/cashflow_v14_tax.py:174`). Audit P2-F4-04 (open) already specifies the design | Gap; **Incorrect** as written (C4) | Implement P2-F4-04 as specified, after the Sri Lankan position is confirmed from the Inland Revenue Act primary text |
@@ -104,53 +107,69 @@ technically wrong, see section 4).
 
 | # | Plan item | State on `main` (evidence) | Assessment | Recommendation |
 |---|---|---|---|---|
-| 25 | "Static 70/30 sizing is insufficient" | Gearing is solved against the real amortisation schedule to hold the DSCR target (`finance/debt_v14.py:1251`) | Premise does not apply | None |
-| 26 | CFADS | CFADS timeline and debt layer (`finance/debt_v14.py:921`) | Exists; P2-F4-01 (high) open: sizing runs on unlevered tax | Fix P2-F4-01. It moves KPIs, so `DOC-02`, `VERSION` and a `TEST-01` oracle apply |
-| 27 | Sculpt principal to a target DSCR | `_sculpted_schedule` (`finance/debt_v14.py:867`), with senior credit-support fees netted inside the sculpt (#737); dual P50/P99 downside case (`:1323`) | Exists, beyond the plan's scope | None |
-| 28 | Maximum debt from NPV of CFADS | `size_debt_with_dual_dscr` (`finance/debt_v14.py:1984`) sizes on the NPV of CFADS divided by the target DSCR | Exists; the plan's formula is **Incorrect** (C1) | Keep the code |
+| 25 | "Static 70/30 sizing is insufficient" | DSCR-based sizing exists but is opt-in. When `Financing_Terms.debt_sizing` is `dual_dscr`, `auto_dscr` or `dscr_sculpt`, `plan_debt` calls `_maybe_autosolve_dscr`, which solves gearing on the real engine through `_solve_gearing_for_dscr` (`finance/debt_v14.py:1251`) to hold the DSCR target, capped at `debt_ratio`. 19 of the 37 top-level scenarios set one of those modes, including the lender case. The other 18 size on static gearing, among them `scenarios/dutchbay_basecase_2025Q4.yaml` at `debt_ratio: 0.7`, which is the plan's 70/30 | Exists, opt-in; the premise applies to the 18 static-gearing scenarios; P3-COV-01 (critical), P3-COV-04, P2-F2-07 and P2-F2-03 open (section 7.1) | State which sizing basis a case uses before relying on it; do not describe the lender case's solve as how every scenario sizes debt |
+| 26 | CFADS | CFADS timeline (`_build_cfads_timeline`, `finance/debt_v14.py:694`) and debt layer (`apply_debt_layer`, `:921`) | Exists; P2-F4-01 (high) open: sizing runs on unlevered tax; P2-F2-01 (high) open: coverage ratios measured on a smaller CFADS than the one published (section 7.1) | Fix P2-F4-01. It moves KPIs, so `DOC-02`, `VERSION` and a `TEST-01` oracle apply |
+| 27 | Sculpt principal to a target DSCR | `_sculpted_schedule` (`finance/debt_v14.py:867`), with senior credit-support fees netted inside the sculpt (#737). A P90 downside case can also bind gearing (`_resolve_downside_ratio`, `:1323`), but only when `Financing_Terms.bind_downside` is true; the lender case does not set it | Exists; the downside binding is opt-in and off in the lender case; findings as item 25 | None beyond item 25 |
+| 28 | Maximum debt from NPV of CFADS | The facility is sized by the gearing solve (item 25). `size_debt_with_dual_dscr` (`finance/debt_v14.py:1984`) computes a closed-form capacity, the NPV of CFADS divided by the target DSCR, but it is called only to fill the `dual_dscr` lender-pack metadata; the code's own note says so (`:1402-1408`). Audit finding P2-F2-05 records that block as inert and self-contradicting, with its `debt_sized` 33.6% above the solved facility in the audited lender case | Exists as the gearing solve; the closed-form helper is metadata only; the plan's formula is **Incorrect** (C1); P2-F2-05 open | Do not treat `size_debt_with_dual_dscr` as the sizing engine. Resolve P2-F2-05 before any lender pack quotes its figures |
 | 29 | Waterfall steps 1-3: revenue, opex and tax, senior debt service | Cashflow and debt layers | Exists | None |
-| 30 | DSRA: sweep cash to fill six months | `_build_funding` (`finance/debt_v14.py:1593`) funds a DSRA at financial close when `Financing_Terms.dsra.fund_at_close` is set. The lender case declares `reserves.dsra_months: 6` (`scenarios/dutchbay_lendercase_2025Q4.yaml:502`) but does not set `fund_at_close` | Partial; P3-COV-05 (high) open | Establish the required structure from the term sheet (cash-funded, funded at close, or letter of credit), then configure it; add a letter-of-credit option |
+| 30 | DSRA: sweep cash to fill six months | The sweep the plan describes exists. The production equity waterfall (`finance/equity_distribution_v14_hydra.py`) tops a reserve up from cash after debt service toward `min_reserve_months` of debt service (default 6, `:68`) and releases the excess as debt amortises (`:541-553`). Separately, `_build_funding` (`finance/debt_v14.py:1593`) funds a DSRA at financial close when `Financing_Terms.dsra.fund_at_close` is set; the lender case declares `reserves.dsra_months: 6` (`scenarios/dutchbay_lendercase_2025Q4.yaml:502`) but does not set `fund_at_close` | Exists, with gaps: nothing draws the reserve when cash falls short of debt service (related to P2-F3-01); it is not funded at close in the lender case; there is no letter-of-credit option. P3-COV-05 (high) open | Establish the required structure from the term sheet, then configure it. Add a draw path and a letter-of-credit option; do not build a second cash sweep |
 | 31 | MRA for major overhauls | None found | Gap; P3-COV-08 (medium) open | A reserve mechanism, default off, sized from LTSA or O&M evidence |
-| 32 | Shareholder distributions | `finance/equity_distribution_v14_hydra.py`: DSCR lock-up, sweep percentage, reserve months | Exists, with open findings P2-F3-01 (shortfall clamped to zero) and P3-COV-03 (critical: large scheduled-maturity balance with partial cash sweep) | Fix P2-F3-01; analyse P3-COV-03 before any mechanism change |
+| 32 | Shareholder distributions | `finance/equity_distribution_v14_hydra.py`: DSCR lock-up, sweep percentage, reserve months | Exists, with open findings P2-F3-01 (shortfall clamped to zero), P3-COV-03 (critical: large scheduled-maturity balance with partial cash sweep) and P2-F3-02 (section 7.1) | Fix P2-F3-01; analyse P3-COV-03 before any mechanism change |
 
 ### 3.5 Phase 5 — bankability and interface
 
 | # | Plan item | State on `main` (evidence) | Assessment | Recommendation |
 |---|---|---|---|---|
-| 33 | Scenario-matrix runner | Batch CLI `run_scenario_analytics_v14.py`; grid, Latin hypercube and pymoo plans (`analytics/sensitivity/optimizer.py`); global sensitivity (`analytics/sensitivity/global_sa.py`) | Exists; labelling issue (C6) | Label combined downsides as stress cases, not P90 |
-| 34 | Monte Carlo P10/P50/P90 of equity IRR | `analytics/mc/engine.py`; Latin hypercube and Sobol samplers (`analytics/mc/samplers.py:19`, `:105`); correlation, convergence and covenant-breach modules; risk blocks under `FRAMEWORK-01` | Exists; open P2-MC-SENS-02 (delivered, review pending) and P5-WIND-003 (P50-to-P90 formula) | Close the findings. State percentile and direction explicitly for IRR (C6) |
+| 33 | Scenario-matrix runner | Batch CLI `run_scenario_analytics_v14.py`; grid, Latin hypercube and pymoo plans (`analytics/sensitivity/optimizer.py`); global sensitivity (`analytics/sensitivity/global_sa.py`) | Exists; labelling issue (C6); P2-MC-SENS-01, P5-SA-001 and P5-SA-002 open (section 7.1) | Label combined downsides as stress cases, not P90 |
+| 34 | Monte Carlo P10/P50/P90 of equity IRR | `analytics/mc/engine.py`; Latin hypercube and Sobol samplers (`analytics/mc/samplers.py:19`, `:105`); correlation, convergence and covenant-breach modules; risk blocks under `FRAMEWORK-01` | Exists; open P2-MC-SENS-02 (delivered, review pending) and P5-WIND-003 (P50-to-P90 formula), and P3-MCFX-03, P3-MCFX-07 and P5-MC-002 (section 7.1) | Close the findings. State percentile and direction explicitly for IRR (C6) |
 | 35 | Three-statement model | `analytics/three_statement.py:157` with tie-out checks (`:113`), rendered in the lender report (`app/reports/report_model.py`, `app/reports/templates/report.html.j2`) | Exists; documented limitations (tax not re-credited for the full interest shield, 100% sweep, equity as the balancing item) | Interactivity is the only gap; it follows decision D2 |
 | 36 | Web dashboard | Server-rendered wizard and report | Partial | Decision D2 |
 | 37 | Excel export "maintaining all formulas" | Values-only workbooks, byte-reproducible (`analytics/executive_workbook.py`, `analytics/reproducible_workbook.py`) | Gap; **Incorrect** as framed (C7) | If a lender-auditable workbook is wanted, build it as an independent formula model and use it as a `TEST-01` oracle (decision D7) |
 | 38 | "Weeks 1-20" phase schedule | Not applicable to code | **Incorrect** for this repository's delivery rules (section 6) | Decompose into dolphins (section 8) |
 
-Summary: of 38 items, 14 exist, 11 exist in part, 11 are gaps and 2 are premises that do not
-apply (items 25 and 38). Three of the gaps (items 2, 3 and 4) are gaps without a present need.
-Section 4 records nine technical corrections; the items they touch are marked **Incorrect** or
-cite the correction. Eleven items touch at least one open audit finding (section 7).
+Summary: of 38 items, 16 exist, 10 exist in part, 11 are gaps and 1 is a premise that does not
+apply (item 38). Item 25 exists only as an opt-in mode, and item 30 exists with named gaps.
+Three of the gaps (items 2, 3 and 4) are gaps without a present need. Section 4 records nine
+technical corrections; the items they touch are marked **Incorrect** or cite the correction. At
+least 19 of the 38 items touch an open, hold-blocking audit finding: the 11 in section 7 and the
+8 more in section 7.1.
+
+The counts first published were 14, 11, 11 and 2, with 11 items touching a finding. They were
+corrected on 28 October 2026 (section 13).
 
 ## 4. Technical corrections
 
 Each correction states what the plan says, what is correct, the consequence of implementing the
 plan as written, and the source.
 
-**C1 — Debt capacity.** The plan sizes maximum debt as "the NPV of CFADS discounted at the debt
-interest rate". Debt capacity is the present value of the *debt service the cash flow can
+**C1 — Debt capacity.** The plan asks to "Calculate maximum debt capacity based on the NPV of
+CFADS discounted at the debt interest rate" (plan line 58), directly after asking to "sculpt
+principal repayments to hit a target DSCR (e.g., 1.30x) in every period" (line 57). The line is
+underspecified rather than definitely wrong: "based on" leaves the step from the NPV to capacity
+unstated. Read literally, as capacity equal to the NPV of CFADS, it is wrong. For principal
+sculpted to the target, debt capacity is the present value of the *debt service the cash flow can
 support*, which is CFADS divided by the target DSCR, discounted at the cost of debt over the
-tenor and then capped by gearing. Discounting CFADS itself sizes debt at a DSCR of 1.00x: if the
-full present value of CFADS is borrowed and sculpted over the same tenor at the same rate, debt
-service equals CFADS in every period. At a 1.30x target the plan's formula oversizes debt by
-exactly 30%. Receipt, using the repository's own function with 15 periods of flat CFADS of 10,
-an 8% debt rate and a 1.30x target (full command in the research notes, section 2.2):
+tenor and then capped by gearing. Under level (annuity) repayment it is lower: the weakest period
+binds, so capacity is the minimum CFADS divided by the target DSCR, times the annuity factor for
+the tenor and rate. Discounting CFADS itself sizes debt at a DSCR of 1.00x: if the full present
+value of CFADS is borrowed and sculpted over the same tenor at the same rate, debt service equals
+CFADS in every period. At a 1.30x target, the literal reading oversizes a sculpted facility by
+exactly 30%. Receipt, using the repository's closed-form capacity helper with 15 periods of flat
+CFADS of 10, an 8% debt rate and a 1.30x target (full command in the research notes, section
+2.2):
 
 ```text
-repository sizing, NPV of CFADS / 1.30:  65.84214375327976
-plan wording, NPV of CFADS:              85.5947868792637
-ratio:                                   1.3
+closed-form helper, NPV of CFADS / 1.30:  65.84214375327976
+literal plan reading, NPV of CFADS:       85.5947868792637
+ratio:                                    1.3
 ```
 
-The code is already correct (`finance/debt_v14.py:1984`). The plan also omits the dual-case
-sizing the code performs (P50 and a downside case, the binding one governs) and the gearing cap.
+The helper, `size_debt_with_dual_dscr` (`finance/debt_v14.py:1984`), implements the sculpted
+formula, but it is not how the engine sizes debt. It fills lender-pack metadata only, and audit
+finding P2-F2-05 records that block as inert (item 28). In the DSCR sizing modes, the engine
+solves gearing on the real schedule (item 25), so the facility it sizes need not equal the
+helper's figure; the audited lender case shows a 33.6% gap (P2-F2-05). The plan also omits the
+gearing cap.
 
 **C2 — LIBOR.** All 35 LIBOR settings ceased permanently; the last synthetic US dollar settings
 were published on 30 September 2024 (FCA). A curve store designed in 2026 should hold SOFR or
@@ -164,17 +183,18 @@ allowance on pooled plant and machinery, and the United Kingdom is not an EU mem
 for tax purposes is set by each jurisdiction's own law, which is why it belongs in versioned
 jurisdiction packs with statute and effective date (section 5.6).
 
-**C4 — Interest limitation.** The plan cites an "EBITDA 30% rule under OECD BEPS Action 4".
-Action 4 recommends a fixed-ratio rule within a corridor of 10% to 30% of EBITDA, with an optional
-group-ratio rule (OECD, 2016 update). The fixed 30% is the EU Anti-Tax Avoidance Directive,
-Article 4, which also permits a EUR 3 million safe harbour and an exclusion for loans funding
-long-term public infrastructure projects; that exclusion can be material for a generation project.
-A debt-to-equity limit ("thin capitalisation" in the narrow sense) is a different mechanism from
-an earnings-based limit, and the Sri Lankan rule appears to be the former: secondary sources
-describe section 18 of the Inland Revenue Act No. 24 of 2017 as a debt-to-capital-and-reserves
-limit with carry-forward of disallowed interest. The primary text was not ingested in this
-session and must be before any code relies on it. Audit finding P2-F4-04 already specifies a design with modes `none | debt_to_equity |
-ebitda_ratio` and requires that confirmation first.
+**C4 — Interest limitation.** The plan cites an "EBITDA 30% rule under OECD BEPS Action 4". Action 4
+recommends a fixed-ratio rule within a corridor of 10% to 30% of EBITDA, with an optional
+group-ratio rule (OECD, 2016 update). The EU Anti-Tax Avoidance Directive, Article 4, fixes the
+ratio at 30%, the top of that corridor, as other regimes also do; it also permits a EUR 3 million
+safe harbour and an exclusion for loans funding long-term public infrastructure projects; that
+exclusion can be material for a generation project. A debt-to-equity limit ("thin capitalisation" in
+the narrow sense) is a different mechanism from an earnings-based limit, and the Sri Lankan rule
+appears to be the former: secondary sources describe section 18 of the Inland Revenue Act No. 24 of
+2017 as a debt-to-capital-and-reserves limit with carry-forward of disallowed interest. The primary
+text was not ingested in this session and must be before any code relies on it. Audit finding
+P2-F4-04 already specifies a design with modes `none | debt_to_equity | ebitda_ratio` and requires
+that confirmation first.
 
 **C5 — Distributions cannot drive chronological dispatch.** The plan combines an 8760-hour dispatch
 model with "hub-height wind speed data (Weibull distributions)" and with flow duration curves. A
@@ -240,12 +260,12 @@ The sound architecture is therefore:
 4. the finance engine at the period resolution lenders use.
 
 Step 3 is what Sprint 20 Lane A is building. The A1 contract (merged as #1225, reverted by #1232,
-re-proposed in draft #1231) states the aggregation rule by variable kind — flows sum, balances
-take the period-end value, and there is deliberately no generic aggregate — and routes
-sub-periods to debt periods through `annual_row_debt_period_map` rather than directly. The #1225
-record warns that the debt layer already has a collision between two DSCR index spaces and that a
-third axis added carelessly would compound it. A "25 years × 8760 hours" finance grid is that
-third axis.
+re-proposed in #1231, which was a draft at the base and has since merged as `d3157e0d`) states the
+aggregation rule by variable kind — flows sum, balances take the period-end value, and there is
+deliberately no generic aggregate — and routes sub-periods to debt periods through
+`annual_row_debt_period_map` rather than directly. The #1225 record warns that the debt layer
+already has a collision between two DSCR index spaces and that a third axis added carelessly would
+compound it. A "25 years × 8760 hours" finance grid is that third axis.
 
 Volume and compute: one 25-year hourly series is 219,000 values, about 1.75 MB as 64-bit floats.
 Data volume is not the constraint. Compute is, once dispatch is optimised inside a Monte Carlo:
@@ -304,8 +324,9 @@ lists "authorize a Python or native-language rewrite" among its non-goals.
 
 Added after the owner decided D2: known clients now, multi-tenant as the planned extension.
 
-What exists today. Every compute route under `/v1` requires an authenticated subject; only
-`/health` and `/v1/token` are public, and the sensitivity surface is composed as gated routes
+What exists today. Every compute route under `/v1` requires an authenticated subject. The
+public routes are `/v1/token`, the health probes `/health` and `/health/readiness`, and
+`/static`; none of them computes. The sensitivity surface is composed as gated routes
 rather than a mounted sub-app so it inherits the gate (`app/api/main.py:112-131`). Each job
 record carries its owner for per-client isolation (`app/jobs/models.py:81-83`).
 
@@ -341,6 +362,10 @@ The plan's most valuable content is in Phases 3 and 4, and it coincides with ope
 August 2026 audit. Every finding below has `hold_effect: blocks_board_lender_release` in the
 current-main overlay.
 
+This table is **not exhaustive**. It lists the findings the evaluation first mapped. Section 7.1
+lists further open findings on assessed items, and neither table is generated from the register,
+so neither should be used as a complete finding map.
+
 | Finding | Severity | Overlay state | Plan item |
 |---|---|---|---|
 | P3-COV-03 Large scheduled-maturity balance with partial cash sweep | critical | open, not examined | 32 |
@@ -364,6 +389,42 @@ The register's own dependency for P2-F5-02 states that authenticated lender and 
 debt denomination, repayment numeraire and transaction terms is required before implementation.
 The plan's dual-currency and swap phase cannot be designed correctly before that evidence exists.
 
+### 7.1 Further open findings on assessed items
+
+Added on 28 October 2026 from the #1296 domain review (DOM-2, #1478). Each ID was confirmed in
+`findings_register.v2.json`; none is baseline-closed in the overlay, and each carries
+`hold_effect: blocks_board_lender_release`. "Open" in this record means not closed; the overlay
+state column gives the exact state. Titles are abbreviated from the register.
+
+| Plan item | Finding | Severity | Overlay state | Register title, abbreviated |
+|---|---|---|---|---|
+| 6 | P3-G7 | medium | open, not examined | Curtailment remains a screening placeholder |
+| 8 | P2-F4-02 | medium | open, not examined | Two corporate-tax-rate resolution ladders with opposite precedence, and a silent 0.0 fallback |
+| 11 | P3-G1 | critical | open, not examined | Zero on-site measurement and standards characterisation |
+| 11 | P3-G2 | high | open, not examined | Unsupported one-year met-mast provenance label |
+| 11 | P3-G3 | medium | open, not examined | Generic measurement uncertainty on a reanalysis-only basis |
+| 11 | P3-G4 | medium | open, not examined | Long-term trend block absent from the canonical frozen AEP |
+| 11 | P3-G6 | low | open, not examined | Open-reference turbine curve pending a certified OEM curve |
+| 11 | P4-DC-1 | medium | deferred, not examined | `non_wake_retention()` is never called by the production AEP pipeline |
+| 11 | P3-MCFX-05 | medium | open, not examined | The 10% Weibull uncertainty knob lacks a derivation and is not the live finance-MC driver |
+| 21 | P2-F4-05 | medium | open, not examined | Enhanced capital allowance wired but switched off, with no statutory citation |
+| 25, 27, 28 | P3-COV-01 | critical | open, not examined | DutchBay DSCR threshold requires transaction-specific challenge |
+| 25, 27, 28 | P3-COV-04 | high | open, not examined | Low solved gearing is CFADS-constrained |
+| 25, 27, 28 | P2-F2-05 | medium | open, not examined | Dual-DSCR closed-form lender-pack block is inert and self-contradicting |
+| 25, 27, 28 | P2-F2-07 | low | open, not examined | Gearing grid stops below the refined plateau edge |
+| 25, 27, 28 | P2-F2-03 | low | open, not examined | Gearing solver's constraint set includes a DSCR computed on phantom cash |
+| 26 | P2-F2-01 | high | open, not examined | Reported DSCR, LLCR and PLCR measured on a CFADS series USD 6.03M smaller than the one published |
+| 32 | P2-F3-02 | low | open, not examined | Distribution lock-up tested against a levered DSCR, not the reported covenant DSCR |
+| 33 | P2-MC-SENS-01 | high | implementation delivered, review pending | Tornado JSON emits null variable and impact for every driver row |
+| 33 | P5-SA-001 | medium | open, not examined | SALib hardening as an above-state-of-the-art claim |
+| 33 | P5-SA-002 | medium | deferred, not examined | Sensitivity sample sufficiency and PAWN noise floor |
+| 34 | P3-MCFX-03 | high | implementation delivered, review pending | DSCR breach-probability diagnostic bypasses the tolerance-aware covenant comparator |
+| 34 | P3-MCFX-07 | high | requires correction, not examined | Claimed canonical 100,000-trial finance-MC run is not evidenced |
+| 34 | P5-MC-002 | medium | open, not examined | Scrambled Sobol implementation and differentiator claim |
+
+Items 6, 8, 11, 21, 25, 27, 28 and 33 appear in neither table above them; with the 11 items of
+section 7, that makes at least 19.
+
 ## 8. Recommendation and proposed sequencing
 
 Do not adopt the plan as the Sprint 21 plan. Adopt its goals selectively, expressed as dolphins
@@ -372,6 +433,7 @@ mapped to existing seams and to the findings above. Proposed for the owner's dec
 **Lane A — continue Sprint 20 (sub-annual finance).**
 
 - A2 (#1231): complete review cycle 3 and merge under its stated merge-boundary condition.
+  Since done: #1231 merged as `d3157e0d`, restoring A1 and landing A2, so Lane A continues at A3.
 - A3: sub-annual debt service and DSCR series, with the two items the reviewers deferred to it
   (BESS augmentation smoothing; registering the new configuration keys). Relates to P2-F2-02.
 - A4: allocation rule for tax and loss carry-forward.
@@ -382,8 +444,8 @@ mapped to existing seams and to the findings above. Proposed for the owner's dec
 |---|---|---|---|
 | B1 Levered-tax CFADS basis | P2-F4-01 | Moves CFADS, LLCR, PLCR (register) | `R3` |
 | B2 Waterfall shortfall treatment | P2-F3-01 | None on canon (register) | `R3` |
-| B3 Major-maintenance reserve and multi-tier lock-up, default off | P3-COV-08 | None while off | `R2` |
-| B4 DSRA structure options including letter of credit | P3-COV-05 | Only when configured from evidence | `R3` |
+| B3 Major-maintenance reserve and multi-tier lock-up, default off | P3-COV-08 | None while off | `R3` |
+| B4 DSRA structure options including letter of credit, a draw path and funding at close; builds on the existing reserve sweep (item 30) rather than duplicating it | P3-COV-05 | Only when configured from evidence | `R3` |
 | B5 Financial-cost limitation | P2-F4-04 | Only when configured | `R3` |
 | B6 Maturity balance and partial sweep: analysis first | P3-COV-03 | To be established | `R3` |
 
@@ -393,7 +455,9 @@ mapped to existing seams and to the findings above. Proposed for the owner's dec
 - The Inland Revenue Act No. 24 of 2017 and its amendments, ingested through the governed
   MarkItDown workflow (`R26`), for B5.
 - Reserve requirements (DSRA months and form, maintenance reserve) from the term sheet and the LTSA.
-- Measured wind data (#1290).
+- Measured wind data. #1290 has since merged a partial met-mast export, held under a `HOLD` on
+  annual or lender-grade use with its site identity undocumented; it is not the on-site
+  measurement campaign this item asks for.
 
 A realistic Sprint 21 core is Lane A (A2, A3), B2 and B3, each designed to leave the committed
 canon unchanged or to default to off, and the Lane C evidence requests; B1 is the one KPI-moving
@@ -456,9 +520,11 @@ oracle and review chain, and they lift no `HOLD`.
 
 ## 12. Limitations
 
-- One coordinator produced this evaluation; it has not been independently reviewed. Under
-  `RECRUIT-01` it needs a domain reviewer (project finance and renewables) and a separate
-  assurance reviewer before it can steer work.
+- One coordinator produced this evaluation. Under `RECRUIT-01` it needs a domain reviewer
+  (project finance and renewables) and a separate assurance reviewer before it can steer work.
+  Both reviews ran after merge and returned REJECT; their blocking findings are corrected here
+  (section 13). The records and their reconciliation are in `docs/PLATFORM_PLAN_DOMAIN_REVIEW_001.md`,
+  `docs/PLATFORM_PLAN_ASSURANCE_REVIEW_001.md` and `docs/PLATFORM_PLAN_REVIEW_RECONCILIATION.md`.
 - Two external points rest on secondary sources: the Sri Lankan section 18 mechanism (primary text
   not ingested) and the United Kingdom allowance details (`gov.uk` was blocked by the session's
   network policy).
@@ -468,3 +534,38 @@ oracle and review chain, and they lift no `HOLD`.
   accessible.
 - The "exists" assessments rest on reading code on `main`, not on re-running the full suite; they
   say nothing about bankability or review status.
+
+## 13. Corrections after the domain review, 28 October 2026
+
+#1296 merged this record on 29 September 2026 without its `RECRUIT-01` review pair. The post-merge
+task-domain review (R-DOM-1) of the frozen candidate `5dd220eb` returned REJECT with seven blocking
+findings and two accepted residuals. Its record is preserved on #1371
+([issuecomment-6459238264](https://github.com/arunakulat/dutchbay-epc-model/issues/1371#issuecomment-6459238264),
+SHA-256 `7ccdaee3d08253783b30e6980f1e0ac28ffa7339df44799302848aef744d9303`). Each blocking finding
+has its own issue. Every finding below was re-checked against `main` at `0cc5a0da` before it was
+corrected; what each finding describes holds at both `b87ee32` and `0cc5a0da`, apart from line
+numbers.
+
+| Finding | Issue | Corrected here |
+|---|---|---|
+| DOM-1 (high): debt sizing attributed to the inert closed-form helper | #1477 | Section 1 step 5; items 25, 27 and 28 re-described and re-graded; C1 receipt relabelled and its closing paragraph rewritten |
+| DOM-2 (high): audit-overlap map incomplete | #1478 | Section 3 summary; section 7 marked non-exhaustive; section 7.1 added; open findings cited on items 6, 8, 11, 21, 25 to 28, 32, 33 and 34 |
+| DOM-3 (low): C1 misquotes the plan and lacks a qualifier | #1479 | C1 quotes plan lines 57 and 58 exactly, calls line 58 underspecified, and qualifies the capacity definition for sculpted and annuity repayment |
+| DOM-4 (medium): item 30 omits the existing reserve sweep | #1480 | Item 30 re-described and re-graded to "Exists, with gaps"; dolphin B4 scoped to build on the sweep |
+| DOM-5 (low): B3 classed `R2` | #1481 | B3 classed `R3` |
+| DOM-6 (low): executive summary inconsistencies | #1482 | In `SPRINT_21_EXECUTIVE_SUMMARY.md` |
+| DOM-7 (medium): statements false on `main` from the merge | #1483 | Items 11 and 12, section 5.1 and Lanes A and C; the trap in `docs/SESSION_HANDOVER_2026-09-26_PLATFORM_PLAN.md` withdrawn; research notes section 2.4 |
+| DOM-8 (low, accepted residual): C4 implied the 30% ratio is unique to ATAD | #1371 | C4 reworded |
+| DOM-9 (low, accepted residual): imprecise citations | #1371 | Item 7 (`fx_builder.py:395-397`), item 26 (`_build_cfads_timeline`, `:694`) and section 5.7's public routes |
+| ASR-1 (assurance review, blocking as delivered): the handover's period-grid trap is false on `main` | #1483 | As DOM-7; the "draft #1231" references in this analysis and the executive summary are dated |
+
+The assessment counts in section 3 changed with DOM-1 and DOM-4: item 25 moved from "premise does
+not apply" to "exists, opt-in", and item 30 from "partial" to "exists, with gaps".
+
+The post-merge assurance review (R-ASR-1) also returned REJECT. Its one blocking finding, ASR-1,
+is the trap DOM-7 names, and is corrected with it. Its non-blocking findings are tracked in #1485
+(ASR-2) and #1486 (ASR-5) or accepted as residuals (ASR-3, ASR-4); the findings ledger is in
+`docs/PLATFORM_PLAN_REVIEW_RECONCILIATION.md`.
+
+One limit applies to this correction. The register states quoted in section 7.1 are the
+overlay's, and the overlay has not re-examined most rows against current `main`.

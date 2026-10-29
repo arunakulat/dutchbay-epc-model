@@ -43,15 +43,23 @@ memorize, add to corpus and discuss" for the next sprint. This session:
    assurance reviewer before merge, recruited under D5. The pull request and the review records
    bound to its head are the authority on whether that is done. Do not merge on green CI alone;
    the A1 revert (#1232) is the precedent.
+   *Update, 28 October 2026:* it merged on 29 September 2026 without the pair. The post-merge
+   domain review returned REJECT, and its blocking findings are corrected through #1477 to #1483
+   (analysis, section 13). The post-merge assurance review also returned REJECT; its one blocking
+   finding is the trap below. Both records and their reconciliation are under `docs/PLATFORM_PLAN_*`.
 3. **Evidence to request before the finance dolphins** (analysis, Lane C): F5-02 lender and legal
    evidence; the Inland Revenue Act No. 24 of 2017 and amendments, for interest limitation; the
-   term-sheet reserve requirements; measured wind data (#1290).
+   term-sheet reserve requirements; measured wind data. (#1290 has since merged a partial
+   met-mast export held under a `HOLD` on annual or lender-grade use; it is not that evidence.)
 
 ## Traps found this session
 
-- `finance/period_grid_v14.py` is **not** on `main`. It merged in #1225, was reverted by #1232 for
-  merging without its review chain, and is re-proposed with A2 in draft #1231. Text that treats
-  Sprint 20 A1 as landed is stale.
+- **Withdrawn on 28 October 2026 (#1483).** This bullet said that `finance/period_grid_v14.py` was
+  not on `main` and that text treating Sprint 20 A1 as landed was stale. It was true at this
+  record's base, `b87ee32`. It stopped being true when this record merged: before the merge the
+  pull request's head took in #1231 (`d3157e0d`), which restored A1 and landed A2, so
+  `finance/period_grid_v14.py` and `finance/subannual_rows_v14.py` are on `main` from `e35ea9f2`.
+  Text that treats A1 as landed is correct; do not distrust it on this record's word.
 - `SPRINT_BOOTSTRAP_PROC_R1` requires a "5-pass analysis" that no file in the repository defines.
   The bootstrap README records the passes actually performed rather than inventing a definition.
 - `scripts/list_session_handover_records.py` took 50.3 s of wall time in this container with this
