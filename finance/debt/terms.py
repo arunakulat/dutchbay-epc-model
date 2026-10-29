@@ -33,6 +33,12 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
         if adapted.get("debt_drawdown_pct") is None:
             fallback_drawdown = adapted.get("drawdown_pct")
             if fallback_drawdown is None:
+                # A1/#91: no project EPC draw schedule supplied. IDC (capitalised interest)
+                # is sensitive to draw timing, so the even [0.5, 0.5] placeholder is an
+                # unfounded substitution for a missing project-specific input — WARN rather
+                # than silently substitute (once per process, #683). Supply
+                # Financing_Terms.debt_drawdown_pct from the EPC milestone/payment
+                # schedule for an auditable, project-specific draw.
                 _warn_placeholder_once(
                     "Financing_Terms.debt_drawdown_pct",
                     "Financing_Terms.debt_drawdown_pct / drawdown_pct absent — using a "
@@ -42,6 +48,9 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
                 fallback_drawdown = [0.5, 0.5]
             adapted["debt_drawdown_pct"] = fallback_drawdown
         if adapted.get("construction_schedule") is None:
+            # Same A1/#91 stance as the draw schedule above (#585): the [40, 60]
+            # capex phasing is a placeholder, not a project input — WARN rather
+            # than silently substitute (once per process, #683).
             _warn_placeholder_once(
                 "Financing_Terms.construction_schedule",
                 "Financing_Terms.construction_schedule absent — using a placeholder "
@@ -75,6 +84,10 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
         )
         usd_rate = _rate_decimal(rate_value, 0.0)
 
+        # #585: the compact ``debt:`` schema must emit the SAME placeholder-
+        # substitution WARNs as the Financing_Terms path above (A1/#91) — IDC is
+        # draw-timing-sensitive, so a silently substituted even draw / capex
+        # phasing is an unfounded stand-in for a missing project input.
         construction_schedule = debt_cfg.get("construction_schedule")
         if construction_schedule is None:
             _warn_placeholder_once(
@@ -115,7 +128,12 @@ def _extract_financing_terms(params: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _resolve_construction_periods(params: Mapping[str, Any]) -> int:
-    """Resolve the debt construction-period count without extraction side effects."""
+    """Resolve the debt construction-period count without extraction side effects.
+
+    The precedence intentionally matches :func:`_extract_financing_terms` and the
+    historical ``apply_debt_layer`` coercion. Section names are case-insensitive;
+    child keys remain case-sensitive to preserve the existing configuration contract.
+    """
     financing_terms = _section_case_insensitive(params, "Financing_Terms")
     if financing_terms:
         value = financing_terms.get("construction_periods")
@@ -174,7 +192,12 @@ def _resolve_first_operating_period(
     construction_periods: int,
     bridge_debt_period: Optional[int],
 ) -> int:
-    """Resolve the first debt period that carries an operating row."""
+    """Resolve the first debt period that carries an operating row.
+
+    The debt timeline built by :func:`_build_cfads_timeline` is laid out as
+    ``[construction] * construction_periods`` + an optional synthetic half-year
+    ``bridge`` period + one period per operating row + post-tenor padding.
+    """
     mapped: List[int] = []
     for mapping in annual_row_debt_period_map:
         try:
