@@ -337,8 +337,8 @@ def _validate_cashflow_period_fields(
     as ``_validate_run_mode`` (#733a) and ``_validate_taxes_indirect`` (#738): a guard
     must reuse the engine's exact resolution, or pre-flight and call time drift apart.
 
-    Three delegations, in dependency order, because each needs the one before it to
-    have succeeded:
+    Four delegations, in dependency order. The first two must succeed before the
+    last two can run, because both measure against the resolved grid:
 
     * ``resolve_period_grid`` rejects a non-string, blank or unrecognised resolution,
       and a ``cashflow`` node that is a mapping but not a ``dict`` -- the silent
@@ -355,6 +355,11 @@ def _validate_cashflow_period_fields(
     * ``resolve_within_year_profile`` rejects a profile whose length does not match the
       resolved grid, or that carries a non-numeric, negative or non-finite weight, or
       that does not sum to 1.
+    * :func:`finance.event_calendar_v14.resolve_event_calendar` (#1395 (b)) rejects a
+      ``cashflow.event_calendar`` declared on the annual grid, an unknown or unmodelled
+      event kind (``working_capital``), and malformed periods or weights. On a
+      sub-annual grid it also names, in a warning, any kind left on its illustrative
+      default date.
 
     The cross-field consequence is the reason the grid is resolved first, and it is the
     mistake most likely to reach a real config: a four-weight
@@ -374,6 +379,15 @@ def _validate_cashflow_period_fields(
 
     try:
         resolve_within_year_profile(raw_config, grid)
+    except ValueError as exc:
+        errors.append(str(exc))
+
+    # #1395 (b): the within-year event calendar, resolved against the same grid. It is
+    # independent of the profile, so a bad profile does not hide a bad calendar.
+    from finance.event_calendar_v14 import resolve_event_calendar
+
+    try:
+        resolve_event_calendar(raw_config, grid)
     except ValueError as exc:
         errors.append(str(exc))
 
