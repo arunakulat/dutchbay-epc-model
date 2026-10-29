@@ -36,7 +36,12 @@ def _maturity_period_index(
 
 
 def resolve_balloon_treatment(config: Mapping[str, Any]) -> str:
-    """The balloon treatment the engine applies (unknown values WARN and fall back)."""
+    """The balloon treatment the engine applies (unknown values WARN and fall back).
+
+    The single resolution of ``Financing_Terms.balloon_treatment``, shared by
+    :func:`plan_debt` and :func:`resolve_refinance_terms` (and through it the v14
+    pre-flight), so the gate and the engine cannot disagree on which path runs.
+    """
     fin = _section_case_insensitive(dict(config), "Financing_Terms") or {}
     treatment = str(
         fin.get("balloon_treatment", _BALLOON_DEFAULT_TREATMENT)
@@ -53,7 +58,13 @@ def resolve_balloon_treatment(config: Mapping[str, Any]) -> str:
 
 
 def resolve_refinance_terms(config: Mapping[str, Any]) -> Optional[Tuple[int, float]]:
-    """``(tenor_years, rate_premium)`` for a balloon refinance, read from YAML only."""
+    """``(tenor_years, rate_premium)`` for a balloon refinance, read from YAML only.
+
+    Returns ``None`` unless the resolved treatment is ``refinance``. When it is, both
+    ``constraints.refinancing.refinance_tenor_years`` (a whole number of years >= 1)
+    and ``constraints.refinancing.refinance_rate_premium`` (a finite decimal added to
+    the average debt rate) must be present: there is no code default (#1396).
+    """
     if resolve_balloon_treatment(config) != "refinance":
         return None
     constraints = _section_case_insensitive(dict(config), "constraints") or {}
