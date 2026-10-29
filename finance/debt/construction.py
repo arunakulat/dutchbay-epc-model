@@ -7,27 +7,26 @@ from typing import List, Sequence, Tuple
 from finance.debt.helpers import _as_float
 
 def calculate_construction_drawdowns(
-    debt_total: float,
-    drawdown_pct: Sequence[float],
-    construction_periods: int,
+    total_debt: float,
+    construction_schedule: List[float],
+    drawdown_pct_per_year: List[float],
 ) -> List[float]:
-    """Allocate debt draws across construction periods from percentage weights."""
-    weights = [float(x) for x in drawdown_pct]
-    if construction_periods <= 0:
-        return []
-    if len(weights) < construction_periods:
-        weights = weights + [0.0] * (construction_periods - len(weights))
-    weights = weights[:construction_periods]
-    total_w = sum(weights) or 1.0
-    return [debt_total * (w / total_w) for w in weights]
+    drawn_schedule: List[float] = []
+    for i, _ in enumerate(construction_schedule):
+        amt = (
+            total_debt * float(drawdown_pct_per_year[i])
+            if i < len(drawdown_pct_per_year)
+            else 0.0
+        )
+        drawn_schedule.append(amt)
+    return drawn_schedule
 
 
 def calculate_idc(
-    debt_drawn_schedule: Sequence[float],
+    debt_drawn_schedule: List[float],
     interest_rate: float,
     construction_periods: int,
 ) -> Tuple[List[float], float]:
-    """Interest during construction; capitalises IDC into balance during construction."""
     idc_schedule: List[float] = []
     balance = 0.0
     total_idc = 0.0
