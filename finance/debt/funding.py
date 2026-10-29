@@ -8,12 +8,12 @@ from typing import Any, Dict, Mapping
 from finance.debt.helpers import _as_float, _section_case_insensitive
 from finance.debt.placeholders import _truthy_flag
 from finance.debt.capex import _extract_capex_usd, _extract_capex_base_usd
-from finance.debt.terms import _build_cfads_timeline, _extract_financing_terms
 from finance.import_levies import compute_capex_uplift_usd, resolve_indirect_taxes
 
 logger = logging.getLogger("finance.debt_v14")
 
 _warned_decorative_tranches = False
+
 
 def _warn_if_decorative_tranches(config: Dict[str, Any]) -> None:
     """Warn once if a (non-input) ``Financing_Terms.debt_tranches`` block is present.

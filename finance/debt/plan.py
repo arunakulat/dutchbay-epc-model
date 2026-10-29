@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-import copy
 import logging
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
@@ -18,7 +17,6 @@ from finance.debt.capex import _extract_capex_usd
 from finance.debt.constants import _BALLOON_TOL
 from finance.debt.dscr_contract import (
     _build_dscr_periods,
-    _clean_public_dscr_series,
     _normalize_operating_year,
     _operating_dscr_minimum,
 )
@@ -27,16 +25,14 @@ from finance.debt.helpers import _as_float, _section_case_insensitive
 from finance.debt.layer import apply_debt_layer
 from finance.debt.placeholders import (
     _FORBID_TOY_FALLBACK_KEY,
-    _allow_toy_capex_fallback,
 )
 from finance.debt.sizing import _maybe_autosolve_dscr
 from finance.debt.terms import (
-    _extract_financing_terms,
-    _resolve_construction_periods,
     _resolve_first_operating_period,
 )
 
 logger = logging.getLogger("finance.debt_v14")
+
 
 def plan_debt(
     *,
@@ -337,5 +333,3 @@ def plan_debt(
         # the scheduled-service min_dscr.
         "refinance": refinance_disclosure,
     }
-
-
