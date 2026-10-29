@@ -24,9 +24,13 @@ def reset_placeholder_warn_dedup() -> None:
     _PLACEHOLDER_WARNS_EMITTED.clear()
 
 
+# Debt is sized via dual_dscr and split by Financing_Terms.mix proportions at the
+# per-currency Financing_Terms.rates. A hand-authored Financing_Terms.debt_tranches
+# list (absolute principals / per-tranche tenors) is NOT an engine input — absolute
+# principals are incompatible with auto-sizing. We warn once if one is present so the
+# redundant block cannot silently drift from the engine's actual schedule. Tests reset
+# this flag to assert the warning.
 _warned_decorative_tranches = False
-
-_FORBID_TOY_FALLBACK_KEY = "_run_mode_forbids_toy_fallback"
 
 
 def _truthy_flag(value: Any) -> bool:
@@ -37,8 +41,25 @@ def _truthy_flag(value: Any) -> bool:
     return bool(value)
 
 
+#: #733b run-mode hard gate. When a declared lender/IC run resolves to
+#: ``run_modes.POLICIES[mode].allow_toy_capex is False``, the analytics pipeline
+#: asks the debt engine to forbid every toy fallback via ``plan_debt(...,
+#: forbid_toy_fallback=True)``, which stamps this reserved key onto the debt
+#: engine's OWN config copy (never the caller's config). The flag rides the
+#: engine's existing config threading to every capex-extraction and cost-free-debt
+#: site, so ONE chokepoint check in ``_allow_toy_capex_fallback`` covers them all.
+#: finance reads a plain config bool — it does not import the analytics run-mode
+#: policy (no layer inversion). Absent (every screening/developer/undeclared run)
+#: it is a strict no-op, so those runs stay byte-identical.
+_FORBID_TOY_FALLBACK_KEY = "_run_mode_forbids_toy_fallback"
+
+
 def _allow_toy_capex_fallback(params: Mapping[str, Any]) -> bool:
-    """Return true only when toy fallback is explicitly enabled AND not forbidden."""
+    """Return true only when toy fallback is explicitly enabled AND not forbidden.
+
+    The #733b run-mode ceiling (``_FORBID_TOY_FALLBACK_KEY``) is a HARD gate: a
+    declared lender/IC run forbids the toy fallback even where the config opted in.
+    """
     if bool(params.get(_FORBID_TOY_FALLBACK_KEY)):
         return False
     if _truthy_flag(_lookup_case_insensitive(params, "allow_toy_fallback")):
