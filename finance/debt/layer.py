@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import logging
-import math
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional
 
 from finance.debt.capex import _extract_capex_usd
 from finance.debt.constants import (
@@ -12,14 +11,11 @@ from finance.debt.constants import (
     _AMORT_DEFAULT_STYLE,
     _AMORT_SCULPTED_STYLES,
     _AMORT_VALID_STYLES,
-    _BALLOON_TOL,
-    _SERVICE_TOL,
 )
 from finance.debt.construction import calculate_construction_drawdowns, calculate_idc
 from finance.debt.helpers import _as_float, _npv
-from finance.debt.placeholders import _allow_toy_capex_fallback, _warn_placeholder_once
+from finance.debt.placeholders import _allow_toy_capex_fallback
 from finance.debt.schedules import (
-    Tranche,
     _annuity_schedule,
     _sculpted_schedule,
     _solve_mix,
@@ -28,10 +24,10 @@ from finance.debt.terms import (
     _build_cfads_timeline,
     _extract_financing_terms,
     _resolve_construction_periods,
-    _resolve_first_operating_period,
 )
 
 logger = logging.getLogger("finance.debt_v14")
+
 
 def apply_debt_layer(
     params: Dict[str, Any],
@@ -361,5 +357,3 @@ def apply_debt_layer(
         "fx_max": fx_max,
         "fx_avg": fx_avg,
     }
-
-
