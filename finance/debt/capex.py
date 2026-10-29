@@ -3,24 +3,22 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Mapping
 
 from finance.import_levies import (
     compute_capex_uplift_usd,
     resolve_indirect_taxes,
 )
 from finance.debt.helpers import (
-    _as_float,
-    _get,
     _lookup_case_insensitive,
     _section_case_insensitive,
 )
 from finance.debt.placeholders import (
     _allow_toy_capex_fallback,
-    _warn_placeholder_once,
 )
 
 logger = logging.getLogger("finance.debt_v14")
+
 
 def _extract_capex_base_usd(params: Dict[str, Any]) -> float:
     """Extract the PRE-LEVY CAPEX base from config (v14, legacy and compact schemas).

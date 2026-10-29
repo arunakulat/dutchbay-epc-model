@@ -6,7 +6,8 @@ import math
 import warnings
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
-from finance.debt.helpers import _as_float, _finite_dscr
+from finance.debt.helpers import _finite_dscr
+
 
 def _clean_public_dscr_series(values: Sequence[Any]) -> List[float]:
     """Drop the undefined sentinels from a PERIOD-indexed DSCR series.

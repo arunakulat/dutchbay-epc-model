@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from typing import List, Sequence, Tuple
+from typing import List, Tuple
 
-from finance.debt.helpers import _as_float
 
 def calculate_construction_drawdowns(
     total_debt: float,

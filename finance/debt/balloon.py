@@ -16,14 +16,12 @@ from finance.debt.constants import (
 from finance.debt.helpers import (
     _as_float,
     _finite_number,
-    _get,
-    _rate_decimal,
     _section_case_insensitive,
 )
 from finance.debt.layer import apply_debt_layer
-from finance.debt.terms import _extract_financing_terms
 
 logger = logging.getLogger("finance.debt_v14")
+
 
 def _maturity_period_index(
     debt_service_total: Sequence[float], construction_periods: int
