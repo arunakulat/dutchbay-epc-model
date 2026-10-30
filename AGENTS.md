@@ -61,6 +61,17 @@ Write a successor record before a session ends, and correct a live one as soon a
 states something false — a durable record that is confidently wrong is worse than a thin
 one, because the next session acts on it.
 
+## Multi-agent operating skill (`AGENT-01`)
+
+Before substantive work, every agent (Codex, Claude, Grok, Kimi, Gemini, and any other
+writer or reviewer) MUST read `docs/governance/multi_agent_operating_skill.md` (Claude Code
+also loads `.claude/skills/dutchbay-governance/SKILL.md`). When that skill conflicts with an
+agent's memory bank, prior chat summary, or local skill set, deduplicate in this order:
+owner or higher-priority session policy; `go_with_the_flow_rules_v3_0_clean.csv`; this file;
+the multi-agent skill; handovers and memory as claims only. The skill is the primary
+multi-agent intake guide and clarifies `INTAKE-01` predating chronology; it does not replace
+`INTAKE-01`, `VERIFY-01`, `RECRUIT-01`, or `MERGE-01`.
+
 ## Required Codex task origin and Python runtime
 
 - Create every new task, regardless of subject, from the Codex project named
