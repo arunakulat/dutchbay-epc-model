@@ -43,8 +43,18 @@ FEE_RATE = 0.0075 + 0.01
 # Pre-#737 canonical lendercase economics (the committed pins before the fees were
 # switched on). The fee-OFF variant must reproduce them exactly: the #737 code path
 # is a no-op without the config keys.
+#
+# #1397 re-measured the equity pin alone, and the four around it are evidence of how
+# narrow the change is: the project IRR, project NPV, total CFADS and facility of this
+# variant are untouched to 1e-12. What moved is the equity path, because the covenant
+# DSCR the distribution waterfall tests against is now computed on levered-tax CFADS
+# and reads higher, so fewer years lock and the sponsor is paid sooner.
+#
+# #1396 part B re-measured the equity pin alone again (-5.77% -> -6.35%): the committed
+# case now refinances its balloon instead of sweeping it, which sits below CFADS, so the
+# other four pins are untouched.
 PRE_737_PROJECT_IRR = 0.010987826287926005
-PRE_737_EQUITY_IRR = -0.06921094221790935
+PRE_737_EQUITY_IRR = -0.063482364508472
 PRE_737_PROJECT_NPV = -78603674.58182944
 PRE_737_TOTAL_CFADS = 176293763.9319677
 PRE_737_DEBT_TOTAL = 63042000.0
@@ -135,10 +145,19 @@ def test_fee_math_declining_outstanding_ops_only(res_on: Dict[str, Any]) -> None
 def test_a_signature_dscr_holds_with_smaller_debt(
     res_on: Dict[str, Any], res_fee_only_off: Dict[str, Any]
 ) -> None:
-    """Rigorous fee-inside-sculpt: min DSCR stays ON target while the debt shrinks.
+    """Rigorous fee-inside-sculpt: the sculpt holds while the economics bear the fee.
 
     A/B against the FEE-ONLY-off fixture (#738 posture kept on both sides), so
     every delta below is attributable to the fee alone.
+
+    #1397 took the title's second half away, and that is worth stating rather than
+    quietly dropping. The fee used to shrink the committed facility; it no longer does,
+    because the extra levered-tax capacity puts both solves on the same 0.3775 gearing
+    step and the fee's effect is smaller than the solver's 0.0025 granularity. The fee
+    is still inside the sculpt -- the sculpted service carries it, and every economic
+    assertion below still holds -- but the de-levering is no longer observable in
+    ``debt_total``. That granularity is part of the gearing work item (#1353,
+    issuecomment-6433557550), not something this change set out to do.
     """
     on, off = res_on["kpis"], res_fee_only_off["kpis"]
     debt_on = res_on["debt_result"] or {}
@@ -147,17 +166,26 @@ def test_a_signature_dscr_holds_with_smaller_debt(
     # re-sizes the gearing against the fee-netted series) — surfaced as
     # min_dscr_period since #790...
     assert on["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
-    # ...and the KPI HEADLINE now agrees with the engine's fold-corrected covenant
-    # minimum (#790): the two lender-facing surfaces can no longer diverge.
-    # F5-01's COD-aligned operating path removes the prior fold gap: both surfaces
-    # resolve to the 1.30 target.
-    assert on["min_dscr"] == pytest.approx(1.30, abs=1e-6)
-    # The conservative per-year covenant table also remains at or above target.
-    assert debt_on["min_dscr"] == pytest.approx(1.30, abs=1e-6)
+    # ...and the KPI HEADLINE agrees with the engine's fold-corrected covenant minimum
+    # (#790): the two lender-facing surfaces can no longer diverge from each other.
+    # They now sit BELOW the target rather than on it, at the year-1 fold value #1397
+    # re-baselined (1.2196; the orphaned bridge service folded into year 1 -- #1353,
+    # issuecomment-6433557550). This docstring used to record the same gap at ~1.288.
+    assert on["min_dscr"] == pytest.approx(debt_on["min_dscr"], abs=1e-9)
+    assert debt_on["min_dscr"] == pytest.approx(1.2196, abs=1e-3)
     by_year = [v for v in debt_on["dscr_by_year"].values() if v is not None]
-    assert min(by_year) >= 1.28
-    # ...while the structure de-levers (the fee is inside the sizing)...
-    assert debt_on["debt_total"] < debt_off["debt_total"]
+    assert min(by_year) >= 1.21
+    assert sorted(by_year)[1] >= 1.29, "only year 1 may sit under the target"
+    # ...while the sculpted debt SERVICE carries the fee, which is what "inside the
+    # sculpt" means and is the part that is still observable. The committed facility is
+    # now identical on both sides (see the docstring), so asserting debt_on < debt_off
+    # would be asserting the solver's rounding, not the fee.
+    assert debt_on["debt_total"] == pytest.approx(debt_off["debt_total"], rel=1e-12)
+    service_on = debt_on["dual_dscr"]["debt_service_p50"]
+    service_off = debt_off["dual_dscr"]["debt_service_p50"]
+    assert sum(service_on) > sum(
+        service_off
+    ), "the fee is no longer inside the sculpted service at all"
     # ...and the economics honestly bear the fee.
     assert on["total_cfads_usd"] < off["total_cfads_usd"]
     assert on["project_npv"] < off["project_npv"]

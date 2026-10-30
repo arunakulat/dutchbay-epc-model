@@ -64,7 +64,7 @@ PINNED_REPOSITORY_SOURCE_TRIPLES = (
     (
         "scenario",
         "scenarios/dutchbay_lendercase_2025Q4.yaml",
-        "bb83a662c754ef1376201818c2e294c660d4e9cc4cae0947ba091cdb62f53c39",
+        "69d92ef97fc924ca4b682410357d170508b75a1ad77a2348d080a07447e96dc3",
     ),
     (
         "era5_summary",
@@ -89,7 +89,7 @@ PINNED_REPOSITORY_SOURCE_TRIPLES = (
     (
         "version_file",
         "VERSION",
-        "e72c21ce1aa4e2ce2e34038decc9a3766eebc2bf7a61b64223cadfee72dd8d81",
+        "450c2674f538ab02c92eeaae49e944d640539d75aa9b713d5da767b7eb6f4fc8",
     ),
 )
 

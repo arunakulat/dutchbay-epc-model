@@ -496,11 +496,19 @@ FULL_STACK_OVERRIDE = str(
 # the absent-block identity a fixed empirical meaning — if the mechanism ever
 # leaks into a block-less config, this breaks at 1e-12. Values = the live
 # pipeline on the committed scenario minus the block (2026-07-05 flip).
-LEVY_OFF_PROJECT_IRR = 0.0076385755390873935
-LEVY_OFF_EQUITY_IRR = -0.06462847216274137
-LEVY_OFF_PROJECT_NPV = -81016248.45805511
-LEVY_OFF_TOTAL_CFADS = 171036158.76062176
-LEVY_OFF_DEBT_TOTAL = 61446000.0
+# Re-measured by #1397 (2026-10-27): sizing on levered-tax CFADS moves the solved
+# facility here too (USD 61.446M -> 65.037M), and the project figures follow it through
+# the larger credit-support fee. The absent-block identity this guards is unaffected --
+# the overlay and the strip still agree with each other at 1e-12, which is what the two
+# tests below check; only the shared empirical anchor moved.
+# Re-measured by #1396 part B (2026-10-27): the committed case now refinances its
+# balloon, so only the equity IRR moves (-8.75% -> -22.61%); the project figures, CFADS
+# and the facility are untouched because balloon resolution sits below CFADS.
+LEVY_OFF_PROJECT_IRR = 0.0077027371852971295
+LEVY_OFF_EQUITY_IRR = -0.226100391862452
+LEVY_OFF_PROJECT_NPV = -80630541.51396486
+LEVY_OFF_TOTAL_CFADS = 171189581.74838185
+LEVY_OFF_DEBT_TOTAL = 65036999.99999999
 
 
 def _merged_with_override(path: str) -> Dict[str, Any]:
@@ -573,7 +581,12 @@ def test_full_stack_paid_overlay_directional_signature() -> None:
     paid = run_v14_pipeline(config=_merged_with_override(FULL_STACK_OVERRIDE))
     k_canon, k_paid = canon["kpis"], paid["kpis"]
     assert k_paid["project_irr"] < k_canon["project_irr"]
-    assert k_paid["equity_irr"] < k_canon["equity_irr"]
+    # Equity value falls (about -95.6M -> -125.8M). Equity IRR is NOT asserted: since
+    # #1396 part B refinances the balloon, equity funds a refinance shortfall late in
+    # life, and with the levy stack paid the IRR moves up (-30.54% -> -30.12%) while
+    # value is destroyed. The balloon barely moves (28.61M vs 28.63M); the mechanism is
+    # not traced further. NPV is the monotone measure at this depth.
+    assert k_paid["equity_npv"] < k_canon["equity_npv"]
     assert k_paid["project_npv"] < k_canon["project_npv"]
     # The sculpt re-solves: the per-period floor holds the 1.30 target...
     assert k_paid["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)

@@ -4,6 +4,49 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Changed
+- **The lender case refinances its balloon instead of sweeping it (15.8.0).** Owner
+  decision 1A on #1396 (audit P3-COV-03): the USD 28.63m scheduled-maturity balloon,
+  of which cash sweep left USD 9.80m unpaid, is refinanced on the assumed YAML terms
+  `constraints.refinancing` (3 years, +2% over the average debt rate; no term sheet).
+  The refinanced tranche covers only 0.28-0.34x against the 1.30 floor
+  (`debt_result.refinance.coverage_breach` is true), so equity funds a shortfall of
+  about USD 24.8m; by the owner's F-5 boundary call that coverage supports no covenant,
+  lender or IC representation until #1395 and real refinance terms land. Canon re-baseline: equity IRR -9.99% -> -30.54%, equity NPV -$93.09M
+  -> -$95.64M; project IRR, NPV, `min_dscr`, LLCR, PLCR and CFADS are unchanged. With
+  the full levy stack paid, equity NPV falls but equity IRR rises slightly, so that
+  directional test now asserts NPV. This re-baselines the committed canonical KPI
+  vector; it does not change the Board/lender circulation HOLD.
+
+### Fixed
+- **Debt is sized, and coverage reported, on levered-tax CFADS (15.7.0).** `plan_debt`
+  was handed rows built with `interest_expense=0`, so the facility was sculpted against —
+  and DSCR, LLCR and PLCR published from — CFADS carrying tax computed with no interest
+  deduction (LKR 36.76bn of interest deducted nowhere on the lender case, worth USD
+  16.44M of coverage CFADS: the sizer saw $175.55M before and sees $191.99M now). Sizing now runs as a fixed point over the levered-tax CFADS
+  series and refuses a schedule it has not settled. The interest is the only input that
+  changed: the senior credit-support fee still enters only the reporting rebuild, so a
+  scenario with interest deductibility off is byte-identical to the previous engine. The
+  project pass keeps its unlevered basis against the after-tax WACC; rows publish both
+  `cfads_usd` and `cfads_coverage_usd`. Canon re-baseline: facility $59.59M -> $63.37M,
+  balloon $31.55M -> $28.63M, equity IRR -7.85% -> -9.99%, project NPV -$91.81M ->
+  -$91.57M, project IRR -0.1166% -> -0.1421%, total CFADS $166.08M -> $165.69M (both
+  down, through the larger facility's credit-support fee), total equity distributed
+  $44.49M -> $32.64M and equity MOIC 0.4109 -> 0.3124. Headline `min_dscr` 1.30 ->
+  1.2196 — the conservative annual fold in operating year 1, which needs both the larger
+  facility and the fee it costs (zero the fee at the same facility and it reads 1.30);
+  `min_dscr_period` stays at the 1.30 sculpt target. Owner decision 2026-10-27: correct
+  the basis and report year 1 honestly rather than constrain the gearing solver. Mullikulam, the 5 US-cent case, the
+  two capex sensitivities and the eight NSO250 LTL variants re-baseline on coverage as
+  well. This re-baselines the committed canonical KPI vector; it does not change the
+  Board/lender circulation HOLD.
+- **`optimization_v14` survives a candidate it cannot score.** The KPI surface drops
+  `equity_irr` where the equity waterfall ran and no rate solves its cashflows (#1436),
+  and the sweep read it with `kpis[key]`, so one deeply geared, fully covenant-locked
+  candidate raised `KeyError` and killed the whole optimization. Such a point now reads
+  `nan`, is marked infeasible, and logs which KPI and which parameter value — never a
+  substituted 0.0, which would read as break-even (#782).
+
 ### Added
 - Record the v15.6.1 release receipts, completed fragment/branch cleanup, surviving Board/lender reliance HOLD, and clean-thread startup checklist in the successor session handover.
 

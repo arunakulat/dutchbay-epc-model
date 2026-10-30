@@ -20,7 +20,7 @@ which raises an actionable ImportError at call-time if the extra is absent. The 
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import Any, cast
 
 from analytics.contracts_v14 import (
     GRID_EMT_CONFIRMATION_SCR,
@@ -28,6 +28,7 @@ from analytics.contracts_v14 import (
     GRID_SCR_WEAK_BELOW,
     GridStrengthResult,
 )
+from analytics.grid.pandapower_screening import in_screening_worker, run_screening
 
 _SCREENING_PROVENANCE = (
     "In-house Python design-stage screen (pandapower IEC 60909; SCR@POC). "
@@ -45,7 +46,7 @@ def _require_pandapower() -> Any:
     except ImportError as exc:  # pragma: no cover - optional dependency
         raise ImportError(
             "Grid short-circuit screening requires the [grid] extra: "
-            "pip install 'pandapower>=3.3,<3.4'  (or  PIP_CONSTRAINT=constraints.txt "
+            "pip install 'pandapower==3.5.4'  (or  PIP_CONSTRAINT=constraints.txt "
             "pip install -e '.[grid]'). It is an OPTIONAL dependency — the base finance "
             "install never needs it (a closed-form fallback is used instead)."
         ) from exc
@@ -175,6 +176,25 @@ def screen_grid_strength(
         except ImportError:
             pp = None
         if pp is not None:
+            if not in_screening_worker():
+                return cast(
+                    GridStrengthResult,
+                    run_screening(
+                        "strength",
+                        {
+                            "poc_voltage_kv": poc_voltage_kv,
+                            "source_fault_level_mva": source_fault_level_mva,
+                            "source_rx": source_rx,
+                            "connection_r_ohm": connection_r_ohm,
+                            "connection_x_ohm": connection_x_ohm,
+                            "plant_rating_mva": plant_rating_mva,
+                            "scr_weak_below": scr_weak_below,
+                            "scr_strong_above": scr_strong_above,
+                            "emt_confirmation_scr": emt_confirmation_scr,
+                            "provenance": provenance,
+                        },
+                    ),
+                )
             fault_min_mva = _pandapower_fault_level_mva(
                 pp,
                 poc_voltage_kv=poc_voltage_kv,

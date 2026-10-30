@@ -55,5 +55,5 @@ source:
   # Identity of the pinned inputs this synthetic run is calibrated against, so a stored
   # record can be tied back to the tree state that produced it (MRM-02). These are the same
   # digests the #923 synthetic feeder package pins.
-  scenario_sha256: bb83a662c754ef1376201818c2e294c660d4e9cc4cae0947ba091cdb62f53c39
+  scenario_sha256: 69d92ef97fc924ca4b682410357d170508b75a1ad77a2348d080a07447e96dc3
   era5_summary_sha256: b2d6fd4a4373d3634383d5aec215e4c2dadd2e0b6a3db6d4139a4c850b4578d0

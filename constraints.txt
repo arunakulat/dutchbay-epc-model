@@ -28,9 +28,9 @@ requests==2.34.2
 # Document-ingestion output and hook behaviour are reproducibility surfaces. Hold
 # the versions migrated from the retired 3.11 environment until a dedicated upgrade
 # dolphin revalidates conversion, extraction, rendering, hooks, audit, and the suite.
-markitdown==0.1.8
+markitdown==0.1.9
 pdfplumber==0.11.10
-pymupdf==1.28.2
+pymupdf==2.0
 pre-commit==4.6.2
 # Retained report/jobs capabilities are production and audit surfaces. These exact
 # versions were migrated from the retiring 3.11 environment and cleared together
@@ -38,7 +38,7 @@ pre-commit==4.6.2
 weasyprint==70.0
 arq==0.28.0
 brotli==1.2.1
-hiredis==3.4.2
+hiredis==3.5.0
 zopfli==0.4.3
 # antlr4-python3-runtime: hard-capped by the Hydra stack, NOT a gate-cleared freeze.
 # hydra-core 1.3.7 and omegaconf 2.3.1 both require antlr4-python3-runtime==4.9.* (the
@@ -47,3 +47,9 @@ zopfli==0.4.3
 # group bumped it to 4.13.2 and made the lock uninstallable). Lift only in lockstep
 # with a hydra-core/omegaconf upgrade that regenerates their grammars.
 antlr4-python3-runtime<4.10
+# pandapower: the #1229 screening worker adapts version-specific vendor internals and
+# config/pandapower_screening.json accepts only the versions it was verified against.
+# Hold the [grid] install at that version (pyproject declares >=3.5,<4), so a fresh
+# `PIP_CONSTRAINT=constraints.txt pip install -e ".[grid]"` cannot resolve a release the
+# screens would refuse. Lift only with a reviewed policy and adapter update.
+pandapower==3.5.4

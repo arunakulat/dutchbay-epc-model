@@ -35,7 +35,7 @@ import time
 from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Sequence
 
 from analytics.contracts_v14 import (
     DebtCovenantSnapshot,
@@ -330,6 +330,155 @@ def _enrich_annual_rows_with_debt(
         enriched.append(out)
 
     return _validate_annual_rows_structure(enriched, require_debt_fields=True)
+
+
+# P2-F4-01 (#1397). Sizing debt on CFADS that bears levered tax is a fixed point:
+# levered tax depends on interest, interest on the debt size, and the debt size on the
+# CFADS that levered tax moves. The loop stops when no operating row's CFADS moves by
+# more than this, in USD. One cent over a 20-row schedule is far below any figure the
+# lender surface reports and well above float noise on nine-figure cashflows.
+_CFADS_FIXED_POINT_TOL_USD = 0.01
+
+# A ceiling, not an expectation. The map is a contraction in practice -- each iteration's
+# interest change feeds tax at the marginal rate, so the CFADS correction shrinks by
+# roughly the tax rate each time and the lender case converges in a handful of passes.
+# Hitting the ceiling means the schedule is oscillating, and an oscillating schedule is
+# reported as a failure rather than silently truncated at whatever the last pass held.
+_CFADS_FIXED_POINT_MAX_ITERATIONS = 25
+
+
+def _size_debt_on_levered_cfads(
+    cfg: dict[str, Any],
+    *,
+    build_annual_rows: Any,
+    forbid_toy_fallback: bool,
+) -> tuple[dict[str, Any], list[dict[str, Any]], int]:
+    """Size debt against CFADS bearing the tax the SPV actually pays.
+
+    Returns the converged ``(debt_result, debt-enriched sizing rows, iteration count)``.
+    The sizing rows carry levered tax -- the real per-operating-year debt interest
+    deducted -- and that is the basis the sculpt, the DSCR series and LLCR/PLCR are
+    computed from.
+
+    **The interest is the only thing this changes.** The rows fed to ``plan_debt`` carry
+    no senior credit-support fee, which is exactly how the pre-#1397 code sized: the fee
+    is derived from the sized facility afterwards and goes into the REPORTING rebuild,
+    never into the sizing pass (architecture pointer RS-A8, "debt sized on pre-fee
+    unlevered rows, reported on rebuilt rows"). Sizing on pre-fee rows overstates debt
+    capacity, because the fee is senior to debt service, but that is RS-A8's finding and
+    not this one; fixing it here would make the KPI delta below impossible to attribute.
+    The consequence worth having is that the loop is a fixed point in the interest alone,
+    so the fee cannot oscillate against the gearing solver, and a scenario with
+    ``tax.interest_deductibility`` off settles on the first pass at the pre-#1397 answer,
+    byte for byte.
+
+    (Folding the fee in was tried and does not settle. On the lender case with interest
+    deductibility off it gives a clean 2-cycle, ``debt_total`` alternating between USD
+    56,652,513.75 and 57,072,162.00 forever with the largest per-row CFADS movement
+    locked at USD 19,909.36: ``_solve_gearing_for_dscr`` steps gearing in discrete 0.0025
+    increments, one step is worth about USD 419,648 of facility, and the fee computed at
+    step k pushes the solve to step k-1 and back. Recorded for whoever takes RS-A8 on.)
+
+    Raises:
+        PipelineValidationError: If the schedule has not converged within
+            ``_CFADS_FIXED_POINT_MAX_ITERATIONS``.
+    """
+    tax_block = cfg.get("tax", {}) or {}
+    interest_deductible = bool(tax_block.get("interest_deductibility", True))
+
+    interest_lkr: list[float] | None = None
+    previous_cfads: list[float] | None = None
+
+    for iteration in range(1, _CFADS_FIXED_POINT_MAX_ITERATIONS + 1):
+        rows = _validate_annual_rows_structure(
+            build_annual_rows(cfg, interest_expense_series=interest_lkr)
+        )
+        debt_result = _validate_debt_result_structure(
+            plan_debt(
+                annual_rows=rows,
+                config=cfg,
+                forbid_toy_fallback=forbid_toy_fallback,
+            )
+        )
+        enriched = _enrich_annual_rows_with_debt(rows, debt_result)
+        cfads = [float(row.get("cfads_usd") or 0.0) for row in enriched]
+
+        if (
+            previous_cfads is not None
+            and len(previous_cfads) == len(cfads)
+            and max(
+                (
+                    abs(now - before)
+                    for now, before in zip(cfads, previous_cfads, strict=True)
+                ),
+                default=0.0,
+            )
+            <= _CFADS_FIXED_POINT_TOL_USD
+        ):
+            logger.info(
+                "Debt sized on levered CFADS: converged in %d iteration(s)", iteration
+            )
+            return debt_result, enriched, iteration
+
+        if not interest_deductible:
+            # Nothing varies between passes, so the first pass IS the fixed point, and
+            # it is the pre-#1397 sizing pass unchanged.
+            logger.info("Debt sized with interest non-deductible: no iteration needed")
+            return debt_result, enriched, iteration
+
+        previous_cfads = cfads
+        interest_lkr = _operating_interest_lkr_series(enriched)
+
+    raise PipelineValidationError(
+        "Debt sizing did not converge on a levered-tax CFADS basis within "
+        f"{_CFADS_FIXED_POINT_MAX_ITERATIONS} iterations: the largest per-row CFADS "
+        f"movement in the last pass stayed above USD {_CFADS_FIXED_POINT_TOL_USD}. The "
+        "schedule is oscillating rather than settling, so no sized facility, DSCR series "
+        "or coverage ratio from this run is reportable."
+    )
+
+
+def _senior_fee_lkr_series(
+    debt_result: Mapping[str, Any], annual_rows: Sequence[Mapping[str, Any]]
+) -> list[float] | None:
+    """Per-operating-row senior credit-support fee in LKR, or None when no fee is set.
+
+    The debt engine sizes with the guarantee + PRI fee inside the sculpt and exposes the
+    per-period USD fee (rate x opening outstanding). Translating it at each row's spot FX
+    is the same basis as opex and interest -- the fee base is USD debt, so ``_hedged_usd``
+    does not apply. Construction periods carry no operating row and a 0.0 engine fee.
+    """
+    senior_fee_usd = [
+        float(v or 0.0) for v in (debt_result.get("senior_fee_usd") or [])
+    ]
+    if not any(fee > 0.0 for fee in senior_fee_usd):
+        return None
+    row_to_period: dict[int, int] = {}
+    for mapping in debt_result.get("annual_row_debt_period_map") or []:
+        try:
+            row_to_period[int(mapping["annual_row_index"])] = int(
+                mapping["debt_period"]
+            )
+        except (KeyError, TypeError, ValueError):
+            continue
+    series: list[float] = []
+    for row_idx, row in enumerate(annual_rows):
+        period_idx = row_to_period.get(row_idx, row_idx)
+        fee_usd = (
+            senior_fee_usd[period_idx] if 0 <= period_idx < len(senior_fee_usd) else 0.0
+        )
+        series.append(fee_usd * float(row.get("fx_rate") or 0.0))
+    return series
+
+
+def _operating_interest_lkr_series(
+    annual_rows: Sequence[Mapping[str, Any]],
+) -> list[float]:
+    """Per-operating-row debt interest in LKR, from the debt-enriched rows."""
+    return [
+        float(row.get("interest_usd") or 0.0) * float(row.get("fx_rate") or 0.0)
+        for row in annual_rows
+    ]
 
 
 def _debt_fee_rate(config: Mapping[str, Any]) -> float:
@@ -841,51 +990,56 @@ def run_v14_pipeline_enhanced(
 
         _mode = resolve_run_mode(cfg)
         _forbid_toy_fallback = _mode is not None and not POLICIES[_mode].allow_toy_capex
-        debt_result = plan_debt(
-            annual_rows=annual_rows,
-            config=cfg,
+        # P2-F4-01 (#1397): debt is sized, and DSCR/LLCR/PLCR reported, on CFADS that
+        # bears the tax the SPV ACTUALLY pays — levered tax, with its real debt interest
+        # deducted. Every pass here used to run on unlevered tax (interest_expense=0),
+        # which overstates the tax outflow and so understates the CFADS the sculpt sizes
+        # against: USD 14.29M over the lender case's 20 operating rows, measured at
+        # 4204d6cd (#1397, issuecomment-6432605039). A DSCR is a cash-coverage ratio with
+        # no WACC in it, so there is nothing for the interest shield to double count
+        # against. The double-count argument is sound for project NPV and project IRR
+        # against an after-tax WACC, where the shield is already inside the cost of debt,
+        # and that pass keeps its unlevered basis a few lines below — this separates the
+        # two uses of the row set rather than flipping the basis wholesale.
+        #
+        # The senior-fee rebuild (#737) is untouched: the fee is still derived from the
+        # sized facility and still goes only into the reporting rows below, never into
+        # the sizing pass. See _size_debt_on_levered_cfads on why that boundary is left
+        # where it is.
+        (
+            debt_result,
+            sizing_rows,
+            fixed_point_iterations,
+        ) = _size_debt_on_levered_cfads(
+            cfg,
+            build_annual_rows=build_annual_rows,
             forbid_toy_fallback=_forbid_toy_fallback,
         )
-        debt_result = _validate_debt_result_structure(debt_result)
+        senior_fee_lkr_series = _senior_fee_lkr_series(debt_result, sizing_rows)
 
-        # Senior credit-support fees (#737): the debt engine sized the debt with the
-        # guarantee + PRI fee inside the sculpt and exposes the per-period USD fee
-        # (rate x opening outstanding). Translate it to LKR at each operating row's
-        # spot FX (same basis as opex/interest; the fee base is USD debt, so no
-        # _hedged_usd) and REBUILD the unlevered rows with the fee charged at the
-        # EBITDA line — so reported CFADS, project NPV/IRR and (levered) tax all bear
-        # the SAME fee the sculpt and the DSCR series charged. Construction periods
-        # carry no operating row and a 0.0 engine fee. No fees configured -> the
-        # original rows pass through untouched (byte-identical).
-        senior_fee_usd = [
-            float(v or 0.0) for v in (debt_result.get("senior_fee_usd") or [])
-        ]
-        senior_fee_lkr_series: list[float] | None = None
-        if any(fee > 0.0 for fee in senior_fee_usd):
-            fee_period_map = debt_result.get("annual_row_debt_period_map") or []
-            fee_row_to_period: dict[int, int] = {}
-            for mapping in fee_period_map:
-                try:
-                    fee_row_to_period[int(mapping["annual_row_index"])] = int(
-                        mapping["debt_period"]
-                    )
-                except (KeyError, TypeError, ValueError):
-                    continue
-            senior_fee_lkr_series = []
-            for row_idx, row in enumerate(annual_rows):
-                period_idx = fee_row_to_period.get(row_idx, row_idx)
-                fee_usd = (
-                    senior_fee_usd[period_idx]
-                    if 0 <= period_idx < len(senior_fee_usd)
-                    else 0.0
-                )
-                senior_fee_lkr_series.append(fee_usd * float(row.get("fx_rate") or 0.0))
-            annual_rows = build_annual_rows(
-                cfg, senior_fee_lkr_series=senior_fee_lkr_series
-            )
-            annual_rows = _validate_annual_rows_structure(annual_rows)
-
+        # The project pass keeps UNLEVERED tax, for the reason above, and carries the
+        # senior fee exactly as it did before this change. So the two passes differ in
+        # the tax basis and in nothing else, and project NPV/IRR stay on the basis the
+        # WACC comparison requires.
+        annual_rows = _validate_annual_rows_structure(
+            build_annual_rows(cfg, senior_fee_lkr_series=senior_fee_lkr_series)
+        )
         annual_rows_enriched = _enrich_annual_rows_with_debt(annual_rows, debt_result)
+
+        # Publish both bases on the row, so a reader can see which CFADS carries which
+        # claim instead of inferring it. `cfads_usd` stays the project basis every
+        # existing consumer reads; `cfads_coverage_usd` is the levered-tax figure the
+        # facility was sized on and the DSCR series divides.
+        for project_row, sizing_row in zip(
+            annual_rows_enriched, sizing_rows, strict=True
+        ):
+            project_row["cfads_coverage_usd"] = float(
+                sizing_row.get("cfads_usd") or 0.0
+            )
+        logger.info(
+            "Debt sized on levered-tax CFADS in %d fixed-point iteration(s)",
+            fixed_point_iterations,
+        )
         metrics.debt_time_sec = time.time() - phase_start
         logger.info("Debt structured in %.3f sec", metrics.debt_time_sec)
 

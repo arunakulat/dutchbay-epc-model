@@ -22,6 +22,7 @@ import pytest
 import yaml
 
 from analytics.mc.engine import MonteCarloEngine, run_monte_carlo_analysis
+from tests._canon import LENDER_PROJECT_IRR as _CANON_PROJECT_IRR
 
 SCENARIO_PATH = Path("scenarios/dutchbay_lendercase_2025Q4.yaml")
 
@@ -162,12 +163,19 @@ class TestMCEngineNoToyFallback:
     def test_mc_irr_in_plausible_range(self, lendercase_config):
         """IRR mean must fall within a plausible range given CF 0.38-0.47.
 
-        #738 re-baseline: the committed lendercase now carries the PRUDENT import
-        levies + 18% opex VAT (net of the revenue-SSCL exemption reversal), which
-        pulls the sampled-CF mean project IRR from ~5.5% to the measured 4.736%
-        (seed 42) — the lower plausibility bound moves 5% -> 3%, keeping >=1.3pp
-        of margin BOTH ways (vs the 4.736% mean and vs the ~1.46% deterministic-
-        canon / toy-fallback signature this test exists to catch).
+        What this test exists to catch is a run whose overrides never reached the
+        pipeline: the trials then all return the deterministic canon (or the toy
+        fallback), and the mean collapses onto it. The band is the backstop; the
+        structural assertion below is the detector, and it does not drift.
+
+        Measured at seed 42, n=100: mean 2.947%, and 3.084% with
+        ``tax.interest_deductibility: False``, which is the pre-#1397 engine. The
+        0.14pp between them is this PR; the 3% lower bound that stood before it
+        was NOT the 1.3pp-of-margin bound its previous docstring claimed, it was
+        0.084pp from the measured mean and had been since an earlier re-baseline
+        moved the mean without moving the bound. Hence 2%, and hence the
+        structural assertion: 0.95pp of margin below the mean, and the band is no
+        longer the only thing standing between a leaked canon and a pass.
         """
         result = MonteCarloEngine(lendercase_config, seed=42).run(n_trials=100)
 
@@ -176,8 +184,15 @@ class TestMCEngineNoToyFallback:
 
         irr_stats = result.summary["project_irr"]
         assert (
-            0.03 < irr_stats["mean"] < 0.35
-        ), f"Mean IRR {irr_stats['mean']:.2%} outside plausible range [3%, 35%]"
+            0.02 < irr_stats["mean"] < 0.35
+        ), f"Mean IRR {irr_stats['mean']:.2%} outside plausible range [2%, 35%]"
+        # The real detector: the sampled band (CF 0.38-0.47) sits well above the
+        # deterministic case (CF 0.332), so a mean anywhere near the canonical
+        # project IRR means the sampling never reached the pipeline.
+        assert irr_stats["mean"] > _CANON_PROJECT_IRR + 0.02, (
+            f"Mean IRR {irr_stats['mean']:.2%} has collapsed onto the deterministic "
+            f"canon {_CANON_PROJECT_IRR:.2%} — overrides are not reaching the pipeline"
+        )
         p10 = irr_stats["percentiles"][10]
         p90 = irr_stats["percentiles"][90]
         assert p10 < p90, f"P10 {p10:.2%} >= P90 {p90:.2%} — distribution inverted"
