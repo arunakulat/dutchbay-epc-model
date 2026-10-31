@@ -218,6 +218,11 @@ from analytics.operational.normalization import (
     normalize_operational_csv,
 )
 from analytics.resource_contracts import ResourceAssessment
+from analytics.storage_dispatch_contracts import (
+    ChronologicalDispatchInput,
+    DispatchLedger,
+    DispatchStep,
+)
 from analytics.storage_sizing import BessSizing
 
 # Canonical CASPER contract version string. Unified Sprint 18D (D.X+5) to
@@ -4565,6 +4570,9 @@ class CapitalStructureOptimizationResult(ContractMixin):
 
 __all__ = [
     "BessSizing",
+    "ChronologicalDispatchInput",
+    "DispatchLedger",
+    "DispatchStep",
     "CASPER_CONTRACT_VERSION",
     "FEASIBILITY_REPORT_CONTRACT_VERSION",
     "FEASIBILITY_REPORT_SCHEMA_ID",
