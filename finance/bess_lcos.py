@@ -330,20 +330,8 @@ def resolve_lcos_specs(config: Mapping[str, Any]) -> Optional[List[LcosSpec]]:
         revenue = revenue if isinstance(revenue, Mapping) else {}
         notes: List[str] = []
 
-        # --- Energy basis (nameplate MWh per full cycle) ------------------------------
-        energy_mwh = _as_float(block.get("energy_mwh"))
-        power_mw = _as_float(spec.get("power_mw"))
-        duration_h = _as_float(block.get("duration_h"))
-        if energy_mwh is not None and energy_mwh > 0:
-            energy_per_cycle = energy_mwh
-        elif power_mw is not None and duration_h is not None and duration_h > 0:
-            energy_per_cycle = power_mw * duration_h
-        else:
-            energy_per_cycle = 0.0
-            notes.append(
-                "no energy rating (energy_mwh or power_mw*duration_h) — LCOS energy "
-                "basis is zero and the metric is undefined."
-            )
+        # Same validated/derived nameplate basis as revenue and chronological dispatch.
+        energy_per_cycle = float(spec["energy_mwh"])
 
         # --- Cycling / efficiency / depth (read-only LCOS assumptions) ----------------
         cycles = _positive(
