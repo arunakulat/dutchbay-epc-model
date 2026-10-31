@@ -21,7 +21,10 @@ tests here select ``refinance`` by override. These tests pin:
 from __future__ import annotations
 
 import copy
+import importlib
+import pkgutil
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Dict, cast
 
 import pytest
@@ -55,10 +58,34 @@ def _refinance(terms: Dict[str, Any] | None) -> Dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # The resolver: YAML or refusal, never a default
 # --------------------------------------------------------------------------- #
+def _debt_engine_modules() -> list[ModuleType]:
+    """The façade plus every module of the ``finance.debt`` package behind it."""
+    import finance.debt
+
+    modules = [debt_v14]
+    for info in pkgutil.iter_modules(finance.debt.__path__):
+        modules.append(importlib.import_module(f"finance.debt.{info.name}"))
+    return modules
+
+
 def test_the_code_defaults_are_gone() -> None:
     assert not hasattr(debt_v14, "_REFINANCE_TENOR_DEFAULT")
     assert not hasattr(debt_v14, "_REFINANCE_PREMIUM_DEFAULT")
     assert not hasattr(debt_v14, "_refinance_terms")
+
+
+def test_no_engine_module_defines_a_code_default() -> None:
+    """The engine's code lives behind the façade, so look in every module of it."""
+    modules = _debt_engine_modules()
+    # The façade alone would make this vacuous: prove the package was enumerated.
+    assert len(modules) >= 15, [m.__name__ for m in modules]
+    for module in modules:
+        for name in (
+            "_REFINANCE_TENOR_DEFAULT",
+            "_REFINANCE_PREMIUM_DEFAULT",
+            "_refinance_terms",
+        ):
+            assert not hasattr(module, name), f"{module.__name__}.{name}"
 
 
 def test_terms_are_read_from_yaml() -> None:

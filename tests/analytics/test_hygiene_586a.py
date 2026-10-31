@@ -4,7 +4,8 @@ Covers, at comment/docstring/alias-shim level only (no behavioral change to any
 committed scenario):
 
 - ``finance.debt_v14`` has a real module docstring (the corrupted
-  ``# [File content too long...]`` header is gone).
+  ``# [File content too long...]`` header is gone), and no module of the
+  ``finance.debt`` package behind it carries that header either.
 - ``analytics.pipeline_v14_enhanced.PipelineMetrics.timestamp`` is tz-aware UTC
   (``datetime.utcnow()`` deprecation fix).
 - ``analytics.mc.samplers.generate_lhs_samples``: ``shared_permutation_stream``
@@ -41,6 +42,21 @@ class TestDebtV14Header:
 
         source = inspect.getsource(debt_v14)
         assert "[File content too long" not in source
+
+    def test_corrupted_header_gone_from_the_engine_package(self) -> None:
+        """The engine's code moved behind the façade into ``finance.debt``; scan it too."""
+        import importlib
+        import inspect
+        import pkgutil
+
+        import finance.debt
+
+        names = [info.name for info in pkgutil.iter_modules(finance.debt.__path__)]
+        # An empty enumeration would pass vacuously: the package has 14 modules.
+        assert len(names) >= 14, names
+        for name in names:
+            module = importlib.import_module(f"finance.debt.{name}")
+            assert "[File content too long" not in inspect.getsource(module), name
 
 
 class TestPipelineMetricsTimestamp:
