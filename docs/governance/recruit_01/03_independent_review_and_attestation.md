@@ -138,3 +138,41 @@ check passed on the exact PR head. Otherwise merge verification fails closed.
 
 Green CI is delivery evidence, not independent semantic review. Neither CI nor review lifts a
 release, lender, Board, professional, evidence, deployment, publication, or `HOLD` boundary.
+
+## 8. Merge trains (`TRAIN-01`)
+
+A merge train lets two or three reviewed pull requests, the cars, share one full-suite run and still
+land as separate commits on `main`. This section is how a car's disposition reaches the train head and
+how the landing is verified. It adds a second carry-forward beside §7 and does not change §7.
+
+**Carry-forward.** A car's disposition, bound to its frozen draft head, carries onto the train head
+only when its lane records all three of §7's proofs, applied to the train:
+
+1. **BLOB-HASH IDENTITY** for every file the lane judged, between the car's reviewed head and the
+   train head.
+2. **BIDIRECTIONAL IMPORT ISOLATION** between the car and everything else the train head changes,
+   meaning the other cars and any advance of `main`. For non-code sources, also account for normative
+   references and dependencies.
+3. The **complete diff from the car's reviewed head to the train head**, shown in full, not a summary.
+
+If any proof is absent, incomplete or fails, the car leaves the train and its disposition stays bound
+to its own head. A judgement that another car cannot matter never substitutes for these artifacts.
+The cars are never edited on the train branch. A fix belongs on the car's own branch, which is a
+subject change, so §6 restarts both of the car's reviews.
+
+**Landing check.** Before landing, record the protected `main` SHA. The train head's commits must form
+a chain of non-merge commits, one per car, whose first parent is that `main` SHA. The train lands by
+rebase-merge, never squash. After it lands, verification passes only if:
+
+- each landed commit's tree equals the tree of the matching train commit;
+- each landed commit's parent is the previous landed commit, and the first one's parent is the
+  recorded `main` SHA; and
+- the last landed commit's tree equals the train head's tree.
+
+Any mismatch fails merge verification closed, exactly as a squash whose tree differs from the accepted
+head does under §7.
+
+**What a train does not prove.** The full suite ran on the union of the cars. The intermediate commits
+between cars on `main` were never run by the full suite on their own, which is why the cars must be
+path-disjoint and import-isolated. A train lifts no `HOLD`, and it confers no release, lender, Board,
+professional, evidence, deployment or publication authority.
