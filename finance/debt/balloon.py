@@ -101,7 +101,7 @@ def resolve_refinance_terms(config: Mapping[str, Any]) -> Optional[Tuple[int, fl
     return int(float(tenor_raw)), float(premium_raw)
 
 
-def _balloon_resolution_stream(
+def _balloon_resolution_path(
     *,
     treatment: str,
     balloon: float,
@@ -112,31 +112,83 @@ def _balloon_resolution_stream(
     avg_rate: float,
     refi_tenor_years: int,
     refi_rate_premium: float,
-    senior_fee_usd: Sequence[float] = (),
-) -> Tuple[List[float], float]:
-    """Per-period cash diverted from equity to retire the balloon + residual.
+    senior_fee_rate: float = 0.0,
+) -> Dict[str, Any]:
+    """How the balloon is carried and retired after maturity, period by period.
 
-    ``resolution[p]`` (USD) is senior to equity and aligned to the SAME period
-    index as ``debt_service_total``. ``residual`` is any balloon still outstanding
-    after the treatment (0.0 when fully resolved). ``cash_sweep``/``bullet``/
-    ``refinance`` produce a stream; ``legacy_ignore``/``amortize`` produce none
-    (``amortize`` removes the balloon by resizing debt upstream).
+    Every series is PERIOD-indexed on the same axis as ``debt_service_total``:
+
+    - ``resolution[p]``: cash (USD) diverted from equity to the balloon, senior to
+      equity: its interest plus whatever principal it retires.
+    - ``interest[p]``: interest accrued on the balloon in period ``p``.
+    - ``outstanding[p]``: the balloon's OPENING balance in period ``p``, or ``None``
+      for every period this path does not govern (before maturity, or when the
+      treatment produces no stream). Plan_debt overlays it on ``debt_outstanding``.
+    - ``senior_fee[p]``: ``senior_fee_rate`` x ``outstanding[p]``, or ``None`` where
+      ``outstanding[p]`` is ``None``. Plan_debt overlays it on ``senior_fee_usd``.
+    - ``residual``: the balloon still outstanding at the end of the timeline,
+      including any interest the cash could not pay (0.0 when fully resolved).
+
+    The balloon is the unpaid part of the facility, so after maturity it keeps
+    accruing interest at the facility's blended contract rate, ``avg_rate``, and it
+    keeps bearing the senior credit-support fee on the balance actually
+    outstanding. Before this, ``cash_sweep`` and ``bullet`` retired it interest-free
+    and the fee stayed charged on the structural balloon after it was repaid.
+
+    - ``cash_sweep`` (default): each period's post-fee cash pays the interest, then
+      principal, until the balloon clears. Interest the cash cannot pay is added to
+      the balance (capitalised): the sweep never asks equity for more cash than
+      the period generates, and an unpaid balance shows as ``residual``.
+    - ``bullet``: the balloon and one period's interest are repaid in the maturity
+      period, which may exceed the period's cash (a sponsor cash call).
+    - ``refinance``: a level annuity over ``refi_tenor_years`` at ``avg_rate`` plus
+      ``refi_rate_premium``, as before.
+    - ``legacy_ignore`` and ``amortize`` produce no stream (``amortize`` removes the
+      balloon by resizing debt upstream), and govern no period.
     """
     n = int(timeline_periods)
     resolution = [0.0] * n
+    interest = [0.0] * n
+    outstanding: List[Optional[float]] = [None] * n
+    senior_fee: List[Optional[float]] = [None] * n
+    fee_rate = float(senior_fee_rate)
+
+    def _path(residual: float) -> Dict[str, Any]:
+        return {
+            "resolution": resolution,
+            "interest": interest,
+            "outstanding": outstanding,
+            "senior_fee": senior_fee,
+            "residual": residual,
+        }
+
     if balloon <= _BALLOON_TOL or treatment in ("legacy_ignore", "amortize"):
-        return resolution, (0.0 if balloon <= _BALLOON_TOL else float(balloon))
+        return _path(0.0 if balloon <= _BALLOON_TOL else float(balloon))
 
     maturity = _maturity_period_index(debt_service_total, construction_periods)
     if maturity >= n:
-        # No post-maturity period to resolve into → collapse to a terminal bullet.
+        # No post-maturity period to resolve into → collapse to a terminal bullet in
+        # the last scheduled period, which already carries the balance and its fee.
         if n > 0:
             resolution[n - 1] = float(balloon)
-        return resolution, 0.0
+        return _path(0.0)
+
+    def _carry(p: int, opening: float, accrued: float, paid: float) -> None:
+        outstanding[p] = opening
+        senior_fee[p] = fee_rate * opening
+        interest[p] = accrued
+        resolution[p] = paid
+
+    def _cleared_from(p: int) -> None:
+        for q in range(p, n):
+            _carry(q, 0.0, 0.0, 0.0)
 
     if treatment == "bullet":
-        resolution[maturity] = float(balloon)
-        return resolution, 0.0
+        opening = float(balloon)
+        accrued = opening * max(0.0, float(avg_rate))
+        _carry(maturity, opening, accrued, opening + accrued)
+        _cleared_from(maturity + 1)
+        return _path(0.0)
 
     if treatment == "refinance":
         rate = max(0.0, float(avg_rate) + float(refi_rate_premium))
@@ -154,26 +206,67 @@ def _balloon_resolution_stream(
             annuity = float(balloon) * factor
         else:
             annuity = float(balloon) / periods
+        opening = float(balloon)
         for j in range(periods):
-            resolution[maturity + j] = annuity
-        return resolution, 0.0
+            accrued = opening * rate
+            _carry(maturity + j, opening, accrued, annuity)
+            opening = max(0.0, opening + accrued - annuity)
+        _cleared_from(maturity + periods)
+        return _path(0.0)
 
     # Default: cash_sweep — trap post-maturity CFADS until the balloon clears.
     # The sweepable headroom is net of the senior credit-support fee (#737): the
     # reported rows already charge equity that fee, so sweeping pre-fee CFADS would
     # double-count the same cash as both fee-paid and balloon-sweepable, overstating
-    # how fast equity can retire the balloon. (The fee is charged on the UN-swept
-    # structural balloon — conservative.) Zero fees -> byte-identical.
+    # how fast equity can retire the balloon. The fee is charged on the balance
+    # actually outstanding at the start of the period. Zero fees -> no fee term.
+    rate = max(0.0, float(avg_rate))
     remaining = float(balloon)
     for p in range(maturity, n):
         available = _as_float(cfads_ext[p], 0.0) if p < len(cfads_ext) else 0.0
-        fee = _as_float(senior_fee_usd[p], 0.0) if p < len(senior_fee_usd) else 0.0
-        pay = min(max(0.0, available - fee), remaining)
-        resolution[p] = pay
-        remaining -= pay
+        fee = fee_rate * remaining
+        accrued = remaining * rate
+        due = remaining + accrued
+        pay = min(max(0.0, available - fee), due)
+        _carry(p, remaining, accrued, pay)
+        remaining = due - pay
         if remaining <= _BALLOON_TOL:
-            return resolution, 0.0
-    return resolution, remaining
+            _cleared_from(p + 1)
+            return _path(0.0)
+    return _path(remaining)
+
+
+def _balloon_resolution_stream(
+    *,
+    treatment: str,
+    balloon: float,
+    cfads_ext: Sequence[float],
+    debt_service_total: Sequence[float],
+    construction_periods: int,
+    timeline_periods: int,
+    avg_rate: float,
+    refi_tenor_years: int,
+    refi_rate_premium: float,
+    senior_fee_rate: float = 0.0,
+) -> Tuple[List[float], float]:
+    """Per-period cash diverted from equity to retire the balloon + residual.
+
+    The ``(resolution, residual)`` pair of :func:`_balloon_resolution_path`, which
+    documents each treatment.
+    """
+    path = _balloon_resolution_path(
+        treatment=treatment,
+        balloon=balloon,
+        cfads_ext=cfads_ext,
+        debt_service_total=debt_service_total,
+        construction_periods=construction_periods,
+        timeline_periods=timeline_periods,
+        avg_rate=avg_rate,
+        refi_tenor_years=refi_tenor_years,
+        refi_rate_premium=refi_rate_premium,
+        senior_fee_rate=senior_fee_rate,
+    )
+    return path["resolution"], path["residual"]
 
 
 def _refinance_disclosure(

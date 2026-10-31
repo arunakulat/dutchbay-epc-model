@@ -62,7 +62,10 @@ def test_pipeline_runs_config_driven(cfg: dict) -> None:
     # equity outruns the extra leverage's drag, so equity IRR EASES -0.0625 ->
     # -0.0547 (the opposite sign of the move on the wind lendercase, where the
     # larger facility absorbs most of the shield).
-    assert kpis["equity_irr"] == pytest.approx(-0.05467, abs=0.005)
+    # #1503 (2026-10-31): the cash-swept balloon now accrues interest at the facility
+    # rate until it clears, so the sweep takes USD 3.01M more and equity IRR moves
+    # -0.0547 -> -0.0607.
+    assert kpis["equity_irr"] == pytest.approx(-0.06068, abs=0.005)
     assert (
         kpis["equity_irr"] < kpis["project_irr"]
     )  # levered equity below the project return

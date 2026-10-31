@@ -185,10 +185,11 @@ def build_three_statement(
         currency: Presentation currency label (default ``"USD"``).
         opening_cash: Cash on the balance sheet at COD (e.g. a funded DSRA), in ``currency``.
         tolerance: Absolute (``currency``) tolerance for the tie-out checks.
-        balloon_interest: Per-row interest INSIDE ``balloon_resolution`` (``currency``).
-            Non-zero only for a refinanced balloon, whose level payments are interest plus
-            principal (#1396); that interest is an expense and only the remainder retires
-            debt. ``None`` (every other treatment) treats the whole row as principal.
+        balloon_interest: Per-row interest accrued on the balloon after maturity
+            (``currency``), which ``balloon_resolution`` pays first (#1396). That
+            interest is an expense and only the remainder retires debt; interest a cash
+            sweep could not pay is capitalised, so the remainder can be negative and the
+            balance grows. ``None`` treats the whole row as principal.
 
     Returns:
         A :class:`ThreeStatementResult` with the three statements and the tie-out status.
@@ -420,27 +421,33 @@ def build_three_statement_from_run(
         fx_rates=fx_rates,
         currency="USD",
         tolerance=tolerance,
-        balloon_interest=_refinance_interest_by_row(debt_result, len(annual_rows)),
+        balloon_interest=_balloon_interest_by_row(debt_result, len(annual_rows)),
     )
 
 
-def _refinance_interest_by_row(
+def _balloon_interest_by_row(
     debt_result: Mapping[str, Any], n_rows: int
 ) -> Optional[List[float]]:
-    """Per-row interest inside a refinanced balloon's payments, or ``None`` (#1396).
+    """Per-row interest accrued on the balloon after maturity, or ``None``.
 
-    Read from the engine's ``debt_result["refinance"]`` disclosure (period-indexed) and
-    placed on rows through ``annual_row_debt_period_map``, the same map the pipeline uses
-    to put ``balloon_resolution`` on rows, so the split lands on the row that carries the
-    payment.
+    Read from the engine's period-indexed ``debt_result["balloon_interest"]`` (every
+    treatment that carries the balloon past maturity accrues interest on it) and placed
+    on rows through ``annual_row_debt_period_map``, the same map the pipeline uses to put
+    ``balloon_resolution`` on rows, so the split lands on the row that carries the
+    payment. A result without that key falls back to the refinanced tranche's own
+    disclosure (#1396), its only interest-bearing balloon before the key existed.
     """
-    refinance = debt_result.get("refinance")
-    if not isinstance(refinance, Mapping):
-        return None
-    by_period = {
-        int(c["period"]): float(c["interest_usd"])
-        for c in refinance.get("coverage_by_period") or []
-    }
+    series = debt_result.get("balloon_interest")
+    if isinstance(series, (list, tuple)):
+        by_period = {period: float(value or 0.0) for period, value in enumerate(series)}
+    else:
+        refinance = debt_result.get("refinance")
+        if not isinstance(refinance, Mapping):
+            return None
+        by_period = {
+            int(c["period"]): float(c["interest_usd"])
+            for c in refinance.get("coverage_by_period") or []
+        }
     out = [0.0] * n_rows
     for mapping in debt_result.get("annual_row_debt_period_map") or []:
         try:

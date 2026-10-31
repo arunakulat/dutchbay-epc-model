@@ -6,7 +6,7 @@ import math
 from typing import Any, Dict, Optional, Sequence
 
 from finance.debt.balloon import (
-    _balloon_resolution_stream,
+    _balloon_resolution_path,
     _refinance_disclosure,
     _resize_for_amortization,
     resolve_balloon_treatment,
@@ -20,7 +20,7 @@ from finance.debt.dscr_contract import (
 )
 from finance.debt.funding import _build_funding
 from finance.debt.helpers import _as_float, _section_case_insensitive
-from finance.debt.layer import apply_debt_layer
+from finance.debt.layer import _coverage_ratios, apply_debt_layer
 from finance.debt.placeholders import _FORBID_TOY_FALLBACK_KEY
 from finance.debt.sizing import _maybe_autosolve_dscr
 from finance.debt.terms import (
@@ -90,8 +90,13 @@ def plan_debt(
       (the per-year, bridge-fold-applied coverage — see below). This is the
       canonical surface; see :func:`_build_dscr_periods`.
     - ``debt_service_total``, ``interest_total``, ``total_service``,
-      ``debt_outstanding``, ``senior_fee_usd``, ``balloon_resolution`` —
-      PERIOD-indexed, positional, aligned 1:1 with ``dscr_series``.
+      ``debt_outstanding``, ``senior_fee_usd``, ``balloon_resolution``,
+      ``balloon_interest`` — PERIOD-indexed, positional, aligned 1:1 with
+      ``dscr_series``. ``debt_outstanding`` is each period's OPENING balance; after
+      maturity it is the balloon actually outstanding under its treatment, and
+      ``senior_fee_usd`` is charged on that balance (see
+      :func:`_balloon_resolution_path`). ``interest_total`` is scheduled interest
+      only; the balloon's post-maturity interest is ``balloon_interest``.
     - ``annual_row_debt_period_map`` — ROW-indexed list; each entry maps an
       ``annual_row_index`` to its ``debt_period`` in the PERIOD space above. It is
       the DEFINITIONAL source of the operating-year labels in ``dscr_periods``.
@@ -136,10 +141,10 @@ def plan_debt(
     # Non-refinance treatments never read the terms; 0/0.0 here is a placeholder the
     # stream ignores, not a refinance default.
     refi_tenor, refi_premium = refi_terms if refi_terms is not None else (0, 0.0)
-    balloon_resolution, balloon_residual = _balloon_resolution_stream(
+    balloon_path = _balloon_resolution_path(
         treatment=treatment,
         balloon=structural_balloon,
-        senior_fee_usd=core.get("senior_fee_usd", []) or [],
+        senior_fee_rate=_as_float(core.get("senior_fee_rate"), 0.0),
         cfads_ext=core.get("cfads_extended", []) or [],
         debt_service_total=core.get("debt_service_total", []) or [],
         construction_periods=int(core.get("construction_periods", 0) or 0),
@@ -148,6 +153,42 @@ def plan_debt(
         refi_tenor_years=refi_tenor,
         refi_rate_premium=refi_premium,
     )
+    balloon_resolution = balloon_path["resolution"]
+    balloon_residual = balloon_path["residual"]
+    balloon_interest = balloon_path["interest"]
+
+    # After maturity the engine's own series still hold the STRUCTURAL balloon: the
+    # layer amortises scheduled principal only, so it cannot see the sweep, bullet
+    # or refinance that retires the balloon. Overlay the balance actually
+    # outstanding, and the senior fee on that balance, wherever the balloon path
+    # governs the period; then re-net LLCR/PLCR on the corrected fee.
+    debt_outstanding = list(core.get("debt_outstanding", []) or [])
+    senior_fee_usd = list(core.get("senior_fee_usd", []) or [])
+    for period, opening in enumerate(balloon_path["outstanding"]):
+        if opening is None:
+            continue
+        if period < len(debt_outstanding):
+            debt_outstanding[period] = opening
+        fee = balloon_path["senior_fee"][period]
+        if fee is not None and period < len(senior_fee_usd):
+            senior_fee_usd[period] = fee
+    llcr = _as_float(core.get("llcr"), 0.0)
+    plcr = _as_float(core.get("plcr"), 0.0)
+    if senior_fee_usd != list(core.get("senior_fee_usd", []) or []):
+        period_row_map_for_fee = core.get("annual_row_debt_period_map", []) or []
+        llcr, plcr = _coverage_ratios(
+            cfads=[_as_float(m.get("cfads_usd"), 0.0) for m in period_row_map_for_fee],
+            senior_fee_schedule=senior_fee_usd,
+            annual_row_debt_period_map=period_row_map_for_fee,
+            tenor=int(core.get("tenor_years", 0) or 0),
+            debt_principal_total=sum(
+                _as_float(v, 0.0)
+                for v in (core.get("principal_after_idc", {}) or {}).values()
+            ),
+            llcr_discount_rate=_as_float(core.get("llcr_discount_rate"), 0.0),
+            plcr_discount_rate=_as_float(core.get("plcr_discount_rate"), 0.0),
+        )
+
     refinance_disclosure = (
         _refinance_disclosure(
             config=config,
@@ -155,7 +196,7 @@ def plan_debt(
             balloon=structural_balloon,
             resolution=balloon_resolution,
             cfads_ext=core.get("cfads_extended", []) or [],
-            senior_fee_usd=core.get("senior_fee_usd", []) or [],
+            senior_fee_usd=senior_fee_usd,
             avg_rate=_as_float(core.get("avg_debt_rate"), 0.0),
         )
         if refi_terms is not None and structural_balloon > _BALLOON_TOL
@@ -185,7 +226,6 @@ def plan_debt(
     }
 
     timeline = core.get("timeline_periods", 0)
-    debt_outstanding = core.get("debt_outstanding", []) or []
     debt_service_total = core.get("debt_service_total", []) or []
     interest_total = core.get("interest_total", []) or []
 
@@ -278,7 +318,7 @@ def plan_debt(
         "debt_service_total": debt_service_total,
         "interest_total": interest_total,
         "total_service": debt_service_total,
-        "senior_fee_usd": core.get("senior_fee_usd", []),
+        "senior_fee_usd": senior_fee_usd,
         "senior_fee_rate": core.get("senior_fee_rate", 0.0),
         "dscr_series": positional_dscr_series,
         # DEPRECATED (F-2, REFACTOR-04 shim lifecycle): an exact alias of `dscr_series`,
@@ -298,8 +338,8 @@ def plan_debt(
         "debt_schedules": core.get("debt_schedules", {}),
         "debt_total": core.get("debt_total", 0.0),
         "avg_debt_rate": core.get("avg_debt_rate", 0.0),
-        "llcr": core.get("llcr", 0.0),
-        "plcr": core.get("plcr", 0.0),
+        "llcr": llcr,
+        "plcr": plcr,
         "fx_min": core.get("fx_min"),
         "fx_max": core.get("fx_max"),
         "fx_avg": core.get("fx_avg"),
@@ -327,4 +367,9 @@ def plan_debt(
         # with no term-sheet basis, and its coverage is tested separately from
         # the scheduled-service min_dscr.
         "refinance": refinance_disclosure,
+        # ── Balloon interest (additive, appended last) ──────────────────────
+        # PERIOD-indexed interest accrued on the balloon after maturity, inside
+        # `balloon_resolution` (cash_sweep, bullet and refinance). Interest a
+        # sweep could not pay is capitalised into `balloon_residual`.
+        "balloon_interest": balloon_interest,
     }

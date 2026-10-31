@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 
 from finance.debt.balloon import (  # noqa: F401
+    _balloon_resolution_path,
     _balloon_resolution_stream,
     _maturity_period_index,
     _refinance_disclosure,
@@ -62,6 +63,7 @@ from finance.debt.helpers import (  # noqa: F401
     _truthy_flag,
 )
 from finance.debt.layer import (  # noqa: F401
+    _coverage_ratios,
     apply_debt_layer,
 )
 from finance.debt.placeholders import (  # noqa: F401
