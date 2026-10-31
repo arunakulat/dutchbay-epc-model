@@ -46,6 +46,7 @@ from analytics.mc.covenant import (
 )
 from analytics.mc.degradation import apply_degradation_if_enabled
 from analytics.mc.samplers import generate_lhs_samples, generate_sobol_samples
+from analytics.run_modes import POLICIES, resolve_run_mode
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +198,7 @@ def _tail_risk(
                 for tm in trial_metrics
                 if isinstance(tm.get(k), (int, float))
                 and not isinstance(tm.get(k), bool)
+                and math.isfinite(float(tm[k]))
             ],
             dtype=float,
         )
@@ -288,7 +290,8 @@ class MonteCarloEngine:
     deterministic toy-metric stand-in so a smoke run still yields an array; the trial is tagged
     ``_toy_fallback`` and counted in ``toy_fallback_count``. Set
     ``monte_carlo.allow_toy_fallback: false`` to fail loud instead — a production run then
-    RAISES on the first failed trial rather than reporting fabricated KPIs.
+    RAISES on the first failed trial rather than reporting fabricated KPIs. Declared lender
+    and IC modes forbid the fallback even if the config explicitly enables it (#962).
     """
 
     def __init__(
@@ -363,17 +366,19 @@ class MonteCarloEngine:
             if isinstance(_mc_cfg, Mapping)
             else False
         )
-        # MC-9 (#473): the toy-metric fallback exists so a smoke/integration run on a minimal
-        # config still produces an array. On a REAL run a fallback means full v14 evaluation
-        # FAILED for that trial — the toy KPIs are fabricated, not real, and (though tagged and
-        # counted) could be consumed downstream as if real. Opt in to fail-loud via
-        # monte_carlo.allow_toy_fallback: false, which RAISES on the first failed trial instead
-        # of substituting toy metrics. Default true keeps smoke tests and back-compat identical.
+        # Resolve outside the trial's fail-soft exception handler: a malformed mode must
+        # never itself trigger fabricated KPIs. The existing policy is a permission ceiling;
+        # permissive/undeclared modes retain the engine setting, including explicit false.
+        self._run_mode = resolve_run_mode(self._base_config)
         self._allow_toy_fallback: bool = (
             bool(_mc_cfg.get("allow_toy_fallback", True))
             if isinstance(_mc_cfg, Mapping)
             else True
         )
+        if self._run_mode is not None:
+            self._allow_toy_fallback = (
+                self._allow_toy_fallback and POLICIES[self._run_mode].allow_toy_fallback
+            )
         self._fixed_debt_covenant: float = _resolve_min_dscr_covenant(self._base_config)
 
         # Market-calibrated FX driver (opt-in via a distribution: fx_calibrated param).
@@ -890,10 +895,11 @@ class MonteCarloEngine:
                 if not self._allow_toy_fallback:
                     raise RuntimeError(
                         f"MC trial {i} failed full v14 evaluation and "
-                        "monte_carlo.allow_toy_fallback is false, so the toy-metric fallback "
+                        "effective monte_carlo.allow_toy_fallback is false, so the toy-metric fallback "
                         "is disabled (a production run must not report fabricated KPIs). Fix "
-                        "the underlying scenario/config error, or set allow_toy_fallback: true "
-                        f"for a smoke run. Underlying error: {exc}"
+                        "the underlying scenario/config error. Toy fallback is permitted only "
+                        "outside lender/IC modes with allow_toy_fallback enabled, for smoke "
+                        f"runs. Underlying error: {exc}"
                     ) from exc
                 # WARNING, not DEBUG: on a production scenario a toy fallback
                 # means real evaluation FAILED for this trial; silently swallowing

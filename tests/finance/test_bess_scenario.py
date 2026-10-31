@@ -114,6 +114,7 @@ def test_bess_revenue_without_capex_is_rejected_on_the_hybrid():
     assert _HYBRID.exists(), f"committed hybrid scenario missing: {_HYBRID}"
     cfg = load_scenario_config(_HYBRID)
     bess_no_capex = {
+        "duration_h": 4.0,
         "type": "bess",
         "power_mw": 50.0,
         "energy_mwh": 200.0,
@@ -143,6 +144,7 @@ def test_bess_with_capex_is_additive_and_financed_on_the_hybrid():
         raw_config=cfg,
         overrides={
             "generation.technologies.bess_1": {
+                "duration_h": 4.0,
                 "type": "bess",
                 "power_mw": 50.0,
                 "energy_mwh": 200.0,
@@ -179,6 +181,7 @@ def test_type_bess_is_not_double_counted_as_generation():
             "technologies": {
                 "wind": {"capacity_mw": 100.0, "capacity_factor": 0.34},
                 "bess": {
+                    "duration_h": 4.0,
                     "type": "bess",
                     "power_mw": 50.0,
                     "capacity_mw": 50.0,
@@ -212,7 +215,7 @@ def test_both_cashflow_builders_agree_on_bess_revenue():
     rows = build_annual_rows(cfg)
     eff = build_annual_rows_efficient(cfg)
     assert len(rows) == len(eff)
-    for base_row, eff_row in zip(rows, eff):
+    for base_row, eff_row in zip(rows, eff, strict=True):
         assert set(base_row.keys()) == set(eff_row.keys())
         for key in base_row:
             assert math.isclose(
@@ -262,7 +265,7 @@ def test_both_builders_agree_with_augmentation():
     cfg = _ceb_with_degradation()
     rows = build_annual_rows(cfg)
     eff = build_annual_rows_efficient(cfg)
-    for base_row, eff_row in zip(rows, eff):
+    for base_row, eff_row in zip(rows, eff, strict=True):
         assert base_row["cfads_final_lkr"] == pytest.approx(eff_row["cfads_final_lkr"])
         assert base_row["bess_augmentation_capex_lkr"] == pytest.approx(
             eff_row["bess_augmentation_capex_lkr"]

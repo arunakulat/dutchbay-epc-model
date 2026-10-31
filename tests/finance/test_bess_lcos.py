@@ -357,12 +357,9 @@ def test_energy_basis_falls_back_to_power_times_duration():
     assert s.energy_per_cycle_mwh == 40.0
 
 
-def test_no_energy_rating_yields_undefined_lcos_with_note():
-    s = resolve_lcos_specs(_bare_capacity_block())[0]  # no energy_mwh, no duration_h
-    assert s.energy_per_cycle_mwh == 0.0
-    assert any("no energy rating" in n for n in s.notes)
-    r = compute_lcos(s, wacc=0.08, project_years=15)
-    assert r.lcos_usd_per_mwh is None
+def test_missing_duration_is_refused_before_lcos():
+    with pytest.raises(ValueError, match="duration_h"):
+        resolve_lcos_specs(_bare_capacity_block())
 
 
 def test_cycles_defaults_when_not_overridden():
@@ -426,9 +423,8 @@ def test_opex_escalation_pct_is_normalised_like_the_cashflow_engine():
     cfg["opex"]["escalation_pct"] = 2.5  # cashflow-canonical percent form
     assert resolve_lcos_specs(cfg)[0].opex_escalation_pct == pytest.approx(0.025)
 
-    cfg["opex"][
-        "escalation_pct"
-    ] = 0.025  # already decimal -> unchanged (heuristic parity)
+    # Already decimal -> unchanged (heuristic parity).
+    cfg["opex"]["escalation_pct"] = 0.025
     assert resolve_lcos_specs(cfg)[0].opex_escalation_pct == pytest.approx(0.025)
 
     cfg["opex"]["escalation_pct"] = 0.0  # committed scenarios -> byte-identical
