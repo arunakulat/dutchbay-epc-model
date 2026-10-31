@@ -21,6 +21,7 @@ import logging
 
 import pytest
 
+import finance.debt.terms as debt_terms
 import finance.debt_v14 as debt_v14
 from finance.debt_v14 import (
     _allow_toy_capex_fallback,
@@ -660,14 +661,14 @@ def test_resize_for_amortization_reduces_balloon_nondict_terms() -> None:
 def test_warn_decorative_tranches_warns_once_then_short_circuits(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    debt_v14._warned_decorative_tranches = False
+    debt_terms._warned_decorative_tranches = False
     cfg = {"Financing_Terms": {"debt_tranches": [{"name": "X", "rate_pct": 5.0}]}}
     with caplog.at_level(logging.WARNING, logger="finance.debt_v14"):
         _warn_if_decorative_tranches(cfg)
     assert any(
         "debt_tranches is NOT an engine input" in r.message for r in caplog.records
     )
-    assert debt_v14._warned_decorative_tranches is True
+    assert debt_terms._warned_decorative_tranches is True
 
     # Second call short-circuits on the module flag (no new warning record).
     caplog.clear()
@@ -676,7 +677,7 @@ def test_warn_decorative_tranches_warns_once_then_short_circuits(
     assert not any(
         "debt_tranches is NOT an engine input" in r.message for r in caplog.records
     )
-    debt_v14._warned_decorative_tranches = False
+    debt_terms._warned_decorative_tranches = False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
