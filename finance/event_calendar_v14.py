@@ -32,11 +32,12 @@ These are assumptions, not evidence. Each kind placed by default is listed in
 :attr:`EventCalendar.assumed` and named in a warning at resolution, so a reader cannot
 mistake one for a declared date. A scenario replaces a default by declaring the kind's
 periods, or keeps a kind on A2's profile spread by declaring it as ``profile``.
-``bridge_service`` has no default: it is placed only when declared.
+``bridge_service`` and ``debt_service`` have no default: each is placed only when
+declared.
 
 What is placed, and what follows from it
 ----------------------------------------
-Three kinds, each declared as a list of 1-based periods within the year with optional
+Four kinds, each declared as a list of 1-based periods within the year with optional
 weights across them, or as ``profile``:
 
 * ``bess_augmentation_capex`` places the row key ``bess_augmentation_capex_lkr``.
@@ -45,8 +46,11 @@ weights across them, or as ``profile``:
 * ``bridge_service`` places the bridge period's scheduled debt service (USD), which the
   debt engine computes in its own PERIOD space and ``dscr_by_year`` folds into operating
   year 1. It is not an annual-row key, so it is placed by
-  :func:`build_bridge_service_events` into year 1's sub-periods. Aligning the rest of
-  debt service onto the sub-period axis is dolphin (c), not this one.
+  :func:`build_bridge_service_events` into year 1's sub-periods.
+* ``debt_service`` places each operating year's scheduled debt service (USD), for
+  example ``periods: [2, 4]`` for semi-annual instalments. Like the bridge it lives in
+  the debt engine's period space, not on an annual row, so this module only resolves it;
+  :mod:`finance.subperiod_coverage_v14` (dolphin (c)) places it.
 
 Moving a placed key moves the CFADS lines that the annual engine derives from it, or the
 period would stop adding up. :func:`apply_event_calendar` therefore re-derives, per
@@ -100,16 +104,18 @@ EVENT_CALENDAR_KEY = "cashflow.event_calendar"
 _CALENDAR_PATH: Sequence[str] = ("cashflow", "event_calendar")
 
 #: Event kind -> the annual-row key it places, or ``None`` for an event that is not an
-#: annual-row key (the bridge service lives in the debt engine's period space).
+#: annual-row key (the bridge and scheduled debt service live in the debt engine's
+#: period space).
 EVENT_KINDS: Mapping[str, Optional[str]] = {
     "bess_augmentation_capex": "bess_augmentation_capex_lkr",
     "tax": "tax_lkr",
     "bridge_service": None,
+    "debt_service": None,
 }
 
 #: ILLUSTRATIVE default placement for an undeclared kind on a sub-annual grid: the year's
 #: "first" or "last" period. Assumptions, not evidence (#920); see the module docstring.
-#: A kind absent here (``bridge_service``) is placed only when declared.
+#: A kind absent here (``bridge_service``, ``debt_service``) is placed only when declared.
 DEFAULT_EVENT_PERIODS: Mapping[str, str] = {
     "bess_augmentation_capex": "first",
     "tax": "last",
