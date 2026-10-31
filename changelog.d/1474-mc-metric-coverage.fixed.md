@@ -5,3 +5,6 @@ Keep all-undefined metrics visible, disclose conditional export denominators and
 CLI coverage, and refuse incomplete joint capital-risk reports rather than fabricating or
 silently selecting observations. This can lower previously optimistic reported tails;
 trial evaluation, finance mathematics and the lender/IC toy-fallback ceiling are unchanged.
+The solar assessment report's Monte Carlo summary now uses every trial with a defined
+project IRR (all 1,000 at its default seed, where 999 were previously dropped) and states
+equity IRR's coverage beside its statistics.
