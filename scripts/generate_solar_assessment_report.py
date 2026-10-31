@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import math
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, cast
@@ -79,6 +80,67 @@ SITE["competitive_tariff_lkr"] = round(SITE["competitive_usc"] / 100.0 * SITE["f
 # ---------------------------------------------------------------------------
 # 1-6. ANALYTICAL ROUTINES (run on the live engine)
 # ---------------------------------------------------------------------------
+def _defined_sample(values: Any) -> list[float]:
+    """Keep a metric's finite trial values; an undefined KPI is None, never zero (#1474)."""
+    out: list[float] = []
+    for value in values or []:
+        if value is None:
+            continue
+        number = float(value)
+        if math.isfinite(number):
+            out.append(number)
+    return out
+
+
+def _trial_coverage(values: Any, defined: list[float]) -> Dict[str, int]:
+    """The denominator behind a statistic, in the same keys as analytics.mc.exports."""
+    total = len(values or [])
+    return {
+        "defined_trials": len(defined),
+        "total_trials": total,
+        "unavailable_trials": total - len(defined),
+    }
+
+
+def _summarise_mc_irr(
+    trials: Dict[str, Any], iterations: int, failed: int
+) -> Dict[str, Any]:
+    """Summarise project and equity IRR, each on its own defined trials.
+
+    MonteCarloResult.trials keeps one aligned row per trial and stores an undefined KPI
+    as None (#1474). Each statistic is computed from that metric's defined sample and
+    returned with its coverage, so a statistic on a small defined sample is visible as
+    such. A metric with no defined trial gets None statistics.
+    """
+    import numpy as np
+
+    raw_irr = trials.get("project_irr", []) or []
+    raw_eqi = trials.get("equity_irr", []) or []
+    irr = _defined_sample(raw_irr)
+    eqi = _defined_sample(raw_eqi)
+    return {
+        "n": iterations,
+        "failed": failed,
+        "coverage": {
+            "project_irr": _trial_coverage(raw_irr, irr),
+            "equity_irr": _trial_coverage(raw_eqi, eqi),
+        },
+        "proj_irr": (
+            {
+                q: float(np.percentile(irr, p))
+                for q, p in (("p10", 10), ("p50", 50), ("p90", 90))
+            }
+            if irr
+            else {}
+        ),
+        "proj_mean": float(np.mean(irr)) if irr else None,
+        "p_below_0": float(np.mean([x < 0 for x in irr])) if irr else None,
+        "eq_p50": float(np.percentile(eqi, 50)) if eqi else None,
+        "eq_p_below_0": float(np.mean([x < 0 for x in eqi])) if eqi else None,
+        "_irr_trials": irr,
+    }
+
+
 def _base_solar_config() -> Dict[str, Any]:
     """A solar single-technology v14 config derived from the canonical base case."""
     from analytics.scenario_loader import load_scenario_config
@@ -215,8 +277,6 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
         )
 
     # --- 3. Monte Carlo ---
-    import numpy as np
-
     mc_cfg = make(comp)
     mc_cfg["monte_carlo"] = {
         "parameters": [
@@ -241,29 +301,7 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
         ]
     }
     mc = run_monte_carlo_analysis(base_config=mc_cfg, n_trials=int(trials), seed=123)
-    # Trial arrays keep undefined KPIs as None (#1474); report each metric on its own
-    # defined sample and disclose how many trials that is.
-    irr = [x for x in (mc.trials.get("project_irr", []) or []) if x is not None]
-    eqi = [x for x in (mc.trials.get("equity_irr", []) or []) if x is not None]
-    R["mc"] = {
-        "n": mc.iterations,
-        "failed": mc.failed_iterations,
-        "proj_irr_defined": len(irr),
-        "eq_irr_defined": len(eqi),
-        "proj_irr": (
-            {
-                q: float(np.percentile(irr, p))
-                for q, p in (("p10", 10), ("p50", 50), ("p90", 90))
-            }
-            if irr
-            else {}
-        ),
-        "proj_mean": float(np.mean(irr)) if irr else None,
-        "p_below_0": float(np.mean([x < 0 for x in irr])) if irr else None,
-        "eq_p50": float(np.percentile(eqi, 50)) if eqi else None,
-        "eq_p_below_0": float(np.mean([x < 0 for x in eqi])) if eqi else None,
-        "_irr_trials": [float(x) for x in irr],
-    }
+    R["mc"] = _summarise_mc_irr(mc.trials, mc.iterations, mc.failed_iterations)
 
     # --- 4. Sensitivity ---
     scen_path = _OUT_PATH / "solar_scenario_competitive.yaml"
