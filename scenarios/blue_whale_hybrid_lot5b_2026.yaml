@@ -1,0 +1,210 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# Blue Whale Hybrid: 10 MW wind + 5 MWp solar + 10 MW / 40 MWh BESS (Lot 5B, Kalpitiya)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Version: 0.1 (SKELETON: screening placeholders, not a basis for any decision)
+# Path: scenarios/blue_whale_hybrid_lot5b_2026.yaml
+#
+# Configuration under study (owner brief, 2026-10-27):
+#   - 1 x 10 MW wind turbine (single-machine project)
+#   - 5 MWp ground-mounted solar PV
+#   - 10 MW BESS at 4 h (40 MWh) base; 5 h (50 MWh) is a sensitivity
+#
+# Site: Lot 5B in Plan 3641, Mutuwal, GN Dutch Bay 633, Kalpitiya DS, Puttalam District,
+# 9.3077 ha, owned by Blue Whale Resort (Pvt) Ltd. Title facts and siting constraints are
+# in docs/blue_whale/STATUS.md.
+#
+# EVERY VALUE BELOW IS A PLACEHOLDER unless its comment says otherwise. Values are carried
+# over from the DutchBay 150 MW cases (dutchbay_hybrid_bess_2025Q4.yaml) or the CEB
+# Solar+BESS 10 MW case (ceb_solar_bess_nightpeak_10mw.yaml) and scaled to this size, so the
+# file validates and runs end to end while the owner's inputs are collected. The register of
+# inputs still owed, and which field each one replaces, is docs/blue_whale/INPUTS_REQUIRED.md.
+# Placeholders are tagged "PLACEHOLDER (input Bnn)" with the register's ID.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+project:
+  name: "Blue Whale Hybrid Wind+Solar+BESS (Lot 5B)"
+  location: "Lot 5B Plan 3641, Mutuwal, GN Dutch Bay 633, Kalpitiya DS, Puttalam District, North Western Province, Sri Lanka"
+  capacity_mw: 15.0             # generation nameplate: 10 MW wind + 5 MW solar (BESS power not counted)
+  capacity_factor: 0.289500     # capacity-weighted blend of the two tech CFs below: (10 x 0.35 + 5 x 0.1685) / 15
+  curtailment_pct: 0.0
+  degradation: 0.5              # PLACEHOLDER (input B12)
+  life_years: 20                # PLACEHOLDER (input F01): PPA term
+  cod_year: 2028                # PLACEHOLDER (input B30)
+  developer: "Blue Whale Limited (project company to be confirmed)"   # input B01
+  grid_poi: "TBD: CEB grid substation and voltage not yet identified"  # input B25
+  boi_approved: false           # input F30
+  jurisdiction: Sri Lanka
+
+generation:
+  technologies:
+    wind:
+      capacity_mw: 10.0
+      capacity_factor: 0.35       # PLACEHOLDER (inputs B05-B08): single 10 MW machine with no wake loss.
+                                  # Derived from the DutchBay ERA5 per-turbine gross (554.1 GWh / 15 = 36.9 GWh)
+                                  # less availability 3%, electrical 2%, curtailment 2%, other 1% (about 34 GWh),
+                                  # rounded down. NOT a site measurement.
+      degradation_pct: 0.6        # PLACEHOLDER: DutchBay turbine-ageing assumption
+      aep_gwh: 30.66              # 10 MW x 8760 h x 0.35 (reporting)
+      capex_usd: 13000000         # PLACEHOLDER (input B09): $1,300/kW, above the DutchBay $1,000/kW because a
+                                  # single machine carries crane, mobilisation and grid costs alone
+      availability_pct: 97.0
+    solar:
+      capacity_mw: 5.0
+      capacity_factor: 0.1685     # PLACEHOLDER (input B14): DutchBay pvlib P50, Kalpitiya PVGIS TMY, fixed tilt
+      degradation_pct: 0.4
+      aep_gwh: 7.38               # 5 MW x 8760 h x 0.1685 (reporting)
+      capex_usd: 4250000          # PLACEHOLDER (input B15): $850/kW (DutchBay $800/kW plus a small-plant premium)
+      availability_pct: 99.0
+    bess_1:
+      type: bess
+      power_mw: 10.0
+      energy_mwh: 40.0            # 4 h base case; 5 h = 50 MWh is a sensitivity (input B18)
+      duration_h: 4.0
+      capex_usd: 5000000          # PLACEHOLDER (input B19): 40 MWh x ~$125/kWh turnkey (DutchBay BESS proxy)
+      availability_pct: 97.0
+      revenue:
+        model: capacity_charge    # PLACEHOLDER (input F05): revenue model for the BESS is an open owner decision
+        capacity_charge_lkr_per_mw_month: 5000000   # PLACEHOLDER (input F06): DutchBay hybrid assumption
+        contract_years: 15
+        availability_factor: 1.0
+        dispatchable_ratio: 1.0
+
+tariff:
+  lkr_per_kwh: 20.3             # PLACEHOLDER (input F03): DutchBay hybrid tariff; no Blue Whale tariff yet
+  tariff_type: fixed            # input F04
+  ppa_term_years: 20            # input F01
+
+ppa:
+  primary_currency: "LKR"
+  ppa_term_years: 20
+  tariff_type: "fixed"
+  offtaker: "Ceylon Electricity Board (CEB)"   # input F02
+  payment_terms_days: 30
+
+fx:
+  enabled: true
+  mode: deterministic
+  base_currency: USD
+  quote_currency: LKR
+  rates:
+    lkr_per_usd: 333.79
+  start_lkr_per_usd: 333.79     # 2026-Q2 pinned rate shared with the DutchBay cases (input F25 to refresh)
+  annual_depr: 0.0              # held flat: the project is fully LKR funded (owner, 2026-10-28), so revenue, costs and
+                                # debt are all LKR and the USD columns are a constant-rate translation of LKR. The
+                                # BIS long-run 5.89%/yr drift applies only to USD exposure, which this project has none of.
+  uncertainty_pct: 0.05
+
+capex:
+  cost_basis_year: 2026
+  estimate_class: 5             # AACE Class 5 (concept screening): no quotes or site data yet
+  usd_total: 24250000           # wind 13.0M + solar 4.25M + BESS 5.0M + grid/civils/development 2.0M (input B26)
+  capex_per_kw_usd: 1617        # 24.25M / 15 MW generation nameplate (BESS power not in the denominator)
+
+opex:
+  usd_per_year: 650000          # PLACEHOLDER (inputs B10, B16, B20, B28): wind 0.35M + solar 0.05M + BESS 0.10M
+                                # + insurance, land lease and SPV overhead 0.15M
+  opex_per_kw_yr_usd: 43.3      # 650k / 15 MW; high because a single turbine carries full O&M overheads
+  escalation_pct: 5.0           # PLACEHOLDER (input B29): LKR O&M inflation at the CBSL 5% inflation target
+
+tax:
+  corporate_tax_rate: 0.30      # input F31
+  tax_holiday_route: none       # input F30 (BOI)
+  tax_holiday_years: 0
+  tax_holiday_start_year: 1
+  depreciation_method: straight_line
+  depreciation_years: 5
+  depreciation_start_year: 1
+  plant_capex_share: 0.85
+  plant_depreciation_years: 5   # SL Fourth Sched Class 2 (plant & machinery)
+  civil_depreciation_years: 20  # SL Fourth Sched Class 4 (buildings/civils)
+  enhanced_capital_allowance_multiple: 1.5
+  enhanced_allowance_applies: false
+  loss_carryforward_years: 6
+  wht_on_interest_to_nonresidents: 0.1
+  wht_on_interest_enabled: true
+  wht_gross_up: false
+  wht_on_dividends: 0.15
+  wht_on_dividends_enabled: true
+  capitalize_idc_in_depreciable_base: true
+  interest_deductibility: true
+
+statutory:
+  success_fee_pct: 0.0          # non-statutory levy, not in the SL regime (#43)
+  env_surcharge_pct: 0.0        # non-statutory levy, not in the SL regime (#43)
+  social_services_levy_pct: 0.025
+
+risk_adjustment:
+  cfads_haircut_pct: 0.1
+
+Financing_Terms:                # PLACEHOLDER pending the term sheet (inputs F11-F24); the 100% LKR mix is the owner's (F10)
+  debt_ratio: 0.7
+  debt_sizing: dual_dscr
+  dscr_p99_downside_factor: 0.80
+  balloon_treatment: cash_sweep
+  tenor_years: 12
+  interest_only_years: 1
+  amortization_style: auto
+  interest_rate_nominal: 0.08
+  mix:                          # fully LKR funded (owner, 2026-10-28; input F10)
+    lkr_max: 1.0
+    dfi_max: 0.0
+    usd_commercial_min: 0.0
+  rates:
+    lkr_nominal: 0.1339         # PLACEHOLDER (input F11): UIP-implied DutchBay rate, not a quoted LKR project loan
+    lkr_min: 0.1339
+    dfi_nominal: 0.065
+    dfi_min: 0.065
+    usd_nominal: 0.075
+    usd_commercial_min: 0.075
+  target_dscr: 1.3
+  min_dscr: 1.2
+  reserves:
+    dsra_months: 6
+  fees:
+    upfront_pct: 0.01
+  enforce_hard_covenants: false
+
+returns:
+  project_life_years: 20
+  project_discount_rate: 0.1
+  equity_discount_rate: 0.12    # input F27
+
+constraints:
+  max_debt_ratio: 0.8
+  warn_debt_ratio: 0.75
+  min_dscr_covenant: 1.3
+  target_dscr: 1.35
+  warn_dscr: 1.25
+  max_balloon_pct: 0.1
+  warn_balloon_pct: 0.05
+  max_tenor_years: 15
+  warn_tenor_years: 14
+  max_interest_rate: 0.25
+  min_interest_rate: 0.0
+  lender_type: DFI
+  jurisdiction: Sri Lanka
+  fail_on_covenant_breach: false
+  fail_on_large_balloon: false
+
+timeline:
+  ppa_to_fc_years: 1
+  construction_years: 1         # PLACEHOLDER (input B30)
+  ops_years: 20
+  lifetime_years: 21
+
+wacc:
+  mode: build_up
+  drives_discount_rate: true
+  cost_of_equity: 0.12
+  prudential_spread_bps: 100
+  description: "Build-up WACC drives the project discount rate."
+
+metadata:
+  version: '0.2'
+  last_updated: '2026-10-27'
+  author: DutchBay V14 Financial Modeling Team
+  review_status: SKELETON - screening placeholders pending owner inputs (docs/blue_whale/INPUTS_REQUIRED.md)
+  assumptions_source: 'Scaled from dutchbay_hybrid_bess_2025Q4 and ceb_solar_bess_nightpeak_10mw'
+  changes:
+    - 'v0.2: Fully LKR funded (owner, 2026-10-28): 100% LKR debt, FX drift 0, LKR O&M escalation 5% placeholder'
+    - 'v0.1: Skeleton for the Blue Whale Lot 5B hybrid (1 x 10 MW wind, 5 MWp PV, 10 MW / 40 MWh BESS)'
