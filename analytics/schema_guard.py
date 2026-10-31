@@ -169,7 +169,7 @@ def _validate_fx_section(
 
     if not isinstance(fx_cfg, Mapping):
         errors.append(
-            f"Invalid FX config type: {type(fx_cfg)!r} " "(expected mapping/dict)."
+            f"Invalid FX config type: {type(fx_cfg)!r} (expected mapping/dict)."
         )
         return
 
@@ -297,6 +297,22 @@ def _validate_run_mode(raw_config: Mapping[str, Any], errors: list[str]) -> None
         resolve_run_mode(raw_config)
     except ValueError as exc:
         errors.append(str(exc))
+
+
+def _validate_bess_sizing(raw_config: Mapping[str, Any], errors: list[str]) -> None:
+    """Require the same explicit battery ratings consumed by finance (#1401)."""
+    from analytics.storage_sizing import BessSizing
+
+    generation = raw_config.get("generation")
+    techs = generation.get("technologies") if isinstance(generation, Mapping) else None
+    if not isinstance(techs, Mapping):
+        return
+    for name, block in techs.items():
+        if isinstance(block, Mapping) and block.get("type") == "bess":
+            try:
+                BessSizing.from_mapping(block)
+            except ValueError as exc:
+                errors.append(f"generation.technologies['{name}']: {exc}")
 
 
 def _validate_taxes_indirect(raw_config: Mapping[str, Any], errors: list[str]) -> None:
@@ -464,6 +480,7 @@ def validate_config_for_v14(
 
     # 1b. Validate any declared technology `type` against the enum (ARCH-6, #488).
     _validate_technology_types(raw_config, errors)
+    _validate_bess_sizing(raw_config, errors)
 
     # 1c. Validate any declared run mode (`run.mode` / `run_mode`) against the
     # #733 contract (opt-in: absent -> no error).
@@ -558,7 +575,7 @@ def validate_config_for_v14(
     # 4. Raise aggregate error if any checks failed
     if errors:
         header = (
-            f"Config '{config_path}' is missing or has invalid " "required fields: "
+            f"Config '{config_path}' is missing or has invalid required fields: "
             if config_path
             else "Config is missing or has invalid required fields: "
         )

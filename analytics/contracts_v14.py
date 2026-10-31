@@ -218,6 +218,7 @@ from analytics.operational.normalization import (
     normalize_operational_csv,
 )
 from analytics.resource_contracts import ResourceAssessment
+from analytics.storage_sizing import BessSizing
 
 # Canonical CASPER contract version string. Unified Sprint 18D (D.X+5) to
 # match the value already shipping in the JSON payload
@@ -4563,6 +4564,7 @@ class CapitalStructureOptimizationResult(ContractMixin):
 
 
 __all__ = [
+    "BessSizing",
     "CASPER_CONTRACT_VERSION",
     "FEASIBILITY_REPORT_CONTRACT_VERSION",
     "FEASIBILITY_REPORT_SCHEMA_ID",
