@@ -289,7 +289,14 @@ def test_canonical_lendercase_economics_unchanged() -> None:
 
     lender = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
     kpis = run_v14_pipeline(config=lender, validation_mode="strict")["kpis"]
-    # Re-baselined by #1396 (2026-10-27, owner decision 1A): the USD 28.63m scheduled-
+    # Re-baselined by #1504 (2026-10-31): after maturity the senior credit-support fee is
+    # charged on the refinanced balance actually outstanding, not on the structural
+    # USD 28.63m balloon in every period to the horizon (USD 3.01m -> 1.04m over periods
+    # 17-22; total fee 15.11M -> 13.14M). Equity IRR -30.54% -> -26.44%, project IRR
+    # -0.142% -> -0.060%, NPV -91.57M -> -91.40M, CFADS 165.69M -> 166.93M, prudential
+    # NPV -96.23M -> -96.09M. min_dscr, min_dscr_period, the facility and the
+    # prudential rate are unchanged: the fee moves only after the scheduled tenor.
+    # Prior: re-baselined by #1396 (2026-10-27, owner decision 1A): the USD 28.63m scheduled-
     # maturity balloon is refinanced on the YAML terms constraints.refinancing (3 years,
     # +2% over the average debt rate; an assumption, no term sheet) instead of
     # cash-swept, which retired USD 18.83m and left USD 9.80m unpaid. The refinanced

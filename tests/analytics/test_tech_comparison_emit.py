@@ -151,9 +151,10 @@ def test_emit_renders_comparison_section_through_canonical_runs(tmp_path) -> Non
     assert "Cross-Technology Comparison" in html
     # Both column labels render; the wind column carries the reconciled headline IRR.
     assert "Wind" in html and "Hybrid" in html
-    # The report's own Project IRR (-0.14% since the #1397 re-baseline, was -0.12%)
-    # appears — proving reconciliation.
-    assert "-0.14%" in html
+    # The report's own Project IRR (-0.06% since #1504 charged the post-maturity fee on
+    # the balance actually outstanding; -0.14% after #1397, -0.12% before) appears —
+    # proving reconciliation.
+    assert "-0.06%" in html
     # No server filesystem path is leaked into the lender document.
     assert str(tmp_path) not in html
 

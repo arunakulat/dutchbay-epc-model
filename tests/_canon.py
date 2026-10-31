@@ -15,7 +15,13 @@ precision. When the canon legitimately re-baselines, update the number here and 
 one-line "Re-baselined by ..." note in the oracle docstring — nothing else.
 
 Provenance of the current vector (see the oracle docstring for the full history):
-#1396 (2026-10-27) resolves the lender case's USD 28.63m scheduled-maturity balloon by
+#1504 (2026-10-31) charges the senior credit-support fee on the balloon actually
+outstanding after maturity instead of the structural USD 28.63m in every period to the
+horizon: total fee USD 15.11m -> 13.14m. Equity IRR -30.54% -> -26.44%, project IRR
+-0.142% -> -0.060%, project NPV -91.57M -> -91.40M, total CFADS 165.69M -> 166.93M,
+prudential NPV -96.23M -> -96.09M; min_dscr, the facility and LLCR do not move. #1503
+(post-maturity balloon interest) does not reach the canon, which refinances.
+Prior: #1396 (2026-10-27) resolves the lender case's USD 28.63m scheduled-maturity balloon by
 refinance on assumed YAML terms (3 years, +2%) instead of a cash sweep that left USD
 9.80m unpaid; only the equity IRR moves (-9.99% -> -30.54%). The refinanced tranche
 covers 0.28-0.34x against the 1.30 floor, so equity funds the shortfall.
@@ -37,9 +43,9 @@ from __future__ import annotations
 from typing import Final
 
 # Base-case (undiscounted / as-modelled) economics.
-LENDER_PROJECT_IRR: Final[float] = -0.0014208847210721192
-LENDER_EQUITY_IRR: Final[float] = -0.30535684032105737
-LENDER_PROJECT_NPV: Final[float] = -91574282.40505882
+LENDER_PROJECT_IRR: Final[float] = -0.0006022786649252747
+LENDER_EQUITY_IRR: Final[float] = -0.2643679102024472
+LENDER_PROJECT_NPV: Final[float] = -91402455.3177098
 
 # Debt-service coverage. ``min_dscr`` is the #790 conservative fold-corrected covenant
 # minimum (the annual number covenants are tested on); ``min_dscr_period`` is the
@@ -78,9 +84,9 @@ LENDER_MIN_DSCR_PERIOD: Final[float] = 1.3
 # 16.44M of coverage CFADS. That is the figure audit P2-F4-01 is about; the register's
 # USD 17.32M was measured at its own commit. Emitting the coverage total as a KPI of its
 # own would change the KPI contract and is deliberately not done here.
-LENDER_TOTAL_CFADS_USD: Final[float] = 165691601.54616684
+LENDER_TOTAL_CFADS_USD: Final[float] = 166930021.151663
 
 # Prudential (downside) NPV: CFADS discounted at the haircut WACC (prudential_rate =
 # WACC + spread), strictly below the base NPV.
-LENDER_PROJECT_NPV_PRUDENTIAL: Final[float] = -96233745.9476691
+LENDER_PROJECT_NPV_PRUDENTIAL: Final[float] = -96090707.97421579
 LENDER_PRUDENTIAL_RATE_USED: Final[float] = 0.1117719098011085

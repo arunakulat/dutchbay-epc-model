@@ -252,7 +252,9 @@ def test_lender_case_refinance_coverage_recomputes(lender_debt: Dict[str, Any]) 
     assert len(periods) == refi["tenor_years"]
     # Independent source for the cash available: the cash-sweep branch pays out all of
     # a period's post-fee cash while the balloon is larger than it, which holds in each
-    # of these periods, so its swept amount IS the cash available to the refinance.
+    # of these periods. Since #1504 each treatment's fee is charged on its OWN balance
+    # outstanding, so the sweep's payment plus its fee is the period's pre-fee cash,
+    # and the refinance's cash available is that less the fee on the refinanced balance.
     sweep = cast(
         Dict[str, Any],
         evaluate_with_overrides(
@@ -261,15 +263,33 @@ def test_lender_case_refinance_coverage_recomputes(lender_debt: Dict[str, Any]) 
             return_full_result=True,
         ),
     )["debt_result"]
+    fee_rate = lender_debt["senior_fee_rate"]
+    assert fee_rate > 0.0
+    # The refinanced balance, rebuilt from the annuity by hand: it opens at the balloon
+    # and each level payment retires principal after the period's interest.
+    opening = lender_debt["balloon_remaining"]
     for row in refi["coverage_by_period"]:
         p = row["period"]
+        assert lender_debt["debt_outstanding"][p] == pytest.approx(opening, rel=1e-12)
+        assert lender_debt["senior_fee_usd"][p] == pytest.approx(
+            fee_rate * opening, rel=1e-12
+        )
+        pre_fee_cash = sweep["balloon_resolution"][p] + sweep["senior_fee_usd"][p]
+        assert sweep["senior_fee_usd"][p] == pytest.approx(
+            fee_rate * sweep["debt_outstanding"][p], rel=1e-12
+        )
+        expected_cash = pre_fee_cash - fee_rate * opening
         assert row["service_usd"] == pytest.approx(resolution[p], rel=1e-12)
-        assert row["cash_available_usd"] == pytest.approx(
-            sweep["balloon_resolution"][p], rel=1e-12
-        )
+        assert row["cash_available_usd"] == pytest.approx(expected_cash, rel=1e-12)
         assert row["coverage"] == pytest.approx(
-            sweep["balloon_resolution"][p] / resolution[p], rel=1e-12
+            expected_cash / resolution[p], rel=1e-12
         )
+        opening = opening * (1.0 + refi["rate"]) - resolution[p]
+    # The annuity clears the refinanced tranche, and nothing is outstanding after it.
+    assert opening == pytest.approx(0.0, abs=1.0)
+    last = refi["coverage_by_period"][-1]["period"]
+    assert all(v == 0.0 for v in lender_debt["debt_outstanding"][last + 1 :])
+    assert all(v == 0.0 for v in lender_debt["senior_fee_usd"][last + 1 :])
     assert refi["min_coverage"] == min(
         c["coverage"] for c in refi["coverage_by_period"]
     )
