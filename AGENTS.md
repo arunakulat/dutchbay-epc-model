@@ -17,6 +17,10 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
   dutchbay_bootstrap_rules.py
 ```
 
+A session that is not a local Codex task starts from `docs/governance/agent_session_routing.md`.
+That note routes each agent host to its sources and grants no merge, review, lease or approval
+authority.
+
 When historical sprint instructions conflict with current governance, follow the newer
 current workflow, especially `WORKTREE-01`, `GOV-02`, `R23`, `R25`, `DELIVERY-01`,
 `DATA-01`, `PERSIST-01`, `THREAD-01`, `MERGE-01`, and `RECRUIT-01`. Never restore a retired sprint integration

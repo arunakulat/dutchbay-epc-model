@@ -241,7 +241,7 @@ def test_known_technology_types_pass() -> None:
             "technologies": {
                 "wind": {"type": "wind", "capacity_factor": 0.34},
                 "solar": {"type": "solar", "capacity_factor": 0.18},
-                "bess": {"type": "bess", "power_mw": 11},
+                "bess": {"duration_h": 4.0, "type": "bess", "power_mw": 11},
             }
         },
     }
