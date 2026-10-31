@@ -26,17 +26,23 @@ once, arriving as though it were somebody's change.
 
 What this module pins is the REMEDY, not the measurements: both audit passes present and
 sharing one suppression list, ``make audit`` left as the canonical single-command spelling,
-and a daily main-branch workflow running the same ``make security``. It cannot re-measure
-coverage - that needs the network and a resolve - so the numbers above stay in the pull
-request's receipts and in the ``Makefile``'s own comment, where a reviewer reads them.
+and a daily main-branch workflow running the same ``make security``. Command equality alone
+is not execution equality: workflow or job environment, run defaults, a job container, or a
+step shell or working directory can skip or interpose the gate while leaving ``run: make
+security`` unchanged, and so can a self-hosted ``runs-on`` label or a ``needs`` on a job
+that never runs, which skips the gate without failing it. The shared workflow guard therefore
+pins those declarative context channels for both committed invocations. It cannot re-measure coverage - that needs the
+network and a resolve - so the numbers above stay in the pull request's receipts and in the
+``Makefile``'s own comment, where a reviewer reads them.
 
 Per VERIFY-01(5) every assertion in the ``Makefile`` and workflow guards ships the negative
 control that observes it firing: both are pure functions over text, exercised against mutated
-copies rather than trusted - 31 controls, 10 over the ``Makefile`` and 21 over the workflow.
-The claim is deliberately not made of the other five tests, which have no text to mutate:
-three are oracles against live objects (one re-runs ``make -n``, two interrogate the installed
-``pip_audit``), one asserts an equality across two workflow files, and one asserts that the
-two fail-closed checks still accept the values that mean "always run".
+copies rather than trusted - 54 controls, 10 over the ``Makefile``, 32 over the main audit
+workflow and 12 over the pull-request gate in ``test-suite.yml``. The claim is deliberately not
+made of the other five tests, which have no text to mutate: three are oracles against live
+objects (one re-runs ``make -n``, two interrogate the installed ``pip_audit``), one asserts
+both committed workflows are clean under the shared guard, and one asserts that the two
+fail-closed checks still accept the values that mean "always run".
 
 That claim was once wider than the set. #1388's independent domain lane probed
 ``audit_workflow`` key by key and found six shapes it passed: ``continue-on-error: true`` on
@@ -103,10 +109,118 @@ DECLARED_FLAGS = ("--no-deps", "--disable-pip")
 UNAUDITED_IN_RESOLVE_MODE = ("packaging", "wheel")
 # PyYAML parses a bare `on:` key as the boolean True (YAML 1.1 truthiness).
 ON_KEYS = (True, "on")
+TEST_SUITE_WORKFLOW_ENV = {"DUTCHBAY_TEST_MODE": "full", "TOTAL_SHARDS": 6}
+# The one runner both committed gate jobs use. Exact equality, so a label list, a runner
+# group or a self-hosted label fails closed rather than being judged harmless.
+GATE_RUNNER = "ubuntu-latest"
 
 # A parsed workflow is genuinely heterogeneous - PyYAML hands back a bool for the `on`
 # key alongside string keys - so the mapping is not narrowable to anything useful.
 Workflow = dict[Any, Any]
+
+
+def _gate_steps(workflow: Workflow) -> list[tuple[Workflow, Workflow]]:
+    """Return each job and step that invokes the exact security gate."""
+    jobs = workflow.get("jobs")
+    if not isinstance(jobs, dict):
+        return []
+    return [
+        (job, step)
+        for job in jobs.values()
+        if isinstance(job, dict)
+        for step in (job.get("steps") or [])
+        if isinstance(step, dict) and step.get("run", "").strip() == "make security"
+    ]
+
+
+def _gate_context_violations(
+    workflow: Workflow,
+    job: Workflow,
+    step: Workflow,
+    *,
+    expected_workflow_env: Workflow,
+    label: str,
+) -> list[str]:
+    """Reject declarative context that can bypass an unchanged gate command."""
+    violations: list[str] = []
+    actual_env = workflow.get("env") or {}
+    if actual_env != expected_workflow_env:
+        violations.append(
+            f"{label}: workflow environment must be exactly "
+            f"{expected_workflow_env!r}, got {actual_env!r}"
+        )
+    if "defaults" in workflow:
+        violations.append(
+            f"{label}: workflow `defaults` can replace the gate shell or working "
+            "directory and are not permitted"
+        )
+    if "env" in job:
+        violations.append(
+            f"{label}: security job must not set `env`; Make and shell control "
+            f"variables can neuter the gate, got {job['env']!r}"
+        )
+    if "defaults" in job:
+        violations.append(
+            f"{label}: security job must not set `defaults`; an alternate shell or "
+            f"working directory can skip the gate, got {job['defaults']!r}"
+        )
+    if "container" in job:
+        violations.append(
+            f"{label}: security job must not replace the governed runner with a "
+            f"container, got {job['container']!r}"
+        )
+    # A self-hosted label replaces the runner as completely as a container does, and it
+    # is the same kind of committed key, so it is pinned here rather than left to the
+    # runner-host limit SECDEP-01 states.
+    if job.get("runs-on") != GATE_RUNNER:
+        violations.append(
+            f"{label}: security job must run on the governed runner "
+            f"{GATE_RUNNER!r}, got {job.get('runs-on')!r}"
+        )
+    # A job that waits on another is SKIPPED when that one fails or never runs, and
+    # GitHub reports skipped, not failed. Test Summary catches that for the pull-request
+    # gate; the daily main audit has no summary behind it, so the skip would be silent.
+    if "needs" in job:
+        violations.append(
+            f"{label}: security job must not declare `needs`; a skipped dependency "
+            f"skips the gate without failing it, got {job['needs']!r}"
+        )
+
+    # These checks already protected the daily main audit. Keeping them in the shared
+    # context helper gives the pull-request gate the same fail-closed semantics. Both
+    # accept only a value proved harmless: Actions takes an expression in either field,
+    # so a list of bad literals missed `${{ true }}`, `"True"` and
+    # `${{ github.event_name == 'schedule' }}`, the last of which neuters only the daily
+    # run while the push run keeps failing normally.
+    for owner, node in (("job", job), ("step", step)):
+        if "if" in node and str(node["if"]).strip().lower() not in {
+            "true",
+            "${{ true }}",
+        }:
+            violations.append(
+                f"{label}: the `make security` {owner} must not be conditional; an "
+                f"`if:` can silence the gate, got {node['if']!r}"
+            )
+        continue_on_error = node.get("continue-on-error")
+        if continue_on_error is not None and str(
+            continue_on_error
+        ).strip().lower() not in {
+            "false",
+            "${{ false }}",
+        }:
+            violations.append(
+                f"{label}: the `make security` {owner} must not set "
+                "`continue-on-error`; a red audit would report success, got "
+                f"{continue_on_error!r}"
+            )
+
+    for key in ("env", "shell", "working-directory"):
+        if key in step:
+            violations.append(
+                f"{label}: `make security` step must not set `{key}`; its committed "
+                f"execution context must stay clean, got {step[key]!r}"
+            )
+    return violations
 
 
 def _recipe(makefile_text: str, target: str) -> list[str]:
@@ -277,51 +391,23 @@ def audit_workflow(workflow: Workflow) -> list[str]:
 
     # Locate the gate step with its job. Exact equality, so `make security || true` and
     # any reduced variant are not the gate.
-    gate_steps = [
-        (job, step)
-        for job in jobs.values()
-        if isinstance(job, dict)
-        for step in (job.get("steps") or [])
-        if isinstance(step, dict) and step.get("run", "").strip() == "make security"
-    ]
-    if not gate_steps:
+    gate_steps = _gate_steps(workflow)
+    if len(gate_steps) != 1:
         violations.append(
-            "must run `make security` itself, not a reduced variant: a weaker audit on "
-            "main than on a pull request reports green on bytes the gate would reject"
+            "must run `make security` itself exactly once, not a reduced or duplicated "
+            "variant: main must audit the same gate as a pull request, got "
+            f"{len(gate_steps)} exact steps"
         )
-
-    # A conditional or non-failing audit is not an audit. Without these, the triggers
-    # above can be honoured in the YAML and neutered in the job: `if: false` or
-    # `if: github.event_name == 'push'` silences the daily run the triggers promise,
-    # and `continue-on-error: true` lets a RED audit report success — which would make
-    # the status on `main` say the opposite of what it measured. Both shapes leave every
-    # other assertion here passing, so the pinned remedy could be undone in silence.
-    for owner, holder in (("job", 0), ("step", 1)):
-        for gate in gate_steps:
-            node = gate[holder]
-            if "if" in node and str(node["if"]).strip().lower() not in {
-                "true",
-                "${{ true }}",
-            }:
-                violations.append(
-                    f"the `make security` {owner} must not be conditional — an `if:` can "
-                    f"silence the daily run the triggers promise, got {node['if']!r}"
-                )
-            # Fails CLOSED, like the `if` check above: only a value that can be proved
-            # harmless is accepted. Actions takes an expression here, so an allowlist of
-            # bad literals missed `${{ true }}`, `"True"` and
-            # `${{ github.event_name == 'schedule' }}` — the last of which neuters the
-            # DAILY run while the push run keeps failing normally, so the workflow looks
-            # healthy and gap 2 reopens with every assertion here still green.
-            cont = node.get("continue-on-error")
-            if cont is not None and str(cont).strip().lower() not in {
-                "false",
-                "${{ false }}",
-            }:
-                violations.append(
-                    f"the `make security` {owner} must not set `continue-on-error` — a "
-                    f"red audit would report success on main, got {cont!r}"
-                )
+    for job, step in gate_steps:
+        violations.extend(
+            _gate_context_violations(
+                workflow,
+                job,
+                step,
+                expected_workflow_env={},
+                label="security-audit.yml",
+            )
+        )
 
     names = {job.get("name") for job in jobs.values() if isinstance(job, dict)}
     if "Security Scan" in names:
@@ -331,6 +417,24 @@ def audit_workflow(workflow: Workflow) -> list[str]:
         )
 
     return violations
+
+
+def audit_merge_gate(workflow: Workflow) -> list[str]:
+    """Return one message per pull-request-gate violation in test-suite.yml."""
+    gate_steps = _gate_steps(workflow)
+    if len(gate_steps) != 1:
+        return [
+            "test-suite.yml: must run `make security` itself exactly once, got "
+            f"{len(gate_steps)} exact steps"
+        ]
+    job, step = gate_steps[0]
+    return _gate_context_violations(
+        workflow,
+        job,
+        step,
+        expected_workflow_env=TEST_SUITE_WORKFLOW_ENV,
+        label="test-suite.yml",
+    )
 
 
 def _make_commands(target: str) -> list[list[str]]:
@@ -400,10 +504,23 @@ def test_the_conditional_checks_do_not_over_reject() -> None:
 
 
 def test_the_merge_gate_and_the_main_audit_run_the_same_command() -> None:
-    """Both workflows must invoke `make security`, so neither can drift weaker."""
-    test_suite = TEST_SUITE_WORKFLOW.read_text(encoding="utf-8")
-    assert "run: make security" in test_suite
-    assert "run: make security" in WORKFLOW.read_text(encoding="utf-8")
+    """Both workflows must invoke the gate from their pinned clean contexts."""
+    assert audit_merge_gate(_test_suite()) == []
+
+    main_audit = _workflow()
+    main_gates = _gate_steps(main_audit)
+    assert len(main_gates) == 1, main_gates
+    job, step = main_gates[0]
+    assert (
+        _gate_context_violations(
+            main_audit,
+            job,
+            step,
+            expected_workflow_env={},
+            label="security-audit.yml",
+        )
+        == []
+    )
 
 
 def test_declared_mode_really_audits_the_pins_resolve_mode_skips() -> None:
@@ -565,6 +682,10 @@ def _with_trigger(key: object, value: object) -> Workflow:
     return workflow
 
 
+def _mutate_workflow(**changes: Any) -> Workflow:
+    return {**_workflow(), **changes}
+
+
 def _mutate_job(**changes: Any) -> Workflow:
     workflow = _workflow()
     jobs = {name: {**job, **changes} for name, job in workflow["jobs"].items()}
@@ -583,6 +704,31 @@ def _mutate_gate_step(**changes: Any) -> Workflow:
                 else step
             )
             for step in job["steps"]
+        ]
+    return workflow
+
+
+def _with_never_run_dependency() -> Workflow:
+    """Make the audit job wait on a job that never runs, so GitHub skips the audit too."""
+    workflow = _workflow()
+    jobs = {
+        name: {**job, "needs": ["never-runs"]} for name, job in workflow["jobs"].items()
+    }
+    jobs["never-runs"] = {
+        "runs-on": "ubuntu-latest",
+        "if": False,
+        "steps": [{"run": "true"}],
+    }
+    workflow["jobs"] = jobs
+    return workflow
+
+
+def _with_duplicated_gate_step() -> Workflow:
+    workflow = _workflow()
+    for job in workflow["jobs"].values():
+        job["steps"] = [
+            *job["steps"],
+            *(s for s in job["steps"] if s.get("run", "").strip() == "make security"),
         ]
     return workflow
 
@@ -705,6 +851,63 @@ def _mutate_gate_step(**changes: Any) -> Workflow:
             "must run `make security` itself",
             id="gate swallowed by a shell or-true",
         ),
+        pytest.param(
+            lambda: _mutate_workflow(env={"MAKEFLAGS": "-n"}),
+            "workflow environment must be exactly",
+            id="workflow makeflags skips command execution",
+        ),
+        pytest.param(
+            lambda: _mutate_workflow(defaults={"run": {"shell": "/bin/true {0}"}}),
+            "workflow `defaults`",
+            id="workflow default shell discards the gate",
+        ),
+        pytest.param(
+            lambda: _mutate_job(env={"GNUMAKEFLAGS": "-i"}),
+            "security job must not set `env`",
+            id="job gnumakeflags ignores command failures",
+        ),
+        pytest.param(
+            lambda: _mutate_job(defaults={"run": {"working-directory": "/tmp"}}),
+            "security job must not set `defaults`",
+            id="job default working directory leaves the checkout",
+        ),
+        pytest.param(
+            lambda: _mutate_job(container="attacker/example:latest"),
+            "must not replace the governed runner",
+            id="job replaces the governed runner",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(env={"PATH": "/tmp/interposed"}),
+            "step must not set `env`",
+            id="step path interposes the governed binaries",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(shell="/bin/true {0}"),
+            "step must not set `shell`",
+            id="step shell discards the gate",
+        ),
+        pytest.param(
+            lambda: _mutate_gate_step(**{"working-directory": "/tmp"}),
+            "step must not set `working-directory`",
+            id="step runs outside the checkout",
+        ),
+        # Found by the takeover review of #1446: two declarative keys that skip or relocate
+        # the gate with `run: make security` untouched, which its controls never tried.
+        pytest.param(
+            lambda: _mutate_job(**{"runs-on": ["self-hosted"]}),
+            "must run on the governed runner",
+            id="job moved to a self-hosted runner",
+        ),
+        pytest.param(
+            _with_never_run_dependency,
+            "must not declare `needs`",
+            id="job waits on a job that never runs and is skipped",
+        ),
+        pytest.param(
+            _with_duplicated_gate_step,
+            "exactly once",
+            id="gate step duplicated",
+        ),
     ],
 )
 def test_the_workflow_guard_rejects_a_reopened_blind_spot(
@@ -712,6 +915,135 @@ def test_the_workflow_guard_rejects_a_reopened_blind_spot(
 ) -> None:
     violations = audit_workflow(workflow_factory())  # type: ignore[operator]
     assert violations, "the guard passed a workflow that reopens the gap"
+    assert any(expected in violation for violation in violations), violations
+
+
+def _test_suite() -> Workflow:
+    loaded: Workflow = yaml.safe_load(TEST_SUITE_WORKFLOW.read_text(encoding="utf-8"))
+    return loaded
+
+
+def _mutate_merge_gate(
+    *, workflow: Workflow | None = None, job: Workflow | None = None
+) -> Workflow:
+    """Apply ``workflow`` keys to test-suite.yml and ``job`` keys to its gate job only."""
+    suite = {**_test_suite(), **(workflow or {})}
+    suite["jobs"] = {
+        name: (
+            {**body, **(job or {})}
+            if any(
+                step.get("run", "").strip() == "make security"
+                for step in body.get("steps") or []
+            )
+            else body
+        )
+        for name, body in suite["jobs"].items()
+    }
+    return suite
+
+
+def _mutate_merge_gate_step(**changes: Any) -> Workflow:
+    suite = _test_suite()
+    for body in suite["jobs"].values():
+        body["steps"] = [
+            (
+                {**step, **changes}
+                if step.get("run", "").strip() == "make security"
+                else step
+            )
+            for step in body.get("steps") or []
+        ]
+    return suite
+
+
+def _merge_gate_with_duplicated_step() -> Workflow:
+    suite = _test_suite()
+    for body in suite["jobs"].values():
+        steps = body.get("steps") or []
+        body["steps"] = [
+            *steps,
+            *(s for s in steps if s.get("run", "").strip() == "make security"),
+        ]
+    return suite
+
+
+@pytest.mark.parametrize(
+    ("workflow_factory", "expected"),
+    [
+        pytest.param(
+            lambda: _mutate_merge_gate(
+                workflow={"env": {**TEST_SUITE_WORKFLOW_ENV, "MAKEFLAGS": "-n"}}
+            ),
+            "workflow environment must be exactly",
+            id="workflow makeflags added beside the benign controls",
+        ),
+        pytest.param(
+            lambda: _mutate_merge_gate(
+                workflow={"env": {"DUTCHBAY_TEST_MODE": "full"}}
+            ),
+            "workflow environment must be exactly",
+            id="workflow environment changed",
+        ),
+        pytest.param(
+            lambda: _mutate_merge_gate(
+                workflow={"defaults": {"run": {"shell": "/bin/true {0}"}}}
+            ),
+            "workflow `defaults`",
+            id="workflow default shell discards the gate",
+        ),
+        pytest.param(
+            lambda: _mutate_merge_gate(job={"env": {"GNUMAKEFLAGS": "-i"}}),
+            "security job must not set `env`",
+            id="job gnumakeflags ignores command failures",
+        ),
+        pytest.param(
+            lambda: _mutate_merge_gate(job={"container": "attacker/example:latest"}),
+            "must not replace the governed runner",
+            id="job replaces the governed runner with a container",
+        ),
+        pytest.param(
+            lambda: _mutate_merge_gate(job={"runs-on": ["self-hosted"]}),
+            "must run on the governed runner",
+            id="job moved to a self-hosted runner",
+        ),
+        pytest.param(
+            lambda: _mutate_merge_gate(job={"needs": ["changes"]}),
+            "must not declare `needs`",
+            id="job made to wait on another job",
+        ),
+        pytest.param(
+            lambda: _mutate_merge_gate(job={"if": False}),
+            "job must not be conditional",
+            id="job if false silences the gate",
+        ),
+        pytest.param(
+            lambda: _mutate_merge_gate_step(**{"continue-on-error": True}),
+            "step must not set `continue-on-error`",
+            id="step continue-on-error lets a red gate report success",
+        ),
+        pytest.param(
+            lambda: _mutate_merge_gate_step(env={"PATH": "/tmp/interposed"}),
+            "step must not set `env`",
+            id="step path interposes the governed binaries",
+        ),
+        pytest.param(
+            lambda: _mutate_merge_gate_step(run="make security || true"),
+            "exactly once",
+            id="gate swallowed by a shell or-true",
+        ),
+        pytest.param(
+            _merge_gate_with_duplicated_step,
+            "exactly once",
+            id="gate step duplicated",
+        ),
+    ],
+)
+def test_the_merge_gate_guard_rejects_a_bypassed_context(
+    workflow_factory: object, expected: str
+) -> None:
+    """VERIFY-01(5): the pull-request gate's own guard is observed firing, not assumed."""
+    violations = audit_merge_gate(workflow_factory())  # type: ignore[operator]
+    assert violations, "the guard passed a merge gate whose context can bypass it"
     assert any(expected in violation for violation in violations), violations
 
 
