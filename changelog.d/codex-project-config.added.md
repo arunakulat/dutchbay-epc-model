@@ -1,0 +1,1 @@
+Track the Codex project defaults in `.codex/config.toml` (no approval prompts, full-access sandbox, medium verbosity, concise reasoning summaries) and pin their values and exact bytes, so a change to local Codex agent permissions arrives as a reviewed diff.
