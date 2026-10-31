@@ -210,13 +210,16 @@ def build_case_metadata_from_trials(
 
     Returns:
         A case mapping ``{"label": ..., "metadata": {"trials": {...}}}`` where each
-        metric array is a plain ``list[float]`` (JSON-serializable for report
+        metric array is a plain ``list[float | None]`` (strict-JSON-safe for report
         metadata). Only the canonical metrics in :data:`DRIVER_MC_TRIAL_METRICS`
         are packaged; a legacy ``min_dscr`` convenience alias (identical to the
         canonical ``dscr_min``) is dropped so a metric is never double-counted.
     """
     canonical = {
-        m: [float(v) for v in np.asarray(trials[m], dtype=float).reshape(-1)]
+        m: [
+            float(v) if np.isfinite(v) else None
+            for v in np.asarray(trials[m], dtype=float).reshape(-1)
+        ]
         for m in DRIVER_MC_TRIAL_METRICS
         if m in trials
     }
@@ -440,6 +443,20 @@ def build_capital_risk_report_from_trials(
         raise KeyError(
             "capital-risk report needs the canonical per-trial keys; missing: "
             f"{', '.join(missing)}"
+        )
+    # This joint report has a complete-cohort contract. Do not silently select
+    # complete cases (the O-5 bias), impute zero or emit NaN-based tail claims.
+    # Metric-wise MC summaries and the lender risk table remain available with
+    # their explicit coverage; extending the joint report needs separate review.
+    incomplete = {
+        key: int((~np.isfinite(np.asarray(trials[key], dtype=float))).sum())
+        for key in _REQUIRED_TRIAL_KEYS
+    }
+    if any(incomplete.values()):
+        raise ValueError(
+            "capital-risk joint report requires complete aligned metric observations; "
+            f"undefined/non-finite counts={incomplete}. Use metric-wise MC summaries "
+            "and their metric_coverage; do not drop whole trials or impute zero."
         )
     version = model_version if model_version is not None else engine_version()
     n_trials = int(len(np.asarray(trials["equity_npv"], dtype=float).reshape(-1)))
