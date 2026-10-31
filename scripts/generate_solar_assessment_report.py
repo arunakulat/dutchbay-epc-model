@@ -241,11 +241,15 @@ def run_routines(trials: int = 1000) -> Dict[str, Any]:
         ]
     }
     mc = run_monte_carlo_analysis(base_config=mc_cfg, n_trials=int(trials), seed=123)
-    irr = mc.trials.get("project_irr", []) or []
-    eqi = mc.trials.get("equity_irr", []) or []
+    # Trial arrays keep undefined KPIs as None (#1474); report each metric on its own
+    # defined sample and disclose how many trials that is.
+    irr = [x for x in (mc.trials.get("project_irr", []) or []) if x is not None]
+    eqi = [x for x in (mc.trials.get("equity_irr", []) or []) if x is not None]
     R["mc"] = {
         "n": mc.iterations,
         "failed": mc.failed_iterations,
+        "proj_irr_defined": len(irr),
+        "eq_irr_defined": len(eqi),
         "proj_irr": (
             {
                 q: float(np.percentile(irr, p))
