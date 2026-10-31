@@ -1,0 +1,17 @@
+# Pinned tooling for the two jobs that run `make security`: the required `Security Scan`
+# gate in test-suite.yml and the daily `Lock Advisory Audit` in security-audit.yml.
+#
+# Both jobs installed `bandit pip-audit` unpinned until #1464, so the tool that decides a
+# merge drifted with whatever PyPI served that morning and its version appeared in no
+# receipt (#1353 D-10). Pinning it here rather than in each workflow keeps the two jobs
+# identical by construction.
+#
+# Both pins must equal the lock's own pins in requirements.txt, so a local `make security`
+# and CI run the same analysers, and a lock bump that moves either tool reds
+# tests/lint/test_security_gate_coverage.py until this file moves with it. The constraint
+# line holds every transitive dependency (requests, CacheControl, urllib3, ...) to the lock
+# too: the auditor's HTTP stack is part of what decides a verdict. pip resolves the path
+# relative to this file.
+-c ../requirements.txt
+bandit==1.9.4
+pip-audit==2.10.1
