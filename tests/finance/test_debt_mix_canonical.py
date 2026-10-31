@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-import finance.debt_v14 as debt_v14
+import finance.debt.terms as debt_terms
 from analytics.evaluation_v14 import evaluate_with_overrides
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -77,10 +77,10 @@ def test_decorative_debt_tranches_is_ignored() -> None:
 
 def test_decorative_debt_tranches_warns(caplog: pytest.LogCaptureFixture) -> None:
     """plan_debt warns (once) when a non-input debt_tranches block is present."""
-    debt_v14._warned_decorative_tranches = False
+    debt_terms._warned_decorative_tranches = False
     with caplog.at_level(logging.WARNING, logger="finance.debt_v14"):
         _debt({"Financing_Terms.debt_tranches": [{"name": "X", "rate_pct": 5.0}]})
     assert any(
         "debt_tranches is NOT an engine input" in rec.message for rec in caplog.records
     )
-    debt_v14._warned_decorative_tranches = False
+    debt_terms._warned_decorative_tranches = False
