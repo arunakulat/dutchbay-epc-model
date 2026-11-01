@@ -337,3 +337,37 @@ def test_assessed_case_project_irr_tornado_discloses_undefined_points() -> None:
     assert meta["undefined_points"] > 0
     # No point is reported as a false break-even.
     assert not any(case == 0.0 for case in cases)
+
+
+# ---------------------------------------------------------------------------
+# finance.irr: a converged bracket on a large project is a root, not "undefined"
+# ---------------------------------------------------------------------------
+def test_large_project_single_root_resolves_and_matches_numpy_financial() -> None:
+    """A USD 1bn single-root project the bisection pinned but called unconverged.
+
+    ``approx_project_irr``'s ``tol`` is an absolute NPV tolerance (1e-6 USD). Here the NPV
+    slope near the root is so steep that 50 halvings pin the rate to ~1e-15 while |NPV|
+    stays above 1e-6 USD, so before #1494 it returned None, which the KPI surface then
+    printed as 0.0. The independent oracle is ``numpy_financial.irr`` on the same
+    time-aligned vector (capex at t=0, two zero build periods, then CFADS).
+    """
+    import numpy_financial as npf
+
+    capex, cfads, construction_years = 1.0e9, [2.0e7] * 25, 2
+    expected = float(npf.irr([-capex] + [0.0] * construction_years + cfads))
+
+    got = approx_project_irr(cfads, capex, construction_years=construction_years)
+
+    assert got is not None
+    assert got == pytest.approx(expected, abs=1e-12)
+    result = calculate_scenario_kpis(
+        config={"capex_total_usd": capex, "construction_years": construction_years},
+        cfads_series_usd=cfads,
+    )
+    assert result["project_irr_status"] == PROJECT_IRR_COMPUTED
+    assert result["project_irr"] == got
+
+
+def test_unconverged_bisection_is_still_undefined() -> None:
+    # FIN-10 is unchanged: a bracket that is still wide when max_iter runs out is no root.
+    assert approx_project_irr([300.0] * 6, 1_000.0, tol=1e-30, max_iter=1) is None

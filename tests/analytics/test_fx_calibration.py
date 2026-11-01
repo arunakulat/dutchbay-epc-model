@@ -180,7 +180,13 @@ class TestEngineIntegration:
                 for x in (res.trials or {}).get("project_irr", [])
                 if x is not None
             ]
-            assert len(irr) == 64
+            # #1494: trial 48's CFADS turn negative in the final year, so its project NPV
+            # has two roots (about -60% and -12%) and the solver resolves no single rate.
+            # It used to arrive as a false 0.0; it is now undefined and disclosed by the
+            # coverage block (as missing, since the numeric KPI surface drops None).
+            coverage = res.metadata["metric_coverage"]["project_irr"]
+            assert len(irr) == coverage["defined_count"] == 63
+            assert coverage["defined_count"] + coverage["missing_count"] == 64
             assert max(irr) - min(irr) > 1e-4  # FX genuinely moves the IRR
         finally:
             logging.disable(logging.NOTSET)

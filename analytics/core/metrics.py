@@ -562,9 +562,6 @@ def compute_kpis(
 
 
 __all__ = [
-    "PROJECT_IRR_COMPUTED",
-    "PROJECT_IRR_NOT_COMPUTED",
-    "PROJECT_IRR_UNDEFINED",
     "_summary_stats",
     "calculate_scenario_kpis",
     "compute_kpis",

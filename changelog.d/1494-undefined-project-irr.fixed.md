@@ -15,3 +15,13 @@
   still drops a `None` KPI, so an undefined project IRR is absent there, as an undefined
   equity IRR already was. The equity-waterfall 0.0 sentinel is unchanged. Every committed
   scenario has a defined project IRR, so no committed KPI value moves.
+- Stop `approx_project_irr` returning no answer for a large project with a single root
+  (#1494). Its `tol` is an absolute NPV tolerance of 1e-6 USD. On a large project the NPV is
+  steep enough near the root that 50 bisection halvings pin the rate to about 1e-15 while
+  |NPV| stays above 1e-6 USD, so the solver returned `None`. One example is the lender case
+  with capex at USD 400m or 500m, whose true IRRs are about -7.8% and -9.4%. The solver
+  now accepts the midpoint once the sign-change bracket is narrower than 1e-10 in rate.
+  That check runs only after `max_iter` is exhausted, so every rate the solver already
+  found is byte-identical, and an unconverged wide bracket still returns `None` (FIN-10).
+  Cashflows whose NPV changes sign more than once (CFADS that turn negative late in life)
+  still return `None`, and are now reported as undefined.
