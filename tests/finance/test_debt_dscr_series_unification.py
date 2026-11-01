@@ -23,7 +23,7 @@ Where the weight sits
 
 1. :func:`test_min_dscr_is_the_operating_minimum_folded_with_dscr_by_year` and
    :func:`test_ceb_bess_headline_is_the_fold_and_is_pinned` are THE hard gate. The
-   headline ``min_dscr`` on both CEB BESS scenarios (0.9069 / 0.8724) is driven entirely
+   headline ``min_dscr`` on both CEB BESS scenarios (0.9020 / 0.8942) is driven entirely
    by the ``dscr_by_year`` FOLD, while the operating-period minimum is 1.3000. Any change
    that "restricts to operating periods" in a way that discards the fold RAISES reported
    coverage and overstates lender protection — a canon move in the flattering direction
@@ -80,15 +80,43 @@ DSCR_PERIOD_FIELDS = frozenset(
 )
 
 
-def _plan_for(path: Path) -> tuple[Dict[str, Any], Dict[str, Any]]:
-    """Run the engine exactly as ``run_v14_pipeline`` does, returning (cfg, result)."""
+def _plan_for(
+    path: Path, capacity_charge_lkr_per_mw_month: Optional[float] = None
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    """Run the engine exactly as ``run_v14_pipeline`` does, returning (cfg, result).
+
+    ``capacity_charge_lkr_per_mw_month``, when given, replaces the rate on every
+    ``type: bess`` capacity-charge block before the run.
+    """
     cfg = load_scenario_config(str(path))
+    if capacity_charge_lkr_per_mw_month is not None:
+        for tech in cfg["generation"]["technologies"].values():
+            revenue = tech.get("revenue") or {}
+            if revenue.get("model") == "capacity_charge":
+                revenue["capacity_charge_lkr_per_mw_month"] = (
+                    capacity_charge_lkr_per_mw_month
+                )
     annual_rows = build_annual_rows(cfg)
     mode = resolve_run_mode(cfg)
     forbid = mode is not None and not POLICIES[mode].allow_toy_capex
     return cfg, plan_debt(
         annual_rows=annual_rows, config=cfg, forbid_toy_fallback=forbid
     )
+
+
+# Covenant-mechanics fixture. The hostile-input tests below need a REAL plan whose snapshot
+# is a three-breach FAIL driven by the year-1 fold. The CEB standalone scenario gave exactly
+# that at its former illustrative rate of 2,500,000 LKR/MW/month. v15.9.0 moved the committed
+# scenario to the NSO 250 MW bid-clearing level (1,752,500), where the snapshot is a single
+# breach (REVIEW). These tests check covenant mechanics, not the tariff, so they pin the
+# former rate as fixture input; their expected values are unchanged.
+CEB_FIXTURE = SCENARIO_DIR / "ceb_bess_10mw_capacity_charge.yaml"
+CEB_FIXTURE_RATE_LKR_PER_MW_MONTH = 2_500_000.0
+
+
+def _plan_for_ceb_fixture() -> tuple[Dict[str, Any], Dict[str, Any]]:
+    """The CEB covenant-mechanics fixture: the committed scenario at the pinned rate."""
+    return _plan_for(CEB_FIXTURE, CEB_FIXTURE_RATE_LKR_PER_MW_MONTH)
 
 
 def _operating_minimum(debt_result: Dict[str, Any]) -> Optional[float]:
@@ -260,9 +288,9 @@ def test_min_dscr_is_the_operating_minimum_folded_with_dscr_by_year(
     fold_min = _fold_minimum(debt_result)
     published = float(debt_result["min_dscr"])
 
-    assert (
-        operating_min is not None
-    ), "an evaluable scenario must have operating periods"
+    assert operating_min is not None, (
+        "an evaluable scenario must have operating periods"
+    )
     assert fold_min is not None, "an evaluable scenario must have a per-year table"
 
     assert published == min(operating_min, fold_min)
@@ -274,11 +302,13 @@ def test_min_dscr_is_the_operating_minimum_folded_with_dscr_by_year(
 @pytest.mark.parametrize(
     ("scenario_name", "expected_min_dscr", "expected_fold_min"),
     [
-        ("ceb_bess_10mw_capacity_charge.yaml", 0.9069456485322224, 0.9069456485322224),
+        # Re-baselined in v15.9.0 (CEB rate 2,500,000 -> 1,752,500; solar+BESS 45.80 / 10 y
+        # -> 50.10 / 15 y). Before: 0.9069456485322224 and 0.8724193845452927.
+        ("ceb_bess_10mw_capacity_charge.yaml", 0.9019916469950849, 0.9019916469950849),
         (
             "ceb_solar_bess_nightpeak_10mw.yaml",
-            0.8724193845452927,
-            0.8724193845452927,
+            0.8942466976990286,
+            0.8942466976990286,
         ),
     ],
 )
@@ -549,8 +579,10 @@ def test_covenant_years_survive_a_map_that_does_not_start_at_year_one() -> None:
     ("scenario_name", "years_below", "first_year", "last_year", "status"),
     [
         ("dutchbay_lendercase_2025Q4.yaml", 0, None, None, "PASS"),
-        ("ceb_bess_10mw_capacity_charge.yaml", 3, 1, 7, "FAIL"),
-        ("ceb_solar_bess_nightpeak_10mw.yaml", 2, 1, 4, "REVIEW"),
+        # Re-baselined in v15.9.0. Before: CEB (3, 1, 7, FAIL), solar+BESS (2, 1, 4, REVIEW).
+        # The hostile-input tests keep the former CEB FAIL through _plan_for_ceb_fixture.
+        ("ceb_bess_10mw_capacity_charge.yaml", 1, 1, 1, "REVIEW"),
+        ("ceb_solar_bess_nightpeak_10mw.yaml", 4, 1, 9, "FAIL"),
     ],
 )
 def test_covenant_snapshot_end_to_end_against_the_real_engine(
@@ -591,7 +623,7 @@ def test_a_legacy_shaped_debt_result_fails_loudly_not_silently() -> None:
 
 def test_breach_years_are_plain_integers() -> None:
     """The map carries float years (``1.0``); the covenant contract types them ``int``."""
-    _cfg, debt_result = _plan_for(SCENARIO_DIR / "ceb_bess_10mw_capacity_charge.yaml")
+    _cfg, debt_result = _plan_for_ceb_fixture()
     snapshot = _build_debt_covenant_snapshot(_covenant_config(), debt_result)
 
     assert type(snapshot.first_breach_year) is int
@@ -688,7 +720,7 @@ def test_real_covenant_rejects_incomplete_or_contradictory_observations(
     A missing/null fold must not substitute the higher bare-period ratio or turn the
     three-breach FAIL into REVIEW/PASS. Dates must still belong to the mapped row.
     """
-    cfg, original = _plan_for(SCENARIO_DIR / "ceb_bess_10mw_capacity_charge.yaml")
+    cfg, original = _plan_for_ceb_fixture()
     before = _build_debt_covenant_snapshot(cfg, original)
     assert (
         before.years_below_threshold,

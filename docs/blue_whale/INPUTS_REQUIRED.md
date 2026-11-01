@@ -71,11 +71,11 @@ feasibility study. **3** refines the result.
 | ID | Input | Replaces (YAML field) | Placeholder now | Priority |
 |---|---|---|---|---|
 | F01 | PPA term (years) | `tariff.ppa_term_years`, `project.life_years` | 20 | 1 |
-| F02 | Offtaker and tender route (CEB competitive tender, SLSEA standardised tariff, or private offtake) | `ppa.offtaker` | CEB | 1 |
-| F03 | Tariff (LKR/kWh) for wind and solar energy, and whether it is one blended tariff or two | `tariff.lkr_per_kwh` | 20.3 (DutchBay) | 1 |
+| F02 | Offtaker and tender route (CEB competitive tender, SLSEA standardised tariff, or private offtake) | `ppa.offtaker` | National System Operator (Private) Limited, from 9 Mar 2026 (Gazette 2479/36); researched 2026-11-01, route still to confirm | 1 |
+| F03 | Tariff (LKR/kWh) for wind and solar energy, and whether it is one blended tariff or two | `tariff.lkr_per_kwh` | 24.76: energy-weighted blend of the PUCSL 2026 FiT, wind 25.73 and ground solar 20.72 (researched 2026-11-01). Open: whether the < 10 MW limit counts per technology or per plant | 1 |
 | F04 | Tariff structure: fixed, CPI-indexed, USD-linked, tiered; any escalation | `tariff.tariff_type` | fixed | 1 |
 | F05 | BESS revenue model: capacity charge, energy tariff for night-peak export, or none (firming only) | `bess_1.revenue.model` | capacity charge | 1 |
-| F06 | BESS rate: LKR/MW-month capacity charge, or LKR/kWh discharge tariff, and its contract term | `bess_1.revenue.*` | LKR 5.0M/MW-month, 15 years | 1 |
+| F06 | BESS rate: LKR/MW-month capacity charge, or LKR/kWh discharge tariff, and its contract term | `bess_1.revenue.*` | LKR 1,752,500/MW-month, 15 years: NSO 250 MW bid-clearing level, not an award (2026-11-01) | 1 |
 | F07 | Take-or-pay or deemed-energy terms for curtailment | revenue protection | none | 2 |
 | F08 | Payment terms, security (letter of credit, Treasury guarantee) | `ppa.payment_terms_days` | 30 days | 2 |
 
