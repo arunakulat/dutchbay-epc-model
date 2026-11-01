@@ -28,6 +28,9 @@ from analytics.core.metrics import (
 )
 from finance.irr import approx_project_irr
 
+#: Passed explicitly so these controls do not depend on where a default rate lives. The
+#: IRR does not depend on it.
+_DRATE = 0.10
 #: All-negative CFADS: no rate makes the NPV zero.
 _ALL_NEGATIVE = {"config": {"capex_total_usd": 1_000.0}, "cfads": [-50.0] * 10}
 #: A positive root far above the solver's 500% cap (capex 1, CFADS 100 a year).
@@ -36,7 +39,10 @@ _ABOVE_SEARCH_BOUND = {"config": {"capex_total_usd": 1.0}, "cfads": [100.0] * 10
 
 def _kpis(case: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
     return calculate_scenario_kpis(
-        config=case["config"], cfads_series_usd=case["cfads"], **kwargs
+        discount_rate=_DRATE,
+        config=case["config"],
+        cfads_series_usd=case["cfads"],
+        **kwargs,
     )
 
 
@@ -71,7 +77,7 @@ def test_unresolved_project_irr_warns_that_it_is_reported_as_none(
 def test_genuine_zero_project_irr_stays_computed() -> None:
     capex, cfads = 100.0, [10.0] * 10  # lifetime CFADS == capex, so the IRR is ~0%
     result = calculate_scenario_kpis(
-        config={"capex_total_usd": capex}, cfads_series_usd=cfads
+        discount_rate=_DRATE, config={"capex_total_usd": capex}, cfads_series_usd=cfads
     )
     assert result["project_irr_status"] == PROJECT_IRR_COMPUTED
     assert result["project_irr"] is not None
@@ -82,7 +88,7 @@ def test_genuine_zero_project_irr_stays_computed() -> None:
 def test_defined_project_irr_is_the_solver_value() -> None:
     capex, cfads = 1_000.0, [300.0] * 6
     result = calculate_scenario_kpis(
-        config={"capex_total_usd": capex}, cfads_series_usd=cfads
+        discount_rate=_DRATE, config={"capex_total_usd": capex}, cfads_series_usd=cfads
     )
     expected = approx_project_irr(cfads, capex)
     assert expected is not None and expected > 0.0
@@ -94,7 +100,7 @@ def test_defined_project_irr_is_the_solver_value() -> None:
 def test_not_computed_project_irr_keeps_the_zero_placeholder_and_says_so() -> None:
     # No capex: the solve is never attempted. The 0.0 API-stability default is unchanged
     # (pinned by test_core_metrics_coverage); the status now marks it as a placeholder.
-    result = calculate_scenario_kpis(cfads_series_usd=[300.0] * 6)
+    result = calculate_scenario_kpis(discount_rate=_DRATE, cfads_series_usd=[300.0] * 6)
     assert result["project_irr"] == 0.0
     assert result["irr"] == 0.0
     assert result["project_irr_status"] == PROJECT_IRR_NOT_COMPUTED
@@ -361,6 +367,7 @@ def test_large_project_single_root_resolves_and_matches_numpy_financial() -> Non
     assert got is not None
     assert got == pytest.approx(expected, abs=1e-12)
     result = calculate_scenario_kpis(
+        discount_rate=_DRATE,
         config={"capex_total_usd": capex, "construction_years": construction_years},
         cfads_series_usd=cfads,
     )
