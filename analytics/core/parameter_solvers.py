@@ -97,14 +97,21 @@ def _require_kpi_present(kpis: Mapping[str, Any], kpi_key: str, *, lever: str) -
     support this solve.
 
     The "not exposed" hint is parameterized on ``kpi_key``: ``equity_irr``/``equity_npv`` are
-    absent when the scenario computes no equity distribution; the project KPIs are absent only
-    on a genuinely degenerate KPI surface (they always ride the base pipeline result).
+    absent when the scenario computes no equity distribution; ``project_irr`` is None, and so
+    absent from the numeric surface, when the IRR solver resolves no rate for the project
+    cashflows (#1494); the other project KPIs are absent only on a genuinely degenerate KPI
+    surface (they always ride the base pipeline result).
     """
     if kpi_key not in kpis or kpis[kpi_key] is None:
         if kpi_key.startswith("equity_"):
             hint = (
                 f"{kpi_key} is only present when an equity distribution is computed, "
                 "and is None when no rate solves the equity cashflows (#1436)"
+            )
+        elif kpi_key == "project_irr":
+            hint = (
+                "project_irr is None, and dropped from the numeric KPI surface, when the "
+                "IRR solver resolves no rate for the project cashflows (#1494)"
             )
         else:
             hint = f"the scenario's KPI surface does not include {kpi_key}"
@@ -968,7 +975,17 @@ def solve_for_min_capex_given_irr_floor(
             base_config_path=base_config_path,
             overrides=overrides,
         )
-        return float(kpis["project_irr"])
+        project_irr = kpis.get("project_irr")
+        if project_irr is None:
+            # #1494: an undefined project IRR is None on the KPI surface and is dropped
+            # by the numeric normalizer, so it arrives absent. Name it instead of
+            # raising a bare KeyError, and never bisect on a 0.0 stand-in.
+            raise ValueError(
+                f"project IRR is undefined at capex.usd_total={capex:,.2f} (the solver "
+                f"resolved no rate for the project cashflows); narrow the "
+                f"capex bracket [{low:,.2f}, {high:,.2f}] to where the IRR is defined."
+            )
+        return float(project_irr)
 
     # Bracketing precheck (round-2 finding, extended here in round 3): fail loud if irr_floor
     # is unreachable over [low, high] capex rather than silently bisecting to a bound. IRR

@@ -325,7 +325,9 @@ class ScenarioResult(ContractMixin):
     scenario_name: str
     config_path: str
     project_npv: float
-    project_irr: float
+    # #1494: None when the IRR solver resolves no rate for the project cashflows
+    # (``kpis["project_irr_status"] == "undefined"``), never a 0.0 stand-in.
+    project_irr: float | None
     dscr_series: list[float]
     min_dscr: float
     max_debt_usd: float

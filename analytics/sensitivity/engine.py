@@ -108,10 +108,11 @@ def _read_sweep_metric(kpis: Mapping[str, Any], metric_key: str, *, case: str) -
     optimiser (#782). It never substitutes 0.0, which would read as break-even.
 
     It sees only the absent-key path (a ``None`` that ``normalize_kpi_dict`` dropped),
-    plus a non-finite value. It cannot see a 0.0 the KPI surface substituted upstream:
-    ``analytics/core/metrics.py:494`` for an unsolvable ``project_irr`` (``:492`` for
-    ``project_npv``) and ``:466`` for an ``equity_irr`` with no equity-distribution
-    result. Such a point arrives as 0.0 and is recorded as defined.
+    plus a non-finite value. Since #1494 an unsolvable ``project_irr`` takes that path
+    too. It cannot see a 0.0 the KPI surface still substitutes upstream: the
+    ``project_npv`` stable-surface default in ``analytics/core/metrics.py`` and the
+    ``equity_irr`` sentinel for a run with no equity-distribution result. Such a point
+    arrives as 0.0 and is recorded as defined.
 
     A missing key is also what a mistyped ``metric_key`` looks like, hence the warning
     naming the metric and the case. ``_extract_scalar_metric`` keeps raising for the
@@ -157,9 +158,11 @@ def _flag_undefined_metric(
     (bars whose swing is undefined because a low or high case was). An undefined base
     leaves ``base_metric`` as ``nan`` rather than a flat or zero bar.
 
-    The counts cover only the absent-key path :func:`_read_sweep_metric` sees. A 0.0 the
-    KPI surface substituted (``analytics/core/metrics.py:494`` and ``:466``) counts as
-    defined, so ``undefined_points == 0`` does not show that every point solved.
+    The counts cover only the absent-key path :func:`_read_sweep_metric` sees, which
+    includes an unsolvable ``project_irr`` since #1494. A 0.0 the KPI surface still
+    substitutes (the ``project_npv`` default and the no-waterfall ``equity_irr``
+    sentinel in ``analytics/core/metrics.py``) counts as defined, so
+    ``undefined_points == 0`` does not show that every point solved.
 
     When no evaluation at all defined the metric there is no tornado to draw, and the
     likeliest cause is a mistyped key, so strict mode raises ``ValueError``.

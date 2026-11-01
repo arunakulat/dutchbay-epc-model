@@ -29,7 +29,11 @@ from pydantic import BaseModel, Field
 #: undefined KPI keeps its key with ``null``, so a missing key still means "not computed".
 #: Owner decision 2026-10-26 ("Bump to 2.0"): the bump follows the policy above, and the
 #: URL surface stays ``/v1`` because no client consumes it yet, so it was not re-cut.
-API_CONTRACT_VERSION = "2.0"
+#: 2.1 (#1494): MINOR, additive. ``POST /v1/run-pipeline`` gains the optional
+#: ``kpis.project_irr_status`` (``computed`` | ``undefined`` | ``not_computed``). A project
+#: IRR with no root in the solver's range is now ``null`` there and in ``CaseResult.kpis``,
+#: where it was a false ``0.0``; both fields were already nullable, so no field is retyped.
+API_CONTRACT_VERSION = "2.1"
 
 
 class WindAssessment(BaseModel):
@@ -84,8 +88,8 @@ class CaseResult(BaseModel):
         default_factory=dict,
         description=(
             "Flat lender KPIs (project_irr, equity_irr, min_dscr, ...). A KPI the engine "
-            "reports as undefined (e.g. an equity IRR with no root) is null, never 0.0; an "
-            "absent key means the KPI was not computed (#1436)."
+            "reports as undefined (e.g. an equity or project IRR with no root) is null, "
+            "never 0.0; an absent key means the KPI was not computed (#1436, #1494)."
         ),
     )
     run_manifest: Optional[Dict[str, Any]] = Field(
