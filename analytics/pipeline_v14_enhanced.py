@@ -420,6 +420,11 @@ def _size_debt_on_levered_cfads(
 
     interest_lkr: list[float] | None = None
     previous_cfads: list[float] | None = None
+    # Each pass's solved gearing seeds the next pass's scan (the warm start of
+    # _solve_gearing_for_dscr in finance.debt.sizing, re-exported by the
+    # finance.debt_v14 facade). It changes where the scan starts, not which gearing
+    # it returns.
+    gearing_hints: dict[str, tuple[float, float, float]] = {}
 
     for iteration in range(1, _CFADS_FIXED_POINT_MAX_ITERATIONS + 1):
         rows = _validate_annual_rows_structure(
@@ -430,6 +435,7 @@ def _size_debt_on_levered_cfads(
                 annual_rows=rows,
                 config=cfg,
                 forbid_toy_fallback=forbid_toy_fallback,
+                gearing_hints=gearing_hints,
             )
         )
         enriched = _enrich_annual_rows_with_debt(rows, debt_result)

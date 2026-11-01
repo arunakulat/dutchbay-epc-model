@@ -19,6 +19,20 @@ All notable changes to this project will be documented here.
   vector; it does not change the Board/lender circulation HOLD.
 
 ### Fixed
+- **The balloon after maturity accrues interest, and the senior fee follows the balance
+  actually outstanding (15.9.0).** #1503 and #1504: under `cash_sweep` and `bullet` the
+  unpaid balloon accrues interest at the facility's blended rate (`avg_debt_rate`) until
+  it is repaid, as the refinance already did; a sweep whose cash cannot pay the interest
+  capitalises it into `balloon_residual` (owner decision, #1510 issuecomment-6542861144).
+  `debt_outstanding` and the senior credit-support fee now follow the balloon actually
+  outstanding instead of the structural balloon to the horizon, and `debt_result` gains
+  `balloon_interest`, which the three-statement builder books as interest for every
+  treatment. Canon re-baseline: equity IRR -30.54% -> -26.44%, project IRR -0.142% ->
+  -0.060%, project NPV -$91.57M -> -$91.40M, PLCR 1.324 -> 1.328, total senior fee
+  $15.11M -> $13.14M; min DSCR, LLCR and the facility are unchanged. This re-baselines
+  the committed canonical KPI vector; it does not change the Board/lender circulation
+  HOLD, and none of these figures supports a lender, IC or covenant representation
+  while the F-5 and #1110 holds stand.
 - **Debt is sized, and coverage reported, on levered-tax CFADS (15.7.0).** `plan_debt`
   was handed rows built with `interest_expense=0`, so the facility was sculpted against —
   and DSCR, LLCR and PLCR published from — CFADS carrying tax computed with no interest

@@ -54,6 +54,8 @@ class TestDebtV14Header:
         names = [info.name for info in pkgutil.iter_modules(finance.debt.__path__)]
         # An empty enumeration would pass vacuously: the package has 14 modules.
         assert len(names) >= 14, names
+        # The package's own __init__ is not one of them, so read it too.
+        assert "[File content too long" not in inspect.getsource(finance.debt)
         for name in names:
             module = importlib.import_module(f"finance.debt.{name}")
             assert "[File content too long" not in inspect.getsource(module), name
