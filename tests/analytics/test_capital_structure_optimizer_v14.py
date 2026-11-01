@@ -61,7 +61,11 @@ def _make_mix_eval(
     objective_fn: Callable[[float, float], float],
     constraint_fns: Optional[Mapping[str, Callable[[float, float], float]]] = None,
 ) -> Callable[..., Dict[str, Any]]:
-    """Fake gateway mapping the (lkr, dfi) mix override to analytic KPIs."""
+    """Fake gateway mapping the (lkr, dfi) mix override to analytic KPIs.
+
+    The objective is emitted as ``equity_npv``, the optimizers' default objective
+    since #1456, so tests that rely on the default score this surface.
+    """
 
     def _fake(
         config_path: str,
@@ -72,7 +76,7 @@ def _make_mix_eval(
         ov = overrides or {}
         lkr = float(ov[_MIX_LKR_PATH])
         dfi = float(ov[_MIX_DFI_PATH])
-        kpis: Dict[str, Any] = {"equity_irr": objective_fn(lkr, dfi)}
+        kpis: Dict[str, Any] = {"equity_npv": objective_fn(lkr, dfi)}
         for key, fn in (constraint_fns or {}).items():
             kpis[key] = fn(lkr, dfi)
         return kpis
@@ -96,7 +100,7 @@ def _make_contingency_eval(
     ) -> Dict[str, Any]:
         total = float((overrides or {})[_CAPEX_TOTAL_PATH])
         frac = total / base_capex - 1.0
-        kpis: Dict[str, Any] = {"equity_irr": objective_fn(frac)}
+        kpis: Dict[str, Any] = {"equity_npv": objective_fn(frac)}
         for key, fn in (constraint_fns or {}).items():
             kpis[key] = fn(frac)
         return kpis
@@ -117,7 +121,7 @@ def test_debt_mix_selects_analytic_max(monkeypatch: pytest.MonkeyPatch) -> None:
 
     res = optimize_debt_mix(
         LENDER_CONFIG,
-        objective_key="equity_irr",
+        objective_key="equity_npv",
         direction="max",
         lkr_bounds=(0.0, 0.5),
         dfi_bounds=(0.0, 0.5),
@@ -180,7 +184,7 @@ def test_debt_mix_skips_over_allocated_geometry(
     ) -> Dict[str, Any]:
         ov = overrides or {}
         calls.append((float(ov[_MIX_LKR_PATH]), float(ov[_MIX_DFI_PATH])))
-        return {"equity_irr": 0.1}
+        return {"equity_npv": 0.1}
 
     monkeypatch.setattr(opt_mod, "evaluate_with_overrides", _fake)
     res = optimize_debt_mix(
