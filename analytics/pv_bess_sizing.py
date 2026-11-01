@@ -84,6 +84,16 @@ def _strict(raw: Mapping[str, Any], keys: Sequence[str], where: str) -> None:
         )
 
 
+def _kpi(kpis: Mapping[str, Any], key: str) -> float:
+    """A KPI as a float; an undefined (``None``) KPI is NaN and drops out of statistics.
+
+    FIN-01 keeps 0.0 and undefined apart, and #1525 proposes reporting an unresolved
+    project IRR as undefined, so ``None`` must not be read as 0.0.
+    """
+    value = kpis.get(key)
+    return float("nan") if value is None else float(value)
+
+
 def _num(value: Any, where: str, *, lo: float = -math.inf) -> float:
     """A finite float at or above ``lo``."""
     if isinstance(value, bool):
@@ -1024,10 +1034,10 @@ def evaluate_point(
         u_irr = irr(flows)
         row = {
             "project_npv": float(kpis["project_npv"]),
-            "project_irr": float(kpis["project_irr"]),
+            "project_irr": _kpi(kpis, "project_irr"),
             "equity_npv": float(kpis["equity_npv"]),
-            "equity_irr": float(kpis["equity_irr"]),
-            "min_dscr": float(kpis["min_dscr"]),
+            "equity_irr": _kpi(kpis, "equity_irr"),
+            "min_dscr": _kpi(kpis, "min_dscr"),
             "unit_pretax_npv_usd": npv(rate, flows),
             "unit_pretax_irr": float("nan") if u_irr is None else float(u_irr),
         }
@@ -1067,16 +1077,48 @@ def summarise_metric(values: Sequence[float]) -> Dict[str, float]:
     }
 
 
+def priority_window_capability(
+    *,
+    energy_mwh: float,
+    power_mw: float,
+    bess: BessConfig,
+    cfg: DispatchConfig,
+) -> Dict[str, float]:
+    """What a full battery can export in the priority windows, against what they take.
+
+    Deliverable energy is the usable stored energy times the discharge efficiency (the
+    base RTE, all loss on discharge by the repository convention). The windows take
+    ``min(power, export limit)`` for their length.
+    """
+    hours = sum(w.hours for w in cfg.windows if w.rate == "priority")
+    deliverable = (
+        energy_mwh
+        * (bess.max_soc_fraction - bess.min_soc_fraction)
+        * bess.discharge_efficiency
+    )
+    return {
+        "priority_window_hours": hours,
+        "deliverable_mwh": deliverable,
+        "window_takes_mwh": hours * min(power_mw, cfg.export_limit_mw),
+        "deliverable_hours_at_power": deliverable / min(power_mw, cfg.export_limit_mw),
+    }
+
+
 def best_point(
-    stats: Sequence[Mapping[str, Any]], *, metric: str, statistic: str
+    stats: Sequence[Mapping[str, Any]],
+    *,
+    metric: str,
+    statistic: str,
+    key: str = "eligible",
 ) -> Optional[int]:
-    """Index of the fitting grid point that maximises ``statistic`` of ``metric``."""
+    """Index of the grid point, among those whose ``key`` is true (default: eligible),
+    that maximises ``statistic`` of ``metric``."""
     if metric not in METRICS or statistic not in STATISTICS:
         raise ValueError(f"unknown objective {metric}.{statistic}")
     best: Optional[int] = None
     best_val = -math.inf
     for i, s in enumerate(stats):
-        if not s["fits"]:
+        if not s[key]:
             continue
         val = s["metrics"][metric].get(statistic)
         if val is not None and math.isfinite(val) and val > best_val:
@@ -1098,6 +1140,7 @@ SIZING_KEYS = (
     "plant",
     "objective",
     "curtailment_scenario",
+    "constraints",
     "recommendation",
     "output",
 )
@@ -1202,6 +1245,13 @@ def run_sizing(
     _strict(plant, ("grid_civils_development_usd", "fixed_opex_usd_per_year"), "plant")
     objective = sizing_cfg["objective"]
     _strict(objective, ("metric", "statistic", "alternatives"), "objective")
+    cons = sizing_cfg["constraints"]
+    _strict(cons, ("min_priority_window_discharge_hours", "basis"), "constraints")
+    min_hours = _num(
+        cons["min_priority_window_discharge_hours"],
+        "constraints.min_priority_window_discharge_hours",
+        lo=0.0,
+    )
     curt = sizing_cfg["curtailment_scenario"]
     _strict(
         curt,
@@ -1330,6 +1380,16 @@ def run_sizing(
                 inverter_kw=pricing.inverter.nominal_ac_kw,
             )
             fits = bool(layout.fit.fits) and inv.ok
+            capability = priority_window_capability(
+                energy_mwh=energy,
+                power_mw=power,
+                bess=_bess_for(ctx, energy, template.round_trip_efficiency, power),
+                cfg=dcfg,
+            )
+            meets_rule = (
+                capability["deliverable_hours_at_power"] >= min_hours - 1e-9
+                and capability["priority_window_hours"] >= min_hours - 1e-9
+            )
             entry: Dict[str, Any] = {
                 "dc_ac_ratio_target": ratio,
                 "dc_ac_ratio": sizing.dc_ac_ratio,
@@ -1339,6 +1399,9 @@ def run_sizing(
                 "bess_power_mw": power,
                 "bess_energy_mwh": energy,
                 "fits": fits,
+                "meets_dispatch_rule": meets_rule,
+                "eligible": fits and meets_rule,
+                "priority_window_capability": capability,
                 "land": {
                     "fenced_area_m2": area.fenced_area_m2,
                     "tables_that_fit": layout.fit.tables_that_fit,
@@ -1355,7 +1418,7 @@ def run_sizing(
             res = evaluate_point(ctx, point, trials, has_base=True, evaluator=evaluator)
             evaluations += trials.n
             results.append(res)
-            base_only.append((point, fits))
+            base_only.append((point, meets_rule))
     stats: List[Dict[str, Any]] = []
     for entry, pres in zip(points, results, strict=True):
         if pres is None:
@@ -1379,7 +1442,15 @@ def run_sizing(
         stats, metric=str(objective["metric"]), statistic=str(objective["statistic"])
     )
     if primary is None:
-        raise ValueError("no grid point fits the site and the inverter")
+        raise ValueError(
+            "no grid point fits the site and the inverter and meets the dispatch rule"
+        )
+    unconstrained = best_point(
+        stats,
+        metric=str(objective["metric"]),
+        statistic=str(objective["statistic"]),
+        key="fits",
+    )
     alternatives = []
     for alt in objective["alternatives"]:
         metric, statistic = str(alt[0]), str(alt[1])
@@ -1396,7 +1467,7 @@ def run_sizing(
     metric = str(objective["metric"])
     # Paired comparison with the runner-up (common random numbers).
     ranked = sorted(
-        (i for i, s in enumerate(stats) if s["fits"]),
+        (i for i, s in enumerate(stats) if s["eligible"]),
         key=lambda i: stats[i]["metrics"][metric][str(objective["statistic"])],
         reverse=True,
     )
@@ -1415,7 +1486,7 @@ def run_sizing(
         f = _num(curt["daytime_export_curtailment_fraction"], "curtailment", lo=0.0)
         base_trial = Trials(values={k: v[:1] for k, v in trials.values.items()})
         rows = []
-        for point, _ in base_only:
+        for point, eligible in base_only:
             r = evaluate_point(
                 ctx,
                 point,
@@ -1429,12 +1500,13 @@ def run_sizing(
                 {
                     "dc_ac_ratio_target": point.dc_ac_ratio,
                     "bess_energy_mwh": point.bess_energy_mwh,
+                    "eligible": eligible,
                     "project_npv": r.base["project_npv"],
                     "project_irr": r.base["project_irr"],
                     "unit_pretax_npv_usd": r.base["unit_pretax_npv_usd"],
                 }
             )
-        best = max(rows, key=lambda r: r["project_npv"])
+        best = max((r for r in rows if r["eligible"]), key=lambda r: r["project_npv"])
         curtailment = {
             "daytime_export_curtailment_fraction": f,
             "basis": str(curt["basis"]),
@@ -1469,6 +1541,22 @@ def run_sizing(
         "bess_power_mw": chosen["bess_power_mw"],
         "bess_energy_mwh": chosen["bess_energy_mwh"],
         "objective_value": chosen["metrics"][metric][str(objective["statistic"])],
+        "constraint": {
+            "min_priority_window_discharge_hours": min_hours,
+            "basis": str(cons["basis"]),
+        },
+        "unconstrained_best": (
+            None
+            if unconstrained is None
+            else {
+                "dc_ac_ratio": stats[unconstrained]["dc_ac_ratio_target"],
+                "bess_energy_mwh": stats[unconstrained]["bess_energy_mwh"],
+                "objective_value": stats[unconstrained]["metrics"][metric][
+                    str(objective["statistic"])
+                ],
+                "meets_dispatch_rule": stats[unconstrained]["meets_dispatch_rule"],
+            }
+        ),
         "paired_with_runner_up": paired,
         "alternatives": alternatives,
     }

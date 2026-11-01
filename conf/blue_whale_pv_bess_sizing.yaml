@@ -32,8 +32,9 @@ grid:
   # the placeholder lot; every point is still checked for fit.
   dc_ac_ratios: [1.0, 1.1, 1.2, 1.3, 1.4]
   # BESS energy at 5 MW. The owner's 4 h evening window takes 20 MWh at 5 MW; the rest
-  # serves 05:30-07:30 (owner, 2026-11-01).
-  bess_energy_mwh: [10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0]
+  # serves 05:30-07:30 (owner, 2026-11-01). 24 MWh is the first step that can deliver
+  # 4 h at 5 MW (20 / 0.85 = 23.53 MWh charge-side; see constraints).
+  bess_energy_mwh: [10.0, 15.0, 20.0, 24.0, 25.0, 30.0, 35.0, 40.0]
   bess_power_mw: 5.0
 
 monte_carlo:
@@ -87,6 +88,18 @@ objective:
     - [equity_npv, p50]
     - [unit_pretax_npv_usd, p50]
     - [min_dscr, p50]
+
+constraints:
+  # A size is ELIGIBLE only if a full battery can export the whole 4 h priority window at
+  # 5 MW (deliverable = energy x usable fraction x base RTE >= 4 h x 5 MW = 20 MWh), and
+  # its lot fit and inverter match pass. Every size is still evaluated and reported.
+  # Added after the first full run (seed 20261101, 7 energy steps), whose primary
+  # objective chose the grid corner DC/AC 1.0 with 10 MWh: a battery that delivers 8.5 MWh
+  # into a 20 MWh window. That is not the dispatch rule the owner set, and the repository
+  # records the PUCSL rate as a "solar + 4 h BESS" tariff. The unconstrained choice is
+  # still reported (recommendation.unconstrained_best).
+  min_priority_window_discharge_hours: 4.0
+  basis: "owner's dispatch rule (4 h at the priority rate 17:30-21:30, the remainder 05:30-07:30) and the PUCSL 2026 ground solar + 4 h BESS FiT as recorded in scenarios/ceb_solar_bess_nightpeak_10mw.yaml"
 
 curtailment_scenario:
   # A SCENARIO, not a base case: the owner's research doc "Sri Lanka small-plant tariffs,

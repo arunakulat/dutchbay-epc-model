@@ -472,11 +472,30 @@ def test_small_run_counts_its_evaluations_truthfully(unit: Dict[str, Any]) -> No
         if p["dc_ac_ratio_target"] == rec["dc_ac_ratio"]
         and p["bess_energy_mwh"] == rec["bess_energy_mwh"]
     ]
-    assert len(chosen) == 1 and chosen[0]["fits"]
-    best = max(p["metrics"]["project_npv"]["p50"] for p in run.points if p["fits"])
+    assert len(chosen) == 1 and chosen[0]["eligible"]
+    best = max(p["metrics"]["project_npv"]["p50"] for p in run.points if p["eligible"])
     assert rec["objective_value"] == best
     assert run.curtailment is not None and len(run.curtailment["rows"]) == 4
     assert all("_trials" not in p for p in run.points)
+    # 20 MWh delivers 17 MWh, short of the 20 MWh window: evaluated, not eligible.
+    by_e = {p["bess_energy_mwh"]: p["meets_dispatch_rule"] for p in run.points}
+    assert by_e == {20.0: False, 30.0: True}
+    assert rec["bess_energy_mwh"] == 30.0
+    assert rec["unconstrained_best"]["objective_value"] >= rec["objective_value"]
+
+
+def test_priority_window_capability_closed_form(unit: Dict[str, Any]) -> None:
+    dcfg = pbd.DispatchConfig.from_mapping(unit["dispatch"])
+    for energy, rte in ((30.0, 0.85), (10.0, 0.85), (24.0, 0.85), (23.0, 0.88)):
+        cap = sz.priority_window_capability(
+            energy_mwh=energy, power_mw=5.0, bess=_bess(unit, energy, rte), cfg=dcfg
+        )
+        assert cap["priority_window_hours"] == 4.0
+        assert cap["window_takes_mwh"] == 20.0
+        assert cap["deliverable_mwh"] == pytest.approx(energy * rte)
+        assert cap["deliverable_hours_at_power"] == pytest.approx(energy * rte / 5.0)
+    # The 4 h threshold sits at 20 / 0.85 = 23.53 MWh.
+    assert 23.0 * 0.85 / 5.0 < 4.0 < 24.0 * 0.85 / 5.0
 
 
 def test_the_turbine_is_not_a_sizing_variable(unit: Dict[str, Any]) -> None:
@@ -512,7 +531,7 @@ def test_hydra_entrypoint_prints_one_json_object(tmp_path: Path) -> None:
             str(SCRIPT),
             "monte_carlo.n_trials=2",
             "grid.dc_ac_ratios=[1.2]",
-            "grid.bess_energy_mwh=[20.0]",
+            "grid.bess_energy_mwh=[30.0]",
             "curtailment_scenario.enabled=false",
         ],
         cwd=str(tmp_path),
