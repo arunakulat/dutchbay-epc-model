@@ -56,9 +56,10 @@ memorize, add to corpus and discuss" for the next sprint. This session:
 
 - **Withdrawn on 28 October 2026 (#1483).** This bullet said that `finance/period_grid_v14.py` was
   not on `main` and that text treating Sprint 20 A1 as landed was stale. It was true at this
-  record's base, `b87ee32`. It stopped being true when this record merged: before the merge the
-  pull request's head took in #1231 (`d3157e0d`), which restored A1 and landed A2, so
-  `finance/period_grid_v14.py` and `finance/subannual_rows_v14.py` are on `main` from `e35ea9f2`.
+  record's base, `b87ee32`. It stopped being true on 27 September 2026, two days before this
+  record merged, when #1231 merged into `main` as `d3157e0d`, restoring A1 and landing A2.
+  `finance/period_grid_v14.py` and `finance/subannual_rows_v14.py` have been on `main` since
+  `d3157e0d`; this record's own change set does not contain them.
   Text that treats A1 as landed is correct; do not distrust it on this record's word.
 - `SPRINT_BOOTSTRAP_PROC_R1` requires a "5-pass analysis" that no file in the repository defines.
   The bootstrap README records the passes actually performed rather than inventing a definition.
