@@ -288,9 +288,9 @@ def test_min_dscr_is_the_operating_minimum_folded_with_dscr_by_year(
     fold_min = _fold_minimum(debt_result)
     published = float(debt_result["min_dscr"])
 
-    assert operating_min is not None, (
-        "an evaluable scenario must have operating periods"
-    )
+    assert (
+        operating_min is not None
+    ), "an evaluable scenario must have operating periods"
     assert fold_min is not None, "an evaluable scenario must have a per-year table"
 
     assert published == min(operating_min, fold_min)
