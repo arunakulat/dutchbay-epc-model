@@ -10,12 +10,15 @@
 # manufacturer's inverter prices with inverter specs matched to the jinkosolar array specs";
 # BESS and turbine from the internal corpus.
 #
-# CONFIDENTIALITY. The BESS figures below are the repository's PUBLIC derived figures in
-# scenarios/nso250_ltl_unit_*.yaml. The private offers behind them (handling note
-# NSO250MW-OFFERS-HANDLING-2026-09-04) were not read, quoted or used for anything new. The
-# turbine capex is the scenario's public placeholder; no internal turbine price was used,
-# because the only ones are in private developer packages whose handling notes allow no
-# trace in this repository.
+# CONFIDENTIALITY. Until PR 6 the BESS figures were the repository's PUBLIC derived figures in
+# scenarios/nso250_ltl_unit_*.yaml and the turbine capex a public placeholder. From PR 6
+# (2026-11-01) the BESS and wind figures are BLENDS that include private commercial inputs
+# (handling notes NSO250MW-OFFERS-HANDLING-2026-09-04 and
+# DUTCHBAY150MW-PACKAGE-HANDLING-2026-09-21), published as blends only on the owner's decision
+# of 2026-11-01 ("Derived blend may publish", #1353 comment 6556975196). No raw private
+# figure is in this repository. This figure is a blend that includes private commercial
+# inputs; a reader may be able to back out a private input. The PV figures below are
+# unchanged from PR 3 and use no private input.
 #
 # "verbatim" holds each figure as the retrieval tool returned it from the page (bracketed
 # words are editorial). The tool extracts rather than mirrors a page, so re-check exact
@@ -131,6 +134,15 @@ sources:
       - docs/knowledge_base/01_wind_epc_costs_and_scaling.md
     verbatim:
       - "Both the EIA ($1,420/kW) and lean ($977/kW) figures bracket the IRENA-2024 global average ($1,041/kW)"
+  PR6-CAPEX-BLEND:
+    title: "Blue Whale PR 6 capex blend (repository, derived; blended with private inputs)"
+    files:
+      - conf/blue_whale_capex_solar_resource.yaml
+      - docs/blue_whale/capex_blend_summary.json
+      - docs/blue_whale/CAPEX_AND_SOLAR_RESOURCE_METHODS.md
+    verbatim:
+      - "BESS all-in USD/kWh contracted: low 129.13, mode 140.74, high 202.51"
+      - "wind single-turbine all-in USD/kW (excluding input B26): low 728.16, mode 936.84, high 1341.16"
   SOLARGIS-UNCERTAINTY:
     title: "Uncertainty estimates"
     publisher: "Solargis knowledge base"
@@ -193,25 +205,45 @@ pv_bop_epc:
     high: 0.545     # IRENA-RPGC-2024: global 2024 USD 691/kW - 0.146
 
 bess:
-  # All-in USD per kWh of contracted (nameplate) energy: equipment, BoP, augmentation
-  # reserve, land and auxiliaries (NSO250-PUBLIC). Low: BIDIMPLIED; mode: BASE; high:
-  # STRESS (UPSIDE, 134.09, lies inside). The base basis is a 4 h unit (11 MW / 44 MWh);
-  # applied per kWh at other durations (a challenge point: power-related costs scale with MW).
+  # All-in USD per kWh of contracted (4 h nameplate) energy. PR 6 (2026-11-01): the BLENDED
+  # range of conf/blue_whale_capex_solar_resource.yaml (docs/blue_whale/capex_blend_summary.json,
+  # source PR6-CAPEX-BLEND): China FOB system prices (TrendForce September 2026, CNNC October
+  # 2026, Ember 2025) blended with the Envision offers (public per-kWh figures of
+  # scenarios/nso250_ltl_unit_{base,upside}.yaml) and a second OEM quotation (private, blended
+  # only), landed with the repository's Sri Lankan levy postures, plus BoP, EPC margin, the
+  # NSO 250 augmentation reserve, and land and auxiliaries. Low: bonded levies, low FOB, BoP
+  # 14, EPC 5%; mode: prudent levies (PAL 5% + SSCL 2.5%, VAT relieved), BoP 14, EPC 8%; high:
+  # every levy paid, high FOB, BoP 30, EPC 12%. Was 78.75 / 135.00 / 143.41 (NSO 250
+  # BIDIMPLIED / BASE / STRESS). This figure is a blend that includes private commercial
+  # inputs; a reader may be able to back out a private input. Published on the owner's
+  # decision of 2026-11-01 (#1353 comment 6556975196).
+  # Applied per kWh at every duration (a challenge point: power-related costs scale with MW).
   all_in_usd_per_kwh:
-    low: 78.75
-    mode: 135.00
-    high: 143.41
-  # The equipment line, for the record (not used separately).
-  equipment_usd_per_kwh_base: 99.50
-  bop_usd_per_kwh_base: 14.00
+    low: 129.13
+    mode: 140.74
+    high: 202.51
+  # The mode as four lines (the parser checks they reproduce it): equipment = DC block, PCS and
+  # EMS landed with duties and its EPC margin; BoP 14.00 with its EPC margin (8%); the NSO 250
+  # augmentation reserve; land and auxiliaries at 10% of the total (the lot is owned: a
+  # challenge point). Was 99.50 / 14.00 / 8.00 / 0.10.
+  equipment_usd_per_kwh_base: 103.55
+  bop_usd_per_kwh_base: 15.12
   augmentation_reserve_usd_per_kwh_base: 8.00
   land_and_auxiliaries_share_base: 0.10
 
 wind:
-  # FIXED by PR 1; not a sizing variable. Public placeholder (input B09), kept unchanged.
-  capex_usd_per_kw: 1300.0
-  source: WIND-KB
-  public_range_usd_per_kw: [977.0, 1420.0]
+  # FIXED by PR 1; not a sizing variable. PR 6 (2026-11-01): the BLENDED single-turbine
+  # all-in (source PR6-CAPEX-BLEND), USD per kW of 9.5 MW, excluding the plant-level grid,
+  # civils and development line (input B26). China export FOB (Soochow Securities 2026-07-24)
+  # blended with a northwest-coast tender (docs/knowledge_base/01_wind_epc_costs_and_scaling.md)
+  # and a developer estimate (private, blended only), landed, with BoP calibrated on three
+  # anchors and a single-machine premium. The range is the blend's low and high. Was 1300.0
+  # (placeholder B09, public range 977-1,420). This figure is a blend that includes private
+  # commercial inputs; a reader may be able to back out a private input. Published on the
+  # owner's decision of 2026-11-01 (#1353 comment 6556975196).
+  capex_usd_per_kw: 936.84
+  source: PR6-CAPEX-BLEND
+  public_range_usd_per_kw: [728.16, 1341.16]
 
 opex:
   # PLACEHOLDERS (inputs B16, B20), the scenario's existing per-unit rates scaled with size:

@@ -231,7 +231,9 @@ def test_draws_are_seeded_and_row_zero_is_the_base_case(pricing: sz.Pricing) -> 
     for k in sz.DIMENSIONS:
         assert np.array_equal(a.values[k], b.values[k])
         assert not np.array_equal(a.values[k][1:], c.values[k][1:])
-    assert a.values["bess_usd_per_kwh"][0] == 135.0
+    # Re-pinned for PR 6 capex: the blended BESS mode. Before: 135.0 (the NSO 250 base).
+    assert a.values["bess_usd_per_kwh"][0] == 140.74
+    assert a.values["bess_usd_per_kwh"][0] == pricing.bess_usd_per_kwh.mode
     assert a.values["module_fob_usd_per_wp"][0] == pricing.module_fob_usd_per_wp.mode
     assert a.values["yield_multiplier"][0] == 1.0
     assert a.values["residual_fade_pct_per_year"][0] == 0.0
@@ -249,7 +251,9 @@ def test_pricing_is_strict_and_reproduces_the_public_bess_build_up() -> None:
     with pytest.raises(ValueError, match="unknown keys"):
         sz.Pricing.from_mapping(bad)
     bad = copy.deepcopy(raw)
-    bad["bess"]["all_in_usd_per_kwh"]["mode"] = 120.0
+    # PR 6 capex: 135.0 (was 120.0, which now lies below the blended low and trips the
+    # triangular check first); it still disagrees with the build-up.
+    bad["bess"]["all_in_usd_per_kwh"]["mode"] = 135.0
     with pytest.raises(ValueError, match="build-up"):
         sz.Pricing.from_mapping(bad)
     bad = copy.deepcopy(raw)
@@ -258,6 +262,13 @@ def test_pricing_is_strict_and_reproduces_the_public_bess_build_up() -> None:
         sz.Pricing.from_mapping(bad)
     # (99.50 + 14.00 + 8.00) / (1 - 0.10) = 135.00, the public all-in.
     assert (99.50 + 14.00 + 8.00) / 0.9 == pytest.approx(135.0)
+    # PR 6 capex: the blended build-up in the config reproduces the blended mode, to the
+    # parser's tolerance: (103.55 + 15.12 + 8.00) / (1 - 0.10) = 140.744 against 140.74.
+    bess = raw["bess"]
+    assert bess["equipment_usd_per_kwh_base"] == 103.55
+    assert (103.55 + 15.12 + 8.00) / 0.9 == pytest.approx(
+        bess["all_in_usd_per_kwh"]["mode"], abs=0.01
+    )
 
 
 def test_inverter_matches_the_pr2_string_and_rejects_a_bad_one(
@@ -580,7 +591,17 @@ def test_scenario_carries_the_recommended_base_case() -> None:
         e_s = solar["capacity_mw"] * eng["solar_capacity_factor"]
         return (e_w * 25.73 + e_s * 20.72) / (e_w + e_s)
 
-    assert blend(0.374256) == pytest.approx(eng["tariff_lkr_per_kwh"], abs=5e-5)
+    # PR 6 capex re-ran this sizing on the current hybrid, so the committed summary's engine
+    # tariff is again the blend on the CURRENT wind CF (PR 3's original oracle, restored).
+    # PR 5's frozen check is kept as a closed form against PR 3's frozen tariff value,
+    # 24.785983774583563 (the summary no longer records it).
+    assert blend(0.374256) == pytest.approx(24.785983774583563, abs=5e-5)
+    assert eng["tariff_lkr_per_kwh"] == pytest.approx(
+        blend(techs["wind"]["capacity_factor"]), abs=5e-5
+    )
+    assert scen["tariff"]["lkr_per_kwh"] == pytest.approx(
+        eng["tariff_lkr_per_kwh"], abs=5e-5
+    )
     assert scen["tariff"]["lkr_per_kwh"] == pytest.approx(
         blend(techs["wind"]["capacity_factor"]), abs=5e-5
     )

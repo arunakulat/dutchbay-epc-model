@@ -1,0 +1,108 @@
+{
+  "bess_usd_per_kwh_contracted": {
+    "high": {
+      "all_in_usd_per_kwh": 202.50771834626366,
+      "augmentation_usd_per_kwh": 8.0,
+      "bop_usd_per_kwh": 30.0,
+      "dc_block_cif_usd_per_kwh": 79.76566293134387,
+      "dc_block_share": 0.8581169594688594,
+      "duties_usd_per_kwh": 6.9715726438429515,
+      "epc_margin_usd_per_kwh": 17.749503837943664,
+      "equipment_cif_usd_per_kwh": 92.95430191790601,
+      "land_and_auxiliaries_usd_per_kwh": 20.250771834626363,
+      "landed_equipment_usd_per_kwh": 117.91253198286377,
+      "pcs_ems_cif_usd_per_kwh": 13.188638986562143,
+      "vat_usd_per_kwh": 26.58156811194467
+    },
+    "low": {
+      "all_in_usd_per_kwh": 129.13094953161828,
+      "augmentation_usd_per_kwh": 8.0,
+      "bop_usd_per_kwh": 14.0,
+      "dc_block_cif_usd_per_kwh": 74.56376959527618,
+      "dc_block_share": 0.8581169594688594,
+      "duties_usd_per_kwh": 2.172307888001311,
+      "epc_margin_usd_per_kwh": 5.153231170402691,
+      "equipment_cif_usd_per_kwh": 86.89231552005245,
+      "land_and_auxiliaries_usd_per_kwh": 12.913094953161831,
+      "landed_equipment_usd_per_kwh": 89.06462340805376,
+      "pcs_ems_cif_usd_per_kwh": 12.328545924776263,
+      "vat_usd_per_kwh": 0.0
+    },
+    "mode": {
+      "all_in_usd_per_kwh": 140.74281882681927,
+      "augmentation_usd_per_kwh": 8.0,
+      "bop_usd_per_kwh": 14.0,
+      "dc_block_cif_usd_per_kwh": 76.53467328161238,
+      "dc_block_share": 0.8581169594688594,
+      "duties_usd_per_kwh": 6.689181973135487,
+      "epc_margin_usd_per_kwh": 8.79026199586204,
+      "equipment_cif_usd_per_kwh": 89.18909297513981,
+      "land_and_auxiliaries_usd_per_kwh": 14.07428188268193,
+      "landed_equipment_usd_per_kwh": 95.8782749482753,
+      "pcs_ems_cif_usd_per_kwh": 12.654419693527434,
+      "vat_usd_per_kwh": 0.0
+    }
+  },
+  "cases": [
+    "low",
+    "mode",
+    "high"
+  ],
+  "config_sha256": "8d6ad66d2d5c29f09d92ba3b89b22435681034dda99125040e36c427871b4e38",
+  "disclosure_note": "This figure is a blend that includes private commercial inputs; a reader may be able to back out a private input. Published on the owner's decision of 2026-11-01 (#1353 comment 6556975196).",
+  "fx_cny_per_usd": 6.722,
+  "levy_posture_by_case": {
+    "bess": {
+      "high": "full_stack_paid",
+      "low": "bonded",
+      "mode": "prudent"
+    },
+    "wind": {
+      "high": "full_stack_paid",
+      "low": "bonded",
+      "mode": "prudent"
+    }
+  },
+  "pricing_build_up_mode": {
+    "augmentation_reserve_usd_per_kwh_base": 8.0,
+    "bop_usd_per_kwh_base": 15.120000000000001,
+    "equipment_usd_per_kwh_base": 103.54853694413734,
+    "land_and_auxiliaries_share_base": 0.1
+  },
+  "private_anchor_count": 6,
+  "wind_usd_per_kw": {
+    "high": {
+      "all_in_usd_per_kw": 1341.160487463384,
+      "bop_farm_usd_per_kw": 345.99107142857144,
+      "bop_single_usd_per_kw": 457.7095310013853,
+      "duties_usd_per_kw": 39.17319177205312,
+      "epc_wrap_usd_per_kw": 47.38473789018999,
+      "inland_transport_usd_per_kw": 70.0,
+      "single_machine_factor": 1.3228940536284264,
+      "turbine_cif_usd_per_kw": 522.3092236273749,
+      "vat_usd_per_kw": 204.5838031723806
+    },
+    "low": {
+      "all_in_usd_per_kw": 728.1600967530121,
+      "bop_farm_usd_per_kw": 197.1875,
+      "bop_single_usd_per_kw": 235.3899027199132,
+      "duties_usd_per_kw": 11.188867157182438,
+      "epc_wrap_usd_per_kw": 14.026640588618925,
+      "inland_transport_usd_per_kw": 20.0,
+      "single_machine_factor": 1.1937364321770558,
+      "turbine_cif_usd_per_kw": 447.5546862872975,
+      "vat_usd_per_kw": 0.0
+    },
+    "mode": {
+      "all_in_usd_per_kw": 936.8407930129863,
+      "bop_farm_usd_per_kw": 264.2204126984127,
+      "bop_single_usd_per_kw": 332.4725727844657,
+      "duties_usd_per_kw": 37.49121468190138,
+      "epc_wrap_usd_per_kw": 26.994143121267587,
+      "inland_transport_usd_per_kw": 40.0,
+      "single_machine_factor": 1.258315242902741,
+      "turbine_cif_usd_per_kw": 499.8828624253517,
+      "vat_usd_per_kw": 0.0
+    }
+  }
+}

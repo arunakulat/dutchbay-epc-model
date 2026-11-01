@@ -10,22 +10,22 @@ turbine, built first, and a solar + BESS project sized under the PUCSL 2026 4 h 
 | Project | Component | Size | Notes |
 |---|---|---|---|
 | Wind (`scenarios/blue_whale_wind_lot5b_2026.yaml`) | Turbine | 1 x Envision EN-206/10.5 de-rated to 9.5 MW, 130 m hub, 206 m rotor | Owner decision 2026-11-01; tip height 233 m; built first. From PR 5 its yield rests on met mast 617725 (net CF 0.487560, 40.57 GWh; not lender-grade) |
-| Solar + BESS (`scenarios/blue_whale_solar_bess_lot5b_2026.yaml`) | Solar PV | 6.0032 MWp DC (160 tables) at 5.0 MW AC, JinkoSolar Tiger Neo 3.0 670 W, fixed tilt 8 degrees, 17 x Huawei SUN2000-330KTL-H1 | PR 4 Monte Carlo, reading A of the 10 MW limit |
-| | BESS | 4.5 MW / 18 MWh (4 h), charged only from the PV, discharged only 17:30-21:30 | PUCSL 2026 4 h rule; PR 4 Monte Carlo, reading A (reading B: 5.5 MW / 22 MWh) |
+| Solar + BESS (`scenarios/blue_whale_solar_bess_lot5b_2026.yaml`) | Solar PV | 4.01464 MWp DC (107 tables) at 3.5 MW AC, JinkoSolar Tiger Neo 3.0 670 W, fixed tilt 8 degrees, 12 x Huawei SUN2000-330KTL-H1 | PR 6 re-run of PR 4's Monte Carlo on the blended prices, both readings of the 10 MW limit (PR 4: 6.0032 MWp, 5.0 MW AC) |
+| | BESS | 1.0 MW / 4.0 MWh (4 h), charged only from the PV, discharged only 17:30-21:30 | PUCSL 2026 4 h rule; PR 6 re-run, both readings, the grid's smallest battery (PR 4: 4.5 MW / 18 MWh under A, 5.5 MW / 22 MWh under B) |
 
-The combined view `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (v0.7: 9.5 MW wind, 5.51544 MWp
+The combined view `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (v0.8: 9.5 MW wind, 5.51544 MWp
 at 5 MW AC, 5 MW / 24 MWh discharged 17:30-21:30 and 05:30-07:30) is superseded; from v0.7 (PR 5)
-its wind block mirrors the wind project's, and nothing else in it has changed since v0.6. The sections from "Wind yield" to "Solar + BESS sizing and
+its wind block mirrors the wind project's, and from v0.8 (PR 6) its wind and BESS capex are the blended figures; nothing else in it has changed since v0.6. The sections from "Wind yield" to "Solar + BESS sizing and
 pricing (v0.6)" below describe it and PR 1 to PR 3, as recorded then.
 
 Funding: **fully LKR funded** (owner, 2026-10-28). Revenue, costs and debt are all LKR, so the
 model runs with FX held flat and the USD columns are a constant-rate translation of LKR.
 
 Model files: `scenarios/blue_whale_wind_lot5b_2026.yaml` and
-`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (versions 0.2 and 0.1), and the superseded
-`scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.7). Placeholders apart from the
+`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (versions 0.3 and 0.2), and the superseded
+`scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.8). Placeholders apart from the
 configuration, the funding currency, the researched tariffs, the wind yield, and the solar +
-BESS size and cited capex.
+BESS size, the cited PV capex and the blended wind and BESS capex (PR 6).
 Inputs register: [INPUTS_REQUIRED.md](INPUTS_REQUIRED.md).
 
 ## Site
@@ -673,7 +673,84 @@ limitations: [MET_MAST_TRANSFER_METHODS.md](MET_MAST_TRANSFER_METHODS.md); resul
 Of the +9.43 GWh, the mean speed (7.14 to 8.24 m/s) gives +8.78, the steeper distribution
 +0.53 and the sector split +0.12; density and losses are unchanged.
 
-## Latest run (PR 5, met-mast wind resource, 15.14.0, 2026-11-01)
+## Capex blend and solar resource (PR 6, 2026-11-01)
+
+Work item: #1353 comment 6556975196. Owner decisions, verbatim: "in the next step, search for
+the latest CAPEX figures for Wind and BESS from RAG and EPC corpus (Mannar, Mullikulam, NSO BESS
+tender, and Kalpitiya) interpolate with China FOB pricing from a deep web search, indicate the
+solar efficacy and strength at the Blue Whale location (provide references for the pvlab or any
+other process through which these numbers are obtained) and update all YAML occasions in the
+Blue Whale Scenario"; and "Derived blend may publish". Method, every source, the anchor
+inventory and references: [CAPEX_AND_SOLAR_RESOURCE_METHODS.md](CAPEX_AND_SOLAR_RESOURCE_METHODS.md);
+results `capex_blend_summary.json`, `solar_resource_summary.json`, `solar_resource_monthly.csv`.
+
+**The disclosure surface moves on the owner's authority.** The wind and BESS capex are blends
+that include private commercial inputs; a reader may be able to back out a private input.
+Published on the owner's decision of 2026-11-01 (#1353 comment 6556975196). No raw private
+figure is published.
+
+| Item | Low | Mode | High | Was |
+|---|---:|---:|---:|---|
+| Wind, single 9.5 MW turbine, USD/kW (excluding the B26 line) | 728.16 | **936.84** | 1,341.16 | 1,300 placeholder |
+| BESS, 4 h, USD per kWh contracted, all-in | 129.13 | **140.74** | 202.51 | 78.75 / 135.00 / 143.41 (NSO 250) |
+
+Wind turbine capex USD 8,899,980 (was 12,350,000); wind project capex USD 10.90M with the B26
+line (1,147 USD/kW). PV prices are unchanged from PR 3.
+
+**Solar resource at the PV centroid (8.291526 N, 79.753204 E; 123 m from the turbine)**, pvlib
+0.16.1 on the frozen TMY, which is PVGIS-ERA5 2005-2023 (its README's "SARAH3" is wrong:
+SARAH3 does not cover the site):
+
+| Item | Value |
+|---|---:|
+| GHI / DNI / DHI | 1,871.3 / 1,796.7 / 657.5 kWh/m2 |
+| POA, 8 degrees, Hay-Davies | 1,885.9 kWh/m2 |
+| Specific yield (6.0032 MWp, 5.0 MW AC, 14% losses) | 1,536.3 kWh/kWp |
+| Performance ratio | 0.8146 |
+| Capacity factor, AC / DC | 21.06% / 17.54% |
+| PVGIS 5.3 PVcalc (ERA5, 14%) | 1,472.9 kWh/kWp (-4.1%) |
+| Global Solar Atlas (Solargis 2.2.68): GHI / PVOUT | 2,047.7 kWh/m2 (+9.4%) / 1,632.5 kWh/kWp (+6.3%) |
+| NASA POWER GHI, 2001-2025 / 2015-2025 | 2,070.6 / 2,046.1 kWh/m2 (+10.6% / +9.3%) |
+
+The ERA5 TMY sits about 9% below the two satellite-based GHI figures, so the committed solar
+basis is conservative; re-basing onto satellite irradiance is an open owner decision.
+
+**The solar + BESS sizing moves.** PR 4's production run, re-run unchanged (seed 20261101,
+325 points x 256 trials, 84,175 evaluations, 3,945 s) on the blended prices, now chooses **107
+tables (4.01464 MWp), 3.5 MW AC and a 1.0 MW / 4.0 MWh BESS under both readings**: the smallest
+PV and the smallest battery on the grid. Every eligible size has a negative P50 unit NPV.
+
+| Size | Unit NPV P50 / P90 (USD) | Unit pre-tax IRR P50 | Project NPV P50 (USD) | Revenue yr 1 P50 (M LKR) |
+|---|---|---|---|---|
+| **Chosen, A and B: 107 tables, 3.5 MW AC, 1 MW / 4 MWh** | -312,629 / -571,313 | 10.14% | -4,079,718 | 164.8 |
+| Runner-up: 107 tables, 4.0 MW AC, 1 MW / 4 MWh | chosen is at least as good in 100% of paired trials (by USD 18,611 at P50) | | | |
+| Lot maximum PV: 192 tables, 6.0 MW AC, 1 MW / 4 MWh | -457,558 / -908,976 | 10.15% | -4,661,634 | 265.6 |
+| PR 4's choice under A: 160 tables, 5.0 MW AC, 4.5 MW / 18 MWh | -684,370 / -1,207,111 | 9.79% | -5,178,503 | 352.8 |
+| Revenue maximum under A: 191 tables, 5.0 MW AC, 5 MW / 20 MWh | -847,442 / -1,445,723 | 9.65% | -5,537,751 | 402.9 |
+| Revenue maximum under B: 191 tables, 7.0 MW AC, 9 MW / 36 MWh | -2,638,469 / -3,634,557 | 6.98% | -7,533,633 | 464.5 |
+
+The battery loses value at every size because its blended all-in (140.74, range 129.13-202.51
+USD/kWh) now carries Sri Lankan levies and an EPC wrap, and its upper tail is wide. The choice
+sits on the grid's lower boundary, so the optimum may be smaller still (or no battery, which
+the PUCSL BESS tariff does not admit). The 12.5% curtailment scenario chooses 107 tables, 3.5 MW
+AC and 3 MW. PR 3's hybrid sizing, re-run the same way, does not move (DC/AC 1.1, 5 MW / 24
+MWh). The owner's "Maximize BESS" decision and this result conflict; see the PR's owner
+decisions.
+
+## Latest run (PR 6, capex blend and re-sizing, 15.15.0, 2026-11-01)
+
+Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
+
+| Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
+|---|---|---|---|---|---|
+| Wind project (v0.3) | 10.81% (was 7.80%) | 9.06% (was 5.34%) | 0.868 | 69,109 (was -3,117,777) | -1,489,263 (was -4,679,503) |
+| Solar + BESS project (v0.2, re-sized) | undefined (reported as 0.0) | -11.32% (was -3.28%) | 0.867 | -4,027,656 (was -4,771,737) | -4,094,172 (was -5,196,733) |
+| Hybrid (v0.8, superseded) | 8.73% (was 6.90%) | 6.38% (was 4.33%) | 0.868 | -2,649,382 (was -5,718,864) | -4,719,271 (was -7,794,231) |
+
+Every other input is still a placeholder, so these are not results.
+
+
+## Earlier run (PR 5, met-mast wind resource, 15.14.0, 2026-11-01)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
 
@@ -777,5 +854,9 @@ priority-1 inputs replace the placeholders.
 5. Done in PR 5: the met-mast transfer. Owner to obtain the mast's documentation and a
    12-month record (met-mast evaluation section 9) and, for a bankable case, a site campaign
    (B07).
-6. Replace placeholders in the scenarios, then run the v14 pipeline for base and P90 cases.
-7. Assemble the DBPL feasibility study once the model has owner-sourced inputs.
+6. Done in PR 6: the wind and BESS capex blend, the solar resource at the site and the
+   re-sizing. Owner to decide whether the 1 MW / 4 MWh result stands against "Maximize BESS",
+   whether to re-base the solar yield on satellite irradiance, and to correct the TMY README's
+   database (ERA5, not SARAH3); quotes are still owed (B09, B15, B19).
+7. Replace placeholders in the scenarios, then run the v14 pipeline for base and P90 cases.
+8. Assemble the DBPL feasibility study once the model has owner-sourced inputs.

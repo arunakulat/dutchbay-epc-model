@@ -276,7 +276,9 @@ def test_scenario_wind_block_is_internally_consistent() -> None:
     assert wind["aep_gwh"] == pytest.approx(
         wind["capacity_mw"] * 8.76 * wind["capacity_factor"], abs=0.005
     )
-    assert wind["capex_usd"] == pytest.approx(1300.0 * 1000.0 * wind["capacity_mw"])
+    # Re-pinned for PR 6 capex: the blended single-turbine mode, USD 936.84/kW
+    # (conf/blue_whale_capex_solar_resource.yaml). Before: 1300.0 (the B09 placeholder).
+    assert wind["capex_usd"] == pytest.approx(936.84 * 1000.0 * wind["capacity_mw"])
     project = scen["project"]
     assert project["capacity_mw"] == wind["capacity_mw"] + solar["capacity_mw"]
     blend = (

@@ -5,6 +5,11 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Blue Whale capex blend, solar resource and re-sizing (15.15.0).** Wind and BESS capex become
+  blends of China FOB pricing and internal anchors on the owner's decision (#1353 comment
+  6556975196); the published figures include private inputs as blends only. Wind 936.84 USD/kW
+  (was 1,300); BESS 140.74 USD/kWh (was 135.00). The solar + BESS project re-sizes to 3.5 MW AC
+  with 1 MW / 4 MWh. Wind project IRR 7.80% -> 10.81%. Detail in the compiled fragment.
 - **Blue Whale wind resource from met mast 617725 (15.14.0).** The Kalpitiya met-mast record is
   long-term corrected against NASA POWER / MERRA-2 (2015-2025) by sector-wise MCP and
   transferred 26.7 km to the turbine (owner direction). Net CF 37.43% -> 48.76% (31.15 ->
