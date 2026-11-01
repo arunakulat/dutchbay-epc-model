@@ -34,6 +34,7 @@ def _cfg(**revenue_overrides) -> dict:
             "technologies": {
                 "bess_unit": {
                     "type": "bess",
+                    "duration_h": 4.0,
                     "power_mw": 10.0,
                     "energy_mwh": 40.0,
                     "revenue": revenue,
@@ -172,10 +173,23 @@ def test_bess_revenue_model_without_type_fails_loud():
             },
             "power_mw",
         ),
-        ({"type": "bess", "power_mw": 10}, "revenue"),
-        ({"type": "bess", "power_mw": 10, "revenue": {"model": "arbitrage"}}, "model"),
+        ({"type": "bess", "duration_h": 4.0, "power_mw": 10}, "revenue"),
         (
-            {"type": "bess", "power_mw": 10, "revenue": {"model": "capacity_charge"}},
+            {
+                "type": "bess",
+                "duration_h": 4.0,
+                "power_mw": 10,
+                "revenue": {"model": "arbitrage"},
+            },
+            "model",
+        ),
+        (
+            {
+                "type": "bess",
+                "duration_h": 4.0,
+                "power_mw": 10,
+                "revenue": {"model": "capacity_charge"},
+            },
             "capacity_charge_lkr_per_mw_month",
         ),
     ],
@@ -197,6 +211,7 @@ def test_non_finite_power_mw_is_rejected(bad):
             "technologies": {
                 "b": {
                     "type": "bess",
+                    "duration_h": 4.0,
                     "power_mw": bad,
                     "revenue": {
                         "model": "capacity_charge",
@@ -217,6 +232,7 @@ def test_non_finite_capacity_charge_rate_is_rejected(bad):
             "technologies": {
                 "b": {
                     "type": "bess",
+                    "duration_h": 4.0,
                     "power_mw": 10,
                     "revenue": {
                         "model": "capacity_charge",
@@ -264,6 +280,7 @@ def test_multiple_bess_are_summed():
             "technologies": {
                 "b1": {
                     "type": "bess",
+                    "duration_h": 4.0,
                     "power_mw": 10,
                     "revenue": {
                         "model": "capacity_charge",
@@ -272,6 +289,7 @@ def test_multiple_bess_are_summed():
                 },
                 "b2": {
                     "type": "bess",
+                    "duration_h": 4.0,
                     "power_mw": 5,
                     "revenue": {
                         "model": "capacity_charge",
@@ -303,6 +321,7 @@ def _energy_cfg(**revenue_overrides) -> dict:
             "technologies": {
                 "bess_pv": {
                     "type": "bess",
+                    "duration_h": 4.0,
                     "power_mw": 10.0,
                     "energy_mwh": 40.0,
                     "revenue": revenue,
@@ -329,6 +348,7 @@ def test_energy_tariff_defaults_cycles_and_rte():
                 "technologies": {
                     "b": {
                         "type": "bess",
+                        "duration_h": 4.0,
                         "power_mw": 10.0,
                         "energy_mwh": 40.0,
                         "revenue": {
@@ -348,12 +368,19 @@ def test_energy_tariff_defaults_cycles_and_rte():
     "block, match",
     [
         (
-            {"type": "bess", "power_mw": 10, "revenue": {"model": "energy_tariff"}},
+            {
+                "type": "bess",
+                "duration_h": 4.0,
+                "power_mw": 10,
+                "energy_mwh": None,
+                "revenue": {"model": "energy_tariff"},
+            },
             "energy_mwh",
         ),
         (
             {
                 "type": "bess",
+                "duration_h": 4.0,
                 "power_mw": 10,
                 "energy_mwh": 40,
                 "revenue": {"model": "energy_tariff"},
@@ -363,6 +390,7 @@ def test_energy_tariff_defaults_cycles_and_rte():
         (
             {
                 "type": "bess",
+                "duration_h": 4.0,
                 "power_mw": 10,
                 "energy_mwh": 40,
                 "revenue": {
@@ -376,6 +404,7 @@ def test_energy_tariff_defaults_cycles_and_rte():
         (
             {
                 "type": "bess",
+                "duration_h": 4.0,
                 "power_mw": 10,
                 "energy_mwh": 40,
                 "revenue": {
@@ -453,6 +482,7 @@ def test_fade_applies_to_energy_tariff_model_too():
             "technologies": {
                 "b": {
                     "type": "bess",
+                    "duration_h": 4.0,
                     "power_mw": 10.0,
                     "energy_mwh": 40.0,
                     "revenue": {

@@ -53,6 +53,8 @@ from finance.debt.funding import (  # noqa: F401
 )
 from finance.debt.helpers import (  # noqa: F401
     _as_float,
+    _case_insensitive_key,
+    _config_at_debt_ratio,
     _finite_number,
     _get,
     _lookup_case_insensitive,

@@ -105,7 +105,8 @@ def aggregate_trials(
         >>> # Access raw trials for breach probability
         >>> from analytics.core.covenant_breach import prob_breach
         >>> dscr_trials = result.trials["dscr_min"]  # 1000 values
-        >>> breach_prob = prob_breach(np.asarray(dscr_trials, dtype=float), 1.30)
+        >>> defined_dscr = np.asarray([v for v in dscr_trials if v is not None], dtype=float)
+        >>> breach_prob = prob_breach(defined_dscr, 1.30)  # disclose its metric_coverage too
 
     Note:
         Canonical KPI names expected in trial_metrics:
@@ -129,50 +130,52 @@ def aggregate_trials(
         "equity_npv",
     ]
 
-    # Partial-trial policy (audit D2, #571). MonteCarloResult enforces that every
-    # trials[] array has the SAME length (row alignment across metrics, so
-    # trials[m][i] refers to the same trial i for breach/joint analytics). The old
-    # code skipped None PER KEY, so a single trial missing one KPI (e.g. an equity
-    # distribution that failed on that draw) produced ragged arrays and the contract
-    # raised ValueError, aborting the WHOLE run instead of degrading.
-    #
-    # Policy: complete-case aggregation. A metric is "observed" if at least one trial
-    # produced a finite numeric value for it; a trial is aggregated only if it produced
-    # a finite value for EVERY observed metric. Partial trials (missing any observed
-    # metric) are excluded from the arrays and counted in failed_iterations. This keeps
-    # exact row alignment, never raises, and is byte-identical on runs where every trial
-    # is complete (all committed scenarios and tests). A malformed non-numeric value is
-    # treated as missing rather than crashing.
+    # O-5 (#1474): keep the original trial index in EVERY raw metric array. None is
+    # an explicit unavailable observation, never zero. Statistics use each metric's
+    # own defined sample; deleting an undefined equity IRR must not delete its DSCR.
+    # The earlier complete-case policy solved ragged arrays (#571) by introducing
+    # selection bias. Aligned nullable rows preserve both identity and coverage.
     def _num(v: Any) -> Optional[float]:
         if v is None or isinstance(v, bool):
             return None
         try:
             f = float(v)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             return None
         return f if np.isfinite(f) else None
 
-    observed_keys = [
-        k
-        for k in metric_keys
-        if any(_num(tm.get(k)) is not None for tm in trial_metrics)
+    declared_keys = [k for k in metric_keys if any(k in tm for tm in trial_metrics)]
+    normalised = [
+        {key: _num(tm.get(key)) for key in declared_keys} for tm in trial_metrics
     ]
-
-    def _is_complete(tm: Mapping[str, Any]) -> bool:
-        return all(_num(tm.get(k)) is not None for k in observed_keys)
-
-    complete_trials = [tm for tm in trial_metrics if _is_complete(tm)]
-
-    # Extract raw trial arrays over the common (complete) trial set.
+    n_trials = len(trial_metrics)
     arrays: Dict[str, np.ndarray] = {}
-    trials: Dict[str, List[float]] = {}
-
-    for k in observed_keys:
-        vals: List[float] = [float(tm[k]) for tm in complete_trials]
-        if not vals:
-            continue
-        arrays[k] = np.array(vals, dtype=float)
-        trials[k] = vals  # Store raw list for MonteCarloResult.trials
+    trials: Dict[str, List[Optional[float]]] = {}
+    coverage: Dict[str, Any] = {}
+    for key in declared_keys:
+        aligned = [row[key] for row in normalised]
+        defined = [value for value in aligned if value is not None]
+        arrays[key] = np.asarray(defined, dtype=float)
+        trials[key] = aligned
+        undefined = sum(1 for tm in trial_metrics if key in tm and tm[key] is None)
+        missing = sum(1 for tm in trial_metrics if key not in tm)
+        invalid = n_trials - len(defined) - undefined - missing
+        if len(defined) == n_trials:
+            status = "defined"
+        elif defined:
+            status = "partial"
+        elif invalid:
+            status = "invalid"
+        else:
+            status = "undefined"
+        coverage[key] = {
+            "total_count": n_trials,
+            "defined_count": len(defined),
+            "undefined_count": undefined,
+            "missing_count": missing,
+            "invalid_count": invalid,
+            "status": status,
+        }
 
     # Compute summary statistics
     summary: Dict[str, Any] = {}
@@ -180,6 +183,14 @@ def aggregate_trials(
 
     for k, arr in arrays.items():
         if arr.size == 0:
+            summary[k] = {
+                "status": coverage[k]["status"],
+                "mean": None,
+                "std": None,
+                "min": None,
+                "max": None,
+                "percentiles": {},
+            }
             continue
 
         pctl_dict = _percentiles(arr, percentiles)
@@ -200,6 +211,12 @@ def aggregate_trials(
     metadata = dict(meta)
     metadata["n_metrics"] = len(arrays)
     metadata["metric_keys"] = list(arrays.keys())
+    metadata["metric_coverage_schema"] = "dutchbay.mc.metric_coverage.v1"
+    metadata["metric_coverage"] = coverage
+    metadata["undefined_metrics"] = [
+        key for key, facts in coverage.items() if facts["status"] == "undefined"
+    ]
+    metadata["trial_alignment"] = "input_order_null_placeholders"
     # Surface toy-fallback usage so a degenerate run (real evaluation failed on
     # every trial, fabricated KPIs substituted) is detectable rather than silent.
     # toy_fallback_count == n_trials means NO real evaluation succeeded.
@@ -215,23 +232,30 @@ def aggregate_trials(
     # (fabricated KPIs from a failed full-v14 eval, tagged _toy_fallback by the engine).
     # Otherwise success_rate() would report fabricated trials as successful production
     # runs (audit R1).
-    n_trials = len(trial_metrics)
+    invalid_trials = [
+        any(
+            key in tm and tm[key] is not None and row[key] is None
+            for key in declared_keys
+        )
+        for tm, row in zip(trial_metrics, normalised, strict=True)
+    ]
     n_failed = sum(
         1
-        for tm in trial_metrics
-        if tm.get("_toy_fallback")
-        or not any(k in tm for k in metric_keys)
-        or not _is_complete(tm)
+        for tm, invalid in zip(trial_metrics, invalid_trials, strict=True)
+        if tm.get("_toy_fallback") or not any(k in tm for k in metric_keys) or invalid
     )
-    # Surface the partial-trial degrade (audit D2): trials dropped because they were
-    # missing one or more observed KPIs (0 on a clean run).
+    metadata["invalid_trial_count"] = sum(invalid_trials)
+    # Partial metric coverage remains visible but is not an evaluation failure.
+    # Defined observations from malformed/failed rows also retain their identity;
+    # the failure/invalid counters prevent treating those runs as clean evidence.
     metadata["partial_trial_count"] = sum(
-        1 for tm in trial_metrics if not _is_complete(tm)
+        1 for row in normalised if any(value is None for value in row.values())
     )
 
     def _stat(metric: str, key: str) -> Optional[float]:
         s = summary.get(metric)
-        return float(s[key]) if isinstance(s, dict) and key in s else None
+        value = s.get(key) if isinstance(s, dict) else None
+        return float(value) if value is not None else None
 
     def _pct(metric: str, p: int) -> Optional[float]:
         return percentile_lookup.get(p, {}).get(metric)

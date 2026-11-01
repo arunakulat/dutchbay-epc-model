@@ -49,6 +49,12 @@ def prob_breach(arr: np.ndarray, floor: float) -> float:
     arr = np.asarray(arr, dtype=float)
     if arr.size == 0:
         return float("nan")
+    if not np.isfinite(arr).all():
+        raise ValueError(
+            "prob_breach requires finite per-metric observations; select defined "
+            "values and disclose their coverage denominator instead of treating "
+            "undefined/non-finite observations as non-breaches."
+        )
     floor_f = float(floor)
     below = arr < floor_f
     at_floor = np.isclose(arr, floor_f, rtol=PROB_BREACH_RTOL, atol=0.0)
