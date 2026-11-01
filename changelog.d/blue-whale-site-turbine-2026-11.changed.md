@@ -10,7 +10,9 @@
     other 1%, no wake). The de-rate is modelled as the curve clipped at 9,500 kW.
   - The curve is read at run time from a path outside the repository and is never
     committed, printed or hashed (`KALPITIYA60MW-WIND-HANDLING-2026-09-21`). Publication of
-    derived figures rests on the owner's decision of 1 Nov 2026.
+    derived figures rests on the owner's decision of 1 Nov 2026. Section 4 of that handling
+    note now records this promotion; its parent pin in
+    `docs/source_materials/kalpitiya_60mw_2026/MANIFEST.sha256` is refreshed.
   - New `scripts/run_blue_whale_wind_siting_v14.py` (Hydra, JSON) and
     `conf/blue_whale_wind_siting.yaml`. The yield reuses `gross_aep_farm_gwh`,
     `density_velocity_factor` and `apply_losses`, and is cross-checked against the
