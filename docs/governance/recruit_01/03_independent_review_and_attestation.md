@@ -152,7 +152,9 @@ only when its lane records all three of §7's proofs, applied to the train:
    train head.
 2. **BIDIRECTIONAL IMPORT ISOLATION** between the car and everything else the train head changes,
    meaning the other cars and any advance of `main`. For non-code sources, also account for normative
-   references and dependencies.
+   references and dependencies. Count shared runtime inputs as dependencies too: a scenario or
+   configuration file, a test fixture, a `conftest.py`, or anything else that two cars' code or tests
+   both read. Path-disjoint cars that share such an input are not isolated.
 3. The **complete diff from the car's reviewed head to the train head**, shown in full, not a summary.
 
 If any proof is absent, incomplete or fails, the car leaves the train and its disposition stays bound
@@ -170,7 +172,9 @@ rebase-merge, never squash. After it lands, verification passes only if:
 - the last landed commit's tree equals the train head's tree.
 
 Any mismatch fails merge verification closed, exactly as a squash whose tree differs from the accepted
-head does under §7.
+head does under §7. The commands that run these checks must fail closed on their own: each stops at its
+first failed comparison and reports success only with an explicit line. A check that passes in silence
+is not a check.
 
 **What a train does not prove.** The full suite ran on the union of the cars. The intermediate commits
 between cars on `main` were never run by the full suite on their own, which is why the cars must be

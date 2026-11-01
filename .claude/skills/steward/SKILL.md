@@ -307,15 +307,18 @@ train that carries a car it wrote. A pull request may always land alone instead.
    the train is exactly one non-merge commit per car on top of it:
 
    ```bash
+   set -euo pipefail
    test "$(git rev-list --count <main-sha>..<train-head-sha>)" = "<number of cars>"
    test -z "$(git rev-list --merges <main-sha>..<train-head-sha>)"
    test "$(git rev-parse "<train-head-sha>~<number of cars>")" = "<main-sha>"
+   echo "TRAIN-01 pre-landing check: OK"
    ```
 
    After it lands, verify every landed commit against its train commit, walking back from the SHA
    the merge returned:
 
    ```bash
+   set -euo pipefail
    git fetch origin main
    n=<number of cars>; landed=<sha-the-merge-returned>; train=<train-head-sha>
    test "$(git rev-parse "$landed^{tree}")" = "$(git rev-parse "$train^{tree}")"
@@ -323,10 +326,14 @@ train that carries a car it wrote. A pull request may always land alone instead.
      test "$(git rev-parse "$landed~$i^{tree}")" = "$(git rev-parse "$train~$i^{tree}")"
    done
    test "$(git rev-parse "$landed~$n")" = "<main-sha-recorded-before-landing>"
+   echo "TRAIN-01 landing check: OK"
    ```
 
-   If any test fails, stop and report it on the train pull request (module 3 §8). Otherwise close
-   each car's pull request with a pointer to its commit on `main`.
+   Each block stops at its first failed `test` and passes only when it prints its `OK` line.
+   Silence, or a missing `OK` line, is a failure. Run each block whole, as written, and never
+   drop its `set -euo pipefail` line. If a block fails, stop and report it on the train pull
+   request (module 3 §8). Otherwise close each car's pull request with a pointer to its commit
+   on `main`.
 
 The full suite ran on the union only. The commits between cars on `main` were never run by the
 full suite on their own, and the train lifts no `HOLD`.

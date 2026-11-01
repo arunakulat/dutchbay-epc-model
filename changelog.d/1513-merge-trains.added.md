@@ -9,7 +9,9 @@
   gains §8. It applies §7's three proofs (blob identity, bidirectional import isolation and the
   complete diff) between the car's reviewed head and the train head. §8 also adds a landing check:
   every landed commit's tree must equal its train commit's tree, in order, on top of the recorded
-  `main`.
+  `main`. The steward skill's check commands fail closed on their own: each starts with
+  `set -euo pipefail` and passes only by printing an `OK` line. Its guard runs them with plain
+  `bash -c`.
 - **What a train does not prove is stated.** The intermediate commits between cars on `main` were
   never run by the full suite on their own.
 - **Routing.** `DELIVERY-01` names a train of dolphin-sized cars as compliant, and `AGENTS.md` and

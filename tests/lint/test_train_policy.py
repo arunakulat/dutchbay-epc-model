@@ -12,8 +12,11 @@ pure function over text, so each pinned control has a negative control that remo
 watches the guard fail.
 
 The steward skill's landing checks are shell commands a merge coordinator runs by hand. They are
-executed here against a throwaway repository: a correct rebase-merge passes, and a squash, a
-changed tree, a merge commit on the train or a stale base each fail.
+executed here exactly as printed, with plain ``bash -c`` and no added ``-e``, against a throwaway
+repository. A correct rebase-merge passes and prints its OK line. A squash, a changed tree (first
+car of two, or middle car of three), a merge commit on the train and a stale base each fail with
+no OK line. A hostile control strips each block's ``set -euo pipefail`` and watches the same bad
+landings exit 0, which is why that line is pinned (#1515 assurance F-1).
 """
 
 from __future__ import annotations
@@ -95,6 +98,10 @@ MODULE_3_REQUIRED_CONTROLS = (
     "the first one's parent is the recorded `main` SHA",
     "the last landed commit's tree equals the train head's tree",
     "Any mismatch fails merge verification closed",
+    "The commands that run these checks must fail closed on their own",
+    "A check that passes in silence is not a check.",
+    "Count shared runtime inputs as dependencies too",
+    "Path-disjoint cars that share such an input are not isolated.",
     "were never run by the full suite on their own",
     "A train lifts no `HOLD`",
 )
@@ -117,6 +124,8 @@ STEWARD_REQUIRED_CONTROLS = (
     "module 3 §8's three proofs",
     "edit no car on it",
     "**Land it with rebase-merge, never squash.**",
+    "Silence, or a missing `OK` line, is a failure.",
+    "never drop its `set -euo pipefail` line",
     "The commits between cars on `main` were never run by the full suite on their own",
 )
 
@@ -335,11 +344,44 @@ def train_repo(tmp_path: Path) -> dict[str, str | Path]:
     return {"repo": repo, "main": main, "train": train, "landed": landed}
 
 
+PRE_OK = "TRAIN-01 pre-landing check: OK"
+POST_OK = "TRAIN-01 landing check: OK"
+FAIL_CLOSED = "set -euo pipefail"
+
+
+def _assert_block_fails_closed_by_shape(block: str, ok_line: str) -> None:
+    """A landing block opens with ``set -euo pipefail`` and ends by printing its OK line."""
+    lines = [line.strip() for line in block.strip().splitlines()]
+    first, last = lines[0], lines[-1]
+    assert first == FAIL_CLOSED, f"block does not open with {FAIL_CLOSED!r}: {first!r}"
+    assert last == f'echo "{ok_line}"', f"block does not end with its OK line: {last!r}"
+
+
+def test_landing_blocks_fail_closed_by_shape() -> None:
+    """Both landing blocks stop at the first failed test and only pass by saying so."""
+    pre, post = _landing_checks()
+    _assert_block_fails_closed_by_shape(pre, PRE_OK)
+    _assert_block_fails_closed_by_shape(post, POST_OK)
+
+
+@pytest.mark.parametrize("which", [0, 1], ids=["pre-landing", "post-landing"])
+@pytest.mark.parametrize(
+    "strip", [FAIL_CLOSED, "echo "], ids=["no-set-e", "no-ok-line"]
+)
+def test_block_shape_guard_fails_on_a_weakened_block(which: int, strip: str) -> None:
+    """Negative control: dropping the set line or the OK line from either block fails."""
+    block = _landing_checks()[which]
+    weakened = "\n".join(line for line in block.splitlines() if strip not in line)
+    with pytest.raises(AssertionError):
+        _assert_block_fails_closed_by_shape(weakened, (PRE_OK, POST_OK)[which])
+
+
 def _run_check(repo: Path, script: str) -> subprocess.CompletedProcess[str]:
+    """Run a block exactly as a steward would paste it: plain ``bash -c``, no added ``-e``."""
     script = script.replace("git fetch origin main", "true")
     assert "<" not in script, f"unfilled placeholder: {script}"
     return subprocess.run(
-        ["bash", "-e", "-c", script],
+        ["bash", "-c", script],
         cwd=repo,
         capture_output=True,
         text=True,
@@ -347,25 +389,43 @@ def _run_check(repo: Path, script: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _pre_landing(repo: Path, main: str, train: str, cars: int) -> int:
-    block, _ = _landing_checks()
+def _passed(result: subprocess.CompletedProcess[str], ok_line: str) -> bool:
+    """A block passed only if it exited 0 and printed its OK line."""
+    return result.returncode == 0 and ok_line in result.stdout
+
+
+def _failed_closed(result: subprocess.CompletedProcess[str], ok_line: str) -> bool:
+    """A block failed closed only if it exited non-zero and never printed its OK line."""
+    return result.returncode != 0 and ok_line not in result.stdout
+
+
+def _pre_landing(
+    repo: Path, main: str, train: str, cars: int, block: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    block = _landing_checks()[0] if block is None else block
     script = (
         block.replace("<main-sha>", main)
         .replace("<train-head-sha>", train)
         .replace("<number of cars>", str(cars))
     )
-    return _run_check(repo, script).returncode
+    return _run_check(repo, script)
 
 
-def _post_landing(repo: Path, main: str, train: str, landed: str, cars: int) -> int:
-    _, block = _landing_checks()
+def _post_landing(
+    repo: Path, main: str, train: str, landed: str, cars: int, block: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    block = _landing_checks()[1] if block is None else block
     script = (
         block.replace("<number of cars>", str(cars))
         .replace("<sha-the-merge-returned>", landed)
         .replace("<train-head-sha>", train)
         .replace("<main-sha-recorded-before-landing>", main)
     )
-    return _run_check(repo, script).returncode
+    return _run_check(repo, script)
+
+
+def _without_set_line(block: str) -> str:
+    return "\n".join(line for line in block.splitlines() if FAIL_CLOSED not in line)
 
 
 def test_landing_checks_pass_for_a_faithful_rebase_merge(
@@ -374,8 +434,8 @@ def test_landing_checks_pass_for_a_faithful_rebase_merge(
     """A train of one commit per car on main, landed by rebase-merge, passes both checks."""
     repo, main = Path(train_repo["repo"]), str(train_repo["main"])
     train, landed = str(train_repo["train"]), str(train_repo["landed"])
-    assert _pre_landing(repo, main, train, cars=2) == 0
-    assert _post_landing(repo, main, train, landed, cars=2) == 0
+    assert _passed(_pre_landing(repo, main, train, cars=2), PRE_OK)
+    assert _passed(_post_landing(repo, main, train, landed, cars=2), POST_OK)
 
 
 def test_landing_check_fails_for_a_squash(train_repo: dict[str, str | Path]) -> None:
@@ -392,7 +452,18 @@ def test_landing_check_fails_for_a_squash(train_repo: dict[str, str | Path]) -> 
     assert _git(repo, "rev-parse", f"{squashed}^{{tree}}") == _git(
         repo, "rev-parse", f"{train}^{{tree}}"
     )
-    assert _post_landing(repo, main, train, squashed, cars=2) != 0
+    assert _failed_closed(_post_landing(repo, main, train, squashed, cars=2), POST_OK)
+
+
+def _tampered_first_car(repo: Path, main: str) -> str:
+    """Land car a with a changed tree and car b restoring it, so the final tree still matches."""
+    _git(repo, "switch", "-q", "--detach", main)
+    _commit(repo, "car_a.txt", "a, edited on landing\n", "docs: car a (#1)")
+    (repo / "car_a.txt").write_text("a\n", encoding="utf-8")
+    (repo / "car_b.txt").write_text("b\n", encoding="utf-8")
+    _git(repo, "add", "car_a.txt", "car_b.txt")
+    _git(repo, "commit", "-q", "-m", "docs: car b (#2)")
+    return _git(repo, "rev-parse", "HEAD")
 
 
 def test_landing_check_fails_when_a_landed_tree_differs(
@@ -404,17 +475,41 @@ def test_landing_check_fails_when_a_landed_tree_differs(
         str(train_repo["main"]),
         str(train_repo["train"]),
     )
+    tampered = _tampered_first_car(repo, main)
+    assert _git(repo, "rev-parse", f"{tampered}^{{tree}}") == _git(
+        repo, "rev-parse", f"{train}^{{tree}}"
+    )
+    assert _failed_closed(_post_landing(repo, main, train, tampered, cars=2), POST_OK)
+
+
+def test_landing_check_fails_when_a_middle_car_of_three_differs(tmp_path: Path) -> None:
+    """Negative control: in a three-car train, a tampered middle car fails inside the loop.
+
+    The later comparisons in the loop would pass, so this case fails only if the block stops
+    at the first failed ``test`` rather than reporting the last one.
+    """
+    if shutil.which("git") is None:
+        pytest.skip("git is not installed")
+    repo = tmp_path / "repo3"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    main = _commit(repo, "base.txt", "base\n", "chore: base")
+    _git(repo, "switch", "-q", "-c", "train")
+    _commit(repo, "car_a.txt", "a\n", "docs: car a (#1)")
+    _commit(repo, "car_b.txt", "b\n", "docs: car b (#2)")
+    train = _commit(repo, "car_c.txt", "c\n", "docs: car c (#3)")
     _git(repo, "switch", "-q", "--detach", main)
-    _commit(repo, "car_a.txt", "a, edited on landing\n", "docs: car a (#1)")
-    (repo / "car_a.txt").write_text("a\n", encoding="utf-8")
+    _commit(repo, "car_a.txt", "a\n", "docs: car a (#1)")
+    _commit(repo, "car_b.txt", "b, edited on landing\n", "docs: car b (#2)")
     (repo / "car_b.txt").write_text("b\n", encoding="utf-8")
-    _git(repo, "add", "car_a.txt", "car_b.txt")
-    _git(repo, "commit", "-q", "-m", "docs: car b (#2)")
+    (repo / "car_c.txt").write_text("c\n", encoding="utf-8")
+    _git(repo, "add", "car_b.txt", "car_c.txt")
+    _git(repo, "commit", "-q", "-m", "docs: car c (#3)")
     tampered = _git(repo, "rev-parse", "HEAD")
     assert _git(repo, "rev-parse", f"{tampered}^{{tree}}") == _git(
         repo, "rev-parse", f"{train}^{{tree}}"
     )
-    assert _post_landing(repo, main, train, tampered, cars=2) != 0
+    assert _failed_closed(_post_landing(repo, main, train, tampered, cars=3), POST_OK)
 
 
 def test_pre_landing_check_fails_for_a_merge_commit_on_the_train(
@@ -422,14 +517,18 @@ def test_pre_landing_check_fails_for_a_merge_commit_on_the_train(
 ) -> None:
     """Negative control: a train carrying a merge commit is not one commit per car."""
     repo, main = Path(train_repo["repo"]), str(train_repo["main"])
+    merged = _merge_commit_train(repo, main)
+    assert _failed_closed(_pre_landing(repo, main, merged, cars=2), PRE_OK)
+    assert _failed_closed(_pre_landing(repo, main, merged, cars=3), PRE_OK)
+
+
+def _merge_commit_train(repo: Path, main: str) -> str:
     _git(repo, "switch", "-q", "-c", "side", main)
     _commit(repo, "car_a.txt", "a\n", "docs: car a (#1)")
     _git(repo, "switch", "-q", "-c", "merged-train", main)
     _commit(repo, "car_b.txt", "b\n", "docs: car b (#2)")
     _git(repo, "merge", "-q", "--no-ff", "-m", "chore: merge side", "side")
-    merged = _git(repo, "rev-parse", "HEAD")
-    assert _pre_landing(repo, main, merged, cars=2) != 0
-    assert _pre_landing(repo, main, merged, cars=3) != 0
+    return _git(repo, "rev-parse", "HEAD")
 
 
 def test_pre_landing_check_fails_on_a_stale_base(
@@ -443,5 +542,29 @@ def test_pre_landing_check_fails_on_a_stale_base(
     )
     _git(repo, "switch", "-q", "--detach", main)
     newer_main = _commit(repo, "other.txt", "moved on\n", "chore: main moved")
-    assert _pre_landing(repo, newer_main, train, cars=2) != 0
-    assert _pre_landing(repo, main, train, cars=2) == 0
+    assert _failed_closed(_pre_landing(repo, newer_main, train, cars=2), PRE_OK)
+    assert _passed(_pre_landing(repo, main, train, cars=2), PRE_OK)
+
+
+def test_dropping_the_set_line_makes_the_blocks_fail_open(
+    train_repo: dict[str, str | Path],
+) -> None:
+    """Hostile control: without ``set -euo pipefail`` the same bad landings exit 0.
+
+    This is what pins the line as load-bearing. Run with plain ``bash -c``, a block without
+    it reports only its last command, so a tampered landing or a merge-commit train would
+    pass in silence. The OK line is printed either way, which is why the block must also
+    stop before reaching it.
+    """
+    repo, main, train = (
+        Path(train_repo["repo"]),
+        str(train_repo["main"]),
+        str(train_repo["train"]),
+    )
+    pre, post = (_without_set_line(block) for block in _landing_checks())
+    tampered = _tampered_first_car(repo, main)
+    assert (
+        _post_landing(repo, main, train, tampered, cars=2, block=post).returncode == 0
+    )
+    merged = _merge_commit_train(repo, main)
+    assert _pre_landing(repo, main, merged, cars=2, block=pre).returncode == 0
