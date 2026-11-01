@@ -87,8 +87,15 @@ def _load_yaml(rel: str) -> Dict[str, Any]:
 
 
 def wind_block(scenario: Mapping[str, Any]) -> WindBlock:
-    """The scenario's wind technology (kept unchanged by this unit)."""
-    wind = scenario["generation"]["technologies"]["wind"]
+    """The scenario's wind technology (kept unchanged by this unit).
+
+    A scenario without one (PR 4's separate solar + BESS project) has a zero wind block,
+    so the generation tariff is the unit's own other-period rate.
+    """
+    techs = scenario["generation"]["technologies"]
+    if "wind" not in techs:
+        return WindBlock(capacity_mw=0.0, capacity_factor=0.0, degradation_pct=0.0)
+    wind = techs["wind"]
     return WindBlock(
         capacity_mw=float(wind["capacity_mw"]),
         capacity_factor=float(wind["capacity_factor"]),

@@ -1,0 +1,176 @@
+# Blue Whale Lot 5B: seeded Monte Carlo sizing of the SEPARATE solar + BESS project (PR 4).
+#
+# Read by scripts/run_blue_whale_pv_bess_sizing_v14.py with --config-name
+# blue_whale_solar_bess_project_sizing (Hydra, one JSON object on stdout: CLI-01, CLI-03) and
+# solar_resource.pv_bess_sizing.run_project_sizing (strict: every key below is required and
+# unknown keys are refused; FRAMEWORK-02). It reuses PR 3's Monte Carlo (the same sampler,
+# seed, trial count, price ranges and uncertainty ranges), PR 2's dispatcher and PR 2's unit
+# config, changed only through unit_overrides below.
+#
+# Owner decisions (2026-11-01, #1353 comment 6556854201, quoted verbatim):
+#   "We will therefore consider the 10mw turbine separately from the solar+bess. It will be a
+#   separate project that will preceed the solar+BESS. Maximize BESS now within the
+#   solar+BESS parameters in order to gain the maximum benefit from the PUCSL evening tariff
+#   band"; objective "Max value, MC decides (Recommended)"; 10 MW reading "Model both, flag
+#   it"; turbine "Separate, risk flagged".
+#
+# The PUCSL and statutory figures are frozen once, with sources, in
+# conf/blue_whale_pucsl_fit_2026.yaml; the parser checks this config against them.
+#
+# TEST-03: a production run is n_trials x evaluated points + evaluated points (base cases)
+# + 2 x evaluated points (curtailment and RTE sensitivities) model evaluations, far above the
+# ordinary suite's 200, so it runs only through the CLI. The ordinary tests use reduced
+# grids and trial counts.
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+schema_version: blue_whale_solar_bess_project_sizing_v1
+unit_config: conf/blue_whale_solar_bess.yaml
+pricing_config: conf/blue_whale_pv_bess_pricing.yaml
+regulatory_config: conf/blue_whale_pucsl_fit_2026.yaml
+scenario: scenarios/blue_whale_solar_bess_lot5b_2026.yaml
+
+unit_overrides:
+  # Dotted paths into the unit config; each must already exist there (no new keys).
+  # PUCSL 2026: the BESS discharges only in the Prioritized Feed-in Time, 17:30-21:30. The
+  # 05:30-07:30 window of PR 2 drops out: the owner allotted it "the remaining 2 hours" of a
+  # 6 h battery, and a 4 h battery has none (superseded by the owner's 4 h-rule decisions).
+  dispatch.windows:
+    evening:
+      start_local: "17:30"
+      end_local: "21:30"
+      rate: priority
+  # The project's export at the connection point. 10 MW is the standardised-PPA limit;
+  # reading A never reaches it (PV AC + BESS power <= 10), reading B is held to it.
+  dispatch.export_limit_mw: 10.0
+  # Every loss on charge: the nameplate is the energy a full battery delivers at nominal power
+  # (PUCSL s.5.1.2 and s.5.2.1; see the regulatory config). The trials apply their own RTE.
+  bess.charge_efficiency: 0.85
+
+grid:
+  # PV DC as whole 37.52 kWp tables: 107 (4.02 MWp) to 174 (6.53 MWp) and land_max, the most
+  # tables the placeholder lot takes with the turbine kept, recomputed at each BESS size (its
+  # container pad changes the room). 147 and 160 are PR 3's DC/AC 1.1 and 1.2 on 5 MW.
+  pv_tables: [107, 120, 134, 147, 160, 174, land_max]
+  # PV AC: the inverters' active-power limit at the connection point (MW). Each must give
+  # DC/AC within [min_dc_ac_ratio, max_dc_ac_ratio] and pass the inverter match.
+  pv_ac_mw: [3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0]
+  min_dc_ac_ratio: 1.0
+  max_dc_ac_ratio: 1.5      # ASSUMPTION: above PR 3's 1.4 grid edge; the inverter match also binds
+  # BESS power (MW); energy = bess_duration_h x power (PUCSL 4 h at nominal capacity).
+  bess_power_mw: [1.0, 2.0, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0, 8.0, 9.0, 10.0]
+  bess_duration_h: 4.0
+
+readings:
+  # The two readings of the 10 MW standardised-PPA limit (regulatory config). null = no
+  # limit of that kind under the reading.
+  A:
+    max_pv_ac_plus_bess_mw: 10.0
+    max_export_mw: null
+    max_pv_ac_mw: 10.0
+    max_bess_power_mw: 10.0
+  B:
+    max_pv_ac_plus_bess_mw: null
+    max_export_mw: 10.0
+    max_pv_ac_mw: 10.0
+    max_bess_power_mw: 10.0
+  # The scenario takes the conservative reading's recommendation; the other is reported.
+  committed: A
+
+monte_carlo:
+  seed: 20261101            # MRM-01: PR 3's seed, recorded in the output
+  n_trials: 256             # PR 3's count, per grid point; the same LHS draws at every point
+  sampler: lhs
+  include_base_case: true
+
+uncertainty:
+  # PR 3's ranges, unchanged (conf/blue_whale_pv_bess_sizing.yaml carries their sources).
+  yield_sigma_pct: 4.7
+  yield_clip_sigma: 3.0
+  rte_low: 0.82
+  rte_high: 0.88
+  residual_fade_pct_per_year:
+    low: 0.0
+    mode: 0.0
+    high: 2.0
+
+plant:
+  # PLACEHOLDERS for the separate project (the hybrid's lines, input register IDs):
+  # grid, civils and development USD 2.0M (B26), carried whole to EACH project because the
+  # two are separate SPPAs with their own connection and development (an ASSUMPTION that
+  # double-counts against the hybrid view until B25/B26 arrive); insurance, land lease and
+  # SPV overhead USD 0.15M/yr (B02, B28). No wind O&M: the turbine is the other project.
+  grid_civils_development_usd: 2000000.0
+  fixed_opex_usd_per_year: 150000.0
+
+objective:
+  # PRIMARY ("Max value, MC decides"; the coordinator's lease: "unit NPV at P50, with P90
+  # and IRR reported"): the P50 of PR 3's unit-only pre-tax NPV (the solar + BESS capex, its
+  # dispatched revenue and its O&M; no tax or debt) at the engine's own discount rate. The
+  # plant-level grid, civils, development and fixed O&M lines are the same at every size, so
+  # they do not change the ranking. The engine's project NPV (after the 30% tax, the 10%
+  # CFADS risk haircut and debt sizing) and the other alternatives are reported, not used.
+  metric: unit_pretax_npv_usd
+  statistic: p50
+  # The committed choice keeps the PV at the lot's maximum (land_max) and lets the objective
+  # choose the PV AC and the BESS. Every size has a negative unit NPV at the engine's
+  # discount rate (the unit's pre-tax IRR sits below it), so over the whole grid the objective
+  # prefers the smallest PV the grid offers and, beyond the grid, building less: it does not
+  # fix the PV. With the lot owned and the owner's "Maximize BESS now within the solar+BESS
+  # parameters", the PV is held at what the lot takes and the Monte Carlo decides the rest.
+  # The whole-grid choice ("any") is reported beside it with a paired comparison.
+  pv_rule: land_max
+  alternatives:
+    - [unit_pretax_npv_usd, p90]
+    - [unit_pretax_npv_usd, mean]
+    - [unit_pretax_irr, p50]
+    - [project_npv, p50]
+    - [project_npv, p90]
+    - [project_irr, p50]
+    - [equity_irr, p50]
+    - [equity_npv, p50]
+    - [min_dscr, p50]
+
+curtailment_scenario:
+  # PR 3's scenario, unchanged: 12.5% of the PV exported directly outside the window lost.
+  enabled: true
+  daytime_export_curtailment_fraction: 0.125
+  basis: "industry-claimed 10-15% daytime curtailment for ground solar (owner's Nov 2026 research doc); midpoint; scenario only"
+
+sensitivities:
+  # Base case at every evaluated point with the RTE of the PUCSL consultation's reference case
+  # (0.90). The base and the Monte Carlo keep the repository's 0.85 and PR 3's 0.82-0.88.
+  round_trip_efficiency: 0.90
+
+recommendation:
+  # Written to scenarios/blue_whale_solar_bess_lot5b_2026.yaml: the primary objective's
+  # choice under the committed reading in docs/blue_whale/solar_bess_project_sizing_summary.json
+  # (a test checks they agree). The other reading's choice is reported, not committed.
+  committed:
+    reading: A
+    pv_tables: 191
+    pv_ac_mw: 5.5
+    bess_power_mw: 4.5
+  alternative:
+    reading: B
+    pv_tables: 191
+    pv_ac_mw: 5.5
+    bess_power_mw: 4.5
+
+output:
+  # Optional, relative to the repository root; null writes nothing. The committed summary is
+  # written with output.summary_json=docs/blue_whale/solar_bess_project_sizing_summary.json
+  summary_json: null
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null

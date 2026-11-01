@@ -4,6 +4,18 @@
 # Version: 0.6 (SKELETON: screening placeholders, not a basis for any decision)
 # Path: scenarios/blue_whale_hybrid_lot5b_2026.yaml
 #
+# SUPERSEDED COMBINED VIEW (PR 4, 2026-11-01). The owner decided (#1353 comment 6556854201):
+# "We will therefore consider the 10mw turbine separately from the solar+bess. It will be a
+# separate project that will preceed the solar+BESS. Maximize BESS now within the solar+BESS
+# parameters in order to gain the maximum benefit from the PUCSL evening tariff band". The two
+# projects are now scenarios/blue_whale_wind_lot5b_2026.yaml (the turbine, built first) and
+# scenarios/blue_whale_solar_bess_lot5b_2026.yaml (sized under the PUCSL 2026 4 h BESS rules).
+# This file is kept unchanged below this note, as the v0.6 combined view and the basis of PR 3's
+# sizing (conf/blue_whale_pv_bess_sizing.yaml); its 05:30-07:30 window and 24 MWh / 4.8 h battery
+# are superseded. OPEN LEGAL RISK: under the Electricity Act No. 36 of 2024, s.11(3) proviso,
+# capacity "procured from a contiguous location ... on cumulative basis shall not exceed 10 MW";
+# the turbine and the solar + BESS project share this lot (conf/blue_whale_pucsl_fit_2026.yaml).
+#
 # Configuration under study (owner brief, 2026-10-27):
 #   - 1 x 10 MW wind turbine (single-machine project); from v0.4 (owner, 2026-11-01) one
 #     Envision EN-206/10.5 de-rated to 9.5 MW at 130 m hub

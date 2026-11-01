@@ -98,6 +98,18 @@ def _kpi(kpis: Mapping[str, Any], key: str) -> float:
     return float("nan") if value is None else float(value)
 
 
+def _project_irr(kpis: Mapping[str, Any]) -> float:
+    """The project IRR, NaN when the engine found none.
+
+    ``analytics.core.metrics`` leaves an IRR with no root in [-0.99, 5.0] unset, and the
+    gateway's KPI reader then reports it as 0.0 for display. A root-finder does not land on
+    exactly 0.0, so an exact 0.0 is read as undefined (FIN-01) and drops out of the
+    statistics; their ``n`` shows how many trials had an IRR.
+    """
+    value = _kpi(kpis, "project_irr")
+    return float("nan") if value == 0.0 else value
+
+
 def _num(value: Any, where: str, *, lo: float = -math.inf) -> float:
     """A finite float at or above ``lo``."""
     if isinstance(value, bool):
@@ -469,6 +481,7 @@ def dispatch_columns(
     bess: BessConfig,
     cfg: DispatchConfig,
     curtailment_fraction: float = 0.0,
+    charge_efficiency: Optional[FloatArray] = None,
 ) -> ColumnSums:
     """Dispatch many columns at once, column ``j`` being PV ``pv_base_mw * scale[j]``.
 
@@ -477,6 +490,9 @@ def dispatch_columns(
     efficiency and the state-of-charge fractions. Steps with no PV outside every window
     change nothing and are skipped. ``curtailment_fraction`` (a sensitivity, 0 in the base
     case) removes that share of the PV exported directly outside the windows.
+    ``charge_efficiency``, when given, is each column's own charge efficiency in place of
+    ``bess.charge_efficiency`` (equal to its RTE when every loss is booked on charge, so
+    that the nameplate energy is the energy a full battery delivers).
 
     Raises:
         ValueError: On mismatched shapes, a non-physical input, or a cyclic state that does
@@ -499,13 +515,18 @@ def dispatch_columns(
         raise ValueError("scale, energy_mwh and round_trip_efficiency must match")
     if (s < 0).any() or (e <= 0).any() or (rte <= 0).any() or (rte > 1).any():
         raise ValueError("scale >= 0, energy_mwh > 0 and 0 < RTE <= 1 are required")
-    if (rte > bess.charge_efficiency + 1e-15).any():
+    if charge_efficiency is None:
+        eta_c: Any = bess.charge_efficiency
+    else:
+        eta_c = np.asarray(charge_efficiency, dtype=np.float64)
+        if eta_c.shape != s.shape or (eta_c > 1.0).any():
+            raise ValueError("charge_efficiency must match the columns and be <= 1")
+    if (rte > eta_c + 1e-15).any():
         raise ValueError("round_trip_efficiency must not exceed charge_efficiency")
     if not 0.0 <= curtailment_fraction < 1.0:
         raise ValueError("curtailment_fraction must lie in [0, 1)")
     window = window_index(idx, cfg.windows, cfg.timezone)
     names = [w.name for w in cfg.windows]
-    eta_c = bess.charge_efficiency
     eta_d = rte / eta_c
     smin = e * bess.min_soc_fraction
     smax = e * bess.max_soc_fraction
@@ -812,6 +833,10 @@ class Context:
         pricing: The cited prices.
         grid_civils_development_usd: Plant-level capex outside the unit (input B26).
         fixed_opex_usd_per_year: Wind O&M plus insurance, land and SPV (inputs B10, B28).
+        losses_on_charge: Book the whole round-trip loss on charge, each trial at its own
+            RTE, so that the nameplate energy is what a full battery delivers (the PUCSL
+            2026 methodology's convention, s.5.1.2). False keeps PR 2's convention (the
+            nameplate is what a full charge absorbs; the loss is on discharge).
     """
 
     scenario: Mapping[str, Any]
@@ -822,6 +847,7 @@ class Context:
     pricing: Pricing
     grid_civils_development_usd: float
     fixed_opex_usd_per_year: float
+    losses_on_charge: bool = False
 
 
 def _bess_for(
@@ -832,7 +858,7 @@ def _bess_for(
         power_mw=power_mw,
         energy_mwh=energy_mwh,
         round_trip_efficiency=rte,
-        charge_efficiency=t.charge_efficiency,
+        charge_efficiency=rte if ctx.losses_on_charge else t.charge_efficiency,
         min_soc_fraction=t.min_soc_fraction,
         max_soc_fraction=t.max_soc_fraction,
         grid_charging=False,
@@ -848,12 +874,18 @@ def engine_overrides(
     bess_capex_usd: float,
     opex_usd_per_year: float,
 ) -> Dict[str, Any]:
-    """The Blue Whale scenario fields that carry one sized and priced unit (PR 2 wiring)."""
-    wind_capex = float(ctx.scenario["generation"]["technologies"]["wind"]["capex_usd"])
+    """The Blue Whale scenario fields that carry one sized and priced unit (PR 2 wiring).
+
+    A scenario without a ``wind`` technology (the separate solar + BESS project) carries no
+    wind capex, and its generation nameplate is the unit's AC capacity.
+    """
+    techs = ctx.scenario["generation"]["technologies"]
+    wind_capex = float(techs["wind"]["capex_usd"]) if "wind" in techs else 0.0
     total = wind_capex + pv_capex_usd + bess_capex_usd + ctx.grid_civils_development_usd
-    cap = float(ctx.scenario["project"]["capacity_mw"])
+    cap = rep.project_capacity_mw
     t = "generation.technologies"
     return {
+        "project.capacity_mw": cap,
         f"{t}.solar.capacity_mw": rep.solar_capacity_mw,
         f"{t}.solar.capacity_factor": rep.solar_capacity_factor,
         f"{t}.solar.degradation_pct": rep.solar_degradation_pct,
@@ -904,6 +936,8 @@ class PointResult:
         base: KPIs and engine fields of the deterministic base case.
         trials: Per metric, one value per trial.
         year1_unit_export_mwh: Per trial.
+        year1_unit_revenue_lkr: Per trial, the dispatched unit revenue in year 1.
+        year1_priority_export_mwh: Per trial, the year-1 export in the priority window.
         discount_rate_used: The engine's discount rate (constant across trials).
     """
 
@@ -915,6 +949,8 @@ class PointResult:
     base: Dict[str, Any] = field(default_factory=dict)
     trials: Dict[str, List[float]] = field(default_factory=dict)
     year1_unit_export_mwh: List[float] = field(default_factory=list)
+    year1_unit_revenue_lkr: List[float] = field(default_factory=list)
+    year1_priority_export_mwh: List[float] = field(default_factory=list)
     discount_rate_used: Optional[float] = None
 
 
@@ -966,6 +1002,7 @@ def evaluate_point(
         ),
         cfg=ctx.dispatch,
         curtailment_fraction=curtailment_fraction,
+        charge_efficiency=rte if ctx.losses_on_charge else None,
     )
     price = ctx.pricing
     inv_kw = point.inverter_kw
@@ -1038,7 +1075,7 @@ def evaluate_point(
         u_irr = irr(flows)
         row = {
             "project_npv": float(kpis["project_npv"]),
-            "project_irr": _kpi(kpis, "project_irr"),
+            "project_irr": _project_irr(kpis),
             "equity_npv": float(kpis["equity_npv"]),
             "equity_irr": _kpi(kpis, "equity_irr"),
             "min_dscr": _kpi(kpis, "min_dscr"),
@@ -1059,6 +1096,8 @@ def evaluate_point(
         for m in METRICS:
             result.trials[m].append(row[m])
         result.year1_unit_export_mwh.append(path[0].unit_export_mwh)
+        result.year1_unit_revenue_lkr.append(path[0].revenue_lkr)
+        result.year1_priority_export_mwh.append(path[0].export_mwh_by_rate["priority"])
         if result.discount_rate_used is None:
             result.discount_rate_used = rate
     return result
@@ -1569,6 +1608,935 @@ def run_sizing(
     )
 
 
+# ---------------------------------------------------------------------------
+# PR 4: the separate solar + BESS project under the PUCSL 2026 rules
+# ---------------------------------------------------------------------------
+PROJECT_SIZING_KEYS = (
+    "schema_version",
+    "unit_config",
+    "pricing_config",
+    "regulatory_config",
+    "scenario",
+    "unit_overrides",
+    "grid",
+    "readings",
+    "monte_carlo",
+    "uncertainty",
+    "plant",
+    "objective",
+    "curtailment_scenario",
+    "sensitivities",
+    "recommendation",
+    "output",
+)
+#: The keys of one 10 MW reading (``None`` = no limit of that kind).
+READING_KEYS = (
+    "max_pv_ac_plus_bess_mw",
+    "max_export_mw",
+    "max_pv_ac_mw",
+    "max_bess_power_mw",
+)
+LAND_MAX = "land_max"
+
+
+@dataclass(frozen=True)
+class RegulatoryBasis:
+    """The PUCSL 2026 and statutory figures the project sizing uses.
+
+    Attributes:
+        discharge_duration_h: The BESS's standard discharge duration at nominal capacity.
+        losses_on_charge: The nameplate is the energy a full battery delivers.
+        contract_years: Years the BESS-inclusive priority tariff is paid.
+        window_start_local, window_end_local, timezone: The Prioritized Feed-in Time.
+        priority_lkr_per_kwh, other_lkr_per_kwh, wind_lkr_per_kwh: Annex 2 tariffs.
+        reference_rte: The consultation reference case's RTE (a sensitivity).
+        max_capacity_mw: The standardised-PPA capacity limit.
+    """
+
+    discharge_duration_h: float
+    losses_on_charge: bool
+    contract_years: int
+    window_start_local: str
+    window_end_local: str
+    timezone: str
+    priority_lkr_per_kwh: float
+    other_lkr_per_kwh: float
+    wind_lkr_per_kwh: float
+    reference_rte: float
+    max_capacity_mw: float
+
+    @classmethod
+    def from_mapping(cls, raw: Mapping[str, Any]) -> "RegulatoryBasis":
+        """Build from ``conf/blue_whale_pucsl_fit_2026.yaml``, checking its arithmetic.
+
+        Raises:
+            ValueError: On a missing or unknown key, a source without a URL or file hash
+                and verbatim text, a tariff that is not the sum of its components, or a
+                consultation reference case that does not meet its own tariff formula.
+        """
+        _strict(
+            raw,
+            (
+                "schema_version",
+                "retrieved",
+                "sources",
+                "bess",
+                "priority_window",
+                "tariff_lkr_per_kwh",
+                "consultation_reference_case",
+                "standardised_ppa_limit",
+            ),
+            "regulatory",
+        )
+        if raw["schema_version"] != "blue_whale_pucsl_fit_2026_v1":
+            raise ValueError(
+                "regulatory.schema_version must be blue_whale_pucsl_fit_2026_v1"
+            )
+        sources = raw["sources"]
+        if not isinstance(sources, Mapping) or not sources:
+            raise ValueError("regulatory.sources must be a non-empty mapping")
+        for name, src in sources.items():
+            if not isinstance(src, Mapping) or not src.get("verbatim"):
+                raise ValueError(f"regulatory.sources.{name} needs verbatim text")
+            if "url" not in src and "pdf_sha256" not in src:
+                raise ValueError(f"regulatory.sources.{name} needs a url or pdf_sha256")
+        bess = raw["bess"]
+        _strict(
+            bess,
+            ("discharge_duration_h", "energy_basis", "charging", "contract_years"),
+            "regulatory.bess",
+        )
+        if bess["energy_basis"] not in ("delivered_at_nominal_power", "absorbed"):
+            raise ValueError("regulatory.bess.energy_basis is not recognised")
+        if bess["charging"] != "co_located_solar_pv_only":
+            raise ValueError(
+                "regulatory.bess.charging must be co_located_solar_pv_only"
+            )
+        win = raw["priority_window"]
+        _strict(win, ("start_local", "end_local", "timezone"), "regulatory.window")
+        tar = raw["tariff_lkr_per_kwh"]
+        _strict(
+            tar,
+            ("solar_bess_priority", "solar_bess_other", "wind", "components"),
+            "regulatory.tariff_lkr_per_kwh",
+        )
+        for key in ("solar_bess_priority", "solar_bess_other", "wind"):
+            parts = [float(x) for x in tar["components"][key]]
+            if abs(sum(parts) - float(tar[key])) > 1e-9:
+                raise ValueError(
+                    f"regulatory tariff {key} is not {' + '.join(map(str, parts))}"
+                )
+        ref = raw["consultation_reference_case"]
+        _strict(
+            ref,
+            (
+                "power_mw",
+                "duration_h",
+                "capital_cost_mlkr_per_mw",
+                "om_pct_of_capex",
+                "depth_of_discharge_pct",
+                "degradation_pct_per_year",
+                "cycles_per_year",
+                "round_trip_efficiency",
+                "first_year_discharge_gwh",
+                "bess_tariff_component_lkr_per_kwh",
+                "standalone_tariff_lkr_per_kwh",
+                "proposed_priority_lkr_per_kwh",
+                "lkr_per_usd",
+            ),
+            "regulatory.consultation_reference_case",
+        )
+        # The consultation's own closed forms: standalone / RTE + BESS component equals its
+        # proposed priority tariff (to the 2 dp it publishes), and 1 MW x 4 h x 365 x DoD is
+        # its first-year discharge (the nameplate is delivered energy).
+        rte = float(ref["round_trip_efficiency"])
+        proposed = float(ref["standalone_tariff_lkr_per_kwh"]) / rte + float(
+            ref["bess_tariff_component_lkr_per_kwh"]
+        )
+        if abs(proposed - float(ref["proposed_priority_lkr_per_kwh"])) > 0.005:
+            raise ValueError(
+                f"reference case gives {proposed:.4f}, not its priority tariff"
+            )
+        discharge = (
+            float(ref["power_mw"])
+            * float(ref["duration_h"])
+            * float(ref["cycles_per_year"])
+            * float(ref["depth_of_discharge_pct"])
+            / 100.0
+            / 1000.0
+        )
+        if abs(discharge - float(ref["first_year_discharge_gwh"])) > 1e-9:
+            raise ValueError(
+                "reference case first-year discharge is not P x h x cycles x DoD"
+            )
+        lim = raw["standardised_ppa_limit"]
+        _strict(
+            lim,
+            (
+                "max_capacity_mw",
+                "contiguous_location_cumulative",
+                "storage_in_capacity_order_from_2025",
+                "readings",
+                "open_question",
+            ),
+            "regulatory.standardised_ppa_limit",
+        )
+        if set(lim["readings"]) != {"A", "B"}:
+            raise ValueError(
+                "regulatory.standardised_ppa_limit.readings must be A and B"
+            )
+        term = bess["contract_years"]
+        if isinstance(term, bool) or int(term) != term or int(term) < 1:
+            raise ValueError(
+                "regulatory.bess.contract_years must be a positive integer"
+            )
+        return cls(
+            discharge_duration_h=_num(bess["discharge_duration_h"], "duration", lo=0.0),
+            losses_on_charge=bess["energy_basis"] == "delivered_at_nominal_power",
+            contract_years=int(term),
+            window_start_local=str(win["start_local"]),
+            window_end_local=str(win["end_local"]),
+            timezone=str(win["timezone"]),
+            priority_lkr_per_kwh=float(tar["solar_bess_priority"]),
+            other_lkr_per_kwh=float(tar["solar_bess_other"]),
+            wind_lkr_per_kwh=float(tar["wind"]),
+            reference_rte=rte,
+            max_capacity_mw=_num(lim["max_capacity_mw"], "max_capacity_mw", lo=0.0),
+        )
+
+    def check(
+        self,
+        *,
+        dispatch: DispatchConfig,
+        tariff: TariffConfig,
+        bess: BessConfig,
+        duration_h: float,
+    ) -> None:
+        """Refuse a unit or sizing config that departs from these rules.
+
+        Raises:
+            ValueError: Naming the first rule the config breaks.
+        """
+        if abs(duration_h - self.discharge_duration_h) > 1e-12:
+            raise ValueError(
+                f"grid.bess_duration_h {duration_h} is not the PUCSL "
+                f"{self.discharge_duration_h} h"
+            )
+        start = _minute_of(self.window_start_local)
+        end = _minute_of(self.window_end_local)
+        prio = [w for w in dispatch.windows if w.rate == "priority"]
+        if len(dispatch.windows) != 1 or len(prio) != 1:
+            raise ValueError("the BESS may discharge only in the one priority window")
+        if (prio[0].start_minute, prio[0].end_minute) != (start, end):
+            raise ValueError(
+                "the dispatch window is not the PUCSL Prioritized Feed-in Time"
+            )
+        if dispatch.timezone != self.timezone:
+            raise ValueError("the dispatch timezone is not the regulatory one")
+        if prio[0].hours != self.discharge_duration_h:
+            raise ValueError(
+                "the priority window is not as long as the discharge duration"
+            )
+        for name, got, want in (
+            ("priority", tariff.priority_lkr_per_kwh, self.priority_lkr_per_kwh),
+            ("other", tariff.other_lkr_per_kwh, self.other_lkr_per_kwh),
+            ("wind", tariff.wind_lkr_per_kwh, self.wind_lkr_per_kwh),
+        ):
+            if abs(got - want) > 1e-9:
+                raise ValueError(f"tariff.{name} {got} is not the Annex 2 {want}")
+        if tariff.priority_term_years != self.contract_years:
+            raise ValueError(
+                "tariff.priority_term_years is not the 15-year BESS contract"
+            )
+        if (
+            self.losses_on_charge
+            and bess.charge_efficiency != bess.round_trip_efficiency
+        ):
+            raise ValueError(
+                "bess.charge_efficiency must equal the RTE: the nameplate is delivered energy"
+            )
+        if dispatch.export_limit_mw > self.max_capacity_mw + 1e-12:
+            raise ValueError("the export limit exceeds the standardised-PPA limit")
+
+
+def _minute_of(hhmm: str) -> int:
+    hh, mm = str(hhmm).split(":")
+    return int(hh) * 60 + int(mm)
+
+
+def apply_unit_overrides(
+    unit_cfg: Mapping[str, Any], overrides: Mapping[str, Any]
+) -> Dict[str, Any]:
+    """PR 2's unit config with dotted-path replacements (each path must already exist).
+
+    Raises:
+        ValueError: If a path is not in the unit config, so no key can be invented here.
+    """
+    import copy
+
+    out = copy.deepcopy(dict(unit_cfg))
+    if not isinstance(overrides, Mapping):
+        raise ValueError("unit_overrides must be a mapping")
+    for path, value in overrides.items():
+        node: Any = out
+        keys = str(path).split(".")
+        for key in keys[:-1]:
+            if not isinstance(node, dict) or key not in node:
+                raise ValueError(f"unit_overrides: {path} is not in the unit config")
+            node = node[key]
+        if not isinstance(node, dict) or keys[-1] not in node:
+            raise ValueError(f"unit_overrides: {path} is not in the unit config")
+        node[keys[-1]] = copy.deepcopy(value)
+    return out
+
+
+def _reading(raw: Any, name: str) -> Dict[str, Optional[float]]:
+    _strict(raw, READING_KEYS, f"readings.{name}")
+    return {
+        k: (None if raw[k] is None else _num(raw[k], f"readings.{name}.{k}", lo=0.0))
+        for k in READING_KEYS
+    }
+
+
+def reading_allows(
+    reading: Mapping[str, Optional[float]],
+    *,
+    pv_ac_mw: float,
+    bess_power_mw: float,
+    export_limit_mw: float,
+) -> bool:
+    """Whether a size meets one reading of the 10 MW limit.
+
+    Under a reading with an export limit the dispatch must be held to it; a reading
+    without one relies on the PV AC plus BESS power limit.
+    """
+    tol = 1e-9
+    cap = reading["max_pv_ac_plus_bess_mw"]
+    if cap is not None and pv_ac_mw + bess_power_mw > cap + tol:
+        return False
+    exp = reading["max_export_mw"]
+    if exp is not None and export_limit_mw > exp + tol:
+        return False
+    for key, val in (("max_pv_ac_mw", pv_ac_mw), ("max_bess_power_mw", bess_power_mw)):
+        lim = reading[key]
+        if lim is not None and val > lim + tol:
+            return False
+    # Without either a combined or an export limit a reading would admit any export.
+    return cap is not None or exp is not None
+
+
+def run_project_sizing(
+    sizing_cfg: Mapping[str, Any],
+    *,
+    unit_cfg: Mapping[str, Any],
+    pricing_cfg: Mapping[str, Any],
+    regulatory_cfg: Mapping[str, Any],
+    scenario: Mapping[str, Any],
+    site: Mapping[str, Any],
+    evaluator: Callable[..., Mapping[str, Any]] = evaluate_with_overrides,
+) -> SizingRun:
+    """Size the separate solar + BESS project under both readings of the 10 MW limit.
+
+    The decision variables are the PV DC (whole tables, up to the most the placeholder lot
+    takes with the turbine kept), the PV AC and the BESS power, with the BESS energy fixed at
+    the PUCSL 4 h. Every point that fits the lot and the inverter is evaluated once, with
+    PR 3's seeded trials, through :func:`evaluate_point`; each reading is then a filter on
+    those points, so the two recommendations share the same draws.
+
+    Args:
+        sizing_cfg: ``conf/blue_whale_solar_bess_project_sizing.yaml``.
+        unit_cfg: PR 2's ``conf/blue_whale_solar_bess.yaml`` (before the overrides).
+        pricing_cfg: ``conf/blue_whale_pv_bess_pricing.yaml``.
+        regulatory_cfg: ``conf/blue_whale_pucsl_fit_2026.yaml``.
+        scenario: The solar + BESS project scenario mapping (no ``wind`` technology).
+        site: As built by :func:`site_context`.
+        evaluator: The evaluation gateway (a stand-in only in tests).
+
+    Returns:
+        The run; ``recommendation`` holds one entry per reading.
+
+    Raises:
+        ValueError: On a malformed config, a config that departs from the regulatory basis,
+            a scenario that carries a turbine, or a reading under which nothing is eligible.
+    """
+    from analytics.gis.pv_array_layout import (
+        ArrayConfig,
+        BessFootprintConfig,
+        LandConfig,
+        ModuleSpec,
+        ShadingRuleConfig,
+        SiteFitConfig,
+        StringDesignConfig,
+        compact_land_area,
+        design_string,
+        equipment_area,
+        fit_site,
+        row_pitch,
+        size_array,
+    )
+    from solar_resource.pv_bess_dispatch import hourly_pv, with_array
+
+    _strict(sizing_cfg, PROJECT_SIZING_KEYS, "sizing")
+    if sizing_cfg["schema_version"] != "blue_whale_solar_bess_project_sizing_v1":
+        raise ValueError(
+            "sizing.schema_version must be blue_whale_solar_bess_project_sizing_v1"
+        )
+    if "wind" in scenario["generation"]["technologies"]:
+        raise ValueError("the solar + BESS project scenario must not carry the turbine")
+    reg = RegulatoryBasis.from_mapping(regulatory_cfg)
+    unit = apply_unit_overrides(unit_cfg, sizing_cfg["unit_overrides"])
+    grid = sizing_cfg["grid"]
+    _strict(
+        grid,
+        (
+            "pv_tables",
+            "pv_ac_mw",
+            "min_dc_ac_ratio",
+            "max_dc_ac_ratio",
+            "bess_power_mw",
+            "bess_duration_h",
+        ),
+        "sizing.grid",
+    )
+    tables_grid: List[Any] = list(grid["pv_tables"])
+    if not tables_grid or any(
+        t != LAND_MAX and (isinstance(t, bool) or not isinstance(t, int) or t < 1)
+        for t in tables_grid
+    ):
+        raise ValueError("grid.pv_tables must be positive integers or 'land_max'")
+    acs = _grid_values(grid["pv_ac_mw"], "grid.pv_ac_mw")
+    powers = _grid_values(grid["bess_power_mw"], "grid.bess_power_mw")
+    min_ratio = _num(grid["min_dc_ac_ratio"], "grid.min_dc_ac_ratio", lo=0.0)
+    max_ratio = _num(grid["max_dc_ac_ratio"], "grid.max_dc_ac_ratio", lo=min_ratio)
+    duration = _num(grid["bess_duration_h"], "grid.bess_duration_h", lo=0.0)
+    readings_raw = sizing_cfg["readings"]
+    _strict(readings_raw, ("A", "B", "committed"), "readings")
+    readings = {k: _reading(readings_raw[k], k) for k in ("A", "B")}
+    for name, r in readings.items():
+        for key in READING_KEYS:
+            if r[key] is not None and r[key] > reg.max_capacity_mw + 1e-12:  # type: ignore[operator]
+                raise ValueError(f"readings.{name}.{key} exceeds the statutory limit")
+    committed = str(readings_raw["committed"])
+    if committed not in readings:
+        raise ValueError("readings.committed must be A or B")
+    mc = sizing_cfg["monte_carlo"]
+    _strict(mc, ("seed", "n_trials", "sampler", "include_base_case"), "monte_carlo")
+    if mc["sampler"] != "lhs" or mc["include_base_case"] is not True:
+        raise ValueError("monte_carlo: sampler lhs and include_base_case true required")
+    seed, n_trials = mc["seed"], mc["n_trials"]
+    for name, val in (("seed", seed), ("n_trials", n_trials)):
+        if isinstance(val, bool) or not isinstance(val, int) or val < 1:
+            raise ValueError(f"monte_carlo.{name} must be a positive integer")
+    plant = sizing_cfg["plant"]
+    _strict(plant, ("grid_civils_development_usd", "fixed_opex_usd_per_year"), "plant")
+    objective = sizing_cfg["objective"]
+    _strict(objective, ("metric", "statistic", "alternatives", "pv_rule"), "objective")
+    pv_rule = str(objective["pv_rule"])
+    if pv_rule not in ("any", LAND_MAX):
+        raise ValueError("objective.pv_rule must be 'any' or 'land_max'")
+    if pv_rule == LAND_MAX and LAND_MAX not in tables_grid:
+        raise ValueError("objective.pv_rule land_max needs land_max in grid.pv_tables")
+    curt = sizing_cfg["curtailment_scenario"]
+    _strict(
+        curt,
+        ("enabled", "daytime_export_curtailment_fraction", "basis"),
+        "curtailment_scenario",
+    )
+    sens = sizing_cfg["sensitivities"]
+    _strict(sens, ("round_trip_efficiency",), "sensitivities")
+    sens_rte = _num(sens["round_trip_efficiency"], "sensitivities.rte", lo=0.0)
+
+    pricing = Pricing.from_mapping(pricing_cfg)
+    uncertainty = Uncertainty.from_mapping(sizing_cfg["uncertainty"])
+    module = ModuleSpec.from_mapping(unit["module"])
+    strings_design = design_string(
+        module, StringDesignConfig.from_mapping(unit["string_design"])
+    )
+    land = LandConfig.from_mapping(unit["land"])
+    footprint = BessFootprintConfig.from_mapping(unit["bess_footprint"])
+    fit_cfg = SiteFitConfig.from_mapping(unit["site_fit"])
+    shading = ShadingRuleConfig.from_mapping(unit["shading_rule"])
+    template = BessConfig.from_mapping(unit["bess"])
+    dcfg = DispatchConfig.from_mapping(unit["dispatch"])
+    tariff = TariffConfig.from_mapping(unit["tariff"])
+    reg.check(dispatch=dcfg, tariff=tariff, bess=template, duration_h=duration)
+    if sens_rte > 1.0 or (
+        not reg.losses_on_charge and sens_rte > template.charge_efficiency
+    ):
+        raise ValueError("sensitivities.round_trip_efficiency is not physical here")
+    ctx = Context(
+        scenario=scenario,
+        bess_template=template,
+        dispatch=dcfg,
+        tariff=tariff,
+        wind=WindBlock(capacity_mw=0.0, capacity_factor=0.0, degradation_pct=0.0),
+        pricing=pricing,
+        grid_civils_development_usd=_num(
+            plant["grid_civils_development_usd"], "plant.grid_civils", lo=0.0
+        ),
+        fixed_opex_usd_per_year=_num(
+            plant["fixed_opex_usd_per_year"], "plant.fixed_opex", lo=0.0
+        ),
+        losses_on_charge=reg.losses_on_charge,
+    )
+    trials = draw_trials(
+        n_trials=n_trials,
+        seed=seed,
+        pricing=pricing,
+        uncertainty=uncertainty,
+        base_rte=template.round_trip_efficiency,
+        with_base=True,
+    )
+    years = int(unit["pv_yield"]["degradation_years"])
+    warranty = tuple(module.warranted_power_fraction(y) for y in range(1, years + 1))
+    resource = dict(unit["pv_yield"]["resource_solar"])
+    resource["inverter_eff_nom"] = pricing.inverter.european_efficiency
+    base_array = dict(unit["array"])
+    table_w = size_array(
+        module, strings_design, ArrayConfig.from_mapping(base_array)
+    ).table_power_w
+
+    def array_for(n_tables: int, ac: float) -> Any:
+        # The DC/AC that makes size_array round up to exactly n_tables.
+        ratio = n_tables * table_w / (ac * 1.0e6)
+        arr = ArrayConfig.from_mapping(
+            {**base_array, "ac_capacity_mw": ac, "dc_ac_ratio": ratio}
+        )
+        sizing = size_array(module, strings_design, arr)
+        if sizing.tables != n_tables:
+            raise ValueError(f"could not size {n_tables} tables at {ac} MW AC")
+        return arr, sizing
+
+    pitch_cache: Dict[int, Any] = {}
+    pv_cache: Dict[Tuple[int, float], Any] = {}
+    land_max: Dict[float, int] = {}
+    points: List[Dict[str, Any]] = []
+    results: List[Optional[PointResult]] = []
+    evaluated: List[Tuple[PointInputs, Dict[str, Any]]] = []
+    evaluations = 0
+    for power in powers:
+        energy = duration * power
+        equipment = equipment_area(
+            bess_power_mw=power, bess_energy_mwh=energy, bess=footprint, land=land
+        )
+        # The lot's capacity at this BESS size: pack with a probe of one table, read the
+        # tables that fit (the packing does not depend on the requested count).
+        probe_arr, probe = array_for(1, acs[0])
+        probe_pitch = row_pitch(
+            lat_deg=float(site["lot_lat"]),
+            lon_deg=float(site["lot_lon"]),
+            sizing=probe,
+            array=probe_arr,
+            rule=shading,
+        )
+        probe_fit = fit_site(
+            site["geometry"],
+            coastal=site["coastal"],
+            cfg=fit_cfg,
+            sizing=probe,
+            pitch=probe_pitch,
+            array=probe_arr,
+            land=land,
+            equipment=equipment,
+            required_fenced_area_m2=0.0,
+        )
+        cap_tables = int(probe_fit.fit.tables_that_fit)
+        land_max[power] = cap_tables
+        resolved: List[int] = sorted(
+            {cap_tables if t == LAND_MAX else int(t) for t in tables_grid}
+        )
+        for n_tables in resolved:
+            for ac in acs:
+                arr, sizing = array_for(n_tables, ac)
+                if not min_ratio - 1e-12 <= sizing.dc_ac_ratio <= max_ratio + 1e-12:
+                    continue
+                inv = match_inverter(
+                    pricing.inverter,
+                    strings=sizing.strings,
+                    voc_cold_v=strings_design.string_voc_cold_v,
+                    vmp_hot_v=strings_design.string_vmp_hot_v,
+                    vmp_stc_v=strings_design.string_vmp_stc_v,
+                    imp_a=module.imp_a,
+                    isc_a=module.isc_a,
+                    ac_capacity_mw=ac,
+                )
+                if n_tables not in pitch_cache:
+                    pitch_cache[n_tables] = row_pitch(
+                        lat_deg=float(site["lot_lat"]),
+                        lon_deg=float(site["lot_lon"]),
+                        sizing=sizing,
+                        array=arr,
+                        rule=shading,
+                    )
+                pitch = pitch_cache[n_tables]
+                area = compact_land_area(
+                    sizing=sizing,
+                    pitch=pitch,
+                    array=arr,
+                    land=land,
+                    equipment=equipment,
+                )
+                layout = fit_site(
+                    site["geometry"],
+                    coastal=site["coastal"],
+                    cfg=fit_cfg,
+                    sizing=sizing,
+                    pitch=pitch,
+                    array=arr,
+                    land=land,
+                    equipment=equipment,
+                    required_fenced_area_m2=area.fenced_area_m2,
+                )
+                fits = bool(layout.fit.fits) and inv.ok
+                bess_cfg = _bess_for(ctx, energy, template.round_trip_efficiency, power)
+                capability = priority_window_capability(
+                    energy_mwh=energy, power_mw=power, bess=bess_cfg, cfg=dcfg
+                )
+                allowed = {
+                    name: reading_allows(
+                        r,
+                        pv_ac_mw=ac,
+                        bess_power_mw=power,
+                        export_limit_mw=dcfg.export_limit_mw,
+                    )
+                    for name, r in readings.items()
+                }
+                meets_rule = (
+                    abs(energy - reg.discharge_duration_h * power) <= 1e-9
+                    and capability["deliverable_hours_at_power"]
+                    >= reg.discharge_duration_h - 1e-9
+                )
+                entry: Dict[str, Any] = {
+                    "pv_tables": n_tables,
+                    "pv_tables_is_land_max": n_tables == cap_tables,
+                    "dc_mwp": sizing.dc_capacity_mw,
+                    "pv_ac_mw": ac,
+                    "dc_ac_ratio": sizing.dc_ac_ratio,
+                    "strings": sizing.strings,
+                    "bess_power_mw": power,
+                    "bess_energy_mwh": energy,
+                    "bess_duration_h": energy / power,
+                    "fits": fits,
+                    "meets_4h_rule": meets_rule,
+                    "allowed_by_reading": allowed,
+                    "eligible_by_reading": {
+                        k: bool(fits and meets_rule and v) for k, v in allowed.items()
+                    },
+                    "priority_window_capability": capability,
+                    "land": {
+                        "fenced_area_m2": area.fenced_area_m2,
+                        "tables_that_fit": layout.fit.tables_that_fit,
+                        "equipment_placed": layout.fit.equipment_placed,
+                        "lot_fits": bool(layout.fit.fits),
+                        "bess_containers": equipment.bess_units,
+                    },
+                    "inverter": asdict(inv),
+                }
+                points.append(entry)
+                if not (fits and meets_rule and any(allowed.values())):
+                    results.append(None)
+                    continue
+                pv_key = (n_tables, ac)
+                if pv_key not in pv_cache:
+                    solar = with_array(
+                        resource,
+                        dc_capacity_mw=sizing.dc_capacity_mw,
+                        dc_ac_ratio=sizing.dc_ac_ratio,
+                        tilt_deg=arr.tilt_deg,
+                        azimuth_deg=arr.azimuth_deg,
+                        gamma_pdc_per_c=module.temp_coeff_pmax_pct_per_c / 100.0,
+                    )
+                    pv_cache[pv_key] = hourly_pv(solar)
+                pv = pv_cache[pv_key]
+                entry["pv_ac_mwh_factor_1"] = pv.annual_mwh
+                point = PointInputs(
+                    dc_ac_ratio=sizing.dc_ac_ratio,
+                    dc_mwp=sizing.dc_capacity_mw,
+                    ac_capacity_mw=ac,
+                    bess_power_mw=power,
+                    bess_energy_mwh=energy,
+                    pv_base_mw=pv.ac_mw,
+                    timestamps_utc=pv.timestamps_utc,
+                    warranty=warranty,
+                    inverter_count=inv.inverter_count,
+                    inverter_kw=pricing.inverter.nominal_ac_kw,
+                )
+                res = evaluate_point(
+                    ctx, point, trials, has_base=True, evaluator=evaluator
+                )
+                evaluations += trials.n
+                results.append(res)
+                evaluated.append((point, entry))
+
+    stats: List[Dict[str, Any]] = []
+    for entry, pres in zip(points, results, strict=True):
+        if pres is None:
+            entry["metrics"] = {}
+            stats.append(entry)
+            continue
+        entry["capex_usd_base"] = {
+            "pv": pres.pv_capex_usd_base,
+            "bess": pres.bess_capex_usd_base,
+        }
+        entry["discount_rate_used"] = pres.discount_rate_used
+        entry["base"] = {k: pres.base[k] for k in METRICS} | {
+            "engine": pres.base["engine"],
+            "year1": pres.base["year1"],
+        }
+        entry["metrics"] = {m: summarise_metric(pres.trials[m]) for m in METRICS}
+        entry["year1_unit_export_mwh"] = summarise_metric(pres.year1_unit_export_mwh)
+        entry["year1_unit_revenue_lkr"] = summarise_metric(pres.year1_unit_revenue_lkr)
+        entry["year1_priority_export_mwh"] = summarise_metric(
+            pres.year1_priority_export_mwh
+        )
+        entry["_trials"] = pres.trials
+        stats.append(entry)
+    for s in stats:
+        for name in readings:
+            s[f"eligible_{name}"] = bool(
+                s["eligible_by_reading"][name] and s["metrics"]
+            )
+        s["evaluated"] = bool(s["metrics"])
+
+    metric = str(objective["metric"])
+    statistic = str(objective["statistic"])
+
+    def size_of(i: Optional[int]) -> Optional[Dict[str, Any]]:
+        if i is None:
+            return None
+        s = stats[i]
+        return {
+            "pv_tables": s["pv_tables"],
+            "dc_mwp": s["dc_mwp"],
+            "pv_ac_mw": s["pv_ac_mw"],
+            "bess_power_mw": s["bess_power_mw"],
+            "bess_energy_mwh": s["bess_energy_mwh"],
+        }
+
+    def revenue_best(key: str) -> Optional[int]:
+        best: Optional[int] = None
+        val = -math.inf
+        for i, s in enumerate(stats):
+            if not s.get(key):
+                continue
+            v = s["year1_unit_revenue_lkr"]["p50"]
+            if v > val:
+                best, val = i, v
+        return best
+
+    def paired_trials(i: int, j: int) -> Dict[str, Any]:
+        """Common-random-number comparison of point ``i`` against point ``j``."""
+        a = np.asarray(stats[i]["_trials"][metric], dtype=np.float64)
+        b = np.asarray(stats[j]["_trials"][metric], dtype=np.float64)
+        ok = np.isfinite(a) & np.isfinite(b)
+        return {
+            "share_of_trials_at_least_as_good": float(np.mean(a[ok] >= b[ok])),
+            "difference_p50": float(np.percentile(a[ok] - b[ok], 50.0)),
+        }
+
+    recommendation: Dict[str, Any] = {
+        "committed_reading": committed,
+        "pv_rule": pv_rule,
+        "by_reading": {},
+    }
+    for name in readings:
+        key = f"eligible_{name}"
+        rule_key = f"rule_{name}"
+        for s in stats:
+            s[rule_key] = bool(
+                s[key] and (pv_rule == "any" or s["pv_tables_is_land_max"])
+            )
+        primary = best_point(stats, metric=metric, statistic=statistic, key=rule_key)
+        any_pv = best_point(stats, metric=metric, statistic=statistic, key=key)
+        if primary is None or any_pv is None:
+            raise ValueError(f"no grid point is eligible under reading {name}")
+        ranked = sorted(
+            (i for i, s in enumerate(stats) if s[rule_key]),
+            key=lambda i: stats[i]["metrics"][metric][statistic],
+            reverse=True,
+        )
+        paired: Optional[Dict[str, Any]] = None
+        if len(ranked) > 1:
+            paired = {
+                "runner_up": size_of(ranked[1]),
+                **paired_trials(ranked[0], ranked[1]),
+            }
+        alternatives = []
+        for alt in objective["alternatives"]:
+            m2, s2 = str(alt[0]), str(alt[1])
+            alternatives.append(
+                {
+                    "metric": m2,
+                    "statistic": s2,
+                    "size": size_of(
+                        best_point(stats, metric=m2, statistic=s2, key=rule_key)
+                    ),
+                    "size_any_pv": size_of(
+                        best_point(stats, metric=m2, statistic=s2, key=key)
+                    ),
+                }
+            )
+        chosen = stats[primary]
+        # The largest battery the reading admits on this grid, at its best PV.
+        p_max = max(s["bess_power_mw"] for s in stats if s[key])
+        largest = best_point(
+            [
+                {**s, "_largest": bool(s[key] and s["bess_power_mw"] == p_max)}
+                for s in stats
+            ],
+            metric=metric,
+            statistic=statistic,
+            key="_largest",
+        )
+        recommendation["by_reading"][name] = {
+            "size": size_of(primary),
+            "objective_value": chosen["metrics"][metric][statistic],
+            "reading": readings[name],
+            "paired_with_runner_up": paired,
+            "alternatives": alternatives,
+            "any_pv": {
+                "size": size_of(any_pv),
+                "objective_value": stats[any_pv]["metrics"][metric][statistic],
+                "pv_tables_at_grid_minimum": stats[any_pv]["pv_tables"]
+                == min(t["pv_tables"] for t in stats if t[key]),
+                "against_the_committed_rule": (
+                    None if any_pv == primary else paired_trials(any_pv, primary)
+                ),
+            },
+            "share_of_eligible_points_with_negative_objective": float(
+                np.mean(
+                    [t["metrics"][metric][statistic] < 0.0 for t in stats if t[key]]
+                )
+            ),
+            "revenue_max": size_of(revenue_best(key)),
+            "largest_bess": size_of(largest),
+        }
+    overall_rev = revenue_best("evaluated")
+    recommendation["revenue_max_any_reading"] = {
+        "size": size_of(overall_rev),
+        "year1_unit_revenue_lkr_p50": (
+            None
+            if overall_rev is None
+            else stats[overall_rev]["year1_unit_revenue_lkr"]["p50"]
+        ),
+        "allowed_by_reading": (
+            None if overall_rev is None else stats[overall_rev]["allowed_by_reading"]
+        ),
+    }
+
+    def base_sweep(
+        trial: Trials, curtailment_fraction: float = 0.0
+    ) -> List[Dict[str, Any]]:
+        """One deterministic case at every evaluated point."""
+        nonlocal evaluations
+        rows = []
+        for point, entry in evaluated:
+            r = evaluate_point(
+                ctx,
+                point,
+                trial,
+                has_base=True,
+                evaluator=evaluator,
+                curtailment_fraction=curtailment_fraction,
+            )
+            evaluations += 1
+            rows.append(
+                {
+                    "size": {
+                        "pv_tables": entry["pv_tables"],
+                        "pv_ac_mw": entry["pv_ac_mw"],
+                        "bess_power_mw": entry["bess_power_mw"],
+                    },
+                    "eligible_by_reading": entry["eligible_by_reading"],
+                    "pv_tables_is_land_max": entry["pv_tables_is_land_max"],
+                    **{m: r.base[m] for m in METRICS},
+                    "year1_unit_revenue_lkr": r.base["year1"]["revenue_lkr"],
+                }
+            )
+        return rows
+
+    def best_rows(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Per reading, the size the objective metric prefers in these base cases."""
+        out: Dict[str, Any] = {}
+        for name in readings:
+            ok = [
+                r
+                for r in rows
+                if r["eligible_by_reading"][name]
+                and (pv_rule == "any" or r["pv_tables_is_land_max"])
+                and r[metric] is not None
+                and math.isfinite(r[metric])
+            ]
+            out[name] = max(ok, key=lambda r: r[metric])["size"] if ok else None
+        return out
+
+    base_trial = Trials(values={k: v[:1] for k, v in trials.values.items()})
+    curtailment: Optional[Dict[str, Any]] = None
+    if curt["enabled"]:
+        f = _num(curt["daytime_export_curtailment_fraction"], "curtailment", lo=0.0)
+        rows = base_sweep(base_trial, curtailment_fraction=f)
+        curtailment = {
+            "daytime_export_curtailment_fraction": f,
+            "basis": str(curt["basis"]),
+            "base_case_only": True,
+            "rows": rows,
+            "best_by_objective": best_rows(rows),
+        }
+    rte_values = {k: v.copy() for k, v in base_trial.values.items()}
+    rte_values["round_trip_efficiency"] = np.array([sens_rte])
+    rte_rows = base_sweep(Trials(values=rte_values))
+    sensitivity = {
+        "round_trip_efficiency": sens_rte,
+        "basis": "PUCSL consultation reference case (regulatory config)",
+        "base_case_only": True,
+        "rows": rte_rows,
+        "best_by_objective": best_rows(rte_rows),
+    }
+    for s in stats:
+        s.pop("_trials", None)
+    spec = {
+        "seed": seed,
+        "sampler": "lhs",
+        "common_random_numbers": True,
+        "requested_trials_per_point": n_trials,
+        "grid_points": len(points),
+        "grid_points_evaluated": len(evaluated),
+        "base_case_per_point": True,
+        "sensitivity_cases_per_point": 1 + int(bool(curt["enabled"])),
+        "effective_evaluations": evaluations,
+        "dimensions": list(DIMENSIONS),
+        "years": years,
+        "objective": {"metric": metric, "statistic": statistic},
+        "land_max_tables_by_bess_power_mw": {str(k): v for k, v in land_max.items()},
+        "bess_duration_h": duration,
+        "losses_on_charge": reg.losses_on_charge,
+        "export_limit_mw": dcfg.export_limit_mw,
+        "dispatch_windows": [
+            {"name": w.name, "start_minute": w.start_minute, "end_minute": w.end_minute}
+            for w in dcfg.windows
+        ],
+    }
+    return SizingRun(
+        spec=spec,
+        points=_json_safe(stats),
+        recommendation=_json_safe(recommendation),
+        curtailment=_json_safe(
+            {"curtailment": curtailment, "rte_sensitivity": sensitivity}
+        ),
+    )
+
+
+def _json_safe(obj: Any) -> Any:
+    """``obj`` with every non-finite float (an undefined IRR) as ``None``."""
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
+    if isinstance(obj, Mapping):
+        return {k: _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
 def site_context(
     unit_cfg: Mapping[str, Any], read_json: Callable[[str], Any]
 ) -> Dict[str, Any]:
@@ -1603,6 +2571,13 @@ def site_context(
 
 
 __all__ = [
+    "LAND_MAX",
+    "PROJECT_SIZING_KEYS",
+    "READING_KEYS",
+    "RegulatoryBasis",
+    "apply_unit_overrides",
+    "reading_allows",
+    "run_project_sizing",
     "ColumnSums",
     "SizingRun",
     "run_sizing",
