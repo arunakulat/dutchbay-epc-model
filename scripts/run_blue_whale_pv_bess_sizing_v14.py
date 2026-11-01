@@ -31,7 +31,7 @@ import hydra
 import yaml
 from omegaconf import DictConfig, OmegaConf
 
-from analytics.pv_bess_sizing import run_sizing, site_context
+from solar_resource.pv_bess_sizing import run_sizing, site_context
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 

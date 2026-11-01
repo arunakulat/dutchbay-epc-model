@@ -1,6 +1,6 @@
 # Blue Whale Lot 5B: frozen, cited prices for sizing the solar + BESS unit (PR 3 of 3).
 #
-# Read by analytics.pv_bess_sizing (strict parser: every key is required, unknown keys are
+# Read by solar_resource.pv_bess_sizing (strict parser: every key is required, unknown keys are
 # refused; FRAMEWORK-02). DATA-01: each external figure is frozen here with its source URL,
 # its retrieval date and the figure as the source states it ("verbatim"). A value marked
 # ASSUMPTION has no source of its own; its basis is stated.
@@ -156,7 +156,7 @@ pv_module:
   delivery_usd_per_wp: 0.010
 
 inverter:
-  # Matched to the PR 2 string design (analytics.pv_bess_sizing.match_inverter checks it).
+  # Matched to the PR 2 string design (solar_resource.pv_bess_sizing.match_inverter checks it).
   model: "Huawei SUN2000-330KTL-H1"
   source: HUAWEI-SPECS
   max_dc_voltage_v: 1500.0

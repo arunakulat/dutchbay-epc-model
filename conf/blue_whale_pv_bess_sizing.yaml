@@ -1,7 +1,7 @@
 # Blue Whale Lot 5B: seeded Monte Carlo sizing of the solar + BESS unit (PR 3 of 3).
 #
 # Read by scripts/run_blue_whale_pv_bess_sizing_v14.py (Hydra, one JSON object on stdout:
-# CLI-01, CLI-03) and analytics.pv_bess_sizing (strict: every key below is required and
+# CLI-01, CLI-03) and solar_resource.pv_bess_sizing (strict: every key below is required and
 # unknown keys are refused; FRAMEWORK-02). The turbine is fixed by PR 1; the decision
 # variables are the PV DC capacity (as DC/AC on the unit's 5 MW AC) and the BESS energy at
 # 5 MW. The array, string, land, dispatch and tariff rules are PR 2's, read from
@@ -113,9 +113,10 @@ curtailment_scenario:
 recommendation:
   # The sizing written to the Blue Whale scenario: the primary objective's choice in the
   # committed run docs/blue_whale/pv_bess_sizing_summary.json (a test checks they agree).
-  # null until a run has been committed.
-  dc_ac_ratio: null
-  bess_energy_mwh: null
+  # Run of 2026-11-01 at 4e84dc82 (result_sha256 40bd2789...0849): DC/AC 1.1 (147 tables,
+  # 5.51544 MWp) with 5 MW / 24 MWh, P50 project NPV USD -8,499,899, P90 -8,962,702.
+  dc_ac_ratio: 1.1
+  bess_energy_mwh: 24.0
 
 output:
   # Optional, relative to the repository root; null writes nothing. The committed summary

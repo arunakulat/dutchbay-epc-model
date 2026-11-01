@@ -7,17 +7,17 @@ Last updated: 2026-11-01. Stage: **concept screening (skeleton model, owner inpu
 | Component | Size | Notes |
 |---|---|---|
 | Wind | 1 x Envision EN-206/10.5 de-rated to 9.5 MW, 130 m hub, 206 m rotor | Owner decision 2026-11-01; tip height 233 m |
-| Solar PV | 5 MW AC (6.0032 MWp DC), JinkoSolar Tiger Neo 3.0 670 W, fixed tilt 8 degrees | Owner decision 2026-11-01; one unit with the BESS |
-| BESS | 5 MW x 6 h (30 MWh), charged only from the PV | Owner decision 2026-11-01; discharged 17:30-21:30 and 05:30-07:30 |
+| Solar PV | 5 MW AC (5.51544 MWp DC, DC/AC 1.1), JinkoSolar Tiger Neo 3.0 670 W, fixed tilt 8 degrees, 17 x Huawei SUN2000-330KTL-H1 | Module: owner decision 2026-11-01; DC size from the v0.6 Monte Carlo; one unit with the BESS |
+| BESS | 5 MW / 24 MWh (4.8 h), charged only from the PV | Owner brief 5 MW x 6 h; 24 MWh from the v0.6 Monte Carlo (owner to confirm); discharged 17:30-21:30 and 05:30-07:30 |
 
 The owner's scheme is "solar+BESS as one unit and then the turbine as the second unit".
 
 Funding: **fully LKR funded** (owner, 2026-10-28). Revenue, costs and debt are all LKR, so the
 model runs with FX held flat and the USD columns are a constant-rate translation of LKR.
 
-Model file: `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.5, placeholders apart from
+Model file: `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.6, placeholders apart from
 the configuration, the funding currency, the researched tariff and BESS inputs, the wind
-yield and the solar + BESS unit derived below).
+yield, the solar + BESS unit derived below and its v0.6 size and cited capex).
 Inputs register: [INPUTS_REQUIRED.md](INPUTS_REQUIRED.md).
 
 ## Site
@@ -283,7 +283,171 @@ LKR for the unit plus 801.38 M LKR of wind. Over 20 years the PV follows the war
 the engine stays within 0.16% of the dispatcher in every year. Battery cell fade,
 augmentation and availability are not modelled.
 
-## Latest run (v0.5, solar + BESS unit, 2026-11-01)
+## Solar + BESS sizing and pricing (v0.6, 2026-11-01)
+
+With the turbine fixed (PR 1), a seeded Monte Carlo chose the PV DC capacity and the BESS energy of
+the unit (`solar_resource/pv_bess_sizing.py`, `scripts/run_blue_whale_pv_bess_sizing_v14.py`,
+`conf/blue_whale_pv_bess_sizing.yaml`). The result summary is
+[pv_bess_sizing_summary.json](pv_bess_sizing_summary.json), which holds statistics only, no per-trial values.
+
+### Owner decisions (2026-11-01)
+
+Relayed on #1353 (comments 6554212671 and 6554297502):
+
+- "We will fix the turbine and then run a new Montecarlo simulation to decide on the best sizing
+  for the solar array and the BESS, given the current prices (take the pricing from internal
+  corpus for turbine and BESS and search for jinkosolar pv array costs - including inverter costs
+  for pv array." The coordinator's lease quotes these words; comment 6554212671 records them in
+  its own words.
+- "try huwawei or other reputed manufacturer's inverter prices with inverter specs matched to the
+  jinkosolar array specs"
+- "Use the 17:30 - 21:30 window and add another 05:30 to 07:30 window for the remaining 2 hours.
+  The priority rate will only apply to the evening window"
+
+### Method
+
+- **Decision grid.** DC/AC 1.0, 1.1, 1.2, 1.3 and 1.4 on the unit's 5.0 MW AC, rounded up to whole
+  37.52 kWp tables. BESS 10, 15, 20, 24, 25, 30, 35 and 40 MWh at 5 MW. Every one of the 40 sizes
+  fits the placeholder lot (191 table positions; 1.4 needs 187) and the matched inverter fleet.
+- **Dispatch.** PR 2's rules unchanged: PV-only charging; 17:30-21:30 at the priority rate, the
+  rest 05:30-07:30 at the other rate; 5 MW combined export limit; the TMY year repeated. An array
+  form of PR 2's dispatcher runs every trial and year at once, and it reproduces PR 2's scalar
+  dispatcher to 1e-10 (`tests/solar/test_pv_bess_sizing.py`).
+- **Evaluation.** Each trial's 20-year dispatch is mapped onto the engine with PR 2's
+  `engine_representation` and evaluated through `evaluate_with_overrides`. Project NPV and IRR come
+  from the engine (`finance.irr`). A unit-only pre-tax NPV (the unit's capex, revenue and O&M, no
+  tax or debt) is reported alongside.
+- **Uncertain inputs (seeded LHS, seed 20261101, 256 trials, the same draws at every size).**
+  Module price, inverter price, PV BoP/EPC and BESS all-in price (triangular, from the cited
+  ranges below); the long-term PV yield (normal, standard deviation 4.7%, from Solargis' +/-4-8%
+  P90 annual GHI uncertainty); RTE (uniform 0.82-0.88, assumed); and the battery fade not recovered
+  by augmentation (triangular 0, 0, 2%/yr, assumed). Model evaluations: 40 x (256 + 1) + 40
+  curtailment cases = 10,320.
+- **Objective.** The P50 of the Blue Whale project NPV, at the engine's own discount rate (the
+  build-up WACC, 11.28-11.37% across sizes). With the turbine fixed, the change in project NPV
+  between sizes is the unit's contribution after tax and debt sizing. P90 here is the value
+  exceeded in 90% of trials.
+- **Dispatch-rule constraint.** A size is eligible only if a full battery can export the whole
+  4 h priority window at 5 MW (deliverable energy at the base RTE of 0.85 must reach at least
+  20 MWh). This constraint was added after the first full run (35 sizes, without the 24 MWh step)
+  chose DC/AC 1.0 with 10 MWh, a battery that delivers 8.5 MWh into the 20 MWh window. That
+  unconstrained choice is still reported (P50 USD -7.681M). It is also where the per-kWh BESS
+  price on a 4 h basis is least reliable, because PCS cost scales with MW.
+
+### Prices (frozen with sources in `conf/blue_whale_pv_bess_pricing.yaml`)
+
+| Item | Low | Mode | High | Basis |
+|---|---|---|---|---|
+| PV module, USD/Wp FOB China | 0.104 | 0.110 | 0.119 | OPIS via pv magazine, 31 Jul 2026: spot USD 0.104-0.119/W; above 650 W "high-$0.100/W to mid-$0.110/W" (mode assumed at its middle); CMM 0.108 on 25 Aug 2026 |
+| Delivery to site, USD/Wp | 0.010 | 0.010 | 0.010 | ASSUMPTION |
+| Inverter, USD/W nominal AC | 0.020 | 0.0311 | 0.045 | ASSUMPTION range: one retail listing (EUR 8,114.84 per SUN2000-330KTL-H1, 20 Oct 2026, at 1.15 USD/EUR assumed) and the Wood Mackenzie China-domestic floor (below USD 0.02/Wac by 2034) |
+| PV BoP and EPC, USD/Wp | 0.354 | 0.462 | 0.545 | IRENA 2024 installed cost (global 691, Asia projection about 500, India 525 USD/kW) less module and inverter; the mode is the midpoint of India and global (ASSUMPTION); per kW DC assumed |
+| BESS all-in, USD/kWh | 78.75 | 135.00 | 143.41 | Public NSO 250 variants (bid-implied, base, stress) in `scenarios/nso250_ltl_unit_*.yaml` |
+| Turbine | fixed | 1,300/kW | fixed | Placeholder B09, inside the public 977-1,420 USD/kW range of `docs/knowledge_base/01_wind_epc_costs_and_scaling.md` |
+
+No private Envision BESS offer price and no internal turbine price was used. The internal turbine
+prices are in private developer packages whose handling notes allow no trace here, and the turbine
+cost does not change which unit size is best.
+
+### Inverter match
+
+Huawei SUN2000-330KTL-H1 (datasheet, Huawei Smart PV): maximum DC 1,500 V against the string's
+1,461.7 V Voc at 15 C; MPPT range 500-1,500 V (full load 930-1,300 V, from a search result) against
+a string Vmp of about 1,076-1,207 V; 65 A per MPPT, so 4 strings of 15.55 A per tracker; 6
+trackers, so 24 strings per inverter (Isc 4 x 16.22 = 64.9 A, against a 115 A limit); 300 kW
+nominal AC. Seventeen units (5.1 MW nominal) carry the unit's 5.0 MW AC, at 18 strings on the most
+loaded unit (DC/AC 1.1, 294 strings) and 22 at DC/AC 1.4. European efficiency 98.8% replaces PVWatts'
+96% placeholder in the yield chain.
+
+### Result
+
+Cells in brackets fail the 4 h dispatch rule.
+
+P50 project NPV, USD million
+
+| DC/AC (MWp) | 10 MWh | 15 MWh | 20 MWh | 24 MWh | 25 MWh | 30 MWh | 35 MWh | 40 MWh |
+|---|---|---|---|---|---|---|---|---|
+| 1.0 (5.0277) | (-7.681) | (-7.882) | (-8.134) | -8.534 | -8.661 | -9.329 | -9.965 | -10.612 |
+| 1.1 (5.5154) | (-7.764) | (-7.968) | (-8.186) | -8.500 | -8.629 | -9.304 | -9.943 | -10.576 |
+| 1.2 (6.0032) | (-7.855) | (-8.059) | (-8.255) | -8.531 | -8.648 | -9.314 | -9.968 | -10.613 |
+| 1.3 (6.5285) | (-7.970) | (-8.173) | (-8.370) | -8.598 | -8.722 | -9.391 | -10.044 | -10.707 |
+| 1.4 (7.0162) | (-8.102) | (-8.303) | (-8.501) | -8.707 | -8.830 | -9.500 | -10.161 | -10.824 |
+
+P90 project NPV (exceeded in 90% of trials), USD million
+
+| DC/AC (MWp) | 10 MWh | 15 MWh | 20 MWh | 24 MWh | 25 MWh | 30 MWh | 35 MWh | 40 MWh |
+|---|---|---|---|---|---|---|---|---|
+| 1.0 (5.0277) | (-7.976) | (-8.219) | (-8.547) | -8.970 | -9.102 | -9.790 | -10.505 | -11.215 |
+| 1.1 (5.5154) | (-8.087) | (-8.321) | (-8.617) | -8.963 | -9.089 | -9.767 | -10.487 | -11.201 |
+| 1.2 (6.0032) | (-8.211) | (-8.434) | (-8.694) | -8.999 | -9.121 | -9.810 | -10.531 | -11.247 |
+| 1.3 (6.5285) | (-8.356) | (-8.577) | (-8.822) | -9.097 | -9.214 | -9.908 | -10.639 | -11.353 |
+| 1.4 (7.0162) | (-8.508) | (-8.725) | (-8.960) | -9.222 | -9.337 | -10.041 | -10.772 | -11.494 |
+
+P50 project IRR
+
+| DC/AC (MWp) | 10 MWh | 15 MWh | 20 MWh | 24 MWh | 25 MWh | 30 MWh | 35 MWh | 40 MWh |
+|---|---|---|---|---|---|---|---|---|
+| 1.0 (5.0277) | (4.49%) | (4.50%) | (4.45%) | 4.29% | 4.22% | 3.86% | 3.51% | 3.16% |
+| 1.1 (5.5154) | (4.53%) | (4.54%) | (4.52%) | 4.42% | 4.35% | 3.98% | 3.64% | 3.30% |
+| 1.2 (6.0032) | (4.55%) | (4.57%) | (4.56%) | 4.49% | 4.43% | 4.07% | 3.72% | 3.39% |
+| 1.3 (6.5285) | (4.55%) | (4.58%) | (4.58%) | 4.54% | 4.48% | 4.12% | 3.76% | 3.43% |
+| 1.4 (7.0162) | (4.54%) | (4.57%) | (4.58%) | 4.54% | 4.49% | 4.12% | 3.77% | 3.44% |
+
+P90 project IRR
+
+| DC/AC (MWp) | 10 MWh | 15 MWh | 20 MWh | 24 MWh | 25 MWh | 30 MWh | 35 MWh | 40 MWh |
+|---|---|---|---|---|---|---|---|---|
+| 1.0 (5.0277) | (4.29%) | (4.28%) | (4.20%) | 4.00% | 3.93% | 3.56% | 3.20% | 2.87% |
+| 1.1 (5.5154) | (4.31%) | (4.31%) | (4.26%) | 4.13% | 4.07% | 3.70% | 3.34% | 3.01% |
+| 1.2 (6.0032) | (4.33%) | (4.33%) | (4.30%) | 4.22% | 4.15% | 3.79% | 3.44% | 3.10% |
+| 1.3 (6.5285) | (4.33%) | (4.34%) | (4.32%) | 4.26% | 4.20% | 3.84% | 3.50% | 3.16% |
+| 1.4 (7.0162) | (4.31%) | (4.31%) | (4.31%) | 4.27% | 4.21% | 3.84% | 3.50% | 3.17% |
+
+The chosen size is **DC/AC 1.1 (147 tables, 5.51544 MWp) with 5 MW / 24 MWh**: P50 project NPV USD
+-8.500M, P90 -8.963M; P50 project IRR 4.42%, P90 4.13%; P50 equity IRR 1.74%. It beats the
+runner-up (DC/AC 1.2, 24 MWh) in 90.6% of paired trials, but by only USD 29k at the median, so DC/AC
+1.1 and 1.2 are practically tied. The 4 h rule binds: every eligible size loses value as the
+battery grows, so 24 MWh (the first eligible step; the threshold is 23.53 MWh) is chosen. The
+alternative objectives agree on 24 MWh and differ on DC/AC: P90 and mean NPV choose 1.1;
+project and equity IRR choose 1.4; equity NPV chooses 1.0; unit pre-tax NPV chooses 1.3; minimum
+DSCR is flat (0.868 at every size). Under the curtailment scenario (12.5% of daytime direct PV export
+lost) the choice is unchanged.
+
+Every size has a negative project NPV, and the unit alone does not earn the discount rate: its
+pre-tax IRR at the chosen size is 9.66% at P50 (unit NPV USD -0.62M) against about 11.3%. So the
+Monte Carlo ranks sizes; it does not show that the unit, or the project, is viable on these
+placeholder financing and O&M inputs.
+
+Base case at the chosen size, as written to the scenario (every price at its mode, yield 1, RTE
+0.85, no residual fade): PV 8.4966 GWh (CF 19.40% on AC), year 1 at the warranted 99% 8,411.65 MWh;
+discharge 6,607.05 MWh evening and 82.17 MWh morning; direct PV export 541.98 MWh; unit export
+7,231.20 MWh (6,639.63 MWh in the priority window); 327.9 equivalent full cycles; unit revenue LKR
+344.90M. Capex: PV USD 3,368,596 (USD 0.611/Wp) and BESS USD 3,240,000. The base case sits below the
+P50 (USD -8.837M against -8.500M) because the BESS price range is skewed below its mode.
+
+### Limitations
+
+- The placeholder site, financing, O&M and grid inputs of earlier versions are unchanged.
+- The BESS price is a 4 h-basis USD/kWh figure applied at every duration, and the all-in figure
+  includes a 10% land share although the lot is owned.
+- The inverter price is an assumption range, not a utility quote. Inverters are about 5% of the PV
+  capex, so the choice does not hinge on them.
+- IRENA's USD/kW basis (AC or DC) is not stated in its summary; reading it per kW DC is an assumption.
+- `conf/blue_whale_solar_bess.yaml` and the committed hourly CSV and layout GeoJSON keep PR 2's
+  owner-brief design (DC/AC 1.2, 30 MWh, 96% inverter). The tests run PR 2's dispatcher at the chosen
+  size by overriding those three keys.
+- The ordinary test suite exercises reduced grids only. Neither this run nor the suite is tail,
+  convergence, lender or bankability evidence (`TEST-03`).
+
+## Latest run (v0.6, sized and priced solar + BESS unit, 2026-11-01)
+
+Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
+project IRR 4.26% (was 3.58%), equity IRR 1.58% (was 0.92%), annual-view minimum DSCR 0.87,
+project NPV USD -8.84M (was -10.20M). The rise is mostly lower capex: the unit now costs
+USD 6.61M (PV 3.37M, BESS 3.24M) against USD 8.0M of placeholders (PV 4.25M, BESS 3.75M), on a
+smaller battery. Every other input is still a placeholder, so these are not results.
+
+## Earlier run (v0.5, solar + BESS unit, 2026-11-01)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
 project IRR 3.58% (was 3.15%), equity IRR 0.92% (was 0.51%), annual-view minimum DSCR 0.87.
@@ -337,7 +501,9 @@ priority-1 inputs replace the placeholders.
 1. Owner supplies the priority-1 inputs in INPUTS_REQUIRED.md (and the input workbook).
 2. Repeat the turbine screen and the PV and BESS fit on the surveyed boundary and vegetation
    line once B03 and B08 arrive.
-3. PR 3: string and inverter matching, and PV and BESS pricing and sizing. At DC/AC 1.2 the
+3. Done in v0.6 (PR 3): inverter matching, cited PV and BESS pricing, and the Monte Carlo
+   sizing (DC/AC 1.1, 24 MWh). Owner to confirm the 4 h rule and the 24 MWh battery against the
+   6 h brief, and to supply EPC and BESS quotes (B15, B19). PR 2's notes, for the record: At DC/AC 1.2 the
    evening window is served by about 23.5 MWh of charge (20 MWh exported), and a 25 MWh
    battery earns slightly more than 30 MWh in year 1 (358.46 against 357.19 M LKR). At
    DC/AC 1.4 (7.02 MWp, 187 tables, which also fit) the unit earns 388.51 M LKR with 30 MWh.

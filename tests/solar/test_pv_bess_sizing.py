@@ -1,4 +1,4 @@
-"""Tests for the Blue Whale solar + BESS sizing (``analytics.pv_bess_sizing``).
+"""Tests for the Blue Whale solar + BESS sizing (``solar_resource.pv_bess_sizing``).
 
 ``TEST-01`` oracles that did not originate in this change:
 
@@ -31,9 +31,9 @@ import pandas as pd
 import pytest
 import yaml
 
-from analytics import pv_bess_sizing as sz
 from finance.irr import npv
 from solar_resource import pv_bess_dispatch as pbd
+from solar_resource import pv_bess_sizing as sz
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 UNIT_CONF = REPO_ROOT / "conf" / "blue_whale_solar_bess.yaml"
@@ -519,6 +519,63 @@ def test_the_turbine_is_not_a_sizing_variable(unit: Dict[str, Any]) -> None:
             scenario=_yaml(SCENARIO),
             site={},
         )
+
+
+def test_committed_summary_carries_a_truthful_spec_and_the_recommendation() -> None:
+    summary = json.loads(SUMMARY.read_text())
+    spec = summary["spec"]
+    n = spec["requested_trials_per_point"]
+    curt = summary["curtailment_scenario"]
+    rows = 0 if curt is None else len(curt["rows"])
+    assert (
+        spec["effective_evaluations"] == spec["grid_points_evaluated"] * (n + 1) + rows
+    )
+    assert spec["seed"] == _yaml(SIZING_CONF)["monte_carlo"]["seed"]
+    rec = _yaml(SIZING_CONF)["recommendation"]
+    assert rec["dc_ac_ratio"] == summary["recommendation"]["dc_ac_ratio"]
+    assert rec["bess_energy_mwh"] == summary["recommendation"]["bess_energy_mwh"]
+    fits = [p for p in summary["points"] if p["eligible"]]
+    best = max(fits, key=lambda p: p["metrics"]["project_npv"]["p50"])
+    assert (best["dc_ac_ratio_target"], best["bess_energy_mwh"]) == (
+        rec["dc_ac_ratio"],
+        rec["bess_energy_mwh"],
+    )
+    # The committed summary was produced from the committed pricing config.
+    import hashlib
+
+    digest = hashlib.sha256(PRICING_CONF.read_bytes()).hexdigest()
+    assert spec["inputs_sha256"]["conf/blue_whale_pv_bess_pricing.yaml"] == digest
+
+
+def test_scenario_carries_the_recommended_base_case() -> None:
+    summary = json.loads(SUMMARY.read_text())
+    rec = summary["recommendation"]
+    point = next(
+        p
+        for p in summary["points"]
+        if p["dc_ac_ratio_target"] == rec["dc_ac_ratio"]
+        and p["bess_energy_mwh"] == rec["bess_energy_mwh"]
+    )
+    scen = _yaml(SCENARIO)
+    techs = scen["generation"]["technologies"]
+    eng = point["base"]["engine"]
+    solar, b = techs["solar"], techs["bess_1"]
+    assert solar["capex_usd"] == pytest.approx(point["capex_usd_base"]["pv"], abs=0.5)
+    assert b["capex_usd"] == pytest.approx(point["capex_usd_base"]["bess"], abs=0.5)
+    assert b["energy_mwh"] == rec["bess_energy_mwh"]
+    assert b["duration_h"] == pytest.approx(rec["bess_energy_mwh"] / b["power_mw"])
+    assert solar["capacity_factor"] == pytest.approx(
+        eng["solar_capacity_factor"], abs=5e-7
+    )
+    assert b["revenue"]["cycles_per_year"] == pytest.approx(
+        eng["bess_cycles_per_year"], abs=5e-5
+    )
+    assert scen["tariff"]["lkr_per_kwh"] == pytest.approx(
+        eng["tariff_lkr_per_kwh"], abs=5e-5
+    )
+    assert scen["capex"]["usd_total"] == pytest.approx(
+        sum(techs[t]["capex_usd"] for t in ("wind", "solar", "bess_1")) + 2.0e6
+    )
 
 
 def test_hydra_entrypoint_prints_one_json_object(tmp_path: Path) -> None:

@@ -17,6 +17,10 @@ uncertain yield, round-trip efficiency and battery fade. It adds no finance math
 * a secondary, unit-only pre-tax NPV and IRR (the unit's capex, its dispatched revenue and
   its O&M, no tax or debt) use :func:`finance.irr.npv` and :func:`finance.irr.irr`.
 
+The module sits in ``solar_resource`` beside PR 2's dispatcher, whose rules it applies. It
+reaches the analytics layer only through the gateway, the LHS sampler and PR 1/PR 2's
+layout modules, so it adds no package edge to ``docs/architecture_import_graph.mmd``.
+
 Sampling reuses the repository's Latin Hypercube sampler
 (:func:`analytics.mc.samplers.generate_lhs_samples`) with an explicit seed. The same draws
 are used at every grid point (common random numbers), so differences between sizes are not

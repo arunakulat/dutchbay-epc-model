@@ -5,6 +5,14 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Blue Whale solar + BESS sizing (15.12.0).** With the turbine fixed, a seeded Monte Carlo
+  (seed 20261101, 40 sizes x 256 LHS trials, through `evaluate_with_overrides`) sizes the unit
+  on cited prices: OPIS module prices, a Huawei SUN2000-330KTL-H1 inverter matched to the
+  string, IRENA-derived PV BoP, and the public NSO 250 BESS figures. Chosen on the P50 project
+  NPV among sizes that export the full 4 h priority window: DC/AC 1.1 (5.51544 MWp) with
+  5 MW / 24 MWh. New `solar_resource/pv_bess_sizing.py`, its Hydra CLI and configs; Blue Whale v0.6.
+  Project IRR 3.58% -> 4.26%, mostly from the cited capex replacing placeholders. No other
+  scenario moves. Detail in the compiled fragment.
 - **Blue Whale solar + BESS unit (15.11.0).** The solar and BESS become one unit (owner):
   5 MW AC of JinkoSolar Tiger Neo 3.0 670 W (6.0032 MWp) with a 5 MW x 6 h (30 MWh) BESS
   charged only from that PV and dispatched hourly over the PVGIS TMY, 17:30-21:30 at the
