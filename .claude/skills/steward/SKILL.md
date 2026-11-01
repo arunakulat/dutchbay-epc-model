@@ -303,16 +303,39 @@ train that carries a car it wrote. A pull request may always land alone instead.
 4. **If the train goes red,** edit no car on it. Split the train and run each part as a smaller
    train or a single pull request. A fix goes on the car's own branch, which restarts its reviews
    (module 3 §6).
-5. **Land it with rebase-merge, never squash.** Record the protected `main` SHA first, and check that
-   the train is exactly one non-merge commit per car on top of it:
+5. **Land it with rebase-merge, never squash.** Record the protected `main` SHA first. Then check
+   that the train is exactly one non-merge commit per car on top of it, and that each train commit
+   is exactly its car's reviewed diff. Set `cars` to every car as `<pr>:<reviewed-head-sha>`,
+   separated by spaces, in queue order as the train issue lists them:
 
    ```bash
    set -euo pipefail
-   test "$(git rev-list --count <main-sha>..<train-head-sha>)" = "<number of cars>"
-   test -z "$(git rev-list --merges <main-sha>..<train-head-sha>)"
-   test "$(git rev-parse "<train-head-sha>~<number of cars>")" = "<main-sha>"
+   main=<main-sha>; train=<train-head-sha>; cars="<car list>"
+   set -- $cars; n=$#
+   test "$n" -ge 2
+   test "$n" -le 3
+   test "$(git rev-list --count "$main..$train")" = "$n"
+   test -z "$(git rev-list --merges "$main..$train")"
+   test "$(git rev-parse "$train~$n")" = "$main"
+   k=0
+   for car in "$@"; do
+     k=$((k + 1)); pr=${car%%:*}; head=${car#*:}
+     commit=$(git rev-parse --verify "$train~$((n - k))^{commit}")
+     base=$(git merge-base "$main" "$head")
+     want=$(git diff --raw --no-renames --no-abbrev "$base" "$head" | cut -d' ' -f2,4-)
+     got=$(git diff --raw --no-renames --no-abbrev "$commit^" "$commit" | cut -d' ' -f2,4-)
+     test -n "$want"
+     test "$got" = "$want"
+     subject=$(git log -1 --format=%s "$commit")
+     test "${subject%"(#$pr)"}" != "$subject"
+   done
    echo "TRAIN-01 pre-landing check: OK"
    ```
+
+   The loop compares train commit `k` with car `k`: the same changed paths, modes and blobs as the
+   car's reviewed head shows against its merge base, and a subject ending with `(#<pr>)`. A train
+   with two cars' messages swapped, a stray file, or part of one car's diff in another car's commit
+   fails here, although every tree comparison would pass it (module 3 §8).
 
    After it lands, verify every landed commit against its train commit, walking back from the SHA
    the merge returned:
@@ -324,6 +347,7 @@ train that carries a car it wrote. A pull request may always land alone instead.
    test "$(git rev-parse "$landed^{tree}")" = "$(git rev-parse "$train^{tree}")"
    for i in $(seq 0 $((n - 1))); do
      test "$(git rev-parse "$landed~$i^{tree}")" = "$(git rev-parse "$train~$i^{tree}")"
+     test "$(git log -1 --format=%B "$landed~$i")" = "$(git log -1 --format=%B "$train~$i")"
    done
    test "$(git rev-parse "$landed~$n")" = "<main-sha-recorded-before-landing>"
    echo "TRAIN-01 landing check: OK"

@@ -8,10 +8,12 @@
 - **A car's binding carries onto the train only through three proofs.** `RECRUIT-01` module 3
   gains §8. It applies §7's three proofs (blob identity, bidirectional import isolation and the
   complete diff) between the car's reviewed head and the train head. §8 also adds a landing check:
-  every landed commit's tree must equal its train commit's tree, in order, on top of the recorded
-  `main`. The steward skill's check commands fail closed on their own: each starts with
-  `set -euo pipefail` and passes only by printing an `OK` line. Its guard runs them with plain
-  `bash -c`.
+  every landed commit's tree and message must equal its train commit's, in order, on top of the
+  recorded `main`. Before landing, each train commit must be exactly its car's reviewed diff (the
+  same paths, modes and blobs, under a subject ending with that car's number), so a train with two
+  cars' messages swapped, or a stray file in one car's commit, cannot land. The steward skill's
+  check commands fail closed on their own: each starts with `set -euo pipefail` and passes only by
+  printing an `OK` line. Its guard runs them with plain `bash -c`.
 - **What a train does not prove is stated.** The intermediate commits between cars on `main` were
   never run by the full suite on their own.
 - **Routing.** `DELIVERY-01` names a train of dolphin-sized cars as compliant, and `AGENTS.md` and

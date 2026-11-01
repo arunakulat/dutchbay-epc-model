@@ -17,6 +17,12 @@ repository. A correct rebase-merge passes and prints its OK line. A squash, a ch
 car of two, or middle car of three), a merge commit on the train and a stale base each fail with
 no OK line. A hostile control strips each block's ``set -euo pipefail`` and watches the same bad
 landings exit 0, which is why that line is pinned (#1515 assurance F-1).
+
+The pre-landing block also checks each train commit against its car's reviewed head. A train
+whose cars' messages are swapped, whose commit for one car carries a stray file, or whose commit
+subject names the wrong pull request fails, and so does a landing whose message was reworded. A
+hostile control keeps only the block's structural checks and watches the swapped train pass,
+which is why the per-car loop is pinned (#1515 domain D-1).
 """
 
 from __future__ import annotations
@@ -73,6 +79,9 @@ TRAIN_01_REQUIRED_CONTROLS = (
     "the module 3 section 6 and section 7 controls",
     "REVIEW-01's lane counts",
     "Any mismatch fails the merge verification closed.",
+    "each train commit is exactly its car's reviewed diff",
+    "with the same modes and blobs, and its subject ends with that car's pull-request number",
+    "each landed commit's tree and message equal the matching train commit's",
     "tests/lint/test_train_policy.py",
     "GitHub's merge queue is not used",
     "'Trains now' on the decision card in the project thread, 2026-10-31T17:40:55Z",
@@ -94,7 +103,10 @@ MODULE_3_REQUIRED_CONTROLS = (
     "A judgement that another car cannot matter never substitutes for these artifacts.",
     "so §6 restarts both of the car's reviews",
     "The train lands by rebase-merge, never squash.",
-    "each landed commit's tree equals the tree of the matching train commit",
+    "**Each train commit must be exactly its car's reviewed diff:**",
+    "with the same modes and blobs, and its subject ends with that car's pull-request number",
+    "The three proofs above compare trees, so they cannot say which commit carries which car.",
+    "each landed commit's tree and message equal those of the matching train commit",
     "the first one's parent is the recorded `main` SHA",
     "the last landed commit's tree equals the train head's tree",
     "Any mismatch fails merge verification closed",
@@ -124,6 +136,8 @@ STEWARD_REQUIRED_CONTROLS = (
     "module 3 §8's three proofs",
     "edit no car on it",
     "**Land it with rebase-merge, never squash.**",
+    "and that each train commit is exactly its car's reviewed diff",
+    "The loop compares train commit `k` with car `k`",
     "Silence, or a missing `OK` line, is a failure.",
     "never drop its `set -euo pipefail` line",
     "The commits between cars on `main` were never run by the full suite on their own",
@@ -320,28 +334,82 @@ def _commit(repo: Path, path: str, content: str, message: str) -> str:
     return _git(repo, "rev-parse", "HEAD")
 
 
+def _car(repo: Path, main: str, name: str, files: dict[str, str]) -> str:
+    """A car: a branch off ``main`` carrying one reviewed change, returned as its head SHA."""
+    _git(repo, "switch", "-q", "-c", f"car-{name}", main)
+    for path, content in files.items():
+        (repo / path).write_text(content, encoding="utf-8")
+        _git(repo, "add", path)
+    _git(repo, "commit", "-q", "-m", f"docs: car {name}, as reviewed")
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def _build_train(
+    repo: Path,
+    main: str,
+    commits: list[tuple[str, str]],
+    stray: dict[str, str] | None = None,
+) -> str:
+    """Build a train the way the steward skill's build block does, one commit per car.
+
+    Each entry is ``(car head, merge message)``. ``stray`` adds files to the first commit, which
+    the skill forbids, so a negative control can show the check catching it.
+    """
+    _git(repo, "switch", "-q", "--detach", main)
+    for index, (head, message) in enumerate(commits):
+        base = _git(repo, "merge-base", main, head)
+        patch = repo.parent / f"car-{index}.patch"
+        patch.write_text(
+            _git(repo, "diff", "--binary", base, head) + "\n", encoding="utf-8"
+        )
+        _git(repo, "apply", "--index", str(patch))
+        for path, content in (stray or {}).items() if index == 0 else ():
+            (repo / path).write_text(content, encoding="utf-8")
+            _git(repo, "add", path)
+        _git(repo, "commit", "-q", "-m", message)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+def _rebase_merge(repo: Path, main: str, train: str, cars: int) -> str:
+    """Land a train as GitHub's rebase-merge does: each commit replayed onto main, new SHAs."""
+    _git(repo, "switch", "-q", "--detach", main)
+    for back in range(cars - 1, -1, -1):
+        _git(repo, "cherry-pick", "--allow-empty", f"{train}~{back}")
+        _git(repo, "commit", "-q", "--amend", "--no-edit", "--date=2030-01-01T00:00:00")
+    return _git(repo, "rev-parse", "HEAD")
+
+
 @pytest.fixture
 def train_repo(tmp_path: Path) -> dict[str, str | Path]:
-    """A repository with ``main``, a two-car train on it, and a faithful rebase-merge landing."""
+    """Two cars branched off an older ``main``, a train built on the current one, and a landing.
+
+    ``main`` advances after the cars branch, as it does in practice, so each car's diff is taken
+    from its own merge base rather than from the main the train starts at.
+    """
     if shutil.which("git") is None:
         pytest.skip("git is not installed")
     repo = tmp_path / "repo"
     repo.mkdir()
     _git(repo, "init", "-q", "-b", "main")
-    _commit(repo, "base.txt", "base\n", "chore: base")
-    main = _git(repo, "rev-parse", "HEAD")
-    _git(repo, "switch", "-q", "-c", "train")
-    _commit(repo, "car_a.txt", "a\n", "docs: car a (#1)")
-    train = _commit(repo, "car_b.txt", "b\n", "docs: car b (#2)")
-    # GitHub's rebase-merge replays each commit onto main with a new committer, so the
-    # landed SHAs differ from the train's while every tree is the same.
-    _git(repo, "switch", "-q", "--detach", main)
-    for sha in (f"{train}~1", train):
-        _git(repo, "cherry-pick", "--allow-empty", sha)
-        _git(repo, "commit", "-q", "--amend", "--no-edit", "--date=2030-01-01T00:00:00")
-    landed = _git(repo, "rev-parse", "HEAD")
+    old_main = _commit(repo, "base.txt", "base\n", "chore: base")
+    car_a = _car(repo, old_main, "a", {"car_a.txt": "a\n"})
+    car_b = _car(repo, old_main, "b", {"car_b.txt": "b\n"})
+    _git(repo, "switch", "-q", "main")
+    main = _commit(repo, "other.txt", "main moved on\n", "chore: main moved")
+    train = _build_train(
+        repo, main, [(car_a, "docs: car a (#1)"), (car_b, "docs: car b (#2)")]
+    )
+    landed = _rebase_merge(repo, main, train, cars=2)
     assert landed != train
-    return {"repo": repo, "main": main, "train": train, "landed": landed}
+    return {
+        "repo": repo,
+        "main": main,
+        "train": train,
+        "landed": landed,
+        "car_a": car_a,
+        "car_b": car_b,
+        "cars": f"1:{car_a} 2:{car_b}",
+    }
 
 
 PRE_OK = "TRAIN-01 pre-landing check: OK"
@@ -400,13 +468,14 @@ def _failed_closed(result: subprocess.CompletedProcess[str], ok_line: str) -> bo
 
 
 def _pre_landing(
-    repo: Path, main: str, train: str, cars: int, block: str | None = None
+    repo: Path, main: str, train: str, cars: str, block: str | None = None
 ) -> subprocess.CompletedProcess[str]:
+    """Run the pre-landing block; ``cars`` is the ``<pr>:<head>`` list in queue order."""
     block = _landing_checks()[0] if block is None else block
     script = (
         block.replace("<main-sha>", main)
         .replace("<train-head-sha>", train)
-        .replace("<number of cars>", str(cars))
+        .replace("<car list>", cars)
     )
     return _run_check(repo, script)
 
@@ -434,7 +503,8 @@ def test_landing_checks_pass_for_a_faithful_rebase_merge(
     """A train of one commit per car on main, landed by rebase-merge, passes both checks."""
     repo, main = Path(train_repo["repo"]), str(train_repo["main"])
     train, landed = str(train_repo["train"]), str(train_repo["landed"])
-    assert _passed(_pre_landing(repo, main, train, cars=2), PRE_OK)
+    cars = str(train_repo["cars"])
+    assert _passed(_pre_landing(repo, main, train, cars), PRE_OK)
     assert _passed(_post_landing(repo, main, train, landed, cars=2), POST_OK)
 
 
@@ -517,9 +587,12 @@ def test_pre_landing_check_fails_for_a_merge_commit_on_the_train(
 ) -> None:
     """Negative control: a train carrying a merge commit is not one commit per car."""
     repo, main = Path(train_repo["repo"]), str(train_repo["main"])
+    cars, car_a = str(train_repo["cars"]), str(train_repo["car_a"])
     merged = _merge_commit_train(repo, main)
-    assert _failed_closed(_pre_landing(repo, main, merged, cars=2), PRE_OK)
-    assert _failed_closed(_pre_landing(repo, main, merged, cars=3), PRE_OK)
+    assert _failed_closed(_pre_landing(repo, main, merged, cars), PRE_OK)
+    # Three entries match the merged train's commit count, so only the merge check stops it.
+    three = f"{cars} 3:{car_a}"
+    assert _failed_closed(_pre_landing(repo, main, merged, three), PRE_OK)
 
 
 def _merge_commit_train(repo: Path, main: str) -> str:
@@ -542,8 +615,9 @@ def test_pre_landing_check_fails_on_a_stale_base(
     )
     _git(repo, "switch", "-q", "--detach", main)
     newer_main = _commit(repo, "other.txt", "moved on\n", "chore: main moved")
-    assert _failed_closed(_pre_landing(repo, newer_main, train, cars=2), PRE_OK)
-    assert _passed(_pre_landing(repo, main, train, cars=2), PRE_OK)
+    cars = str(train_repo["cars"])
+    assert _failed_closed(_pre_landing(repo, newer_main, train, cars), PRE_OK)
+    assert _passed(_pre_landing(repo, main, train, cars), PRE_OK)
 
 
 def test_dropping_the_set_line_makes_the_blocks_fail_open(
@@ -567,4 +641,158 @@ def test_dropping_the_set_line_makes_the_blocks_fail_open(
         _post_landing(repo, main, train, tampered, cars=2, block=post).returncode == 0
     )
     merged = _merge_commit_train(repo, main)
-    assert _pre_landing(repo, main, merged, cars=2, block=pre).returncode == 0
+    cars = str(train_repo["cars"])
+    assert _pre_landing(repo, main, merged, cars, block=pre).returncode == 0
+
+
+def _structural_only(block: str) -> str:
+    """The pre-landing block without its per-car loop: the checks #1515 had at ``95dbe158``."""
+    lines = block.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.strip() == "k=0")
+    end = next(i for i, line in enumerate(lines) if line.strip() == "done")
+    return "\n".join(lines[:start] + lines[end + 1 :])
+
+
+def _swapped_train(train_repo: dict[str, str | Path]) -> str:
+    """Car b's diff under car a's message, then car a's diff under car b's (domain D-1)."""
+    repo, main = Path(train_repo["repo"]), str(train_repo["main"])
+    car_a, car_b = str(train_repo["car_a"]), str(train_repo["car_b"])
+    return _build_train(
+        repo, main, [(car_b, "docs: car a (#1)"), (car_a, "docs: car b (#2)")]
+    )
+
+
+def test_pre_landing_check_fails_when_car_messages_are_swapped(
+    train_repo: dict[str, str | Path],
+) -> None:
+    """Negative control: each car's diff landing under the other car's message fails.
+
+    The swapped train has one non-merge commit per car on the recorded main and the faithful
+    train's final tree, so every structural and tree check passes it. Only the per-car loop
+    sees that train commit 1 is not car 1's diff.
+    """
+    repo, main = Path(train_repo["repo"]), str(train_repo["main"])
+    cars, train = str(train_repo["cars"]), str(train_repo["train"])
+    swapped = _swapped_train(train_repo)
+    assert _git(repo, "rev-parse", f"{swapped}^{{tree}}") == _git(
+        repo, "rev-parse", f"{train}^{{tree}}"
+    )
+    assert _failed_closed(_pre_landing(repo, main, swapped, cars), PRE_OK)
+
+
+def test_structural_checks_alone_pass_a_swapped_train(
+    train_repo: dict[str, str | Path],
+) -> None:
+    """Hostile control: without the per-car loop, the swapped train passes in full.
+
+    This is what pins the loop as load-bearing: the structural checks alone are what the block
+    carried before #1515's domain D-1, and a mislabelled car would have landed on main.
+    """
+    repo, main = Path(train_repo["repo"]), str(train_repo["main"])
+    cars = str(train_repo["cars"])
+    swapped = _swapped_train(train_repo)
+    block = _structural_only(_landing_checks()[0])
+    assert "for car in" not in block
+    assert _passed(_pre_landing(repo, main, swapped, cars, block=block), PRE_OK)
+
+
+def test_pre_landing_check_fails_on_a_stray_file_in_a_car_commit(
+    train_repo: dict[str, str | Path],
+) -> None:
+    """Negative control: a car's train commit that carries a file the car never changed fails."""
+    repo, main, cars = (
+        Path(train_repo["repo"]),
+        str(train_repo["main"]),
+        str(train_repo["cars"]),
+    )
+    car_a, car_b = str(train_repo["car_a"]), str(train_repo["car_b"])
+    stray = _build_train(
+        repo,
+        main,
+        [(car_a, "docs: car a (#1)"), (car_b, "docs: car b (#2)")],
+        stray={"stray.txt": "not reviewed\n"},
+    )
+    assert _failed_closed(_pre_landing(repo, main, stray, cars), PRE_OK)
+
+
+def test_pre_landing_check_fails_when_a_subject_names_the_wrong_car(
+    train_repo: dict[str, str | Path],
+) -> None:
+    """Negative control: the right diff under a subject ending with another number fails."""
+    repo, main, cars = (
+        Path(train_repo["repo"]),
+        str(train_repo["main"]),
+        str(train_repo["cars"]),
+    )
+    car_a, car_b = str(train_repo["car_a"]), str(train_repo["car_b"])
+    misnumbered = _build_train(
+        repo, main, [(car_a, "docs: car a (#1)"), (car_b, "docs: car b (#12)")]
+    )
+    assert _failed_closed(_pre_landing(repo, main, misnumbered, cars), PRE_OK)
+
+
+def test_pre_landing_check_fails_for_a_single_car(
+    train_repo: dict[str, str | Path],
+) -> None:
+    """Negative control: a train of one car is not a train; it lands alone instead."""
+    repo, main = Path(train_repo["repo"]), str(train_repo["main"])
+    car_a = str(train_repo["car_a"])
+    single = _build_train(repo, main, [(car_a, "docs: car a (#1)")])
+    assert _failed_closed(_pre_landing(repo, main, single, f"1:{car_a}"), PRE_OK)
+
+
+def test_landing_check_fails_when_a_landed_message_differs(
+    train_repo: dict[str, str | Path],
+) -> None:
+    """Negative control: a landing with every tree right but a reworded car message fails."""
+    repo, main, train = (
+        Path(train_repo["repo"]),
+        str(train_repo["main"]),
+        str(train_repo["train"]),
+    )
+    _git(repo, "switch", "-q", "--detach", main)
+    _git(repo, "cherry-pick", f"{train}~1")
+    _git(repo, "cherry-pick", train)
+    _git(repo, "commit", "-q", "--amend", "-m", "docs: car b, reworded (#2)")
+    reworded = _git(repo, "rev-parse", "HEAD")
+    assert _git(repo, "rev-parse", f"{reworded}^{{tree}}") == _git(
+        repo, "rev-parse", f"{train}^{{tree}}"
+    )
+    assert _failed_closed(_post_landing(repo, main, train, reworded, cars=2), POST_OK)
+
+
+def test_pre_landing_check_fails_for_four_cars(
+    train_repo: dict[str, str | Path],
+) -> None:
+    """Negative control: a train carries at most three cars."""
+    repo, main = Path(train_repo["repo"]), str(train_repo["main"])
+    heads = [
+        _car(repo, main, name, {f"car_{name}.txt": f"{name}\n"}) for name in "cdef"
+    ]
+    four = _build_train(
+        repo,
+        main,
+        [(head, f"docs: car {n} (#{n})") for n, head in enumerate(heads, start=1)],
+    )
+    cars = " ".join(f"{n}:{head}" for n, head in enumerate(heads, start=1))
+    assert _failed_closed(_pre_landing(repo, main, four, cars), PRE_OK)
+    three = " ".join(cars.split()[:3])
+    assert _passed(_pre_landing(repo, main, f"{four}~1", three), PRE_OK)
+
+
+def test_pre_landing_check_fails_for_a_car_with_no_diff(
+    train_repo: dict[str, str | Path],
+) -> None:
+    """Negative control: an empty commit for a car that changes nothing is not a car.
+
+    A car whose reviewed head is already on ``main`` has an empty diff, and an empty train
+    commit matches it, so only the block's non-empty test stops this train.
+    """
+    repo, main = Path(train_repo["repo"]), str(train_repo["main"])
+    car_a = str(train_repo["car_a"])
+    train = _build_train(repo, main, [(car_a, "docs: car a (#1)")])
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "docs: car b (#2)")
+    empty = _git(repo, "rev-parse", "HEAD")
+    cars = f"1:{car_a} 2:{main}"
+    assert train != empty
+    assert _failed_closed(_pre_landing(repo, main, empty, cars), PRE_OK)
