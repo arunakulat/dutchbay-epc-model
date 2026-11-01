@@ -78,9 +78,9 @@ _MODULE = Path(
 ).resolve()
 _UTC = timezone.utc
 # Moves with the canonical lender-case result and engine identity; last re-pinned for
-# 15.9.0 (engine identity only; the lender-case result is unchanged).
+# 15.10.0 (engine identity only; the lender-case result is unchanged).
 _KNOWN_D3B_SUCCESS_DIGEST = (
-    "a761d159269e6d5e49b985906b3abf5266713770851eff9b04150950611cf823"
+    "315f6c620ccfb5bd449bf8ddae7ee35adde1f6ba53f16deae39b595423fcc66b"
 )
 _FX_RATE_INPUT_ID = (
     "input:project_case.currency_conversion.fx:lkr-to-usd:2026-08-29.rate"
