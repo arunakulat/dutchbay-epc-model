@@ -55,10 +55,13 @@ SOLAR_BESS_PINS = {
     "equity_irr": -0.03275959163948128,
     "min_dscr": 0.8675297318839426,
 }
+# WIND_PINS re-pinned at 15.14.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
+# 0.487560). Before, at 15.13.0 (v0.1): project IRR 0.04085210230412145, equity IRR
+# 0.014728921618622381, min DSCR 0.868369272868335.
 WIND_PINS = {
-    "project_irr": 0.04085210230412145,
-    "equity_irr": 0.014728921618622381,
-    "min_dscr": 0.868369272868335,
+    "project_irr": 0.07798231364379474,
+    "equity_irr": 0.053445387955278756,
+    "min_dscr": 0.8682973694248998,
 }
 
 

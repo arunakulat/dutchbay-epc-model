@@ -5,6 +5,11 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Blue Whale wind resource from met mast 617725 (15.14.0).** The Kalpitiya met-mast record is
+  long-term corrected against NASA POWER / MERRA-2 (2015-2025) by sector-wise MCP and
+  transferred 26.7 km to the turbine (owner direction). Net CF 37.43% -> 48.76% (31.15 ->
+  40.57 GWh; P90 33.73 GWh at 1 year). Wind project IRR 4.09% -> 7.80%; hybrid 4.26% -> 6.90%.
+  Not lender-grade: the met-mast HOLD stands. Detail in the compiled fragment.
 - **Blue Whale split into a wind project and a solar + BESS project (15.13.0).** Owner decision:
   the 9.5 MW turbine is a separate project built first. The solar + BESS project is sized by
   PR 3's seeded Monte Carlo under the PUCSL 2026 rules (4 h BESS, PV-only charging, discharge

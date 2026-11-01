@@ -9,21 +9,21 @@ turbine, built first, and a solar + BESS project sized under the PUCSL 2026 4 h 
 
 | Project | Component | Size | Notes |
 |---|---|---|---|
-| Wind (`scenarios/blue_whale_wind_lot5b_2026.yaml`) | Turbine | 1 x Envision EN-206/10.5 de-rated to 9.5 MW, 130 m hub, 206 m rotor | Owner decision 2026-11-01; tip height 233 m; built first |
+| Wind (`scenarios/blue_whale_wind_lot5b_2026.yaml`) | Turbine | 1 x Envision EN-206/10.5 de-rated to 9.5 MW, 130 m hub, 206 m rotor | Owner decision 2026-11-01; tip height 233 m; built first. From PR 5 its yield rests on met mast 617725 (net CF 0.487560, 40.57 GWh; not lender-grade) |
 | Solar + BESS (`scenarios/blue_whale_solar_bess_lot5b_2026.yaml`) | Solar PV | 6.0032 MWp DC (160 tables) at 5.0 MW AC, JinkoSolar Tiger Neo 3.0 670 W, fixed tilt 8 degrees, 17 x Huawei SUN2000-330KTL-H1 | PR 4 Monte Carlo, reading A of the 10 MW limit |
 | | BESS | 4.5 MW / 18 MWh (4 h), charged only from the PV, discharged only 17:30-21:30 | PUCSL 2026 4 h rule; PR 4 Monte Carlo, reading A (reading B: 5.5 MW / 22 MWh) |
 
-The combined view `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (v0.6: 9.5 MW wind, 5.51544 MWp
-at 5 MW AC, 5 MW / 24 MWh discharged 17:30-21:30 and 05:30-07:30) is superseded and kept
-unchanged apart from a header note. The sections from "Wind yield" to "Solar + BESS sizing and
+The combined view `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (v0.7: 9.5 MW wind, 5.51544 MWp
+at 5 MW AC, 5 MW / 24 MWh discharged 17:30-21:30 and 05:30-07:30) is superseded; from v0.7 (PR 5)
+its wind block mirrors the wind project's, and nothing else in it has changed since v0.6. The sections from "Wind yield" to "Solar + BESS sizing and
 pricing (v0.6)" below describe it and PR 1 to PR 3, as recorded then.
 
 Funding: **fully LKR funded** (owner, 2026-10-28). Revenue, costs and debt are all LKR, so the
 model runs with FX held flat and the USD columns are a constant-rate translation of LKR.
 
 Model files: `scenarios/blue_whale_wind_lot5b_2026.yaml` and
-`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (version 0.1 each), and the superseded
-`scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.6). Placeholders apart from the
+`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (versions 0.2 and 0.1), and the superseded
+`scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.7). Placeholders apart from the
 configuration, the funding currency, the researched tariffs, the wind yield, and the solar +
 BESS size and cited capex.
 Inputs register: [INPUTS_REQUIRED.md](INPUTS_REQUIRED.md).
@@ -107,6 +107,9 @@ rotor may overhang the reservation and restricted areas (section 6.4.3 lists wha
 reservation admits), the sea, and land outside the lot.
 
 ### Wind yield
+
+Superseded in PR 5 by the met-mast transfer (section "Wind resource from met mast 617725"
+below). The ERA5 basis here is kept as the comparison.
 
 | Item | Value |
 |---|---|
@@ -644,7 +647,45 @@ Best size at each PV level:
 - The ordinary test suite runs reduced grids only. Neither this run nor the suite is tail,
   convergence, lender or bankability evidence (`TEST-03`).
 
-## Latest run (PR 4, two projects, 15.13.0, 2026-11-01)
+## Wind resource from met mast 617725 (PR 5, 2026-11-01)
+
+Work item: #1353 comment 6556910250. Owner direction, verbatim: "use the kalpitiya met-mast
+evidence from RAG repo and interpolate to obtain wind rose and more detailed wind evidence. the
+two locations are near to each other on the same coastline". Method, sources, tables and
+limitations: [MET_MAST_TRANSFER_METHODS.md](MET_MAST_TRANSFER_METHODS.md); results
+`met_mast_transfer_summary.json`; rose `met_mast_wind_rose_130m.png` and `.csv`.
+
+**HOLD: not lender-grade.** The met-mast package's HOLD on annual, P50/P90 and lender use stands.
+
+| Item | Value |
+|---|---|
+| Mast clock | UTC+05:30 (S2 pressure tide, temperature cycle and reference correlation) |
+| MCP | Variance ratio by 16 reference sectors at 120 m against NASA POWER / MERRA-2; hourly R^2 0.610, daily r 0.881; own fits SSW, SW, WSW, W; omnidirectional elsewhere |
+| Long term | 2015-2025; correction factor 0.916 on the concurrent 120 m mean (8.794 to 8.058 m/s) |
+| Transfer | MERRA-2 turbine/mast cell ratio by sector (all-sector 1.014), direction -2.4 degrees |
+| Turbine, 130 m | Mean 8.243 m/s; Weibull A 9.207 m/s, k 3.044; SW 26.6% of hours and 36.9% of wind energy; SSW-WSW 51.8% and 68.6% |
+| Shear | 100-120 m exponent 0.10 (by sector 0.04-0.12) |
+| TI (120 m) | 0.066 at 9-11 m/s, 0.0710 at 15-16 m/s (representative 0.090); not an IEC class |
+| **Net AEP** | **40.57 GWh, CF 48.76%** (gross 43.99 GWh); was 31.15 GWh, 37.43% on #1530's ERA5 basis |
+| Exceedance | 1-year sigma 13.2%: P90 33.73 GWh (1 year), 33.92 GWh (20 years) |
+| Shadow flicker, expected | Rotor yawed to the long-term wind: 826 h/yr at the west-edge midpoint (worst case 2,054, #1530 expected 1,816); six of eight boundary points still above 8 h/yr |
+
+Of the +9.43 GWh, the mean speed (7.14 to 8.24 m/s) gives +8.78, the steeper distribution
++0.53 and the sector split +0.12; density and losses are unchanged.
+
+## Latest run (PR 5, met-mast wind resource, 15.14.0, 2026-11-01)
+
+Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
+
+| Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
+|---|---|---|---|---|---|
+| Wind project (v0.2) | 7.80% (was 4.09%) | 5.34% (was 1.47%) | 0.868 | -3,117,777 (was -6,241,315) | -4,679,503 (was -7,318,639) |
+| Hybrid (v0.7, superseded) | 6.90% (was 4.26%) | 4.33% (was 1.58%) | 0.867 | -5,718,864 (was -8,837,254) | -7,794,231 (was -10,441,094) |
+
+The solar + BESS project does not move. Every other input is still a placeholder, so these are
+not results.
+
+## Earlier run (PR 4, two projects, 15.13.0, 2026-11-01)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
 
@@ -733,5 +774,8 @@ priority-1 inputs replace the placeholders.
    rules. Owner to decide the 10 MW reading (L01) and to obtain a PUCSL, NSO or counsel view on
    whether the turbine counts against the solar + BESS project; to confirm the committed
    reading A size; and to supply the PV EPC and BESS quotes (B15, B19).
-5. Replace placeholders in the scenarios, then run the v14 pipeline for base and P90 cases.
-6. Assemble the DBPL feasibility study once the model has owner-sourced inputs.
+5. Done in PR 5: the met-mast transfer. Owner to obtain the mast's documentation and a
+   12-month record (met-mast evaluation section 9) and, for a bankable case, a site campaign
+   (B07).
+6. Replace placeholders in the scenarios, then run the v14 pipeline for base and P90 cases.
+7. Assemble the DBPL feasibility study once the model has owner-sourced inputs.

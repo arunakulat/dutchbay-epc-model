@@ -23,6 +23,11 @@ a time step only when the hour's direct normal irradiance meets the WMO sunshine
 and scales the result by the probability that the rotor is turning. The caller supplies
 that probability.
 
+:func:`expected_hours_with_orientation` adds a realistic expected case: the rotor disc is
+yawed to the wind direction (``oriented_shadow_mask``) and each sunny step is weighted by
+the caller's month-by-sector probability that the wind blows from that sector with the
+rotor turning (a long-term wind series supplies it).
+
 Geometry is computed in a local transverse Mercator frame (``+proj=tmerc``, scale 1 at the
 origin, axes east and true north). Over the few hundred metres of a lot, its scale error is
 below one part in a million.
@@ -784,6 +789,118 @@ def shadow_mask(
     return mask
 
 
+def oriented_shadow_mask(
+    receptor_en: EastNorth,
+    *,
+    turbine: TurbineGeometry,
+    receptor_height_m: float,
+    max_distance_m: float,
+    sun: SunPath,
+    rotor_axis_deg: float,
+    tower_en: EastNorth = (0.0, 0.0),
+) -> BoolArray:
+    """Steps at which the receptor sees a yawed rotor disc in front of the sun.
+
+    The rotor is a disc of one rotor radius centred on the hub, its axis horizontal and
+    pointing along ``rotor_axis_deg`` (the wind direction it faces; either sense gives the
+    same disc). The receptor is in shadow when the ray from it towards the sun meets the
+    disc's plane, on the sun side, within one rotor radius of the hub. With the axis
+    pointing at the sun's azimuth and the sun on the horizon this reduces to
+    :func:`shadow_mask`; with the axis square to the sun it never casts a shadow.
+
+    Args:
+        receptor_en: Receptor position in the local frame.
+        turbine: Rotor geometry.
+        receptor_height_m: Receptor height above ground.
+        max_distance_m: Horizontal distance beyond which no shadow is counted.
+        sun: Sun path.
+        rotor_axis_deg: Rotor axis bearing, clockwise from true north.
+        tower_en: Tower position in the local frame.
+
+    Returns:
+        Boolean array aligned with the sun path.
+    """
+    dx = tower_en[0] - receptor_en[0]
+    dy = tower_en[1] - receptor_en[1]
+    dz = turbine.hub_height_m - receptor_height_m
+    if math.hypot(dx, dy) > max_distance_m:
+        return np.zeros(sun.elevation_deg.shape, dtype=np.bool_)
+    sx, sy, sz = sun.unit_vectors()
+    ax = math.radians(rotor_axis_deg)
+    nx, ny = math.sin(ax), math.cos(ax)
+    n_dot_s = nx * sx + ny * sy
+    n_dot_d = nx * dx + ny * dy
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t = np.where(np.abs(n_dot_s) > 1e-12, n_dot_d / n_dot_s, -1.0)
+    along = dx * sx + dy * sy + dz * sz
+    dist_sq = t * t - 2.0 * t * along + (dx * dx + dy * dy + dz * dz)
+    mask: BoolArray = (t > 0.0) & (dist_sq <= turbine.rotor_radius_m**2)
+    return mask
+
+
+def expected_hours_with_orientation(
+    receptor_en: EastNorth,
+    *,
+    tower_en: EastNorth,
+    turbine: TurbineGeometry,
+    cfg: ShadowFlickerConfig,
+    sun: SunPath,
+    sunny: BoolArray,
+    month_sector_weights: npt.ArrayLike,
+    sub_directions_per_sector: int,
+) -> float:
+    """Expected flicker hours with the rotor yawed to the wind and turning only when it can.
+
+    Each sunny step is weighted by ``P(wind in sector s and rotor turning | month)`` for
+    every sector, times the share of that sector's yaw angles (sampled evenly across the
+    sector) at which the yawed disc shades the receptor. The weights come from the caller
+    (a long-term wind series); the month is the step's UTC month.
+
+    Args:
+        receptor_en: Receptor position in the local frame.
+        tower_en: Tower position in the local frame.
+        turbine: Rotor geometry.
+        cfg: Receptor height and distance cut-off.
+        sun: Sun path.
+        sunny: Sunshine flags aligned with ``sun``.
+        month_sector_weights: ``[12][n_sectors]`` joint probabilities, each row summing
+            to at most 1.
+        sub_directions_per_sector: Yaw angles sampled per sector.
+
+    Returns:
+        Expected hours per year.
+
+    Raises:
+        ValueError: If the weights are not 12 rows of probabilities summing to at most 1,
+            or fewer than one yaw angle is requested.
+    """
+    w = np.asarray(month_sector_weights, dtype=np.float64)
+    if w.ndim != 2 or w.shape[0] != 12 or np.any(w < 0) or np.any(w.sum(1) > 1 + 1e-9):
+        raise ValueError("month_sector_weights must be 12 rows of probabilities")
+    if sub_directions_per_sector < 1:
+        raise ValueError("sub_directions_per_sector must be >= 1")
+    n_sectors = w.shape[1]
+    width = 360.0 / n_sectors
+    month = (sun.utc_hour_key // 10000 - 1).astype(np.int64)
+    weight = np.zeros(sun.elevation_deg.shape)
+    for s in range(n_sectors):
+        share = np.zeros(sun.elevation_deg.shape)
+        for j in range(sub_directions_per_sector):
+            offset = ((j + 0.5) / sub_directions_per_sector - 0.5) * width
+            share += oriented_shadow_mask(
+                receptor_en,
+                turbine=turbine,
+                receptor_height_m=cfg.receptor_height_m,
+                max_distance_m=cfg.max_shadow_distance_rotor_diameters
+                * turbine.rotor_diameter_m,
+                sun=sun,
+                rotor_axis_deg=s * width + offset,
+                tower_en=tower_en,
+            )
+        weight += w[month, s] * share / sub_directions_per_sector
+    return float((weight * sunny).sum()) * sun.step_minutes / 60.0
+
+
 def sunny_steps(sun: SunPath, tmy_csv: str, dni_threshold_wm2: float) -> BoolArray:
     """Steps whose UTC hour in an hourly record has DNI at or above the threshold.
 
@@ -1019,10 +1136,12 @@ __all__ = [
     "TurbineGeometry",
     "coast_aligned_square_lot",
     "coastline_lines_east_north",
+    "expected_hours_with_orientation",
     "flicker_grid",
     "grid_summary",
     "place_at_coastal_setback",
     "receptor_as_dict",
+    "oriented_shadow_mask",
     "receptor_flicker",
     "shadow_mask",
     "site_feature_collection",
