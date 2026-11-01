@@ -11,39 +11,17 @@ options that change the solve, and pin the walk's branches on a small synthetic 
 
 from __future__ import annotations
 
-import importlib
-import pkgutil
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 
-import finance.debt
 from analytics.evaluation_v14 import evaluate_with_overrides
 from finance import debt_v14
+from tests._debt_seams import wrap_everywhere
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER_CONFIG = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
-
-
-def _wrap_everywhere(
-    monkeypatch: pytest.MonkeyPatch,
-    real: Callable[..., Any],
-    wrapper: Callable[..., Any],
-) -> list[str]:
-    """Replace ``real`` in every ``finance.debt`` module that binds it by name.
-
-    The engine's functions read their collaborators from their own module's globals,
-    so a patch on the ``finance.debt_v14`` façade would be dead
-    (``tests/lint/test_debt_package_boundary.py`` rule 2).
-    """
-    patched = []
-    for info in pkgutil.iter_modules(finance.debt.__path__):
-        module = importlib.import_module(f"finance.debt.{info.name}")
-        if getattr(module, real.__name__, None) is real:
-            monkeypatch.setattr(module, real.__name__, wrapper)
-            patched.append(module.__name__)
-    return patched
 
 
 @pytest.fixture
@@ -71,7 +49,7 @@ def solves(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     for real, wrapper in ((real_layer, counting_layer), (real_solve, checking_solve)):
         # A seam no module binds would leave the counters silently empty.
-        assert _wrap_everywhere(monkeypatch, real, wrapper), real.__name__
+        assert wrap_everywhere(monkeypatch, real, wrapper), real.__name__
     return record
 
 
