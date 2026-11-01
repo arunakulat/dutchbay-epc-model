@@ -61,8 +61,14 @@ def _reference_solve(
     *,
     step: float = 0.0025,
     fp_eps: float = 1e-6,
+    start_hint: float | None = None,
 ) -> float:
-    """``_solve_gearing_for_dscr`` as it stood before the change (deep copy per trial)."""
+    """``_solve_gearing_for_dscr`` as it stood before the change (deep copy per trial).
+
+    ``start_hint`` is accepted and ignored: the oracle is always the cold scan, so a
+    warm-started solve is held to the same answer (see test_gearing_warm_start.py).
+    """
+    del start_hint
     ratio = max_ratio
     while ratio > 0.0:
         core = debt_v14.apply_debt_layer(
