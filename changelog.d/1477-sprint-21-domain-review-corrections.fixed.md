@@ -2,8 +2,8 @@
   #1296 merged `docs/SPRINT_21_BOOTSTRAP/` without its review pair; the post-merge domain review
   (#1371) returned REJECT with seven blocking findings, each now an issue (#1477 to #1483). Four
   statements in the #1296 entry of `CHANGELOG.md` are corrected here. The
-  repository sizes debt by solving gearing on the real schedule, in an opt-in mode that 19 of 37
-  top-level scenarios use; `size_debt_with_dual_dscr`, against which the debt-capacity check was
+  repository sizes debt by solving gearing on the real schedule, in an opt-in mode that 20 of 38
+  top-level scenarios use at 15.10.0; `size_debt_with_dual_dscr`, against which the debt-capacity check was
   run, only fills lender-pack metadata. The plan bases debt capacity "on the NPV of CFADS"
   without saying how, so only its literal reading sizes at 1.00x coverage and oversizes a
   sculpted facility by the target DSCR factor. At least 19 of the 38 plan items touch open

@@ -546,6 +546,18 @@ has its own issue. Every finding below was re-checked against `main` at `0cc5a0d
 corrected; what each finding describes holds at both `b87ee32` and `0cc5a0da`, apart from line
 numbers.
 
+Two later changes on `main` move where a reader finds these facts, not what they say; both were
+re-checked on 1 November 2026 at `709bd406`. #1502 (`1e4ccc61`) moved the debt engine verbatim
+from `finance/debt_v14.py` into the `finance/debt/` package, and `finance/debt_v14.py` now only
+re-exports it, so this record's `finance/debt_v14.py` line numbers are to `b87ee32`. The functions
+named are now in `finance/debt/sizing.py` (`_solve_gearing_for_dscr`, `_resolve_downside_ratio`,
+`_maybe_autosolve_dscr`, `size_debt_with_dual_dscr`), `finance/debt/terms.py`
+(`_build_cfads_timeline`), `finance/debt/schedules.py` (`_sculpted_schedule`),
+`finance/debt/plan.py` (`plan_debt`) and `finance/debt/layer.py` (`apply_debt_layer`). #1450 added
+a top-level scenario in `dual_dscr` mode (`scenarios/blue_whale_hybrid_lot5b_2026.yaml`), so 20 of
+38 top-level scenarios set a DSCR mode at `709bd406`; the 19 of 37 in item 25 is the count at
+`b87ee32` and `0cc5a0da`.
+
 | Finding | Issue | Corrected here |
 |---|---|---|
 | DOM-1 (high): debt sizing attributed to the inert closed-form helper | #1477 | Section 1 step 5; items 25, 27 and 28 re-described and re-graded; C1 receipt relabelled and its closing paragraph rewritten |

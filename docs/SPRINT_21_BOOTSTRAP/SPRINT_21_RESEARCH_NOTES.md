@@ -74,7 +74,7 @@ and every other cited finding as `open_current_state_not_examined`.
 | Fact | Where it was read |
 |---|---|
 | Closed-form capacity, NPV of CFADS divided by target DSCR, used only as lender-pack metadata (corrected 28 October 2026, #1477) | `finance/debt_v14.py:1984`, called at `:1410`; note at `:1402-1408` |
-| Gearing solved against the real schedule, opt-in by `Financing_Terms.debt_sizing`; 19 of 37 top-level scenarios set it | `finance/debt_v14.py:1251`, via `_maybe_autosolve_dscr` |
+| Gearing solved against the real schedule, opt-in by `Financing_Terms.debt_sizing`; 19 of 37 top-level scenarios set it (20 of 38 at `709bd406`, after #1450) | `finance/debt_v14.py:1251`, via `_maybe_autosolve_dscr` |
 | DSRA funded at close only when `dsra.fund_at_close` is set; lender case does not set it | `finance/debt_v14.py:1593`; `scenarios/dutchbay_lendercase_2025Q4.yaml:502` |
 | Straight-line and split straight-line depreciation; an enhanced capital allowance multiple is also wired, off in the lender case (corrected 28 October 2026, #1478) | `finance/cashflow_v14_tax.py:359`, `:396`, `:135-143`; `scenarios/dutchbay_lendercase_2025Q4.yaml:377-378` |
 | `loss_carryforward_years` required, `>= 0`, `0` disables carry-forward | `finance/cashflow_v14_tax.py:243`, `:290`, `:488` |
