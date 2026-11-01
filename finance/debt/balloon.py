@@ -121,6 +121,13 @@ def _balloon_resolution_path(
     - ``resolution[p]``: cash (USD) diverted from equity to the balloon, senior to
       equity: its interest plus whatever principal it retires.
     - ``interest[p]``: interest accrued on the balloon in period ``p``.
+    - ``interest_paid[p]``: interest settled in cash in period ``p``, inside
+      ``resolution[p]``. A payment settles interest before principal: first any
+      interest an earlier period capitalised, then the period's own. It differs
+      from ``interest[p]`` only under ``cash_sweep``, when the cash cannot pay the
+      interest (it is capitalised) or later pays interest capitalised earlier. Tax
+      can deduct balloon interest when it is paid (#1505), so the paid split is
+      published beside the accrual.
     - ``outstanding[p]``: the balloon's OPENING balance in period ``p``, or ``None``
       for every period this path does not govern (before maturity, or when the
       treatment produces no stream). Plan_debt overlays it on ``debt_outstanding``.
@@ -149,6 +156,7 @@ def _balloon_resolution_path(
     n = int(timeline_periods)
     resolution = [0.0] * n
     interest = [0.0] * n
+    interest_paid = [0.0] * n
     outstanding: List[Optional[float]] = [None] * n
     senior_fee: List[Optional[float]] = [None] * n
     fee_rate = float(senior_fee_rate)
@@ -157,6 +165,7 @@ def _balloon_resolution_path(
         return {
             "resolution": resolution,
             "interest": interest,
+            "interest_paid": interest_paid,
             "outstanding": outstanding,
             "senior_fee": senior_fee,
             "residual": residual,
@@ -173,20 +182,23 @@ def _balloon_resolution_path(
             resolution[n - 1] = float(balloon)
         return _path(0.0)
 
-    def _carry(p: int, opening: float, accrued: float, paid: float) -> None:
+    def _carry(
+        p: int, opening: float, accrued: float, paid: float, interest_settled: float
+    ) -> None:
         outstanding[p] = opening
         senior_fee[p] = fee_rate * opening
         interest[p] = accrued
+        interest_paid[p] = interest_settled
         resolution[p] = paid
 
     def _cleared_from(p: int) -> None:
         for q in range(p, n):
-            _carry(q, 0.0, 0.0, 0.0)
+            _carry(q, 0.0, 0.0, 0.0, 0.0)
 
     if treatment == "bullet":
         opening = float(balloon)
         accrued = opening * max(0.0, float(avg_rate))
-        _carry(maturity, opening, accrued, opening + accrued)
+        _carry(maturity, opening, accrued, opening + accrued, accrued)
         _cleared_from(maturity + 1)
         return _path(0.0)
 
@@ -209,7 +221,9 @@ def _balloon_resolution_path(
         opening = float(balloon)
         for j in range(periods):
             accrued = opening * rate
-            _carry(maturity + j, opening, accrued, annuity)
+            # A level annuity is never less than the period's interest, so the
+            # refinance pays its interest as it accrues.
+            _carry(maturity + j, opening, accrued, annuity, min(accrued, annuity))
             opening = max(0.0, opening + accrued - annuity)
         _cleared_from(maturity + periods)
         return _path(0.0)
@@ -222,13 +236,19 @@ def _balloon_resolution_path(
     # actually outstanding at the start of the period. Zero fees -> no fee term.
     rate = max(0.0, float(avg_rate))
     remaining = float(balloon)
+    # Interest accrued in earlier periods that the cash could not pay. It sits in
+    # `remaining` (capitalised) and is the first claim on a later payment.
+    capitalised_interest = 0.0
     for p in range(maturity, n):
         available = _as_float(cfads_ext[p], 0.0) if p < len(cfads_ext) else 0.0
         fee = fee_rate * remaining
         accrued = remaining * rate
         due = remaining + accrued
         pay = min(max(0.0, available - fee), due)
-        _carry(p, remaining, accrued, pay)
+        interest_due = capitalised_interest + accrued
+        interest_settled = min(pay, interest_due)
+        _carry(p, remaining, accrued, pay, interest_settled)
+        capitalised_interest = interest_due - interest_settled
         remaining = due - pay
         if remaining <= _BALLOON_TOL:
             _cleared_from(p + 1)

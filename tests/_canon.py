@@ -15,7 +15,11 @@ precision. When the canon legitimately re-baselines, update the number here and 
 one-line "Re-baselined by ..." note in the oracle docstring — nothing else.
 
 Provenance of the current vector (see the oracle docstring for the full history):
-#1504 (2026-10-31) charges the senior credit-support fee on the balloon actually
+#1505 (2026-11-01) deducts the balloon interest paid after maturity in the levered tax
+pass (owner decision: deductible when paid, ``tax.balloon_interest_tax_basis``). On the
+lender case that is the refinanced tranche's USD 7.24M: equity IRR -26.44% -> -23.01%;
+nothing else in this vector moves.
+Prior: #1504 (2026-10-31) charges the senior credit-support fee on the balloon actually
 outstanding after maturity instead of the structural USD 28.63m in every period to the
 horizon: total fee USD 15.11m -> 13.14m. Equity IRR -30.54% -> -26.44%, project IRR
 -0.142% -> -0.060%, project NPV -91.57M -> -91.40M, total CFADS 165.69M -> 166.93M,
@@ -44,7 +48,7 @@ from typing import Final
 
 # Base-case (undiscounted / as-modelled) economics.
 LENDER_PROJECT_IRR: Final[float] = -0.0006022786649252747
-LENDER_EQUITY_IRR: Final[float] = -0.2643679102024472
+LENDER_EQUITY_IRR: Final[float] = -0.23007420618012175
 LENDER_PROJECT_NPV: Final[float] = -91402455.3177098
 
 # Debt-service coverage. ``min_dscr`` is the #790 conservative fold-corrected covenant

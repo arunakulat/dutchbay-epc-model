@@ -289,7 +289,14 @@ def test_canonical_lendercase_economics_unchanged() -> None:
 
     lender = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
     kpis = run_v14_pipeline(config=lender, validation_mode="strict")["kpis"]
-    # Re-baselined by #1504 (2026-10-31): after maturity the senior credit-support fee is
+    # Re-baselined by #1505 (2026-11-01, owner decision: deductible when paid,
+    # tax.balloon_interest_tax_basis): the levered tax pass deducts the refinanced
+    # tranche's USD 7.24M of interest, paid in operating years 15-17, which it deducted
+    # nowhere before. Equity IRR -26.44% -> -23.01% (equity NPV -95.53M -> -95.27M);
+    # LLCR 1.2875 -> 1.2905 and PLCR 1.3283 -> 1.3342 (their windows reach the years
+    # the interest is paid). Project IRR, NPV, CFADS, min_dscr and the facility are
+    # unchanged: the project pass deducts no interest.
+    # Prior: re-baselined by #1504 (2026-10-31): after maturity the senior credit-support fee is
     # charged on the refinanced balance actually outstanding, not on the structural
     # USD 28.63m balloon in every period to the horizon (USD 3.01m -> 1.04m over periods
     # 17-22; total fee 15.11M -> 13.14M). Equity IRR -30.54% -> -26.44%, project IRR

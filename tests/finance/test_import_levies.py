@@ -508,8 +508,11 @@ FULL_STACK_OVERRIDE = str(
 # refinanced balance actually outstanding, not the structural balloon to the horizon,
 # so equity IRR -22.61% -> -18.46%, project IRR 0.770% -> 0.842%, NPV -80.63M ->
 # -80.46M and CFADS 171.19M -> 172.41M. The facility does not move.
+# Re-measured by #1505 (2026-11-01): the levered tax pass deducts the refinanced
+# tranche's interest (paid basis), so equity IRR -18.46% -> -15.49%. The project
+# figures, CFADS and the facility do not move.
 LEVY_OFF_PROJECT_IRR = 0.008422903814629845
-LEVY_OFF_EQUITY_IRR = -0.18464920944794894
+LEVY_OFF_EQUITY_IRR = -0.15485745093533887
 LEVY_OFF_PROJECT_NPV = -80457071.06813467
 LEVY_OFF_TOTAL_CFADS = 172406889.7900688
 LEVY_OFF_DEBT_TOTAL = 65036999.99999999

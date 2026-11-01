@@ -80,7 +80,9 @@ REFINANCE_KEYS = frozenset({"refinance"})
 
 # The key #1503 appends after that: interest accrued on the balloon after maturity,
 # period-indexed, under every treatment that carries the balloon past maturity.
-BALLOON_INTEREST_KEYS = frozenset({"balloon_interest"})
+# #1505 appends the part of it settled in cash, which the levered tax pass deducts on
+# the default `paid` basis.
+BALLOON_INTEREST_KEYS = frozenset({"balloon_interest", "balloon_interest_paid"})
 
 # Every key ``plan_debt`` published BEFORE the taxonomy was added, captured from
 # the pre-change engine across all evaluable scenarios (the set is identical for
@@ -403,23 +405,24 @@ def test_published_key_order_places_the_taxonomy_last() -> None:
     this module passing.
 
     F-2/F-3 appended ``dscr_periods`` AFTER the F-6 taxonomy, #1396 appended
-    ``refinance`` after that, and #1503 appended ``balloon_interest`` last, so the tail
-    is six keys in dolphin order. The pin is extended rather than relaxed: the exact
+    ``refinance`` after that, #1503 appended ``balloon_interest`` and #1505
+    ``balloon_interest_paid`` last, so the tail is seven keys in dolphin order. The pin is extended rather than relaxed: the exact
     list is still asserted, in order, and everything before it is still exactly the
     pre-existing surface.
     """
     _cfg, debt_result = _plan_for(Path(LENDER_CONFIG))
     published = list(debt_result)
-    assert published[-6:] == [
+    assert published[-7:] == [
         "construction_periods",
         "bridge_debt_period",
         "first_operating_period",
         "dscr_periods",
         "refinance",
         "balloon_interest",
+        "balloon_interest_paid",
     ]
     # Everything before the additive tail is exactly the pre-existing surface, in order.
-    assert set(published[:-6]) == PRE_EXISTING_KEYS
+    assert set(published[:-7]) == PRE_EXISTING_KEYS
 
 
 def test_first_mapped_period_zero_is_reported_as_zero() -> None:
