@@ -1,4 +1,4 @@
-- Apply the November 2026 tariff and BESS research to four scenarios (15.9.0). Source: the
+- Apply the November 2026 tariff and BESS research to four scenarios (15.11.0). Source: the
   owner's research record "Sri Lanka small-plant tariffs, BESS methodology and curtailment
   (Nov 2026)" and, for the capacity charge, the repository's own NSO 250 MW record.
   - `scenarios/ceb_solar_bess_nightpeak_10mw.yaml` moves from CEB's 2025 night-peak scheme

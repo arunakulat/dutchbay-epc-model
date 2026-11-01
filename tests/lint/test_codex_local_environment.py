@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import subprocess
@@ -9,6 +10,7 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+PROJECT_CONFIG = ROOT / ".codex" / "config.toml"
 ENVIRONMENT_FILE = ROOT / ".codex" / "environments" / "environment.toml"
 ENVRC = ROOT / ".envrc"
 SETUP_SCRIPT = ROOT / "setup_venv.sh"
@@ -26,6 +28,31 @@ def _environment() -> dict[str, object]:
 
     with ENVIRONMENT_FILE.open("rb") as stream:
         return tomllib.load(stream)
+
+
+def test_codex_project_config_tracks_the_recorded_defaults() -> None:
+    """Pin the project defaults Codex applies to every trusted checkout.
+
+    These settings let a local Codex task run without approval prompts and outside
+    the sandbox, so a change to them is an agent-permission change and must arrive
+    as a reviewed diff. The digest is the one H02, H05, H06 and H08 recorded for the
+    copy that sat untracked in the primary checkout, so tracking the file moved its
+    bytes into review without changing them.
+    """
+
+    with PROJECT_CONFIG.open("rb") as stream:
+        config = tomllib.load(stream)
+
+    assert config == {
+        "approval_policy": "never",
+        "sandbox_mode": "danger-full-access",
+        "model_verbosity": "medium",
+        "model_reasoning_summary": "concise",
+    }
+    assert (
+        hashlib.sha256(PROJECT_CONFIG.read_bytes()).hexdigest()
+        == "42dac680fc1f9e47c5cbc864ca50984445019be946ac09b470981fd25bd2969d"
+    )
 
 
 def test_codex_environment_uses_supported_location_and_version() -> None:

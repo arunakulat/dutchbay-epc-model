@@ -77,10 +77,14 @@ _MODULE = Path(
     )
 ).resolve()
 _UTC = timezone.utc
-# Moves with the canonical lender-case result and engine identity; last re-pinned for
-# 15.9.0 (engine identity only; the lender-case result is unchanged).
+# Moves with the canonical lender-case result and engine identity; last re-pinned by
+# #1528 (tariff research, 15.11.0: only the engine identity moved), before that by
+# #1526 (balloon interest deducted for tax, 15.10.0: only the engine identity moved;
+# the digest did not move with #1526's canon change before the bump), before that by
+# #1510 (post-maturity balloon carry, 15.9.0: the engine identity moved) and by #1396
+# part B (refinance canon, 15.8.0).
 _KNOWN_D3B_SUCCESS_DIGEST = (
-    "a761d159269e6d5e49b985906b3abf5266713770851eff9b04150950611cf823"
+    "a1cd496739cf7bc0aa973552a02d9d72c033ec6e5749f7d84cab65e0c89513d1"
 )
 _FX_RATE_INPUT_ID = (
     "input:project_case.currency_conversion.fx:lkr-to-usd:2026-08-29.rate"
