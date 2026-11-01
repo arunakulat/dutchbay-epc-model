@@ -148,16 +148,19 @@ recommendation:
   # Written to scenarios/blue_whale_solar_bess_lot5b_2026.yaml: the primary objective's
   # choice under the committed reading in docs/blue_whale/solar_bess_project_sizing_summary.json
   # (a test checks they agree). The other reading's choice is reported, not committed.
+  # Run of 2026-11-01 (seed 20261101, 325 points x 256 trials): reading A chooses 160 tables
+  # (6.0032 MWp), 5.0 MW AC and a 4.5 MW / 18 MWh BESS; reading B chooses 191 tables
+  # (7.16632 MWp, the lot's maximum), 6.0 MW AC and 5.5 MW / 22 MWh.
   committed:
     reading: A
-    pv_tables: 191
-    pv_ac_mw: 5.5
+    pv_tables: 160
+    pv_ac_mw: 5.0
     bess_power_mw: 4.5
   alternative:
     reading: B
     pv_tables: 191
-    pv_ac_mw: 5.5
-    bess_power_mw: 4.5
+    pv_ac_mw: 6.0
+    bess_power_mw: 5.5
 
 output:
   # Optional, relative to the repository root; null writes nothing. The committed summary is
