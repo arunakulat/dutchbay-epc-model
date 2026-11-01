@@ -744,6 +744,9 @@ for _path, _disposition in (
             # None unless the balloon is refinanced, and this facade routes none of
             # its period-indexed rows, so the whole container stays opaque.
             "refinance",
+            # Period-indexed interest accrued on the balloon after maturity, inside
+            # `balloon_resolution`; opaque with the rest of the period series.
+            "balloon_interest",
         )
     ),
     (

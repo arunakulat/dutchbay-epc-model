@@ -504,10 +504,14 @@ FULL_STACK_OVERRIDE = str(
 # Re-measured by #1396 part B (2026-10-27): the committed case now refinances its
 # balloon, so only the equity IRR moves (-8.75% -> -22.61%); the project figures, CFADS
 # and the facility are untouched because balloon resolution sits below CFADS.
-LEVY_OFF_PROJECT_IRR = 0.0077027371852971295
-LEVY_OFF_EQUITY_IRR = -0.226100391862452
-LEVY_OFF_PROJECT_NPV = -80630541.51396486
-LEVY_OFF_TOTAL_CFADS = 171189581.74838185
+# Re-measured by #1504 (2026-10-31): after maturity the senior fee is charged on the
+# refinanced balance actually outstanding, not the structural balloon to the horizon,
+# so equity IRR -22.61% -> -18.46%, project IRR 0.770% -> 0.842%, NPV -80.63M ->
+# -80.46M and CFADS 171.19M -> 172.41M. The facility does not move.
+LEVY_OFF_PROJECT_IRR = 0.008422903814629845
+LEVY_OFF_EQUITY_IRR = -0.18464920944794894
+LEVY_OFF_PROJECT_NPV = -80457071.06813467
+LEVY_OFF_TOTAL_CFADS = 172406889.7900688
 LEVY_OFF_DEBT_TOTAL = 65036999.99999999
 
 

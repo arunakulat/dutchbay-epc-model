@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from finance.debt.capex import _extract_capex_usd
 from finance.debt.constants import (
@@ -288,27 +288,14 @@ def apply_debt_layer(
     # per-period fee the DSCR series charges (via the canonical row->debt-period map).
     # Leaving the numerator pre-fee would overstate coverage relative to the reported
     # (fee-netted) CFADS rows and the DSCR series. 0.0 fees -> byte-identical.
-    fee_by_row: Dict[int, float] = {}
-    for mapping in annual_row_debt_period_map:
-        debt_period = int(mapping["debt_period"])
-        if 0 <= debt_period < len(senior_fee_schedule):
-            fee_by_row[int(mapping["annual_row_index"])] = senior_fee_schedule[
-                debt_period
-            ]
-    project_cfads = [
-        value - fee_by_row.get(row_i, 0.0) for row_i, value in enumerate(cfads)
-    ]
-    cfads_for_llcr = project_cfads[:tenor] if tenor > 0 else []
-
-    llcr = (
-        _npv(cfads_for_llcr, llcr_discount_rate) / debt_principal_total
-        if debt_principal_total > 0 and cfads_for_llcr
-        else 0.0
-    )
-    plcr = (
-        _npv(project_cfads, plcr_discount_rate) / debt_principal_total
-        if debt_principal_total > 0 and project_cfads
-        else 0.0
+    llcr, plcr = _coverage_ratios(
+        cfads=cfads,
+        senior_fee_schedule=senior_fee_schedule,
+        annual_row_debt_period_map=annual_row_debt_period_map,
+        tenor=tenor,
+        debt_principal_total=debt_principal_total,
+        llcr_discount_rate=llcr_discount_rate,
+        plcr_discount_rate=plcr_discount_rate,
     )
 
     fx_values: List[float] = []
@@ -351,7 +338,51 @@ def apply_debt_layer(
         "avg_debt_rate": avg_debt_rate,
         "llcr": llcr,
         "plcr": plcr,
+        "llcr_discount_rate": llcr_discount_rate,
+        "plcr_discount_rate": plcr_discount_rate,
         "fx_min": fx_min,
         "fx_max": fx_max,
         "fx_avg": fx_avg,
     }
+
+
+def _coverage_ratios(
+    *,
+    cfads: Sequence[float],
+    senior_fee_schedule: Sequence[float],
+    annual_row_debt_period_map: Sequence[Mapping[str, Any]],
+    tenor: int,
+    debt_principal_total: float,
+    llcr_discount_rate: float,
+    plcr_discount_rate: float,
+) -> Tuple[float, float]:
+    """LLCR and PLCR on per-row CFADS net of each row's senior credit-support fee.
+
+    The window and discount conventions are documented where
+    :func:`apply_debt_layer` calls this. :func:`plan_debt` calls it again once the
+    balloon's post-maturity fee is known, so both ratios net the fee on the balance
+    actually outstanding.
+    """
+    fee_by_row: Dict[int, float] = {}
+    for mapping in annual_row_debt_period_map:
+        debt_period = int(mapping["debt_period"])
+        if 0 <= debt_period < len(senior_fee_schedule):
+            fee_by_row[int(mapping["annual_row_index"])] = senior_fee_schedule[
+                debt_period
+            ]
+    project_cfads = [
+        value - fee_by_row.get(row_i, 0.0) for row_i, value in enumerate(cfads)
+    ]
+    cfads_for_llcr = project_cfads[:tenor] if tenor > 0 else []
+
+    llcr = (
+        _npv(cfads_for_llcr, llcr_discount_rate) / debt_principal_total
+        if debt_principal_total > 0 and cfads_for_llcr
+        else 0.0
+    )
+    plcr = (
+        _npv(project_cfads, plcr_discount_rate) / debt_principal_total
+        if debt_principal_total > 0 and project_cfads
+        else 0.0
+    )
+    return llcr, plcr

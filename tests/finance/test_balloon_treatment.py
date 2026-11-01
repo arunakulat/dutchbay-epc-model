@@ -112,15 +112,18 @@ def test_cash_sweep_partially_retires_balloon_and_lowers_equity_irr(
     # Partial retirement: some balloon swept, a residual remains (CFADS now insufficient).
     assert 0.0 < dr["balloon_residual"] < dr["balloon_remaining"]
     assert sum(dr["balloon_resolution"]) > 0.0
-    # Cash conserves: total swept + residual == the structural balloon.
+    # Cash conserves: total swept + residual == the structural balloon plus the
+    # interest it accrued after maturity (#1503: the balloon is not interest-free).
+    assert sum(dr["balloon_interest"]) > 0.0
     assert sum(dr["balloon_resolution"]) + dr["balloon_residual"] == pytest.approx(
-        dr["balloon_remaining"], rel=0.02
+        dr["balloon_remaining"] + sum(dr["balloon_interest"]), rel=1e-9
     )
     assert sweep < legacy - 0.025  # materially below the free pass, honest
-    # #738 re-baseline: cash_sweep IS the committed default, so this equals the
-    # canonical equity IRR, re-baselined by #1397 (-7.85% -> -9.99%). Keep it in step
-    # with tests/_canon.py::LENDER_EQUITY_IRR.
-    assert sweep == pytest.approx(-0.0999, abs=0.003)
+    # #738 re-baseline: cash_sweep was the committed default until #1396 part B, so this
+    # was the canonical equity IRR, re-baselined by #1397 (-7.85% -> -9.99%). #1503 and
+    # #1504 (2026-10-31) move it to -10.03%: the swept balloon accrues interest, which
+    # the sweep was already taking every dollar for, and the fee falls with the balance.
+    assert sweep == pytest.approx(-0.1003, abs=0.003)
 
 
 def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
@@ -131,9 +134,11 @@ def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
     # The 5.9% FX-drift re-baseline plus the 2.0% AEP haircut leave a large balloon;
     # refinancing it at the penalty rate against the weaker CFADS is catastrophic for
     # equity. #1397 moves it -34.71% -> -30.54%: the levered-tax basis shrinks the
-    # balloon being refinanced ($31.55M -> $28.63M). It is still the worst of the five,
-    # which is the ordering this test pins.
-    assert refi == pytest.approx(-0.3054, abs=0.005)
+    # balloon being refinanced ($31.55M -> $28.63M). #1504 (2026-10-31) moves it to
+    # -26.44%: the senior fee after maturity is charged on the refinanced balance
+    # actually outstanding. It is still the worst of the five, which is the ordering
+    # this test pins.
+    assert refi == pytest.approx(-0.2644, abs=0.005)
 
 
 def test_amortize_removes_balloon_by_resizing_debt(results: dict) -> None:
