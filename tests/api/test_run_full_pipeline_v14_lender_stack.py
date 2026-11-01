@@ -99,6 +99,7 @@ class TestCanonicalCLIProducesLenderStack:
             # Explicit flat FX (FIN-6): the engine no longer fabricates a silent flat
             # fallback. 333.79 LKR/USD flat reproduces the prior fallback behaviour.
             "fx": {"start_lkr_per_usd": 333.79, "annual_depr_pct": 0.0},
+            "returns": {"project_discount_rate": 0.10},  # required since #1429
         }
 
     def test_cli_output_has_annual_rows(self, minimal_test_config):
@@ -418,6 +419,7 @@ class TestLenderStackOutputQuality:
             # Explicit flat FX (FIN-6): the engine no longer fabricates a silent flat
             # fallback. 333.79 LKR/USD flat reproduces the prior fallback behaviour.
             "fx": {"start_lkr_per_usd": 333.79, "annual_depr_pct": 0.0},
+            "returns": {"project_discount_rate": 0.10},  # required since #1429
         }
 
     def test_annual_rows_has_expected_length(self, minimal_test_config):

@@ -77,10 +77,12 @@ _MODULE = Path(
     )
 ).resolve()
 _UTC = timezone.utc
-# Moves with the canonical lender-case result and engine identity; last re-pinned by
-# #1396 part B (refinance canon, 15.8.0).
+# Moves with the canonical lender-case result and engine identity; re-pinned by
+# #1396 part B (refinance canon, 15.8.0), then by #1429, whose D3B fixture now declares
+# returns.project_discount_rate 0.10 (the rate it was always discounted at). The new
+# config key is echoed into the result; no computed value moves.
 _KNOWN_D3B_SUCCESS_DIGEST = (
-    "7474d237a7b550bb499af7c736a862817335ae54c06483655b499c6fe2de8c9d"
+    "3651fda77916c11d6ae478571465925449f8e6c1df412915d4d6b491ce93290d"
 )
 _FX_RATE_INPUT_ID = (
     "input:project_case.currency_conversion.fx:lkr-to-usd:2026-08-29.rate"
