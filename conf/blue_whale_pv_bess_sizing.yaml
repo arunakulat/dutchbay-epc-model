@@ -113,7 +113,7 @@ curtailment_scenario:
 recommendation:
   # The sizing written to the Blue Whale scenario: the primary objective's choice in the
   # committed run docs/blue_whale/pv_bess_sizing_summary.json (a test checks they agree).
-  # Run of 2026-11-01 at 4e84dc82 (result_sha256 40bd2789...0849): DC/AC 1.1 (147 tables,
+  # Run of 2026-11-01 at 31036d40 (result_sha256 92f718e6...0d9e): DC/AC 1.1 (147 tables,
   # 5.51544 MWp) with 5 MW / 24 MWh, P50 project NPV USD -8,499,899, P90 -8,962,702.
   dc_ac_ratio: 1.1
   bess_energy_mwh: 24.0

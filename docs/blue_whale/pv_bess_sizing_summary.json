@@ -9253,13 +9253,13 @@
    "residual_fade_pct_per_year"
   ],
   "effective_evaluations": 10320,
-  "git_sha": "4e84dc82ed068b8c7b9cf3f7c950712f2b63488d",
+  "git_sha": "31036d401e571368471f412401290a5d237618ae",
   "grid_points": 40,
   "grid_points_evaluated": 40,
   "inputs_sha256": {
-   "conf/blue_whale_pv_bess_pricing.yaml": "1fbc8ceceda695629528bc81537d60563bcd00c68658efba4d98e0b0a7e0839f",
+   "conf/blue_whale_pv_bess_pricing.yaml": "baf763ed35378622242664e3ebaffa08442e8370c835f368ac2af41d88176090",
    "conf/blue_whale_solar_bess.yaml": "0c7f2d4105e8099a7c02322746dbf81bd85bf5a03ee7da72e339fdcd534e83c9",
-   "scenarios/blue_whale_hybrid_lot5b_2026.yaml": "5df9a89b3466c04f498f7d22b6790ec827bf69de0a209d3097baec2d67bc1c92"
+   "scenarios/blue_whale_hybrid_lot5b_2026.yaml": "ea30b7bb0ff9bad95e935bde5b729809423f04264a9210f83c98f662a33aba89"
   },
   "limitations": [
    "Placeholder site (PR 1) and placeholder O&M, financing and grid inputs.",
@@ -9272,8 +9272,8 @@
    "statistic": "p50"
   },
   "requested_trials_per_point": 256,
-  "result_sha256": "40bd2789fcab40655331a8dea546e47639e12b6ebc0eefaad49e3aeed4ce0849",
-  "runtime_s": 559.0,
+  "result_sha256": "92f718e6542ba302c8bd80640fe89b3360c474d501365971814febb2b6140d9e",
+  "runtime_s": 557.2,
   "sampler": "lhs",
   "seed": 20261101,
   "sizing_config_sha256": "6c7d9289dc3ac969c2b7f906b07f4a9ad9c5347228643927ef6a0b7c8a46e43e",
