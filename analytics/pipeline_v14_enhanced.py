@@ -388,9 +388,10 @@ def _size_debt_on_levered_cfads(
 
     interest_lkr: list[float] | None = None
     previous_cfads: list[float] | None = None
-    # Each pass's solved gearing seeds the next pass's scan (finance.debt_v14
-    # _solve_gearing_for_dscr's warm start). It changes where the scan starts, not
-    # which gearing it returns.
+    # Each pass's solved gearing seeds the next pass's scan (the warm start of
+    # _solve_gearing_for_dscr in finance.debt.sizing, re-exported by the
+    # finance.debt_v14 facade). It changes where the scan starts, not which gearing
+    # it returns.
     gearing_hints: dict[str, tuple[float, float, float]] = {}
 
     for iteration in range(1, _CFADS_FIXED_POINT_MAX_ITERATIONS + 1):
