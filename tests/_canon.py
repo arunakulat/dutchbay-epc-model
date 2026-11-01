@@ -15,7 +15,11 @@ precision. When the canon legitimately re-baselines, update the number here and 
 one-line "Re-baselined by ..." note in the oracle docstring — nothing else.
 
 Provenance of the current vector (see the oracle docstring for the full history):
-#1397 (2026-10-27) sizes the facility, and reports DSCR/LLCR/PLCR, on CFADS bearing the
+#1396 (2026-10-27) resolves the lender case's USD 28.63m scheduled-maturity balloon by
+refinance on assumed YAML terms (3 years, +2%) instead of a cash sweep that left USD
+9.80m unpaid; only the equity IRR moves (-9.99% -> -30.54%). The refinanced tranche
+covers 0.28-0.34x against the 1.30 floor, so equity funds the shortfall.
+Prior: #1397 (2026-10-27) sizes the facility, and reports DSCR/LLCR/PLCR, on CFADS bearing the
 levered tax the SPV actually pays. Prior: F5-01 (2026-08-16) aligned the first operating cashflow row to COD after the
 two-period construction window while preserving financial-close FX for capex,
 levies and IDC tax basis; reports now reuse those exact annual-row FX rates.
@@ -34,7 +38,7 @@ from typing import Final
 
 # Base-case (undiscounted / as-modelled) economics.
 LENDER_PROJECT_IRR: Final[float] = -0.0014208847210721192
-LENDER_EQUITY_IRR: Final[float] = -0.09989917555530214
+LENDER_EQUITY_IRR: Final[float] = -0.30535684032105737
 LENDER_PROJECT_NPV: Final[float] = -91574282.40505882
 
 # Debt-service coverage. ``min_dscr`` is the #790 conservative fold-corrected covenant

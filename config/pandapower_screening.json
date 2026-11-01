@@ -1,0 +1,5 @@
+{
+  "schema_version": "dutchbay.pandapower_screening.v1",
+  "timeout_seconds": 120.0,
+  "supported_pandapower_versions": ["3.5.4"]
+}

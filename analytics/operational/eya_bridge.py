@@ -524,6 +524,9 @@ class EYAActualBridgeReceipt:
     arithmetic_policy: Literal["binary64_hex_to_fraction_kwh_v1"]
     sign_convention: Literal["positive_increases_actual_vs_eya"]
     full_reconciliation_residual_kwh: OperationalEnergyQuantity
+    full_reconciliation_semantics: Literal[
+        "arithmetic_identity_not_independent_check"
+    ] = "arithmetic_identity_not_independent_check"
     original_sources_preserved: Literal[True] = True
     canonical_mutation_performed: Literal[False] = False
     issue_1110_state: Literal["OPEN_HOLD"] = "OPEN_HOLD"
@@ -535,6 +538,14 @@ class EYAActualBridgeReceipt:
 
     def __post_init__(self) -> None:
         """Validate reconciliation identity and non-authority fences."""
+        if (
+            type(self.full_reconciliation_semantics) is not str
+            or self.full_reconciliation_semantics
+            != "arithmetic_identity_not_independent_check"
+        ):
+            raise ValueError(
+                "full reconciliation must disclose arithmetic identity semantics."
+            )
         if type(self.schema) is not str or self.schema != EYA_ACTUAL_BRIDGE_SCHEMA:
             raise ValueError("bridge receipt schema is not supported.")
         _require_identifier(self.bridge_id, "bridge_id")
@@ -1531,6 +1542,9 @@ def _build_artifacts(
     unknown = actual_value - eya_value - attributed
     total_gap = actual_value - eya_value
     residual = actual_value - eya_value - attributed - unknown
+    # This is an identity because unknown is defined immediately above from the same
+    # exact Fractions. Zero is not independent validation of the retained categories;
+    # the receipt discloses that limitation explicitly (#1381 O-1 / #1404).
     if residual != 0:
         raise EYAActualBridgeError(
             "ARITHMETIC_FAILED", "EYA-to-actual identity failed exact reconciliation."

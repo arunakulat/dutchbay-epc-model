@@ -104,7 +104,12 @@ def test_type_bess_is_storage_not_generation_even_with_capacity_factor():
         "generation": {
             "technologies": {
                 "wind": {"capacity_mw": 100, "capacity_factor": 0.34},
-                "bess": {"type": "bess", "power_mw": 50, "capacity_factor": 0.20},
+                "bess": {
+                    "duration_h": 4.0,
+                    "type": "bess",
+                    "power_mw": 50,
+                    "capacity_factor": 0.20,
+                },
             }
         }
     }
@@ -296,6 +301,7 @@ def test_applicable_storage_drivers_needs_a_revenue_lever():
         "generation": {
             "technologies": {
                 "bess": {
+                    "duration_h": 4.0,
                     "type": "bess",
                     "power_mw": 10,
                     "revenue": {
@@ -303,7 +309,11 @@ def test_applicable_storage_drivers_needs_a_revenue_lever():
                         "capacity_charge_lkr_per_mw_month": 2_000_000,
                     },
                 },
-                "bare": {"type": "bess", "power_mw": 5},  # no revenue -> not sweepable
+                "bare": {
+                    "duration_h": 4.0,
+                    "type": "bess",
+                    "power_mw": 5,
+                },  # no revenue -> not sweepable
             }
         }
     }
@@ -318,6 +328,7 @@ def test_build_storage_override_is_direct_single_key():
         "generation": {
             "technologies": {
                 "bess": {
+                    "duration_h": 4.0,
                     "type": "bess",
                     "power_mw": 10,
                     "revenue": {
@@ -341,6 +352,7 @@ def test_build_storage_override_rejects_unknown_driver():
         "generation": {
             "technologies": {
                 "bess": {
+                    "duration_h": 4.0,
                     "type": "bess",
                     "power_mw": 10,
                     "revenue": {
@@ -359,6 +371,7 @@ def test_bess_with_revenue_lever_is_swept_alongside_generation(hybrid_config):
     cfg = dict(hybrid_config)
     techs = dict(cfg["generation"]["technologies"])
     techs["bess_1"] = {
+        "duration_h": 4.0,
         "type": "bess",
         "power_mw": 50.0,
         "energy_mwh": 200.0,

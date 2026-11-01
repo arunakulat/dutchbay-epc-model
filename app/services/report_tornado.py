@@ -16,6 +16,7 @@ it returns ``None`` (and logs) on any error. The CORE report blocks stay fail-lo
 from __future__ import annotations
 
 import logging
+import math
 import os
 import tempfile
 from typing import Any, Callable, List, Mapping, Optional
@@ -50,6 +51,15 @@ class TornadoBlock(BaseModel):
     rows: List[TornadoRow]
 
 
+def _defined(value: Optional[float]) -> Optional[float]:
+    """``None`` for a value the sweep could not define (#1457: it arrives as ``nan``).
+
+    The report renders ``None`` as an em-dash; a ``nan`` would print as ``nan%`` and,
+    as a sort key, scramble the widest-first order of every defined row.
+    """
+    return value if value is not None and math.isfinite(value) else None
+
+
 def _to_row(tornado: Any) -> Optional[TornadoRow]:
     """Map one canonical ``TornadoResult`` to a render row (None if unlabelled)."""
     shocks = tornado.shock_results or []
@@ -67,10 +77,10 @@ def _to_row(tornado: Any) -> Optional[TornadoRow]:
         return None
     return TornadoRow(
         label=str(label),
-        base=tornado.base_metric,
-        low_case=getattr(first, "low_case", None),
-        high_case=getattr(first, "high_case", None),
-        impact_abs=tornado.impact_abs,
+        base=_defined(tornado.base_metric),
+        low_case=_defined(getattr(first, "low_case", None)),
+        high_case=_defined(getattr(first, "high_case", None)),
+        impact_abs=_defined(tornado.impact_abs),
     )
 
 

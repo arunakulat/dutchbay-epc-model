@@ -521,15 +521,21 @@ def test_result_is_json_serializable(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.slow
 def test_real_debt_mix_favours_cheap_dfi() -> None:
-    """On the committed lender case, max equity IRR shifts weight to cheap DFI.
+    """On the committed lender case, max equity NPV shifts weight to cheap DFI.
 
     DFI debt is the cheapest tranche (6.5% vs LKR 13.39%), so — absent a binding
-    covenant — the equity-IRR-maximizing mix loads DFI and drops LKR. This proves
+    covenant — the equity-value-maximizing mix loads DFI and drops LKR. This proves
     the real levers move the pipeline the intended way (no monkeypatch).
+
+    The objective was equity IRR until #1396 part B. Once the committed case
+    refinances its balloon, equity injects cash in operating years 17-19, those late
+    flows dominate a ~-30% IRR, and equity IRR prefers the DEAREST mix (60% LKR, no
+    DFI). Equity NPV keeps the economically correct ordering, so it is the objective
+    here. The finding is #1456.
     """
     res = optimize_debt_mix(
         LENDER_CONFIG,
-        objective_key="equity_irr",
+        objective_key="equity_npv",
         direction="max",
         lkr_bounds=(0.0, 0.6),
         dfi_bounds=(0.0, 0.4),
@@ -547,14 +553,18 @@ def test_real_debt_mix_favours_cheap_dfi() -> None:
 
 @pytest.mark.slow
 def test_real_contingency_monotonic_and_opt_in_byte_identical() -> None:
-    """Contingency lowers equity IRR monotonically AND the pipeline is untouched.
+    """Contingency lowers equity NPV monotonically AND the pipeline is untouched.
 
     (1) Running the optimizer does not change the committed scenario: a plain
         pipeline eval before and after returns the exact committed project IRR
         (0.014551597740253388) — nothing the optimizers add is read by
         run_v14_pipeline on a committed scenario (opt-in / byte-identical).
     (2) The f=0 candidate reproduces the committed capex economics; higher
-        contingency strictly lowers equity IRR (safer-but-costlier).
+        contingency strictly lowers equity NPV (safer-but-costlier).
+
+    The objective was equity IRR until #1396 part B. Under the refinance canon,
+    equity IRR is non-monotone in contingency (-29.41%, -30.43%, -28.68%, -28.73%)
+    because the late equity injections dominate it; equity NPV falls strictly. #1456.
     """
     from analytics.evaluation_v14 import evaluate_with_overrides
 
@@ -564,7 +574,7 @@ def test_real_contingency_monotonic_and_opt_in_byte_identical() -> None:
     res = optimize_capex_contingency(
         LENDER_CONFIG,
         base_capex_usd=LENDER_BASE_CAPEX,
-        objective_key="equity_irr",
+        objective_key="equity_npv",
         direction="max",
         contingency_bounds=(0.0, 0.15),
         n_steps=4,
@@ -573,7 +583,7 @@ def test_real_contingency_monotonic_and_opt_in_byte_identical() -> None:
     assert res.best is not None
     # Return maximized at the lowest contingency.
     assert res.best.value[0] == pytest.approx(0.0, abs=1e-9)
-    # Strictly decreasing equity IRR across the (ascending) contingency grid.
+    # Strictly decreasing equity NPV across the (ascending) contingency grid.
     eqs = [p.objective for p in res.curve]
     assert eqs == sorted(eqs, reverse=True)
     assert eqs[0] > eqs[-1]

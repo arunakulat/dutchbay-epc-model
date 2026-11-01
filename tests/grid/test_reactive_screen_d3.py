@@ -14,6 +14,8 @@ Run: ``pytest tests/ -m grid``  (or ``-m 'not grid'`` to skip).
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 pytestmark = pytest.mark.grid
@@ -144,11 +146,18 @@ def test_reactive_screen_non_converged_corner_is_binding_failure(monkeypatch) ->
 
     # Force EVERY runpp corner to report non-convergence. Use AMPLE capability so a
     # headroom-only shortfall would be 0 — the failure must come from non-convergence.
-    monkeypatch.setattr(
-        rs,
-        "_poc_pf_and_voltage",
-        lambda pp, net, poc_bus: (False, float("nan"), 0.0, 0.0),
-    )
+    from analytics.grid import pandapower_screening as adapter
+
+    # Inject the existing negative control inside the real process boundary.
+    command = [
+        sys.executable,
+        "-c",
+        "from analytics.grid import reactive_screen as rs; "
+        "from analytics.grid._pandapower_worker import main; "
+        "rs._poc_pf_and_voltage = lambda pp, net, poc_bus: (False, float('nan'), 0., 0.); "
+        "main()",
+    ]
+    monkeypatch.setattr(adapter, "_worker_command", lambda: command)
     ample = {
         **_DUTCHBAY_GRID,
         "resources": [

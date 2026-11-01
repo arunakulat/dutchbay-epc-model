@@ -47,3 +47,9 @@ zopfli==0.4.3
 # group bumped it to 4.13.2 and made the lock uninstallable). Lift only in lockstep
 # with a hydra-core/omegaconf upgrade that regenerates their grammars.
 antlr4-python3-runtime<4.10
+# pandapower: the #1229 screening worker adapts version-specific vendor internals and
+# config/pandapower_screening.json accepts only the versions it was verified against.
+# Hold the [grid] install at that version (pyproject declares >=3.5,<4), so a fresh
+# `PIP_CONSTRAINT=constraints.txt pip install -e ".[grid]"` cannot resolve a release the
+# screens would refuse. Lift only with a reviewed policy and adapter update.
+pandapower==3.5.4

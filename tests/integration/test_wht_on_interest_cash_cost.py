@@ -139,17 +139,23 @@ def test_interest_deductibility_flag_is_live_on_the_equity_path() -> None:
     * and the shield's benefit to EQUITY is now much smaller, +44bps rather than +272bps,
       because most of it is absorbed by the extra leverage it finances. That is a real
       consequence of the change and is asserted, not hidden.
+
+    #1396 part B widened the equity gap again, to +537bps, without touching the sizing
+    half. The committed case now refinances its balloon, and the off case's smaller
+    facility leaves a LARGER balloon (USD 31.55m vs 28.63m) whose refinance service
+    equity must fund (tranche coverage 0.25x vs 0.28x). So the band's upper bound moves
+    from 0.02 to 0.08; the lower bound still catches the flag going decorative.
     """
     on = evaluate_with_overrides(LENDER, overrides={})  # default True
     off = evaluate_with_overrides(
         LENDER, overrides={"tax.interest_deductibility": False}
     )
     assert on["equity_irr"] == pytest.approx(_CANON_EQ_IRR, abs=1e-9)
-    assert off["equity_irr"] == pytest.approx(-0.10433619112815862, abs=1e-9)
-    # Still material to equity, and materially SMALLER than it was. Both bounds matter:
-    # the lower one catches the flag going decorative again, the upper one catches the
-    # extra leverage silently disappearing.
-    assert 0.001 < on["equity_irr"] - off["equity_irr"] < 0.02
+    assert off["equity_irr"] == pytest.approx(-0.3590084845235719, abs=1e-9)
+    # Still material to equity. Both bounds matter: the lower one catches the flag going
+    # decorative again, the upper one catches the refinance gap between the two cases
+    # growing beyond what the balloon difference explains.
+    assert 0.001 < on["equity_irr"] - off["equity_irr"] < 0.08
     # The shield now reaches the sizing path as well, in these directions.
     assert on["llcr"] > off["llcr"]
     assert on["min_dscr"] < off["min_dscr"]

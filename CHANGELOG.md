@@ -4,6 +4,20 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Changed
+- **The lender case refinances its balloon instead of sweeping it (15.8.0).** Owner
+  decision 1A on #1396 (audit P3-COV-03): the USD 28.63m scheduled-maturity balloon,
+  of which cash sweep left USD 9.80m unpaid, is refinanced on the assumed YAML terms
+  `constraints.refinancing` (3 years, +2% over the average debt rate; no term sheet).
+  The refinanced tranche covers only 0.28-0.34x against the 1.30 floor
+  (`debt_result.refinance.coverage_breach` is true), so equity funds a shortfall of
+  about USD 24.8m; by the owner's F-5 boundary call that coverage supports no covenant,
+  lender or IC representation until #1395 and real refinance terms land. Canon re-baseline: equity IRR -9.99% -> -30.54%, equity NPV -$93.09M
+  -> -$95.64M; project IRR, NPV, `min_dscr`, LLCR, PLCR and CFADS are unchanged. With
+  the full levy stack paid, equity NPV falls but equity IRR rises slightly, so that
+  directional test now asserts NPV. This re-baselines the committed canonical KPI
+  vector; it does not change the Board/lender circulation HOLD.
+
 ### Fixed
 - **Debt is sized, and coverage reported, on levered-tax CFADS (15.7.0).** `plan_debt`
   was handed rows built with `interest_expense=0`, so the facility was sculpted against —

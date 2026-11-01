@@ -32,7 +32,9 @@ def test_run_pipeline_returns_full_report() -> None:
     assert resp.kpis.project_irr == pytest.approx(-0.0012, abs=0.005)
     # #1397 re-baseline: debt is sized on levered-tax CFADS, so the facility grows
     # and absorbs most of the interest shield's benefit to equity (-0.0785 -> -0.0999).
-    assert resp.kpis.equity_irr == pytest.approx(-0.0999, abs=0.005)
+    # #1396 part B: the balloon is refinanced, not cash-swept, and equity funds the
+    # refinanced tranche's shortfall (-0.0999 -> -0.3054).
+    assert resp.kpis.equity_irr == pytest.approx(-0.3054, abs=0.005)
     assert resp.kpis.project_npv_usd is not None
     # The headline is the fold-corrected year-1 minimum (#790); the extra gearing
     # #1397 supports pushes that fold under the 1.30 per-period sculpt target.

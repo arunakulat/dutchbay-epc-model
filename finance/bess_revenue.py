@@ -92,6 +92,8 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
+from analytics.storage_sizing import BessSizing
+
 #: The explicit per-technology type discriminator value marking a storage block.
 BESS_TYPE = "bess"
 
@@ -442,7 +444,7 @@ def resolve_bess_specs(
     builds a normalised spec per block. Returns ``None`` when no such block exists, so
     the cashflow keeps its byte-identical wind/solar behaviour.
 
-    Each BESS block must declare ``power_mw`` and a ``revenue`` sub-block with
+    Each BESS block must declare ``power_mw``, ``duration_h`` and a ``revenue`` sub-block with
     ``model: capacity_charge`` and ``capacity_charge_lkr_per_mw_month``; a missing or
     non-numeric value raises (CESSPIT fail-loud — a mis-keyed BESS must not silently
     earn zero). Optional: ``revenue.contract_years`` (default ``None`` → paid for the
@@ -486,29 +488,12 @@ def resolve_bess_specs(
                 )
             continue
 
-        power_mw = _as_float(block.get("power_mw"))
-        if power_mw is None or power_mw <= 0:
-            raise ValueError(
-                f"generation.technologies['{name}'] is type: bess but has no positive "
-                "power_mw — a capacity charge needs the contracted power rating (MW)."
-            )
-
-        # Cross-assert the (informational) energy rating against power x duration so a
-        # typo cannot masquerade as a valid spec — the capacity charge itself is
-        # POWER-based (LKR/MW/month), so energy_mwh / duration_h only document the
-        # 4-hour / 0.25C nature. Other reporting-only fields: capex_usd (the financed
-        # capex is capex.usd_total, as for wind/solar) and availability_pct (the live
-        # derate is revenue.availability_factor).
-        energy_mwh = _as_float(block.get("energy_mwh"))
-        duration_h = _as_float(block.get("duration_h"))
-        if energy_mwh is not None and duration_h is not None:
-            implied_mwh = power_mw * duration_h
-            if implied_mwh <= 0 or abs(energy_mwh - implied_mwh) / implied_mwh > 0.01:
-                raise ValueError(
-                    f"generation.technologies['{name}']: energy_mwh={energy_mwh} does "
-                    f"not reconcile with power_mw*duration_h={implied_mwh:.4f} (within "
-                    "1%). Align the BESS rating."
-                )
+        try:
+            sizing = BessSizing.from_mapping(block)
+        except ValueError as exc:
+            raise ValueError(f"generation.technologies['{name}']: {exc}") from exc
+        power_mw = sizing.power_mw
+        energy_mwh = sizing.energy_mwh
 
         revenue = block.get("revenue")
         if not isinstance(revenue, Mapping):
@@ -591,6 +576,8 @@ def resolve_bess_specs(
             "technology": str(name),
             "model": model,
             "power_mw": power_mw,
+            "duration_h": sizing.duration_h,
+            "energy_mwh": energy_mwh,
             "contract_years": contract_years,
             "availability_factor": availability,
             # For the geometric model this is the (1-rate)**t base; for the separable model
@@ -620,12 +607,6 @@ def resolve_bess_specs(
                 field="dispatchable_ratio",
             )
         elif model == "energy_tariff":
-            if energy_mwh is None or energy_mwh <= 0:
-                raise ValueError(
-                    f"generation.technologies['{name}'].energy_mwh must be a positive "
-                    "number for the energy_tariff model (it sets the energy exported "
-                    "per cycle)."
-                )
             tariff = _as_float(revenue.get("tariff_lkr_per_kwh"))
             if tariff is None or tariff < 0:
                 raise ValueError(
@@ -647,7 +628,6 @@ def resolve_bess_specs(
                     rte_raw, tech=str(name), field="round_trip_efficiency"
                 )
             )
-            spec["energy_mwh"] = energy_mwh
             spec["tariff_lkr_per_kwh"] = tariff
             spec["cycles_per_year"] = cycles
         else:  # pragma: no cover - guarded by the SUPPORTED_BESS_REVENUE_MODELS check

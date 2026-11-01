@@ -102,3 +102,39 @@ def test_compute_tornado_honours_metric_argument() -> None:
     block = compute_report_tornado(_SCENARIO, metric="equity_irr", runner=_runner)
     assert captured["metric"] == "equity_irr"
     assert block is not None and block.metric == "equity_irr"
+
+
+def test_compute_tornado_renders_undefined_values_as_absent() -> None:
+    """#1457: an undefined sweep point arrives as ``nan``; the report shows it as absent.
+
+    ``nan`` would print as ``nan%`` and, as a sort key, break the widest-first order.
+    """
+    nan = float("nan")
+    suite = _suite_with_two_drivers()
+    undefined = TornadoResult(
+        metric_name="project_irr",
+        base_metric=nan,
+        impact_abs=nan,
+        shock_results=[
+            ShockResult(
+                label="Debt Tenor",
+                low_case=nan,
+                high_case=0.0101,
+                base_case=nan,
+                impact_abs=nan,
+            )
+        ],
+    )
+    suite = SensitivitySuite(
+        tornado_results=[suite.tornado_results[0], undefined, suite.tornado_results[1]]
+    )
+    block = compute_report_tornado(_SCENARIO, runner=lambda _p, *, metric: suite)
+    assert block is not None
+    assert [r.label for r in block.rows] == [
+        "Tariff",
+        "Corporate Tax Rate",
+        "Debt Tenor",
+    ]
+    row = block.rows[-1]
+    assert row.base is None and row.low_case is None and row.impact_abs is None
+    assert row.high_case == 0.0101
