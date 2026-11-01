@@ -167,7 +167,10 @@ For the selected EYA P-level:
 - each available category delta is `operational actual net effect - EYA expected net
   effect`, with positive meaning an increase in actual energy relative to EYA;
 - `U = A - E - sum(available signed category deltas)`; and
-- the receipt independently proves `A - E - sum(deltas) - U = 0` exactly.
+- the receipt records `A - E - sum(deltas) - U = 0` as an arithmetic identity.
+  Because `U` is defined from those same values, zero is guaranteed: it is not an
+  independent check of the components or their completeness. The emitted
+  `full_reconciliation_semantics` states `arithmetic_identity_not_independent_check`.
 
 No display rounding or decimal reconstruction is allowed in the EYA projection. This can
 produce a rational value microscopically different from the apparent decimal; that is an

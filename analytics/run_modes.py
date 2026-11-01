@@ -27,12 +27,13 @@ policy table says what that grade permits. The four modes:
   ``lender``; the distinct ``report_grade`` stamp keeps IC artefacts labelled as
   IC, not lender, output.
 
-Slice-1 scope (#733a): **contract only — nothing consumes this yet; wiring is
-#733b/#733c.** The only behavioural surface added anywhere is the opt-in
-pre-flight token validation in :mod:`analytics.schema_guard` (CESSPIT: a config
-that declares a mode mis-spells it at config time, not at first use — the #601
-lesson). A config without ``run.mode``/``run_mode`` resolves to ``None`` and the
-model behaves byte-identically to today.
+The debt pipeline consumes the capex ceiling (#733b); reports stamp the declared
+grade (#733c); the MC engine consumes the toy-trial ceiling (#962). Pre-flight
+token validation in :mod:`analytics.schema_guard` and the direct MC entrypoint
+reject malformed declarations (CESSPIT). A config without ``run.mode``/``run_mode``
+resolves to ``None`` and retains the existing engine behaviour. The minimum trial
+floor remains enforced by the lender-report path, not the direct MC entrypoint;
+declaring a mode alone is not a lender-grade qualification.
 
 Assumptions and limitations:
     - ``resolve_run_mode`` returns ``None`` for an undeclared mode; it does NOT

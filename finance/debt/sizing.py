@@ -10,6 +10,7 @@ from finance.debt.capex import _extract_capex_usd
 from finance.debt.dscr_contract import _clean_public_dscr_series
 from finance.debt.helpers import (
     _as_float,
+    _config_at_debt_ratio,
     _npv,
     _section_case_insensitive,
     _truthy_flag,
@@ -42,13 +43,12 @@ def _solve_gearing_for_dscr(
     at ``max_ratio`` already meets the target, ``max_ratio`` is returned unchanged.
     """
 
+    # One deep copy per solve isolates the caller's config; each trial gearing then
+    # path-copies only the two mappings it changes (see _config_at_debt_ratio).
+    base = copy.deepcopy(config)
+
     def _min_dscr_at(ratio: float) -> float:
-        cfg = copy.deepcopy(config)
-        fin = _section_case_insensitive(cfg, "Financing_Terms")
-        if isinstance(fin, dict):
-            fin["debt_ratio"] = ratio
-        else:
-            cfg["debt_ratio"] = ratio
+        cfg = _config_at_debt_ratio(base, ratio)
         core = apply_debt_layer(params=cfg, annual_rows=annual_rows)
         # Target the minimum over every DEFINED period, bridge included. This is NOT
         # plan_debt's published min_dscr: since F-2/F-3 that headline excludes

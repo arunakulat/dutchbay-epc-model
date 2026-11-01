@@ -13,7 +13,12 @@ from finance.debt.constants import (
     _SERVICE_TOL,
     REFINANCE_TERMS_BASIS,
 )
-from finance.debt.helpers import _as_float, _finite_number, _section_case_insensitive
+from finance.debt.helpers import (
+    _as_float,
+    _config_at_debt_ratio,
+    _finite_number,
+    _section_case_insensitive,
+)
 from finance.debt.layer import apply_debt_layer
 
 # The engine logged as ``finance.debt_v14`` before the split; keep that name so
@@ -358,21 +363,19 @@ def _resize_for_amortization(
     fin = _section_case_insensitive(config, "Financing_Terms") or {}
     lo, hi = 0.0, _as_float(fin.get("debt_ratio"), 0.70)
 
-    def _at_ratio(ratio: float) -> Dict[str, Any]:
-        cfg = copy.deepcopy(config)
-        fin_m = _section_case_insensitive(cfg, "Financing_Terms")
-        if isinstance(fin_m, dict):
-            fin_m["debt_ratio"] = ratio
-        else:
-            cfg["debt_ratio"] = ratio
-        return cfg
+    # The 40 bisection trials share one deep copy and path-copy per trial (see
+    # _config_at_debt_ratio). The config this function RETURNS is still a full deep copy,
+    # because callers keep it and may hand it on.
+    base = copy.deepcopy(config)
 
     for _ in range(40):
         mid = (lo + hi) / 2.0
-        trial = apply_debt_layer(params=_at_ratio(mid), annual_rows=rows)
+        trial = apply_debt_layer(
+            params=_config_at_debt_ratio(base, mid), annual_rows=rows
+        )
         if _as_float(trial.get("balloon_remaining"), 0.0) > _BALLOON_TOL:
             hi = mid
         else:
             lo = mid
-    resized_cfg = _at_ratio(lo)
+    resized_cfg = _config_at_debt_ratio(copy.deepcopy(config), lo)
     return resized_cfg, apply_debt_layer(params=resized_cfg, annual_rows=rows)
