@@ -1252,6 +1252,44 @@ def apply_debt_layer(
     }
 
 
+def _case_insensitive_key(mapping: Mapping[str, Any], key: str) -> Any:
+    """The key :func:`_lookup_case_insensitive` would read for ``key``, or ``None``."""
+    if key in mapping:
+        return key
+    key_lower = key.lower()
+    for existing_key in mapping:
+        if str(existing_key).lower() == key_lower:
+            return existing_key
+    return None
+
+
+def _config_at_debt_ratio(config: Dict[str, Any], ratio: float) -> Dict[str, Any]:
+    """``config`` with its gearing set to ``ratio``, sharing every object it does not change.
+
+    The gearing solve and the balloon bisection run :func:`apply_debt_layer` once per trial
+    gearing, up to ~180 times per sizing pass, and each trial used to deep-copy the whole
+    scenario only to change one number. Since #1451 sizes debt as a fixed point over up to
+    25 passes, that copy became most of a pipeline run's wall-clock (#1397's lender case:
+    7 passes, ~920 copies, about 70% of the run). This copies only the top-level mapping and
+    the ``Financing_Terms`` section, and writes ``debt_ratio`` exactly where the deep-copy
+    version did: into a ``Financing_Terms`` dict when there is one, else at the top level.
+
+    It is equivalent to the deep copy only because :func:`apply_debt_layer` reads its
+    ``params`` and never mutates them; ``tests/finance/test_gearing_trial_config_copy.py``
+    pins both that and the solved gearing against the deep-copy recipe.
+    """
+    cfg = copy.copy(config)
+    fin_key = _case_insensitive_key(cfg, "Financing_Terms")
+    fin = cfg.get(fin_key) if fin_key is not None else None
+    if isinstance(fin, dict):
+        fin = copy.copy(fin)
+        fin["debt_ratio"] = ratio
+        cfg[fin_key] = fin
+    else:
+        cfg["debt_ratio"] = ratio
+    return cfg
+
+
 def _solve_gearing_for_dscr(
     config: Dict[str, Any],
     annual_rows: List[Dict[str, Any]],
@@ -1273,13 +1311,12 @@ def _solve_gearing_for_dscr(
     at ``max_ratio`` already meets the target, ``max_ratio`` is returned unchanged.
     """
 
+    # One deep copy per solve isolates the caller's config; each trial gearing then
+    # path-copies only the two mappings it changes (see _config_at_debt_ratio).
+    base = copy.deepcopy(config)
+
     def _min_dscr_at(ratio: float) -> float:
-        cfg = copy.deepcopy(config)
-        fin = _section_case_insensitive(cfg, "Financing_Terms")
-        if isinstance(fin, dict):
-            fin["debt_ratio"] = ratio
-        else:
-            cfg["debt_ratio"] = ratio
+        cfg = _config_at_debt_ratio(base, ratio)
         core = apply_debt_layer(params=cfg, annual_rows=annual_rows)
         # Target the minimum over every DEFINED period, bridge included. This is NOT
         # plan_debt's published min_dscr: since F-2/F-3 that headline excludes
@@ -1691,23 +1728,21 @@ def _resize_for_amortization(
     fin = _section_case_insensitive(config, "Financing_Terms") or {}
     lo, hi = 0.0, _as_float(fin.get("debt_ratio"), 0.70)
 
-    def _at_ratio(ratio: float) -> Dict[str, Any]:
-        cfg = copy.deepcopy(config)
-        fin_m = _section_case_insensitive(cfg, "Financing_Terms")
-        if isinstance(fin_m, dict):
-            fin_m["debt_ratio"] = ratio
-        else:
-            cfg["debt_ratio"] = ratio
-        return cfg
+    # The 40 bisection trials share one deep copy and path-copy per trial (see
+    # _config_at_debt_ratio). The config this function RETURNS is still a full deep copy,
+    # because callers keep it and may hand it on.
+    base = copy.deepcopy(config)
 
     for _ in range(40):
         mid = (lo + hi) / 2.0
-        trial = apply_debt_layer(params=_at_ratio(mid), annual_rows=rows)
+        trial = apply_debt_layer(
+            params=_config_at_debt_ratio(base, mid), annual_rows=rows
+        )
         if _as_float(trial.get("balloon_remaining"), 0.0) > _BALLOON_TOL:
             hi = mid
         else:
             lo = mid
-    resized_cfg = _at_ratio(lo)
+    resized_cfg = _config_at_debt_ratio(copy.deepcopy(config), lo)
     return resized_cfg, apply_debt_layer(params=resized_cfg, annual_rows=rows)
 
 
