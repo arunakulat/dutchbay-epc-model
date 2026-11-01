@@ -62,9 +62,9 @@
 #    document's power curve is used in the project's internal calculations, with only derived
 #    results published (decision quoted verbatim in PR #1530 and on #1353, comment 6554211155).
 #    On that basis, results DERIVED from the curve now enter
-#    scenarios/blue_whale_hybrid_lot5b_2026.yaml: the net annual energy and net capacity factor
-#    of one turbine de-rated to 9.5 MW. The curve is read at run time from a path outside this
-#    repository. No power curve value, thrust coefficient value, curve table, or hash of the
+#    scenarios/blue_whale_hybrid_lot5b_2026.yaml and scenarios/blue_whale_wind_lot5b_2026.yaml:
+#    the net annual energy and net capacity factor of one turbine de-rated to 9.5 MW. The curve
+#    is read at run time from a path outside this repository. No power curve value, thrust coefficient value, curve table, or hash of the
 #    private curve file beyond the entry already recorded below is published here. Nothing else
 #    from the package, including the proposal's energy yield, has been promoted.
 #    The evaluation's two open questions for the issuer remain unanswered: which power curve

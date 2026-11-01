@@ -6,7 +6,9 @@
   - New `scenarios/blue_whale_wind_lot5b_2026.yaml` (the turbine: #1530's CF 0.374256 and
     31.15 GWh, wind FiT 25.73, capex USD 14.35M with the USD 2.0M grid placeholder) and
     `scenarios/blue_whale_solar_bess_lot5b_2026.yaml`. The hybrid scenario is kept, unchanged
-    apart from a header note, as the superseded combined view.
+    apart from a header note, as the superseded combined view. Section 4 of handling note
+    `KALPITIYA60MW-WIND-HANDLING-2026-09-21` now names the wind scenario beside the hybrid as
+    carrying the derived AEP and CF, and its parent manifest pin is refreshed.
   - New `conf/blue_whale_pucsl_fit_2026.yaml`: the PUCSL methodology, consultation and Annex 2
     figures and the Electricity Act No. 36 of 2024 and Amendment Act No. 14 of 2025 clauses,
     each with its URL, section, PDF SHA-256 and verbatim text, checked by
