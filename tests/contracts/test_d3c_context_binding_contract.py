@@ -80,7 +80,7 @@ _UTC = timezone.utc
 # Moves with the canonical lender-case result and engine identity; last re-pinned for
 # 15.14.0 (engine identity only; the lender-case result is unchanged).
 _KNOWN_D3B_SUCCESS_DIGEST = (
-    "ac04b28d940fe9123ed4cd44a270121f8caa6bc269f8d5f8519ff71d298e94be"
+    "941554f4c5f7411cb304a7c39612d6bd16b4d7fd2cc093a943b44f177c3b5eaf"
 )
 _FX_RATE_INPUT_ID = (
     "input:project_case.currency_conversion.fx:lkr-to-usd:2026-08-29.rate"

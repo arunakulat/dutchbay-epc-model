@@ -22,6 +22,13 @@ PR 4 sizes the separate solar + BESS project from its own config (schema
     .venv/bin/python scripts/run_blue_whale_pv_bess_sizing_v14.py \\
         --config-name blue_whale_solar_bess_project_sizing \\
         output.summary_json=docs/blue_whale/solar_bess_project_sizing_summary.json
+
+PR 7 chooses the PV DC for the owner's 5 MW / 20 MWh battery with the same schema (a Hydra
+child of the project config)::
+
+    .venv/bin/python scripts/run_blue_whale_pv_bess_sizing_v14.py \\
+        --config-name blue_whale_solar_bess_fixed_bess_sizing \\
+        output.summary_json=docs/blue_whale/solar_bess_fixed_bess_sizing_summary.json
 """
 
 from __future__ import annotations

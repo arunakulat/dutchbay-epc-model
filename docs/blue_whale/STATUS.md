@@ -10,8 +10,8 @@ turbine, built first, and a solar + BESS project sized under the PUCSL 2026 4 h 
 | Project | Component | Size | Notes |
 |---|---|---|---|
 | Wind (`scenarios/blue_whale_wind_lot5b_2026.yaml`) | Turbine | 1 x Envision EN-206/10.5 de-rated to 9.5 MW, 130 m hub, 206 m rotor | Owner decision 2026-11-01; tip height 233 m; built first. From PR 5 its yield rests on met mast 617725 (net CF 0.487560, 40.57 GWh; not lender-grade) |
-| Solar + BESS (`scenarios/blue_whale_solar_bess_lot5b_2026.yaml`) | Solar PV | 4.01464 MWp DC (107 tables) at 3.5 MW AC, JinkoSolar Tiger Neo 3.0 670 W, fixed tilt 8 degrees, 12 x Huawei SUN2000-330KTL-H1 | PR 6 re-run of PR 4's Monte Carlo on the blended prices, both readings of the 10 MW limit (PR 4: 6.0032 MWp, 5.0 MW AC) |
-| | BESS | 1.0 MW / 4.0 MWh (4 h), charged only from the PV, discharged only 17:30-21:30 | PUCSL 2026 4 h rule; PR 6 re-run, both readings, the grid's smallest battery (PR 4: 4.5 MW / 18 MWh under A, 5.5 MW / 22 MWh under B) |
+| Solar + BESS (`scenarios/blue_whale_solar_bess_lot5b_2026.yaml`) | Solar PV | 5.66552 MWp DC (151 tables) at 5.0 MW AC, JinkoSolar Tiger Neo 3.0 670 W, fixed tilt 8 degrees, 17 x Huawei SUN2000-330KTL-H1 | PR 7: PV AC 5.0 MW so that reading A sits at its 10 MW limit; PV DC chosen for the owner's battery on the P50 after-tax project NPV (PR 6: 4.01464 MWp, 3.5 MW AC; PR 4: 6.0032 MWp, 5.0 MW AC) |
+| | BESS | **5.0 MW / 20.0 MWh (4 h), the owner's strategic choice** ("Fix 5 MW / 20 MWh"), charged only from the PV, discharged only 17:30-21:30 | PUCSL 2026 4 h rule. Not the value-based size: that is 1.0 MW / 4.0 MWh on 107 tables at 3.5 MW AC, USD 1.25M better at P50 after tax (PR 7 section) |
 
 The combined view `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (v0.8: 9.5 MW wind, 5.51544 MWp
 at 5 MW AC, 5 MW / 24 MWh discharged 17:30-21:30 and 05:30-07:30) is superseded; from v0.7 (PR 5)
@@ -22,10 +22,11 @@ Funding: **fully LKR funded** (owner, 2026-10-28). Revenue, costs and debt are a
 model runs with FX held flat and the USD columns are a constant-rate translation of LKR.
 
 Model files: `scenarios/blue_whale_wind_lot5b_2026.yaml` and
-`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (versions 0.3 and 0.2), and the superseded
+`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (versions 0.3 and 0.3), and the superseded
 `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.8). Placeholders apart from the
-configuration, the funding currency, the researched tariffs, the wind yield, and the solar +
-BESS size, the cited PV capex and the blended wind and BESS capex (PR 6).
+configuration, the funding currency, the researched tariffs, the wind yield, the solar + BESS
+size (the owner's 5 MW / 20 MWh battery and the PV chosen for it, PR 7), the cited PV capex and
+the blended wind and BESS capex (PR 6).
 Inputs register: [INPUTS_REQUIRED.md](INPUTS_REQUIRED.md).
 
 ## Site
@@ -698,8 +699,8 @@ Wind turbine capex USD 8,899,980 (was 12,350,000); wind project capex USD 10.90M
 line (1,147 USD/kW). PV prices are unchanged from PR 3.
 
 **Solar resource at the PV centroid (8.291526 N, 79.753204 E; 123 m from the turbine)**, pvlib
-0.16.1 on the frozen TMY, which is PVGIS-ERA5 2005-2023 (its README's "SARAH3" is wrong:
-SARAH3 does not cover the site):
+0.16.1 on the frozen TMY, which is PVGIS-ERA5 2005-2023 (its README's "SARAH3" was wrong:
+SARAH3 does not cover the site; the README is corrected in PR 7):
 
 | Item | Value |
 |---|---:|
@@ -737,7 +738,82 @@ AC and 3 MW. PR 3's hybrid sizing, re-run the same way, does not move (DC/AC 1.1
 MWh). The owner's "Maximize BESS" decision and this result conflict; see the PR's owner
 decisions.
 
-## Latest run (PR 6, capex blend and re-sizing, 15.15.0, 2026-11-01)
+## The owner's battery and the after-tax objective (PR 7, 2026-11-01)
+
+Work item: #1353 comment 6563070978. Owner decisions, verbatim: 1. committed size "Fix 5 MW / 20
+MWh"; 2. objective "After-tax project NPV (Recommended)"; 4. solar basis "Keep ERA5, fix README
+(Recommended)". Unchanged and confirmed: 3. levies "Prudent (current)"; 5. wind "Accept 40.57 GWh
+(Recommended)"; 6. air density "Keep 1.15 (Recommended)"; 7. "Yes, east is shore".
+
+**Objective.** The solar + BESS sizing now ranks on the P50 of the engine's **after-tax project
+NPV** of the solar + BESS project scenario: every trial goes through
+`analytics.evaluation_v14.evaluate_with_overrides`, whose project NPV discounts the CFADS after
+the 30% corporate tax and the 10% CFADS haircut, less the capex, at the engine's own rate. P90
+is reported beside it, and so is the unit's pre-tax NPV (PR 4's objective, still selectable in
+`conf/blue_whale_solar_bess_project_sizing.yaml` and off by default).
+
+**The battery is the owner's strategic choice, not the value-based size.** The project commits
+BESS 5.0 MW / 20.0 MWh (4 h) with PV AC 5.0 MW, so reading A of the 10 MW limit sits at its
+limit (5.0 + 5.0 = 10.0 MW). The PV DC for that battery comes from a reduced production run
+(`conf/blue_whale_solar_bess_fixed_bess_sizing.yaml`; seed 20261101, the same 256 trials; every
+whole table count from 134, DC/AC 1.0055, to the lot's maximum of 191 at this battery; 58 points,
+15,022 evaluations, 724.7 s): **151 tables, 5.66552 MWp, DC/AC 1.1331**.
+
+| PV tables (MWp) | DC/AC | After-tax project NPV P50 / P90 (USD) | Unit pre-tax NPV P50 / P90 (USD) | Equity IRR P50 |
+|---|---|---|---|---|
+| 134 (5.02768) | 1.0055 | -5,380,477 / -5,946,667 | -1,012,547 / -1,599,269 | -5.09% |
+| 145 (5.44040) | 1.0881 | -5,334,185 / -5,912,640 | -881,587 / -1,470,292 | -4.49% |
+| 148 (5.55296) | 1.1106 | -5,328,601 / -5,910,375 | -853,675 / -1,444,436 | -4.37% |
+| **151 (5.66552), chosen** | **1.1331** | **-5,326,884 / -5,911,801** | **-829,383 / -1,421,478** | **-4.24%** |
+| 152 (5.70304) | 1.1406 | -5,327,556 / -5,912,246 | -821,669 / -1,412,171 | -4.20% |
+| 155 (5.81560) | 1.1631 | -5,330,070 / -5,915,507 | -806,780 / -1,386,760 | -4.11% |
+| 160 (6.00320) | 1.2006 | -5,341,413 / -5,927,668 | -784,424 / -1,362,972 | -3.95% |
+| 170 (6.37840) | 1.2757 | -5,375,348 / -5,980,237 | -768,460 / -1,349,668 | -3.72% |
+| 191 (7.16632), lot maximum | 1.4333 | -5,537,751 / -6,164,183 | -847,442 / -1,445,723 | -3.46% |
+
+The curve is flat near the choice: 151 tables is at least as good as 152 in 52.7% of paired
+trials (by USD 316 at the median), and every count from 147 to 155 lies within USD 3,200 of it at
+P50. No trial at any point has a project IRR. Under PR 4's objective (unit pre-tax NPV P50) the
+same battery would take 171 tables; P90 after-tax prefers 148. Sensitivities (base case): the
+12.5% curtailment scenario picks 152 tables, the 0.90 RTE case 146.
+
+**The value-based size and the cost of the choice.** PR 4's full grid, re-run under the after-tax
+objective (325 points x 256 trials, 84,175 evaluations, 3,922.8 s; every grid row identical to
+PR 6's run), chooses **107 tables (4.01464 MWp), 3.5 MW AC and 1.0 MW / 4.0 MWh under both
+readings**, the same size PR 6's unit pre-tax objective chose. It beats its runner-up (107
+tables, 4.0 MW AC) in 100% of paired trials.
+
+| Size | After-tax project NPV P50 / P90 (USD) | Unit pre-tax NPV P50 / P90 (USD) |
+|---|---|---|
+| Value-based: 107 tables, 3.5 MW AC, 1.0 MW / 4.0 MWh | -4,079,718 / -4,321,796 | -312,629 / -571,313 |
+| **Committed: 151 tables, 5.0 MW AC, 5.0 MW / 20.0 MWh** | **-5,326,884 / -5,911,801** | **-829,383 / -1,421,478** |
+| **Cost of the owner's choice** | **1,247,165 / 1,590,005** | **516,754 / 850,165** |
+
+Committing 5 MW / 20 MWh gives up USD 1.25M of after-tax project NPV at P50 and USD 1.59M at
+P90 against the value-based size. The figures are recorded in
+`conf/blue_whale_solar_bess_fixed_bess_sizing.yaml` (`strategic_cost_usd`), and a test recomputes
+them from the two committed summaries. Every eligible size on both grids has a negative P50
+after-tax project NPV, so neither size is viable on these placeholder inputs.
+
+**Solar basis.** ERA5 stays the basis; `inputs/solar_tmy/README.md` now says PVGIS-ERA5, not
+SARAH3, citing #1540's finding, and reports the satellite figures (Global Solar Atlas PVOUT
++6.3%, about +9% GHI) as upside only. No data file changed.
+
+## Latest run (PR 7, the owner's battery, 15.16.0, 2026-11-01)
+
+Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
+
+| Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
+|---|---|---|---|---|---|
+| Wind project (v0.3) | 10.81% (unchanged) | 9.06% | 0.868 | 69,109 | -1,489,263 |
+| Solar + BESS project (v0.3, 5 MW / 20 MWh) | undefined (reported as 0.0) | -3.58% (was -11.32%) | 0.868 | -4,992,409 (was -4,027,656) | -5,395,403 (was -4,094,172) |
+| Hybrid (v0.8, superseded) | 8.73% (unchanged) | 6.38% | 0.868 | -2,649,382 | -4,719,271 |
+
+The larger battery earns the priority rate on 6,803 MWh in year 1 (was 1,481), which lifts the
+equity IRR, but it costs USD 3.26M more capex, so the project NPV falls by USD 0.96M. Every other
+input is still a placeholder, so these are not results.
+
+## Earlier run (PR 6, capex blend and re-sizing, 15.15.0, 2026-11-01)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
 
@@ -855,8 +931,11 @@ priority-1 inputs replace the placeholders.
    12-month record (met-mast evaluation section 9) and, for a bankable case, a site campaign
    (B07).
 6. Done in PR 6: the wind and BESS capex blend, the solar resource at the site and the
-   re-sizing. Owner to decide whether the 1 MW / 4 MWh result stands against "Maximize BESS",
-   whether to re-base the solar yield on satellite irradiance, and to correct the TMY README's
-   database (ERA5, not SARAH3); quotes are still owed (B09, B15, B19).
-7. Replace placeholders in the scenarios, then run the v14 pipeline for base and P90 cases.
-8. Assemble the DBPL feasibility study once the model has owner-sourced inputs.
+   re-sizing. Quotes are still owed (B09, B15, B19).
+7. Done in PR 7: the owner fixed the battery at 5 MW / 20 MWh ("Fix 5 MW / 20 MWh"), the sizing
+   ranks on the after-tax project NPV, ERA5 stays the solar basis and the TMY README is
+   corrected. The owner's choice costs USD 1.25M of after-tax project NPV at P50 (1.59M at P90)
+   against the value-based 1 MW / 4 MWh. Owner to note that every size is value-negative on the
+   placeholder inputs; quotes are still owed (B09, B15, B19).
+8. Replace placeholders in the scenarios, then run the v14 pipeline for base and P90 cases.
+9. Assemble the DBPL feasibility study once the model has owner-sourced inputs.

@@ -13256,6 +13256,24 @@
        "pv_ac_mw": 3.5,
        "pv_tables": 107
       },
+      "statistic": "p50"
+     },
+     {
+      "metric": "unit_pretax_npv_usd",
+      "size": {
+       "bess_energy_mwh": 4.0,
+       "bess_power_mw": 1.0,
+       "dc_mwp": 4.01464,
+       "pv_ac_mw": 3.5,
+       "pv_tables": 107
+      },
+      "size_any_pv": {
+       "bess_energy_mwh": 4.0,
+       "bess_power_mw": 1.0,
+       "dc_mwp": 4.01464,
+       "pv_ac_mw": 3.5,
+       "pv_tables": 107
+      },
       "statistic": "p90"
      },
      {
@@ -13291,24 +13309,6 @@
        "dc_mwp": 7.16632,
        "pv_ac_mw": 6.0,
        "pv_tables": 191
-      },
-      "statistic": "p50"
-     },
-     {
-      "metric": "project_npv",
-      "size": {
-       "bess_energy_mwh": 4.0,
-       "bess_power_mw": 1.0,
-       "dc_mwp": 4.01464,
-       "pv_ac_mw": 3.5,
-       "pv_tables": 107
-      },
-      "size_any_pv": {
-       "bess_energy_mwh": 4.0,
-       "bess_power_mw": 1.0,
-       "dc_mwp": 4.01464,
-       "pv_ac_mw": 3.5,
-       "pv_tables": 107
       },
       "statistic": "p50"
      },
@@ -13405,7 +13405,7 @@
     ],
     "any_pv": {
      "against_the_committed_choice": null,
-     "objective_value": -312628.743085359,
+     "objective_value": -4079718.499528507,
      "pv_tables_at_grid_minimum": true,
      "size": {
       "bess_energy_mwh": 4.0,
@@ -13417,10 +13417,10 @@
     },
     "land_max_pv": {
      "against_the_committed_choice": {
-      "difference_p50": -152236.2421370854,
-      "share_of_trials_at_least_as_good": 0.15234375
+      "difference_p50": -577239.4406277065,
+      "share_of_trials_at_least_as_good": 0.0
      },
-     "objective_value": -457557.6536643098,
+     "objective_value": -4661634.327346716,
      "pv_tables_at_grid_minimum": false,
      "size": {
       "bess_energy_mwh": 4.0,
@@ -13437,9 +13437,18 @@
      "pv_ac_mw": 4.0,
      "pv_tables": 147
     },
-    "objective_value": -312628.743085359,
+    "objective_statistics": {
+     "max": -3565452.3871543086,
+     "mean": -4084519.633569494,
+     "min": -4662595.425738543,
+     "n": 256.0,
+     "p10": -3859382.159894468,
+     "p50": -4079718.499528507,
+     "p90": -4321795.696994899
+    },
+    "objective_value": -4079718.499528507,
     "paired_with_runner_up": {
-     "difference_p50": 18611.30158700164,
+     "difference_p50": 18594.75730660488,
      "runner_up": {
       "bess_energy_mwh": 4.0,
       "bess_power_mw": 1.0,
@@ -13454,6 +13463,38 @@
      "max_export_mw": null,
      "max_pv_ac_mw": 10.0,
      "max_pv_ac_plus_bess_mw": 10.0
+    },
+    "reported_beside": {
+     "equity_irr": {
+      "max": -0.09460680596268378,
+      "mean": -0.11811648688463552,
+      "min": -0.1585660268107807,
+      "n": 256.0,
+      "p10": -0.10490064586117809,
+      "p50": -0.11783085625928491,
+      "p90": -0.13173409179961487
+     },
+     "project_irr": {
+      "n": 0.0
+     },
+     "unit_pretax_irr": {
+      "max": 0.12875705974755647,
+      "mean": 0.10111498350939113,
+      "min": 0.0733070602357837,
+      "n": 256.0,
+      "p10": 0.11381269191329113,
+      "p50": 0.10137947884499066,
+      "p90": 0.08918730380316198
+     },
+     "unit_pretax_npv_usd": {
+      "max": 219472.09204198583,
+      "mean": -318204.72882911656,
+      "min": -945101.942923273,
+      "n": 256.0,
+      "p10": -56931.90505939671,
+      "p50": -312628.743085359,
+      "p90": -571312.8777258301
+     }
     },
     "revenue_max": {
      "bess_energy_mwh": 20.0,
@@ -13489,6 +13530,24 @@
        "pv_ac_mw": 3.5,
        "pv_tables": 107
       },
+      "statistic": "p50"
+     },
+     {
+      "metric": "unit_pretax_npv_usd",
+      "size": {
+       "bess_energy_mwh": 4.0,
+       "bess_power_mw": 1.0,
+       "dc_mwp": 4.01464,
+       "pv_ac_mw": 3.5,
+       "pv_tables": 107
+      },
+      "size_any_pv": {
+       "bess_energy_mwh": 4.0,
+       "bess_power_mw": 1.0,
+       "dc_mwp": 4.01464,
+       "pv_ac_mw": 3.5,
+       "pv_tables": 107
+      },
       "statistic": "p90"
      },
      {
@@ -13524,24 +13583,6 @@
        "dc_mwp": 7.16632,
        "pv_ac_mw": 6.0,
        "pv_tables": 191
-      },
-      "statistic": "p50"
-     },
-     {
-      "metric": "project_npv",
-      "size": {
-       "bess_energy_mwh": 4.0,
-       "bess_power_mw": 1.0,
-       "dc_mwp": 4.01464,
-       "pv_ac_mw": 3.5,
-       "pv_tables": 107
-      },
-      "size_any_pv": {
-       "bess_energy_mwh": 4.0,
-       "bess_power_mw": 1.0,
-       "dc_mwp": 4.01464,
-       "pv_ac_mw": 3.5,
-       "pv_tables": 107
       },
       "statistic": "p50"
      },
@@ -13638,7 +13679,7 @@
     ],
     "any_pv": {
      "against_the_committed_choice": null,
-     "objective_value": -312628.743085359,
+     "objective_value": -4079718.499528507,
      "pv_tables_at_grid_minimum": true,
      "size": {
       "bess_energy_mwh": 4.0,
@@ -13650,10 +13691,10 @@
     },
     "land_max_pv": {
      "against_the_committed_choice": {
-      "difference_p50": -152236.2421370854,
-      "share_of_trials_at_least_as_good": 0.15234375
+      "difference_p50": -577239.4406277065,
+      "share_of_trials_at_least_as_good": 0.0
      },
-     "objective_value": -457557.6536643098,
+     "objective_value": -4661634.327346716,
      "pv_tables_at_grid_minimum": false,
      "size": {
       "bess_energy_mwh": 4.0,
@@ -13670,9 +13711,18 @@
      "pv_ac_mw": 6.0,
      "pv_tables": 189
     },
-    "objective_value": -312628.743085359,
+    "objective_statistics": {
+     "max": -3565452.3871543086,
+     "mean": -4084519.633569494,
+     "min": -4662595.425738543,
+     "n": 256.0,
+     "p10": -3859382.159894468,
+     "p50": -4079718.499528507,
+     "p90": -4321795.696994899
+    },
+    "objective_value": -4079718.499528507,
     "paired_with_runner_up": {
-     "difference_p50": 18611.30158700164,
+     "difference_p50": 18594.75730660488,
      "runner_up": {
       "bess_energy_mwh": 4.0,
       "bess_power_mw": 1.0,
@@ -13687,6 +13737,38 @@
      "max_export_mw": 10.0,
      "max_pv_ac_mw": 10.0,
      "max_pv_ac_plus_bess_mw": null
+    },
+    "reported_beside": {
+     "equity_irr": {
+      "max": -0.09460680596268378,
+      "mean": -0.11811648688463552,
+      "min": -0.1585660268107807,
+      "n": 256.0,
+      "p10": -0.10490064586117809,
+      "p50": -0.11783085625928491,
+      "p90": -0.13173409179961487
+     },
+     "project_irr": {
+      "n": 0.0
+     },
+     "unit_pretax_irr": {
+      "max": 0.12875705974755647,
+      "mean": 0.10111498350939113,
+      "min": 0.0733070602357837,
+      "n": 256.0,
+      "p10": 0.11381269191329113,
+      "p50": 0.10137947884499066,
+      "p90": 0.08918730380316198
+     },
+     "unit_pretax_npv_usd": {
+      "max": 219472.09204198583,
+      "mean": -318204.72882911656,
+      "min": -945101.942923273,
+      "n": 256.0,
+      "p10": -56931.90505939671,
+      "p50": -312628.743085359,
+      "p90": -571312.8777258301
+     }
     },
     "revenue_max": {
      "bess_energy_mwh": 36.0,
@@ -13728,12 +13810,12 @@
    "basis": "industry-claimed 10-15% daytime curtailment for ground solar (owner's Nov 2026 research doc); midpoint; scenario only",
    "best_by_objective": {
     "A": {
-     "bess_power_mw": 3.0,
+     "bess_power_mw": 1.0,
      "pv_ac_mw": 3.5,
      "pv_tables": 107
     },
     "B": {
-     "bess_power_mw": 3.0,
+     "bess_power_mw": 1.0,
      "pv_ac_mw": 3.5,
      "pv_tables": 107
     }
@@ -17007,12 +17089,12 @@
    "basis": "PUCSL consultation reference case (regulatory config)",
    "best_by_objective": {
     "A": {
-     "bess_power_mw": 3.0,
+     "bess_power_mw": 1.0,
      "pv_ac_mw": 3.5,
      "pv_tables": 107
     },
     "B": {
-     "bess_power_mw": 3.0,
+     "bess_power_mw": 1.0,
      "pv_ac_mw": 3.5,
      "pv_tables": 107
     }
@@ -20304,14 +20386,14 @@
   ],
   "effective_evaluations": 84175,
   "export_limit_mw": 10.0,
-  "git_sha": "1a929699467ee999a220bc28f7bed0fbbf4e3f87",
+  "git_sha": "6f25310625a5342b2e50be3b57d9161df2a52145",
   "grid_points": 325,
   "grid_points_evaluated": 325,
   "inputs_sha256": {
    "conf/blue_whale_pucsl_fit_2026.yaml": "d314f5b44cf407f32a9472f1c49075c557718a94163fb45b3759f2dc945f5a23",
    "conf/blue_whale_pv_bess_pricing.yaml": "6730291beec447d73eb07c8840154540c6497ed834a45c87615c66502dd6d8e9",
    "conf/blue_whale_solar_bess.yaml": "0c7f2d4105e8099a7c02322746dbf81bd85bf5a03ee7da72e339fdcd534e83c9",
-   "scenarios/blue_whale_solar_bess_lot5b_2026.yaml": "ffe9fb9f90274d194928696ecaa81b4c74f8b3b2464b94e4d3ad43c20bf2262b"
+   "scenarios/blue_whale_solar_bess_lot5b_2026.yaml": "079294d474fab4cffc53eee005c30f7821d77e83337c165baca74f3206de356c"
   },
   "land_max_tables_by_bess_power_mw": {
    "1.0": 192,
@@ -20338,16 +20420,16 @@
   "losses_on_charge": true,
   "model_version": "15.15.0",
   "objective": {
-   "metric": "unit_pretax_npv_usd",
+   "metric": "project_npv",
    "statistic": "p50"
   },
   "requested_trials_per_point": 256,
-  "result_sha256": "984e97544309b8a307ec47db8ccf43c3a7a3716722881d1154309fa0d506772b",
-  "runtime_s": 3943.8,
+  "result_sha256": "6ad10b19eff8b95af9f45c85aecae30fbd23829378490fdb4c0aee651ff54053",
+  "runtime_s": 3922.8,
   "sampler": "lhs",
   "seed": 20261101,
   "sensitivity_cases_per_point": 2,
-  "sizing_config_sha256": "9c93a7b2449756ccd757707e7995038b1a9fede3f9156b683d515316772c2314",
+  "sizing_config_sha256": "7a7c39d003377e0be68ad215eb960340a099fe9a91dd9ff12aa8890fc27fb44f",
   "summary": "concise: one grid row per point; the full point only for the named sizes",
   "years": 20
  },

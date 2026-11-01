@@ -38,17 +38,36 @@ grid:
 recommendation:
   # Written to scenarios/blue_whale_solar_bess_lot5b_2026.yaml (a test checks they agree):
   # the after-tax objective's choice under reading A in
-  # docs/blue_whale/solar_bess_fixed_bess_sizing_summary.json.
+  # docs/blue_whale/solar_bess_fixed_bess_sizing_summary.json. Run of 2026-11-01 at 6f253106
+  # (seed 20261101, 58 points x 256 trials, 15,022 evaluations, 724.7 s): 151 tables
+  # (5.66552 MWp, DC/AC 1.1331, 17 inverters). After-tax project NPV P50 USD -5,326,884,
+  # P90 -5,911,801; no project IRR in any trial. Unit pre-tax NPV P50 -829,383, P90 -1,421,478.
+  # A near tie with 152 tables (at least as good in 52.7% of paired trials, by USD 316 at the
+  # median); the P50 curve is within USD 3,200 of the choice from 147 to 155 tables.
   committed:
     reading: A
-    pv_tables: 134
+    pv_tables: 151
     pv_ac_mw: 5.0
     bess_power_mw: 5.0
   alternative:
     reading: B
-    pv_tables: 134
+    pv_tables: 151
     pv_ac_mw: 5.0
     bess_power_mw: 5.0
+  # The value-based size under the same objective, seed and trials, from the full grid.
+  value_based:
+    summary: docs/blue_whale/solar_bess_project_sizing_summary.json
+    reading: A
+    pv_tables: 107
+    pv_ac_mw: 3.5
+    bess_power_mw: 1.0
+  # THE COST OF THE STRATEGIC CHOICE (USD): the value-based size's statistic less the committed
+  # size's, from the two summaries (a test recomputes them). Positive = value given up.
+  strategic_cost_usd:
+    project_npv_p50: 1247165.50       # after-tax project NPV: -4,079,718 vs -5,326,884
+    project_npv_p90: 1590005.48       # -4,321,796 vs -5,911,801
+    unit_pretax_npv_usd_p50: 516753.81  # unit pre-tax NPV: -312,629 vs -829,383
+    unit_pretax_npv_usd_p90: 850165.10  # -571,313 vs -1,421,478
 
 output:
   summary_json: null
