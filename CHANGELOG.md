@@ -19,6 +19,25 @@ All notable changes to this project will be documented here.
   vector; it does not change the Board/lender circulation HOLD.
 
 ### Fixed
+- **Balloon interest paid after maturity is deducted for tax (15.10.0).** #1505: the
+  levered tax pass deducted scheduled interest only, so the interest on the balloon after
+  maturity (the refinanced tranche's, a sweep's or a bullet's) reduced no taxable income,
+  although the three-statement P&L books it. The basis is a new scenario input,
+  `tax.balloon_interest_tax_basis`: `paid` (owner decision, #1526 issuecomment-6553550944,
+  and the default when absent: deducted in the year it is settled in cash, capitalised
+  interest when a later sweep pays it), `accrued` or `none` (the earlier treatment).
+  `tax.interest_deductibility: false` still switches every interest deduction off.
+  `debt_result` gains `balloon_interest_paid`, the enriched rows gain
+  `balloon_interest_accrued_usd` and `balloon_interest_paid_usd`, and the non-resident
+  interest WHT gross-up now also charges the balloon interest paid (off in every committed
+  scenario). The deduction reaches both the sizing pass and the equity pass; the sizing
+  loop's iteration ceiling rises from 25 to 200. Canon re-baseline: equity IRR -26.44% ->
+  -23.01%, equity NPV -$95.53M -> -$95.27M, LLCR 1.2875 -> 1.2905, PLCR 1.3283 -> 1.3342;
+  project IRR, NPV, CFADS, min DSCR and the facility are unchanged. LLCR and PLCR are now
+  pinned at full precision in `tests/_canon.py`. This re-baselines the committed
+  canonical KPI vector; it does not change the Board/lender circulation HOLD, and none of
+  these figures supports a lender, IC or covenant representation while the F-5 and #1110
+  holds stand.
 - **The balloon after maturity accrues interest, and the senior fee follows the balance
   actually outstanding (15.9.0).** #1503 and #1504: under `cash_sweep` and `bullet` the
   unpaid balloon accrues interest at the facility's blended rate (`avg_debt_rate`) until

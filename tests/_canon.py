@@ -1,6 +1,6 @@
 """Single source of truth for the canonical lender-case KPI vector (#955).
 
-These eight values are the canonical economics of the ``dutchbay_lendercase_2025Q4``
+These ten values are the canonical economics of the ``dutchbay_lendercase_2025Q4``
 scenario. They are pinned by the oracle
 ``tests/finance/test_multitech_generation.py::test_canonical_lendercase_economics_unchanged``
 and were previously echoed as bare literals across a dozen unit tests, so that a
@@ -77,6 +77,16 @@ LENDER_PROJECT_NPV: Final[float] = -91402455.3177098
 # the year-1 figure honestly rather than hold 1.30 by constraining the solver.
 LENDER_MIN_DSCR: Final[float] = 1.2196047509679255
 LENDER_MIN_DSCR_PERIOD: Final[float] = 1.3
+
+# Loan- and project-life coverage ratios, on the levered-tax coverage CFADS net of the
+# senior credit-support fee actually charged. Pinned at full precision by #1526 because
+# nothing pinned them closely before: the lender fixture holds PLCR to 0.02, so removing
+# #1510's post-maturity LLCR/PLCR re-net (PLCR back to 1.3238) left the suite green
+# (#1510 domain DOM-1, assurance A-2). #1505 moves both: LLCR 1.2875 -> 1.2905, PLCR
+# 1.3283 -> 1.3342, because their windows reach the years the deducted balloon interest
+# is paid.
+LENDER_LLCR: Final[float] = 1.2905042250735763
+LENDER_PLCR: Final[float] = 1.33416659224924
 
 # Total cash available for debt service over the modelled life, on the PROJECT basis
 # (unlevered tax, after the senior credit-support fee) -- the same series project NPV and

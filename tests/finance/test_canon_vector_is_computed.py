@@ -1,7 +1,7 @@
 """Guard that the canonical lender KPI vector is *computed*, not *returned*.
 
 ``tests/finance/test_multitech_generation.py::test_canonical_lendercase_economics_unchanged``
-pins the eight canonical lender KPIs to full-precision literals held in
+pins the ten canonical lender KPIs to full-precision literals held in
 :mod:`tests._canon`. A pinned-constant oracle answers "did the number change?" but not
 "is the number still being derived?" — an engine short-circuited to emit the pinned
 values would satisfy it exactly.

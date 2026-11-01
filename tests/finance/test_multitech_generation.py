@@ -18,8 +18,10 @@ from finance.cashflow_v14_production import (
 )
 from tests._canon import (
     LENDER_EQUITY_IRR,
+    LENDER_LLCR,
     LENDER_MIN_DSCR,
     LENDER_MIN_DSCR_PERIOD,
+    LENDER_PLCR,
     LENDER_PROJECT_IRR,
     LENDER_PROJECT_NPV,
     LENDER_PROJECT_NPV_PRUDENTIAL,
@@ -352,6 +354,10 @@ def test_canonical_lendercase_economics_unchanged() -> None:
     assert kpis["min_dscr"] == pytest.approx(LENDER_MIN_DSCR, abs=1e-9)
     assert kpis["min_dscr_period"] == pytest.approx(LENDER_MIN_DSCR_PERIOD, abs=1e-9)
     assert kpis["total_cfads_usd"] == pytest.approx(LENDER_TOTAL_CFADS_USD, rel=1e-9)
+    # LLCR and PLCR at full precision (#1526): the fixture's 0.02 band could not tell
+    # #1510's post-maturity fee re-net (PLCR 1.3283 vs 1.3238) from its absence.
+    assert kpis["llcr"] == pytest.approx(LENDER_LLCR, abs=1e-9)
+    assert kpis["plcr"] == pytest.approx(LENDER_PLCR, abs=1e-9)
     # Prudential (downside) NPV: CFADS discounted at the haircut WACC (prudential_rate =
     # WACC + spread), below the base NPV.
     assert kpis["project_npv_prudential"] == pytest.approx(
