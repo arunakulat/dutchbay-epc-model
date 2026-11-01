@@ -13,16 +13,28 @@ sizing pass of the levered-tax fixed point, the P90 bind and the amortize bisect
 * ``apply_debt_layer`` leaves its params exactly as it found them; and
 * every solve and every bisection returns exactly, not approximately, what the old
   deep-copy recipe returns from the same arguments.
+
+The bisection also returns a config that shares no dict or list with its caller's
+(#1521 O-1): callers keep that config and may hand it on.
+
+The engine's code lives behind the ``finance.debt_v14`` façade in ``finance.debt``, and
+each function there reads its collaborators from its own module's globals. A seam is
+therefore wrapped in every engine module that binds it, never on the façade, where a
+patch would be dead (``tests/lint/test_debt_package_boundary.py`` rule 2).
 """
 
 from __future__ import annotations
 
 import copy
+import importlib
+import pkgutil
 from pathlib import Path
-from typing import Any, Callable
+from types import ModuleType
+from typing import Any, Callable, Iterator
 
 import pytest
 
+import finance.debt
 from analytics.evaluation_v14 import evaluate_with_overrides
 from finance import debt_v14
 
@@ -49,8 +61,14 @@ def _reference_solve(
     *,
     step: float = 0.0025,
     fp_eps: float = 1e-6,
+    start_hint: float | None = None,
 ) -> float:
-    """``_solve_gearing_for_dscr`` as it stood before the change (deep copy per trial)."""
+    """``_solve_gearing_for_dscr`` as it stood before the change (deep copy per trial).
+
+    ``start_hint`` is accepted and ignored: the oracle is always the cold scan, so a
+    warm-started solve is held to the same answer (see test_gearing_warm_start.py).
+    """
+    del start_hint
     ratio = max_ratio
     while ratio > 0.0:
         core = debt_v14.apply_debt_layer(
@@ -88,6 +106,47 @@ def _reference_resize(
     return resized, debt_v14.apply_debt_layer(params=resized, annual_rows=rows)
 
 
+def _engine_modules() -> list[ModuleType]:
+    """Every module of the ``finance.debt`` package that sits behind the façade."""
+    return [
+        importlib.import_module(f"finance.debt.{info.name}")
+        for info in pkgutil.iter_modules(finance.debt.__path__)
+    ]
+
+
+def _wrap_everywhere(
+    monkeypatch: pytest.MonkeyPatch,
+    real: Callable[..., Any],
+    wrapper: Callable[..., Any],
+) -> list[str]:
+    """Replace ``real`` with ``wrapper`` in every engine module that binds it by name."""
+    patched = []
+    for module in _engine_modules():
+        if getattr(module, real.__name__, None) is real:
+            monkeypatch.setattr(module, real.__name__, wrapper)
+            patched.append(module.__name__)
+    return patched
+
+
+def _containers(obj: Any) -> Iterator[Any]:
+    """Every dict and list reachable from ``obj``, each once."""
+    seen: set[int] = set()
+    stack = [obj]
+    while stack:
+        item = stack.pop()
+        if not isinstance(item, (dict, list)) or id(item) in seen:
+            continue
+        seen.add(id(item))
+        yield item
+        stack.extend(item.values() if isinstance(item, dict) else item)
+
+
+def _shared_containers(a: Any, b: Any) -> int:
+    """How many dicts and lists ``a`` and ``b`` share by identity."""
+    ids = {id(x) for x in _containers(a)}
+    return sum(1 for x in _containers(b) if id(x) in ids)
+
+
 @pytest.fixture
 def recorded(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[Any]]:
     """Wrap the engine seams so one lender-case run records every call through them."""
@@ -96,6 +155,7 @@ def recorded(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[Any]]:
         "layer_calls": [],
         "solves": [],
         "resizes": [],
+        "resize_sharing": [],
     }
 
     real_layer: Callable[..., dict[str, Any]] = debt_v14.apply_debt_layer
@@ -129,11 +189,22 @@ def recorded(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[Any]]:
         args = (copy.deepcopy(config), copy.deepcopy(rows), copy.deepcopy(core))
         out = real_resize(config, rows, core)
         record["resizes"].append((args, out))
+        bisected = (
+            debt_v14._as_float(core.get("balloon_remaining"), 0.0)
+            > debt_v14._BALLOON_TOL
+        )
+        if bisected:
+            record["resize_sharing"].append(_shared_containers(config, out[0]))
         return out
 
-    monkeypatch.setattr(debt_v14, "apply_debt_layer", checked_layer)
-    monkeypatch.setattr(debt_v14, "_solve_gearing_for_dscr", recording_solve)
-    monkeypatch.setattr(debt_v14, "_resize_for_amortization", recording_resize)
+    for real, wrapper in (
+        (real_layer, checked_layer),
+        (real_solve, recording_solve),
+        (real_resize, recording_resize),
+    ):
+        patched = _wrap_everywhere(monkeypatch, real, wrapper)
+        # A seam no module binds would leave its recorder silently empty.
+        assert patched, f"no finance.debt module binds {real.__name__}"
     return record
 
 
@@ -166,6 +237,10 @@ def test_trial_configs_match_the_deep_copy_recipe_exactly(
         ref_cfg, ref_core = _reference_resize(config, rows, core)
         assert out_cfg == ref_cfg
         assert out_core == ref_core
+    if overrides.get("Financing_Terms.balloon_treatment") == "amortize":
+        # #1521 O-1: the bisection's result is a full deep copy of the caller's config.
+        assert recorded["resize_sharing"], "amortize no longer bisects the lender case"
+        assert recorded["resize_sharing"] == [0] * len(recorded["resize_sharing"])
 
 
 def test_config_at_debt_ratio_writes_where_the_deep_copy_did() -> None:
