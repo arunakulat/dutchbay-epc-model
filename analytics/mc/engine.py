@@ -198,6 +198,7 @@ def _tail_risk(
                 for tm in trial_metrics
                 if isinstance(tm.get(k), (int, float))
                 and not isinstance(tm.get(k), bool)
+                and math.isfinite(float(tm[k]))
             ],
             dtype=float,
         )

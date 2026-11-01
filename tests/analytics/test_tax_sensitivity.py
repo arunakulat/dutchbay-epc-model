@@ -126,9 +126,16 @@ def test_tax_holiday_is_inert_where_interest_already_shelters_the_income(base_co
     A test that asserts "no change" is worthless without a control, so the second half
     turns the shield off. With interest non-deductible there IS tax in the early years,
     and the holiday then moves equity IRR by 350bps, in the conventional direction.
+
+    #1505: the tolerance is 1e-9, not 1e-12. Deducting the balloon interest the sweep
+    pays makes the sizing loop run 17 passes here instead of 4, and it stops once no
+    row's CFADS moves by more than one cent, so two runs that should land on the same
+    fixed point are only guaranteed to agree to that tolerance, not to the bit
+    (measured 2.1e-12 apart in equity IRR). 1e-9 is still a thousand times tighter than any
+    effect the second half of this test measures.
     """
     assert _equity_irr(base_config, {"tax.tax_holiday_years": 10}) == pytest.approx(
-        _equity_irr(base_config, {"tax.tax_holiday_years": 0}), abs=1e-12
+        _equity_irr(base_config, {"tax.tax_holiday_years": 0}), abs=1e-9
     )
 
     sheltered = _equity_irr(

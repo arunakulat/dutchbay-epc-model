@@ -1,4 +1,4 @@
-.PHONY: setup hooks lint type security audit audit-declared test test-stochastic-qualification test-report-qualification cov html package lock clean
+.PHONY: setup hooks lint type security audit audit-declared audit-osv test test-stochastic-qualification test-report-qualification cov html package lock clean
 
 PY ?= python
 PIP ?= pip
@@ -38,8 +38,8 @@ ENTRYPOINTS := run_full_pipeline_v14.py run_scenario_analytics_v14.py \
 # Use only exact `--ignore-vuln <ID>` or `--ignore-vuln=<ID>` tokens; abbreviations and other tokens are rejected.
 # Ignore-option tokens may appear only in that assignment; direct recipe flags and other variables are rejected.
 # Both `make security` and `make audit` are live-checked against the canonical advisory IDs.
-# The complete recipes are fixed: `audit` is only canonical resolve-mode pip-audit; `security` is exact Bandit then canonical resolve and declared-pin pip-audit passes.
-# `.ONESHELL`, `SHELL`, `.SHELLFLAGS`, shell preambles, aliases, functions, wrappers and extra commands are rejected; runtime sentinels prove all three invocations reach the expected binaries.
+# The complete recipes are fixed: `audit` is only canonical resolve-mode pip-audit; `security` is exact Bandit then the canonical resolve-mode, declared-pin and OSV cross-check pip-audit passes.
+# `.ONESHELL`, `SHELL`, `.SHELLFLAGS`, shell preambles, aliases, functions, wrappers and extra commands are rejected; runtime sentinels prove all four invocations reach the expected binaries.
 # `.IGNORE`, Make flag variable assignments (`MAKEFLAGS`, `GNUMAKEFLAGS`, `MFLAGS`) and `-` recipe prefixes are rejected: a failing audit must fail the target, and sentinels forced to fail prove it does.
 # Each suppression has one physical declaration line in this comment block:
 # ignore-vuln: <ADVISORY-ID> | package: <name>==<version> | cap: <name><specifier> | lifted-by: <name> <version>|unknown | reason: <why the suppression is defensible>
@@ -83,11 +83,12 @@ type:
 	mypy $(SURFACE) $(ENTRYPOINTS)
 
 # Security gate (mirrors CI). SAST over own code (fail on MEDIUM+ severity/confidence) +
-# dependency CVE audit of the pinned lock in BOTH of pip-audit's coverage modes (fail on
-# any non-allowlisted advisory). The same $(PIP_AUDIT_IGNORES) applies to both passes, so a
-# suppression can never hold in one mode and not the other.
+# dependency CVE audit of the pinned lock in BOTH of pip-audit's coverage modes and
+# against TWO independent advisory feeds (fail on any non-allowlisted advisory). The same
+# $(PIP_AUDIT_IGNORES) applies to all three passes, so a suppression can never hold in one
+# mode or one feed and not the others.
 #
-# TWO passes, because neither alone audits the whole lock. Measured 2026-10-25 against
+# TWO coverage passes, because neither alone audits the whole lock. Measured 2026-10-25 against
 # requirements.txt at main 9b2b51e0 (312 pins), pip-audit 2.10.1, Python 3.12.3:
 #
 #   resolve mode   pip-audit -r requirements.txt                          -> 310 audited
@@ -111,13 +112,43 @@ type:
 # a COMPLEMENT, not a replacement: it audits only what is written down, which is why both
 # passes run and neither is dropped.
 #
-# Out of scope in both passes, stated rather than implied: `pip` itself, which this lock
+# A THIRD pass cross-checks the feed rather than the coverage. The two passes above both
+# ask PyPI's advisory API, and on 2026-10-27 that single answer proved unreliable: the
+# required Security Scan reported `No known vulnerabilities found` on a lock pinning
+# `hydra-core==1.3.7` (job 122348327291, 17:19:24Z) two minutes after the same workflow
+# redded the same two lock lines on GHSA-wf6j-7hvr-gr93 (jobs 122346893695, 122347443951).
+# Recorded as residual D-10 on #1353. The cause is NOT established, and nothing here names
+# one, so this pass is hardening rather than a repair of a diagnosed fault. In pip-audit
+# 2.10.1 neither service reads pip's cache: `caching_session` defaults to `use_pip=False`
+# and neither `_service.pypi` nor `_service.osv` overrides it, so with no `--cache-dir` both
+# cache in pip-audit's own directory (~/.cache/pip-audit), whatever the `--cache-dir` help
+# text says. Within one job the resolve and declared-pin passes share that directory, so
+# the second PyPI pass may be answered from the first one's responses: the two PyPI passes
+# are not two independent reads of the feed. This pass is, because it asks a different
+# database. One feed serving a stale or partial answer therefore no longer produces a clean
+# verdict on its own.
+#
+# It runs in DECLARED mode, so it audits every pin with no network resolve, and it is a
+# cross-check rather than a replacement: the two feeds carry different version ranges for
+# the same advisory - for GHSA-wf6j-7hvr-gr93, PyPI's gives fix versions 1.3.8 and 1.4.0rc3
+# where OSV carries two ranges and pip-audit prints only 1.4.0rc3 - so neither is treated as
+# the authority. Measured 2026-10-28: against main 3b6117f7 the OSV pass finds exactly the
+# one advisory the PyPI passes find (`hydra-core 1.3.7`), and against main 2ce82a9c, where
+# that pin is 1.3.8, it finds nothing, so it adds no finding of its own on today's lock. A
+# feed moves on upstream's clock, so that is a measurement and not a guarantee. The CI jobs
+# also run scripts/ci/check_audit_canary.py first, which fails unless both feeds report two
+# known advisories, so a clean verdict here comes from feeds just shown able to fail. That
+# proves each feed can report known advisories at that minute; it does not prove that every
+# per-package answer for the lock's own pins is current.
+#
+# Out of scope in both coverage passes, stated rather than implied: `pip` itself, which this lock
 # deliberately does not pin - it is the resolver, and the one unpinned entry the lock-closure
 # check of #1359/#1387 expects to see. Tracked as a residual on #1353.
 security:
 	bandit -c pyproject.toml -r $(SURFACE) --severity-level medium --confidence-level medium
 	pip-audit -r requirements.txt $(PIP_AUDIT_IGNORES)
 	pip-audit --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)
+	pip-audit --vulnerability-service osv --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)
 
 # Convenience alias for the resolve-mode audit alone. Deliberately ONE recipe line carrying
 # no flags beyond the lock and the allowlist: this is the canonical spelling of the effective
@@ -130,6 +161,11 @@ audit:
 # mode skips, in under a second and with no network resolve. The fast local pre-flight.
 audit-declared:
 	pip-audit --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)
+
+# The OSV cross-check on its own: the same declared-pin coverage read from the other feed.
+# Useful when a PyPI-feed verdict needs a second opinion before it is reported anywhere.
+audit-osv:
+	pip-audit --vulnerability-service osv --no-deps --disable-pip -r requirements.txt $(PIP_AUDIT_IGNORES)
 
 # The real test gate: pytest (xdist-parallel) with the coverage floor (#439). The floor
 # is enforced HERE and in the CI test step, not in pyproject addopts.

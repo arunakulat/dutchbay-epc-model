@@ -50,7 +50,7 @@ class CovenantSpec:
 _DEFAULT_COVENANT_SPEC = CovenantSpec()
 
 
-def _get_trial_array(result: MonteCarloResult, key: str) -> np.ndarray:
+def _raw_trial_array(result: MonteCarloResult, key: str) -> np.ndarray:
     """
     Pull a raw per-trial array for metric key.
     This function defines the contract: to compute breach probabilities and robust stats,
@@ -85,8 +85,25 @@ def _get_trial_array(result: MonteCarloResult, key: str) -> np.ndarray:
     )
 
 
-def _p(arr: np.ndarray, pctl: int) -> float:
-    return float(np.percentile(arr, int(pctl)))
+def _get_trial_array(result: MonteCarloResult, key: str) -> np.ndarray:
+    """Return this metric's defined sample without filtering any other metric."""
+    raw = _raw_trial_array(result, key)
+    return np.asarray(raw[np.isfinite(raw)], dtype=float)
+
+
+def _trial_coverage(result: MonteCarloResult, key: str) -> Dict[str, int]:
+    """Expose the denominator behind a conditional metric statistic."""
+    raw = _raw_trial_array(result, key)
+    defined = int(np.isfinite(raw).sum())
+    return {
+        "defined_trials": defined,
+        "total_trials": int(raw.size),
+        "unavailable_trials": int(raw.size) - defined,
+    }
+
+
+def _p(arr: np.ndarray, pctl: int) -> Optional[float]:
+    return float(np.percentile(arr, int(pctl))) if arr.size else None
 
 
 def dscr_breach_probability(dscr: np.ndarray, *, floor: float) -> float:
@@ -164,14 +181,16 @@ def build_lender_risk_table(
             p90, p95 = _p(arr, 10), _p(arr, 5)
         else:
             p90, p95 = _p(arr, 90), _p(arr, 95)
+        std = float(arr.std(ddof=1)) if arr.size > 1 else 0.0
         rows.append(
             {
                 "metric": label,
                 "P50": _p(arr, 50),
                 "P90": p90,
                 "P95": p95,
-                "mean": float(arr.mean()) if arr.size else float("nan"),
-                "std": float(arr.std(ddof=1)) if arr.size > 1 else 0.0,
+                "mean": float(arr.mean()) if arr.size else None,
+                "std": std if arr.size else None,
+                **_trial_coverage(result, key),
             }
         )
 
@@ -195,6 +214,7 @@ def build_lender_risk_table(
             "P95": float("nan"),
             "mean": prob_breach,
             "std": float("nan"),
+            **_trial_coverage(result, k_dscr),
         }
     )
     rows.append(
@@ -205,6 +225,7 @@ def build_lender_risk_table(
             "P95": float("nan"),
             "mean": dscr_p95_downside,
             "std": float("nan"),
+            **_trial_coverage(result, k_dscr),
         }
     )
 
@@ -260,9 +281,12 @@ def build_casper_risk_blocks(
         "floor_pinned": bool(is_floor_pinned(dscr, covenant.dscr_floor)),
         "worst_year_dscr_p95_downside": worst_year_dscr_p95(dscr),
         "n_trials": int(len(dscr)),
+        "n_total_trials": int(_raw_trial_array(result, k_dscr).size),
+        "unavailable_trials": int(_raw_trial_array(result, k_dscr).size - len(dscr)),
     }
 
     return {
         "lender_risk_table": df,
         "covenant": covenant_block,
+        "metric_coverage": dict(result.metadata.get("metric_coverage", {})),
     }

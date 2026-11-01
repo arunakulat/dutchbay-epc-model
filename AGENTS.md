@@ -17,6 +17,10 @@ DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
   dutchbay_bootstrap_rules.py
 ```
 
+A session that is not a local Codex task starts from `docs/governance/agent_session_routing.md`.
+That note routes each agent host to its sources and grants no merge, review, lease or approval
+authority.
+
 When historical sprint instructions conflict with current governance, follow the newer
 current workflow, especially `WORKTREE-01`, `GOV-02`, `R23`, `R25`, `DELIVERY-01`,
 `DATA-01`, `PERSIST-01`, `THREAD-01`, `MERGE-01`, and `RECRUIT-01`. Never restore a retired sprint integration
@@ -151,6 +155,11 @@ overlap judgment or the time the first edit occurred.
   assurance pair, and a subject change after review restarts both reviews (module 3 §6).
   `test-suite.yml` defers the shards, the Coverage Gate and Grid Study on a draft, so the
   required `Test Summary` check exists only after the ready run.
+- `TRAIN-01`: the merge coordinator may land two or three reviewed draft pull requests as one
+  merge train, so they share one full-suite run. The cars are path-disjoint, and at most one of
+  them changes a KPI. Each car keeps its own commit, carrying its own message, and the train lands
+  by rebase-merge, never squash. A car's binding carries onto the train head only through module 3
+  §8's three proofs. The steward skill's "Merge trains" section has the build and landing checks.
 
 ## Runtime logging and evidence retention
 
