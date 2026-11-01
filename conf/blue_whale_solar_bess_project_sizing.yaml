@@ -107,14 +107,20 @@ plant:
   fixed_opex_usd_per_year: 150000.0
 
 objective:
-  # PRIMARY ("Max value, MC decides"; the coordinator's lease: "unit NPV at P50, with P90
-  # and IRR reported"): the P50 of PR 3's unit-only pre-tax NPV (the solar + BESS capex, its
-  # dispatched revenue and its O&M; no tax or debt) at the engine's own discount rate. The
-  # plant-level grid, civils, development and fixed O&M lines are the same at every size, so
-  # they do not change the ranking. The engine's project NPV (after the 30% tax, the 10%
-  # CFADS risk haircut and debt sizing) and the other alternatives are reported, not used.
-  metric: unit_pretax_npv_usd
+  # PRIMARY (PR 7; owner decision 2 of 2026-11-01, #1353 comment 6563070978, verbatim:
+  # "After-tax project NPV (Recommended)"): the P50 of the engine's after-tax project NPV of
+  # the solar + BESS project scenario. Each trial is evaluated through
+  # analytics.evaluation_v14.evaluate_with_overrides (ARCH-04, FRAMEWORK-03): CFADS after the
+  # 30% corporate tax and the 10% CFADS risk haircut, less the capex at t=0, discounted at the
+  # engine's own rate by finance.irr (ARCH-02). P90 is reported beside it (objective_statistics
+  # in the summary), and so is the unit's pre-tax NPV (report_beside).
+  # PR 4's objective, the P50 of the unit-only pre-tax NPV (the solar + BESS capex, its
+  # dispatched revenue and its O&M; no tax or debt), stays selectable and is OFF by default:
+  # set metric: unit_pretax_npv_usd to restore it. It is also listed under alternatives.
+  metric: project_npv
   statistic: p50
+  # Reported at each reading's choice beside the objective (P50, P90, mean and n of each).
+  report_beside: [unit_pretax_npv_usd, unit_pretax_irr, project_irr, equity_irr]
   # PV rule: "any" lets the objective choose the PV over the whole grid (up to the lot's
   # maximum); the best size with the PV held at the lot's maximum is reported beside it with a
   # paired comparison. A base-case screen on 2026-11-01 (one trial per point, 1,300
@@ -123,10 +129,10 @@ objective:
   # optimum under reading A, so the rule is "any" and the objective decides the PV too.
   pv_rule: any
   alternatives:
+    - [unit_pretax_npv_usd, p50]
     - [unit_pretax_npv_usd, p90]
     - [unit_pretax_npv_usd, mean]
     - [unit_pretax_irr, p50]
-    - [project_npv, p50]
     - [project_npv, p90]
     - [project_irr, p50]
     - [equity_irr, p50]
