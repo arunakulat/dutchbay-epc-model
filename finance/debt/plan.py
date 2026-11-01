@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 from finance.debt.balloon import (
     _balloon_resolution_path,
@@ -34,6 +34,7 @@ def plan_debt(
     annual_rows: Sequence[Dict[str, Any]],
     config: Dict[str, Any],
     forbid_toy_fallback: bool = False,
+    gearing_hints: Optional[Dict[str, Tuple[float, float, float]]] = None,
 ) -> Dict[str, Any]:
     """Plan debt for the project using the v14 engine.
 
@@ -127,7 +128,7 @@ def plan_debt(
     if forbid_toy_fallback:
         config = {**config, _FORBID_TOY_FALLBACK_KEY: True}
     _warn_if_decorative_tranches(config)
-    config, dual_dscr_detail = _maybe_autosolve_dscr(config, rows)
+    config, dual_dscr_detail = _maybe_autosolve_dscr(config, rows, gearing_hints)
     core = apply_debt_layer(params=config, annual_rows=rows)
 
     # ── Balloon treatment ──────────────────────────────────────────────────

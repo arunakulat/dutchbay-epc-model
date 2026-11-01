@@ -19,24 +19,22 @@ The bisection also returns a config that shares no dict or list with its caller'
 
 The engine's code lives behind the ``finance.debt_v14`` façade in ``finance.debt``, and
 each function there reads its collaborators from its own module's globals. A seam is
-therefore wrapped in every engine module that binds it, never on the façade, where a
-patch would be dead (``tests/lint/test_debt_package_boundary.py`` rule 2).
+therefore wrapped in every engine module that binds it (``tests/_debt_seams.py``),
+never on the façade, where a patch would be dead
+(``tests/lint/test_debt_package_boundary.py`` rule 2).
 """
 
 from __future__ import annotations
 
 import copy
-import importlib
-import pkgutil
 from pathlib import Path
-from types import ModuleType
 from typing import Any, Callable, Iterator
 
 import pytest
 
-import finance.debt
 from analytics.evaluation_v14 import evaluate_with_overrides
 from finance import debt_v14
+from tests._debt_seams import wrap_everywhere
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LENDER_CONFIG = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
@@ -61,8 +59,14 @@ def _reference_solve(
     *,
     step: float = 0.0025,
     fp_eps: float = 1e-6,
+    start_hint: float | None = None,
 ) -> float:
-    """``_solve_gearing_for_dscr`` as it stood before the change (deep copy per trial)."""
+    """``_solve_gearing_for_dscr`` as it stood before the change (deep copy per trial).
+
+    ``start_hint`` is accepted and ignored: the oracle is always the cold scan, so a
+    warm-started solve is held to the same answer (see test_gearing_warm_start.py).
+    """
+    del start_hint
     ratio = max_ratio
     while ratio > 0.0:
         core = debt_v14.apply_debt_layer(
@@ -98,28 +102,6 @@ def _reference_resize(
             lo = mid
     resized = _deepcopy_config_at(config, lo)
     return resized, debt_v14.apply_debt_layer(params=resized, annual_rows=rows)
-
-
-def _engine_modules() -> list[ModuleType]:
-    """Every module of the ``finance.debt`` package that sits behind the façade."""
-    return [
-        importlib.import_module(f"finance.debt.{info.name}")
-        for info in pkgutil.iter_modules(finance.debt.__path__)
-    ]
-
-
-def _wrap_everywhere(
-    monkeypatch: pytest.MonkeyPatch,
-    real: Callable[..., Any],
-    wrapper: Callable[..., Any],
-) -> list[str]:
-    """Replace ``real`` with ``wrapper`` in every engine module that binds it by name."""
-    patched = []
-    for module in _engine_modules():
-        if getattr(module, real.__name__, None) is real:
-            monkeypatch.setattr(module, real.__name__, wrapper)
-            patched.append(module.__name__)
-    return patched
 
 
 def _containers(obj: Any) -> Iterator[Any]:
@@ -196,7 +178,7 @@ def recorded(monkeypatch: pytest.MonkeyPatch) -> dict[str, list[Any]]:
         (real_solve, recording_solve),
         (real_resize, recording_resize),
     ):
-        patched = _wrap_everywhere(monkeypatch, real, wrapper)
+        patched = wrap_everywhere(monkeypatch, real, wrapper)
         # A seam no module binds would leave its recorder silently empty.
         assert patched, f"no finance.debt module binds {real.__name__}"
     return record

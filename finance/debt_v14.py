@@ -88,6 +88,7 @@ from finance.debt.schema import (  # noqa: F401
     _register_debt_schema,
 )
 from finance.debt.sizing import (  # noqa: F401
+    _gearing_hint,
     _maybe_autosolve_dscr,
     _resolve_downside_ratio,
     _solve_gearing_for_dscr,

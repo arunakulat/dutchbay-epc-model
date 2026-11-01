@@ -30,6 +30,7 @@ def _solve_gearing_for_dscr(
     *,
     step: float = 0.0025,
     fp_eps: float = 1e-6,
+    start_hint: Optional[float] = None,
 ) -> float:
     """Largest gearing whose REAL-schedule min DSCR still meets ``target_dscr``.
 
@@ -74,11 +75,52 @@ def _solve_gearing_for_dscr(
     # the target (an FP epsilon absorbs the sculpt's near-target rounding). min DSCR is
     # monotonic in gearing, so the first pass scanning down is the boundary -> max leverage
     # at the target, without the bisection's plateau/FP fragility.
-    ratio = max_ratio
-    while ratio > 0.0:
-        if _min_dscr_at(ratio) >= target_dscr - fp_eps:
-            return round(ratio, 6)
-        ratio -= step
+    if start_hint is None:
+        ratio = max_ratio
+        while ratio > 0.0:
+            if _min_dscr_at(ratio) >= target_dscr - fp_eps:
+                return round(ratio, 6)
+            ratio -= step
+    else:
+        # Warm start (#1514 follow-up). The levered-tax fixed point re-solves the same
+        # scenario on CFADS that moves by cents to dollars between passes, so the answer
+        # sits at or next to the previous pass's. Rather than rescan ~130 trials from
+        # max_ratio, start at the previous answer's grid point and walk to the boundary.
+        # The grid is built by the same accumulated subtraction as the cold scan, so
+        # every candidate is the same float the cold scan would have tried, and the
+        # boundary found is the one the cold scan returns whenever min DSCR is
+        # non-increasing in gearing (the property the cold scan's own comment relies
+        # on). tests/finance/test_gearing_warm_start.py pins hinted == cold on every
+        # pass of the lender case (plain, P90 bind, amortize); it and
+        # tests/finance/test_gearing_warm_start_walk.py pin each branch of the walk.
+        # #1527 checked every committed scenario once, outside the suite.
+        grid: List[float] = []
+        ratio = max_ratio
+        while ratio > 0.0:
+            grid.append(ratio)
+            ratio -= step
+        hint = round(start_hint, 6)
+        start = next((i for i, r in enumerate(grid) if round(r, 6) == hint), None)
+        if start is None:
+            # The hint is not a point of this grid (a caller passed a value this
+            # scan would never return): fall back to the cold scan.
+            return _solve_gearing_for_dscr(
+                config, annual_rows, target_dscr, max_ratio, step=step, fp_eps=fp_eps
+            )
+
+        def _meets(index: int) -> bool:
+            return _min_dscr_at(grid[index]) >= target_dscr - fp_eps
+
+        if _meets(start):
+            # Walk up toward max_ratio while the next-higher gearing still holds.
+            index = start
+            while index > 0 and _meets(index - 1):
+                index -= 1
+            return round(grid[index], 6)
+        # Walk down until a gearing holds the target.
+        for index in range(start + 1, len(grid)):
+            if _meets(index):
+                return round(grid[index], 6)
     # Non-convergence: no gearing down to the floor holds the target DSCR (an unbankable
     # CFADS profile). Fail LOUD and size DOWN to the conservative floor (least debt) — the
     # old fallback returned max_ratio - step (near-MAXIMUM leverage), silently sizing an
@@ -116,8 +158,25 @@ def _resolve_downside_ratio(
     return _as_float(fin.get("dscr_p99_downside_factor"), 0.80), "flat_factor"
 
 
+def _gearing_hint(
+    hints: Optional[Mapping[str, Tuple[float, float, float]]],
+    case: str,
+    max_ratio: float,
+    target: float,
+) -> Optional[float]:
+    """The previous pass's solved gearing for ``case``, if it was solved on the same terms."""
+    if not hints or case not in hints:
+        return None
+    hint_max, hint_target, solved = hints[case]
+    if hint_max != max_ratio or hint_target != target:
+        return None
+    return solved
+
+
 def _maybe_autosolve_dscr(
-    config: Dict[str, Any], annual_rows: List[Dict[str, Any]]
+    config: Dict[str, Any],
+    annual_rows: List[Dict[str, Any]],
+    gearing_hints: Optional[Dict[str, Tuple[float, float, float]]] = None,
 ) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
     """Opt-in DSCR-based debt sizing (``Financing_Terms.debt_sizing: dual_dscr``).
 
@@ -132,6 +191,11 @@ def _maybe_autosolve_dscr(
     resized gearing is ``min(P50, P90)`` -- so the structure clears both the base DSCR and a
     downside DSCR floor. Default-off leaves the P50 solve as the sole driver (canonical
     gearing unchanged).
+
+    ``gearing_hints`` (optional, read and written) carries each case's last solve between
+    the passes of the levered-tax fixed point: ``{"P50" | "P90": (max_ratio, target,
+    solved)}``. A hint is used only when its ``max_ratio`` and target match this solve's,
+    and it only changes where the scan starts (see :func:`_solve_gearing_for_dscr`).
     """
     fin = _section_case_insensitive(config, "Financing_Terms") or {}
     mode = str(fin.get("debt_sizing", "")).lower()
@@ -140,7 +204,15 @@ def _maybe_autosolve_dscr(
 
     target = _as_float(fin.get("target_dscr"), 1.30)
     max_ratio = _as_float(fin.get("debt_ratio"), 0.70)
-    solved = _solve_gearing_for_dscr(config, annual_rows, target, max_ratio)
+    solved = _solve_gearing_for_dscr(
+        config,
+        annual_rows,
+        target,
+        max_ratio,
+        start_hint=_gearing_hint(gearing_hints, "P50", max_ratio, target),
+    )
+    if gearing_hints is not None:
+        gearing_hints["P50"] = (max_ratio, target, solved)
 
     # Optionally let the bankable P90 (downside) case BIND the gearing: size to
     # min(P50 gearing, P90 gearing). Default-off keeps the P50 solve as sole driver.
@@ -156,7 +228,15 @@ def _maybe_autosolve_dscr(
             {**r, "cfads_usd": _as_float(r.get("cfads_usd"), 0.0) * downside_ratio}
             for r in annual_rows
         ]
-        solved_p90 = _solve_gearing_for_dscr(config, p90_rows, target_p90, max_ratio)
+        solved_p90 = _solve_gearing_for_dscr(
+            config,
+            p90_rows,
+            target_p90,
+            max_ratio,
+            start_hint=_gearing_hint(gearing_hints, "P90", max_ratio, target_p90),
+        )
+        if gearing_hints is not None:
+            gearing_hints["P90"] = (max_ratio, target_p90, solved_p90)
         if solved_p90 < binding_gearing:
             binding_gearing, binding_case = solved_p90, "P90"
         downside = downside_ratio

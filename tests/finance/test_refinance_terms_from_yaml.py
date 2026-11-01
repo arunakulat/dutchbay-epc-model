@@ -59,10 +59,10 @@ def _refinance(terms: Dict[str, Any] | None) -> Dict[str, Any]:
 # The resolver: YAML or refusal, never a default
 # --------------------------------------------------------------------------- #
 def _debt_engine_modules() -> list[ModuleType]:
-    """The façade plus every module of the ``finance.debt`` package behind it."""
+    """The façade, the ``finance.debt`` package itself and every module in it."""
     import finance.debt
 
-    modules = [debt_v14]
+    modules = [debt_v14, finance.debt]
     for info in pkgutil.iter_modules(finance.debt.__path__):
         modules.append(importlib.import_module(f"finance.debt.{info.name}"))
     return modules
@@ -78,7 +78,7 @@ def test_no_engine_module_defines_a_code_default() -> None:
     """The engine's code lives behind the façade, so look in every module of it."""
     modules = _debt_engine_modules()
     # The façade alone would make this vacuous: prove the package was enumerated.
-    assert len(modules) >= 15, [m.__name__ for m in modules]
+    assert len(modules) >= 16, [m.__name__ for m in modules]
     for module in modules:
         for name in (
             "_REFINANCE_TENOR_DEFAULT",
