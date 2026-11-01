@@ -579,7 +579,7 @@ PIP_AUDIT_DECLARED_PREFIX = [
     "requirements.txt",
 ]
 # The feed cross-check pass (#1353 D-10): declared-pin coverage asked of OSV rather than
-# PyPI's advisory API, which also keeps it off pip's HTTP cache (`use_pip=False`).
+# PyPI's advisory API, a second and independent database.
 PIP_AUDIT_OSV_PREFIX = [
     "pip-audit",
     "--vulnerability-service",
@@ -869,8 +869,8 @@ def _effective_suppression_violations(
     # and filtering for recognizable lines is what let F-1 through.
     #
     # Each command is compared ON ITS OWN. The mandatory target passes the allowlist to
-    # two audits, as #1388 requires, so pooling their tokens makes one correct
-    # declaration look like two suppressions - the F-1 defect the assurance lane found,
+    # three audits, as #1388 requires, so pooling their tokens makes one correct
+    # declaration look like three suppressions - the F-1 defect the assurance lane found,
     # invisible while the live allowlist is empty.
     for position, command in enumerate(commands, start=1):
         tokens = _command_ignore_tokens(command)

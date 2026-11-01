@@ -3,8 +3,9 @@
 #
 # Both jobs installed `bandit pip-audit` unpinned until #1464, so the tool that decides a
 # merge drifted with whatever PyPI served that morning and its version appeared in no
-# receipt (#1353 D-10). Pinning it here rather than in each workflow keeps the two jobs
-# identical by construction.
+# receipt (#1353). This is receipt hygiene, not a D-10 finding: the false green and the
+# true reds of #1353 D-10 all ran bandit 1.9.4 and pip-audit 2.10.1. Pinning it here rather
+# than in each workflow keeps the two jobs identical by construction.
 #
 # Both pins must equal the lock's own pins in requirements.txt, so a local `make security`
 # and CI run the same analysers, and a lock bump that moves either tool reds

@@ -25,26 +25,25 @@ on 2026-10-23/24 and the next run was not due until Monday 2026-10-26. The gate 
 whole lock rather than the diff, so the only signal was every open pull request going red at
 once, arriving as though it were somebody's change.
 
-**3. The gate could answer from a cache and a single feed, and nothing showed it could
-fail.** ``pip_audit._service.pypi``
-builds its HTTP session with ``caching_session(cache_dir)``, taking the default
-``use_pip=True``, which ``pip_audit._cache._get_cache_dir`` resolves to
-``$(pip cache dir)/http``. Both jobs that run ``make security`` set
-``actions/setup-python``'s ``cache: 'pip'``, so each audit read advisory responses out of a
-restored cache whose key is the runner, the Python version and the lock hash - shared across
-branches. On 2026-10-27 a cache saved at 16:50:20Z by job 122331742996, 18 minutes before
-``GHSA-wf6j-7hvr-gr93`` published at 17:08:41Z, was restored byte-identical (31,413,483 B)
-by five later runs, and the required gate reported a lock pinning the vulnerable
-``hydra-core==1.3.7`` clean at 17:19:24Z (job 122348327291) two minutes after the same
-workflow redded the same two lock lines (jobs 122346893695, 122347443951); another run
-reported one of two live advisories (job 122353695670). The cause is NOT established: the
-same restored bytes gave both answers, and PyPI-side consistency or edge caching, a partial
-response accepted as complete, and runner egress remain open candidates beside the cache
-(residual D-10 on #1353). So the rest of the remedy does not depend on the cache. A single
-feed's answer, stale or partial for whatever reason, no longer decides the verdict alone,
-because the OSV pass asks a different database and ``pip_audit._service.osv`` passes
-``use_pip=False``; and a canary step makes every feed report two known advisories in the
-same job before its clean verdict is trusted. Both jobs also installed ``bandit pip-audit``
+**3. The gate answered from a single feed with restored cross-branch state, and nothing
+showed it could fail.** Both jobs that run ``make security`` set ``actions/setup-python``'s
+``cache: 'pip'``, which restores ``$(pip cache dir)`` from a key of the runner, the Python
+version and the lock hash - shared across branches. That cache does not hold pip-audit's
+advisory lookups: in pip-audit 2.10.1 ``pip_audit._cache.caching_session`` defaults to
+``use_pip=False`` and neither ``_service.pypi`` nor ``_service.osv`` overrides it, so with
+no ``--cache-dir`` both services cache in pip-audit's own directory (``~/.cache/pip-audit``).
+What the restored cache can reach is the resolve pass's own pip resolution. On 2026-10-27 a
+cache saved at 16:50:20Z by job 122331742996, 18 minutes before ``GHSA-wf6j-7hvr-gr93``
+published at 17:08:41Z, was restored byte-identical (31,413,483 B) by five later runs, and
+the required gate reported a lock pinning the vulnerable ``hydra-core==1.3.7`` clean at
+17:19:24Z (job 122348327291) two minutes after the same workflow redded the same two lock
+lines (jobs 122346893695, 122347443951). The cause is NOT established and is still unknown
+(residual D-10 on #1353); nothing here names one. So no part of the remedy depends on a
+cause. A single feed's answer, stale or partial for whatever reason, no longer decides the
+verdict alone, because the OSV pass asks a different database (within one job the two PyPI
+passes share pip-audit's cache, so they are not two independent reads of the feed); and a
+canary step makes every feed report two known advisories in the same job before its clean
+verdict is trusted. Both jobs also installed ``bandit pip-audit``
 UNPINNED, so the tool that decides a merge drifted with PyPI and its version reached no
 receipt. Hardened under #1464.
 
@@ -491,17 +490,18 @@ def audit_gate_hygiene(workflow: Workflow, label: str) -> list[str]:
     #1353, and both outside everything ``audit_makefile`` and ``audit_workflow`` can see,
     because neither lives in the Makefile or in a trigger.
 
-    **The cache.** ``pip_audit._service.pypi`` builds its session with
-    ``caching_session(cache_dir)``, taking the default ``use_pip=True``, which
-    ``pip_audit._cache._get_cache_dir`` resolves to ``$(pip cache dir)/http``. A job that
-    restores pip's cache therefore hands the auditor somebody else's advisory responses.
-    The key is the runner, the Python version and the lock hash, so it is shared across
-    branches: a cache saved at 16:50:20Z, 18 minutes before GHSA-wf6j-7hvr-gr93
-    published, was restored byte-identical by five later runs, and the gate reported a
-    lock pinning the vulnerable ``hydra-core==1.3.7`` clean (job 122348327291). Rejected
-    fail-CLOSED - the key must be absent, not merely unequal to ``'pip'`` - because the
-    field takes any value Actions accepts and a cache of any flavour is a directory the
-    auditor may read.
+    **The cache.** ``cache: 'pip'`` restores ``$(pip cache dir)`` from a key of the runner,
+    the Python version and the lock hash, so it is shared across branches: a cache saved
+    at 16:50:20Z, 18 minutes before GHSA-wf6j-7hvr-gr93 published, was restored
+    byte-identical by five later runs, and the gate reported a lock pinning the vulnerable
+    ``hydra-core==1.3.7`` clean (job 122348327291). Those bytes were pip's cache, not
+    pip-audit's: in pip-audit 2.10.1 ``caching_session`` defaults to ``use_pip=False``, so
+    the advisory services cache in pip-audit's own directory. What a restored pip cache
+    can reach is the resolve pass's own pip resolution. The cause of that verdict is still
+    unknown and none is claimed here; the key is removed as hardening, to keep cross-branch
+    state out of the gate job. Rejected fail-CLOSED - the key must be absent, not merely
+    unequal to ``'pip'`` - because the field takes any value Actions accepts and a cache of
+    any flavour is restored state the job did not produce.
 
     **The pins.** Both jobs installed ``bandit pip-audit`` unpinned, so the tool that
     decides a merge drifted with whatever PyPI served that morning and its version
@@ -536,9 +536,9 @@ def audit_gate_hygiene(workflow: Workflow, label: str) -> list[str]:
             if isinstance(configured, dict) and "cache" in configured:
                 violations.append(
                     f"{label}: a job running `make security` must not set setup-python "
-                    "`cache` - pip-audit reads pip's HTTP cache by default, so a restored "
-                    "cache hands the audit advisory responses saved by another branch's "
-                    f"run (#1353 D-10, #1464), got {configured['cache']!r}"
+                    "`cache` - a restored cache carries state saved by another branch's run "
+                    "into the gate job, including the resolve pass's pip resolution "
+                    f"(#1353 D-10, #1464), got {configured['cache']!r}"
                 )
 
         runs = "\n".join(str(step.get("run", "")) for step in steps)
@@ -769,7 +769,7 @@ def test_the_merge_gate_and_the_main_audit_run_the_same_command() -> None:
 
 @pytest.mark.parametrize("path", [TEST_SUITE_WORKFLOW, WORKFLOW], ids=lambda p: p.name)
 def test_neither_audit_job_lets_a_cache_answer_for_the_feed(path: Path) -> None:
-    """Both live audit jobs must keep pip's cache out of the audit and pin the tools."""
+    """Both live audit jobs must keep a restored pip cache out of the gate and pin the tools."""
     loaded: Workflow = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert audit_gate_hygiene(loaded, path.name) == []
 

@@ -116,16 +116,17 @@ type:
 # ask PyPI's advisory API, and on 2026-10-27 that single answer proved unreliable: the
 # required Security Scan reported `No known vulnerabilities found` on a lock pinning
 # `hydra-core==1.3.7` (job 122348327291, 17:19:24Z) two minutes after the same workflow
-# redded the same two lock lines on GHSA-wf6j-7hvr-gr93 (jobs 122346893695, 122347443951),
-# and on another run reported one of two live advisories (job 122353695670). Recorded as
-# residual D-10 on #1353. The cause is NOT established - the same restored cache bytes gave
-# both answers minutes apart - so this pass is hardening rather than a repair of a diagnosed
-# fault. What is established is the shape of the exposure: `pip_audit._service.pypi` passes
-# `caching_session`'s default `use_pip=True`, so the PyPI service reads and writes pip's own
-# HTTP cache, which this repository's audit jobs used to restore from a key shared across
-# branches. `pip_audit._service.osv` passes `use_pip=False`, so the OSV pass cannot read
-# that cache even if one is restored, and it answers from a different database. One feed
-# serving a stale or partial answer therefore no longer produces a clean verdict on its own.
+# redded the same two lock lines on GHSA-wf6j-7hvr-gr93 (jobs 122346893695, 122347443951).
+# Recorded as residual D-10 on #1353. The cause is NOT established, and nothing here names
+# one, so this pass is hardening rather than a repair of a diagnosed fault. In pip-audit
+# 2.10.1 neither service reads pip's cache: `caching_session` defaults to `use_pip=False`
+# and neither `_service.pypi` nor `_service.osv` overrides it, so with no `--cache-dir` both
+# cache in pip-audit's own directory (~/.cache/pip-audit), whatever the `--cache-dir` help
+# text says. Within one job the resolve and declared-pin passes share that directory, so
+# the second PyPI pass may be answered from the first one's responses: the two PyPI passes
+# are not two independent reads of the feed. This pass is, because it asks a different
+# database. One feed serving a stale or partial answer therefore no longer produces a clean
+# verdict on its own.
 #
 # It runs in DECLARED mode, so it audits every pin with no network resolve, and it is a
 # cross-check rather than a replacement: the two feeds carry different version ranges for
@@ -136,7 +137,9 @@ type:
 # that pin is 1.3.8, it finds nothing, so it adds no finding of its own on today's lock. A
 # feed moves on upstream's clock, so that is a measurement and not a guarantee. The CI jobs
 # also run scripts/ci/check_audit_canary.py first, which fails unless both feeds report two
-# known advisories, so a clean verdict here comes from feeds just shown able to fail.
+# known advisories, so a clean verdict here comes from feeds just shown able to fail. That
+# proves each feed can report known advisories at that minute; it does not prove that every
+# per-package answer for the lock's own pins is current.
 #
 # Out of scope in both coverage passes, stated rather than implied: `pip` itself, which this lock
 # deliberately does not pin - it is the resolver, and the one unpinned entry the lock-closure
