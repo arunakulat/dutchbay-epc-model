@@ -74,7 +74,10 @@ def test_every_warm_started_solve_equals_the_cold_scan(
 
 
 def test_the_warm_start_is_where_the_time_goes(solves: dict[str, Any]) -> None:
-    """The lender case's 7 passes cost about 920 engine calls cold; warm, about 170."""
+    """The lender case's 7 passes cost about 920 engine calls cold; warm, about 170.
+
+    Since #1505 deducts the refinance interest it takes 8 passes, about 160 calls warm.
+    """
     evaluate_with_overrides(LENDER_CONFIG, return_full_result=True)
     # The lower bound proves the counter sits on the engine's real seam: a dead patch
     # would count nothing and pass the upper bound.

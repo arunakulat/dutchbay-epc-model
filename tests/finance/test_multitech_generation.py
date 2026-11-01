@@ -18,8 +18,10 @@ from finance.cashflow_v14_production import (
 )
 from tests._canon import (
     LENDER_EQUITY_IRR,
+    LENDER_LLCR,
     LENDER_MIN_DSCR,
     LENDER_MIN_DSCR_PERIOD,
+    LENDER_PLCR,
     LENDER_PROJECT_IRR,
     LENDER_PROJECT_NPV,
     LENDER_PROJECT_NPV_PRUDENTIAL,
@@ -289,7 +291,14 @@ def test_canonical_lendercase_economics_unchanged() -> None:
 
     lender = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
     kpis = run_v14_pipeline(config=lender, validation_mode="strict")["kpis"]
-    # Re-baselined by #1504 (2026-10-31): after maturity the senior credit-support fee is
+    # Re-baselined by #1505 (2026-11-01, owner decision: deductible when paid,
+    # tax.balloon_interest_tax_basis): the levered tax pass deducts the refinanced
+    # tranche's USD 7.24M of interest, paid in operating years 15-17, which it deducted
+    # nowhere before. Equity IRR -26.44% -> -23.01% (equity NPV -95.53M -> -95.27M);
+    # LLCR 1.2875 -> 1.2905 and PLCR 1.3283 -> 1.3342 (their windows reach the years
+    # the interest is paid). Project IRR, NPV, CFADS, min_dscr and the facility are
+    # unchanged: the project pass deducts no interest.
+    # Prior: re-baselined by #1504 (2026-10-31): after maturity the senior credit-support fee is
     # charged on the refinanced balance actually outstanding, not on the structural
     # USD 28.63m balloon in every period to the horizon (USD 3.01m -> 1.04m over periods
     # 17-22; total fee 15.11M -> 13.14M). Equity IRR -30.54% -> -26.44%, project IRR
@@ -345,6 +354,10 @@ def test_canonical_lendercase_economics_unchanged() -> None:
     assert kpis["min_dscr"] == pytest.approx(LENDER_MIN_DSCR, abs=1e-9)
     assert kpis["min_dscr_period"] == pytest.approx(LENDER_MIN_DSCR_PERIOD, abs=1e-9)
     assert kpis["total_cfads_usd"] == pytest.approx(LENDER_TOTAL_CFADS_USD, rel=1e-9)
+    # LLCR and PLCR at full precision (#1526): the fixture's 0.02 band could not tell
+    # #1510's post-maturity fee re-net (PLCR 1.3283 vs 1.3238) from its absence.
+    assert kpis["llcr"] == pytest.approx(LENDER_LLCR, abs=1e-9)
+    assert kpis["plcr"] == pytest.approx(LENDER_PLCR, abs=1e-9)
     # Prudential (downside) NPV: CFADS discounted at the haircut WACC (prudential_rate =
     # WACC + spread), below the base NPV.
     assert kpis["project_npv_prudential"] == pytest.approx(

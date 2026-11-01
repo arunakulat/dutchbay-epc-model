@@ -136,9 +136,10 @@ def test_refinance_is_lowest_due_to_penalty_rate(results: dict) -> None:
     # equity. #1397 moves it -34.71% -> -30.54%: the levered-tax basis shrinks the
     # balloon being refinanced ($31.55M -> $28.63M). #1504 (2026-10-31) moves it to
     # -26.44%: the senior fee after maturity is charged on the refinanced balance
-    # actually outstanding. It is still the worst of the five, which is the ordering
-    # this test pins.
-    assert refi == pytest.approx(-0.2644, abs=0.005)
+    # actually outstanding. #1505 (2026-11-01) moves it to -23.01%: the refinance
+    # interest is deducted in the levered tax pass. It is still the worst of the five,
+    # which is the ordering this test pins.
+    assert refi == pytest.approx(-0.2301, abs=0.005)
 
 
 def test_amortize_removes_balloon_by_resizing_debt(results: dict) -> None:

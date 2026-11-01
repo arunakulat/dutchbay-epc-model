@@ -92,12 +92,13 @@ def plan_debt(
       canonical surface; see :func:`_build_dscr_periods`.
     - ``debt_service_total``, ``interest_total``, ``total_service``,
       ``debt_outstanding``, ``senior_fee_usd``, ``balloon_resolution``,
-      ``balloon_interest`` — PERIOD-indexed, positional, aligned 1:1 with
+      ``balloon_interest``, ``balloon_interest_paid`` — PERIOD-indexed, positional, aligned 1:1 with
       ``dscr_series``. ``debt_outstanding`` is each period's OPENING balance; after
       maturity it is the balloon actually outstanding under its treatment, and
       ``senior_fee_usd`` is charged on that balance (see
       :func:`_balloon_resolution_path`). ``interest_total`` is scheduled interest
-      only; the balloon's post-maturity interest is ``balloon_interest``.
+      only; the balloon's post-maturity interest is ``balloon_interest`` (accrued)
+      and ``balloon_interest_paid`` (settled in cash, capitalised interest first).
     - ``annual_row_debt_period_map`` — ROW-indexed list; each entry maps an
       ``annual_row_index`` to its ``debt_period`` in the PERIOD space above. It is
       the DEFINITIONAL source of the operating-year labels in ``dscr_periods``.
@@ -157,6 +158,7 @@ def plan_debt(
     balloon_resolution = balloon_path["resolution"]
     balloon_residual = balloon_path["residual"]
     balloon_interest = balloon_path["interest"]
+    balloon_interest_paid = balloon_path["interest_paid"]
 
     # After maturity the engine's own series still hold the STRUCTURAL balloon: the
     # layer amortises scheduled principal only, so it cannot see the sweep, bullet
@@ -373,4 +375,10 @@ def plan_debt(
         # `balloon_resolution` (cash_sweep, bullet and refinance). Interest a
         # sweep could not pay is capitalised into `balloon_residual`.
         "balloon_interest": balloon_interest,
+        # ── Balloon interest paid (#1505; additive, appended last) ──────────
+        # PERIOD-indexed interest settled in cash inside `balloon_resolution`,
+        # capitalised interest first. Equal to `balloon_interest` except under a
+        # sweep that capitalises. The levered tax pass deducts this series when
+        # `tax.balloon_interest_tax_basis` is `paid`.
+        "balloon_interest_paid": balloon_interest_paid,
     }

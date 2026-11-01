@@ -35,7 +35,9 @@ def test_run_pipeline_returns_full_report() -> None:
     # #1396 part B: the balloon is refinanced, not cash-swept, and equity funds the
     # refinanced tranche's shortfall (-0.0999 -> -0.3054). #1504: the post-maturity senior
     # fee follows the refinanced balance actually outstanding (-0.3054 -> -0.2644).
-    assert resp.kpis.equity_irr == pytest.approx(-0.2644, abs=0.005)
+    # #1505: the refinanced tranche's interest is deducted in the levered tax pass
+    # (-0.2644 -> -0.2301).
+    assert resp.kpis.equity_irr == pytest.approx(-0.2301, abs=0.005)
     assert resp.kpis.project_npv_usd is not None
     # The headline is the fold-corrected year-1 minimum (#790); the extra gearing
     # #1397 supports pushes that fold under the 1.30 per-period sculpt target.
