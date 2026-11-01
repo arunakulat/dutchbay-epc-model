@@ -92,18 +92,21 @@ logger = logging.getLogger(__name__)
 
 
 def _derive_run_status(
-    iterations: int, failed_iterations: int, toy_fallback_count: int
+    iterations: int,
+    failed_iterations: int,
+    toy_fallback_count: int,
+    partial_trial_count: int = 0,
 ) -> str:
     """Classify an MC run for the CLI payload instead of hardcoding "success".
 
     - ``degenerate``: every trial fell back to TOY KPIs (no real evaluation succeeded) —
       the reported metrics are fabricated and must not read as a clean success.
-    - ``degraded``: some trials failed real evaluation or fell back to toy.
-    - ``success``: all trials evaluated for real.
+    - ``degraded``: failed/toy trials or incomplete per-metric observations.
+    - ``success``: all trials evaluated for real with complete metric coverage.
     """
     if iterations > 0 and toy_fallback_count >= iterations:
         return "degenerate"
-    if toy_fallback_count > 0 or failed_iterations > 0:
+    if toy_fallback_count > 0 or failed_iterations > 0 or partial_trial_count > 0:
         return "degraded"
     return "success"
 
@@ -223,8 +226,12 @@ def main(cfg: DictConfig) -> None:
             (result.metadata or {}).get("toy_fallback_count", 0) or 0
         )
         success_rate_pct = result.success_rate()
+        partial_trial_count = int(result.metadata.get("partial_trial_count", 0))
         status = _derive_run_status(
-            iterations, result.failed_iterations, toy_fallback_count
+            iterations,
+            result.failed_iterations,
+            toy_fallback_count,
+            partial_trial_count,
         )
 
         # #647: report the trial count actually EVALUATED, not the request. The engine
@@ -242,6 +249,7 @@ def main(cfg: DictConfig) -> None:
             "success_rate_pct": round(success_rate_pct, 2),
             "failed_iterations": result.failed_iterations,
             "toy_fallback_count": toy_fallback_count,
+            "partial_trial_count": partial_trial_count,
             "n_trials": n_trials_used,
             "seed": seed,
             "execution_time_seconds": round(execution_time_seconds, 4),
@@ -254,12 +262,14 @@ def main(cfg: DictConfig) -> None:
 
         if status != "success":
             logger.warning(
-                "Monte Carlo run is %s: %d/%d trials fell back to toy KPIs, %d failed "
-                "(success_rate=%.1f%%) — reported metrics are NOT fully real.",
+                "Monte Carlo run is %s: %d/%d toy trials, %d failed, %d with partial "
+                "metric coverage (evaluation success_rate=%.1f%%). Inspect metric_coverage "
+                "before relying on metric-specific bands.",
                 status,
                 toy_fallback_count,
                 iterations,
                 result.failed_iterations,
+                partial_trial_count,
                 success_rate_pct,
             )
 

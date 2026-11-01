@@ -47,6 +47,7 @@ from __future__ import annotations
 import csv
 import re
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
@@ -97,6 +98,19 @@ RETIRED_EXPANSIONS = (
 
 # The invented members of the checklist's C1-C5 structure. Neither is a rule.
 RETIRED_PSEUDO_RULES = ("LIBsct", "Config-Directory-Import-Reproducibility")
+
+
+def _case_ids(cases: Sequence[tuple[str, str]]) -> list[str]:
+    """Test ids that name the acronym and a case number, never the expansion text.
+
+    pytest writes a parametrised test's id into ``.test_durations`` when the shard
+    durations are regenerated (``pytest --store-durations``). An id built from the
+    expansion string puts that string into a tracked file, and the scans below then find
+    it there (#1516's first regeneration did exactly this). Numbered ids keep the planted
+    strings inside this file, which the guard already scans itself out of.
+    """
+    return [f"{acronym}-{number}" for number, (acronym, _) in enumerate(cases, 1)]
+
 
 # Acronym, optionally closing a markdown emphasis, then ( : - or an em/en dash, then the
 # candidate definition. `**CASPER** (...)` is the form the docs actually use, so the
@@ -310,7 +324,9 @@ def test_every_spelled_out_expansion_is_canonical() -> None:
     )
 
 
-@pytest.mark.parametrize(("acronym", "expansion"), RETIRED_EXPANSIONS)
+@pytest.mark.parametrize(
+    ("acronym", "expansion"), RETIRED_EXPANSIONS, ids=_case_ids(RETIRED_EXPANSIONS)
+)
 def test_retired_expansion_guard_rejects_each_string(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, acronym: str, expansion: str
 ) -> None:
@@ -359,13 +375,15 @@ def test_retired_guard_allows_a_document_that_reports_the_defect(
     test_every_spelled_out_expansion_is_canonical()
 
 
+_ONE_LINE_PAIRINGS = (
+    ("CASPER", "Clean Architecture"),
+    ("CESSPIT", "Comprehensive Error Handling"),
+    ("CCCDIR", "Clear, Complete, Consistent Documentation"),
+)
+
+
 @pytest.mark.parametrize(
-    ("acronym", "expansion"),
-    [
-        ("CASPER", "Clean Architecture"),
-        ("CESSPIT", "Comprehensive Error Handling"),
-        ("CCCDIR", "Clear, Complete, Consistent Documentation"),
-    ],
+    ("acronym", "expansion"), _ONE_LINE_PAIRINGS, ids=_case_ids(_ONE_LINE_PAIRINGS)
 )
 def test_retired_guard_still_fires_when_the_pairing_is_on_one_line(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, acronym: str, expansion: str
@@ -387,15 +405,17 @@ def test_retired_guard_still_fires_when_the_pairing_is_on_one_line(
         test_no_retired_framework_expansion_returns()
 
 
+_EMPHASIS_EXPANSIONS = (
+    (
+        "CASPER",
+        "Comprehensive Argument Specification, Pydantic Enforcement, Runtime",
+    ),
+    ("CCCDIR", "Clear, Comprehensive, Correct, Defensible, Informative, Robust"),
+)
+
+
 @pytest.mark.parametrize(
-    ("acronym", "expansion"),
-    [
-        (
-            "CASPER",
-            "Comprehensive Argument Specification, Pydantic Enforcement, Runtime",
-        ),
-        ("CCCDIR", "Clear, Comprehensive, Correct, Defensible, Informative, Robust"),
-    ],
+    ("acronym", "expansion"), _EMPHASIS_EXPANSIONS, ids=_case_ids(_EMPHASIS_EXPANSIONS)
 )
 def test_initials_guard_fires_through_markdown_emphasis(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, acronym: str, expansion: str
@@ -417,13 +437,15 @@ def test_initials_guard_fires_through_markdown_emphasis(
         test_every_spelled_out_expansion_is_canonical()
 
 
+_INVENTED_EXPANSIONS = (
+    ("CASPER", "Capital Analytics Sensitivity Portfolio Evaluation Rigor"),
+    ("CESSPIT", "Careful Error Specification Strict Principle Input Typology"),
+    ("CCCDIR", "Completely Commented Code Directory Import Rules"),
+)
+
+
 @pytest.mark.parametrize(
-    ("acronym", "invented"),
-    [
-        ("CASPER", "Capital Analytics Sensitivity Portfolio Evaluation Rigor"),
-        ("CESSPIT", "Careful Error Specification Strict Principle Input Typology"),
-        ("CCCDIR", "Completely Commented Code Directory Import Rules"),
-    ],
+    ("acronym", "invented"), _INVENTED_EXPANSIONS, ids=_case_ids(_INVENTED_EXPANSIONS)
 )
 def test_initials_guard_rejects_an_invented_expansion(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, acronym: str, invented: str
@@ -446,16 +468,18 @@ def test_initials_guard_rejects_an_invented_expansion(
         test_every_spelled_out_expansion_is_canonical()
 
 
+_CANONICAL_WORDINGS = (
+    ("CASPER", "Clear API Surfaces with Predictable Error Responses"),
+    ("CESSPIT", "Config Explicit, Schema Strict, Pre-flight Integrity Tests"),
+    (
+        "CCCDIR",
+        "Contracts Centralized, Compliance Documented, Import Relationships explicit",
+    ),
+)
+
+
 @pytest.mark.parametrize(
-    ("acronym", "wording"),
-    [
-        ("CASPER", "Clear API Surfaces with Predictable Error Responses"),
-        ("CESSPIT", "Config Explicit, Schema Strict, Pre-flight Integrity Tests"),
-        (
-            "CCCDIR",
-            "Contracts Centralized, Compliance Documented, Import Relationships explicit",
-        ),
-    ],
+    ("acronym", "wording"), _CANONICAL_WORDINGS, ids=_case_ids(_CANONICAL_WORDINGS)
 )
 def test_canonical_wording_is_recognised_as_a_definition(
     acronym: str, wording: str

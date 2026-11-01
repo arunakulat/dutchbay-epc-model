@@ -59,6 +59,8 @@ LAYOUT: dict[str, tuple[str, ...]] = {
         "_npv",
         "_rate_decimal",
         "_finite_number",
+        "_case_insensitive_key",
+        "_config_at_debt_ratio",
     ),
     "placeholders": (
         "_PLACEHOLDER_WARNS_EMITTED",

@@ -322,6 +322,9 @@ def _monte_carlo_to_dict(mc: MonteCarloResult | None) -> dict[str, Any] | None:
         "iterations": mc.iterations,
         "failed_iterations": mc.failed_iterations,
         "success_rate_pct": mc.success_rate(),
+        # Evaluation success is distinct from whether each metric is defined.
+        "metric_coverage": dict(mc.metadata.get("metric_coverage", {})),
+        "partial_trial_count": int(mc.metadata.get("partial_trial_count", 0)),
         "irr": {
             "mean": mc.project_irr_mean,
             "std": mc.project_irr_std,

@@ -59,7 +59,7 @@ DEFAULT_CI_PERCENTILES: Tuple[int, ...] = (90, 95)
 
 
 def convergence_diagnostic(
-    trials: Mapping[str, Sequence[float]],
+    trials: Mapping[str, Sequence[float | None]],
     *,
     z: float = Z_95,
     min_n: int = 30,
@@ -178,7 +178,7 @@ def _wilson_interval(k: int, n: int, z: float) -> Tuple[float, float]:
 
 
 def percentile_ci_diagnostic(
-    trials: Mapping[str, Sequence[float]],
+    trials: Mapping[str, Sequence[float | None]],
     *,
     percentiles: Sequence[int] = DEFAULT_CI_PERCENTILES,
     z: float = Z_95,
