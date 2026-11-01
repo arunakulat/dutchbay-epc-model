@@ -12,17 +12,19 @@ case YAML, so the same file shape works for any project the engine can run. The
 committed base scenarios are never written to, so the KPIs they produce cannot
 move because a case exists.
 
-Three kinds are supported. Each is built only from inputs the engine already
-reads, so no engine code changes and no default moves:
+Three kinds are supported. Each is built only from inputs the engine reads,
+and every one of those inputs defaults to the committed behaviour:
 
 ``grid_connection_delay``
     The plant is built on the base schedule but cannot export until the grid
-    connection is ready. Each 12 months of delay adds one idle construction
-    period with no capex and no debt draw, so interest during construction keeps
-    accruing, commercial operation and the first revenue move out by the same
-    number of years, and the project cash flows are discounted from the later
-    start. The engine runs in whole years, so a delay that is not a whole number
-    of years is refused rather than rounded.
+    connection is ready. The engine is annual, so the delay is split into whole
+    years and a remainder. Each whole year adds one idle construction period with
+    no capex and no debt draw, so interest during construction keeps accruing,
+    commercial operation and the first revenue move out by a year, and the
+    project cash flows are discounted from the later start. The remaining months
+    (under 12) set ``project.first_year_grid_unavailable_months``: commercial
+    operation and debt service start on schedule, but the first operating year's
+    energy is cut by ``months / 12`` because nothing can be exported yet.
 
 ``developer_funded_connection``
     The developer pays for grid connection assets that the grid owner would
@@ -43,7 +45,7 @@ from __future__ import annotations
 import copy
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -93,7 +95,6 @@ class WhatIfParameter:
     value: Any
     provenance: str
     presets: Tuple[Any, ...] = ()
-    deferred_presets: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -139,7 +140,6 @@ class WhatIfCase:
                 name: {
                     "value": p.value,
                     "presets": list(p.presets),
-                    "deferred_presets": dict(p.deferred_presets),
                     "provenance": p.provenance,
                 }
                 for name, p in self.parameters.items()
@@ -163,7 +163,7 @@ def _parse_parameter(name: str, raw: Any, where: str) -> WhatIfParameter:
         raise WhatIfCaseError(
             f"{where}.{name} must be a mapping with value and provenance."
         )
-    unknown = set(raw) - {"value", "presets", "deferred_presets", "provenance"}
+    unknown = set(raw) - {"value", "presets", "provenance"}
     if unknown:
         raise WhatIfCaseError(f"{where}.{name} has unknown keys {sorted(unknown)}.")
     provenance = _require_text(raw, "provenance", f"{where}.{name}")
@@ -177,23 +177,11 @@ def _parse_parameter(name: str, raw: Any, where: str) -> WhatIfParameter:
         )
     if "value" not in raw and not presets:
         raise WhatIfCaseError(f"{where}.{name} must declare a value or presets.")
-    deferred_raw = raw.get("deferred_presets", {}) or {}
-    if not isinstance(deferred_raw, Mapping):
-        raise WhatIfCaseError(
-            f"{where}.{name}.deferred_presets must map each preset to its reason."
-        )
-    deferred = {str(k): str(v) for k, v in deferred_raw.items()}
-    for key, reason in deferred.items():
-        if not reason.strip():
-            raise WhatIfCaseError(
-                f"{where}.{name}.deferred_presets[{key}] needs a stated reason."
-            )
     return WhatIfParameter(
         name=name,
         value=raw.get("value", presets[0] if presets else None),
         provenance=provenance,
         presets=presets,
-        deferred_presets=deferred,
     )
 
 
@@ -320,24 +308,18 @@ def _finite_number(value: Any, name: str) -> float:
     return number
 
 
-def _delay_periods(delay_months: Any) -> int:
+def _delay_split(delay_months: Any) -> Tuple[int, int]:
+    """Split a delay into whole engine periods and the remaining months."""
     months = _finite_number(delay_months, "delay_months")
     if months <= 0 or months != int(months):
         raise WhatIfCaseError(
             f"delay_months must be a positive whole number of months; got {delay_months!r}."
         )
-    if int(months) % MONTHS_PER_ENGINE_PERIOD:
-        raise WhatIfCaseError(
-            f"delay_months {int(months)} is not a whole number of engine periods "
-            f"({MONTHS_PER_ENGINE_PERIOD} months each). The cashflow engine is "
-            "annual and has no partial-year operating lever, so this delay is "
-            "refused rather than rounded."
-        )
-    return int(months) // MONTHS_PER_ENGINE_PERIOD
+    return divmod(int(months), MONTHS_PER_ENGINE_PERIOD)
 
 
 def _validate_delay(variant: Mapping[str, Any]) -> None:
-    _delay_periods(variant["delay_months"])
+    _delay_split(variant["delay_months"])
 
 
 def _validate_connection(variant: Mapping[str, Any]) -> None:
@@ -390,12 +372,35 @@ def _section(config: Dict[str, Any], name: str) -> Dict[str, Any]:
 def _apply_delay(
     config: Dict[str, Any], variant: Mapping[str, Any]
 ) -> List[Dict[str, Any]]:
+    periods, remainder = _delay_split(variant["delay_months"])
+    changes: List[Dict[str, Any]] = []
+    if periods:
+        changes.extend(_extend_construction(config, periods))
+    if remainder:
+        project = config.get("project")
+        if not isinstance(project, dict):
+            raise WhatIfCaseError("base scenario has no 'project' mapping to modify.")
+        key = "first_year_grid_unavailable_months"
+        base_value = project.get(key)
+        if base_value:
+            raise WhatIfCaseError(
+                f"the base scenario already sets project.{key}; the case refuses to "
+                "add a delay on top of one it cannot see the reason for."
+            )
+        project[key] = float(remainder)
+        changes.append(
+            {"path": f"project.{key}", "base": base_value, "case": float(remainder)}
+        )
+    return changes
+
+
+def _extend_construction(config: Dict[str, Any], periods: int) -> List[Dict[str, Any]]:
+    """Append ``periods`` idle construction periods and move the calendar labels."""
     from finance.debt_v14 import (
         _extract_financing_terms,
         _resolve_construction_periods,
     )
 
-    periods = _delay_periods(variant["delay_months"])
     terms = _section(config, "Financing_Terms")
     # Resolve the base schedules exactly as the debt engine does, placeholders and
     # their warnings included, so the case extends what the base actually runs.

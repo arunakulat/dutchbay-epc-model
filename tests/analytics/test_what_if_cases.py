@@ -104,14 +104,11 @@ def test_the_connection_case_defaults_to_zero_and_is_labelled_illustrative() -> 
     assert case.parameters["reimbursement_usd_per_year"].value == 0
 
 
-def test_the_delay_case_runs_whole_years_and_records_why_six_months_is_held() -> None:
+def test_the_delay_case_runs_the_owner_presets_6_12_and_24() -> None:
     case = load_what_if_case(
         CASE_DIR / "grid_connection_delay.yaml", repo_root=REPO_ROOT
     )
-    delay = case.parameters["delay_months"]
-    assert delay.presets == (12, 24)
-    assert "6" in delay.deferred_presets
-    assert "rounded" in delay.deferred_presets["6"]
+    assert case.parameters["delay_months"].presets == (6, 12, 24)
 
 
 # -------------------------------------------------------- validation and refusals
@@ -148,8 +145,8 @@ def test_a_parameter_set_that_does_not_match_the_kind_is_refused() -> None:
         parse_what_if_case(raw, repo_root=REPO_ROOT)
 
 
-@pytest.mark.parametrize("months", [6, 18, 0, -12, 12.5, True, "12"])
-def test_a_delay_that_is_not_a_whole_number_of_engine_years_is_refused(
+@pytest.mark.parametrize("months", [0, -12, 12.5, True, "12"])
+def test_a_delay_that_is_not_a_positive_whole_number_of_months_is_refused(
     months: Any,
 ) -> None:
     raw = _synthetic_case(
@@ -159,12 +156,15 @@ def test_a_delay_that_is_not_a_whole_number_of_engine_years_is_refused(
         parse_what_if_case(raw)
 
 
-def test_six_months_is_refused_rather_than_rounded() -> None:
+def test_a_delay_on_top_of_one_the_base_already_carries_is_refused() -> None:
     raw = _synthetic_case(
         "grid_connection_delay", {"delay_months": {"value": 6, "provenance": "x"}}
     )
-    with pytest.raises(WhatIfCaseError, match="refused rather than rounded"):
-        parse_what_if_case(raw)
+    case = parse_what_if_case(raw)
+    base = _synthetic_base()
+    base["project"]["first_year_grid_unavailable_months"] = 3
+    with pytest.raises(WhatIfCaseError, match="already sets"):
+        build_case_config(case, base, case.variants()[0])
 
 
 def test_a_non_zero_reimbursement_is_refused() -> None:
@@ -239,6 +239,35 @@ def test_delay_appends_idle_periods_and_moves_the_calendar_on_any_site() -> None
     assert [c["project"]["cod_year"] for c in configs] == [2032, 2033]
     assert configs[1]["timeline"] == {"construction_years": 5, "lifetime_years": 30}
     assert configs[0]["meta"]["what_if_case"]["canonical"] is False
+    for config in configs:
+        assert "first_year_grid_unavailable_months" not in config["project"]
+
+
+def test_months_under_a_year_use_the_partial_year_lever_on_any_site() -> None:
+    raw = _synthetic_case(
+        "grid_connection_delay",
+        {"delay_months": {"presets": [6, 18], "provenance": "x"}},
+    )
+    case = parse_what_if_case(raw)
+    base = _synthetic_base()
+    six, eighteen = (build_case_config(case, base, v) for v in case.variants())
+
+    config, changes = six
+    assert config["Financing_Terms"] == base["Financing_Terms"]
+    assert config["project"]["cod_year"] == 2031
+    assert config["project"]["first_year_grid_unavailable_months"] == 6.0
+    assert changes == [
+        {
+            "path": "project.first_year_grid_unavailable_months",
+            "base": None,
+            "case": 6.0,
+        }
+    ]
+
+    config, _ = eighteen
+    assert config["Financing_Terms"]["construction_periods"] == 4
+    assert config["project"]["cod_year"] == 2032
+    assert config["project"]["first_year_grid_unavailable_months"] == 6.0
 
 
 def test_connection_adds_its_own_capex_line_on_any_site() -> None:
@@ -311,19 +340,21 @@ def test_running_a_case_leaves_the_base_scenario_file_untouched() -> None:
 
 def test_grid_delay_raises_idc_and_cuts_value_more_the_longer_it_runs() -> None:
     result = _run("grid_connection_delay")
-    twelve, twenty_four = (_report(v) for v in result["variants"])
-    for key in ("total_idc_usd",):
-        assert twelve[key]["delta"] > 0
-        assert twenty_four[key]["case"] > twelve[key]["case"]
+    six, twelve, twenty_four = (_report(v) for v in result["variants"])
+    # Six months keeps COD and the construction window, so it moves no
+    # Financing_Terms input; it only cuts operating-year-1 export.
+    six_paths = [c["path"] for c in result["variants"][0]["changes"]]
+    assert six_paths == ["project.first_year_grid_unavailable_months"]
     for key in ("project_npv", "project_irr"):
-        assert twelve[key]["delta"] < 0
+        assert six[key]["delta"] < 0
+        assert twelve[key]["case"] < six[key]["case"]
         assert twenty_four[key]["case"] < twelve[key]["case"]
-    # Liquidity: a larger funding need with less debt capacity lands on equity.
+    assert twelve["total_idc_usd"]["delta"] > 0
+    assert twenty_four["total_idc_usd"]["case"] > twelve["total_idc_usd"]["case"]
+    # Liquidity: every delay leaves less debt capacity, so equity funds more.
     base_equity = result["base"]["sources_and_uses"]["sources"]["equity_usd"]
-    equity = [
-        v["sources_and_uses"]["sources"]["equity_usd"] for v in result["variants"]
-    ]
-    assert base_equity < equity[0] < equity[1]
+    for variant in result["variants"]:
+        assert variant["sources_and_uses"]["sources"]["equity_usd"] > base_equity
     for variant in result["variants"]:
         assert variant["sources_and_uses"]["balanced"] is True
 

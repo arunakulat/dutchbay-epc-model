@@ -2,10 +2,15 @@
 # What-if case: delayed grid connection  (#1403; NON-CANONICAL)
 #
 # The plant is built on the base scenario's schedule but cannot export until the
-# grid connection is ready. Each 12 months of delay adds one idle construction
-# period (no capex, no debt draw): interest during construction keeps accruing,
-# commercial operation and first revenue move out by the same number of years,
-# and project cash flows are discounted from the later start.
+# grid connection is ready. The engine is annual, so a delay is split into whole
+# years and a remainder:
+#  - each whole year adds one idle construction period (no capex, no debt draw):
+#    interest during construction keeps accruing, commercial operation and first
+#    revenue move out a year, and project cash flows are discounted from the later
+#    start;
+#  - the remaining months (under 12) set project.first_year_grid_unavailable_months:
+#    commercial operation and debt service start on schedule, but operating year 1
+#    exports nothing for those months, so its energy is cut by months / 12.
 #
 # This file is a case definition, not a scenario. It is read by
 # analytics/what_if_cases.py, which applies it to a deep copy of base_scenario.
@@ -22,15 +27,12 @@ what_if_case:
   base_scenario: scenarios/dutchbay_lendercase_2025Q4.yaml
   parameters:
     delay_months:
-      presets: [12, 24]
-      deferred_presets:
-        6: >-
-          Not run. The cashflow engine is annual and has no partial-year operating
-          lever, so a 6-month delay cannot be represented without rounding it.
-          It is refused rather than rounded, pending the owner's choice on #1403.
+      presets: [6, 12, 24]
       provenance: >-
         Owner decision on #1403 (issuecomment-6407662515, 2026-10-26): COD/grid
-        delay in YAML months, with presets of 6, 12 and 24.
+        delay in YAML months, with presets of 6, 12 and 24. The owner chose on
+        2026-11-01 (decision card in the project thread) to model the part of a
+        delay under a year with a partial-year lever rather than hold or round it.
   source: >-
     #1403 basis, recorded 2026-10-26: Cabinet approval for the
     Norochcholai-Wariyapola transmission line and Wariyapola switching station
@@ -39,8 +41,10 @@ what_if_case:
     reimbursement or COD was located. The delay durations are owner-defined
     presets, not an estimate of the actual programme.
   limitations:
-    - "Whole years only: the engine is annual, so each 12 months of delay is one idle construction period."
+    - "Two treatments: each whole year of delay is an idle construction period (IDC capitalised, COD moved), and the months under a year are lost first-year output with COD and debt service on schedule. A delay of 18 months is one idle year plus six lost months, not a single continuous mechanism."
+    - "The partial-year lever cuts operating-year-1 energy by months / 12, evenly. Seasonality inside the year is not modelled, and opex, fees and taxes for year 1 are not reduced."
     - "Debt is sized on the delayed schedule, as if the delay were known at financial close. An unforeseen delay after close, with the facility already fixed, is not modelled."
+    - "The debt sculpt sizes the facility to its weakest period. A short first operating year therefore cuts the facility sharply (6 months: USD 63.4M to 26.4M on the lender case), and equity IRR can improve only because a smaller facility leaves a smaller balloon to refinance. Read project NPV and equity NPV for the partial-year case."
     - "The idle period carries no extra cost beyond interest during construction: no standby O&M, insurance, extended EPC preliminaries, delay liquidated damages or deemed-energy payments."
     - "Construction schedule and debt drawdown are extended from what the base scenario resolves. Where the base omits them, that is the engine's placeholder phasing, and its warning is emitted."
     - "The FX curve, tariff and operating life move with the later COD exactly as the engine already does for any longer construction period. No other input changes."
