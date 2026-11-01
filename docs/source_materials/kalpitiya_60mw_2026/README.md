@@ -37,9 +37,9 @@ blocking finding of the `RECRUIT-01` review of that change.
 
 ## Status: recorded, not accepted
 
-Nothing in this package has been promoted into a scenario, a model input, a baseline or a report,
-and it should not be. The evaluation held privately leaves two questions that need a written
-answer from the issuer first:
+What has been promoted from this package, and on what basis, is stated once, in section 4 of
+`KALPITIYA60MW-WIND-HANDLING-2026-09-21`; read it there. The evaluation held privately leaves two
+questions that still need a written answer from the issuer:
 
 1. **Which power curve produced the energy yield appendix.** The appendix and the machine the
    proposal offers are not labelled consistently, and the difference is not cosmetic.
