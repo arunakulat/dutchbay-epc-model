@@ -411,6 +411,24 @@ def _validate_refinance_terms(raw_config: Mapping[str, Any], errors: list[str]) 
         errors.append(str(exc))
 
 
+def _validate_project_discount_rate(
+    raw_config: Mapping[str, Any], errors: list[str]
+) -> None:
+    """Refuse a scenario that declares no project discount rate (#1429).
+
+    Runs whenever the ``cashflow`` module is validated, which every pipeline caller
+    requests: such a scenario must carry ``returns.project_discount_rate``. Delegates to :func:`analytics.core.metrics.resolve_project_discount_rate`, the
+    resolver the pipeline uses, so pre-flight and the KPI pass cannot disagree.
+    There is no code default.
+    """
+    from analytics.core.metrics import resolve_project_discount_rate
+
+    try:
+        resolve_project_discount_rate(raw_config)
+    except ValueError as exc:
+        errors.append(str(exc))
+
+
 def _validate_grid_conditionals(
     raw_config: Mapping[str, Any], errors: list[str]
 ) -> None:
@@ -532,6 +550,13 @@ def validate_config_for_v14(
             module_list.append("grid")
     for name in module_list:
         _ensure_module_registered(name)
+
+    # 2b. A run that computes cashflows discounts them, so it must declare its project
+    # discount rate; there is no code default (#1429). Every pipeline caller passes
+    # "cashflow". Narrower validations (an FX-only or grid-only check) do not discount
+    # and are not asked for one.
+    if "cashflow" in module_list:
+        _validate_project_discount_rate(raw_config, errors)
 
     # 3. Collect and validate registered specs for requested modules
     specs: list[Any] = []

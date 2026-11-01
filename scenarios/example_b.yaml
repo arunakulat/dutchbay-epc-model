@@ -47,3 +47,7 @@ Financing_Terms:
     usd_commercial_min: 1.0
   rates:
     usd_nominal: 0.075
+returns:
+  # Required since #1429: the engine has no code default for the project discount
+  # rate. 0.10 is the rate this scenario was always discounted at.
+  project_discount_rate: 0.10
