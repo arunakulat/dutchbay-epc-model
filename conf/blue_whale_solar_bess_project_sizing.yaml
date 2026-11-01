@@ -115,14 +115,13 @@ objective:
   # CFADS risk haircut and debt sizing) and the other alternatives are reported, not used.
   metric: unit_pretax_npv_usd
   statistic: p50
-  # The committed choice keeps the PV at the lot's maximum (land_max) and lets the objective
-  # choose the PV AC and the BESS. Every size has a negative unit NPV at the engine's
-  # discount rate (the unit's pre-tax IRR sits below it), so over the whole grid the objective
-  # prefers the smallest PV the grid offers and, beyond the grid, building less: it does not
-  # fix the PV. With the lot owned and the owner's "Maximize BESS now within the solar+BESS
-  # parameters", the PV is held at what the lot takes and the Monte Carlo decides the rest.
-  # The whole-grid choice ("any") is reported beside it with a paired comparison.
-  pv_rule: land_max
+  # PV rule: "any" lets the objective choose the PV over the whole grid (up to the lot's
+  # maximum); the best size with the PV held at the lot's maximum is reported beside it with a
+  # paired comparison. A base-case screen on 2026-11-01 (one trial per point, 1,300
+  # evaluations) suggested that value kept rising as the PV shrank, so one production run (at
+  # 2270a402) held the PV at land_max. Its P50 (seed 20261101, 256 trials) has an interior PV
+  # optimum under reading A, so the rule is "any" and the objective decides the PV too.
+  pv_rule: any
   alternatives:
     - [unit_pretax_npv_usd, p90]
     - [unit_pretax_npv_usd, mean]

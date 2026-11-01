@@ -2334,6 +2334,20 @@ def run_project_sizing(
             "difference_p50": float(np.percentile(a[ok] - b[ok], 50.0)),
         }
 
+    def compare(i: Optional[int], primary: int, key: str) -> Optional[Dict[str, Any]]:
+        """The best point under another PV rule, against the committed choice."""
+        if i is None:
+            return None
+        return {
+            "size": size_of(i),
+            "objective_value": stats[i]["metrics"][metric][statistic],
+            "pv_tables_at_grid_minimum": stats[i]["pv_tables"]
+            == min(t["pv_tables"] for t in stats if t[key]),
+            "against_the_committed_choice": (
+                None if i == primary else paired_trials(i, primary)
+            ),
+        }
+
     recommendation: Dict[str, Any] = {
         "committed_reading": committed,
         "pv_rule": pv_rule,
@@ -2350,6 +2364,10 @@ def run_project_sizing(
         any_pv = best_point(stats, metric=metric, statistic=statistic, key=key)
         if primary is None or any_pv is None:
             raise ValueError(f"no grid point is eligible under reading {name}")
+        land_key = f"land_{name}"
+        for s in stats:
+            s[land_key] = bool(s[key] and s["pv_tables_is_land_max"])
+        land_best = best_point(stats, metric=metric, statistic=statistic, key=land_key)
         ranked = sorted(
             (i for i, s in enumerate(stats) if s[rule_key]),
             key=lambda i: stats[i]["metrics"][metric][statistic],
@@ -2394,15 +2412,8 @@ def run_project_sizing(
             "reading": readings[name],
             "paired_with_runner_up": paired,
             "alternatives": alternatives,
-            "any_pv": {
-                "size": size_of(any_pv),
-                "objective_value": stats[any_pv]["metrics"][metric][statistic],
-                "pv_tables_at_grid_minimum": stats[any_pv]["pv_tables"]
-                == min(t["pv_tables"] for t in stats if t[key]),
-                "against_the_committed_rule": (
-                    None if any_pv == primary else paired_trials(any_pv, primary)
-                ),
-            },
+            "any_pv": compare(any_pv, primary, key),
+            "land_max_pv": compare(land_best, primary, key),
             "share_of_eligible_points_with_negative_objective": float(
                 np.mean(
                     [t["metrics"][metric][statistic] < 0.0 for t in stats if t[key]]

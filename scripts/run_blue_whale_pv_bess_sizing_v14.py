@@ -166,8 +166,44 @@ def run(
     return out
 
 
-#: Per-point statistics kept in the concise project summary.
-_CONCISE_STATS = ("p50", "p90", "p10", "mean", "n")
+#: The grid table's columns: (column, path into a point). Statistics are P50 and P90 in the
+#: exceedance convention, and ``n`` counts the trials whose metric is defined.
+GRID_COLUMNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("pv_tables", ("pv_tables",)),
+    ("pv_tables_is_land_max", ("pv_tables_is_land_max",)),
+    ("dc_mwp", ("dc_mwp",)),
+    ("pv_ac_mw", ("pv_ac_mw",)),
+    ("dc_ac_ratio", ("dc_ac_ratio",)),
+    ("bess_power_mw", ("bess_power_mw",)),
+    ("bess_energy_mwh", ("bess_energy_mwh",)),
+    ("fits", ("fits",)),
+    ("meets_4h_rule", ("meets_4h_rule",)),
+    ("eligible_A", ("eligible_by_reading", "A")),
+    ("eligible_B", ("eligible_by_reading", "B")),
+    ("tables_that_fit", ("land", "tables_that_fit")),
+    ("bess_containers", ("land", "bess_containers")),
+    ("inverter_count", ("inverter", "inverter_count")),
+    ("pv_capex_usd_base", ("capex_usd_base", "pv")),
+    ("bess_capex_usd_base", ("capex_usd_base", "bess")),
+    ("discount_rate_used", ("discount_rate_used",)),
+    ("base_unit_pretax_npv_usd", ("base", "unit_pretax_npv_usd")),
+    ("base_project_npv", ("base", "project_npv")),
+    ("unit_pretax_npv_usd_p50", ("metrics", "unit_pretax_npv_usd", "p50")),
+    ("unit_pretax_npv_usd_p90", ("metrics", "unit_pretax_npv_usd", "p90")),
+    ("unit_pretax_npv_usd_mean", ("metrics", "unit_pretax_npv_usd", "mean")),
+    ("unit_pretax_irr_p50", ("metrics", "unit_pretax_irr", "p50")),
+    ("unit_pretax_irr_p90", ("metrics", "unit_pretax_irr", "p90")),
+    ("project_npv_p50", ("metrics", "project_npv", "p50")),
+    ("project_npv_p90", ("metrics", "project_npv", "p90")),
+    ("project_irr_p50", ("metrics", "project_irr", "p50")),
+    ("project_irr_n", ("metrics", "project_irr", "n")),
+    ("equity_irr_p50", ("metrics", "equity_irr", "p50")),
+    ("equity_npv_p50", ("metrics", "equity_npv", "p50")),
+    ("min_dscr_p50", ("metrics", "min_dscr", "p50")),
+    ("year1_revenue_lkr_p50", ("year1_unit_revenue_lkr", "p50")),
+    ("year1_priority_export_mwh_p50", ("year1_priority_export_mwh", "p50")),
+    ("year1_unit_export_mwh_p50", ("year1_unit_export_mwh", "p50")),
+)
 _SIZE_KEYS = ("pv_tables", "pv_ac_mw", "bess_power_mw")
 
 
@@ -175,13 +211,22 @@ def _size(entry: Mapping[str, Any]) -> tuple[Any, ...]:
     return tuple(entry[k] for k in _SIZE_KEYS)
 
 
-def concise_project_summary(out: Mapping[str, Any]) -> Dict[str, Any]:
-    """The project run without per-point engine series (``TEST-03``: a concise record).
+def _dig(entry: Mapping[str, Any], path: tuple[str, ...]) -> Any:
+    node: Any = entry
+    for key in path:
+        if not isinstance(node, Mapping) or key not in node:
+            return None
+        node = node[key]
+    return node
 
-    Every grid point keeps its size, fit, eligibility, base-case metrics and distribution
-    summaries; the full base case (engine fields and year-1 energy) is kept only for the
-    sizes the recommendation names. ``spec.result_sha256`` still identifies the full output
-    the CLI printed.
+
+def concise_project_summary(out: Mapping[str, Any]) -> Dict[str, Any]:
+    """The project run as a concise record (``TEST-03``).
+
+    Every grid point is one row of ``grid`` (size, fit, eligibility, base case and the
+    distribution summaries). The full point, with the base case's engine fields and year-1
+    energy, is kept in ``named_points`` only for the sizes the recommendation names.
+    ``spec.result_sha256`` still identifies the full output the CLI printed.
     """
     rec = out["recommendation"]
     named = set()
@@ -189,79 +234,57 @@ def concise_project_summary(out: Mapping[str, Any]) -> Dict[str, Any]:
         for key in ("size", "revenue_max", "largest_bess"):
             if r.get(key):
                 named.add(_size(r[key]))
-        if r["any_pv"]["size"]:
-            named.add(_size(r["any_pv"]["size"]))
+        for key in ("any_pv", "land_max_pv"):
+            if r.get(key):
+                named.add(_size(r[key]["size"]))
     if rec["revenue_max_any_reading"]["size"]:
         named.add(_size(rec["revenue_max_any_reading"]["size"]))
-    points = []
-    for p in out["points"]:
-        row: Dict[str, Any] = {
-            k: p[k]
-            for k in (
-                "pv_tables",
-                "pv_tables_is_land_max",
-                "dc_mwp",
-                "pv_ac_mw",
-                "dc_ac_ratio",
-                "bess_power_mw",
-                "bess_energy_mwh",
-                "bess_duration_h",
-                "fits",
-                "meets_4h_rule",
-                "allowed_by_reading",
-                "eligible_by_reading",
-                "evaluated",
-            )
-        }
-        row["land"] = p["land"]
-        row["inverter_count"] = p["inverter"]["inverter_count"]
-        row["inverter_ok"] = p["inverter"]["ok"]
-        if p["evaluated"]:
-            row["capex_usd_base"] = p["capex_usd_base"]
-            row["discount_rate_used"] = p["discount_rate_used"]
-            row["pv_ac_mwh_factor_1"] = p["pv_ac_mwh_factor_1"]
-            row["metrics"] = {
-                m: {k: v.get(k) for k in _CONCISE_STATS}
-                for m, v in p["metrics"].items()
-            }
-            for key in (
-                "year1_unit_export_mwh",
-                "year1_unit_revenue_lkr",
-                "year1_priority_export_mwh",
-            ):
-                row[key] = {k: p[key].get(k) for k in _CONCISE_STATS}
-            base = p["base"]
-            row["base"] = {
-                k: v for k, v in base.items() if k not in ("engine", "year1")
-            }
-            if _size(p) in named:
-                row["base"]["engine"] = base["engine"]
-                row["base"]["year1"] = base["year1"]
-        points.append(row)
+    named_points = [p for p in out["points"] if _size(p) in named and p["evaluated"]]
+    grid = {
+        "columns": [c for c, _ in GRID_COLUMNS],
+        "rows": [[_dig(p, path) for _, path in GRID_COLUMNS] for p in out["points"]],
+    }
     sens: Dict[str, Any] = {}
+    sens_cols = (
+        "pv_tables",
+        "pv_ac_mw",
+        "bess_power_mw",
+        "eligible_A",
+        "eligible_B",
+        "unit_pretax_npv_usd",
+        "project_npv",
+        "year1_unit_revenue_lkr",
+    )
     for name, block in out["sensitivities"].items():
         if block is None:
             sens[name] = None
             continue
         sens[name] = {k: v for k, v in block.items() if k != "rows"}
+        sens[name]["columns"] = list(sens_cols)
         sens[name]["rows"] = [
-            {
-                "size": r["size"],
-                "eligible_by_reading": r["eligible_by_reading"],
-                "unit_pretax_npv_usd": r["unit_pretax_npv_usd"],
-                "project_npv": r["project_npv"],
-                "year1_unit_revenue_lkr": r["year1_unit_revenue_lkr"],
-            }
+            [
+                r["size"]["pv_tables"],
+                r["size"]["pv_ac_mw"],
+                r["size"]["bess_power_mw"],
+                r["eligible_by_reading"]["A"],
+                r["eligible_by_reading"]["B"],
+                r["unit_pretax_npv_usd"],
+                r["project_npv"],
+                r["year1_unit_revenue_lkr"],
+            ]
             for r in block["rows"]
         ]
     spec = dict(out["spec"])
-    spec["summary"] = "concise: per-point engine series kept only for the named sizes"
+    spec["summary"] = (
+        "concise: one grid row per point; the full point only for the named sizes"
+    )
     return {
         "config": out["config"],
         "statistics_convention": out["statistics_convention"],
         "spec": spec,
         "recommendation": rec,
-        "points": points,
+        "grid": grid,
+        "named_points": named_points,
         "sensitivities": sens,
     }
 
