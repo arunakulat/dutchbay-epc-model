@@ -1,0 +1,44 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# What-if case: published tariff reference  (#1403; NON-CANONICAL)
+#
+# The energy tariff is replaced by a published reference value. It is a
+# REFERENCE, NOT AN ENTITLEMENT: no tariff agreement at this value exists.
+# The tariff field written is tariff.<currency>_per_kwh, and the base scenario
+# must already carry it.
+#
+#   from analytics.what_if_cases import load_what_if_case, run_what_if_case
+#   result = run_what_if_case(load_what_if_case("scenarios/what_if/tariff_reference.yaml"))
+# ─────────────────────────────────────────────────────────────────────────────
+what_if_case:
+  id: tariff_reference_2026_wind
+  kind: tariff_reference
+  label: "Published 2026 wind tariff reference: a reference, not an entitlement"
+  canonical: false
+  base_scenario: scenarios/dutchbay_lendercase_2025Q4.yaml
+  parameters:
+    tariff_per_kwh:
+      value: 25.73
+      provenance: >-
+        #1403 basis: the published 2026 wind reference of LKR 25.73/kWh, recorded
+        as a reference and not a confirmed entitlement. Owner decision on #1403
+        (issuecomment-6407662515, 2026-10-26).
+    currency:
+      value: LKR
+      provenance: "The base scenario's tariff currency (tariff.lkr_per_kwh)."
+  source: >-
+    #1403 basis, recorded 2026-10-26: the canonical lender case uses
+    tariff.lkr_per_kwh 20.3. The published 2026 wind reference is LKR 25.73/kWh
+    (+26.7%), which the Monte Carlo tariff distribution (base 20.3, rel_std 0.10)
+    does not reach, so no other committed run covers it.
+  limitations:
+    - "A reference, not an entitlement: no tariff agreement at this value exists."
+    - "Only the tariff changes. The value is applied flat for the whole operating life under the base scenario's tariff type, with no indexation or escalation added."
+    - "Debt is re-sized to the base scenario's DSCR target on the higher revenue."
+  report_kpis:
+    - project_irr
+    - project_npv
+    - equity_irr
+    - equity_npv
+    - max_debt_usd
+    - min_dscr
+    - total_cfads_usd

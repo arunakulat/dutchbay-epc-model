@@ -1,0 +1,56 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# What-if case: delayed grid connection  (#1403; NON-CANONICAL)
+#
+# The plant is built on the base scenario's schedule but cannot export until the
+# grid connection is ready. Each 12 months of delay adds one idle construction
+# period (no capex, no debt draw): interest during construction keeps accruing,
+# commercial operation and first revenue move out by the same number of years,
+# and project cash flows are discounted from the later start.
+#
+# This file is a case definition, not a scenario. It is read by
+# analytics/what_if_cases.py, which applies it to a deep copy of base_scenario.
+# The base scenario file is never modified, so its KPIs cannot move.
+#
+#   from analytics.what_if_cases import load_what_if_case, run_what_if_case
+#   result = run_what_if_case(load_what_if_case("scenarios/what_if/grid_connection_delay.yaml"))
+# ─────────────────────────────────────────────────────────────────────────────
+what_if_case:
+  id: grid_connection_delay
+  kind: grid_connection_delay
+  label: "Delayed grid connection: non-canonical what-if, not a forecast"
+  canonical: false
+  base_scenario: scenarios/dutchbay_lendercase_2025Q4.yaml
+  parameters:
+    delay_months:
+      presets: [12, 24]
+      deferred_presets:
+        6: >-
+          Not run. The cashflow engine is annual and has no partial-year operating
+          lever, so a 6-month delay cannot be represented without rounding it.
+          It is refused rather than rounded, pending the owner's choice on #1403.
+      provenance: >-
+        Owner decision on #1403 (issuecomment-6407662515, 2026-10-26): COD/grid
+        delay in YAML months, with presets of 6, 12 and 24.
+  source: >-
+    #1403 basis, recorded 2026-10-26: Cabinet approval for the
+    Norochcholai-Wariyapola transmission line and Wariyapola switching station
+    (estimated LKR 24.06bn), with AIIB financing to be pursued. No AIIB project
+    record or written CEB instrument covering this project's connection,
+    reimbursement or COD was located. The delay durations are owner-defined
+    presets, not an estimate of the actual programme.
+  limitations:
+    - "Whole years only: the engine is annual, so each 12 months of delay is one idle construction period."
+    - "Debt is sized on the delayed schedule, as if the delay were known at financial close. An unforeseen delay after close, with the facility already fixed, is not modelled."
+    - "The idle period carries no extra cost beyond interest during construction: no standby O&M, insurance, extended EPC preliminaries, delay liquidated damages or deemed-energy payments."
+    - "Construction schedule and debt drawdown are extended from what the base scenario resolves. Where the base omits them, that is the engine's placeholder phasing, and its warning is emitted."
+    - "The FX curve, tariff and operating life move with the later COD exactly as the engine already does for any longer construction period. No other input changes."
+    - "How a shortfall year is funded depends on the equity waterfall in force. Figures measured before #1452 merges reflect the clamped waterfall."
+  report_kpis:
+    - project_irr
+    - project_npv
+    - equity_irr
+    - equity_npv
+    - total_idc_usd
+    - max_debt_usd
+    - min_dscr
+    - llcr
