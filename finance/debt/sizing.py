@@ -91,7 +91,8 @@ def _solve_gearing_for_dscr(
         # boundary found is the one the cold scan returns whenever min DSCR is
         # non-increasing in gearing (the property the cold scan's own comment relies
         # on). tests/finance/test_gearing_warm_start.py pins hinted == cold on every
-        # pass of the committed scenarios.
+        # pass of the lender case (plain, P90 bind, amortize) and pins each branch of
+        # the walk; #1527 checked every committed scenario once, outside the suite.
         grid: List[float] = []
         ratio = max_ratio
         while ratio > 0.0:
@@ -100,8 +101,8 @@ def _solve_gearing_for_dscr(
         hint = round(start_hint, 6)
         start = next((i for i, r in enumerate(grid) if round(r, 6) == hint), None)
         if start is None:
-            # The hint is not a grid point (for example the non-convergence floor):
-            # fall back to the cold scan.
+            # The hint is not a point of this grid (a caller passed a value this
+            # scan would never return): fall back to the cold scan.
             return _solve_gearing_for_dscr(
                 config, annual_rows, target_dscr, max_ratio, step=step, fp_eps=fp_eps
             )

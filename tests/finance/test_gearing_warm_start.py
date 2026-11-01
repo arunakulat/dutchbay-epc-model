@@ -134,27 +134,58 @@ def test_the_synthetic_answer_is_interior() -> None:
     assert 0.1 < cold < 0.6, cold
 
 
+def _grid(max_ratio: float = 0.7, step: float = 0.0025) -> list[float]:
+    """The scan's grid, built the way the scan builds it (highest gearing first)."""
+    grid: list[float] = []
+    ratio = max_ratio
+    while ratio > 0.0:
+        grid.append(ratio)
+        ratio -= step
+    return grid
+
+
 @pytest.mark.parametrize(
     "offset_steps",
     [
         pytest.param(0, id="at"),
+        pytest.param(-1, id="one-above"),
         pytest.param(-8, id="above"),
+        pytest.param(1, id="one-below"),
         pytest.param(8, id="below"),
+        pytest.param(None, id="from-the-floor"),
     ],
 )
-def test_the_walk_lands_on_the_cold_answer_from_either_side(offset_steps: int) -> None:
-    """A hint above the answer walks down; one below walks up; one on it stays."""
+def test_the_walk_lands_on_the_cold_answer_from_either_side(
+    offset_steps: int | None,
+) -> None:
+    """A hint above the answer walks down; one below walks up; one on it stays.
+
+    One step either side is the likeliest movement between fixed-point passes, and the
+    case that catches a walk skipping or repeating a grid point (#1527 assurance A-1,
+    domain D-1). The step floor is itself a grid point, so a hint there walks up too.
+    """
     cold = _cold()
-    # A grid point offset_steps away from the answer, built the way the scan builds it.
-    grid: list[float] = []
-    ratio = 0.7
-    while ratio > 0.0:
-        grid.append(ratio)
-        ratio -= 0.0025
+    grid = _grid()
     at = next(i for i, r in enumerate(grid) if round(r, 6) == cold)
-    hint = round(grid[at + offset_steps], 6)
+    index = len(grid) - 1 if offset_steps is None else at + offset_steps
+    hint = round(grid[index], 6)
     warm = debt_v14._solve_gearing_for_dscr(
         _config(), _rows(), target_dscr=1.30, max_ratio=0.7, start_hint=hint
+    )
+    assert warm == cold
+
+
+@pytest.mark.parametrize("offset_steps", [0, 1, 8], ids=["at", "one-below", "below"])
+def test_the_walk_up_stops_at_the_cap(offset_steps: int) -> None:
+    """When max_ratio itself holds the target, the walk up ends on max_ratio exactly."""
+    target = 0.5
+    cold = debt_v14._solve_gearing_for_dscr(
+        _config(), _rows(), target_dscr=target, max_ratio=0.7
+    )
+    assert cold == 0.7
+    hint = round(_grid()[offset_steps], 6)
+    warm = debt_v14._solve_gearing_for_dscr(
+        _config(), _rows(), target_dscr=target, max_ratio=0.7, start_hint=hint
     )
     assert warm == cold
 
