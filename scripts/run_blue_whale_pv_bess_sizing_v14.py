@@ -157,12 +157,113 @@ def run(
     spec["runtime_s"] = round(time.time() - started, 1)
     target = cfg["output"]["summary_json"]
     if target:
+        written = concise_project_summary(out) if project else out
         path = _repo_path(str(target))
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
-            json.dumps(out, sort_keys=True, allow_nan=False, indent=1) + "\n"
+            json.dumps(written, sort_keys=True, allow_nan=False, indent=1) + "\n"
         )
     return out
+
+
+#: Per-point statistics kept in the concise project summary.
+_CONCISE_STATS = ("p50", "p90", "p10", "mean", "n")
+_SIZE_KEYS = ("pv_tables", "pv_ac_mw", "bess_power_mw")
+
+
+def _size(entry: Mapping[str, Any]) -> tuple[Any, ...]:
+    return tuple(entry[k] for k in _SIZE_KEYS)
+
+
+def concise_project_summary(out: Mapping[str, Any]) -> Dict[str, Any]:
+    """The project run without per-point engine series (``TEST-03``: a concise record).
+
+    Every grid point keeps its size, fit, eligibility, base-case metrics and distribution
+    summaries; the full base case (engine fields and year-1 energy) is kept only for the
+    sizes the recommendation names. ``spec.result_sha256`` still identifies the full output
+    the CLI printed.
+    """
+    rec = out["recommendation"]
+    named = set()
+    for r in rec["by_reading"].values():
+        for key in ("size", "revenue_max", "largest_bess"):
+            if r.get(key):
+                named.add(_size(r[key]))
+        if r["any_pv"]["size"]:
+            named.add(_size(r["any_pv"]["size"]))
+    if rec["revenue_max_any_reading"]["size"]:
+        named.add(_size(rec["revenue_max_any_reading"]["size"]))
+    points = []
+    for p in out["points"]:
+        row: Dict[str, Any] = {
+            k: p[k]
+            for k in (
+                "pv_tables",
+                "pv_tables_is_land_max",
+                "dc_mwp",
+                "pv_ac_mw",
+                "dc_ac_ratio",
+                "bess_power_mw",
+                "bess_energy_mwh",
+                "bess_duration_h",
+                "fits",
+                "meets_4h_rule",
+                "allowed_by_reading",
+                "eligible_by_reading",
+                "evaluated",
+            )
+        }
+        row["land"] = p["land"]
+        row["inverter_count"] = p["inverter"]["inverter_count"]
+        row["inverter_ok"] = p["inverter"]["ok"]
+        if p["evaluated"]:
+            row["capex_usd_base"] = p["capex_usd_base"]
+            row["discount_rate_used"] = p["discount_rate_used"]
+            row["pv_ac_mwh_factor_1"] = p["pv_ac_mwh_factor_1"]
+            row["metrics"] = {
+                m: {k: v.get(k) for k in _CONCISE_STATS}
+                for m, v in p["metrics"].items()
+            }
+            for key in (
+                "year1_unit_export_mwh",
+                "year1_unit_revenue_lkr",
+                "year1_priority_export_mwh",
+            ):
+                row[key] = {k: p[key].get(k) for k in _CONCISE_STATS}
+            base = p["base"]
+            row["base"] = {
+                k: v for k, v in base.items() if k not in ("engine", "year1")
+            }
+            if _size(p) in named:
+                row["base"]["engine"] = base["engine"]
+                row["base"]["year1"] = base["year1"]
+        points.append(row)
+    sens: Dict[str, Any] = {}
+    for name, block in out["sensitivities"].items():
+        if block is None:
+            sens[name] = None
+            continue
+        sens[name] = {k: v for k, v in block.items() if k != "rows"}
+        sens[name]["rows"] = [
+            {
+                "size": r["size"],
+                "eligible_by_reading": r["eligible_by_reading"],
+                "unit_pretax_npv_usd": r["unit_pretax_npv_usd"],
+                "project_npv": r["project_npv"],
+                "year1_unit_revenue_lkr": r["year1_unit_revenue_lkr"],
+            }
+            for r in block["rows"]
+        ]
+    spec = dict(out["spec"])
+    spec["summary"] = "concise: per-point engine series kept only for the named sizes"
+    return {
+        "config": out["config"],
+        "statistics_convention": out["statistics_convention"],
+        "spec": spec,
+        "recommendation": rec,
+        "points": points,
+        "sensitivities": sens,
+    }
 
 
 @hydra.main(
