@@ -5,8 +5,7 @@
   `tests/_debt_seams.wrap_everywhere`, which replaces a function in every engine module
   that binds it, found by identity so a binding under another name is caught too. The
   #1516 config-copy test and the #1527 warm-start test use that helper, and a new test
-  shows a patch on the defining
-  module alone records no calls. Rule 2 now also catches `mocker` and fully spelled
+  shows that a patch on the defining module alone records no calls. Rule 2 now also catches `mocker` and fully spelled
   `unittest.mock` patches, `delattr`, `del`, `patch.multiple`, `patch.dict` and writes to
   the façade's `__dict__`, plus `finance.debt_v14.<name>` after `import finance`. Rule 1
   catches a `finance.debt.<module>` attribute chain in production code. A new rule 3
