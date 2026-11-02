@@ -7,6 +7,10 @@
     (PUCSL Annex 2). Life, PPA term and timeline move to 15 years. The 2025 scheme is treated
     as superseded and kept only as a sensitivity. The window hours (18:30-22:30) and 365
     cycles remain assumptions: no official figure exists, internally or publicly.
+    **The case books no cost for the PV energy that charges the BESS.** Under one SPPA each
+    stored kWh is PV not sold at the other-period rate (20.72); netting it takes project IRR
+    from 10.04% to 0.82%, so the 10.04% is an upper bound. Its FiT eligibility is also open:
+    a 10 MW / 40 MWh BESS plus its PV is not under the FiT's 10 MW limit on either reading.
   - The BESS capacity charge in `ceb_bess_10mw_capacity_charge.yaml` (was 2,500,000),
     `dutchbay_hybrid_bess_2025Q4.yaml` (was 5,000,000) and `blue_whale_hybrid_lot5b_2026.yaml`
     (input F06, was 5,000,000) becomes 1,752,500 LKR/MW/month: the capacity-weighted average
@@ -18,7 +22,8 @@
     offtaker -> National System Operator (Private) Limited (input F02, Gazette 2479/36).
     Whether the < 10 MW limit counts per technology or per plant is unresolved; if per
     plant, the FiT does not apply to this 15 MW plant.
-- KPI effect (project IRR): solar + BESS 6.61% -> 10.04%; standalone BESS -1.29% -> -6.27%;
+- KPI effect (project IRR): solar + BESS 6.61% -> 10.04% (with charging energy free; 0.82%
+  if it is netted at 20.72); standalone BESS -1.29% -> -6.27%;
   DutchBay hybrid + BESS 1.77% -> 0.16%; Blue Whale 4.59% -> 2.77%. At the new rate the
   DutchBay hybrid's battery lowers project IRR below the plain hybrid (0.307%); it raised
   it before, and `tests/analytics/test_tech_comparison_scenarios_821.py` now asserts the new
