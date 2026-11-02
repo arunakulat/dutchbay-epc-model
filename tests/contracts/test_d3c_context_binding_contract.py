@@ -77,10 +77,19 @@ _MODULE = Path(
     )
 ).resolve()
 _UTC = timezone.utc
-# Moves with the canonical lender-case result and engine identity; last re-pinned for
-# 15.14.0 (engine identity only; the lender-case result is unchanged).
+# Moves with the canonical lender-case result and engine identity; last re-pinned by
+# Blue Whale PR 5 (15.16.0: only the engine identity moved), before that by
+# Blue Whale PR 4 (15.15.0: only the engine identity moved), before that by
+# Blue Whale PR 3 (15.14.0: only the engine identity moved), before that by
+# Blue Whale PR 2 (15.13.0: only the engine identity moved), before that by
+# Blue Whale PR 1 (15.12.0: only the engine identity moved), before that by
+# #1528 (tariff research, 15.11.0: only the engine identity moved), before that by
+# #1526 (balloon interest deducted for tax, 15.10.0: only the engine identity moved;
+# the digest did not move with #1526's canon change before the bump), before that by
+# #1510 (post-maturity balloon carry, 15.9.0: the engine identity moved) and by #1396
+# part B (refinance canon, 15.8.0).
 _KNOWN_D3B_SUCCESS_DIGEST = (
-    "fce25640743bd48939caeaafabd2074120df25d7d7b311d0e71c7fbc465db609"
+    "941554f4c5f7411cb304a7c39612d6bd16b4d7fd2cc093a943b44f177c3b5eaf"
 )
 _FX_RATE_INPUT_ID = (
     "input:project_case.currency_conversion.fx:lkr-to-usd:2026-08-29.rate"
