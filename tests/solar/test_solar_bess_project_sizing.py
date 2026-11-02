@@ -46,7 +46,7 @@ SUMMARY = REPO_ROOT / "docs" / "blue_whale" / "solar_bess_project_sizing_summary
 UNIT_CLI = REPO_ROOT / "scripts" / "run_blue_whale_solar_bess_v14.py"
 POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 
-# Pinned at 15.13.0 (v0.1 of each new scenario). TEST-01 responsiveness guards below.
+# Pinned at 15.15.0 (v0.1 of each new scenario). TEST-01 responsiveness guards below.
 # The solar + BESS project's 20-year CFADS does not recover its capex, so the engine finds
 # no project IRR and its KPI reader reports 0.0 (undefined); its NPVs are pinned instead.
 SOLAR_BESS_PINS = {
@@ -55,8 +55,8 @@ SOLAR_BESS_PINS = {
     "equity_irr": -0.03275959163948128,
     "min_dscr": 0.8675297318839426,
 }
-# WIND_PINS re-pinned at 15.14.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
-# 0.487560). Before, at 15.13.0 (v0.1): project IRR 0.04085210230412145, equity IRR
+# WIND_PINS re-pinned at 15.16.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
+# 0.487560). Before, at 15.15.0 (v0.1): project IRR 0.04085210230412145, equity IRR
 # 0.014728921618622381, min DSCR 0.868369272868335.
 WIND_PINS = {
     "project_irr": 0.07798231364379474,

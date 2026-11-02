@@ -1,5 +1,5 @@
 - Blue Whale split into two projects and the solar + BESS sized under the PUCSL 2026 rules
-  (15.13.0). Owner decisions of 1 Nov 2026 (#1353 comment 6556854201): the 9.5 MW turbine is a
+  (15.15.0). Owner decisions of 1 Nov 2026 (#1353 comment 6556854201): the 9.5 MW turbine is a
   separate project built first; maximise the BESS within the solar + BESS parameters for the
   PUCSL evening tariff band; "Max value, MC decides"; model both readings of the 10 MW limit
   and flag the turbine's cumulative risk.

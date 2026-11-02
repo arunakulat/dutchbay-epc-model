@@ -673,7 +673,7 @@ limitations: [MET_MAST_TRANSFER_METHODS.md](MET_MAST_TRANSFER_METHODS.md); resul
 Of the +9.43 GWh, the mean speed (7.14 to 8.24 m/s) gives +8.78, the steeper distribution
 +0.53 and the sector split +0.12; density and losses are unchanged.
 
-## Latest run (PR 5, met-mast wind resource, 15.14.0, 2026-11-01)
+## Latest run (PR 5, met-mast wind resource, 15.16.0, 2026-11-01)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
 
@@ -685,7 +685,7 @@ Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base c
 The solar + BESS project does not move. Every other input is still a placeholder, so these are
 not results.
 
-## Earlier run (PR 4, two projects, 15.13.0, 2026-11-01)
+## Earlier run (PR 4, two projects, 15.15.0, 2026-11-01)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
 
