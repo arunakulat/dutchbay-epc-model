@@ -644,7 +644,7 @@ Best size at each PV level:
 - The ordinary test suite runs reduced grids only. Neither this run nor the suite is tail,
   convergence, lender or bankability evidence (`TEST-03`).
 
-## Latest run (PR 4, two projects, 15.13.0, 2026-11-01)
+## Latest run (PR 4, two projects, 15.15.0, 2026-11-01)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
 

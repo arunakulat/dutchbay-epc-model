@@ -46,7 +46,7 @@ SUMMARY = REPO_ROOT / "docs" / "blue_whale" / "solar_bess_project_sizing_summary
 UNIT_CLI = REPO_ROOT / "scripts" / "run_blue_whale_solar_bess_v14.py"
 POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 
-# Pinned at 15.13.0 (v0.1 of each new scenario). TEST-01 responsiveness guards below.
+# Pinned at 15.15.0 (v0.1 of each new scenario). TEST-01 responsiveness guards below.
 # The solar + BESS project's 20-year CFADS does not recover its capex, so the engine finds
 # no project IRR and its KPI reader reports 0.0 (undefined); its NPVs are pinned instead.
 SOLAR_BESS_PINS = {

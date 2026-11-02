@@ -1,5 +1,5 @@
 - Blue Whale wind: turbine, placeholder site, coastal placement, setbacks and shadow
-  flicker (15.10.0). Owner decisions of 1 Nov 2026: the Envision EN-206/10.5 de-rated to
+  flicker (15.12.0). Owner decisions of 1 Nov 2026: the Envision EN-206/10.5 de-rated to
   9.5 MW, its yield derived from the confidential curve PMD-004447 Rev A; an assumed square
   site, flagged; the turbine pushed west to the coast-conservation setback.
   - `scenarios/blue_whale_hybrid_lot5b_2026.yaml` v0.4: wind 9.5 MW, net CF 0.374256 and
