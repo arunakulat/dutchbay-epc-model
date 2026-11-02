@@ -1,4 +1,4 @@
-"""Regression pins for the Blue Whale Lot 5B scenario (v0.5, model 15.11.0).
+"""Regression pins for the Blue Whale Lot 5B scenario (v0.5, model 15.13.0).
 
 The scenario is a screening skeleton on placeholder inputs, so these pins prove only that
 the committed KPIs have not moved unnoticed. ``TEST-01`` pairs each pin with a
@@ -36,9 +36,9 @@ SCRIPT = (
     Path(__file__).resolve().parents[2] / "scripts" / "run_blue_whale_solar_bess_v14.py"
 )
 
-# Pinned at 15.11.0 (v0.5: the 5 MW solar + 5 MW x 6 h BESS unit). Before, at 15.10.0
+# Pinned at 15.13.0 (v0.5: the 5 MW solar + 5 MW x 6 h BESS unit). Before, at 15.12.0
 # (v0.4): project IRR 0.03150801785651182, equity IRR 0.005060003909760136,
-# min DSCR 0.8685883776324956. At 15.9.0 (v0.3): 0.027674815875491747,
+# min DSCR 0.8685883776324956. At 15.11.0 (v0.3): 0.027674815875491747,
 # 0.0006314091936767685, 0.8688229918413363.
 PINS = {
     "project_irr": 0.03578223216261529,

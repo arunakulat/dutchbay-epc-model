@@ -1,4 +1,4 @@
-- Blue Whale solar + BESS unit (15.11.0). Owner decisions of 1 Nov 2026: a 5 MW PV array on
+- Blue Whale solar + BESS unit (15.13.0). Owner decisions of 1 Nov 2026: a 5 MW PV array on
   the latest JinkoSolar panel and a 5 MW x 6 h BESS, run as one unit beside the turbine; the
   BESS discharged 17:30-21:30 at the priority rate and 05:30-07:30 at the other rate.
   - New `analytics/gis/pv_array_layout.py`: module warranty path, cold-Voc string length,
