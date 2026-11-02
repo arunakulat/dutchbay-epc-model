@@ -1,4 +1,4 @@
-"""Regression pins for the Blue Whale Lot 5B scenario (v0.4, model 15.10.0).
+"""Regression pins for the Blue Whale Lot 5B scenario (v0.4, model 15.12.0).
 
 The scenario is a screening skeleton on placeholder inputs, so these pins prove only that
 the committed KPIs have not moved unnoticed. ``TEST-01`` pairs each pin with a
@@ -24,7 +24,7 @@ SCENARIO = (
     / "blue_whale_hybrid_lot5b_2026.yaml"
 )
 
-# Pinned at 15.10.0 (v0.4: EN-206/10.5 de-rated to 9.5 MW). Before, at 15.9.0 (v0.3):
+# Pinned at 15.12.0 (v0.4: EN-206/10.5 de-rated to 9.5 MW). Before, at 15.11.0 (v0.3):
 # project IRR 0.027674815875491747, equity IRR 0.0006314091936767685,
 # min DSCR 0.8688229918413363.
 PINS = {
