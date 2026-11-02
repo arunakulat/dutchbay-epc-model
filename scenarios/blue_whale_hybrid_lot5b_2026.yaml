@@ -132,7 +132,7 @@ generation:
                                         # the Monte Carlo draws a residual fade of 0-2%/yr
 
 tariff:
-  # Input F03 (v15.9.0): PUCSL feed-in tariffs effective 25 Aug 2026 for plants < 10 MW (Annex 2):
+  # Input F03 (v15.11.0): PUCSL feed-in tariffs effective 25 Aug 2026 for plants < 10 MW (Annex 2):
   # wind 25.73 (20.80 non-escalable + 4.93 escalable O&M), ground solar + BESS other-period 20.72
   # (18.00 + 2.72). The engine reads one tariff, so this is their energy-weighted blend on the CFs
   # above (v0.5: the solar CF is the unit's export, priced at 20.72; bess_1 adds the premium):
