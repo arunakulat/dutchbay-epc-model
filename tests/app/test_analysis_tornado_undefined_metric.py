@@ -57,8 +57,20 @@ _EXPORT = {
 }
 
 
+# A weaker resource than _EXPORT. Until #1504 the refinance case above had no
+# solvable equity IRR at the 22.8% export, because the senior fee stayed charged on
+# the repaid balloon to the horizon. With the fee on the balance actually
+# outstanding it solves (about -97%), so the undefined base this test needs comes
+# from a 20% capacity factor instead.
+_UNDEFINED_EXPORT = {
+    **_EXPORT,
+    "capacity_factor_percent": 20.0,
+    "annual_generation_mwh": 300_000.0 * 20.0 / 22.8,
+}
+
+
 def test_tornado_over_undefined_equity_irr_reports_it_instead_of_raising() -> None:
-    assessed = _build_assessed_scenario(_wind(), _EXPORT)
+    assessed = _build_assessed_scenario(_wind(), _UNDEFINED_EXPORT)
     assessed["Financing_Terms"]["balloon_treatment"] = "refinance"
 
     out = default_analysis(
