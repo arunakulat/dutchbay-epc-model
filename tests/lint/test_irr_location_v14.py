@@ -16,7 +16,7 @@ irr/xirr/npv redefinitions and are out of scope.
 
 Allowlist
 ---------
-``finance/debt_v14.py::_npv`` is a LOCAL discount-factor sum (``Σ cf / (1+r)**t``) used
+``finance/debt/helpers.py::_npv`` is a LOCAL discount-factor sum (``Σ cf / (1+r)**t``) used
 for the LLCR/PLCR coverage ratios — it contains NO root-finding / IRR logic (its own
 docstring: "no IRR logic here - IRR stays in finance.irr"). It is KPI-sensitive and must
 NOT be refactored, so it is allowlisted here (not exempted silently). Without this entry
@@ -79,8 +79,9 @@ SKIP_DIR_NAMES = {
 # despite normalising to a banned stem. Each MUST be a non-IRR helper.
 ALLOWLIST: dict[str, Set[str]] = {
     # Local discount-factor sum for LLCR/PLCR — NOT an IRR solver, KPI-sensitive,
-    # do not refactor. (finance/debt_v14.py _npv docstring: "no IRR logic here".)
-    "finance/debt_v14.py": {"_npv"},
+    # do not refactor. (finance/debt/helpers.py _npv docstring: "no IRR logic here".)
+    # It moved there from finance/debt_v14.py verbatim; the façade re-exports it.
+    "finance/debt/helpers.py": {"_npv"},
 }
 
 
@@ -171,7 +172,7 @@ _VIOLATIONS: dict[str, List[str]] = _scan_violations()
 def test_no_unlisted_irr_npv_definitions_outside_finance_irr() -> None:
     """irr/xirr/npv may only be defined in finance/irr.py (R7), except allowlisted.
 
-    PASSES today: the sole out-of-home definition is ``finance/debt_v14.py::_npv``
+    PASSES today: the sole out-of-home definition is ``finance/debt/helpers.py::_npv``
     (a discount-factor helper, allowlisted). FAILS the moment a new irr/xirr/npv (or
     ``_irr``/``_npv`` …) is defined outside finance/irr.py without an allowlist entry.
     """
@@ -194,7 +195,7 @@ def test_no_unlisted_irr_npv_definitions_outside_finance_irr() -> None:
 def test_irr_allowlist_has_no_stale_entries() -> None:
     """Every ALLOWLIST entry must still exist AND still define the named helper.
 
-    Keeps the allowlist honest: if ``finance/debt_v14.py::_npv`` is renamed or removed,
+    Keeps the allowlist honest: if ``finance/debt/helpers.py::_npv`` is renamed or removed,
     its entry must go too, or this test fails.
     """
     stale: List[str] = []

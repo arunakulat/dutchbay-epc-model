@@ -106,7 +106,7 @@ def _plan_for(
 
 # Covenant-mechanics fixture. The hostile-input tests below need a REAL plan whose snapshot
 # is a three-breach FAIL driven by the year-1 fold. The CEB standalone scenario gave exactly
-# that at its former illustrative rate of 2,500,000 LKR/MW/month. v15.9.0 moved the committed
+# that at its former illustrative rate of 2,500,000 LKR/MW/month. v15.11.0 moved the committed
 # scenario to the NSO 250 MW bid-clearing level (1,752,500), where the snapshot is a single
 # breach (REVIEW). These tests check covenant mechanics, not the tariff, so they pin the
 # former rate as fixture input; their expected values are unchanged.
@@ -302,7 +302,7 @@ def test_min_dscr_is_the_operating_minimum_folded_with_dscr_by_year(
 @pytest.mark.parametrize(
     ("scenario_name", "expected_min_dscr", "expected_fold_min"),
     [
-        # Re-baselined in v15.9.0 (CEB rate 2,500,000 -> 1,752,500; solar+BESS 45.80 / 10 y
+        # Re-baselined in v15.11.0 (CEB rate 2,500,000 -> 1,752,500; solar+BESS 45.80 / 10 y
         # -> 50.10 / 15 y). Before: 0.9069456485322224 and 0.8724193845452927.
         ("ceb_bess_10mw_capacity_charge.yaml", 0.9019916469950849, 0.9019916469950849),
         (
@@ -579,7 +579,7 @@ def test_covenant_years_survive_a_map_that_does_not_start_at_year_one() -> None:
     ("scenario_name", "years_below", "first_year", "last_year", "status"),
     [
         ("dutchbay_lendercase_2025Q4.yaml", 0, None, None, "PASS"),
-        # Re-baselined in v15.9.0. Before: CEB (3, 1, 7, FAIL), solar+BESS (2, 1, 4, REVIEW).
+        # Re-baselined in v15.11.0. Before: CEB (3, 1, 7, FAIL), solar+BESS (2, 1, 4, REVIEW).
         # The hostile-input tests keep the former CEB FAIL through _plan_for_ceb_fixture.
         ("ceb_bess_10mw_capacity_charge.yaml", 1, 1, 1, "REVIEW"),
         ("ceb_solar_bess_nightpeak_10mw.yaml", 4, 1, 9, "FAIL"),
