@@ -529,6 +529,10 @@ def build_equity_distribution_schedule(
                 "levered equity pass enriches it) or disable wht_gross_up."
             )
         interest_usd = _as_float(row.get("interest_usd"), 0.0) or 0.0
+        # #1505: interest paid on the balloon after maturity goes to the same lenders,
+        # so it bears the same WHT. It is the interest PAID (cash), whatever basis the
+        # tax pass deducts it on; absent on a row without a post-maturity balloon.
+        interest_usd += _as_float(row.get("balloon_interest_paid_usd"), 0.0) or 0.0
         wht_cost = (
             interest_usd * distribution_config.wht_on_interest_rate
             if distribution_config.wht_gross_up

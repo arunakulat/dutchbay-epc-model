@@ -102,7 +102,8 @@ def test_levered_cfads_uplift_equals_the_rate_times_deductible_interest(
     assert rate > 0.0, "the oracle is vacuous at a zero tax rate"
 
     _, sizing_rows, _ = _size(cfg)
-    interest_lkr = _operating_interest_lkr_series(sizing_rows)
+    # Scheduled interest plus the balloon interest paid (#1505), the default basis.
+    interest_lkr = _operating_interest_lkr_series(sizing_rows, balloon_basis="paid")
     unlevered = build_annual_rows(cfg)
 
     checked = 0

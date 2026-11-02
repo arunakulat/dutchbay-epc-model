@@ -21,7 +21,10 @@ tests here select ``refinance`` by override. These tests pin:
 from __future__ import annotations
 
 import copy
+import importlib
+import pkgutil
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Dict, cast
 
 import pytest
@@ -55,10 +58,34 @@ def _refinance(terms: Dict[str, Any] | None) -> Dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # The resolver: YAML or refusal, never a default
 # --------------------------------------------------------------------------- #
+def _debt_engine_modules() -> list[ModuleType]:
+    """The façade, the ``finance.debt`` package itself and every module in it."""
+    import finance.debt
+
+    modules = [debt_v14, finance.debt]
+    for info in pkgutil.iter_modules(finance.debt.__path__):
+        modules.append(importlib.import_module(f"finance.debt.{info.name}"))
+    return modules
+
+
 def test_the_code_defaults_are_gone() -> None:
     assert not hasattr(debt_v14, "_REFINANCE_TENOR_DEFAULT")
     assert not hasattr(debt_v14, "_REFINANCE_PREMIUM_DEFAULT")
     assert not hasattr(debt_v14, "_refinance_terms")
+
+
+def test_no_engine_module_defines_a_code_default() -> None:
+    """The engine's code lives behind the façade, so look in every module of it."""
+    modules = _debt_engine_modules()
+    # The façade alone would make this vacuous: prove the package was enumerated.
+    assert len(modules) >= 16, [m.__name__ for m in modules]
+    for module in modules:
+        for name in (
+            "_REFINANCE_TENOR_DEFAULT",
+            "_REFINANCE_PREMIUM_DEFAULT",
+            "_refinance_terms",
+        ):
+            assert not hasattr(module, name), f"{module.__name__}.{name}"
 
 
 def test_terms_are_read_from_yaml() -> None:
@@ -250,26 +277,65 @@ def test_lender_case_refinance_coverage_recomputes(lender_debt: Dict[str, Any]) 
     periods = [p for p, v in enumerate(resolution) if v > 1.0]
     assert [c["period"] for c in refi["coverage_by_period"]] == periods
     assert len(periods) == refi["tenor_years"]
+
     # Independent source for the cash available: the cash-sweep branch pays out all of
     # a period's post-fee cash while the balloon is larger than it, which holds in each
-    # of these periods, so its swept amount IS the cash available to the refinance.
-    sweep = cast(
-        Dict[str, Any],
-        evaluate_with_overrides(
-            str(LENDER_CONFIG),
-            overrides={"Financing_Terms.balloon_treatment": "cash_sweep"},
-            return_full_result=True,
-        ),
-    )["debt_result"]
-    for row in refi["coverage_by_period"]:
+    # of these periods. Since #1504 each treatment's fee is charged on its OWN balance
+    # outstanding, so the sweep's payment plus its fee is the period's pre-fee cash,
+    # and the refinance's cash available is that less the fee on the refinanced balance.
+    # #1505: the levered tax now deducts each treatment's OWN balloon interest paid, so
+    # the two treatments' pre-fee cash differs by the tax that interest saves. The
+    # recompute therefore runs both with the balloon deduction off
+    # (`tax.balloon_interest_tax_basis: none`), where the pre-fee cash is the same
+    # for both; the deduction's own effect on the coverage is checked below.
+    def _debt(overrides: Dict[str, Any]) -> Dict[str, Any]:
+        return cast(
+            Dict[str, Any],
+            evaluate_with_overrides(
+                str(LENDER_CONFIG), overrides=overrides, return_full_result=True
+            ),
+        )["debt_result"]
+
+    no_deduction = {"tax.balloon_interest_tax_basis": "none"}
+    sweep = _debt({**no_deduction, "Financing_Terms.balloon_treatment": "cash_sweep"})
+    undeducted = _debt(no_deduction)
+    fee_rate = undeducted["senior_fee_rate"]
+    assert fee_rate > 0.0
+    # The refinanced balance, rebuilt from the annuity by hand: it opens at the balloon
+    # and each level payment retires principal after the period's interest.
+    opening = undeducted["balloon_remaining"]
+    assert undeducted["balloon_resolution"] == pytest.approx(resolution, rel=1e-12)
+    for row, deducted in zip(
+        undeducted["refinance"]["coverage_by_period"],
+        refi["coverage_by_period"],
+        strict=True,
+    ):
         p = row["period"]
+        # Deducting the refinance interest raises the cash available in every period
+        # of the refinance, and changes neither the service nor the balance.
+        assert deducted["cash_available_usd"] > row["cash_available_usd"]
+        assert deducted["service_usd"] == pytest.approx(row["service_usd"], rel=1e-12)
+        assert undeducted["debt_outstanding"][p] == pytest.approx(opening, rel=1e-12)
+        assert lender_debt["debt_outstanding"][p] == pytest.approx(opening, rel=1e-12)
+        assert lender_debt["senior_fee_usd"][p] == pytest.approx(
+            fee_rate * opening, rel=1e-12
+        )
+        pre_fee_cash = sweep["balloon_resolution"][p] + sweep["senior_fee_usd"][p]
+        assert sweep["senior_fee_usd"][p] == pytest.approx(
+            fee_rate * sweep["debt_outstanding"][p], rel=1e-12
+        )
+        expected_cash = pre_fee_cash - fee_rate * opening
         assert row["service_usd"] == pytest.approx(resolution[p], rel=1e-12)
-        assert row["cash_available_usd"] == pytest.approx(
-            sweep["balloon_resolution"][p], rel=1e-12
-        )
+        assert row["cash_available_usd"] == pytest.approx(expected_cash, rel=1e-12)
         assert row["coverage"] == pytest.approx(
-            sweep["balloon_resolution"][p] / resolution[p], rel=1e-12
+            expected_cash / resolution[p], rel=1e-12
         )
+        opening = opening * (1.0 + undeducted["refinance"]["rate"]) - resolution[p]
+    # The annuity clears the refinanced tranche, and nothing is outstanding after it.
+    assert opening == pytest.approx(0.0, abs=1.0)
+    last = refi["coverage_by_period"][-1]["period"]
+    assert all(v == 0.0 for v in lender_debt["debt_outstanding"][last + 1 :])
+    assert all(v == 0.0 for v in lender_debt["senior_fee_usd"][last + 1 :])
     assert refi["min_coverage"] == min(
         c["coverage"] for c in refi["coverage_by_period"]
     )

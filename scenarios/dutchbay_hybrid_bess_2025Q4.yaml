@@ -105,7 +105,7 @@ generation:
         # average of the 24 L1 bids at bid opening, 4 Sep 2026 (range 1,695,000 to 1,850,000),
         # as published in scenarios/nso250_ltl_unit_base.yaml. It is a bid-clearing level, not a
         # published award: no awarded rate for this tender or for CEB 2025/003/C is public.
-        # Was 5,000,000 (illustrative) until v15.9.0.
+        # Was 5,000,000 (illustrative) until v15.11.0.
         capacity_charge_lkr_per_mw_month: 1752500
         contract_years: 15
         availability_factor: 1.0   # 1.0 = meets the >=97% monthly availability guarantee
