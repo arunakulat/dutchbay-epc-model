@@ -46,11 +46,11 @@ SUMMARY = REPO_ROOT / "docs" / "blue_whale" / "solar_bess_project_sizing_summary
 UNIT_CLI = REPO_ROOT / "scripts" / "run_blue_whale_solar_bess_v14.py"
 POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 
-# Pinned at 15.13.0 (v0.1 of each new scenario). TEST-01 responsiveness guards below.
+# Pinned at 15.15.0 (v0.1 of each new scenario). TEST-01 responsiveness guards below.
 # The solar + BESS project's 20-year CFADS does not recover its capex, so the engine finds
 # no project IRR and its KPI reader reports 0.0 (undefined); its NPVs are pinned instead.
-# Re-pinned at 15.15.0 for PR 6 capex: the blended BESS price re-sized the project (v0.2:
-# 107 tables, 3.5 MW AC, 1.0 MW / 4.0 MWh). Before, at 15.13.0-15.14.0 (v0.1): project NPV
+# Re-pinned at 15.17.0 for PR 6 capex: the blended BESS price re-sized the project (v0.2:
+# 107 tables, 3.5 MW AC, 1.0 MW / 4.0 MWh). Before, at 15.15.0-15.16.0 (v0.1): project NPV
 # -4771737.166012999, equity NPV -5196732.668408366, equity IRR -0.03275959163948128, min DSCR
 # 0.8675297318839426.
 SOLAR_BESS_PINS = {
@@ -59,11 +59,11 @@ SOLAR_BESS_PINS = {
     "equity_irr": -0.11324848332854087,
     "min_dscr": 0.8669721833235606,
 }
-# WIND_PINS re-pinned at 15.14.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
-# 0.487560). Before, at 15.13.0 (v0.1): project IRR 0.04085210230412145, equity IRR
+# WIND_PINS re-pinned at 15.16.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
+# 0.487560). Before, at 15.15.0 (v0.1): project IRR 0.04085210230412145, equity IRR
 # 0.014728921618622381, min DSCR 0.868369272868335.
-# Re-pinned at 15.15.0 for PR 6 capex (wind v0.3: turbine capex 12,350,000 -> 8,899,980,
-# blended). Before, at 15.14.0 (v0.2): project IRR 0.07798231364379474, equity IRR
+# Re-pinned at 15.17.0 for PR 6 capex (wind v0.3: turbine capex 12,350,000 -> 8,899,980,
+# blended). Before, at 15.16.0 (v0.2): project IRR 0.07798231364379474, equity IRR
 # 0.053445387955278756, min DSCR 0.8682973694248998.
 WIND_PINS = {
     "project_irr": 0.10808262995624021,

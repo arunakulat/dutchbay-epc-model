@@ -1,4 +1,4 @@
-"""Regression pins for the Blue Whale Lot 5B scenario (v0.6, model 15.12.0).
+"""Regression pins for the Blue Whale Lot 5B scenario (v0.6, model 15.14.0).
 
 The scenario is a screening skeleton on placeholder inputs, so these pins prove only that
 the committed KPIs have not moved unnoticed. ``TEST-01`` pairs each pin with a
@@ -40,17 +40,17 @@ SCRIPT = (
     Path(__file__).resolve().parents[2] / "scripts" / "run_blue_whale_solar_bess_v14.py"
 )
 
-# Pinned at 15.12.0 (v0.6: the unit sized and priced by PR 3's Monte Carlo, DC/AC 1.1 and
-# 5 MW / 24 MWh). Before, at 15.11.0 (v0.5: DC/AC 1.2 and 30 MWh, placeholder capex):
+# Pinned at 15.14.0 (v0.6: the unit sized and priced by PR 3's Monte Carlo, DC/AC 1.1 and
+# 5 MW / 24 MWh). Before, at 15.13.0 (v0.5: DC/AC 1.2 and 30 MWh, placeholder capex):
 # project IRR 0.03578223216261529, equity IRR 0.009208957605289392, min DSCR
-# 0.8682259068634375. At 15.10.0 (v0.4): 0.03150801785651182, 0.005060003909760136,
-# 0.8685883776324956. At 15.9.0 (v0.3): 0.027674815875491747, 0.0006314091936767685,
+# 0.8682259068634375. At 15.12.0 (v0.4): 0.03150801785651182, 0.005060003909760136,
+# 0.8685883776324956. At 15.11.0 (v0.3): 0.027674815875491747, 0.0006314091936767685,
 # 0.8688229918413363.
-# Re-pinned at 15.14.0 for the PR 5 met-mast transfer (hybrid v0.7: wind CF 0.374256 ->
-# 0.487560, tariff blend 24.786 -> 24.97218). Before, at 15.13.0 (v0.6): project IRR
+# Re-pinned at 15.16.0 for the PR 5 met-mast transfer (hybrid v0.7: wind CF 0.374256 ->
+# 0.487560, tariff blend 24.786 -> 24.97218). Before, at 15.15.0 (v0.6): project IRR
 # 0.042560941205600764, equity IRR 0.015846290954853348, min DSCR 0.8678660628624484.
-# Re-pinned at 15.15.0 for PR 6 capex (hybrid v0.8: wind capex 12,350,000 -> 8,899,980,
-# BESS capex 3,240,000 -> 3,377,760, both blended). Before, at 15.14.0 (v0.7): project IRR
+# Re-pinned at 15.17.0 for PR 6 capex (hybrid v0.8: wind capex 12,350,000 -> 8,899,980,
+# BESS capex 3,240,000 -> 3,377,760, both blended). Before, at 15.16.0 (v0.7): project IRR
 # 0.06900278150431857, equity IRR 0.04331151885509987, min DSCR 0.8674143524654796.
 PINS = {
     "project_irr": 0.08734893167526492,

@@ -9266,7 +9266,7 @@
    "Ordinary-suite tests exercise reduced grids only; this run is not tail-adequacy, convergence, lender or bankability evidence (TEST-03).",
    "BESS priced per kWh on a 4 h basis at every duration."
   ],
-  "model_version": "15.15.0",
+  "model_version": "15.17.0",
   "objective": {
    "metric": "project_npv",
    "statistic": "p50"

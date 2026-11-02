@@ -20336,7 +20336,7 @@
    "The BESS container footprint is a 6 h product's (power-bound at 4 h), so the land maximum is conservative for large batteries."
   ],
   "losses_on_charge": true,
-  "model_version": "15.15.0",
+  "model_version": "15.17.0",
   "objective": {
    "metric": "unit_pretax_npv_usd",
    "statistic": "p50"

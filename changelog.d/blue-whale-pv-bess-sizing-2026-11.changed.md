@@ -1,4 +1,4 @@
-- Blue Whale solar + BESS sizing (15.12.0). Owner decisions of 1 Nov 2026: fix the turbine and
+- Blue Whale solar + BESS sizing (15.14.0). Owner decisions of 1 Nov 2026: fix the turbine and
   run a new Monte Carlo to size the solar array and the BESS on current prices, pricing the
   inverter from Huawei or another tier-1 maker matched to the JinkoSolar string; the BESS
   windows stay 17:30-21:30 (priority) and 05:30-07:30.
