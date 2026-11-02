@@ -258,19 +258,27 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
      fails and the condition allows only a merge commit, do not merge; state it as a blocker.
      Otherwise prefer a squash that meets the condition.
    - Before submitting, re-read each condition against the final message text.
-3. **Verify against the SHA the merge returned.** The commit the merge created must have the
-   head's tree, and its first parent must be the `main` SHA recorded in step 2. A two-parent merge
-   commit must also have the head as its second parent:
+3. **Verify against the SHA the merge returned.** The commit the merge created must be on
+   `origin/main` and have the head's tree, and its first parent must be the `main` SHA recorded in
+   step 2. A squash has one parent. A two-parent merge commit must also have the head as its second
+   parent. Set `parents` to `1` for a squash or `2` for a merge commit:
 
    ```bash
+   set -euo pipefail
    git fetch origin main
-   test "$(git rev-parse <merge-sha>^{tree})" = "$(git rev-parse <head-sha>^{tree})"
-   test "$(git rev-parse <merge-sha>^1)" = "<main-sha-recorded-in-step-2>"
-   test "$(git rev-parse <merge-sha>^2)" = "<head-sha>"   # two-parent merge commit only
+   merge=<merge-sha>; head=<head-sha>; main=<main-sha-recorded-in-step-2>; parents=<1 or 2>
+   git merge-base --is-ancestor "$merge" origin/main
+   test "$(git rev-list --parents -n 1 "$merge" | wc -w)" = "$((parents + 1))"
+   test "$(git rev-parse "$merge^{tree}")" = "$(git rev-parse "$head^{tree}")"
+   test "$(git rev-parse "$merge^1")" = "$main"
+   if [ "$parents" = 2 ]; then test "$(git rev-parse "$merge^2")" = "$head"; fi
+   echo "Merge check: OK"
    ```
 
-   If any test fails, stop. Report the mismatch on the pull request and take no further action on
-   it until the mismatch is resolved (`RECRUIT-01` module 3 §7).
+   The block stops at its first failed `test` and passes only when it prints `Merge check: OK`.
+   Silence, or a missing `OK` line, is a failure. If it fails, stop. Report the mismatch on the pull
+   request and take no further action on it until the mismatch is resolved (`RECRUIT-01` module 3
+   §7).
 4. Retire only branches and worktrees you own.
 
 ### Merge trains (`TRAIN-01`)
@@ -283,49 +291,93 @@ train that carries a car it wrote. A pull request may always land alone instead.
    (`REVIEW-01`), with its merge-boundary conditions collected (step 1 above). Take two or three
    adjacent cars in queue order. They must be path-disjoint, none may be stacked on another, and
    at most one may be `R3` or change a KPI.
-2. **Build the train.** Open a focused train issue that lists every car and record it on #1353.
-   Then build `train/<date>-<n>` from the current `main`, one non-merge commit per car:
-
-   ```bash
-   git fetch origin main && git switch -c train/<date>-<n> origin/main
-   # for each car, in queue order:
-   base=$(git merge-base origin/main <car-head>)
-   git diff --binary "$base" <car-head> | git apply --index
-   git commit --author="<car author>" -F <car-merge-message.txt>   # R18; ends with (#<car>)
-   ```
-
-   If a car's diff does not apply cleanly, leave that car out. Commit nothing else. Open the train
-   as one pull request, ready for review, with the train issue as its `Work item:` and a `VERIFY-01`
-   receipts table. The full suite runs once.
-3. **Carry the bindings.** Each car's lanes record module 3 §8's three proofs against the train
-   head. A car whose proof fails leaves the train. For a KPI car, the train head's lender KPI vector
-   must equal the vector the owner signed off; if no car changes a KPI, it must equal `main`'s.
-4. **If the train goes red,** edit no car on it. Split the train and run each part as a smaller
-   train or a single pull request. A fix goes on the car's own branch, which restarts its reviews
-   (module 3 §6).
-5. **Land it with rebase-merge, never squash.** Record the protected `main` SHA first. Then check
-   that the train is exactly one non-merge commit per car on top of it, and that each train commit
-   is exactly its car's reviewed diff. Set `cars` to every car as `<pr>:<reviewed-head-sha>`,
-   separated by spaces, in queue order as the train issue lists them:
+2. **Record the cars.** Open a focused train issue that lists every car and record it on #1353. For
+   each car, take the pull-request number and the reviewed head from the car's lane records, and
+   check the head against `refs/pull/<pr>/head`. Write `cars` as `<pr>:<reviewed-head-sha>`,
+   separated by spaces, in queue order. Then make a car directory holding, for each car,
+   `<pr>.msg` (the car's hand-written merge message, which meets `R18` and whose subject ends with
+   `(#<pr>)`) and `<pr>.author` (one line, `Name <email>`). The author is the car pull request's
+   author, as a squash merge of that pull request would record it. List the same values on the
+   train issue.
+3. **Build the train** from the current `main`, one non-merge commit per car:
 
    ```bash
    set -euo pipefail
-   main=<main-sha>; train=<train-head-sha>; cars="<car list>"
+   git fetch origin main
+   cardir=<car directory>; cars="<car list>"
+   git switch -c train/<date>-<n> origin/main
+   main=$(git rev-parse origin/main)
+   for car in $cars; do
+     pr=${car%%:*}; head=${car#*:}
+     base=$(git merge-base "$main" "$head")
+     git diff --binary "$base" "$head" | git apply --index
+     git commit -q --author="$(cat "$cardir/$pr.author")" -F "$cardir/$pr.msg"
+   done
+   echo "TRAIN-01 train built: $(git rev-parse HEAD)"
+   ```
+
+   If a car's diff does not apply cleanly, the block stops: delete the branch and rebuild without
+   that car. Commit nothing else. **Run the pre-landing check (step 6) on the train before you open
+   it.** Then open the train as one pull request, ready for review, with the train issue as its
+   `Work item:` and a `VERIFY-01` receipts table. The full suite runs once. If `main` moves before
+   the train lands, never merge `main` into the train: a merge commit on it fails the pre-landing
+   check. Rebuild the train from the new `main` instead, and repeat module 3 §8's proofs and the
+   pre-landing check on the new train head.
+4. **Carry the bindings.** Each car's lanes record module 3 §8's three proofs against the train
+   head. A car whose proof fails leaves the train. For a KPI car, the train head's lender KPI vector
+   must equal the vector the owner signed off, which is the vector at the car's reviewed head. If no
+   car changes a KPI, it must equal `main`'s. Set `reference` to the KPI car's reviewed head, or to
+   `main` when no car changes a KPI, and run from the repository root:
+
+   ```bash
+   set -euo pipefail
+   reference=<kpi-car-head-or-main-sha>; train=<train-head-sha>
+   digest() {
+     git worktree add -q --detach "../kpi-$1" "$1"
+     (cd "../kpi-$1" && PYTHONPATH=. python -c 'import hashlib, json; from analytics.pipeline_v14_enhanced import run_v14_pipeline as run; k = run(config="scenarios/dutchbay_lendercase_2025Q4.yaml", validation_mode="strict")["kpis"]; print(len(k), hashlib.sha256(json.dumps({key: repr(v) if isinstance(v, float) else v for key, v in k.items()}, sort_keys=True, default=repr).encode()).hexdigest())')
+     git worktree remove --force "../kpi-$1"
+   }
+   want=$(digest "$reference"); got=$(digest "$train")
+   echo "reference: $want"; echo "train: $got"
+   test -n "$want"
+   test "$got" = "$want"
+   echo "TRAIN-01 KPI check: OK"
+   ```
+
+   It prints the count and SHA-256 of the 39-KPI lender vector at each revision, and passes only
+   when they are equal.
+5. **If the train goes red,** edit no car on it. Split the train and run each part as a smaller
+   train or a single pull request. A fix goes on the car's own branch, which restarts its reviews
+   (module 3 §6).
+6. **Land it with rebase-merge, never squash.** Run the pre-landing check before the train is
+   opened ready (step 3), and again just before landing, with the protected `main` SHA recorded at
+   that moment. It checks that the recorded `main` is `origin/main`, that the train is exactly one
+   non-merge commit per car on top of it, and that each train commit is exactly its car's reviewed
+   diff, under its recorded message and author, with each car's reviewed head still its pull
+   request's head:
+
+   ```bash
+   set -euo pipefail
+   git fetch origin main
+   main=<main-sha>; train=<train-head-sha>; cardir=<car directory>; cars="<car list>"
+   test "$(git rev-parse origin/main)" = "$main"
    set -- $cars; n=$#
    test "$n" -ge 2
    test "$n" -le 3
-   test "$(git rev-list --count "$main..$train")" = "$n"
    test -z "$(git rev-list --merges "$main..$train")"
    test "$(git rev-parse "$train~$n")" = "$main"
    k=0
    for car in "$@"; do
      k=$((k + 1)); pr=${car%%:*}; head=${car#*:}
+     test "$(git ls-remote origin "refs/pull/$pr/head" | cut -f1)" = "$head"
      commit=$(git rev-parse --verify "$train~$((n - k))^{commit}")
      base=$(git merge-base "$main" "$head")
      want=$(git diff --raw --no-renames --no-abbrev "$base" "$head" | cut -d' ' -f2,4-)
      got=$(git diff --raw --no-renames --no-abbrev "$commit^" "$commit" | cut -d' ' -f2,4-)
      test -n "$want"
      test "$got" = "$want"
+     test "$(git log -1 --format=%B "$commit")" = "$(git stripspace < "$cardir/$pr.msg")"
+     test "$(git log -1 --format='%an <%ae>' "$commit")" = "$(cat "$cardir/$pr.author")"
      subject=$(git log -1 --format=%s "$commit")
      test "${subject%"(#$pr)"}" != "$subject"
    done
@@ -333,23 +385,29 @@ train that carries a car it wrote. A pull request may always land alone instead.
    ```
 
    The loop compares train commit `k` with car `k`: the same changed paths, modes and blobs as the
-   car's reviewed head shows against its merge base, and a subject ending with `(#<pr>)`. A train
-   with two cars' messages swapped, a stray file, or part of one car's diff in another car's commit
-   fails here, although every tree comparison would pass it (module 3 §8).
+   car's reviewed head shows against its merge base, the car's recorded message and author, and a
+   subject ending with `(#<pr>)`. It also checks that `refs/pull/<pr>/head` is still the reviewed
+   head, so a car list that pairs a number with another car's head fails. A train with two cars'
+   messages swapped, a stray file, part of one car's diff in another car's commit, or a merge
+   commit fails here, although every tree comparison would pass it (module 3 §8).
 
    After it lands, verify every landed commit against its train commit, walking back from the SHA
-   the merge returned:
+   the merge returned. The walk starts at the train head (`i = 0`), so the last landed tree is
+   compared with the train head's tree:
 
    ```bash
    set -euo pipefail
    git fetch origin main
    n=<number of cars>; landed=<sha-the-merge-returned>; train=<train-head-sha>
-   test "$(git rev-parse "$landed^{tree}")" = "$(git rev-parse "$train^{tree}")"
+   main=<main-sha-recorded-before-landing>
+   git merge-base --is-ancestor "$landed" origin/main
+   test -z "$(git rev-list --merges "$main..$landed")"
    for i in $(seq 0 $((n - 1))); do
      test "$(git rev-parse "$landed~$i^{tree}")" = "$(git rev-parse "$train~$i^{tree}")"
      test "$(git log -1 --format=%B "$landed~$i")" = "$(git log -1 --format=%B "$train~$i")"
+     test "$(git log -1 --format='%an <%ae>' "$landed~$i")" = "$(git log -1 --format='%an <%ae>' "$train~$i")"
    done
-   test "$(git rev-parse "$landed~$n")" = "<main-sha-recorded-before-landing>"
+   test "$(git rev-parse "$landed~$n")" = "$main"
    echo "TRAIN-01 landing check: OK"
    ```
 
