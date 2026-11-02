@@ -273,5 +273,94 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
    it until the mismatch is resolved (`RECRUIT-01` module 3 §7).
 4. Retire only branches and worktrees you own.
 
+### Merge trains (`TRAIN-01`)
+
+A train lets two or three reviewed pull requests share one full-suite run and land as separate
+commits. Only the delivery coordinator holding the merge lease builds and lands one, and never a
+train that carries a car it wrote. A pull request may always land alone instead.
+
+1. **Pick the cars.** Each car is a draft whose required lanes are bound to its frozen draft head
+   (`REVIEW-01`), with its merge-boundary conditions collected (step 1 above). Take two or three
+   adjacent cars in queue order. They must be path-disjoint, none may be stacked on another, and
+   at most one may be `R3` or change a KPI.
+2. **Build the train.** Open a focused train issue that lists every car and record it on #1353.
+   Then build `train/<date>-<n>` from the current `main`, one non-merge commit per car:
+
+   ```bash
+   git fetch origin main && git switch -c train/<date>-<n> origin/main
+   # for each car, in queue order:
+   base=$(git merge-base origin/main <car-head>)
+   git diff --binary "$base" <car-head> | git apply --index
+   git commit --author="<car author>" -F <car-merge-message.txt>   # R18; ends with (#<car>)
+   ```
+
+   If a car's diff does not apply cleanly, leave that car out. Commit nothing else. Open the train
+   as one pull request, ready for review, with the train issue as its `Work item:` and a `VERIFY-01`
+   receipts table. The full suite runs once.
+3. **Carry the bindings.** Each car's lanes record module 3 §8's three proofs against the train
+   head. A car whose proof fails leaves the train. For a KPI car, the train head's lender KPI vector
+   must equal the vector the owner signed off; if no car changes a KPI, it must equal `main`'s.
+4. **If the train goes red,** edit no car on it. Split the train and run each part as a smaller
+   train or a single pull request. A fix goes on the car's own branch, which restarts its reviews
+   (module 3 §6).
+5. **Land it with rebase-merge, never squash.** Record the protected `main` SHA first. Then check
+   that the train is exactly one non-merge commit per car on top of it, and that each train commit
+   is exactly its car's reviewed diff. Set `cars` to every car as `<pr>:<reviewed-head-sha>`,
+   separated by spaces, in queue order as the train issue lists them:
+
+   ```bash
+   set -euo pipefail
+   main=<main-sha>; train=<train-head-sha>; cars="<car list>"
+   set -- $cars; n=$#
+   test "$n" -ge 2
+   test "$n" -le 3
+   test "$(git rev-list --count "$main..$train")" = "$n"
+   test -z "$(git rev-list --merges "$main..$train")"
+   test "$(git rev-parse "$train~$n")" = "$main"
+   k=0
+   for car in "$@"; do
+     k=$((k + 1)); pr=${car%%:*}; head=${car#*:}
+     commit=$(git rev-parse --verify "$train~$((n - k))^{commit}")
+     base=$(git merge-base "$main" "$head")
+     want=$(git diff --raw --no-renames --no-abbrev "$base" "$head" | cut -d' ' -f2,4-)
+     got=$(git diff --raw --no-renames --no-abbrev "$commit^" "$commit" | cut -d' ' -f2,4-)
+     test -n "$want"
+     test "$got" = "$want"
+     subject=$(git log -1 --format=%s "$commit")
+     test "${subject%"(#$pr)"}" != "$subject"
+   done
+   echo "TRAIN-01 pre-landing check: OK"
+   ```
+
+   The loop compares train commit `k` with car `k`: the same changed paths, modes and blobs as the
+   car's reviewed head shows against its merge base, and a subject ending with `(#<pr>)`. A train
+   with two cars' messages swapped, a stray file, or part of one car's diff in another car's commit
+   fails here, although every tree comparison would pass it (module 3 §8).
+
+   After it lands, verify every landed commit against its train commit, walking back from the SHA
+   the merge returned:
+
+   ```bash
+   set -euo pipefail
+   git fetch origin main
+   n=<number of cars>; landed=<sha-the-merge-returned>; train=<train-head-sha>
+   test "$(git rev-parse "$landed^{tree}")" = "$(git rev-parse "$train^{tree}")"
+   for i in $(seq 0 $((n - 1))); do
+     test "$(git rev-parse "$landed~$i^{tree}")" = "$(git rev-parse "$train~$i^{tree}")"
+     test "$(git log -1 --format=%B "$landed~$i")" = "$(git log -1 --format=%B "$train~$i")"
+   done
+   test "$(git rev-parse "$landed~$n")" = "<main-sha-recorded-before-landing>"
+   echo "TRAIN-01 landing check: OK"
+   ```
+
+   Each block stops at its first failed `test` and passes only when it prints its `OK` line.
+   Silence, or a missing `OK` line, is a failure. Run each block whole, as written, and never
+   drop its `set -euo pipefail` line. If a block fails, stop and report it on the train pull
+   request (module 3 §8). Otherwise close each car's pull request with a pointer to its commit
+   on `main`.
+
+The full suite ran on the union only. The commits between cars on `main` were never run by the
+full suite on their own, and the train lifts no `HOLD`.
+
 Merging is delivery authority only. Under `MERGE-01`'s boundary, it lifts no `HOLD` and
 confers no grade, release, lender or Board authority.
