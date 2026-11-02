@@ -56,8 +56,11 @@ All notable changes to this project will be documented here.
   Whale takes the blended 2026 FiT (24.76) and NSO as offtaker. Project IRR: solar + BESS
   6.61% -> 10.04%, standalone BESS -1.29% -> -6.27%, DutchBay hybrid + BESS 1.77% -> 0.16%
   (now below the plain hybrid), Blue Whale 4.59% -> 2.77%. The canonical lender case is
-  unchanged. Window hours, cycle count, the PPA term for small plants and awarded capacity
-  charges have no official figure and stay assumptions. Detail in the compiled fragment.
+  unchanged. The solar + BESS 10.04% books no cost for the PV energy that charges the
+  battery; netted at the other-period rate (20.72) it is 0.82%, and the case's eligibility
+  for the < 10 MW FiT is unresolved. Window hours, cycle count, the PPA term for small
+  plants and awarded capacity charges have no official figure and stay assumptions. Detail
+  in the compiled fragment.
 - **The lender case refinances its balloon instead of sweeping it (15.8.0).** Owner
   decision 1A on #1396 (audit P3-COV-03): the USD 28.63m scheduled-maturity balloon,
   of which cash sweep left USD 9.80m unpaid, is refinanced on the assumed YAML terms
@@ -72,6 +75,39 @@ All notable changes to this project will be documented here.
   vector; it does not change the Board/lender circulation HOLD.
 
 ### Fixed
+- **Balloon interest paid after maturity is deducted for tax (15.10.0).** #1505: the
+  levered tax pass deducted scheduled interest only, so the interest on the balloon after
+  maturity (the refinanced tranche's, a sweep's or a bullet's) reduced no taxable income,
+  although the three-statement P&L books it. The basis is a new scenario input,
+  `tax.balloon_interest_tax_basis`: `paid` (owner decision, #1526 issuecomment-6553550944,
+  and the default when absent: deducted in the year it is settled in cash, capitalised
+  interest when a later sweep pays it), `accrued` or `none` (the earlier treatment).
+  `tax.interest_deductibility: false` still switches every interest deduction off.
+  `debt_result` gains `balloon_interest_paid`, the enriched rows gain
+  `balloon_interest_accrued_usd` and `balloon_interest_paid_usd`, and the non-resident
+  interest WHT gross-up now also charges the balloon interest paid (off in every committed
+  scenario). The deduction reaches both the sizing pass and the equity pass; the sizing
+  loop's iteration ceiling rises from 25 to 200. Canon re-baseline: equity IRR -26.44% ->
+  -23.01%, equity NPV -$95.53M -> -$95.27M, LLCR 1.2875 -> 1.2905, PLCR 1.3283 -> 1.3342;
+  project IRR, NPV, CFADS, min DSCR and the facility are unchanged. LLCR and PLCR are now
+  pinned at full precision in `tests/_canon.py`. This re-baselines the committed
+  canonical KPI vector; it does not change the Board/lender circulation HOLD, and none of
+  these figures supports a lender, IC or covenant representation while the F-5 and #1110
+  holds stand.
+- **The balloon after maturity accrues interest, and the senior fee follows the balance
+  actually outstanding (15.9.0).** #1503 and #1504: under `cash_sweep` and `bullet` the
+  unpaid balloon accrues interest at the facility's blended rate (`avg_debt_rate`) until
+  it is repaid, as the refinance already did; a sweep whose cash cannot pay the interest
+  capitalises it into `balloon_residual` (owner decision, #1510 issuecomment-6542861144).
+  `debt_outstanding` and the senior credit-support fee now follow the balloon actually
+  outstanding instead of the structural balloon to the horizon, and `debt_result` gains
+  `balloon_interest`, which the three-statement builder books as interest for every
+  treatment. Canon re-baseline: equity IRR -30.54% -> -26.44%, project IRR -0.142% ->
+  -0.060%, project NPV -$91.57M -> -$91.40M, PLCR 1.324 -> 1.328, total senior fee
+  $15.11M -> $13.14M; min DSCR, LLCR and the facility are unchanged. This re-baselines
+  the committed canonical KPI vector; it does not change the Board/lender circulation
+  HOLD, and none of these figures supports a lender, IC or covenant representation
+  while the F-5 and #1110 holds stand.
 - **Debt is sized, and coverage reported, on levered-tax CFADS (15.7.0).** `plan_debt`
   was handed rows built with `interest_expense=0`, so the facility was sculpted against —
   and DSCR, LLCR and PLCR published from — CFADS carrying tax computed with no interest
