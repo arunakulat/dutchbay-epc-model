@@ -64,21 +64,35 @@ generation:
       availability_pct: 97.0
       revenue:
         model: capacity_charge    # PLACEHOLDER (input F05): revenue model for the BESS is an open owner decision
-        capacity_charge_lkr_per_mw_month: 5000000   # PLACEHOLDER (input F06): DutchBay hybrid assumption
+        # Input F06, sourced internally (v15.11.0): 1,752,500 is the capacity-weighted average of
+        # the 24 L1 bids at the NSO 250 MW standalone-BESS tender's bid opening, 4 Sep 2026
+        # (range 1,695,000 to 1,850,000; scenarios/nso250_ltl_unit_base.yaml). A bid-clearing
+        # level, not a published award. Was 5,000,000 (DutchBay hybrid assumption).
+        capacity_charge_lkr_per_mw_month: 1752500
         contract_years: 15
         availability_factor: 1.0
         dispatchable_ratio: 1.0
 
 tariff:
-  lkr_per_kwh: 20.3             # PLACEHOLDER (input F03): DutchBay hybrid tariff; no Blue Whale tariff yet
-  tariff_type: fixed            # input F04
-  ppa_term_years: 20            # input F01
+  # Input F03 (v15.11.0): PUCSL feed-in tariffs effective 25 Aug 2026 for plants < 10 MW (Annex 2):
+  # wind 25.73 (20.80 non-escalable + 4.93 escalable O&M), ground solar 20.72 (18.00 + 2.72).
+  # The engine reads one tariff, so this is their energy-weighted blend on the CFs above:
+  # (10 x 0.35 x 25.73 + 5 x 0.1685 x 20.72) / (10 x 0.35 + 5 x 0.1685) = 24.76.
+  # OPEN: the FiT is for plants under 10 MW; the wind is exactly 10 MW and the plant 15 MW.
+  # Whether the limit counts per technology or per plant was not found. If per plant, this
+  # tariff does not apply. Was 20.3 (DutchBay hybrid tariff).
+  lkr_per_kwh: 24.76
+  tariff_type: fixed            # input F04: two-part regulator-set FiT. The O&M part is indexed yearly and
+                                # the non-escalable part adjusted once at month 12; neither is modelled here
+  ppa_term_years: 20            # input F01: no official term for the 2026 small-plant FiT. 20 matches the
+                                # CEB standardised PPA draft (June 2025, >= 50 MW): 20 years from COD
 
 ppa:
   primary_currency: "LKR"
   ppa_term_years: 20
   tariff_type: "fixed"
-  offtaker: "Ceylon Electricity Board (CEB)"   # input F02
+  offtaker: "National System Operator (Private) Limited"   # input F02: PPA counterparty from 9 Mar 2026
+                                # (Gazette Extraordinary 2479/36); CEB PPAs moved to it on unchanged terms
   payment_terms_days: 30
 
 fx:
@@ -200,11 +214,12 @@ wacc:
   description: "Build-up WACC drives the project discount rate."
 
 metadata:
-  version: '0.2'
-  last_updated: '2026-10-27'
+  version: '0.3'
+  last_updated: '2026-11-01'
   author: DutchBay V14 Financial Modeling Team
   review_status: SKELETON - screening placeholders pending owner inputs (docs/blue_whale/INPUTS_REQUIRED.md)
   assumptions_source: 'Scaled from dutchbay_hybrid_bess_2025Q4 and ceb_solar_bess_nightpeak_10mw'
   changes:
+    - 'v0.3 (2026-11-01): researched inputs F02, F03 and F06. Tariff 24.76 (energy-weighted PUCSL 2026 FiT: wind 25.73, solar 20.72), offtaker NSO, BESS capacity charge 1,752,500 (NSO 250 MW bid-clearing level)'
     - 'v0.2: Fully LKR funded (owner, 2026-10-28): 100% LKR debt, FX drift 0, LKR O&M escalation 5% placeholder'
     - 'v0.1: Skeleton for the Blue Whale Lot 5B hybrid (1 x 10 MW wind, 5 MWp PV, 10 MW / 40 MWh BESS)'

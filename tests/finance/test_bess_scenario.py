@@ -32,15 +32,16 @@ def test_standalone_bess_books_fading_capacity_charge_with_augmentation():
     """The committed CEB scenario opts into MDSC fade (0.011/yr) + a year-10 cell
     augmentation (#470d): the capacity charge is full in year 1 (SoH 1.0), DECLINES with
     fade, then the year-10 top-up restores it to the full charge. Generation revenue stays
-    zero (storage-only). SHAPE is pinned, not the illustrative economics (the bid rate is a
-    placeholder); the KPI deltas are recorded in the PR/CHANGELOG."""
+    zero (storage-only). SHAPE is pinned, plus the year-1 charge R x MW x 12, where R is the
+    NSO 250 MW bid-clearing level (1,752,500 LKR/MW/month, v15.11.0); the KPI deltas are
+    recorded in the PR/CHANGELOG."""
     assert _CEB.exists(), f"committed CEB BESS scenario missing: {_CEB}"
     out = evaluate_with_overrides(
         raw_config=load_scenario_config(_CEB), overrides={}, return_full_result=True
     )
     rows = out["annual_rows"]
     assert len(rows) == 15  # 15-year tender term
-    full_charge = 2_500_000 * 10 * 12  # R x power_mw x 12 (SoH 1.0, year 1)
+    full_charge = 1_752_500 * 10 * 12  # R x power_mw x 12 (SoH 1.0, year 1)
     assert rows[0]["bess_revenue_lkr"] == pytest.approx(
         full_charge
     )  # year 1 undiminished
@@ -63,10 +64,10 @@ def test_standalone_bess_books_fading_capacity_charge_with_augmentation():
 
 
 def test_energy_tariff_scenario_books_fading_night_peak_revenue():
-    """The committed night-peak scenario opts into MDSC fade (0.005/yr, #470d): year 1 is
-    the full night-peak export (SoH 1.0) and it DECLINES monotonically over the 10-year
-    contract, with no mid-life augmentation. Generation revenue stays zero
-    (BESS-incremental)."""
+    """The committed solar+BESS scenario opts into MDSC fade (0.005/yr, #470d): year 1 is
+    the full prioritised-window export (SoH 1.0) and it DECLINES monotonically over the
+    15-year prioritised-rate term of the PUCSL 2026 FiT (50.10 LKR/kWh, v15.11.0), with no
+    mid-life augmentation. Generation revenue stays zero (BESS-incremental)."""
     assert _NIGHTPEAK.exists(), f"committed night-peak scenario missing: {_NIGHTPEAK}"
     out = evaluate_with_overrides(
         raw_config=load_scenario_config(_NIGHTPEAK),
@@ -74,9 +75,9 @@ def test_energy_tariff_scenario_books_fading_night_peak_revenue():
         return_full_result=True,
     )
     rows = out["annual_rows"]
-    assert len(rows) == 10  # 10-year night-peak contract term
+    assert len(rows) == 15  # 15-year prioritised-rate term (PUCSL Annex 2)
     full_export = (
-        40 * 1000 * 365 * 0.85 * 1.0 * 45.80
+        40 * 1000 * 365 * 0.85 * 1.0 * 50.10
     )  # energy_mwh×1000×cycles×RTE(0.85, #588)×avail×tariff (SoH 1.0, year 1)
     assert rows[0]["bess_revenue_lkr"] == pytest.approx(
         full_export
@@ -89,7 +90,7 @@ def test_energy_tariff_scenario_books_fading_night_peak_revenue():
     assert all(r["bess_augmentation_capex_lkr"] == 0 for r in rows)
     assert (
         out["kpis"]["project_irr"] > 0
-    )  # the 45.80 LKR/kWh night-peak tariff stays lucrative
+    )  # positive at 50.10 LKR/kWh only because charging energy is not costed (BESS-6)
 
 
 def test_no_bess_block_means_zero_bess_revenue():

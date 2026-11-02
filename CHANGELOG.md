@@ -5,6 +5,18 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Tariff and BESS capacity-charge research applied to four scenarios (15.11.0).** The
+  solar + 4 h BESS case moves to the PUCSL 2026 feed-in tariff (50.10 LKR/kWh, 15 years;
+  the CEB 2025 45.80 / 10-year scheme is superseded and kept as a sensitivity). Three BESS
+  capacity charges move to 1,752,500 LKR/MW/month, the NSO 250 MW bid-clearing level. Blue
+  Whale takes the blended 2026 FiT (24.76) and NSO as offtaker. Project IRR: solar + BESS
+  6.61% -> 10.04%, standalone BESS -1.29% -> -6.27%, DutchBay hybrid + BESS 1.77% -> 0.16%
+  (now below the plain hybrid), Blue Whale 4.59% -> 2.77%. The canonical lender case is
+  unchanged. The solar + BESS 10.04% books no cost for the PV energy that charges the
+  battery; netted at the other-period rate (20.72) it is 0.82%, and the case's eligibility
+  for the < 10 MW FiT is unresolved. Window hours, cycle count, the PPA term for small
+  plants and awarded capacity charges have no official figure and stay assumptions. Detail
+  in the compiled fragment.
 - **The lender case refinances its balloon instead of sweeping it (15.8.0).** Owner
   decision 1A on #1396 (audit P3-COV-03): the USD 28.63m scheduled-maturity balloon,
   of which cash sweep left USD 9.80m unpaid, is refinanced on the assumed YAML terms

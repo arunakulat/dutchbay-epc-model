@@ -99,10 +99,14 @@ generation:
       availability_pct: 97.0     # contractual availability target (reporting)
       revenue:
         model: capacity_charge
-        # R = bid Capacity Charge Rate (LKR/MW/month). ILLUSTRATIVE bankable value for the
-        # comparison column (the real R is the competitive bid variable; the CEB Addendum-A
-        # worked example used 20,000,000). Paid flat for the 15-year contract term, no escalation.
-        capacity_charge_lkr_per_mw_month: 5000000
+        # R = Capacity Charge Rate (LKR/MW/month), paid flat for the 15-year term, no escalation.
+        # Source: the NSO 250 MW / 1,000 MWh standalone-BESS tender (TR/REP&PM/ICB/2026/001/C,
+        # 15-year BOO, flat LKR capacity charge, no indexation): 1,752,500 is the capacity-weighted
+        # average of the 24 L1 bids at bid opening, 4 Sep 2026 (range 1,695,000 to 1,850,000),
+        # as published in scenarios/nso250_ltl_unit_base.yaml. It is a bid-clearing level, not a
+        # published award: no awarded rate for this tender or for CEB 2025/003/C is public.
+        # Was 5,000,000 (illustrative) until v15.11.0.
+        capacity_charge_lkr_per_mw_month: 1752500
         contract_years: 15
         availability_factor: 1.0   # 1.0 = meets the >=97% monthly availability guarantee
         dispatchable_ratio: 1.0    # ADSC/MDSC (<=1); 1.0 = BESS sized to hold MDSC

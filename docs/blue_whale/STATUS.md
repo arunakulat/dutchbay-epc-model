@@ -46,7 +46,18 @@ record under `DATA-01`.
 6. **Revenue.** No tariff, offtake route or BESS revenue model is fixed yet. Results from
    the skeleton reflect DutchBay assumptions, not Blue Whale ones.
 
-## Latest run (v0.2, placeholders, 2026-10-28)
+## Latest run (v0.3, researched inputs F02, F03 and F06, 2026-11-01)
+
+Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
+tariff 24.76 LKR/kWh (blended PUCSL 2026 FiT), BESS capacity charge LKR 1,752,500/MW-month,
+LKR debt 13.39%, BESS 4 h. Project IRR 2.8%, equity IRR 0.1%, annual-view minimum DSCR
+0.87. The lower BESS rate cuts year-1 BESS revenue from LKR 600m to LKR 210m (18% of year-1
+revenue, was 44%); the higher tariff adds about LKR 170m of generation revenue. The FiT may
+not apply if the < 10 MW limit counts per plant, and every other input is still a
+placeholder, so these are not results. The sensitivities below were run on v0.2 and have not
+been re-run.
+
+## Earlier run (v0.2, placeholders, 2026-10-28)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR:
 
