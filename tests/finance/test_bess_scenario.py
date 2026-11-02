@@ -33,7 +33,7 @@ def test_standalone_bess_books_fading_capacity_charge_with_augmentation():
     augmentation (#470d): the capacity charge is full in year 1 (SoH 1.0), DECLINES with
     fade, then the year-10 top-up restores it to the full charge. Generation revenue stays
     zero (storage-only). SHAPE is pinned, plus the year-1 charge R x MW x 12, where R is the
-    NSO 250 MW bid-clearing level (1,752,500 LKR/MW/month, v15.9.0); the KPI deltas are
+    NSO 250 MW bid-clearing level (1,752,500 LKR/MW/month, v15.11.0); the KPI deltas are
     recorded in the PR/CHANGELOG."""
     assert _CEB.exists(), f"committed CEB BESS scenario missing: {_CEB}"
     out = evaluate_with_overrides(
@@ -66,7 +66,7 @@ def test_standalone_bess_books_fading_capacity_charge_with_augmentation():
 def test_energy_tariff_scenario_books_fading_night_peak_revenue():
     """The committed solar+BESS scenario opts into MDSC fade (0.005/yr, #470d): year 1 is
     the full prioritised-window export (SoH 1.0) and it DECLINES monotonically over the
-    15-year prioritised-rate term of the PUCSL 2026 FiT (50.10 LKR/kWh, v15.9.0), with no
+    15-year prioritised-rate term of the PUCSL 2026 FiT (50.10 LKR/kWh, v15.11.0), with no
     mid-life augmentation. Generation revenue stays zero (BESS-incremental)."""
     assert _NIGHTPEAK.exists(), f"committed night-peak scenario missing: {_NIGHTPEAK}"
     out = evaluate_with_overrides(
@@ -90,7 +90,7 @@ def test_energy_tariff_scenario_books_fading_night_peak_revenue():
     assert all(r["bess_augmentation_capex_lkr"] == 0 for r in rows)
     assert (
         out["kpis"]["project_irr"] > 0
-    )  # the 50.10 LKR/kWh prioritised-window tariff keeps the case positive
+    )  # positive at 50.10 LKR/kWh only because charging energy is not costed (BESS-6)
 
 
 def test_no_bess_block_means_zero_bess_revenue():

@@ -53,8 +53,12 @@ FEE_RATE = 0.0075 + 0.01
 # #1396 part B re-measured the equity pin alone again (-5.77% -> -6.35%): the committed
 # case now refinances its balloon instead of sweeping it, which sits below CFADS, so the
 # other four pins are untouched.
+#
+# #1505 (2026-11-01) re-measured the equity pin alone (-6.35% -> -6.19%): the levered
+# tax pass now deducts the refinanced tranche's interest when it is paid, which sits
+# below CFADS on the project pass, so the other four pins are untouched.
 PRE_737_PROJECT_IRR = 0.010987826287926005
-PRE_737_EQUITY_IRR = -0.063482364508472
+PRE_737_EQUITY_IRR = -0.06191598501790474
 PRE_737_PROJECT_NPV = -78603674.58182944
 PRE_737_TOTAL_CFADS = 176293763.9319677
 PRE_737_DEBT_TOTAL = 63042000.0
