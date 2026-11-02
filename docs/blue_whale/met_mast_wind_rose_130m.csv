@@ -1,4 +1,4 @@
-# Blue Whale 130 m long-term wind rose (aggregates). Model 15.14.0. conf/blue_whale_met_mast_transfer.yaml. HOLD: not lender-grade. A 232-day, monsoon-weighted, pre-filtered and undocumented mast record, transferred 26.7 km through a reanalysis to a placeholder site. The met-mast package's HOLD on annual, P50/P90 and lender use stands.
+# Blue Whale 130 m long-term wind rose (aggregates). Model 15.16.0. conf/blue_whale_met_mast_transfer.yaml. HOLD: not lender-grade. A 232-day, monsoon-weighted, pre-filtered and undocumented mast record, transferred 26.7 km through a reanalysis to a placeholder site. The met-mast package's HOLD on annual, P50/P90 and lender use stands.
 sector,label,centre_deg,frequency,mean_speed_ms,weibull_a_ms,weibull_k,energy_share
 0,N,0.0,0.037853,7.1019,7.9442,2.8534,0.025000
 1,NNE,22.5,0.078576,7.7167,8.5110,3.7872,0.058382

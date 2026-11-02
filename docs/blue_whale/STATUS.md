@@ -799,7 +799,7 @@ after-tax project NPV, so neither size is viable on these placeholder inputs.
 SARAH3, citing #1540's finding, and reports the satellite figures (Global Solar Atlas PVOUT
 +6.3%, about +9% GHI) as upside only. No data file changed.
 
-## Latest run (PR 7, the owner's battery, 15.16.0, 2026-11-01)
+## Latest run (PR 7, the owner's battery, 15.18.0, 2026-11-01)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
 
@@ -813,7 +813,7 @@ The larger battery earns the priority rate on 6,803 MWh in year 1 (was 1,481), w
 equity IRR, but it costs USD 3.26M more capex, so the project NPV falls by USD 0.96M. Every other
 input is still a placeholder, so these are not results.
 
-## Earlier run (PR 6, capex blend and re-sizing, 15.15.0, 2026-11-01)
+## Earlier run (PR 6, capex blend and re-sizing, 15.17.0, 2026-11-01)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
 
@@ -826,7 +826,7 @@ Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base c
 Every other input is still a placeholder, so these are not results.
 
 
-## Earlier run (PR 5, met-mast wind resource, 15.14.0, 2026-11-01)
+## Earlier run (PR 5, met-mast wind resource, 15.16.0, 2026-11-01)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
 
@@ -838,7 +838,7 @@ Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base c
 The solar + BESS project does not move. Every other input is still a placeholder, so these are
 not results.
 
-## Earlier run (PR 4, two projects, 15.13.0, 2026-11-01)
+## Earlier run (PR 4, two projects, 15.15.0, 2026-11-01)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
 

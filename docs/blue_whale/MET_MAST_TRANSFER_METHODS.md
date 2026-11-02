@@ -1,6 +1,6 @@
 # Blue Whale wind: met-mast 617725 transferred to the turbine site
 
-**Prepared:** 1 November 2026, model 15.14.0, Blue Whale PR 5.
+**Prepared:** 1 November 2026, model 15.16.0, Blue Whale PR 5.
 
 **Work item:** <https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6556910250>
 

@@ -1,5 +1,5 @@
 - Blue Whale solar + BESS: the owner's 5 MW / 20 MWh battery, ranked on the after-tax project
-  NPV (15.15.0 -> 15.16.0). Owner decisions of 1 Nov 2026 (#1353 comment 6563070978):
+  NPV (15.17.0 -> 15.18.0). Owner decisions of 1 Nov 2026 (#1353 comment 6563070978):
   "Fix 5 MW / 20 MWh", "After-tax project NPV (Recommended)" and "Keep ERA5, fix README
   (Recommended)".
   - `conf/blue_whale_solar_bess_project_sizing.yaml` ranks on the P50 of the engine's after-tax

@@ -1,4 +1,4 @@
-- Blue Whale wind resource from met mast 617725 (15.14.0). On the owner's direction of 1 Nov
+- Blue Whale wind resource from met mast 617725 (15.16.0). On the owner's direction of 1 Nov
   2026 (#1353 comment 6556910250), the Kalpitiya met-mast record is transferred 26.7 km to the
   Blue Whale turbine and its yield re-derived. Not lender-grade: the met-mast package's HOLD on
   annual, P50/P90 and lender use stands.

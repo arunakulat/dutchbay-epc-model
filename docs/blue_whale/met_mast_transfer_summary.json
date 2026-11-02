@@ -1021,7 +1021,7 @@
   ],
   "target_height_m": 120
  },
- "model_version": "15.14.0",
+ "model_version": "15.16.0",
  "reference": {
   "api": "https://power.larc.nasa.gov/api/temporal/hourly/point",
   "api_version": "v2.10.3",

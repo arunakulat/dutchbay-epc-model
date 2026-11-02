@@ -1,4 +1,4 @@
-- Blue Whale capex blend and solar resource (15.15.0). On the owner's request and decision of
+- Blue Whale capex blend and solar resource (15.17.0). On the owner's request and decision of
   1 Nov 2026 (#1353 comment 6556975196, "Derived blend may publish"), the wind and BESS capex
   become blends of China FOB pricing and internal anchors, and the solar resource at the site is
   reported with cross-checks. The disclosure surface moves on the owner's authority: the
