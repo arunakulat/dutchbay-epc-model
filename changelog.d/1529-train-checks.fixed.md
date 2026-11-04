@@ -8,14 +8,20 @@
   - **The pre-landing check runs twice.** It runs once before the train is opened ready, so a
     mis-built train never spends a full-suite run, and again just before landing.
   - **If `main` moves, the train is rebuilt, never refreshed with a merge commit.**
-  - **The landing check is anchored to `main`.** It now confirms that the landed SHA is on
-    `origin/main`, that the landing has no merge commit, and that every landed author matches.
+  - **The landing check is anchored to `main`.** It now confirms that the landed SHA equals the freshly fetched
+    `origin/main` tip, that the landing has no merge commit, and that every landed author matches.
   - **The build is a fail-closed block.** It reads the same car records.
   - **A new KPI block compares the lender KPI vector** at the train head with the vector at the
     KPI car's reviewed head, or at `main`.
   - **The single pull-request merge check fails closed.** It opens with `set -euo pipefail`,
-    prints an `OK` line, and confirms that the merge is on `origin/main` with the stated parent
+    prints an `OK` line, and confirms that the merge equals the freshly fetched `origin/main` tip with the stated parent
     count.
-- **Every comparison is load-bearing.** `tests/lint/test_train_policy.py` executes all five blocks,
-  and gives every comparison a negative control that only it stops. Deleting any check line now
-  fails a test.
+- The focused tests execute all five blocks, with faithful positive controls and hostile cases
+  for incorrect car identity, metadata, history, preimages, counts, evaluator failure and scratch
+  ownership. Specific deletion and old-mode mutants demonstrate that dropping the old diff
+  columns loses protection. This is not an exhaustive mutation or full-suite claim.
+- Both sides of each diff retain old/new modes and blob IDs, status and path bytes. Named
+  environment inputs carry quoted paths and recorded message/author blob IDs. Failed KPI
+  evaluation or malformed output cannot satisfy the comparator; only owned, clean scratch
+  worktrees are removed without force. Standalone Bash conditionals explicitly exit on
+  refusal, including on the governed Mac Bash where `set -e` alone did not stop them.

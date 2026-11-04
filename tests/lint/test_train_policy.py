@@ -24,9 +24,12 @@ pre-landing loop and watch a swapped train pass (#1515 assurance F-1, domain D-1
 from __future__ import annotations
 
 import csv
+import hashlib
 import re
+import shlex
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -83,7 +86,7 @@ TRAIN_01_REQUIRED_CONTROLS = (
     "its subject ends with that car's pull-request number",
     "the car's reviewed head is still its pull request's head",
     "the train is rebuilt from the new main, never refreshed with a merge commit",
-    "the SHA the merge returned is on origin/main, the landed commits contain no merge commit",
+    "the SHA the merge returned equals the freshly fetched origin/main tip, the landed commits contain no merge commit",
     "each landed commit's tree, message and author equal the matching train commit's",
     "tests/lint/test_train_policy.py",
     "GitHub's merge queue is not used",
@@ -109,13 +112,13 @@ MODULE_3_REQUIRED_CONTROLS = (
     "**Each train commit must be exactly its car's reviewed diff:**",
     "Run the pre-landing check twice: on the built train before it is opened ready",
     "which must be `origin/main` at that moment",
-    "with the same modes and blobs. Its message and author equal the car's recorded merge message and author",
+    "with the same modes and blobs. Compare both old and new modes and blob IDs, change status, and",
     "the car pull request's author as a squash merge of that pull request would record it",
     "its subject ends with that car's pull-request number",
     "Each car's reviewed head must still be its pull request's head",
     "The three proofs above compare trees, so they cannot say which commit carries which car.",
     "never refreshed with a merge commit",
-    "the SHA the merge returned is on `origin/main`",
+    "the SHA the merge returned equals the freshly fetched `origin/main` tip",
     "the landed commits contain no merge commit",
     "each landed commit's tree, message and author equal those of the matching train commit",
     "the first one's parent is the recorded `main` SHA",
@@ -333,7 +336,14 @@ def _block(ok: str) -> str:
         if block.strip().splitlines()[-1].strip().startswith(f'echo "{ok}')
     ]
     assert len(blocks) == 1, f"expected one block printing {ok!r}, found {len(blocks)}"
-    return blocks[0]
+    # Remove Markdown list indentation, including the Python heredoc terminator.
+    return (
+        "\n".join(
+            line[3:] if line.startswith("   ") else line
+            for line in blocks[0].splitlines()
+        )
+        + "\n"
+    )
 
 
 def _assert_block_fails_closed_by_shape(block: str, ok: str) -> None:
@@ -526,12 +536,40 @@ def rig(tmp_path: Path) -> Rig:
 
 
 def _fill(block: str, values: dict[str, str]) -> str:
-    for placeholder, value in values.items():
-        assert placeholder in block, f"{placeholder} is not in the block"
-        block = block.replace(placeholder, value)
-    leftover = _PLACEHOLDER.findall(block)
-    assert not leftover, f"unfilled placeholders: {leftover}"
-    return block
+    """Supply documented inputs as quoted data rather than replacing shell source."""
+    names = {
+        "<car directory>": "CAR_DIR",
+        "<car list>": "TRAIN_CARS",
+        "train/<date>-<n>": "TRAIN_BRANCH",
+        "<main-sha>": "MAIN_SHA",
+        "<train-head-sha>": "TRAIN_SHA",
+        "<number of cars>": "CAR_COUNT",
+        "<sha-the-merge-returned>": "LANDED_SHA",
+        "<main-sha-recorded-before-landing>": "MAIN_SHA",
+        "<kpi-car-head-or-main-sha>": "REFERENCE_SHA",
+        "<merge-sha>": "MERGE_SHA",
+        "<head-sha>": "HEAD_SHA",
+        "<main-sha-recorded-in-step-2>": "MAIN_SHA",
+        "<1 or 2>": "PARENTS",
+    }
+    supplied = {names[key]: value for key, value in values.items()}
+    if "TRAIN_CARS" in supplied:
+        directory = Path(supplied["CAR_DIR"])
+        records = []
+        for record in supplied["TRAIN_CARS"].split():
+            pr, head = record.split(":")
+            blobs = []
+            for suffix in ("msg", "author"):
+                data = (directory / f"{pr}.{suffix}").read_bytes()
+                blobs.append(
+                    hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+                )
+            records.append(":".join((pr, head, *blobs)))
+        supplied["TRAIN_CARS"] = " ".join(records)
+    prefix = "\n".join(
+        f"export {key}={shlex.quote(value)}" for key, value in supplied.items()
+    )
+    return prefix + "\n" + block
 
 
 def _run(
@@ -612,7 +650,9 @@ def _structural_only(block: str) -> str:
     """The pre-landing block without its per-car loop: the checks #1515 had at ``95dbe158``."""
     lines = block.splitlines()
     start = next(i for i, line in enumerate(lines) if line.strip() == "k=0")
-    end = next(i for i, line in enumerate(lines) if line.strip() == "done")
+    end = next(
+        i for i, line in enumerate(lines) if i > start and line.strip() == "done"
+    )
     return "\n".join(lines[:start] + lines[end + 1 :])
 
 
@@ -772,8 +812,11 @@ def test_pre_landing_check_fails_when_a_recorded_subject_names_the_wrong_car(
     """Negative control: a recorded message whose subject ends with another number fails."""
     (rig.cardir / "2.msg").write_text(_message("b", 12), encoding="utf-8")
     result = run_build(rig, rig.cars(1, 2))
-    assert _passed(result, BUILD_OK), result.stderr
-    train = result.stdout.split(BUILD_OK)[1].strip()
+    assert _failed_closed(result, BUILD_OK)
+    # Build independently so pre-landing also has to reject the bad recorded subject.
+    train = rig.build(
+        [(1, _message("a", 1), CARS[1][1]), (2, _message("b", 12), CARS[2][1])]
+    )
     assert _failed_closed(run_pre(rig, train, rig.cars(1, 2)), PRE_OK)
 
 
@@ -985,11 +1028,14 @@ def test_dropping_the_set_line_makes_the_blocks_fail_open(rig: Rig) -> None:
 
 def _fake_python(tmp: Path) -> str:
     """A stand-in for the lender-case run: it prints a count and the digest of ``kpi.txt``."""
-    bindir = tmp / "fakebin"
-    bindir.mkdir()
+    bindir = tmp / "fakevenv" / "bin"
+    bindir.mkdir(parents=True)
     fake = bindir / "python"
     fake.write_text(
-        '#!/bin/sh\necho "39 $(sha256sum kpi.txt | cut -d" " -f1)"\n', "utf-8"
+        f"#!{sys.executable}\n"
+        "import hashlib\nfrom pathlib import Path\n"
+        "print('39', hashlib.sha256(Path('kpi.txt').read_bytes()).hexdigest())\n",
+        "utf-8",
     )
     fake.chmod(0o755)
     return f"{bindir}:{_ENV['PATH']}"
@@ -1001,6 +1047,11 @@ def run_kpi(
     script = _fill(
         _block(KPI_OK),
         {"<kpi-car-head-or-main-sha>": reference, "<train-head-sha>": train},
+    )
+    bindir = Path(path.split(":", 1)[0])
+    script = (
+        f"export DUTCHBAY_VENV={shlex.quote(str(bindir.parent))}\n"
+        f"export TMPDIR={shlex.quote(str(rig.repo.parent))}\n" + script
     )
     return _run(rig, script, path=path)
 
@@ -1031,8 +1082,8 @@ def test_kpi_check_compares_the_vector_at_two_revisions(
 
 def test_kpi_check_fails_when_the_run_prints_nothing(rig: Rig, tmp_path: Path) -> None:
     """Negative control: a run that prints no vector at either revision is not a match."""
-    bindir = tmp_path / "silentbin"
-    bindir.mkdir()
+    bindir = tmp_path / "silentvenv" / "bin"
+    bindir.mkdir(parents=True)
     (bindir / "python").write_text("#!/bin/sh\nexit 0\n", "utf-8")
     (bindir / "python").chmod(0o755)
     path = f"{bindir}:{_ENV['PATH']}"
@@ -1130,3 +1181,184 @@ def test_dropping_the_set_line_makes_the_merge_check_fail_open(rig: Rig) -> None
     rig.publish(other)
     block = _without_set_line(_block(MERGE_OK))
     assert run_merge(rig, other, head, 1, block=block).returncode == 0
+
+
+@pytest.mark.parametrize("count", [0, 1, 4])
+def test_landing_rejects_an_invalid_recorded_count(rig: Rig, count: int) -> None:
+    """An empty or out-of-policy loop must not certify a landing."""
+    train = rig.faithful(1, 2)
+    landed = _landed(rig, train)
+    assert _failed_closed(run_post(rig, train, landed, n=count), POST_OK)
+
+
+def test_landing_rejects_a_nonexistent_train(rig: Rig) -> None:
+    """A failed object lookup must not produce an empty successful iteration."""
+    train = rig.faithful(1, 2)
+    assert _failed_closed(run_post(rig, "0" * 40, _landed(rig, train)), POST_OK)
+
+
+def test_single_merge_rejects_a_landing_only_on_a_side_parent(rig: Rig) -> None:
+    """Reachability cannot substitute for the exact fetched protected tip."""
+    head = _pr_head(rig)
+    good = _squash(rig, head)
+    side_merge = rig.commit_tree(
+        rig.git("rev-parse", f"{good}^{{tree}}"),
+        [rig.main, good],
+        "chore: unrelated protected merge",
+        CARS[1][1],
+    )
+    rig.publish(side_merge)
+    assert _failed_closed(run_merge(rig, good, head, 1), MERGE_OK)
+
+
+def test_car_directory_is_data_even_with_shell_punctuation(rig: Rig) -> None:
+    """A path containing spaces and punctuation cannot inject a shell command."""
+    destination = rig.cardir.parent / "Train Records; touch INJECTION"
+    rig.cardir.rename(destination)
+    rig.cardir = destination
+    built = run_build(rig, rig.cars(1, 2))
+    assert _passed(built, BUILD_OK), built.stderr
+    train = built.stdout.split(BUILD_OK)[1].strip()
+    assert _passed(run_pre(rig, train, rig.cars(1, 2)), PRE_OK)
+    assert not (rig.repo / "INJECTION").exists()
+
+
+@pytest.mark.parametrize(
+    ("output", "exit_code"),
+    [
+        ("identical diagnostic", 17),
+        ("39 " + "a" * 64, 17),
+        ("0 " + "a" * 64, 0),
+        ("39 not-a-digest", 0),
+    ],
+)
+def test_kpi_refuses_failed_or_malformed_matching_runs(
+    rig: Rig, tmp_path: Path, output: str, exit_code: int
+) -> None:
+    """Matching text is insufficient when either evaluator failed or its receipt is invalid."""
+    bindir = tmp_path / "controlledvenv" / "bin"
+    bindir.mkdir(parents=True)
+    executable = bindir / "python"
+    executable.write_text(
+        f"#!{sys.executable}\nprint({output!r})\nraise SystemExit({exit_code})\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    assert _failed_closed(
+        run_kpi(rig, rig.main, rig.main, f"{bindir}:{_ENV['PATH']}"), KPI_OK
+    )
+
+
+def test_failed_scratch_add_never_attempts_removal(rig: Rig, tmp_path: Path) -> None:
+    """A safe Git double refuses creation and records any forbidden cleanup attempt."""
+    path = _fake_python(tmp_path)
+    bindir = Path(path.split(":", 1)[0])
+    record = tmp_path / "scratch-operations.txt"
+    real_git = shutil.which("git")
+    assert real_git is not None
+    wrapper = bindir / "git"
+    wrapper.write_text(
+        "#!/bin/sh\n"
+        f"printf '%s\\n' \"$*\" >> {shlex.quote(str(record))}\n"
+        'if [ "$1" = worktree ] && [ "$2" = add ]; then exit 128; fi\n'
+        f'exec {shlex.quote(real_git)} "$@"\n',
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o755)
+    try:
+        assert _failed_closed(run_kpi(rig, rig.main, rig.main, path), KPI_OK)
+        operations = record.read_text(encoding="utf-8")
+        assert "worktree add" in operations
+        assert "worktree remove" not in operations
+        assert "--force" not in operations
+    finally:
+        record.unlink(missing_ok=True)
+
+
+def test_deletion_cannot_hide_a_changed_preimage(rig: Rig) -> None:
+    """Deleting two different input blobs gives the same absence but different reviewed diffs."""
+    rig.git("switch", "-q", "--detach", rig.old_main)
+    rig.git("rm", "base.txt")
+    rig.git("commit", "-q", "-m", "docs: reviewed deletion")
+    deletion = rig.git("rev-parse", "HEAD")
+    rig.heads[3] = deletion
+    rig.git("push", "-q", "origin", f"{deletion}:refs/pull/3/head")
+    (rig.cardir / "3.msg").write_text(_message("c", 3), encoding="utf-8")
+    (rig.cardir / "3.author").write_text(CARS[1][1] + "\n", encoding="utf-8")
+    first = rig.faithful(1)
+    rig.git("switch", "-q", "--detach", first)
+    rig.git("rm", "base.txt")
+    rig.git("commit", "-q", "-m", _message("c", 3), env=_author_env(CARS[1][1]))
+    train = rig.git("rev-parse", "HEAD")
+    assert _failed_closed(run_pre(rig, train, rig.cars(1, 3)), PRE_OK)
+    assert _passed(
+        run_pre(rig, train, rig.cars(1, 3), block=_without_old_diff_columns()), PRE_OK
+    )
+
+
+def _without_old_diff_columns() -> str:
+    """Recreate the rejected projection for a targeted hostile mutation control."""
+    block = _block(PRE_OK)
+    start = block.index("raw_diff() {")
+    end = block.index("\n}", start) + 2
+    replacement = (
+        "raw_diff() {\n"
+        '  git diff --raw --no-renames --no-abbrev "$1" "$2" -- | '
+        "cut -d' ' -f2,4-\n}"
+    )
+    return block[:start] + replacement + block[end:]
+
+
+def test_mode_preimage_has_its_own_hostile_control(rig: Rig) -> None:
+    """Identical old/new blobs and new modes cannot hide an unreviewed old mode."""
+    rig.git("switch", "-q", "--detach", rig.old_main)
+    changed = BASE_LINES.replace("line 2", "line 2, reviewed")
+    target = rig.repo / "base.txt"
+    target.write_text(changed, encoding="utf-8")
+    target.chmod(0o755)
+    rig.git("add", "base.txt")
+    rig.git("commit", "-q", "-m", "docs: reviewed mode and content")
+    head = rig.git("rev-parse", "HEAD")
+    rig.heads[3] = head
+    rig.git("push", "-q", "origin", f"{head}:refs/pull/3/head")
+    (rig.cardir / "3.msg").write_text(_message("c", 3), encoding="utf-8")
+    (rig.cardir / "3.author").write_text(CARS[1][1] + "\n", encoding="utf-8")
+    rig.git("switch", "-q", "--detach", rig.main)
+    target.write_text(BASE_LINES, encoding="utf-8")
+    target.chmod(0o755)
+    rig.git("add", "base.txt")
+    rig.git("commit", "-q", "-m", "chore: main already executable")
+    rig.main = rig.git("rev-parse", "HEAD")
+    rig.publish(rig.main)
+    first = rig.faithful(1)
+    rig.git("switch", "-q", "--detach", first)
+    target.write_text(changed, encoding="utf-8")
+    rig.git("add", "base.txt")
+    rig.git("commit", "-q", "-m", _message("c", 3), env=_author_env(CARS[1][1]))
+    train = rig.git("rev-parse", "HEAD")
+    assert _failed_closed(run_pre(rig, train, rig.cars(1, 3)), PRE_OK)
+    assert _passed(
+        run_pre(rig, train, rig.cars(1, 3), block=_without_old_diff_columns()), PRE_OK
+    )
+
+
+def test_kpi_preserves_unexpected_scratch_dirt(rig: Rig, tmp_path: Path) -> None:
+    """A newly dirty owned checkout is retained and cannot yield a successful receipt."""
+    bindir = tmp_path / "dirtyvenv" / "bin"
+    bindir.mkdir(parents=True)
+    executable = bindir / "python"
+    executable.write_text(
+        f"#!{sys.executable}\nfrom pathlib import Path\n"
+        "Path('unexpected-evidence.txt').write_text('preserve me')\n"
+        "print('39', 'a' * 64)\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    assert _failed_closed(
+        run_kpi(rig, rig.main, rig.main, f"{bindir}:{_ENV['PATH']}"), KPI_OK
+    )
+    preserved = list(
+        rig.repo.parent.glob("dutchbay-kpi.*/checkout/unexpected-evidence.txt")
+    )
+    assert preserved
+    assert all(path.read_text(encoding="utf-8") == "preserve me" for path in preserved)

@@ -167,7 +167,8 @@ mis-built train never spends a full-suite run, and again just before landing. Ea
 protected `main` SHA, which must be `origin/main` at that moment. The train head's commits must form a
 chain of non-merge commits, one per car, whose first parent is that `main` SHA. **Each train commit
 must be exactly its car's reviewed diff:** it changes the same paths that the car's reviewed head
-changes from its merge base, with the same modes and blobs. Its message and author equal the car's
+changes from its merge base, with the same modes and blobs. Compare both old and new modes and blob IDs, change status, and
+every path byte using unambiguous framing. Its message and author equal the car's
 recorded merge message and author, where the author is the car pull request's author as a squash
 merge of that pull request would record it, and its subject ends with that car's pull-request number.
 Each car's reviewed head must still be its pull request's head, so a car list that pairs a number with
@@ -180,8 +181,9 @@ refreshed with a merge commit, and the three proofs and the pre-landing check ar
 train head. The train lands by rebase-merge, never squash. After it lands, verification passes only
 if:
 
-- the SHA the merge returned is on `origin/main`, so the check is not run against the train head by
-  mistake;
+- the SHA the merge returned equals the freshly fetched `origin/main` tip, so a side-parent or
+  stale reachable commit cannot substitute for the protected landing; reconcile before proceeding
+  if protected main has advanced again;
 - the landed commits contain no merge commit;
 - each landed commit's tree, message and author equal those of the matching train commit;
 - each landed commit's parent is the previous landed commit, and the first one's parent is the
