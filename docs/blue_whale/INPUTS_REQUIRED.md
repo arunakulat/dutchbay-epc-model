@@ -1,6 +1,6 @@
 # Blue Whale hybrid: inputs required from the owner
 
-Configuration under study: **1 x 10 MW wind turbine, 5 MWp solar PV, and a 10 MW BESS of
+Configuration under study: **1 x Envision EN-206/10.5 wind turbine de-rated to 9.5 MW, 5 MWp solar PV, and a 10 MW BESS of
 4 h (40 MWh) or 5 h (50 MWh)**, on Lot 5B Plan 3641, Kalpitiya. Status and site facts are in
 [STATUS.md](STATUS.md).
 
@@ -18,18 +18,18 @@ feasibility study. **3** refines the result.
 |---|---|---|---|---|
 | B01 | Project company: legal name, PV number, shareholders, and its relationship to Blue Whale Resort (Pvt) Ltd | `project.developer` | "Blue Whale Limited (to be confirmed)" | 1 |
 | B02 | Land arrangement: lease or transfer from the landowner, term, annual rent or premium | `opex` land lease line | inside the 0.15M overhead line | 1 |
-| B03 | Site survey with coordinates (WGS84) of the boundary and proposed turbine, PV and BESS positions | resource coordinates (to add) | none | 1 |
+| B03 | Site survey with coordinates (WGS84) of the boundary and proposed turbine, PV and BESS positions, and the permanent vegetation line or back-dune toe on the beach | `conf/blue_whale_wind_siting.yaml` `site`; `docs/blue_whale/site_placeholder_lot5b.geojson` | Assumed 9.3077 ha square on the OpenStreetMap coastline at DutchBay T2's latitude, flagged `surveyed: false` (owner, 2026-11-01). Every wind, setback and flicker figure depends on it | 1 |
 | B04 | The 9 title documents missing from the scan, and a current Land Registry search on folio D 65/97 | lender due diligence | n/a | 2 |
 
-## B. Wind (1 x 10 MW)
+## B. Wind (1 x 9.5 MW)
 
 | ID | Input | Replaces (YAML field) | Placeholder now | Priority |
 |---|---|---|---|---|
-| B05 | Turbine shortlist: OEM, model, rotor diameter, hub height, IEC class (a 10 MW machine on a 9.3 ha coastal lot is large, so setbacks decide whether it fits) | `turbine` block (to add) | none | 1 |
-| B06 | Certified power curve and thrust curve for that model | `resource.power_curve` (to add) | none | 1 |
-| B07 | Wind data at the site: any met mast or LiDAR campaign. Failing that, confirm use of the DutchBay ERA5 series and met mast 617725 | `generation.technologies.wind.capacity_factor` | 0.35 (DutchBay per-turbine gross less losses, no wake) | 1 |
-| B08 | Setbacks to the sea, lagoon, streams, roads and resort buildings, and any CC&CRMD guidance received | layout check | none | 1 |
-| B09 | Wind CAPEX: turbine supply, foundation, crane and transport, BOP (quote or budget) | `generation.technologies.wind.capex_usd` | $13.0M ($1,300/kW) | 1 |
+| B05 | Turbine: the owner chose the Envision EN-206/10.5 de-rated to 9.5 MW at 130 m hub (2026-11-01). Still owed: the OEM's de-rate mode, IEC class, foundation and hardstand footprint | `generation.technologies.wind`; `conf/blue_whale_wind_siting.yaml` `turbine` | De-rate modelled as the curve clipped at 9,500 kW; tower centre on the setback line (no foundation radius) | 1 |
+| B06 | Certified power curve and thrust curve for that model, and for the 9.5 MW mode | read at run time from a private path (`BLUE_WHALE_POWER_CURVE_CSV`) | PMD-004447 Rev A (10.5 MW, held privately under `KALPITIYA60MW-WIND-HANDLING-2026-09-21`; owner, 2026-11-01). A curve for the de-rated mode is still owed | 1 |
+| B07 | Wind data at the site: any met mast or LiDAR campaign. Failing that, confirm use of the DutchBay ERA5 series and met mast 617725 | `generation.technologies.wind.capacity_factor` | 0.374256 net (31.15 GWh): the private curve over the DutchBay ERA5 Weibull at 130 m, losses 7.77%, no wake | 1 |
+| B08 | Setbacks to the sea, lagoon, streams, roads and resort buildings, and any CC&CRMD guidance received; whether the rotor may overhang the coastal reservation, the sea and land outside the lot; positions of buildings and dwellings for shadow flicker | `conf/blue_whale_wind_siting.yaml` `coastal_setback`, `tip_setback`, `shadow_flicker` | Coast 60 m (CZ&CRMP 2024-2029 segment 2) from the OSM coastline; boundary 1.0 x tip height (233 m); no receptors, so flicker is reported at the lot boundary | 1 |
+| B09 | Wind CAPEX: turbine supply, foundation, crane and transport, BOP (quote or budget) | `generation.technologies.wind.capex_usd` | $12.35M ($1,300/kW x 9.5 MW) | 1 |
 | B10 | Wind O&M: OEM service agreement price and term | `opex.usd_per_year` | $0.35M/yr | 2 |
 | B11 | Transport route survey: road access over Lot 5I and Lot 3 of Plan 3215, or the Lot 5D jetty | logistics risk | none | 2 |
 | B12 | Degradation and availability guarantees | `degradation`, `availability_pct` | 0.6%/yr, 97% | 3 |

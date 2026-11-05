@@ -5,6 +5,14 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Blue Whale turbine, placeholder site, coastal placement and shadow flicker (15.12.0).**
+  The wind becomes one Envision EN-206/10.5 de-rated to 9.5 MW at 130 m (owner), with a net
+  CF of 37.43% (31.15 GWh) derived from the confidential OEM curve over the DutchBay ERA5
+  basis; only derived figures are published. The lot is a flagged placeholder square on the
+  OpenStreetMap coastline and the turbine sits at the CZ&CRMP 2024-2029 60 m coastal setback.
+  New `analytics/gis/shadow_flicker.py` screens the tip-height setback and shadow flicker.
+  Blue Whale project IRR 2.77% -> 3.15%. No other scenario moves. Detail in the compiled
+  fragment.
 - **Tariff and BESS capacity-charge research applied to four scenarios (15.11.0).** The
   solar + 4 h BESS case moves to the PUCSL 2026 feed-in tariff (50.10 LKR/kWh, 15 years;
   the CEB 2025 45.80 / 10-year scheme is superseded and kept as a sensitivity). Three BESS
