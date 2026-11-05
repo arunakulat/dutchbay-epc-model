@@ -436,3 +436,28 @@ def test_summary_executes_coverage_diagnosis(
     if coverage_result == "failure" and test_result == "success":
         assert "Coverage job failed" in result.stdout
         assert ("NOT evidence" in result.stdout) == (enforced != "true")
+
+
+def test_shard_and_coverage_jobs_install_solar_extra_for_pvlib_gated_modules() -> None:
+    """The sharded test and coverage jobs must install `[solar]` (`pvlib`).
+
+    `solar_resource/*` and `analytics/gis/pv_array_layout.py` are in the `.coveragerc`
+    `source` denominator while their tests guard `pvlib` via `pytest.importorskip("pvlib")`.
+    Without `[solar]` in the shard install, those tests skip in CI and leave the modules
+    only partially covered in the combined union (#1531 run 42008845029).
+    """
+    test_install = _step_run("test", "Install dependencies")
+    cov_install = _step_run(
+        "coverage", "Install project (for coverage source resolution) + coverage"
+    )
+    lint_install = _step_run("lint", "Install linting tools")
+
+    for label, script in (
+        ("test", test_install),
+        ("coverage", cov_install),
+        ("lint", lint_install),
+    ):
+        assert 'python -m pip install -e ".[wind,gis,solar]"' in script, (
+            f"job {label!r} must install `.[wind,gis,solar]` so pvlib-gated solar/GIS "
+            "modules are exercised in CI"
+        )
