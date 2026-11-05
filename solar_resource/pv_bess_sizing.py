@@ -61,7 +61,9 @@ from solar_resource.pv_bess_dispatch import (
 FloatArray = npt.NDArray[np.float64]
 
 _KWH_PER_MWH = 1000.0
-#: The metrics summarised for every grid point.
+#: The metrics summarised for every grid point. ``project_npv``, ``project_irr``,
+#: ``equity_*`` and ``min_dscr`` are the engine's (after tax, through the gateway);
+#: ``unit_pretax_*`` are the unit's own pre-tax cash flows.
 METRICS = (
     "project_npv",
     "project_irr",
@@ -1943,6 +1945,15 @@ def run_project_sizing(
     PR 3's seeded trials, through :func:`evaluate_point`; each reading is then a filter on
     those points, so the two recommendations share the same draws.
 
+    The objective is config-named (``objective.metric`` and ``objective.statistic``).
+    ``project_npv`` is the engine's after-tax project NPV of the whole project scenario
+    (CFADS after corporate tax and the CFADS risk haircut, discounted at the engine's rate
+    through :func:`~analytics.evaluation_v14.evaluate_with_overrides`); PR 4's
+    ``unit_pretax_npv_usd`` (the unit's own capex, revenue and O&M, no tax or debt) stays
+    selectable. ``objective.report_beside`` names the metrics whose distributions are
+    reported at each reading's choice. A run restricted to one battery (a one-value
+    ``grid.bess_power_mw``) chooses only the PV for that battery.
+
     Args:
         sizing_cfg: ``conf/blue_whale_solar_bess_project_sizing.yaml``.
         unit_cfg: PR 2's ``conf/blue_whale_solar_bess.yaml`` (before the overrides).
@@ -2030,7 +2041,21 @@ def run_project_sizing(
     plant = sizing_cfg["plant"]
     _strict(plant, ("grid_civils_development_usd", "fixed_opex_usd_per_year"), "plant")
     objective = sizing_cfg["objective"]
-    _strict(objective, ("metric", "statistic", "alternatives", "pv_rule"), "objective")
+    _strict(
+        objective,
+        ("metric", "statistic", "alternatives", "pv_rule", "report_beside"),
+        "objective",
+    )
+    if objective["metric"] not in METRICS or objective["statistic"] not in STATISTICS:
+        raise ValueError(
+            f"objective {objective['metric']}.{objective['statistic']} is not one of "
+            f"{list(METRICS)} x {list(STATISTICS)}"
+        )
+    beside = objective["report_beside"]
+    if not isinstance(beside, (list, tuple)) or any(m not in METRICS for m in beside):
+        raise ValueError(
+            f"objective.report_beside must list metrics of {list(METRICS)}"
+        )
     pv_rule = str(objective["pv_rule"])
     if pv_rule not in ("any", LAND_MAX):
         raise ValueError("objective.pv_rule must be 'any' or 'land_max'")
@@ -2409,6 +2434,12 @@ def run_project_sizing(
         recommendation["by_reading"][name] = {
             "size": size_of(primary),
             "objective_value": chosen["metrics"][metric][statistic],
+            # The objective metric's distribution at the choice (P50 and P90 among them),
+            # and the metrics the config reports beside it (FRAMEWORK-02: config-named).
+            "objective_statistics": dict(chosen["metrics"][metric]),
+            "reported_beside": {
+                str(m): dict(chosen["metrics"][str(m)]) for m in beside
+            },
             "reading": readings[name],
             "paired_with_runner_up": paired,
             "alternatives": alternatives,

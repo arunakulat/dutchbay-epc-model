@@ -5,6 +5,11 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Blue Whale solar + BESS: the owner's 5 MW / 20 MWh battery (15.18.0).** The sizing ranks on
+  the after-tax project NPV and the project commits the owner's 5 MW / 20 MWh with 151 tables at
+  5.0 MW AC (#1353 comment 6563070978). The value-based size stays 1 MW / 4 MWh; the choice
+  costs USD 1.25M at P50. Solar + BESS project NPV USD -4.03M -> -4.99M. The TMY README now names
+  PVGIS-ERA5. Detail in the compiled fragment.
 - **Blue Whale capex blend, solar resource and re-sizing (15.17.0).** Wind and BESS capex become
   blends of China FOB pricing and internal anchors on the owner's decision (#1353 comment
   6556975196); the published figures include private inputs as blends only. Wind 936.84 USD/kW

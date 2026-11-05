@@ -13,6 +13,10 @@
 #   solar+BESS parameters in order to gain the maximum benefit from the PUCSL evening tariff
 #   band"; objective "Max value, MC decides (Recommended)"; 10 MW reading "Model both, flag
 #   it"; turbine "Separate, risk flagged".
+# PR 7 (2026-11-01, #1353 comment 6563070978, verbatim): objective "After-tax project NPV
+#   (Recommended)"; committed size "Fix 5 MW / 20 MWh". This full grid now gives the
+#   value-based size under the after-tax objective; the committed size is the owner's
+#   strategic choice, sized for its PV by conf/blue_whale_solar_bess_fixed_bess_sizing.yaml.
 #
 # The PUCSL and statutory figures are frozen once, with sources, in
 # conf/blue_whale_pucsl_fit_2026.yaml; the parser checks this config against them.
@@ -66,7 +70,8 @@ grid:
 
 readings:
   # The two readings of the 10 MW standardised-PPA limit (regulatory config). null = no
-  # limit of that kind under the reading.
+  # limit of that kind under the reading. PR 7: the owner's 5 MW PV AC + 5 MW BESS sits at
+  # reading A's limit (10.0 MW), which the limit admits.
   A:
     max_pv_ac_plus_bess_mw: 10.0
     max_export_mw: null
@@ -107,14 +112,20 @@ plant:
   fixed_opex_usd_per_year: 150000.0
 
 objective:
-  # PRIMARY ("Max value, MC decides"; the coordinator's lease: "unit NPV at P50, with P90
-  # and IRR reported"): the P50 of PR 3's unit-only pre-tax NPV (the solar + BESS capex, its
-  # dispatched revenue and its O&M; no tax or debt) at the engine's own discount rate. The
-  # plant-level grid, civils, development and fixed O&M lines are the same at every size, so
-  # they do not change the ranking. The engine's project NPV (after the 30% tax, the 10%
-  # CFADS risk haircut and debt sizing) and the other alternatives are reported, not used.
-  metric: unit_pretax_npv_usd
+  # PRIMARY (PR 7; owner decision 2 of 2026-11-01, #1353 comment 6563070978, verbatim:
+  # "After-tax project NPV (Recommended)"): the P50 of the engine's after-tax project NPV of
+  # the solar + BESS project scenario. Each trial is evaluated through
+  # analytics.evaluation_v14.evaluate_with_overrides (ARCH-04, FRAMEWORK-03): CFADS after the
+  # 30% corporate tax and the 10% CFADS risk haircut, less the capex at t=0, discounted at the
+  # engine's own rate by finance.irr (ARCH-02). P90 is reported beside it (objective_statistics
+  # in the summary), and so is the unit's pre-tax NPV (report_beside).
+  # PR 4's objective, the P50 of the unit-only pre-tax NPV (the solar + BESS capex, its
+  # dispatched revenue and its O&M; no tax or debt), stays selectable and is OFF by default:
+  # set metric: unit_pretax_npv_usd to restore it. It is also listed under alternatives.
+  metric: project_npv
   statistic: p50
+  # Reported at each reading's choice beside the objective (P50, P90, mean and n of each).
+  report_beside: [unit_pretax_npv_usd, unit_pretax_irr, project_irr, equity_irr]
   # PV rule: "any" lets the objective choose the PV over the whole grid (up to the lot's
   # maximum); the best size with the PV held at the lot's maximum is reported beside it with a
   # paired comparison. A base-case screen on 2026-11-01 (one trial per point, 1,300
@@ -123,10 +134,10 @@ objective:
   # optimum under reading A, so the rule is "any" and the objective decides the PV too.
   pv_rule: any
   alternatives:
+    - [unit_pretax_npv_usd, p50]
     - [unit_pretax_npv_usd, p90]
     - [unit_pretax_npv_usd, mean]
     - [unit_pretax_irr, p50]
-    - [project_npv, p50]
     - [project_npv, p90]
     - [project_irr, p50]
     - [equity_irr, p50]
@@ -145,21 +156,23 @@ sensitivities:
   round_trip_efficiency: 0.90
 
 recommendation:
-  # Written to scenarios/blue_whale_solar_bess_lot5b_2026.yaml: the primary objective's
-  # choice under the committed reading in docs/blue_whale/solar_bess_project_sizing_summary.json
-  # (a test checks they agree). The other reading's choice is reported, not committed.
-  # Re-run of 2026-11-01 for PR 6 (#1353 comment 6556975196) on the BLENDED prices of
-  # conf/blue_whale_pv_bess_pricing.yaml (seed 20261101, 325 points x 256 trials): BOTH readings
-  # choose 107 tables (4.01464 MWp), 3.5 MW AC and a 1.0 MW / 4.0 MWh BESS, the smallest PV and
-  # the smallest battery on the grid; every eligible size has a negative P50 unit NPV.
-  # PR 4's run (NSO 250 price 135.00): reading A 160 tables, 5.0 MW AC, 4.5 MW / 18 MWh;
-  # reading B 191 tables, 6.0 MW AC, 5.5 MW / 22 MWh.
-  committed:
+  # PR 7: the VALUE-BASED size, reported and NOT written to the scenario. The owner fixed the
+  # battery at 5 MW / 20 MWh as a strategic choice ("Fix 5 MW / 20 MWh", #1353 comment
+  # 6563070978); the scenario takes the PV DC for that battery from
+  # conf/blue_whale_solar_bess_fixed_bess_sizing.yaml, which records the cost of the choice
+  # against the size below. Each entry is the primary objective's choice under its reading in
+  # docs/blue_whale/solar_bess_project_sizing_summary.json (a test checks they agree).
+  # PR 7 re-run (after-tax project NPV P50; seed 20261101, 325 points x 256 trials): BOTH
+  # readings choose 107 tables (4.01464 MWp), 3.5 MW AC and a 1.0 MW / 4.0 MWh BESS, the smallest
+  # PV and the smallest battery on the grid, as PR 6's unit pre-tax NPV did.
+  # PR 4's run (NSO 250 price 135.00, unit pre-tax NPV): reading A 160 tables, 5.0 MW AC,
+  # 4.5 MW / 18 MWh; reading B 191 tables, 6.0 MW AC, 5.5 MW / 22 MWh.
+  value_based:
     reading: A
     pv_tables: 107
     pv_ac_mw: 3.5
     bess_power_mw: 1.0
-  alternative:
+  value_based_other_reading:
     reading: B
     pv_tables: 107
     pv_ac_mw: 3.5

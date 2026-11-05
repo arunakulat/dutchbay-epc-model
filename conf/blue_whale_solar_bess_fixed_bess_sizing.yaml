@@ -1,0 +1,73 @@
+# Blue Whale Lot 5B: the PV DC for the owner's committed battery, 5 MW / 20 MWh (PR 7).
+#
+# Owner decisions of 2026-11-01 (#1353 comment 6563070978), quoted verbatim:
+#   1. Solar + BESS committed size: "Fix 5 MW / 20 MWh"
+#   2. Objective: "After-tax project NPV (Recommended)"
+# The battery is the owner's STRATEGIC choice, not the value-based size. This run chooses only
+# the PV DC for it; the value-based size and the cost of the choice come from the full grid
+# (conf/blue_whale_solar_bess_project_sizing.yaml, docs/blue_whale/solar_bess_project_sizing_summary.json).
+#
+# A reduced production run of the project sizing (schema blue_whale_solar_bess_project_sizing_v1):
+# everything below the defaults line comes from that config (the same unit overrides, readings,
+# seed 20261101, 256 LHS trials, uncertainty, plant lines and objective) except the grid, the
+# recommendation and the output. Only the PV DC varies:
+#   - BESS 5.0 MW / 20.0 MWh (4 h at nominal capacity);
+#   - PV AC 5.0 MW, so reading A sits AT its limit (PV AC 5.0 + BESS 5.0 = 10.0 MW);
+#   - PV DC every whole table count from 134 (5.02768 MWp, DC/AC 1.0055, the first count at or
+#     above DC/AC 1.0) to the lot's maximum at this battery (191 tables, 7.16632 MWp, DC/AC
+#     1.4333; the land fit binds before DC/AC 1.5, which would be 199 tables).
+#
+#   .venv/bin/python scripts/run_blue_whale_pv_bess_sizing_v14.py \
+#       --config-name blue_whale_solar_bess_fixed_bess_sizing \
+#       output.summary_json=docs/blue_whale/solar_bess_fixed_bess_sizing_summary.json
+#
+# TEST-03: 58 points x (256 + 1) + 2 x 58 = 15,022 model evaluations, CLI only.
+
+defaults:
+  - blue_whale_solar_bess_project_sizing
+  - _self_
+
+grid:
+  pv_tables: [134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149,
+    150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163, 164, 165, 166, 167,
+    168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185,
+    186, 187, 188, 189, 190, 191, land_max]
+  pv_ac_mw: [5.0]
+  bess_power_mw: [5.0]
+
+recommendation:
+  # Written to scenarios/blue_whale_solar_bess_lot5b_2026.yaml (a test checks they agree):
+  # the after-tax objective's choice under reading A in
+  # docs/blue_whale/solar_bess_fixed_bess_sizing_summary.json. Run of 2026-11-01 at 6f253106
+  # (seed 20261101, 58 points x 256 trials, 15,022 evaluations, 724.7 s): 151 tables
+  # (5.66552 MWp, DC/AC 1.1331, 17 inverters). After-tax project NPV P50 USD -5,326,884,
+  # P90 -5,911,801; no project IRR in any trial. Unit pre-tax NPV P50 -829,383, P90 -1,421,478.
+  # A near tie with 152 tables (at least as good in 52.7% of paired trials, by USD 316 at the
+  # median); the P50 curve is within USD 3,200 of the choice from 147 to 155 tables.
+  committed:
+    reading: A
+    pv_tables: 151
+    pv_ac_mw: 5.0
+    bess_power_mw: 5.0
+  alternative:
+    reading: B
+    pv_tables: 151
+    pv_ac_mw: 5.0
+    bess_power_mw: 5.0
+  # The value-based size under the same objective, seed and trials, from the full grid.
+  value_based:
+    summary: docs/blue_whale/solar_bess_project_sizing_summary.json
+    reading: A
+    pv_tables: 107
+    pv_ac_mw: 3.5
+    bess_power_mw: 1.0
+  # THE COST OF THE STRATEGIC CHOICE (USD): the value-based size's statistic less the committed
+  # size's, from the two summaries (a test recomputes them). Positive = value given up.
+  strategic_cost_usd:
+    project_npv_p50: 1247165.50       # after-tax project NPV: -4,079,718 vs -5,326,884
+    project_npv_p90: 1590005.48       # -4,321,796 vs -5,911,801
+    unit_pretax_npv_usd_p50: 516753.81  # unit pre-tax NPV: -312,629 vs -829,383
+    unit_pretax_npv_usd_p90: 850165.10  # -571,313 vs -1,421,478
+
+output:
+  summary_json: null

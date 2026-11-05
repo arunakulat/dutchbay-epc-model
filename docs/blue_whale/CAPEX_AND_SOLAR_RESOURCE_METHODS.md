@@ -154,8 +154,9 @@ the geometry changes the annual POA by 0.002%.
 the site (the PVGIS 5.3 API answers "Location out of the spatial coverage of the radiation
 database selected. Please, selectanother database (PVGIS-ERA5)."), and the PVGIS 5.3 TMY at the
 same point is built on PVGIS-ERA5, 2005-2023, and reproduces the frozen file (first row, months
-selected, annual GHI 1,871.34 kWh/m2). The frozen TMY is an ERA5 TMY. The README is outside
-this PR's allowlist and is not corrected here.
+selected, annual GHI 1,871.34 kWh/m2). The frozen TMY is an ERA5 TMY. The README was outside
+PR 6's allowlist; PR 7 corrects it on the owner's decision "Keep ERA5, fix README (Recommended)"
+(#1353 comment 6563070978), with the satellite figures reported as upside.
 
 **Model (pvlib 0.16.1).** The repository's chain, the TMY branch of
 `solar_resource.pv_producer.compute_solar_aep`: NREL SPA solar position; Hay-Davies
@@ -226,6 +227,11 @@ unchanged on the blended prices. **The choice moves**: 107 tables (4.01464 MWp),
 is USD -312,629 (P90 -571,313). At that size the PV alone gives 6,180.5 MWh before the warranted
 1%, a specific yield of 1,539.5 kWh/kWp (AC CF 20.16%, DC CF 17.57%). PR 3's hybrid sizing,
 re-run the same way, does not move (DC/AC 1.1, 5 MW / 24 MWh). Details: `STATUS.md`.
+
+PR 7 (owner decisions of 2026-11-01, #1353 comment 6563070978): the sizing ranks on the P50
+after-tax project NPV, which chooses the same 107 tables, 3.5 MW AC and 1.0 MW / 4.0 MWh, but
+the project commits the owner's 5 MW / 20 MWh battery with 151 tables (5.66552 MWp) at 5.0 MW AC.
+The cost of that choice and the PV curve are in `STATUS.md`.
 
 ## 7. References
 
