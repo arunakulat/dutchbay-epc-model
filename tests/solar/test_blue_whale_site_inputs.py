@@ -435,11 +435,37 @@ def test_yield_identities(solar: Dict[str, Any]) -> None:
     )
 
 
+def _assert_nested_approx(
+    expected: Any, actual: Any, *, rel: float = 1e-14, abs_tol: float = 1e-14
+) -> None:
+    if isinstance(expected, dict):
+        assert isinstance(actual, dict)
+        assert list(expected.keys()) == list(actual.keys())
+        for key, value in expected.items():
+            _assert_nested_approx(value, actual[key], rel=rel, abs_tol=abs_tol)
+    elif isinstance(expected, list):
+        assert isinstance(actual, list)
+        assert len(expected) == len(actual)
+        for exp_item, act_item in zip(expected, actual, strict=True):
+            _assert_nested_approx(exp_item, act_item, rel=rel, abs_tol=abs_tol)
+    elif isinstance(expected, float) and not isinstance(expected, bool):
+        assert isinstance(actual, float) and not isinstance(actual, bool)
+        assert actual == pytest.approx(expected, rel=rel, abs=abs_tol)
+    else:
+        assert type(expected) is type(actual)
+        assert actual == expected
+
+
 def test_committed_solar_outputs_match_a_rerun(solar: Dict[str, Any]) -> None:
     doc = json.loads(SOLAR_SUMMARY.read_text(encoding="utf-8"))
     assert doc["config_sha256"] == hashlib.sha256(CONF.read_bytes()).hexdigest()
     fresh = json.loads(json.dumps(solar, sort_keys=True, allow_nan=False))
-    assert {k: v for k, v in doc.items() if k != "config_sha256"} == fresh
+    expected = {k: v for k, v in doc.items() if k != "config_sha256"}
+    _assert_nested_approx(expected, fresh)
+    mutated = copy.deepcopy(fresh)
+    mutated["at_pv_centroid"]["annual"]["net_ac_mwh"] += 1e-9
+    with pytest.raises(AssertionError):
+        _assert_nested_approx(expected, mutated)
     header = SOLAR_CSV.read_text(encoding="utf-8").splitlines()[0]
     assert header.startswith("month,ghi_kwh_m2,dni_kwh_m2,dhi_kwh_m2,poa_kwh_m2")
     assert len(SOLAR_CSV.read_text(encoding="utf-8").splitlines()) == 13
