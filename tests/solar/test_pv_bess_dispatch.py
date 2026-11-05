@@ -35,6 +35,26 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 CONF = REPO_ROOT / "conf" / "blue_whale_solar_bess.yaml"
 SCRIPT = REPO_ROOT / "scripts" / "run_blue_whale_solar_bess_v14.py"
 SCENARIO = REPO_ROOT / "scenarios" / "blue_whale_hybrid_lot5b_2026.yaml"
+SIZING = REPO_ROOT / "conf" / "blue_whale_pv_bess_sizing.yaml"
+PRICING = REPO_ROOT / "conf" / "blue_whale_pv_bess_pricing.yaml"
+
+
+def sized_conf() -> Dict[str, Any]:
+    """This unit config at the size PR 3 chose, which the scenario carries (v0.6).
+
+    ``conf/blue_whale_solar_bess.yaml`` keeps the owner-brief design (DC/AC 1.2, 30 MWh,
+    PVWatts' 96% inverter efficiency); the recommendation in the sizing config and the
+    matched inverter's European efficiency in the pricing config override it here.
+    """
+    conf = yaml.safe_load(CONF.read_text())
+    rec = yaml.safe_load(SIZING.read_text())["recommendation"]
+    inverter = yaml.safe_load(PRICING.read_text())["inverter"]
+    conf["array"]["dc_ac_ratio"] = rec["dc_ac_ratio"]
+    conf["bess"]["energy_mwh"] = rec["bess_energy_mwh"]
+    conf["pv_yield"]["resource_solar"]["inverter_eff_nom"] = inverter[
+        "european_efficiency"
+    ]
+    return conf
 
 
 def _load_cli() -> ModuleType:
@@ -73,6 +93,16 @@ def cli_out() -> Dict[str, Any]:
     pytest.importorskip("shapely")
     pytest.importorskip("pyproj")
     out = _load_cli().run(yaml.safe_load(CONF.read_text()))
+    assert isinstance(out, dict)
+    return out
+
+
+@pytest.fixture(scope="module")
+def sized_cli_out() -> Dict[str, Any]:
+    pytest.importorskip("pvlib")
+    pytest.importorskip("shapely")
+    pytest.importorskip("pyproj")
+    out = _load_cli().run(sized_conf())
     assert isinstance(out, dict)
     return out
 
@@ -382,10 +412,14 @@ def test_engine_mapping_reproduces_the_dispatcher(cli_out: Dict[str, Any]) -> No
     )
 
 
-def test_scenario_carries_the_derived_unit(cli_out: Dict[str, Any]) -> None:
+def test_scenario_carries_the_derived_unit(sized_cli_out: Dict[str, Any]) -> None:
+    # From v0.6 the scenario carries the unit at PR 3's recommended size, so this
+    # dispatcher is run at that size (sized_conf) rather than at the owner-brief design.
     scen = yaml.safe_load(SCENARIO.read_text())
     techs = scen["generation"]["technologies"]
-    e = cli_out["engine"]
+    e = sized_cli_out["engine"]
+    rec = yaml.safe_load(SIZING.read_text())["recommendation"]
+    bess_all_in = yaml.safe_load(PRICING.read_text())["bess"]["all_in_usd_per_kwh"]
     solar, b = techs["solar"], techs["bess_1"]
     assert solar["capacity_mw"] == e["solar_capacity_mw"] == 5.0
     assert solar["capacity_factor"] == pytest.approx(
@@ -395,7 +429,15 @@ def test_scenario_carries_the_derived_unit(cli_out: Dict[str, Any]) -> None:
         e["solar_degradation_pct"], abs=5e-7
     )
     assert solar["aep_gwh"] == pytest.approx(e["solar_aep_gwh"], abs=0.005)
-    assert (b["power_mw"], b["energy_mwh"], b["duration_h"]) == (5.0, 30.0, 6.0)
+    energy = float(rec["bess_energy_mwh"])
+    assert (b["power_mw"], b["energy_mwh"], b["duration_h"]) == (
+        5.0,
+        energy,
+        energy / 5.0,
+    )
+    assert sized_cli_out["array"]["dc_ac_ratio"] == pytest.approx(
+        rec["dc_ac_ratio"], abs=0.01
+    )
     rev = b["revenue"]
     assert rev["model"] == "energy_tariff"
     assert rev["tariff_lkr_per_kwh"] == pytest.approx(e["bess_tariff_lkr_per_kwh"])
@@ -404,7 +446,8 @@ def test_scenario_carries_the_derived_unit(cli_out: Dict[str, Any]) -> None:
         e["bess_mdsc_fade_pct_annual"], abs=5e-7
     )
     assert rev["round_trip_efficiency"] == 0.85 and rev["contract_years"] == 15
-    assert b["capex_usd"] == pytest.approx(30.0 * 1000.0 * 125.0)
+    # The cited BESS all-in mode (public NSO 250 base, USD 135.00/kWh), PR 3.
+    assert b["capex_usd"] == pytest.approx(energy * 1000.0 * bess_all_in["mode"])
     assert scen["tariff"]["lkr_per_kwh"] == pytest.approx(
         e["tariff_lkr_per_kwh"], abs=5e-5
     )

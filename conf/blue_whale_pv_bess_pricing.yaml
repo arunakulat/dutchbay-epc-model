@@ -1,0 +1,221 @@
+# Blue Whale Lot 5B: frozen, cited prices for sizing the solar + BESS unit (PR 3 of 3).
+#
+# Read by solar_resource.pv_bess_sizing (strict parser: every key is required, unknown keys are
+# refused; FRAMEWORK-02). DATA-01: each external figure is frozen here with its source URL,
+# its retrieval date and the figure as the source states it ("verbatim"). A value marked
+# ASSUMPTION has no source of its own; its basis is stated.
+#
+# Owner decisions (relayed on #1353, 2026-11-01; see the PR body for the exact record):
+# PV module prices for JinkoSolar from web sources; "try huwawei or other reputed
+# manufacturer's inverter prices with inverter specs matched to the jinkosolar array specs";
+# BESS and turbine from the internal corpus.
+#
+# CONFIDENTIALITY. The BESS figures below are the repository's PUBLIC derived figures in
+# scenarios/nso250_ltl_unit_*.yaml. The private offers behind them (handling note
+# NSO250MW-OFFERS-HANDLING-2026-09-04) were not read, quoted or used for anything new. The
+# turbine capex is the scenario's public placeholder; no internal turbine price was used,
+# because the only ones are in private developer packages whose handling notes allow no
+# trace in this repository.
+#
+# "verbatim" holds each figure as the retrieval tool returned it from the page (bracketed
+# words are editorial). The tool extracts rather than mirrors a page, so re-check exact
+# wording at the URL before quoting it onward.
+#
+# Each uncertain price is a triangular distribution (low, mode, high) sampled in the Monte
+# Carlo; the deterministic base case (and the scenario) uses the mode.
+
+schema_version: blue_whale_pv_bess_pricing_v1
+retrieved: "2026-11-01"
+currency: USD
+
+sources:
+  OPIS-2026-07-28:
+    title: "Chinese TOPCon module prices fall as high-efficiency supply adds pressure"
+    publisher: "pv magazine (OPIS Global Solar Markets Report released July 28, 2026)"
+    published: "2026-07-31"
+    url: "https://www.pv-magazine.com/2026/07/31/chinese-topcon-module-prices-fall-as-high-efficiency-supply-adds-pressure/"
+    verbatim:
+      - "[the Chinese Module Marker, TOPCon below 645 W] fell 0.91% this week to $0.109/W"
+      - "spot indications ranged from $0.104/W to $0.119/W"
+      - "[high-efficiency TOPCon, products above 650 W] around high-$0.100/W to mid-$0.110/W on an FOB China basis"
+      - "Q3 2026 and Q4 2026: $0.109/W"
+  OPIS-2026-08-25:
+    title: "China TOPCon solar module prices rise on upstream cost pressure as deals lag offers"
+    publisher: "pv magazine USA (OPIS Global Solar Markets Report released August 25, 2026), republished by Now.Solar 2026-08-29"
+    published: "2026-08-28"
+    url: "https://now.solar/2026/08/29/china-topcon-solar-module-prices-rise-on-upstream-cost-pressure-as-deals-lag-offers-pv-magazine-usa/"
+    verbatim:
+      - "$0.108/W FOB China, up 2.86% week on week"
+      - "Q1 2027: $0.107/W"
+      - "Q2 2027: $0.106/W"
+  OPIS-2025-02-28:
+    title: "Global solar module prices largely stabilize with upward momentum"
+    publisher: "pv magazine (OPIS)"
+    published: "2025-02-28"
+    url: "https://www.pv-magazine.com/?p=40156"
+    verbatim:
+      - "first-quarter 2026 prices climbed 3.61% to $0.086/W"
+    note: "A forward price quoted 13 months ahead; superseded by the 2026 spot readings above and NOT used."
+  HUAWEI-SPECS:
+    title: "SUN2000-330KTL-H1-H2 Specs"
+    publisher: "Huawei Digital Power (HUAWEI Smart PV Global)"
+    url: "https://solar.huawei.com/en/products/SUN2000-330KTL-H1-H2/specs"
+    verbatim:
+      - "Max. input voltage 1500 V"
+      - "Max.current per MPPT 65 A"
+      - "Max. short circuit current per MPPT 115 A"
+      - "Start voltage 550 V"
+      - "MPPT operating voltage range 500 V ~ 1500 V"
+      - "Nominal input voltage 1080 V"
+      - "Number of MPPT 6"
+      - "Max. PV inputs per MPPT 4 / 5 / 5 / 4 / 5 / 5"
+      - "Nominal AC active power 300,000 W [H1]"
+      - "Max. AC apparent power 330,000 VA"
+      - "Max. efficiency >= 99.03% [H1]"
+      - "European efficiency >= 98.8%"
+      - "Nominal output voltage 800 V, 3 W + PE"
+      - "Operating temperature range -25 C ~ 60 C"
+    note: "The German datasheet also lists a full-load MPPT range of 930-1300 V (search result only; not fetched here)."
+  INVERTER-RETAIL-DE:
+    title: "SUN2000-330KTL-H1 String-Wechselrichter"
+    publisher: "solaranlage-tipps.de (price comparison; retailer not named)"
+    page_updated: "2026-10-20"
+    url: "https://www.solaranlage-tipps.de/wechselrichter/sun2000-330ktl-h1-string-wechselrichter"
+    verbatim:
+      - "ab 8.114,84 EUR"
+    note: "Single-unit retail price; VAT treatment not stated; no utility procurement price was found."
+  WOODMAC-2025-12-15:
+    title: "Global solar inverter market faces two-year decline before stabilising, Wood Mackenzie forecasts"
+    publisher: "Wood Mackenzie (press release)"
+    published: "2025-12-15"
+    url: "https://www.woodmac.com/press-releases/global-solar-inverter-market-faces-two-year-decline-before-stabilising-wood-mackenzie-forecasts/"
+    verbatim:
+      - "Chinese domestic three-phase string inverters expected to fall below US$0.02/watts AC (Wac)"
+    note: "A forecast (by 2034) for China's domestic market; used only as a floor."
+  IRENA-RPGC-2024:
+    title: "Renewable Power Generation Costs in 2024 (Summary)"
+    publisher: "IRENA, July 2025"
+    url: "https://www.irena.org/-/media/Files/IRENA/Agency/Publication/2025/Jul/IRENA_TEC_RPGC_in_2024_Summary_2025.pdf"
+    pdf_sha256: "4056554016a640a2ffd47a9c437f3ea238c6d84bb6bd79647a45861743dcdd75"
+    read_with: "markitdown (R26)"
+    verbatim:
+      - "By 2024, TIC fell to USD 691/kW for solar PV"
+      - "Globally, solar PV is expected to fall below USD 600/kW by 2026"
+      - "Asia is set to retain a distinct cost advantage, with solar PV projected at around USD 500/kW"
+    note: "The summary does not state whether USD/kW is per kW AC or DC."
+  IRENA-INDIA-2024:
+    title: "India Sees 91% Drop in Utility-Scale Solar LCOE Since 2010: IRENA"
+    publisher: "Saur Energy International (Chitrika Grover), reporting IRENA RPGC 2024"
+    published: "2025-07-24"
+    url: "https://www.saurenergy.com/solar-energy-news/india-sees-91-drop-in-utility-scale-solar-lcoe-since-2010-irena-9529963"
+    verbatim:
+      - "Solar PV saw the most uniform reductions, with India achieving the lowest cost in 2024, at USD 525/kW"
+    note: "Secondary report of the full IRENA report, which was not read here."
+  NSO250-PUBLIC:
+    title: "NSO 250 MW BESS LTL unit scenarios (repository, public derived figures)"
+    files:
+      - scenarios/nso250_ltl_unit_base.yaml
+      - scenarios/nso250_ltl_unit_bidimplied.yaml
+      - scenarios/nso250_ltl_unit_upside.yaml
+      - scenarios/nso250_ltl_unit_stress.yaml
+    verbatim:
+      - "capex variant: BASE - equipment USD 99.50/kWh, all-in USD 135.00/kWh"
+      - "adding balance of plant USD 14.00/kWh and an augmentation reserve USD 8.00/kWh, then land and auxiliaries at 10% of total capex"
+      - "capex variant: BIDIMPLIED - equipment USD 48.88/kWh, all-in USD 78.75/kWh"
+      - "capex variant: UPSIDE - equipment USD 98.68/kWh, all-in USD 134.09/kWh"
+      - "capex variant: STRESS - equipment USD 107.07/kWh, all-in USD 143.41/kWh"
+      - "the cost of holding the floor sits in the augmentation reserve inside capex"
+  WIND-KB:
+    title: "Wind EPC costs and scaling (repository knowledge base, public)"
+    files:
+      - docs/knowledge_base/01_wind_epc_costs_and_scaling.md
+    verbatim:
+      - "Both the EIA ($1,420/kW) and lean ($977/kW) figures bracket the IRENA-2024 global average ($1,041/kW)"
+  SOLARGIS-UNCERTAINTY:
+    title: "Uncertainty estimates"
+    publisher: "Solargis knowledge base"
+    updated: "2026-10-22"
+    url: "https://kb.solargis.com/docs/uncertainty-estimates"
+    verbatim:
+      - "the expected P90 uncertainty for areas outside validation sites ranges between +/-4% and +/-8%"
+
+fx:
+  # ASSUMPTION: EUR to USD for the one EUR-quoted inverter price. Not sourced; the
+  # inverter range below is wide enough that a +/-5% FX error stays inside it.
+  usd_per_eur: 1.15
+
+pv_module:
+  # JinkoSolar Tiger Neo 3.0 JKM670N-66QL6-BDV is a TOPCon module above 650 W, the OPIS
+  # "high-efficiency" category. FOB China, USD per Wp.
+  fob_usd_per_wp:
+    low: 0.104      # OPIS-2026-07-28 spot range, low end
+    mode: 0.110     # ASSUMPTION: middle of OPIS-2026-07-28's ">650 W" indication ("high-$0.100/W to mid-$0.110/W")
+    high: 0.119     # OPIS-2026-07-28 spot range, high end
+  # ASSUMPTION: freight FOB China to Colombo, insurance, port handling and inland transport,
+  # added to every draw. No Sri Lankan import duty schedule for PV modules was read.
+  delivery_usd_per_wp: 0.010
+
+inverter:
+  # Matched to the PR 2 string design (solar_resource.pv_bess_sizing.match_inverter checks it).
+  model: "Huawei SUN2000-330KTL-H1"
+  source: HUAWEI-SPECS
+  max_dc_voltage_v: 1500.0
+  mppt_min_v: 500.0
+  mppt_max_v: 1500.0
+  start_voltage_v: 550.0
+  max_current_per_mppt_a: 65.0
+  max_short_circuit_current_per_mppt_a: 115.0
+  mppt_count: 6
+  max_inputs_per_mppt: [4, 5, 5, 4, 5, 5]
+  nominal_ac_kw: 300.0
+  max_ac_kva: 330.0
+  european_efficiency: 0.988
+  # USD per W of inverter nominal AC rating. ASSUMPTION range: no utility procurement
+  # price was found. Mode: INVERTER-RETAIL-DE, EUR 8,114.84 / 300 kW x 1.15 = 0.0311.
+  # Low: WOODMAC-2025-12-15's China-domestic floor (0.02). High: ASSUMPTION, the retail
+  # mode plus 19% VAT and a small-lot margin (about 1.45 x the mode).
+  usd_per_wac:
+    low: 0.020
+    mode: 0.0311
+    high: 0.045
+
+pv_bop_epc:
+  # Structures, piles, DC and AC cabling, combiner and MV station, civils within the fence,
+  # installation, commissioning and EPC margin, USD per Wp. Excludes the modules and
+  # inverters above and the plant-level grid, civils and development line (input B26,
+  # $2.0M in the scenario), which stays as it is.
+  # Derived: IRENA total installed cost less the mode module (0.120 delivered) and inverter
+  # (0.0311 / 1.2 = 0.026) costs per Wp, reading IRENA's USD/kW as per kW DC (ASSUMPTION;
+  # the summary does not say).
+  usd_per_wp:
+    low: 0.354      # IRENA-RPGC-2024: Asia ~USD 500/kW (projection) - 0.146
+    mode: 0.462     # ASSUMPTION: midpoint of India 2024 (525, IRENA-INDIA-2024) and global 2024 (691, IRENA-RPGC-2024), 608 - 0.146: a 5 MW plant lacks India's utility-scale economies
+    high: 0.545     # IRENA-RPGC-2024: global 2024 USD 691/kW - 0.146
+
+bess:
+  # All-in USD per kWh of contracted (nameplate) energy: equipment, BoP, augmentation
+  # reserve, land and auxiliaries (NSO250-PUBLIC). Low: BIDIMPLIED; mode: BASE; high:
+  # STRESS (UPSIDE, 134.09, lies inside). The base basis is a 4 h unit (11 MW / 44 MWh);
+  # applied per kWh at other durations (a challenge point: power-related costs scale with MW).
+  all_in_usd_per_kwh:
+    low: 78.75
+    mode: 135.00
+    high: 143.41
+  # The equipment line, for the record (not used separately).
+  equipment_usd_per_kwh_base: 99.50
+  bop_usd_per_kwh_base: 14.00
+  augmentation_reserve_usd_per_kwh_base: 8.00
+  land_and_auxiliaries_share_base: 0.10
+
+wind:
+  # FIXED by PR 1; not a sizing variable. Public placeholder (input B09), kept unchanged.
+  capex_usd_per_kw: 1300.0
+  source: WIND-KB
+  public_range_usd_per_kw: [977.0, 1420.0]
+
+opex:
+  # PLACEHOLDERS (inputs B16, B20), the scenario's existing per-unit rates scaled with size:
+  # solar $0.05M on the 5 MWp basis of v0.1-v0.4 (USD 10/kWp-yr) and BESS $0.10M on the
+  # 40 MWh basis (USD 2.5/kWh-yr). Not sourced.
+  pv_usd_per_kwp_year: 10.0
+  bess_usd_per_kwh_year: 2.5
