@@ -5,6 +5,15 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Blue Whale split into a wind project and a solar + BESS project (15.15.0).** Owner decision:
+  the 9.5 MW turbine is a separate project built first. The solar + BESS project is sized by
+  PR 3's seeded Monte Carlo under the PUCSL 2026 rules (4 h BESS, PV-only charging, discharge
+  17:30-21:30 only) and both readings of the 10 MW standardised-PPA limit: reading A chooses
+  6.0032 MWp, 5.0 MW AC and 4.5 MW / 18 MWh (committed); reading B 7.16632 MWp, 6.0 MW AC and
+  5.5 MW / 22 MWh. The turbine's contiguous-location cumulative risk is flagged as an open legal
+  question. The hybrid scenario is kept as the superseded combined view; its KPIs do not move.
+  New scenarios: wind project IRR 4.09%; solar + BESS project NPV USD -4.77M with no project
+  IRR. Detail in the compiled fragment.
 - **Blue Whale solar + BESS sizing (15.14.0).** With the turbine fixed, a seeded Monte Carlo
   (seed 20261101, 40 sizes x 256 LHS trials, through `evaluate_with_overrides`) sizes the unit
   on cited prices: OPIS module prices, a Huawei SUN2000-330KTL-H1 inverter matched to the

@@ -1,23 +1,31 @@
-# Blue Whale hybrid: project status
+# Blue Whale: project status
 
 Last updated: 2026-11-01. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
 
 ## Configuration under study
 
-| Component | Size | Notes |
-|---|---|---|
-| Wind | 1 x Envision EN-206/10.5 de-rated to 9.5 MW, 130 m hub, 206 m rotor | Owner decision 2026-11-01; tip height 233 m |
-| Solar PV | 5 MW AC (5.51544 MWp DC, DC/AC 1.1), JinkoSolar Tiger Neo 3.0 670 W, fixed tilt 8 degrees, 17 x Huawei SUN2000-330KTL-H1 | Module: owner decision 2026-11-01; DC size from the v0.6 Monte Carlo; one unit with the BESS |
-| BESS | 5 MW / 24 MWh (4.8 h), charged only from the PV | Owner brief 5 MW x 6 h; 24 MWh from the v0.6 Monte Carlo (owner to confirm); discharged 17:30-21:30 and 05:30-07:30 |
+From PR 4 (owner, 2026-11-01) Blue Whale is **two separate projects** on the same lot: the
+turbine, built first, and a solar + BESS project sized under the PUCSL 2026 4 h BESS rules.
 
-The owner's scheme is "solar+BESS as one unit and then the turbine as the second unit".
+| Project | Component | Size | Notes |
+|---|---|---|---|
+| Wind (`scenarios/blue_whale_wind_lot5b_2026.yaml`) | Turbine | 1 x Envision EN-206/10.5 de-rated to 9.5 MW, 130 m hub, 206 m rotor | Owner decision 2026-11-01; tip height 233 m; built first |
+| Solar + BESS (`scenarios/blue_whale_solar_bess_lot5b_2026.yaml`) | Solar PV | 6.0032 MWp DC (160 tables) at 5.0 MW AC, JinkoSolar Tiger Neo 3.0 670 W, fixed tilt 8 degrees, 17 x Huawei SUN2000-330KTL-H1 | PR 4 Monte Carlo, reading A of the 10 MW limit |
+| | BESS | 4.5 MW / 18 MWh (4 h), charged only from the PV, discharged only 17:30-21:30 | PUCSL 2026 4 h rule; PR 4 Monte Carlo, reading A (reading B: 5.5 MW / 22 MWh) |
+
+The combined view `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (v0.6: 9.5 MW wind, 5.51544 MWp
+at 5 MW AC, 5 MW / 24 MWh discharged 17:30-21:30 and 05:30-07:30) is superseded and kept
+unchanged apart from a header note. The sections from "Wind yield" to "Solar + BESS sizing and
+pricing (v0.6)" below describe it and PR 1 to PR 3, as recorded then.
 
 Funding: **fully LKR funded** (owner, 2026-10-28). Revenue, costs and debt are all LKR, so the
 model runs with FX held flat and the USD columns are a constant-rate translation of LKR.
 
-Model file: `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.6, placeholders apart from
-the configuration, the funding currency, the researched tariff and BESS inputs, the wind
-yield, the solar + BESS unit derived below and its v0.6 size and cited capex).
+Model files: `scenarios/blue_whale_wind_lot5b_2026.yaml` and
+`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (version 0.1 each), and the superseded
+`scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.6). Placeholders apart from the
+configuration, the funding currency, the researched tariffs, the wind yield, and the solar +
+BESS size and cited capex.
 Inputs register: [INPUTS_REQUIRED.md](INPUTS_REQUIRED.md).
 
 ## Site
@@ -49,9 +57,15 @@ record under `DATA-01`.
 5. **Landowner and project company differ.** A lease or transfer from Blue Whale Resort (Pvt)
    Ltd to the project company has to be documented.
 6. **Revenue.** The tariffs are the researched PUCSL 2026 FiT and the BESS earns through the
-   hourly dispatch below, but the offtake route is not confirmed, the FiT's 10 MW limit may
-   count per plant (this plant is 14.5 MW), and the priority window's clock hours come from
-   a consultation, not the approved Annex 2.
+   hourly dispatch below, but the offtake route is not confirmed and the priority window's
+   clock hours come from a consultation, not the approved Annex 2. From PR 4 the turbine and
+   the solar + BESS are separate projects, each under 10 MW on its own.
+7. **The 10 MW contiguous-location limit (open legal question, PR 4).** The Electricity Act
+   No. 36 of 2024, s.11(3) proviso, caps capacity "procured from a contiguous location using
+   standard power purchase agreements on cumulative basis" at 10 MW. The 9.5 MW turbine stands
+   on the same lot as the solar + BESS project. If the two count together, the turbine leaves
+   0.5 MW and the pair exceeds the limit at every size considered, under either reading of the
+   limit. For PUCSL, the NSO or counsel (input L01); see the PR 4 section below.
 
 ## Wind yield and siting screen (v0.4, 2026-11-01)
 
@@ -439,7 +453,215 @@ P50 (USD -8.837M against -8.500M) because the BESS price range is skewed below i
 - The ordinary test suite exercises reduced grids only. Neither this run nor the suite is tail,
   convergence, lender or bankability evidence (`TEST-03`).
 
-## Latest run (v0.6, sized and priced solar + BESS unit, 2026-11-01)
+## Two projects, and the solar + BESS project under the PUCSL 2026 rules (PR 4, 2026-11-01)
+
+### Owner decisions (2026-11-01)
+
+Recorded on #1353 (comment 6556854201), quoted verbatim:
+
+- "We will therefore consider the 10mw turbine separately from the solar+bess. It will be a
+  separate project that will preceed the solar+BESS. Maximize BESS now within the solar+BESS
+  parameters in order to gain the maximum benefit from the PUCSL evening tariff band"
+- Objective: "Max value, MC decides (Recommended)"
+- 10 MW reading: "Model both, flag it"
+- Turbine: "Separate, risk flagged"
+
+The earlier window decision, "Use the 17:30 - 21:30 window and add another 05:30 to 07:30
+window for the remaining 2 hours. The priority rate will only apply to the evening window", gave
+the morning window the remaining 2 hours of a 6 h battery. A 4 h battery has no remaining
+hours, so that window is superseded by the decisions above and the PUCSL 4 h rule.
+
+### Scenarios
+
+| File | Project | Status |
+|---|---|---|
+| `scenarios/blue_whale_wind_lot5b_2026.yaml` | The 9.5 MW turbine, built first: #1530's position, CF 0.374256 and 31.15 GWh (derived results only), wind FiT 25.73, NSO, 20 years, USD 1,300/kW placeholder | v0.1 |
+| `scenarios/blue_whale_solar_bess_lot5b_2026.yaml` | The solar + BESS project, sized below under reading A | v0.1 |
+| `scenarios/blue_whale_hybrid_lot5b_2026.yaml` | The combined view of PR 3 | superseded; unchanged apart from a header note |
+
+Each new scenario carries the hybrid's finance blocks unchanged (LKR debt 13.39%, 70% gearing,
+12 years, 30% tax, FX flat). Each carries the whole USD 2.0M grid, civils and development
+placeholder (B26) and USD 0.15M a year of insurance, land and SPV overhead (B28), because the two
+are separate SPPAs. That double-counts against the hybrid view until B25 and B26 arrive.
+
+### Legal and regulatory findings
+
+The figures are frozen, with source URLs, sections, PDF SHA-256s and verbatim text, in
+`conf/blue_whale_pucsl_fit_2026.yaml`. Each PDF was converted with MarkItDown (R26).
+
+| Finding | Source |
+|---|---|
+| The BESS tariff covers solar PV plants "connected along with a Battery Energy Storage System"; wind is not covered | [PUCSL Methodology 2026 (Approved)](https://www.pucsl.gov.lk/wp-content/uploads/2026/07/The-Methodology-for-Renewable-Energy-Feed-in-Tariffs-2026-Approved.pdf), s.5.1 |
+| "The battery shall have a 4-hour discharge duration." (dispatchable plants); "These BESS shall have a standard discharge duration of 4-hours, at the nominal capacity." (both kinds) | Methodology s.5.1.1, s.5.2.1.1, s.5.2.1.2 |
+| Discharged energy = BESS capacity x depth of discharge x cycles x degradation; the charging tariff is divided by the RTE. The nameplate is therefore read as the energy a full battery delivers, with the loss booked on charge | Methodology s.5.1.2 |
+| The BESS contract runs 15 years; then the standalone tariff for the rest of the SPPA. The PFT "would be as specified in the SPPA" | Methodology s.5.1; s.4.1, Table 3, note [1] |
+| "Prioritized Feed in Time (PFT) - 1730h to 2130h" | [Consultation, July 2026](https://www.pucsl.gov.lk/wp-content/uploads/2026/07/Full-Consultation-Document-Feed-in-Tariff-Review-July-2026.pdf), s.2.3, Table 3 note |
+| Reference case: 1 MW, 4 h, 182.52 MLKR/MW, O&M 3%, DoD 100%, 1.5%/yr degradation, 365 cycles, RTE 90%, first-year discharge 1.46 GWh, BESS component 27.57; 21.58 / 0.90 + 27.57 = 51.55, its proposed PFT tariff | Consultation, Annex 2, s.3.1 |
+| Ground solar + BESS: priority 47.08 + 3.02 = 50.10; other periods 18.00 + 2.72 = 20.72. Wind 20.80 + 4.93 = 25.73 | Annex 2 (August 2026), s.1 and s.3 |
+| "the maximum capacity of such renewable energy plants to be procured from a contiguous location using standard power purchase agreements on cumulative basis shall not exceed 10 MW" | [Electricity Act No. 36 of 2024](https://www.parliament.lk/uploads/acts/gbills/english/6347.pdf), s.11(3) first proviso |
+| "standardized power purchase agreement" means "... for renewable energy based power plants having a maximum capacity of 10MW" | Act No. 36 of 2024, s.52 |
+| The Minister's capacity Order covers "each renewable energy technology based power plant along with storage or ancillary services directly associated with such power plant" | [Amendment Act No. 14 of 2025](https://www.parliament.lk/uploads/acts/gbills/english/6385.pdf), s.11(3) |
+
+**Two readings of the 10 MW limit** (owner: "Model both, flag it"). Neither is a legal opinion.
+
+- **(A)** PV AC plus BESS power at most 10 MW: the 2025 amendment brings storage "directly
+  associated" with the plant into its capacity. The conservative reading; the scenario takes it.
+- **(B)** Export at the connection point at most 10 MW, with the PV AC and the BESS power each
+  at most 10 MW.
+
+**Open legal risk: the contiguous-location cumulative limit.** The turbine and the solar + BESS
+project stand on the same lot. If PUCSL, the NSO or a court counts them "on cumulative basis" as
+one "contiguous location", the 9.5 MW turbine leaves 0.5 MW, and the pair exceeds 10 MW at every
+size considered here, under either reading. Sequencing the projects does not obviously avoid the
+proviso. This is for PUCSL, the NSO or counsel (input L01).
+
+### Method
+
+- **Reused.** PR 3's module (`solar_resource/pv_bess_sizing.py`), its seed (20261101), its LHS
+  sampler and 256 trials per point with common random numbers, its cited prices
+  (`conf/blue_whale_pv_bess_pricing.yaml`, unchanged) and its uncertainty ranges (unchanged).
+  PR 2's dispatcher and unit config, changed only through `unit_overrides` in
+  `conf/blue_whale_solar_bess_project_sizing.yaml`.
+- **BESS rules.** Energy = 4 x power, the energy a full battery delivers at nominal power; the
+  0.85 round trip is booked on charge, each trial at its own RTE (0.82-0.88). Charging only from
+  the co-located PV. Discharge only 17:30-21:30, at 50.10 for 15 years; every other kWh, and the
+  window after year 15, at 20.72. PR 2's 5 MW export limit becomes 10 MW, which reading A never
+  reaches and reading B is held to.
+- **Decision grid.** PV DC 107, 120, 134, 147, 160 and 174 tables (4.01-6.53 MWp) and the land
+  maximum, recomputed at each BESS size; PV AC 3.5-7.0 MW, keeping DC/AC within 1.0-1.5 and the
+  inverter match; BESS power 1-10 MW (0.5 MW steps from 3 to 6). That is 325 sizes; every one fits the lot and passes the inverter match, and all 325 are evaluated.
+- **Land maximum.** With the turbine kept (its foundation and crane pad excluded, as in PR 2),
+  `analytics/gis/pv_array_layout.py` fits 191 tables (7.16632 MWp) at most BESS sizes (below). The container pad is sized from PR 2's
+  6 h product, power-bound at 4 h, so this is conservative for large batteries.
+- **Objective** ("Max value, MC decides"; the lease's "unit NPV at P50, with P90 and IRR
+  reported"): the P50 of PR 3's unit pre-tax NPV at the engine's discount rate. The engine's
+  project NPV, after the 30% tax, the 10% CFADS risk haircut and debt sizing, is reported beside
+  it. Plant-level lines are the same at every size, so they do not change the ranking.
+- **PV rule.** The objective chooses the PV over the whole grid. A base-case screen (one trial per point) suggested that value kept rising as the PV shrank, so a first production run (at 2270a402) held the PV at the lot's maximum; its P50 showed an interior PV optimum under reading A, so the committed run lets the objective choose and reports the best size at the lot's maximum beside it. The two runs gave identical results at every point.
+
+### Result
+
+Run of 2026-11-01 at 9bc593d7: seed 20261101, 325 grid points, every one evaluated with 256 LHS
+trials plus the base case, then a curtailment and an RTE case at each point: 84,175 (325 x 257 + 2 x 325) model
+evaluations in 4,131.3 s (`docs/blue_whale/solar_bess_project_sizing_summary.json`, a concise
+record whose `result_sha256` identifies the full output). P90 is the value exceeded in 90% of
+trials. Unit NPV is the unit pre-tax NPV at the engine's discount rate (about 11.47%); project
+NPV is the engine's, after tax, the CFADS haircut and debt.
+
+**Land maximum.** With the turbine kept, the placeholder lot takes 191 tables (7.16632 MWp) for BESS powers of 2 to 9 MW, 192 (7.20384 MWp) at 1 MW and 189 (7.09128 MWp) at 10 MW, where the larger container pad takes room. PR 2 found 191 at 5 MW / 30 MWh, so the coordinator's figure of about 191 tables or 7.17 MWp stands.
+
+| Size | PV tables (MWp) | PV AC MW | BESS MW / MWh | Unit NPV P50 / P90 (USD) | Unit pre-tax IRR P50 / P90 | Project NPV P50 / P90 (USD) | Project IRR | Equity IRR P50 | Evening export, yr 1 P50 (MWh) | Revenue, yr 1 P50 (M LKR) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **Reading A, chosen (committed)** | 160 (6.0032) | 5.0 | 4.5 / 18 | 11,747 / -468,482 | 11.48% / 10.26% | -4,532,537 / -4,964,560 | undefined | -3.28% | 6,382 | 352.8 |
+| Reading A, PV at the lot's maximum | 191 (7.16632) | 5.5 | 4.5 / 18 | -18,240 / -554,979 | 11.39% / 10.16% | -4,739,097 / -5,203,888 | undefined | -2.76% | 6,485 | 390.1 |
+| Reading A, largest BESS allowed | 147 (5.51544) | 4.0 | 6.0 / 24 | -556,391 / -1,194,458 | 10.07% / 8.46% | -5,063,379 / -5,614,768 | undefined | -3.98% | 6,985 | 349.9 |
+| **Reading B, chosen (alternative)** | 191 (7.16632) | 6.0 | 5.5 / 22 | 36,391 / -540,752 | 11.48% / 10.26% | -4,858,708 / -5,355,066 | undefined | -2.15% | 7,769 | 425.0 |
+| Revenue maximum (reading B only) | 191 (7.16632) | 7.0 | 9.0 / 36 | -1,299,670 / -2,154,663 | 9.07% / 7.43% | -6,257,428 / -6,977,450 | undefined | -3.02% | 9,271 | 464.5 |
+| Reading B, largest BESS | 189 (7.09128) | 6.0 | 10.0 / 40 | -1,918,742 / -2,804,431 | 7.97% / 6.39% | -6,821,144 / -7,570,194 | undefined | -3.76% | 9,158 | 458.8 |
+
+**Recommendation (reading A, committed): 160 tables (6.0032 MWp, DC/AC 1.2006, 17 x Huawei
+SUN2000-330KTL-H1) at 5.0 MW AC, with a 4.5 MW / 18 MWh BESS.** PV AC + BESS = 9.5 MW. It beats the runner-up (174 tables, 5.5 MW AC, the same 4.5 MW battery) in 52.7% of paired trials, by USD 1,099 at the median: the PV size between 160 and 174 tables is a near tie. Against the best size with the PV at the lot's maximum (191 tables, 5.5 MW AC, 4.5 MW / 18 MWh; P50 USD -18,240), the chosen size is at least as good in 77.7% of paired trials, by USD 37,816 at the median. The battery is 4.5 MW / 18 MWh either way; only the PV changes.
+
+**Reading B's choice (reported, not committed): 191 tables (7.16632 MWp, the lot's maximum) at
+6.0 MW AC, with a 5.5 MW / 22 MWh BESS.** Its PV AC + BESS power is 11.5 MW, so reading A does not
+allow it; its export never exceeds 10 MW (the battery discharges after sunset), which reading B
+allows. Here the lot's maximum PV is also the best PV. It beats the runner-up (5 MW / 20 MWh at the same PV) in 56.3% of paired trials, by USD 5,203 at the median.
+
+**Revenue maximum: 9 MW / 36 MWh with the PV at the lot's maximum and 7.0 MW AC**, LKR 464.5M
+in year 1 at P50 and 9,271 MWh exported, all of it in the priority window. Reading A does not
+allow it (7 + 9 = 16 MW); reading B does. It loses USD 1.30M of unit NPV at P50 against the
+reading B choice: beyond about 22 MWh, each extra MWh of battery is filled on fewer days.
+
+BESS power with the PV at the lot's maximum (best PV AC at each power):
+
+| BESS MW / MWh | Reading A: PV AC MW, unit NPV P50 / P90 (USD) | Reading B: PV AC MW, unit NPV P50 / P90 (USD) | Evening export, yr 1 P50, reading B's size (MWh) | Revenue, yr 1 P50, reading B's size (M LKR) |
+|---|---|---|---|---|
+| 1.0 / 4 | 6.0: -315,451 / -759,541 | 6.0: -315,451 / -759,541 | 1,502.5 | 265.56 |
+| 2.0 / 8 | 6.0: -203,120 / -657,908 | 6.0: -203,120 / -657,908 | 2,955.7 | 301.85 |
+| 3.0 / 12 | 6.0: -108,694 / -602,537 | 6.0: -108,694 / -602,537 | 4,392.7 | 338.62 |
+| 3.5 / 14 | 6.0: -59,054 / -567,764 | 6.0: -59,054 / -567,764 | 5,101.6 | 356.48 |
+| 4.0 / 16 | 6.0: -19,260 / -542,705 | 6.0: -19,260 / -542,705 | 5,799.4 | 374.41 |
+| 4.5 / 18 | 5.5: -18,240 / -554,979 | 6.0: 15,301 / -524,223 | 6,483.8 | 391.98 |
+| 5.0 / 20 | 5.0: -72,013 / -626,343 | 6.0: 30,531 / -521,107 | 7,151.7 | 409.19 |
+| 5.5 / 22 | not allowed | 6.0: 36,391 / -540,752 | 7,769.3 | 425.00 |
+| 6.0 / 24 | not allowed | 6.0: 2,969 / -612,032 | 8,307.6 | 438.97 |
+| 7.0 / 28 | not allowed | 6.0: -226,846 / -969,535 | 9,008.5 | 457.15 |
+| 8.0 / 32 | not allowed | 6.0: -683,079 / -1,517,963 | 9,234.6 | 463.01 |
+| 9.0 / 36 | not allowed | 6.0: -1,279,040 / -2,129,674 | 9,249.5 | 463.40 |
+| 10.0 / 40 | not allowed | 6.0: -1,918,742 / -2,804,431 | 9,158.0 | 458.82 |
+
+The BESS optimum is interior under both readings and close to the coordinator's pre-tax screen
+(15-20 MWh, against an annualised cost of about 7.7 M LKR per MWh a year). Reading A binds: a
+larger battery needs less PV AC, and with the lot's maximum PV the inverter match and the 1.5
+DC/AC ceiling stop the PV AC below 5.0 MW, so 5 MW / 20 MWh (at 5.0 MW AC) is the largest
+battery there, at a P50 of USD -72,013.
+
+Best size at each PV level:
+
+| PV tables (MWp) | Reading A: PV AC MW / BESS MW, unit NPV P50 (USD) | Reading B: PV AC MW / BESS MW, unit NPV P50 (USD) |
+|---|---|---|
+| 107 (4.01464) | 3.5 / 3.0: -19,372 | 3.5 / 3.0: -19,372 |
+| 120 (4.50240) | 4.0 / 3.5: -17,908 | 4.0 / 3.5: -17,908 |
+| 134 (5.02768) | 4.5 / 4.0: -6,469 | 4.5 / 4.0: -6,469 |
+| 147 (5.51544) | 4.5 / 4.0: -330 | 4.5 / 4.0: -330 |
+| 160 (6.00320) | 5.0 / 4.5: 11,747 | 5.0 / 4.5: 11,747 |
+| 174 (6.52848) | 5.5 / 4.5: 11,204 | 5.5 / 5.0: 19,891 |
+| 189 (7.09128) | - | 6.0 / 10.0: -1,918,742 |
+| 191 (7.16632) | 5.5 / 4.5: -18,240 | 6.0 / 5.5: 36,391 |
+| 192 (7.20384) | 6.0 / 1.0: -315,451 | 6.0 / 1.0: -315,451 |
+
+**Other objectives.** Under reading A: the mean unit NPV chooses the same size; P90 unit NPV chooses 107 tables, 3.5 MW AC and 3 MW / 12 MWh (the smallest PV on the grid); unit pre-tax IRR chooses 147 tables, 4.5 MW AC and 4 MW / 16 MWh; equity IRR chooses 191 tables, 5.0 MW AC and 5 MW / 20 MWh. The engine's project NPV, equity NPV and minimum DSCR all choose a 1 MW / 4 MWh battery on the smallest PV. Under reading B the mean chooses reading B's size and equity IRR 6 MW / 24 MWh. Project IRR is undefined at almost every size; the size it ranks first has one trial with an IRR and means nothing.
+
+**Sensitivities (base case at every point).** With the PUCSL reference RTE of 0.90, the base case at every point picks the same sizes as the Monte Carlo under both readings (reading A unit NPV USD -4,731, reading B USD 16,375). Under the curtailment scenario (12.5% of the PV exported outside the window lost) the base case picks 107 tables, 3.5 MW AC and 3 MW / 12 MWh under both readings: losing direct PV export makes PV beyond what the battery needs worth less. Base-case rankings use every price at its mode and so sit below the P50, which the BESS price range skews.
+
+**What the result does and does not show.**
+- Every size is within about USD 0.04M of zero unit NPV at P50 and negative at P90: the unit's
+  pre-tax IRR at P50 (11.48%) only matches the engine's discount rate (about 11.47%). The Monte
+  Carlo ranks sizes; it does not show that the project is viable.
+- 97.8% of the sizes reading A allows, and 95.7% of those reading B allows, have a negative P50 unit NPV. The P90 unit NPV is negative at every size.
+- On the engine's own terms the project loses value at every size: project NPV P50 about
+  USD -4.5M to -6.8M, and no project IRR exists, because with O&M escalating 5% a year against
+  a flat tariff, the CFADS turn negative after the 15-year priority term and the 20-year CFADS
+  sum stays below the capex. The engine's project NPV prefers the smallest battery on the grid
+  (1 MW / 4 MWh); after the 30% tax and the 10% CFADS haircut, the battery's margin is negative.
+- The committed scenario's base case (every price at its mode) gives a unit NPV of USD -215,111,
+  below its P50, because the BESS price range is skewed below its mode, as in PR 3.
+
+### Limitations
+
+- Placeholder site, financing, O&M and grid inputs, as in PR 3. The engine's discount rate is the
+  build-up WACC (about 11.5% here), above the PUCSL consultation's 10.3%.
+- The PUCSL O&M components are indexed yearly and the non-escalable components adjusted once at
+  month 12; neither is modelled, while O&M escalates at 5% a year (B29). This is why the project's
+  CFADS turn negative after the priority term.
+- The BESS price is PR 3's 4 h-basis USD/kWh; at 4 h it now matches its basis. O&M is PR 3's
+  USD 2.5/kWh-yr (about 1.9% of capex), below the consultation's 3%.
+- AC coupling: PV clipped at its inverters is lost, not stored. A DC-coupled design could store
+  some of it.
+- PV AC is the inverters' active-power limit; a fleet of 300 kW units can exceed it by up to one
+  unit's rating unless the plant controller caps it. If PUCSL counts inverter nameplate under
+  reading A, that margin counts.
+- The ordinary test suite runs reduced grids only. Neither this run nor the suite is tail,
+  convergence, lender or bankability evidence (`TEST-03`).
+
+## Latest run (PR 4, two projects, 15.15.0, 2026-11-01)
+
+Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
+
+| Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
+|---|---|---|---|---|---|
+| Wind project (v0.1) | 4.09% | 1.47% | 0.868 | -6,241,315 | -7,318,639 |
+| Solar + BESS project (v0.1) | undefined (reported as 0.0) | -3.28% | 0.868 | -4,771,737 | -5,196,733 |
+| Hybrid (v0.6, superseded) | 4.26% | 1.58% | 0.868 | -8,837,254 | -10,441,094 |
+
+The hybrid does not move (its file gained only a header note). The two projects do not add up
+to the hybrid: each carries its own USD 2.0M grid line and USD 0.15M a year of overhead, the
+solar + BESS project is a different size, and it earns the priority rate only in 17:30-21:30.
+The solar + BESS project has no project IRR: its 20-year CFADS sum stays below its capex, so
+its NPV is negative at every discount rate. Every other input is still a placeholder, so these
+are not results.
+
+## Earlier run (v0.6, sized and priced solar + BESS unit, 2026-11-01)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
 project IRR 4.26% (was 3.58%), equity IRR 1.58% (was 0.92%), annual-view minimum DSCR 0.87,
@@ -507,5 +729,9 @@ priority-1 inputs replace the placeholders.
    evening window is served by about 23.5 MWh of charge (20 MWh exported), and a 25 MWh
    battery earns slightly more than 30 MWh in year 1 (358.46 against 357.19 M LKR). At
    DC/AC 1.4 (7.02 MWp, 187 tables, which also fit) the unit earns 388.51 M LKR with 30 MWh.
-4. Replace placeholders in the scenario, then run the v14 pipeline for base and P90 cases.
-5. Assemble the DBPL feasibility study once the model has owner-sourced inputs.
+4. Done in PR 4: the split into two projects and the solar + BESS sizing under the PUCSL 2026
+   rules. Owner to decide the 10 MW reading (L01) and to obtain a PUCSL, NSO or counsel view on
+   whether the turbine counts against the solar + BESS project; to confirm the committed
+   reading A size; and to supply the PV EPC and BESS quotes (B15, B19).
+5. Replace placeholders in the scenarios, then run the v14 pipeline for base and P90 cases.
+6. Assemble the DBPL feasibility study once the model has owner-sourced inputs.
