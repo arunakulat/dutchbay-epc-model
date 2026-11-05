@@ -792,7 +792,8 @@ def compact_land_area(
                 fenced_area_ha=total / 1.0e4,
                 land_per_mwp_ha=total / 1.0e4 / sizing.dc_capacity_mw,
             )
-    assert best is not None  # tables >= 1 gives at least one layout
+    if best is None:
+        raise ValueError("tables >= 1 gives at least one layout")
     return best
 
 
