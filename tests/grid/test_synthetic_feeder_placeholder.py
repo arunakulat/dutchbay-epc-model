@@ -50,6 +50,13 @@ EXPECTED_PAYLOAD_SHA256 = {
     "profile/generation_profile.csv": "cefa4b9e37f85e5f7774a14727bf35a43c9c3bd8b3219bd730a35aff4f36ab76",
 }
 EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
+    # Re-pinned for 15.18.0 (Blue Whale PR 7: only VERSION moved; the scenario did not).
+    # Re-pinned for 15.17.0 (Blue Whale PR 6: only VERSION moved; the scenario did not).
+    # Re-pinned for 15.16.0 (Blue Whale PR 5: only VERSION moved; the scenario did not).
+    # Re-pinned for 15.15.0 (Blue Whale PR 4: only VERSION moved; the scenario did not).
+    # Re-pinned for 15.14.0 (Blue Whale PR 3: only VERSION moved; the scenario did not).
+    # Re-pinned for 15.13.0 (Blue Whale PR 2: only VERSION moved; the scenario did not).
+    # Re-pinned for 15.12.0 (Blue Whale PR 1: only VERSION moved; the scenario did not).
     # Re-pinned for 15.11.0 (#1528: only VERSION moved; the scenario did not). Before
     # that, for 15.10.0 (#1526: only VERSION moved), for 15.9.0 (#1510: only VERSION moved) and for 15.8.0 (#1396 part B:
     # VERSION and the lender scenario both moved).
@@ -59,7 +66,7 @@ EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
     # and profile are byte-identical - so this moved only because the manifest
     # records which sources produced them, which is the guard working, not
     # drifting. Verified deterministic across repeated runs (MRM-01).
-    "7bba6aaf198c5f9cc183b26468b29458b087ed8a0050ffc606fbbcdd54e140a3"
+    "31a174f6391347ed1fc3e98b80db0d6ab0df904227da48a2ab0682908f60cc1f"
 )
 
 MASTER_REDIRECT_MUTATIONS = [

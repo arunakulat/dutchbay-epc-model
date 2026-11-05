@@ -1,0 +1,142 @@
+# Blue Whale Lot 5B: the regulatory basis of the separate solar + BESS project (PR 4).
+#
+# DATA-01: every figure the PR 4 sizing uses from the PUCSL 2026 feed-in tariff documents and
+# the Electricity Acts is frozen here once, with its source URL, the section it comes from,
+# the retrieval date and the words as the converted source gives them ("verbatim"). Each PDF
+# was converted with MarkItDown (R26) by the coordinator session before reading; nothing was
+# read from raw PDF bytes. The converted text is not committed. Square-bracketed words in a
+# "verbatim" entry are editorial; a formula is transcribed in words because the converted
+# text renders it as stacked symbols.
+#
+# Read by solar_resource.pv_bess_sizing.RegulatoryBasis (strict: every key below is required
+# and unknown keys are refused; FRAMEWORK-02), which checks that the sizing config, the unit
+# config and the solar + BESS scenario agree with these figures, so a figure is stated here
+# and cited elsewhere (one fact, one home).
+#
+# The 10 MW limit is an OPEN LEGAL QUESTION. Two readings are modelled (owner, 2026-11-01:
+# "Model both, flag it"); neither is a legal opinion. Whether a 9.5 MW turbine on the same
+# lot counts against the solar + BESS project under the "contiguous location ... cumulative
+# basis" proviso is for PUCSL, the NSO or counsel.
+
+schema_version: blue_whale_pucsl_fit_2026_v1
+retrieved: "2026-11-01"
+
+sources:
+  PUCSL-METHOD-2026:
+    title: "The Methodology for Renewable Energy Feed-in Tariffs 2026 (Approved)"
+    publisher: "Public Utilities Commission of Sri Lanka"
+    url: "https://www.pucsl.gov.lk/wp-content/uploads/2026/07/The-Methodology-for-Renewable-Energy-Feed-in-Tariffs-2026-Approved.pdf"
+    pdf_sha256: "7ee0f6d6a42459e53f91bf38a40194464edabbd18bac647bd1a2a8d8a79866dd"
+    read_with: "markitdown (R26)"
+    verbatim:
+      - "s.1: The 'Prioritized Feed in Time' mentioned in this methodology may not be identical to the conventional 'Time-of Use (ToU)' durations."
+      - "s.3.1: The RE based electricity purchase tariffs (Tariffs) will be calculated based on projected cash flow of a generic 1 MW plant over 20 years"
+      - "s.4.1, Table 3, note [1]: 'Prioritized Feed in Time' would be as specified in the SPPA"
+      - "s.5.1: Solar PV plants (Ground mounted & Floating) as considered under Clause 3 of this methodology, connected along with a Battery Energy Storage System (BESS) is considered here for feed in tariff determination."
+      - "s.5.1: The BESS contract is considered for a 15-year period. Accordingly, the BESS inclusive feed in tariff as described below is applicable for the first 15 years. The standalone power plant feed in tariff, as determined under Clause 3 of this methodology would be applicable for the remainder of the SPPA period."
+      - "s.5.1.1 [Dispatchable plants with BESS]: The battery shall have a 4-hour discharge duration."
+      - "s.5.1.2 [Non-dispatchable plants with BESS]: Non-dispatchable renewable energy power plants with BESS would be offered a separate energy purchase tariff for the specified 'Prioritized Feed in Time'. The typical power plant tariff, as determined in accordance with the Clause 3 of this methodology, would be applicable during the other times."
+      - "s.5.1.2: [Prioritized Feed-in Time Tariff = R Charging / Round Trip Efficiency + NPV of Cash Outflow for BESS / NPV of Energy Discharged]"
+      - "s.5.1.2: The battery charging tariff (R Charging) is set at the approved tariff for the standalone plant, as determined in accordance with Clause 3 of this methodology."
+      - "s.5.1.2: [Annual Energy Discharged = BESS Capacity (kWh) x Standard Depth of Discharge x No. of Cycles Annually at the Standard DoD x Cumulative Battery Capacity Degradation]"
+      - "s.5.2.1.1 and s.5.2.1.2: These BESS shall have a standard discharge duration of 4-hours, at the nominal capacity."
+    note: "s.5 names solar PV only: a wind plant is not covered by the BESS tariff. Annex 01 (parameters for 2026) reads 'To be completed'."
+  PUCSL-CONSULT-2026-07:
+    title: "Full Consultation Document, Feed-in Tariff Review, July 2026"
+    publisher: "Public Utilities Commission of Sri Lanka"
+    url: "https://www.pucsl.gov.lk/wp-content/uploads/2026/07/Full-Consultation-Document-Feed-in-Tariff-Review-July-2026.pdf"
+    pdf_sha256: "70051f7beb747aa1704442035d13b958980fdd23aa7ab80da61f16eafaf49bdc"
+    read_with: "markitdown (R26)"
+    verbatim:
+      - "s.2.3, Table 3, note: Prioritized Feed in Time (PFT) - 1730h to 2130h"
+      - "s.2.3, Table 3 [proposed]: Ground Mounted Solar 51.55 21.58"
+      - "s.2.3: Considering the uncertainty surrounding the readiness of the utility in connecting BESS based dispatchable power plants, the Feed in tariffs for these plants are not proposed in this review."
+      - "Annex 2, s.3.1 [Non-dispatchable BESS]: Feed in Tariff during prioritized feed in time = Standalone Plant Tariff / BESS Round Trip Efficiency + BESS Tariff"
+      - "Annex 2, s.3.1 inputs: BESS Capacity (MW) 1.00; BESS Nominal Discharge Duration (hours) 4.00; Capital Cost (MLKR/MW) 182.52; Equity (%) 40%; Cost of Debt (%) 10.92%; Cost of Equity (%) 14.19%; Loan Repayment Period (Years) 6; Annual O&M Cost as a Percentage of Capital Cost (%) 3.0%; Income Tax Rate (%) 30%; Standard Depth of Discharge (DoD) of BESS (%) 100%; Annual Capacity Degradation Factor - BESS (%) 1.5%; Annual No. of Discharging Cycles 365; BESS Round Trip Efficiency 90.0%; Annual O&M Cost Escalation (%) 3.85%; Exchange Rate (LKR/USD) 341.09; Colombo Consumer Price Index (CCPI) 207.70; Depreciation Rate (%) 6.67%; Capital Allowance (%) 20%; Salvage Value (MLKR/MW) -; Inverter Replacement Cost on Year No. 11 (MKR/kW) -"
+      - "Annex 2, s.3.1 calculated: Total Capital Cost (MLKR) 182.52; Weighted Average Cost of Capital (WACC) 10.3%; First Year Electricity Discharge (GWh) 1.46; Annual O&M Cost (MLKR) 5.48; Tariff Component (LKR/kWh) 27.57; Project Equity IRR (%) 14.19%; Project NPV (MLKR) 20.41; Return on Equity (%) 21%"
+    note: "A consultation, not the approved tariff. The approved Annex 2 states no PFT clock hours, so the 17:30-21:30 window rests on this document (input B22)."
+  PUCSL-ANNEX2-2026-08:
+    title: "Annex 2, Summary of Approved Feed in Tariffs - August 2026"
+    publisher: "Public Utilities Commission of Sri Lanka"
+    pdf_sha256: "ff505687c80af7d1863dd287ecc45aff6dbe356fd7eb97d81481db6151e13218"
+    read_with: "markitdown (R26)"
+    verbatim:
+      - "s.1 [Power Plants]: Wind 20.80 4.93 [non-escalable, base O&M]"
+      - "s.1 [Power Plants]: Ground Mounted Solar PV 18.00 2.72"
+      - "s.3 [Power Plants with BESS]: Ground Mounted Solar PV 47.08 3.02 [At Prioritized Feed in Time: non-escalable, escalable O&M] 18.00 2.72 [At Other Periods]"
+      - "s.3, note [2]: Prioritized Feed in Time tariff above is applicable only for the first 15 years of the SPPA. The standalone power plant feed in tariff (Given as Other Period Tariff above) is applicable for the remainder of the SPPA period."
+      - "s.2, note [2] [prosumers]: Total exports for BESS schemes are capped at a maximum of 123kWh/kW of contracted capacity, during a 30 day billing cycle"
+    note: "Converted by the coordinator session from the PUCSL approved-tariff annex (scratchpad copy annex2.md); the annex's download URL was not recorded with it, so it is cited by title and the SHA-256 of the PDF read. The s.2 export cap is in the prosumer section and is NOT applied to this power plant. The O&M component's yearly indexation and the month-12 adjustment of the non-escalable component are not modelled."
+  SL-ELECTRICITY-ACT-36-2024:
+    title: "Sri Lanka Electricity Act, No. 36 of 2024"
+    publisher: "Parliament of Sri Lanka"
+    url: "https://www.parliament.lk/uploads/acts/gbills/english/6347.pdf"
+    pdf_sha256: "91a223273adfe4a89540e7627833a4d923ddf16bdccff2f4b23904ca29b2f8de"
+    read_with: "markitdown (R26)"
+    verbatim:
+      - "s.11(3): The Minister may on the advice of the Council, by Order published in the Gazette, specify the maximum capacity of any renewable energy technology-based power plants which may be permitted to enter into standardized power purchase agreements with the National System Operator:"
+      - "s.11(3), first proviso: Provided that, the maximum capacity of such renewable energy plants to be procured from a contiguous location using standard power purchase agreements on cumulative basis shall not exceed 10 MW, which shall be further reduced by an order made by the Minister published in the Gazette, once the regulations prescribing the procedures for competitive procurement of new capacity are in place:"
+      - "s.52: \"standardized power purchase agreement\" means, a power purchase agreement on pre-defined terms and conditions where the technology, specific power purchase tariff and other contractual terms for renewable energy based power plants having a maximum capacity of 10MW;"
+      - "s.11(1)(a), proviso (i): if the capacity of the generation plant is below or equal to the threshold value as specified under subsection (3), and the final approval has been granted to generate electricity through renewable energy resources by the Sri Lanka Sustainable Energy Authority"
+  SL-ELECTRICITY-AMENDMENT-14-2025:
+    title: "Sri Lanka Electricity (Amendment) Act, No. 14 of 2025"
+    publisher: "Parliament of Sri Lanka"
+    url: "https://www.parliament.lk/uploads/acts/gbills/english/6385.pdf"
+    pdf_sha256: "0bd7cd86dfcbeca22bd55b2ddfcab7820bbae3f1a5149059bbd250b58696e0b7"
+    read_with: "markitdown (R26)"
+    verbatim:
+      - "s.11(3) [amending s.11(3) of the principal enactment]: The Minister may by Order published in the Gazette, specify the maximum capacity of each renewable energy technology based power plant along with storage or ancillary services directly associated with such power plant, which may be permitted to enter into standardized power purchase agreements with the National System Operator and distribution licensees in accordance with the provisions of subsection (4) of section 30:"
+    note: "The amendment substitutes the words from 'The Minister' to 'National System Operator:'; the 10 MW contiguous-location proviso that follows them is not among the substituted words."
+
+# The figures the sizing uses, each tied to a source above.
+bess:
+  # s.5.1.1, s.5.2.1.1, s.5.2.1.2: 4 h at the nominal capacity, so energy = 4 x power. The
+  # nameplate is read as the energy a full battery DELIVERS at nominal power (s.5.1.2 computes
+  # discharged energy as capacity x DoD, with no efficiency; consultation Annex 2 s.3.1: 1 MW x
+  # 4 h x 365 x 100% = 1.46 GWh), and the round-trip loss is booked on charge (the charging
+  # tariff is divided by the RTE).
+  discharge_duration_h: 4.0
+  energy_basis: delivered_at_nominal_power
+  charging: co_located_solar_pv_only     # s.5.1: solar PV plants "connected along with" a BESS
+  contract_years: 15                     # s.5.1; Annex 2 s.3 note [2]
+priority_window:
+  # Consultation s.2.3, Table 3 note. The approved Annex 2 gives no hours; the methodology
+  # (s.4.1 note [1]) leaves them to the SPPA.
+  start_local: "17:30"
+  end_local: "21:30"
+  timezone: Asia/Colombo
+tariff_lkr_per_kwh:
+  # Annex 2 (effective 25 Aug 2026), plants < 10 MW.
+  solar_bess_priority: 50.10             # 47.08 + 3.02, first 15 years of the SPPA
+  solar_bess_other: 20.72                # 18.00 + 2.72; also the standalone ground-solar rate
+  wind: 25.73                            # 20.80 + 4.93
+  components:
+    solar_bess_priority: [47.08, 3.02]
+    solar_bess_other: [18.00, 2.72]
+    wind: [20.80, 4.93]
+consultation_reference_case:
+  # Consultation Annex 2 s.3.1, kept for the closed-form check of the tariff formula
+  # (standalone / RTE + BESS component) and for the RTE sensitivity. Not a model input
+  # except round_trip_efficiency (sensitivity only; the base keeps the repository's 0.85).
+  power_mw: 1.0
+  duration_h: 4.0
+  capital_cost_mlkr_per_mw: 182.52
+  om_pct_of_capex: 3.0
+  depth_of_discharge_pct: 100.0
+  degradation_pct_per_year: 1.5
+  cycles_per_year: 365
+  round_trip_efficiency: 0.90
+  first_year_discharge_gwh: 1.46
+  bess_tariff_component_lkr_per_kwh: 27.57
+  standalone_tariff_lkr_per_kwh: 21.58   # consultation Table 3, ground solar, other periods
+  proposed_priority_lkr_per_kwh: 51.55   # consultation Table 3; approved 50.10
+  lkr_per_usd: 341.09
+standardised_ppa_limit:
+  # Act No. 36 of 2024 s.11(3) first proviso and s.52; Amendment Act No. 14 of 2025 s.11(3).
+  max_capacity_mw: 10.0
+  contiguous_location_cumulative: true
+  storage_in_capacity_order_from_2025: true
+  readings:
+    A: "PV AC plus BESS power at most 10 MW: the storage 'directly associated with' the plant counts in its capacity (Amendment Act No. 14 of 2025, s.11(3))."
+    B: "Export at the connection point at most 10 MW, with the PV AC and the BESS power each at most 10 MW: the capacity is what the plant can deliver to the NSO."
+  open_question: "Whether a 9.5 MW turbine on the same lot is a 'contiguous location' whose capacity counts 'on cumulative basis' against the solar + BESS project's 10 MW. If it does, the two projects together (9.5 MW plus the solar + BESS project) exceed 10 MW under either reading. For PUCSL, the NSO or counsel."

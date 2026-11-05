@@ -5,6 +5,55 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Blue Whale solar + BESS: the owner's 5 MW / 20 MWh battery (15.18.0).** The sizing ranks on
+  the after-tax project NPV and the project commits the owner's 5 MW / 20 MWh with 151 tables at
+  5.0 MW AC (#1353 comment 6563070978). The value-based size stays 1 MW / 4 MWh; the choice
+  costs USD 1.25M at P50. Solar + BESS project NPV USD -4.03M -> -4.99M. The TMY README now names
+  PVGIS-ERA5. Detail in the compiled fragment.
+- **Blue Whale capex blend, solar resource and re-sizing (15.17.0).** Wind and BESS capex become
+  blends of China FOB pricing and internal anchors on the owner's decision (#1353 comment
+  6556975196); the published figures include private inputs as blends only. Wind 936.84 USD/kW
+  (was 1,300); BESS 140.74 USD/kWh (was 135.00). The solar + BESS project re-sizes to 3.5 MW AC
+  with 1 MW / 4 MWh. Wind project IRR 7.80% -> 10.81%. Detail in the compiled fragment.
+- **Blue Whale wind resource from met mast 617725 (15.16.0).** The Kalpitiya met-mast record is
+  long-term corrected against NASA POWER / MERRA-2 (2015-2025) by sector-wise MCP and
+  transferred 26.7 km to the turbine (owner direction). Net CF 37.43% -> 48.76% (31.15 ->
+  40.57 GWh; P90 33.73 GWh at 1 year). Wind project IRR 4.09% -> 7.80%; hybrid 4.26% -> 6.90%.
+  Not lender-grade: the met-mast HOLD stands. Detail in the compiled fragment.
+- **Blue Whale split into a wind project and a solar + BESS project (15.15.0).** Owner decision:
+  the 9.5 MW turbine is a separate project built first. The solar + BESS project is sized by
+  PR 3's seeded Monte Carlo under the PUCSL 2026 rules (4 h BESS, PV-only charging, discharge
+  17:30-21:30 only) and both readings of the 10 MW standardised-PPA limit: reading A chooses
+  6.0032 MWp, 5.0 MW AC and 4.5 MW / 18 MWh (committed); reading B 7.16632 MWp, 6.0 MW AC and
+  5.5 MW / 22 MWh. The turbine's contiguous-location cumulative risk is flagged as an open legal
+  question. The hybrid scenario is kept as the superseded combined view; its KPIs do not move.
+  New scenarios: wind project IRR 4.09%; solar + BESS project NPV USD -4.77M with no project
+  IRR. Detail in the compiled fragment.
+- **Blue Whale solar + BESS sizing (15.14.0).** With the turbine fixed, a seeded Monte Carlo
+  (seed 20261101, 40 sizes x 256 LHS trials, through `evaluate_with_overrides`) sizes the unit
+  on cited prices: OPIS module prices, a Huawei SUN2000-330KTL-H1 inverter matched to the
+  string, IRENA-derived PV BoP, and the public NSO 250 BESS figures. Chosen on the P50 project
+  NPV among sizes that export the full 4 h priority window: DC/AC 1.1 (5.51544 MWp) with
+  5 MW / 24 MWh. New `solar_resource/pv_bess_sizing.py`, its Hydra CLI and configs; Blue Whale v0.6.
+  Project IRR 3.58% -> 4.26%, mostly from the cited capex replacing placeholders. No other
+  scenario moves. Detail in the compiled fragment.
+- **Blue Whale solar + BESS unit (15.13.0).** The solar and BESS become one unit (owner):
+  5 MW AC of JinkoSolar Tiger Neo 3.0 670 W (6.0032 MWp) with a 5 MW x 6 h (30 MWh) BESS
+  charged only from that PV and dispatched hourly over the PVGIS TMY, 17:30-21:30 at the
+  PUCSL priority rate and 05:30-07:30 at the other rate. New
+  `analytics/gis/pv_array_layout.py` (strings, row pitch, land, fit on the placeholder lot)
+  and `solar_resource/pv_bess_dispatch.py` (hourly PV pinned to `compute_solar_aep`, the
+  dispatcher, the engine mapping). The array and BESS fit the placeholder lot. Blue Whale
+  project IRR 3.15% -> 3.58%, mostly from the BESS capex placeholder scaled to 30 MWh. No
+  other scenario moves. Detail in the compiled fragment.
+- **Blue Whale turbine, placeholder site, coastal placement and shadow flicker (15.12.0).**
+  The wind becomes one Envision EN-206/10.5 de-rated to 9.5 MW at 130 m (owner), with a net
+  CF of 37.43% (31.15 GWh) derived from the confidential OEM curve over the DutchBay ERA5
+  basis; only derived figures are published. The lot is a flagged placeholder square on the
+  OpenStreetMap coastline and the turbine sits at the CZ&CRMP 2024-2029 60 m coastal setback.
+  New `analytics/gis/shadow_flicker.py` screens the tip-height setback and shadow flicker.
+  Blue Whale project IRR 2.77% -> 3.15%. No other scenario moves. Detail in the compiled
+  fragment.
 - **Tariff and BESS capacity-charge research applied to four scenarios (15.11.0).** The
   solar + 4 h BESS case moves to the PUCSL 2026 feed-in tariff (50.10 LKR/kWh, 15 years;
   the CEB 2025 45.80 / 10-year scheme is superseded and kept as a sensitivity). Three BESS

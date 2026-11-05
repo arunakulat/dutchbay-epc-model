@@ -1,0 +1,408 @@
+# Blue Whale Lot 5B (PR 6): the wind and BESS capex blend, and the solar resource at the site.
+#
+# Read by scripts/run_blue_whale_capex_solar_resource_v14.py (Hydra, one JSON object on stdout:
+# CLI-01, CLI-03) through solar_resource.blue_whale_site_inputs. Every key is required and an
+# unknown key is refused (FRAMEWORK-02). DATA-01: every external figure is frozen here with its
+# source, date and the figure as the source states it ("verbatim"). A value marked ASSUMPTION has
+# no source of its own; its basis is stated.
+#
+# Work item: https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6556975196
+# Owner decisions, quoted verbatim from that record:
+#   Request: "in the next step, search for the latest CAPEX figures for Wind and BESS from RAG and
+#   EPC corpus (Mannar, Mullikulam, NSO BESS tender, and Kalpitiya) interpolate with China FOB
+#   pricing from a deep web search, indicate the solar efficacy and strength at the Blue Whale
+#   location (provide references for the pvlab or any other process through which these numbers
+#   are obtained) and update all YAML occasions in the Blue Whale Scenario"
+#   Private-price handling: "Derived blend may publish"
+#
+# PRIVATE ANCHORS. Anchors marked `kind: private` come from the private repository
+# arunakulat/DutchBay_RAG. Their values are NOT in this file or anywhere in this repository. The
+# CLI reads them at run time from a file outside the repository (private_anchors_path) and
+# publishes only the blended results. The handling notes that govern them are cited by identifier.
+
+schema_version: blue_whale_capex_solar_resource_v1
+retrieved: "2026-11-01"
+disclosure_note: >-
+  This figure is a blend that includes private commercial inputs; a reader may be able to back
+  out a private input. Published on the owner's decision of 2026-11-01 (#1353 comment 6556975196).
+
+sources:
+  SOOCHOW-2026-07-24:
+    title: "短期招标承压，看好“十五五”两海成长空间——风电2026年中期策略报告 (Wind power 2026 mid-year strategy report)"
+    publisher: "Soochow Securities (东吴证券研究所), analyst 曾朵红; data CWEA, company announcements"
+    published: "2026-07-24"
+    url: "https://pdf.dfcfw.com/pdf/H3_AP202607241827319006_1.pdf"
+    pdf_sha256: "6dec7f6feba6eac27d0d9591178943fea54f433b861cb3bc7bd2136b676feebe"
+    read_with: "markitdown (R26)"
+    verbatim:
+      - "我国风机企业出口至类中国市场价格约2000~3000元/kW（含运费、5年质保，不含长期维护）"
+      - "类中国市场主要包括东南亚、中亚、印度、中东及拉美等"
+      - "单价 元/kW 3000 2800 2700 2700 2600 2500 2400 2300 [2023, 2024, 2025, 2026E, 2027E, 2028E, 2029E, 2030E]"
+      - "陆风机组（含塔筒）单价分别为1822、2128元/kW [25年11、12月份]"
+      - "预计26年陆风风机投标价保持稳定"
+    note: >-
+      Export price to "China-like" markets (South-East Asia, Central Asia, India, the Middle East,
+      Latin America), including freight and a 5-year warranty, excluding long-term maintenance.
+      Whether the tower is in scope is not stated. The domestic onshore figures (with tower)
+      include Chinese VAT and are recorded for comparison only.
+  WOODMAC-VIA-GREENTECHLEAD-2026-09-17:
+    title: "Wind Turbine Prices 2026: Chinese OEMs at $400,000/MW vs Vestas, Siemens Gamesa and GE Vernova"
+    publisher: "GreentechLead (Shafana Fazal), attributing the figures to Wood Mackenzie"
+    published: "2026-09-17"
+    url: "https://greentechlead.com/wind/wind-turbine-prices-2026-chinese-oems-at-400000-mw-vs-vestas-siemens-gamesa-and-ge-vernova-55445"
+    verbatim:
+      - "as low as $400,000 per MW in some emerging markets"
+      - "around $1 million-$1.2 million per MW for Western onshore turbines in Europe and the United States"
+    note: "Secondary report; corroborates the Soochow export range. Not weighted separately."
+  CFETS-2026-10-16:
+    title: "人民币汇率中间价 (RMB central parity), China Foreign Exchange Trade System, via China Economic Net / Sina Finance"
+    published: "2026-10-16"
+    url: "https://cj.sina.com.cn/articles/view/1663612603/6328b6bb0200248kg"
+    verbatim:
+      - "2026年10月16日银行间外汇市场人民币汇率中间价为1美元对人民币6.7220元"
+  TRENDFORCE-2026-09:
+    title: "Storage Tenders Hit 72.84 GWh in September; EPC Awarded Volume Hits New High for the Year"
+    publisher: "EnergyTrend, from TrendForce's China Energy Storage Industry Tender Database (September 2026 Report)"
+    published: "2026-10-16"
+    url: "https://www.energytrend.com/research/20261016-52306.html"
+    verbatim:
+      - "4-hour systems: RMB 0.52-0.58/Wh range; RMB 0.53/Wh weighted average; falling 12% month-on-month"
+      - "4-hour EPC projects: RMB 0.57-1.04/Wh range; RMB 0.78/Wh weighted average"
+    note: "China domestic awarded prices for energy storage systems; the article does not define the system boundary."
+  CNNC-2026-10-14:
+    title: "Sungrow, CATL among five winners of CNNC 2.98 GWh storage procurement"
+    publisher: "Shanghai Metals Market (SMM)"
+    published: "2026-10-16"
+    url: "https://news.metal.com/newscontent/104162262-energy-storage-sungrow-catl-among-five-winners-of-cnnc-298gwh-storage-procurement"
+    verbatim:
+      - "RMB 0.4995-0.5329/Wh"
+      - "2.98GWh tender ... 33 bidders ... 2-hour and 4-hour systems"
+  HUADIAN-2026-03:
+    title: "China Huadian announces winners of 12 GWh energy storage tender as bidding prices rise from last year"
+    publisher: "ESS News (Vincent Shaw)"
+    published: "2026-03-11"
+    url: "https://www.ess-news.com/2026/03/11/china-huadian-announces-winners-of-12-gwh-energy-storage-tender-as-bidding-prices-rise-from-last-year/"
+    verbatim:
+      - "CNY 0.4923/Wh to CNY 0.6207/Wh ($71.9/kWh - $90.6/kWh)"
+      - "around CNY 0.54/Wh ($78.8/kWh)"
+      - "covers 0.5C and 0.25C LFP storage systems ... including batteries and installation guidance"
+    note: "Corroborates the TrendForce September average; not weighted separately."
+  EMBER-2025-12-11:
+    title: "How cheap is battery storage?"
+    publisher: "Ember (Kostantsa Rangelova, Dave Jones)"
+    published: "2025-12-11"
+    url: "https://ember-energy.org/app/uploads/2025/12/How-cheap-is-battery-storage.pdf"
+    pdf_sha256: "9c9b0d12a78c36d4f05bcb49d5c80be91d5411c059114809aa656fa33c2dcfeb"
+    read_with: "markitdown (R26)"
+    verbatim:
+      - "Core equipment - mainly the BESS enclosures, the Power Conversion System (PCS) and the Energy Management System (EMS) - costs around $75/kWh when delivered from China, for countries with low import duties. This cost is per unit of usable battery capacity."
+      - "Manufacturers typically oversize the installed capacity by at least 10%"
+      - "The enclosures account for close to 90% of the $75/kWh core equipment cost for long duration projects, with PCS and EMS costs making up around 10%."
+      - "The EPC services and grid connection required to turn this equipment into an operational project can vary widely, but typically costs around $50 /kWh."
+      - "The Tabuk and Hail projects awarded equipment supply contracts in August 2025 of $179-183 million for 2.45 GWh each, or just $73-75/kWh. The EPC contracts added another $116-118 million, or $47-48/kWh."
+  KB-WIND-EPC:
+    title: "Wind EPC costs and scaling (repository knowledge base, public)"
+    files:
+      - docs/knowledge_base/01_wind_epc_costs_and_scaling.md
+    verbatim:
+      - "Sub-total (pre-tax EPC) | $44,490,413 | $889.81/kW"
+      - "Wind turbine supply alone | $19.49M | $389.80/kW (43.8% of subtotal)"
+      - "Transportation (sea + inland) | $5.62M | $112.50/kW (12.6%)"
+      - "On a 56 MW rated basis the same EPC implies $794.47/kW pre-tax"
+      - "Shared infrastructure - switchyard, on-site substation, engineering, mobilisation | ~MW^0.7"
+  MULLIKULAM-SCENARIO:
+    title: "Mullikulam 2 x 50 MW (Lot 1) scenario, LandBOSSE-decomposed WBS (public)"
+    files:
+      - scenarios/mullikulam_2x50mw_mannar.yaml
+    verbatim:
+      - "usd_total: 63100000; capex_per_kw_usd: 1126.79 # 63.1M / 56 MW"
+      - "foundation_usd: 3028800; erection_usd: 2019200; collection_system_usd: 2019200; site_preparation_usd: 1211520; site_development_usd: 807680; project_management_usd: 1009600; contingency_usd: 946500"
+  NSO250-PUBLIC:
+    title: "NSO 250 MW BESS LTL unit scenarios (repository, public derived figures)"
+    files:
+      - scenarios/nso250_ltl_unit_base.yaml
+      - scenarios/nso250_ltl_unit_upside.yaml
+    verbatim:
+      - "capex variant: BASE - equipment USD 99.50/kWh, all-in USD 135.00/kWh"
+      - "capex variant: UPSIDE - equipment USD 98.68/kWh, all-in USD 134.09/kWh"
+      - "adding balance of plant USD 14.00/kWh and an augmentation reserve USD 8.00/kWh, then land and auxiliaries at 10% of total capex"
+  LEVIES-REPOSITORY:
+    title: "Sri Lankan import levy postures already in the repository (finance/import_levies.py)"
+    files:
+      - scenarios/nso250_ltl_unit_base.yaml
+      - scenarios/dutchbay_lendercase_2025Q4.yaml
+      - scenarios/overrides/import_levies_full_stack_paid.yaml
+    verbatim:
+      - "cid_pct: 0.0 # Customs Import Duty - HS 8502.31 wind gensets: FREE (Tariff Guide 2026 Ch.85)"
+      - "pal_pct: 0.05 # Ports & Airports Levy, 5% on CIF"
+      - "sscl_import_pct: 0.025 # SSCL on imports, 2.5%"
+      - "pal_pct: 0.0 # Ports & Airports Levy - relieved by the bonded scheme [NSO 250]"
+      - "vat_capex_relieved: true # BOI s17 / bonded route relieves capex VAT"
+      - "vat_on_full_capex: true # domestic capex share carries unrecoverable VAT too [full-stack-paid]"
+  PVGIS-API-5.3:
+    title: "PVGIS 5.3 PVcalc and TMY API (EU Joint Research Centre)"
+    url: "https://re.jrc.ec.europa.eu/api/v5_3/PVcalc?lat=8.291526&lon=79.753204&peakpower=1&loss=14&angle=8&aspect=0&mountingplace=free&pvtechchoice=crystSi&raddatabase=PVGIS-ERA5&outputformat=json"
+    response_sha256: "c910e9701934c9ad77bd783138a1c68fd95c87bd041954f9972bf51a5c47d68f"
+    verbatim:
+      - "\"E_y\": 1472.93, \"H(i)_y\": 1933.89, \"SD_y\": 33.68, \"l_aoi\": -2.7, \"l_spec\": \"0.41\", \"l_tg\": -9.36, \"l_total\": -23.84"
+      - "\"radiation_db\": \"PVGIS-ERA5\", \"meteo_db\": \"ERA5\", \"year_min\": 2005, \"year_max\": 2023"
+      - "[raddatabase=PVGIS-SARAH3] Location out of the spatial coverage of the radiation database selected. Please, selectanother database (PVGIS-ERA5)."
+    note: >-
+      PVGIS-SARAH3 does not cover the site. The PVGIS TMY at 8.27 N, 79.75 E is built on
+      PVGIS-ERA5 (2005-2023) and reproduces the repository's frozen TMY (first row, months
+      selected and annual GHI 1871.34 kWh/m2), so the frozen file is an ERA5 TMY, not SARAH3.
+  GSA-LTA-1.7:
+    title: "Global Solar Atlas long-term averages API (Solargis model 2.2.68, data 1.7)"
+    url: "https://api.globalsolaratlas.info/data/lta?loc=8.291526,79.753204"
+    response_sha256: "7780aacc79425855dd58e6f1b3ebf6470e821adb1d884e60a55ffd786ab7767e"
+    verbatim:
+      - "\"PVOUT_csi\": 1632.50439453125, \"DNI\": 1499.1171875, \"GHI\": 2047.6796875, \"DIF\": 911.8828125, \"GTI_opta\": 2067.8203125, \"OPTA\": 9, \"TEMP\": 27.3125"
+      - "\"period\": {\"from\": \"satregion\", \"to\": \"2025\"}, \"updated\": \"2026-04-01\", \"version\": \"2.2.68\""
+  NASA-POWER-CLIM:
+    title: "NASA POWER climatology API v2.10.1 (SYN1DEG; January 2001 - December 2025)"
+    url: "https://power.larc.nasa.gov/api/temporal/climatology/point?parameters=ALLSKY_SFC_SW_DWN,ALLSKY_SFC_SW_DNI,ALLSKY_SFC_SW_DIFF&community=RE&longitude=79.753204&latitude=8.291526&format=JSON"
+    response_sha256: "55672f44326040dd17e6a90faab4769c720644b440a4b35340253296530a4037"
+    verbatim:
+      - "\"ALLSKY_SFC_SW_DWN\": {... \"ANN\": 5.6729}, \"ALLSKY_SFC_SW_DNI\": {... \"ANN\": 4.069}, \"ALLSKY_SFC_SW_DIFF\": {... \"ANN\": 2.3734}"
+  NASA-POWER-MONTHLY:
+    title: "NASA POWER monthly and annual API v2.10.0 (SYN1DEG), 2015-2025"
+    url: "https://power.larc.nasa.gov/api/temporal/monthly/point?parameters=ALLSKY_SFC_SW_DWN&community=RE&longitude=79.753204&latitude=8.291526&start=2015&end=2025&format=JSON"
+    response_sha256: "45beeeef256e1b16c59bb4221bdbd45585a13f157c0e24cbc3a5a7ce2c2e8a8d"
+    verbatim:
+      - "annual ALLSKY_SFC_SW_DWN 2015-2025 (kWh/m2/day): 5.6959, 5.7888, 5.6918, 5.545, 5.6849, 5.6208, 5.5858, 5.4696, 5.5759, 5.507, 5.4979"
+
+fx:
+  cny_per_usd: 6.7220          # CFETS-2026-10-16, applied to every CNY figure (ASSUMPTION: one rate for all dates)
+  source: CFETS-2026-10-16
+
+# Import levy postures, rates copied from the repository's own configs (LEVIES-REPOSITORY) and
+# applied with finance/import_levies.py's cascade: duties = CIF x (CID + PAL + SSCL); VAT on
+# (CIF + duties), and on the domestic share too when vat_on_domestic; VAT zero when relieved.
+levy_postures:
+  bonded:                       # NSO 250 base: PAL relieved by the bonded scheme, SSCL paid, VAT relieved
+    cid_pct: 0.0
+    pal_pct: 0.0
+    sscl_import_pct: 0.025
+    vat_pct: 0.18
+    vat_relieved: true
+    vat_on_domestic: false
+    source: scenarios/nso250_ltl_unit_base.yaml
+  prudent:                      # DutchBay lender case: PAL and SSCL paid, capex VAT relieved
+    cid_pct: 0.0
+    pal_pct: 0.05
+    sscl_import_pct: 0.025
+    vat_pct: 0.18
+    vat_relieved: true
+    vat_on_domestic: false
+    source: scenarios/dutchbay_lendercase_2025Q4.yaml
+  full_stack_paid:              # the repository's worst case: no relief, VAT on the whole capex
+    cid_pct: 0.0
+    pal_pct: 0.05
+    sscl_import_pct: 0.025
+    vat_pct: 0.18
+    vat_relieved: false
+    vat_on_domestic: true
+    source: scenarios/overrides/import_levies_full_stack_paid.yaml
+
+wind:
+  # One Envision EN-206/10.5 de-rated to 9.5 MW. Result: USD per kW of the 9.5 MW rating, all-in
+  # for the turbine (supply, freight, insurance, levies, inland transport, erection, foundation,
+  # electrical and EPC margin), EXCLUDING the plant-level grid, civils and development line
+  # (input B26, USD 2.0M), which the scenarios carry separately.
+  rated_kw: 9500.0
+  turbine_supply:
+    # CIF-equivalent turbine supply, USD/kW: a weighted blend of the web FOB and the internal
+    # anchors. Weights sum to 1 (checked).
+    web:
+      source: SOOCHOW-2026-07-24
+      weight: 0.5
+      cny_per_kw: {low: 2000.0, mode: 2700.0, high: 3000.0}   # range and the 2026E unit price
+      includes_freight: true
+    anchors:
+      W-KB-TENDER:
+        kind: public
+        weight: 0.25
+        source: KB-WIND-EPC
+        date: "2024-2025 (tender; undated in the knowledge base)"
+        scope: "wind turbine supply, Chinese OEM, bonded; transport is a separate line"
+        currency: USD
+        denominator: "per kW installed (56 MW: 10 x 5.6 MW)"
+        usd_per_kw: 348.0357142857143   # 389.80 x 50 / 56
+        includes_freight: false
+      W-DB150-DEV:
+        kind: private
+        weight: 0.25
+        source_repository: "arunakulat/DutchBay_RAG corpus/dutchbay_150mw_2025_developer_package (rough cost estimate)"
+        handling_note: DUTCHBAY150MW-PACKAGE-HANDLING-2026-09-21
+        date: "2025 (undated; package of February-May 2025)"
+        scope: "turbine equipment line of a 15-unit estimate; Incoterm not stated"
+        currency: USD
+        denominator: "per kW installed (unit rating inferred)"
+        includes_freight: true          # ASSUMPTION: treated as delivered (CIF)
+    freight_insurance_pct_for_fob: 0.06   # ASSUMPTION: added to anchors quoted without freight
+    marine_insurance_pct: 0.005           # ASSUMPTION: on every CIF-equivalent figure
+  inland_transport_usd_per_kw: {low: 20.0, mode: 40.0, high: 70.0}   # ASSUMPTION: port to Kalpitiya, one 10 MW-class set
+  epc_margin_pct: {low: 0.03, mode: 0.05, high: 0.08}                # ASSUMPTION: EPC wrap on the pass-through turbine and inland transport
+  levy_posture: {low: bonded, mode: prudent, high: full_stack_paid}
+  bop:
+    # Balance of plant within the turbine's scope (foundation, erection, cabling, site works,
+    # project management, contingency, EPC margin on that scope), farm scale, USD/kW installed.
+    # Excludes turbine supply, freight, the plant substation and the grid line. Each anchor is an
+    # EPC-level figure already carrying its contractor's margin. low = smallest anchor; mode =
+    # weighted blend; high = largest anchor.
+    anchors:
+      W-KB-TENDER-BOP:
+        kind: public
+        weight: 0.3333333333333333
+        source: KB-WIND-EPC
+        scope: "pre-tax EPC less turbine supply and transport (889.81 - 389.80 - 112.50 per kW on 50 MW), restated per installed kW"
+        usd_per_kw: 345.99107142857144  # (889.81 - 389.80 - 112.50) x 50 / 56
+      W-DB150-DEV-BOP:
+        kind: private
+        weight: 0.3333333333333333
+        source_repository: "arunakulat/DutchBay_RAG corpus/dutchbay_150mw_2025_developer_package (rough cost estimate)"
+        handling_note: DUTCHBAY150MW-PACKAGE-HANDLING-2026-09-21
+        scope: "wind generation plant item less turbine equipment (installation, construction, unit transformers, other)"
+      W-MULLIKULAM-WBS-BOP:
+        kind: public
+        weight: 0.3333333333333334
+        source: MULLIKULAM-SCENARIO
+        scope: "foundation, erection, collection, site preparation and development, project management, contingency; per installed kW (56 MW)"
+        usd_per_kw: 197.1875            # 11,042,500 / 56,000
+  single_machine:
+    # Premium for one machine against the 50 MW reference: the knowledge base's rule that shared
+    # infrastructure (mobilisation, engineering, site works, management) scales as MW^0.7, so its
+    # per-kW cost scales as (reference / this)^(1 - 0.7). The other BoP scales linearly.
+    reference_mw: 50.0
+    exponent: 0.7                                         # KB-WIND-EPC
+    shared_fraction: {low: 0.3, mode: 0.4, high: 0.5}    # ASSUMPTION: share of BoP that is shared infrastructure
+
+bess:
+  # USD per kWh of CONTRACTED energy (the 4 h nameplate), all-in: equipment (DC block, PCS and
+  # EMS) landed, BoP, EPC margin, augmentation reserve, then land and auxiliaries as a share of
+  # the total, the structure of conf/blue_whale_pv_bess_pricing.yaml (NSO250-PUBLIC).
+  equipment:
+    web:
+      weight: 0.5
+      source: TRENDFORCE-2026-09            # mode: September 4 h weighted average
+      low_source: CNNC-2026-10-14           # low: CNNC's lowest winning bid
+      cny_per_wh: {low: 0.4995, mode: 0.53, high: 0.58}
+      vat_in_price_pct: 0.13                # ASSUMPTION: Chinese tender prices include 13% VAT, removed for export
+      dc_per_contracted: 1.10               # EMBER-2025-12-11: installed oversized "by at least 10%"
+      freight_insurance_pct: 0.04           # ASSUMPTION: FOB China to Colombo, containerised
+      dc_block_share: 0.90                  # EMBER-2025-12-11: enclosures "close to 90%"
+    anchors:
+      B-ENV10:
+        kind: public
+        weight: 0.125
+        source: NSO250-PUBLIC
+        date: "2026-08-31 (offer); re-supplied 2026-09-04"
+        scope: "CIF Colombo, excluding duty and taxes: DC block, PCS and MV transformers, SCADA and EMS, installation guidance and commissioning, transport"
+        currency: USD
+        denominator: "per kWh contracted (10 MW / 40 MWh)"
+        usd_per_kwh: 99.50
+        includes_freight: true
+        handling_note: NSO250MW-OFFERS-HANDLING-2026-09-04   # its DC-block share is private
+      B-ENV11:
+        kind: public
+        weight: 0.125
+        source: NSO250-PUBLIC
+        date: "2026-08-31 (offer); re-supplied 2026-09-04"
+        scope: "as B-ENV10, 11 MW / 44 MWh"
+        currency: USD
+        denominator: "per kWh contracted (11 MW / 44 MWh)"
+        usd_per_kwh: 98.68
+        includes_freight: true
+        handling_note: NSO250MW-OFFERS-HANDLING-2026-09-04
+      B-OEMH:
+        kind: private
+        weight: 0.25
+        source_repository: "arunakulat/DutchBay_RAG corpus/nso_bess_250mw_2026_offers (second OEM quotation)"
+        handling_note: NSO250MW-OFFERS-HANDLING-2026-09-04
+        date: "2026-08-31 (file modified)"
+        scope: "DC containers, PCS and MV skid, EMS, commissioning; one site; Incoterm not stated"
+        currency: USD
+        denominator: "per kWh contracted (ASSUMPTION: 11 MW x 4 h)"
+        includes_freight: false
+  bop_usd_per_kwh: {low: 14.0, mode: 14.0, high: 30.0}    # NSO250-PUBLIC USD 14 (low, mode); EMBER's low-cost-grid EPC USD 30 (high)
+  epc_margin_pct: {low: 0.05, mode: 0.08, high: 0.12}     # ASSUMPTION: EPC wrap on landed equipment and BoP
+  augmentation_usd_per_kwh: 8.0                            # NSO250-PUBLIC
+  land_and_auxiliaries_share: 0.10                         # NSO250-PUBLIC (the lot is owned: a challenge point)
+  levy_posture: {low: bonded, mode: prudent, high: full_stack_paid}
+
+solar_resource:
+  # The PR 2 array (conf/blue_whale_solar_bess.yaml: module, tilt, azimuth, losses) at the PR 2
+  # layout's 160 tables (docs/blue_whale/pv_bess_layout_lot5b.geojson), the PR 4 size, on the
+  # repository's frozen TMY. PR 6's re-sizing commits 107 tables / 3.5 MW AC; the specific yield
+  # differs only through clipping (the sizing summary records that size's PV energy).
+  site:
+    # Area centroid of the 160 PV tables in docs/blue_whale/pv_bess_layout_lot5b.geojson.
+    latitude: 8.291526
+    longitude: 79.753204
+    turbine_latitude: 8.2925           # conf/blue_whale_wind_siting.yaml (PR 1 turbine)
+    turbine_longitude: 79.752666
+    tmy_latitude: 8.27
+    tmy_longitude: 79.75
+  unit_config: conf/blue_whale_solar_bess.yaml
+  dc_mwp: 6.0032                       # 160 tables of 56 x 670 W modules (the PR 2 layout; PR 4's size)
+  ac_mw: 5.0
+  inverter_eff_nom: 0.988              # Huawei SUN2000-330KTL-H1 European efficiency (conf/blue_whale_pv_bess_pricing.yaml)
+  albedo: 0.25                         # pvlib's default, which the repository's producer uses
+  cross_checks:
+    pvgis:
+      source: PVGIS-API-5.3
+      database: PVGIS-ERA5
+      years: "2005-2023"
+      system_loss_pct: 14.0
+      tilt_deg: 8.0
+      aspect_deg: 0.0                  # PVGIS convention: 0 = south
+      e_y_kwh_per_kwp: 1472.93
+      h_i_y_kwh_m2: 1933.89
+      sd_y_kwh: 33.68
+      l_aoi_pct: -2.7
+      l_spec_pct: 0.41
+      l_tg_pct: -9.36
+      l_total_pct: -23.84
+      e_m_kwh_per_kwp: [123.74, 127.44, 144.74, 127.43, 121.81, 119.39, 125.86, 130.97, 127.3, 118.08, 100.65, 105.52]
+      h_i_m_kwh_m2: [160.53, 168.32, 195.25, 171.91, 159.86, 155.54, 164.54, 170.66, 164.87, 154.24, 131.73, 136.45]
+    global_solar_atlas:
+      source: GSA-LTA-1.7
+      ghi_kwh_m2: 2047.6796875
+      dni_kwh_m2: 1499.1171875
+      dif_kwh_m2: 911.8828125
+      gti_opta_kwh_m2: 2067.8203125
+      opta_deg: 9
+      pvout_kwh_per_kwp: 1632.50439453125
+      pvout_monthly_kwh_per_kwp: [132.4010009765625, 139.583251953125, 162.37799072265625, 145.59002685546875, 132.21502685546875, 129.45001220703125, 136.9580078125, 141.76300048828125, 144.1500244140625, 138.01202392578125, 113.94000244140625, 116.06402587890625]
+      ghi_monthly_kwh_m2: [155.4375, 168.9921875, 204.5703125, 188.8203125, 173.9375, 171.4765625, 180.328125, 183.5546875, 181.828125, 168.296875, 134.96875, 135.46875]
+    nasa_power:
+      source: NASA-POWER-CLIM
+      period: "2001-2025 climatology"
+      ghi_kwh_m2_day: 5.6729
+      dni_kwh_m2_day: 4.069
+      dhi_kwh_m2_day: 2.3734
+      ghi_monthly_kwh_m2_day: [5.2337, 6.0415, 6.5366, 6.329, 5.8901, 5.875, 5.8195, 5.9842, 6.1123, 5.4298, 4.4794, 4.381]
+      annual_2015_2025_kwh_m2_day: [5.6959, 5.7888, 5.6918, 5.545, 5.6849, 5.6208, 5.5858, 5.4696, 5.5759, 5.507, 5.4979]
+      monthly_source: NASA-POWER-MONTHLY
+
+output:
+  # Relative to the repository root; null writes nothing.
+  capex_summary_json: null
+  solar_summary_json: null
+  solar_monthly_csv: null
+private_anchors_path: null             # a file OUTSIDE the repository; required for the capex blend
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null

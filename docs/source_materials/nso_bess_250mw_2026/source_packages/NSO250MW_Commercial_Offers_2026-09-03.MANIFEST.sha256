@@ -59,6 +59,19 @@
 #    repository and recorded by manifest.
 #
 #    Offer validity is 30 days from 31 August 2026, so both offers lapse on 30 September 2026.
+#
+# 5. PROMOTION INTO A PUBLISHED BLEND, 1 NOVEMBER 2026.
+#    On 1 November 2026 the project owner decided "Derived blend may publish" (#1353, comment
+#    6556975196): prices from this package may enter a capex blend whose blended or derived
+#    figures are published, and no raw figure is. On that basis, blended figures derived in part
+#    from this package now appear in the Blue Whale configs and scenarios
+#    (conf/blue_whale_capex_solar_resource.yaml, conf/blue_whale_pv_bess_pricing.yaml,
+#    docs/blue_whale/capex_blend_summary.json and scenarios/blue_whale_*_lot5b_2026.yaml): the
+#    BESS all-in capex per kWh and its blended split. No raw figure from the offers or from the
+#    second OEM quotation is published. A reader may be able to back out a private input from a
+#    blend, and the owner's decision accepts that. This moves the disclosure surface on the
+#    owner's authority, and it is recorded here as a handling change rather than applied
+#    quietly. Items 1 to 4 stand.
 # ═════════════════════════════════════════════════════════════════════════════════════════════
 #
 # Paths below are relative to corpus/nso_bess_250mw_2026_offers/ in the private repository.
