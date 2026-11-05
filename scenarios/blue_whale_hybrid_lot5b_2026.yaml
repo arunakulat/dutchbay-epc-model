@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # Blue Whale Hybrid: 9.5 MW wind + a 5 MW solar + 5 MW / 24 MWh BESS unit (Lot 5B, Kalpitiya)
 # ═══════════════════════════════════════════════════════════════════════════════
-# Version: 0.6 (SKELETON: screening placeholders, not a basis for any decision)
+# Version: 0.7 (SKELETON: screening placeholders, not a basis for any decision)
 # Path: scenarios/blue_whale_hybrid_lot5b_2026.yaml
 #
 # SUPERSEDED COMBINED VIEW (PR 4, 2026-11-01). The owner decided (#1353 comment 6556854201):
@@ -15,6 +15,11 @@
 # are superseded. OPEN LEGAL RISK: under the Electricity Act No. 36 of 2024, s.11(3) proviso,
 # capacity "procured from a contiguous location ... on cumulative basis shall not exceed 10 MW";
 # the turbine and the solar + BESS project share this lot (conf/blue_whale_pucsl_fit_2026.yaml).
+#
+# v0.7 (PR 5): the wind block mirrors scenarios/blue_whale_wind_lot5b_2026.yaml, so its CF and
+# AEP move with that file to the met-mast transfer (docs/blue_whale/met_mast_transfer_summary.json),
+# and the project CF and tariff blend below are recomputed by their own formulas. Nothing else in
+# the combined view changes. NOT LENDER-GRADE: the met-mast package's HOLD stands.
 #
 # Configuration under study (owner brief, 2026-10-27):
 #   - 1 x 10 MW wind turbine (single-machine project); from v0.4 (owner, 2026-11-01) one
@@ -56,7 +61,8 @@ project:
   name: "Blue Whale Hybrid Wind+Solar+BESS (Lot 5B)"
   location: "Lot 5B Plan 3641, Mutuwal, GN Dutch Bay 633, Kalpitiya DS, Puttalam District, North Western Province, Sri Lanka"
   capacity_mw: 14.5             # generation nameplate: 9.5 MW wind + the 5 MW AC solar + BESS unit
-  capacity_factor: 0.302132     # capacity-weighted blend of the two tech CFs below: (9.5 x 0.374256 + 5 x 0.165096) / 14.5
+  capacity_factor: 0.3763655    # capacity-weighted blend of the two tech CFs below: (9.5 x 0.487560 + 5 x 0.165096) / 14.5
+                                # (v0.7; was 0.302132 on the #1530 wind CF 0.374256)
   curtailment_pct: 0.0
   degradation: 0.5              # PLACEHOLDER (input B12)
   life_years: 20                # PLACEHOLDER (input F01): PPA term
@@ -73,7 +79,10 @@ generation:
       # 206 m rotor, tip height 233 m. De-rate modelled as the power curve clipped at
       # 9,500 kW (an assumption; an OEM de-rate mode may differ).
       capacity_mw: 9.5
-      capacity_factor: 0.374256   # Net P50 CF on 9.5 MW, derived (v0.4) by
+      capacity_factor: 0.487560   # v0.7 (PR 5): = scenarios/blue_whale_wind_lot5b_2026.yaml, from met mast 617725
+                                  # transferred to the turbine (scripts/run_blue_whale_met_mast_transfer_v14.py);
+                                  # gross 43.99 GWh, net 40.57 GWh; NOT LENDER-GRADE. Superseded v0.4 basis follows.
+                                  # Was 0.374256: net P50 CF on 9.5 MW, derived (v0.4) by
                                   # scripts/run_blue_whale_wind_siting_v14.py from the confidential OEM curve
                                   # (PMD-004447 Rev A, read at run time, never committed) over the DutchBay
                                   # ERA5-fitted Weibull (A 8.199, k 2.665 at 150 m) moved to 130 m with shear
@@ -83,7 +92,7 @@ generation:
                                   # DEPENDS ON THE PLACEHOLDER SITE. ERA5 basis, not a site measurement (B07).
                                   # Was 0.35 on 10 MW (DutchBay per-turbine scaling).
       degradation_pct: 0.6        # PLACEHOLDER: DutchBay turbine-ageing assumption
-      aep_gwh: 31.15              # net P50: 9.5 MW x 8760 h x 0.374256 (reporting)
+      aep_gwh: 40.57              # net P50: 9.5 MW x 8760 h x 0.487560 (reporting). Was 31.15 (v0.4-v0.6)
       capex_usd: 12350000         # PLACEHOLDER (input B09): $1,300/kW x 9.5 MW, above the DutchBay $1,000/kW
                                   # because a single machine carries crane, mobilisation and grid costs alone
       availability_pct: 97.0
@@ -148,12 +157,12 @@ tariff:
   # wind 25.73 (20.80 non-escalable + 4.93 escalable O&M), ground solar + BESS other-period 20.72
   # (18.00 + 2.72). The engine reads one tariff, so this is their energy-weighted blend on the CFs
   # above (v0.5: the solar CF is the unit's export, priced at 20.72; bess_1 adds the premium):
-  # (9.5 x 0.374256 x 25.73 + 5 x 0.165096 x 20.72) / (9.5 x 0.374256 + 5 x 0.165096) = 24.786
-  # (24.749 at v0.5; 24.77 at v0.4 on the 5 MWp x 0.1685 solar; 24.76 at v0.3).
+  # (9.5 x 0.487560 x 25.73 + 5 x 0.165096 x 20.72) / (9.5 x 0.487560 + 5 x 0.165096) = 24.97218
+  # (24.786 at v0.6; 24.749 at v0.5; 24.77 at v0.4 on the 5 MWp x 0.1685 solar; 24.76 at v0.3).
   # OPEN: the FiT is for plants under 10 MW. The wind is now 9.5 MW, under the limit on its
   # own, but the plant is 14.5 MW. Whether the limit counts per technology or per plant was
   # not found. If per plant, this tariff does not apply. Was 20.3 (DutchBay hybrid tariff).
-  lkr_per_kwh: 24.786
+  lkr_per_kwh: 24.97218
   tariff_type: fixed            # input F04: two-part regulator-set FiT. The O&M part is indexed yearly and
                                 # the non-escalable part adjusted once at month 12; neither is modelled here
   ppa_term_years: 20            # input F01: no official term for the 2026 small-plant FiT. 20 matches the
@@ -288,12 +297,13 @@ wacc:
   description: "Build-up WACC drives the project discount rate."
 
 metadata:
-  version: '0.6'
+  version: '0.7'
   last_updated: '2026-11-01'
   author: DutchBay V14 Financial Modeling Team
   review_status: SKELETON - screening placeholders pending owner inputs (docs/blue_whale/INPUTS_REQUIRED.md)
   assumptions_source: 'Scaled from dutchbay_hybrid_bess_2025Q4 and ceb_solar_bess_nightpeak_10mw'
   changes:
+    - 'v0.7 (2026-11-01): wind block mirrors the wind scenario v0.2 (PR 5, met mast 617725 transferred to the turbine): wind CF 0.374256 -> 0.487560, AEP 31.15 -> 40.57 GWh; project CF 0.302132 -> 0.3763655 and tariff blend 24.786 -> 24.97218 by their formulas. Not lender-grade; the met-mast HOLD stands'
     - 'v0.6 (2026-11-01): solar + BESS unit SIZED by a seeded Monte Carlo (PR 3; seed 20261101, 40 sizes x 256 LHS trials, docs/blue_whale/pv_bess_sizing_summary.json) on the P50 project NPV among sizes that export the full 4 h priority window: DC/AC 1.1 (5.51544 MWp, 147 tables) with 5 MW / 24 MWh. Priced from cited sources (conf/blue_whale_pv_bess_pricing.yaml): PV 3,368,596 (modules OPIS Jul-Aug 2026, Huawei SUN2000-330KTL-H1 inverters, IRENA-derived BoP), BESS 3,240,000 at the public NSO 250 base USD 135.00/kWh. Solar CF 0.165096, degradation 0.384074; bess_1 325.4723 cycles, fade 0.001914; tariff blend 24.786; capex 20,958,596; O&M 615,154 (placeholder rates scaled). Turbine unchanged'
     - 'v0.5 (2026-11-01): solar + BESS unit (owner): 5 MW AC / 6.0032 MWp of JinkoSolar Tiger Neo 3.0 670 W with a 5 MW x 6 h (30 MWh) BESS charged only from the PV, dispatched hourly 17:30-21:30 (priority 50.10) and 05:30-07:30 (20.72) over the PVGIS TMY. Solar block = unit export (CF 0.173144, degradation 0.364946); bess_1 = energy_tariff priority premium 29.38 on 267.0335 cycles for 15 years; tariff blend 24.749. BESS capex placeholder scaled to 30 MWh (3.75M). The array and BESS fit the placeholder lot'
     - 'v0.4 (2026-11-01): turbine EN-206/10.5 de-rated to 9.5 MW at 130 m hub (owner); wind CF 0.374256 and net AEP 31.15 GWh derived from the confidential OEM curve over the DutchBay ERA5 basis; generation 14.5 MW; wind capex at the unchanged $1,300/kW placeholder; tariff blend 24.77. Placeholder site: assumed square lot on the OSM coastline, turbine at the CZ&CRMP 2024-2029 setback'

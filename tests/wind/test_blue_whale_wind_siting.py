@@ -315,8 +315,14 @@ def test_scenario_matches_the_private_curve_yield() -> None:
         losses=basis["losses"],
         integrator_tolerance_pct=raw["resource"]["integrator_tolerance_pct"],
     )
-    wind = yaml.safe_load(SCENARIO.read_text())["generation"]["technologies"]["wind"]
-    assert wind["capacity_factor"] == pytest.approx(
+    # From PR 5 the scenario's wind CF rests on the met-mast transfer; this screen's ERA5
+    # basis is recorded in that run's summary, which must still equal what the curve yields.
+    era5 = json.loads(
+        (
+            REPO_ROOT / "docs" / "blue_whale" / "met_mast_transfer_summary.json"
+        ).read_text()
+    )["yield"]["era5_weibull_basis_1530"]
+    assert era5["net_capacity_factor"] == pytest.approx(
         got["net_capacity_factor"], abs=5e-7
     )
-    assert wind["aep_gwh"] == pytest.approx(got["net_aep_gwh"], abs=0.005)
+    assert era5["net_aep_gwh"] == pytest.approx(got["net_aep_gwh"], abs=0.005)

@@ -570,8 +570,19 @@ def test_scenario_carries_the_recommended_base_case() -> None:
     assert b["revenue"]["cycles_per_year"] == pytest.approx(
         eng["bess_cycles_per_year"], abs=5e-5
     )
+
+    # PR 5 (met-mast transfer) moved the hybrid's wind CF after this sizing ran, so the
+    # tariff is checked against the blend formula on the CURRENT wind CF; the same formula
+    # on PR 3's frozen wind CF must still reproduce PR 3's frozen tariff (the original
+    # oracle, kept rather than dropped).
+    def blend(wind_cf: float) -> float:
+        e_w = techs["wind"]["capacity_mw"] * wind_cf
+        e_s = solar["capacity_mw"] * eng["solar_capacity_factor"]
+        return (e_w * 25.73 + e_s * 20.72) / (e_w + e_s)
+
+    assert blend(0.374256) == pytest.approx(eng["tariff_lkr_per_kwh"], abs=5e-5)
     assert scen["tariff"]["lkr_per_kwh"] == pytest.approx(
-        eng["tariff_lkr_per_kwh"], abs=5e-5
+        blend(techs["wind"]["capacity_factor"]), abs=5e-5
     )
     assert scen["capex"]["usd_total"] == pytest.approx(
         sum(techs[t]["capex_usd"] for t in ("wind", "solar", "bess_1")) + 2.0e6
