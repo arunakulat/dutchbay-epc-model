@@ -1,0 +1,1 @@
+- **CI coverage gate (`test-suite.yml`)**: install the `[solar]` (`pvlib`) optional extra alongside `[wind,gis]` in the `test`, `coverage`, and `lint` jobs so `pvlib`-gated tests under `tests/solar/` and `tests/gis/` execute in the sharded test suite instead of skipping while `solar_resource` and `analytics/gis` remain in the 95% coverage denominator.
