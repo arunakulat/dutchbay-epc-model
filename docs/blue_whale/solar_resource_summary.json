@@ -1,0 +1,255 @@
+{
+  "array": {
+    "ac_mw": 5.0,
+    "azimuth_deg": 180.0,
+    "cell_temperature": "Faiman",
+    "dc_mwp": 6.0032,
+    "gamma_pdc_per_c": -0.0026,
+    "inverter_eff_nom": 0.988,
+    "module": "JinkoSolar Tiger Neo 3.0 JKM670N-66QL6-BDV",
+    "system_loss_pct": 14.0,
+    "tilt_deg": 8.0,
+    "transposition": "Hay-Davies"
+  },
+  "at_pv_centroid": {
+    "annual": {
+      "ac_mwh": 10723.952295705658,
+      "capacity_factor_ac": 0.21056162041796497,
+      "capacity_factor_dc": 0.17537448395686048,
+      "clipping_hours": 138.0,
+      "dc_mwh": 10895.99487796952,
+      "dhi_kwh_m2": 657.4910500000001,
+      "dni_kwh_m2": 1796.6668200000001,
+      "ghi_kwh_m2": 1871.34475,
+      "mean_ambient_c": 26.998708904109588,
+      "net_ac_mwh": 9222.598974306866,
+      "performance_ratio": 0.8146298458276314,
+      "poa_isotropic_closed_form_kwh_m2": 1883.172684212736,
+      "poa_isotropic_pvlib_kwh_m2": 1883.172684212736,
+      "poa_kwh_m2": 1885.8632387833745,
+      "poa_weighted_cell_c": 39.44596740000027,
+      "reference_mwh": 11321.214195064353,
+      "specific_yield_kwh_per_kwp": 1536.2804794620981
+    },
+    "loss_breakdown_of_reference": {
+      "inverter_efficiency_and_clipping": -0.015196477983683685,
+      "system_losses": -0.1326141609486842,
+      "temperature_and_irradiance": -0.03755951524000073,
+      "total": -0.1853701541723686
+    },
+    "monthly": [
+      {
+        "dhi_kwh_m2": 52.20715,
+        "dni_kwh_m2": 149.83106,
+        "ghi_kwh_m2": 148.77745000000002,
+        "month": 1.0,
+        "net_ac_mwh": 777.9308565513826,
+        "performance_ratio": 0.8161250738940818,
+        "poa_kwh_m2": 158.78207195719222,
+        "specific_yield_kwh_per_kwp": 129.58603020911892
+      },
+      {
+        "dhi_kwh_m2": 43.135850000000005,
+        "dni_kwh_m2": 175.69638,
+        "ghi_kwh_m2": 162.2209,
+        "month": 2.0,
+        "net_ac_mwh": 816.2133285609925,
+        "performance_ratio": 0.7993424187989744,
+        "poa_kwh_m2": 170.09361437681716,
+        "specific_yield_kwh_per_kwp": 135.96304113822504
+      },
+      {
+        "dhi_kwh_m2": 56.991800000000005,
+        "dni_kwh_m2": 147.35726,
+        "ghi_kwh_m2": 158.7596,
+        "month": 3.0,
+        "net_ac_mwh": 777.6581527615365,
+        "performance_ratio": 0.8069461925210472,
+        "poa_kwh_m2": 160.53189792021323,
+        "specific_yield_kwh_per_kwp": 129.54060380489346
+      },
+      {
+        "dhi_kwh_m2": 50.19025,
+        "dni_kwh_m2": 189.9332,
+        "ghi_kwh_m2": 181.39,
+        "month": 4.0,
+        "net_ac_mwh": 858.8142125914042,
+        "performance_ratio": 0.8040640173014704,
+        "poa_kwh_m2": 177.9204151306562,
+        "specific_yield_kwh_per_kwp": 143.05940374990075
+      },
+      {
+        "dhi_kwh_m2": 59.64565,
+        "dni_kwh_m2": 146.97208999999998,
+        "ghi_kwh_m2": 163.45065,
+        "month": 5.0,
+        "net_ac_mwh": 772.4449916920289,
+        "performance_ratio": 0.8209680261864848,
+        "poa_kwh_m2": 156.73229975767458,
+        "specific_yield_kwh_per_kwp": 128.67220677172656
+      },
+      {
+        "dhi_kwh_m2": 58.44175,
+        "dni_kwh_m2": 145.87584999999999,
+        "ghi_kwh_m2": 161.08875000000003,
+        "month": 6.0,
+        "net_ac_mwh": 757.4502985465664,
+        "performance_ratio": 0.8259095389367576,
+        "poa_kwh_m2": 152.77027016911197,
+        "specific_yield_kwh_per_kwp": 126.17442339861515
+      },
+      {
+        "dhi_kwh_m2": 61.62835,
+        "dni_kwh_m2": 133.27428,
+        "ghi_kwh_m2": 155.9159,
+        "month": 7.0,
+        "net_ac_mwh": 733.1939325925908,
+        "performance_ratio": 0.8201535040080505,
+        "poa_kwh_m2": 148.91584333281108,
+        "specific_yield_kwh_per_kwp": 122.13385071171889
+      },
+      {
+        "dhi_kwh_m2": 67.02289999999999,
+        "dni_kwh_m2": 140.27801000000002,
+        "ghi_kwh_m2": 165.86475,
+        "month": 8.0,
+        "net_ac_mwh": 795.0324024117758,
+        "performance_ratio": 0.8206367354512235,
+        "poa_kwh_m2": 161.38050224207558,
+        "specific_yield_kwh_per_kwp": 132.43476852541576
+      },
+      {
+        "dhi_kwh_m2": 59.249599999999994,
+        "dni_kwh_m2": 146.58363,
+        "ghi_kwh_m2": 162.2021,
+        "month": 9.0,
+        "net_ac_mwh": 799.4175228087671,
+        "performance_ratio": 0.8193910541539104,
+        "poa_kwh_m2": 162.5173129107629,
+        "specific_yield_kwh_per_kwp": 133.16523234421095
+      },
+      {
+        "dhi_kwh_m2": 56.8019,
+        "dni_kwh_m2": 129.27023,
+        "ghi_kwh_m2": 145.9143,
+        "month": 10.0,
+        "net_ac_mwh": 735.2607415636934,
+        "performance_ratio": 0.8159408704419758,
+        "poa_kwh_m2": 150.10663111997644,
+        "specific_yield_kwh_per_kwp": 122.47813525514616
+      },
+      {
+        "dhi_kwh_m2": 47.958600000000004,
+        "dni_kwh_m2": 116.05115,
+        "ghi_kwh_m2": 116.54729999999999,
+        "month": 11.0,
+        "net_ac_mwh": 607.1605851787114,
+        "performance_ratio": 0.8169387852987922,
+        "poa_kwh_m2": 123.80302125684915,
+        "specific_yield_kwh_per_kwp": 101.13948980189089
+      },
+      {
+        "dhi_kwh_m2": 44.21725,
+        "dni_kwh_m2": 175.54368,
+        "ghi_kwh_m2": 149.21304999999998,
+        "month": 12.0,
+        "net_ac_mwh": 792.0219490474153,
+        "performance_ratio": 0.8128508108326015,
+        "poa_kwh_m2": 162.30935860923387,
+        "specific_yield_kwh_per_kwp": 131.93329375123523
+      }
+    ]
+  },
+  "at_tmy_point": {
+    "annual": {
+      "ac_mwh": 10723.718234202595,
+      "capacity_factor_ac": 0.2105570246898226,
+      "capacity_factor_dc": 0.17537065622486558,
+      "clipping_hours": 138.0,
+      "dc_mwh": 10895.777519838217,
+      "dhi_kwh_m2": 657.4910500000001,
+      "dni_kwh_m2": 1796.6668200000001,
+      "ghi_kwh_m2": 1871.34475,
+      "mean_ambient_c": 26.998708904109588,
+      "net_ac_mwh": 9222.39768141423,
+      "performance_ratio": 0.8146280116512579,
+      "poa_isotropic_closed_form_kwh_m2": 1883.151613562574,
+      "poa_isotropic_pvlib_kwh_m2": 1883.1516135625739,
+      "poa_kwh_m2": 1885.8263238650939,
+      "poa_weighted_cell_c": 39.44610580758808,
+      "reference_mwh": 11320.99258742693,
+      "specific_yield_kwh_per_kwp": 1536.2469485298225
+    },
+    "producer_annual_energy_gwh": 9.222397681414233,
+    "relative_difference_to_producer": 3.8522668415831106e-16
+  },
+  "config_sha256": "8d6ad66d2d5c29f09d92ba3b89b22435681034dda99125040e36c427871b4e38",
+  "cross_checks": [
+    {
+      "dhi_kwh_m2": 657.4910500000001,
+      "dni_kwh_m2": 1796.6668200000001,
+      "ghi_kwh_m2": 1871.34475,
+      "ghi_kwh_m2_vs_pvlib": 0.0,
+      "poa_kwh_m2": 1885.8632387833745,
+      "poa_kwh_m2_vs_pvlib": 0.0,
+      "source": "pvlib on the frozen PVGIS-ERA5 TMY (this run)",
+      "specific_yield_kwh_per_kwp": 1536.2804794620981,
+      "specific_yield_kwh_per_kwp_vs_pvlib": 0.0
+    },
+    {
+      "dhi_kwh_m2": null,
+      "dni_kwh_m2": null,
+      "ghi_kwh_m2": null,
+      "ghi_kwh_m2_vs_pvlib": null,
+      "poa_kwh_m2": 1933.89,
+      "poa_kwh_m2_vs_pvlib": 0.025466725385457467,
+      "source": "PVGIS 5.3 PVcalc, PVGIS-ERA5 2005-2023, 8 deg, 14% loss",
+      "specific_yield_kwh_per_kwp": 1472.93,
+      "specific_yield_kwh_per_kwp_vs_pvlib": -0.0412362718325231
+    },
+    {
+      "dhi_kwh_m2": 911.8828125,
+      "dni_kwh_m2": 1499.1171875,
+      "ghi_kwh_m2": 2047.6796875,
+      "ghi_kwh_m2_vs_pvlib": 0.09422899628729553,
+      "poa_kwh_m2": 2067.8203125,
+      "poa_kwh_m2_vs_pvlib": 0.09648476621985136,
+      "source": "Global Solar Atlas (Solargis 2.2.68), optimum tilt 9 deg, GSA losses",
+      "specific_yield_kwh_per_kwp": 1632.50439453125,
+      "specific_yield_kwh_per_kwp_vs_pvlib": 0.06263434077014574
+    },
+    {
+      "dhi_kwh_m2": 866.291,
+      "dni_kwh_m2": 1485.185,
+      "ghi_kwh_m2": 2070.6085000000003,
+      "ghi_kwh_m2_vs_pvlib": 0.1064815822952987,
+      "poa_kwh_m2": null,
+      "poa_kwh_m2_vs_pvlib": null,
+      "source": "NASA POWER SYN1DEG climatology 2001-2025",
+      "specific_yield_kwh_per_kwp": null,
+      "specific_yield_kwh_per_kwp_vs_pvlib": null
+    },
+    {
+      "dhi_kwh_m2": null,
+      "dni_kwh_m2": null,
+      "ghi_kwh_m2": 2046.1037272727272,
+      "ghi_kwh_m2_vs_pvlib": 0.09338684241518158,
+      "poa_kwh_m2": null,
+      "poa_kwh_m2_vs_pvlib": null,
+      "source": "NASA POWER SYN1DEG annual mean 2015-2025",
+      "specific_yield_kwh_per_kwp": null,
+      "specific_yield_kwh_per_kwp_vs_pvlib": null
+    }
+  ],
+  "site": {
+    "distance_to_tmy_point_m": 2419.410124910669,
+    "distance_to_turbine_m": 123.42653311214886,
+    "pv_centroid": [
+      8.291526,
+      79.753204
+    ],
+    "tmy_database": "PVGIS-ERA5 (2005-2023), per the PVGIS 5.3 TMY API metadata",
+    "tmy_path": "inputs/solar_tmy/kalpitiya_pvgis_tmy_8.27N_79.75E.csv",
+    "tmy_sha256": "c71c9c8bd8d8736580a8b5a1e27ca53dbed9576ef8221ba48dce87a45ecf3d24"
+  }
+}

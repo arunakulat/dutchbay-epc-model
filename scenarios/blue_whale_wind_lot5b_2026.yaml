@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # Blue Whale Wind project (Lot 5B, Kalpitiya): 1 x Envision EN-206/10.5 de-rated to 9.5 MW
 # ═══════════════════════════════════════════════════════════════════════════════
-# Version: 0.2 (SKELETON: screening placeholders, not a basis for any decision)
+# Version: 0.3 (SKELETON: screening placeholders, not a basis for any decision)
 # Path: scenarios/blue_whale_wind_lot5b_2026.yaml
 #
 # A SEPARATE PROJECT, BUILT FIRST (owner, 2026-11-01, #1353 comment 6556854201): "We will
@@ -48,6 +48,17 @@
 # any size the solar + BESS sizing considered. An open question for PUCSL, the NSO or counsel
 # (sources frozen in conf/blue_whale_pucsl_fit_2026.yaml).
 #
+# CAPEX (v0.3, PR 6, work item #1353 comment 6556975196): the turbine capex is a BLEND of China
+# export FOB pricing and internal anchors (conf/blue_whale_capex_solar_resource.yaml,
+# scripts/run_blue_whale_capex_solar_resource_v14.py, method
+# docs/blue_whale/CAPEX_AND_SOLAR_RESOURCE_METHODS.md). Owner decisions, verbatim: "in the next
+# step, search for the latest CAPEX figures for Wind and BESS from RAG and EPC corpus (Mannar,
+# Mullikulam, NSO BESS tender, and Kalpitiya) interpolate with China FOB pricing from a deep web
+# search, indicate the solar efficacy and strength at the Blue Whale location (provide
+# references for the pvlab or any other process through which these numbers are obtained) and
+# update all YAML occasions in the Blue Whale Scenario"; "Derived blend may publish". The
+# disclosure surface moves on the owner's authority; no raw private figure is published.
+#
 # EVERY VALUE BELOW IS A PLACEHOLDER unless its comment says otherwise. The finance blocks are
 # the hybrid's (v0.6), copied where they apply. The inputs register is
 # docs/blue_whale/INPUTS_REQUIRED.md.
@@ -83,8 +94,14 @@ generation:
                                   # Was 0.374256 (#1530: DutchBay ERA5-fitted Weibull, 7.14 m/s at 130 m)
       degradation_pct: 0.6        # PLACEHOLDER: DutchBay turbine-ageing assumption
       aep_gwh: 40.57              # net P50: 9.5 MW x 8760 h x 0.487560 (reporting). Was 31.15
-      capex_usd: 12350000         # PLACEHOLDER (input B09): $1,300/kW x 9.5 MW (public range 977-1,420 USD/kW,
-                                  # docs/knowledge_base/01_wind_epc_costs_and_scaling.md)
+      capex_usd: 8899980          # BLENDED (v0.3, PR 6, input B09): USD 936.84/kW x 9.5 MW, the single-turbine
+                                  # all-in mode of conf/blue_whale_capex_solar_resource.yaml (range 728.16-1,341.16
+                                  # USD/kW; docs/blue_whale/capex_blend_summary.json): China export FOB blended
+                                  # with internal anchors, landed (PAL 5% + SSCL 2.5%, VAT relieved), inland
+                                  # transport, EPC wrap, BoP with a single-machine premium; excludes the B26 line.
+                                  # This figure is a blend that includes private commercial inputs; a reader may
+                                  # be able to back out a private input. Published on the owner's decision of
+                                  # 2026-11-01 (#1353 comment 6556975196). Was 12,350,000 ($1,300/kW placeholder)
       availability_pct: 97.0
 
 tariff:
@@ -117,9 +134,10 @@ fx:
 capex:
   cost_basis_year: 2026
   estimate_class: 5             # AACE Class 5 (concept screening)
-  usd_total: 14350000           # wind 12.35M + grid/civils/development 2.0M (PLACEHOLDER B26, the hybrid's whole
-                                # line carried to each project: separate SPPAs, separate connections)
-  capex_per_kw_usd: 1511        # 14.35M / 9.5 MW
+  usd_total: 10899980           # wind 8,899,980 (blended, v0.3) + grid/civils/development 2.0M (PLACEHOLDER B26, the
+                                # hybrid's whole line carried to each project: separate SPPAs, separate connections).
+                                # Was 14,350,000
+  capex_per_kw_usd: 1147        # 10,899,980 / 9.5 MW (was 1511)
 
 opex:
   usd_per_year: 500000          # PLACEHOLDER (inputs B10, B28): wind O&M 0.35M + insurance, land lease and
@@ -221,11 +239,12 @@ wacc:
   description: "Build-up WACC drives the project discount rate."
 
 metadata:
-  version: '0.2'
+  version: '0.3'
   last_updated: '2026-11-01'
   author: DutchBay V14 Financial Modeling Team
   review_status: SKELETON - screening placeholders pending owner inputs (docs/blue_whale/INPUTS_REQUIRED.md)
   assumptions_source: 'Split from blue_whale_hybrid_lot5b_2026 v0.6 (wind block and finance blocks)'
   changes:
+    - 'v0.3 (2026-11-01): wind capex BLENDED (PR 6, #1353 comment 6556975196): 12,350,000 ($1,300/kW placeholder) -> 8,899,980 (USD 936.84/kW, range 728.16-1,341.16, conf/blue_whale_capex_solar_resource.yaml); capex total 14,350,000 -> 10,899,980. A blend that includes private commercial inputs, published on the owner''s decision'
     - 'v0.2 (2026-11-01): wind resource from met mast 617725 (PR 5, #1353 comment 6556910250): sector-wise variance-ratio MCP at 120 m against NASA POWER / MERRA-2, long-term 2015-2025, transferred 26.7 km to the turbine through the reference, sheared to 130 m. Wind CF 0.374256 -> 0.487560, net AEP 31.15 -> 40.57 GWh (P90 1-year 33.73, 20-year 33.92). Not lender-grade; the met-mast HOLD stands'
     - 'v0.1 (2026-11-01): the turbine as its own project, built first (owner decision, #1353 comment 6556854201). Wind block unchanged from the hybrid v0.6 (#1530: 9.5 MW, CF 0.374256, 31.15 GWh, capex 12.35M placeholder); tariff 25.73 (PUCSL Annex 2 wind); capex 14.35M with the 2.0M grid/civils/development placeholder; O&M 0.5M; no solar, no BESS'

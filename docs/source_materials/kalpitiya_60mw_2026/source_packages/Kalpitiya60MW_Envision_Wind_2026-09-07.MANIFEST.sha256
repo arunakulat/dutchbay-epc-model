@@ -71,6 +71,10 @@
 #    produced the energy yield appendix, and what the wind data provenance and uncertainty basis
 #    are. The owner's decision uses the curve without waiting for those answers; it does not
 #    answer them. Recording a package is not accepting it.
+#    On the same date the owner also decided "Derived blend may publish" (#1353, comment
+#    6556975196), which allows prices from this package to enter a published capex blend. No
+#    figure from this package entered the Blue Whale capex blend (conf/blue_whale_capex_solar_resource.yaml),
+#    so this note's account of what has been promoted is unchanged.
 # ═════════════════════════════════════════════════════════════════════════════════════════════
 #
 # Paths below are relative to corpus/kalpitiya_60mw_2026_envision_wind/ in the private

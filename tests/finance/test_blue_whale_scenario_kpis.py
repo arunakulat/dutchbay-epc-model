@@ -49,10 +49,13 @@ SCRIPT = (
 # Re-pinned at 15.16.0 for the PR 5 met-mast transfer (hybrid v0.7: wind CF 0.374256 ->
 # 0.487560, tariff blend 24.786 -> 24.97218). Before, at 15.15.0 (v0.6): project IRR
 # 0.042560941205600764, equity IRR 0.015846290954853348, min DSCR 0.8678660628624484.
+# Re-pinned at 15.17.0 for PR 6 capex (hybrid v0.8: wind capex 12,350,000 -> 8,899,980,
+# BESS capex 3,240,000 -> 3,377,760, both blended). Before, at 15.16.0 (v0.7): project IRR
+# 0.06900278150431857, equity IRR 0.04331151885509987, min DSCR 0.8674143524654796.
 PINS = {
-    "project_irr": 0.06900278150431857,
-    "equity_irr": 0.04331151885509987,
-    "min_dscr": 0.8674143524654796,
+    "project_irr": 0.08734893167526492,
+    "equity_irr": 0.06377186287573333,
+    "min_dscr": 0.8678977848741305,
 }
 
 

@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # Blue Whale Hybrid: 9.5 MW wind + a 5 MW solar + 5 MW / 24 MWh BESS unit (Lot 5B, Kalpitiya)
 # ═══════════════════════════════════════════════════════════════════════════════
-# Version: 0.7 (SKELETON: screening placeholders, not a basis for any decision)
+# Version: 0.8 (SKELETON: screening placeholders, not a basis for any decision)
 # Path: scenarios/blue_whale_hybrid_lot5b_2026.yaml
 #
 # SUPERSEDED COMBINED VIEW (PR 4, 2026-11-01). The owner decided (#1353 comment 6556854201):
@@ -15,6 +15,16 @@
 # are superseded. OPEN LEGAL RISK: under the Electricity Act No. 36 of 2024, s.11(3) proviso,
 # capacity "procured from a contiguous location ... on cumulative basis shall not exceed 10 MW";
 # the turbine and the solar + BESS project share this lot (conf/blue_whale_pucsl_fit_2026.yaml).
+#
+# v0.8 (PR 6, #1353 comment 6556975196): the wind capex mirrors the wind scenario's BLENDED
+# turbine capex (USD 936.84/kW) and the BESS capex takes the BLENDED all-in mode (USD 140.74 per
+# kWh contracted), both from conf/blue_whale_capex_solar_resource.yaml through
+# conf/blue_whale_pv_bess_pricing.yaml. These are blends that include private commercial inputs;
+# a reader may be able to back out a private input. Published on the owner's decision of
+# 2026-11-01 (#1353 comment 6556975196). The unit size, CFs and tariff blend are unchanged: PR 3's
+# sizing (docs/blue_whale/pv_bess_sizing_summary.json) was re-run on the blended prices and this
+# file (seed 20261101, 40 sizes x 256 trials) and still chooses DC/AC 1.1 with 5 MW / 24 MWh,
+# beating DC/AC 1.2 in 92.6% of paired trials.
 #
 # v0.7 (PR 5): the wind block mirrors scenarios/blue_whale_wind_lot5b_2026.yaml, so its CF and
 # AEP move with that file to the met-mast transfer (docs/blue_whale/met_mast_transfer_summary.json),
@@ -93,8 +103,10 @@ generation:
                                   # Was 0.35 on 10 MW (DutchBay per-turbine scaling).
       degradation_pct: 0.6        # PLACEHOLDER: DutchBay turbine-ageing assumption
       aep_gwh: 40.57              # net P50: 9.5 MW x 8760 h x 0.487560 (reporting). Was 31.15 (v0.4-v0.6)
-      capex_usd: 12350000         # PLACEHOLDER (input B09): $1,300/kW x 9.5 MW, above the DutchBay $1,000/kW
-                                  # because a single machine carries crane, mobilisation and grid costs alone
+      capex_usd: 8899980          # BLENDED (v0.8, PR 6, input B09) = scenarios/blue_whale_wind_lot5b_2026.yaml:
+                                  # USD 936.84/kW x 9.5 MW, single-turbine all-in mode with its single-machine
+                                  # premium (conf/blue_whale_capex_solar_resource.yaml). Was 12,350,000
+                                  # ($1,300/kW placeholder)
       availability_pct: 97.0
     # THE SOLAR + BESS UNIT (v0.5, sized in v0.6). The engine has one generation tariff and per-BESS revenue,
     # so the unit is carried in two blocks (no engine code; solar_resource.pv_bess_dispatch):
@@ -131,8 +143,9 @@ generation:
                                   # priority window (24 x 0.85 = 20.4 MWh >= 20). Was 30 (owner brief 5 MW x 6 h).
                                   # Energy a full charge absorbs (repository convention)
       duration_h: 4.8
-      capex_usd: 3240000          # CITED (v0.6, input B19): USD 135.00/kWh all-in, the public NSO 250 base
-                                  # (scenarios/nso250_ltl_unit_base.yaml), on 24 MWh. Was $3.75M placeholder
+      capex_usd: 3377760          # BLENDED (v0.8, PR 6, input B19): USD 140.74/kWh all-in mode
+                                  # (conf/blue_whale_pv_bess_pricing.yaml, from conf/blue_whale_capex_solar_resource.yaml)
+                                  # on 24 MWh. Was 3,240,000 (v0.6: USD 135.00/kWh, the public NSO 250 base)
       availability_pct: 97.0
       revenue:
         model: energy_tariff      # input F05 (v0.5): the PUCSL 2026 ground solar + BESS FiT, dispatched hourly
@@ -192,8 +205,9 @@ fx:
 capex:
   cost_basis_year: 2026
   estimate_class: 5             # AACE Class 5 (concept screening): no quotes or site data yet
-  usd_total: 20958596           # wind 12.35M + solar 3.368596M + BESS 3.24M + grid/civils/development 2.0M (input B26)
-  capex_per_kw_usd: 1445        # 20.96M / 14.5 MW generation nameplate (BESS power not in the denominator)
+  usd_total: 17646336           # wind 8.89998M + solar 3.368596M + BESS 3.37776M + grid/civils/development 2.0M
+                                # (input B26). v0.8; was 20,958,596
+  capex_per_kw_usd: 1217        # 17.65M / 14.5 MW generation nameplate (BESS power not in the denominator); was 1445
 
 opex:
   usd_per_year: 615154          # PLACEHOLDER (inputs B10, B16, B20, B28): wind 0.35M + solar 0.055154M
@@ -297,12 +311,13 @@ wacc:
   description: "Build-up WACC drives the project discount rate."
 
 metadata:
-  version: '0.7'
+  version: '0.8'
   last_updated: '2026-11-01'
   author: DutchBay V14 Financial Modeling Team
   review_status: SKELETON - screening placeholders pending owner inputs (docs/blue_whale/INPUTS_REQUIRED.md)
   assumptions_source: 'Scaled from dutchbay_hybrid_bess_2025Q4 and ceb_solar_bess_nightpeak_10mw'
   changes:
+    - 'v0.8 (2026-11-01): capex BLENDED (PR 6, #1353 comment 6556975196): wind 12,350,000 -> 8,899,980 (USD 936.84/kW, mirrors the wind scenario v0.3); BESS 3,240,000 -> 3,377,760 (USD 140.74/kWh on 24 MWh); capex total 20,958,596 -> 17,646,336. Blends that include private commercial inputs, published on the owner''s decision. Nothing else changes'
     - 'v0.7 (2026-11-01): wind block mirrors the wind scenario v0.2 (PR 5, met mast 617725 transferred to the turbine): wind CF 0.374256 -> 0.487560, AEP 31.15 -> 40.57 GWh; project CF 0.302132 -> 0.3763655 and tariff blend 24.786 -> 24.97218 by their formulas. Not lender-grade; the met-mast HOLD stands'
     - 'v0.6 (2026-11-01): solar + BESS unit SIZED by a seeded Monte Carlo (PR 3; seed 20261101, 40 sizes x 256 LHS trials, docs/blue_whale/pv_bess_sizing_summary.json) on the P50 project NPV among sizes that export the full 4 h priority window: DC/AC 1.1 (5.51544 MWp, 147 tables) with 5 MW / 24 MWh. Priced from cited sources (conf/blue_whale_pv_bess_pricing.yaml): PV 3,368,596 (modules OPIS Jul-Aug 2026, Huawei SUN2000-330KTL-H1 inverters, IRENA-derived BoP), BESS 3,240,000 at the public NSO 250 base USD 135.00/kWh. Solar CF 0.165096, degradation 0.384074; bess_1 325.4723 cycles, fade 0.001914; tariff blend 24.786; capex 20,958,596; O&M 615,154 (placeholder rates scaled). Turbine unchanged'
     - 'v0.5 (2026-11-01): solar + BESS unit (owner): 5 MW AC / 6.0032 MWp of JinkoSolar Tiger Neo 3.0 670 W with a 5 MW x 6 h (30 MWh) BESS charged only from the PV, dispatched hourly 17:30-21:30 (priority 50.10) and 05:30-07:30 (20.72) over the PVGIS TMY. Solar block = unit export (CF 0.173144, degradation 0.364946); bess_1 = energy_tariff priority premium 29.38 on 267.0335 cycles for 15 years; tariff blend 24.749. BESS capex placeholder scaled to 30 MWh (3.75M). The array and BESS fit the placeholder lot'

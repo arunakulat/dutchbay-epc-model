@@ -148,19 +148,22 @@ recommendation:
   # Written to scenarios/blue_whale_solar_bess_lot5b_2026.yaml: the primary objective's
   # choice under the committed reading in docs/blue_whale/solar_bess_project_sizing_summary.json
   # (a test checks they agree). The other reading's choice is reported, not committed.
-  # Run of 2026-11-01 (seed 20261101, 325 points x 256 trials): reading A chooses 160 tables
-  # (6.0032 MWp), 5.0 MW AC and a 4.5 MW / 18 MWh BESS; reading B chooses 191 tables
-  # (7.16632 MWp, the lot's maximum), 6.0 MW AC and 5.5 MW / 22 MWh.
+  # Re-run of 2026-11-01 for PR 6 (#1353 comment 6556975196) on the BLENDED prices of
+  # conf/blue_whale_pv_bess_pricing.yaml (seed 20261101, 325 points x 256 trials): BOTH readings
+  # choose 107 tables (4.01464 MWp), 3.5 MW AC and a 1.0 MW / 4.0 MWh BESS, the smallest PV and
+  # the smallest battery on the grid; every eligible size has a negative P50 unit NPV.
+  # PR 4's run (NSO 250 price 135.00): reading A 160 tables, 5.0 MW AC, 4.5 MW / 18 MWh;
+  # reading B 191 tables, 6.0 MW AC, 5.5 MW / 22 MWh.
   committed:
     reading: A
-    pv_tables: 160
-    pv_ac_mw: 5.0
-    bess_power_mw: 4.5
+    pv_tables: 107
+    pv_ac_mw: 3.5
+    bess_power_mw: 1.0
   alternative:
     reading: B
-    pv_tables: 191
-    pv_ac_mw: 6.0
-    bess_power_mw: 5.5
+    pv_tables: 107
+    pv_ac_mw: 3.5
+    bess_power_mw: 1.0
 
 output:
   # Optional, relative to the repository root; null writes nothing. The committed summary is

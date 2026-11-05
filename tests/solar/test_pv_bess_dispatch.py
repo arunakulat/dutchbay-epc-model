@@ -446,7 +446,8 @@ def test_scenario_carries_the_derived_unit(sized_cli_out: Dict[str, Any]) -> Non
         e["bess_mdsc_fade_pct_annual"], abs=5e-7
     )
     assert rev["round_trip_efficiency"] == 0.85 and rev["contract_years"] == 15
-    # The cited BESS all-in mode (public NSO 250 base, USD 135.00/kWh), PR 3.
+    # The BESS all-in mode of the pricing config: PR 3 cited the public NSO 250 base, USD
+    # 135.00/kWh; PR 6 capex replaced it with the blended mode (USD 140.74/kWh).
     assert b["capex_usd"] == pytest.approx(energy * 1000.0 * bess_all_in["mode"])
     assert scen["tariff"]["lkr_per_kwh"] == pytest.approx(
         e["tariff_lkr_per_kwh"], abs=5e-5
