@@ -5,6 +5,15 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Blue Whale solar + BESS unit (15.13.0).** The solar and BESS become one unit (owner):
+  5 MW AC of JinkoSolar Tiger Neo 3.0 670 W (6.0032 MWp) with a 5 MW x 6 h (30 MWh) BESS
+  charged only from that PV and dispatched hourly over the PVGIS TMY, 17:30-21:30 at the
+  PUCSL priority rate and 05:30-07:30 at the other rate. New
+  `analytics/gis/pv_array_layout.py` (strings, row pitch, land, fit on the placeholder lot)
+  and `solar_resource/pv_bess_dispatch.py` (hourly PV pinned to `compute_solar_aep`, the
+  dispatcher, the engine mapping). The array and BESS fit the placeholder lot. Blue Whale
+  project IRR 3.15% -> 3.58%, mostly from the BESS capex placeholder scaled to 30 MWh. No
+  other scenario moves. Detail in the compiled fragment.
 - **Blue Whale turbine, placeholder site, coastal placement and shadow flicker (15.12.0).**
   The wind becomes one Envision EN-206/10.5 de-rated to 9.5 MW at 130 m (owner), with a net
   CF of 37.43% (31.15 GWh) derived from the confidential OEM curve over the DutchBay ERA5

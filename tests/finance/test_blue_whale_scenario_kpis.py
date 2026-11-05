@@ -1,15 +1,22 @@
-"""Regression pins for the Blue Whale Lot 5B scenario (v0.4, model 15.12.0).
+"""Regression pins for the Blue Whale Lot 5B scenario (v0.5, model 15.13.0).
 
 The scenario is a screening skeleton on placeholder inputs, so these pins prove only that
 the committed KPIs have not moved unnoticed. ``TEST-01`` pairs each pin with a
 responsiveness guard: the year-1 generation revenue must equal the closed form
 ``(sum of capacity x CF x 8760) x tariff`` the engine is meant to compute, and the
-project IRR must move with the wind capacity factor and the tariff. A pipeline that
-returned the pinned numbers without deriving them would fail those guards.
+project IRR must move with the wind capacity factor, the tariff, the solar + BESS unit's
+CF and its BESS premium. A pipeline that returned the pinned numbers without deriving them
+would fail those guards.
+
+From v0.5 the solar + BESS unit is carried in the engine's ``solar`` and ``bess_1`` blocks
+(``solar_resource.pv_bess_dispatch``). The engine's revenue, an implementation that
+predates that mapping, must reproduce the hourly dispatcher's revenue: exactly in year 1
+up to the YAML's rounding, and within the configured tolerance in every later year.
 """
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
 from typing import Any, Dict
 
@@ -24,13 +31,19 @@ SCENARIO = (
     / "blue_whale_hybrid_lot5b_2026.yaml"
 )
 
-# Pinned at 15.12.0 (v0.4: EN-206/10.5 de-rated to 9.5 MW). Before, at 15.11.0 (v0.3):
-# project IRR 0.027674815875491747, equity IRR 0.0006314091936767685,
-# min DSCR 0.8688229918413363.
+CONF = Path(__file__).resolve().parents[2] / "conf" / "blue_whale_solar_bess.yaml"
+SCRIPT = (
+    Path(__file__).resolve().parents[2] / "scripts" / "run_blue_whale_solar_bess_v14.py"
+)
+
+# Pinned at 15.13.0 (v0.5: the 5 MW solar + 5 MW x 6 h BESS unit). Before, at 15.12.0
+# (v0.4): project IRR 0.03150801785651182, equity IRR 0.005060003909760136,
+# min DSCR 0.8685883776324956. At 15.11.0 (v0.3): 0.027674815875491747,
+# 0.0006314091936767685, 0.8688229918413363.
 PINS = {
-    "project_irr": 0.03150801785651182,
-    "equity_irr": 0.005060003909760136,
-    "min_dscr": 0.8685883776324956,
+    "project_irr": 0.03578223216261529,
+    "equity_irr": 0.009208957605289392,
+    "min_dscr": 0.8682259068634375,
 }
 
 
@@ -82,3 +95,51 @@ def test_project_irr_moves_with_wind_cf_and_tariff(base: Dict[str, float]) -> No
     assert higher_cf["project_irr"] > base["project_irr"]
     lower_tariff = _kpis({"tariff.lkr_per_kwh": scen["tariff"]["lkr_per_kwh"] * 0.9})
     assert lower_tariff["project_irr"] < base["project_irr"]
+
+
+def test_project_irr_moves_with_the_solar_bess_unit(base: Dict[str, float]) -> None:
+    scen = yaml.safe_load(SCENARIO.read_text())
+    rev = scen["generation"]["technologies"]["bess_1"]["revenue"]
+    lower_premium = _kpis(
+        {
+            "generation.technologies.bess_1.revenue.tariff_lkr_per_kwh": rev[
+                "tariff_lkr_per_kwh"
+            ]
+            * 0.5
+        }
+    )
+    assert lower_premium["project_irr"] < base["project_irr"]
+    fewer_cycles = _kpis(
+        {
+            "generation.technologies.bess_1.revenue.cycles_per_year": rev[
+                "cycles_per_year"
+            ]
+            * 0.8
+        }
+    )
+    assert fewer_cycles["project_irr"] < base["project_irr"]
+
+
+def test_engine_revenue_equals_the_dispatcher() -> None:
+    pytest.importorskip("pvlib")
+    pytest.importorskip("shapely")
+    pytest.importorskip("pyproj")
+    spec = importlib.util.spec_from_file_location("blue_whale_solar_bess_cli", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cli)
+    conf = yaml.safe_load(CONF.read_text())
+    out = cli.run(conf)
+    dispatcher = out["engine"]["dispatcher_revenue_lkr"]
+    full = evaluate_with_overrides(str(SCENARIO), overrides={}, return_full_result=True)
+    assert isinstance(full, dict)
+    rows = full["annual_rows"]
+    assert len(rows) == len(dispatcher) == 20
+    engine = [r["generation_revenue_lkr"] + r["bess_revenue_lkr"] for r in rows]
+    # Year 1: the only difference is the YAML's rounding of CF, cycles and tariff.
+    assert engine[0] == pytest.approx(dispatcher[0], rel=1e-4)
+    tol = conf["engine"]["later_year_revenue_tolerance_pct"] / 100.0
+    for year, (e, d) in enumerate(zip(engine, dispatcher, strict=True), start=1):
+        assert e == pytest.approx(d, rel=tol), year
+    # The priority premium stops after its 15-year term, in both.
+    assert rows[14]["bess_revenue_lkr"] > 0 and rows[15]["bess_revenue_lkr"] == 0
