@@ -59,7 +59,7 @@ def _synthetic_curve() -> np.ndarray:
 
 def _write_curve(path: Path, ws: np.ndarray, pw: np.ndarray) -> Path:
     lines = ["# synthetic test curve", "wind_speed_ms,power_kw,thrust_coefficient"]
-    lines += [f"{w},{p},0.5" for w, p in zip(ws, pw)]
+    lines += [f"{w},{p},0.5" for w, p in zip(ws, pw, strict=True)]
     path.write_text("\n".join(lines) + "\n")
     return path
 
@@ -217,6 +217,42 @@ def _config(curve: Path) -> Dict[str, Any]:
     fl = raw["shadow_flicker"]
     fl.update(time_step_minutes=60, grid_half_width_m=200.0, grid_spacing_m=200.0)
     return dict(raw)
+
+
+def test_json_matches_tolerates_ulps_and_rejects_drift() -> None:
+    base = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "properties": {
+                    "west_edge_bearing_deg": 28.119886551949254,
+                    "area_m2": 93077.0,
+                    "placeholder": True,
+                },
+                "geometry": {"coordinates": [[[79.751395711, 8.291283529]]]},
+            }
+        ],
+    }
+    ulps = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "properties": {
+                    "west_edge_bearing_deg": 28.11988655194687,
+                    "area_m2": 93077,
+                    "placeholder": True,
+                },
+                "geometry": {"coordinates": [[[79.751395711, 8.291283529]]]},
+            }
+        ],
+    }
+    assert cli._json_matches(base, ulps) is True
+    drifted = json.loads(json.dumps(base))
+    drifted["features"][0]["properties"]["west_edge_bearing_deg"] += 1e-6
+    assert cli._json_matches(base, drifted) is False
+    assert cli._json_matches({"a": 1.0}, {"a": True}) is False
+    assert cli._json_matches({"a": [1.0, 2.0]}, {"a": [1.0]}) is False
+    assert cli._json_matches({"a": 1.0}, {"b": 1.0}) is False
 
 
 def test_run_on_a_synthetic_curve(tmp_path: Path) -> None:

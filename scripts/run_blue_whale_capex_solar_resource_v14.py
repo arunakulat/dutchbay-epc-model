@@ -28,6 +28,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import logging
 import math
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional
@@ -319,14 +320,16 @@ def _write_monthly_csv(path: Path, solar: Mapping[str, Any]) -> None:
 
 
 @hydra.main(
-    version_base=None,
+    version_base="1.3",
     config_path="../conf",
     config_name="blue_whale_capex_solar_resource",
 )
 def main(cfg: DictConfig) -> None:
     """Run both parts and print one JSON object."""
+    logging.disable(logging.WARNING)
     container = OmegaConf.to_container(cfg, resolve=True)
-    assert isinstance(container, dict)
+    if not isinstance(container, dict):
+        raise TypeError("expected the Hydra config to resolve to a mapping")
     raw: Dict[str, Any] = {str(k): v for k, v in container.items()}
     if raw.get("schema_version") != "blue_whale_capex_solar_resource_v1":
         raise ValueError("schema_version must be blue_whale_capex_solar_resource_v1")
@@ -334,14 +337,29 @@ def main(cfg: DictConfig) -> None:
     solar = run_solar(raw)
     out_cfg = raw["output"]
     cfg_sha = _sha256(REPO_ROOT / "conf" / "blue_whale_capex_solar_resource.yaml")
+    version = (REPO_ROOT / "VERSION").read_text().strip()
     if out_cfg.get("capex_summary_json"):
-        doc = {"config_sha256": cfg_sha, "cases": list(CASES), **capex}
+        doc = {
+            "schema": "dutchbay.epc.blue_whale_capex_blend.v1",
+            "model_version": version,
+            "config": "conf/blue_whale_capex_solar_resource.yaml",
+            "config_sha256": cfg_sha,
+            "cases": list(CASES),
+            **capex,
+        }
         _repo_path(out_cfg["capex_summary_json"]).write_text(
             json.dumps(doc, indent=2, sort_keys=True, allow_nan=False) + "\n",
             encoding="utf-8",
         )
     if out_cfg.get("solar_summary_json"):
-        doc = {"config_sha256": cfg_sha, **solar}
+        doc = {
+            "schema": "dutchbay.epc.blue_whale_solar_resource.v1",
+            "model_version": version,
+            "config": "conf/blue_whale_capex_solar_resource.yaml",
+            "config_sha256": cfg_sha,
+            "scenario": "scenarios/blue_whale_solar_bess_lot5b_2026.yaml",
+            **solar,
+        }
         _repo_path(out_cfg["solar_summary_json"]).write_text(
             json.dumps(doc, indent=2, sort_keys=True, allow_nan=False) + "\n",
             encoding="utf-8",

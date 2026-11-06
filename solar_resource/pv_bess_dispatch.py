@@ -1,8 +1,8 @@
 """Hourly PV output and a PV-charged BESS dispatcher for a solar + BESS unit (``[solar]``).
 
-Scenario-local and minimal by design. #1472 proposes a general hourly BESS feasibility
-ledger (``analytics.storage_dispatch``); it is not on ``main`` or on this branch, so this
-module does not build on it and does not try to be one. It serves one unit: a PV array
+Scenario-local and minimal by design. #1472 implemented a general hourly BESS feasibility
+ledger (``analytics.storage_dispatch``) on ``main``; this module focuses specifically on
+the single-unit PV + BESS dispatch and engine mapping. It serves one unit: a PV array
 and a battery behind one export limit, the battery charged only from that PV and
 discharged in fixed clock-time windows. There is no optimisation, no grid charging and no
 merchant price.
@@ -202,7 +202,8 @@ def _loss_factor(config: SolarResourceConfig) -> float:
     soiling: Optional[float] = None
     if config.soiling_profile is not None:
         profile = soiling_profile_from_config(config.soiling_profile)
-        assert profile is not None
+        if profile is None:
+            raise ValueError("could not build soiling profile from config")
         soiling = profile.effective_soiling_pct()
     if config.losses is not None:
         losses = dict(config.losses)

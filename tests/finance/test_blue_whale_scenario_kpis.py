@@ -1,4 +1,4 @@
-"""Regression pins for the Blue Whale Lot 5B scenario (v0.6, model 15.14.0).
+"""Regression pins for the Blue Whale Lot 5B scenario (v0.8, model 15.18.0).
 
 The scenario is a screening skeleton on placeholder inputs, so these pins prove only that
 the committed KPIs have not moved unnoticed. ``TEST-01`` pairs each pin with a

@@ -63,29 +63,30 @@ All 7 Blue Whale PRs along with prerequisite CI PR `#1548` have landed on `main`
 
 ---
 
-## 3. Substantive Audit Findings & Traps
+## 3. Substantive Audit Findings & Traps (REMEDIATED)
 
-### Finding 1: Cross-Platform Precision Variance in GeoJSON Validation
+### Finding 1: Cross-Platform Precision Variance in GeoJSON Validation (REMEDIATED)
 - **Symptom**: `tests/wind/test_blue_whale_wind_siting.py::test_run_on_a_synthetic_curve` fails on macOS with `assert out["lot"]["site_geojson_matches_committed"] is True`.
-- **Root Cause**: `scripts/run_blue_whale_wind_siting_v14.py` line 394 checks `json.loads(committed.read_text()) == site_doc`.
+- **Root Cause**: `scripts/run_blue_whale_wind_siting_v14.py` checked `json.loads(committed.read_text()) == site_doc`.
   On macOS Apple Silicon (Accelerate BLAS / libc), total-least-squares line fitting computes:
   - `west_edge_bearing_deg`: `28.11988655194687`
   - Committed on Linux runner: `28.119886551949254`
-  The $2.38 \times 10^{-12}$ difference invalidates exact string equality in GeoJSON feature properties.
-- **Remediation**: Use float-approximate tolerance or rounded string representation in property assertions.
+  The $2.38 \times 10^{-12}$ difference invalidated exact float equality in GeoJSON feature properties.
+- **Remediation**: Replaced exact dict equality in `scripts/run_blue_whale_wind_siting_v14.py` with `_json_matches(..., abs_tol=1e-9)` and added `test_json_matches_tolerates_ulps_and_rejects_drift` in `tests/wind/test_blue_whale_wind_siting.py`.
 
-### Finding 2: CLI Hygiene and Metadata Standards (`MRM-02`, `CLI-01`, `CLI-03`)
+### Finding 2: CLI Hygiene and Metadata Standards (`MRM-02`, `CLI-01`, `CLI-03`) (REMEDIATED)
 - `scripts/run_blue_whale_capex_solar_resource_v14.py`:
-  - Needs `@hydra.main(version_base="1.3")`.
-  - Logging output on stdout needs suppression (`logging.disable(logging.WARNING)`).
-  - Runtime `assert isinstance(container, dict)` should be explicit `TypeError`.
-  - Output summary JSONs require `schema` and `model_version` metadata.
-- `analytics/gis/pv_array_layout.py` and `solar_resource/pv_bess_dispatch.py`: replace bare runtime `assert` statements with explicit `ValueError` exceptions.
+  - Pinned `@hydra.main(version_base="1.3")`.
+  - Suppressed routine logging output on stdout (`logging.disable(logging.WARNING)`).
+  - Replaced runtime `assert isinstance(container, dict)` with explicit `TypeError`.
+  - Added `schema`, `model_version` (`"15.18.0"`), `config`, and `scenario` metadata to `docs/blue_whale/capex_blend_summary.json` and `docs/blue_whale/solar_resource_summary.json`, guarded in `tests/solar/test_blue_whale_site_inputs.py`.
+- `docs/blue_whale/met_mast_transfer_summary.json` and `docs/blue_whale/met_mast_wind_rose_130m.csv`: refreshed stale `model_version` (`15.16.0` -> `15.18.0`) so `tests/wind/test_met_mast_transfer.py::test_rerun_reproduces_the_committed_summary` passes when re-run against the private mast, NASA POWER, and confidential curve inputs.
+- `analytics/gis/pv_array_layout.py` and `solar_resource/pv_bess_dispatch.py`: replaced bare runtime `assert` statements with explicit `ValueError` exceptions.
 
-### Finding 3: Documentation Sync
-- `docs/blue_whale/INPUTS_REQUIRED.md`: Item F03 lists `24.786` for the superseded hybrid tariff blend; correct committed value is `24.97218`.
-- `tests/finance/test_blue_whale_scenario_kpis.py`: Docstring references `(v0.6, model 15.14.0)`; update to `(v0.8, model 15.18.0)`.
-- `docs/blue_whale/STATUS.md`: Add historical reference banners for intermediate iterations (PR 3 & PR 4).
+### Finding 3: Documentation Sync (REMEDIATED)
+- `docs/blue_whale/INPUTS_REQUIRED.md`: Updated item F03 superseded hybrid tariff blend from `24.786` to `24.97218`.
+- `tests/finance/test_blue_whale_scenario_kpis.py`: Updated module docstring reference from `(v0.6, model 15.14.0)` to `(v0.8, model 15.18.0)`.
+- `docs/blue_whale/STATUS.md`: Added historical reference banners for intermediate iterations (PR 3 & PR 4).
 
 
 ---

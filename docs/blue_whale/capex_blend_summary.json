@@ -48,6 +48,7 @@
     "mode",
     "high"
   ],
+  "config": "conf/blue_whale_capex_solar_resource.yaml",
   "config_sha256": "8d6ad66d2d5c29f09d92ba3b89b22435681034dda99125040e36c427871b4e38",
   "disclosure_note": "This figure is a blend that includes private commercial inputs; a reader may be able to back out a private input. Published on the owner's decision of 2026-11-01 (#1353 comment 6556975196).",
   "fx_cny_per_usd": 6.722,
@@ -63,6 +64,7 @@
       "mode": "prudent"
     }
   },
+  "model_version": "15.18.0",
   "pricing_build_up_mode": {
     "augmentation_reserve_usd_per_kwh_base": 8.0,
     "bop_usd_per_kwh_base": 15.120000000000001,
@@ -70,6 +72,7 @@
     "land_and_auxiliaries_share_base": 0.1
   },
   "private_anchor_count": 6,
+  "schema": "dutchbay.epc.blue_whale_capex_blend.v1",
   "wind_usd_per_kw": {
     "high": {
       "all_in_usd_per_kw": 1341.160487463384,

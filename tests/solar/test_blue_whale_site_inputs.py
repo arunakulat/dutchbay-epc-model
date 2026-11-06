@@ -302,6 +302,9 @@ def test_committed_capex_summary_is_internally_consistent() -> None:
 
 def test_pricing_config_and_scenarios_carry_the_blend() -> None:
     doc = json.loads(CAPEX_SUMMARY.read_text(encoding="utf-8"))
+    assert doc["schema"] == "dutchbay.epc.blue_whale_capex_blend.v1"
+    assert doc["model_version"] == "15.18.0"
+    assert doc["config"] == "conf/blue_whale_capex_solar_resource.yaml"
     pricing = _yaml(PRICING)
     bess = doc["bess_usd_per_kwh_contracted"]
     for c in si.CASES:
@@ -458,9 +461,14 @@ def _assert_nested_approx(
 
 def test_committed_solar_outputs_match_a_rerun(solar: Dict[str, Any]) -> None:
     doc = json.loads(SOLAR_SUMMARY.read_text(encoding="utf-8"))
+    assert doc["schema"] == "dutchbay.epc.blue_whale_solar_resource.v1"
+    assert doc["model_version"] == "15.18.0"
+    assert doc["config"] == "conf/blue_whale_capex_solar_resource.yaml"
+    assert doc["scenario"] == "scenarios/blue_whale_solar_bess_lot5b_2026.yaml"
     assert doc["config_sha256"] == hashlib.sha256(CONF.read_bytes()).hexdigest()
     fresh = json.loads(json.dumps(solar, sort_keys=True, allow_nan=False))
-    expected = {k: v for k, v in doc.items() if k != "config_sha256"}
+    envelope = {"schema", "model_version", "config", "config_sha256", "scenario"}
+    expected = {k: v for k, v in doc.items() if k not in envelope}
     _assert_nested_approx(expected, fresh)
     mutated = copy.deepcopy(fresh)
     mutated["at_pv_centroid"]["annual"]["net_ac_mwh"] += 1e-9

@@ -21,7 +21,7 @@
   "aep_decomposition": [
    {
     "delta_from_previous_gwh": 0.0,
-    "mean_speed_ms": 7.143496442562994,
+    "mean_speed_ms": 7.143496442562992,
     "net_aep_gwh": 31.145570551976164,
     "net_capacity_factor": 0.3742558345587138,
     "step": "1530 ERA5 Weibull at 130 m",
@@ -29,28 +29,28 @@
     "weibull_k": 2.665
    },
    {
-    "delta_from_previous_gwh": 8.783653810544308,
+    "delta_from_previous_gwh": 8.783653810544322,
     "mean_speed_ms": 8.242754180611902,
-    "net_aep_gwh": 39.92922436252047,
-    "net_capacity_factor": 0.4798032247358865,
+    "net_aep_gwh": 39.929224362520486,
+    "net_capacity_factor": 0.47980322473588666,
     "step": "ERA5 shape (k) with the transferred long-term mean speed",
-    "weibull_a_ms": 9.273030644102064,
+    "weibull_a_ms": 9.273030644102068,
     "weibull_k": 2.665
    },
    {
-    "delta_from_previous_gwh": 0.5269588100506937,
-    "mean_speed_ms": 8.226550707871247,
-    "net_aep_gwh": 40.456183172571166,
-    "net_capacity_factor": 0.48613534213615917,
+    "delta_from_previous_gwh": 0.5269588100505871,
+    "mean_speed_ms": 8.226550707871235,
+    "net_aep_gwh": 40.45618317257107,
+    "net_capacity_factor": 0.48613534213615806,
     "step": "transferred long-term omnidirectional Weibull",
-    "weibull_a_ms": 9.206553808013782,
+    "weibull_a_ms": 9.206553808013767,
     "weibull_k": 3.043591722491189
    },
    {
-    "delta_from_previous_gwh": 0.11856627897223859,
+    "delta_from_previous_gwh": 0.11856627897228122,
     "mean_speed_ms": 8.242754180611902,
-    "net_aep_gwh": 40.574749451543404,
-    "net_capacity_factor": 0.48756007512068494,
+    "net_aep_gwh": 40.574749451543354,
+    "net_capacity_factor": 0.48756007512068444,
     "step": "transferred long-term 16 sector Weibulls (primary)"
    }
   ],
@@ -199,22 +199,22 @@
   },
   "loss_stack_effect_gwh": 0.0,
   "sensitivity_2016_2025": {
-   "gross_aep_gwh": 44.1292873110881,
+   "gross_aep_gwh": 44.12928731108829,
    "mean_speed_ms": 8.257446641867352,
-   "net_aep_gwh": 40.69921136248632,
-   "net_capacity_factor": 0.4890556520366056
+   "net_aep_gwh": 40.699211362486494,
+   "net_capacity_factor": 0.4890556520366077
   },
   "sensitivity_era5_shape_with_mast_mean": {
-   "delta_from_previous_gwh": 8.783653810544308,
+   "delta_from_previous_gwh": 8.783653810544322,
    "mean_speed_ms": 8.242754180611902,
-   "net_aep_gwh": 39.92922436252047,
-   "net_capacity_factor": 0.4798032247358865,
+   "net_aep_gwh": 39.929224362520486,
+   "net_capacity_factor": 0.47980322473588666,
    "step": "ERA5 shape (k) with the transferred long-term mean speed",
-   "weibull_a_ms": 9.273030644102064,
+   "weibull_a_ms": 9.273030644102068,
    "weibull_k": 2.665
   },
   "speed_level": {
-   "1530_era5_130m_ms": 7.143496442562994,
+   "1530_era5_130m_ms": 7.143496442562992,
    "mast_120m_long_term_ms": 8.058002775922779,
    "mast_130m_long_term_ms": 8.11725728506801,
    "reference_mast_cell_50m_long_term_ms": 6.790677783308444,
@@ -228,8 +228,8 @@
  "long_term_130m": {
   "annual_mean_ms": {
    "2015": 8.075774752193455,
-   "2016": 8.1682219330422,
-   "2017": 8.360923013774196,
+   "2016": 8.168221933042203,
+   "2017": 8.360923013774197,
    "2018": 7.9612615758015,
    "2019": 8.220179633640086,
    "2020": 8.306112666623136,
@@ -242,10 +242,10 @@
   "direction_copies_per_hour": 10,
   "diurnal_mean_ms_local_hour": [
    8.761926431226199,
-   8.678541085971252,
+   8.678541085971254,
    8.530093774795638,
    8.352129213835877,
-   8.187791176410487,
+   8.187791176410489,
    8.03673599241342,
    7.702400477724716,
    7.637449554653713,
@@ -264,10 +264,10 @@
    8.786610226380878,
    8.830460251999305,
    8.83757745553679,
-   8.81683265939384
+   8.816832659393842
   ],
   "hours": 96432,
-  "interannual_cov": 0.018608769006507018,
+  "interannual_cov": 0.018608769006507025,
   "mean_speed_ms": 8.242754180611902,
   "monthly_mean_ms_local": [
    8.261123834661483,
@@ -276,9 +276,9 @@
    4.987094202390275,
    8.971330107046269,
    10.811242391178334,
-   10.064256807304444,
+   10.064256807304446,
    10.26122030523509,
-   10.039285793735916,
+   10.039285793735917,
    7.109214189367028,
    6.595119736020102,
    7.799634434211961
@@ -286,7 +286,7 @@
   "rose": [
    {
     "centre_deg": 0.0,
-    "energy_share": 0.025000351593779724,
+    "energy_share": 0.02500035159377972,
     "frequency": 0.03785258005641281,
     "hours": 3650.2,
     "label": "N",
@@ -297,7 +297,7 @@
    },
    {
     "centre_deg": 22.5,
-    "energy_share": 0.05838215833008792,
+    "energy_share": 0.05838215833008791,
     "frequency": 0.07857557657209226,
     "hours": 7577.2,
     "label": "NNE",
@@ -308,18 +308,18 @@
    },
    {
     "centre_deg": 45.0,
-    "energy_share": 0.08097177463959021,
+    "energy_share": 0.0809717746395902,
     "frequency": 0.11177098888335822,
     "hours": 10778.3,
     "label": "NE",
     "mean_speed_ms": 7.749115235147668,
     "sector": 2,
-    "weibull_a_ms": 8.496400092011154,
+    "weibull_a_ms": 8.496400092011111,
     "weibull_k": 4.239440415913796
    },
    {
     "centre_deg": 67.5,
-    "energy_share": 0.04693560092244212,
+    "energy_share": 0.04693560092244211,
     "frequency": 0.07744213539074166,
     "hours": 7467.9,
     "label": "ENE",
@@ -330,18 +330,18 @@
    },
    {
     "centre_deg": 90.0,
-    "energy_share": 0.022806921430525328,
+    "energy_share": 0.022806921430525325,
     "frequency": 0.04487721918035507,
     "hours": 4327.6,
     "label": "E",
     "mean_speed_ms": 6.622954530104814,
     "sector": 4,
-    "weibull_a_ms": 7.374193547103086,
+    "weibull_a_ms": 7.3741935471030935,
     "weibull_k": 3.1350392385718404
    },
    {
     "centre_deg": 112.5,
-    "energy_share": 0.0073860072965725035,
+    "energy_share": 0.007386007296572502,
     "frequency": 0.020887257341961174,
     "hours": 2014.2,
     "label": "ESE",
@@ -352,7 +352,7 @@
    },
    {
     "centre_deg": 135.0,
-    "energy_share": 0.004077929565717387,
+    "energy_share": 0.004077929565717386,
     "frequency": 0.013580554172888667,
     "hours": 1309.6,
     "label": "SE",
@@ -363,7 +363,7 @@
    },
    {
     "centre_deg": 157.5,
-    "energy_share": 0.00494513655476679,
+    "energy_share": 0.004945136554766789,
     "frequency": 0.012245934959349593,
     "hours": 1180.9,
     "label": "SSE",
@@ -374,13 +374,13 @@
    },
    {
     "centre_deg": 180.0,
-    "energy_share": 0.02470203989990357,
+    "energy_share": 0.024702039899903567,
     "frequency": 0.029431101708976275,
     "hours": 2838.1,
     "label": "S",
     "mean_speed_ms": 7.493723991720689,
     "sector": 8,
-    "weibull_a_ms": 8.450899883714103,
+    "weibull_a_ms": 8.450899883714044,
     "weibull_k": 2.4997376778162086
    },
    {
@@ -396,7 +396,7 @@
    },
    {
     "centre_deg": 225.0,
-    "energy_share": 0.3691868623636086,
+    "energy_share": 0.36918686236360854,
     "frequency": 0.2658764725402356,
     "hours": 25639.0,
     "label": "SW",
@@ -407,7 +407,7 @@
    },
    {
     "centre_deg": 247.5,
-    "energy_share": 0.170108611147305,
+    "energy_share": 0.17010861114730497,
     "frequency": 0.12716629334660692,
     "hours": 12262.9,
     "label": "WSW",
@@ -418,7 +418,7 @@
    },
    {
     "centre_deg": 270.0,
-    "energy_share": 0.010790629921237142,
+    "energy_share": 0.01079062992123714,
     "frequency": 0.012772731043636966,
     "hours": 1231.7,
     "label": "W",
@@ -429,7 +429,7 @@
    },
    {
     "centre_deg": 292.5,
-    "energy_share": 0.0038969768523984117,
+    "energy_share": 0.0038969768523984113,
     "frequency": 0.008280446324871411,
     "hours": 798.5,
     "label": "WNW",
@@ -440,31 +440,31 @@
    },
    {
     "centre_deg": 315.0,
-    "energy_share": 0.005949193042300657,
+    "energy_share": 0.005949193042300656,
     "frequency": 0.010384519661523145,
     "hours": 1001.4,
     "label": "NW",
     "mean_speed_ms": 5.668605440837119,
     "sector": 14,
-    "weibull_a_ms": 6.385089982115819,
+    "weibull_a_ms": 6.385089982115838,
     "weibull_k": 1.7227207767831603
    },
    {
     "centre_deg": 337.5,
-    "energy_share": 0.01791424096381762,
+    "energy_share": 0.017914240963817617,
     "frequency": 0.024428612908578066,
     "hours": 2355.7,
     "label": "NNW",
     "mean_speed_ms": 7.067016630554762,
     "sector": 15,
-    "weibull_a_ms": 7.949288423433711,
+    "weibull_a_ms": 7.949288423433715,
     "weibull_k": 2.390607045253023
    }
   ],
-  "weibull_a_ms": 9.206553808013782,
-  "weibull_energy_gof_pct": 0.05479187862411695,
+  "weibull_a_ms": 9.206553808013767,
+  "weibull_energy_gof_pct": 0.054791878624600325,
   "weibull_k": 3.043591722491189,
-  "weibull_mean_ms": 8.226550707871247,
+  "weibull_mean_ms": 8.226550707871235,
   "window": [
    2015,
    2025
@@ -510,15 +510,15 @@
   ],
   "correlation_gates": {
    "100m": {
-    "daily_r": 0.8879438061696542,
+    "daily_r": 0.887943806169654,
     "days": 231,
-    "hourly_r_squared": 0.6221951687234177,
+    "hourly_r_squared": 0.6221951687234176,
     "hours": 5556
    },
    "120m": {
-    "daily_r": 0.8810596767969742,
+    "daily_r": 0.8810596767969752,
     "days": 216,
-    "hourly_r_squared": 0.6096856419338776,
+    "hourly_r_squared": 0.6096856419338778,
     "hours": 5198
    }
   },
@@ -586,10 +586,10 @@
     -27.008866552341352,
     -17.251907054414403,
     -11.884615548177502,
-    -7.4043847467424655,
+    -7.40438474674248,
     -3.3186231906923673,
     0.6900907505860232,
-    5.538445550374838,
+    5.538445550374831,
     11.757881327165876,
     35.80492384123401
    ],
@@ -598,10 +598,10 @@
     -27.008866552341352,
     -17.251907054414403,
     -11.884615548177502,
-    -7.4043847467424655,
+    -7.40438474674248,
     -3.3186231906923673,
     0.6900907505860232,
-    5.538445550374838,
+    5.538445550374831,
     11.757881327165876,
     35.80492384123401
    ],
@@ -610,10 +610,10 @@
     -27.008866552341352,
     -17.251907054414403,
     -11.884615548177502,
-    -7.4043847467424655,
+    -7.40438474674248,
     -3.3186231906923673,
     0.6900907505860232,
-    5.538445550374838,
+    5.538445550374831,
     11.757881327165876,
     35.80492384123401
    ],
@@ -622,10 +622,10 @@
     -27.008866552341352,
     -17.251907054414403,
     -11.884615548177502,
-    -7.4043847467424655,
+    -7.40438474674248,
     -3.3186231906923673,
     0.6900907505860232,
-    5.538445550374838,
+    5.538445550374831,
     11.757881327165876,
     35.80492384123401
    ],
@@ -634,10 +634,10 @@
     -27.008866552341352,
     -17.251907054414403,
     -11.884615548177502,
-    -7.4043847467424655,
+    -7.40438474674248,
     -3.3186231906923673,
     0.6900907505860232,
-    5.538445550374838,
+    5.538445550374831,
     11.757881327165876,
     35.80492384123401
    ],
@@ -646,10 +646,10 @@
     -27.008866552341352,
     -17.251907054414403,
     -11.884615548177502,
-    -7.4043847467424655,
+    -7.40438474674248,
     -3.3186231906923673,
     0.6900907505860232,
-    5.538445550374838,
+    5.538445550374831,
     11.757881327165876,
     35.80492384123401
    ],
@@ -658,10 +658,10 @@
     -27.008866552341352,
     -17.251907054414403,
     -11.884615548177502,
-    -7.4043847467424655,
+    -7.40438474674248,
     -3.3186231906923673,
     0.6900907505860232,
-    5.538445550374838,
+    5.538445550374831,
     11.757881327165876,
     35.80492384123401
    ],
@@ -670,10 +670,10 @@
     -27.008866552341352,
     -17.251907054414403,
     -11.884615548177502,
-    -7.4043847467424655,
+    -7.40438474674248,
     -3.3186231906923673,
     0.6900907505860232,
-    5.538445550374838,
+    5.538445550374831,
     11.757881327165876,
     35.80492384123401
    ],
@@ -682,10 +682,10 @@
     -27.008866552341352,
     -17.251907054414403,
     -11.884615548177502,
-    -7.4043847467424655,
+    -7.40438474674248,
     -3.3186231906923673,
     0.6900907505860232,
-    5.538445550374838,
+    5.538445550374831,
     11.757881327165876,
     35.80492384123401
    ],
@@ -695,15 +695,15 @@
     -15.232203746776037,
     -5.857570493803812,
     -1.2216482845458585,
-    3.249296477700267,
+    3.249296477700242,
     8.373415739831408,
-    13.516708425428689,
-    21.01915183221256,
+    13.516708425428675,
+    21.019151832212568,
     33.12067278242923
    ],
    [
     -30.68723765124192,
-    -15.241057498216078,
+    -15.241057498216081,
     -10.181112963774424,
     -6.404044597657011,
     -3.0734611029568004,
@@ -715,11 +715,11 @@
    ],
    [
     -42.15048334095435,
-    -24.632496331771346,
+    -24.63249633177132,
     -19.228393337941085,
     -14.897554963293175,
     -11.464967664947086,
-    -7.942018031512699,
+    -7.9420180315127125,
     -4.511971010523919,
     -0.9172635277070142,
     3.629621132073911,
@@ -728,10 +728,10 @@
    [
     -81.20538867910209,
     -60.005393451292164,
-    -51.72425558178615,
+    -51.72425558178617,
     -42.10021513226086,
     -33.50542673708333,
-    -25.533955538037628,
+    -25.533955538037617,
     -18.558446533816642,
     -13.343028846566142,
     -2.387541351411585,
@@ -742,10 +742,10 @@
     -27.008866552341352,
     -17.251907054414403,
     -11.884615548177502,
-    -7.4043847467424655,
+    -7.40438474674248,
     -3.3186231906923673,
     0.6900907505860232,
-    5.538445550374838,
+    5.538445550374831,
     11.757881327165876,
     35.80492384123401
    ],
@@ -754,10 +754,10 @@
     -27.008866552341352,
     -17.251907054414403,
     -11.884615548177502,
-    -7.4043847467424655,
+    -7.40438474674248,
     -3.3186231906923673,
     0.6900907505860232,
-    5.538445550374838,
+    5.538445550374831,
     11.757881327165876,
     35.80492384123401
    ],
@@ -766,10 +766,10 @@
     -27.008866552341352,
     -17.251907054414403,
     -11.884615548177502,
-    -7.4043847467424655,
+    -7.40438474674248,
     -3.3186231906923673,
     0.6900907505860232,
-    5.538445550374838,
+    5.538445550374831,
     11.757881327165876,
     35.80492384123401
    ]
@@ -801,7 +801,7 @@
    "mast_mean_ms": 8.794417724765935,
    "mean_bias_ms": 3.061977160643756e-16,
    "n_hours": 5198,
-   "r_squared": 0.6096856419338776,
+   "r_squared": 0.6096856419338778,
    "reference_mean_ms": 7.443966910350135,
    "residual_std_ms": 1.9804260692486058,
    "sector": -1,
@@ -829,7 +829,7 @@
     "mast_mean_ms": 3.7524137931034485,
     "mean_bias_ms": 0.7089718737492918,
     "n_hours": 29,
-    "r_squared": 0.038849539229741215,
+    "r_squared": 0.03884953922974119,
     "reference_mean_ms": 2.3982758620689655,
     "residual_std_ms": 2.3151326578336455,
     "sector": 1,
@@ -842,7 +842,7 @@
     "mast_mean_ms": 4.8693961352657,
     "mean_bias_ms": -0.34506108622097886,
     "n_hours": 69,
-    "r_squared": 0.27823151722145306,
+    "r_squared": 0.2782315172214532,
     "reference_mean_ms": 4.303043478260869,
     "residual_std_ms": 1.9682453702055869,
     "sector": 2,
@@ -855,7 +855,7 @@
     "mast_mean_ms": 4.573047619047618,
     "mean_bias_ms": -0.815095025412274,
     "n_hours": 105,
-    "r_squared": 0.2785017679685006,
+    "r_squared": 0.2785017679685005,
     "reference_mean_ms": 4.4554285714285715,
     "residual_std_ms": 2.015835749825042,
     "sector": 3,
@@ -868,7 +868,7 @@
     "mast_mean_ms": 4.226560283687943,
     "mean_bias_ms": -1.542435042547616,
     "n_hours": 94,
-    "r_squared": 0.0760680505305878,
+    "r_squared": 0.07606805053058777,
     "reference_mean_ms": 4.789574468085106,
     "residual_std_ms": 2.4103580342362974,
     "sector": 4,
@@ -894,7 +894,7 @@
     "mast_mean_ms": 3.816388888888888,
     "mean_bias_ms": 1.1366611257290964,
     "n_hours": 12,
-    "r_squared": 0.0068380936458968,
+    "r_squared": 0.006838093645896798,
     "reference_mean_ms": 2.079166666666667,
     "residual_std_ms": 2.078055875178201,
     "sector": 6,
@@ -933,7 +933,7 @@
     "mast_mean_ms": 7.28313401187447,
     "mean_bias_ms": 1.7356769117803973e-15,
     "n_hours": 393,
-    "r_squared": 0.49596952230962965,
+    "r_squared": 0.4959695223096298,
     "reference_mean_ms": 5.4611704834605606,
     "residual_std_ms": 1.8098869696523887,
     "sector": 9,
@@ -946,7 +946,7 @@
     "mast_mean_ms": 9.661758241758243,
     "mean_bias_ms": -2.7514475377418845e-16,
     "n_hours": 1911,
-    "r_squared": 0.5985346575357805,
+    "r_squared": 0.5985346575357797,
     "reference_mean_ms": 7.71152799581371,
     "residual_std_ms": 1.6079175724336268,
     "sector": 10,
@@ -959,7 +959,7 @@
     "mast_mean_ms": 9.748435651478816,
     "mean_bias_ms": -8.17890918860547e-16,
     "n_hours": 2085,
-    "r_squared": 0.49037518129747093,
+    "r_squared": 0.49037518129747126,
     "reference_mean_ms": 8.674541966426858,
     "residual_std_ms": 1.9573118232381201,
     "sector": 11,
@@ -972,7 +972,7 @@
     "mast_mean_ms": 6.359173076923076,
     "mean_bias_ms": 0.0,
     "n_hours": 260,
-    "r_squared": 0.36048454399092805,
+    "r_squared": 0.36048454399092833,
     "reference_mean_ms": 6.481153846153846,
     "residual_std_ms": 2.3672022723355206,
     "sector": 12,
@@ -985,7 +985,7 @@
     "mast_mean_ms": 4.4237698412698405,
     "mean_bias_ms": 0.24808133212377542,
     "n_hours": 42,
-    "r_squared": 0.14561673954456789,
+    "r_squared": 0.14561673954456783,
     "reference_mean_ms": 3.3916666666666666,
     "residual_std_ms": 2.2140239645369,
     "sector": 13,
@@ -1021,7 +1021,7 @@
   ],
   "target_height_m": 120
  },
- "model_version": "15.16.0",
+ "model_version": "15.18.0",
  "reference": {
   "api": "https://power.larc.nasa.gov/api/temporal/hourly/point",
   "api_version": "v2.10.3",
@@ -1036,70 +1036,70 @@
  "sensitivities": {
   "air_density_mast_record_mean": {
    "air_density_kgm3": 1.136950944408181,
-   "gross_aep_gwh": 43.71442025287424,
+   "gross_aep_gwh": 43.71442025287419,
    "mean_speed_ms": 8.242754180611902,
-   "net_aep_gwh": 40.316591041189255,
-   "net_capacity_factor": 0.4844579553134974
+   "net_aep_gwh": 40.31659104118921,
+   "net_capacity_factor": 0.4844579553134969
   },
   "clock_offset_300min": {
-   "gross_aep_gwh": 44.03079722657284,
+   "gross_aep_gwh": 44.030797226572886,
    "mean_speed_ms": 8.244818831082833,
-   "net_aep_gwh": 40.608376703441444,
-   "net_capacity_factor": 0.48796415168759244
+   "net_aep_gwh": 40.60837670344149,
+   "net_capacity_factor": 0.48796415168759305
   },
   "clock_offset_360min": {
-   "gross_aep_gwh": 43.94773997332595,
+   "gross_aep_gwh": 43.94773997332328,
    "mean_speed_ms": 8.240988161921127,
-   "net_aep_gwh": 40.531775314408065,
-   "net_capacity_factor": 0.4870436831820243
+   "net_aep_gwh": 40.5317753144056,
+   "net_capacity_factor": 0.4870436831819947
   },
   "height_100m": {
-   "gross_aep_gwh": 43.49650247501874,
+   "gross_aep_gwh": 43.49650247501918,
    "mean_speed_ms": 8.195708484436153,
-   "net_aep_gwh": 40.11561155022078,
-   "net_capacity_factor": 0.4820429169697281
+   "net_aep_gwh": 40.11561155022118,
+   "net_capacity_factor": 0.48204291696973306
   },
   "method_linear_regression": {
-   "gross_aep_gwh": 47.52907922140503,
-   "mean_speed_ms": 8.491525693299735,
-   "net_aep_gwh": 43.83474465517316,
-   "net_capacity_factor": 0.5267332931407493
+   "gross_aep_gwh": 47.52907922139956,
+   "mean_speed_ms": 8.491525693299728,
+   "net_aep_gwh": 43.83474465516812,
+   "net_capacity_factor": 0.5267332931406887
   },
   "no_site_transfer_mast_at_130m": {
-   "gross_aep_gwh": 42.86109063133922,
+   "gross_aep_gwh": 42.861090631339074,
    "mean_speed_ms": 8.11725728506801,
-   "net_aep_gwh": 39.52958892207736,
-   "net_capacity_factor": 0.47500106851811297
+   "net_aep_gwh": 39.529588922077224,
+   "net_capacity_factor": 0.4750010685181113
   },
   "omnidirectional_transfer": {
-   "gross_aep_gwh": 43.971825278443276,
+   "gross_aep_gwh": 43.971825278443305,
    "mean_speed_ms": 8.226282583857007,
-   "net_aep_gwh": 40.55398851981947,
-   "net_capacity_factor": 0.48731060466017145
+   "net_aep_gwh": 40.55398851981949,
+   "net_capacity_factor": 0.48731060466017173
   },
   "primary": {
-   "gross_aep_gwh": 43.99433591415884,
+   "gross_aep_gwh": 43.99433591415878,
    "mean_speed_ms": 8.242754180611902,
-   "net_aep_gwh": 40.574749451543404,
-   "net_capacity_factor": 0.48756007512068494
+   "net_aep_gwh": 40.574749451543354,
+   "net_capacity_factor": 0.48756007512068444
   },
   "sparse_sector_bias_corrected": {
-   "gross_aep_gwh": 42.15260570750111,
-   "mean_speed_ms": 8.051255750908489,
-   "net_aep_gwh": 38.87617302938114,
-   "net_capacity_factor": 0.4671493995359426
+   "gross_aep_gwh": 42.15260570749852,
+   "mean_speed_ms": 8.05125575090849,
+   "net_aep_gwh": 38.87617302937876,
+   "net_capacity_factor": 0.467149399535914
   },
   "window_2015_2024": {
-   "gross_aep_gwh": 43.75125713952125,
+   "gross_aep_gwh": 43.75125713952123,
    "mean_speed_ms": 8.217465485733683,
-   "net_aep_gwh": 40.350564674731395,
-   "net_capacity_factor": 0.484866194120781
+   "net_aep_gwh": 40.35056467473137,
+   "net_capacity_factor": 0.48486619412078075
   },
   "window_2016_2025": {
-   "gross_aep_gwh": 44.1292873110881,
+   "gross_aep_gwh": 44.12928731108829,
    "mean_speed_ms": 8.257446641867352,
-   "net_aep_gwh": 40.69921136248632,
-   "net_capacity_factor": 0.4890556520366056
+   "net_aep_gwh": 40.699211362486494,
+   "net_capacity_factor": 0.4890556520366077
   }
  },
  "shadow_flicker": {
@@ -1109,7 +1109,7 @@
   "operating_probability_1530": 0.930293125243161,
   "receptors": [
    {
-    "distance_m": 194.1196596703149,
+    "distance_m": 194.11965967031023,
     "exceeds_expected_limit_yawed": true,
     "expected_1530_hours_per_year": 236.26344404092146,
     "expected_no_yaw_long_term_operating_hours_per_year": 239.100851930203,
@@ -1119,7 +1119,7 @@
     "worst_case_max_minutes_per_day": 190.0
    },
    {
-    "distance_m": 306.8282926218509,
+    "distance_m": 306.8282926218499,
     "exceeds_expected_limit_yawed": false,
     "expected_1530_hours_per_year": 0.0,
     "expected_no_yaw_long_term_operating_hours_per_year": 0.0,
@@ -1129,7 +1129,7 @@
     "worst_case_max_minutes_per_day": 0.0
    },
    {
-    "distance_m": 273.08648371352666,
+    "distance_m": 273.08648371353036,
     "exceeds_expected_limit_yawed": true,
     "expected_1530_hours_per_year": 346.2395963300838,
     "expected_no_yaw_long_term_operating_hours_per_year": 350.39776377827553,
@@ -1139,7 +1139,7 @@
     "worst_case_max_minutes_per_day": 161.0
    },
    {
-    "distance_m": 134.59223121821336,
+    "distance_m": 134.59223121821628,
     "exceeds_expected_limit_yawed": true,
     "expected_1530_hours_per_year": 504.23437876721397,
     "expected_no_yaw_long_term_operating_hours_per_year": 510.2899859313644,
@@ -1149,7 +1149,7 @@
     "worst_case_max_minutes_per_day": 286.0
    },
    {
-    "distance_m": 206.5036844995254,
+    "distance_m": 206.50368449952245,
     "exceeds_expected_limit_yawed": false,
     "expected_1530_hours_per_year": 0.0,
     "expected_no_yaw_long_term_operating_hours_per_year": 0.0,
@@ -1159,7 +1159,7 @@
     "worst_case_max_minutes_per_day": 0.0
    },
    {
-    "distance_m": 247.1652572068518,
+    "distance_m": 247.16525720685325,
     "exceeds_expected_limit_yawed": true,
     "expected_1530_hours_per_year": 181.03504217231912,
     "expected_no_yaw_long_term_operating_hours_per_year": 183.20918408826947,
@@ -1169,7 +1169,7 @@
     "worst_case_max_minutes_per_day": 169.0
    },
    {
-    "distance_m": 151.9091772924126,
+    "distance_m": 151.9091772924172,
     "exceeds_expected_limit_yawed": true,
     "expected_1530_hours_per_year": 811.3396442954021,
     "expected_no_yaw_long_term_operating_hours_per_year": 821.083434821083,
@@ -1179,7 +1179,7 @@
     "worst_case_max_minutes_per_day": 258.0
    },
    {
-    "distance_m": 68.04046948256564,
+    "distance_m": 68.04046948256186,
     "exceeds_expected_limit_yawed": true,
     "expected_1530_hours_per_year": 1815.994200016333,
     "expected_no_yaw_long_term_operating_hours_per_year": 1837.8033981804103,
@@ -1274,8 +1274,8 @@
   },
   "measured": {
    "alpha_100_120": 0.10324243494564742,
-   "alpha_log_fit_30_120": 0.0799821735464645,
-   "alpha_log_fit_80_120": 0.06625748947258328,
+   "alpha_log_fit_30_120": 0.07998217354646485,
+   "alpha_log_fit_80_120": 0.06625748947258318,
    "basis": "10-minute rows with all five mean speeds present, assessment window",
    "by_sector_80m_direction": [
     {
@@ -1497,7 +1497,7 @@
    "day_night_local_06_18": {
     "day": {
      "alpha_100_120": 0.10122827379869508,
-     "alpha_log_fit_30_120": 0.06432735408538638,
+     "alpha_log_fit_30_120": 0.06432735408538649,
      "mean_ms_by_height": {
       "100": 8.281395617811475,
       "120": 8.435657007003792,
@@ -1509,7 +1509,7 @@
     },
     "night": {
      "alpha_100_120": 0.10509127896824612,
-     "alpha_log_fit_30_120": 0.09463360515182236,
+     "alpha_log_fit_30_120": 0.09463360515182247,
      "mean_ms_by_height": {
       "100": 8.975458498529223,
       "120": 9.149090037089142,
@@ -1600,7 +1600,7 @@
    -5.082569852253982,
    -3.467719555647932,
    0.25332604798066427,
-   17.631848135340164,
+   17.631848135340192,
    21.19133257883871,
    16.541192325926318
   ],
@@ -1628,44 +1628,44 @@
  "timezone": {
   "candidates": [
    {
-    "hourly_speed_r": 0.7774366167673756,
+    "hourly_speed_r": 0.7774366167673742,
     "offset_h": 0.0,
-    "s2_pressure_maximum_local_solar_h": 3.103166796661254,
-    "subdaily_u_component_r": 0.1004605636570931,
-    "subdaily_v_component_r": 0.262705592042813,
-    "temperature_maximum_local_solar_h": 19.024859487078658
+    "s2_pressure_maximum_local_solar_h": 3.1031667966612613,
+    "subdaily_u_component_r": 0.10046056365709313,
+    "subdaily_v_component_r": 0.26270559204281296,
+    "temperature_maximum_local_solar_h": 19.024859487078643
    },
    {
-    "hourly_speed_r": 0.7888834227399536,
+    "hourly_speed_r": 0.7888834227399537,
     "offset_h": 5.0,
-    "s2_pressure_maximum_local_solar_h": 10.103166796661254,
-    "subdaily_u_component_r": 0.2031111244831935,
-    "subdaily_v_component_r": 0.41598245160180886,
-    "temperature_maximum_local_solar_h": 14.02485948707866
+    "s2_pressure_maximum_local_solar_h": 10.103166796661261,
+    "subdaily_u_component_r": 0.20311112448319363,
+    "subdaily_v_component_r": 0.4159824516018087,
+    "temperature_maximum_local_solar_h": 14.024859487078642
    },
    {
-    "hourly_speed_r": 0.7887934892754996,
+    "hourly_speed_r": 0.7887934892754995,
     "offset_h": 5.5,
-    "s2_pressure_maximum_local_solar_h": 9.603166796661254,
-    "subdaily_u_component_r": 0.1843892971231244,
+    "s2_pressure_maximum_local_solar_h": 9.603166796661261,
+    "subdaily_u_component_r": 0.18438929712312435,
     "subdaily_v_component_r": 0.3833347015139621,
-    "temperature_maximum_local_solar_h": 13.52485948707866
+    "temperature_maximum_local_solar_h": 13.524859487078642
    },
    {
-    "hourly_speed_r": 0.7886728670582338,
+    "hourly_speed_r": 0.7886728670582337,
     "offset_h": 6.0,
-    "s2_pressure_maximum_local_solar_h": 9.103166796661254,
-    "subdaily_u_component_r": 0.16872186912479617,
-    "subdaily_v_component_r": 0.35186923883917215,
-    "temperature_maximum_local_solar_h": 13.02485948707866
+    "s2_pressure_maximum_local_solar_h": 9.103166796661261,
+    "subdaily_u_component_r": 0.16872186912479603,
+    "subdaily_v_component_r": 0.3518692388391723,
+    "temperature_maximum_local_solar_h": 13.024859487078642
    },
    {
-    "hourly_speed_r": 0.7842971605637427,
+    "hourly_speed_r": 0.7842971605637425,
     "offset_h": 8.0,
-    "s2_pressure_maximum_local_solar_h": 7.103166796661254,
-    "subdaily_u_component_r": 0.05953798879553044,
-    "subdaily_v_component_r": 0.1601141478591644,
-    "temperature_maximum_local_solar_h": 11.02485948707866
+    "s2_pressure_maximum_local_solar_h": 7.103166796661261,
+    "subdaily_u_component_r": 0.05953798879553045,
+    "subdaily_v_component_r": 0.16011414785916428,
+    "temperature_maximum_local_solar_h": 11.024859487078642
    }
   ],
   "checks": {
@@ -1674,23 +1674,23 @@
   },
   "configured_clock_offset_h": 5.5,
   "finding": "mast clock = UTC+05:30 (Sri Lanka Standard Time)",
-  "hourly_speed_correlation_at_configured_offset": 0.7887934892754996,
+  "hourly_speed_correlation_at_configured_offset": 0.7887934892754995,
   "hourly_speed_correlation_peak_offset_h": 5.0,
-  "hourly_speed_correlation_peak_r": 0.7888834227399536,
-  "s2_amplitude_kpa": 0.14503280016609327,
+  "hourly_speed_correlation_peak_r": 0.7888834227399537,
+  "s2_amplitude_kpa": 0.145032800166092,
   "s2_assumed_local_solar_time_of_maximum_h": 10.0,
-  "s2_implied_clock_offset_h": 5.103166796661254,
+  "s2_implied_clock_offset_h": 5.103166796661261,
   "s2_maximum_mast_clock_h_by_month": [
-   9.841502871741092,
-   9.848568264332865,
-   9.859507183274454,
-   9.96102656751307,
-   9.893883657777184,
-   9.726988980894898,
-   9.51009071629148
+   9.841502871741094,
+   9.848568264332892,
+   9.85950718327446,
+   9.961026567513123,
+   9.893883657777236,
+   9.72698898089489,
+   9.510090716291504
   ],
-  "s2_pressure_tide_maximum_mast_clock_h": 9.789290129994587,
-  "temperature_10m_daily_maximum_mast_clock_h": 13.710982820411992
+  "s2_pressure_tide_maximum_mast_clock_h": 9.789290129994594,
+  "temperature_10m_daily_maximum_mast_clock_h": 13.710982820411974
  },
  "turbulence": {
   "100m": {
@@ -2140,41 +2140,41 @@
  "uncertainty": {
   "energy_pct": {
    "budget": {
-    "horizontal_flow_pct": 6.67217147544311,
-    "interannual_variability_pct": 3.104022443958149,
-    "long_term_pct": 8.292689802057755,
+    "horizontal_flow_pct": 6.672171475443068,
+    "interannual_variability_pct": 3.10402244395813,
+    "long_term_pct": 8.292689802057666,
     "power_curve_pct": 5.0,
-    "vertical_extrapolation_pct": 0.33021530928336396,
+    "vertical_extrapolation_pct": 0.33021530928336185,
     "wake_model_pct": 0.0,
-    "wind_measurement_pct": 5.0041286065823325
+    "wind_measurement_pct": 5.0041286065823005
    },
-   "long_term_combined": 8.292689802057755,
-   "mcp_method": 4.017270898398303,
-   "resource_combined": 11.765922046850818,
-   "sparse_sector_extrapolation": 4.186289367456958
+   "long_term_combined": 8.292689802057666,
+   "mcp_method": 4.0172708983921614,
+   "resource_combined": 11.765922046850717,
+   "sparse_sector_extrapolation": 4.186289367462707
   },
   "jackknife_month_mean_speed_ms": {
    "10": 8.207265729993482,
    "11": 8.257127193774611,
    "3": 8.257058112938497,
    "4": 8.126054374887195,
-   "5": 8.189850555254745,
+   "5": 8.189850555254747,
    "6": 8.222093419830209,
-   "7": 8.479071353521045,
+   "7": 8.479071353521046,
    "8": 8.230536850324778,
-   "9": 8.209154505828037
+   "9": 8.209154505828039
   },
   "life_years": 20,
-  "p50_net_gwh": 40.574749451543404,
-  "p75_1yr_net_gwh": 36.97434696851298,
-  "p90_1yr_net_gwh": 33.73371783960599,
-  "p90_life_net_gwh": 33.91707499432223,
-  "sigma_1yr_pct": 13.155678505693503,
-  "sigma_life_pct": 12.80307265382806,
+  "p50_net_gwh": 40.574749451543354,
+  "p75_1yr_net_gwh": 36.97434696851297,
+  "p90_1yr_net_gwh": 33.733717839605994,
+  "p90_life_net_gwh": 33.917074994322235,
+  "sigma_1yr_pct": 13.155678505693409,
+  "sigma_life_pct": 12.803072653827968,
   "speed_pct": {
    "clock_offset": 0.023236584991922556,
-   "concurrency_seasonal_jackknife": 3.1456533178825197,
-   "long_term_window": 0.611247198672907,
+   "concurrency_seasonal_jackknife": 3.145653317882531,
+   "long_term_window": 0.6112471986729072,
    "mcp_correlation": 1.5322324957796447,
    "measurement": 3.0,
    "shear_extrapolation": 0.19796572105421426,
@@ -2184,24 +2184,24 @@
  "work_item": "https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6556910250",
  "yield": {
   "basis": "frequency-weighted sector Weibulls at 130 m; curve clipped at 9.5 MW; #1530 density and losses",
-  "cross_check_omni_weibull_gross_aep_gwh": 43.86577702530048,
+  "cross_check_omni_weibull_gross_aep_gwh": 43.86577702530038,
   "cross_check_time_series_gross_aep_gwh": 45.61690442843249,
   "era5_weibull_basis_1530": {
    "gross_aep_gwh": 33.77047823149654,
-   "mean_speed_130m_ms": 7.143496442562994,
+   "mean_speed_130m_ms": 7.143496442562992,
    "net_aep_gwh": 31.145570551976164,
    "net_capacity_factor": 0.3742558345587138,
    "operating_probability": 0.930293125243161,
    "weibull_a_130m_ms": 8.036374731850035,
    "weibull_k": 2.665
   },
-  "gross_aep_gwh": 43.99433591415884,
-  "gross_capacity_factor": 0.528650996324908,
-  "net_aep_gwh": 40.574749451543404,
-  "net_capacity_factor": 0.48756007512068494,
-  "omni_weibull_integrator_gap_pct": 0.000689123227337556,
+  "gross_aep_gwh": 43.99433591415878,
+  "gross_capacity_factor": 0.5286509963249072,
+  "net_aep_gwh": 40.574749451543354,
+  "net_capacity_factor": 0.48756007512068444,
+  "omni_weibull_integrator_gap_pct": 0.0006891232273213594,
   "operating_fraction": 0.9414654886344782,
-  "speed_to_energy_sensitivity": 1.6680428688607776,
+  "speed_to_energy_sensitivity": 1.668042868860767,
   "total_loss_pct": 7.772788000000008
  }
 }
