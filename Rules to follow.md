@@ -26,8 +26,8 @@ git worktree list
 
 | Document | Scope & Authority |
 |---|---|
-| [`go_with_the_flow_rules_v3_0_clean.csv`](go_with_the_flow_rules_v3_0_clean.csv) | **Canonical GWTF v3.0 Ruleset** (78 active rules across 19 categories; validated by [`dutchbay_bootstrap_rules.py`](dutchbay_bootstrap_rules.py) and [`tests/lint/test_gwtf_canonical_source.py`](tests/lint/test_gwtf_canonical_source.py)). |
-| [`AGENTS.md`](AGENTS.md) | **Codex & Universal Agent Gateway** — runtime requirements (`ENV-01`, `THREAD-01`), intake (`INTAKE-01`), delivery (`DELIVERY-01`, `REVIEW-01`, `TRAIN-01`, `MERGE-01`), corpus manifest rules (`DATA-01`), and `DBPL-01`. Guarded by [`tests/lint/test_codex_project_guidance.py`](tests/lint/test_codex_project_guidance.py). |
+| [`go_with_the_flow_rules_v3_0_clean.csv`](go_with_the_flow_rules_v3_0_clean.csv) | **Canonical GWTF v3.0 Ruleset** (79 active rules across 19 categories; validated by [`dutchbay_bootstrap_rules.py`](dutchbay_bootstrap_rules.py) and [`tests/lint/test_gwtf_canonical_source.py`](tests/lint/test_gwtf_canonical_source.py)). |
+| [`AGENTS.md`](AGENTS.md) | **Codex & Universal Agent Gateway** — runtime requirements (`ENV-01`, `THREAD-01`), intake (`INTAKE-01`), delivery (`DELIVERY-01`, `REVIEW-01`, `TRAIN-01`, `MERGE-01`, `CLEANUP-01`), corpus manifest rules (`DATA-01`), and `DBPL-01`. Guarded by [`tests/lint/test_codex_project_guidance.py`](tests/lint/test_codex_project_guidance.py). |
 | [`CLAUDE.md`](CLAUDE.md) | **Claude Code Gateway** — build/lint/test commands, architecture map, config-first rules, and pointer to [`AGENTS.md`](AGENTS.md). |
 | [`docs/governance/agent_session_routing.md`](docs/governance/agent_session_routing.md) | **Multi-Agent Session Router** — routes any non-Codex or cloud session to its governing documents. Guarded by [`tests/lint/test_agent_session_routing.py`](tests/lint/test_agent_session_routing.py). |
 | [`.claude/skills/steward/SKILL.md`](.claude/skills/steward/SKILL.md) | **Steward Skill** — PR driving, base-currency maintenance, `Evidence pack` formatting, Grid Study classification, `MERGE-01` boundary checks, and `TRAIN-01` merge-train execution. |
@@ -66,7 +66,7 @@ git worktree list
 
 ---
 
-## 3. Complete GWTF v3.0 Ruleset Summary (All 78 Active Rules by Category)
+## 3. Complete GWTF v3.0 Ruleset Summary (All 79 Active Rules by Category)
 
 ### 3.1 Governance & Intake (`GOV-01`, `GOV-02`, `INTAKE-01`)
 - **`GOV-01` (AI-Assisted Development Governance)**: AI agents are bound to the same engineering, verification, and provenance standards as human contributors. Human project owner retains all release, grade, audit, lender, and Board reliance authority.
@@ -80,8 +80,8 @@ git worktree list
 ### 3.2 Architecture (`ARCH-01` – `ARCH-04`)
 - **`ARCH-01` (Config-First Design)**: Business values, tariffs, FX curves, debt terms, and pipeline modes belong in `scenarios/*.yaml` or `conf/*.yaml`, never hardcoded in Python.
 - **`ARCH-02` (Single IRR / NPV / XIRR Source)**: Define `irr`, `npv`, and `xirr` only in [`finance/irr.py`](finance/irr.py). Enforced by [`tests/lint/test_irr_location_v14.py`](tests/lint/test_irr_location_v14.py).
-- **`ARCH-03` (Centralized Contracts & Evaluation Gateway)**: Use [`analytics/contracts_v14.py`](analytics/contracts_v14.py) and `analytics.evaluation_v14.evaluate_with_overrides()`.
-- **`ARCH-04` (Optional Dependencies Import-Safe)**: Guard optional packages behind call-time `_require_*()` helpers.
+- **`ARCH-03` (Tranche-Aware Debt Result Surface)**: Debt sizing and schedule results expose explicit tranche-level and aggregate metrics cleanly without conflating senior, subordinated, or DFI tranches.
+- **`ARCH-04` (Contract Gateway Pattern for Analytics Evaluation)**: Use [`analytics/contracts_v14.py`](analytics/contracts_v14.py) and `analytics.evaluation_v14.evaluate_with_overrides()` as the sole evaluation gateway, and keep optional dependencies import-safe behind call-time `_require_*()` helpers (`CASPER` / `FRAMEWORK-01`).
 
 ### 3.3 CLI & Tooling (`CLI-01` – `CLI-03`, `R1` – `R9`, `ADD-01` – `ADD-03`, `R26`)
 - **`CLI-01` / `R1` (Hydra Standard)**: All canonical CLIs (`run_*_v14.py`, `scripts/run_*_v14.py`) use `@hydra.main(version_base="1.3", config_path=..., config_name=...)`. Enforced by [`tests/lint/test_entrypoints_hydra_only.py`](tests/lint/test_entrypoints_hydra_only.py).
@@ -115,7 +115,7 @@ git worktree list
   - Any PDF described as a DBPL document must be rendered through [`app/reports/dbpl/print_core.py`](app/reports/dbpl/print_core.py) (`render_dbpl_pdf`), requiring the complete `[report]` extra (`weasyprint`, `reportlab`, `geopandas`, `contextily`) and failing loud with `DbplDependencyError` if any dependency or font is missing.
   - Design tokens live only in [`app/reports/dbpl/style.py`](app/reports/dbpl/style.py). Running header, running footer (`Page n of m`), and section caveat bands are un-suppressible, and font substitutions must be surfaced ([`docs/dbpl_styleguide.md`](docs/dbpl_styleguide.md)).
 
-### 3.7 Git Workflow, Delivery & Refactoring (`R10` – `R25`, `DELIVERY-01`, `REFACTOR-01` – `REFACTOR-04`, `WORKTREE-01`, `MERGE-01`, `REVIEW-01`, `TRAIN-01`)
+### 3.7 Git Workflow, Delivery & Refactoring (`R10` – `R25`, `DELIVERY-01`, `REFACTOR-01` – `REFACTOR-04`, `WORKTREE-01`, `MERGE-01`, `REVIEW-01`, `TRAIN-01`, `CLEANUP-01`)
 - **`R10` – `R17` & `R19` – `R25`**: Pre-commit hooks enabled (never use `--no-verify`), ruff/black/isort formatting clean, legacy code isolated under `legacy/` ([`tests/lint/test_no_legacy_imports.py`](tests/lint/test_no_legacy_imports.py)), branch-PR-CI-merge workflow against `origin/main`.
 - **`R18` (Conventional Commits)**: Commit subjects must use `type(scope): summary` from the 11 sanctioned types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert` (`deploy` is unsanctioned). Guarded by [`tests/lint/test_commit_message_conformance.py`](tests/lint/test_commit_message_conformance.py).
 - **`R21` (Graduated Verification Cadence)**: Run the narrowest meaningful check before each commit while iterating, and run the full relevant suite before pushing.
@@ -135,6 +135,12 @@ git worktree list
 - **`MERGE-01` (Standing Merge-on-Green Authority & Boundaries)**:
   - Standing authorization to merge a PR as soon as every required check reports success on the exact current HEAD (`Test Summary`, `Code Quality Checks`, `Security Scan`, `Verification receipts (VERIFY-01)`, and conditional `Coverage Gate` / `Grid Study`) with no conflict and up-to-date base.
   - **Boundary**: Merging is delivery authority only; it lifts no `HOLD` (such as `#1110`), and confers no grade, release, audit, lender, or Board authority. *(Note: When the project owner places a temporary session hold on `MERGE-01`, honour that hold until explicitly lifted.)*
+- **`CLEANUP-01` (Post-Merge Tracker Notification, Issue Closure & Worktree/Branch/Venv Retirement)**:
+  - Immediately after any PR or `TRAIN-01` merge train lands on `origin/main` and protected-main ancestry/tree verification succeeds:
+    1. **Inform Tasklist & GitHub Issues**: Update the session/project tasklist, post a closure/reconciliation receipt on [Issue #1353](https://github.com/arunakulat/dutchbay-epc-model/issues/1353) naming the merged PR and commit SHA on `origin/main`, and close completed focused GitHub issue(s) (or each car PR and train issue for a train).
+    2. **Clear, Prune & Close Worktrees**: Synchronize the primary checkout (`git fetch origin main && git checkout main && git pull --ff-only origin main`), remove the merged task worktree (`git worktree remove <worktree-path>`), and run `git worktree prune` (preserving any dirty or concurrently owned worktrees belonging to other active tasks).
+    3. **Delete Merged Branches**: Delete the merged branch locally (`git branch -d <branch>`) and remotely (`git push origin --delete <branch>`), and run `git fetch --prune origin`.
+    4. **Clean Non-Protected Venvs**: Remove any temporary, per-task, or worktree-local virtual environments (`.venv`, `.venv311`, or ad-hoc venvs) associated with the retired worktree/task, while **NEVER** deleting, clearing, pruning, or modifying the protected persistent Python 3.12 environment at `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` (`THREAD-01`, `ENV-01`). Guarded by [`tests/lint/test_gwtf_canonical_source.py`](tests/lint/test_gwtf_canonical_source.py).
 
 ### 3.8 Data Ingestion, Persistence, Environment & Dependency Security (`DATA-01`, `PERSIST-01`, `ENV-01`, `THREAD-01`, `SECDEP-01`)
 - **`DATA-01` (Lossless Ingestion & Corpus Manifest Integrity)**:

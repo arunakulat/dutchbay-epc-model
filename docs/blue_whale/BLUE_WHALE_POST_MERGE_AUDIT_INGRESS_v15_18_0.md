@@ -16,7 +16,7 @@ Every prospective worker must complete the safety preflight before substantive i
 |---|---|---|---|---|
 | Python Runtime | Python 3.12 (`ENV-01`, `THREAD-01`) | `$DUTCHBAY_VENV/bin/python -VV` | `Python 3.12.13 (main, Mar  3 2026, 12:39:30) [Clang 21.0.0]` | **PASS** |
 | Environment Integrity | Governed persistent `.venv` | `DUTCHBAY_VENV="$DUTCHBAY_VENV" ./check_venv.sh` | Status `PASS`, 315 locked distributions, schema `dutchbay.development_environment_receipt.v1` | **PASS** |
-| Ruleset Canon | Unaltered CSV (`eb14d836...`) | `dutchbay_bootstrap_rules.py` | 78 rules, all active, latest `v3.0`, SHA-256 `eb14d836513fef208b59029c35bf6add826aa0c24dd764bb8a62f3a3acfee560` | **PASS** |
+| Ruleset Canon | Canonical CSV (`23074328...`) | `dutchbay_bootstrap_rules.py` | 79 rules, all active, latest `v3.0`, SHA-256 `230743289f135338344cba0740061935af461325d6729f3d210db3f3aee2e7a4` (`eb14d836...` at 78 rules prior to `CLEANUP-01`) | **PASS** |
 | Handover Continuity | Resolver lineage verification | `scripts/list_session_handover_records.py` | Lineage verified back to founding records; latest introduction is `docs/SESSION_HANDOVER_2026-10-22_AUDIT_GATE_CLEARED_ON_MERIT.md` (`86ca5732`) | **PASS** |
 | Protected Branch | Protected `main` read-only | `git branch --show-current` | Working on dedicated worktree branch `add_ingress_file` | **PASS** |
 | Merge Authority | `MERGE-01` standing authority | Standing merge authority check | **SUSPENDED** by project owner at 2026-11-05T20:15:19+05:30 (Checkpoint 9 in `blue_whale_merge_train_ledger.md`). Strictly non-merging. | **HELD** |
@@ -93,7 +93,7 @@ All 7 Blue Whale PRs along with prerequisite CI PR `#1548` have landed on `main`
 ## 4. Complete Repository & Host-Global Governance Ingress Matrix (`2026-11-06`)
 
 ### 4.1 Canonical GWTF Ruleset (`go_with_the_flow_rules_v3_0_clean.csv`)
-- **Verified Count & Digest**: **78 active rules** (`78 rules; versions: v3.0; latest = v3.0; active=78`), SHA-256 `eb14d836513fef208b59029c35bf6add826aa0c24dd764bb8a62f3a3acfee560`.
+- **Verified Count & Digest**: **79 active rules** (`79 rules; versions: v3.0; latest = v3.0; active=79`), SHA-256 `230743289f135338344cba0740061935af461325d6729f3d210db3f3aee2e7a4` (updated from 78 active rules / `eb14d836513fef208b59029c35bf6add826aa0c24dd764bb8a62f3a3acfee560` with owner-directed `CLEANUP-01`).
 - **Complete Rule Family Synthesis**:
   - **Governance & Intake (`GOV-01`, `GOV-02`, `INTAKE-01`)**:
     - `GOV-01`: AI-assisted development contract (human product owner retains all release, grade, lender, and Board authority).
@@ -102,8 +102,8 @@ All 7 Blue Whale PRs along with prerequisite CI PR `#1548` have landed on `main`
   - **Architecture & Contracts (`ARCH-01..04`)**:
     - `ARCH-01`: Config-first design (`YAML`/`JSON`); no hard-coded business constants or hidden switches.
     - `ARCH-02`: `finance/irr.py` is the sole canonical implementation of `irr()`, `npv()`, and `xirr()`.
-    - `ARCH-03`: All analytics outputs use canonical dataclasses in `analytics.contracts_v14` (`ScenarioResult`, `SensitivityResult`, `MonteCarloResult`, `CasperPayload`) and route evaluation exclusively through `analytics.evaluation_v14.evaluate_with_overrides()`.
-    - `ARCH-04`: Optional dependencies (`openpyxl`, `pandas`, `matplotlib`, `scipy`, `pyyaml`, `weasyprint`, etc.) must be import-safe and fail at call time via `_require_*()` guards (except `DBPL-01` print core, which fails loud with `DbplDependencyError`).
+    - `ARCH-03`: Tranche-aware debt result surface (explicit tranche-level and aggregate debt sizing/schedule outputs without conflating senior, subordinated, or DFI tranches).
+    - `ARCH-04`: Contract gateway pattern for analytics evaluation — all analytics outputs use canonical dataclasses in `analytics.contracts_v14` (`ScenarioResult`, `SensitivityResult`, `MonteCarloResult`, `CasperPayload`) and route evaluation exclusively through `analytics.evaluation_v14.evaluate_with_overrides()`, keeping optional dependencies import-safe via call-time `_require_*()` guards (`FRAMEWORK-01` / `CASPER`, except `DBPL-01` print core, which fails loud with `DbplDependencyError`).
   - **Canonical Framework Acronyms (`FRAMEWORK-01..03`)** (enforced by `tests/lint/test_framework_expansions_match_csv.py`):
     - `FRAMEWORK-01` (**CASPER**):
       - **Primary**: *Clear API Surfaces with Predictable Error Responses* (call-time `_require_*()` guards, explicit errors, clean documented contracts).
@@ -126,7 +126,7 @@ All 7 Blue Whale PRs along with prerequisite CI PR `#1548` have landed on `main`
     - `TEST-05`: Coverage gate (`--cov-fail-under=80` across `finance/` and `analytics/`).
     - `FIN-01..02` / `MRM-01..02`: Explicit seed for stochastic runs; version/changelog update when committed financial outputs change; `schema` and `model_version` provenance in governed artifacts.
     - `DBPL-01`: DutchBay Presentation Layer PDFs must route through `app.reports.dbpl.print_core.render_dbpl_pdf` with the complete `[report]` extra (`weasyprint`, `reportlab`, `geopandas`, `contextily`), fail loud via `DbplDependencyError`, keep all design tokens in `app/reports/dbpl/style.py`, keep running header/footer/caveat band un-suppressible, and surface font substitutions (`docs/dbpl_styleguide.md`).
-  - **Git Workflow, Delivery, Persistence, Environment, Recruitment & Security (`R10..R25`, `DELIVERY-01`, `REFACTOR-01..04`, `WORKTREE-01`, `DATA-01`, `PERSIST-01`, `ENV-01`, `THREAD-01`, `VERIFY-01`, `MERGE-01`, `RECRUIT-01`, `SECDEP-01`, `REVIEW-01`, `TRAIN-01`)**:
+  - **Git Workflow, Delivery, Persistence, Environment, Recruitment & Security (`R10..R25`, `DELIVERY-01`, `REFACTOR-01..04`, `WORKTREE-01`, `DATA-01`, `PERSIST-01`, `ENV-01`, `THREAD-01`, `VERIFY-01`, `MERGE-01`, `RECRUIT-01`, `SECDEP-01`, `REVIEW-01`, `TRAIN-01`, `CLEANUP-01`)**:
     - `R18`: Eleven sanctioned Conventional Commit types (`build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`); `deploy` is unsanctioned.
     - `R21`: Run the narrowest meaningful check before each commit, and the full suite before pushing.
     - `DELIVERY-01` & `REFACTOR-01..04`: Dolphin Strategy — one small, complete, independently reversible change per branch/PR (`MOVE -> SHIM -> UPDATE -> DEPRECATE`).
@@ -135,15 +135,16 @@ All 7 Blue Whale PRs along with prerequisite CI PR `#1548` have landed on `main`
     - `PERSIST-01`: Checkpoint durable state early and often to survive session interruptions; maintain the linear handover chain verified by `scripts/list_session_handover_records.py`.
     - `ENV-01` & `THREAD-01`: Root repository work at the active checkout/worktree with `PYTHONPATH="$PWD"` first, bound to the persistent governed Python 3.12 environment `DUTCHBAY_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"` (`./check_venv.sh`); shared-venv governance edits require `scripts/verify_shared_venv_worktrees.py` across two clean worktrees during a quiet window.
     - `VERIFY-01`: "A claimed check without a receipt is not a check" — enforced by required CI check `Verification receipts (VERIFY-01)`.
-    - `MERGE-01`: Standing authorization to merge when all required checks are green on the exact current HEAD (delivery authority only; **currently suspended by owner at Checkpoint 9 on `2026-11-05T20:15:19+05:30` until explicitly re-authorized**).
+    - `MERGE-01`: Standing authorization to merge when all required checks are green on the exact current HEAD (delivery authority only; **currently suspended by owner at Checkpoint 9 on `2026-11-05T20:15:19+05:30` unless explicitly authorized per PR**).
     - `SECDEP-01`: Every suppressed `pip-audit` advisory in `PIP_AUDIT_IGNORES` must declare exact package pin, forcing cap, lifting release, and runtime defensibility (`tests/lint/test_pip_audit_allowlist.py`).
     - `REVIEW-01`: Open PR as draft first (fast gates only; shards, Coverage Gate, and Grid Study defer and report `Test Summary (draft: full suite deferred)`), freeze HEAD, post `Evidence pack` comment, bind required review lanes (`R1` = 1 lane; `R2`/`R3` = Domain + Assurance pair) to the draft HEAD, then mark ready for review so the full suite runs once.
     - `TRAIN-01`: Merge coordinator may combine 2–3 path-disjoint, import-isolated reviewed draft PRs ("cars", at most one `R3`/KPI-changing) onto `train/<date>-<n>` so they share one full-suite run and land by **rebase-merge** (never squash) with Module 3 §8 carry-forward proofs and pre/post-landing checks.
+    - `CLEANUP-01`: Post-merge tracker notification (`#1353` & tasklist), completed focused GitHub issue closure, primary `main` synchronization, merged worktree and branch removal/pruning (`git worktree remove`, `git worktree prune`, `git branch -d`, `git push origin --delete`), and cleanup of any non-protected venvs while strictly preserving `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` (`THREAD-01`, `ENV-01`).
 
 ### 4.2 `RECRUIT-01` Canonical Modules (`docs/governance/recruit_01/01..04.md`)
 1. **Module 1 (`01_capability_and_risk.md`)**:
    - Capabilities `C1`–`C7` and semantic risk classes `R0` (no repo mutation), `R1` (low-risk bounded), `R2` (standard code/config/tests), `R3` (finance/KPI/contract/grid/governance/corpus-handling material).
-   - **§3.1 Three Bounded `R1` Single-Lane Classes**: (1) pure narrative/handover/changelog docs with no handling or normative change, (2) isolated test-only additions with no production/fixture/contract edit, (3) mechanical lint/type/format hygiene with zero semantic change. Everything else requires the 2-lane Domain + Assurance review pair.
+   - **§3.1 Three Bounded `R1` Single-Lane Classes**: (1) presentation-only code with no effect on any computed value, input, output file, API contract, or report figure; (2) test-only guard tightening that adds or tightens a guard without changing any oracle's expected value, tolerance, or fixture data and without removing, skipping, or weakening an assertion; and (3) record corrections that fix a dated record's receipts or citations without changing any disposition, authority, finding state, or carried-forward instruction. Everything else requires the 2-lane Domain + Assurance review pair.
 2. **Module 2 (`02_writer_lease_and_recovery.md`)**:
    - One sole-writer coordinator per worktree/branch (`GRANTED -> ACTIVE -> CHECKPOINTED -> COMPLETED`).
    - Any session interruption, timeout, crash, or rate-limit **revokes** lease continuity (`INTERRUPTED -> REVOKED`); successor must run full `ENV-01`/`WORKTREE-01` recovery before writing. Subagents never commit (`D-1`).
@@ -171,8 +172,8 @@ All 7 Blue Whale PRs along with prerequisite CI PR `#1548` have landed on `main`
 
 ### 4.5 Governance Drift & Errata Discovered (and Remediated)
 1. **Stale GWTF Rule Counts in Global Claude Memory (REMEDIATED)**:
-   - `/Users/aruna/.claude/projects/-Users-aruna-Downloads/memory/MEMORY.md` (line 4) and `dutchbay_gwtf_ruleset_and_framework_acronyms.md` (lines 18, 91) referenced `74 rules` / `77 rules` (`2026-10-26`, missing `TRAIN-01`).
-   - **Action Taken**: Updated both files with the dated `2026-11-06` (`main` `cc4d1b59`, `v15.18.0`) count receipt of **78 active rules** (SHA-256 `eb14d836513fef208b59029c35bf6add826aa0c24dd764bb8a62f3a3acfee560`, documenting `TRAIN-01` and the temporary Checkpoint 9 `MERGE-01` hold).
-2. **Broken `@import` Paths in `/Users/aruna/.codex/AGENTS.md` (FLAGGED)**:
-   - Lines 5, 14, and 23 of `/Users/aruna/.codex/AGENTS.md` contain `@/Users/aruna/.Codex/projects/-Users-aruna-Downloads/memory/...`.
-   - That directory does **not exist** under `~/.codex/`; the actual files reside under `/Users/aruna/.claude/projects/-Users-aruna-Downloads/memory/...`.
+   - `/Users/aruna/.claude/projects/-Users-aruna-Downloads/memory/MEMORY.md` (line 4) and `dutchbay_gwtf_ruleset_and_framework_acronyms.md` (lines 18, 91) referenced `74 rules` / `77 rules` (`2026-10-26`, missing `TRAIN-01` and `CLEANUP-01`).
+   - **Action Taken**: Updated both files with the dated `2026-11-06` count receipt of **79 active rules** (SHA-256 `230743289f135338344cba0740061935af461325d6729f3d210db3f3aee2e7a4`, documenting `TRAIN-01`, `CLEANUP-01`, and the Checkpoint 9 `MERGE-01` hold).
+2. **Broken `@import` Paths in `/Users/aruna/.codex/AGENTS.md` (REMEDIATED)**:
+   - Lines 5, 14, and 23 of `/Users/aruna/.codex/AGENTS.md` contained `@/Users/aruna/.Codex/projects/-Users-aruna-Downloads/memory/...`.
+   - Repaired to point to the live directory `/Users/aruna/.claude/projects/-Users-aruna-Downloads/memory/...`.

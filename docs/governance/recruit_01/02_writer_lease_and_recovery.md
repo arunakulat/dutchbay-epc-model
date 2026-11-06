@@ -108,7 +108,11 @@ established.
 
 ## 8. Closure
 
-After merge, verify protected-main ancestry and tree/delivered-blob identity, synchronize the clean
-primary checkout, and retire only the dolphin's own branch and worktree. Preserve unrelated, dirty,
-unfamiliar, backup, and concurrently owned state. The final PERSIST-01 handover records what was
-removed, what remains, and whether recovery is possible.
+After merge, follow `CLEANUP-01`: verify protected-main ancestry and tree/delivered-blob identity,
+inform the tasklist and capability tracker (`#1353`), close completed focused GitHub issues,
+synchronize the clean primary checkout, retire only the dolphin's own branch and worktree
+(`git worktree remove`, `git worktree prune`, `git branch -d`, `git push origin --delete`), and
+remove any temporary or worktree-local virtual environments while NEVER touching the protected
+persistent environment at `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` (`THREAD-01`, `ENV-01`).
+Preserve unrelated, dirty, unfamiliar, backup, and concurrently owned state. The final PERSIST-01
+handover records what was removed, what remains, and whether recovery is possible.
