@@ -23,7 +23,7 @@ authority.
 
 When historical sprint instructions conflict with current governance, follow the newer
 current workflow, especially `WORKTREE-01`, `GOV-02`, `R23`, `R25`, `DELIVERY-01`,
-`DATA-01`, `PERSIST-01`, `THREAD-01`, `MERGE-01`, and `RECRUIT-01`. Never restore a retired sprint integration
+`DATA-01`, `PERSIST-01`, `THREAD-01`, `MERGE-01`, `RECRUIT-01`, and `CLEANUP-01`. Never restore a retired sprint integration
 branch or a nonexistent ruleset filename.
 
 ## Session continuity
@@ -160,6 +160,13 @@ overlap judgment or the time the first edit occurred.
   them changes a KPI. Each car keeps its own commit, carrying its own message, and the train lands
   by rebase-merge, never squash. A car's binding carries onto the train head only through module 3
   §8's three proofs. The steward skill's "Merge trains" section has the build and landing checks.
+- `CLEANUP-01`: immediately after any pull request or merge train lands on `origin/main` and
+  ancestry/tree verification passes, inform the tasklist and capability tracker (`#1353`), close
+  completed focused GitHub issues, synchronize `main`, remove and prune the merged worktree and
+  branch (`git worktree remove`, `git worktree prune`, `git branch -d`, `git push origin --delete`),
+  and clean any temporary or worktree-local virtual environments while NEVER deleting, clearing,
+  pruning, or modifying the protected persistent Python 3.12 environment at
+  `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` (`THREAD-01`, `ENV-01`).
 
 ## Runtime logging and evidence retention
 
@@ -368,5 +375,6 @@ request as unrelated to the governed QSTS/grid execution surface.
 
 Report the outcome first, then list material files changed and exact checks run. State
 clearly whether work is uncommitted, committed, pushed, opened as a PR, or merged. After a
-successful merge, synchronize `main` and remove obsolete task branches/worktrees only when
-it is safe to do so.
+successful merge, follow `CLEANUP-01`: update the tasklist and GitHub Issues (`#1353`),
+synchronize `main`, remove obsolete task branches/worktrees only when it is safe to do so,
+and clean any non-protected venvs while preserving `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`.

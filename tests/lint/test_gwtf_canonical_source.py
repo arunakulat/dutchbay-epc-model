@@ -580,3 +580,59 @@ def test_secdep_01_release_guard_rejects_lock_before_recheck() -> None:
     reordered = releasing[:insertion] + "\nmake lock\n" + releasing[insertion:]
     with pytest.raises(AssertionError):
         _assert_secdep_01_release_order(reordered)
+
+
+CLEANUP_01_REQUIRED_CONTROLS = (
+    "INFORM TASKLIST & GITHUB ISSUES",
+    "capability tracker #1353",
+    "CLEAR, PRUNE & CLOSE WORKTREES",
+    "git worktree remove",
+    "git worktree prune",
+    "DELETE MERGED BRANCHES",
+    "git branch -d",
+    "git push origin --delete",
+    "CLEAN NON-PROTECTED VENVS",
+    "HARD BOUNDARY - PROTECTED PERSISTENT VENV",
+    "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv",
+)
+
+
+def test_cleanup_01_requires_post_merge_tracker_issue_and_workspace_retirement() -> (
+    None
+):
+    """Pin CLEANUP-01 to post-merge issue/tracker updates, worktree/branch pruning, and protected-venv preservation."""
+    cleanup_01 = _rules_by_id()["CLEANUP-01"]
+    policy = _policy("CLEANUP-01")
+
+    assert cleanup_01["status"] == "active"
+    assert cleanup_01["category"] == "Git Workflow"
+    for control in CLEANUP_01_REQUIRED_CONTROLS:
+        assert control in policy
+
+    for relative_path in (
+        "AGENTS.md",
+        "CLAUDE.md",
+        ".claude/skills/steward/SKILL.md",
+        "docs/governance/agent_session_routing.md",
+        "docs/governance/recruit_01/02_writer_lease_and_recovery.md",
+        "Rules to follow.md",
+    ):
+        surface = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert "CLEANUP-01" in surface
+        assert "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv" in surface
+
+
+@pytest.mark.parametrize("removed_control", CLEANUP_01_REQUIRED_CONTROLS)
+def test_cleanup_01_guard_rejects_control_loss(
+    monkeypatch: pytest.MonkeyPatch, removed_control: str
+) -> None:
+    """Observe every asserted CLEANUP-01 control being load-bearing, one at a time."""
+    mutated = {key: dict(row) for key, row in _rules_by_id().items()}
+    for cell in ("title", "description", "enforcement"):
+        mutated["CLEANUP-01"][cell] = mutated["CLEANUP-01"][cell].replace(
+            removed_control, "REMOVED_CONTROL"
+        )
+
+    monkeypatch.setitem(globals(), "_rules_by_id", lambda: mutated)
+    with pytest.raises(AssertionError):
+        test_cleanup_01_requires_post_merge_tracker_issue_and_workspace_retirement()

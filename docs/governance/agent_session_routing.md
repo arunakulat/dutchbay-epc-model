@@ -10,7 +10,9 @@ wins and this note is stale. Correct it, don't follow it.
 This note grants no merge, review, lease or approval authority to any session.
 
 - `MERGE-01` says *when* a green pull request may merge. `REVIEW-01` names the merge coordinator
-  as the party that merges. Reading this note does not make a session the merge coordinator.
+  as the party that merges, and `CLEANUP-01` governs post-merge tracker/issue closure and
+  worktree/branch/venv retirement (while preserving `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`).
+  Reading this note does not make a session the merge coordinator.
 - The coordinator recruits each worker to a written profile, and that profile names the
   authorities the worker does not hold, merge among them, unless they are separately and
   explicitly granted (`RECRUIT-01` module 1 §2,
