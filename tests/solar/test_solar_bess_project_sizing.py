@@ -71,10 +71,12 @@ POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 # on the after-tax project NPV (v0.3: 151 tables, 5.0 MW AC). Before, at 15.17.0 (v0.2): project
 # NPV -4027655.5031581176, equity NPV -4094171.9053015206, equity IRR -0.11324848332854087, min
 # DSCR 0.8669721833235606.
+# Re-pinned for #1398 (P2-F3-01 debt-service shortfall carried as sponsor cure in years 1 and
+# 16-20; before: equity NPV -5395403.401365028, equity IRR -0.03575607324588892).
 SOLAR_BESS_PINS = {
     "project_npv": -4992408.759406766,
-    "equity_npv": -5395403.401365028,
-    "equity_irr": -0.03575607324588892,
+    "equity_npv": -5564410.144390165,
+    "equity_irr": -0.08317620969932149,
     "min_dscr": 0.867987057099332,
 }
 # WIND_PINS re-pinned at 15.16.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
@@ -83,9 +85,11 @@ SOLAR_BESS_PINS = {
 # Re-pinned at 15.17.0 for PR 6 capex (wind v0.3: turbine capex 12,350,000 -> 8,899,980,
 # blended). Before, at 15.16.0 (v0.2): project IRR 0.07798231364379474, equity IRR
 # 0.053445387955278756, min DSCR 0.8682973694248998.
+# Re-pinned for #1398 (P2-F3-01 debt-service shortfall carried as sponsor cure in year 1;
+# before: equity IRR 0.09064100100108274).
 WIND_PINS = {
     "project_irr": 0.10808262995624021,
-    "equity_irr": 0.09064100100108274,
+    "equity_irr": 0.0863203211939878,
     "min_dscr": 0.8679985938194438,
 }
 
