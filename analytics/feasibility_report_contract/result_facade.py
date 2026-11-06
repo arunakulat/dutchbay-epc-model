@@ -680,6 +680,8 @@ for _path, _disposition in (
             "total_equity_distributed_usd",
             "average_equity_cash_on_cash",
             "equity_covenant_locked_years",
+            "equity_debt_service_shortfall_years",
+            "equity_sponsor_cure_usd",
             "fx_match_ratio",
             "hedging_coverage_pct",
             "var_95_usd_million",

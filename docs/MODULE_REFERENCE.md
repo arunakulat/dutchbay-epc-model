@@ -741,8 +741,12 @@ examined in full in the separately delivered deep-research credibility report.
   IEC 61400-15-1 / MEASNET. A Measure-Correlate-Predict module (`wind_resource/mcp.py`) exists
   but is not wired into the committed path. Treat P50/P90 as pre-measurement until a real mast
   campaign is run through the MCP module.
-- **Debt service reserve account.** The DSRA is modelled as a fund-at-close sources-and-uses
-  item with no dynamic operating draw and release to cure a low-DSCR year, and it is opt-in.
+- **Debt service reserve account.** Funding the DSRA at close is an opt-in sources-and-uses
+  item. Otherwise the equity waterfall builds the reserve from operating cash and releases it
+  as the requirement falls. Since P2-F3-01 (#1398) a year whose CFADS falls short of debt
+  service draws the reserve first, then cash the SPV holds for the sponsor, then a sponsor
+  cure booked as negative equity cash flow; each step is a row field, and the shortfall is
+  no longer clamped to zero.
 - **Monte Carlo default.** The Monte Carlo engine allows a toy fallback by default
   (`allow_toy_fallback=True`); a failed trial substitutes tagged, counted placeholder KPIs. A
   lender or production run should set this to `false`.

@@ -52,9 +52,11 @@ SCRIPT = (
 # Re-pinned at 15.17.0 for PR 6 capex (hybrid v0.8: wind capex 12,350,000 -> 8,899,980,
 # BESS capex 3,240,000 -> 3,377,760, both blended). Before, at 15.16.0 (v0.7): project IRR
 # 0.06900278150431857, equity IRR 0.04331151885509987, min DSCR 0.8674143524654796.
+# Re-pinned for #1398 (P2-F3-01 debt-service shortfall carried as sponsor cure in year 1,
+# where min DSCR is 0.8679; before: equity IRR 0.06377186287573333).
 PINS = {
     "project_irr": 0.08734893167526492,
-    "equity_irr": 0.06377186287573333,
+    "equity_irr": 0.06053321098433617,
     "min_dscr": 0.8678977848741305,
 }
 

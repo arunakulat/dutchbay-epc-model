@@ -7,6 +7,7 @@ both injected, and the screening-seam builder is exercised with a spy.
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, List, Mapping, Tuple
 
 import pytest
@@ -446,9 +447,8 @@ def test_assessed_seam_feeds_fresh_cf_to_real_engine() -> None:
 # through the AnalysisResult envelope. A regression in _DEFAULT_DRIVERS, the config
 # schema, or the strict-resolve path would fail here rather than shipping green.
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("metric", ["project_irr", "equity_irr", "project_npv"])
-def test_tornado_real_engine_over_assessed_lendercase(metric: str) -> None:
-    export = {
+def _assessed_export() -> Dict[str, Any]:
+    return {
         "scenario": "P75",
         "annual_generation_mwh": 300_000.0,
         "capacity_factor_percent": 22.8,  # fresh screening CF, far from the form's 0.339
@@ -461,7 +461,11 @@ def test_tornado_real_engine_over_assessed_lendercase(metric: str) -> None:
         "tariff_lkr_per_kwh": 20.3,
         "exchange_rate_lkr_usd": 300.0,
     }
-    assessed = _build_assessed_scenario(_wind(), export)
+
+
+@pytest.mark.parametrize("metric", ["project_irr", "project_npv"])
+def test_tornado_real_engine_over_assessed_lendercase(metric: str) -> None:
+    assessed = _build_assessed_scenario(_wind(), _assessed_export())
     # #993: tornado sweeps the FRESH assessed CF (0.228), not the stale form 0.339.
     assert assessed["project"]["capacity_factor"] == pytest.approx(0.228)
 
@@ -477,6 +481,54 @@ def test_tornado_real_engine_over_assessed_lendercase(metric: str) -> None:
     assert len(engine_result["tornado_results"]) >= 7
     # A supported metric is genuinely sensitive — never a silent all-flat table.
     assert engine_result["metadata"].get("flat_metric") is False
+
+
+def test_tornado_discloses_an_undefined_equity_irr_over_assessed_lendercase() -> None:
+    """At this assessed case the equity IRR is undefined, and the tornado says so.
+
+    This was the ``equity_irr`` arm of the test above until P2-F3-01 (#1398). At a 22.8%
+    screening CF the case runs short of debt service in its last operating years. The
+    equity waterfall used to clamp those shortfalls to zero and reported an equity IRR of
+    -19.12% (at main 27e0cb10). Carried as sponsor cures (USD 1.58M), they put negative flows
+    at the END of an equity vector that has already lost USD 154M of USD 171M invested, so its
+    NPV is negative at both ends of the solver's bracket and no rate solves it. The pipeline
+    reports that as ``None`` (#1436).
+
+    Since #1457 (#1458) the tornado records an undefined point as ``nan`` and discloses it
+    rather than refusing, which is the owner's ruling for this case. Only the all-undefined
+    sweep still raises, and this one is not all-undefined: at main c283565a (refinance
+    canon, #1492) 21 of its 22 evaluations are undefined and one driver point (OPEX low)
+    solves. So the test asserts the disclosure, and that no undefined point is reported as
+    a number. It pins no count, so a later canon change that solves more points still
+    passes; one that leaves none raises, and this test then says so.
+    """
+    assessed = _build_assessed_scenario(_wind(), _assessed_export())
+    out = default_analysis(
+        _request(analysis_type="tornado", metric="equity_irr"),
+        assessed,
+        lambda _step, _message: None,
+    )
+    result = out["engine_result"]
+    meta = result["metadata"]
+    bars = result["tornado_results"]
+    evaluations = 1 + 3 * len(bars)  # the base, then each driver's base, low and high
+
+    assert meta["undefined_base"] is True
+    assert all(math.isnan(bar["base_metric"]) for bar in bars)
+    # Undefined at most points, but not all: an all-undefined sweep raises instead.
+    assert 0 < meta["undefined_points"] < evaluations
+    disclosed = sum(len(bar["metadata"].get("undefined_cases", [])) for bar in bars)
+    assert meta["undefined_points"] == 1 + disclosed
+    # Every point that is not disclosed as undefined carries a real, negative IRR.
+    defined = [
+        case[key]
+        for bar in bars
+        for case in bar["shock_results"]
+        for key in ("low_case", "high_case")
+        if not math.isnan(case[key])
+    ]
+    assert len(defined) == evaluations - meta["undefined_points"]
+    assert all(value < 0.0 for value in defined)
 
 
 # --------------------------------------------------------------------------- #
