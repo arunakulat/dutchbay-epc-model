@@ -32,12 +32,15 @@ These are assumptions, not evidence. Each kind placed by default is listed in
 :attr:`EventCalendar.assumed` and named in a warning at resolution, so a reader cannot
 mistake one for a declared date. A scenario replaces a default by declaring the kind's
 periods, or keeps a kind on A2's profile spread by declaring it as ``profile``.
-``bridge_service`` has no default: it is placed only when declared.
+``bridge_service`` and ``debt_service`` have no default: each is placed only when
+declared. Neither takes ``profile``: debt cash is paid on instalment dates, and A2's
+profile describes how a flow accrues, so the entry is refused rather than read as some
+other spread.
 
 What is placed, and what follows from it
 ----------------------------------------
-Three kinds, each declared as a list of 1-based periods within the year with optional
-weights across them, or as ``profile``:
+Four kinds, each declared as a list of 1-based periods within the year with optional
+weights across them, or (except the two debt kinds) as ``profile``:
 
 * ``bess_augmentation_capex`` places the row key ``bess_augmentation_capex_lkr``.
 * ``tax`` places the row key ``tax_lkr``, the tax CASH payment. ``taxable_income_lkr``
@@ -45,8 +48,11 @@ weights across them, or as ``profile``:
 * ``bridge_service`` places the bridge period's scheduled debt service (USD), which the
   debt engine computes in its own PERIOD space and ``dscr_by_year`` folds into operating
   year 1. It is not an annual-row key, so it is placed by
-  :func:`build_bridge_service_events` into year 1's sub-periods. Aligning the rest of
-  debt service onto the sub-period axis is dolphin (c), not this one.
+  :func:`build_bridge_service_events` into year 1's sub-periods.
+* ``debt_service`` places each operating year's scheduled debt service (USD), for
+  example ``periods: [2, 4]`` for semi-annual instalments. Like the bridge it lives in
+  the debt engine's period space, not on an annual row, so this module only resolves it;
+  :mod:`finance.subperiod_coverage_v14` (dolphin (c)) places it.
 
 Moving a placed key moves the CFADS lines that the annual engine derives from it, or the
 period would stop adding up. :func:`apply_event_calendar` therefore re-derives, per
@@ -100,16 +106,18 @@ EVENT_CALENDAR_KEY = "cashflow.event_calendar"
 _CALENDAR_PATH: Sequence[str] = ("cashflow", "event_calendar")
 
 #: Event kind -> the annual-row key it places, or ``None`` for an event that is not an
-#: annual-row key (the bridge service lives in the debt engine's period space).
+#: annual-row key (the bridge and scheduled debt service live in the debt engine's
+#: period space).
 EVENT_KINDS: Mapping[str, Optional[str]] = {
     "bess_augmentation_capex": "bess_augmentation_capex_lkr",
     "tax": "tax_lkr",
     "bridge_service": None,
+    "debt_service": None,
 }
 
 #: ILLUSTRATIVE default placement for an undeclared kind on a sub-annual grid: the year's
 #: "first" or "last" period. Assumptions, not evidence (#920); see the module docstring.
-#: A kind absent here (``bridge_service``) is placed only when declared.
+#: A kind absent here (``bridge_service``, ``debt_service``) is placed only when declared.
 DEFAULT_EVENT_PERIODS: Mapping[str, str] = {
     "bess_augmentation_capex": "first",
     "tax": "last",
@@ -125,6 +133,17 @@ _NOT_MODELLED: Mapping[str, str] = {
         "the engine has no working-capital flow (no receivables, payables or inventory "
         "line), so there is nothing to place on a date"
     ),
+}
+
+#: Kinds that cannot be declared as ``profile``, with the reason given on refusal.
+_NO_PROFILE: Mapping[str, str] = {
+    kind: (
+        "debt cash is paid on instalment dates, and A2's profile describes how a flow "
+        "accrues through the year, so it has no meaning for debt service. Declare the "
+        "instalment periods, or leave the kind undeclared for the coverage view's "
+        "even-spread assumption"
+    )
+    for kind in ("bridge_service", "debt_service")
 }
 
 _EVENT_FIELDS = frozenset({"periods", "weights"})
@@ -175,7 +194,8 @@ def resolve_event_calendar(
 
     Raises:
         ValueError: If the calendar is declared on the annual grid; if it is not a
-            mapping, or an entry is neither a mapping nor ``profile``; if it names an
+            mapping, or an entry is neither a mapping nor ``profile``; if a debt kind is
+            declared as ``profile``; if it names an
             unknown or unmodelled event kind, or an unknown field; or if an entry's
             periods or weights are malformed.
     """
@@ -214,6 +234,10 @@ def resolve_event_calendar(
             raise ValueError(
                 f"{label} is not a known event kind. Known: "
                 f"{', '.join(sorted(EVENT_KINDS))}."
+            )
+        if kind in _NO_PROFILE and entry == _PROFILE:
+            raise ValueError(
+                f"{label} cannot be {_PROFILE!r}: {_NO_PROFILE[kind]} (FRAMEWORK-02)."
             )
         declared.add(str(kind))
         weights = _resolve_entry(entry, grid, label)
