@@ -683,6 +683,8 @@ for _path, _disposition in (
             "total_equity_distributed_usd",
             "average_equity_cash_on_cash",
             "equity_covenant_locked_years",
+            "equity_debt_service_shortfall_years",
+            "equity_sponsor_cure_usd",
             "fx_match_ratio",
             "hedging_coverage_pct",
             "var_95_usd_million",
@@ -747,6 +749,11 @@ for _path, _disposition in (
             # None unless the balloon is refinanced, and this facade routes none of
             # its period-indexed rows, so the whole container stays opaque.
             "refinance",
+            # Period-indexed interest accrued on the balloon after maturity, inside
+            # `balloon_resolution`; opaque with the rest of the period series.
+            "balloon_interest",
+            # #1505: the part of it settled in cash in each period.
+            "balloon_interest_paid",
         )
     ),
     (
@@ -867,6 +874,10 @@ for _path, _disposition in (
             "debt_service_total",
             "interest_usd",
             "balloon_resolution",
+            # #1505: balloon interest on the row (accrued and paid), the two
+            # bases `tax.balloon_interest_tax_basis` chooses between.
+            "balloon_interest_accrued_usd",
+            "balloon_interest_paid_usd",
             "cf_after_debt",
             # #1397: the levered-tax basis the facility was sized and covenanted
             # on. ``cfads_usd`` stays the carried predicate operand because it is

@@ -214,6 +214,16 @@ def _validate_debt_result_structure(debt_result: Any) -> dict[str, Any]:
     return debt_result
 
 
+def _period_value(series: Sequence[Any], period_idx: int) -> float:
+    """``series[period_idx]`` as a float, 0.0 outside the series or when not numeric."""
+    if not 0 <= period_idx < len(series):
+        return 0.0
+    try:
+        return float(series[period_idx] or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _enrich_annual_rows_with_debt(
     annual_rows: list[dict[str, Any]],
     debt_result: dict[str, Any],
@@ -229,6 +239,13 @@ def _enrich_annual_rows_with_debt(
     # bullet). Same PERIOD index as debt_service_total; senior to equity but NOT
     # part of scheduled debt service, so it does not enter the DSCR.
     balloon_resolution = list(debt_result.get("balloon_resolution") or [])
+    # Interest on the balloon after maturity, inside balloon_resolution: accrued, and
+    # settled in cash (#1505). Same PERIOD index. Surfaced on each row so the levered
+    # tax pass can deduct it on the basis `tax.balloon_interest_tax_basis` names, and
+    # so the WHT gross-up sees the interest actually paid. Like interest_usd, neither
+    # touches cf_after_debt.
+    balloon_interest_accrued = list(debt_result.get("balloon_interest") or [])
+    balloon_interest_paid = list(debt_result.get("balloon_interest_paid") or [])
     # debt_service_total is PERIOD-indexed (offset by the construction + bridge
     # lead-in). Align each annual row to its debt period via the canonical map;
     # positional indexing attributed each year an earlier (higher-CFADS) year's
@@ -324,6 +341,12 @@ def _enrich_annual_rows_with_debt(
         out["debt_service_total"] = debt_service_value
         out["interest_usd"] = interest_value
         out["balloon_resolution"] = balloon_resolution_value
+        out["balloon_interest_accrued_usd"] = _period_value(
+            balloon_interest_accrued, period_idx
+        )
+        out["balloon_interest_paid_usd"] = _period_value(
+            balloon_interest_paid, period_idx
+        )
         out["cf_after_debt"] = (
             cf_pre_debt - debt_service_value - balloon_resolution_value
         )
@@ -344,7 +367,15 @@ _CFADS_FIXED_POINT_TOL_USD = 0.01
 # roughly the tax rate each time and the lender case converges in a handful of passes.
 # Hitting the ceiling means the schedule is oscillating, and an oscillating schedule is
 # reported as a failure rather than silently truncated at whatever the last pass held.
-_CFADS_FIXED_POINT_MAX_ITERATIONS = 25
+#
+# #1505 raised it from 25. Deducting the balloon interest a cash sweep pays adds a
+# slower loop: the tax saved is swept, and all of it is more interest paid while the
+# sweep cannot clear, so that correction shrinks by exactly the marginal rate and no
+# faster. At 30% the base case settles in 17 passes (4 before), at 40% in about 23, and
+# a 90% stress rate needs about 90. A universal model meets rates above Sri Lanka's, so
+# the ceiling is set for the slow loop, not the scheduled-interest one. A pass costs
+# milliseconds, so the higher ceiling costs nothing on a case that converges early.
+_CFADS_FIXED_POINT_MAX_ITERATIONS = 200
 
 
 def _size_debt_on_levered_cfads(
@@ -385,9 +416,15 @@ def _size_debt_on_levered_cfads(
     """
     tax_block = cfg.get("tax", {}) or {}
     interest_deductible = bool(tax_block.get("interest_deductibility", True))
+    balloon_basis = _balloon_interest_tax_basis(cfg)
 
     interest_lkr: list[float] | None = None
     previous_cfads: list[float] | None = None
+    # Each pass's solved gearing seeds the next pass's scan (the warm start of
+    # _solve_gearing_for_dscr in finance.debt.sizing, re-exported by the
+    # finance.debt_v14 facade). It changes where the scan starts, not which gearing
+    # it returns.
+    gearing_hints: dict[str, tuple[float, float, float]] = {}
 
     for iteration in range(1, _CFADS_FIXED_POINT_MAX_ITERATIONS + 1):
         rows = _validate_annual_rows_structure(
@@ -398,6 +435,7 @@ def _size_debt_on_levered_cfads(
                 annual_rows=rows,
                 config=cfg,
                 forbid_toy_fallback=forbid_toy_fallback,
+                gearing_hints=gearing_hints,
             )
         )
         enriched = _enrich_annual_rows_with_debt(rows, debt_result)
@@ -427,7 +465,9 @@ def _size_debt_on_levered_cfads(
             return debt_result, enriched, iteration
 
         previous_cfads = cfads
-        interest_lkr = _operating_interest_lkr_series(enriched)
+        interest_lkr = _operating_interest_lkr_series(
+            enriched, balloon_basis=balloon_basis
+        )
 
     raise PipelineValidationError(
         "Debt sizing did not converge on a levered-tax CFADS basis within "
@@ -471,14 +511,67 @@ def _senior_fee_lkr_series(
     return series
 
 
+# #1505. When the levered tax pass deducts the interest paid on the balloon after
+# maturity. Read from ``tax.balloon_interest_tax_basis`` in the scenario YAML, so a
+# site whose tax law differs sets its own basis:
+#
+# - ``paid``: deducted in the year it is settled in cash. Interest a sweep capitalises
+#   is deducted in the later year that pays it, and never if it is never paid. This is
+#   the basis scheduled interest already has, and the default when the key is absent
+#   (the project owner's decision for #1505, 2026-11-01).
+# - ``accrued``: deducted in the year it accrues, paid or not.
+# - ``none``: not deducted (the treatment before #1505).
+#
+# ``tax.interest_deductibility: false`` still switches off every interest deduction,
+# this one included.
+BALLOON_INTEREST_TAX_BASES: tuple[str, ...] = ("paid", "accrued", "none")
+_DEFAULT_BALLOON_INTEREST_TAX_BASIS = "paid"
+
+# The enriched-row column each basis deducts.
+_BALLOON_INTEREST_ROW_KEY: Mapping[str, str] = {
+    "paid": "balloon_interest_paid_usd",
+    "accrued": "balloon_interest_accrued_usd",
+}
+
+
+def _balloon_interest_tax_basis(cfg: Mapping[str, Any]) -> str:
+    """The scenario's ``tax.balloon_interest_tax_basis``, validated.
+
+    Raises:
+        PipelineValidationError: If the key holds anything but one of
+            ``BALLOON_INTEREST_TAX_BASES``.
+    """
+    tax_block = cfg.get("tax", {}) or {}
+    raw = tax_block.get("balloon_interest_tax_basis")
+    if raw is None:
+        return _DEFAULT_BALLOON_INTEREST_TAX_BASIS
+    basis = str(raw).strip().lower()
+    if basis not in BALLOON_INTEREST_TAX_BASES:
+        raise PipelineValidationError(
+            f"tax.balloon_interest_tax_basis must be one of "
+            f"{', '.join(BALLOON_INTEREST_TAX_BASES)}; got {raw!r}"
+        )
+    return basis
+
+
 def _operating_interest_lkr_series(
     annual_rows: Sequence[Mapping[str, Any]],
+    *,
+    balloon_basis: str,
 ) -> list[float]:
-    """Per-operating-row debt interest in LKR, from the debt-enriched rows."""
-    return [
-        float(row.get("interest_usd") or 0.0) * float(row.get("fx_rate") or 0.0)
-        for row in annual_rows
-    ]
+    """Per-operating-row tax-deductible debt interest in LKR, from the enriched rows.
+
+    Scheduled interest (``interest_usd``) plus the balloon's post-maturity interest on
+    ``balloon_basis`` (see ``BALLOON_INTEREST_TAX_BASES``), translated at each row's FX.
+    """
+    balloon_key = _BALLOON_INTEREST_ROW_KEY.get(balloon_basis)
+    series: list[float] = []
+    for row in annual_rows:
+        interest_usd = float(row.get("interest_usd") or 0.0)
+        if balloon_key is not None:
+            interest_usd += float(row.get(balloon_key) or 0.0)
+        series.append(interest_usd * float(row.get("fx_rate") or 0.0))
+    return series
 
 
 def _debt_fee_rate(config: Mapping[str, Any]) -> float:
@@ -878,6 +971,9 @@ def _update_kpis_with_equity_distribution(
         ("total_equity_distributed_usd", "total_equity_distributed_usd"),
         ("average_cash_on_cash", "average_equity_cash_on_cash"),
         ("covenant_locked_years", "equity_covenant_locked_years"),
+        # P2-F3-01 (#1398): a DSCR<1 year's shortfall and the sponsor cure that funded it.
+        ("debt_service_shortfall_years", "equity_debt_service_shortfall_years"),
+        ("total_sponsor_cure_usd", "equity_sponsor_cure_usd"),
     ):
         value = summary_raw.get(source_key)
         if value is not None:
@@ -1141,12 +1237,12 @@ def run_v14_pipeline_enhanced(
         )
         idc_usd = float(debt_result.get("total_idc") or 0.0) if capitalize_idc else None
         if interest_deductible or capitalize_idc:
+            # Scheduled interest plus the balloon's, on the scenario's basis (#1505).
             op_interest_lkr = (
-                [
-                    float(row.get("interest_usd") or 0.0)
-                    * float(row.get("fx_rate") or 0.0)
-                    for row in annual_rows_enriched
-                ]
+                _operating_interest_lkr_series(
+                    annual_rows_enriched,
+                    balloon_basis=_balloon_interest_tax_basis(cfg),
+                )
                 if interest_deductible
                 else None
             )

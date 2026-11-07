@@ -1,0 +1,704 @@
+"""Tests for the met-mast transfer (analytics.wind.met_mast_transfer and its Hydra CLI).
+
+The mast record and the OEM power curve are private, so every test here runs on SYNTHETIC
+data. The oracles do not come from the code under test (TEST-01):
+
+* a synthetic sector-wise linear relation whose slopes and intercepts are known, recovered
+  by both transfer methods (and by OLS under noise);
+* the closed-form Weibull mean ``A * Gamma(1 + 1/k)`` and a seeded Weibull sample;
+* the pre-existing, independently written integrator
+  ``wind_resource.bankable_aep.gross_aep_weibull``, kept off the production path;
+* power-law shear, an S2 tide and a clock offset planted in synthetic series;
+* invariants: sector frequencies sum to 1, AEP rises with the speed scale, a pure
+  rotation is recovered as the veer, an edge-on rotor casts no shadow, and every step is
+  deterministic (no stochastic step exists, so reproducibility is identity of outputs).
+
+Two tests read the committed outputs: the scenarios must carry the summary's derived CF
+and AEP, and the rose table must equal the summary. One test re-runs the real transfer and
+is skipped unless the three private inputs are configured on the host.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+import math
+import os
+from pathlib import Path
+from types import ModuleType
+from typing import Any, Dict
+
+import numpy as np
+import pandas as pd
+import pytest
+import yaml
+
+from analytics.gis import shadow_flicker as sf
+from analytics.wind import met_mast_transfer as mmt
+from wind_resource.bankable_aep import gross_aep_weibull
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = REPO_ROOT / "scripts" / "run_blue_whale_met_mast_transfer_v14.py"
+CONF = REPO_ROOT / "conf" / "blue_whale_met_mast_transfer.yaml"
+SUMMARY = REPO_ROOT / "docs" / "blue_whale" / "met_mast_transfer_summary.json"
+ROSE_CSV = REPO_ROOT / "docs" / "blue_whale" / "met_mast_wind_rose_130m.csv"
+WIND = REPO_ROOT / "scenarios" / "blue_whale_wind_lot5b_2026.yaml"
+HYBRID = REPO_ROOT / "scenarios" / "blue_whale_hybrid_lot5b_2026.yaml"
+
+WS = np.arange(3.0, 25.01, 0.5)
+
+
+def _load_cli() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("met_mast_transfer_cli", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+cli = _load_cli()
+
+
+def _curve() -> np.ndarray:
+    """A generic 9.5 MW-class shape. Not derived from any OEM document."""
+    rated, v_in, v_r = 9500.0, 3.0, 11.0
+    p = rated * np.clip((WS**3 - v_in**3) / (v_r**3 - v_in**3), 0.0, 1.0)
+    return np.asarray(p, dtype=np.float64)
+
+
+# ---------------------------------------------------------------------------
+# Sectors and circular statistics
+# ---------------------------------------------------------------------------
+def test_sector_index_edges_and_wrap() -> None:
+    d = np.array([0.0, 11.2499, 11.25, 348.75, 359.9, 360.0, -5.0, 225.0])
+    assert mmt.sector_index(d, 16).tolist() == [0, 0, 1, 0, 0, 0, 0, 10]
+    assert mmt.angular_difference_deg(10.0, 350.0) == pytest.approx(20.0)
+    assert mmt.angular_difference_deg(350.0, 10.0) == pytest.approx(-20.0)
+    assert mmt.circular_mean_deg([350.0, 10.0]) == pytest.approx(0.0, abs=1e-9) or (
+        mmt.circular_mean_deg([350.0, 10.0]) == pytest.approx(360.0)
+    )
+    with pytest.raises(ValueError):
+        mmt.sector_index(d, 0)
+
+
+def test_sector_frequencies_sum_to_one() -> None:
+    rng = np.random.default_rng(7)
+    d = rng.uniform(0, 360, 5000)
+    v = rng.weibull(2.0, 5000) * 8.0
+    assert mmt.sector_frequencies(d, 16).sum() == pytest.approx(1.0)
+    rose = mmt.sector_rose(v, d, 16)
+    assert sum(r["frequency"] for r in rose) == pytest.approx(1.0)
+    assert sum(r["energy_share"] for r in rose) == pytest.approx(1.0)
+    month = rng.integers(1, 13, 5000)
+    op = (v > 3.0).astype(float)
+    w = mmt.month_sector_weights(month, d, op, 16)
+    assert w.shape == (12, 16)
+    assert np.all(w.sum(1) <= 1.0 + 1e-12)
+    for m in range(1, 13):
+        assert w[m - 1].sum() == pytest.approx(op[month == m].mean())
+
+
+# ---------------------------------------------------------------------------
+# MCP
+# ---------------------------------------------------------------------------
+def _synthetic_concurrent(noise: float, seed: int = 11) -> Dict[str, Any]:
+    rng = np.random.default_rng(seed)
+    n = 8000
+    d = rng.uniform(0, 360, n)
+    r = rng.weibull(2.2, n) * 7.0
+    sec = mmt.sector_index(d, 16)
+    slope = 1.0 + 0.03 * np.arange(16)
+    intercept = 0.1 * (np.arange(16) - 8)
+    m = slope[sec] * r + intercept[sec] + rng.normal(0.0, noise, n)
+    return {"m": m, "r": r, "d": d, "slope": slope, "intercept": intercept}
+
+
+@pytest.mark.parametrize("method", ["variance_ratio", "linear_regression"])
+def test_noise_free_mcp_recovers_the_planted_sector_relation(method: str) -> None:
+    s = _synthetic_concurrent(noise=0.0)
+    fits, omni = mmt.fit_sector_mcp(
+        s["m"],
+        s["r"],
+        s["d"],
+        n_sectors=16,
+        method=method,
+        min_sector_hours=50,
+        min_sector_r_squared=0.3,
+    )
+    assert omni.sector == -1 and omni.n == s["m"].size
+    for f in fits:
+        assert f.source == "sector"
+        assert f.slope == pytest.approx(s["slope"][f.sector], rel=1e-9)
+        assert f.intercept == pytest.approx(s["intercept"][f.sector], abs=1e-9)
+        assert f.r_squared == pytest.approx(1.0)
+        assert f.residual_std_ms == pytest.approx(0.0, abs=1e-9)
+    pred = mmt.predict_by_sector(s["r"], s["d"], fits)
+    assert np.allclose(pred, np.clip(s["m"], 0.0, None))
+
+
+def test_ols_recovers_slopes_under_noise_and_variance_ratio_inflates_them() -> None:
+    s = _synthetic_concurrent(noise=1.0)
+    ols, _ = mmt.fit_sector_mcp(
+        s["m"],
+        s["r"],
+        s["d"],
+        n_sectors=16,
+        method="linear_regression",
+        min_sector_hours=50,
+        min_sector_r_squared=0.3,
+    )
+    vr, _ = mmt.fit_sector_mcp(
+        s["m"],
+        s["r"],
+        s["d"],
+        n_sectors=16,
+        method="variance_ratio",
+        min_sector_hours=50,
+        min_sector_r_squared=0.3,
+    )
+    for o, v in zip(ols, vr, strict=True):
+        assert o.slope == pytest.approx(s["slope"][o.sector], rel=0.06)
+        # Variance ratio = slope / r for an exact linear model plus noise.
+        assert v.slope > o.slope
+        assert v.slope == pytest.approx(o.slope / math.sqrt(o.r_squared), rel=1e-9)
+
+
+def test_sparse_or_weak_sectors_fall_back_to_the_omni_fit() -> None:
+    s = _synthetic_concurrent(noise=0.0)
+    keep = ~((mmt.sector_index(s["d"], 16) == 3) & (np.arange(s["d"].size) % 10 != 0))
+    fits, omni = mmt.fit_sector_mcp(
+        s["m"][keep],
+        s["r"][keep],
+        s["d"][keep],
+        n_sectors=16,
+        method="variance_ratio",
+        min_sector_hours=200,
+        min_sector_r_squared=0.3,
+    )
+    assert fits[3].source == "omni"
+    assert (fits[3].slope, fits[3].intercept) == (omni.slope, omni.intercept)
+    assert fits[4].source == "sector"
+    with pytest.raises(ValueError, match="finite"):
+        mmt.fit_sector_mcp(
+            np.array([1.0, np.nan]),
+            np.array([1.0, 2.0]),
+            np.array([0.0, 0.0]),
+            n_sectors=16,
+            method="variance_ratio",
+            min_sector_hours=1,
+            min_sector_r_squared=0.0,
+        )
+
+
+def test_correlation_gate_refuses_a_weak_relation() -> None:
+    rng = np.random.default_rng(3)
+    idx = pd.date_range("2025-01-01", periods=24 * 60, freq="1h")
+    ref = rng.weibull(2, idx.size) * 7
+    j = pd.DataFrame({"WS50M": ref, "v120": rng.permutation(ref)}, index=idx)
+    gate = {"min_hourly_r_squared": 0.49, "min_daily_r": 0.8}
+    with pytest.raises(ValueError, match="too weak"):
+        cli.correlation_gate(j, "v120", gate)
+    j["v120"] = 1.2 * ref + rng.normal(0, 0.3, idx.size)
+    out = cli.correlation_gate(j, "v120", gate)
+    assert out["hourly_r_squared"] > 0.9 and out["days"] == 60
+
+
+# ---------------------------------------------------------------------------
+# Direction transfer
+# ---------------------------------------------------------------------------
+def test_a_pure_rotation_is_recovered_as_veer_and_quantiles() -> None:
+    rng = np.random.default_rng(5)
+    ref = rng.uniform(0, 360, 4000)
+    target = np.mod(ref - 12.0, 360.0)
+    veer, omni, _ = mmt.sector_veer(target, ref, n_sectors=16, min_sector_hours=10)
+    assert omni == pytest.approx(-12.0)
+    assert np.allclose(veer, -12.0)
+    q, _ = mmt.direction_residual_quantiles(
+        target, ref, n_sectors=16, min_sector_hours=10, n_quantiles=7
+    )
+    assert np.allclose(q, -12.0)
+    src, d = mmt.expand_by_direction_quantiles(ref[:5], q)
+    assert src.tolist() == [i for i in range(5) for _ in range(7)]
+    assert np.allclose(mmt.angular_difference_deg(d, ref[src]), -12.0)
+    assert np.allclose(mmt.continuous_veer(ref, np.full(16, -12.0)), -12.0)
+
+
+def test_quantile_expansion_reproduces_the_conditional_rose() -> None:
+    rng = np.random.default_rng(9)
+    ref = rng.uniform(180, 270, 20000)
+    target = np.mod(ref + rng.normal(-8.0, 15.0, ref.size), 360.0)
+    q, _ = mmt.direction_residual_quantiles(
+        target, ref, n_sectors=16, min_sector_hours=200, n_quantiles=20
+    )
+    _, d = mmt.expand_by_direction_quantiles(ref, q)
+    err = np.abs(mmt.sector_frequencies(d, 16) - mmt.sector_frequencies(target, 16))
+    assert err.max() < 0.01
+    # A single mean rotation concentrates the rose instead.
+    veer, _, _ = mmt.sector_veer(target, ref, n_sectors=16, min_sector_hours=200)
+    rotated = ref + veer[mmt.sector_index(ref, 16)]
+    err_mean = np.abs(
+        mmt.sector_frequencies(rotated, 16) - mmt.sector_frequencies(target, 16)
+    )
+    assert err_mean.max() > err.max()
+
+
+def test_continuous_veer_refuses_a_fold_over() -> None:
+    v = np.zeros(16)
+    v[4], v[5] = 10.0, -15.0
+    with pytest.raises(ValueError, match="monotone"):
+        mmt.continuous_veer([0.0], v)
+
+
+def test_sector_speed_ratio_recovers_a_planted_gradient() -> None:
+    rng = np.random.default_rng(2)
+    d = rng.uniform(0, 360, 6000)
+    m = rng.weibull(2, 6000) * 7
+    gain = 1.0 + 0.01 * mmt.sector_index(d, 16)
+    ratio, omni = mmt.sector_speed_ratio(
+        m * gain, m, d, n_sectors=16, min_sector_hours=50
+    )
+    assert np.allclose(ratio, 1.0 + 0.01 * np.arange(16))
+    assert omni == pytest.approx((m * gain).mean() / m.mean())
+
+
+# ---------------------------------------------------------------------------
+# Shear, distributions, turbulence
+# ---------------------------------------------------------------------------
+def test_power_law_shear_is_recovered_and_inverted() -> None:
+    assert mmt.shear_exponent(8.0, 8.0 * 1.2**0.14, 100, 120) == pytest.approx(0.14)
+    h = [30, 50, 80, 100, 120]
+    assert mmt.log_law_fit_exponent(h, [7 * (x / 30) ** 0.2 for x in h]) == (
+        pytest.approx(0.2)
+    )
+    rng = np.random.default_rng(4)
+    n = 4000
+    lo = rng.uniform(4, 12, n)
+    day = rng.random(n) < 0.5
+    alpha_true = np.where(day, 0.05, 0.15)
+    hi = lo * 1.2**alpha_true
+    d = rng.uniform(0, 360, n)
+    t = mmt.shear_table(
+        lo,
+        hi,
+        d,
+        day,
+        h_low=100,
+        h_high=120,
+        n_sectors=16,
+        min_cell_hours=20,
+        min_speed_ms=3.0,
+    )
+    assert t["alpha_day"] == pytest.approx(0.05, abs=1e-9)
+    assert t["alpha_night"] == pytest.approx(0.15, abs=1e-9)
+    out = mmt.apply_shear(lo, d, day, t["alpha"], h_from=100, h_to=120)
+    assert np.allclose(out, hi)
+
+
+def test_weibull_closed_form_mean_and_sector_fit() -> None:
+    a, k = 9.0, 2.5
+    assert mmt.weibull_mean(a, k) == pytest.approx(a * math.gamma(1 + 1 / k))
+    rng = np.random.default_rng(1)
+    v = a * rng.weibull(k, 200000)
+    rose = mmt.sector_rose(v, np.full(v.size, 225.0), 16)
+    row = rose[10]
+    assert row["frequency"] == 1.0 and row["energy_share"] == 1.0
+    assert row["weibull_a_ms"] == pytest.approx(a, rel=0.01)
+    assert row["weibull_k"] == pytest.approx(k, rel=0.01)
+    assert row["mean_speed_ms"] == pytest.approx(mmt.weibull_mean(a, k), rel=0.01)
+    assert all(r["weibull_a_ms"] is None for i, r in enumerate(rose) if i != 10)
+
+
+def test_turbulence_closed_form() -> None:
+    mean = np.array([5.0, 5.5, 5.2, 10.0, 10.5, 2.0])
+    sd = mean * np.array([0.10, 0.12, 0.08, 0.07, 0.07, 0.5])
+    t = mmt.turbulence_table(
+        mean,
+        sd,
+        np.zeros(6),
+        bin_edges_ms=[3, 6, 9, 12],
+        n_sectors=16,
+        min_speed_ms=3.0,
+        min_count=2,
+    )
+    b0 = t["by_speed_bin"][0]
+    ti = np.array([0.10, 0.12, 0.08])
+    assert b0["n"] == 3
+    assert b0["ti_mean"] == pytest.approx(ti.mean())
+    assert b0["ti_representative"] == pytest.approx(ti.mean() + 1.28 * ti.std())
+    assert t["by_speed_bin"][1]["n"] == 0 and "ti_mean" not in t["by_speed_bin"][1]
+    assert t["n_valid"] == 5  # the 2 m/s row is below the floor
+
+
+def test_jackknife_and_energy_sensitivity_closed_forms() -> None:
+    assert mmt.jackknife_std([1.0, 2.0, 3.0]) == pytest.approx(math.sqrt(4 / 3))
+    assert mmt.energy_sensitivity(lambda s: 5.0 * s**3) == pytest.approx(3.0)
+    with pytest.raises(ValueError):
+        mmt.jackknife_std([1.0])
+
+
+# ---------------------------------------------------------------------------
+# Yield
+# ---------------------------------------------------------------------------
+def test_sector_weighted_yield_equals_the_independent_integrator() -> None:
+    p = _curve()
+    rose = [
+        {"sector": s, "frequency": 1 / 16, "weibull_a_ms": 9.0, "weibull_k": 2.4}
+        for s in range(16)
+    ]
+    got = mmt.sector_weighted_gross_aep_gwh(rose, WS, p, 1.0)
+    oracle = gross_aep_weibull(
+        wind_speed_ms=WS.tolist(),
+        power_kw=p.tolist(),
+        weibull_a=9.0,
+        weibull_k=2.4,
+        rated_power_kw=9500.0,
+        n_turbines=1,
+        cut_in_ms=0.0,
+        cut_out_ms=float(WS.max()),
+        rho_site_kgm3=1.225,
+        rho_ref_kgm3=1.225,
+    ).aep_gwh_farm
+    assert got == pytest.approx(oracle, rel=1e-3)
+    two = [dict(r) for r in rose]
+    for r in two[:8]:
+        r["weibull_a_ms"] = 7.0
+    for r in two[8:]:
+        r["weibull_a_ms"] = 11.0
+    mixed = mmt.sector_weighted_gross_aep_gwh(two, WS, p, 1.0)
+    halves = [
+        gross_aep_weibull(
+            wind_speed_ms=WS.tolist(),
+            power_kw=p.tolist(),
+            weibull_a=a,
+            weibull_k=2.4,
+            rated_power_kw=9500.0,
+            n_turbines=1,
+            cut_in_ms=0.0,
+            cut_out_ms=float(WS.max()),
+            rho_site_kgm3=1.225,
+            rho_ref_kgm3=1.225,
+        ).aep_gwh_farm
+        for a in (7.0, 11.0)
+    ]
+    assert mixed == pytest.approx(0.5 * sum(halves), rel=1e-3)
+
+
+def test_aep_rises_with_the_speed_scale_and_refuses_a_missing_fit() -> None:
+    p = _curve()
+    rng = np.random.default_rng(8)
+    v = rng.weibull(2.5, 30000) * 8.0
+    d = rng.uniform(0, 360, v.size)
+    out = []
+    for scale in (0.8, 0.9, 1.0, 1.1, 1.2):
+        rose = mmt.sector_rose(v * scale, d, 16)
+        out.append(mmt.sector_weighted_gross_aep_gwh(rose, WS, p, 1.0))
+        ts = mmt.time_series_gross_aep_gwh(v * scale, WS, p, 1.0)
+        assert out[-1] == pytest.approx(ts, rel=0.03)
+    assert all(b > a for a, b in zip(out, out[1:], strict=False))
+    bad = [{"sector": 0, "frequency": 1.0, "weibull_a_ms": None, "weibull_k": None}]
+    with pytest.raises(ValueError, match="no Weibull"):
+        mmt.sector_weighted_gross_aep_gwh(bad, WS, p, 1.0)
+
+
+# ---------------------------------------------------------------------------
+# Hourly aggregation and the clock-offset evidence
+# ---------------------------------------------------------------------------
+def test_hourly_means_keep_only_complete_hours_and_vector_average() -> None:
+    idx = pd.date_range("2025-06-01 05:30", periods=12, freq="10min")
+    f = pd.DataFrame(
+        {"v": np.arange(12, dtype=float), "d": [350.0, 10.0] * 6}, index=idx
+    )
+    f.loc[idx[7], "v"] = np.nan
+    hr = mmt.hourly_means(
+        f,
+        speed_columns={"v": "v"},
+        direction_columns={"d": "d"},
+        clock_offset_minutes=330,
+        samples_per_hour=6,
+    )
+    assert list(hr.index) == [
+        pd.Timestamp("2025-06-01 00:00"),
+        pd.Timestamp("2025-06-01 01:00"),
+    ]
+    assert hr["v"].iloc[0] == pytest.approx(2.5)
+    assert np.isnan(hr["v"].iloc[1])
+    assert mmt.angular_difference_deg(hr["d"].iloc[0], 0.0) == pytest.approx(
+        0.0, abs=1e-9
+    )
+
+
+def test_s2_phase_and_clock_offset_are_recovered() -> None:
+    h = np.arange(0, 24, 1 / 6)
+    y = (
+        100
+        + 0.15 * np.cos(2 * np.pi * (h - 9.6) / 12)
+        + 0.05 * np.cos(2 * np.pi * (h - 5.0) / 24)
+    )
+    out = mmt.harmonic_phase_hours(y, h, 12.0)
+    assert out["max_at_h"] == pytest.approx(9.6, abs=1e-6)
+    assert out["amplitude"] == pytest.approx(0.15, abs=1e-9)
+    assert mmt.harmonic_phase_hours(y, h, 24.0)["max_at_h"] == pytest.approx(5.0)
+    rng = np.random.default_rng(12)
+    utc = pd.date_range("2025-04-01", periods=24 * 60, freq="1h")
+    ref = pd.Series(
+        pd.Series(rng.normal(0, 1, utc.size))
+        .rolling(5, min_periods=1)
+        .mean()
+        .to_numpy()
+        + 7,
+        index=utc,
+    )
+    ten = ref.resample("10min").ffill()
+    mast = pd.Series(ten.to_numpy(), index=ten.index + pd.Timedelta(minutes=330))
+    scan = mmt.offset_correlation_scan(mast, ref, [0, 300, 330, 360, 480], 6)
+    best = max(scan, key=lambda r: r["pearson_r"])
+    assert best["offset_h"] == pytest.approx(5.5)
+
+
+def _synthetic_mast_for_timezone(offset_min: int) -> Dict[str, Any]:
+    rng = np.random.default_rng(21)
+    utc = pd.date_range("2025-04-01", "2025-07-31 23:00", freq="1h")
+    base = pd.Series(rng.normal(0, 1, utc.size)).rolling(4, min_periods=1).mean()
+    ws = 7 + 1.5 * base.to_numpy()
+    wd = np.mod(225 + 20 * np.sin(2 * np.pi * (utc.hour + 5.3) / 24), 360)
+    ref = pd.DataFrame({"WS50M": ws, "WD50M": wd}, index=utc)
+    ten = ref.resample("10min").ffill()
+    clock = ten.index + pd.Timedelta(minutes=offset_min)
+    lst_h = (ten.index.hour + ten.index.minute / 60 + 79.70815 / 15) % 24
+    mast = pd.DataFrame(
+        {
+            "Speed 80 m Avg [m/s]": ten["WS50M"].to_numpy(),
+            "Speed 100 m Avg [m/s]": ten["WS50M"].to_numpy() * 1.05,
+            "Direction 80 m Avg [°]": ten["WD50M"].to_numpy(),
+            "Pressure 10 m Avg [kPa]": 100.9
+            + 0.15 * np.cos(2 * np.pi * (lst_h - 10.0) / 12),
+            "Temp 10 m Avg [℃]": 28 + 3 * np.cos(2 * np.pi * (lst_h - 14.0) / 24),
+        },
+        index=clock,
+    )
+    return {"mast": mast, "ref": ref}
+
+
+def test_timezone_evidence_accepts_the_true_offset_and_refuses_a_wrong_one() -> None:
+    raw = yaml.safe_load(CONF.read_text())
+    s = _synthetic_mast_for_timezone(330)
+    tz = dict(raw["timezone"])
+    tz["scan_offsets_minutes"] = {"start": 0, "stop": 600, "step": 30}
+    out = cli.timezone_evidence(s["mast"], s["ref"], raw["mast"], tz)
+    assert out["s2_implied_clock_offset_h"] == pytest.approx(5.5, abs=0.01)
+    assert out["hourly_speed_correlation_peak_offset_h"] == pytest.approx(5.5)
+    wrong = dict(tz)
+    wrong["clock_offset_minutes"] = 480
+    wrong["candidate_offsets_minutes"] = [0, 330, 480]
+    with pytest.raises(ValueError, match="does not support"):
+        cli.timezone_evidence(s["mast"], s["ref"], raw["mast"], wrong)
+
+
+# ---------------------------------------------------------------------------
+# Inputs and boundaries
+# ---------------------------------------------------------------------------
+def test_reference_loader_refuses_altered_or_misplaced_data(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli, "REPO_ROOT", REPO_ROOT)
+    block = {
+        "WS50M": {"2015010100": 5.0, "2015010101": 6.0},
+        "WD50M": {"2015010100": 200.0, "2015010101": 210.0},
+        "WS10M": {"2015010100": 4.0, "2015010101": 4.5},
+    }
+    doc = {
+        "geometry": {"type": "Point", "coordinates": [79.708, 8.056, 55.0]},
+        "properties": {"parameter": block},
+    }
+    (tmp_path / "p").mkdir()
+    (tmp_path / "p" / "wsd_2015.json").write_text(json.dumps(doc))
+    cfg = {
+        "dir": str(tmp_path),
+        "dir_env": "X",
+        "first_year": 2015,
+        "last_year": 2015,
+        "points": {
+            "mast": {
+                "subdir": "p",
+                "latitude_deg_n": 8.056318,
+                "longitude_deg_e": 79.70815,
+                "parameter_sha256": {"2015": cli.parameter_digest(block)},
+            }
+        },
+    }
+    assert len(cli.load_reference(cfg, "mast")) == 2
+    cfg["points"]["mast"]["parameter_sha256"]["2015"] = "0" * 64
+    with pytest.raises(ValueError, match="pin"):
+        cli.load_reference(cfg, "mast")
+    cfg["points"]["mast"]["parameter_sha256"]["2015"] = cli.parameter_digest(block)
+    cfg["points"]["mast"]["latitude_deg_n"] = 8.3
+    with pytest.raises(ValueError, match="configured point"):
+        cli.load_reference(cfg, "mast")
+
+
+def test_private_inputs_are_refused_from_inside_the_repository() -> None:
+    with pytest.raises(ValueError, match="outside the repository"):
+        cli._outside_repo(str(CONF), "source", "X")
+    with pytest.raises(ValueError, match="No source"):
+        cli._outside_repo(None, "source", "X")
+    pin = cli.private_source_pin(
+        REPO_ROOT
+        / "docs"
+        / "source_materials"
+        / "met_mast_617725_2025"
+        / "PRIVATE_SOURCE_MANIFEST.sha256"
+    )
+    assert pin == "a19963698f6d7e1085f8c66bb1810ecc1e8937e7f004ab25b81539bfd2e2cd46"
+
+
+def test_json_clean_is_strict() -> None:
+    out = cli.json_clean({"a": float("nan"), "b": [np.float64(1.5), np.int64(2)]})
+    assert out == {"a": None, "b": [1.5, 2]}
+    json.dumps(out, allow_nan=False)
+
+
+# ---------------------------------------------------------------------------
+# Yawed rotor shadow
+# ---------------------------------------------------------------------------
+def _sun(el_deg: float, az_deg: float, n: int = 4) -> sf.SunPath:
+    return sf.SunPath(
+        elevation_deg=np.full(n, el_deg),
+        azimuth_deg=np.full(n, az_deg),
+        day_index=np.zeros(n, dtype=np.int64),
+        utc_hour_key=np.full(n, 60112, dtype=np.int64),
+        step_minutes=60.0,
+        n_days=1,
+    )
+
+
+def test_yawed_rotor_shadow_closed_forms() -> None:
+    turbine = sf.TurbineGeometry(hub_height_m=130.0, rotor_diameter_m=206.0)
+    # Sun due east at 20 degrees: the shadow of the hub falls west, at H' / tan(el).
+    el = 20.0
+    reach = (130.0 - 2.0) / math.tan(math.radians(el))
+    receptor = (-reach, 0.0)
+    sun = _sun(el, 90.0)
+    kw = dict(turbine=turbine, receptor_height_m=2.0, max_distance_m=2060.0, sun=sun)
+    facing = sf.oriented_shadow_mask(receptor, rotor_axis_deg=90.0, **kw)
+    assert facing.all()
+    assert sf.shadow_mask(receptor, **kw).all()
+    edge_on = sf.oriented_shadow_mask(receptor, rotor_axis_deg=0.0, **kw)
+    assert not edge_on.any()
+    # Off the hub's shadow by more than the yawed disc's half-width: no shadow.
+    side = (-reach, 103.0 * math.cos(math.radians(60)) + 5.0)
+    assert not sf.oriented_shadow_mask(side, rotor_axis_deg=150.0, **kw).any()
+    assert sf.oriented_shadow_mask(side, rotor_axis_deg=90.0, **kw).all()
+
+
+def test_expected_hours_with_orientation_is_linear_and_bounded() -> None:
+    turbine = sf.TurbineGeometry(hub_height_m=130.0, rotor_diameter_m=206.0)
+    raw = yaml.safe_load(
+        (REPO_ROOT / "conf" / "blue_whale_wind_siting.yaml").read_text()
+    )
+    cfg = sf.ShadowFlickerConfig.from_mapping(raw["shadow_flicker"])
+    el = 20.0
+    reach = (130.0 - 2.0) / math.tan(math.radians(el))
+    sun = _sun(el, 90.0)
+    sunny = np.ones(4, dtype=bool)
+    w = np.zeros((12, 16))
+    w[5, 4] = 1.0  # June, rotor axis East: faces the sun
+    kw = dict(tower_en=(0.0, 0.0), turbine=turbine, cfg=cfg, sun=sun, sunny=sunny)
+    full = sf.expected_hours_with_orientation(
+        (-reach, 0.0), month_sector_weights=w, sub_directions_per_sector=1, **kw
+    )
+    assert full == pytest.approx(4.0)
+    half = sf.expected_hours_with_orientation(
+        (-reach, 0.0), month_sector_weights=w / 2, sub_directions_per_sector=1, **kw
+    )
+    assert half == pytest.approx(2.0)
+    w2 = np.zeros((12, 16))
+    w2[5, 0] = 1.0  # rotor axis North: edge-on to an eastern sun
+    assert sf.expected_hours_with_orientation(
+        (-reach, 0.0), month_sector_weights=w2, sub_directions_per_sector=1, **kw
+    ) == pytest.approx(0.0)
+    with pytest.raises(ValueError):
+        sf.expected_hours_with_orientation(
+            (-reach, 0.0), month_sector_weights=w * 2, sub_directions_per_sector=1, **kw
+        )
+
+
+# ---------------------------------------------------------------------------
+# Committed outputs and scenarios
+# ---------------------------------------------------------------------------
+def test_scenarios_carry_the_summary_yield_and_the_hold() -> None:
+    summary = json.loads(SUMMARY.read_text())
+    y = summary["yield"]
+    for path in (WIND, HYBRID):
+        scen = yaml.safe_load(path.read_text())
+        wind = scen["generation"]["technologies"]["wind"]
+        assert wind["capacity_factor"] == pytest.approx(
+            y["net_capacity_factor"], abs=5e-7
+        )
+        assert wind["aep_gwh"] == pytest.approx(y["net_aep_gwh"], abs=0.005)
+        text = path.read_text()
+        assert "NOT LENDER-GRADE" in text
+        assert "met_mast_transfer" in text
+    assert "HOLD" in summary["hold"]
+    assert summary["mast_source"]["sha256_verified"] is True
+    gates = summary["mcp"]["correlation_gates"]
+    raw = yaml.safe_load(CONF.read_text())["mcp"]
+    for gate in gates.values():
+        assert gate["hourly_r_squared"] >= raw["min_hourly_r_squared"]
+        assert gate["daily_r"] >= raw["min_daily_r"]
+
+
+def test_committed_rose_is_consistent() -> None:
+    summary = json.loads(SUMMARY.read_text())
+    rose = summary["long_term_130m"]["rose"]
+    assert sum(r["frequency"] for r in rose) == pytest.approx(1.0)
+    assert sum(r["energy_share"] for r in rose) == pytest.approx(1.0)
+    weighted = sum(r["frequency"] * r["mean_speed_ms"] for r in rose)
+    assert weighted == pytest.approx(summary["long_term_130m"]["mean_speed_ms"])
+    rows = pd.read_csv(ROSE_CSV, comment="#")
+    assert len(rows) == 16
+    for r, c in zip(rose, rows.itertuples(), strict=True):
+        assert c.label == r["label"]
+        assert c.frequency == pytest.approx(r["frequency"], abs=5e-7)
+        assert c.weibull_a_ms == pytest.approx(r["weibull_a_ms"], abs=5e-5)
+        assert c.weibull_k == pytest.approx(r["weibull_k"], abs=5e-5)
+
+
+def test_summary_publishes_aggregates_only() -> None:
+    """No list in the summary is long enough to be an hourly or 10-minute series."""
+
+    def longest(x: Any) -> int:
+        if isinstance(x, dict):
+            return max((longest(v) for v in x.values()), default=0)
+        if isinstance(x, list):
+            return max([len(x)] + [longest(v) for v in x])
+        return 0
+
+    assert longest(json.loads(SUMMARY.read_text())) <= 64
+
+
+_PRIVATE = (
+    "DUTCHBAY_MET_MAST_617725_SOURCE",
+    "DUTCHBAY_NASA_POWER_DIR",
+    "BLUE_WHALE_POWER_CURVE_CSV",
+)
+
+
+@pytest.mark.skipif(
+    not all(os.environ.get(k) for k in _PRIVATE),
+    reason="needs the private mast, the reference files and the confidential curve",
+)
+def test_rerun_reproduces_the_committed_summary() -> None:
+    from omegaconf import OmegaConf
+
+    raw = OmegaConf.to_container(OmegaConf.load(CONF), resolve=True)
+    assert isinstance(raw, dict)
+    raw["output"] = {"summary_json": None, "rose_csv": None, "rose_png": None}
+    out = cli.run(raw)
+    committed = json.loads(SUMMARY.read_text())
+    got = json.loads(json.dumps(out, sort_keys=True))
+    assert got == committed
+    assert (
+        hashlib.sha256(json.dumps(got, sort_keys=True).encode()).hexdigest()
+        == hashlib.sha256(json.dumps(committed, sort_keys=True).encode()).hexdigest()
+    )

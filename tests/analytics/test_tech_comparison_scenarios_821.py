@@ -80,7 +80,8 @@ def test_hybrid_bess_books_financed_additive_capacity_charge() -> None:
     """The BESS capacity charge is booked ADDITIVELY on top of generation, and its capex is financed.
 
     Real evidence (BESS-3), not a trivially-true identity:
-      - year-1 ``bess_revenue_lkr`` equals R x power_mw x 12 (5,000,000 x 50 x 12) exactly;
+      - year-1 ``bess_revenue_lkr`` equals R x power_mw x 12 (1,752,500 x 50 x 12) exactly, R
+        being the NSO 250 MW bid-clearing level committed in v15.11.0 (was 5,000,000);
       - generation revenue is still positive alongside it (additive, not a replacement);
       - the financed ``capex.usd_total`` grew by the battery cost vs the base hybrid (25M), so the
         project IRR reflects a battery that was paid for, not a free revenue uplift.
@@ -88,7 +89,7 @@ def test_hybrid_bess_books_financed_additive_capacity_charge() -> None:
     out = run_v14_pipeline(config=str(HYBRID_BESS_SCENARIO), validation_mode="strict")
     rows = out["annual_rows"]
     assert rows, "hybrid+BESS produced no annual rows"
-    expected_year1_charge = 5_000_000 * 50 * 12  # R x power_mw x 12 (SoH 1.0, year 1)
+    expected_year1_charge = 1_752_500 * 50 * 12  # R x power_mw x 12 (SoH 1.0, year 1)
     assert rows[0]["bess_revenue_lkr"] == pytest.approx(expected_year1_charge)
     assert rows[0]["generation_revenue_lkr"] > 0  # additive, not a replacement
 
@@ -107,11 +108,14 @@ def test_hybrid_bess_books_financed_additive_capacity_charge() -> None:
     assert bess_total == pytest.approx(224_600_000)
     assert bess_total == pytest.approx(hybrid_total + 25_000_000)
 
-    # The extra tolling revenue net of the financed battery lifts project IRR above the plain hybrid
-    # (a distinct, non-trivial economics — the fourth column is real), and stays finite.
+    # The battery gives the fourth column distinct, non-trivial economics, and the IRR stays
+    # finite. v15.11.0 moved R from an illustrative 5,000,000 to the NSO 250 MW bid-clearing level
+    # of 1,752,500 LKR/MW/month. At that rate the tolling revenue no longer covers the financed
+    # USD 25M battery, so the BESS now LOWERS project IRR below the plain hybrid (0.164% against
+    # 0.307%). Before v15.11.0 it raised it (1.774%). The direction is asserted, not assumed.
     b_irr = out["kpis"]["project_irr"]
-    assert b_irr == pytest.approx(0.017736581873141265)
-    assert b_irr > hybrid["kpis"]["project_irr"]
+    assert b_irr == pytest.approx(0.0016420248064584783)
+    assert b_irr < hybrid["kpis"]["project_irr"]
 
 
 # --------------------------------------------------------------------------- #

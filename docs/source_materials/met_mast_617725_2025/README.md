@@ -79,9 +79,17 @@ vertical-profile screening, and preparation for a future measure-correlate-predi
 **Not usable alone:** annual long-term wind speed, bankable P50/P75/P90, direct validation of
 either project site, warranty assessment, or certified power-performance work.
 
-No value from this record has been promoted into a model scenario or lender output. The full
-reasoning and information request are in
-`evaluation/Met_Mast_617725_Ingress_and_Wind_Resource_Evaluation_2026-09-22.md`.
+**Promotion (1 November 2026).** On the project owner's direction, recorded in work item
+<https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6556910250>, values
+derived from this record now enter one model scenario: the Blue Whale wind project's capacity
+factor and energy (`scenarios/blue_whale_wind_lot5b_2026.yaml`, mirrored in the superseded
+`scenarios/blue_whale_hybrid_lot5b_2026.yaml`), through a measure-correlate-predict transfer to
+the Blue Whale turbine site (`docs/blue_whale/MET_MAST_TRANSFER_METHODS.md`). Only aggregates
+were published; the interval rows stay private. **The HOLD above still stands:** those values
+are screening results, not an annual long-term mean, a bankable P50/P90, a site validation or a
+lender output, and no lender output uses them. The full reasoning and information request are
+in `evaluation/Met_Mast_617725_Ingress_and_Wind_Resource_Evaluation_2026-09-22.md`; its
+statement that this ingress promoted nothing describes the 22 September 2026 ingress.
 
 ## Reproducing
 
