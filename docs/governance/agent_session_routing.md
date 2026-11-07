@@ -12,6 +12,10 @@ This note grants no merge, review, lease or approval authority to any session.
 - `MERGE-01` says *when* a green pull request may merge. `REVIEW-01` names the merge coordinator
   as the party that merges, and `CLEANUP-01` governs post-merge tracker/issue closure and
   worktree/branch/venv retirement (while preserving `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`).
+  Cleanup closes only the focused issue its merged pull request names, and never closes tracker #1353.
+  Cleanup never closes a pull request: closing an unmerged one needs a cited owner decision, posted
+  as a comment on it first. It deletes a branch only when its pull request's `merged_at` is set and
+  every ref still present equals the merged head.
   Reading this note does not make a session the merge coordinator.
 - The coordinator recruits each worker to a written profile, and that profile names the
   authorities the worker does not hold, merge among them, unless they are separately and

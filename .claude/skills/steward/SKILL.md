@@ -303,13 +303,83 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
 4. **Retire only branches, worktrees and non-protected venvs you own (`CLEANUP-01`).** Immediately
    after step 3's merge verification succeeds:
    - Inform the session/project tasklist, post a closure/reconciliation receipt on #1353 naming
-     the merged pull request and commit SHA on `origin/main`, and close any completed focused
-     GitHub issue (or each car pull request and the train issue for a train).
-   - Synchronize the clean primary checkout (`git fetch origin main && git checkout main && git pull --ff-only origin main`),
+     the merged pull request and commit SHA on `origin/main`, and close only the focused issue
+     named by number on the merged pull request's own `Work item:` or closing line (for a train,
+     the train issue and the focused issue named on each car's line), and only when its
+     deliverable is complete. A `Work item:` line that names a #1353 comment closes nothing, and
+     cleanup never closes tracker #1353.
+   - Cleanup never closes a pull request. Closing an unmerged pull request needs a
+     cited owner decision (where and when the owner decided), posted as a comment on that pull
+     request before it is closed. The one exception is a train car, closed under "Merge trains"
+     step 5 below.
+   - Synchronize the clean primary checkout, when no other session is using it (`git fetch origin main && git checkout main && git pull --ff-only origin main`),
      remove the merged task worktree (`git worktree remove <worktree-path>`), and run
      `git worktree prune`, preserving any dirty or concurrently owned worktrees (`WORKTREE-01`).
-   - Delete the merged branch locally (`git branch -d <branch>`) and remotely
-     (`git push origin --delete <branch>`), and run `git fetch --prune origin`.
+   - Delete a branch only when its pull request's `merged_at` is set and every ref still present
+     equals the merged head. Run this block in a fresh shell with `PR` and `BRANCH` set from the
+     merged pull request, and for a train car also `CAR_HEAD` (the car head recorded in the train
+     issue) and `TRAIN_PR` (the train pull request). Never paste record text into the code. The
+     block reads everything immediately before deleting and stops at the first failed check,
+     before any delete. A missing `OK` line is a failure. The pull request's `head.ref` must name
+     the branch. No open pull request may use the branch as its base; that pull request's writer
+     retargets it first. The remote ref is checked if it still exists, and skipped if GitHub
+     already auto-deleted it (`delete_branch_on_merge` is on). The local ref is checked if it
+     exists. A squash merge makes `git branch -d` refuse, so the local delete uses `-D`, but only
+     after the check. A train car's pull request must be closed under "Merge trains" step 5, the
+     train pull request must have merged, and the train must carry the car's landed commit, whose
+     subject ends `(#<car PR>)`. Every GitHub read is assigned or compared before anything uses it,
+     so a failed API call stops the block rather than reading as "no open pull request". The remote
+     delete carries a lease on the checked head, so a push between the check and the delete makes
+     the delete fail.
+
+     ```bash
+     set -euo pipefail
+     unset GIT_CONFIG_PARAMETERS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
+     unset GIT_ALTERNATE_OBJECT_DIRECTORIES
+     export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
+     export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+     export GIT_CONFIG_KEY_1=advice.graftFileDeprecated GIT_CONFIG_VALUE_1=false
+     test "$(git config --get core.commitGraph)" = false
+     repo=arunakulat/dutchbay-epc-model
+     CAR_HEAD=${CAR_HEAD:-}; TRAIN_PR=${TRAIN_PR:-}
+     [[ $PR =~ ^[1-9][0-9]*$ ]] || exit 1
+     test "$(git check-ref-format --branch "$BRANCH")" = "$BRANCH"
+     if [ -n "$CAR_HEAD$TRAIN_PR" ]; then
+       [[ $CAR_HEAD =~ ^[0-9a-f]{40}$ && $TRAIN_PR =~ ^[1-9][0-9]*$ ]] || exit 1
+     fi
+     test "$(gh api "repos/$repo/pulls/$PR" --jq '.head.ref')" = "$BRANCH"
+     if [ -z "$CAR_HEAD" ]; then
+       test -n "$(gh api "repos/$repo/pulls/$PR" --jq '.merged_at // ""')"
+       want=$(gh api "repos/$repo/pulls/$PR" --jq '.head.sha')
+     else
+       test "$(gh api "repos/$repo/pulls/$PR" --jq '.state')" = "closed"
+       test "$(gh api "repos/$repo/pulls/$PR" --jq '.head.sha')" = "$CAR_HEAD"
+       test -n "$(gh api "repos/$repo/pulls/$TRAIN_PR" --jq '.merged_at // ""')"
+       train_subjects=$(gh api "repos/$repo/pulls/$TRAIN_PR/commits" --paginate --jq '.[].commit.message | split("\n")[0]')
+       grep -qE " \(#$PR\)\$" <<<"$train_subjects"
+       want=$CAR_HEAD
+     fi
+     [[ $want =~ ^[0-9a-f]{40}$ ]] || exit 1
+     open_on_base=$(gh api -X GET "repos/$repo/pulls" -f state=open -f base="$BRANCH" --jq '.[].number')
+     test -z "$open_on_base"
+     remote_head=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+     if [ -n "$remote_head" ]; then test "$remote_head" = "$want"; fi
+     local_present=no
+     if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+       local_present=yes
+       test "$(git rev-parse --verify "refs/heads/$BRANCH")" = "$want"
+     fi
+     if [ -n "$remote_head" ]; then
+       git push origin --delete --force-with-lease="refs/heads/$BRANCH:$want" "$BRANCH"
+     fi
+     if [ "$local_present" = yes ]; then git branch -D "$BRANCH"; fi
+     git fetch --prune origin
+     echo "CLEANUP-01 branch retirement: OK: #$PR $BRANCH at $want (remote: ${remote_head:-auto-deleted}; local: $local_present)"
+     ```
+
+     A branch whose pull request is open, closed unmerged, or whose head moved after the merge is
+     never deleted by cleanup. `tests/lint/test_gwtf_canonical_source.py` runs this block against
+     stubbed `gh` and `git` for the passing and failing cases.
    - Remove any temporary, per-task or worktree-local virtual environments (`.venv`, `.venv311` or
      ad-hoc venvs) associated with the retired worktree, while NEVER deleting, clearing, pruning
      or modifying the protected persistent Python 3.12 environment at
@@ -649,8 +719,10 @@ train that carries a car it wrote. A pull request may always land alone instead.
    Each block stops at its first failed `test` and passes only when it prints its `OK` line.
    Silence, or a missing `OK` line, is a failure. Run each block whole, as written, and never
    drop its `set -euo pipefail` line. If a block fails, stop and report it on the train pull
-   request (module 3 §8). Otherwise close each car's pull request with a pointer to its commit
-   on `main`.
+   request (module 3 §8). Otherwise, on each car's pull request, first post a pointer comment
+   naming its commit on `main`, then close that pull request. This is `CLEANUP-01`'s one exception
+   to never closing a pull request, and it covers only the cars listed in the train issue whose
+   commits the block above proved are on `main`.
 
 The full suite ran on the union only. The commits between cars on `main` were never run by the
 full suite on their own, and the train lifts no `HOLD`.

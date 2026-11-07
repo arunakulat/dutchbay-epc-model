@@ -323,8 +323,12 @@ PRE_OK = "TRAIN-01 pre-landing check: OK"
 POST_OK = "TRAIN-01 landing check: OK"
 KPI_OK = "TRAIN-01 KPI check: OK"
 MERGE_OK = "Merge check: OK"
+# CLEANUP-01's branch retirement gate (#1563). It reads refs rather than certifying object
+# identity, but it carries the same Git hygiene so a hostile environment cannot redirect it.
+# Its behaviour is exercised in tests/lint/test_gwtf_canonical_source.py.
+CLEANUP_OK = "CLEANUP-01 branch retirement: OK"
 FAIL_CLOSED = "set -euo pipefail"
-ALL_OK = (BUILD_OK, PRE_OK, POST_OK, KPI_OK, MERGE_OK)
+ALL_OK = (BUILD_OK, PRE_OK, POST_OK, KPI_OK, MERGE_OK, CLEANUP_OK)
 
 
 def _block(ok: str) -> str:
@@ -336,10 +340,13 @@ def _block(ok: str) -> str:
         if block.strip().splitlines()[-1].strip().startswith(f'echo "{ok}')
     ]
     assert len(blocks) == 1, f"expected one block printing {ok!r}, found {len(blocks)}"
-    # Remove Markdown list indentation, including the Python heredoc terminator.
+    # Remove Markdown list indentation, including the Python heredoc terminator. The depth is
+    # the fence's own: 3 for a top-level step, 5 for a fence inside a step's bullet (#1563).
+    first = blocks[0].splitlines()[0]
+    pad = " " * (len(first) - len(first.lstrip(" ")))
     return (
         "\n".join(
-            line[3:] if line.startswith("   ") else line
+            line[len(pad) :] if line.startswith(pad) else line
             for line in blocks[0].splitlines()
         )
         + "\n"
