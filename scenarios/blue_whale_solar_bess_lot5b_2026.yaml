@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # Blue Whale Solar + BESS project (Lot 5B, Kalpitiya): 5.66552 MWp / 5.0 MW AC PV with a 5.0 MW / 20.0 MWh BESS
 # ═══════════════════════════════════════════════════════════════════════════════
-# Version: 0.5 (SKELETON: screening placeholders, not a basis for any decision)
+# Version: 0.6 (SKELETON: screening placeholders, not a basis for any decision)
 # Path: scenarios/blue_whale_solar_bess_lot5b_2026.yaml
 #
 # A SEPARATE PROJECT (owner, 2026-11-01, #1353 comment 6556854201): "We will therefore
@@ -141,6 +141,9 @@ generation:
       revenue:
         model: energy_tariff        # input F05: the PUCSL 2026 ground solar + BESS FiT, dispatched hourly
         tariff_lkr_per_kwh: 29.38   # 50.10 - 20.72 (Annex 2): the premium over the generation tariff
+        escalable_om_lkr_per_kwh: 0.30  # L-9: 3.02 - 2.72, the premium's share of the indexed O&M. The priority
+                                    # rate's 3.02 is the standalone 2.72 / 0.90 RTE (methodology s.5.1.2:
+                                    # R_charging / RTE); the BESS component itself is constant (s.5.1.2)
         cycles_per_year: 399.9815 # DERIVED (v0.4): priority-window export 6,799.68 MWh / (20.0 MWh x 0.85), year 1
                                     # (an engine mapping, not a cycle count: 338.3 true cycles). v0.3 400.1935,
                                     # v0.2 435.6547
@@ -156,8 +159,24 @@ tariff:
   # Input F03: the PUCSL feed-in tariffs effective 25 Aug 2026 for plants < 10 MW (Annex 2),
   # ground solar + BESS: 20.72 (18.00 + 2.72) at other periods, which every exported kWh earns
   # here; bess_1 adds the 29.38 priority premium in 17:30-21:30 for 15 years. No wind, so no
-  # blend. The O&M part's yearly indexation and the month-12 adjustment are not modelled.
+  # blend. The month-12 FX/CCPI adjustment of the non-escalable parts is not modelled.
   lkr_per_kwh: 20.72
+  om_indexation:                # L-9 (owner, 2026-11-07: index it): only the escalable O&M parts move
+    escalable_om_lkr_per_kwh: 2.72  # Annex 2, ground solar other-period base O&M; the 18.00 stays flat.
+                                    # bess_1's premium carries its own 0.30 on this same index
+    basis: ccpi_fx_weighted     # PUCSL 2026 methodology s.3.1 item 2: the Commission publishes the yearly
+                                # rate "considering CCPI and LKR/USD exchange rate variations"
+    ccpi_weight: 0.30           # PLACEHOLDER (input B35): the methodology states no weights for the O&M
+    lkr_usd_weight: 0.70        # rate; these are its own s.3.1 item 1 weights for the non-escalable
+                                # adjustment (70% LKR/USD, 30% CCPI)
+    ccpi_inflation_pct: 5.0     # PLACEHOLDER (input B29): the CBSL 5% target, as the O&M's LKR inflation
+    lkr_usd_depreciation_pct: relative_ppp  # (1 + CCPI) / (1 + USD inflation) - 1 = 2.44%/yr
+    usd_inflation_pct: 2.5      # PLACEHOLDER (input B34): as the O&M's USD inflation
+                                # -> 0.30 x 5.0% + 0.70 x 2.44% = 3.21%/yr (PUCSL's consultation assumed
+                                #    3.85%/yr O&M escalation in its BESS case)
+    pre_operation_years: 0      # index 1.0 in operating year 1, the date the opex is stated at; any
+                                # escalation between the 2026 base year and COD is not modelled
+    source: "PUCSL Methodology for RE Feed-in Tariffs 2026 (Approved), s.3.1 item 2; conf/blue_whale_pucsl_fit_2026.yaml PUCSL-METHOD-2026"
   tariff_type: fixed            # input F04
   ppa_term_years: 20            # input F01: the hybrid's basis (the CEB standardised PPA draft, June 2025,
                                 # 20 years from COD); the methodology's s.3.1 tariff rests on a 20-year cash flow
@@ -328,12 +347,13 @@ wacc:
   description: "Build-up WACC drives the project discount rate."
 
 metadata:
-  version: '0.5'
+  version: '0.6'
   last_updated: '2026-11-07'
   author: DutchBay V14 Financial Modeling Team
   review_status: SKELETON - screening placeholders pending owner inputs (docs/blue_whale/INPUTS_REQUIRED.md)
   assumptions_source: 'Split from blue_whale_hybrid_lot5b_2026 v0.6 (finance blocks); battery fixed by the owner (5 MW / 20 MWh), PV sized by conf/blue_whale_solar_bess_fixed_bess_sizing.yaml'
   changes:
+    - 'v0.6 (2026-11-07): the PUCSL escalable O&M tariff components indexed yearly (L-9; owner, 2026-11-07: yes; model 15.21.0). tariff.om_indexation: the 2.72 other-period O&M part of 20.72, and bess_1''s premium carries 0.30 (the priority rate''s 3.02 less 2.72), both at 3.21%/yr from operating year 1 (PUCSL 2026 methodology s.3.1 item 2; weights placeholder input B35). Project NPV USD -4,517,261 -> -4,439,870, equity IRR -7.00% -> -5.12%; year-1 DSCR unchanged. The sizing runs priced flat tariffs and are not re-run'
     - 'v0.5 (2026-11-07): opex split by currency (input B34; owner rule and decision of 2026-11-02): BESS O&M at USD 1.80/kWh-yr on 22,000 kWh DC (39,600; was USD 2.5/kWh-yr on 20,000 kWh, 50,000), converted to LKR at the wind value date (333.79: LKR 13,218,084/yr; owner, 2026-11-07); solar O&M 56,655.2 and insurance, land and SPV 150,000 in LKR. O&M 256,655 -> 246,255.2, all LKR at 5%/yr. Financing_Terms.construction_periods 1 (= B30; the engine had defaulted to 2; owner, 2026-11-07). Not re-sized'
     - 'v0.4 (2026-11-07): the TURBINE''S SHADOW on the PV (input B33; #1520''s geometry on the layout''s tables, rotor yaw from the 130 m met-mast wind rose, optical floor with no electrical-mismatch uplift): 0.130% of the array''s plane-of-array irradiance, 0.136% of its AC energy. The size is unchanged (151 tables, 5.0 MW AC; P50 after-tax project NPV USD -5,331,746, P90 -5,916,888 in the re-run of conf/blue_whale_solar_bess_fixed_bess_sizing.yaml). Solar CF 0.169929 -> 0.169675, degradation 0.392075 -> 0.391957, aep 7.44 -> 7.43; bess_1 cycles 400.1935 -> 399.9815, fade 0.0016798 -> 0.0016880. Capex and O&M unchanged'
     - 'v0.3 (2026-11-01): the OWNER''S STRATEGIC BATTERY, 5.0 MW / 20.0 MWh (PR 7, #1353 comment 6563070978: "Fix 5 MW / 20 MWh"; objective "After-tax project NPV (Recommended)"). PV AC 5.0 MW (reading A at its 10 MW limit); PV DC chosen on the P50 after-tax project NPV by conf/blue_whale_solar_bess_fixed_bess_sizing.yaml (seed 20261101, 256 trials): 151 tables (5.66552 MWp), P50 USD -5,326,884, P90 -5,911,801. The value-based size (107 tables, 3.5 MW AC, 1.0 MW / 4.0 MWh) is better by USD 1,247,165 at P50 and 1,590,005 at P90. Solar CF 0.169929, degradation 0.392075, capex 3,455,943; bess_1 capex 2,814,800, 400.1935 cycles, fade 0.0016798; capex total 8,270,743; O&M 256,655'
