@@ -509,6 +509,46 @@ def test_priority_window_capability_closed_form(unit: Dict[str, Any]) -> None:
     assert 23.0 * 0.85 / 5.0 < 4.0 < 24.0 * 0.85 / 5.0
 
 
+def test_the_turbine_shadow_reaches_the_sized_pv(unit: Dict[str, Any]) -> None:
+    """A one-point run derates its PV when the site carries the turbine's shadow (B33).
+
+    The same point, run with and without the shading source, must report less PV with
+    it. A run that skipped the shading branch would report the unshaded figure twice.
+    """
+    pytest.importorskip("pvlib")
+    pytest.importorskip("shapely")
+    pytest.importorskip("pyproj")
+    from analytics.evaluation_v14 import evaluate_with_overrides
+
+    cfg = _small_cfg()
+    cfg["grid"] = {
+        "dc_ac_ratios": [1.1],
+        "bess_energy_mwh": [24.0],
+        "bess_power_mw": 5.0,
+    }
+    cfg["monte_carlo"] = {**cfg["monte_carlo"], "n_trials": 1}
+    site = sz.site_context(unit, _read_repo)
+    assert site["shading"] is not None  # the committed unit config models the shadow
+
+    def pv_of(s: Dict[str, Any]) -> float:
+        run = sz.run_sizing(
+            cfg,
+            unit_cfg=unit,
+            pricing_cfg=_yaml(PRICING_CONF),
+            scenario=_yaml(SCENARIO),
+            site=s,
+            evaluator=evaluate_with_overrides,
+        )
+        (point,) = run.points
+        assert point["land"]["lot_fits"]  # every table placed, so the branch applies
+        return float(point["pv_ac_mwh_factor_1"])
+
+    shaded = pv_of(site)
+    unshaded = pv_of({**site, "shading": None})
+    # The optical floor costs about 0.13% of the AC energy; anything from a hair to 1%.
+    assert unshaded * 0.99 < shaded < unshaded * (1.0 - 1.0e-4)
+
+
 def test_the_turbine_is_not_a_sizing_variable(unit: Dict[str, Any]) -> None:
     scenario = _yaml(SCENARIO)
     scenario["generation"]["technologies"]["wind"]["capex_usd"] = 11.0e6
