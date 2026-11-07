@@ -12,7 +12,12 @@ All notable changes to this project will be documented here.
   70% USD / 30% LKR; BESS O&M at USD 1.80/kWh-yr of DC installed (a vendor LTSA benchmark),
   converted to LKR at the wind project's value date (owner, 2026-11-07).
   Wind project IRR 10.81% -> 10.72%, NPV USD +69k -> -7k (USD share on relative PPP); solar + BESS NPV USD -5.00M -> -4.92M.
-  Detail in the compiled fragment.
+  Detail in the compiled fragment. 15.20.0 also carries #1452's release record (`P2-F3-01`,
+  merged as `cd283c5d` without a version move; its equity figures are PROVISIONAL pending
+  #1564) and the corrected `1398-debt-service-shortfall-carried` fragment. HOLDs that
+  survive this release: #1110's Board and lender circulation hold; the F-5 covenant bar (no
+  quarterly CFADS or intra-year DSCR figure supports a lender representation); and the
+  `v15.6.1` release hold.
 - **Blue Whale: the turbine's shadow on the PV, input B33 (15.19.0).** The rotor and tower
   shadow is computed per PV table and the hourly PV is derated before BESS dispatch. The
   electrical-mismatch treatment is the optical floor. The loss is 0.13% of the solar + BESS
