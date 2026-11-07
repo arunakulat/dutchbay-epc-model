@@ -23,10 +23,10 @@ Quoted verbatim from the work item:
 
 **The disclosure surface moves on the owner's authority** (`AGENTS.md` "Four ways a corpus
 commit goes wrong", item 2). The wind and BESS figures below are blends that include private
-commercial inputs. This figure is a blend that includes private commercial inputs; a reader may
-be able to back out a private input. Published on the owner's decision of 2026-11-01 (#1353
-comment 6556975196). No raw private figure is in this repository; the private anchors are read
-at run time from a file outside it.
+commercial inputs, and those inputs can be recovered exactly from the published figures.
+Published on the owner's decision of 2026-11-01 (#1353 comment 6556975196); the owner accepted
+the exact recoverability on 2026-11-07 (#1353 comment 6702419885). The private anchors are not
+written out in this repository; they are read at run time from a file outside it.
 
 ## 1. Capex anchors
 
