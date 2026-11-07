@@ -95,9 +95,9 @@ All 7 Blue Whale PRs along with prerequisite CI PR `#1548` have landed on `main`
 
 ### 4.1 Canonical GWTF Ruleset (`go_with_the_flow_rules_v3_0_clean.csv`)
 - **Verified Count & Digest**: **79 active rules** (`79 rules; versions: v3.0; latest = v3.0; active=79`), SHA-256 `230743289f135338344cba0740061935af461325d6729f3d210db3f3aee2e7a4` (updated from 78 active rules / `eb14d836513fef208b59029c35bf6add826aa0c24dd764bb8a62f3a3acfee560` with owner-directed `CLEANUP-01`).
-- **Complete Rule Family Synthesis**:
+- **Complete Rule Family Synthesis** (rule-ID attributions corrected against the CSV on 2026-11-07 after the retrospective #1549 domain review; the CSV wins):
   - **Governance & Intake (`GOV-01`, `GOV-02`, `INTAKE-01`)**:
-    - `GOV-01`: AI-assisted development contract (human product owner retains all release, grade, lender, and Board authority).
+    - `GOV-01`: AI-assisted development contract (AI tools are bound by the ruleset and meet the same standards as human-written code; the owner's release, grade, lender, and Board authority boundaries are stated in `MERGE-01`, `REVIEW-01`, `TRAIN-01` and `RECRUIT-01`).
     - `GOV-02`: Never commit or push directly to `main`/`master`; verify `git branch --show-current` before every commit.
     - `INTAKE-01`: Before any edit or PR opening, fetch `origin/main`, inspect live capability tracker (`#1353`), enumerate all open PRs, record a scoped item in `#1353` or a linked focused issue **predating** the PR, and include work-item link, base SHA, and overlap disposition in the PR body (enforced by `scripts/ci/check_pr_intake.py` inside `Verification receipts (VERIFY-01)`).
   - **Architecture & Contracts (`ARCH-01..04`)**:
@@ -117,15 +117,15 @@ All 7 Blue Whale PRs along with prerequisite CI PR `#1548` have landed on `main`
       - **Primary**: *Contracts Centralized, Compliance Documented, Import Relationships explicit* (`analytics.contracts_v14` + `evaluate_with_overrides()` gateway only).
       - **Secondary**: *Config-Centric Contract-Driven Integration Rules*.
   - **CLI & Tooling (`CLI-01..03`, `R1..R9`, `ADD-01..03`, `R26`)**:
-    - `CLI-01` / `R1`: Hydra (`@hydra.main(version_base="1.3", ...)`) is the sole canonical CLI framework.
-    - `CLI-02` / `R2`: JSON-first output on stdout; suppress routine `INFO` logging in long-running calculations (`logging.disable(logging.WARNING)` when emitting JSON stdout).
-    - `CLI-03` / `R3`: `argparse` is banned repo-wide; legacy Typer/Click CLIs are frozen.
+    - `CLI-01`: Hydra (`hydra-core`) is the CLI framework for all v14 CLIs; `argparse` is banned repo-wide (also `R3`) and legacy Typer/Click CLIs are frozen (Typer: `R4`).
+    - `CLI-02` / `R1`: Canonical v14 entrypoints (`run_full_pipeline_v14.py`, `run_scenario_analytics_v14.py`); `R2`: config-first CLIs via Hydra overrides.
+    - `CLI-03`: JSON-first output on stdout (a single JSON object summarising the run).
     - `R26`: Convert PDFs via local MarkItDown in `$DUTCHBAY_VENV` before parsing; never infer from raw PDF bytes.
   - **Validation, Typing, Testing, Finance & Presentation (`VAL-01..02`, `CST-01`, `TYPE-01`, `TEST-01..05`, `FIN-01..02`, `MRM-01..02`, `DOC-01..02`, `DBPL-01`)**:
-    - `VAL-01..02` / `CST-01`: Strict v14 schema validation; explicit units in field names (`*_pct`, `*_years`, `*_usd`, `*_lkr`, `*_mw`).
+    - `VAL-01`: Strict v14 schema validation (`validate_config_for_v14`); `VAL-02`: ScenarioAnalytics batch behaviour; `CST-01`: LibCST import and hot-spot API guardrails; `FIN-02`: explicit units in field names (`*_pct`, `*_years`, `*_usd`, `*_lkr`).
     - `TEST-01`: Independent-oracle requirement — finance-material code must answer to an oracle that did not originate in the same change (pre-existing test, external benchmark, closed-form identity, independent implementation, or invariant), and any pinned constant must be paired with a responsiveness guard.
-    - `TEST-05`: Coverage gate (`--cov-fail-under=80` across `finance/` and `analytics/`).
-    - `FIN-01..02` / `MRM-01..02`: Explicit seed for stochastic runs; version/changelog update when committed financial outputs change; `schema` and `model_version` provenance in governed artifacts.
+    - `TEST-02` / `R8`: Coverage thresholds apply to the full suite (the gate is `coverage report --fail-under=95` in `.github/workflows/test-suite.yml`); `TEST-05`: independent GitHub-hosted Grid Study evidence for QSTS execution claims.
+    - `FIN-01`: Numeric robustness and IRR/NPV safety; `MRM-01`: explicit seed for stochastic runs; `MRM-02`: scenario name, config path or hash, and model version on exported artefacts; `DOC-02`: VERSION and CHANGELOG update for any change that can affect IRR, DSCR, NPV or covenant logic.
     - `DBPL-01`: DutchBay Presentation Layer PDFs must route through `app.reports.dbpl.print_core.render_dbpl_pdf` with the complete `[report]` extra (`weasyprint`, `reportlab`, `geopandas`, `contextily`), fail loud via `DbplDependencyError`, keep all design tokens in `app/reports/dbpl/style.py`, keep running header/footer/caveat band un-suppressible, and surface font substitutions (`docs/dbpl_styleguide.md`).
   - **Git Workflow, Delivery, Persistence, Environment, Recruitment & Security (`R10..R25`, `DELIVERY-01`, `REFACTOR-01..04`, `WORKTREE-01`, `DATA-01`, `PERSIST-01`, `ENV-01`, `THREAD-01`, `VERIFY-01`, `MERGE-01`, `RECRUIT-01`, `SECDEP-01`, `REVIEW-01`, `TRAIN-01`, `CLEANUP-01`)**:
     - `R18`: Eleven sanctioned Conventional Commit types (`build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`); `deploy` is unsanctioned.
