@@ -690,9 +690,9 @@ inventory and references: [CAPEX_AND_SOLAR_RESOURCE_METHODS.md](CAPEX_AND_SOLAR_
 results `capex_blend_summary.json`, `solar_resource_summary.json`, `solar_resource_monthly.csv`.
 
 **The disclosure surface moves on the owner's authority.** The wind and BESS capex are blends
-that include private commercial inputs; a reader may be able to back out a private input.
-Published on the owner's decision of 2026-11-01 (#1353 comment 6556975196). No raw private
-figure is published.
+that include private commercial inputs, and those inputs can be recovered exactly from the
+published figures. Published on the owner's decision of 2026-11-01 (#1353 comment 6556975196);
+the owner accepted the exact recoverability on 2026-11-07 (#1353 comment 6702419885).
 
 | Item | Low | Mode | High | Was |
 |---|---:|---:|---:|---|

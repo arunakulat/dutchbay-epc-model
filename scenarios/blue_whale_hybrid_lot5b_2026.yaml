@@ -19,8 +19,9 @@
 # v0.8 (PR 6, #1353 comment 6556975196): the wind capex mirrors the wind scenario's BLENDED
 # turbine capex (USD 936.84/kW) and the BESS capex takes the BLENDED all-in mode (USD 140.74 per
 # kWh contracted), both from conf/blue_whale_capex_solar_resource.yaml through
-# conf/blue_whale_pv_bess_pricing.yaml. These are blends that include private commercial inputs;
-# a reader may be able to back out a private input. Published on the owner's decision of
+# conf/blue_whale_pv_bess_pricing.yaml. These are blends that include private commercial inputs,
+# and those inputs can be recovered exactly from the published figures (owner accepted on
+# 2026-11-07, #1353 comment 6702419885). Published on the owner's decision of
 # 2026-11-01 (#1353 comment 6556975196). The unit size, CFs and tariff blend are unchanged: PR 3's
 # sizing (docs/blue_whale/pv_bess_sizing_summary.json) was re-run on the blended prices and this
 # file (seed 20261101, 40 sizes x 256 trials) and still chooses DC/AC 1.1 with 5 MW / 24 MWh,
