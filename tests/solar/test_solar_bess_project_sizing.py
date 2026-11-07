@@ -76,11 +76,15 @@ POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 # Re-pinned at 15.19.0 for the turbine's shadow on the PV (input B33; v0.4, size unchanged at
 # 151 tables). Before, at 15.18.0 after #1398 (v0.3): project NPV -4992408.759406766, equity
 # NPV -5564410.144390165, equity IRR -0.08317620969932149, min DSCR 0.867987057099332.
+# Re-pinned at 15.22.0 for the turbine standing on DutchBay T2 (v0.5: the shadow moves and the
+# fixed-battery run now picks 152 tables). Before, at 15.19.0 (v0.4): project NPV
+# -4997611.258776674, equity NPV -5568837.4281859165, equity IRR -0.0843625813445068, min DSCR
+# 0.8676222789656864.
 SOLAR_BESS_PINS = {
-    "project_npv": -4997611.258776674,
-    "equity_npv": -5568837.4281859165,
-    "equity_irr": -0.0843625813445068,
-    "min_dscr": 0.8676222789656864,
+    "project_npv": -4998968.108052977,
+    "equity_npv": -5573458.437417614,
+    "equity_irr": -0.08118799835314083,
+    "min_dscr": 0.8683503097163515,
 }
 # WIND_PINS re-pinned at 15.16.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
 # 0.487560). Before, at 15.15.0 (v0.1): project IRR 0.04085210230412145, equity IRR
@@ -688,10 +692,14 @@ def test_fixed_bess_summary_holds_the_owners_battery_and_chooses_the_pv() -> Non
     assert spec["seed"] == _summary()["spec"]["seed"]
     assert n == cfg["monte_carlo"]["n_trials"] == 256
     assert spec["objective"] == {"metric": "project_npv", "statistic": "p50"}
-    assert spec["land_max_tables_by_bess_power_mw"] == {"5.0": 191}
+    # The turbine on DutchBay T2 (15.22.0) moves its crane pad onto the lot's west side and
+    # its shadow onto the array, so the lot holds 186 tables (191 before).
+    assert spec["land_max_tables_by_bess_power_mw"] == {"5.0": 186}
     rows = _rows_of(summary)
-    # Every whole table count from DC/AC 1.0 at 5 MW AC to the lot's maximum, once each.
+    # Every whole table count from DC/AC 1.0 at 5 MW AC to 191, once each; the five above the
+    # lot's maximum are listed as not fitting and are not evaluated.
     assert sorted(r["pv_tables"] for r in rows) == list(range(134, 192))
+    assert {r["pv_tables"] for r in rows if not r["fits"]} == set(range(187, 192))
     assert 133 * 37.52 / 5000.0 < 1.0 <= 134 * 37.52 / 5000.0
     for r in rows:
         # The owner's battery, E = 4P: 5 MW / 20 MWh.
@@ -726,11 +734,11 @@ def test_fixed_bess_summary_holds_the_owners_battery_and_chooses_the_pv() -> Non
 
 def test_fixed_bess_run_reproduces_the_full_grid_at_every_shared_point() -> None:
     """MRM-01 at production scale: two runs with the same seed draw the same trials, so the
-    sizes both evaluate (5 MW AC, 5 MW / 20 MWh at 134, 147, 160, 174 and 191 tables) carry
+    sizes both evaluate (5 MW AC, 5 MW / 20 MWh at 134, 147, 160, 174 and 186 tables) carry
     identical statistics."""
     full = {_key(r): r for r in _grid_rows()}
     shared = [r for r in _rows_of(_fixed_summary()) if _key(r) in full]
-    assert sorted(r["pv_tables"] for r in shared) == [134, 147, 160, 174, 191]
+    assert sorted(r["pv_tables"] for r in shared) == [134, 147, 160, 174, 186]
     for r in shared:
         assert r == full[_key(r)], _key(r)
 

@@ -396,6 +396,63 @@ def test_site_fit_on_the_placeholder_lot(
     assert tight.fit.tables_that_fit < 160
 
 
+def test_crane_pad_side_moves_the_hardstand(cfg: Dict[str, Any]) -> None:
+    from analytics.gis.shadow_flicker import CoastalSetbackConfig, LocalFrame
+
+    array = pal.ArrayConfig.from_mapping(cfg["array"])
+    module = pal.ModuleSpec.from_mapping(cfg["module"])
+    strings = pal.design_string(
+        module, pal.StringDesignConfig.from_mapping(cfg["string_design"])
+    )
+    sizing = pal.size_array(module, strings, array)
+    land = pal.LandConfig.from_mapping(cfg["land"])
+    eq = pal.equipment_area(
+        bess_power_mw=5.0,
+        bess_energy_mwh=30.0,
+        bess=pal.BessFootprintConfig.from_mapping(cfg["bess_footprint"]),
+        land=land,
+    )
+    frame = LocalFrame(0.0, 0.0)
+    # A 400 m square lot with the tower at its centre and no coastline near it.
+    lot = ((-200.0, -200.0), (200.0, -200.0), (200.0, 200.0), (-200.0, 200.0))
+    site = pal.SiteGeometry(
+        frame=frame,
+        lot_ring=lot,
+        turbine=(0.0, 0.0),
+        coastline=(((-5000.0, -5000.0), (-5000.0, 5000.0)),),
+    )
+    coastal = CoastalSetbackConfig(
+        reservation_m=25.0,
+        restricted_m=35.0,
+        seaward_reference_offset_m=0.0,
+        foundation_clearance_m=0.0,
+        source="test",
+    )
+    boxes = {}
+    for side in ("east", "west"):
+        fit_cfg = pal.SiteFitConfig.from_mapping(
+            {**cfg["site_fit"], "crane_pad_side": side}
+        )
+        layout = pal.fit_site(
+            site,
+            coastal=coastal,
+            cfg=fit_cfg,
+            sizing=sizing,
+            pitch=_pitch(cfg, sizing, array),
+            array=array,
+            land=land,
+            equipment=eq,
+            required_fenced_area_m2=41000.0,
+        )
+        assert layout.fit.crane_pad_in_lot_m2 == pytest.approx(40.0 * 80.0, rel=1e-9)
+        boxes[side] = layout.exclusions["crane_hardstand"].bounds
+    r = cfg["site_fit"]["foundation_diameter_m"] / 2.0
+    assert boxes["east"] == pytest.approx((r, -20.0, r + 80.0, 20.0))
+    assert boxes["west"] == pytest.approx((-r - 80.0, -20.0, -r, 20.0))
+    with pytest.raises(ValueError, match="crane_pad_side"):
+        pal.SiteFitConfig.from_mapping({**cfg["site_fit"], "crane_pad_side": "north"})
+
+
 def test_site_fit_config_is_strict(cfg: Dict[str, Any]) -> None:
     with pytest.raises(ValueError, match="unknown keys"):
         pal.SiteFitConfig.from_mapping({**cfg["site_fit"], "extra": 1})

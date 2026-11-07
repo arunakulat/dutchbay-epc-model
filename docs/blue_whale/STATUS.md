@@ -1,6 +1,6 @@
 # Blue Whale: project status
 
-Last updated: 2026-11-01. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
+Last updated: 2026-11-07. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
 
 ## Configuration under study
 
@@ -10,7 +10,7 @@ turbine, built first, and a solar + BESS project sized under the PUCSL 2026 4 h 
 | Project | Component | Size | Notes |
 |---|---|---|---|
 | Wind (`scenarios/blue_whale_wind_lot5b_2026.yaml`) | Turbine | 1 x Envision EN-206/10.5 de-rated to 9.5 MW, 130 m hub, 206 m rotor | Owner decision 2026-11-01; tip height 233 m; built first. From PR 5 its yield rests on met mast 617725 (net CF 0.487560, 40.57 GWh; not lender-grade) |
-| Solar + BESS (`scenarios/blue_whale_solar_bess_lot5b_2026.yaml`) | Solar PV | 5.66552 MWp DC (151 tables) at 5.0 MW AC, JinkoSolar Tiger Neo 3.0 670 W, fixed tilt 8 degrees, 17 x Huawei SUN2000-330KTL-H1 | PR 7: PV AC 5.0 MW so that reading A sits at its 10 MW limit; PV DC chosen for the owner's battery on the P50 after-tax project NPV (PR 6: 4.01464 MWp, 3.5 MW AC; PR 4: 6.0032 MWp, 5.0 MW AC) |
+| Solar + BESS (`scenarios/blue_whale_solar_bess_lot5b_2026.yaml`) | Solar PV | 5.70304 MWp DC (152 tables) at 5.0 MW AC, JinkoSolar Tiger Neo 3.0 670 W, fixed tilt 8 degrees, 17 x Huawei SUN2000-330KTL-H1 | PR 7: PV AC 5.0 MW so that reading A sits at its 10 MW limit; PV DC chosen for the owner's battery on the P50 after-tax project NPV. 152 tables from 15.22.0, with the turbine on DutchBay T2 (15.18.0-15.19.0: 151; PR 6: 4.01464 MWp, 3.5 MW AC; PR 4: 6.0032 MWp, 5.0 MW AC) |
 | | BESS | **5.0 MW / 20.0 MWh (4 h), the owner's strategic choice** ("Fix 5 MW / 20 MWh"), charged only from the PV, discharged only 17:30-21:30 | PUCSL 2026 4 h rule. Not the value-based size: that is 1.0 MW / 4.0 MWh on 107 tables at 3.5 MW AC, USD 1.25M better at P50 after tax (PR 7 section) |
 
 The combined view `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (v0.8: 9.5 MW wind, 5.51544 MWp
@@ -43,25 +43,32 @@ record under `DATA-01`.
 
 ## Open risks
 
-1. **Fit of the turbine.** On the placeholder lot below, the 233 m tip-height setback is
-   breached on three of the lot's four edges, and the worst-case shadow flicker exceeds
-   30 h/yr at six of the eight boundary points. Rotor overhang beyond the lot and over
-   the coastal reservation is the owner's stated intent, but whether it is permitted is
-   open. A surveyed boundary (B03) and setbacks (B08) decide whether the turbine fits.
-2. **Coastal permitting.** Most of the lot is likely inside the Coast Conservation Act zone
+1. **Fit of the turbine.** The turbine stands on DutchBay T2's position (owner,
+   2026-11-07), which falls in the north-east corner of the placeholder lot below. The
+   233 m tip-height setback is breached on the north and east edges, the 30 m foundation
+   reaches the north edge, the rotor overhangs land outside the lot by up to 88 m, and the
+   worst-case shadow flicker exceeds 30 h/yr at five of the eight boundary points. A
+   surveyed boundary (B03) and setbacks (B08) decide whether the turbine fits.
+2. **Wake from DutchBay T1 and T3.** The yield assumes no wake. The turbine replaces T2,
+   so T2 itself casts none (owner, 2026-11-07: "As such wake does not apply"). If the rest
+   of the DutchBay array is built, T1 (624 m, bearing 21 degrees, 3.0 Blue Whale rotor
+   diameters) and T3 (529 m, bearing 202 degrees, 2.6 diameters) stand roughly upwind in
+   the north-east and south-west monsoons and would wake it. The owner chose zero wake
+   with this risk disclosed (2026-11-07); it is not quantified.
+3. **Coastal permitting.** Most of the lot is likely inside the Coast Conservation Act zone
    (CC&CRMD permit, IEE or EIA), with lagoon ecology and bird collision in scope.
-3. **Component transport.** Blade and tower delivery over a 9 m right of way, or by the
+4. **Component transport.** Blade and tower delivery over a 9 m right of way, or by the
    shared jetty, is unsurveyed.
-4. **Title.** The 2010 misregistration was cured only in 2023 (Deed of Declaration 11619).
+5. **Title.** The 2010 misregistration was cured only in 2023 (Deed of Declaration 11619).
    Lenders will want a fresh registry search; 9 of the 12 listed title documents are missing
    from the scan.
-5. **Landowner and project company differ.** A lease or transfer from Blue Whale Resort (Pvt)
+6. **Landowner and project company differ.** A lease or transfer from Blue Whale Resort (Pvt)
    Ltd to the project company has to be documented.
-6. **Revenue.** The tariffs are the researched PUCSL 2026 FiT and the BESS earns through the
+7. **Revenue.** The tariffs are the researched PUCSL 2026 FiT and the BESS earns through the
    hourly dispatch below, but the offtake route is not confirmed and the priority window's
    clock hours come from a consultation, not the approved Annex 2. From PR 4 the turbine and
    the solar + BESS are separate projects, each under 10 MW on its own.
-7. **The 10 MW contiguous-location limit (open legal question, PR 4).** The Electricity Act
+8. **The 10 MW contiguous-location limit (open legal question, PR 4).** The Electricity Act
    No. 36 of 2024, s.11(3) proviso, caps capacity "procured from a contiguous location using
    standard power purchase agreements on cumulative basis" at 10 MW. The 9.5 MW turbine stands
    on the same lot as the solar + BESS project. If the two count together, the turbine leaves
@@ -83,7 +90,12 @@ OpenStreetMap's. Generated by `scripts/run_blue_whale_wind_siting_v14.py` from
 - Site: "Assumed square, flagged".
 - Position: "The turbine tip can go over the sea - as T2 location borders the sea, push the
   turbine as much as possible westwards towards the shore, respecting the coast conservation
-  set backs - check EIA".
+  set backs - check EIA". **Superseded on 2026-11-07** (below).
+- Position, 2026-11-07, verbatim: "Blue Whale Turbine is replacing the T2 Dutchbay turbine -
+  its on the exact same location - if not, recalculate location to match T2 location. As
+  such wake does not apply". The turbine had stood 224 m west of T2 (the westernmost
+  setback point); it now stands on T2. On wake from the neighbouring DutchBay turbines she
+  chose "Zero wake, disclose T1/T3 risk" (open risk 2).
 
 ### Placeholder site and turbine position
 
@@ -92,20 +104,22 @@ OpenStreetMap's. Generated by `scripts/run_blue_whale_wind_siting_v14.py` from
 | Coastline | OSM `natural=coastline` ways 399832875, 399832880 and 399832872, retrieved 2026-11-01 | [`osm_coastline_near_t2.geojson`](osm_coastline_near_t2.geojson), (c) OpenStreetMap contributors, ODbL. Traced from aerial imagery; vertices 50 to 240 m apart near T2; accuracy not stated by OSM |
 | Coastline at T2's latitude | 292 m west of DutchBay T2 (8.292500 N, 79.754700 E) | Interpolated between two OSM vertices 237 m apart |
 | Coastal setback | 60 m: 25 m reservation and 35 m restricted area | CZ&CRMP 2024-2029, Table 6-1, segment 2 (Uchchamunai to Mohoththuwaram Split Northern Boundary, Medium (+)), measured from the Seaward Reference Line of section 6.4.1 |
-| Turbine | **8.292500 N, 79.752666 E** (WGS84), 224 m west of T2 | Westernmost point on T2's latitude 60 m from the coastline |
+| Turbine | **8.292500 N, 79.754700 E** (WGS84), DutchBay T2 | T2's recorded position (`scripts/process_era5_wind_data.py`), owner decision of 2026-11-07 (`site.turbine_placement: reference_point`). Until then 8.292500 N, 79.752666 E, 224 m west, the westernmost point on T2's latitude 60 m from the coastline |
 | Lot | 305.09 m square, west edge on the coastline at bearing 28.1 degrees, centred on T2's latitude | [`site_placeholder_lot5b.geojson`](site_placeholder_lot5b.geojson): `surveyed: false`, `placeholder: true`. The edge departs from the coastline by at most 0.4 m |
-| Distances from the tower | coastline 60.0 m, setback line 0 m; lot edges west 60.0 m, north 120.5 m, south 184.6 m, east 245.1 m | |
+| Distances from the tower | nearest mapped coastline 108.3 m (OSM way 399832872, south-east of the tower, along the lot's east side), its 60 m setback line 48.3 m; the sea coastline 257.6 m (way 399832880, west); lot edges west 257.6 m, north 14.9 m, south 290.2 m, east 47.4 m | |
 
-The position is a **westernmost bound**, for two reasons. The plan measures the setback from
-the permanent vegetation line (or the landward toe of the back dune), not from the high-water
-line OSM maps, so the true line lies farther east by the beach width. And the tower centre
-sits on the setback line, so the foundation and hardstand radius (not known) would also move
-it east. The setback figure is taken from the public plan (statutory source).
+The tower clears the 60 m CZ&CRMP setback of every mapped coastline way: the nearest is the
+way along the lot's east side, 108.3 m away, whose setback (sea or lagoon, CZ&CRMP 6.5.4)
+is itself an open question from PR 1. The setback figure is taken from the public plan
+(statutory source). The run refuses a reference point inside the setback.
 
-The rotor reaches up to 103 m from the tower, so a blade can pass 43 m beyond the mapped
-coastline and over the whole 60 m setback strip. Both are **open questions**: whether a
-rotor may overhang the reservation and restricted areas (section 6.4.3 lists what the
-reservation admits), the sea, and land outside the lot.
+The rotor reaches up to 103 m from the tower: it stays 5 m short of the east-side coastline
+way but passes 55 m into its setback strip, and it overhangs land outside the lot by up to
+88 m (north and east). Both are **open questions**: whether a rotor may overhang the
+reservation and restricted areas (section 6.4.3 lists what the reservation admits) and
+land outside the lot. The lot itself is unchanged: it is still the assumed square on the
+coastline at T2's latitude, so T2 falls in its north-east corner. A survey (B03) replaces
+both.
 
 ### Wind yield
 
@@ -118,12 +132,12 @@ below). The ERA5 basis here is kept as the comparison.
 | Air density | Curve corrected from its 1.148 kg/m3 basis to the 1.15 kg/m3 site density of the DutchBay scenario (IEC 61400-12-1 wind-speed scaling, factor 1.00058) |
 | De-rate | Curve clipped at 9,500 kW (an assumption; an OEM de-rate mode may differ) |
 | Gross AEP | 33.77 GWh, CF 40.58% on 9.5 MW |
-| Losses | availability 97%, electrical 2%, curtailment 2%, other 1% (the DutchBay stack), no wake (one turbine): 7.77% in all |
+| Losses | availability 97%, electrical 2%, curtailment 2%, other 1% (the DutchBay stack), no wake (the turbine replaces T2; owner, 2026-11-07; open risk 2): 7.77% in all |
 | **Net AEP** | **31.15 GWh, CF 37.43%** (was 30.66 GWh, 10 MW x 35%) |
 | Cross-check | The independent integrator agrees to 0.002% |
 
 The ERA5 point is the DutchBay array centroid (8.27 N, 79.75 E), in the same ERA5 cell as
-both T2 and the turbine position, so moving the turbine does not change the yield. The basis
+both T2 and the #1530 position, so the move to T2 (2026-11-07) does not change the yield. The basis
 is reanalysis, not a site measurement (B07). Only derived figures are published; the curve is
 held privately under `KALPITIYA60MW-WIND-HANDLING-2026-09-21`.
 
@@ -134,8 +148,9 @@ For the BESS work: no hourly wind series is built here. The ERA5 hourly tooling
 ### Tip-height setback
 
 Tip height 233 m; setback 1.0 x tip height, the usual topple distance (no Sri Lankan
-statutory figure is held, B08). The tower is within 233 m of the west, north and south edges,
-and 87,323 m2 of the 170,280 m2 setback disc lies outside the lot. A
+statutory figure is held, B08). At T2 the tower is within 233 m of the north and east edges
+(14.9 m and 47.4 m), and 112,577 m2 of the 170,280 m2 setback disc lies outside the lot
+(87,323 m2 at the #1530 position). A
 233 m setback could not fit on this lot from any position: it exceeds the 152.5 m
 half-width of the square.
 
@@ -149,19 +164,22 @@ sun above 3 degrees, within 10 rotor diameters, 2 m receptor height, 1-minute st
 least 120 W/m2 in the DutchBay PVGIS TMY, times the 93.0% chance that the rotor is turning;
 rotor orientation is not credited, so it stays conservative.
 
+With the turbine on T2 (2026-11-07):
+
 | Receptor | Distance (m) | Worst case (h/yr) | Worst case (max min/day) | Expected (h/yr) |
 |---|---|---|---|---|
-| West edge midpoint | 68 | 2,053.7 | 367 | 1,816.0 |
-| North-west corner | 135 | 580.1 | 286 | 504.2 |
-| North edge midpoint | 152 | 1,036.0 | 258 | 811.3 |
-| South-west corner | 194 | 266.4 | 190 | 236.3 |
-| South edge midpoint | 207 | 0.0 | 0 | 0.0 |
-| East edge midpoint | 247 | 250.9 | 169 | 181.0 |
-| North-east corner | 273 | 539.5 | 161 | 346.2 |
-| South-east corner | 307 | 0.0 | 0 | 0.0 |
+| North-east corner | 50 | 2,194.4 | 400 | 1,856.6 |
+| North edge midpoint | 106 | 1,425.9 | 320 | 1,260.8 |
+| East edge midpoint | 146 | 0.0 | 0 | 0.0 |
+| North-west corner | 258 | 423.5 | 183 | 340.9 |
+| West edge midpoint | 292 | 437.4 | 152 | 359.3 |
+| South-east corner | 294 | 0.0 | 0 | 0.0 |
+| South edge midpoint | 309 | 0.0 | 0 | 0.0 |
+| South-west corner | 388 | 273.0 | 127 | 209.1 |
 
 Thresholds (config, sources in `conf/blue_whale_wind_siting.yaml`): 30 h/yr and 30 min/day
-worst case, 8 h/yr expected (LAI 2002). Six of the eight points exceed all three. On the
+worst case, 8 h/yr expected (LAI 2002). Five of the eight points exceed all three (six at
+the #1530 position). The grid is centred on the tower, so its figures barely move. On the
 grid, the worst-case 30 h/yr area covers 1.67 km2 and reaches 1,487 m from the tower. Any
 resort building or dwelling in that area is a receptor to assess; real receptors are owed
 (B08).
@@ -303,7 +321,7 @@ augmentation and availability are not modelled.
 
 ## Solar + BESS sizing and pricing (v0.6, 2026-11-01)
 
-> **Historical Reference Note:** The sizing, decision grid, and KPIs in this section represent an intermediate design snapshot (v0.6, PR 3) superseded by PR 4 (two projects split), PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-the-turbines-shadow-on-the-pv-15190-2026-11-07) for current figures.
+> **Historical Reference Note:** The sizing, decision grid, and KPIs in this section represent an intermediate design snapshot (v0.6, PR 3) superseded by PR 4 (two projects split), PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0) and later PRs. See [Latest run](#latest-run-the-turbine-on-dutchbay-t2-15220-2026-11-07) for current figures.
 
 With the turbine fixed (PR 1), a seeded Monte Carlo chose the PV DC capacity and the BESS energy of
 the unit (`solar_resource/pv_bess_sizing.py`, `scripts/run_blue_whale_pv_bess_sizing_v14.py`,
@@ -461,7 +479,7 @@ P50 (USD -8.837M against -8.500M) because the BESS price range is skewed below i
 
 ## Two projects, and the solar + BESS project under the PUCSL 2026 rules (PR 4, 2026-11-01)
 
-> **Historical Reference Note:** The sizing (4.5 MW / 18 MWh), capacities, and KPIs in this section represent an intermediate design snapshot under PR 4 superseded by PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-the-turbines-shadow-on-the-pv-15190-2026-11-07) for current figures.
+> **Historical Reference Note:** The sizing (4.5 MW / 18 MWh), capacities, and KPIs in this section represent an intermediate design snapshot under PR 4 superseded by PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0) and later PRs. See [Latest run](#latest-run-the-turbine-on-dutchbay-t2-15220-2026-11-07) for current figures.
 
 ### Owner decisions (2026-11-01)
 
@@ -673,7 +691,7 @@ limitations: [MET_MAST_TRANSFER_METHODS.md](MET_MAST_TRANSFER_METHODS.md); resul
 | TI (120 m) | 0.066 at 9-11 m/s, 0.0710 at 15-16 m/s (representative 0.090); not an IEC class |
 | **Net AEP** | **40.57 GWh, CF 48.76%** (gross 43.99 GWh); was 31.15 GWh, 37.43% on #1530's ERA5 basis |
 | Exceedance | 1-year sigma 13.2%: P90 33.73 GWh (1 year), 33.92 GWh (20 years) |
-| Shadow flicker, expected | Rotor yawed to the long-term wind: 826 h/yr at the west-edge midpoint (worst case 2,054, #1530 expected 1,816); six of eight boundary points still above 8 h/yr |
+| Shadow flicker, expected | Rotor yawed to the long-term wind, turbine on T2: 733 h/yr at the north-east corner (worst case 2,194, #1530 expected 1,857); five of eight boundary points still above 8 h/yr |
 
 Of the +9.43 GWh, the mean speed (7.14 to 8.24 m/s) gives +8.78, the steeper distribution
 +0.53 and the sector split +0.12; density and losses are unchanged.
@@ -888,7 +906,86 @@ declared treatment, not a simulation. Every one of these limitations is recorded
 summary's `turbine_shading.limitations`. The losses are per table at its sample points, so
 #1518's grid-edge truncation of a footprint (its review finding D-1) does not apply here.
 
-## Latest run (the turbine's shadow on the PV, 15.19.0, 2026-11-07)
+## The turbine on DutchBay T2: layout, shading and sizing (15.22.0, 2026-11-07)
+
+Work item: #1353 comment 6705598736. Owner decision, verbatim: "Blue Whale Turbine is replacing
+the T2 Dutchbay turbine - its on the exact same location - if not, recalculate location to
+match T2 location. As such wake does not apply" (2026-11-07). On wake from T1 and T3 she chose
+"Zero wake, disclose T1/T3 risk" (open risk 2). The siting, flicker and wind figures for the
+new position are in the sections above; the wind yield does not change.
+
+**Layout.** The turbine now stands in the placeholder lot's north-east corner. The crane
+hardstand (`site_fit.crane_pad_side`, new) goes on the tower's west side: on the east side it
+would lie mostly outside the lot. This is an assumption until a crane plan exists. With the
+tower, its exclusion and the hardstand in the corner, the lot holds **186 tables** at the owner's
+5 MW / 20 MWh battery (191 before). The layout
+([`pv_bess_layout_lot5b.geojson`](pv_bess_layout_lot5b.geojson)) and the hourly table
+([`pv_bess_hourly_tmy.csv`](pv_bess_hourly_tmy.csv)) are regenerated.
+
+**Shading.** The tower now stands nearer the array, so its shadow costs more. The method and
+its limitations are unchanged (previous section). These are model estimates on placeholder
+inputs, at the optical floor:
+
+| Array | Tables | Tower | Rotor (wind rose) | Optical loss | AC energy loss | Rotor yawed to the sun (sensitivity) |
+|---|---|---|---|---|---|---|
+| Solar + BESS project (committed) | 152 | 0.082% | 0.121% | **0.203%** (was 0.130%) | **0.19%** (was 0.136%) | 0.258% |
+| Hybrid's unit (superseded) | 147 | 0.076% | 0.115% | 0.192% (was 0.125%) | 0.18% (was 0.130%) | 0.243% |
+
+**Sizing.** All three sizings were re-run on the same seed and trials. PR 3 keeps DC/AC 1.1
+with 24 MWh. PR 4's value-based size stays 107 tables, 3.5 MW AC and 1.0 MW / 4.0 MWh. The
+owner's battery moves from 151 to **152 tables (5.70304 MWp, DC/AC 1.1406)** at 5.0 MW AC
+(`conf/blue_whale_solar_bess_fixed_bess_sizing.yaml`: every whole table count from 134 to 191,
+of which 53 fit; 13,727 evaluations):
+
+| PV tables (MWp) | DC/AC | After-tax project NPV P50 / P90 (USD) | Unit pre-tax NPV P50 / P90 (USD) | Equity IRR P50 |
+|---|---|---|---|---|
+| 134 (5.02768) | 1.0055 | -5,387,036 / -5,952,887 | -1,020,311 / -1,607,833 | -9.61% |
+| 148 (5.55296) | 1.1106 | -5,335,273 / -5,917,521 | -863,948 / -1,453,787 | -7.63% |
+| 151 (5.66552) | 1.1331 | -5,334,392 / -5,919,004 | -838,619 / -1,430,883 | -7.73% |
+| **152 (5.70304), chosen** | **1.1406** | **-5,334,279 / -5,919,614** | **-831,885 / -1,421,663** | **-7.59%** |
+| 153 (5.74056) | 1.1481 | -5,335,251 / -5,920,707 | -825,863 / -1,413,590 | -7.50% |
+| 160 (6.00320) | 1.2006 | -5,348,600 / -5,935,362 | -794,204 / -1,372,569 | -7.04% |
+| 186 (6.97872), lot maximum | 1.3957 | -5,498,250 / -6,123,830 | -832,635 / -1,423,465 | -5.23% |
+
+The choice is a near tie: 152 tables is at least as good as 151 in 44.9% of paired trials, and
+better by USD 392 at the median. Every count from 145 to 155 lies within USD 7,100 of it at P50.
+The equity IRRs include #1398's debt-service shortfall carry, which landed after PR 7's run.
+Sensitivities (base case): the 12.5% curtailment scenario picks 150 tables and the 0.90 RTE
+case 146. The owner's choice now costs USD 1,253,066 of after-tax project NPV at P50 and
+1,596,441 at P90 against the value-based size (was 1,251,428 and 1,594,480).
+
+**Preview, not final.** These runs were made on #1561's head with this change applied; their
+summaries record that local merge's `git_sha`, whose tree is this branch at the time. The
+sizings are re-run once #1557 and the PUCSL O&M indexation land, and the figures here are
+replaced then.
+
+**KPIs.** Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case
+only. "Was" is main at 15.19.0.
+
+| Scenario | Project NPV (USD) | Equity NPV (USD) | Equity IRR | Min DSCR | Project IRR |
+|---|---|---|---|---|---|
+| Solar + BESS v0.5 | -4,998,968 (was -4,997,611) | -5,573,458 (was -5,568,837) | -8.12% (was -8.44%) | 0.8684 (was 0.8676) | undefined |
+| Hybrid v0.10 (superseded) | -2,654,612 (was -2,653,195) | -5,059,274 (was -5,058,080) | 6.05% (unchanged to 2 dp) | 0.8678 | 8.73% (8.7303%, was 8.7315%) |
+| Wind v0.3 | unchanged | unchanged | unchanged | unchanged | 10.81% |
+
+The solar + BESS equity cash flows change sign more than once, so its equity IRR is not a
+reliable ranking figure (audit residual L-13). Solar + BESS year 1: PV 8,676.59 MWh, export
+7,479.55 MWh (was 7,431.76), of which 6,817.18 MWh in the priority window (was 6,799.68);
+revenue LKR 355.27M (was 353.76M). The extra table outweighs the larger shadow.
+
+## Latest run (the turbine on DutchBay T2, 15.22.0, 2026-11-07)
+
+Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
+
+| Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
+|---|---|---|---|---|---|
+| Wind project (v0.3) | 10.81% (unchanged) | 8.63% | 0.868 | 69,109 | -1,737,634 |
+| Solar + BESS project (v0.5, 5 MW / 20 MWh, 152 tables) | undefined (reported as 0.0) | -8.12% | 0.868 | -4,998,968 | -5,573,458 |
+| Hybrid (v0.10, superseded) | 8.73% | 6.05% | 0.868 | -2,654,612 | -5,059,274 |
+
+Every other input is still a placeholder, so these are not results.
+
+## Earlier run (the turbine's shadow on the PV, 15.19.0, 2026-11-07)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only (after
 #1398's debt-service shortfall carry, which moved the equity figures at 15.18.0):

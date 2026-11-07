@@ -5,6 +5,12 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Blue Whale: the turbine stands on DutchBay T2, with zero wake (15.22.0).** Owner decision
+  of 7 Nov 2026: the turbine replaces T2 at T2's position, so T2 casts no wake; the T1/T3 wake
+  risk is disclosed, not quantified. The wind yield is unchanged. The lot holds 186 PV tables
+  (was 191), the shadow on the PV rises to 0.20% of irradiance, and the owner's battery takes
+  152 tables (was 151). Solar + BESS project NPV USD -5.00M (unchanged to 2 dp); hybrid project
+  IRR 8.73% (unchanged to 2 dp). Detail in the compiled fragment.
 - **Blue Whale: the turbine's shadow on the PV, input B33 (15.19.0).** The rotor and tower
   shadow is computed per PV table and the hourly PV is derated before BESS dispatch. The
   electrical-mismatch treatment is the optical floor. The loss is 0.13% of the solar + BESS
