@@ -89,9 +89,13 @@ before a session ends if it changed load-bearing state.
 
 Watching, fixing or merging a pull request follows `.claude/skills/steward/SKILL.md`. After a
 pull request or merge train lands on `origin/main`, follow `CLEANUP-01`: update the tasklist and
-tracker `#1353`, close completed focused GitHub issues, synchronize `main`, remove and prune the
-merged worktree and branch, and clean any temporary/worktree-local venvs while never touching the
-protected local `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` (`THREAD-01`, `ENV-01`).
+tracker `#1353`, close only the issues named on the merged pull request's `Work item:` or closing
+line, synchronize `main`, remove and prune the merged worktree and branch, and clean any
+temporary/worktree-local venvs while never touching the protected local
+`/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` (`THREAD-01`, `ENV-01`). Cleanup never closes a
+pull request: closing an unmerged one needs a cited owner decision, posted as a comment on it
+first. Delete a branch only when its pull request's `merged_at` is set and the branch head equals
+the merged head.
 
 ## Known local-only failures
 

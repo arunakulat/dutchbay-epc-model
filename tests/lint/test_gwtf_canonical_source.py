@@ -594,7 +594,47 @@ CLEANUP_01_REQUIRED_CONTROLS = (
     "CLEAN NON-PROTECTED VENVS",
     "HARD BOUNDARY - PROTECTED PERSISTENT VENV",
     "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv",
+    # Guard (a), owner decision 2026-11-07: cleanup closes only the merged PR's named
+    # issues and never a pull request; an unmerged PR closes only on a cited owner decision.
+    "close only the GitHub issue(s) named on the merged PR's own Work item: line or closing line",
+    "Cleanup never closes a pull request",
+    "HARD BOUNDARY - NO PULL REQUEST CLOSURE",
+    "cited owner decision",
+    "posted as a comment on that pull request before it is closed",
+    "proves its car commit is on origin/main",
+    # Guard (b), owner decision 2026-11-07: a branch is deleted only after its PR merged.
+    "BRANCH DELETION GATE",
+    "merged_at is set and the branch head equals that pull request's merged head",
+    "never deleted by cleanup",
 )
+
+# The wording that let post-merge cleanup close pull requests. It must not come back.
+CLEANUP_01_RETIRED_PHRASES = ("(or each car PR and train issue for a train)",)
+
+# Every surface that restates CLEANUP-01 must carry both guards, not only the rule's name.
+CLEANUP_01_SURFACES = (
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".claude/skills/steward/SKILL.md",
+    "docs/governance/agent_session_routing.md",
+    "docs/governance/recruit_01/02_writer_lease_and_recovery.md",
+    "Rules to follow.md",
+)
+CLEANUP_01_SURFACE_CONTROLS = (
+    "CLEANUP-01",
+    "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv",
+    "cited owner decision",
+    "merged_at",
+    "merged head",
+)
+
+
+def _assert_cleanup_01_surface(relative_path: str, surface: str) -> None:
+    """Check one restating surface for the rule name, the venv boundary and both guards."""
+    for control in CLEANUP_01_SURFACE_CONTROLS:
+        assert control in surface, f"{relative_path} lacks {control!r}"
+    for phrase in CLEANUP_01_RETIRED_PHRASES:
+        assert phrase not in surface, f"{relative_path} restores {phrase!r}"
 
 
 def test_cleanup_01_requires_post_merge_tracker_issue_and_workspace_retirement() -> (
@@ -608,18 +648,12 @@ def test_cleanup_01_requires_post_merge_tracker_issue_and_workspace_retirement()
     assert cleanup_01["category"] == "Git Workflow"
     for control in CLEANUP_01_REQUIRED_CONTROLS:
         assert control in policy
+    for phrase in CLEANUP_01_RETIRED_PHRASES:
+        assert phrase not in policy
 
-    for relative_path in (
-        "AGENTS.md",
-        "CLAUDE.md",
-        ".claude/skills/steward/SKILL.md",
-        "docs/governance/agent_session_routing.md",
-        "docs/governance/recruit_01/02_writer_lease_and_recovery.md",
-        "Rules to follow.md",
-    ):
+    for relative_path in CLEANUP_01_SURFACES:
         surface = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
-        assert "CLEANUP-01" in surface
-        assert "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv" in surface
+        _assert_cleanup_01_surface(relative_path, surface)
 
 
 @pytest.mark.parametrize("removed_control", CLEANUP_01_REQUIRED_CONTROLS)
@@ -636,3 +670,29 @@ def test_cleanup_01_guard_rejects_control_loss(
     monkeypatch.setitem(globals(), "_rules_by_id", lambda: mutated)
     with pytest.raises(AssertionError):
         test_cleanup_01_requires_post_merge_tracker_issue_and_workspace_retirement()
+
+
+def test_cleanup_01_guard_rejects_restored_pull_request_closure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Restoring the retired 'close each car PR' clause fails even with every control present."""
+    mutated = {key: dict(row) for key, row in _rules_by_id().items()}
+    mutated["CLEANUP-01"]["description"] += " " + CLEANUP_01_RETIRED_PHRASES[0]
+
+    monkeypatch.setitem(globals(), "_rules_by_id", lambda: mutated)
+    with pytest.raises(AssertionError):
+        test_cleanup_01_requires_post_merge_tracker_issue_and_workspace_retirement()
+
+
+@pytest.mark.parametrize("relative_path", CLEANUP_01_SURFACES)
+@pytest.mark.parametrize("removed_control", CLEANUP_01_SURFACE_CONTROLS)
+def test_cleanup_01_surface_guard_rejects_control_loss(
+    relative_path: str, removed_control: str
+) -> None:
+    """Observe each surface control being load-bearing on each restating surface."""
+    surface = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+    _assert_cleanup_01_surface(relative_path, surface)
+    with pytest.raises(AssertionError):
+        _assert_cleanup_01_surface(
+            relative_path, surface.replace(removed_control, "REMOVED_CONTROL")
+        )

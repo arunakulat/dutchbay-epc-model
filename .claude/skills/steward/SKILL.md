@@ -274,12 +274,33 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
 4. **Retire only branches, worktrees and non-protected venvs you own (`CLEANUP-01`).** Immediately
    after step 3's merge verification succeeds:
    - Inform the session/project tasklist, post a closure/reconciliation receipt on #1353 naming
-     the merged pull request and commit SHA on `origin/main`, and close any completed focused
-     GitHub issue (or each car pull request and the train issue for a train).
+     the merged pull request and commit SHA on `origin/main`, and close only the issues named on
+     the merged pull request's own `Work item:` or closing line (for a train, the train issue and
+     the issues named on each car's line).
+   - Never close a pull request as cleanup. Closing an unmerged pull request needs a
+     cited owner decision (where and when the owner decided), posted as a comment on that pull request before
+     it is closed. The one exception is a train car, closed under "Merge trains" step 5 below.
    - Synchronize the clean primary checkout (`git fetch origin main && git checkout main && git pull --ff-only origin main`),
      remove the merged task worktree (`git worktree remove <worktree-path>`), and run
      `git worktree prune`, preserving any dirty or concurrently owned worktrees (`WORKTREE-01`).
-   - Delete the merged branch locally (`git branch -d <branch>`) and remotely
+   - Delete a branch only when its pull request's `merged_at` is set and the branch head equals
+     the merged head. Read both immediately before deleting, and stop if either fails:
+
+     ```bash
+     set -euo pipefail
+     pr=<number>; branch=<branch>
+     merged_at=$(gh api "repos/arunakulat/dutchbay-epc-model/pulls/$pr" --jq '.merged_at // ""')
+     merged_head=$(gh api "repos/arunakulat/dutchbay-epc-model/pulls/$pr" --jq '.head.sha')
+     branch_head=$(git ls-remote origin "refs/heads/$branch" | cut -f1)
+     test -n "$merged_at"
+     test -n "$branch_head"
+     test "$branch_head" = "$merged_head"
+     echo "OK: #$pr merged at $merged_at; $branch is at the merged head $merged_head"
+     ```
+
+     A train car's branch qualifies only when its car pull request was closed under "Merge
+     trains" step 5 and the branch head equals the car head recorded in the train issue. Then
+     delete the merged branch locally (`git branch -d <branch>`) and remotely
      (`git push origin --delete <branch>`), and run `git fetch --prune origin`.
    - Remove any temporary, per-task or worktree-local virtual environments (`.venv`, `.venv311` or
      ad-hoc venvs) associated with the retired worktree, while NEVER deleting, clearing, pruning
@@ -369,8 +390,10 @@ train that carries a car it wrote. A pull request may always land alone instead.
    Each block stops at its first failed `test` and passes only when it prints its `OK` line.
    Silence, or a missing `OK` line, is a failure. Run each block whole, as written, and never
    drop its `set -euo pipefail` line. If a block fails, stop and report it on the train pull
-   request (module 3 §8). Otherwise close each car's pull request with a pointer to its commit
-   on `main`.
+   request (module 3 §8). Otherwise, on each car's pull request, first post a pointer comment
+   naming its commit on `main`, then close that pull request. This is `CLEANUP-01`'s one exception
+   to never closing a pull request, and it covers only the cars listed in the train issue whose
+   commits the block above proved are on `main`.
 
 The full suite ran on the union only. The commits between cars on `main` were never run by the
 full suite on their own, and the train lifts no `HOLD`.
