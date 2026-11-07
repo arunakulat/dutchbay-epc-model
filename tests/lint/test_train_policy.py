@@ -15,8 +15,8 @@ The steward skill's check blocks are shell commands a merge coordinator runs by 
 build, the pre-landing check, the landing check, the KPI check and the single-pull-request merge
 check. Each is executed here exactly as printed, with plain ``bash -c`` and no added ``-e``,
 against a throwaway repository with its own ``origin``. Each passes only by exiting 0 and
-printing its OK line, and each fails closed with no OK line. Every comparison in every block has
-a negative control that it alone stops, so deleting any one line fails a test (#1529). Hostile
+printing its OK line, and each fails closed with no OK line. The cases below exercise specific
+failure modes and targeted mutations; they do not establish exhaustive mutation coverage. Hostile
 controls strip a block's ``set -euo pipefail`` and watch bad landings exit 0, and strip the
 pre-landing loop and watch a swapped train pass (#1515 assurance F-1, domain D-1).
 """
@@ -1077,7 +1077,9 @@ def test_kpi_check_compares_the_vector_at_two_revisions(
     moved = rig.git("rev-parse", "HEAD")
     assert _passed(run_kpi(rig, same, unchanged, path), KPI_OK)
     assert _failed_closed(run_kpi(rig, same, moved, path), KPI_OK)
-    assert "kpi-" not in rig.git("worktree", "list")
+    scratches = list(rig.repo.parent.glob("dutchbay-kpi.*/checkout"))
+    assert len(scratches) == 4
+    assert all((scratch / "kpi.txt").is_file() for scratch in scratches)
 
 
 def test_kpi_check_fails_when_the_run_prints_nothing(rig: Rig, tmp_path: Path) -> None:
@@ -1362,3 +1364,120 @@ def test_kpi_preserves_unexpected_scratch_dirt(rig: Rig, tmp_path: Path) -> None
     )
     assert preserved
     assert all(path.read_text(encoding="utf-8") == "preserve me" for path in preserved)
+
+
+@pytest.mark.parametrize("ok", ALL_OK)
+def test_every_block_disables_local_object_substitution(ok: str) -> None:
+    """Object identity controls travel with each literal, independently runnable fence."""
+    control = "export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null"
+    assert control in _block(ok)
+
+
+def test_replacement_cannot_certify_a_different_physical_merge(rig: Rig) -> None:
+    """A fixture-local replacement must not turn a wrong landed tree into an accepted one."""
+    head = _pr_head(rig)
+    faithful = _squash(rig, head)
+    rig.publish(faithful)
+    assert _passed(run_merge(rig, faithful, head, 1), MERGE_OK)
+    wrong = _squash(rig, head, tree=rig.git("rev-parse", f"{rig.main}^{{tree}}"))
+    rig.publish(wrong)
+    assert _failed_closed(run_merge(rig, wrong, head, 1), MERGE_OK)
+    rig.git("replace", wrong, faithful)
+    assert rig.git("rev-parse", f"{wrong}^{{tree}}") == rig.git(
+        "rev-parse", f"{head}^{{tree}}"
+    )
+    assert rig.git("--no-replace-objects", "rev-parse", f"{wrong}^{{tree}}") != rig.git(
+        "--no-replace-objects", "rev-parse", f"{head}^{{tree}}"
+    )
+    assert _failed_closed(run_merge(rig, wrong, head, 1), MERGE_OK)
+    weakened = _block(MERGE_OK).replace(
+        "export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null", ""
+    )
+    assert _passed(run_merge(rig, wrong, head, 1, block=weakened), MERGE_OK)
+
+
+@pytest.mark.parametrize("hidden", ["assume-unchanged", "skip-worktree", "fifo"])
+def test_kpi_preserves_state_that_porcelain_misses(
+    rig: Rig, tmp_path: Path, hidden: str
+) -> None:
+    """Real Git flags and a real FIFO cannot cause the evaluation trap to delete evidence."""
+    bindir = tmp_path / "hiddenvenv" / "bin"
+    bindir.mkdir(parents=True)
+    if hidden == "fifo":
+        action = "os.mkfifo('owner-channel')\n"
+    else:
+        action = (
+            f"subprocess.run(['git', 'update-index', '--{hidden}', '--', 'base.txt'], "
+            "check=True)\nPath('base.txt').write_text('preserve changed tracked bytes')\n"
+        )
+    executable = bindir / "python"
+    executable.write_text(
+        f"#!{sys.executable}\nimport os, subprocess\nfrom pathlib import Path\n"
+        + action
+        + "assert not subprocess.check_output(['git', 'status', '--porcelain'])\n"
+        + "print('39', 'a' * 64)\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    result = run_kpi(rig, rig.main, rig.main, f"{bindir}:{_ENV['PATH']}")
+    assert _failed_closed(result, KPI_OK), result.stderr
+    scratches = list(rig.repo.parent.glob("dutchbay-kpi.*/checkout"))
+    assert scratches
+    for scratch in scratches:
+        if hidden == "fifo":
+            assert (scratch / "owner-channel").is_fifo()
+        else:
+            assert (
+                scratch / "base.txt"
+            ).read_text() == "preserve changed tracked bytes"
+    assert "worktree remove" not in _block(KPI_OK)
+
+
+def test_destination_mode_has_its_own_hostile_control(rig: Rig) -> None:
+    """Changing only the new mode must fail even when every other raw-diff field agrees."""
+    train = rig.faithful(1, 2)
+    assert _passed(run_pre(rig, train, rig.cars(1, 2)), PRE_OK)
+    rig.git("update-index", "--chmod=+x", "car_b.txt")
+    rig.git("commit", "-q", "--amend", "--no-edit")
+    wrong = rig.git("rev-parse", "HEAD")
+    assert rig.git("rev-parse", f"{wrong}:car_b.txt") == rig.git(
+        "rev-parse", f"{train}:car_b.txt"
+    )
+    assert _failed_closed(run_pre(rig, wrong, rig.cars(1, 2)), PRE_OK)
+    # Project only the second header field away; retain NUL paths, old mode, both blobs and status.
+    projection = (
+        "import sys; parts=sys.stdin.buffer.read().split(b'\\0'); "
+        "\nfor i in range(0, len(parts)-1, 2):\n"
+        " fields=parts[i].split(b' '); fields[1]=b'000000'; parts[i]=b' '.join(fields)\n"
+        "sys.stdout.buffer.write(b'\\0'.join(parts))"
+    )
+    block = _block(PRE_OK)
+    needle = "    od -An -v -tx1"
+    assert block.count(needle) == 1
+    weakened = block.replace(
+        needle,
+        f"    {shlex.quote(sys.executable)} -c {shlex.quote(projection)} | od -An -v -tx1",
+    )
+    assert _passed(run_pre(rig, wrong, rig.cars(1, 2), block=weakened), PRE_OK)
+
+
+def test_build_uses_the_issued_message_hash_before_file_tampering(rig: Rig) -> None:
+    """Normalize-equivalent tampering must fail against a hash issued before the edit."""
+    rig.git("switch", "-q", "--detach", rig.main)
+    issued_script = _fill(
+        _block(BUILD_OK),
+        {
+            "<car directory>": str(rig.cardir),
+            "<car list>": rig.cars(1, 2),
+            "train/<date>-<n>": "train/issued-record-control",
+        },
+    )
+    message = rig.cardir / "1.msg"
+    original = message.read_bytes()
+    message.write_bytes(original + b"\n\n")
+    assert _failed_closed(_run(rig, issued_script), BUILD_OK)
+    comparison = '  test "$(git hash-object --stdin < "$msg")" = "$msg_blob"\n'
+    assert issued_script.count(comparison) == 1
+    weakened = issued_script.replace(comparison, "")
+    result = _run(rig, weakened)
+    assert _passed(result, BUILD_OK), result.stderr

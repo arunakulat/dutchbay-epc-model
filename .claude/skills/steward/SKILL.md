@@ -267,6 +267,7 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
 
    ```bash
    set -euo pipefail
+   export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
    git fetch origin refs/heads/main:refs/remotes/origin/main
    for sha in "$MERGE_SHA" "$HEAD_SHA" "$MAIN_SHA"; do
      [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1
@@ -284,6 +285,8 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
    ```
 
    The block stops at its first failed `test` and passes only when it prints `Merge check: OK`.
+   Object checks use the stored commits, without local replacement refs or grafts. Keep the
+   exported Git controls in every block; a clean worktree alone does not establish object identity.
    Silence, or a missing `OK` line, is a failure. If it fails, stop. Report the mismatch on the pull
    request and take no further action on it until the mismatch is resolved (`RECRUIT-01` module 3
    §7).
@@ -330,6 +333,7 @@ train that carries a car it wrote. A pull request may always land alone instead.
 
    ```bash
    set -euo pipefail
+   export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
    git fetch origin refs/heads/main:refs/remotes/origin/main
    [[ $CAR_DIR = /* && -d $CAR_DIR ]] || exit 1
    record='[1-9][0-9]*:[0-9a-f]{40}:[0-9a-f]{40}:[0-9a-f]{40}'
@@ -389,6 +393,7 @@ train that carries a car it wrote. A pull request may always land alone instead.
 
    ```bash
    set -euo pipefail
+   export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
    [[ $DUTCHBAY_VENV = /* && -x $DUTCHBAY_VENV/bin/python ]] || exit 1
    for sha in "$REFERENCE_SHA" "$TRAIN_SHA"; do
      [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1
@@ -404,21 +409,24 @@ train that carries a car it wrote. A pull request may always land alone instead.
      [[ ! -e $checkout && ! -L $checkout ]] || exit 1
      git worktree add -q --detach "$checkout" "$rev"
      owner=$(git -C "$checkout" rev-parse --absolute-git-dir)
-     cleanup() {
+     inspect_scratch() {
        previous=$1
-       # An incomplete add never installs this trap. Keep unexpected state for its owner.
+       # Never delete from an evaluation trap: retain even apparently clean scratch state.
        [[ -d $checkout && ! -L $checkout ]] || exit 1
        test "$(git -C "$checkout" rev-parse --show-toplevel)" = "$checkout"
        test "$(git -C "$checkout" rev-parse --absolute-git-dir)" = "$owner"
        test "$(git -C "$checkout" rev-parse --abbrev-ref HEAD)" = HEAD
        test "$(git -C "$checkout" rev-parse HEAD)" = "$rev"
-       dirty=$(git -C "$checkout" status --porcelain --ignored --untracked-files=all --ignore-submodules=none)
+       flags=$(git -C "$checkout" ls-files -v | sed '/^H /d')
+       test -z "$flags"
+       special=$(find "$checkout" -mindepth 1 ! -type f ! -type d ! -type l -print)
+       test -z "$special"
+       dirty=$(git -C "$checkout" -c core.fsmonitor=false -c core.filemode=true status --porcelain --ignored --untracked-files=all --ignore-submodules=none)
        test -z "$dirty"
-       git worktree remove -- "$checkout"
-       rmdir -- "$private"
+       printf 'KPI scratch retained for owner inspection: %s\n' "$private" >&2
        exit "$previous"
      }
-     trap 'cleanup "$?"' EXIT
+     trap 'inspect_scratch "$?"' EXIT
      (
        cd -- "$checkout"
        PYTHONPATH="$checkout" PYTHONDONTWRITEBYTECODE=1 "$DUTCHBAY_VENV/bin/python" - <<'PY'
@@ -490,7 +498,11 @@ train that carries a car it wrote. A pull request may always land alone instead.
 
    It prints the count and SHA-256 of the 39-KPI lender vector at each revision, and passes only
    when they are equal. The schema describes the current lender vector. A changed schema needs a
-   reviewed contract update. On any failure, inspect the named scratch location before recovery.
+   reviewed contract update. Scratch worktrees are retained on success and failure: Git status
+   is not proof that deleting a directory preserves every filesystem object. Index flags that
+   can conceal tracked changes and special files also refuse the check. Inspect the named
+   locations and reconcile ownership before any separately authorized retirement; this block
+   performs no automatic removal.
 5. **If the train goes red,** edit no car on it. Split the train and run each part as a smaller
    train or a single pull request. A fix goes on the car's own branch, which restarts its reviews
    (module 3 §6).
@@ -503,6 +515,7 @@ train that carries a car it wrote. A pull request may always land alone instead.
 
    ```bash
    set -euo pipefail
+   export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
    git fetch origin refs/heads/main:refs/remotes/origin/main
    for sha in "$MAIN_SHA" "$TRAIN_SHA"; do
      [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1
@@ -566,6 +579,7 @@ train that carries a car it wrote. A pull request may always land alone instead.
 
    ```bash
    set -euo pipefail
+   export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
    git fetch origin refs/heads/main:refs/remotes/origin/main
    for sha in "$MAIN_SHA" "$TRAIN_SHA" "$LANDED_SHA"; do
      [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1

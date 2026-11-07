@@ -22,6 +22,8 @@
   columns loses protection. This is not an exhaustive mutation or full-suite claim.
 - Both sides of each diff retain old/new modes and blob IDs, status and path bytes. Named
   environment inputs carry quoted paths and recorded message/author blob IDs. Failed KPI
-  evaluation or malformed output cannot satisfy the comparator; only owned, clean scratch
-  worktrees are removed without force. Standalone Bash conditionals explicitly exit on
+  evaluation or malformed output cannot satisfy the comparator. Scratch worktrees are retained
+  for owner inspection on success and failure; concealed index state and special files refuse
+  the check. Object checks disable local replacement refs and grafts. Specific destination-mode
+  and issued-message tampering controls cover the later review findings. Standalone Bash conditionals explicitly exit on
   refusal, including on the governed Mac Bash where `set -e` alone did not stop them.
