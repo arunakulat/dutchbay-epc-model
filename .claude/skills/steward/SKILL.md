@@ -268,6 +268,7 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
    ```bash
    set -euo pipefail
    export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
+   export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
    git fetch origin refs/heads/main:refs/remotes/origin/main
    for sha in "$MERGE_SHA" "$HEAD_SHA" "$MAIN_SHA"; do
      [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1
@@ -285,8 +286,10 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
    ```
 
    The block stops at its first failed `test` and passes only when it prints `Merge check: OK`.
-   Object checks use the stored commits, without local replacement refs or grafts. Keep the
-   exported Git controls in every block; a clean worktree alone does not establish object identity.
+   Object checks use the stored commits, without local replacement refs, grafts or a local
+   commit-graph file, whose cached parents and trees Git otherwise trusts without re-reading the
+   commits. Keep both exported lines in every block; a clean worktree alone does not establish
+   object identity.
    Silence, or a missing `OK` line, is a failure. If it fails, stop. Report the mismatch on the pull
    request and take no further action on it until the mismatch is resolved (`RECRUIT-01` module 3
    §7).
@@ -334,6 +337,7 @@ train that carries a car it wrote. A pull request may always land alone instead.
    ```bash
    set -euo pipefail
    export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
+   export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
    git fetch origin refs/heads/main:refs/remotes/origin/main
    [[ $CAR_DIR = /* && -d $CAR_DIR ]] || exit 1
    record='[1-9][0-9]*:[0-9a-f]{40}:[0-9a-f]{40}:[0-9a-f]{40}'
@@ -394,6 +398,7 @@ train that carries a car it wrote. A pull request may always land alone instead.
    ```bash
    set -euo pipefail
    export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
+   export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
    [[ $DUTCHBAY_VENV = /* && -x $DUTCHBAY_VENV/bin/python ]] || exit 1
    for sha in "$REFERENCE_SHA" "$TRAIN_SHA"; do
      [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1
@@ -516,6 +521,7 @@ train that carries a car it wrote. A pull request may always land alone instead.
    ```bash
    set -euo pipefail
    export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
+   export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
    git fetch origin refs/heads/main:refs/remotes/origin/main
    for sha in "$MAIN_SHA" "$TRAIN_SHA"; do
      [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1
@@ -580,6 +586,7 @@ train that carries a car it wrote. A pull request may always land alone instead.
    ```bash
    set -euo pipefail
    export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
+   export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
    git fetch origin refs/heads/main:refs/remotes/origin/main
    for sha in "$MAIN_SHA" "$TRAIN_SHA" "$LANDED_SHA"; do
      [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1

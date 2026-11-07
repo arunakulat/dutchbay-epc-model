@@ -1366,11 +1366,15 @@ def test_kpi_preserves_unexpected_scratch_dirt(rig: Rig, tmp_path: Path) -> None
     assert all(path.read_text(encoding="utf-8") == "preserve me" for path in preserved)
 
 
+REPLACE_CONTROL = "export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null"
+GRAPH_CONTROL = "export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false"
+
+
 @pytest.mark.parametrize("ok", ALL_OK)
 def test_every_block_disables_local_object_substitution(ok: str) -> None:
     """Object identity controls travel with each literal, independently runnable fence."""
-    control = "export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null"
-    assert control in _block(ok)
+    assert REPLACE_CONTROL in _block(ok)
+    assert GRAPH_CONTROL in _block(ok)
 
 
 def test_replacement_cannot_certify_a_different_physical_merge(rig: Rig) -> None:
@@ -1481,3 +1485,41 @@ def test_build_uses_the_issued_message_hash_before_file_tampering(rig: Rig) -> N
     weakened = issued_script.replace(comparison, "")
     result = _run(rig, weakened)
     assert _passed(result, BUILD_OK), result.stderr
+
+
+def _point_first_parent_in_commit_graph(rig: Rig, commit: str, parent: str) -> None:
+    """Rewrite one commit's cached first parent in a real commit-graph file, as local
+    tampering or corruption would, leaving every object in the store unchanged."""
+    rig.git("update-ref", "refs/graph/commit", commit)
+    rig.git("update-ref", "refs/graph/parent", parent)
+    rig.git("commit-graph", "write", "--no-progress", "--reachable")
+    path = rig.repo / ".git" / "objects" / "info" / "commit-graph"
+    data = bytearray(path.read_bytes())
+    chunks = {}
+    for i in range(data[6] + 1):
+        offset = 8 + 12 * i
+        chunks[bytes(data[offset : offset + 4])] = int.from_bytes(
+            data[offset + 4 : offset + 12], "big"
+        )
+    oids, cdat = chunks[b"OIDL"], chunks[b"CDAT"]
+    count = (cdat - oids) // 20
+    ids = [bytes(data[oids + 20 * i : oids + 20 * i + 20]).hex() for i in range(count)]
+    entry = cdat + 36 * ids.index(commit)
+    data[entry + 20 : entry + 24] = ids.index(parent).to_bytes(4, "big")
+    path.write_bytes(bytes(data))
+
+
+def test_commit_graph_cannot_certify_a_different_physical_parent(rig: Rig) -> None:
+    """A tampered commit-graph must not turn a landing on the wrong parent into an OK."""
+    head = _pr_head(rig)
+    wrong = _squash(rig, head, parent=rig.old_main)
+    rig.publish(wrong)
+    assert _failed_closed(run_merge(rig, wrong, head, 1), MERGE_OK)
+    _point_first_parent_in_commit_graph(rig, wrong, rig.main)
+    assert rig.git("show", "-s", "--format=%P", wrong) == rig.main
+    assert rig.git(
+        "-c", "core.commitGraph=false", "show", "-s", "--format=%P", wrong
+    ) == (rig.old_main)
+    assert _failed_closed(run_merge(rig, wrong, head, 1), MERGE_OK)
+    weakened = _block(MERGE_OK).replace(GRAPH_CONTROL, "")
+    assert _passed(run_merge(rig, wrong, head, 1, block=weakened), MERGE_OK)

@@ -24,6 +24,8 @@
   environment inputs carry quoted paths and recorded message/author blob IDs. Failed KPI
   evaluation or malformed output cannot satisfy the comparator. Scratch worktrees are retained
   for owner inspection on success and failure; concealed index state and special files refuse
-  the check. Object checks disable local replacement refs and grafts. Specific destination-mode
-  and issued-message tampering controls cover the later review findings. Standalone Bash conditionals explicitly exit on
-  refusal, including on the governed Mac Bash where `set -e` alone did not stop them.
+  the check. Object checks disable local replacement refs, grafts and the local commit-graph
+  file, whose cached parents Git would otherwise trust. Specific destination-mode and
+  issued-message tampering controls cover the later review findings. Standalone Bash conditionals
+  explicitly exit on refusal, including on the governed Mac Bash where `set -e` alone did not stop
+  them.
