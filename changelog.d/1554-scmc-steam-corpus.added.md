@@ -1,0 +1,1 @@
+- Add the `docs/source_materials/scmc_ananda_coe_2026/` corpus area: a public record of the SCMC and STEAM Hub work with a SHA-256 register of its artifacts, and routing for STEAM, SCMC and Planet Green Force work through this repository. Third-party sources, commercial terms and personal data stay outside the public tree. KPI-neutral.
