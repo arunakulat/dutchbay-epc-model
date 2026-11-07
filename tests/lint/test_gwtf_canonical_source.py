@@ -608,6 +608,7 @@ CLEANUP_01_REQUIRED_CONTROLS = (
     "posted as a comment on that pull request before it is closed",
     "proves its car commit is on origin/main",
     "OWNER DECISIONS:",
+    "owner instruction to the Nov 6 agent session, 2026-11-06T02:22:07Z",
     "'clean and amend please', project thread, 2026-11-07T11:06:49Z",
     "'yes please to all', project thread, 2026-11-07T05:29:05Z",
     "decision card at 2026-11-07T05:33:39Z",
