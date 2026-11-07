@@ -64,7 +64,7 @@ The commercial figures, individuals and source terms are deliberately left out. 
 
 | Item | Owner | Note |
 |---|---|---|
-| Decide where held deliverables live | Project owner | Public repository, the private corpus, or both |
+| Merge the private corpus | Project owner | `arunakulat/DutchBay_RAG#41`, held while `MERGE-01` is suspended. A squash merge means updating the pinned commit in `README.md` |
 | Confirm which pack the Board holds | Project owner | The 5 September feedback cites page 37 of the 105-page pack. In v2.0 the same items are on page 35 |
 | AV expectations of the remaining centres | COE | Requested on 5 September, not received in this record |
 | Written TVEC mapping | COE | Approval gate before any qualification claim |
@@ -79,7 +79,7 @@ The commercial figures, individuals and source terms are deliberately left out. 
 | Claude Code | "STEAM Hub Foundation Program" (`local_e25a0508-e17a-443d-93e3-e50ce2db652b`) | 20 Jul–7 Nov 2026 | Primary. All work above except the 5 August review and v2.0 |
 | Codex | `019fd034-e0ad-7f52-b6a5-00776faea626` | 5 Aug 2026 | Design critique, reference audit and v2.0 |
 | Codex | `019fc272-9ef3-7a91-841d-17910b5b9dd1` | 2 Aug 2026 | Opens with the same prompts as the primary session. No SCMC file writes detected |
-| Codex | Sessions rooted in the `Plant Green Force` folder | From 4 Nov 2026 | PGF work, not SCMC. Not imported |
+| Codex | Sessions rooted in the `Plant Green Force` folder | From 4 Nov 2026 | PGF work, not SCMC. Filed in the private corpus. See `../planet_green_force_2026/README.md` |
 
 **Search coverage.** Searched: Claude Code transcripts, Codex sessions and local Cowork session
 files, by keyword, by user prompt and by file writes. No other Claude Code or Codex session has an

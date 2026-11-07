@@ -11,18 +11,33 @@ version, the open decisions and every session that contributed.
 ## What is in this repository, and what is not
 
 This repository is public, and publication to it is effectively irreversible. This area therefore
-holds a record of the work, not the work product itself.
+holds a record of the work, not the work product itself. The work product is in the private corpus,
+and this area links to it for sanitised use.
+
+| Item | Value |
+|---|---|
+| Private location | `arunakulat/DutchBay_RAG`, `corpus/scmc_ananda_coe_2026/held/` |
+| Pinned commit | `edcf6bc99120ebf831213e5b8b24fbca1f2cac67`, on branch `claude/private-scmc-pgf-corpus` until `arunakulat/DutchBay_RAG#41` merges |
+| Files | 175, each checked against `ARTIFACT_REGISTER.tsv` when copied |
 
 | Material | Where it is | Why |
 |---|---|---|
 | Work record, decisions, open actions | Here | Needed by anyone continuing the work |
-| Client, consultant and third-party sources | Owner's working folder, SHA-256 here | `AGENTS.md`: no third-party material without explicit authorization |
-| Text conversions of those sources | Owner's working folder, SHA-256 here | They carry the same content as the source |
-| Owner-authored deliverables and working papers | Owner's working folder, SHA-256 here | They quote client commercial terms. Publication is an open owner decision |
-| Commercial figures, named individuals, contact details | Not recorded here | Restricted. See the deliverables |
+| Client, consultant and third-party sources | Private corpus, SHA-256 here | `AGENTS.md`: no third-party material without explicit authorization |
+| Text conversions of those sources | Private corpus, SHA-256 here | They carry the same content as the source |
+| Owner-authored deliverables and working papers | Private corpus, SHA-256 here | They quote client commercial terms |
+| Commercial figures, named individuals, contact details | Private corpus only | Restricted. See the deliverables |
+| Regenerable page images | Owner's working folder, SHA-256 here | Can be rebuilt from the PDFs |
 
-A hash proves which file is meant. It does not give access to the file. Until the owner decides where
-the held material goes, a contributor needs the owner to supply it.
+A hash proves which file is meant. It does not give access to the file. Reading the held material
+needs access to the private repository, which the owner grants.
+
+## Using held material here
+
+Anything derived from the private corpus must be sanitised before it enters this repository: no
+source text, commercial figures, named individuals or contact details. Describe the finding in general
+terms and cite the file by its SHA-256. If publishing more is intended, that is a project-owner
+decision and the change must say so.
 
 ## Working rules
 
@@ -32,5 +47,5 @@ the held material goes, a contributor needs the owner to supply it.
   its hash and describe the finding in general terms. See "Four ways a corpus commit goes wrong" in
   `AGENTS.md`.
 - Keep `MANIFEST.sha256` current. CI fails if a tracked file here is missing from it.
-- PGF work has no public corpus area yet. Its existing working folder contains private correspondence
-  and must not be copied here. Open a PGF area only after a scoped issue settles what may be public.
+- PGF material is private and must stay out of any public repository. Its public entry point is
+  [`../planet_green_force_2026/README.md`](../planet_green_force_2026/README.md).
