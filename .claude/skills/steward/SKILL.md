@@ -325,8 +325,12 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
      retargets it first. The remote ref is checked if it still exists, and skipped if GitHub
      already auto-deleted it (`delete_branch_on_merge` is on). The local ref is checked if it
      exists. A squash merge makes `git branch -d` refuse, so the local delete uses `-D`, but only
-     after the check. A train car's pull request must be closed under "Merge trains" step 5, and
-     the train pull request must have merged.
+     after the check. A train car's pull request must be closed under "Merge trains" step 5, the
+     train pull request must have merged, and the train must carry the car's landed commit, whose
+     subject ends `(#<car PR>)`. Every GitHub read is assigned or compared before anything uses it,
+     so a failed API call stops the block rather than reading as "no open pull request". The remote
+     delete carries a lease on the checked head, so a push between the check and the delete makes
+     the delete fail.
 
      ```bash
      set -euo pipefail
@@ -351,10 +355,13 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
        test "$(gh api "repos/$repo/pulls/$PR" --jq '.state')" = "closed"
        test "$(gh api "repos/$repo/pulls/$PR" --jq '.head.sha')" = "$CAR_HEAD"
        test -n "$(gh api "repos/$repo/pulls/$TRAIN_PR" --jq '.merged_at // ""')"
+       train_subjects=$(gh api "repos/$repo/pulls/$TRAIN_PR/commits" --paginate --jq '.[].commit.message | split("\n")[0]')
+       grep -qE " \(#$PR\)\$" <<<"$train_subjects"
        want=$CAR_HEAD
      fi
      [[ $want =~ ^[0-9a-f]{40}$ ]] || exit 1
-     test -z "$(gh api -X GET "repos/$repo/pulls" -f state=open -f base="$BRANCH" --jq '.[].number')"
+     open_on_base=$(gh api -X GET "repos/$repo/pulls" -f state=open -f base="$BRANCH" --jq '.[].number')
+     test -z "$open_on_base"
      remote_head=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
      if [ -n "$remote_head" ]; then test "$remote_head" = "$want"; fi
      local_present=no
@@ -362,7 +369,9 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
        local_present=yes
        test "$(git rev-parse --verify "refs/heads/$BRANCH")" = "$want"
      fi
-     if [ -n "$remote_head" ]; then git push origin --delete "$BRANCH"; fi
+     if [ -n "$remote_head" ]; then
+       git push origin --delete --force-with-lease="refs/heads/$BRANCH:$want" "$BRANCH"
+     fi
      if [ "$local_present" = yes ]; then git branch -D "$BRANCH"; fi
      git fetch --prune origin
      echo "CLEANUP-01 branch retirement: OK: #$PR $BRANCH at $want (remote: ${remote_head:-auto-deleted}; local: $local_present)"

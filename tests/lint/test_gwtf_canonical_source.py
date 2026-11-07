@@ -672,7 +672,12 @@ CLEANUP_01_STEWARD_CONTROLS = (
     'test "$(gh api "repos/$repo/pulls/$PR" --jq \'.state\')" = "closed"',
     'test "$(gh api "repos/$repo/pulls/$PR" --jq \'.head.sha\')" = "$CAR_HEAD"',
     'test -n "$(gh api "repos/$repo/pulls/$TRAIN_PR" --jq \'.merged_at // ""\')"',
-    'test -z "$(gh api -X GET "repos/$repo/pulls" -f state=open -f base="$BRANCH" --jq \'.[].number\')"',
+    'open_on_base=$(gh api -X GET "repos/$repo/pulls" -f state=open -f base="$BRANCH" --jq \'.[].number\')',
+    'test -z "$open_on_base"',
+    'train_subjects=$(gh api "repos/$repo/pulls/$TRAIN_PR/commits" --paginate '
+    "--jq '.[].commit.message | split(\"\\n\")[0]')",
+    'grep -qE " \\(#$PR\\)\\$" <<<"$train_subjects"',
+    'git push origin --delete --force-with-lease="refs/heads/$BRANCH:$want" "$BRANCH"',
     'if [ -n "$remote_head" ]; then test "$remote_head" = "$want"; fi',
     'test "$(git rev-parse --verify "refs/heads/$BRANCH")" = "$want"',
     "first post a pointer comment naming its commit on `main`, then close that pull request",
@@ -794,6 +799,11 @@ import json, os, sys
 args = sys.argv[1:]
 assert args[0] == "api", args
 key = " ".join(args[1:])
+with open(os.environ["STUB_LOG"], "a", encoding="utf-8") as log:
+    log.write("gh " + " ".join(args) + "\\n")
+if key == os.environ.get("STUB_GH_FAIL"):
+    sys.stderr.write("HTTP 502: Bad Gateway\\n")
+    sys.exit(1)
 answers = json.loads(open(os.environ["STUB_GH"], encoding="utf-8").read())
 if key not in answers:
     sys.stderr.write("unexpected gh call: " + key + "\\n")
@@ -817,6 +827,8 @@ if args[:2] == ["config", "--get"]:
         sys.exit(1)
     print(pairs[args[2]])
 elif args[:2] == ["check-ref-format", "--branch"]:
+    if refs.get("reject_ref"):
+        sys.exit(128)
     print(args[2])
 elif args[0] == "ls-remote":
     sha = refs.get("remote")
@@ -826,7 +838,12 @@ elif args[0] == "show-ref":
     sys.exit(0 if refs.get("local") else 1)
 elif args[0] == "rev-parse":
     print(refs["local"])
-elif args[0] in ("push", "branch", "fetch"):
+elif args[0] == "push":
+    lease = [a for a in args if a.startswith("--force-with-lease=")]
+    expected = lease[0].rsplit(":", 1)[1] if lease else None
+    if expected != refs.get("remote_at_push", refs.get("remote")):
+        sys.exit(1)
+elif args[0] in ("branch", "fetch"):
     pass
 else:
     sys.exit(4)
@@ -844,6 +861,12 @@ def _steward_branch_block() -> str:
     return "\n".join(line.strip() for line in text[start:end].splitlines())
 
 
+_TRAIN_COMMITS = (
+    "repos/arunakulat/dutchbay-epc-model/pulls/9/commits --paginate "
+    '--jq .[].commit.message | split("\\n")[0]'
+)
+
+
 def _gh_answers(
     *,
     head_ref: str = "feature",
@@ -852,6 +875,7 @@ def _gh_answers(
     state: str = "closed",
     open_on_base: str = "",
     train_merged_at: str = "2026-11-07T00:00:00Z",
+    train_subjects: str = "feat: first car (#6)\nfix: the car (#7)",
 ) -> dict[str, str]:
     pr = "repos/arunakulat/dutchbay-epc-model/pulls/7"
     return {
@@ -862,6 +886,7 @@ def _gh_answers(
         'repos/arunakulat/dutchbay-epc-model/pulls/9 --jq .merged_at // ""': train_merged_at,
         "-X GET repos/arunakulat/dutchbay-epc-model/pulls -f state=open -f base=feature "
         "--jq .[].number": open_on_base,
+        _TRAIN_COMMITS: train_subjects,
     }
 
 
@@ -873,6 +898,7 @@ def _run_branch_block(
     car_head: str = "",
     train_pr: str = "",
     pr: str = "7",
+    gh_fail: str = "",
 ) -> tuple[int, str, list[str]]:
     import json
     import os
@@ -906,6 +932,7 @@ def _run_branch_block(
         "STUB_GH": str(tmp_path / "gh.json"),
         "STUB_GIT": str(tmp_path / "git.json"),
         "STUB_LOG": str(log),
+        "STUB_GH_FAIL": gh_fail,
     }
     result = subprocess.run(
         [bash, "-c", script], env=env, capture_output=True, text=True, check=False
@@ -921,15 +948,20 @@ def _deletes(calls: list[str]) -> list[str]:
     return [c for c in calls if c.startswith(("push origin --delete", "branch -D"))]
 
 
+_PUSH_DELETE = (
+    f"push origin --delete --force-with-lease=refs/heads/feature:{_MERGED} feature"
+)
+
+
 @pytest.mark.parametrize(
     ("refs", "expected_deletes"),
     [
         ({}, []),
-        ({"remote": _MERGED}, ["push origin --delete feature"]),
+        ({"remote": _MERGED}, [_PUSH_DELETE]),
         ({"local": _MERGED}, ["branch -D feature"]),
         (
             {"remote": _MERGED, "local": _MERGED},
-            ["push origin --delete feature", "branch -D feature"],
+            [_PUSH_DELETE, "branch -D feature"],
         ),
     ],
     ids=["auto-deleted", "remote-only", "local-only", "both"],
@@ -953,6 +985,8 @@ def test_cleanup_01_branch_gate_passes_a_merged_branch(
         (_gh_answers(), {"local": _MOVED}),
         (_gh_answers(), {"remote": _MERGED, "local": _MOVED}),
         (_gh_answers(open_on_base="8"), {"remote": _MERGED}),
+        (_gh_answers(), {"remote": _MERGED, "reject_ref": "yes"}),
+        (_gh_answers(head_sha="not-a-sha"), {}),
     ],
     ids=[
         "unmerged",
@@ -961,6 +995,8 @@ def test_cleanup_01_branch_gate_passes_a_merged_branch(
         "local-moved",
         "local-moved-remote-ok",
         "base-of-open-pr",
+        "branch-name-rejected",
+        "merged-head-not-a-sha",
     ],
 )
 def test_cleanup_01_branch_gate_refuses_before_any_delete(
@@ -973,6 +1009,18 @@ def test_cleanup_01_branch_gate_refuses_before_any_delete(
     assert _deletes(calls) == []
 
 
+def test_cleanup_01_branch_gate_remote_delete_is_leased_to_the_checked_head(
+    tmp_path: Path,
+) -> None:
+    """A push between the check and the delete makes the remote delete fail (#1563 A-8)."""
+    refs = {"remote": _MERGED, "local": _MERGED, "remote_at_push": _MOVED}
+    code, out, calls = _run_branch_block(tmp_path, _gh_answers(), refs)
+    assert code != 0
+    assert "OK:" not in out
+    assert _deletes(calls) == [_PUSH_DELETE]
+    assert "branch -D feature" not in calls
+
+
 def test_cleanup_01_branch_gate_passes_a_landed_train_car(tmp_path: Path) -> None:
     """A closed car whose train merged passes at the recorded car head."""
     gh = _gh_answers(merged_at="", head_sha=_CAR)
@@ -981,7 +1029,7 @@ def test_cleanup_01_branch_gate_passes_a_landed_train_car(tmp_path: Path) -> Non
     )
     assert code == 0
     assert out.startswith("CLEANUP-01 branch retirement: OK: #7")
-    assert _deletes(calls) == ["push origin --delete feature"]
+    assert _deletes(calls) == [_PUSH_DELETE.replace(_MERGED, _CAR)]
 
 
 @pytest.mark.parametrize(
@@ -994,8 +1042,22 @@ def test_cleanup_01_branch_gate_passes_a_landed_train_car(tmp_path: Path) -> Non
         ),
         (_gh_answers(merged_at="", head_sha=_MOVED), {"remote": _CAR}),
         (_gh_answers(merged_at="", head_sha=_CAR), {"remote": _MOVED}),
+        (
+            _gh_answers(
+                merged_at="",
+                head_sha=_CAR,
+                train_subjects="fix: another car (#17)\nfeat: (#7) in the middle",
+            ),
+            {"remote": _CAR},
+        ),
     ],
-    ids=["car-pr-open", "train-unmerged", "car-pr-moved", "car-branch-moved"],
+    ids=[
+        "car-pr-open",
+        "train-unmerged",
+        "car-pr-moved",
+        "car-branch-moved",
+        "car-not-in-train",
+    ],
 )
 def test_cleanup_01_branch_gate_refuses_an_unproven_train_car(
     tmp_path: Path, gh: dict[str, str], refs: dict[str, str]
@@ -1006,6 +1068,66 @@ def test_cleanup_01_branch_gate_refuses_an_unproven_train_car(
     )
     assert code != 0
     assert "OK:" not in out
+    assert _deletes(calls) == []
+
+
+_PR_7 = "repos/arunakulat/dutchbay-epc-model/pulls/7"
+_GH_KEYS = {
+    "head-ref": f"{_PR_7} --jq .head.ref",
+    "merged-at": f'{_PR_7} --jq .merged_at // ""',
+    "head-sha": f"{_PR_7} --jq .head.sha",
+    "car-state": f"{_PR_7} --jq .state",
+    "train-merged-at": 'repos/arunakulat/dutchbay-epc-model/pulls/9 --jq .merged_at // ""',
+    "train-commits": _TRAIN_COMMITS,
+    "open-base": "-X GET repos/arunakulat/dutchbay-epc-model/pulls -f state=open "
+    "-f base=feature --jq .[].number",
+}
+
+
+@pytest.mark.parametrize(
+    ("failing", "car"),
+    [
+        ("head-ref", False),
+        ("merged-at", False),
+        ("head-sha", False),
+        ("open-base", False),
+        ("head-ref", True),
+        ("car-state", True),
+        ("head-sha", True),
+        ("train-merged-at", True),
+        ("train-commits", True),
+        ("open-base", True),
+    ],
+    ids=lambda v: v if isinstance(v, str) else ("car" if v else "merged"),
+)
+def test_cleanup_01_branch_gate_fails_closed_when_a_github_call_errors(
+    tmp_path: Path, failing: str, car: bool
+) -> None:
+    """An API error on any gh call stops the block before any delete (#1563 DOM-3)."""
+    if car:
+        gh, refs = (
+            _gh_answers(merged_at="", head_sha=_CAR),
+            {
+                "remote": _CAR,
+                "local": _CAR,
+            },
+        )
+        kwargs = {"car_head": _CAR, "train_pr": "9"}
+    else:
+        gh, refs = _gh_answers(), {"remote": _MERGED, "local": _MERGED}
+        kwargs = {}
+    (tmp_path / "control").mkdir()
+    (tmp_path / "failing").mkdir()
+    # Without the failure, the same inputs pass, so the failure is what stops the block.
+    code, _, calls = _run_branch_block(tmp_path / "control", gh, refs, **kwargs)
+    assert code == 0 and len(_deletes(calls)) == 2
+    assert f"gh api {_GH_KEYS[failing]}" in calls
+    code, out, calls = _run_branch_block(
+        tmp_path / "failing", gh, refs, gh_fail=_GH_KEYS[failing], **kwargs
+    )
+    assert code != 0
+    assert "OK:" not in out
+    assert f"gh api {_GH_KEYS[failing]}" in calls
     assert _deletes(calls) == []
 
 
@@ -1041,3 +1163,4 @@ def test_cleanup_01_branch_gate_refuses_malformed_inputs(
     assert code != 0
     assert "OK:" not in out
     assert _deletes(calls) == []
+    assert [c for c in calls if c.startswith("gh ")] == []
