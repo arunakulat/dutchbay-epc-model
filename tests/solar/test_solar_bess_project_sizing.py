@@ -94,12 +94,13 @@ SIZING_OPEX_BASIS = {"opex.currency_split": None, "opex.usd_per_year": 256655}
 # Re-pinned for #1398 (P2-F3-01 debt-service shortfall carried as sponsor cure in year 1;
 # before: equity IRR 0.09064100100108274).
 # Re-pinned at 15.19.0 for the opex currency split (wind v0.4: wind O&M 70% USD / 30% LKR,
-# overhead LKR; the USD share on a 5.89%/yr LKR depreciation path). Before (v0.3): project
-# IRR 0.10808262995624021, equity IRR 0.0863203211939878, min DSCR 0.8679985938194438.
+# overhead LKR; the USD share on a relative-PPP LKR depreciation path, 1.05 / 1.025 - 1).
+# Before (v0.3): project IRR 0.10808262995624021, equity IRR 0.0863203211939878, min DSCR
+# 0.8679985938194438.
 WIND_PINS = {
-    "project_irr": 0.09900478988066094,
-    "equity_irr": 0.07313367420692463,
-    "min_dscr": 0.8675308887998293,
+    "project_irr": 0.10719659217604985,
+    "equity_irr": 0.08512161444077626,
+    "min_dscr": 0.8680798271015333,
 }
 
 

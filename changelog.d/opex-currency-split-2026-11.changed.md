@@ -4,7 +4,8 @@
   - `finance.cashflow_v14_params` reads an optional `opex.currency_split`: `usd_share` (or
     amount-weighted `components`, each `usd_per_year` or `usd_per_unit_year` x `units`, with its
     own `usd_share`), `usd_escalation_pct`, `lkr_escalation_pct` (percent, always) and an optional
-    `usd_lkr_depreciation_pct`. It fails loud on unknown keys, out-of-range values, both or
+    `usd_lkr_depreciation_pct`: a percent, or `relative_ppp` to derive it from the two inflation
+    inputs, `(1 + lkr) / (1 + usd) - 1`. It fails loud on unknown keys, out-of-range values, both or
     neither of `usd_share` and `components`, and an `opex.escalation_pct` that disagrees with
     `lkr_escalation_pct`.
   - `finance.cashflow_v14_production.opex_for_year` is the one opex line both row builders call.
@@ -14,8 +15,8 @@
     and escalates at LKR inflation. Without the block the line is the original expression; a
     repr-exact KPI comparison over all 32 runnable committed scenarios is identical.
   - Blue Whale wind v0.4: wind O&M 350k at 70% USD, insurance, land and SPV 150k LKR (49% USD);
-    USD 2.5%/yr, LKR 5%/yr, USD share on 5.89%/yr. Project IRR 10.81% -> 9.90%, equity IRR
-    8.63% -> 7.31%, project NPV USD 69,109 -> -625,284.
+    USD 2.5%/yr, LKR 5%/yr, USD share on relative PPP, 2.44%/yr (owner, 2026-11-07). Project IRR
+    10.81% -> 10.72%, equity IRR 8.63% -> 8.51%, project NPV USD 69,109 -> -7,068.
   - Blue Whale solar + BESS v0.4: BESS O&M at USD 1.80/kWh-yr on 22,000 kWh DC (39,600; was
     USD 2.5/kWh-yr on 20,000 kWh), converted to LKR at the wind project's value date (333.79,
     LKR 13,218,084/yr; owner, 2026-11-07); every line in LKR; total 256,655 -> 246,255.2.

@@ -269,8 +269,9 @@ class OpexCurrencySplit:
         usd_share: Share of ``opex.usd_per_year`` that is USD-denominated (0-1).
         usd_escalation: Yearly escalation of the USD share, in USD.
         lkr_escalation: Yearly escalation of the LKR share, in LKR.
-        usd_lkr_depreciation: Yearly LKR depreciation for the USD share's own FX path,
-            or ``None`` to translate the USD share on the model FX curve.
+        usd_lkr_depreciation: Yearly LKR depreciation for the USD share's own FX path
+            (given as a percent, or derived by relative PPP from the two escalation
+            rates), or ``None`` to translate the USD share on the model FX curve.
     """
 
     usd_share: float
@@ -347,6 +348,32 @@ def _rate_pct(block: Mapping[str, Any], key: str, *, required: bool) -> float | 
             f"{where} must be a percent per year in [-50, 100]; got {pct!r}"
         )
     return pct / 100.0
+
+
+RELATIVE_PPP = "relative_ppp"
+
+
+def _usd_lkr_depreciation(
+    split: Mapping[str, Any], usd_escalation: float, lkr_escalation: float
+) -> float | None:
+    """Return the USD share's own LKR depreciation rate (decimal), or ``None``.
+
+    ``usd_lkr_depreciation_pct`` is either a percent per year (read by
+    :func:`_rate_pct`) or the word ``relative_ppp``, which derives the rate from the
+    block's own inflation inputs so the two cannot drift apart:
+    ``(1 + lkr_escalation) / (1 + usd_escalation) - 1``. Under relative purchasing-power
+    parity the LKR cost of the USD share then grows at LKR inflation, the same real
+    path as the LKR share.
+    """
+    value = split.get("usd_lkr_depreciation_pct")
+    if isinstance(value, str):
+        if value != RELATIVE_PPP:
+            raise ValueError(
+                "opex.currency_split.usd_lkr_depreciation_pct must be a percent per "
+                f"year or {RELATIVE_PPP!r}; got {value!r}"
+            )
+        return (1.0 + lkr_escalation) / (1.0 + usd_escalation) - 1.0
+    return _rate_pct(split, "usd_lkr_depreciation_pct", required=False)
 
 
 def _usd_share_from_components(components: Any) -> float:
@@ -464,7 +491,7 @@ def _resolve_opex_currency_split(raw: Mapping[str, Any]) -> OpexCurrencySplit | 
     )
     usd_escalation = _rate_pct(split, "usd_escalation_pct", required=True) or 0.0
     lkr_escalation = _rate_pct(split, "lkr_escalation_pct", required=True) or 0.0
-    depreciation = _rate_pct(split, "usd_lkr_depreciation_pct", required=False)
+    depreciation = _usd_lkr_depreciation(split, usd_escalation, lkr_escalation)
 
     # Every spelling the single-rate reader in _build_cashflow_params accepts, read
     # under that reader's own convention (pct_to_decimal), so the two cannot disagree

@@ -156,9 +156,11 @@ opex:
     usd_escalation_pct: 2.5     # PLACEHOLDER (input B34): USD O&M inflation (no USD index is sourced in
                                 # either corpus)
     lkr_escalation_pct: 5.0     # PLACEHOLDER (input B29): LKR O&M inflation at the CBSL 5% target
-    usd_lkr_depreciation_pct: 5.89  # LKR depreciation for the USD share only: the DutchBay cases' data-derived
-                                    # rate (BIS 2005-2026 long run, analytics.fx.fx_calibration), advanced
-                                    # through construction as the model curve would be
+    usd_lkr_depreciation_pct: relative_ppp  # LKR depreciation for the USD share only, derived from the two
+                                    # inflation inputs above: 1.05 / 1.025 - 1 = 2.44%/yr (the owner, 2026-11-07:
+                                    # "fix for inflation"). Was 5.89%, the DutchBay cases' BIS 2005-2026 nominal
+                                    # rate, which with these inflation inputs implied ~3.3%/yr real LKR
+                                    # depreciation. Advanced through construction as the model curve would be
     components:
       - name: wind_om
         usd_per_year: 350000    # PLACEHOLDER (input B10): no OEM has priced a wind LTSA in either corpus;
@@ -269,7 +271,7 @@ metadata:
   review_status: SKELETON - screening placeholders pending owner inputs (docs/blue_whale/INPUTS_REQUIRED.md)
   assumptions_source: 'Split from blue_whale_hybrid_lot5b_2026 v0.6 (wind block and finance blocks)'
   changes:
-    - 'v0.4 (2026-11-07): opex split by currency (input B34; owner rule and decision of 2026-11-02): wind O&M 0.35M 70% USD / 30% LKR, insurance, land and SPV 0.15M LKR; USD share 49% escalates at 2.5%/yr in USD on a 5.89%/yr LKR depreciation path; LKR share at 5%/yr. Total unchanged at 500,000'
+    - 'v0.4 (2026-11-07): opex split by currency (input B34; owner rule and decision of 2026-11-02): wind O&M 0.35M 70% USD / 30% LKR, insurance, land and SPV 0.15M LKR; USD share 49% escalates at 2.5%/yr in USD on an LKR depreciation path of 2.44%/yr, derived by relative PPP from the inflation inputs (owner, 2026-11-07: "fix for inflation"; was 5.89%); LKR share at 5%/yr. Total unchanged at 500,000'
     - 'v0.3 (2026-11-01): wind capex BLENDED (PR 6, #1353 comment 6556975196): 12,350,000 ($1,300/kW placeholder) -> 8,899,980 (USD 936.84/kW, range 728.16-1,341.16, conf/blue_whale_capex_solar_resource.yaml); capex total 14,350,000 -> 10,899,980. A blend that includes private commercial inputs, published on the owner''s decision'
     - 'v0.2 (2026-11-01): wind resource from met mast 617725 (PR 5, #1353 comment 6556910250): sector-wise variance-ratio MCP at 120 m against NASA POWER / MERRA-2, long-term 2015-2025, transferred 26.7 km to the turbine through the reference, sheared to 130 m. Wind CF 0.374256 -> 0.487560, net AEP 31.15 -> 40.57 GWh (P90 1-year 33.73, 20-year 33.92). Not lender-grade; the met-mast HOLD stands'
     - 'v0.1 (2026-11-01): the turbine as its own project, built first (owner decision, #1353 comment 6556854201). Wind block unchanged from the hybrid v0.6 (#1530: 9.5 MW, CF 0.374256, 31.15 GWh, capex 12.35M placeholder); tariff 25.73 (PUCSL Annex 2 wind); capex 14.35M with the 2.0M grid/civils/development placeholder; O&M 0.5M; no solar, no BESS'

@@ -11,7 +11,7 @@ All notable changes to this project will be documented here.
   take it on the owner's rule and decision of 2026-11-02 (#1353 comment 6702129557): wind O&M
   70% USD / 30% LKR; BESS O&M at USD 1.80/kWh-yr of DC installed (a vendor LTSA benchmark),
   converted to LKR at the wind project's value date (owner, 2026-11-07).
-  Wind project IRR 10.81% -> 9.90%, NPV USD +69k -> -625k; solar + BESS NPV USD -4.99M -> -4.91M.
+  Wind project IRR 10.81% -> 10.72%, NPV USD +69k -> -7k (USD share on relative PPP); solar + BESS NPV USD -4.99M -> -4.91M.
   Detail in the compiled fragment.
 - **Blue Whale solar + BESS: the owner's 5 MW / 20 MWh battery (15.18.0).** The sizing ranks on
   the after-tax project NPV and the project commits the owner's 5 MW / 20 MWh with 151 tables at

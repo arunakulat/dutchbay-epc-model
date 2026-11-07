@@ -203,9 +203,11 @@ opex:
     usd_escalation_pct: 2.5     # PLACEHOLDER (input B34): USD O&M inflation (no USD index is sourced in
                                 # either corpus)
     lkr_escalation_pct: 5.0     # PLACEHOLDER (input B29): LKR O&M inflation at the CBSL 5% target
-    usd_lkr_depreciation_pct: 5.89  # LKR depreciation for the USD share only: the DutchBay cases' data-derived
-                                    # rate (BIS 2005-2026 long run, analytics.fx.fx_calibration), advanced
-                                    # through construction as the model curve would be
+    usd_lkr_depreciation_pct: relative_ppp  # LKR depreciation for the USD share only, derived from the two
+                                    # inflation inputs above: 1.05 / 1.025 - 1 = 2.44%/yr (the owner, 2026-11-07:
+                                    # "fix for inflation"). Was 5.89%, the DutchBay cases' BIS 2005-2026 nominal
+                                    # rate, which with these inflation inputs implied ~3.3%/yr real LKR
+                                    # depreciation. Advanced through construction as the model curve would be
     components:
       - name: solar_om
         usd_per_unit_year: 10.0 # PLACEHOLDER (input B16): USD/kWp-yr, PR 3's rate, not sourced

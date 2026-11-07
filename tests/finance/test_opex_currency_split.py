@@ -87,8 +87,10 @@ def test_split_opex_matches_its_closed_form_on_the_own_fx_path() -> None:
     s = 0.7 * 350_000.0 / 500_000.0
     spot = float(cfg["fx"]["start_lkr_per_usd"])
     construction = 2  # Financing_Terms declares no construction period: the default 2
+    # usd_lkr_depreciation_pct: relative_ppp, derived from the block's inflation inputs.
+    depr = 1.05 / 1.025 - 1.0
     for t, row in enumerate(rows):
-        usd_fx = spot * 1.0589 ** (construction + t)
+        usd_fx = spot * (1.0 + depr) ** (construction + t)
         expected = total * s * 1.025**t * usd_fx + total * (1.0 - s) * spot * 1.05**t
         assert row["opex_lkr"] == pytest.approx(expected, rel=1e-12)
         # The model curve stays flat (constant-LKR reporting), so the USD view is LKR / spot.
@@ -182,6 +184,34 @@ def test_usd_depreciation_lowers_the_wind_project_npv() -> None:
         str(WIND), overrides={"opex.currency_split": None}
     )
     assert harder["project_npv"] < base["project_npv"] < unsplit["project_npv"]
+
+
+def test_relative_ppp_derives_the_depreciation_from_the_inflation_inputs() -> None:
+    cfg = _cfg()
+    assert _split(cfg)["usd_lkr_depreciation_pct"] == "relative_ppp"
+    got = _resolve_opex_currency_split(cfg)
+    assert got is not None and got.usd_lkr_depreciation is not None
+    assert got.usd_lkr_depreciation == pytest.approx(1.05 / 1.025 - 1.0, rel=1e-15)
+    # The derived rate follows the inputs: it is not a stored number.
+    _split(cfg)["usd_escalation_pct"] = 5.0
+    moved = _resolve_opex_currency_split(cfg)
+    assert moved is not None and moved.usd_lkr_depreciation == 0.0
+    # Under relative PPP the LKR cost of the USD share grows at LKR inflation after COD.
+    rows = build_annual_rows(_cfg())
+    s = 0.7 * 350_000.0 / 500_000.0
+    usd_part = [
+        r["opex_lkr"] - 500_000.0 * (1.0 - s) * 333.79 * 1.05**t
+        for t, r in enumerate(rows)
+    ]
+    for a, b in zip(usd_part, usd_part[1:], strict=False):
+        assert b / a == pytest.approx(1.05, rel=1e-12)
+
+
+def test_an_unknown_depreciation_word_is_refused() -> None:
+    cfg = _cfg()
+    _split(cfg)["usd_lkr_depreciation_pct"] = "ppp"
+    with pytest.raises(ValueError, match="relative_ppp"):
+        _resolve_opex_currency_split(cfg)
 
 
 def test_the_helper_refuses_a_split_without_its_fx_anchor() -> None:

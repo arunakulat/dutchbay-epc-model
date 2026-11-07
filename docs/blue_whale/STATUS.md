@@ -811,7 +811,10 @@ LKR. However, a percentage of OPEX will be in USD". Her decision the same day: B
 directed that the BESS O&M be converted to LKR at the wind project's value date (the 2026-Q2 pinned
 333.79 both projects share): LKR 13,218,084 a year. Both projects carry an `opex.currency_split`
 (input B34); the solar + BESS project's USD share is now 0%.
-The USD share escalates at 2.5%/yr in USD and is translated on a 5.89%/yr LKR depreciation path;
+The USD share escalates at 2.5%/yr in USD and is translated on an LKR depreciation path derived from
+the two inflation inputs by relative purchasing-power parity, 1.05 / 1.025 - 1 = 2.44%/yr (the
+owner, 2026-11-07: "fix for inflation"; the DutchBay cases' 5.89%/yr nominal rate implied about
+3.3%/yr real depreciation with these inputs);
 the LKR share (all solar + BESS opex, and 30% of wind O&M plus its overhead) is fixed in LKR
 at 333.79 and escalates at 5%/yr. The model's FX curve stays flat, so the USD columns are still a
 constant-rate translation of LKR.
@@ -821,11 +824,14 @@ Through `analytics.evaluation_v14.evaluate_with_overrides`, base case only. The 
 
 | Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
 |---|---|---|---|---|---|
-| Wind project (v0.4; 49% of opex in USD) | 9.90% (was 10.81%) | 7.31% (was 8.63%) | 0.868 | -625,284 (was 69,109) | -2,250,537 (was -1,737,634) |
+| Wind project (v0.4; 49% of opex in USD) | 10.72% (was 10.81%) | 8.51% (was 8.63%) | 0.868 | -7,068 (was 69,109) | -1,796,906 (was -1,737,634) |
 | Solar + BESS project (v0.4; all opex in LKR) | undefined (reported as 0.0) | -6.49% (was -8.32%) | 0.868 | -4,912,184 (was -4,992,409) | -5,497,192 (was -5,564,410) |
 | Hybrid (v0.8, superseded) | unchanged: not given the split | | | | |
 
-The wind project is no longer about break-even at the discount rate: its NPV is negative. The
+The wind project stays about break-even at the discount rate: under relative PPP the LKR cost of
+its USD share grows at LKR inflation after COD, and the NPV falls by about USD 76,000 because the
+FX path advances through the two construction years. At the 5.89% nominal rate it would have been
+-625,284. The
 solar + BESS battery O&M is lower than the old placeholder (USD 39,600 against 50,000 a year, both
 in LKR at 333.79), so its NPV rises by about USD 80,000; it remains far from viable.
 
@@ -837,6 +843,8 @@ Not done here, and open:
   the supplier states it. The rate is held for all 20 years.
 - The PUCSL escalable O&M tariff component is indexed yearly; that indexation is still not
   modelled and would offset part of the USD erosion.
+- Relative PPP is a long-run convention; a sourced real-exchange-rate view (or the 5.89% nominal
+  rate as a downside) is a sensitivity, not the base case.
 
 ## Earlier run (PR 7, the owner's battery, 15.18.0, 2026-11-01)
 
