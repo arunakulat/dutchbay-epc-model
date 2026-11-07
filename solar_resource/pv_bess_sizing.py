@@ -34,6 +34,7 @@ in 10% (the 90th percentile).
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from dataclasses import asdict, dataclass, field
 from statistics import NormalDist
@@ -1766,6 +1767,7 @@ PROJECT_SIZING_KEYS = (
     "monte_carlo",
     "uncertainty",
     "plant",
+    "bess_opex",
     "objective",
     "curtailment_scenario",
     "sensitivities",
@@ -2068,6 +2070,197 @@ def reading_allows(
     return cap is not None or exp is not None
 
 
+@dataclass(frozen=True)
+class BessOpex:
+    """The battery's O&M rate on its DC capacity (sizing config ``bess_opex``).
+
+    A vendor O&M or LTSA rate is quoted per kWh of DC capacity installed; the grid sizes the
+    battery by its nominal (delivered) energy. The sizing prices each kWh of nominal energy
+    at ``usd_per_dc_kwh_year x dc_kwh_per_nominal_kwh``, which replaces the pricing
+    config's placeholder ``opex.bess_usd_per_kwh_year``.
+
+    Attributes:
+        usd_per_dc_kwh_year: USD per kWh of DC capacity per year.
+        dc_kwh_per_nominal_kwh: DC capacity installed per kWh of nominal energy (>= 1).
+    """
+
+    usd_per_dc_kwh_year: float
+    dc_kwh_per_nominal_kwh: float
+
+    @property
+    def usd_per_nominal_kwh_year(self) -> float:
+        """USD per kWh of nominal energy per year."""
+        return self.usd_per_dc_kwh_year * self.dc_kwh_per_nominal_kwh
+
+    @classmethod
+    def from_mapping(cls, raw: Mapping[str, Any]) -> "BessOpex":
+        """Build from config, refusing a missing or unknown key or a DC ratio below 1."""
+        _strict(raw, ("usd_per_dc_kwh_year", "dc_kwh_per_nominal_kwh"), "bess_opex")
+        out = cls(
+            usd_per_dc_kwh_year=_num(
+                raw["usd_per_dc_kwh_year"], "bess_opex.usd_per_dc_kwh_year", lo=0.0
+            ),
+            dc_kwh_per_nominal_kwh=_num(
+                raw["dc_kwh_per_nominal_kwh"], "bess_opex.dc_kwh_per_nominal_kwh", lo=1.0
+            ),
+        )
+        return out
+
+
+#: The inputs a one-at-a-time sensitivity case may move from the base case. Each is a
+#: config key (FRAMEWORK-02): a price or rate replaces the base value, ``scenario`` maps
+#: dotted paths of the project scenario (each must already exist) to replacement values.
+SHIFT_KEYS = (
+    "bess_usd_per_kwh",
+    "bess_opex_usd_per_dc_kwh_year",
+    "priority_lkr_per_kwh",
+    "other_lkr_per_kwh",
+    "priority_term_years",
+    "round_trip_efficiency",
+    "scenario",
+)
+#: The scalar inputs a break-even search may move.
+BREAK_EVEN_INPUTS = (
+    "bess_usd_per_kwh",
+    "bess_opex_usd_per_dc_kwh_year",
+    "priority_lkr_per_kwh",
+    "other_lkr_per_kwh",
+    "round_trip_efficiency",
+)
+
+
+def _with_dotted(
+    mapping: Mapping[str, Any], updates: Mapping[str, Any], where: str
+) -> Dict[str, Any]:
+    """A deep copy of ``mapping`` with dotted-path replacements (each path must exist)."""
+    import copy
+
+    out = copy.deepcopy(dict(mapping))
+    for path, value in updates.items():
+        node: Any = out
+        keys = str(path).split(".")
+        for key in keys[:-1]:
+            if not isinstance(node, dict) or key not in node:
+                raise ValueError(f"{where}: {path} is not in the scenario")
+            node = node[key]
+        if not isinstance(node, dict) or keys[-1] not in node:
+            raise ValueError(f"{where}: {path} is not in the scenario")
+        node[keys[-1]] = copy.deepcopy(value)
+    return out
+
+
+def _one_at_a_time_cases(raw: Any) -> List[Tuple[str, Dict[str, Any]]]:
+    """``sensitivities.one_at_a_time``: a list of ``{name, <input>: value, ...}``."""
+    if not isinstance(raw, (list, tuple)):
+        raise ValueError("sensitivities.one_at_a_time must be a list")
+    out: List[Tuple[str, Dict[str, Any]]] = []
+    for i, case in enumerate(raw):
+        where = f"sensitivities.one_at_a_time[{i}]"
+        if not isinstance(case, Mapping) or not isinstance(case.get("name"), str):
+            raise ValueError(f"{where} must be a mapping with a string name")
+        name = str(case["name"])
+        if any(name == n for n, _ in out):
+            raise ValueError(f"{where}: duplicate name {name!r}")
+        shift = {str(k): v for k, v in case.items() if k != "name"}
+        unknown = sorted(set(shift) - set(SHIFT_KEYS))
+        if unknown or not shift:
+            raise ValueError(
+                f"{where}: unknown inputs {unknown} or none; allowed {list(SHIFT_KEYS)}"
+            )
+        out.append((name, shift))
+    return out
+
+
+def _break_even_specs(raw: Any) -> List[Dict[str, Any]]:
+    """``sensitivities.break_even``: a list of ``{input, low, high, tolerance}``."""
+    if not isinstance(raw, (list, tuple)):
+        raise ValueError("sensitivities.break_even must be a list")
+    out: List[Dict[str, Any]] = []
+    for i, spec in enumerate(raw):
+        where = f"sensitivities.break_even[{i}]"
+        if not isinstance(spec, Mapping):
+            raise ValueError(f"{where} must be a mapping")
+        _strict(spec, ("input", "low", "high", "tolerance"), where)
+        if spec["input"] not in BREAK_EVEN_INPUTS:
+            raise ValueError(f"{where}.input must be one of {list(BREAK_EVEN_INPUTS)}")
+        low = _num(spec["low"], f"{where}.low")
+        high = _num(spec["high"], f"{where}.high")
+        tol = _num(spec["tolerance"], f"{where}.tolerance", lo=0.0)
+        if not low < high or tol <= 0.0:
+            raise ValueError(f"{where}: need low < high and a positive tolerance")
+        out.append({"input": str(spec["input"]), "low": low, "high": high, "tolerance": tol})
+    return out
+
+
+def shifted_case(
+    ctx: Context,
+    base: Trials,
+    shift: Mapping[str, Any],
+    *,
+    bess_opex: BessOpex,
+    where: str,
+) -> Tuple[Context, Trials]:
+    """The context and one-trial base case with ``shift`` applied.
+
+    ``base`` is the deterministic base case (one row). Only the inputs ``shift`` names
+    move; every other input keeps its base value.
+
+    Raises:
+        ValueError: On an unknown input, a non-physical value or a scenario path that does
+            not exist.
+    """
+    unknown = sorted(set(shift) - set(SHIFT_KEYS))
+    if unknown:
+        raise ValueError(f"{where}: unknown inputs {unknown}; allowed {list(SHIFT_KEYS)}")
+    if not shift:
+        raise ValueError(f"{where}: moves no input")
+    if base.n != 1:
+        raise ValueError(f"{where}: the base case must be one trial")
+    values = {k: v.copy() for k, v in base.values.items()}
+    pricing, tariff, scenario = ctx.pricing, ctx.tariff, ctx.scenario
+    if "bess_usd_per_kwh" in shift:
+        values["bess_usd_per_kwh"] = np.array(
+            [_num(shift["bess_usd_per_kwh"], f"{where}.bess_usd_per_kwh", lo=0.0)]
+        )
+    if "bess_opex_usd_per_dc_kwh_year" in shift:
+        rate = _num(
+            shift["bess_opex_usd_per_dc_kwh_year"],
+            f"{where}.bess_opex_usd_per_dc_kwh_year",
+            lo=0.0,
+        )
+        pricing = dataclasses.replace(
+            pricing,
+            bess_opex_usd_per_kwh_year=rate * bess_opex.dc_kwh_per_nominal_kwh,
+        )
+    tariff_kw: Dict[str, Any] = {}
+    for key in ("priority_lkr_per_kwh", "other_lkr_per_kwh"):
+        if key in shift:
+            tariff_kw[key] = _num(shift[key], f"{where}.{key}", lo=0.0)
+    if "priority_term_years" in shift:
+        term = shift["priority_term_years"]
+        if isinstance(term, bool) or not isinstance(term, int) or term < 1:
+            raise ValueError(f"{where}.priority_term_years must be a positive integer")
+        tariff_kw["priority_term_years"] = term
+    if tariff_kw:
+        tariff = dataclasses.replace(tariff, **tariff_kw)
+        if tariff.priority_lkr_per_kwh < tariff.other_lkr_per_kwh:
+            raise ValueError(f"{where}: the priority rate is below the other rate")
+    if "round_trip_efficiency" in shift:
+        rte = _num(shift["round_trip_efficiency"], f"{where}.round_trip_efficiency")
+        if not 0.0 < rte <= 1.0 or (
+            not ctx.losses_on_charge and rte > ctx.bess_template.charge_efficiency
+        ):
+            raise ValueError(f"{where}.round_trip_efficiency is not physical here")
+        values["round_trip_efficiency"] = np.array([rte])
+    if "scenario" in shift:
+        updates = shift["scenario"]
+        if not isinstance(updates, Mapping) or not updates:
+            raise ValueError(f"{where}.scenario must map dotted paths to values")
+        scenario = _with_dotted(scenario, updates, f"{where}.scenario")
+    moved = dataclasses.replace(ctx, pricing=pricing, tariff=tariff, scenario=scenario)
+    return moved, Trials(values=values)
+
+
 def run_project_sizing(
     sizing_cfg: Mapping[str, Any],
     *,
@@ -2217,10 +2410,19 @@ def run_project_sizing(
         "curtailment_scenario",
     )
     sens = sizing_cfg["sensitivities"]
-    _strict(sens, ("round_trip_efficiency",), "sensitivities")
+    _strict(
+        sens, ("round_trip_efficiency", "one_at_a_time", "break_even"), "sensitivities"
+    )
     sens_rte = _num(sens["round_trip_efficiency"], "sensitivities.rte", lo=0.0)
+    oat_cases = _one_at_a_time_cases(sens["one_at_a_time"])
+    break_evens = _break_even_specs(sens["break_even"])
 
-    pricing = Pricing.from_mapping(pricing_cfg)
+    bess_opex = BessOpex.from_mapping(sizing_cfg["bess_opex"])
+    # The battery's O&M on its DC capacity replaces the pricing config's placeholder.
+    pricing = dataclasses.replace(
+        Pricing.from_mapping(pricing_cfg),
+        bess_opex_usd_per_kwh_year=bess_opex.usd_per_nominal_kwh_year,
+    )
     uncertainty = Uncertainty.from_mapping(sizing_cfg["uncertainty"])
     module = ModuleSpec.from_mapping(unit["module"])
     strings_design = design_string(
@@ -2538,6 +2740,30 @@ def run_project_sizing(
             ),
         }
 
+    def battery_profile(key: str, primary: int) -> List[Dict[str, Any]]:
+        """Per battery power, the best point among those whose ``key`` is true, its
+        objective statistics and how often the choice is at least as good (paired)."""
+        out: List[Dict[str, Any]] = []
+        for power in sorted({s["bess_power_mw"] for s in stats if s[key]}):
+            sub = [
+                {**s, "_power": bool(s[key] and s["bess_power_mw"] == power)}
+                for s in stats
+            ]
+            i = best_point(sub, metric=metric, statistic=statistic, key="_power")
+            if i is None:
+                continue
+            m = stats[i]["metrics"][metric]
+            out.append(
+                {
+                    "size": size_of(i),
+                    **{k: m.get(k) for k in STATISTICS},
+                    "choice_against_this": (
+                        None if i == primary else paired_trials(primary, i)
+                    ),
+                }
+            )
+        return out
+
     recommendation: Dict[str, Any] = {
         "committed_reading": committed,
         "pv_rule": pv_rule,
@@ -2617,6 +2843,9 @@ def run_project_sizing(
             ),
             "revenue_max": size_of(revenue_best(key)),
             "largest_bess": size_of(largest),
+            # The objective at the best PV for every battery on the grid (the battery's
+            # value curve), with the choice paired against each.
+            "battery_profile": battery_profile(rule_key, primary),
         }
     overall_rev = revenue_best("evaluated")
     recommendation["revenue_max_any_reading"] = {
@@ -2632,14 +2861,19 @@ def run_project_sizing(
     }
 
     def base_sweep(
-        trial: Trials, curtailment_fraction: float = 0.0
+        trial: Trials,
+        curtailment_fraction: float = 0.0,
+        case_ctx: Optional[Context] = None,
+        only: Optional[Callable[[Mapping[str, Any]], bool]] = None,
     ) -> List[Dict[str, Any]]:
-        """One deterministic case at every evaluated point."""
+        """One deterministic case at every evaluated point (or those ``only`` keeps)."""
         nonlocal evaluations
         rows = []
         for point, entry in evaluated:
+            if only is not None and not only(entry):
+                continue
             r = evaluate_point(
-                ctx,
+                ctx if case_ctx is None else case_ctx,
                 point,
                 trial,
                 has_base=True,
@@ -2699,6 +2933,122 @@ def run_project_sizing(
         "rows": rte_rows,
         "best_by_objective": best_rows(rte_rows),
     }
+    def ruled(entry: Mapping[str, Any], name: str) -> bool:
+        return bool(
+            entry["eligible_by_reading"][name]
+            and (pv_rule == "any" or entry["pv_tables_is_land_max"])
+        )
+
+    def base_profile(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Per reading and battery power, the best base-case objective and its PV."""
+        out: Dict[str, Any] = {}
+        for name in readings:
+            best: Dict[float, Dict[str, Any]] = {}
+            for r in rows:
+                v = r[metric]
+                if not ruled(r, name) or v is None or not math.isfinite(v):
+                    continue
+                p = r["size"]["bess_power_mw"]
+                if p not in best or v > best[p][metric]:
+                    best[p] = {"size": r["size"], metric: v}
+            out[name] = [best[p] for p in sorted(best)]
+        return out
+
+    # The base case at every point, from the main run (no further evaluations).
+    base_rows = [
+        {
+            "size": {k: s[k] for k in ("pv_tables", "pv_ac_mw", "bess_power_mw")},
+            "eligible_by_reading": s["eligible_by_reading"],
+            "pv_tables_is_land_max": s["pv_tables_is_land_max"],
+            **{m: s["base"][m] for m in METRICS},
+        }
+        for s in stats
+        if s["evaluated"]
+    ]
+    one_at_a_time: Dict[str, Any] = {
+        "base_case_only": True,
+        "objective_metric": metric,
+        "base": {
+            "best_by_objective": best_rows(base_rows),
+            "battery_profile": base_profile(base_rows),
+        },
+        "cases": {},
+    }
+    for case_name, shift in oat_cases:
+        case_ctx, case_trial = shifted_case(
+            ctx,
+            base_trial,
+            shift,
+            bess_opex=bess_opex,
+            where=f"sensitivities.one_at_a_time.{case_name}",
+        )
+        case_rows = base_sweep(case_trial, case_ctx=case_ctx)
+        one_at_a_time["cases"][case_name] = {
+            "shift": shift,
+            "best_by_objective": best_rows(case_rows),
+            "battery_profile": base_profile(case_rows),
+        }
+
+    # Break-even: the value of one input at which the base case's best battery (at its
+    # best PV, under the committed reading) stops being the battery the run chose.
+    chosen_power = recommendation["by_reading"][committed]["size"]["bess_power_mw"]
+
+    def gap(inp: str, x: float) -> Tuple[float, Optional[Dict[str, Any]]]:
+        """The best other battery's base-case objective less the chosen battery's."""
+        case_ctx, case_trial = shifted_case(
+            ctx,
+            base_trial,
+            {inp: x},
+            bess_opex=bess_opex,
+            where=f"sensitivities.break_even.{inp}",
+        )
+        rows = base_sweep(
+            case_trial, case_ctx=case_ctx, only=lambda e: ruled(e, committed)
+        )
+        own = -math.inf
+        other, other_size = -math.inf, None
+        for r in rows:
+            v = r[metric]
+            if v is None or not math.isfinite(v):
+                continue
+            if r["size"]["bess_power_mw"] == chosen_power:
+                own = max(own, v)
+            elif v > other:
+                other, other_size = v, r["size"]
+        return other - own, other_size
+
+    break_even: List[Dict[str, Any]] = []
+    before = evaluations
+    for be in break_evens:
+        inp, lo, hi = be["input"], be["low"], be["high"]
+        g_lo, size_lo = gap(inp, lo)
+        g_hi, size_hi = gap(inp, hi)
+        found: Dict[str, Any] = {
+            **be,
+            "reading": committed,
+            "chosen_bess_power_mw": chosen_power,
+            "gap_at_low": g_lo,
+            "gap_at_high": g_hi,
+            "value": None,
+            "bracket": None,
+            "other_battery_takes_over_at": None,
+        }
+        if (g_lo > 0.0) != (g_hi > 0.0):
+            other_side = size_lo if g_lo > 0.0 else size_hi
+            while hi - lo > be["tolerance"]:
+                mid = 0.5 * (lo + hi)
+                g_mid, size_mid = gap(inp, mid)
+                if g_mid > 0.0:
+                    other_side = size_mid
+                if (g_mid > 0.0) == (g_lo > 0.0):
+                    lo, g_lo = mid, g_mid
+                else:
+                    hi, g_hi = mid, g_mid
+            found["value"] = 0.5 * (lo + hi)
+            found["bracket"] = [lo, hi]
+            found["other_battery_takes_over_at"] = other_side
+        break_even.append(found)
+    break_even_evaluations = evaluations - before
     for s in stats:
         s.pop("_trials", None)
     spec = {
@@ -2709,8 +3059,13 @@ def run_project_sizing(
         "grid_points": len(points),
         "grid_points_evaluated": len(evaluated),
         "base_case_per_point": True,
-        "sensitivity_cases_per_point": 1 + int(bool(curt["enabled"])),
+        "sensitivity_cases_per_point": 1 + int(bool(curt["enabled"])) + len(oat_cases),
+        "break_even_evaluations": break_even_evaluations,
         "effective_evaluations": evaluations,
+        "bess_opex": {
+            **asdict(bess_opex),
+            "usd_per_nominal_kwh_year": bess_opex.usd_per_nominal_kwh_year,
+        },
         "dimensions": list(DIMENSIONS),
         "years": years,
         "objective": {"metric": metric, "statistic": statistic},
@@ -2732,7 +3087,12 @@ def run_project_sizing(
         points=_json_safe(stats),
         recommendation=_json_safe(recommendation),
         curtailment=_json_safe(
-            {"curtailment": curtailment, "rte_sensitivity": sensitivity}
+            {
+                "curtailment": curtailment,
+                "rte_sensitivity": sensitivity,
+                "one_at_a_time": one_at_a_time,
+                "break_even": break_even,
+            }
         ),
     )
 

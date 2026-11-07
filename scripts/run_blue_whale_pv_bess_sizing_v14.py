@@ -263,8 +263,9 @@ def concise_project_summary(out: Mapping[str, Any]) -> Dict[str, Any]:
         "year1_unit_revenue_lkr",
     )
     for name, block in out["sensitivities"].items():
-        if block is None:
-            sens[name] = None
+        if not isinstance(block, Mapping) or "rows" not in block:
+            # None, or a block that is already compact (one_at_a_time, break_even).
+            sens[name] = block
             continue
         sens[name] = {k: v for k, v in block.items() if k != "rows"}
         sens[name]["columns"] = list(sens_cols)
