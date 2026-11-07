@@ -1,4 +1,4 @@
-"""Regression pins for the Blue Whale Lot 5B scenario (v0.9, model 15.19.0).
+"""Regression pins for the Blue Whale Lot 5B scenario (v0.10, model 15.21.0).
 
 The scenario is a screening skeleton on placeholder inputs, so these pins prove only that
 the committed KPIs have not moved unnoticed. ``TEST-01`` pairs each pin with a
@@ -58,9 +58,13 @@ SCRIPT = (
 # 0.165096 -> 0.164864, tariff blend 24.97218 -> 24.97308). Before, at 15.18.0 after #1398
 # (v0.8): project IRR 0.08734893167526492, equity IRR 0.06053321098433617, min DSCR
 # 0.8678977848741305.
+# Re-pinned at 15.21.0 for the PUCSL escalable O&M indexation (L-9, hybrid v0.10: the blended
+# 4.596111 O&M part and the premium's 0.30 indexed at 3.21%/yr). Before, at 15.20.0 (v0.9):
+# project IRR 0.08731517255077664, equity IRR 0.060488952949803165, min DSCR
+# 0.8678177667918598 (year 1; unchanged).
 PINS = {
-    "project_irr": 0.08731517255077664,
-    "equity_irr": 0.060488952949803165,
+    "project_irr": 0.09282901849371646,
+    "equity_irr": 0.06792211828140893,
     "min_dscr": 0.8678177667918598,
 }
 
@@ -157,6 +161,45 @@ def test_project_npv_moves_with_the_unit_capex(base: Dict[str, float]) -> None:
         assert dearer["project_irr"] < base["project_irr"], tech
 
 
+def _om_index_rate(scen: Dict[str, Any]) -> float:
+    """The yearly O&M index growth, in closed form from the scenario's inputs (L-9).
+
+    Written out here, apart from ``finance.tariff_indexation``, so the engine answers to an
+    oracle it does not share (TEST-01).
+    """
+    ix = scen["tariff"]["om_indexation"]
+    assert ix["basis"] == "ccpi_fx_weighted"
+    assert ix["lkr_usd_depreciation_pct"] == "relative_ppp"
+    ccpi = ix["ccpi_inflation_pct"] / 100.0
+    fx = (1.0 + ccpi) / (1.0 + ix["usd_inflation_pct"] / 100.0) - 1.0
+    return ix["ccpi_weight"] * ccpi + ix["lkr_usd_weight"] * fx
+
+
+def _indexed_dispatcher_revenue(out: Dict[str, Any], scen: Dict[str, Any]) -> list:
+    """The hourly dispatcher's revenue with the Annex 2 escalable O&M parts indexed.
+
+    The dispatcher's flat revenue per year is wind energy x 25.73 + unit export x 20.72 +
+    priority export x 29.38. Each kWh earns ``escalable x (index - 1)`` more, with the
+    Annex 2 escalable parts (wind 4.93, ground solar 2.72, and the priority rate's
+    3.02 = 2.72 / 0.90, so 0.30 on the premium) and ``index = (1 + g) ** (year - 1)``.
+    """
+    g = _om_index_rate(scen)
+    flat = out["engine"]["dispatcher_revenue_lkr"]
+    indexed = []
+    for year, (rev, step) in enumerate(
+        zip(flat, out["degradation_path"], strict=True), start=1
+    ):
+        assert step["year"] == year
+        wind_kwh = (rev - step["revenue_lkr"]) / 25.73
+        unit_kwh = step["unit_export_mwh"] * 1000.0
+        priority_kwh = step["priority_export_mwh"] * 1000.0
+        uplift = (1.0 + g) ** (year - 1) - 1.0
+        indexed.append(
+            rev + uplift * (wind_kwh * 4.93 + unit_kwh * 2.72 + priority_kwh * 0.30)
+        )
+    return indexed
+
+
 def test_engine_revenue_equals_the_dispatcher() -> None:
     pytest.importorskip("pvlib")
     pytest.importorskip("shapely")
@@ -176,7 +219,9 @@ def test_engine_revenue_equals_the_dispatcher() -> None:
         "european_efficiency"
     ]
     out = cli.run(conf)
-    dispatcher = out["engine"]["dispatcher_revenue_lkr"]
+    # The dispatcher prices at the flat Annex 2 rates; L-9 indexes their escalable O&M
+    # parts (wind 4.93, solar 2.72, priority premium 3.02 - 2.72 = 0.30) yearly.
+    dispatcher = _indexed_dispatcher_revenue(out, yaml.safe_load(SCENARIO.read_text()))
     full = evaluate_with_overrides(str(SCENARIO), overrides={}, return_full_result=True)
     assert isinstance(full, dict)
     rows = full["annual_rows"]

@@ -5,6 +5,14 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **PUCSL escalable O&M tariff indexed yearly (15.21.0).** New optional `tariff.om_indexation`
+  (the escalable O&M part in LKR/kWh, and a yearly index weighted on CCPI and LKR/USD or a fixed
+  rate), plus an optional `escalable_om_lkr_per_kwh` on an energy-tariff BESS premium. Without
+  them every scenario is byte-identical. The Blue Whale scenarios take it on the owner's answer of
+  2026-11-07 (audit residual L-9, #1353 comment 6705449182), on the PUCSL 2026 methodology's basis
+  (s.3.1 item 2) with placeholder weights (input B35): 3.21%/yr. Wind project IRR 12.41% ->
+  13.13%; solar + BESS NPV USD -4.52M -> -4.44M; year-1 DSCR unchanged. Detail in the compiled
+  fragment.
 - **Opex split by currency (15.20.0).** New optional `opex.currency_split` (a USD share, given
   directly or weighted from components, USD and LKR escalation, and an optional LKR depreciation
   path for the USD share). Without it every scenario is byte-identical. The Blue Whale projects

@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # Blue Whale Hybrid: 9.5 MW wind + a 5 MW solar + 5 MW / 24 MWh BESS unit (Lot 5B, Kalpitiya)
 # ═══════════════════════════════════════════════════════════════════════════════
-# Version: 0.9 (SKELETON: screening placeholders, not a basis for any decision)
+# Version: 0.10 (SKELETON: screening placeholders, not a basis for any decision)
 # Path: scenarios/blue_whale_hybrid_lot5b_2026.yaml
 #
 # SUPERSEDED COMBINED VIEW (PR 4, 2026-11-01). The owner decided (#1353 comment 6556854201):
@@ -159,6 +159,9 @@ generation:
         # effective 25 Aug 2026). The 17:30-21:30 hours are from the July 2026 consultation;
         # the approved Annex 2 does not state them.
         tariff_lkr_per_kwh: 29.38
+        escalable_om_lkr_per_kwh: 0.30  # L-9: 3.02 - 2.72, the premium's share of the indexed O&M. The priority
+                                    # rate's 3.02 is the standalone 2.72 / 0.90 RTE (methodology s.5.1.2:
+                                    # R_charging / RTE); the BESS component itself is constant (s.5.1.2)
         cycles_per_year: 325.2787   # DERIVED (v0.9): priority-window export 6,635.69 MWh / (24 MWh x 0.85), year 1.
                                     # Includes 32.48 MWh of PV exported in the window. True cycles: 327.7/yr.
                                     # Was 325.4723 (v0.6-v0.8, unshaded)
@@ -182,8 +185,25 @@ tariff:
   # own, but the plant is 14.5 MW. Whether the limit counts per technology or per plant was
   # not found. If per plant, this tariff does not apply. Was 20.3 (DutchBay hybrid tariff).
   lkr_per_kwh: 24.97308
-  tariff_type: fixed            # input F04: two-part regulator-set FiT. The O&M part is indexed yearly and
-                                # the non-escalable part adjusted once at month 12; neither is modelled here
+  om_indexation:                # L-9 (owner, 2026-11-07: index it): only the escalable O&M part moves
+    escalable_om_lkr_per_kwh: 4.596111  # the same energy-weighted blend of the escalable parts (wind 4.93,
+                                        # solar 2.72): (9.5 x 0.487560 x 4.93 + 5 x 0.164864 x 2.72) /
+                                        # (9.5 x 0.487560 + 5 x 0.164864); bess_1 carries its own 0.30
+    basis: ccpi_fx_weighted     # PUCSL 2026 methodology s.3.1 item 2: the Commission publishes the yearly
+                                # rate "considering CCPI and LKR/USD exchange rate variations"
+    ccpi_weight: 0.30           # PLACEHOLDER (input B35): the methodology states no weights for the O&M
+    lkr_usd_weight: 0.70        # rate; these are its own s.3.1 item 1 weights for the non-escalable
+                                # adjustment (70% LKR/USD, 30% CCPI)
+    ccpi_inflation_pct: 5.0     # PLACEHOLDER (input B29): the CBSL 5% target, as the O&M's LKR inflation
+    lkr_usd_depreciation_pct: relative_ppp  # (1 + CCPI) / (1 + USD inflation) - 1 = 2.44%/yr
+    usd_inflation_pct: 2.5      # PLACEHOLDER (input B34): as the O&M's USD inflation
+                                # -> 0.30 x 5.0% + 0.70 x 2.44% = 3.21%/yr (PUCSL's consultation assumed
+                                #    3.85%/yr O&M escalation in its BESS case)
+    pre_operation_years: 0      # index 1.0 in operating year 1, the date the opex is stated at; any
+                                # escalation between the 2026 base year and COD is not modelled
+    source: "PUCSL Methodology for RE Feed-in Tariffs 2026 (Approved), s.3.1 item 2; conf/blue_whale_pucsl_fit_2026.yaml PUCSL-METHOD-2026"
+  tariff_type: fixed            # input F04: two-part regulator-set FiT. The O&M part is indexed yearly (above);
+                                # the month-12 adjustment of the non-escalable part is not modelled
   ppa_term_years: 20            # input F01: no official term for the 2026 small-plant FiT. 20 matches the
                                 # CEB standardised PPA draft (June 2025, >= 50 MW): 20 years from COD
 
@@ -317,12 +337,13 @@ wacc:
   description: "Build-up WACC drives the project discount rate."
 
 metadata:
-  version: '0.9'
+  version: '0.10'
   last_updated: '2026-11-07'
   author: DutchBay V14 Financial Modeling Team
   review_status: SKELETON - screening placeholders pending owner inputs (docs/blue_whale/INPUTS_REQUIRED.md)
   assumptions_source: 'Scaled from dutchbay_hybrid_bess_2025Q4 and ceb_solar_bess_nightpeak_10mw'
   changes:
+    - 'v0.10 (2026-11-07): the PUCSL escalable O&M tariff components indexed yearly (L-9; owner, 2026-11-07: yes; model 15.21.0). tariff.om_indexation: the energy-weighted blend of the escalable parts (wind 4.93, solar 2.72) = 4.596111 of 24.97308, and bess_1''s premium carries 0.30, at 3.21%/yr from operating year 1 (weights placeholder input B35). Project IRR 8.73% -> 9.28%, equity IRR 6.05% -> 6.79%; year-1 DSCR unchanged'
     - 'v0.9 (2026-11-07): the turbine''s shadow on the PV (input B33, model 15.19.0): the unit''s hourly PV is derated before dispatch for the tower and rotor shadow on its 147 tables (solar_resource.pv_array_turbine_shading on #1520''s geometry, rotor yaw from the PR 5 wind rose, optical floor). PR 3''s sizing re-run with the shadow keeps DC/AC 1.1 and 5 MW / 24 MWh. Solar CF 0.165096 -> 0.164864, degradation 0.384074 -> 0.383664, cycles 325.4723 -> 325.2787, fade 0.001914 -> 0.001929, blended tariff 24.97218 -> 24.97308, project CF 0.3763655 -> 0.3762855. Nothing else changes'
     - 'v0.8 (2026-11-01): capex BLENDED (PR 6, #1353 comment 6556975196): wind 12,350,000 -> 8,899,980 (USD 936.84/kW, mirrors the wind scenario v0.3); BESS 3,240,000 -> 3,377,760 (USD 140.74/kWh on 24 MWh); capex total 20,958,596 -> 17,646,336. Blends that include private commercial inputs, published on the owner''s decision. Nothing else changes'
     - 'v0.7 (2026-11-01): wind block mirrors the wind scenario v0.2 (PR 5, met mast 617725 transferred to the turbine): wind CF 0.374256 -> 0.487560, AEP 31.15 -> 40.57 GWh; project CF 0.302132 -> 0.3763655 and tariff blend 24.786 -> 24.97218 by their formulas. Not lender-grade; the met-mast HOLD stands'
