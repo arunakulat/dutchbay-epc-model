@@ -17,7 +17,8 @@ All notable changes to this project will be documented here.
   PVGIS-ERA5. Detail in the compiled fragment.
 - **Blue Whale capex blend, solar resource and re-sizing (15.17.0).** Wind and BESS capex become
   blends of China FOB pricing and internal anchors on the owner's decision (#1353 comment
-  6556975196); the published figures include private inputs as blends only. Wind 936.84 USD/kW
+  6556975196); the published figures are blends that include private inputs, and those inputs
+  can be recovered exactly from them (owner accepted, #1353 comment 6702419885). Wind 936.84 USD/kW
   (was 1,300); BESS 140.74 USD/kWh (was 135.00). The solar + BESS project re-sizes to 3.5 MW AC
   with 1 MW / 4 MWh. Wind project IRR 7.80% -> 10.81%. Detail in the compiled fragment.
 - **Blue Whale wind resource from met mast 617725 (15.16.0).** The Kalpitiya met-mast record is

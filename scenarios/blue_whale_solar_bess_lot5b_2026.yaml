@@ -46,8 +46,9 @@
 # 20261101, 325 points x 256 trials) now chooses 107 tables (4.01464 MWp), 3.5 MW AC and a
 # 1.0 MW / 4.0 MWh BESS under BOTH readings: the smallest PV and the smallest battery on the grid.
 # Every eligible size has a negative P50 unit NPV (this size: USD -312,629; P90 -571,313). The
-# BESS capex is a blend that includes private commercial inputs; a reader may be able to back out
-# a private input. Published on the owner's decision of 2026-11-01 (#1353 comment 6556975196).
+# BESS capex is a blend that includes private commercial inputs, and those inputs can be
+# recovered exactly from the published figures (owner accepted on 2026-11-07, #1353 comment
+# 6702419885). Published on the owner's decision of 2026-11-01 (#1353 comment 6556975196).
 # v0.1 (PR 4, NSO 250 price 135.00) chose 160 tables, 5.0 MW AC and 4.5 MW / 18 MWh. v0.3 (PR 7)
 # replaces v0.2's size with the owner's battery above.
 #
