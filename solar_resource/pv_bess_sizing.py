@@ -2101,7 +2101,9 @@ class BessOpex:
                 raw["usd_per_dc_kwh_year"], "bess_opex.usd_per_dc_kwh_year", lo=0.0
             ),
             dc_kwh_per_nominal_kwh=_num(
-                raw["dc_kwh_per_nominal_kwh"], "bess_opex.dc_kwh_per_nominal_kwh", lo=1.0
+                raw["dc_kwh_per_nominal_kwh"],
+                "bess_opex.dc_kwh_per_nominal_kwh",
+                lo=1.0,
             ),
         )
         return out
@@ -2188,7 +2190,9 @@ def _break_even_specs(raw: Any) -> List[Dict[str, Any]]:
         tol = _num(spec["tolerance"], f"{where}.tolerance", lo=0.0)
         if not low < high or tol <= 0.0:
             raise ValueError(f"{where}: need low < high and a positive tolerance")
-        out.append({"input": str(spec["input"]), "low": low, "high": high, "tolerance": tol})
+        out.append(
+            {"input": str(spec["input"]), "low": low, "high": high, "tolerance": tol}
+        )
     return out
 
 
@@ -2211,7 +2215,9 @@ def shifted_case(
     """
     unknown = sorted(set(shift) - set(SHIFT_KEYS))
     if unknown:
-        raise ValueError(f"{where}: unknown inputs {unknown}; allowed {list(SHIFT_KEYS)}")
+        raise ValueError(
+            f"{where}: unknown inputs {unknown}; allowed {list(SHIFT_KEYS)}"
+        )
     if not shift:
         raise ValueError(f"{where}: moves no input")
     if base.n != 1:
@@ -2933,6 +2939,7 @@ def run_project_sizing(
         "rows": rte_rows,
         "best_by_objective": best_rows(rte_rows),
     }
+
     def ruled(entry: Mapping[str, Any], name: str) -> bool:
         return bool(
             entry["eligible_by_reading"][name]
