@@ -1,6 +1,6 @@
 # Blue Whale: project status
 
-Last updated: 2026-11-01. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
+Last updated: 2026-11-07. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
 
 ## Configuration under study
 
@@ -10,7 +10,7 @@ turbine, built first, and a solar + BESS project sized under the PUCSL 2026 4 h 
 | Project | Component | Size | Notes |
 |---|---|---|---|
 | Wind (`scenarios/blue_whale_wind_lot5b_2026.yaml`) | Turbine | 1 x Envision EN-206/10.5 de-rated to 9.5 MW, 130 m hub, 206 m rotor | Owner decision 2026-11-01; tip height 233 m; built first. From PR 5 its yield rests on met mast 617725 (net CF 0.487560, 40.57 GWh; not lender-grade) |
-| Solar + BESS (`scenarios/blue_whale_solar_bess_lot5b_2026.yaml`) | Solar PV | 5.66552 MWp DC (151 tables) at 5.0 MW AC, JinkoSolar Tiger Neo 3.0 670 W, fixed tilt 8 degrees, 17 x Huawei SUN2000-330KTL-H1 | PR 7: PV AC 5.0 MW so that reading A sits at its 10 MW limit; PV DC chosen for the owner's battery on the P50 after-tax project NPV (PR 6: 4.01464 MWp, 3.5 MW AC; PR 4: 6.0032 MWp, 5.0 MW AC) |
+| Solar + BESS (`scenarios/blue_whale_solar_bess_lot5b_2026.yaml`) | Solar PV | 5.70304 MWp DC (152 tables) at 5.0 MW AC, JinkoSolar Tiger Neo 3.0 670 W, fixed tilt 8 degrees, 17 x Huawei SUN2000-330KTL-H1 | PR 7: PV AC 5.0 MW so that reading A sits at its 10 MW limit; PV DC chosen for the owner's battery on the P50 after-tax project NPV. 152 tables from 15.22.0, with the turbine on DutchBay T2 (15.18.0-15.19.0: 151; PR 6: 4.01464 MWp, 3.5 MW AC; PR 4: 6.0032 MWp, 5.0 MW AC) |
 | | BESS | **5.0 MW / 20.0 MWh (4 h), the owner's strategic choice** ("Fix 5 MW / 20 MWh"), charged only from the PV, discharged only 17:30-21:30 | PUCSL 2026 4 h rule. Not the value-based size: that is 1.0 MW / 4.0 MWh on 107 tables at 3.5 MW AC, USD 1.25M better at P50 after tax (PR 7 section) |
 
 The combined view `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (v0.8: 9.5 MW wind, 5.51544 MWp
@@ -321,7 +321,7 @@ augmentation and availability are not modelled.
 
 ## Solar + BESS sizing and pricing (v0.6, 2026-11-01)
 
-> **Historical Reference Note:** The sizing, decision grid, and KPIs in this section represent an intermediate design snapshot (v0.6, PR 3) superseded by PR 4 (two projects split), PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-the-turbines-shadow-on-the-pv-15190-2026-11-07) for current figures.
+> **Historical Reference Note:** The sizing, decision grid, and KPIs in this section represent an intermediate design snapshot (v0.6, PR 3) superseded by PR 4 (two projects split), PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0) and later PRs. See [Latest run](#latest-run-the-turbine-on-dutchbay-t2-15220-2026-11-07) for current figures.
 
 With the turbine fixed (PR 1), a seeded Monte Carlo chose the PV DC capacity and the BESS energy of
 the unit (`solar_resource/pv_bess_sizing.py`, `scripts/run_blue_whale_pv_bess_sizing_v14.py`,
@@ -479,7 +479,7 @@ P50 (USD -8.837M against -8.500M) because the BESS price range is skewed below i
 
 ## Two projects, and the solar + BESS project under the PUCSL 2026 rules (PR 4, 2026-11-01)
 
-> **Historical Reference Note:** The sizing (4.5 MW / 18 MWh), capacities, and KPIs in this section represent an intermediate design snapshot under PR 4 superseded by PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-the-turbines-shadow-on-the-pv-15190-2026-11-07) for current figures.
+> **Historical Reference Note:** The sizing (4.5 MW / 18 MWh), capacities, and KPIs in this section represent an intermediate design snapshot under PR 4 superseded by PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0) and later PRs. See [Latest run](#latest-run-the-turbine-on-dutchbay-t2-15220-2026-11-07) for current figures.
 
 ### Owner decisions (2026-11-01)
 
@@ -906,7 +906,86 @@ declared treatment, not a simulation. Every one of these limitations is recorded
 summary's `turbine_shading.limitations`. The losses are per table at its sample points, so
 #1518's grid-edge truncation of a footprint (its review finding D-1) does not apply here.
 
-## Latest run (the turbine's shadow on the PV, 15.19.0, 2026-11-07)
+## The turbine on DutchBay T2: layout, shading and sizing (15.22.0, 2026-11-07)
+
+Work item: #1353 comment 6705598736. Owner decision, verbatim: "Blue Whale Turbine is replacing
+the T2 Dutchbay turbine - its on the exact same location - if not, recalculate location to
+match T2 location. As such wake does not apply" (2026-11-07). On wake from T1 and T3 she chose
+"Zero wake, disclose T1/T3 risk" (open risk 2). The siting, flicker and wind figures for the
+new position are in the sections above; the wind yield does not change.
+
+**Layout.** The turbine now stands in the placeholder lot's north-east corner. The crane
+hardstand (`site_fit.crane_pad_side`, new) goes on the tower's west side: on the east side it
+would lie mostly outside the lot. This is an assumption until a crane plan exists. With the
+tower, its exclusion and the hardstand in the corner, the lot holds **186 tables** at the owner's
+5 MW / 20 MWh battery (191 before). The layout
+([`pv_bess_layout_lot5b.geojson`](pv_bess_layout_lot5b.geojson)) and the hourly table
+([`pv_bess_hourly_tmy.csv`](pv_bess_hourly_tmy.csv)) are regenerated.
+
+**Shading.** The tower now stands nearer the array, so its shadow costs more. The method and
+its limitations are unchanged (previous section). These are model estimates on placeholder
+inputs, at the optical floor:
+
+| Array | Tables | Tower | Rotor (wind rose) | Optical loss | AC energy loss | Rotor yawed to the sun (sensitivity) |
+|---|---|---|---|---|---|---|
+| Solar + BESS project (committed) | 152 | 0.082% | 0.121% | **0.203%** (was 0.130%) | **0.19%** (was 0.136%) | 0.258% |
+| Hybrid's unit (superseded) | 147 | 0.076% | 0.115% | 0.192% (was 0.125%) | 0.18% (was 0.130%) | 0.243% |
+
+**Sizing.** All three sizings were re-run on the same seed and trials. PR 3 keeps DC/AC 1.1
+with 24 MWh. PR 4's value-based size stays 107 tables, 3.5 MW AC and 1.0 MW / 4.0 MWh. The
+owner's battery moves from 151 to **152 tables (5.70304 MWp, DC/AC 1.1406)** at 5.0 MW AC
+(`conf/blue_whale_solar_bess_fixed_bess_sizing.yaml`: every whole table count from 134 to 191,
+of which 53 fit; 13,727 evaluations):
+
+| PV tables (MWp) | DC/AC | After-tax project NPV P50 / P90 (USD) | Unit pre-tax NPV P50 / P90 (USD) | Equity IRR P50 |
+|---|---|---|---|---|
+| 134 (5.02768) | 1.0055 | -5,387,036 / -5,952,887 | -1,020,311 / -1,607,833 | -9.61% |
+| 148 (5.55296) | 1.1106 | -5,335,273 / -5,917,521 | -863,948 / -1,453,787 | -7.63% |
+| 151 (5.66552) | 1.1331 | -5,334,392 / -5,919,004 | -838,619 / -1,430,883 | -7.73% |
+| **152 (5.70304), chosen** | **1.1406** | **-5,334,279 / -5,919,614** | **-831,885 / -1,421,663** | **-7.59%** |
+| 153 (5.74056) | 1.1481 | -5,335,251 / -5,920,707 | -825,863 / -1,413,590 | -7.50% |
+| 160 (6.00320) | 1.2006 | -5,348,600 / -5,935,362 | -794,204 / -1,372,569 | -7.04% |
+| 186 (6.97872), lot maximum | 1.3957 | -5,498,250 / -6,123,830 | -832,635 / -1,423,465 | -5.23% |
+
+The choice is a near tie: 152 tables is at least as good as 151 in 44.9% of paired trials, and
+better by USD 392 at the median. Every count from 145 to 155 lies within USD 7,100 of it at P50.
+The equity IRRs include #1398's debt-service shortfall carry, which landed after PR 7's run.
+Sensitivities (base case): the 12.5% curtailment scenario picks 150 tables and the 0.90 RTE
+case 146. The owner's choice now costs USD 1,253,066 of after-tax project NPV at P50 and
+1,596,441 at P90 against the value-based size (was 1,251,428 and 1,594,480).
+
+**Preview, not final.** These runs were made on #1561's head with this change applied; their
+summaries record that local merge's `git_sha`, whose tree is this branch at the time. The
+sizings are re-run once #1557 and the PUCSL O&M indexation land, and the figures here are
+replaced then.
+
+**KPIs.** Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case
+only. "Was" is main at 15.19.0.
+
+| Scenario | Project NPV (USD) | Equity NPV (USD) | Equity IRR | Min DSCR | Project IRR |
+|---|---|---|---|---|---|
+| Solar + BESS v0.5 | -4,998,968 (was -4,997,611) | -5,573,458 (was -5,568,837) | -8.12% (was -8.44%) | 0.8684 (was 0.8676) | undefined |
+| Hybrid v0.10 (superseded) | -2,654,612 (was -2,653,195) | -5,059,274 (was -5,058,080) | 6.05% (unchanged to 2 dp) | 0.8678 | 8.73% (8.7303%, was 8.7315%) |
+| Wind v0.3 | unchanged | unchanged | unchanged | unchanged | 10.81% |
+
+The solar + BESS equity cash flows change sign more than once, so its equity IRR is not a
+reliable ranking figure (audit residual L-13). Solar + BESS year 1: PV 8,676.59 MWh, export
+7,479.55 MWh (was 7,431.76), of which 6,817.18 MWh in the priority window (was 6,799.68);
+revenue LKR 355.27M (was 353.76M). The extra table outweighs the larger shadow.
+
+## Latest run (the turbine on DutchBay T2, 15.22.0, 2026-11-07)
+
+Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
+
+| Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
+|---|---|---|---|---|---|
+| Wind project (v0.3) | 10.81% (unchanged) | 8.63% | 0.868 | 69,109 | -1,737,634 |
+| Solar + BESS project (v0.5, 5 MW / 20 MWh, 152 tables) | undefined (reported as 0.0) | -8.12% | 0.868 | -4,998,968 | -5,573,458 |
+| Hybrid (v0.10, superseded) | 8.73% | 6.05% | 0.868 | -2,654,612 | -5,059,274 |
+
+Every other input is still a placeholder, so these are not results.
+
+## Earlier run (the turbine's shadow on the PV, 15.19.0, 2026-11-07)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only (after
 #1398's debt-service shortfall carry, which moved the equity figures at 15.18.0):
