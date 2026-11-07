@@ -809,8 +809,10 @@ class SiteFitConfig:
         coastline_geojson: Coastline the coastal setback is measured from.
         wind_siting_config: Config holding the ``site`` frame and ``coastal_setback``.
         foundation_diameter_m: Turbine foundation diameter.
-        crane_pad_length_ew_m, crane_pad_width_ns_m: Crane hardstand, east of the
-            foundation.
+        crane_pad_length_ew_m, crane_pad_width_ns_m: Crane hardstand, beside the
+            foundation and centred on the tower's latitude.
+        crane_pad_side: ``"east"`` or ``"west"``: the side of the foundation the
+            hardstand lies on.
         equipment_search_step_m: Grid step of the search for the equipment position.
         geojson_decimals: Decimal places of written coordinates.
     """
@@ -821,6 +823,7 @@ class SiteFitConfig:
     foundation_diameter_m: float
     crane_pad_length_ew_m: float
     crane_pad_width_ns_m: float
+    crane_pad_side: str
     equipment_search_step_m: float
     geojson_decimals: int
 
@@ -836,6 +839,12 @@ class SiteFitConfig:
             "crane_pad_width_ns_m",
         ):
             kw[key] = _non_negative(kw[key], f"site_fit.{key}")
+        side = str(kw["crane_pad_side"])
+        if side not in ("east", "west"):
+            raise ValueError(
+                f"site_fit.crane_pad_side must be 'east' or 'west', got {side!r}"
+            )
+        kw["crane_pad_side"] = side
         kw["equipment_search_step_m"] = _positive(
             kw["equipment_search_step_m"], "site_fit.equipment_search_step_m"
         )
@@ -1083,7 +1092,7 @@ def fit_site(
 
     Exclusions: the coastal setback (reservation and restricted area, from the mapped
     coastline plus any seaward-reference offset), the foundation disc at the tower, and
-    the crane hardstand east of it. The perimeter allowance is then taken inward from the
+    the crane hardstand on the configured side of it. The perimeter allowance is then taken inward from the
     usable area, the equipment group is placed, and the rest is packed with tables.
     """
     _require_shapely()
@@ -1097,10 +1106,13 @@ def fit_site(
     te, tn = site.turbine
     r = cfg.foundation_diameter_m / 2.0
     foundation = Point(te, tn).buffer(r, quad_segs=64)
+    pad_west = (
+        te + r if cfg.crane_pad_side == "east" else te - r - cfg.crane_pad_length_ew_m
+    )
     pad = box(
-        te + r,
+        pad_west,
         tn - cfg.crane_pad_width_ns_m / 2.0,
-        te + r + cfg.crane_pad_length_ew_m,
+        pad_west + cfg.crane_pad_length_ew_m,
         tn + cfg.crane_pad_width_ns_m / 2.0,
     )
     strip = lot.intersection(coast_zone)

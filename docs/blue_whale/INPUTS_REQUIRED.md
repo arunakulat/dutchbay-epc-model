@@ -25,7 +25,7 @@ feasibility study. **3** refines the result.
 |---|---|---|---|---|
 | B01 | Project company: legal name, PV number, shareholders, and its relationship to Blue Whale Resort (Pvt) Ltd | `project.developer` | "Blue Whale Limited (to be confirmed)" | 1 |
 | B02 | Land arrangement: lease or transfer from the landowner, term, annual rent or premium | `opex` land lease line | inside the 0.15M overhead line | 1 |
-| B03 | Site survey with coordinates (WGS84) of the boundary and proposed turbine, PV and BESS positions, and the permanent vegetation line or back-dune toe on the beach | `conf/blue_whale_wind_siting.yaml` `site`; `docs/blue_whale/site_placeholder_lot5b.geojson` | Assumed 9.3077 ha square on the OpenStreetMap coastline at DutchBay T2's latitude, flagged `surveyed: false` (owner, 2026-11-01). Every wind, setback and flicker figure depends on it | 1 |
+| B03 | Site survey with coordinates (WGS84) of the boundary and proposed turbine, PV and BESS positions, and the permanent vegetation line or back-dune toe on the beach | `conf/blue_whale_wind_siting.yaml` `site`; `docs/blue_whale/site_placeholder_lot5b.geojson` | Assumed 9.3077 ha square on the OpenStreetMap coastline at DutchBay T2's latitude, flagged `surveyed: false` (owner, 2026-11-01). The turbine stands on T2's recorded position (owner, 2026-11-07: it replaces T2), which falls in the lot's north-east corner. Every wind, setback and flicker figure depends on it | 1 |
 | B04 | The 9 title documents missing from the scan, and a current Land Registry search on folio D 65/97 | lender due diligence | n/a | 2 |
 
 ## B. Wind (1 x 9.5 MW)

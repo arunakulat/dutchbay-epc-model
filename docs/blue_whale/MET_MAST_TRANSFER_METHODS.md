@@ -21,7 +21,7 @@ The method is `analytics/wind/met_mast_transfer.py`. Only aggregates are publish
 | Input | Identity | Handling |
 |---|---|---|
 | Met-mast export 617725, 10-minute, 30-120 m, 8.056318 N 79.708150 E | SHA-256 `a1996369...2cd46`, 8,758,675 bytes; checked against the package's `PRIVATE_SOURCE_MANIFEST.sha256` before use (the run refuses a mismatch) | Private (DutchBay_RAG); read through `DUTCHBAY_MET_MAST_617725_SOURCE` |
-| NASA POWER hourly, MERRA-2, WS50M, WD50M, WS10M, UTC, 2015-2025 | `https://power.larc.nasa.gov/api/temporal/hourly/point`, `community=RE`, `time-standard=UTC`, API v2.10.3, retrieved 1 November 2026, at the mast and at the turbine (8.292500 N 79.752666 E). Each year's data block is pinned by SHA-256 in the config | Public; read through `DUTCHBAY_NASA_POWER_DIR`. The files carry a per-request timing field, so the data block, not the file, is pinned |
+| NASA POWER hourly, MERRA-2, WS50M, WD50M, WS10M, UTC, 2015-2025 | `https://power.larc.nasa.gov/api/temporal/hourly/point`, `community=RE`, `time-standard=UTC`, API v2.10.3, retrieved 1 November 2026, at the mast and at the turbine, now DutchBay T2 (8.292500 N 79.754700 E; until 2026-11-07 the #1530 position, 79.752666 E). Each year's data block is pinned by SHA-256 in the config. Re-fetched at T2 on 2026-11-07: all 11 data blocks are byte-identical to those at the #1530 position (the same MERRA-2 cell), so the pins and every wind result are unchanged. A local copy fetched at the old point must be re-fetched, because the run checks each file's coordinates against the config | Public; read through `DUTCHBAY_NASA_POWER_DIR`. The files carry a per-request timing field, so the data block, not the file, is pinned |
 | Envision EN-206/10.5 curve, de-rated to 9.5 MW by clipping | Read at run time from outside the repository, as #1530 | Confidential; only derived AEP and CF are published (owner decision, #1353 comment 6554211155) |
 | Density 1.15 kg/m3 and loss stack 7.77% | #1530's basis, read through `conf/blue_whale_wind_siting.yaml` | Public |
 
@@ -203,7 +203,9 @@ P50 40.57 GWh; 1-year sigma 13.16%: P75 36.97, **P90 (1 year) 33.73 GWh**; 20-ye
 
 ### Shadow flicker, expected case
 
-At the placeholder-lot receptors (`conf/blue_whale_wind_siting.yaml`), hours per year: the
+At the placeholder-lot receptors (`conf/blue_whale_wind_siting.yaml`), with the turbine on
+DutchBay T2 (owner, 2026-11-07; re-run that day, and only these receptor figures changed),
+hours per year: the
 astronomical worst case; #1530's expected case (sunshine, operating probability 0.930, rotor
 always facing the sun); and the realistic case here, with the rotor yawed into the long-term
 wind (month by sector, five yaw angles per sector) and turning only when the hub speed lies in
@@ -211,15 +213,15 @@ the curve's producing range (94.1% of hours).
 
 | Receptor | Distance (m) | Worst case | #1530 expected | Expected, yawed |
 |---|---:|---:|---:|---:|
-| mid_west | 68 | 2,053.7 | 1,816.0 | 826.2 |
-| mid_north | 152 | 1,036.0 | 811.3 | 493.4 |
-| corner_ne | 273 | 539.5 | 346.2 | 157.3 |
-| corner_nw | 135 | 580.1 | 504.2 | 142.3 |
-| corner_sw | 194 | 266.4 | 236.3 | 110.5 |
-| mid_east | 247 | 250.9 | 181.0 | 32.2 |
-| corner_se, mid_south | 307, 207 | 0 | 0 | 0 |
+| corner_ne | 50 | 2,194.4 | 1,856.6 | 733.3 |
+| mid_north | 106 | 1,425.9 | 1,260.8 | 445.1 |
+| mid_west | 292 | 437.4 | 359.3 | 208.0 |
+| corner_sw | 388 | 273.0 | 209.1 | 171.8 |
+| corner_nw | 258 | 423.5 | 340.9 | 167.3 |
+| mid_east, corner_se, mid_south | 146, 294, 309 | 0 | 0 | 0 |
 
-Six of eight boundary receptors still exceed the 8 h/yr expected-case guidance. The receptors
+Five of eight boundary receptors still exceed the 8 h/yr expected-case guidance (six at the
+#1530 position). The receptors
 are lot-boundary points, not dwellings (input B08).
 
 ## Assumptions
