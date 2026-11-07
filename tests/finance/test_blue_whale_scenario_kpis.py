@@ -1,4 +1,4 @@
-"""Regression pins for the Blue Whale Lot 5B scenario (v0.8, model 15.18.0).
+"""Regression pins for the Blue Whale Lot 5B scenario (v0.9, model 15.19.0).
 
 The scenario is a screening skeleton on placeholder inputs, so these pins prove only that
 the committed KPIs have not moved unnoticed. ``TEST-01`` pairs each pin with a
@@ -54,10 +54,14 @@ SCRIPT = (
 # 0.06900278150431857, equity IRR 0.04331151885509987, min DSCR 0.8674143524654796.
 # Re-pinned for #1398 (P2-F3-01 debt-service shortfall carried as sponsor cure in year 1,
 # where min DSCR is 0.8679; before: equity IRR 0.06377186287573333).
+# Re-pinned at 15.19.0 for the turbine's shadow on the PV (hybrid v0.9, input B33: solar CF
+# 0.165096 -> 0.164864, tariff blend 24.97218 -> 24.97308). Before, at 15.18.0 after #1398
+# (v0.8): project IRR 0.08734893167526492, equity IRR 0.06053321098433617, min DSCR
+# 0.8678977848741305.
 PINS = {
-    "project_irr": 0.08734893167526492,
-    "equity_irr": 0.06053321098433617,
-    "min_dscr": 0.8678977848741305,
+    "project_irr": 0.08731517255077664,
+    "equity_irr": 0.060488952949803165,
+    "min_dscr": 0.8678177667918598,
 }
 
 

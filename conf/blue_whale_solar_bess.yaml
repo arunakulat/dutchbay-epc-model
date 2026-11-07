@@ -165,10 +165,38 @@ pv_yield:
   # Not modelled, declared:
   # - bifacial rear gain: no measured ground albedo or row-height basis for this site, and
   #   the financed solar chain is monofacial by rule (solar_resource.bifacial_guard, SOLAR-9);
-  # - turbine shadow on the PV: belongs to #1520 (solar_resource.turbine_shading), not on
-  #   main or on this branch.
   bifacial_modelled: false
-  turbine_shading_modelled: false
+  # Turbine shadow on the PV (input B33): modelled from model 15.19.0. The hourly PV is
+  # derated, before the battery sees it, by the beam irradiance the tower and rotor remove
+  # from the laid-out tables (solar_resource.pv_array_turbine_shading, on the geometry of
+  # #1520's solar_resource.turbine_shading). Every site input is read, not restated: the
+  # tables from the layout this config packs, the tower from site_fit.site_geojson, the hub
+  # height and rotor diameter from site_fit.wind_siting_config (turbine block), the module
+  # plane and TMY from resource_solar above. Method values not set here come from
+  # config/defaults.yaml (defaults.solar_resource.turbine_shading): blade solidity 0.04,
+  # tower width 1/16 of the rotor radius, module height 1 m, 2 sun positions per hour.
+  turbine_shading_modelled: true
+  turbine_shading:
+    # Sample points per table (cell centres). 8 x 2 on the ~32 m x 4.7 m tables puts a
+    # point every ~4 m along a row; the array loss changes by under 0.001 percentage point
+    # from 3 x 3 to 16 x 4 on PR 2's layout.
+    samples_per_table_ew: 8
+    samples_per_table_ns: 2
+    # The rotor faces the wind, so the disc's orientation follows the 130 m wind rose of
+    # PR 5's met-mast transfer (HOLD: not lender-grade; annual, so direction is taken as
+    # independent of the hour). "uniform" would spread yaw evenly over 180 degrees.
+    yaw_basis: wind_rose
+    wind_rose_csv: docs/blue_whale/met_mast_wind_rose_130m.csv
+    # ASSUMPTION (declared, decides materiality): 1.0, the optical floor. Moving blade
+    # shadows also disturb string currents, bypass diodes and inverter MPPT, so measured
+    # losses can exceed the optical figure (Dekker et al. 2023, J. Renewable Sustainable
+    # Energy 15, 063703, measured at a Dutch wind-solar park, reports MPPT disturbance);
+    # no published multiplier for this rotor and table design is in the corpus, and no
+    # string-level simulation exists, so none is assumed. The stress case (x3) is reported
+    # beside the pinned KPIs in docs/blue_whale/STATUS.md.
+    electrical_mismatch_multiplier: 1.0
+    electrical_mismatch_basis: "optical floor: no string-level simulation or site measurement; x3 stress reported in docs/blue_whale/STATUS.md"
+    method_overrides: {}
   degradation_years: 20               # path reported for the PPA term
 
 bess:

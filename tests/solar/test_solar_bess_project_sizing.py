@@ -73,11 +73,14 @@ POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 # DSCR 0.8669721833235606.
 # Re-pinned for #1398 (P2-F3-01 debt-service shortfall carried as sponsor cure in years 1 and
 # 16-20; before: equity NPV -5395403.401365028, equity IRR -0.03575607324588892).
+# Re-pinned at 15.19.0 for the turbine's shadow on the PV (input B33; v0.4, size unchanged at
+# 151 tables). Before, at 15.18.0 after #1398 (v0.3): project NPV -4992408.759406766, equity
+# NPV -5564410.144390165, equity IRR -0.08317620969932149, min DSCR 0.867987057099332.
 SOLAR_BESS_PINS = {
-    "project_npv": -4992408.759406766,
-    "equity_npv": -5564410.144390165,
-    "equity_irr": -0.08317620969932149,
-    "min_dscr": 0.867987057099332,
+    "project_npv": -4997611.258776674,
+    "equity_npv": -5568837.4281859165,
+    "equity_irr": -0.0843625813445068,
+    "min_dscr": 0.8676222789656864,
 }
 # WIND_PINS re-pinned at 15.16.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
 # 0.487560). Before, at 15.15.0 (v0.1): project IRR 0.04085210230412145, equity IRR
@@ -453,6 +456,39 @@ def test_small_run_is_truthful_reproducible_and_obeys_both_readings(
     for p in first.points:
         assert p["bess_energy_mwh"] == pytest.approx(4.0 * p["bess_power_mw"])
         assert p["meets_4h_rule"]
+
+
+def test_shaded_pv_follows_each_points_table_packing(
+    site: Dict[str, Any],
+) -> None:
+    """The PV cache keys on the table packing when the turbine's shadow is modelled (B33).
+
+    At 185 tables and 5 MW AC, the 1 MW and the 3 MW BESS footprints pack the tables
+    differently, so the shadow falls on different tables. Unshaded, the two points share
+    one PV series; shaded, each must get its own. A cache that ignored the packing would
+    hand the 3 MW point the 1 MW point's series.
+    """
+    assert site["shading"] is not None
+    cfg = _small()
+    cfg["grid"] = {
+        **cfg["grid"],
+        "pv_tables": [185],
+        "pv_ac_mw": [5.0],
+        "bess_power_mw": [1.0, 3.0],
+    }
+    cfg["monte_carlo"] = {**cfg["monte_carlo"], "n_trials": 1}
+
+    def pv_by_power(s: Dict[str, Any]) -> Dict[float, float]:
+        run = _run(cfg, s, evaluate_with_overrides)
+        assert len(run.points) == 2
+        return {p["bess_power_mw"]: p["pv_ac_mwh_factor_1"] for p in run.points}
+
+    unshaded = pv_by_power({**site, "shading": None})
+    assert unshaded[1.0] == unshaded[3.0]
+    shaded = pv_by_power(site)
+    assert shaded[1.0] != shaded[3.0]
+    for power in (1.0, 3.0):
+        assert unshaded[power] * 0.99 < shaded[power] < unshaded[power]
 
 
 def test_project_sizing_refuses_the_turbine_and_a_bad_duration(

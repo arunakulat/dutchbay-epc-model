@@ -234,8 +234,8 @@ packing is indicative, not a layout:
 The lot's east edge also lies on an OpenStreetMap coastline way, so the 60 m segment-2
 setback is applied there too. The setback on that side may differ (CZ&CRMP 6.5.4 lagoon and
 stream setbacks are an open question from PR 1). The tip-height setback and shadow flicker of
-PR 1 are not PV exclusions; the PV output lost to the turbine's shadow is #1520's calculation
-and is not modelled here.
+PR 1 are not PV exclusions; the PV output lost to the turbine's shadow is modelled from
+15.19.0 (input B33; see "The turbine's shadow on the PV" below).
 
 ### PV yield
 
@@ -248,8 +248,8 @@ the same chain, sums to the producer's figure (relative gap 2e-16):
 [`pv_bess_hourly_tmy.csv`](pv_bess_hourly_tmy.csv) (year 1, hour-start UTC).
 
 Not modelled: bifacial rear gain (no albedo or row-height basis for the site, and the
-financed solar chain is monofacial under `solar_resource.bifacial_guard`); turbine shading
-on the PV (#1520).
+financed solar chain is monofacial under `solar_resource.bifacial_guard`). Turbine shading on
+the PV was not modelled at this version; it is from 15.19.0 (input B33).
 
 ### BESS dispatch (year 1, over the TMY year)
 
@@ -303,7 +303,7 @@ augmentation and availability are not modelled.
 
 ## Solar + BESS sizing and pricing (v0.6, 2026-11-01)
 
-> **Historical Reference Note:** The sizing, decision grid, and KPIs in this section represent an intermediate design snapshot (v0.6, PR 3) superseded by PR 4 (two projects split), PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-pr-7-the-owners-battery-15180-2026-11-01) for current figures.
+> **Historical Reference Note:** The sizing, decision grid, and KPIs in this section represent an intermediate design snapshot (v0.6, PR 3) superseded by PR 4 (two projects split), PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-the-turbines-shadow-on-the-pv-15190-2026-11-07) for current figures.
 
 With the turbine fixed (PR 1), a seeded Monte Carlo chose the PV DC capacity and the BESS energy of
 the unit (`solar_resource/pv_bess_sizing.py`, `scripts/run_blue_whale_pv_bess_sizing_v14.py`,
@@ -461,7 +461,7 @@ P50 (USD -8.837M against -8.500M) because the BESS price range is skewed below i
 
 ## Two projects, and the solar + BESS project under the PUCSL 2026 rules (PR 4, 2026-11-01)
 
-> **Historical Reference Note:** The sizing (4.5 MW / 18 MWh), capacities, and KPIs in this section represent an intermediate design snapshot under PR 4 superseded by PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-pr-7-the-owners-battery-15180-2026-11-01) for current figures.
+> **Historical Reference Note:** The sizing (4.5 MW / 18 MWh), capacities, and KPIs in this section represent an intermediate design snapshot under PR 4 superseded by PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-the-turbines-shadow-on-the-pv-15190-2026-11-07) for current figures.
 
 ### Owner decisions (2026-11-01)
 
@@ -690,9 +690,9 @@ inventory and references: [CAPEX_AND_SOLAR_RESOURCE_METHODS.md](CAPEX_AND_SOLAR_
 results `capex_blend_summary.json`, `solar_resource_summary.json`, `solar_resource_monthly.csv`.
 
 **The disclosure surface moves on the owner's authority.** The wind and BESS capex are blends
-that include private commercial inputs; a reader may be able to back out a private input.
-Published on the owner's decision of 2026-11-01 (#1353 comment 6556975196). No raw private
-figure is published.
+that include private commercial inputs, and those inputs can be recovered exactly from the
+published figures. Published on the owner's decision of 2026-11-01 (#1353 comment 6556975196);
+the owner accepted the exact recoverability on 2026-11-07 (#1353 comment 6702419885).
 
 | Item | Low | Mode | High | Was |
 |---|---:|---:|---:|---|
@@ -803,7 +803,105 @@ after-tax project NPV, so neither size is viable on these placeholder inputs.
 SARAH3, citing #1540's finding, and reports the satellite figures (Global Solar Atlas PVOUT
 +6.3%, about +9% GHI) as upside only. No data file changed.
 
-## Latest run (PR 7, the owner's battery, 15.18.0, 2026-11-01)
+## The turbine's shadow on the PV (input B33, 15.19.0, 2026-11-07)
+
+Work item: #1353 comment 6568242480. Owner decisions, verbatim: "#1520 as is, Blue Whale PR
+next" and, of the shadow work, "This PR has a material effect on Blue Whale" (2 Nov 2026).
+
+**Method.** `solar_resource/pv_array_turbine_shading.py` runs #1518's shadow geometry
+(`solar_resource/turbine_shading.py`: a tower strip and a projected rotor disc, both along the
+sun ray) on each PV table of [`pv_bess_layout_lot5b.geojson`](pv_bess_layout_lot5b.geojson),
+from the turbine in [`site_placeholder_lot5b.geojson`](site_placeholder_lot5b.geojson) and the
+rotor and hub of `conf/blue_whale_wind_siting.yaml`. Every site input comes from those files, so
+nothing in the code is specific to this site. Each table is sampled at 8 x 2 points, at the
+TMY's half-hourly sun positions:
+
+- the tower strip takes the whole beam;
+- inside the rotor's shadow, and outside the tower strip, the turning blades take the blade
+  solidity (0.04) of the beam;
+- the rotor's yaw is weighted by the 130 m wind rose
+  ([`met_mast_wind_rose_130m.csv`](met_mast_wind_rose_130m.csv), its 16 sectors folded onto 8
+  orientations, since a disc and its reverse cast the same shadow).
+
+The hourly retention, one less the shaded share of plane-of-array irradiance, multiplies the
+plane-of-array irradiance that drives the PVWatts DC model, before clipping and before BESS
+dispatch, in the unit runner and in all three sizings. The cell temperature stays on the
+unshaded irradiance.
+
+**Electrical mismatch: the optical floor.** A partial shadow across a string can cost more than
+the light it blocks, through mismatch and bypass diodes, and field work reports MPPT
+disturbance under turbine shadows (Dekker et al. 2023, J. Renewable Sustainable Energy 15,
+063703). No published multiplier fits this array, and there is no string-level simulation
+or site measurement, so the committed case applies none (`electrical_mismatch_multiplier: 1.0`).
+A x3 stress is reported below. A string-level study or site measurement would replace the
+floor.
+
+**Result.** These are model estimates on placeholder inputs, not measurements.
+
+| Array | Tables | Tower | Rotor (wind rose) | Optical loss | AC energy loss | Rotor yawed to the sun (sensitivity) |
+|---|---|---|---|---|---|---|
+| Solar + BESS project (committed) | 151 | 0.042% | 0.089% | **0.130%** | **0.136%** | 0.197% |
+| Hybrid's unit (superseded) | 147 | 0.039% | 0.085% | 0.125% | 0.130% | 0.191% |
+
+Losses are shares of the array's annual plane-of-array irradiance (optical) and of its AC
+energy. The last column turns the rotor to face the sun's azimuth at every step, which is the
+largest shadow a horizontal-axis rotor can cast. It is a sensitivity, not an upper bound on
+the loss: the wind decides the yaw. #1518's sun-facing sphere case ("high") cannot happen
+physically and is not quoted.
+
+**Sizing.** All three sizings were re-run with the shadow on the same seed and trials. No size
+changes: PR 3 keeps DC/AC 1.1 with 24 MWh; PR 4's value-based size stays 107 tables, 3.5 MW AC
+and 1.0 MW / 4.0 MWh; the owner's battery keeps 151 tables at 5.0 MW AC. The owner's choice
+now costs USD 1,251,428 of after-tax project NPV at P50 and 1,594,480 at P90 (was 1,247,165
+and 1,590,005). The objective's P50 and P90 at every grid point move only by the shadow. The
+equity figures reported beside them also take in #1398's debt-service shortfall carry, which
+landed after the last runs. Some of the alternatives the full-grid summary reports (none
+committed) move too:
+- the best P50 unit pre-tax IRR moves from 191 tables, 6.0 MW AC and 2 MW / 8 MWh to the
+  value-based size;
+- the best P50 equity IRR moves to 191 tables at 6.0 MW AC with 4 MW / 16 MWh under reading A
+  (was 5.0 MW AC with 5 MW / 20 MWh) and 5 MW / 20 MWh under reading B (was 6 MW / 24 MWh);
+- the best P50 minimum DSCR under reading B moves from 4.0 to 3.5 MW AC.
+
+The runs are at 391b0dc7 (all three summaries). Each summary's digest of the scenario file
+differs from the committed scenario, because the scenario is written from the run, as on main.
+
+**KPIs.** These run through `analytics.evaluation_v14.evaluate_with_overrides` in constant LKR,
+base case only. The "before" values are main at 15.18.0 after #1398.
+
+| Scenario | Project NPV (USD) | Equity NPV (USD) | Equity IRR | Min DSCR | Project IRR |
+|---|---|---|---|---|---|
+| Solar + BESS v0.4, optical floor | -4,997,611 (was -4,992,409) | -5,568,837 (was -5,564,410) | -8.44% (was -8.32%) | 0.8676 (was 0.8680) | undefined |
+| Solar + BESS, x3 mismatch stress (not committed) | -5,008,092 | -5,577,755 | -8.69% | 0.8669 | undefined |
+| Hybrid v0.9 (superseded) | -2,653,195 (was -2,649,382) | -5,058,080 (was -5,054,866) | 6.05% (unchanged to 2 dp) | 0.8678 | 8.73% (8.7315%, was 8.7349%) |
+| Wind v0.3 | unchanged | unchanged | unchanged | unchanged | 10.81% |
+
+Solar + BESS year 1: export 7,431.76 MWh (was 7,442.89), of which 6,799.68 MWh in the priority
+window (was 6,803.29); revenue LKR 353.76M (was 354.10M). Under the x3 stress: export 7,409.52 MWh
+and revenue LKR 353.08M.
+
+**Limitations.** Diffuse and circumsolar irradiance are treated as unshaded, the ground is
+flat, and the nacelle, hub overhang and tower taper are left out. The yaw follows the annual
+wind rose, independent of hour and season. Shaded modules get no credit for running cooler.
+The blade solidity is a time average with no blade planform. The electrical multiplier is a
+declared treatment, not a simulation. Every one of these limitations is recorded in the
+summary's `turbine_shading.limitations`. The losses are per table at its sample points, so
+#1518's grid-edge truncation of a footprint (its review finding D-1) does not apply here.
+
+## Latest run (the turbine's shadow on the PV, 15.19.0, 2026-11-07)
+
+Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only (after
+#1398's debt-service shortfall carry, which moved the equity figures at 15.18.0):
+
+| Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
+|---|---|---|---|---|---|
+| Wind project (v0.3) | 10.81% (unchanged) | 8.63% | 0.868 | 69,109 | -1,737,634 |
+| Solar + BESS project (v0.4, 5 MW / 20 MWh) | undefined (reported as 0.0) | -8.44% | 0.868 | -4,997,611 | -5,568,837 |
+| Hybrid (v0.9, superseded) | 8.73% | 6.05% | 0.868 | -2,653,195 | -5,058,080 |
+
+Every other input is still a placeholder, so these are not results.
+
+## Earlier run (PR 7, the owner's battery, 15.18.0, 2026-11-01)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
 
@@ -941,5 +1039,8 @@ priority-1 inputs replace the placeholders.
    corrected. The owner's choice costs USD 1.25M of after-tax project NPV at P50 (1.59M at P90)
    against the value-based 1 MW / 4 MWh. Owner to note that every size is value-negative on the
    placeholder inputs; quotes are still owed (B09, B15, B19).
-8. Replace placeholders in the scenarios, then run the v14 pipeline for base and P90 cases.
-9. Assemble the DBPL feasibility study once the model has owner-sourced inputs.
+8. Done in 15.19.0: the turbine's shadow on the PV (B33), on the optical floor. Owner to
+   decide whether to commission a string-level shading study (the x3 stress costs a further
+   USD 0.01M of project NPV) and to note that the shadow modelled here is optical only.
+9. Replace placeholders in the scenarios, then run the v14 pipeline for base and P90 cases.
+10. Assemble the DBPL feasibility study once the model has owner-sourced inputs.

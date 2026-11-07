@@ -8,7 +8,9 @@ Reads ``conf/blue_whale_solar_bess.yaml`` and prints one JSON object (CLI-01, CL
   (:mod:`analytics.gis.pv_array_layout`);
 * the PV yield from the repository's producer
   (:func:`solar_resource.pv_producer.compute_solar_aep`) and its hourly series, checked
-  to sum to the producer's annual energy;
+  to sum to the producer's annual energy, then derated hour by hour for the turbine's
+  shadow on the laid-out tables when ``pv_yield.turbine_shading_modelled`` is true
+  (:mod:`solar_resource.pv_array_turbine_shading`, input B33);
 * the hourly dispatch of the battery over the TMY year, its annual energy and revenue
   by rate, the degradation path, and the engine fields that represent the unit
   (:mod:`solar_resource.pv_bess_dispatch`).
@@ -51,6 +53,7 @@ from analytics.gis.pv_array_layout import (
     size_array,
 )
 from analytics.gis.shadow_flicker import CoastalSetbackConfig, LocalFrame
+from solar_resource.pv_array_turbine_shading import shading_source_from_unit
 from solar_resource.pv_bess_dispatch import (
     BessConfig,
     DispatchConfig,
@@ -211,12 +214,37 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:
         gamma_pdc_per_c=module.temp_coeff_pmax_pct_per_c / 100.0,
     )
     aep = compute_solar_aep(solar)
-    pv = hourly_pv(solar)
-    gap = abs(pv.annual_mwh / 1000.0 - aep.annual_energy_gwh) / aep.annual_energy_gwh
+    unshaded = hourly_pv(solar)
+    gap = (
+        abs(unshaded.annual_mwh / 1000.0 - aep.annual_energy_gwh)
+        / aep.annual_energy_gwh
+    )
     if gap > PARITY_TOLERANCE:
         raise RuntimeError(
-            f"hourly PV sums to {pv.annual_mwh} MWh, producer {aep.annual_energy_gwh} GWh"
+            f"hourly PV sums to {unshaded.annual_mwh} MWh, "
+            f"producer {aep.annual_energy_gwh} GWh"
         )
+    # The turbine's shadow on the laid-out tables (input B33), hour by hour, before the
+    # battery sees the PV.
+    shade = shading_source_from_unit(
+        pv_cfg,
+        turbine=wind_siting["turbine"],
+        turbine_en=site.turbine,
+        read_text=lambda rel: _repo_path(rel).read_text(),
+    )
+    shading_report: Dict[str, Any] | None = None
+    pv = unshaded
+    if shade is not None:
+        if len(layout.tables) < sizing.tables:
+            raise ValueError(
+                f"the lot takes {len(layout.tables)} tables, the array needs "
+                f"{sizing.tables}: the turbine shadow needs every table placed"
+            )
+        pv = hourly_pv(
+            solar, poa_retention=shade.retention(layout.tables, sizing.tables, solar)
+        )
+        shading_report = shade.report(layout.tables, sizing.tables, solar)
+        shading_report["ac_energy_loss"] = 1.0 - pv.annual_mwh / unshaded.annual_mwh
     years = int(pv_cfg["degradation_years"])
     factors = [module.warranted_power_fraction(y) for y in range(1, years + 1)]
 
@@ -302,14 +330,18 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:
             "specific_yield_kwh_per_kwp": aep.specific_yield_kwh_per_kwp,
             "poa_kwh_m2": aep.poa_kwh_m2,
             "ghi_kwh_m2": aep.ghi_kwh_m2,
-            "hourly_sum_gwh": pv.annual_mwh / 1000.0,
+            "hourly_sum_gwh": unshaded.annual_mwh / 1000.0,
             "hourly_parity_relative_gap": gap,
             "loss_factor": pv.loss_factor,
             "dc_clipped_mwh": float(pv.dc_clipped_mw.sum()),
             "peak_ac_mw": float(pv.ac_mw.max()),
-            "year1_energy_gwh": aep.annual_energy_gwh * factors[0],
+            "shaded_annual_energy_gwh": pv.annual_mwh / 1000.0,
+            "year1_energy_gwh": aep.annual_energy_gwh
+            * (pv.annual_mwh / unshaded.annual_mwh)
+            * factors[0],
             "bifacial_modelled": bool(pv_cfg["bifacial_modelled"]),
-            "turbine_shading_modelled": bool(pv_cfg["turbine_shading_modelled"]),
+            "turbine_shading_modelled": shade is not None,
+            "turbine_shading": shading_report,
         },
         "dispatch": {
             "policy": dcfg.charge_policy,

@@ -5,6 +5,11 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Blue Whale: the turbine's shadow on the PV, input B33 (15.19.0).** The rotor and tower
+  shadow is computed per PV table and the hourly PV is derated before BESS dispatch. The
+  electrical-mismatch treatment is the optical floor. The loss is 0.13% of the solar + BESS
+  array's energy, and no size changes. Solar + BESS project NPV USD -4.99M -> -5.00M; hybrid
+  project IRR 8.73% (unchanged to 2 dp). Detail in the compiled fragment.
 - **Blue Whale solar + BESS: the owner's 5 MW / 20 MWh battery (15.18.0).** The sizing ranks on
   the after-tax project NPV and the project commits the owner's 5 MW / 20 MWh with 151 tables at
   5.0 MW AC (#1353 comment 6563070978). The value-based size stays 1 MW / 4 MWh; the choice
@@ -12,7 +17,8 @@ All notable changes to this project will be documented here.
   PVGIS-ERA5. Detail in the compiled fragment.
 - **Blue Whale capex blend, solar resource and re-sizing (15.17.0).** Wind and BESS capex become
   blends of China FOB pricing and internal anchors on the owner's decision (#1353 comment
-  6556975196); the published figures include private inputs as blends only. Wind 936.84 USD/kW
+  6556975196); the published figures are blends that include private inputs, and those inputs
+  can be recovered exactly from them (owner accepted, #1353 comment 6702419885). Wind 936.84 USD/kW
   (was 1,300); BESS 140.74 USD/kWh (was 135.00). The solar + BESS project re-sizes to 3.5 MW AC
   with 1 MW / 4 MWh. Wind project IRR 7.80% -> 10.81%. Detail in the compiled fragment.
 - **Blue Whale wind resource from met mast 617725 (15.16.0).** The Kalpitiya met-mast record is
