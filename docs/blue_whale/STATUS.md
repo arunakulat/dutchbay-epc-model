@@ -22,8 +22,8 @@ Funding: **fully LKR funded** (owner, 2026-10-28). Revenue, costs and debt are a
 model runs with FX held flat and the USD columns are a constant-rate translation of LKR.
 
 Model files: `scenarios/blue_whale_wind_lot5b_2026.yaml` and
-`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (versions 0.4 and 0.5), and the superseded
-`scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.9). Placeholders apart from the
+`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (versions 0.5 and 0.6), and the superseded
+`scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.10). Placeholders apart from the
 configuration, the funding currency, the researched tariffs, the wind yield, the solar + BESS
 size (the owner's 5 MW / 20 MWh battery and the PV chosen for it, PR 7), the cited PV capex and
 the blended wind and BESS capex (PR 6).
@@ -641,7 +641,8 @@ Best size at each PV level:
   build-up WACC (about 11.5% here), above the PUCSL consultation's 10.3%.
 - The PUCSL O&M components are indexed yearly and the non-escalable components adjusted once at
   month 12; neither is modelled, while O&M escalates at 5% a year (B29). This is why the project's
-  CFADS turn negative after the priority term.
+  CFADS turn negative after the priority term. (From 15.21.0 the escalable O&M parts are indexed;
+  see "Latest run".)
 - The BESS price is PR 3's 4 h-basis USD/kWh; at 4 h it now matches its basis. O&M is PR 3's
   USD 2.5/kWh-yr (about 1.9% of capex), below the consultation's 3%.
 - AC coupling: PV clipped at its inverters is lost, not stored. A DC-coupled design could store
@@ -803,7 +804,63 @@ after-tax project NPV, so neither size is viable on these placeholder inputs.
 SARAH3, citing #1540's finding, and reports the satellite figures (Global Solar Atlas PVOUT
 +6.3%, about +9% GHI) as upside only. No data file changed.
 
-## Latest run (opex split by currency, 15.20.0, 2026-11-07)
+## Latest run (PUCSL escalable O&M tariff indexed, 15.21.0, 2026-11-07)
+
+Work item: #1353 comment 6705449182 (audit residual L-9, #1537 domain F-3). The owner,
+2026-11-07, asked whether the PUCSL escalable O&M tariff component should be indexed: "yes".
+
+**Basis.** The PUCSL *Methodology for Renewable Energy Feed-in Tariffs 2026 (Approved)*
+(`conf/blue_whale_pucsl_fit_2026.yaml`, source `PUCSL-METHOD-2026`, PDF SHA-256 `7ee0f6d6…`,
+re-read with MarkItDown for this change), s.3.1 item 2: "A base O&M component will be approved
+considering existing market rates (no escalation assumed). Annual escalation rate for the base
+rate, will be published by the Commission considering CCPI and LKR/USD exchange rate variations.
+However, the Commission will adjust the cumulative escalation rate once in every three years
+taking into account the actual market rates." The July 2026 consultation shows the wind base O&M
+of 4.93 LKR/kWh is the year-1 O&M cost over the year-1 energy (15.98 MLKR / 3.24 GWh), so the
+component is meant to track O&M cost.
+
+**What is indexed.** Only the escalable O&M parts of the Annex 2 tariffs: wind 4.93 of 25.73,
+ground solar 2.72 of 20.72 (other periods), and 0.30 of the 29.38 priority premium. The 0.30 is
+the priority rate's 3.02 less 2.72. The 3.02 is the standalone 2.72 over the methodology's 0.90
+round-trip efficiency (s.5.1.2: R_charging / RTE), and the BESS component inside the priority
+rate stays constant (s.5.1.2). The non-escalable parts stay flat. The hybrid carries the
+energy-weighted blend of the escalable parts, 4.596111 of 24.97308.
+
+**The yearly rate** is `tariff.om_indexation` in each scenario, read by
+`finance/tariff_indexation.py`: g = 0.30 x CCPI 5.0% + 0.70 x LKR/USD 2.44% = 3.21%/yr. The LKR/USD
+rate is derived by relative PPP from USD inflation of 2.5%, the same inputs as the opex split
+(B29, B34). The methodology publishes no weights for this rate. The 70/30 split is its own weighting
+for the non-escalable adjustment (s.3.1 item 1). That is a placeholder, input B35. For comparison,
+the consultation assumed 3.85%/yr O&M escalation in its BESS case. The index is 1.0 in operating
+year 1, the date the opex is stated at, so year-1 DSCR does not move.
+
+Through `analytics.evaluation_v14.evaluate_with_overrides`, base case only. The "was" figures are
+15.20.0, after the opex split (the next section):
+
+| Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
+|---|---|---|---|---|---|
+| Wind project (v0.5) | 13.13% (was 12.41%) | 11.55% (was 10.54%) | 0.867 (unchanged) | 1,956,797 (was 1,342,632) | -215,852 (was -660,786) |
+| Solar + BESS project (v0.6) | undefined (reported as 0.0) | -5.12% (was -7.00%) | 0.867 (unchanged) | -4,439,870 (was -4,517,261) | -5,073,780 (was -5,146,449) |
+| Hybrid (v0.10, superseded) | 9.28% (was 8.73%) | 6.79% (was 6.05%) | 0.868 (unchanged) | -2,065,856 (was -2,653,195) | -4,613,663 (was -5,058,080) |
+
+The wind project's NPV at its discount rate rises by about USD 0.61M. The solar + BESS project
+stays far from viable: its escalable parts are small against its O&M.
+
+Not done here, and open:
+- The month-12 adjustment of the non-escalable part (70% LKR/USD, 30% CCPI; s.3.1 item 1). With
+  the model's FX held flat it would rest on the same placeholder macro inputs.
+- The three-yearly true-up of the cumulative rate to actual market rates. No forecast can model it.
+- Escalation between the 2026 base year and COD (`pre_operation_years: 0`). This is the same
+  price-date question as the opex inputs (#1557 domain D-3).
+- The sizing runs priced flat tariffs and are not re-run. Their unit pre-tax metric
+  (`solar_resource/pv_bess_sizing.unit_pretax_cashflows_usd`) is also flat. The battery-size PR
+  re-runs them on this basis. `conf/blue_whale_pucsl_fit_2026.yaml`'s note that the O&M
+  indexation is not modelled is stale. That file is pinned by SHA-256 in the sizing summaries, so
+  it is corrected when they are re-run.
+- The other PUCSL scenario, `scenarios/ceb_solar_bess_nightpeak_10mw.yaml`, is not Blue Whale and
+  stays flat. It can opt in with the same block.
+
+## Earlier run (opex split by currency, 15.20.0, 2026-11-07)
 
 The owner's rule (2026-11-02): "all CAPEX is fixed at project start in LKR. The debt will be in
 LKR. However, a percentage of OPEX will be in USD". Her decision the same day: BESS O&M at USD
@@ -850,8 +907,8 @@ Not done here, and open:
   Monte Carlo run and a sensitivity analysis in a follow-up.
 - The DC installed for the BESS (22,000 kWh) assumes a 10% DC oversize on the 20 MWh nominal until
   the supplier states it. The rate is held for all 20 years.
-- The PUCSL escalable O&M tariff component is indexed yearly; that indexation is still not
-  modelled and would offset part of the USD erosion.
+- The PUCSL escalable O&M tariff component is indexed yearly; that indexation was not modelled
+  here and would offset part of the USD erosion. Done in 15.21.0 (the section above).
 - The superseded hybrid scenario still runs on the engine's default of 2 construction periods.
 - Relative PPP is a long-run convention; a sourced real-exchange-rate view (or the 5.89% nominal
   rate as a downside) is a sensitivity, not the base case.
@@ -1095,5 +1152,7 @@ priority-1 inputs replace the placeholders.
 8. Done in 15.19.0: the turbine's shadow on the PV (B33), on the optical floor. Owner to
    decide whether to commission a string-level shading study (the x3 stress costs a further
    USD 0.01M of project NPV) and to note that the shadow modelled here is optical only.
-9. Replace placeholders in the scenarios, then run the v14 pipeline for base and P90 cases.
-10. Assemble the DBPL feasibility study once the model has owner-sourced inputs.
+9. Done in 15.21.0: the PUCSL escalable O&M tariff parts are indexed yearly (L-9). Owner to
+   confirm the index weights and, once PUCSL publishes them, the yearly rates (B35).
+10. Replace placeholders in the scenarios, then run the v14 pipeline for base and P90 cases.
+11. Assemble the DBPL feasibility study once the model has owner-sourced inputs.
