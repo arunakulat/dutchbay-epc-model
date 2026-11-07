@@ -73,7 +73,7 @@ feasibility study. **3** refines the result.
 | B28 | Insurance, security, SPV admin costs | `opex.usd_per_year` | $0.15M/yr with land, in EACH project (PR 4) | 2 |
 | B29 | O&M escalation in LKR (contract indexation) | `opex.currency_split.lkr_escalation_pct` (and `opex.escalation_pct`, which must equal it) | 5%/yr (CBSL inflation target), on the LKR share | 2 |
 | B34 | Opex currency split: the USD share of each opex line, USD O&M inflation, and the LKR depreciation the USD share bears | `opex.currency_split` | Wind 49% USD, solar + BESS 0% USD (from B10 and B20); USD 2.5%/yr (placeholder); depreciation derived by relative PPP from the two inflation inputs, 2.44%/yr (owner, 2026-11-07; was 5.89%/yr, the DutchBay cases' BIS 2005-2026 nominal rate). Owner rule of 2026-11-02 | 2 |
-| B30 | Target COD and construction period | `project.cod_year`, `timeline.construction_years` | Wind 2028, solar + BESS 2029 (the turbine is built first; owner, 2026-11-01); 1 year each | 1 |
+| B30 | Target COD and construction period | `project.cod_year`, `timeline.construction_years`, `Financing_Terms.construction_periods` (the key the engine reads; from 15.20.0 set equal, owner 2026-11-07) | Wind 2028, solar + BESS 2029 (the turbine is built first; owner, 2026-11-01); 1 year each | 1 |
 | B31 | Permits status: SLSEA provisional approval, CC&CRMD, CEA (IEE/EIA), Pradeshiya Sabha, UDA, CAA (turbine height), Wildlife and Forest | feasibility chapter | none | 2 |
 
 ## F. Financial term sheets

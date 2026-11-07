@@ -86,7 +86,9 @@ def test_split_opex_matches_its_closed_form_on_the_own_fx_path() -> None:
     total = float(cfg["opex"]["usd_per_year"])
     s = 0.7 * 350_000.0 / 500_000.0
     spot = float(cfg["fx"]["start_lkr_per_usd"])
-    construction = 2  # Financing_Terms declares no construction period: the default 2
+    construction = (
+        1  # Financing_Terms.construction_periods (= timeline.construction_years, B30)
+    )
     # usd_lkr_depreciation_pct: relative_ppp, derived from the block's inflation inputs.
     depr = 1.05 / 1.025 - 1.0
     for t, row in enumerate(rows):

@@ -819,21 +819,30 @@ the LKR share (all solar + BESS opex, and 30% of wind O&M plus its overhead) is 
 at 333.79 and escalates at 5%/yr. The model's FX curve stays flat, so the USD columns are still a
 constant-rate translation of LKR.
 
+**One construction period.** Both projects declare a 1-year construction period (input B30,
+`timeline.construction_years`), but the engine reads the period from `Financing_Terms` and, with
+none set there, defaulted to 2 for the debt drawdown, interest during construction and the FX
+start. The owner chose on 2026-11-07 to "Set 1 year for the whole model now", so both projects now
+set `Financing_Terms.construction_periods: 1`. This is most of the move below: on its own it lifts
+the wind NPV from 69,109 to 1,382,093 and the solar + BESS NPV from -4,997,611 to -4,607,829,
+mainly through lower interest during construction (wind 1.14M to 0.41M).
+
 Through `analytics.evaluation_v14.evaluate_with_overrides`, base case only. The "was" figures are
 `main` at 15.19.0, after the turbine's shadow on the PV (the next section):
 
 | Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
 |---|---|---|---|---|---|
-| Wind project (v0.4; 49% of opex in USD) | 10.72% (was 10.81%) | 8.51% (was 8.63%) | 0.868 | -7,068 (was 69,109) | -1,796,906 (was -1,737,634) |
-| Solar + BESS project (v0.5; all opex in LKR) | undefined (reported as 0.0) | -6.55% (was -8.44%) | 0.868 | -4,916,675 (was -4,997,611) | -5,501,620 (was -5,568,837) |
+| Wind project (v0.4; 49% of opex in USD; 1 construction year) | 12.41% (was 10.81%) | 10.54% (was 8.63%) | 0.867 | 1,342,632 (was 69,109) | -660,786 (was -1,737,634) |
+| Solar + BESS project (v0.5; all opex in LKR; 1 construction year) | undefined (reported as 0.0) | -7.00% (was -8.44%) | 0.867 | -4,517,261 (was -4,997,611) | -5,146,449 (was -5,568,837) |
 | Hybrid (v0.9, superseded) | unchanged: not given the split | | | | |
 
-The wind project stays about break-even at the discount rate: under relative PPP the LKR cost of
-its USD share grows at LKR inflation after COD, and the NPV falls by about USD 76,000 because the
-FX path advances through the two construction years. At the 5.89% nominal rate it would have been
--625,284. The
-solar + BESS battery O&M is lower than the old placeholder (USD 39,600 against 50,000 a year, both
-in LKR at 333.79), so its NPV rises by about USD 81,000; it remains far from viable.
+Split into its two parts: the construction period moves the wind NPV by +1,312,984 and the opex
+split by -39,461 (under relative PPP the LKR cost of the USD share grows at LKR inflation after
+COD; the fall comes from the FX path advancing through the construction year). For solar + BESS
+the construction period gives +389,782 and the cheaper battery O&M (USD 39,600 against 50,000 a
+year, both in LKR at 333.79) +90,568; the project remains far from viable. With 2 construction
+periods, as before this change, the wind NPV was -7,068, and at the 5.89% nominal depreciation
+rate -625,284.
 
 Not done here, and open:
 - The sizing runs priced the battery O&M at the USD 2.5/kWh-yr placeholder and were not re-run.
@@ -843,6 +852,7 @@ Not done here, and open:
   the supplier states it. The rate is held for all 20 years.
 - The PUCSL escalable O&M tariff component is indexed yearly; that indexation is still not
   modelled and would offset part of the USD erosion.
+- The superseded hybrid scenario still runs on the engine's default of 2 construction periods.
 - Relative PPP is a long-run convention; a sourced real-exchange-rate view (or the 5.89% nominal
   rate as a downside) is a sensitivity, not the base case.
 

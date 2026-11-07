@@ -77,17 +77,24 @@ POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 # 151 tables). Before, at 15.18.0 after #1398 (v0.3): project NPV -4992408.759406766, equity
 # NPV -5564410.144390165, equity IRR -0.08317620969932149, min DSCR 0.867987057099332.
 # Re-pinned at 15.20.0 for the opex currency split (v0.5: BESS O&M at USD 1.80/kWh-yr on
-# 22,000 kWh DC, converted to LKR at the wind project's value date, 333.79; every line in LKR).
+# 22,000 kWh DC, converted to LKR at the wind project's value date, 333.79; every line in LKR)
+# and one construction period (Financing_Terms.construction_periods 1 = B30; the engine
+# defaulted to 2).
 # Before, at 15.19.0 (v0.4, the turbine's shadow): project NPV -4997611.258776674, equity NPV
 # -5568837.4281859165, equity IRR -0.0843625813445068, min DSCR 0.8676222789656864.
 SOLAR_BESS_PINS = {
-    "project_npv": -4916674.6193491435,
-    "equity_npv": -5501619.658929199,
-    "equity_irr": -0.06551594463701071,
-    "min_dscr": 0.8678758063512626,
+    "project_npv": -4517260.638496677,
+    "equity_npv": -5146449.112710573,
+    "equity_irr": -0.06998004779138234,
+    "min_dscr": 0.8673920535047875,
 }
-# The opex basis the sizing runs priced (v0.3): one currency, BESS O&M at USD 2.5/kWh-yr.
-SIZING_OPEX_BASIS = {"opex.currency_split": None, "opex.usd_per_year": 256655}
+# The basis the sizing runs priced (v0.3): opex in one currency, BESS O&M at USD 2.5/kWh-yr,
+# and the engine's default of 2 construction periods (from 15.20.0 the scenario sets 1, B30).
+SIZING_OPEX_BASIS = {
+    "opex.currency_split": None,
+    "opex.usd_per_year": 256655,
+    "Financing_Terms.construction_periods": 2,
+}
 # WIND_PINS re-pinned at 15.16.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
 # 0.487560). Before, at 15.15.0 (v0.1): project IRR 0.04085210230412145, equity IRR
 # 0.014728921618622381, min DSCR 0.868369272868335.
@@ -97,13 +104,14 @@ SIZING_OPEX_BASIS = {"opex.currency_split": None, "opex.usd_per_year": 256655}
 # Re-pinned for #1398 (P2-F3-01 debt-service shortfall carried as sponsor cure in year 1;
 # before: equity IRR 0.09064100100108274).
 # Re-pinned at 15.20.0 for the opex currency split (wind v0.4: wind O&M 70% USD / 30% LKR,
-# overhead LKR; the USD share on a relative-PPP LKR depreciation path, 1.05 / 1.025 - 1).
+# overhead LKR; the USD share on a relative-PPP LKR depreciation path, 1.05 / 1.025 - 1) and
+# one construction period (Financing_Terms.construction_periods 1 = B30; the engine defaulted to 2).
 # Before (v0.3): project IRR 0.10808262995624021, equity IRR 0.0863203211939878, min DSCR
 # 0.8679985938194438.
 WIND_PINS = {
-    "project_irr": 0.10719659217604985,
-    "equity_irr": 0.08512161444077626,
-    "min_dscr": 0.8680798271015333,
+    "project_irr": 0.1240563483741687,
+    "equity_irr": 0.10542705973481747,
+    "min_dscr": 0.8668689564723109,
 }
 
 

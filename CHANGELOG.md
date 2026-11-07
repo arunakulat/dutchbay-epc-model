@@ -11,7 +11,9 @@ All notable changes to this project will be documented here.
   take it on the owner's rule and decision of 2026-11-02 (#1353 comment 6702129557): wind O&M
   70% USD / 30% LKR; BESS O&M at USD 1.80/kWh-yr of DC installed (a vendor LTSA benchmark),
   converted to LKR at the wind project's value date (owner, 2026-11-07).
-  Wind project IRR 10.81% -> 10.72%, NPV USD +69k -> -7k (USD share on relative PPP); solar + BESS NPV USD -5.00M -> -4.92M.
+  Both projects also set `Financing_Terms.construction_periods: 1` to match input B30 (the engine had
+  defaulted to 2; owner, 2026-11-07). Wind project IRR 10.81% -> 12.41%, NPV USD +69k -> +1.34M;
+  solar + BESS NPV USD -5.00M -> -4.52M. Most of the move is the construction period.
   Detail in the compiled fragment. 15.20.0 also carries #1452's release record (`P2-F3-01`,
   merged as `cd283c5d` without a version move; its equity figures are PROVISIONAL pending
   #1564) and the corrected `1398-debt-service-shortfall-carried` fragment. HOLDs that

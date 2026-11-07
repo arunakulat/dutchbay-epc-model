@@ -16,10 +16,16 @@
     repr-exact KPI comparison over all 32 runnable committed scenarios is identical.
   - Blue Whale wind v0.4: wind O&M 350k at 70% USD, insurance, land and SPV 150k LKR (49% USD);
     USD 2.5%/yr, LKR 5%/yr, USD share on relative PPP, 2.44%/yr (owner, 2026-11-07). Project IRR
-    10.81% -> 10.72%, equity IRR 8.63% -> 8.51%, project NPV USD 69,109 -> -7,068.
+    10.81% -> 12.41%, equity IRR 8.63% -> 10.54%, project NPV USD 69,109 -> 1,342,632
+    (construction period +1,312,984; opex split -39,461).
   - Blue Whale solar + BESS v0.5: BESS O&M at USD 1.80/kWh-yr on 22,000 kWh DC (39,600; was
     USD 2.5/kWh-yr on 20,000 kWh), converted to LKR at the wind project's value date (333.79,
     LKR 13,218,084/yr; owner, 2026-11-07); every line in LKR; total 256,655 -> 246,255.2.
-    Against 15.19.0 (with the turbine's shadow): project NPV USD -4,997,611 -> -4,916,675;
-    equity IRR -8.44% -> -6.55%. The sizing runs are
+    Against 15.19.0 (with the turbine's shadow): project NPV USD -4,997,611 -> -4,517,261
+    (construction period +389,782; opex +90,568); equity IRR -8.44% -> -7.00%.
+  - Both Blue Whale projects set `Financing_Terms.construction_periods: 1`, equal to their
+    `timeline.construction_years` (input B30). The engine reads the period only from
+    `Financing_Terms` and had defaulted to 2 for the debt drawdown, interest during
+    construction and the FX start (owner, 2026-11-07: "Set 1 year for the whole model now").
+    The superseded hybrid keeps the default. The sizing runs are
     not re-run; the test that ties the scenario to them now evaluates it on their opex basis.
