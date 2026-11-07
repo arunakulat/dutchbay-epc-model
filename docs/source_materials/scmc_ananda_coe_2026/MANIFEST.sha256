@@ -3,6 +3,6 @@
 # Records the files tracked in this area. ARTIFACT_REGISTER.tsv separately records the artifacts
 # held outside this repository, by SHA-256. Issue #1554.
 #
-223192ca19c12003502bae796fd97e08dd407152c02917bbf05218d8d233b0c7  ARTIFACT_REGISTER.tsv
-14494ba883fc08a4f29eb3ed7bdce9f10f8ff5567cbdfccbbda9c1d935351a2d  README.md
-91a274a4178c552c88d46edc6b66584085137a6d26368a9af67ee29dbb45bff7  WORK_RECORD.md
+147801daa41ba06e8485cc4e5ea531d05099fd0c2519e1210276c68caf1eb323  ARTIFACT_REGISTER.tsv
+4f0b69e2acc6022b2d3e7e7e2c73be94840f31062576d1f77d84eff0afa70575  README.md
+3bafc90b1076e3fbfff0607cd2badabab2cd14a7cc70523a517fd592e283845c  WORK_RECORD.md
