@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # Blue Whale Wind project (Lot 5B, Kalpitiya): 1 x Envision EN-206/10.5 de-rated to 9.5 MW
 # ═══════════════════════════════════════════════════════════════════════════════
-# Version: 0.3 (SKELETON: screening placeholders, not a basis for any decision)
+# Version: 0.4 (SKELETON: screening placeholders, not a basis for any decision)
 # Path: scenarios/blue_whale_wind_lot5b_2026.yaml
 #
 # A SEPARATE PROJECT, BUILT FIRST (owner, 2026-11-01, #1353 comment 6556854201): "We will
@@ -147,9 +147,35 @@ capex:
 
 opex:
   usd_per_year: 500000          # PLACEHOLDER (inputs B10, B28): wind O&M 0.35M + insurance, land lease and
-                                # SPV overhead 0.15M (the hybrid's lines)
+                                # SPV overhead 0.15M (the hybrid's lines). Stated in USD at fx.start_lkr_per_usd;
+                                # the components below must add up to it (a test checks)
   opex_per_kw_yr_usd: 52.6      # 500k / 9.5 MW; high because a single turbine carries full O&M overheads
-  escalation_pct: 5.0           # PLACEHOLDER (input B29): LKR O&M inflation at the CBSL 5% target
+  escalation_pct: 5.0           # = currency_split.lkr_escalation_pct (the engine refuses a mismatch); kept
+                                # for the single-rate screening tools that read it
+  # v0.4 (input B34): the owner's rule (2026-11-02): "all CAPEX is fixed at project start in LKR. The debt
+  # will be in LKR. However, a percentage of OPEX will be in USD". Her decision of 2026-11-02: wind O&M
+  # stays 0.35M, 70% USD / 30% LKR. The USD share is
+  # 245,000 / 500,000 = 49% of the total; it escalates in USD and is translated on its own FX path, while
+  # the model curve stays flat (fx block: constant-LKR reporting rate). The LKR share is fixed in LKR at
+  # 333.79 and escalates at LKR inflation.
+  currency_split:
+    usd_escalation_pct: 2.5     # PLACEHOLDER (input B34): USD O&M inflation (no USD index is sourced in
+                                # either corpus)
+    lkr_escalation_pct: 5.0     # PLACEHOLDER (input B29): LKR O&M inflation at the CBSL 5% target
+    usd_lkr_depreciation_pct: relative_ppp  # LKR depreciation for the USD share only, derived from the two
+                                    # inflation inputs above: 1.05 / 1.025 - 1 = 2.44%/yr (the owner, 2026-11-07:
+                                    # "fix for inflation"). Was 5.89%, the DutchBay cases' BIS 2005-2026 nominal
+                                    # rate, which with these inflation inputs implied ~3.3%/yr real LKR
+                                    # depreciation. Advanced through construction as the model curve would be
+    components:
+      - name: wind_om
+        usd_per_year: 350000    # PLACEHOLDER (input B10): no OEM has priced a wind LTSA in either corpus;
+                                # 3.9% of turbine capex, the top of the 3-4% benchmark band
+        usd_share: 0.70         # parts and OEM service in USD; 30% local labour (a typical labour / plant
+                                # split for wind O&M; the owner's decision of 2026-11-02)
+      - name: insurance_land_spv
+        usd_per_year: 150000    # PLACEHOLDER (inputs B02, B28)
+        usd_share: 0.0          # LKR (the owner has not said otherwise)
 
 tax:
   corporate_tax_rate: 0.30      # input F31
@@ -182,6 +208,9 @@ risk_adjustment:
   cfads_haircut_pct: 0.1
 
 Financing_Terms:                # PLACEHOLDER pending the term sheet (inputs F11-F24); the 100% LKR mix is the owner's (F10)
+  construction_periods: 1       # = timeline.construction_years (input B30). The engine reads this key for
+                                # debt, IDC and the FX start, and defaulted to 2 without it (owner, 2026-11-07:
+                                # "Set 1 year for the whole model now")
   debt_ratio: 0.7
   debt_sizing: dual_dscr
   dscr_p99_downside_factor: 0.80
@@ -245,12 +274,13 @@ wacc:
   description: "Build-up WACC drives the project discount rate."
 
 metadata:
-  version: '0.3'
-  last_updated: '2026-11-01'
+  version: '0.4'
+  last_updated: '2026-11-07'
   author: DutchBay V14 Financial Modeling Team
   review_status: SKELETON - screening placeholders pending owner inputs (docs/blue_whale/INPUTS_REQUIRED.md)
   assumptions_source: 'Split from blue_whale_hybrid_lot5b_2026 v0.6 (wind block and finance blocks)'
   changes:
+    - 'v0.4 (2026-11-07): opex split by currency (input B34; owner rule and decision of 2026-11-02): wind O&M 0.35M 70% USD / 30% LKR, insurance, land and SPV 0.15M LKR; USD share 49% escalates at 2.5%/yr in USD on an LKR depreciation path of 2.44%/yr, derived by relative PPP from the inflation inputs (owner, 2026-11-07: "fix for inflation"; was 5.89%); LKR share at 5%/yr. Total unchanged at 500,000. Financing_Terms.construction_periods 1 (= B30; the engine had defaulted to 2; owner, 2026-11-07)'
     - 'v0.3 (2026-11-01): wind capex BLENDED (PR 6, #1353 comment 6556975196): 12,350,000 ($1,300/kW placeholder) -> 8,899,980 (USD 936.84/kW, range 728.16-1,341.16, conf/blue_whale_capex_solar_resource.yaml); capex total 14,350,000 -> 10,899,980. A blend that includes private commercial inputs, published on the owner''s decision'
     - 'v0.2 (2026-11-01): wind resource from met mast 617725 (PR 5, #1353 comment 6556910250): sector-wise variance-ratio MCP at 120 m against NASA POWER / MERRA-2, long-term 2015-2025, transferred 26.7 km to the turbine through the reference, sheared to 130 m. Wind CF 0.374256 -> 0.487560, net AEP 31.15 -> 40.57 GWh (P90 1-year 33.73, 20-year 33.92). Not lender-grade; the met-mast HOLD stands'
     - 'v0.1 (2026-11-01): the turbine as its own project, built first (owner decision, #1353 comment 6556854201). Wind block unchanged from the hybrid v0.6 (#1530: 9.5 MW, CF 0.374256, 31.15 GWh, capex 12.35M placeholder); tariff 25.73 (PUCSL Annex 2 wind); capex 14.35M with the 2.0M grid/civils/development placeholder; O&M 0.5M; no solar, no BESS'

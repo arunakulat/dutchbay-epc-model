@@ -52,6 +52,7 @@ EXPECTED_PAYLOAD_SHA256 = {
 EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
     # Re-pinned for 15.22.0 (Blue Whale turbine on DutchBay T2: only VERSION moved; the
     # lender scenario did not).
+    # Re-pinned for 15.20.0 (opex currency split: only VERSION moved; the scenario did not).
     # Re-pinned for 15.19.0 (Blue Whale turbine shadow, input B33: only VERSION moved;
     # the lender scenario did not).
     # Re-pinned for #1399 part A, which removed the dead

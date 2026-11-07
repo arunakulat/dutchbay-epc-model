@@ -22,8 +22,8 @@ Funding: **fully LKR funded** (owner, 2026-10-28). Revenue, costs and debt are a
 model runs with FX held flat and the USD columns are a constant-rate translation of LKR.
 
 Model files: `scenarios/blue_whale_wind_lot5b_2026.yaml` and
-`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (versions 0.3 and 0.3), and the superseded
-`scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.8). Placeholders apart from the
+`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (versions 0.4 and 0.5), and the superseded
+`scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.9). Placeholders apart from the
 configuration, the funding currency, the researched tariffs, the wind yield, the solar + BESS
 size (the owner's 5 MW / 20 MWh battery and the PV chosen for it, PR 7), the cited PV capex and
 the blended wind and BESS capex (PR 6).
@@ -821,6 +821,59 @@ after-tax project NPV, so neither size is viable on these placeholder inputs.
 SARAH3, citing #1540's finding, and reports the satellite figures (Global Solar Atlas PVOUT
 +6.3%, about +9% GHI) as upside only. No data file changed.
 
+## Opex split by currency and one construction period (15.20.0, 2026-11-07)
+
+The owner's rule (2026-11-02): "all CAPEX is fixed at project start in LKR. The debt will be in
+LKR. However, a percentage of OPEX will be in USD". Her decision the same day: BESS O&M at USD
+1.80/kWh-yr of DC installed; wind O&M kept at USD 0.35M, 70% USD and 30% LKR. On 2026-11-07 she
+directed that the BESS O&M be converted to LKR at the wind project's value date (the 2026-Q2 pinned
+333.79 both projects share): LKR 13,218,084 a year. Both projects carry an `opex.currency_split`
+(input B34); the solar + BESS project's USD share is now 0%.
+The USD share escalates at 2.5%/yr in USD and is translated on an LKR depreciation path derived from
+the two inflation inputs by relative purchasing-power parity, 1.05 / 1.025 - 1 = 2.44%/yr (the
+owner, 2026-11-07: "fix for inflation"; the DutchBay cases' 5.89%/yr nominal rate implied about
+3.3%/yr real depreciation with these inputs);
+the LKR share (all solar + BESS opex, and 30% of wind O&M plus its overhead) is fixed in LKR
+at 333.79 and escalates at 5%/yr. The model's FX curve stays flat, so the USD columns are still a
+constant-rate translation of LKR.
+
+**One construction period.** Both projects declare a 1-year construction period (input B30,
+`timeline.construction_years`), but the engine reads the period from `Financing_Terms` and, with
+none set there, defaulted to 2 for the debt drawdown, interest during construction and the FX
+start. The owner chose on 2026-11-07 to "Set 1 year for the whole model now", so both projects now
+set `Financing_Terms.construction_periods: 1`. This is most of the move below: on its own it lifts
+the wind NPV from 69,109 to 1,382,093 and the solar + BESS NPV from -4,997,611 to -4,607,829,
+mainly through lower interest during construction (wind 1.14M to 0.41M).
+
+Through `analytics.evaluation_v14.evaluate_with_overrides`, base case only. The "was" figures are
+`main` at 15.19.0, after the turbine's shadow on the PV (the next section):
+
+| Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
+|---|---|---|---|---|---|
+| Wind project (v0.4; 49% of opex in USD; 1 construction year) | 12.41% (was 10.81%) | 10.54% (was 8.63%) | 0.867 | 1,342,632 (was 69,109) | -660,786 (was -1,737,634) |
+| Solar + BESS project (v0.5; all opex in LKR; 1 construction year) | undefined (reported as 0.0) | -7.00% (was -8.44%) | 0.867 | -4,517,261 (was -4,997,611) | -5,146,449 (was -5,568,837) |
+| Hybrid (v0.9, superseded) | unchanged: not given the split | | | | |
+
+Split into its two parts: the construction period moves the wind NPV by +1,312,984 and the opex
+split by -39,461 (under relative PPP the LKR cost of the USD share grows at LKR inflation after
+COD; the fall comes from the FX path advancing through the construction year). For solar + BESS
+the construction period gives +389,782 and the cheaper battery O&M (USD 39,600 against 50,000 a
+year, both in LKR at 333.79) +90,568; the project remains far from viable. With 2 construction
+periods, as before this change, the wind NPV was -7,068, and at the 5.89% nominal depreciation
+rate -625,284.
+
+Not done here, and open:
+- The sizing runs priced the battery O&M at the USD 2.5/kWh-yr placeholder and were not re-run.
+  The owner has said (2026-11-07) the battery size should not be fixed: it is to be optimised by a
+  Monte Carlo run and a sensitivity analysis in a follow-up.
+- The DC installed for the BESS (22,000 kWh) assumes a 10% DC oversize on the 20 MWh nominal until
+  the supplier states it. The rate is held for all 20 years.
+- The PUCSL escalable O&M tariff component is indexed yearly; that indexation is still not
+  modelled and would offset part of the USD erosion.
+- The superseded hybrid scenario still runs on the engine's default of 2 construction periods.
+- Relative PPP is a long-run convention; a sourced real-exchange-rate view (or the 5.89% nominal
+  rate as a downside) is a sensitivity, not the base case.
+
 ## The turbine's shadow on the PV (input B33, 15.19.0, 2026-11-07)
 
 Work item: #1353 comment 6568242480. Owner decisions, verbatim: "#1520 as is, Blue Whale PR
@@ -955,18 +1008,23 @@ case 146. The owner's choice now costs USD 1,253,066 of after-tax project NPV at
 1,596,441 at P90 against the value-based size (was 1,251,428 and 1,594,480).
 
 **Preview, not final.** These runs were made on #1561's head with this change applied; their
-summaries record that local merge's `git_sha`, whose tree is this branch at the time. The
-sizings are re-run once #1557 and the PUCSL O&M indexation land, and the figures here are
-replaced then.
+summaries record that local merge's `git_sha`, whose tree is this branch at the time. They price
+on the basis 15.20.0 left the sizings on (opex in one currency with BESS O&M at USD 2.5/kWh-yr,
+and two construction periods; previous section), so the after-tax NPVs above are on that basis.
+The sizings are re-run on the current basis once the PUCSL O&M indexation lands, and the figures
+here are replaced then.
 
 **KPIs.** Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case
-only. "Was" is main at 15.19.0.
+only, on the 15.20.0 basis (opex split by currency, one construction period). "Was" is main at
+15.20.0.
 
 | Scenario | Project NPV (USD) | Equity NPV (USD) | Equity IRR | Min DSCR | Project IRR |
 |---|---|---|---|---|---|
-| Solar + BESS v0.5 | -4,998,968 (was -4,997,611) | -5,573,458 (was -5,568,837) | -8.12% (was -8.44%) | 0.8684 (was 0.8676) | undefined |
+| Solar + BESS v0.6 | -4,517,866 (was -4,517,261) | -5,148,948 (was -5,146,449) | -6.80% (was -7.00%) | 0.8681 (was 0.8674) | undefined |
 | Hybrid v0.10 (superseded) | -2,654,612 (was -2,653,195) | -5,059,274 (was -5,058,080) | 6.05% (unchanged to 2 dp) | 0.8678 | 8.73% (8.7303%, was 8.7315%) |
-| Wind v0.3 | unchanged | unchanged | unchanged | unchanged | 10.81% |
+| Wind v0.4 | unchanged | unchanged | unchanged | unchanged | 12.41% |
+
+The solar + BESS O&M rises by USD 375 a year (solar O&M on 5,703.04 kWp, in LKR).
 
 The solar + BESS equity cash flows change sign more than once, so its equity IRR is not a
 reliable ranking figure (audit residual L-13). Solar + BESS year 1: PV 8,676.59 MWh, export
@@ -975,12 +1033,12 @@ revenue LKR 355.27M (was 353.76M). The extra table outweighs the larger shadow.
 
 ## Latest run (the turbine on DutchBay T2, 15.22.0, 2026-11-07)
 
-Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
+Through `analytics.evaluation_v14.evaluate_with_overrides`, base case only, on the 15.20.0 basis:
 
 | Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
 |---|---|---|---|---|---|
-| Wind project (v0.3) | 10.81% (unchanged) | 8.63% | 0.868 | 69,109 | -1,737,634 |
-| Solar + BESS project (v0.5, 5 MW / 20 MWh, 152 tables) | undefined (reported as 0.0) | -8.12% | 0.868 | -4,998,968 | -5,573,458 |
+| Wind project (v0.4) | 12.41% (unchanged) | 10.54% | 0.867 | 1,342,632 | -660,786 |
+| Solar + BESS project (v0.6, 5 MW / 20 MWh, 152 tables) | undefined (reported as 0.0) | -6.80% | 0.868 | -4,517,866 | -5,148,948 |
 | Hybrid (v0.10, superseded) | 8.73% | 6.05% | 0.868 | -2,654,612 | -5,059,274 |
 
 Every other input is still a placeholder, so these are not results.
