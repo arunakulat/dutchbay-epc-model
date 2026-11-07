@@ -33,12 +33,14 @@ These are assumptions, not evidence. Each kind placed by default is listed in
 mistake one for a declared date. A scenario replaces a default by declaring the kind's
 periods, or keeps a kind on A2's profile spread by declaring it as ``profile``.
 ``bridge_service`` and ``debt_service`` have no default: each is placed only when
-declared.
+declared. Neither takes ``profile``: debt cash is paid on instalment dates, and A2's
+profile describes how a flow accrues, so the entry is refused rather than read as some
+other spread.
 
 What is placed, and what follows from it
 ----------------------------------------
 Four kinds, each declared as a list of 1-based periods within the year with optional
-weights across them, or as ``profile``:
+weights across them, or (except the two debt kinds) as ``profile``:
 
 * ``bess_augmentation_capex`` places the row key ``bess_augmentation_capex_lkr``.
 * ``tax`` places the row key ``tax_lkr``, the tax CASH payment. ``taxable_income_lkr``
@@ -133,6 +135,17 @@ _NOT_MODELLED: Mapping[str, str] = {
     ),
 }
 
+#: Kinds that cannot be declared as ``profile``, with the reason given on refusal.
+_NO_PROFILE: Mapping[str, str] = {
+    kind: (
+        "debt cash is paid on instalment dates, and A2's profile describes how a flow "
+        "accrues through the year, so it has no meaning for debt service. Declare the "
+        "instalment periods, or leave the kind undeclared for the coverage view's "
+        "even-spread assumption"
+    )
+    for kind in ("bridge_service", "debt_service")
+}
+
 _EVENT_FIELDS = frozenset({"periods", "weights"})
 
 
@@ -181,7 +194,8 @@ def resolve_event_calendar(
 
     Raises:
         ValueError: If the calendar is declared on the annual grid; if it is not a
-            mapping, or an entry is neither a mapping nor ``profile``; if it names an
+            mapping, or an entry is neither a mapping nor ``profile``; if a debt kind is
+            declared as ``profile``; if it names an
             unknown or unmodelled event kind, or an unknown field; or if an entry's
             periods or weights are malformed.
     """
@@ -220,6 +234,10 @@ def resolve_event_calendar(
             raise ValueError(
                 f"{label} is not a known event kind. Known: "
                 f"{', '.join(sorted(EVENT_KINDS))}."
+            )
+        if kind in _NO_PROFILE and entry == _PROFILE:
+            raise ValueError(
+                f"{label} cannot be {_PROFILE!r}: {_NO_PROFILE[kind]} (FRAMEWORK-02)."
             )
         declared.add(str(kind))
         weights = _resolve_entry(entry, grid, label)

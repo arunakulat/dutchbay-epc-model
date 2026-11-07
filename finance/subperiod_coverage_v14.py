@@ -9,7 +9,8 @@ space says where in a year the cash falls.
 This module puts the three on the operating SUB-PERIOD index that A1/A2 and the event
 calendar (dolphin (b)) use. For each sub-period of each operating year it reports the
 coverage CFADS, the senior fee, the scheduled debt service, the bridge service, the
-interest and principal split, and the sub-period's DSCR.
+interest and principal split, and, where an instalment falls, its DSCR over its
+calculation period.
 
 A view beside the annual figures, never a replacement
 -----------------------------------------------------
@@ -41,14 +42,28 @@ When the debt cash falls
   evenly.
 * Interest paid on a balloon carried past maturity (#1503, #1504) is real debt cash in
   the years after the tenor, but the engine keeps it out of ``debt_service_total`` and so
-  out of ``dscr_by_year``. The view reports it per sub-period as
-  ``balloon_interest_paid_usd``, on the ``debt_service`` placement, and keeps it out of the
-  DSCR the same way, so a year after the tenor shows that cash with no ratio rather than
-  looking debt-free.
+  out of ``dscr_by_year``. The view reads it from the debt result
+  (``balloon_interest_paid`` at the year's debt period, as the pipeline's enrichment
+  does), reports it per sub-period as ``balloon_interest_paid_usd`` on the
+  ``debt_service`` placement, and keeps it out of the DSCR the same way. A year after the
+  tenor therefore shows that cash with no ratio rather than looking debt-free.
 
 An even spread is an assumption, not evidence: the real instalment dates are term-sheet
 facts (#920). Each one used is recorded in :attr:`SubperiodCoverage.assumptions` and
 named in a warning, as (b) does for its default dates.
+
+What a sub-period DSCR measures
+-------------------------------
+An instalment is paid out of the cash earned since the previous one, so a sub-period's
+DSCR is its instalment's cover over its CALCULATION PERIOD: the coverage CFADS less the
+senior fee, accumulated over every sub-period since the previous instalment (or since
+the first operating sub-period), divided by the debt service paid in this sub-period. A
+sub-period with no debt service carries no ratio, and its cash counts towards the next
+instalment, across a year end if need be. ``calculation_periods`` names how many
+sub-periods each ratio covers. With an instalment in every sub-period (the even default)
+the calculation period is the sub-period itself. With semi-annual instalments
+(``periods: [2, 4]``) and flat CFADS, each instalment's cover equals the annual DSCR,
+where a one-quarter numerator would have read half of it.
 
 Reconciliation
 --------------
@@ -57,6 +72,14 @@ rule, so each operating year's sub-periods re-aggregate to the debt period's CFA
 fee, service and interest within 1 ULP, and year 1's bridge parts to the bridge
 period's service. A year's re-aggregated coverage, ``(CFADS - fee) / service``, therefore
 reproduces ``dscr_by_year`` for that year, the folded year 1 included.
+
+Labels
+------
+``year``, ``period_index`` and ``period_in_year`` are carried from A2's rows, as floats
+like every other figure. ``period_in_year`` is 0-BASED (``0.0`` is the year's first
+sub-period, ``3.0`` a quarterly year's fourth), whereas ``cashflow.event_calendar``
+declares periods 1-based. ``period_index`` counts sub-periods from the first operating
+one, also from 0.
 """
 
 from __future__ import annotations
@@ -106,21 +129,24 @@ class SubperiodCoverage:
 
     Attributes:
         periods: One dict per sub-period of every operating year, in order, with
-            ``year``, ``period_index``, ``period_in_year``, ``cfads_usd``,
-            ``senior_fee_usd``, ``scheduled_service_usd``, ``bridge_service_usd``,
-            ``debt_service_usd``, ``interest_usd``, ``principal_usd``,
-            ``balloon_interest_paid_usd`` (outside the DSCR, as in ``dscr_by_year``)
-            and ``dscr`` (``None`` where the sub-period carries no debt service).
+            ``year``, ``period_index`` and ``period_in_year`` (0-based; see the module
+            docstring's Labels), ``cfads_usd``, ``senior_fee_usd``,
+            ``scheduled_service_usd``, ``bridge_service_usd``, ``debt_service_usd``,
+            ``interest_usd``, ``principal_usd``, ``balloon_interest_paid_usd`` (outside
+            the DSCR, as in ``dscr_by_year``), ``dscr`` (the instalment's cover over its
+            calculation period, ``None`` where the sub-period carries no debt service)
+            and ``calculation_periods`` (how many sub-periods that ratio covers,
+            ``None`` with it).
         assumptions: Each debt-cash placement that used the even default rather than a
             declared date, mapped to what was assumed.
-        min_dscr: The lowest sub-period DSCR, for disclosure only. It is not, and must
-            not be read as, the headline ``min_dscr``.
+        min_subperiod_dscr: The lowest sub-period DSCR, for disclosure only. It is not,
+            and must not be read as, the headline ``min_dscr``, so it is named apart.
         covenant_use: :data:`COVENANT_USE`.
     """
 
     periods: Tuple[Mapping[str, Optional[float]], ...]
     assumptions: Mapping[str, str] = field(default_factory=dict)
-    min_dscr: Optional[float] = None
+    min_subperiod_dscr: Optional[float] = None
     covenant_use: str = COVENANT_USE
 
 
@@ -137,8 +163,8 @@ def build_subperiod_coverage(
             ``debt_result['annual_row_debt_period_map']`` entry, with or without the
             pipeline's debt-enrichment keys.
         debt_result: The debt engine's result. Reads ``annual_row_debt_period_map``,
-            ``debt_service_total``, ``interest_total``, ``senior_fee_usd`` and
-            ``cfads_bridge_debt_period``.
+            ``debt_service_total``, ``interest_total``, ``senior_fee_usd``,
+            ``balloon_interest_paid`` and ``cfads_bridge_debt_period``.
         calendar: The resolved event calendar; its grid is the sub-period grid.
         profile: The within-year profile for A2. Defaults to an even split.
 
@@ -146,9 +172,16 @@ def build_subperiod_coverage(
         The sub-period view.
 
     Raises:
-        ValueError: If the rows do not match the debt result one to one, or their
-            ``cfads_usd`` is not the CFADS the debt engine divided.
+        ValueError: If the rows do not match the debt result one to one, their
+            ``cfads_usd`` is not the CFADS the debt engine divided, or the debt result
+            carries no ``balloon_interest_paid`` series.
     """
+    if "balloon_interest_paid" not in debt_result:
+        raise ValueError(
+            "build_subperiod_coverage needs the debt result's balloon_interest_paid "
+            "series (#1505): without it, interest paid on a balloon carried past "
+            "maturity would show as zero and a post-tenor year would look debt-free."
+        )
     mapping = list(debt_result["annual_row_debt_period_map"])
     if len(coverage_rows) != len(mapping):
         raise ValueError(
@@ -194,9 +227,14 @@ def build_subperiod_coverage(
 
     service_total = debt_result["debt_service_total"]
     interest_total = debt_result["interest_total"]
+    balloon_paid_total = debt_result["balloon_interest_paid"] or []
     fees = debt_result.get("senior_fee_usd") or [0.0] * len(service_total)
 
     periods: List[Dict[str, Optional[float]]] = []
+    # The calculation period of the next instalment: cash and fee accumulated since the
+    # previous one, across a year end if need be.
+    window_cash: List[float] = []
+    window_fee: List[float] = []
     for year_index, entry in enumerate(mapping):
         debt_period = int(entry["debt_period"])
         year_rows = placed[year_index * per_year : (year_index + 1) * per_year]
@@ -207,13 +245,9 @@ def build_subperiod_coverage(
         scheduled = allocate_flow(service, service_weights)
         scheduled_interest = allocate_flow(interest, service_weights)
         fee_parts = allocate_flow(fee, even_profile(grid))
-        balloon_paid = float(
-            coverage_rows[int(entry["annual_row_index"])].get(
-                "balloon_interest_paid_usd"
-            )
-            or 0.0
+        balloon_parts = allocate_flow(
+            _at(balloon_paid_total, debt_period), service_weights
         )
-        balloon_parts = allocate_flow(balloon_paid, service_weights)
         if year_index == 0:
             bridge_parts = allocate_flow(bridge_service, bridge_weights)
             bridge_interest_parts = allocate_flow(bridge_interest, bridge_weights)
@@ -227,6 +261,14 @@ def build_subperiod_coverage(
                 scheduled_interest[position] + bridge_interest_parts[position]
             )
             cfads = float(row["cfads_usd"])
+            window_cash.append(cfads)
+            window_fee.append(fee_parts[position])
+            dscr: Optional[float] = None
+            covered: Optional[float] = None
+            if total > 0:
+                dscr = (math.fsum(window_cash) - math.fsum(window_fee)) / total
+                covered = float(len(window_cash))
+                window_cash, window_fee = [], []
             periods.append(
                 {
                     "year": float(row["year"]),
@@ -240,9 +282,8 @@ def build_subperiod_coverage(
                     "interest_usd": interest_part,
                     "principal_usd": total - interest_part,
                     "balloon_interest_paid_usd": balloon_parts[position],
-                    "dscr": (
-                        (cfads - fee_parts[position]) / total if total > 0 else None
-                    ),
+                    "dscr": dscr,
+                    "calculation_periods": covered,
                 }
             )
 
@@ -251,7 +292,7 @@ def build_subperiod_coverage(
     return SubperiodCoverage(
         periods=tuple(periods),
         assumptions=assumptions,
-        min_dscr=min(finite) if finite else None,
+        min_subperiod_dscr=min(finite) if finite else None,
     )
 
 
@@ -260,7 +301,8 @@ def _weights(
 ) -> Tuple[float, ...]:
     """The declared placement of ``kind``, or the even spread, recorded as assumed.
 
-    ``profile`` places nothing for a debt kind, so it falls to the even spread too.
+    The calendar refuses ``profile`` for a debt kind, so an absent placement here means
+    the kind was not declared.
     """
     declared = calendar.placements.get(kind)
     if declared is not None:

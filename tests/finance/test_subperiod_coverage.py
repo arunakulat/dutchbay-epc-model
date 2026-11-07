@@ -12,8 +12,9 @@ properties carry the weight here:
    untouched; the view's own minimum is a separate, labelled field.
 3. The arithmetic is right where it can be worked by hand. An even spread over a year
    with no events gives every quarter the annual DSCR; declared instalment periods carry
-   the service and leave the other quarters with no ratio; the bridge lands in year 1
-   alone; a lumpy tax quarter shows its dip.
+   the service, leave the other quarters with no ratio, and cover each instalment over
+   its calculation period, so flat CFADS gives every instalment the annual DSCR; the
+   bridge lands in year 1 alone; a lumpy tax quarter shows its dip.
 4. It divides the right CFADS. Project-basis rows, and rows that do not match the debt
    result one to one, are refused.
 5. Assumptions are flagged. An even spread used in place of a declared date is recorded
@@ -103,6 +104,7 @@ def _synthetic_debt(
         "debt_service_total": [bridge] + [service] * len(rows),
         "interest_total": [bridge / 2.0] + [interest] * len(rows),
         "senior_fee_usd": [0.0] * (len(rows) + 1),
+        "balloon_interest_paid": [0.0] * (len(rows) + 1),
         "cfads_bridge_debt_period": 0 if bridge else None,
     }
 
@@ -185,31 +187,73 @@ def test_interest_and_principal_split_each_quarters_service(sized_lender) -> Non
     assert _within_ulp(interest, float(debt["interest_total"][period]))
 
 
+def _carried_balloon_years(debt: Dict[str, Any]) -> List[Tuple[int, float]]:
+    """(year index, interest paid on the carried balloon) for each year that pays some."""
+    paid = debt["balloon_interest_paid"]
+    carried = []
+    for index, entry in enumerate(debt["annual_row_debt_period_map"]):
+        period = int(entry["debt_period"])
+        value = float(paid[period]) if period < len(paid) else 0.0
+        if value > 0.0:
+            carried.append((index, value))
+    return carried
+
+
 def test_balloon_interest_after_the_tenor_is_shown_outside_the_dscr(
     sized_lender,
 ) -> None:
-    """A carried balloon's interest is debt cash with no ratio, as in ``dscr_by_year``."""
+    """A carried balloon's interest is debt cash with no ratio, as in ``dscr_by_year``.
+
+    It is read from the debt result, so rows passed without the pipeline's enrichment
+    keys (which the view accepts) still show it.
+    """
     debt, rows = sized_lender
-    view = build_subperiod_coverage(rows, debt, _calendar(ALL_EVEN))
-    carried = [
-        index
-        for index, row in enumerate(rows)
-        if float(row.get("balloon_interest_paid_usd") or 0.0) > 0.0
+    bare_rows = [
+        {key: value for key, value in row.items() if key not in DEBT_ENRICHMENT_KEYS}
+        for row in rows
     ]
+    carried = _carried_balloon_years(debt)
     assert carried, "the lender case carries its balloon past the tenor"
-    for year_index in carried:
-        want = float(rows[year_index]["balloon_interest_paid_usd"])
-        quarters = _year(view, year_index)
-        got = math.fsum(q["balloon_interest_paid_usd"] for q in quarters)
-        assert _within_ulp(got, want)
-        assert all(q["debt_service_usd"] == 0.0 for q in quarters)
-        assert all(q["dscr"] is None for q in quarters)
-        year = debt["annual_row_debt_period_map"][year_index]["year"]
-        assert debt["dscr_by_year"][year] is None
-    others = [i for i in range(len(rows)) if i not in carried]
-    assert all(
-        q["balloon_interest_paid_usd"] == 0.0 for i in others for q in _year(view, i)
+    for given in (rows, bare_rows):
+        view = build_subperiod_coverage(given, debt, _calendar(ALL_EVEN))
+        for year_index, want in carried:
+            assert want == float(rows[year_index]["balloon_interest_paid_usd"])
+            quarters = _year(view, year_index)
+            got = math.fsum(q["balloon_interest_paid_usd"] for q in quarters)
+            assert _within_ulp(got, want)
+            assert all(q["debt_service_usd"] == 0.0 for q in quarters)
+            assert all(q["dscr"] is None for q in quarters)
+            year = debt["annual_row_debt_period_map"][year_index]["year"]
+            assert debt["dscr_by_year"][year] is None
+        others = [i for i in range(len(rows)) if i not in dict(carried)]
+        assert all(
+            q["balloon_interest_paid_usd"] == 0.0
+            for i in others
+            for q in _year(view, i)
+        )
+    total = math.fsum(p["balloon_interest_paid_usd"] for p in view.periods)
+    assert total > 0.0
+
+
+def test_balloon_interest_follows_the_declared_instalment_dates(sized_lender) -> None:
+    debt, rows = sized_lender
+    view = build_subperiod_coverage(
+        rows, debt, _calendar({**ALL_EVEN, "debt_service": {"periods": [2, 4]}})
     )
+    for year_index, want in _carried_balloon_years(debt):
+        q1, q2, q3, q4 = _year(view, year_index)
+        assert q1["balloon_interest_paid_usd"] == q3["balloon_interest_paid_usd"] == 0.0
+        assert q2["balloon_interest_paid_usd"] == want / 2.0
+        assert _within_ulp(
+            q2["balloon_interest_paid_usd"] + q4["balloon_interest_paid_usd"], want
+        )
+
+
+def test_a_debt_result_without_balloon_interest_is_refused(sized_lender) -> None:
+    debt, rows = sized_lender
+    stripped = {k: v for k, v in debt.items() if k != "balloon_interest_paid"}
+    with pytest.raises(ValueError, match="balloon_interest_paid"):
+        build_subperiod_coverage(rows, stripped, _calendar(ALL_EVEN))
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +268,10 @@ def test_the_debt_result_and_headline_are_untouched(sized_lender) -> None:
     view = build_subperiod_coverage(rows, debt, _calendar({}))
     assert debt == before_debt
     assert rows == before_rows
-    assert view.min_dscr is not None and view.min_dscr != debt["min_dscr"]
+    assert view.min_subperiod_dscr is not None
+    assert view.min_subperiod_dscr != debt["min_dscr"]
+    # Named apart from the headline so a consumer cannot read one for the other.
+    assert not hasattr(view, "min_dscr")
 
 
 # ---------------------------------------------------------------------------
@@ -246,6 +293,7 @@ def test_an_eventless_even_year_gives_every_quarter_the_annual_dscr(
 
 
 def test_declared_instalments_carry_the_service_and_leave_gaps(sized_lender) -> None:
+    """Each instalment is covered by the cash since the previous one, not one quarter's."""
     _, rows = sized_lender
     debt = _synthetic_debt(rows, service=1_000_000.0, interest=400_000.0)
     view = build_subperiod_coverage(
@@ -254,10 +302,57 @@ def test_declared_instalments_carry_the_service_and_leave_gaps(sized_lender) -> 
     q1, q2, q3, q4 = _year(view, 3)
     assert q1["debt_service_usd"] == q3["debt_service_usd"] == 0.0
     assert q1["dscr"] is None and q3["dscr"] is None
+    assert q1["calculation_periods"] is None and q3["calculation_periods"] is None
     assert q2["debt_service_usd"] == q4["debt_service_usd"] == 500_000.0
     assert q2["interest_usd"] == 200_000.0
-    assert q2["dscr"] == q2["cfads_usd"] / 500_000.0
-    assert view.min_dscr == min(p["dscr"] for p in view.periods if p["dscr"])
+    assert q2["dscr"] == math.fsum([q1["cfads_usd"], q2["cfads_usd"]]) / 500_000.0
+    assert q4["dscr"] == math.fsum([q3["cfads_usd"], q4["cfads_usd"]]) / 500_000.0
+    assert q2["calculation_periods"] == q4["calculation_periods"] == 2.0
+    assert view.min_subperiod_dscr == min(
+        p["dscr"] for p in view.periods if p["dscr"] is not None
+    )
+
+
+@pytest.mark.parametrize("periods", [[1, 2, 3, 4], [2, 4], [4]])
+def test_flat_cfads_gives_every_instalment_the_annual_dscr(
+    sized_lender, periods: List[int]
+) -> None:
+    """The analytic oracle for declared dates: with CFADS flat through the year, each
+    instalment's calculation-period cover equals the annual DSCR, however many there are.
+    """
+    _, rows = sized_lender
+    no_tax_year = next(i for i, row in enumerate(rows) if float(row["tax_lkr"]) == 0.0)
+    service = float(rows[no_tax_year]["cfads_usd"]) / 1.30
+    debt = _synthetic_debt(rows, service=service, interest=service / 3.0)
+    view = build_subperiod_coverage(
+        rows, debt, _calendar({**ALL_EVEN, "debt_service": {"periods": periods}})
+    )
+    # Each list ends on Q4, so no calculation period crosses the year end; that case
+    # has its own test below.
+    quarters = _year(view, no_tax_year)
+    paid = [quarters[p - 1] for p in periods]
+    for quarter in paid:
+        assert math.isclose(quarter["dscr"], 1.30, rel_tol=1e-14), quarter
+    assert [q["calculation_periods"] for q in paid] == [
+        float(b - a) for a, b in zip([0] + periods[:-1], periods)
+    ]
+
+
+def test_cash_after_the_last_instalment_counts_towards_the_next_years_first(
+    sized_lender,
+) -> None:
+    _, rows = sized_lender
+    debt = _synthetic_debt(rows, service=1_000_000.0, interest=0.0)
+    view = build_subperiod_coverage(
+        rows, debt, _calendar({**ALL_EVEN, "debt_service": {"periods": [1, 3]}})
+    )
+    first = _year(view, 0)
+    assert first[0]["calculation_periods"] == 1.0
+    assert first[2]["calculation_periods"] == 2.0
+    previous, current = _year(view, 2), _year(view, 3)
+    assert current[0]["calculation_periods"] == 2.0
+    want = math.fsum([previous[3]["cfads_usd"], current[0]["cfads_usd"]]) / 500_000.0
+    assert current[0]["dscr"] == want
 
 
 def test_the_bridge_lands_in_year_one_on_its_declared_quarter(sized_lender) -> None:
@@ -302,9 +397,10 @@ def test_a_year_end_tax_payment_shows_its_dip(sized_lender) -> None:
     annual = debt["dscr_by_year"][debt["annual_row_debt_period_map"][first_tax]["year"]]
     assert q4["dscr"] < annual < q1["dscr"]
     assert q1["dscr"] == q2["dscr"] == q3["dscr"]
-    assert dated.min_dscr is not None and spread.min_dscr is not None
-    assert dated.min_dscr < spread.min_dscr
-    assert math.isclose(spread.min_dscr, debt["min_dscr"], rel_tol=1e-14)
+    assert dated.min_subperiod_dscr is not None
+    assert spread.min_subperiod_dscr is not None
+    assert dated.min_subperiod_dscr < spread.min_subperiod_dscr
+    assert math.isclose(spread.min_subperiod_dscr, debt["min_dscr"], rel_tol=1e-14)
 
 
 # ---------------------------------------------------------------------------
@@ -386,3 +482,11 @@ def test_debt_service_is_a_calendar_kind_without_a_default_date() -> None:
     assert calendar.placements["debt_service"] == (0.0, 0.5, 0.0, 0.5)
     assert "debt_service" not in calendar.assumed
     assert "debt_service" not in _calendar({}).placements
+
+
+@pytest.mark.parametrize("kind", ["debt_service", "bridge_service"])
+def test_a_debt_kind_cannot_be_declared_as_profile(kind: str) -> None:
+    """Debt cash falls on instalment dates; ``profile`` would be read as some other
+    spread, so it is refused rather than accepted and silently evened."""
+    with pytest.raises(ValueError, match=f"{kind} cannot be 'profile'"):
+        _calendar({kind: "profile"})
