@@ -77,11 +77,15 @@ for night-peak energy exported (the CEB Solar+BESS night-peak scheme, 45.80 LKR/
     annual_lkr = energy_mwh × 1000 × cycles_per_year × round_trip_efficiency
                  × availability_factor × tariff_lkr_per_kwh
 
-flat over ``contract_years`` (``cycles_per_year`` defaults to 365 — one cycle/day;
+over ``contract_years`` (``cycles_per_year`` defaults to 365 — one cycle/day;
 ``round_trip_efficiency`` to 0.85, NREL ATB 2024, #588). BESS-6 (#486): the charging energy carries NO cost here
 because the scheme charges the BESS from a SEPARATE co-located solar PV plant the EPC owns;
 ``round_trip_efficiency`` already books the dispatch loss, so a charging-cost line would
-double-count. Out of scope: the Kolonnawa 100 MW single-site
+double-count. An ``energy_tariff`` block may declare ``escalable_om_lkr_per_kwh``, the part of
+``tariff_lkr_per_kwh`` that the regulator indexes yearly (L-9). That part then moves with the
+scenario's ``tariff.om_indexation`` index (``finance.tariff_indexation``), and the rest stays
+flat. A block that declares it in a scenario without the index is refused by the cashflow
+engine. Without it, the tariff is flat, byte-identical to the prior behaviour. Out of scope: the Kolonnawa 100 MW single-site
 project — a CEB-owned night-peak supply procured via an EPC contract, i.e. a
 construction-margin deal, not an operational tolling/tariff stream, so it does not belong
 on this operational cashflow path at all.
@@ -93,6 +97,8 @@ import math
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from analytics.storage_sizing import BessSizing
+
+from .tariff_indexation import OmIndexation
 
 #: The explicit per-technology type discriminator value marking a storage block.
 BESS_TYPE = "bess"
@@ -630,6 +636,17 @@ def resolve_bess_specs(
             )
             spec["tariff_lkr_per_kwh"] = tariff
             spec["cycles_per_year"] = cycles
+            # L-9: the part of the tariff the regulator indexes yearly (optional; 0.0 ->
+            # a flat tariff, byte-identical). It rides the scenario's tariff.om_indexation.
+            escalable_raw = revenue.get("escalable_om_lkr_per_kwh")
+            escalable = 0.0 if escalable_raw is None else _as_float(escalable_raw)
+            if escalable is None or not 0.0 <= escalable <= tariff:
+                raise ValueError(
+                    f"generation.technologies['{name}'].revenue.escalable_om_lkr_per_kwh="
+                    f"{escalable_raw!r} must be a number in [0, tariff_lkr_per_kwh="
+                    f"{tariff}] (the indexed O&M part of the tariff)."
+                )
+            spec["escalable_om_lkr_per_kwh"] = escalable
         else:  # pragma: no cover - guarded by the SUPPORTED_BESS_REVENUE_MODELS check
             raise AssertionError(f"unhandled BESS revenue model {model!r}")
 
@@ -638,8 +655,14 @@ def resolve_bess_specs(
     return specs or None
 
 
-def _spec_annual_revenue_lkr(spec: Dict[str, Any]) -> float:
-    """The flat annual BESS revenue (LKR) for one resolved spec, by its model."""
+def _spec_annual_revenue_lkr(
+    spec: Dict[str, Any], tariff_uplift_lkr_per_kwh: float = 0.0
+) -> float:
+    """The annual BESS revenue (LKR) for one resolved spec, by its model.
+
+    ``tariff_uplift_lkr_per_kwh`` is added to an ``energy_tariff`` spec's tariff (the
+    indexed uplift of its escalable O&M part); ``0.0`` gives the flat revenue.
+    """
     model = spec["model"]
     if model == "capacity_charge":
         return float(
@@ -656,7 +679,7 @@ def _spec_annual_revenue_lkr(spec: Dict[str, Any]) -> float:
             * spec["cycles_per_year"]
             * spec["round_trip_efficiency"]
             * spec["availability_factor"]
-            * spec["tariff_lkr_per_kwh"]
+            * (spec["tariff_lkr_per_kwh"] + tariff_uplift_lkr_per_kwh)
         )
     raise AssertionError(  # pragma: no cover - specs only carry supported models
         f"unhandled BESS revenue model {model!r}"
@@ -752,18 +775,23 @@ def bess_augmentation_capex_lkr_for_year(
 
 
 def bess_revenue_lkr_for_year(
-    specs: Optional[List[Dict[str, Any]]], year_index: int
+    specs: Optional[List[Dict[str, Any]]],
+    year_index: int,
+    om_indexation: Optional[OmIndexation] = None,
 ) -> float:
     """Total BESS revenue (LKR) for one operating year, summed over every spec.
 
     Dispatches by each spec's ``model`` (``capacity_charge`` or ``energy_tariff``) and
     pays each only while the operating year is within its ``contract_years`` window (a
     spec with ``contract_years is None`` is paid every year). ``year_index`` is 0-based
-    (operating year 1 → 0). The per-spec revenue is flat — no escalation.
+    (operating year 1 → 0). The per-spec revenue is flat except for an ``energy_tariff``
+    spec's ``escalable_om_lkr_per_kwh``, which moves with ``om_indexation`` (L-9).
 
     Args:
         specs: Resolved BESS specs from :func:`resolve_bess_specs`, or ``None``.
         year_index: Zero-based operating-year index.
+        om_indexation: The scenario's resolved ``tariff.om_indexation``, or ``None``
+            (flat; byte-identical).
 
     Returns:
         The combined BESS revenue in LKR (``0.0`` when ``specs`` is empty or every BESS
@@ -778,7 +806,15 @@ def bess_revenue_lkr_for_year(
             continue
         # Flat per-spec revenue, derated by the year-indexed state-of-health (1.0 when
         # the spec declares no MDSC fade -> byte-identical to the prior flat behaviour).
-        total += _spec_annual_revenue_lkr(spec) * mdsc_soh_for_year(spec, year_index)
+        escalable = float(spec.get("escalable_om_lkr_per_kwh", 0.0))
+        uplift = (
+            escalable * (om_indexation.index(year_index) - 1.0)
+            if om_indexation is not None and escalable > 0.0
+            else 0.0
+        )
+        total += _spec_annual_revenue_lkr(spec, uplift) * mdsc_soh_for_year(
+            spec, year_index
+        )
     return total
 
 

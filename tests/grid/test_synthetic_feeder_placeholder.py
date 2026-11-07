@@ -50,6 +50,8 @@ EXPECTED_PAYLOAD_SHA256 = {
     "profile/generation_profile.csv": "cefa4b9e37f85e5f7774a14727bf35a43c9c3bd8b3219bd730a35aff4f36ab76",
 }
 EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
+    # Re-pinned for 15.21.0 (PUCSL O&M indexation: only VERSION moved; the scenario did not).
+    # Re-pinned for 15.20.0 (opex currency split: only VERSION moved; the scenario did not).
     # Re-pinned for 15.19.0 (Blue Whale turbine shadow, input B33: only VERSION moved;
     # the lender scenario did not).
     # Re-pinned for #1399 part A, which removed the dead
@@ -71,7 +73,7 @@ EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
     # and profile are byte-identical - so this moved only because the manifest
     # records which sources produced them, which is the guard working, not
     # drifting. Verified deterministic across repeated runs (MRM-01).
-    "9d1ce305649460b5cfad0f6f78e4fafaa5fddb083695e5e855315b5ec8004127"
+    "ca06fe53121787c1a9d2b2b653881dc103591f72ad2bda39e37b6a1dda37df08"
 )
 
 MASTER_REDIRECT_MUTATIONS = [
