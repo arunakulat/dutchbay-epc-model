@@ -82,23 +82,30 @@ POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 # defaulted to 2).
 # Before, at 15.19.0 (v0.4, the turbine's shadow): project NPV -4997611.258776674, equity NPV
 # -5568837.4281859165, equity IRR -0.0843625813445068, min DSCR 0.8676222789656864.
-# Re-pinned at 15.22.0 for the turbine standing on DutchBay T2 (v0.6: the shadow moves and the
-# fixed-battery run picks 152 tables; solar O&M on 5,703.04 kWp). Before, at 15.20.0 (v0.5):
-# project NPV -4517260.638496677, equity NPV -5146449.112710573, equity IRR
-# -0.06998004779138234, min DSCR 0.8673920535047875.
+# Re-pinned at 15.21.0 for the PUCSL escalable O&M indexation (L-9, v0.6: the 2.72 other-period
+# O&M part and the premium's 0.30 indexed at 3.21%/yr). Before, at 15.20.0 (v0.5): project NPV
+# -4517260.638496677, equity NPV -5146449.112710573, equity IRR -0.06998004779138234, min DSCR
+# 0.8673920535047875.
+# Re-pinned at 15.22.0 for the turbine standing on DutchBay T2 (v0.7: the shadow moves and the
+# fixed-battery run picks 152 tables; solar O&M on 5,703.04 kWp). Before, at 15.21.0 (v0.6):
+# project NPV -4439869.942132653, equity NPV -5073779.560724569, equity IRR
+# -0.051245236683051254, min DSCR 0.8673920535047875.
 SOLAR_BESS_PINS = {
-    "project_npv": -4517866.475176257,
-    "equity_npv": -5148948.153136429,
-    "equity_irr": -0.06802122787537923,
+    "project_npv": -4439999.608625973,
+    "equity_npv": -5075831.700126602,
+    "equity_irr": -0.04998720726172046,
     "min_dscr": 0.8681005901376199,
 }
-# The basis the sizing runs priced (v0.3 to v0.6): opex in one currency, BESS O&M at USD
-# 2.5/kWh-yr, and the engine's default of 2 construction periods (from 15.20.0 the scenario sets
-# 1, B30). From 15.22.0 the solar O&M is on 152 tables (257,030; was 256,655 on 151).
+# The basis the sizing runs priced (v0.3 to v0.7): opex in one currency, BESS O&M at USD
+# 2.5/kWh-yr, the engine's default of 2 construction periods (from 15.20.0 the scenario sets 1,
+# B30), and flat tariffs (no L-9 indexation of the escalable O&M parts; from 15.21.0 the scenario
+# indexes them). From 15.22.0 the solar O&M is on 152 tables (257,030; was 256,655 on 151).
 SIZING_OPEX_BASIS = {
     "opex.currency_split": None,
     "opex.usd_per_year": 257030,
     "Financing_Terms.construction_periods": 2,
+    "tariff.om_indexation": None,
+    "generation.technologies.bess_1.revenue.escalable_om_lkr_per_kwh": None,
 }
 # WIND_PINS re-pinned at 15.16.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
 # 0.487560). Before, at 15.15.0 (v0.1): project IRR 0.04085210230412145, equity IRR
@@ -113,9 +120,12 @@ SIZING_OPEX_BASIS = {
 # one construction period (Financing_Terms.construction_periods 1 = B30; the engine defaulted to 2).
 # Before (v0.3): project IRR 0.10808262995624021, equity IRR 0.0863203211939878, min DSCR
 # 0.8679985938194438.
+# Re-pinned at 15.21.0 for the PUCSL escalable O&M indexation (L-9, wind v0.5: the 4.93 O&M
+# part indexed at 3.21%/yr). Before, at 15.20.0 (v0.4): project IRR 0.1240563483741687,
+# equity IRR 0.10542705973481747, min DSCR 0.8668689564723109.
 WIND_PINS = {
-    "project_irr": 0.1240563483741687,
-    "equity_irr": 0.10542705973481747,
+    "project_irr": 0.13126573271197758,
+    "equity_irr": 0.11548743505017844,
     "min_dscr": 0.8668689564723109,
 }
 
@@ -895,7 +905,8 @@ def test_after_tax_objective_is_recomputed_from_the_engine_cfads_by_finance_irr(
     # The scenario reproduces the committed point's base case through the engine, on the
     # opex basis the sizing priced (v0.3: one currency, BESS O&M at USD 2.5/kWh-yr). From
     # v0.5 the scenario carries the opex currency split and the new BESS O&M rate (lower, and in
-    # LKR); the sizing has not been re-run on them (scenario comment, opex block).
+    # LKR); from v0.6 it indexes the PUCSL escalable O&M parts (L-9). The sizing has not been
+    # re-run on either (scenario comments, opex and tariff blocks).
     point = _committed_point()
     sized = _kpis(SOLAR_BESS, SIZING_OPEX_BASIS)
     assert sized["project_npv"] == pytest.approx(point["base"]["project_npv"], rel=1e-4)
@@ -947,6 +958,42 @@ def test_solar_bess_scenario_carries_the_committed_base_case() -> None:
         assert "contiguous" in path.read_text(), path.name
 
 
+def _indexed_dispatcher_revenue(out: Dict[str, Any], scen: Dict[str, Any]) -> list:
+    """The hourly dispatcher's revenue with the Annex 2 escalable O&M parts indexed (L-9).
+
+    Each exported kWh earns ``escalable x (index - 1)`` more than the flat rate: 2.72
+    (ground solar, other periods) on every unit kWh, plus 0.30 on a priority kWh (the
+    priority rate's 3.02 = 2.72 / 0.90, less 2.72), with ``index = (1 + g) ** (year - 1)``
+    and ``g`` written out in closed form from the scenario's inputs, apart from
+    ``finance.tariff_indexation`` (TEST-01). The project has no wind.
+    """
+    ix = scen["tariff"]["om_indexation"]
+    assert ix["basis"] == "ccpi_fx_weighted"
+    assert ix["lkr_usd_depreciation_pct"] == "relative_ppp"
+    ccpi = ix["ccpi_inflation_pct"] / 100.0
+    fx = (1.0 + ccpi) / (1.0 + ix["usd_inflation_pct"] / 100.0) - 1.0
+    g = ix["ccpi_weight"] * ccpi + ix["lkr_usd_weight"] * fx
+    indexed = []
+    for year, (rev, step) in enumerate(
+        zip(
+            out["engine"]["dispatcher_revenue_lkr"],
+            out["degradation_path"],
+            strict=True,
+        ),
+        start=1,
+    ):
+        assert step["year"] == year
+        assert rev == pytest.approx(step["revenue_lkr"], rel=1e-12)  # no wind
+        uplift = (1.0 + g) ** (year - 1) - 1.0
+        indexed.append(
+            rev
+            + uplift
+            * 1000.0
+            * (step["unit_export_mwh"] * 2.72 + step["priority_export_mwh"] * 0.30)
+        )
+    return indexed
+
+
 def test_solar_bess_engine_revenue_equals_the_pr2_dispatcher() -> None:
     pytest.importorskip("pvlib")
     pytest.importorskip("shapely")
@@ -968,7 +1015,9 @@ def test_solar_bess_engine_revenue_equals_the_pr2_dispatcher() -> None:
     conf["engine"]["scenario"] = str(SOLAR_BESS.relative_to(REPO_ROOT))
     out = cli.run(conf)
     assert out["array"]["tables"] == point["pv_tables"]
-    dispatcher = out["engine"]["dispatcher_revenue_lkr"]
+    # L-9: the dispatcher prices at the flat Annex 2 rates; the scenario indexes their
+    # escalable O&M parts (solar 2.72, priority premium 0.30) yearly.
+    dispatcher = _indexed_dispatcher_revenue(out, _yaml(SOLAR_BESS))
     full = evaluate_with_overrides(
         str(SOLAR_BESS), overrides={}, return_full_result=True
     )

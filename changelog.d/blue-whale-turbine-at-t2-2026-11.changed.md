@@ -1,4 +1,4 @@
-- Blue Whale: the turbine stands on DutchBay T2, with zero wake (15.20.0 -> 15.22.0). Owner
+- Blue Whale: the turbine stands on DutchBay T2, with zero wake (15.21.0 -> 15.22.0). Owner
   decision of 7 Nov 2026: "Blue Whale Turbine is replacing the T2 Dutchbay turbine - its on the
   exact same location - if not, recalculate location to match T2 location. As such wake does
   not apply"; on wake from T1 and T3, "Zero wake, disclose T1/T3 risk". Work item: #1353
@@ -19,8 +19,9 @@
     costs the solar + BESS array 0.203% of plane-of-array irradiance (was 0.130%). The
     fixed-battery sizing moves from 151 to 152 tables (a near tie); PR 3's and PR 4's sizes do
     not change.
-  - Solar + BESS v0.6 (on 15.20.0's opex split and one construction period): project NPV USD
-    -4,517,261 -> -4,517,866; equity IRR -7.00% -> -6.80%; solar O&M on 5,703.04 kWp. Hybrid
-    v0.10 (superseded): project IRR 8.7315% -> 8.7303%. Wind is unchanged.
-  - Preview: the sizings keep the basis 15.20.0 left them on (single-currency opex, two
-    construction periods) and are re-run once the PUCSL O&M indexation lands.
+  - Solar + BESS v0.7 (on 15.20.0's opex split and one construction period and 15.21.0's O&M
+    indexation): project NPV USD -4,439,870 -> -4,440,000; equity IRR -5.12% -> -5.00%; solar O&M
+    on 5,703.04 kWp. Hybrid v0.11 (superseded): project IRR 9.2829% -> 9.2817%. Wind is
+    unchanged.
+  - The sizings keep the basis they have had since 15.19.0 (single-currency opex, two
+    construction periods, flat tariffs); the battery-size work moves them to the current basis.

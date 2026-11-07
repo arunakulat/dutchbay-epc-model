@@ -39,6 +39,11 @@ from .cashflow_v14_tax import (
 )
 from .cashflow_v14_utils import as_float, get_nested
 from .import_levies import capex_uplift_from_config
+from .tariff_indexation import (
+    OmIndexation,
+    resolve_om_indexation,
+    tariff_lkr_per_kwh_for_year,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +113,29 @@ Key improvements over v13:
 # =============================================================================
 
 
+def _resolve_tariff_om_indexation(
+    config: Dict[str, Any], params_dict: Dict[str, Any]
+) -> Optional[OmIndexation]:
+    """Resolve ``tariff.om_indexation`` (L-9) and check the BESS specs that ride it.
+
+    Returns ``None`` when the scenario declares no block. A ``type: bess`` energy-tariff
+    block that declares an ``escalable_om_lkr_per_kwh`` needs the scenario's index, so
+    without the block it is refused rather than silently held flat (FRAMEWORK-02).
+    """
+    indexation = resolve_om_indexation(
+        config, base_tariff_lkr_per_kwh=float(params_dict["tariff_lkr_per_kwh"])
+    )
+    if indexation is None:
+        for spec in params_dict.get("bess_revenue_specs") or []:
+            if float(spec.get("escalable_om_lkr_per_kwh", 0.0)) > 0.0:
+                raise ValueError(
+                    f"generation.technologies['{spec.get('technology')}'].revenue declares "
+                    "escalable_om_lkr_per_kwh, but the scenario has no "
+                    "tariff.om_indexation block to index it on"
+                )
+    return indexation
+
+
 def _prepare_cashflow_context(
     config: Dict[str, Any],
     fx_curve: Optional[List[float]],
@@ -160,6 +188,13 @@ def _prepare_cashflow_context(
     # availability-based Capacity Charge (LKR/MW/month), NOT generation revenue.
     # None when no BESS block is present -> wind/solar runs stay byte-identical.
     params_dict["bess_revenue_specs"] = resolve_bess_specs(config)
+
+    # L-9: yearly indexation of the tariff's escalable O&M component (PUCSL 2026
+    # methodology s.3.1 item 2). None without a tariff.om_indexation block -> the
+    # tariff is flat and every run is byte-identical.
+    params_dict["tariff_om_indexation"] = _resolve_tariff_om_indexation(
+        config, params_dict
+    )
 
     # BESS-3 / CESSPIT: reject a storage asset booked as free revenue — a revenue-
     # producing type:bess block must declare a positive capex_usd (it must then be
@@ -490,14 +525,18 @@ def calculate_single_year_cfads(
 
     gross_kwh, net_kwh = calculate_net_production_for_year(params, year_index)
 
-    generation_revenue_lkr = _calculate_revenue_lkr(
-        net_kwh, float(params["tariff_lkr_per_kwh"])
+    # L-9: the escalable O&M part of the tariff is indexed yearly when the scenario
+    # declares tariff.om_indexation; otherwise this is the flat tariff (byte-identical).
+    om_indexation = params.get("tariff_om_indexation")
+    tariff_lkr_per_kwh = tariff_lkr_per_kwh_for_year(
+        float(params["tariff_lkr_per_kwh"]), om_indexation, year_index
     )
+    generation_revenue_lkr = _calculate_revenue_lkr(net_kwh, tariff_lkr_per_kwh)
 
     # BESS capacity-charge revenue (availability tolling), additive to generation
     # revenue. 0.0 when no `type: bess` block -> byte-identical wind/solar behaviour.
     bess_revenue_lkr = bess_revenue_lkr_for_year(
-        params.get("bess_revenue_specs"), year_index
+        params.get("bess_revenue_specs"), year_index, om_indexation
     )
     revenue_lkr = generation_revenue_lkr + bess_revenue_lkr
 
@@ -859,13 +898,15 @@ def build_annual_rows_efficient(
 
         gross_kwh, net_kwh = calculate_net_production_for_year(params, year_index)
 
-        generation_revenue_lkr = _calculate_revenue_lkr(
-            net_kwh, float(params["tariff_lkr_per_kwh"])
+        # L-9 tariff indexation and BESS revenue — mirror calculate_single_year_cfads
+        # so the two builders stay identical (flat without tariff.om_indexation).
+        om_indexation = params.get("tariff_om_indexation")
+        tariff_lkr_per_kwh = tariff_lkr_per_kwh_for_year(
+            float(params["tariff_lkr_per_kwh"]), om_indexation, year_index
         )
-        # BESS capacity-charge revenue (additive; 0.0 when no `type: bess` block) —
-        # mirrors calculate_single_year_cfads so the two builders stay identical.
+        generation_revenue_lkr = _calculate_revenue_lkr(net_kwh, tariff_lkr_per_kwh)
         bess_revenue_lkr = bess_revenue_lkr_for_year(
-            params.get("bess_revenue_specs"), year_index
+            params.get("bess_revenue_specs"), year_index, om_indexation
         )
         revenue_lkr = generation_revenue_lkr + bess_revenue_lkr
 

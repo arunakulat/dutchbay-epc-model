@@ -79,6 +79,7 @@ _MODULE = Path(
 _UTC = timezone.utc
 # Moves with the canonical lender-case result and engine identity; last re-pinned by
 # the Blue Whale turbine on DutchBay T2 (15.22.0: only the engine identity moved), before
+# that by the PUCSL escalable O&M indexation (15.21.0: only the engine identity moved), before
 # that by the opex currency split (15.20.0: only the engine identity moved), before that by
 # the Blue Whale turbine shadow (15.19.0: only the engine identity moved), before that by
 # Blue Whale PR 7 (15.18.0: only the engine identity moved), before that by
