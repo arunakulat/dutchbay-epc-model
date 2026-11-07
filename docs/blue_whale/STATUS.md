@@ -1041,7 +1041,8 @@ inputs, at the optical floor:
 | Solar + BESS project (committed) | 152 | 0.082% | 0.121% | **0.203%** (was 0.130%) | **0.19%** (was 0.136%) | 0.258% |
 | Hybrid's unit (superseded) | 147 | 0.076% | 0.115% | 0.192% (was 0.125%) | 0.18% (was 0.130%) | 0.243% |
 
-**Sizing.** All three sizings were re-run on the same seed and trials. PR 3 keeps DC/AC 1.1
+**Sizing.** All three sizings were re-run on the same seed and trials, at commit `f5b45904`
+on this change's branch (model 15.22.0; each summary records that commit, MRM-02). PR 3 keeps DC/AC 1.1
 with 24 MWh. PR 4's value-based size stays 107 tables, 3.5 MW AC and 1.0 MW / 4.0 MWh. The
 owner's battery moves from 151 to **152 tables (5.70304 MWp, DC/AC 1.1406)** at 5.0 MW AC
 (`conf/blue_whale_solar_bess_fixed_bess_sizing.yaml`: every whole table count from 134 to 191,

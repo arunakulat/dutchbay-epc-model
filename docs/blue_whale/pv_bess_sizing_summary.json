@@ -7781,27 +7781,27 @@
    "residual_fade_pct_per_year"
   ],
   "effective_evaluations": 8256,
-  "git_sha": "6575e4f29a732d797ad74ab62ff3a3f0ae18f87c",
+  "git_sha": "f5b4590422a15bb6ede9da7b80df89623992be94",
   "grid_points": 40,
   "grid_points_evaluated": 32,
   "inputs_sha256": {
    "conf/blue_whale_pv_bess_pricing.yaml": "6730291beec447d73eb07c8840154540c6497ed834a45c87615c66502dd6d8e9",
    "conf/blue_whale_solar_bess.yaml": "3574680026271f6b65725cc6c2bd1bbc6da91032eb06985e098f250915d8e3d3",
-   "scenarios/blue_whale_hybrid_lot5b_2026.yaml": "db9bb0805967256f3762f09ad4e3ac36d9a6a7aa6a5ca7f46ccda2ec1f437938"
+   "scenarios/blue_whale_hybrid_lot5b_2026.yaml": "9ec74496b5e08cac961657c16819a4d78d9a9b918b0a86a9083ed347e232176c"
   },
   "limitations": [
    "Placeholder site (PR 1) and placeholder O&M, financing and grid inputs.",
    "Ordinary-suite tests exercise reduced grids only; this run is not tail-adequacy, convergence, lender or bankability evidence (TEST-03).",
    "BESS priced per kWh on a 4 h basis at every duration."
   ],
-  "model_version": "15.19.0",
+  "model_version": "15.22.0",
   "objective": {
    "metric": "project_npv",
    "statistic": "p50"
   },
   "requested_trials_per_point": 256,
-  "result_sha256": "2649f0a2d389a280874c579240c6c2a67095b47f7d7d40691728c3f745f22c50",
-  "runtime_s": 194.5,
+  "result_sha256": "75f7525448d1e1e38bcf91fbad3249f2cc5c5293d6363e1106741c1ada20b17f",
+  "runtime_s": 345.9,
   "sampler": "lhs",
   "seed": 20261101,
   "sizing_config_sha256": "6c7d9289dc3ac969c2b7f906b07f4a9ad9c5347228643927ef6a0b7c8a46e43e",

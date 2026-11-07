@@ -19808,14 +19808,14 @@
   ],
   "effective_evaluations": 81585,
   "export_limit_mw": 10.0,
-  "git_sha": "6575e4f29a732d797ad74ab62ff3a3f0ae18f87c",
+  "git_sha": "f5b4590422a15bb6ede9da7b80df89623992be94",
   "grid_points": 315,
   "grid_points_evaluated": 315,
   "inputs_sha256": {
    "conf/blue_whale_pucsl_fit_2026.yaml": "d314f5b44cf407f32a9472f1c49075c557718a94163fb45b3759f2dc945f5a23",
    "conf/blue_whale_pv_bess_pricing.yaml": "6730291beec447d73eb07c8840154540c6497ed834a45c87615c66502dd6d8e9",
    "conf/blue_whale_solar_bess.yaml": "3574680026271f6b65725cc6c2bd1bbc6da91032eb06985e098f250915d8e3d3",
-   "scenarios/blue_whale_solar_bess_lot5b_2026.yaml": "5ec3c394988cdadf032ea4942565641eebfb4194c40edd119450dbc68d629520"
+   "scenarios/blue_whale_solar_bess_lot5b_2026.yaml": "2b0d6b24f9818f0babb1b2fbf9da33b8dfff6b3e45ad80a70c5ea41fff0a9ff7"
   },
   "land_max_tables_by_bess_power_mw": {
    "1.0": 188,
@@ -19840,14 +19840,14 @@
    "The BESS container footprint is a 6 h product's (power-bound at 4 h), so the land maximum is conservative for large batteries."
   ],
   "losses_on_charge": true,
-  "model_version": "15.19.0",
+  "model_version": "15.22.0",
   "objective": {
    "metric": "project_npv",
    "statistic": "p50"
   },
   "requested_trials_per_point": 256,
-  "result_sha256": "eba51e9605217f04dc13fba4a2f63bc5e99b87fb818c287a1eb7d789c23c3f43",
-  "runtime_s": 2343.2,
+  "result_sha256": "bdcfdd4f7415ab8a223d7dfe9c7799330b0580a44bc2828cadbc81b07d5db749",
+  "runtime_s": 2773.1,
   "sampler": "lhs",
   "seed": 20261101,
   "sensitivity_cases_per_point": 2,
