@@ -5,14 +5,19 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
-- **Opex split by currency (15.19.0).** New optional `opex.currency_split` (a USD share, given
+- **Opex split by currency (15.20.0).** New optional `opex.currency_split` (a USD share, given
   directly or weighted from components, USD and LKR escalation, and an optional LKR depreciation
   path for the USD share). Without it every scenario is byte-identical. The Blue Whale projects
   take it on the owner's rule and decision of 2026-11-02 (#1353 comment 6702129557): wind O&M
   70% USD / 30% LKR; BESS O&M at USD 1.80/kWh-yr of DC installed (a vendor LTSA benchmark),
   converted to LKR at the wind project's value date (owner, 2026-11-07).
-  Wind project IRR 10.81% -> 10.72%, NPV USD +69k -> -7k (USD share on relative PPP); solar + BESS NPV USD -4.99M -> -4.91M.
+  Wind project IRR 10.81% -> 10.72%, NPV USD +69k -> -7k (USD share on relative PPP); solar + BESS NPV USD -5.00M -> -4.92M.
   Detail in the compiled fragment.
+- **Blue Whale: the turbine's shadow on the PV, input B33 (15.19.0).** The rotor and tower
+  shadow is computed per PV table and the hourly PV is derated before BESS dispatch. The
+  electrical-mismatch treatment is the optical floor. The loss is 0.13% of the solar + BESS
+  array's energy, and no size changes. Solar + BESS project NPV USD -4.99M -> -5.00M; hybrid
+  project IRR 8.73% (unchanged to 2 dp). Detail in the compiled fragment.
 - **Blue Whale solar + BESS: the owner's 5 MW / 20 MWh battery (15.18.0).** The sizing ranks on
   the after-tax project NPV and the project commits the owner's 5 MW / 20 MWh with 151 tables at
   5.0 MW AC (#1353 comment 6563070978). The value-based size stays 1 MW / 4 MWh; the choice
@@ -20,7 +25,8 @@ All notable changes to this project will be documented here.
   PVGIS-ERA5. Detail in the compiled fragment.
 - **Blue Whale capex blend, solar resource and re-sizing (15.17.0).** Wind and BESS capex become
   blends of China FOB pricing and internal anchors on the owner's decision (#1353 comment
-  6556975196); the published figures include private inputs as blends only. Wind 936.84 USD/kW
+  6556975196); the published figures are blends that include private inputs, and those inputs
+  can be recovered exactly from them (owner accepted, #1353 comment 6702419885). Wind 936.84 USD/kW
   (was 1,300); BESS 140.74 USD/kWh (was 135.00). The solar + BESS project re-sizes to 3.5 MW AC
   with 1 MW / 4 MWh. Wind project IRR 7.80% -> 10.81%. Detail in the compiled fragment.
 - **Blue Whale wind resource from met mast 617725 (15.16.0).** The Kalpitiya met-mast record is

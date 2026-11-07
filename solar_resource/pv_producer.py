@@ -93,7 +93,12 @@ _HOURS_PER_YEAR = 8760.0
 #: consumed elsewhere, so :meth:`SolarResourceConfig.from_scenario` skips them rather than
 #: rejecting them as typos. ``source_quality`` (#743) is graded into the provenance block by
 #: ``solar_resource.source_quality``; it is pure metadata and bills off nothing.
-_PRODUCER_IGNORED_KEYS: frozenset[str] = frozenset({"source_quality"})
+#: ``turbine_shading`` (#1518) configures ``solar_resource.turbine_shading``, which estimates a
+#: loss the scenario may then carry as ``losses.turbine_shading_pct``; the producer itself
+#: never reads it.
+_PRODUCER_IGNORED_KEYS: frozenset[str] = frozenset(
+    {"source_quality", "turbine_shading"}
+)
 
 
 def _require_pvlib() -> Any:

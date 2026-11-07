@@ -1,4 +1,4 @@
-- Opex split by currency (15.18.0 -> 15.19.0). Owner rule of 2 Nov 2026: "all CAPEX is fixed at
+- Opex split by currency (15.19.0 -> 15.20.0). Owner rule of 2 Nov 2026: "all CAPEX is fixed at
   project start in LKR. The debt will be in LKR. However, a percentage of OPEX will be in USD".
   Work item #1353 comment 6702129557.
   - `finance.cashflow_v14_params` reads an optional `opex.currency_split`: `usd_share` (or
@@ -17,8 +17,9 @@
   - Blue Whale wind v0.4: wind O&M 350k at 70% USD, insurance, land and SPV 150k LKR (49% USD);
     USD 2.5%/yr, LKR 5%/yr, USD share on relative PPP, 2.44%/yr (owner, 2026-11-07). Project IRR
     10.81% -> 10.72%, equity IRR 8.63% -> 8.51%, project NPV USD 69,109 -> -7,068.
-  - Blue Whale solar + BESS v0.4: BESS O&M at USD 1.80/kWh-yr on 22,000 kWh DC (39,600; was
+  - Blue Whale solar + BESS v0.5: BESS O&M at USD 1.80/kWh-yr on 22,000 kWh DC (39,600; was
     USD 2.5/kWh-yr on 20,000 kWh), converted to LKR at the wind project's value date (333.79,
     LKR 13,218,084/yr; owner, 2026-11-07); every line in LKR; total 256,655 -> 246,255.2.
-    Project NPV USD -4,992,409 -> -4,912,184; equity IRR -8.32% -> -6.49%. The sizing runs are
+    Against 15.19.0 (with the turbine's shadow): project NPV USD -4,997,611 -> -4,916,675;
+    equity IRR -8.44% -> -6.55%. The sizing runs are
     not re-run; the test that ties the scenario to them now evaluates it on their opex basis.

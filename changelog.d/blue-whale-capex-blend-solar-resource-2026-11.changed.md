@@ -2,8 +2,9 @@
   1 Nov 2026 (#1353 comment 6556975196, "Derived blend may publish"), the wind and BESS capex
   become blends of China FOB pricing and internal anchors, and the solar resource at the site is
   reported with cross-checks. The disclosure surface moves on the owner's authority: the
-  published figures are blends that include private commercial inputs, and no raw private
-  figure is published.
+  published figures are blends that include private commercial inputs, and those inputs can be
+  recovered exactly from the published figures. The owner accepted that disclosure on
+  7 Nov 2026 (#1353 comment 6702419885).
   - New `solar_resource/blue_whale_site_inputs.py`, `conf/blue_whale_capex_solar_resource.yaml`
     and the Hydra CLI `scripts/run_blue_whale_capex_solar_resource_v14.py`. The landed-cost
     build-up uses the repository's own levy postures (bonded, prudent, full stack paid) and
