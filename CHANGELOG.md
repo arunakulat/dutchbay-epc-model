@@ -5,6 +5,67 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Blue Whale solar + BESS: the owner's 5 MW / 20 MWh battery (15.18.0).** The sizing ranks on
+  the after-tax project NPV and the project commits the owner's 5 MW / 20 MWh with 151 tables at
+  5.0 MW AC (#1353 comment 6563070978). The value-based size stays 1 MW / 4 MWh; the choice
+  costs USD 1.25M at P50. Solar + BESS project NPV USD -4.03M -> -4.99M. The TMY README now names
+  PVGIS-ERA5. Detail in the compiled fragment.
+- **Blue Whale capex blend, solar resource and re-sizing (15.17.0).** Wind and BESS capex become
+  blends of China FOB pricing and internal anchors on the owner's decision (#1353 comment
+  6556975196); the published figures include private inputs as blends only. Wind 936.84 USD/kW
+  (was 1,300); BESS 140.74 USD/kWh (was 135.00). The solar + BESS project re-sizes to 3.5 MW AC
+  with 1 MW / 4 MWh. Wind project IRR 7.80% -> 10.81%. Detail in the compiled fragment.
+- **Blue Whale wind resource from met mast 617725 (15.16.0).** The Kalpitiya met-mast record is
+  long-term corrected against NASA POWER / MERRA-2 (2015-2025) by sector-wise MCP and
+  transferred 26.7 km to the turbine (owner direction). Net CF 37.43% -> 48.76% (31.15 ->
+  40.57 GWh; P90 33.73 GWh at 1 year). Wind project IRR 4.09% -> 7.80%; hybrid 4.26% -> 6.90%.
+  Not lender-grade: the met-mast HOLD stands. Detail in the compiled fragment.
+- **Blue Whale split into a wind project and a solar + BESS project (15.15.0).** Owner decision:
+  the 9.5 MW turbine is a separate project built first. The solar + BESS project is sized by
+  PR 3's seeded Monte Carlo under the PUCSL 2026 rules (4 h BESS, PV-only charging, discharge
+  17:30-21:30 only) and both readings of the 10 MW standardised-PPA limit: reading A chooses
+  6.0032 MWp, 5.0 MW AC and 4.5 MW / 18 MWh (committed); reading B 7.16632 MWp, 6.0 MW AC and
+  5.5 MW / 22 MWh. The turbine's contiguous-location cumulative risk is flagged as an open legal
+  question. The hybrid scenario is kept as the superseded combined view; its KPIs do not move.
+  New scenarios: wind project IRR 4.09%; solar + BESS project NPV USD -4.77M with no project
+  IRR. Detail in the compiled fragment.
+- **Blue Whale solar + BESS sizing (15.14.0).** With the turbine fixed, a seeded Monte Carlo
+  (seed 20261101, 40 sizes x 256 LHS trials, through `evaluate_with_overrides`) sizes the unit
+  on cited prices: OPIS module prices, a Huawei SUN2000-330KTL-H1 inverter matched to the
+  string, IRENA-derived PV BoP, and the public NSO 250 BESS figures. Chosen on the P50 project
+  NPV among sizes that export the full 4 h priority window: DC/AC 1.1 (5.51544 MWp) with
+  5 MW / 24 MWh. New `solar_resource/pv_bess_sizing.py`, its Hydra CLI and configs; Blue Whale v0.6.
+  Project IRR 3.58% -> 4.26%, mostly from the cited capex replacing placeholders. No other
+  scenario moves. Detail in the compiled fragment.
+- **Blue Whale solar + BESS unit (15.13.0).** The solar and BESS become one unit (owner):
+  5 MW AC of JinkoSolar Tiger Neo 3.0 670 W (6.0032 MWp) with a 5 MW x 6 h (30 MWh) BESS
+  charged only from that PV and dispatched hourly over the PVGIS TMY, 17:30-21:30 at the
+  PUCSL priority rate and 05:30-07:30 at the other rate. New
+  `analytics/gis/pv_array_layout.py` (strings, row pitch, land, fit on the placeholder lot)
+  and `solar_resource/pv_bess_dispatch.py` (hourly PV pinned to `compute_solar_aep`, the
+  dispatcher, the engine mapping). The array and BESS fit the placeholder lot. Blue Whale
+  project IRR 3.15% -> 3.58%, mostly from the BESS capex placeholder scaled to 30 MWh. No
+  other scenario moves. Detail in the compiled fragment.
+- **Blue Whale turbine, placeholder site, coastal placement and shadow flicker (15.12.0).**
+  The wind becomes one Envision EN-206/10.5 de-rated to 9.5 MW at 130 m (owner), with a net
+  CF of 37.43% (31.15 GWh) derived from the confidential OEM curve over the DutchBay ERA5
+  basis; only derived figures are published. The lot is a flagged placeholder square on the
+  OpenStreetMap coastline and the turbine sits at the CZ&CRMP 2024-2029 60 m coastal setback.
+  New `analytics/gis/shadow_flicker.py` screens the tip-height setback and shadow flicker.
+  Blue Whale project IRR 2.77% -> 3.15%. No other scenario moves. Detail in the compiled
+  fragment.
+- **Tariff and BESS capacity-charge research applied to four scenarios (15.11.0).** The
+  solar + 4 h BESS case moves to the PUCSL 2026 feed-in tariff (50.10 LKR/kWh, 15 years;
+  the CEB 2025 45.80 / 10-year scheme is superseded and kept as a sensitivity). Three BESS
+  capacity charges move to 1,752,500 LKR/MW/month, the NSO 250 MW bid-clearing level. Blue
+  Whale takes the blended 2026 FiT (24.76) and NSO as offtaker. Project IRR: solar + BESS
+  6.61% -> 10.04%, standalone BESS -1.29% -> -6.27%, DutchBay hybrid + BESS 1.77% -> 0.16%
+  (now below the plain hybrid), Blue Whale 4.59% -> 2.77%. The canonical lender case is
+  unchanged. The solar + BESS 10.04% books no cost for the PV energy that charges the
+  battery; netted at the other-period rate (20.72) it is 0.82%, and the case's eligibility
+  for the < 10 MW FiT is unresolved. Window hours, cycle count, the PPA term for small
+  plants and awarded capacity charges have no official figure and stay assumptions. Detail
+  in the compiled fragment.
 - **The lender case refinances its balloon instead of sweeping it (15.8.0).** Owner
   decision 1A on #1396 (audit P3-COV-03): the USD 28.63m scheduled-maturity balloon,
   of which cash sweep left USD 9.80m unpaid, is refinanced on the assumed YAML terms
@@ -19,6 +80,39 @@ All notable changes to this project will be documented here.
   vector; it does not change the Board/lender circulation HOLD.
 
 ### Fixed
+- **Balloon interest paid after maturity is deducted for tax (15.10.0).** #1505: the
+  levered tax pass deducted scheduled interest only, so the interest on the balloon after
+  maturity (the refinanced tranche's, a sweep's or a bullet's) reduced no taxable income,
+  although the three-statement P&L books it. The basis is a new scenario input,
+  `tax.balloon_interest_tax_basis`: `paid` (owner decision, #1526 issuecomment-6553550944,
+  and the default when absent: deducted in the year it is settled in cash, capitalised
+  interest when a later sweep pays it), `accrued` or `none` (the earlier treatment).
+  `tax.interest_deductibility: false` still switches every interest deduction off.
+  `debt_result` gains `balloon_interest_paid`, the enriched rows gain
+  `balloon_interest_accrued_usd` and `balloon_interest_paid_usd`, and the non-resident
+  interest WHT gross-up now also charges the balloon interest paid (off in every committed
+  scenario). The deduction reaches both the sizing pass and the equity pass; the sizing
+  loop's iteration ceiling rises from 25 to 200. Canon re-baseline: equity IRR -26.44% ->
+  -23.01%, equity NPV -$95.53M -> -$95.27M, LLCR 1.2875 -> 1.2905, PLCR 1.3283 -> 1.3342;
+  project IRR, NPV, CFADS, min DSCR and the facility are unchanged. LLCR and PLCR are now
+  pinned at full precision in `tests/_canon.py`. This re-baselines the committed
+  canonical KPI vector; it does not change the Board/lender circulation HOLD, and none of
+  these figures supports a lender, IC or covenant representation while the F-5 and #1110
+  holds stand.
+- **The balloon after maturity accrues interest, and the senior fee follows the balance
+  actually outstanding (15.9.0).** #1503 and #1504: under `cash_sweep` and `bullet` the
+  unpaid balloon accrues interest at the facility's blended rate (`avg_debt_rate`) until
+  it is repaid, as the refinance already did; a sweep whose cash cannot pay the interest
+  capitalises it into `balloon_residual` (owner decision, #1510 issuecomment-6542861144).
+  `debt_outstanding` and the senior credit-support fee now follow the balloon actually
+  outstanding instead of the structural balloon to the horizon, and `debt_result` gains
+  `balloon_interest`, which the three-statement builder books as interest for every
+  treatment. Canon re-baseline: equity IRR -30.54% -> -26.44%, project IRR -0.142% ->
+  -0.060%, project NPV -$91.57M -> -$91.40M, PLCR 1.324 -> 1.328, total senior fee
+  $15.11M -> $13.14M; min DSCR, LLCR and the facility are unchanged. This re-baselines
+  the committed canonical KPI vector; it does not change the Board/lender circulation
+  HOLD, and none of these figures supports a lender, IC or covenant representation
+  while the F-5 and #1110 holds stand.
 - **Debt is sized, and coverage reported, on levered-tax CFADS (15.7.0).** `plan_debt`
   was handed rows built with `interest_expense=0`, so the facility was sculpted against —
   and DSCR, LLCR and PLCR published from — CFADS carrying tax computed with no interest

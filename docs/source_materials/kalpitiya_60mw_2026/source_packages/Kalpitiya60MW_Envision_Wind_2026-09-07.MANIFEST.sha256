@@ -56,12 +56,25 @@
 #    cannot be checked without naming what arrived, so this is the irreducible minimum, and it
 #    is recorded as a disclosure rather than treated as none.
 #
-# 4. NOTHING HERE HAS BEEN PROMOTED.
-#    No figure from this package has entered a scenario, a model input, a baseline or a report.
-#    The evaluation holds two open questions that must be answered in writing by the issuer
-#    before anything in the package is used: which power curve produced the energy yield
-#    appendix, and what the wind data provenance and uncertainty basis are. Recording a package
-#    is not accepting it.
+# 4. WHAT HAS BEEN PROMOTED, AND ON WHAT BASIS.
+#    Until 1 November 2026 no figure from this package had entered a scenario, a model input, a
+#    baseline or a report. On that date the project owner decided that the turbine performance
+#    document's power curve is used in the project's internal calculations, with only derived
+#    results published (decision quoted verbatim in PR #1530 and on #1353, comment 6554211155).
+#    On that basis, results DERIVED from the curve now enter
+#    scenarios/blue_whale_hybrid_lot5b_2026.yaml and scenarios/blue_whale_wind_lot5b_2026.yaml:
+#    the net annual energy and net capacity factor of one turbine de-rated to 9.5 MW. The curve
+#    is read at run time from a path outside this repository. No power curve value, thrust coefficient value, curve table, or hash of the
+#    private curve file beyond the entry already recorded below is published here. Nothing else
+#    from the package, including the proposal's energy yield, has been promoted.
+#    The evaluation's two open questions for the issuer remain unanswered: which power curve
+#    produced the energy yield appendix, and what the wind data provenance and uncertainty basis
+#    are. The owner's decision uses the curve without waiting for those answers; it does not
+#    answer them. Recording a package is not accepting it.
+#    On the same date the owner also decided "Derived blend may publish" (#1353, comment
+#    6556975196), which allows prices from this package to enter a published capex blend. No
+#    figure from this package entered the Blue Whale capex blend (conf/blue_whale_capex_solar_resource.yaml),
+#    so this note's account of what has been promoted is unchanged.
 # ═════════════════════════════════════════════════════════════════════════════════════════════
 #
 # Paths below are relative to corpus/kalpitiya_60mw_2026_envision_wind/ in the private
