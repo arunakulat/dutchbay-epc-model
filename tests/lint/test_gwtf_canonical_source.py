@@ -589,27 +589,44 @@ CLEANUP_01_REQUIRED_CONTROLS = (
     "git worktree remove",
     "git worktree prune",
     "DELETE MERGED BRANCHES",
-    "git branch -d",
+    "git branch -D",
     "git push origin --delete",
     "CLEAN NON-PROTECTED VENVS",
     "HARD BOUNDARY - PROTECTED PERSISTENT VENV",
     "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv",
-    # Guard (a), owner decision 2026-11-07: cleanup closes only the merged PR's named
-    # issues and never a pull request; an unmerged PR closes only on a cited owner decision.
-    "close only the GitHub issue(s) named on the merged PR's own Work item: line or closing line",
+    # Guard (a), owner decision 2026-11-07: cleanup closes only the merged PR's focused
+    # issue, never tracker #1353 and never a pull request; an unmerged PR closes only on a
+    # cited owner decision.
+    "close only the focused GitHub issue named by number on the merged PR's own Work item: line or closing line",
+    "only when its deliverable is complete",
+    "A Work item: line that names a #1353 comment closes nothing",
+    "cleanup never closes tracker #1353",
     "Cleanup never closes a pull request",
     "HARD BOUNDARY - NO PULL REQUEST CLOSURE",
     "cited owner decision",
     "posted as a comment on that pull request before it is closed",
     "proves its car commit is on origin/main",
+    "2026-11-07T05:29:05Z",
+    "2026-11-07T05:33:39Z",
     # Guard (b), owner decision 2026-11-07: a branch is deleted only after its PR merged.
     "BRANCH DELETION GATE",
     "merged_at is set and the branch head equals that pull request's merged head",
+    "head.ref must name the branch",
+    "the remote ref, if it still exists, must equal the merged head",
+    "skip the remote delete and record that it was auto-deleted",
+    "the local ref, if it exists, must equal the merged head before any local delete",
+    "no open pull request may have the branch as its base",
+    "the train pull request's merged_at is set",
     "never deleted by cleanup",
 )
 
-# The wording that let post-merge cleanup close pull requests. It must not come back.
-CLEANUP_01_RETIRED_PHRASES = ("(or each car PR and train issue for a train)",)
+# Wording that let post-merge cleanup close pull requests. It must not come back anywhere.
+CLEANUP_01_RETIRED_PHRASES = (
+    "(or each car PR and train issue for a train)",
+    "(or each car pull request and the train issue for a train)",
+    "Otherwise close each car's pull request with a pointer",
+    "close completed focused GitHub issues",
+)
 
 # Every surface that restates CLEANUP-01 must carry both guards, not only the rule's name.
 CLEANUP_01_SURFACES = (
@@ -623,18 +640,45 @@ CLEANUP_01_SURFACES = (
 CLEANUP_01_SURFACE_CONTROLS = (
     "CLEANUP-01",
     "/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv",
+    "focused issue",
+    "never closes tracker #1353",
+    "Cleanup never closes a pull request",
     "cited owner decision",
     "merged_at",
     "merged head",
 )
 
+STEWARD_SKILL = ".claude/skills/steward/SKILL.md"
+# The steward's executable branch deletion gate, pinned line by line, and the train-car order.
+CLEANUP_01_STEWARD_CONTROLS = (
+    'test "$(gh api "repos/$repo/pulls/$pr" --jq \'.head.ref\')" = "$branch"',
+    'test -n "$(gh api "repos/$repo/pulls/$pr" --jq \'.merged_at // ""\')"',
+    "want=$(gh api \"repos/$repo/pulls/$pr\" --jq '.head.sha')",
+    'test "$(gh api "repos/$repo/pulls/$pr" --jq \'.state\')" = "closed"',
+    'test "$(gh api "repos/$repo/pulls/$pr" --jq \'.head.sha\')" = "$car_head"',
+    'test -n "$(gh api "repos/$repo/pulls/$train_pr" --jq \'.merged_at // ""\')"',
+    'test -z "$(gh api "repos/$repo/pulls?state=open&base=$branch" --jq \'.[].number\')"',
+    'if [ -n "$remote_head" ]; then test "$remote_head" = "$want"; fi',
+    'test "$(git rev-parse "refs/heads/$branch")" = "$want"',
+    "first post a pointer comment naming its commit on `main`, then close that pull request",
+)
+
+
+def _flat(text: str) -> str:
+    """Collapse line wrapping so a phrase is found wherever a surface wraps it."""
+    return " ".join(text.split())
+
 
 def _assert_cleanup_01_surface(relative_path: str, surface: str) -> None:
     """Check one restating surface for the rule name, the venv boundary and both guards."""
+    flat = _flat(surface)
     for control in CLEANUP_01_SURFACE_CONTROLS:
-        assert control in surface, f"{relative_path} lacks {control!r}"
+        assert control in flat, f"{relative_path} lacks {control!r}"
     for phrase in CLEANUP_01_RETIRED_PHRASES:
-        assert phrase not in surface, f"{relative_path} restores {phrase!r}"
+        assert phrase not in flat, f"{relative_path} restores {phrase!r}"
+    if relative_path == STEWARD_SKILL:
+        for control in CLEANUP_01_STEWARD_CONTROLS:
+            assert _flat(control) in flat, f"{relative_path} lacks {control!r}"
 
 
 def test_cleanup_01_requires_post_merge_tracker_issue_and_workspace_retirement() -> (
@@ -672,27 +716,266 @@ def test_cleanup_01_guard_rejects_control_loss(
         test_cleanup_01_requires_post_merge_tracker_issue_and_workspace_retirement()
 
 
+@pytest.mark.parametrize("restored_phrase", CLEANUP_01_RETIRED_PHRASES)
 def test_cleanup_01_guard_rejects_restored_pull_request_closure(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, restored_phrase: str
 ) -> None:
-    """Restoring the retired 'close each car PR' clause fails even with every control present."""
+    """Restoring a retired PR-closing clause fails even with every control present."""
     mutated = {key: dict(row) for key, row in _rules_by_id().items()}
-    mutated["CLEANUP-01"]["description"] += " " + CLEANUP_01_RETIRED_PHRASES[0]
+    mutated["CLEANUP-01"]["description"] += " " + restored_phrase
 
     monkeypatch.setitem(globals(), "_rules_by_id", lambda: mutated)
     with pytest.raises(AssertionError):
         test_cleanup_01_requires_post_merge_tracker_issue_and_workspace_retirement()
 
 
-@pytest.mark.parametrize("relative_path", CLEANUP_01_SURFACES)
-@pytest.mark.parametrize("removed_control", CLEANUP_01_SURFACE_CONTROLS)
+def _surface_mutation_cases() -> list[tuple[str, str]]:
+    cases = [
+        (path, control)
+        for path in CLEANUP_01_SURFACES
+        for control in CLEANUP_01_SURFACE_CONTROLS
+    ]
+    cases += [(STEWARD_SKILL, control) for control in CLEANUP_01_STEWARD_CONTROLS]
+    return cases
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "removed_control"), _surface_mutation_cases()
+)
 def test_cleanup_01_surface_guard_rejects_control_loss(
     relative_path: str, removed_control: str
 ) -> None:
     """Observe each surface control being load-bearing on each restating surface."""
-    surface = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
-    _assert_cleanup_01_surface(relative_path, surface)
+    flat = _flat((REPO_ROOT / relative_path).read_text(encoding="utf-8"))
+    _assert_cleanup_01_surface(relative_path, flat)
+    mutated = flat.replace(_flat(removed_control), "REMOVED_CONTROL")
+    assert mutated != flat
     with pytest.raises(AssertionError):
-        _assert_cleanup_01_surface(
-            relative_path, surface.replace(removed_control, "REMOVED_CONTROL")
+        _assert_cleanup_01_surface(relative_path, mutated)
+
+
+@pytest.mark.parametrize("relative_path", CLEANUP_01_SURFACES)
+@pytest.mark.parametrize("restored_phrase", CLEANUP_01_RETIRED_PHRASES)
+def test_cleanup_01_surface_guard_rejects_restored_closure(
+    relative_path: str, restored_phrase: str
+) -> None:
+    """A surface that brings back a retired PR-closing clause fails."""
+    surface = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+    with pytest.raises(AssertionError):
+        _assert_cleanup_01_surface(relative_path, surface + "\n" + restored_phrase)
+
+
+# --- Executing the steward's branch deletion block against stubbed gh and git ---
+
+_MERGED = "a" * 40
+_MOVED = "b" * 40
+_CAR = "c" * 40
+
+_GH_STUB = """#!/usr/bin/env python3
+import json, os, sys
+args = sys.argv[1:]
+assert args[0] == "api" and args[2] == "--jq", args
+key = args[1] + " " + args[3]
+answers = json.loads(open(os.environ["STUB_GH"], encoding="utf-8").read())
+if key not in answers:
+    sys.stderr.write("unexpected gh call: " + key + "\\n")
+    sys.exit(3)
+if answers[key]:
+    print(answers[key])
+"""
+
+_GIT_STUB = """#!/usr/bin/env python3
+import json, os, sys
+args = sys.argv[1:]
+refs = json.loads(open(os.environ["STUB_GIT"], encoding="utf-8").read())
+with open(os.environ["STUB_LOG"], "a", encoding="utf-8") as log:
+    log.write(" ".join(args) + "\\n")
+if args[0] == "ls-remote":
+    sha = refs.get("remote")
+    if sha:
+        print(sha + "\\t" + args[2])
+elif args[0] == "show-ref":
+    sys.exit(0 if refs.get("local") else 1)
+elif args[0] == "rev-parse":
+    print(refs["local"])
+elif args[0] in ("push", "branch", "fetch"):
+    pass
+else:
+    sys.exit(4)
+"""
+
+
+def _steward_branch_block() -> str:
+    """Extract the bash block that holds the branch deletion gate from the steward skill."""
+    text = (REPO_ROOT / STEWARD_SKILL).read_text(encoding="utf-8")
+    anchor = text.index(
+        "Delete a branch only when its pull request's `merged_at` is set"
+    )
+    start = text.index("```bash\n", anchor) + len("```bash\n")
+    end = text.index("```", start)
+    return "\n".join(line.strip() for line in text[start:end].splitlines())
+
+
+def _gh_answers(
+    *,
+    head_ref: str = "feature",
+    merged_at: str = "2026-11-07T00:00:00Z",
+    head_sha: str = _MERGED,
+    state: str = "closed",
+    open_on_base: str = "",
+    train_merged_at: str = "2026-11-07T00:00:00Z",
+) -> dict[str, str]:
+    pr = "repos/arunakulat/dutchbay-epc-model/pulls/7"
+    return {
+        f"{pr} .head.ref": head_ref,
+        f'{pr} .merged_at // ""': merged_at,
+        f"{pr} .head.sha": head_sha,
+        f"{pr} .state": state,
+        'repos/arunakulat/dutchbay-epc-model/pulls/9 .merged_at // ""': train_merged_at,
+        "repos/arunakulat/dutchbay-epc-model/pulls?state=open&base=feature .[].number": open_on_base,
+    }
+
+
+def _run_branch_block(
+    tmp_path: Path,
+    gh: dict[str, str],
+    refs: dict[str, str],
+    *,
+    car_head: str = "",
+    train_pr: str = "",
+) -> tuple[int, str, list[str]]:
+    import json
+    import os
+    import shutil
+    import subprocess
+    import sys
+
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash is not available")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for name, body in (("gh", _GH_STUB), ("git", _GIT_STUB)):
+        stub = bin_dir / name
+        stub.write_text(
+            body.replace("/usr/bin/env python3", sys.executable, 1), encoding="utf-8"
         )
+        stub.chmod(0o755)
+    (tmp_path / "gh.json").write_text(json.dumps(gh), encoding="utf-8")
+    (tmp_path / "git.json").write_text(json.dumps(refs), encoding="utf-8")
+    log = tmp_path / "git.log"
+    log.write_text("", encoding="utf-8")
+    script = (
+        _steward_branch_block()
+        .replace("<number>", "7")
+        .replace("<branch>", "feature")
+        .replace("<car-head-or-empty>", f'"{car_head}"')
+        .replace("<train-pr-or-empty>", f'"{train_pr}"')
+    )
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+        "STUB_GH": str(tmp_path / "gh.json"),
+        "STUB_GIT": str(tmp_path / "git.json"),
+        "STUB_LOG": str(log),
+    }
+    result = subprocess.run(
+        [bash, "-c", script], env=env, capture_output=True, text=True, check=False
+    )
+    calls = log.read_text(encoding="utf-8").splitlines()
+    # A stub refusing an unexpected call would fail the block for the wrong reason.
+    assert "unexpected gh call" not in result.stderr, result.stderr
+    assert "Traceback" not in result.stderr, result.stderr
+    return result.returncode, result.stdout, calls
+
+
+def _deletes(calls: list[str]) -> list[str]:
+    return [c for c in calls if c.startswith(("push origin --delete", "branch -D"))]
+
+
+@pytest.mark.parametrize(
+    ("refs", "expected_deletes"),
+    [
+        ({}, []),
+        ({"remote": _MERGED}, ["push origin --delete feature"]),
+        ({"local": _MERGED}, ["branch -D feature"]),
+        (
+            {"remote": _MERGED, "local": _MERGED},
+            ["push origin --delete feature", "branch -D feature"],
+        ),
+    ],
+    ids=["auto-deleted", "remote-only", "local-only", "both"],
+)
+def test_cleanup_01_branch_gate_passes_a_merged_branch(
+    tmp_path: Path, refs: dict[str, str], expected_deletes: list[str]
+) -> None:
+    """A merged PR passes whether or not GitHub already auto-deleted its remote branch."""
+    code, out, calls = _run_branch_block(tmp_path, _gh_answers(), refs)
+    assert code == 0
+    assert out.startswith("OK: #7")
+    assert _deletes(calls) == expected_deletes
+
+
+@pytest.mark.parametrize(
+    ("gh", "refs"),
+    [
+        (_gh_answers(merged_at=""), {"remote": _MERGED}),
+        (_gh_answers(head_ref="other"), {"remote": _MERGED}),
+        (_gh_answers(), {"remote": _MOVED}),
+        (_gh_answers(), {"local": _MOVED}),
+        (_gh_answers(), {"remote": _MERGED, "local": _MOVED}),
+        (_gh_answers(open_on_base="8"), {"remote": _MERGED}),
+    ],
+    ids=[
+        "unmerged",
+        "head-ref-mismatch",
+        "remote-moved",
+        "local-moved",
+        "local-moved-remote-ok",
+        "base-of-open-pr",
+    ],
+)
+def test_cleanup_01_branch_gate_refuses_before_any_delete(
+    tmp_path: Path, gh: dict[str, str], refs: dict[str, str]
+) -> None:
+    """Every failing check stops the block with no OK line and no delete."""
+    code, out, calls = _run_branch_block(tmp_path, gh, refs)
+    assert code != 0
+    assert "OK:" not in out
+    assert _deletes(calls) == []
+
+
+def test_cleanup_01_branch_gate_passes_a_landed_train_car(tmp_path: Path) -> None:
+    """A closed car whose train merged passes at the recorded car head."""
+    gh = _gh_answers(merged_at="", head_sha=_CAR)
+    code, out, calls = _run_branch_block(
+        tmp_path, gh, {"remote": _CAR}, car_head=_CAR, train_pr="9"
+    )
+    assert code == 0
+    assert out.startswith("OK: #7")
+    assert _deletes(calls) == ["push origin --delete feature"]
+
+
+@pytest.mark.parametrize(
+    ("gh", "refs"),
+    [
+        (_gh_answers(merged_at="", head_sha=_CAR, state="open"), {"remote": _CAR}),
+        (
+            _gh_answers(merged_at="", head_sha=_CAR, train_merged_at=""),
+            {"remote": _CAR},
+        ),
+        (_gh_answers(merged_at="", head_sha=_MOVED), {"remote": _CAR}),
+        (_gh_answers(merged_at="", head_sha=_CAR), {"remote": _MOVED}),
+    ],
+    ids=["car-pr-open", "train-unmerged", "car-pr-moved", "car-branch-moved"],
+)
+def test_cleanup_01_branch_gate_refuses_an_unproven_train_car(
+    tmp_path: Path, gh: dict[str, str], refs: dict[str, str]
+) -> None:
+    """A car branch is never deleted unless its PR closed, the train merged and refs match."""
+    code, out, calls = _run_branch_block(
+        tmp_path, gh, refs, car_head=_CAR, train_pr="9"
+    )
+    assert code != 0
+    assert "OK:" not in out
+    assert _deletes(calls) == []
