@@ -22,8 +22,8 @@ Funding: **fully LKR funded** (owner, 2026-10-28). Revenue, costs and debt are a
 model runs with FX held flat and the USD columns are a constant-rate translation of LKR.
 
 Model files: `scenarios/blue_whale_wind_lot5b_2026.yaml` and
-`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (versions 0.4 and 0.4), and the superseded
-`scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.8). Placeholders apart from the
+`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (versions 0.4 and 0.5), and the superseded
+`scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.9). Placeholders apart from the
 configuration, the funding currency, the researched tariffs, the wind yield, the solar + BESS
 size (the owner's 5 MW / 20 MWh battery and the PV chosen for it, PR 7), the cited PV capex and
 the blended wind and BESS capex (PR 6).

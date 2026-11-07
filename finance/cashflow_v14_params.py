@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import math
+import numbers
 from collections.abc import Mapping
 from collections.abc import Sequence as Seq
 from dataclasses import asdict, dataclass
@@ -307,13 +308,14 @@ _OPEX_COMPONENT_KEYS = frozenset(
 
 
 def _finite(value: Any, where: str) -> float:
-    """Return ``value`` as a finite float, or raise naming ``where``."""
-    if isinstance(value, bool):
+    """Return ``value`` as a finite float, or raise naming ``where``.
+
+    Only real numbers are accepted: a bool, or a string such as ``"0.5"`` (a quoted YAML
+    value), is refused rather than coerced.
+    """
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
         raise ValueError(f"{where} must be a number; got {value!r}")
-    try:
-        out = float(value)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(f"{where} must be a number; got {value!r}") from exc
+    out = float(value)
     if not math.isfinite(out):
         raise ValueError(f"{where} must be finite; got {value!r}")
     return out
@@ -372,7 +374,14 @@ def _usd_lkr_depreciation(
                 "opex.currency_split.usd_lkr_depreciation_pct must be a percent per "
                 f"year or {RELATIVE_PPP!r}; got {value!r}"
             )
-        return (1.0 + lkr_escalation) / (1.0 + usd_escalation) - 1.0
+        derived = (1.0 + lkr_escalation) / (1.0 + usd_escalation) - 1.0
+        if not -0.5 <= derived <= 1.0:
+            raise ValueError(
+                "opex.currency_split.usd_lkr_depreciation_pct: relative_ppp derives "
+                f"{derived * 100.0:.4g}%/yr from the escalation inputs, outside the "
+                "[-50, 100] percent-per-year bound every rate in the block must meet"
+            )
+        return derived
     return _rate_pct(split, "usd_lkr_depreciation_pct", required=False)
 
 

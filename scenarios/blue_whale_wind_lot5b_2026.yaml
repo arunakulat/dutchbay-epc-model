@@ -167,8 +167,8 @@ opex:
       - name: wind_om
         usd_per_year: 350000    # PLACEHOLDER (input B10): no OEM has priced a wind LTSA in either corpus;
                                 # 3.9% of turbine capex, the top of the 3-4% benchmark band
-        usd_share: 0.70         # parts and OEM service; 30% local labour (the Tariff Calculation Committee
-                                # workbook's 30% labour / 70% plant split for wind)
+        usd_share: 0.70         # parts and OEM service in USD; 30% local labour (a typical labour / plant
+                                # split for wind O&M; the owner's decision of 2026-11-02)
       - name: insurance_land_spv
         usd_per_year: 150000    # PLACEHOLDER (inputs B02, B28)
         usd_share: 0.0          # LKR (the owner has not said otherwise)

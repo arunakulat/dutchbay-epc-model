@@ -239,6 +239,12 @@ def test_the_helper_refuses_a_split_without_its_fx_anchor() -> None:
         (lambda s: s["components"][1].update(name="wind_om"), "duplicated"),
         (lambda s: s["components"][0].update(usd_per_year=-1.0), ">= 0"),
         (lambda s: s["components"][0].pop("usd_share"), "usd_share is required"),
+        # A quoted YAML number is a string: refused, not coerced.
+        (lambda s: s["components"][0].update(usd_share="0.7"), "must be a number"),
+        (lambda s: s.update(lkr_escalation_pct="5.0"), "must be a number"),
+        # relative_ppp meets the same [-50, 100] bound as a stated rate: with USD
+        # inflation at -50% it would derive 110%/yr.
+        (lambda s: s.update(usd_escalation_pct=-50.0), "outside the"),
     ],
 )
 def test_malformed_splits_are_refused(mutate: Any, match: str) -> None:
@@ -281,6 +287,9 @@ def test_split_rates_are_percent_even_below_one() -> None:
 )
 def test_split_rate_bounds(value: float, ok: bool) -> None:
     cfg = _cfg()
+    # A stated depreciation rate, so the bound on the escalation input is what is tested
+    # (relative_ppp has its own bound on the rate it derives).
+    _split(cfg)["usd_lkr_depreciation_pct"] = 2.44
     _split(cfg)["usd_escalation_pct"] = value
     if ok:
         assert _resolve_opex_currency_split(cfg) is not None

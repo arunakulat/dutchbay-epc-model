@@ -877,7 +877,7 @@ def test_after_tax_objective_is_recomputed_from_the_engine_cfads_by_finance_irr(
     assert taxed["project_npv"] < untaxed["project_npv"]
     # The scenario reproduces the committed point's base case through the engine, on the
     # opex basis the sizing priced (v0.3: one currency, BESS O&M at USD 2.5/kWh-yr). From
-    # v0.4 the scenario carries the opex currency split and the new BESS O&M rate (lower, and in
+    # v0.5 the scenario carries the opex currency split and the new BESS O&M rate (lower, and in
     # LKR); the sizing has not been re-run on them (scenario comment, opex block).
     point = _committed_point()
     sized = _kpis(SOLAR_BESS, SIZING_OPEX_BASIS)
