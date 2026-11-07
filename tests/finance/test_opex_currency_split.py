@@ -218,6 +218,70 @@ def test_malformed_splits_are_refused(mutate: Any, match: str) -> None:
         build_annual_rows(cfg)
 
 
+def test_vat_multiplies_the_split_opex() -> None:
+    cfg = _cfg()
+    taxed = copy.deepcopy(cfg)
+    taxed["taxes_indirect"] = {"vat_opex_pct": 0.18}
+    params = dict(vars(_build_cashflow_params(taxed)))
+    assert params["opex_vat_pct"] == pytest.approx(0.18)
+    plain, vat = build_annual_rows(cfg), build_annual_rows(taxed)
+    for p, v in zip(plain, vat, strict=True):
+        assert v["opex_lkr"] == pytest.approx(1.18 * p["opex_lkr"], rel=1e-12)
+        assert v["opex_usd"] == pytest.approx(p["opex_usd"], rel=1e-12)  # pre-VAT
+
+
+def test_split_rates_are_percent_even_below_one() -> None:
+    cfg = _unsplit(_cfg())
+    cfg["opex"]["currency_split"] = {
+        "usd_share": 0.5,
+        "usd_escalation_pct": 0.5,
+        "lkr_escalation_pct": 0.8,
+        "usd_lkr_depreciation_pct": 0.9,
+    }
+    del cfg["opex"]["escalation_pct"]
+    got = _resolve_opex_currency_split(cfg)
+    assert got is not None
+    assert got.usd_escalation == pytest.approx(0.005)
+    assert got.lkr_escalation == pytest.approx(0.008)
+    assert got.usd_lkr_depreciation == pytest.approx(0.009)
+
+
+@pytest.mark.parametrize(
+    ("value", "ok"), [(-50.0, True), (-50.5, False), (100.0, True)]
+)
+def test_split_rate_bounds(value: float, ok: bool) -> None:
+    cfg = _cfg()
+    _split(cfg)["usd_escalation_pct"] = value
+    if ok:
+        assert _resolve_opex_currency_split(cfg) is not None
+    else:
+        with pytest.raises(ValueError, match="percent per year"):
+            _resolve_opex_currency_split(cfg)
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "ok"),
+    [
+        ("escalation_pct", 0.05, True),  # decimal form of 5%: agrees
+        ("escalation_pct", 5.0, True),
+        ("annual_escalation_pct", 5.0, True),
+        ("inflation_pct", 4.0, False),  # an alias that disagrees is refused too
+        ("escalation_pct", 0.5, False),  # 50% under the single-rate reading
+    ],
+)
+def test_the_single_rate_key_is_checked_under_its_own_convention(
+    key: str, value: float, ok: bool
+) -> None:
+    cfg = _cfg()
+    del cfg["opex"]["escalation_pct"]
+    cfg["opex"][key] = value
+    if ok:
+        assert _resolve_opex_currency_split(cfg) is not None
+    else:
+        with pytest.raises(ValueError, match="disagree"):
+            _resolve_opex_currency_split(cfg)
+
+
 def test_an_own_fx_path_needs_a_scalar_start_spot() -> None:
     cfg = _cfg()
     cfg["fx"] = {"curve_lkr_per_usd": [333.79] * 20}
@@ -247,9 +311,11 @@ def test_the_committed_blue_whale_splits_follow_the_owners_decision() -> None:
     assert wind_split == {"wind_om": 0.70, "insurance_land_spv": 0.0}
     sb = yaml.safe_load(SOLAR_BESS.read_text())
     comps = {c["name"]: c for c in sb["opex"]["currency_split"]["components"]}
-    assert comps["bess_ltsa"]["usd_per_unit_year"] == 1.80
-    assert comps["bess_ltsa"]["usd_share"] == 1.0
+    assert comps["bess_om"]["usd_per_unit_year"] == 1.80
+    # 2026-11-02: all USD; 2026-11-07: converted to LKR at the wind project's value date.
+    assert comps["bess_om"]["usd_share"] == 0.0
+    assert sb["fx"]["start_lkr_per_usd"] == _cfg()["fx"]["start_lkr_per_usd"]
     energy_kwh = sb["generation"]["technologies"]["bess_1"]["energy_mwh"] * 1000.0
-    assert comps["bess_ltsa"]["units"] == pytest.approx(energy_kwh * 44.2 / 40.0)
+    assert comps["bess_om"]["units"] == pytest.approx(energy_kwh * 1.10)
     assert comps["solar_om"]["usd_share"] == 0.0
     assert comps["insurance_land_spv"]["usd_share"] == 0.0

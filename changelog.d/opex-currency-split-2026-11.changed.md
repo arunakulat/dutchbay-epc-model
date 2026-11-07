@@ -16,8 +16,8 @@
   - Blue Whale wind v0.4: wind O&M 350k at 70% USD, insurance, land and SPV 150k LKR (49% USD);
     USD 2.5%/yr, LKR 5%/yr, USD share on 5.89%/yr. Project IRR 10.81% -> 9.90%, equity IRR
     8.63% -> 7.31%, project NPV USD 69,109 -> -625,284.
-  - Blue Whale solar + BESS v0.4: BESS O&M at USD 1.80/kWh-yr on 22,100 kWh DC (39,780, all USD;
-    was USD 2.5/kWh-yr on 20,000 kWh); solar O&M and overhead LKR; total 256,655 -> 246,435.2.
-    Project NPV USD -4,992,409 -> -5,058,008; the equity IRR no longer exists (equity NPV is
-    negative at every rate). The sizing runs are not re-run; the test that ties the scenario to
-    them now evaluates it on their opex basis.
+  - Blue Whale solar + BESS v0.4: BESS O&M at USD 1.80/kWh-yr on 22,000 kWh DC (39,600; was
+    USD 2.5/kWh-yr on 20,000 kWh), converted to LKR at the wind project's value date (333.79,
+    LKR 13,218,084/yr; owner, 2026-11-07); every line in LKR; total 256,655 -> 246,255.2.
+    Project NPV USD -4,992,409 -> -4,912,184; equity IRR -8.32% -> -6.49%. The sizing runs are
+    not re-run; the test that ties the scenario to them now evaluates it on their opex basis.

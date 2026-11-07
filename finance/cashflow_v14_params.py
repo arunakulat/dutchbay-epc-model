@@ -466,15 +466,28 @@ def _resolve_opex_currency_split(raw: Mapping[str, Any]) -> OpexCurrencySplit | 
     lkr_escalation = _rate_pct(split, "lkr_escalation_pct", required=True) or 0.0
     depreciation = _rate_pct(split, "usd_lkr_depreciation_pct", required=False)
 
-    legacy = _as_float_or_none(opex.get("escalation_pct"))
+    # Every spelling the single-rate reader in _build_cashflow_params accepts, read
+    # under that reader's own convention (pct_to_decimal), so the two cannot disagree
+    # unseen.
+    legacy = _as_float_or_none(
+        _resolve_first(
+            dict(raw),
+            ("opex", "escalation_pct"),
+            ("opex", "annual_escalation_pct"),
+            ("opex", "inflation_pct"),
+            "opex_escalation_pct",
+        )
+    )
     if legacy is not None:
         legacy_dec = _pct_to_decimal(legacy) or 0.0
         if not math.isclose(legacy_dec, lkr_escalation, rel_tol=0.0, abs_tol=1e-12):
             raise ValueError(
-                "opex.escalation_pct and opex.currency_split.lkr_escalation_pct disagree "
-                f"({legacy!r} vs {split['lkr_escalation_pct']!r}). With a currency split "
-                "the engine escalates the LKR share at lkr_escalation_pct; keep "
-                "opex.escalation_pct equal to it or remove it."
+                "the single-rate opex escalation (opex.escalation_pct or an alias) and "
+                "opex.currency_split.lkr_escalation_pct disagree "
+                f"({legacy!r} vs {split['lkr_escalation_pct']!r}; the single-rate key "
+                "reads a value <= 1 as a decimal, the split key always as percent). With "
+                "a currency split the engine escalates the LKR share at "
+                "lkr_escalation_pct; keep the single-rate key equal to it or remove it."
             )
     return OpexCurrencySplit(
         usd_share=usd_share,

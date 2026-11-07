@@ -806,11 +806,13 @@ SARAH3, citing #1540's finding, and reports the satellite figures (Global Solar 
 ## Latest run (opex split by currency, 15.19.0, 2026-11-07)
 
 The owner's rule (2026-11-02): "all CAPEX is fixed at project start in LKR. The debt will be in
-LKR. However, a percentage of OPEX will be in USD". Her decision the same day (option "Envision
-LTSA, published as a rate"): BESS O&M at USD 1.80/kWh-yr of DC installed, all USD; wind O&M kept
-at USD 0.35M, 70% USD and 30% LKR. Both projects now carry an `opex.currency_split` (input B34).
+LKR. However, a percentage of OPEX will be in USD". Her decision the same day: BESS O&M at USD
+1.80/kWh-yr of DC installed; wind O&M kept at USD 0.35M, 70% USD and 30% LKR. On 2026-11-07 she
+directed that the BESS O&M be converted to LKR at the wind project's value date (the 2026-Q2 pinned
+333.79 both projects share): LKR 13,218,084 a year. Both projects carry an `opex.currency_split`
+(input B34); the solar + BESS project's USD share is now 0%.
 The USD share escalates at 2.5%/yr in USD and is translated on a 5.89%/yr LKR depreciation path;
-the LKR share (solar O&M, insurance, land and SPV overhead, and 30% of wind O&M) is fixed in LKR
+the LKR share (all solar + BESS opex, and 30% of wind O&M plus its overhead) is fixed in LKR
 at 333.79 and escalates at 5%/yr. The model's FX curve stays flat, so the USD columns are still a
 constant-rate translation of LKR.
 
@@ -820,21 +822,19 @@ Through `analytics.evaluation_v14.evaluate_with_overrides`, base case only. The 
 | Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
 |---|---|---|---|---|---|
 | Wind project (v0.4; 49% of opex in USD) | 9.90% (was 10.81%) | 7.31% (was 8.63%) | 0.868 | -625,284 (was 69,109) | -2,250,537 (was -1,737,634) |
-| Solar + BESS project (v0.4; 16.1% of opex in USD) | undefined (reported as 0.0) | none exists (was -8.32%) | 0.870 | -5,058,008 (was -4,992,409) | -5,620,614 (was -5,564,410) |
+| Solar + BESS project (v0.4; all opex in LKR) | undefined (reported as 0.0) | -6.49% (was -8.32%) | 0.868 | -4,912,184 (was -4,992,409) | -5,497,192 (was -5,564,410) |
 | Hybrid (v0.8, superseded) | unchanged: not given the split | | | | |
 
 The wind project is no longer about break-even at the discount rate: its NPV is negative. The
-solar + BESS battery O&M is lower than the old placeholder (USD 39,780 against 50,000 a year), but
-it is now in USD and erodes with the rupee, and the net effect is a lower NPV. The equity IRR of the
-solar + BESS project no longer exists: the sponsor cures in years 16 to 20 grow, and the equity NPV
-is negative at every discount rate.
+solar + BESS battery O&M is lower than the old placeholder (USD 39,600 against 50,000 a year, both
+in LKR at 333.79), so its NPV rises by about USD 80,000; it remains far from viable.
 
 Not done here, and open:
-- The sizing runs priced the battery O&M at the USD 2.5/kWh-yr placeholder in one currency and were
-  not re-run. The battery is the owner's fixed choice; the PV size was a near tie.
-- The DC installed for the BESS (22,100 kWh) applies the 44.2 / 40 installed-to-nominal ratio of
-  a tender design in the corpus until the supplier states it. The LTSA term is 15 years; the
-  rate is held for all 20.
+- The sizing runs priced the battery O&M at the USD 2.5/kWh-yr placeholder and were not re-run.
+  The owner has said (2026-11-07) the battery size should not be fixed: it is to be optimised by a
+  Monte Carlo run and a sensitivity analysis in a follow-up.
+- The DC installed for the BESS (22,000 kWh) assumes a 10% DC oversize on the 20 MWh nominal until
+  the supplier states it. The rate is held for all 20 years.
 - The PUCSL escalable O&M tariff component is indexed yearly; that indexation is still not
   modelled and would offset part of the USD erosion.
 

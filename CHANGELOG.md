@@ -9,8 +9,9 @@ All notable changes to this project will be documented here.
   directly or weighted from components, USD and LKR escalation, and an optional LKR depreciation
   path for the USD share). Without it every scenario is byte-identical. The Blue Whale projects
   take it on the owner's rule and decision of 2026-11-02 (#1353 comment 6702129557): wind O&M
-  70% USD / 30% LKR; BESS O&M at the derived LTSA rate USD 1.80/kWh-yr of DC installed, all USD.
-  Wind project IRR 10.81% -> 9.90%, NPV USD +69k -> -625k; solar + BESS NPV USD -4.99M -> -5.06M.
+  70% USD / 30% LKR; BESS O&M at USD 1.80/kWh-yr of DC installed (a vendor LTSA benchmark),
+  converted to LKR at the wind project's value date (owner, 2026-11-07).
+  Wind project IRR 10.81% -> 9.90%, NPV USD +69k -> -625k; solar + BESS NPV USD -4.99M -> -4.91M.
   Detail in the compiled fragment.
 - **Blue Whale solar + BESS: the owner's 5 MW / 20 MWh battery (15.18.0).** The sizing ranks on
   the after-tax project NPV and the project commits the owner's 5 MW / 20 MWh with 151 tables at

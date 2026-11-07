@@ -147,14 +147,14 @@ opex:
   escalation_pct: 5.0           # = currency_split.lkr_escalation_pct (the engine refuses a mismatch); kept
                                 # for the single-rate screening tools that read it
   # v0.4 (input B34): the owner's rule (2026-11-02): "all CAPEX is fixed at project start in LKR. The debt
-  # will be in LKR. However, a percentage of OPEX will be in USD". Her decision of 2026-11-02 (option
-  # "Envision LTSA, published as a rate"): wind O&M stays 0.35M, 70% USD / 30% LKR. The USD share is
+  # will be in LKR. However, a percentage of OPEX will be in USD". Her decision of 2026-11-02: wind O&M
+  # stays 0.35M, 70% USD / 30% LKR. The USD share is
   # 245,000 / 500,000 = 49% of the total; it escalates in USD and is translated on its own FX path, while
   # the model curve stays flat (fx block: constant-LKR reporting rate). The LKR share is fixed in LKR at
   # 333.79 and escalates at LKR inflation.
   currency_split:
-    usd_escalation_pct: 2.5     # PLACEHOLDER (input B34): USD O&M inflation, the basis of the owner's OPEX
-                                # research of 2026-11-02 (no USD index is sourced in either corpus)
+    usd_escalation_pct: 2.5     # PLACEHOLDER (input B34): USD O&M inflation (no USD index is sourced in
+                                # either corpus)
     lkr_escalation_pct: 5.0     # PLACEHOLDER (input B29): LKR O&M inflation at the CBSL 5% target
     usd_lkr_depreciation_pct: 5.89  # LKR depreciation for the USD share only: the DutchBay cases' data-derived
                                     # rate (BIS 2005-2026 long run, analytics.fx.fx_calibration), advanced
@@ -167,7 +167,7 @@ opex:
                                 # workbook's 30% labour / 70% plant split for wind)
       - name: insurance_land_spv
         usd_per_year: 150000    # PLACEHOLDER (inputs B02, B28)
-        usd_share: 0.0          # LKR (research note s.4; the owner has not said otherwise)
+        usd_share: 0.0          # LKR (the owner has not said otherwise)
 
 tax:
   corporate_tax_rate: 0.30      # input F31
