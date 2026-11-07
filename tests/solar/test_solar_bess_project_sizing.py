@@ -73,12 +73,19 @@ POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 # DSCR 0.8669721833235606.
 # Re-pinned for #1398 (P2-F3-01 debt-service shortfall carried as sponsor cure in years 1 and
 # 16-20; before: equity NPV -5395403.401365028, equity IRR -0.03575607324588892).
+# Re-pinned at 15.19.0 for the opex currency split (v0.4: BESS O&M at the derived LTSA rate,
+# USD 1.80/kWh-yr on 22,100 kWh DC, all USD; solar O&M and overhead in LKR). Before (v0.3):
+# project NPV -4992408.759406766, equity NPV -5564410.144390165, equity IRR
+# -0.08317620969932149, min DSCR 0.867987057099332. The equity IRR no longer exists: the
+# sponsor cures of years 16-20 grow, and the equity NPV is negative at every rate (its
+# maximum, about USD -2.46M, is near -7.5%), so the engine reports none.
 SOLAR_BESS_PINS = {
-    "project_npv": -4992408.759406766,
-    "equity_npv": -5564410.144390165,
-    "equity_irr": -0.08317620969932149,
-    "min_dscr": 0.867987057099332,
+    "project_npv": -5058007.677953334,
+    "equity_npv": -5620614.421227344,
+    "min_dscr": 0.8699791830258778,
 }
+# The opex basis the sizing runs priced (v0.3): one currency, BESS O&M at USD 2.5/kWh-yr.
+SIZING_OPEX_BASIS = {"opex.currency_split": None, "opex.usd_per_year": 256655}
 # WIND_PINS re-pinned at 15.16.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
 # 0.487560). Before, at 15.15.0 (v0.1): project IRR 0.04085210230412145, equity IRR
 # 0.014728921618622381, min DSCR 0.868369272868335.
@@ -87,10 +94,13 @@ SOLAR_BESS_PINS = {
 # 0.053445387955278756, min DSCR 0.8682973694248998.
 # Re-pinned for #1398 (P2-F3-01 debt-service shortfall carried as sponsor cure in year 1;
 # before: equity IRR 0.09064100100108274).
+# Re-pinned at 15.19.0 for the opex currency split (wind v0.4: wind O&M 70% USD / 30% LKR,
+# overhead LKR; the USD share on a 5.89%/yr LKR depreciation path). Before (v0.3): project
+# IRR 0.10808262995624021, equity IRR 0.0863203211939878, min DSCR 0.8679985938194438.
 WIND_PINS = {
-    "project_irr": 0.10808262995624021,
-    "equity_irr": 0.0863203211939878,
-    "min_dscr": 0.8679985938194438,
+    "project_irr": 0.09900478988066094,
+    "equity_irr": 0.07313367420692463,
+    "min_dscr": 0.8675308887998293,
 }
 
 
@@ -829,9 +839,14 @@ def test_after_tax_objective_is_recomputed_from_the_engine_cfads_by_finance_irr(
     untaxed = _kpis(SOLAR_BESS, {**held, "tax.corporate_tax_rate": 0.0})
     taxed = _kpis(SOLAR_BESS, {**held, "tax.corporate_tax_rate": 0.30})
     assert taxed["project_npv"] < untaxed["project_npv"]
-    # The scenario reproduces the committed point's base case through the engine.
+    # The scenario reproduces the committed point's base case through the engine, on the
+    # opex basis the sizing priced (v0.3: one currency, BESS O&M at USD 2.5/kWh-yr). From
+    # v0.4 the scenario carries the opex currency split and the LTSA rate; the sizing has
+    # not been re-run on them (scenario comment, opex block).
     point = _committed_point()
-    assert kpis["project_npv"] == pytest.approx(point["base"]["project_npv"], rel=1e-4)
+    sized = _kpis(SOLAR_BESS, SIZING_OPEX_BASIS)
+    assert sized["project_npv"] == pytest.approx(point["base"]["project_npv"], rel=1e-4)
+    assert kpis["project_npv"] < sized["project_npv"]
 
 
 def _committed_point() -> Dict[str, Any]:
@@ -927,6 +942,10 @@ def test_solar_bess_kpi_pins_and_responsiveness() -> None:
     base = _kpis(SOLAR_BESS)
     for key, pinned in SOLAR_BESS_PINS.items():
         assert base[key] == pytest.approx(pinned, rel=1e-9, abs=1e-12), key
+    # No equity IRR either (v0.4): the evaluator reports none.
+    assert (
+        evaluate_with_overrides(str(SOLAR_BESS), overrides={}).get("equity_irr") is None
+    )
     # No project IRR: the 20-year CFADS sum is below the capex, so NPV < 0 at every rate.
     assert base["project_irr"] == 0.0
     full = evaluate_with_overrides(

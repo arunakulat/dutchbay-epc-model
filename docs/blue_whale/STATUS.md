@@ -1,6 +1,6 @@
 # Blue Whale: project status
 
-Last updated: 2026-11-01. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
+Last updated: 2026-11-07. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
 
 ## Configuration under study
 
@@ -22,7 +22,7 @@ Funding: **fully LKR funded** (owner, 2026-10-28). Revenue, costs and debt are a
 model runs with FX held flat and the USD columns are a constant-rate translation of LKR.
 
 Model files: `scenarios/blue_whale_wind_lot5b_2026.yaml` and
-`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (versions 0.3 and 0.3), and the superseded
+`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (versions 0.4 and 0.4), and the superseded
 `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.8). Placeholders apart from the
 configuration, the funding currency, the researched tariffs, the wind yield, the solar + BESS
 size (the owner's 5 MW / 20 MWh battery and the PV chosen for it, PR 7), the cited PV capex and
@@ -303,7 +303,7 @@ augmentation and availability are not modelled.
 
 ## Solar + BESS sizing and pricing (v0.6, 2026-11-01)
 
-> **Historical Reference Note:** The sizing, decision grid, and KPIs in this section represent an intermediate design snapshot (v0.6, PR 3) superseded by PR 4 (two projects split), PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-pr-7-the-owners-battery-15180-2026-11-01) for current figures.
+> **Historical Reference Note:** The sizing, decision grid, and KPIs in this section represent an intermediate design snapshot (v0.6, PR 3) superseded by PR 4 (two projects split), PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-opex-split-by-currency-15190-2026-11-07) for current figures.
 
 With the turbine fixed (PR 1), a seeded Monte Carlo chose the PV DC capacity and the BESS energy of
 the unit (`solar_resource/pv_bess_sizing.py`, `scripts/run_blue_whale_pv_bess_sizing_v14.py`,
@@ -461,7 +461,7 @@ P50 (USD -8.837M against -8.500M) because the BESS price range is skewed below i
 
 ## Two projects, and the solar + BESS project under the PUCSL 2026 rules (PR 4, 2026-11-01)
 
-> **Historical Reference Note:** The sizing (4.5 MW / 18 MWh), capacities, and KPIs in this section represent an intermediate design snapshot under PR 4 superseded by PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-pr-7-the-owners-battery-15180-2026-11-01) for current figures.
+> **Historical Reference Note:** The sizing (4.5 MW / 18 MWh), capacities, and KPIs in this section represent an intermediate design snapshot under PR 4 superseded by PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-opex-split-by-currency-15190-2026-11-07) for current figures.
 
 ### Owner decisions (2026-11-01)
 
@@ -803,7 +803,42 @@ after-tax project NPV, so neither size is viable on these placeholder inputs.
 SARAH3, citing #1540's finding, and reports the satellite figures (Global Solar Atlas PVOUT
 +6.3%, about +9% GHI) as upside only. No data file changed.
 
-## Latest run (PR 7, the owner's battery, 15.18.0, 2026-11-01)
+## Latest run (opex split by currency, 15.19.0, 2026-11-07)
+
+The owner's rule (2026-11-02): "all CAPEX is fixed at project start in LKR. The debt will be in
+LKR. However, a percentage of OPEX will be in USD". Her decision the same day (option "Envision
+LTSA, published as a rate"): BESS O&M at USD 1.80/kWh-yr of DC installed, all USD; wind O&M kept
+at USD 0.35M, 70% USD and 30% LKR. Both projects now carry an `opex.currency_split` (input B34).
+The USD share escalates at 2.5%/yr in USD and is translated on a 5.89%/yr LKR depreciation path;
+the LKR share (solar O&M, insurance, land and SPV overhead, and 30% of wind O&M) is fixed in LKR
+at 333.79 and escalates at 5%/yr. The model's FX curve stays flat, so the USD columns are still a
+constant-rate translation of LKR.
+
+Through `analytics.evaluation_v14.evaluate_with_overrides`, base case only. The "was" figures are
+`main` at 15.18.0 after #1452 (sponsor cure), which moved the equity figures of PR 7's table:
+
+| Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
+|---|---|---|---|---|---|
+| Wind project (v0.4; 49% of opex in USD) | 9.90% (was 10.81%) | 7.31% (was 8.63%) | 0.868 | -625,284 (was 69,109) | -2,250,537 (was -1,737,634) |
+| Solar + BESS project (v0.4; 16.1% of opex in USD) | undefined (reported as 0.0) | none exists (was -8.32%) | 0.870 | -5,058,008 (was -4,992,409) | -5,620,614 (was -5,564,410) |
+| Hybrid (v0.8, superseded) | unchanged: not given the split | | | | |
+
+The wind project is no longer about break-even at the discount rate: its NPV is negative. The
+solar + BESS battery O&M is lower than the old placeholder (USD 39,780 against 50,000 a year), but
+it is now in USD and erodes with the rupee, and the net effect is a lower NPV. The equity IRR of the
+solar + BESS project no longer exists: the sponsor cures in years 16 to 20 grow, and the equity NPV
+is negative at every discount rate.
+
+Not done here, and open:
+- The sizing runs priced the battery O&M at the USD 2.5/kWh-yr placeholder in one currency and were
+  not re-run. The battery is the owner's fixed choice; the PV size was a near tie.
+- The DC installed for the BESS (22,100 kWh) applies the 44.2 / 40 installed-to-nominal ratio of
+  a tender design in the corpus until the supplier states it. The LTSA term is 15 years; the
+  rate is held for all 20.
+- The PUCSL escalable O&M tariff component is indexed yearly; that indexation is still not
+  modelled and would offset part of the USD erosion.
+
+## Earlier run (PR 7, the owner's battery, 15.18.0, 2026-11-01)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only:
 

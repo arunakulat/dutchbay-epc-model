@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # Blue Whale Solar + BESS project (Lot 5B, Kalpitiya): 5.66552 MWp / 5.0 MW AC PV with a 5.0 MW / 20.0 MWh BESS
 # ═══════════════════════════════════════════════════════════════════════════════
-# Version: 0.3 (SKELETON: screening placeholders, not a basis for any decision)
+# Version: 0.4 (SKELETON: screening placeholders, not a basis for any decision)
 # Path: scenarios/blue_whale_solar_bess_lot5b_2026.yaml
 #
 # A SEPARATE PROJECT (owner, 2026-11-01, #1353 comment 6556854201): "We will therefore
@@ -182,11 +182,50 @@ capex:
   capex_per_kw_usd: 1654   # usd_total / 5.0 MW AC (BESS power not in the denominator); v0.2 1432
 
 opex:
-  usd_per_year: 256655        # PLACEHOLDER (inputs B16, B20, B28): solar USD 10/kWp-yr on 5.66552 MWp
-                                # + BESS USD 2.5/kWh-yr on 20.0 MWh (PR 3's rates, not sourced)
-                                # + insurance, land lease and SPV overhead 0.15M (the hybrid's line). v0.3; v0.2 200,146
-  opex_per_kw_yr_usd: 51.3      # 256,655 / 5,000 kW (v0.2 57.2)
-  escalation_pct: 5.0           # PLACEHOLDER (input B29): LKR O&M inflation at the CBSL 5% target
+  usd_per_year: 246435.2        # inputs B16, B20, B28: solar O&M 56,655.2 + BESS LTSA 39,780 + insurance, land
+                                # lease and SPV overhead 150,000 (the components below; a test checks the sum).
+                                # Stated in USD at fx.start_lkr_per_usd. v0.4; v0.3 256,655 (BESS at the
+                                # unsourced USD 2.5/kWh-yr on 20.0 MWh); v0.2 200,146
+  opex_per_kw_yr_usd: 49.3      # 246,435 / 5,000 kW (v0.3 51.3)
+  escalation_pct: 5.0           # = currency_split.lkr_escalation_pct (the engine refuses a mismatch); kept
+                                # for the single-rate screening tools that read it
+  # v0.4 (input B34): the owner's rule (2026-11-02): "all CAPEX is fixed at project start in LKR. The debt
+  # will be in LKR. However, a percentage of OPEX will be in USD". Her decision of 2026-11-02 (option
+  # "Envision LTSA, published as a rate"): BESS O&M at USD 1.80/kWh-yr of DC installed, all USD. The USD
+  # share is 39,780 / 246,435.2 = 16.1% of the total; it escalates in USD and is translated on its own FX
+  # path, while the model curve stays flat (fx block: constant-LKR reporting rate). The LKR share is fixed
+  # in LKR at 333.79 and escalates at LKR inflation.
+  # NOT RE-SIZED: the sizing runs (docs/blue_whale/*sizing_summary.json) priced the battery's O&M at the
+  # 2.5 placeholder in one currency (conf/blue_whale_pv_bess_pricing.yaml). The battery is the owner's
+  # fixed choice; the PV size was a near tie at the old O&M. A re-run is a follow-up.
+  currency_split:
+    usd_escalation_pct: 2.5     # PLACEHOLDER (input B34): USD O&M inflation, the basis of the owner's OPEX
+                                # research of 2026-11-02 (no USD index is sourced in either corpus). The LTSA
+                                # price is flat with "an indexation to be mutually agreed"
+    lkr_escalation_pct: 5.0     # PLACEHOLDER (input B29): LKR O&M inflation at the CBSL 5% target
+    usd_lkr_depreciation_pct: 5.89  # LKR depreciation for the USD share only: the DutchBay cases' data-derived
+                                    # rate (BIS 2005-2026 long run, analytics.fx.fx_calibration), advanced
+                                    # through construction as the model curve would be
+    components:
+      - name: solar_om
+        usd_per_unit_year: 10.0 # PLACEHOLDER (input B16): USD/kWp-yr, PR 3's rate, not sourced
+        units: 5665.52          # kWp DC (151 tables x 37.52 kWp)
+        usd_share: 0.0          # LKR: local labour and site services (research note s.4)
+      - name: bess_ltsa
+        usd_per_unit_year: 1.80 # input B20: USD/kWh-yr of DC installed, DERIVED from the only priced BESS
+                                # LTSA in the corpora (a full-scope, 15-year, USD-denominated offer in a
+                                # 2026 BESS tender); only this derived rate is published, on the owner's
+                                # decision of 2026-11-02. Excludes augmentation, insurance, taxes and heavy equipment.
+                                # Held for all 20 years (the offer's term is 15)
+        units: 22100            # PLACEHOLDER (input B20): kWh DC installed = 20.0 MWh x 44.2 / 40 (the
+                                # installed-to-nominal ratio of the NSO 250 Envision 10 MW / 40 MWh design,
+                                # docs/source_materials/nso_bess_250mw_2026/reviews/
+                                # Envision_11MW_44MWh_and_Functional_Checklist_Ingress_Evaluation_2026-08-06.md)
+                                # until the BESS supplier states the DC capacity
+        usd_share: 1.0          # the LTSA is priced in USD
+      - name: insurance_land_spv
+        usd_per_year: 150000    # PLACEHOLDER (inputs B02, B28)
+        usd_share: 0.0          # LKR (research note s.4; the owner has not said otherwise)
 
 tax:
   corporate_tax_rate: 0.30      # input F31
@@ -282,12 +321,13 @@ wacc:
   description: "Build-up WACC drives the project discount rate."
 
 metadata:
-  version: '0.3'
-  last_updated: '2026-11-01'
+  version: '0.4'
+  last_updated: '2026-11-07'
   author: DutchBay V14 Financial Modeling Team
   review_status: SKELETON - screening placeholders pending owner inputs (docs/blue_whale/INPUTS_REQUIRED.md)
   assumptions_source: 'Split from blue_whale_hybrid_lot5b_2026 v0.6 (finance blocks); battery fixed by the owner (5 MW / 20 MWh), PV sized by conf/blue_whale_solar_bess_fixed_bess_sizing.yaml'
   changes:
+    - 'v0.4 (2026-11-07): opex split by currency (input B34; owner rule and decision of 2026-11-02): BESS O&M at the derived LTSA rate USD 1.80/kWh-yr on 22,100 kWh DC (39,780, all USD; was USD 2.5/kWh-yr on 20,000 kWh, 50,000); solar O&M 56,655.2 and insurance, land and SPV 150,000 in LKR. O&M 256,655 -> 246,435.2; USD share 16.1% escalates at 2.5%/yr in USD on a 5.89%/yr LKR depreciation path; LKR share at 5%/yr. Not re-sized'
     - 'v0.3 (2026-11-01): the OWNER''S STRATEGIC BATTERY, 5.0 MW / 20.0 MWh (PR 7, #1353 comment 6563070978: "Fix 5 MW / 20 MWh"; objective "After-tax project NPV (Recommended)"). PV AC 5.0 MW (reading A at its 10 MW limit); PV DC chosen on the P50 after-tax project NPV by conf/blue_whale_solar_bess_fixed_bess_sizing.yaml (seed 20261101, 256 trials): 151 tables (5.66552 MWp), P50 USD -5,326,884, P90 -5,911,801. The value-based size (107 tables, 3.5 MW AC, 1.0 MW / 4.0 MWh) is better by USD 1,247,165 at P50 and 1,590,005 at P90. Solar CF 0.169929, degradation 0.392075, capex 3,455,943; bess_1 capex 2,814,800, 400.1935 cycles, fade 0.0016798; capex total 8,270,743; O&M 256,655'
     - 'v0.2 (2026-11-01): RE-SIZED on the BLENDED BESS price (PR 6, #1353 comment 6556975196; all-in 129.13 / 140.74 / 202.51 USD/kWh, was 78.75 / 135.00 / 143.41). The same seeded run (20261101, 325 points x 256 trials) chooses 107 tables (4.01464 MWp), 3.5 MW AC and 1.0 MW / 4.0 MWh under both readings, the smallest PV and BESS on the grid; every eligible size has a negative P50 unit NPV. Solar CF 0.191179, degradation 0.377386, capex 2,448,480; bess_1 capex 562,960, 435.6547 cycles, fade 0.0000718; capex total 5,011,440; O&M 200,146. A blend that includes private commercial inputs, published on the owner''s decision'
     - 'v0.1 (2026-11-01): the solar + BESS unit as its own project (owner decision, #1353 comment 6556854201), under the PUCSL 2026 rules: 4 h BESS (energy = 4 x power, delivered), PV-only charging, discharge 17:30-21:30 only. Sized by a seeded Monte Carlo (seed 20261101) under reading A of the 10 MW limit: 160 tables (6.00320 MWp), 5.0 MW AC, BESS 4.5 MW / 18.0 MWh. Capex 8082472; O&M 255032; tariff 20.72 plus the 29.38 premium on 417.3444 cycles'

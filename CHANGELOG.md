@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Opex split by currency (15.19.0).** New optional `opex.currency_split` (a USD share, given
+  directly or weighted from components, USD and LKR escalation, and an optional LKR depreciation
+  path for the USD share). Without it every scenario is byte-identical. The Blue Whale projects
+  take it on the owner's rule and decision of 2026-11-02 (#1353 comment 6702129557): wind O&M
+  70% USD / 30% LKR; BESS O&M at the derived LTSA rate USD 1.80/kWh-yr of DC installed, all USD.
+  Wind project IRR 10.81% -> 9.90%, NPV USD +69k -> -625k; solar + BESS NPV USD -4.99M -> -5.06M.
+  Detail in the compiled fragment.
 - **Blue Whale solar + BESS: the owner's 5 MW / 20 MWh battery (15.18.0).** The sizing ranks on
   the after-tax project NPV and the project commits the owner's 5 MW / 20 MWh with 151 tables at
   5.0 MW AC (#1353 comment 6563070978). The value-based size stays 1 MW / 4 MWh; the choice
