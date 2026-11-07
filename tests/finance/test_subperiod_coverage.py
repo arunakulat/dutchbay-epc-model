@@ -185,6 +185,33 @@ def test_interest_and_principal_split_each_quarters_service(sized_lender) -> Non
     assert _within_ulp(interest, float(debt["interest_total"][period]))
 
 
+def test_balloon_interest_after_the_tenor_is_shown_outside_the_dscr(
+    sized_lender,
+) -> None:
+    """A carried balloon's interest is debt cash with no ratio, as in ``dscr_by_year``."""
+    debt, rows = sized_lender
+    view = build_subperiod_coverage(rows, debt, _calendar(ALL_EVEN))
+    carried = [
+        index
+        for index, row in enumerate(rows)
+        if float(row.get("balloon_interest_paid_usd") or 0.0) > 0.0
+    ]
+    assert carried, "the lender case carries its balloon past the tenor"
+    for year_index in carried:
+        want = float(rows[year_index]["balloon_interest_paid_usd"])
+        quarters = _year(view, year_index)
+        got = math.fsum(q["balloon_interest_paid_usd"] for q in quarters)
+        assert _within_ulp(got, want)
+        assert all(q["debt_service_usd"] == 0.0 for q in quarters)
+        assert all(q["dscr"] is None for q in quarters)
+        year = debt["annual_row_debt_period_map"][year_index]["year"]
+        assert debt["dscr_by_year"][year] is None
+    others = [i for i in range(len(rows)) if i not in carried]
+    assert all(
+        q["balloon_interest_paid_usd"] == 0.0 for i in others for q in _year(view, i)
+    )
+
+
 # ---------------------------------------------------------------------------
 # It moves nothing
 # ---------------------------------------------------------------------------

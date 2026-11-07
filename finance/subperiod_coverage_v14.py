@@ -39,6 +39,12 @@ When the debt cash falls
   otherwise spread evenly over year 1.
 * The senior fee accrues on the outstanding balance through the year, so it is spread
   evenly.
+* Interest paid on a balloon carried past maturity (#1503, #1504) is real debt cash in
+  the years after the tenor, but the engine keeps it out of ``debt_service_total`` and so
+  out of ``dscr_by_year``. The view reports it per sub-period as
+  ``balloon_interest_paid_usd``, on the ``debt_service`` placement, and keeps it out of the
+  DSCR the same way, so a year after the tenor shows that cash with no ratio rather than
+  looking debt-free.
 
 An even spread is an assumption, not evidence: the real instalment dates are term-sheet
 facts (#920). Each one used is recorded in :attr:`SubperiodCoverage.assumptions` and
@@ -83,6 +89,8 @@ COVENANT_USE = (
 #: otherwise refuse them as unclassified. A new enrichment key fails loud in A2.
 DEBT_ENRICHMENT_KEYS = frozenset(
     {
+        "balloon_interest_accrued_usd",
+        "balloon_interest_paid_usd",
         "balloon_resolution",
         "cf_after_debt",
         "cf_pre_debt",
@@ -100,8 +108,9 @@ class SubperiodCoverage:
         periods: One dict per sub-period of every operating year, in order, with
             ``year``, ``period_index``, ``period_in_year``, ``cfads_usd``,
             ``senior_fee_usd``, ``scheduled_service_usd``, ``bridge_service_usd``,
-            ``debt_service_usd``, ``interest_usd``, ``principal_usd`` and ``dscr``
-            (``None`` where the sub-period carries no debt service).
+            ``debt_service_usd``, ``interest_usd``, ``principal_usd``,
+            ``balloon_interest_paid_usd`` (outside the DSCR, as in ``dscr_by_year``)
+            and ``dscr`` (``None`` where the sub-period carries no debt service).
         assumptions: Each debt-cash placement that used the even default rather than a
             declared date, mapped to what was assumed.
         min_dscr: The lowest sub-period DSCR, for disclosure only. It is not, and must
@@ -198,6 +207,13 @@ def build_subperiod_coverage(
         scheduled = allocate_flow(service, service_weights)
         scheduled_interest = allocate_flow(interest, service_weights)
         fee_parts = allocate_flow(fee, even_profile(grid))
+        balloon_paid = float(
+            coverage_rows[int(entry["annual_row_index"])].get(
+                "balloon_interest_paid_usd"
+            )
+            or 0.0
+        )
+        balloon_parts = allocate_flow(balloon_paid, service_weights)
         if year_index == 0:
             bridge_parts = allocate_flow(bridge_service, bridge_weights)
             bridge_interest_parts = allocate_flow(bridge_interest, bridge_weights)
@@ -223,6 +239,7 @@ def build_subperiod_coverage(
                     "debt_service_usd": total,
                     "interest_usd": interest_part,
                     "principal_usd": total - interest_part,
+                    "balloon_interest_paid_usd": balloon_parts[position],
                     "dscr": (
                         (cfads - fee_parts[position]) / total if total > 0 else None
                     ),
