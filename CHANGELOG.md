@@ -5,6 +5,11 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Blue Whale: the turbine's shadow on the PV, input B33 (15.19.0).** The rotor and tower
+  shadow is computed per PV table and the hourly PV is derated before BESS dispatch. The
+  electrical-mismatch treatment is the optical floor. The loss is 0.13% of the solar + BESS
+  array's energy, and no size changes. Solar + BESS project NPV USD -4.99M -> -5.00M; hybrid
+  project IRR 8.73% (unchanged to 2 dp). Detail in the compiled fragment.
 - **Blue Whale solar + BESS: the owner's 5 MW / 20 MWh battery (15.18.0).** The sizing ranks on
   the after-tax project NPV and the project commits the owner's 5 MW / 20 MWh with 151 tables at
   5.0 MW AC (#1353 comment 6563070978). The value-based size stays 1 MW / 4 MWh; the choice

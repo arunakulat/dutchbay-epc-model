@@ -317,12 +317,12 @@ wacc:
 
 metadata:
   version: '0.9'
-  last_updated: '2026-11-02'
+  last_updated: '2026-11-07'
   author: DutchBay V14 Financial Modeling Team
   review_status: SKELETON - screening placeholders pending owner inputs (docs/blue_whale/INPUTS_REQUIRED.md)
   assumptions_source: 'Scaled from dutchbay_hybrid_bess_2025Q4 and ceb_solar_bess_nightpeak_10mw'
   changes:
-    - 'v0.9 (2026-11-02): the turbine''s shadow on the PV (input B33, model 15.19.0): the unit''s hourly PV is derated before dispatch for the tower and rotor shadow on its 147 tables (solar_resource.pv_array_turbine_shading on #1520''s geometry, rotor yaw from the PR 5 wind rose, optical floor). PR 3''s sizing re-run with the shadow keeps DC/AC 1.1 and 5 MW / 24 MWh. Solar CF 0.165096 -> 0.164864, degradation 0.384074 -> 0.383664, cycles 325.4723 -> 325.2787, fade 0.001914 -> 0.001929, blended tariff 24.97218 -> 24.97308, project CF 0.3763655 -> 0.3762855. Nothing else changes'
+    - 'v0.9 (2026-11-07): the turbine''s shadow on the PV (input B33, model 15.19.0): the unit''s hourly PV is derated before dispatch for the tower and rotor shadow on its 147 tables (solar_resource.pv_array_turbine_shading on #1520''s geometry, rotor yaw from the PR 5 wind rose, optical floor). PR 3''s sizing re-run with the shadow keeps DC/AC 1.1 and 5 MW / 24 MWh. Solar CF 0.165096 -> 0.164864, degradation 0.384074 -> 0.383664, cycles 325.4723 -> 325.2787, fade 0.001914 -> 0.001929, blended tariff 24.97218 -> 24.97308, project CF 0.3763655 -> 0.3762855. Nothing else changes'
     - 'v0.8 (2026-11-01): capex BLENDED (PR 6, #1353 comment 6556975196): wind 12,350,000 -> 8,899,980 (USD 936.84/kW, mirrors the wind scenario v0.3); BESS 3,240,000 -> 3,377,760 (USD 140.74/kWh on 24 MWh); capex total 20,958,596 -> 17,646,336. Blends that include private commercial inputs, published on the owner''s decision. Nothing else changes'
     - 'v0.7 (2026-11-01): wind block mirrors the wind scenario v0.2 (PR 5, met mast 617725 transferred to the turbine): wind CF 0.374256 -> 0.487560, AEP 31.15 -> 40.57 GWh; project CF 0.302132 -> 0.3763655 and tariff blend 24.786 -> 24.97218 by their formulas. Not lender-grade; the met-mast HOLD stands'
     - 'v0.6 (2026-11-01): solar + BESS unit SIZED by a seeded Monte Carlo (PR 3; seed 20261101, 40 sizes x 256 LHS trials, docs/blue_whale/pv_bess_sizing_summary.json) on the P50 project NPV among sizes that export the full 4 h priority window: DC/AC 1.1 (5.51544 MWp, 147 tables) with 5 MW / 24 MWh. Priced from cited sources (conf/blue_whale_pv_bess_pricing.yaml): PV 3,368,596 (modules OPIS Jul-Aug 2026, Huawei SUN2000-330KTL-H1 inverters, IRENA-derived BoP), BESS 3,240,000 at the public NSO 250 base USD 135.00/kWh. Solar CF 0.165096, degradation 0.384074; bess_1 325.4723 cycles, fade 0.001914; tariff blend 24.786; capex 20,958,596; O&M 615,154 (placeholder rates scaled). Turbine unchanged'
