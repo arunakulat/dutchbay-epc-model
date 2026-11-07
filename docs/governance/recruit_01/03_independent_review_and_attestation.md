@@ -162,18 +162,30 @@ to its own head. A judgement that another car cannot matter never substitutes fo
 The cars are never edited on the train branch. A fix belongs on the car's own branch, which is a
 subject change, so §6 restarts both of the car's reviews.
 
-**Landing check.** Before landing, record the protected `main` SHA. The train head's commits must form
-a chain of non-merge commits, one per car, whose first parent is that `main` SHA. **Each train commit
+**Landing check.** Run the pre-landing check twice: on the built train before it is opened ready, so a
+mis-built train never spends a full-suite run, and again just before landing. Each time, record the
+protected `main` SHA, which must be `origin/main` at that moment. The train head's commits must form a
+chain of non-merge commits, one per car, whose first parent is that `main` SHA. **Each train commit
 must be exactly its car's reviewed diff:** it changes the same paths that the car's reviewed head
-changes from its merge base, with the same modes and blobs, and its subject ends with that car's
-pull-request number. The three proofs above compare trees, so they cannot say which commit carries
+changes from its merge base, with the same modes and blobs. Compare both old and new modes and blob IDs, change status, and
+every path byte using unambiguous framing. Its message and author equal the car's
+recorded merge message and author, where the author is the car pull request's author as a squash
+merge of that pull request would record it, and its subject ends with that car's pull-request number.
+Each car's reviewed head must still be its pull request's head, so a car list that pairs a number with
+another car's head fails. The three proofs above compare trees, so they cannot say which commit carries
 which car. Without this check, a train whose cars' messages were swapped, or whose commit for one car
 also carries a stray file or part of another car, passes every tree comparison. It would then land
 under the wrong message on a `main` whose history is never rewritten, and reverting one car would
-revert another. The train lands by rebase-merge, never squash. After it lands, verification passes
-only if:
+revert another. If `main` moves before landing, the train is rebuilt from the new `main`, never
+refreshed with a merge commit, and the three proofs and the pre-landing check are repeated on the new
+train head. The train lands by rebase-merge, never squash. After it lands, verification passes only
+if:
 
-- each landed commit's tree and message equal those of the matching train commit;
+- the SHA the merge returned equals the freshly fetched `origin/main` tip, so a side-parent or
+  stale reachable commit cannot substitute for the protected landing; reconcile before proceeding
+  if protected main has advanced again;
+- the landed commits contain no merge commit;
+- each landed commit's tree, message and author equal those of the matching train commit;
 - each landed commit's parent is the previous landed commit, and the first one's parent is the
   recorded `main` SHA; and
 - the last landed commit's tree equals the train head's tree.

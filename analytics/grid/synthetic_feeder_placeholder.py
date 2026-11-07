@@ -89,7 +89,7 @@ PINNED_REPOSITORY_SOURCE_TRIPLES = (
     (
         "version_file",
         "VERSION",
-        "56607e6da83c5757faf6312f89945bca0f3ee6cbff423bb9f8b7eddb91c5b3e9",
+        "f8b1a7b9cdfcb7050751174b893b60b710310bb4e8a37491fad498024be39800",
     ),
 )
 
