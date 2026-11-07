@@ -73,11 +73,14 @@ POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 # DSCR 0.8669721833235606.
 # Re-pinned for #1398 (P2-F3-01 debt-service shortfall carried as sponsor cure in years 1 and
 # 16-20; before: equity NPV -5395403.401365028, equity IRR -0.03575607324588892).
+# Re-pinned at 15.19.0 for the turbine's shadow on the PV (input B33; v0.4, size unchanged at
+# 151 tables). Before, at 15.18.0 after #1398 (v0.3): project NPV -4992408.759406766, equity
+# NPV -5564410.144390165, equity IRR -0.08317620969932149, min DSCR 0.867987057099332.
 SOLAR_BESS_PINS = {
-    "project_npv": -4992408.759406766,
-    "equity_npv": -5564410.144390165,
-    "equity_irr": -0.08317620969932149,
-    "min_dscr": 0.867987057099332,
+    "project_npv": -4997611.258776674,
+    "equity_npv": -5568837.4281859165,
+    "equity_irr": -0.0843625813445068,
+    "min_dscr": 0.8676222789656864,
 }
 # WIND_PINS re-pinned at 15.16.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
 # 0.487560). Before, at 15.15.0 (v0.1): project IRR 0.04085210230412145, equity IRR

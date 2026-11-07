@@ -161,9 +161,25 @@ class TestAccumulation:
         tower_area = w * h / math.tan(math.radians(el))
         ellipse_area = math.pi * r * r / math.sin(math.radians(el))
         assert acc.tower_wh.sum() * cell / 800.0 == pytest.approx(tower_area, rel=0.03)
-        assert acc.rotor_high_wh.sum() * cell / (800.0 * sigma) == pytest.approx(
-            ellipse_area, rel=0.03
+        # The blades take beam only outside the tower strip, so the sun-facing rotor's
+        # footprint is the ellipse less the part of the strip inside it. The strip runs
+        # due north from the tower to the hub's shadow, the ellipse's centre (0, c), whose
+        # north-south semi-axis is b and east-west a; integrate the strip's width inside
+        # the ellipse over its last b metres.
+        a_ew, b_ns = r, r / math.sin(math.radians(el))
+        c = h / math.tan(math.radians(el))
+        ys = np.linspace(c - b_ns, c, 200001)
+        widths = np.minimum(
+            w, 2.0 * a_ew * np.sqrt(np.clip(1 - ((ys - c) / b_ns) ** 2, 0, 1))
         )
+        overlap = float(np.trapezoid(widths, ys))
+        assert overlap > 0.0
+        assert acc.rotor_high_wh.sum() * cell / (800.0 * sigma) == pytest.approx(
+            ellipse_area - overlap, rel=0.03
+        )
+        # No point loses more than its beam.
+        removed = acc.tower_wh + acc.rotor_high_wh
+        assert removed.max() <= 800.0 + 1e-9
         # The yaw-averaged disc is never larger than the sun-facing one.
         assert acc.rotor_low_wh.sum() <= acc.rotor_high_wh.sum()
         assert acc.poa_global_wh == 1000.0 and acc.poa_beam_wh == 800.0

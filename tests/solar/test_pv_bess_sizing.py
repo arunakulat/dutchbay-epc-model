@@ -586,16 +586,19 @@ def test_scenario_carries_the_recommended_base_case() -> None:
     # tariff is checked against the blend formula on the CURRENT wind CF; the same formula
     # on PR 3's frozen wind CF must still reproduce PR 3's frozen tariff (the original
     # oracle, kept rather than dropped).
-    def blend(wind_cf: float) -> float:
+    def blend(wind_cf: float, solar_cf: float | None = None) -> float:
         e_w = techs["wind"]["capacity_mw"] * wind_cf
-        e_s = solar["capacity_mw"] * eng["solar_capacity_factor"]
+        cf = eng["solar_capacity_factor"] if solar_cf is None else solar_cf
+        e_s = solar["capacity_mw"] * cf
         return (e_w * 25.73 + e_s * 20.72) / (e_w + e_s)
 
     # PR 6 capex re-ran this sizing on the current hybrid, so the committed summary's engine
     # tariff is again the blend on the CURRENT wind CF (PR 3's original oracle, restored).
     # PR 5's frozen check is kept as a closed form against PR 3's frozen tariff value,
     # 24.785983774583563 (the summary no longer records it).
-    assert blend(0.374256) == pytest.approx(24.785983774583563, abs=5e-5)
+    # 15.19.0 (turbine shadow, input B33) moved the solar CF, so that frozen check runs on
+    # the solar CF PR 3 had then, 0.165096 (unshaded), stated here as a constant.
+    assert blend(0.374256, 0.165096) == pytest.approx(24.785983774583563, abs=5e-5)
     assert eng["tariff_lkr_per_kwh"] == pytest.approx(
         blend(techs["wind"]["capacity_factor"]), abs=5e-5
     )

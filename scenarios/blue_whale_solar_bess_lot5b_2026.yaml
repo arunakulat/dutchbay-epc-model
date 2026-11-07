@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # Blue Whale Solar + BESS project (Lot 5B, Kalpitiya): 5.66552 MWp / 5.0 MW AC PV with a 5.0 MW / 20.0 MWh BESS
 # ═══════════════════════════════════════════════════════════════════════════════
-# Version: 0.3 (SKELETON: screening placeholders, not a basis for any decision)
+# Version: 0.4 (SKELETON: screening placeholders, not a basis for any decision)
 # Path: scenarios/blue_whale_solar_bess_lot5b_2026.yaml
 #
 # A SEPARATE PROJECT (owner, 2026-11-01, #1353 comment 6556854201): "We will therefore
@@ -81,7 +81,7 @@ project:
   name: "Blue Whale Solar + BESS (Lot 5B)"
   location: "Lot 5B Plan 3641, Mutuwal, GN Dutch Bay 633, Kalpitiya DS, Puttalam District, North Western Province, Sri Lanka"
   capacity_mw: 5.0            # generation nameplate: the PV AC (the BESS power is not in it, as in the hybrid)
-  capacity_factor: 0.169929     # = the solar block's CF (the only generation block); v0.2 0.191179, v0.1 0.182870
+  capacity_factor: 0.169675     # = the solar block's CF (the only generation block); v0.3 0.169929, v0.2 0.191179, v0.1 0.182870
   curtailment_pct: 0.0
   degradation: 0.5                  # PLACEHOLDER (input B12)
   life_years: 20                    # PLACEHOLDER (input F01): SPPA term
@@ -99,25 +99,30 @@ generation:
     #            the generation tariff, the 20.72 other-period rate;
     #   bess_1 = the priority PREMIUM (50.10 - 20.72 = 29.38) on the energy exported in the
     #            17:30-21:30 window, for the 15-year priority term.
-    # Year 1 (base case, v0.3), hourly over the frozen TMY with PV at the warranted 99%: PV
-    # 8,637.52 MWh; charge 7,964.25; discharge 6,769.61 (17:30-21:30 only); PV direct
-    # 673.28 (33.68 in the window, 639.60 outside); curtailed 0.00;
-    # export 7,442.89 MWh, of which 6,803.29 in the priority window; 338.5
-    # equivalent full cycles; revenue LKR 354,097,246. (v0.2, 107 tables and 4 MWh: export
+    # Year 1 (base case, v0.4), hourly over the frozen TMY with PV at the warranted 99% and the
+    # turbine's shadow on the array (input B33, 0.130% of plane-of-array irradiance): PV
+    # 8,625.78 MWh; charge 7,960.14; discharge 6,766.12 (17:30-21:30 only); PV direct
+    # 665.63 (33.56 in the window, 632.07 outside); curtailed 0.00;
+    # export 7,431.76 MWh, of which 6,799.68 in the priority window; 338.3
+    # equivalent full cycles; revenue LKR 353,760,712. (v0.3, unshaded: export 7,442.89 MWh,
+    # 6,803.29 priority, revenue LKR 354,097,246. v0.2, 107 tables and 4 MWh: export
     # 5,861.53 MWh, 1,481.23 priority, revenue LKR 164,969,416; v0.1, 160 tables and 18 MWh:
     # export 8,009.72 MWh, 6,385.37 priority, revenue LKR 353,563,620.)
     solar:
       capacity_mw: 5.0        # AC: the PV inverters' active-power limit (v0.3, PR 7; v0.2 3.5). DC 5.66552 MWp
                                     # (151 tables of JinkoSolar Tiger Neo 3.0 670 W, DC/AC 1.133104); 17 x Huawei
                                     # SUN2000-330KTL-H1
-      capacity_factor: 0.169929 # DERIVED: export 7,442.89 MWh / (5.0 MW x 8760 h), year 1 (v0.2 0.191179).
-                                    # PV alone (frozen PVGIS-ERA5 TMY, 8 deg tilt, 14% losses, inverter 98.8%):
-                                    # 8.7248 GWh before the warranted year-1 1%. Bifacial gain and
-                                    # turbine shading (#1520) NOT modelled. Resource and cross-checks:
+      capacity_factor: 0.169675 # DERIVED: export 7,431.76 MWh / (5.0 MW x 8760 h), year 1 (v0.3 0.169929,
+                                    # v0.2 0.191179). PV alone (frozen PVGIS-ERA5 TMY, 8 deg tilt, 14% losses,
+                                    # inverter 98.8%): 8.7129 GWh before the warranted year-1 1% (8.7248
+                                    # unshaded). Turbine shading MODELLED (input B33, v0.4): optical floor,
+                                    # no electrical-mismatch uplift (conf/blue_whale_solar_bess.yaml). Bifacial
+                                    # gain NOT modelled. Resource and cross-checks:
                                     # docs/blue_whale/CAPEX_AND_SOLAR_RESOURCE_METHODS.md
-      degradation_pct: 0.392075  # DERIVED: geometric rate whose 20-year sum equals the dispatched export
-                                      # under the Jinko warranty path (1% year 1, then 0.35%/yr linear); v0.2 0.377386
-      aep_gwh: 7.44        # export, year 1 (reporting); v0.2 5.86
+      degradation_pct: 0.391957  # DERIVED: geometric rate whose 20-year sum equals the dispatched export
+                                      # under the Jinko warranty path (1% year 1, then 0.35%/yr linear); v0.3 0.392075,
+                                      # v0.2 0.377386
+      aep_gwh: 7.43        # export, year 1 (reporting); v0.3 7.44, v0.2 5.86
       capex_usd: 3455943       # CITED (input B15), PR 3's price modes of conf/blue_whale_pv_bess_pricing.yaml:
                                     # modules 0.110 FOB + 0.010 delivery, BoP/EPC 0.462 per Wp on 5.66552 MWp,
                                     # inverters 0.0311 per W on 17 x 300 kW (v0.2 2,448,480 on 4.01464 MWp)
@@ -135,13 +140,14 @@ generation:
       revenue:
         model: energy_tariff        # input F05: the PUCSL 2026 ground solar + BESS FiT, dispatched hourly
         tariff_lkr_per_kwh: 29.38   # 50.10 - 20.72 (Annex 2): the premium over the generation tariff
-        cycles_per_year: 400.1935 # DERIVED (v0.3): priority-window export 6,803.29 MWh / (20.0 MWh x 0.85), year 1
-                                    # (an engine mapping, not a cycle count: 338.5 true cycles). v0.2 435.6547
+        cycles_per_year: 399.9815 # DERIVED (v0.4): priority-window export 6,799.68 MWh / (20.0 MWh x 0.85), year 1
+                                    # (an engine mapping, not a cycle count: 338.3 true cycles). v0.3 400.1935,
+                                    # v0.2 435.6547
         round_trip_efficiency: 0.85 # repository value (NREL ATB 2024 basis, #588); the whole loss on charge.
                                     # PUCSL's 0.90 reference case is a sensitivity in the sizing summary
         availability_factor: 1.0
         contract_years: 15          # PUCSL methodology s.5.1, Annex 2 s.3 note [2]
-        mdsc_fade_pct_annual: 0.0016798  # DERIVED (v0.3; v0.2 0.0000718): decline of the priority-window export as the PV degrades
+        mdsc_fade_pct_annual: 0.0016880  # DERIVED (v0.4; v0.3 0.0016798, v0.2 0.0000718): decline of the priority-window export as the PV degrades
                                         # (geometric rate matching its 15-year sum); no cell fade in the base
                                         # case (the price carries the NSO 250 augmentation reserve)
 
@@ -282,12 +288,13 @@ wacc:
   description: "Build-up WACC drives the project discount rate."
 
 metadata:
-  version: '0.3'
-  last_updated: '2026-11-01'
+  version: '0.4'
+  last_updated: '2026-11-02'
   author: DutchBay V14 Financial Modeling Team
   review_status: SKELETON - screening placeholders pending owner inputs (docs/blue_whale/INPUTS_REQUIRED.md)
   assumptions_source: 'Split from blue_whale_hybrid_lot5b_2026 v0.6 (finance blocks); battery fixed by the owner (5 MW / 20 MWh), PV sized by conf/blue_whale_solar_bess_fixed_bess_sizing.yaml'
   changes:
+    - 'v0.4 (2026-11-02): the TURBINE''S SHADOW on the PV (input B33; #1520''s geometry on the layout''s tables, rotor yaw from the 130 m met-mast wind rose, optical floor with no electrical-mismatch uplift): 0.130% of the array''s plane-of-array irradiance, 0.136% of its AC energy. The size is unchanged (151 tables, 5.0 MW AC; P50 after-tax project NPV USD -5,331,746, P90 -5,916,888 in the re-run of conf/blue_whale_solar_bess_fixed_bess_sizing.yaml). Solar CF 0.169929 -> 0.169675, degradation 0.392075 -> 0.391957, aep 7.44 -> 7.43; bess_1 cycles 400.1935 -> 399.9815, fade 0.0016798 -> 0.0016880. Capex and O&M unchanged'
     - 'v0.3 (2026-11-01): the OWNER''S STRATEGIC BATTERY, 5.0 MW / 20.0 MWh (PR 7, #1353 comment 6563070978: "Fix 5 MW / 20 MWh"; objective "After-tax project NPV (Recommended)"). PV AC 5.0 MW (reading A at its 10 MW limit); PV DC chosen on the P50 after-tax project NPV by conf/blue_whale_solar_bess_fixed_bess_sizing.yaml (seed 20261101, 256 trials): 151 tables (5.66552 MWp), P50 USD -5,326,884, P90 -5,911,801. The value-based size (107 tables, 3.5 MW AC, 1.0 MW / 4.0 MWh) is better by USD 1,247,165 at P50 and 1,590,005 at P90. Solar CF 0.169929, degradation 0.392075, capex 3,455,943; bess_1 capex 2,814,800, 400.1935 cycles, fade 0.0016798; capex total 8,270,743; O&M 256,655'
     - 'v0.2 (2026-11-01): RE-SIZED on the BLENDED BESS price (PR 6, #1353 comment 6556975196; all-in 129.13 / 140.74 / 202.51 USD/kWh, was 78.75 / 135.00 / 143.41). The same seeded run (20261101, 325 points x 256 trials) chooses 107 tables (4.01464 MWp), 3.5 MW AC and 1.0 MW / 4.0 MWh under both readings, the smallest PV and BESS on the grid; every eligible size has a negative P50 unit NPV. Solar CF 0.191179, degradation 0.377386, capex 2,448,480; bess_1 capex 562,960, 435.6547 cycles, fade 0.0000718; capex total 5,011,440; O&M 200,146. A blend that includes private commercial inputs, published on the owner''s decision'
     - 'v0.1 (2026-11-01): the solar + BESS unit as its own project (owner decision, #1353 comment 6556854201), under the PUCSL 2026 rules: 4 h BESS (energy = 4 x power, delivered), PV-only charging, discharge 17:30-21:30 only. Sized by a seeded Monte Carlo (seed 20261101) under reading A of the 10 MW limit: 160 tables (6.00320 MWp), 5.0 MW AC, BESS 4.5 MW / 18.0 MWh. Capex 8082472; O&M 255032; tariff 20.72 plus the 29.38 premium on 417.3444 cycles'
