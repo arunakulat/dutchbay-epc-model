@@ -139,15 +139,26 @@ class HourlyPv:
         return float(self.ac_mw.sum())
 
 
-def hourly_pv(config: SolarResourceConfig) -> HourlyPv:
+def hourly_pv(
+    config: SolarResourceConfig, poa_retention: Optional[FloatArray] = None
+) -> HourlyPv:
     """Hourly AC output of the producer's pvlib chain on its frozen TMY.
 
     The steps, inputs and loss factor are those of
-    :func:`solar_resource.pv_producer.compute_solar_aep`'s TMY branch, so the annual sum
-    equals its ``annual_energy_gwh``.
+    :func:`solar_resource.pv_producer.compute_solar_aep`'s TMY branch, so without
+    ``poa_retention`` the annual sum equals its ``annual_energy_gwh``.
+
+    Args:
+        config: The producer config (``tmy_path`` required).
+        poa_retention: Optional per-hour share (0-1) of the plane-of-array irradiance the
+            array keeps, aligned with the TMY rows (the turbine-shadow derate of
+            :mod:`solar_resource.pv_array_turbine_shading`). It scales the POA that drives
+            the DC model, so inverter clipping sees the shaded power; the cell temperature
+            stays on the unshaded POA.
 
     Raises:
-        ValueError: If the config has no ``tmy_path`` (the clear-sky path is annual only).
+        ValueError: If the config has no ``tmy_path`` (the clear-sky path is annual only),
+            or ``poa_retention`` is misaligned or outside 0-1.
         RuntimeError: If pvlib is not installed.
     """
     if config.tmy_path is None:
@@ -178,6 +189,15 @@ def hourly_pv(config: SolarResourceConfig) -> HourlyPv:
     cell = pvlib.temperature.faiman(
         poa, temp_air=tmy["temp_air"], wind_speed=tmy["wind_speed"]
     )
+    if poa_retention is not None:
+        keep = np.asarray(poa_retention, dtype=float)
+        if keep.shape != (len(times),):
+            raise ValueError(
+                f"poa_retention has shape {keep.shape}, expected ({len(times)},)"
+            )
+        if not np.all(np.isfinite(keep)) or keep.min() < 0.0 or keep.max() > 1.0:
+            raise ValueError("poa_retention must lie in [0, 1]")
+        poa = poa * keep
     pdc0_w = config.dc_capacity_mw * 1.0e6
     dc = pvlib.pvsystem.pvwatts_dc(poa, cell, pdc0_w, config.gamma_pdc_per_c)
     ac_nameplate_w = pdc0_w / config.dc_ac_ratio

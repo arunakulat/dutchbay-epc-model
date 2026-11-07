@@ -38,12 +38,15 @@ grid:
 recommendation:
   # Written to scenarios/blue_whale_solar_bess_lot5b_2026.yaml (a test checks they agree):
   # the after-tax objective's choice under reading A in
-  # docs/blue_whale/solar_bess_fixed_bess_sizing_summary.json. Run of 2026-11-01 at 6f253106
-  # (seed 20261101, 58 points x 256 trials, 15,022 evaluations, 724.7 s): 151 tables
-  # (5.66552 MWp, DC/AC 1.1331, 17 inverters). After-tax project NPV P50 USD -5,326,884,
-  # P90 -5,911,801; no project IRR in any trial. Unit pre-tax NPV P50 -829,383, P90 -1,421,478.
-  # A near tie with 152 tables (at least as good in 52.7% of paired trials, by USD 316 at the
-  # median); the P50 curve is within USD 3,200 of the choice from 147 to 155 tables.
+  # docs/blue_whale/solar_bess_fixed_bess_sizing_summary.json. Run of 2026-11-07 at 391b0dc7
+  # with the turbine's shadow on the PV (input B33; seed 20261101, 58 points x 256 trials,
+  # 15,022 evaluations, 610.0 s): 151 tables (5.66552 MWp, DC/AC 1.1331, 17 inverters), the
+  # same size as the unshaded run of 2026-11-01 at 6f253106. After-tax project NPV P50 USD
+  # -5,331,746, P90 -5,916,888; no project IRR in any trial. Unit pre-tax NPV P50 -835,914,
+  # P90 -1,428,112. A near tie with 152 tables (at least as good in 53.9% of paired trials, by
+  # USD 334 at the median); the P50 curve is within USD 3,200 of the choice from 147 to 155
+  # tables. Before shading (6f253106): P50 -5,326,884, P90 -5,911,801; unit pre-tax P50
+  # -829,383, P90 -1,421,478.
   committed:
     reading: A
     pv_tables: 151
@@ -64,10 +67,12 @@ recommendation:
   # THE COST OF THE STRATEGIC CHOICE (USD): the value-based size's statistic less the committed
   # size's, from the two summaries (a test recomputes them). Positive = value given up.
   strategic_cost_usd:
-    project_npv_p50: 1247165.50       # after-tax project NPV: -4,079,718 vs -5,326,884
-    project_npv_p90: 1590005.48       # -4,321,796 vs -5,911,801
-    unit_pretax_npv_usd_p50: 516753.81  # unit pre-tax NPV: -312,629 vs -829,383
-    unit_pretax_npv_usd_p90: 850165.10  # -571,313 vs -1,421,478
+    # Re-derived at 15.19.0 with the turbine's shadow (both summaries at 391b0dc7). Before, at
+    # 15.18.0: 1,247,165.50; 1,590,005.48; 516,753.81; 850,165.10.
+    project_npv_p50: 1251427.66       # after-tax project NPV: -4,080,318 vs -5,331,746
+    project_npv_p90: 1594479.94       # -4,322,408 vs -5,916,888
+    unit_pretax_npv_usd_p50: 522453.36  # unit pre-tax NPV: -313,460 vs -835,914
+    unit_pretax_npv_usd_p90: 856044.45  # -572,068 vs -1,428,112
 
 output:
   summary_json: null
