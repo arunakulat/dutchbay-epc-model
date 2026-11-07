@@ -1,7 +1,7 @@
 # Blue Whale Post-Merge Audit & Clean-Up (`v15.18.0`) — Ingress Brief & Receipt
 
-**Document Version:** `1.0.0`
-**Date:** 2026-11-06
+**Document Version:** `1.1.0`
+**Date:** 2026-11-06 (amended 2026-11-07: §5 records that the `MERGE-01` suspension is lifted)
 **Governing Authority:** GWTF Ruleset `v3.0` (`go_with_the_flow_rules_v3_0_clean.csv`), `RECRUIT-01` Modules 1–4, `PERSIST-01`, `ENV-01`, `THREAD-01`
 **Base Commit:** `cc4d1b59a7d9554ae9c6919d74fff623f62aa045` (`origin/main`, `VERSION 15.18.0`)
 **Worktree / Branch:** `/Users/aruna/.gemini/antigravity/worktrees/dutchbay-epc-model/add_ingress_file` (`add_ingress_file`)
@@ -19,7 +19,7 @@ Every prospective worker must complete the safety preflight before substantive i
 | Ruleset Canon | Canonical CSV (`23074328...`) | `dutchbay_bootstrap_rules.py` | 79 rules, all active, latest `v3.0`, SHA-256 `230743289f135338344cba0740061935af461325d6729f3d210db3f3aee2e7a4` (`eb14d836...` at 78 rules prior to `CLEANUP-01`) | **PASS** |
 | Handover Continuity | Resolver lineage verification | `scripts/list_session_handover_records.py` | Lineage verified back to founding records; latest introduction is `docs/SESSION_HANDOVER_2026-10-22_AUDIT_GATE_CLEARED_ON_MERIT.md` (`86ca5732`) | **PASS** |
 | Protected Branch | Protected `main` read-only | `git branch --show-current` | Working on dedicated worktree branch `add_ingress_file` | **PASS** |
-| Merge Authority | `MERGE-01` standing authority | Standing merge authority check | **SUSPENDED** by project owner at 2026-11-05T20:15:19+05:30 (Checkpoint 9 in `blue_whale_merge_train_ledger.md`). Strictly non-merging. | **HELD** |
+| Merge Authority | `MERGE-01` standing authority | Standing merge authority check | **SUSPENDED** by project owner at 2026-11-05T20:15:19+05:30 (Checkpoint 9 in `blue_whale_merge_train_ledger.md`). Strictly non-merging. *As recorded on 2026-11-06. Lifted by the owner on 2026-11-07; see §5.* | **HELD** on 2026-11-06; **LIFTED** 2026-11-07 (§5) |
 
 ---
 
@@ -47,7 +47,7 @@ All 7 Blue Whale PRs along with prerequisite CI PR `#1548` have landed on `main`
 - **Owner KPI Sign-off**: Owner decision card `cmsg_01NZBxgCsuANZNkiqqCY1a9FUtcMyBiLppgPwkXDFZJqzd` (`2026-11-02T02:50:17Z`).
 
 ### Tier 3: Predecessor Findings & Open Residuals
-- Standing merge authority suspended at Checkpoint 9.
+- Standing merge authority suspended at Checkpoint 9. *(Residual as of 2026-11-06. Closed on 2026-11-07, when the owner lifted the suspension; see §5.)*
 - Capability tracker `#1353` reconciled on 2026-11-06 06:50 Asia/Colombo (comment `6674071397`): 98 open issues, 13 open PRs (8 draft, 5 ready).
 - Local branch `fix/blue-whale-audit-cleanup` carries commit `cc0fa69a` addressing initial audit findings.
 
@@ -136,7 +136,7 @@ All 7 Blue Whale PRs along with prerequisite CI PR `#1548` have landed on `main`
     - `PERSIST-01`: Checkpoint durable state early and often to survive session interruptions; maintain the linear handover chain verified by `scripts/list_session_handover_records.py`.
     - `ENV-01` & `THREAD-01`: Root repository work at the active checkout/worktree with `PYTHONPATH="$PWD"` first, bound to the persistent governed Python 3.12 environment `DUTCHBAY_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"` (`./check_venv.sh`); shared-venv governance edits require `scripts/verify_shared_venv_worktrees.py` across two clean worktrees during a quiet window.
     - `VERIFY-01`: "A claimed check without a receipt is not a check" — enforced by required CI check `Verification receipts (VERIFY-01)`.
-    - `MERGE-01`: Standing authorization to merge when all required checks are green on the exact current HEAD (delivery authority only; **currently suspended by owner at Checkpoint 9 on `2026-11-05T20:15:19+05:30` unless explicitly authorized per PR**).
+    - `MERGE-01`: Standing authorization to merge when all required checks are green on the exact current HEAD (delivery authority only; suspended by owner at Checkpoint 9 on `2026-11-05T20:15:19+05:30` unless explicitly authorized per PR, as recorded on 2026-11-06. **The suspension was lifted on 2026-11-07; see §5. `MERGE-01` is in force as written in the CSV.**)
     - `SECDEP-01`: Every suppressed `pip-audit` advisory in `PIP_AUDIT_IGNORES` must declare exact package pin, forcing cap, lifting release, and runtime defensibility (`tests/lint/test_pip_audit_allowlist.py`).
     - `REVIEW-01`: Open PR as draft first (fast gates only; shards, Coverage Gate, and Grid Study defer and report `Test Summary (draft: full suite deferred)`), freeze HEAD, post `Evidence pack` comment, bind required review lanes (`R1` = 1 lane; `R2`/`R3` = Domain + Assurance pair) to the draft HEAD, then mark ready for review so the full suite runs once.
     - `TRAIN-01`: Merge coordinator may combine 2–3 path-disjoint, import-isolated reviewed draft PRs ("cars", at most one `R3`/KPI-changing) onto `train/<date>-<n>` so they share one full-suite run and land by **rebase-merge** (never squash) with Module 3 §8 carry-forward proofs and pre/post-landing checks.
@@ -178,3 +178,33 @@ All 7 Blue Whale PRs along with prerequisite CI PR `#1548` have landed on `main`
 2. **Broken `@import` Paths in `/Users/aruna/.codex/AGENTS.md` (REMEDIATED)**:
    - Lines 5, 14, and 23 of `/Users/aruna/.codex/AGENTS.md` contained `@/Users/aruna/.Codex/projects/-Users-aruna-Downloads/memory/...`.
    - Repaired to point to the live directory `/Users/aruna/.claude/projects/-Users-aruna-Downloads/memory/...`.
+
+---
+
+## 5. Addendum (2026-11-07): `MERGE-01` suspension lifted
+
+This addendum supersedes every statement above that the standing merge authority is suspended
+(the §1 Merge Authority row, the §2 Tier 3 residual, and the `MERGE-01` entry in §4.1). Those
+statements are kept as the receipts recorded on 2026-11-06. They do not describe the current
+state.
+
+- **What changed.** The project owner lifted the Checkpoint 9 suspension of `MERGE-01` on
+  2026-11-07. `MERGE-01` is in force as written in `go_with_the_flow_rules_v3_0_clean.csv`
+  (SHA-256 `230743289f135338344cba0740061935af461325d6729f3d210db3f3aee2e7a4`), where its status
+  is `active`. No ruleset row changes.
+- **Sources.** The owner's handback of coordinator and merge authority on 2026-11-07, quoted with
+  times in [#1353 comment 6702383287](https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6702383287);
+  the reconciling note in [#1353 comment 6702809373](https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6702809373);
+  and the owner's request, in the project thread at 2026-11-07T05:26:34Z, that these references
+  be corrected so that no agent reads `MERGE-01` as suspended. The work item for this addendum is
+  [#1353 comment 6702818232](https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6702818232).
+- **Who merges.** The project coordinator orders the queue and grants merge slots, and the
+  merge-lease holder executes merges (#1353 comment 6702809373). Lifting the suspension does not
+  let any other session merge.
+- **What it does not change.** `MERGE-01` is delivery authority only. The lift waives no
+  `REVIEW-01` lane, required check, `VERIFY-01` receipt or owner KPI sign-off, and it lifts no
+  other HOLD: #1110, `v15.6.1` and F-5 remain, and so does the hold on merge trains until #1529's
+  pull request (#1542) lands.
+- **§4.5 item 1.** That item records an action taken on 2026-11-06: owner-side memory files were
+  updated to document the Checkpoint 9 hold. It stays as a dated receipt. Those files are outside
+  this repository; whether they still describe the hold as current is not verified here.
