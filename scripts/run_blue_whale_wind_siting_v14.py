@@ -181,7 +181,10 @@ def operating_probability(
     producing = wind_speed_ms[power_kw > 0]
     lo = float(producing.min()) / density_factor
     hi = float(wind_speed_ms.max()) / density_factor
-    cdf = lambda v: 1.0 - math.exp(-((v / weibull_a) ** weibull_k))  # noqa: E731
+
+    def cdf(v: float) -> float:
+        return 1.0 - math.exp(-((v / weibull_a) ** weibull_k))
+
     return cdf(hi) - cdf(lo)
 
 
@@ -261,6 +264,37 @@ def single_turbine_yield(
 def _repo_path(rel: str) -> Path:
     path = Path(rel)
     return path if path.is_absolute() else REPO_ROOT / path
+
+
+def _json_matches(expected: Any, actual: Any, *, abs_tol: float = 1e-9) -> bool:
+    """Compare two parsed JSON trees with a tight absolute tolerance on floats."""
+    if type(expected) is not type(actual):
+        if (
+            isinstance(expected, (int, float))
+            and not isinstance(expected, bool)
+            and isinstance(actual, (int, float))
+            and not isinstance(actual, bool)
+        ):
+            return math.isclose(
+                float(expected), float(actual), rel_tol=0.0, abs_tol=abs_tol
+            )
+        return False
+    if isinstance(expected, dict):
+        if expected.keys() != actual.keys():
+            return False
+        return all(
+            _json_matches(expected[k], actual[k], abs_tol=abs_tol) for k in expected
+        )
+    if isinstance(expected, list):
+        if len(expected) != len(actual):
+            return False
+        return all(
+            _json_matches(e, a, abs_tol=abs_tol)
+            for e, a in zip(expected, actual, strict=True)
+        )
+    if isinstance(expected, float):
+        return math.isclose(expected, actual, rel_tol=0.0, abs_tol=abs_tol)
+    return bool(expected == actual)
 
 
 def resource_basis(resource_cfg: Mapping[str, Any]) -> Dict[str, Any]:
@@ -391,7 +425,9 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:
         decimals=int(site["geojson_decimals"]),
     )
     committed = _repo_path(str(site["site_geojson"]))
-    matches = committed.is_file() and json.loads(committed.read_text()) == site_doc
+    matches = committed.is_file() and _json_matches(
+        json.loads(committed.read_text()), site_doc
+    )
 
     # Shadow flicker
     fcfg = ShadowFlickerConfig.from_mapping(cfg["shadow_flicker"])

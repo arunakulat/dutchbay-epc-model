@@ -145,7 +145,7 @@ def _lightweight_financing_check(d: Dict[str, Any], strict: bool) -> None:
     }
     allowed_mix = {"lkr_max", "dfi_max", "usd_commercial_min"}
     allowed_rates = {"lkr_floor", "usd_floor", "dfi_floor"}
-    allowed_reserves = {"dsra_months", "receivables_guarantee_months"}
+    allowed_reserves = {"dsra_months"}
     allowed_fees = {"upfront_pct", "commitment_pct"}
 
     if strict:

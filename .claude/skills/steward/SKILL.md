@@ -287,7 +287,20 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
    Silence, or a missing `OK` line, is a failure. If it fails, stop. Report the mismatch on the pull
    request and take no further action on it until the mismatch is resolved (`RECRUIT-01` module 3
    §7).
-4. Retire only branches and worktrees you own.
+4. **Retire only branches, worktrees and non-protected venvs you own (`CLEANUP-01`).** Immediately
+   after step 3's merge verification succeeds:
+   - Inform the session/project tasklist, post a closure/reconciliation receipt on #1353 naming
+     the merged pull request and commit SHA on `origin/main`, and close any completed focused
+     GitHub issue (or each car pull request and the train issue for a train).
+   - Synchronize the clean primary checkout (`git fetch origin main && git checkout main && git pull --ff-only origin main`),
+     remove the merged task worktree (`git worktree remove <worktree-path>`), and run
+     `git worktree prune`, preserving any dirty or concurrently owned worktrees (`WORKTREE-01`).
+   - Delete the merged branch locally (`git branch -d <branch>`) and remotely
+     (`git push origin --delete <branch>`), and run `git fetch --prune origin`.
+   - Remove any temporary, per-task or worktree-local virtual environments (`.venv`, `.venv311` or
+     ad-hoc venvs) associated with the retired worktree, while NEVER deleting, clearing, pruning
+     or modifying the protected persistent Python 3.12 environment at
+     `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` (`THREAD-01`, `ENV-01`).
 
 ### Merge trains (`TRAIN-01`)
 

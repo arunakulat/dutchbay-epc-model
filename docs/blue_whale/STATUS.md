@@ -303,6 +303,8 @@ augmentation and availability are not modelled.
 
 ## Solar + BESS sizing and pricing (v0.6, 2026-11-01)
 
+> **Historical Reference Note:** The sizing, decision grid, and KPIs in this section represent an intermediate design snapshot (v0.6, PR 3) superseded by PR 4 (two projects split), PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-pr-7-the-owners-battery-15180-2026-11-01) for current figures.
+
 With the turbine fixed (PR 1), a seeded Monte Carlo chose the PV DC capacity and the BESS energy of
 the unit (`solar_resource/pv_bess_sizing.py`, `scripts/run_blue_whale_pv_bess_sizing_v14.py`,
 `conf/blue_whale_pv_bess_sizing.yaml`). The result summary is
@@ -458,6 +460,8 @@ P50 (USD -8.837M against -8.500M) because the BESS price range is skewed below i
   convergence, lender or bankability evidence (`TEST-03`).
 
 ## Two projects, and the solar + BESS project under the PUCSL 2026 rules (PR 4, 2026-11-01)
+
+> **Historical Reference Note:** The sizing (4.5 MW / 18 MWh), capacities, and KPIs in this section represent an intermediate design snapshot under PR 4 superseded by PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-pr-7-the-owners-battery-15180-2026-11-01) for current figures.
 
 ### Owner decisions (2026-11-01)
 
@@ -686,9 +690,9 @@ inventory and references: [CAPEX_AND_SOLAR_RESOURCE_METHODS.md](CAPEX_AND_SOLAR_
 results `capex_blend_summary.json`, `solar_resource_summary.json`, `solar_resource_monthly.csv`.
 
 **The disclosure surface moves on the owner's authority.** The wind and BESS capex are blends
-that include private commercial inputs; a reader may be able to back out a private input.
-Published on the owner's decision of 2026-11-01 (#1353 comment 6556975196). No raw private
-figure is published.
+that include private commercial inputs, and those inputs can be recovered exactly from the
+published figures. Published on the owner's decision of 2026-11-01 (#1353 comment 6556975196);
+the owner accepted the exact recoverability on 2026-11-07 (#1353 comment 6702419885).
 
 | Item | Low | Mode | High | Was |
 |---|---:|---:|---:|---|
