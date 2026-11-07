@@ -25,11 +25,13 @@ Method (all vector geometry, so it holds in either hemisphere and for any module
    as a strip ``tower_diameter_m`` wide and ``(hub height - panel height) / tan(elevation)``
    long, pointing away from the sun.
 3. The rotor disc is projected along the sun ray onto the same plane, which gives an
-   ellipse. Two orientations bracket the yaw: ``high`` keeps the disc facing the sun (the
-   largest possible shadow, DNV WindFarmer's conservative sphere case); ``low`` averages
-   ``yaw_samples`` yaw angles spread evenly over 180 degrees (wind from every direction
-   equally often). Inside the ellipse the turning blades remove ``blade_solidity`` of the
-   beam on average.
+   ellipse. Two orientations bracket the yaw: ``high`` keeps the disc facing the sun (DNV
+   WindFarmer's conservative sphere case; a horizontal-axis rotor cannot tilt to face a
+   high sun, so this exceeds the attainable maximum, which is the disc yawed to the sun's
+   azimuth); ``low`` averages ``yaw_samples`` yaw angles spread evenly over 180 degrees
+   (wind from every direction equally often). Inside the ellipse the turning blades remove
+   ``blade_solidity`` of the beam on average, but only where the tower has not already
+   taken it, so a point under both shadows loses its beam once.
 4. Beam POA removed, summed over the year and divided by the annual global POA, is the
    optical loss at each grid point around the turbine.
 
@@ -76,7 +78,9 @@ __all__ = [
     "TurbineShadingResult",
     "accumulate_shading",
     "compute_turbine_shading",
+    "irradiance_steps",
     "rotor_shadow_mask",
+    "strict_int",
     "summarise_shading",
     "sun_unit_vectors",
     "tower_shadow_mask",
@@ -109,6 +113,23 @@ _ARRAY_KEYS: tuple[str, ...] = (
 
 FloatArray = NDArray[np.float64]
 BoolArray = NDArray[np.bool_]
+
+
+def strict_int(value: Any, name: str) -> int:
+    """A whole-number config value, refusing what ``int()`` would silently change.
+
+    Accepts an ``int`` or an integral ``float`` (``4.0``); rejects booleans, fractional
+    numbers (``2.7`` would truncate to 2) and anything else.
+
+    Raises:
+        TypeError: If ``value`` is a boolean or not a number.
+        ValueError: If ``value`` is not a whole number.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{name} must be a whole number, got {value!r}")
+    if isinstance(value, float) and not (math.isfinite(value) and value.is_integer()):
+        raise ValueError(f"{name} must be a whole number, got {value!r}")
+    return int(value)
 
 
 @lru_cache(maxsize=1)
@@ -207,7 +228,8 @@ def rotor_shadow_mask(
         hub_height_m: Hub height above the module plane, metres.
         rotor_radius_m: Rotor radius, metres.
         yaw_deg: Azimuth of the rotor axis, degrees clockwise from north. ``None`` turns the
-            disc to face the sun, which casts the largest possible shadow.
+            disc to face the sun (the conservative sphere case; larger than any yaw of a
+            horizontal-axis rotor can reach).
 
     Returns:
         Boolean mask of length ``m``. An edge-on disc casts no area and returns all False.
@@ -283,17 +305,25 @@ def accumulate_shading(
     active = np.nonzero((elevation >= min_sun_elevation_deg) & (beam > 0.0))[0]
     for i in active:
         sun = suns[i]
-        tower += beam[i] * tower_shadow_mask(
-            points, sun, hub_height_m, tower_diameter_m
-        )
+        in_tower = tower_shadow_mask(points, sun, hub_height_m, tower_diameter_m)
+        # The blades only take beam that the tower has not already taken, so a point
+        # under both shadows loses its beam once, not more than once.
+        open_sky = ~in_tower
+        tower += beam[i] * in_tower
         high += (
             beam[i]
             * blade_solidity
-            * rotor_shadow_mask(points, sun, hub_height_m, rotor_radius_m, None)
+            * (
+                rotor_shadow_mask(points, sun, hub_height_m, rotor_radius_m, None)
+                & open_sky
+            )
         )
         hits = np.zeros(len(points))
         for yaw in yaws:
-            hits += rotor_shadow_mask(points, sun, hub_height_m, rotor_radius_m, yaw)
+            hits += (
+                rotor_shadow_mask(points, sun, hub_height_m, rotor_radius_m, yaw)
+                & open_sky
+            )
         low += beam[i] * blade_solidity * hits / yaw_samples
     return _Accumulated(
         tower_wh=tower,
@@ -406,7 +436,9 @@ class TurbineShadingConfig:
         if missing:
             raise KeyError(f"turbine block is missing: {missing}")
         solar = SolarResourceConfig.from_scenario(scenario)
-        block_raw = scenario["resource"]["solar"].get("turbine_shading") or {}
+        block_raw = scenario["resource"]["solar"].get("turbine_shading")
+        if block_raw is None:
+            block_raw = {}
         if not isinstance(block_raw, Mapping):
             raise TypeError("resource.solar.turbine_shading must be a mapping")
         block = dict(block_raw)
@@ -446,7 +478,10 @@ class TurbineShadingConfig:
                 )
             if array_raw.get("turbines_within_array") is None:
                 raise KeyError("turbine_shading.array is missing turbines_within_array")
-            turbines_in = int(array_raw["turbines_within_array"])
+            turbines_in = strict_int(
+                array_raw["turbines_within_array"],
+                "turbine_shading.array.turbines_within_array",
+            )
             if has_area:
                 land_m2 = float(array_raw["land_area_m2"])
             else:
@@ -466,10 +501,12 @@ class TurbineShadingConfig:
             tower_diameter_m=float(tower_d),
             blade_solidity=float(params["blade_solidity"]),
             panel_height_m=float(params["panel_height_m"]),
-            yaw_samples=int(params["yaw_samples"]),
+            yaw_samples=strict_int(params["yaw_samples"], "yaw_samples"),
             grid_step_m=float(params["grid_step_m"]),
             grid_extent_m=float(params["grid_extent_rotor_diameters"]) * rotor_d,
-            substeps_per_hour=int(params["substeps_per_hour"]),
+            substeps_per_hour=strict_int(
+                params["substeps_per_hour"], "substeps_per_hour"
+            ),
             min_sun_elevation_deg=float(params["min_sun_elevation_deg"]),
             setbacks_m=setbacks,
             distance_bands_m=tuple(float(b) for b in params["distance_bands_m"]),
@@ -577,6 +614,13 @@ class TurbineShadingResult:
 def _irradiance_steps(
     config: TurbineShadingConfig,
 ) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray, str]:
+    """Sun position and beam/global POA for ``config`` (see :func:`irradiance_steps`)."""
+    return irradiance_steps(config.solar, config.substeps_per_hour)
+
+
+def irradiance_steps(
+    solar: SolarResourceConfig, substeps_per_hour: int
+) -> tuple[FloatArray, FloatArray, FloatArray, FloatArray, str]:
     """Sun position and beam/global POA (Wh/m² per step) for every sub-hourly step.
 
     The hourly irradiance year is the one the PV producer uses: the frozen TMY when
@@ -588,7 +632,6 @@ def _irradiance_steps(
     pvlib = _require_pvlib()
     import pandas as pd
 
-    solar = config.solar
     loc = pvlib.location.Location(
         solar.latitude, solar.longitude, tz=solar.timezone, altitude=solar.altitude_m
     )
@@ -617,7 +660,7 @@ def _irradiance_steps(
         dhi_h = (ghi_s - dni_s * cos_zen).clip(lower=0.0).to_numpy(dtype=float)
         basis = "clear-sky"
 
-    n = config.substeps_per_hour
+    n = substeps_per_hour
     offsets = [pd.Timedelta(minutes=60.0 * k / n) for k in range(n)]
     # One block of hours per sub-step offset, in the same order as np.tile below.
     times = hours.append([hours + off for off in offsets[1:]]) if n > 1 else hours

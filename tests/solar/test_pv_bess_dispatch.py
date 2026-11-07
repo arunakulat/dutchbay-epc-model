@@ -98,6 +98,20 @@ def cli_out() -> Dict[str, Any]:
 
 
 @pytest.fixture(scope="module")
+def unshaded_cli_out() -> Dict[str, Any]:
+    """The unit with the turbine shadow switched off (the hourly PV is the producer's)."""
+    pytest.importorskip("pvlib")
+    pytest.importorskip("shapely")
+    pytest.importorskip("pyproj")
+    conf = yaml.safe_load(CONF.read_text())
+    conf["pv_yield"]["turbine_shading_modelled"] = False
+    conf["pv_yield"]["turbine_shading"] = None
+    out = _load_cli().run(conf)
+    assert isinstance(out, dict)
+    return out
+
+
+@pytest.fixture(scope="module")
 def sized_cli_out() -> Dict[str, Any]:
     pytest.importorskip("pvlib")
     pytest.importorskip("shapely")
@@ -302,11 +316,14 @@ def test_overlapping_windows_and_grid_charging_are_refused(cfg: Dict[str, Any]) 
 # The TMY year: invariants and the committed result
 # ---------------------------------------------------------------------------
 def test_tmy_year_invariants(
-    cli_out: Dict[str, Any],
+    unshaded_cli_out: Dict[str, Any],
     cfg: Dict[str, Any],
     bess: pbd.BessConfig,
     dcfg: pbd.DispatchConfig,
 ) -> None:
+    # The oracle is the producer's own hourly chain, so the unit is run unshaded here; the
+    # turbine-shadow derate (input B33) is checked against it in the next test.
+    cli_out = unshaded_cli_out
     solar = pbd.with_array(
         cfg["pv_yield"]["resource_solar"],
         dc_capacity_mw=cli_out["array"]["dc_capacity_mw"],
@@ -342,6 +359,47 @@ def test_tmy_year_invariants(
     assert y1["pv_export_mwh"] + y1["charge_mwh"] + y1[
         "curtailed_mwh"
     ] == pytest.approx(y1["pv_mwh"], rel=1e-12)
+
+
+def test_turbine_shadow_derates_the_pv_before_dispatch(
+    cli_out: Dict[str, Any], unshaded_cli_out: Dict[str, Any]
+) -> None:
+    """Input B33: the unit's PV is the producer's, less the turbine's shadow, hour by hour.
+
+    The oracle is the unshaded run: the shaded year-1 PV must be the unshaded one less the
+    reported AC loss, the loss must be positive and below the optical upper bound times
+    the multiplier, and the battery must see the shaded PV (its year-1 balance closes on
+    it).
+    """
+    shaded, plain = cli_out["pv_yield"], unshaded_cli_out["pv_yield"]
+    assert shaded["turbine_shading_modelled"] is True
+    assert plain["turbine_shading_modelled"] is False
+    assert plain["turbine_shading"] is None
+    rep = shaded["turbine_shading"]
+    assert rep["irradiance_basis"] == "TMY" and rep["yaw_basis"] == "wind_rose"
+    assert rep["tables"] == cli_out["array"]["tables"]
+    loss = rep["ac_energy_loss"]
+    multiplier = rep["electrical_mismatch_multiplier"]
+    assert 0.0 < loss < rep["optical_loss_rotor_yawed_to_sun"] * multiplier * 1.5
+    # The blades are counted only outside the tower strip, so the parts add up.
+    assert rep["optical_tower"] + rep["optical_rotor"] == pytest.approx(
+        rep["optical_loss"], rel=1e-9
+    )
+    assert rep["optical_rotor"] < rep["optical_rotor_yawed_to_sun"]
+    assert rep["optical_loss_rotor_yawed_to_sun"] == pytest.approx(
+        rep["optical_tower"] + rep["optical_rotor_yawed_to_sun"], rel=1e-12
+    )
+    # The parity check stays on the producer's unshaded series.
+    assert shaded["hourly_sum_gwh"] == pytest.approx(plain["hourly_sum_gwh"], rel=1e-15)
+    assert shaded["shaded_annual_energy_gwh"] == pytest.approx(
+        plain["hourly_sum_gwh"] * (1.0 - loss), rel=1e-12
+    )
+    y1s, y1p = cli_out["dispatch"]["year1"], unshaded_cli_out["dispatch"]["year1"]
+    assert y1s["pv_mwh"] == pytest.approx(y1p["pv_mwh"] * (1.0 - loss), rel=1e-12)
+    assert y1s["pv_export_mwh"] + y1s["charge_mwh"] + y1s[
+        "curtailed_mwh"
+    ] == pytest.approx(y1s["pv_mwh"], rel=1e-12)
+    assert y1s["revenue_lkr"] < y1p["revenue_lkr"]
 
 
 def test_engine_bess_formula_matches_finance_bess_revenue(
