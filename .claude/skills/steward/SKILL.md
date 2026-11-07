@@ -316,44 +316,56 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
      remove the merged task worktree (`git worktree remove <worktree-path>`), and run
      `git worktree prune`, preserving any dirty or concurrently owned worktrees (`WORKTREE-01`).
    - Delete a branch only when its pull request's `merged_at` is set and every ref still present
-     equals the merged head. Run this block whole, with the placeholders filled in. It reads
-     everything immediately before deleting and stops at the first failed check, before any
-     delete. A missing `OK` line is a failure. The pull request's `head.ref` must name the branch.
-     No open pull request may use the branch as its base; that pull request's writer retargets it
-     first. The remote ref is checked if it still exists, and skipped if GitHub already
-     auto-deleted it (`delete_branch_on_merge` is on). The local ref is checked if it exists. A
-     squash merge makes `git branch -d` refuse, so the local delete uses `-D`, but only after the
-     check. For a train car, set `car_head` to the car head recorded in the train issue and
-     `train_pr` to the train pull request. The car pull request must be closed under "Merge
-     trains" step 5, and the train pull request must have merged.
+     equals the merged head. Run this block in a fresh shell with `PR` and `BRANCH` set from the
+     merged pull request, and for a train car also `CAR_HEAD` (the car head recorded in the train
+     issue) and `TRAIN_PR` (the train pull request). Never paste record text into the code. The
+     block reads everything immediately before deleting and stops at the first failed check,
+     before any delete. A missing `OK` line is a failure. The pull request's `head.ref` must name
+     the branch. No open pull request may use the branch as its base; that pull request's writer
+     retargets it first. The remote ref is checked if it still exists, and skipped if GitHub
+     already auto-deleted it (`delete_branch_on_merge` is on). The local ref is checked if it
+     exists. A squash merge makes `git branch -d` refuse, so the local delete uses `-D`, but only
+     after the check. A train car's pull request must be closed under "Merge trains" step 5, and
+     the train pull request must have merged.
 
      ```bash
      set -euo pipefail
+     unset GIT_CONFIG_PARAMETERS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
+     unset GIT_ALTERNATE_OBJECT_DIRECTORIES
+     export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
+     export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+     export GIT_CONFIG_KEY_1=advice.graftFileDeprecated GIT_CONFIG_VALUE_1=false
+     test "$(git config --get core.commitGraph)" = false
      repo=arunakulat/dutchbay-epc-model
-     pr=<number>; branch=<branch>
-     car_head=<car-head-or-empty>; train_pr=<train-pr-or-empty>
-     test "$(gh api "repos/$repo/pulls/$pr" --jq '.head.ref')" = "$branch"
-     if [ -z "$car_head" ]; then
-       test -n "$(gh api "repos/$repo/pulls/$pr" --jq '.merged_at // ""')"
-       want=$(gh api "repos/$repo/pulls/$pr" --jq '.head.sha')
-     else
-       test "$(gh api "repos/$repo/pulls/$pr" --jq '.state')" = "closed"
-       test "$(gh api "repos/$repo/pulls/$pr" --jq '.head.sha')" = "$car_head"
-       test -n "$(gh api "repos/$repo/pulls/$train_pr" --jq '.merged_at // ""')"
-       want=$car_head
+     CAR_HEAD=${CAR_HEAD:-}; TRAIN_PR=${TRAIN_PR:-}
+     [[ $PR =~ ^[1-9][0-9]*$ ]] || exit 1
+     test "$(git check-ref-format --branch "$BRANCH")" = "$BRANCH"
+     if [ -n "$CAR_HEAD$TRAIN_PR" ]; then
+       [[ $CAR_HEAD =~ ^[0-9a-f]{40}$ && $TRAIN_PR =~ ^[1-9][0-9]*$ ]] || exit 1
      fi
-     test -z "$(gh api "repos/$repo/pulls?state=open&base=$branch" --jq '.[].number')"
-     remote_head=$(git ls-remote origin "refs/heads/$branch" | cut -f1)
+     test "$(gh api "repos/$repo/pulls/$PR" --jq '.head.ref')" = "$BRANCH"
+     if [ -z "$CAR_HEAD" ]; then
+       test -n "$(gh api "repos/$repo/pulls/$PR" --jq '.merged_at // ""')"
+       want=$(gh api "repos/$repo/pulls/$PR" --jq '.head.sha')
+     else
+       test "$(gh api "repos/$repo/pulls/$PR" --jq '.state')" = "closed"
+       test "$(gh api "repos/$repo/pulls/$PR" --jq '.head.sha')" = "$CAR_HEAD"
+       test -n "$(gh api "repos/$repo/pulls/$TRAIN_PR" --jq '.merged_at // ""')"
+       want=$CAR_HEAD
+     fi
+     [[ $want =~ ^[0-9a-f]{40}$ ]] || exit 1
+     test -z "$(gh api -X GET "repos/$repo/pulls" -f state=open -f base="$BRANCH" --jq '.[].number')"
+     remote_head=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
      if [ -n "$remote_head" ]; then test "$remote_head" = "$want"; fi
      local_present=no
-     if git show-ref --verify --quiet "refs/heads/$branch"; then
+     if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
        local_present=yes
-       test "$(git rev-parse "refs/heads/$branch")" = "$want"
+       test "$(git rev-parse --verify "refs/heads/$BRANCH")" = "$want"
      fi
-     echo "OK: #$pr; every present ref of $branch is at $want (remote: ${remote_head:-auto-deleted}; local: $local_present)"
-     if [ -n "$remote_head" ]; then git push origin --delete "$branch"; fi
-     if [ "$local_present" = yes ]; then git branch -D "$branch"; fi
+     if [ -n "$remote_head" ]; then git push origin --delete "$BRANCH"; fi
+     if [ "$local_present" = yes ]; then git branch -D "$BRANCH"; fi
      git fetch --prune origin
+     echo "CLEANUP-01 branch retirement: OK: #$PR $BRANCH at $want (remote: ${remote_head:-auto-deleted}; local: $local_present)"
      ```
 
      A branch whose pull request is open, closed unmerged, or whose head moved after the merge is
