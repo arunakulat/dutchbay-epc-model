@@ -13,8 +13,13 @@
   `CaseResult.kpis` carry such an IRR as `null`; the public contract version moves from
   2.0 to **2.1** (MINOR, additive). The numeric KPI surface from `evaluate_with_overrides`
   still drops a `None` KPI, so an undefined project IRR is absent there, as an undefined
-  equity IRR already was. The equity-waterfall 0.0 sentinel is unchanged. Every committed
-  scenario has a defined project IRR, so no committed KPI value moves.
+  equity IRR already was. The equity-waterfall 0.0 sentinel is unchanged.
+  - KPI change, one committed scenario: `blue_whale_solar_bess_lot5b_2026` reported
+    `project_irr = 0.0`; it now reports it as undefined (`None`). Its CFADS turn negative
+    after the 15-year priority term, so its project NPV changes sign twice, near -19.2% and
+    -1.7%, and the solver resolves no single rate. Its CFADS sum is below its capex, so its
+    NPV is negative at every non-negative rate. Every other committed scenario's full
+    result is unchanged apart from the new status key.
 - Stop `approx_project_irr` returning no answer for a large project with a single root
   (#1494). Its `tol` is an absolute NPV tolerance of 1e-6 USD. On a large project the NPV is
   steep enough near the root that 50 bisection halvings pin the rate to about 1e-15 while
