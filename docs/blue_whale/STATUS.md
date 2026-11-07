@@ -1,6 +1,6 @@
 # Blue Whale: project status
 
-Last updated: 2026-11-01. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
+Last updated: 2026-11-07. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
 
 ## Configuration under study
 
@@ -22,8 +22,8 @@ Funding: **fully LKR funded** (owner, 2026-10-28). Revenue, costs and debt are a
 model runs with FX held flat and the USD columns are a constant-rate translation of LKR.
 
 Model files: `scenarios/blue_whale_wind_lot5b_2026.yaml` and
-`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (versions 0.3 and 0.3), and the superseded
-`scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.8). Placeholders apart from the
+`scenarios/blue_whale_solar_bess_lot5b_2026.yaml` (versions 0.4 and 0.5), and the superseded
+`scenarios/blue_whale_hybrid_lot5b_2026.yaml` (version 0.9). Placeholders apart from the
 configuration, the funding currency, the researched tariffs, the wind yield, the solar + BESS
 size (the owner's 5 MW / 20 MWh battery and the PV chosen for it, PR 7), the cited PV capex and
 the blended wind and BESS capex (PR 6).
@@ -303,7 +303,7 @@ augmentation and availability are not modelled.
 
 ## Solar + BESS sizing and pricing (v0.6, 2026-11-01)
 
-> **Historical Reference Note:** The sizing, decision grid, and KPIs in this section represent an intermediate design snapshot (v0.6, PR 3) superseded by PR 4 (two projects split), PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-the-turbines-shadow-on-the-pv-15190-2026-11-07) for current figures.
+> **Historical Reference Note:** The sizing, decision grid, and KPIs in this section represent an intermediate design snapshot (v0.6, PR 3) superseded by PR 4 (two projects split), PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-opex-split-by-currency-15200-2026-11-07) for current figures.
 
 With the turbine fixed (PR 1), a seeded Monte Carlo chose the PV DC capacity and the BESS energy of
 the unit (`solar_resource/pv_bess_sizing.py`, `scripts/run_blue_whale_pv_bess_sizing_v14.py`,
@@ -461,7 +461,7 @@ P50 (USD -8.837M against -8.500M) because the BESS price range is skewed below i
 
 ## Two projects, and the solar + BESS project under the PUCSL 2026 rules (PR 4, 2026-11-01)
 
-> **Historical Reference Note:** The sizing (4.5 MW / 18 MWh), capacities, and KPIs in this section represent an intermediate design snapshot under PR 4 superseded by PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-the-turbines-shadow-on-the-pv-15190-2026-11-07) for current figures.
+> **Historical Reference Note:** The sizing (4.5 MW / 18 MWh), capacities, and KPIs in this section represent an intermediate design snapshot under PR 4 superseded by PR 5 (met-mast wind resource), PR 6 (blended capex), and PR 7 (the owner's 5 MW / 20 MWh battery; v0.8 / 15.18.0). See [Latest run](#latest-run-opex-split-by-currency-15200-2026-11-07) for current figures.
 
 ### Owner decisions (2026-11-01)
 
@@ -803,6 +803,59 @@ after-tax project NPV, so neither size is viable on these placeholder inputs.
 SARAH3, citing #1540's finding, and reports the satellite figures (Global Solar Atlas PVOUT
 +6.3%, about +9% GHI) as upside only. No data file changed.
 
+## Latest run (opex split by currency, 15.20.0, 2026-11-07)
+
+The owner's rule (2026-11-02): "all CAPEX is fixed at project start in LKR. The debt will be in
+LKR. However, a percentage of OPEX will be in USD". Her decision the same day: BESS O&M at USD
+1.80/kWh-yr of DC installed; wind O&M kept at USD 0.35M, 70% USD and 30% LKR. On 2026-11-07 she
+directed that the BESS O&M be converted to LKR at the wind project's value date (the 2026-Q2 pinned
+333.79 both projects share): LKR 13,218,084 a year. Both projects carry an `opex.currency_split`
+(input B34); the solar + BESS project's USD share is now 0%.
+The USD share escalates at 2.5%/yr in USD and is translated on an LKR depreciation path derived from
+the two inflation inputs by relative purchasing-power parity, 1.05 / 1.025 - 1 = 2.44%/yr (the
+owner, 2026-11-07: "fix for inflation"; the DutchBay cases' 5.89%/yr nominal rate implied about
+3.3%/yr real depreciation with these inputs);
+the LKR share (all solar + BESS opex, and 30% of wind O&M plus its overhead) is fixed in LKR
+at 333.79 and escalates at 5%/yr. The model's FX curve stays flat, so the USD columns are still a
+constant-rate translation of LKR.
+
+**One construction period.** Both projects declare a 1-year construction period (input B30,
+`timeline.construction_years`), but the engine reads the period from `Financing_Terms` and, with
+none set there, defaulted to 2 for the debt drawdown, interest during construction and the FX
+start. The owner chose on 2026-11-07 to "Set 1 year for the whole model now", so both projects now
+set `Financing_Terms.construction_periods: 1`. This is most of the move below: on its own it lifts
+the wind NPV from 69,109 to 1,382,093 and the solar + BESS NPV from -4,997,611 to -4,607,829,
+mainly through lower interest during construction (wind 1.14M to 0.41M).
+
+Through `analytics.evaluation_v14.evaluate_with_overrides`, base case only. The "was" figures are
+`main` at 15.19.0, after the turbine's shadow on the PV (the next section):
+
+| Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
+|---|---|---|---|---|---|
+| Wind project (v0.4; 49% of opex in USD; 1 construction year) | 12.41% (was 10.81%) | 10.54% (was 8.63%) | 0.867 | 1,342,632 (was 69,109) | -660,786 (was -1,737,634) |
+| Solar + BESS project (v0.5; all opex in LKR; 1 construction year) | undefined (reported as 0.0) | -7.00% (was -8.44%) | 0.867 | -4,517,261 (was -4,997,611) | -5,146,449 (was -5,568,837) |
+| Hybrid (v0.9, superseded) | unchanged: not given the split | | | | |
+
+Split into its two parts: the construction period moves the wind NPV by +1,312,984 and the opex
+split by -39,461 (under relative PPP the LKR cost of the USD share grows at LKR inflation after
+COD; the fall comes from the FX path advancing through the construction year). For solar + BESS
+the construction period gives +389,782 and the cheaper battery O&M (USD 39,600 against 50,000 a
+year, both in LKR at 333.79) +90,568; the project remains far from viable. With 2 construction
+periods, as before this change, the wind NPV was -7,068, and at the 5.89% nominal depreciation
+rate -625,284.
+
+Not done here, and open:
+- The sizing runs priced the battery O&M at the USD 2.5/kWh-yr placeholder and were not re-run.
+  The owner has said (2026-11-07) the battery size should not be fixed: it is to be optimised by a
+  Monte Carlo run and a sensitivity analysis in a follow-up.
+- The DC installed for the BESS (22,000 kWh) assumes a 10% DC oversize on the 20 MWh nominal until
+  the supplier states it. The rate is held for all 20 years.
+- The PUCSL escalable O&M tariff component is indexed yearly; that indexation is still not
+  modelled and would offset part of the USD erosion.
+- The superseded hybrid scenario still runs on the engine's default of 2 construction periods.
+- Relative PPP is a long-run convention; a sourced real-exchange-rate view (or the 5.89% nominal
+  rate as a downside) is a sensitivity, not the base case.
+
 ## The turbine's shadow on the PV (input B33, 15.19.0, 2026-11-07)
 
 Work item: #1353 comment 6568242480. Owner decisions, verbatim: "#1520 as is, Blue Whale PR
@@ -888,7 +941,7 @@ declared treatment, not a simulation. Every one of these limitations is recorded
 summary's `turbine_shading.limitations`. The losses are per table at its sample points, so
 #1518's grid-edge truncation of a footprint (its review finding D-1) does not apply here.
 
-## Latest run (the turbine's shadow on the PV, 15.19.0, 2026-11-07)
+## Earlier run (the turbine's shadow on the PV, 15.19.0, 2026-11-07)
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base case only (after
 #1398's debt-service shortfall carry, which moved the equity figures at 15.18.0):

@@ -21,10 +21,10 @@ from .cashflow_v14_fx import (
 from .cashflow_v14_params import _build_cashflow_params, validate_parameters
 from .cashflow_v14_production import (
     _apply_risk_haircut,
-    _calculate_opex_lkr,
     _calculate_revenue_lkr,
     _calculate_statutory_deductions,
     calculate_net_production_for_year,
+    opex_for_year,
     resolve_tech_generation_specs,
     validate_storage_capex_declared,
 )
@@ -203,6 +203,28 @@ def _prepare_cashflow_context(
         if financial_close_spot is not None
         else fx_curve_resolved[0]
     )
+
+    # Opex currency split (opex.currency_split): the LKR share is fixed in LKR at the
+    # same financial-close FX the capex is translated at; the USD share may carry its own
+    # parametric FX path (usd_lkr_depreciation_pct), anchored on the financial-close spot
+    # and advanced through construction exactly as the model curve is. Unset -> no keys
+    # are read and the opex line is byte-identical.
+    if params_dict.get("opex_usd_share") is not None:
+        params_dict["opex_lkr_base_fx"] = tax_basis_fx
+        depr = params_dict.get("opex_usd_lkr_depreciation_pct")
+        if depr is None:
+            params_dict["opex_usd_fx_path"] = None
+        else:
+            if financial_close_spot is None:
+                raise ValueError(
+                    "opex.currency_split.usd_lkr_depreciation_pct needs a scalar "
+                    "fx.start_lkr_per_usd (the financial-close spot) to anchor the USD "
+                    "share's FX path"
+                )
+            params_dict["opex_usd_fx_path"] = [
+                financial_close_spot * (1.0 + float(depr)) ** (construction_periods + i)
+                for i in range(years)
+            ]
 
     # Depreciable capex base in LKR – explicit tax base takes precedence.
     capex_dep_resolved = capex_depreciable_lkr
@@ -487,18 +509,14 @@ def calculate_single_year_cfads(
         float(params["social_levy_pct"]),
     )
 
-    # OpEx escalates in USD at opex_escalation_pct/yr (O&M inflation), THEN is
-    # translated to LKR at the per-year FX rate — so the LKR cost carries both the
-    # inflation and the FX-depreciation effect. year_index is 0-based (ops year 1 = base).
-    opex_escalation = float(params.get("opex_escalation_pct", 0.0))
-    opex_usd_year = (
-        float(params["opex_usd_per_year"]) * (1.0 + opex_escalation) ** year_index
-    )
-    # #738: unrecoverable O&M input VAT multiplies the escalated figure inside the
-    # shared helper (0.0 -> byte-identical); deductible automatically (EBITDA line).
-    opex_lkr = _calculate_opex_lkr(
-        opex_usd_year, fx_rate, float(params.get("opex_vat_pct", 0.0))
-    )
+    # OpEx: the shared helper (cashflow_v14_production.opex_for_year). Without an
+    # opex.currency_split the whole amount escalates in USD at opex_escalation_pct/yr and
+    # is translated at the per-year FX rate (inflation AND FX effect). With a split, the
+    # USD share does that at its own escalation and the LKR share is fixed in LKR at the
+    # financial-close FX and escalates at LKR inflation. year_index is 0-based (ops year
+    # 1 = base). #738: unrecoverable O&M input VAT multiplies the sum inside the helper
+    # (0.0 -> byte-identical); deductible automatically (EBITDA line).
+    opex_usd_year, opex_lkr = opex_for_year(params, year_index, fx_rate)
 
     # For this engine, EBITDA and EBIT coincide (no other non-cash items)
     # Depreciation is NOT in EBIT; it's a tax deduction.
@@ -595,7 +613,7 @@ def calculate_single_year_cfads(
         "env_surcharge_lkr": statutory["environmental_surcharge"],
         "social_levy_lkr": statutory["social_services_levy"],
         "total_statutory_deductions_lkr": statutory["total_statutory_deductions"],
-        "opex_usd": opex_usd_year,  # escalated (year-1 base x (1+esc)^year_index)
+        "opex_usd": opex_usd_year,  # pre-VAT, escalated; with a split, LKR cost / fx_rate
         "fx_rate": fx_rate,
         "opex_lkr": opex_lkr,
         "senior_fee_lkr": senior_fee_lkr,
@@ -858,16 +876,9 @@ def build_annual_rows_efficient(
             float(params["social_levy_pct"]),
         )
 
-        # OpEx escalates in USD at opex_escalation_pct/yr, then x the per-year FX rate.
-        opex_escalation = float(params.get("opex_escalation_pct", 0.0))
-        opex_usd_year = (
-            float(params["opex_usd_per_year"]) * (1.0 + opex_escalation) ** year_index
-        )
-        # #738: O&M input VAT inside the shared helper — mirrors
+        # OpEx (currency split and #738 VAT) through the shared helper — mirrors
         # calculate_single_year_cfads so the two builders stay identical.
-        opex_lkr = _calculate_opex_lkr(
-            opex_usd_year, fx_rate, float(params.get("opex_vat_pct", 0.0))
-        )
+        opex_usd_year, opex_lkr = opex_for_year(params, year_index, fx_rate)
 
         # Senior credit-support fee at the EBITDA line (#737) — mirrors
         # calculate_single_year_cfads so the two builders stay identical.
@@ -894,7 +905,7 @@ def build_annual_rows_efficient(
                 "total_statutory_deductions_lkr": statutory[
                     "total_statutory_deductions"
                 ],
-                "opex_usd": opex_usd_year,  # escalated (year-1 base x (1+esc)^year_index)
+                "opex_usd": opex_usd_year,  # pre-VAT, escalated; with a split, LKR cost / fx_rate
                 "fx_rate": fx_rate,
                 "opex_lkr": opex_lkr,
                 "senior_fee_lkr": senior_fee_lkr,
