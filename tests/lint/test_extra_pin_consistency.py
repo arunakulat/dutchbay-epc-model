@@ -317,11 +317,13 @@ def test_declared_extra_specs_are_satisfied_by_the_lock(extra: str) -> None:
 
 #: Extras whose packages are deliberately absent from the CI lock, so the
 #: lock-agreement control above has nothing to check for them.  ``[pareto]``
-#: (pymoo) and ``[solar]`` (pvlib) are heavy opt-in scientific stacks guarded at
-#: call time, not installed in the base lane.  Listed explicitly so the gap is
-#: DECLARED rather than silent -- the control below fails in both directions, so
-#: locking one of these, or a new extra going unlocked, forces a decision here.
-_EXTRAS_DELIBERATELY_NOT_LOCKED = frozenset({"pareto", "solar"})
+#: (pymoo) is a heavy opt-in scientific stack guarded at call time, not installed
+#: in the base lane.  Listed explicitly so the gap is DECLARED rather than silent
+#: -- the control below fails in both directions, so locking one of these, or a
+#: new extra going unlocked, forces a decision here.  ``[solar]`` (pvlib) left
+#: this list on 2026-11-07: #1548 made the test, coverage and lint jobs install
+#: it, so it is now in ``LOCK_EXTRAS`` and pinned, and its spec is really checked.
+_EXTRAS_DELIBERATELY_NOT_LOCKED = frozenset({"pareto"})
 
 
 def test_no_extra_is_silently_vacuous() -> None:
