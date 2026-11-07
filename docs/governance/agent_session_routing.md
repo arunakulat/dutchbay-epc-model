@@ -54,6 +54,14 @@ Notes for a host this table does not name:
 compares creation times: for a human or agent pull request, the work record must exist before the
 pull request does. A record posted afterwards cannot clear it.
 
+## STEAM, SCMC and Planet Green Force work
+
+These programmes run through this repository so that other agents and programmers can follow and add
+to them. Start at `docs/source_materials/scmc_ananda_coe_2026/README.md` or
+`docs/source_materials/planet_green_force_2026/README.md`. `INTAKE-01` and the branch and pull request
+rules apply as they do to model work. This repository is public: private material goes to
+`arunakulat/DutchBay_RAG`, and only sanitised derivatives and hashes come here.
+
 ## Rules and formats
 
 `CLAUDE.md` "Rules and formats that govern this repository" lists the formats the repository checks
