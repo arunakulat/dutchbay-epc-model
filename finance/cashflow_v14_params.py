@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 import math
+import numbers
 from collections.abc import Mapping
 from collections.abc import Sequence as Seq
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Tuple
 
 from .cashflow_v14_contracts import CashflowParams
@@ -261,6 +262,277 @@ def _extract_project_life_years(
     )
 
 
+@dataclass(frozen=True)
+class OpexCurrencySplit:
+    """A resolved ``opex.currency_split`` block (decimals throughout).
+
+    Attributes:
+        usd_share: Share of ``opex.usd_per_year`` that is USD-denominated (0-1).
+        usd_escalation: Yearly escalation of the USD share, in USD.
+        lkr_escalation: Yearly escalation of the LKR share, in LKR.
+        usd_lkr_depreciation: Yearly LKR depreciation for the USD share's own FX path
+            (given as a percent, or derived by relative PPP from the two escalation
+            rates), or ``None`` to translate the USD share on the model FX curve.
+    """
+
+    usd_share: float
+    usd_escalation: float
+    lkr_escalation: float
+    usd_lkr_depreciation: float | None
+
+
+_OPEX_SPLIT_KEYS = frozenset(
+    {
+        "usd_share",
+        "components",
+        "usd_escalation_pct",
+        "lkr_escalation_pct",
+        "usd_lkr_depreciation_pct",
+        "basis",
+        "source",
+        "note",
+    }
+)
+_OPEX_COMPONENT_KEYS = frozenset(
+    {
+        "name",
+        "usd_per_year",
+        "usd_per_unit_year",
+        "units",
+        "unit",
+        "usd_share",
+        "source",
+        "note",
+    }
+)
+
+
+def _finite(value: Any, where: str) -> float:
+    """Return ``value`` as a finite float, or raise naming ``where``.
+
+    Only real numbers are accepted: a bool, or a string such as ``"0.5"`` (a quoted YAML
+    value), is refused rather than coerced.
+    """
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        raise ValueError(f"{where} must be a number; got {value!r}")
+    out = float(value)
+    if not math.isfinite(out):
+        raise ValueError(f"{where} must be finite; got {value!r}")
+    return out
+
+
+def _share(value: Any, where: str) -> float:
+    """Return a 0-1 decimal share, or raise naming ``where``."""
+    out = _finite(value, where)
+    if not 0.0 <= out <= 1.0:
+        raise ValueError(f"{where} must be a decimal share in [0, 1]; got {value!r}")
+    return out
+
+
+def _rate_pct(block: Mapping[str, Any], key: str, *, required: bool) -> float | None:
+    """Return ``block[key]`` (a percent) as a decimal, or raise.
+
+    These keys are PERCENT, always: ``2.5`` means 2.5%/yr and ``0.5`` means 0.5%/yr. The
+    repository's older ``*_pct`` keys go through :func:`pct_to_decimal`, which reads a
+    value at or below 1 as already decimal; a new key has no legacy values to protect, so
+    it takes the unambiguous reading.
+    """
+    where = f"opex.currency_split.{key}"
+    if block.get(key) is None:
+        if required:
+            raise ValueError(
+                f"{where} is required when opex.currency_split is declared"
+            )
+        return None
+    pct = _finite(block[key], where)
+    if not -50.0 <= pct <= 100.0:
+        raise ValueError(
+            f"{where} must be a percent per year in [-50, 100]; got {pct!r}"
+        )
+    return pct / 100.0
+
+
+RELATIVE_PPP = "relative_ppp"
+
+
+def _usd_lkr_depreciation(
+    split: Mapping[str, Any], usd_escalation: float, lkr_escalation: float
+) -> float | None:
+    """Return the USD share's own LKR depreciation rate (decimal), or ``None``.
+
+    ``usd_lkr_depreciation_pct`` is either a percent per year (read by
+    :func:`_rate_pct`) or the word ``relative_ppp``, which derives the rate from the
+    block's own inflation inputs so the two cannot drift apart:
+    ``(1 + lkr_escalation) / (1 + usd_escalation) - 1``. Under relative purchasing-power
+    parity the LKR cost of the USD share then grows at LKR inflation, the same real
+    path as the LKR share.
+    """
+    value = split.get("usd_lkr_depreciation_pct")
+    if isinstance(value, str):
+        if value != RELATIVE_PPP:
+            raise ValueError(
+                "opex.currency_split.usd_lkr_depreciation_pct must be a percent per "
+                f"year or {RELATIVE_PPP!r}; got {value!r}"
+            )
+        derived = (1.0 + lkr_escalation) / (1.0 + usd_escalation) - 1.0
+        if not -0.5 <= derived <= 1.0:
+            raise ValueError(
+                "opex.currency_split.usd_lkr_depreciation_pct: relative_ppp derives "
+                f"{derived * 100.0:.4g}%/yr from the escalation inputs, outside the "
+                "[-50, 100] percent-per-year bound every rate in the block must meet"
+            )
+        return derived
+    return _rate_pct(split, "usd_lkr_depreciation_pct", required=False)
+
+
+def _usd_share_from_components(components: Any) -> float:
+    """Return the amount-weighted USD share of ``opex.currency_split.components``.
+
+    Each component is ``{name, usd_per_year | usd_per_unit_year + units, usd_share}``.
+    Only the SHARE leaves this function: the engine applies it to ``opex.usd_per_year``,
+    so a shock to that total (a sensitivity or a Monte Carlo draw) scales every
+    component pro rata. That the components add up to the committed total is a
+    property of the committed scenario, checked by its tests, not a runtime gate.
+    """
+    if not isinstance(components, Seq) or isinstance(components, (str, bytes)):
+        raise ValueError("opex.currency_split.components must be a list of mappings")
+    if not components:
+        raise ValueError("opex.currency_split.components must not be empty")
+    total = 0.0
+    usd = 0.0
+    names: set[str] = set()
+    for i, comp in enumerate(components):
+        where = f"opex.currency_split.components[{i}]"
+        if not isinstance(comp, Mapping):
+            raise ValueError(f"{where} must be a mapping")
+        unknown = sorted(set(comp) - _OPEX_COMPONENT_KEYS)
+        if unknown:
+            raise ValueError(f"{where} has unknown key(s) {unknown}")
+        name = comp.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"{where}.name must be a non-empty string")
+        if name in names:
+            raise ValueError(f"{where}.name {name!r} is duplicated")
+        names.add(name)
+        flat = comp.get("usd_per_year")
+        rate = comp.get("usd_per_unit_year")
+        units = comp.get("units")
+        if (flat is None) == (rate is None and units is None):
+            raise ValueError(
+                f"{where} must declare either usd_per_year or "
+                "usd_per_unit_year with units, not both and not neither"
+            )
+        if flat is not None:
+            amount = _finite(flat, f"{where}.usd_per_year")
+        else:
+            if rate is None or units is None:
+                raise ValueError(f"{where} needs both usd_per_unit_year and units")
+            amount = _finite(rate, f"{where}.usd_per_unit_year") * _finite(
+                units, f"{where}.units"
+            )
+        if amount < 0.0:
+            raise ValueError(f"{where} amount must be >= 0; got {amount!r}")
+        if comp.get("usd_share") is None:
+            raise ValueError(f"{where}.usd_share is required")
+        share = _share(comp["usd_share"], f"{where}.usd_share")
+        total += amount
+        usd += amount * share
+    if total <= 0.0:
+        raise ValueError("opex.currency_split.components must sum to a positive amount")
+    return usd / total
+
+
+def opex_component_amounts_usd(raw: Mapping[str, Any]) -> Dict[str, float]:
+    """Return each ``opex.currency_split.components`` amount in USD per year, by name.
+
+    For reports and for the committed-scenario tests that check the components add up
+    to ``opex.usd_per_year``. Empty when the scenario declares no components.
+    """
+    opex = raw.get("opex")
+    split = opex.get("currency_split") if isinstance(opex, Mapping) else None
+    comps = split.get("components") if isinstance(split, Mapping) else None
+    if comps is None:
+        return {}
+    _usd_share_from_components(comps)  # validates
+    out: Dict[str, float] = {}
+    for comp in comps:
+        if comp.get("usd_per_year") is not None:
+            out[comp["name"]] = float(comp["usd_per_year"])
+        else:
+            out[comp["name"]] = float(comp["usd_per_unit_year"]) * float(comp["units"])
+    return out
+
+
+def _resolve_opex_currency_split(raw: Mapping[str, Any]) -> OpexCurrencySplit | None:
+    """Resolve the optional ``opex.currency_split`` block (location-agnostic).
+
+    Absent (or null) returns ``None``: every opex dollar stays on the single-currency
+    path, byte-identical to before the block existed. Present, it must declare the USD
+    share either directly (``usd_share``) or as amount-weighted ``components``, and
+    both escalation rates. ``opex.escalation_pct``, when also present, must equal
+    ``lkr_escalation_pct``: single-rate screening tools read it as the project's opex
+    rate, and two different numbers for one input are a drift the engine refuses.
+
+    Raises:
+        ValueError: On any malformed, out-of-range or ambiguous input.
+    """
+    opex = raw.get("opex")
+    if not isinstance(opex, Mapping):
+        return None
+    split = opex.get("currency_split")
+    if split is None:
+        return None
+    if not isinstance(split, Mapping):
+        raise ValueError("opex.currency_split must be a mapping")
+    unknown = sorted(set(split) - _OPEX_SPLIT_KEYS)
+    if unknown:
+        raise ValueError(f"opex.currency_split has unknown key(s) {unknown}")
+    has_share = split.get("usd_share") is not None
+    has_components = split.get("components") is not None
+    if has_share == has_components:
+        raise ValueError(
+            "opex.currency_split must declare exactly one of usd_share or components"
+        )
+    usd_share = (
+        _share(split["usd_share"], "opex.currency_split.usd_share")
+        if has_share
+        else _usd_share_from_components(split["components"])
+    )
+    usd_escalation = _rate_pct(split, "usd_escalation_pct", required=True) or 0.0
+    lkr_escalation = _rate_pct(split, "lkr_escalation_pct", required=True) or 0.0
+    depreciation = _usd_lkr_depreciation(split, usd_escalation, lkr_escalation)
+
+    # Every spelling the single-rate reader in _build_cashflow_params accepts, read
+    # under that reader's own convention (pct_to_decimal), so the two cannot disagree
+    # unseen.
+    legacy = _as_float_or_none(
+        _resolve_first(
+            dict(raw),
+            ("opex", "escalation_pct"),
+            ("opex", "annual_escalation_pct"),
+            ("opex", "inflation_pct"),
+            "opex_escalation_pct",
+        )
+    )
+    if legacy is not None:
+        legacy_dec = _pct_to_decimal(legacy) or 0.0
+        if not math.isclose(legacy_dec, lkr_escalation, rel_tol=0.0, abs_tol=1e-12):
+            raise ValueError(
+                "the single-rate opex escalation (opex.escalation_pct or an alias) and "
+                "opex.currency_split.lkr_escalation_pct disagree "
+                f"({legacy!r} vs {split['lkr_escalation_pct']!r}; the single-rate key "
+                "reads a value <= 1 as a decimal, the split key always as percent). With "
+                "a currency split the engine escalates the LKR share at "
+                "lkr_escalation_pct; keep the single-rate key equal to it or remove it."
+            )
+    return OpexCurrencySplit(
+        usd_share=usd_share,
+        usd_escalation=usd_escalation,
+        lkr_escalation=lkr_escalation,
+        usd_lkr_depreciation=depreciation,
+    )
+
+
 def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
     """Extract and normalize parameters required for v14 CFADS calculation."""
     project_life_years = _extract_project_life_years(raw, log=True)
@@ -453,6 +725,10 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
     indirect_taxes = resolve_indirect_taxes(raw)
     opex_vat_pct = indirect_taxes.opex_vat_rate if indirect_taxes is not None else 0.0
 
+    # Optional opex currency split (owner rule, 2026-11-02: part of opex is USD, the rest
+    # LKR). None -> the single-currency path, byte-identical.
+    opex_split = _resolve_opex_currency_split(raw)
+
     params = CashflowParams(
         project_life_years=project_life_years,
         capacity_mw=float(capacity_mw) if capacity_mw is not None else 0.0,
@@ -473,6 +749,16 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         social_levy_pct=float(social_levy_pct),
         risk_haircut_pct=float(risk_haircut_pct),
         opex_vat_pct=float(opex_vat_pct),
+        opex_usd_share=opex_split.usd_share if opex_split is not None else None,
+        opex_usd_escalation_pct=(
+            opex_split.usd_escalation if opex_split is not None else 0.0
+        ),
+        opex_lkr_escalation_pct=(
+            opex_split.lkr_escalation if opex_split is not None else 0.0
+        ),
+        opex_usd_lkr_depreciation_pct=(
+            opex_split.usd_lkr_depreciation if opex_split is not None else None
+        ),
     )
 
     missing_or_invalid: List[str] = []
