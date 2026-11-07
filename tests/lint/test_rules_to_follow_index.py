@@ -6,7 +6,9 @@ the VERSION bump under ``FIN-01``, the coverage gate under ``TEST-05``) and a ca
 the CSV does not have. These guards pin what can be checked mechanically: the §3.0 index
 must list every CSV rule with its exact category and title in CSV order, the rule and
 category counts must match, every bold heading that pairs a rule ID with a title must carry
-that ID's exact CSV title, and every backticked rule ID must exist. The prose after a
+that ID's exact CSV title in the ``**`ID`: Title**`` form (a parenthesised
+``**`ID` (Title)**`` heading is rejected, because it escaped the title check and once filed
+manifest practice under ``DATA-01``), and every backticked rule ID must exist. The prose after a
 heading is a summary, and review checks it; the CSV text governs.
 """
 
@@ -24,6 +26,7 @@ RULES_TO_FOLLOW = REPO_ROOT / "Rules to follow.md"
 
 _INDEX_ROW = re.compile(r"^\| `([^`|]+)` \| ([^|]+?) \| ([^|]+?) \|$", re.MULTILINE)
 _TITLED_HEADING = re.compile(r"\*\*`([A-Za-z0-9_-]+)`: ([^*]+)\*\*")
+_PAREN_HEADING = re.compile(r"\*\*`([A-Za-z0-9_-]+)` \(([^*]+)\)\*\*")
 _RULE_ID_TOKEN = re.compile(
     r"`((?:[A-Z]+-\d{2})|(?:R\d{1,2})|(?:SPRINT[A-Z0-9_]*_R1))`"
 )
@@ -69,6 +72,12 @@ def _problems(text: str, rows: list[dict[str, str]]) -> list[str]:
             problems.append(
                 f"heading {rule_id} title {title.strip()!r} != CSV {by_id[rule_id]['title']!r}"
             )
+
+    for rule_id, title in _PAREN_HEADING.findall(text):
+        problems.append(
+            f"heading {rule_id} uses a parenthesised title {title.strip()!r}; "
+            "write it as **`ID`: <exact CSV title>**"
+        )
 
     for rule_id in sorted(set(_RULE_ID_TOKEN.findall(text))):
         if rule_id not in by_id:
@@ -141,6 +150,14 @@ def _swap_first(text: str, old: str, new: str) -> str:
         pytest.param(
             lambda t, rows: t + "\nSee `TEST-09`.\n",
             id="unknown-rule-token",
+        ),
+        pytest.param(
+            lambda t, rows: _swap_first(
+                t,
+                f"**`DATA-01`: {rows['DATA-01']['title']}**",
+                "**`DATA-01` (Lossless Ingestion & Corpus Manifest Integrity)**",
+            ),
+            id="heading-parenthesised-title",
         ),
     ],
 )
