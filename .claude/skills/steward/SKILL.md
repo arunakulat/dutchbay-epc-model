@@ -283,7 +283,7 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
      cited owner decision (where and when the owner decided), posted as a comment on that pull
      request before it is closed. The one exception is a train car, closed under "Merge trains"
      step 5 below.
-   - Synchronize the clean primary checkout (`git fetch origin main && git checkout main && git pull --ff-only origin main`),
+   - Synchronize the clean primary checkout, when no other session is using it (`git fetch origin main && git checkout main && git pull --ff-only origin main`),
      remove the merged task worktree (`git worktree remove <worktree-path>`), and run
      `git worktree prune`, preserving any dirty or concurrently owned worktrees (`WORKTREE-01`).
    - Delete a branch only when its pull request's `merged_at` is set and every ref still present

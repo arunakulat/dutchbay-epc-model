@@ -111,7 +111,7 @@ established.
 After merge, follow `CLEANUP-01`: verify protected-main ancestry and tree/delivered-blob identity,
 inform the tasklist and capability tracker (`#1353`), close only the focused issue named by number
 on the merged pull request's `Work item:` or closing line, and only when its deliverable is
-complete, synchronize the clean primary checkout, retire only the
+complete, synchronize the clean primary checkout when no other session is using it, retire only the
 dolphin's own branch and worktree (`git worktree remove`, `git worktree prune`, `git branch -D`,
 `git push origin --delete`), and remove any temporary or worktree-local virtual environments while
 NEVER touching the protected persistent environment at

@@ -586,6 +586,7 @@ CLEANUP_01_REQUIRED_CONTROLS = (
     "INFORM TASKLIST & GITHUB ISSUES",
     "capability tracker #1353",
     "CLEAR, PRUNE & CLOSE WORKTREES",
+    "synchronize the clean primary checkout, when no other session is using it",
     "git worktree remove",
     "git worktree prune",
     "DELETE MERGED BRANCHES",
@@ -606,8 +607,10 @@ CLEANUP_01_REQUIRED_CONTROLS = (
     "cited owner decision",
     "posted as a comment on that pull request before it is closed",
     "proves its car commit is on origin/main",
-    "2026-11-07T05:29:05Z",
-    "2026-11-07T05:33:39Z",
+    "OWNER DECISIONS:",
+    "'clean and amend please', project thread, 2026-11-07T11:06:49Z",
+    "'yes please to all', project thread, 2026-11-07T05:29:05Z",
+    "decision card at 2026-11-07T05:33:39Z",
     # Guard (b), owner decision 2026-11-07: a branch is deleted only after its PR merged.
     "BRANCH DELETION GATE",
     "merged_at is set and the branch head equals that pull request's merged head",
@@ -648,6 +651,17 @@ CLEANUP_01_SURFACE_CONTROLS = (
     "merged head",
 )
 
+# Surfaces that tell a session to synchronize the primary checkout must not do it under
+# another session's feet (#1549 domain re-review, N-2).
+CLEANUP_01_SYNC_SURFACES = (
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".claude/skills/steward/SKILL.md",
+    "docs/governance/recruit_01/02_writer_lease_and_recovery.md",
+    "Rules to follow.md",
+)
+CLEANUP_01_SYNC_CONTROL = "when no other session is using it"
+
 STEWARD_SKILL = ".claude/skills/steward/SKILL.md"
 # The steward's executable branch deletion gate, pinned line by line, and the train-car order.
 CLEANUP_01_STEWARD_CONTROLS = (
@@ -676,6 +690,8 @@ def _assert_cleanup_01_surface(relative_path: str, surface: str) -> None:
         assert control in flat, f"{relative_path} lacks {control!r}"
     for phrase in CLEANUP_01_RETIRED_PHRASES:
         assert phrase not in flat, f"{relative_path} restores {phrase!r}"
+    if relative_path in CLEANUP_01_SYNC_SURFACES:
+        assert CLEANUP_01_SYNC_CONTROL in flat, f"{relative_path} lacks the sync guard"
     if relative_path == STEWARD_SKILL:
         for control in CLEANUP_01_STEWARD_CONTROLS:
             assert _flat(control) in flat, f"{relative_path} lacks {control!r}"
@@ -736,6 +752,7 @@ def _surface_mutation_cases() -> list[tuple[str, str]]:
         for control in CLEANUP_01_SURFACE_CONTROLS
     ]
     cases += [(STEWARD_SKILL, control) for control in CLEANUP_01_STEWARD_CONTROLS]
+    cases += [(path, CLEANUP_01_SYNC_CONTROL) for path in CLEANUP_01_SYNC_SURFACES]
     return cases
 
 
