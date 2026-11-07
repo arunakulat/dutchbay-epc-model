@@ -29,6 +29,9 @@
 # the model never imports protobuf directly. [ingestion] is also pinned so GWTF R26
 # is reconstructable under Python 3.12. The retained [report] and [jobs] capabilities
 # are pinned and audited too, while remaining opt-in at application call time.
+# [solar] joined the lock on 2026-11-07: #1548 made the test, coverage and lint jobs
+# install it, so pvlib and h5py (pvlib's one dependency not already pinned) are now
+# pinned and inside the pip-audit gate instead of resolving fresh from PyPI each run.
 #
 # A mandatory `pip-audit -r requirements.txt` CI gate scans this lock for CVEs;
 # the accepted-advisory allowlist is currently EMPTY (no known vulnerabilities).
@@ -112,6 +115,7 @@ git-lfs==1.6
 h11==0.16.0
 h2==4.4.1
 h5netcdf==1.8.1
+h5py==3.16.0
 hiredis==3.5.0
 hpack==4.2.0
 httpcore==1.0.9
@@ -233,6 +237,7 @@ protobuf==6.33.6
 psutil==7.2.2
 ptyprocess==0.7.0
 pure_eval==0.2.3
+pvlib==0.16.1
 py-cpuinfo==9.0.0
 py-serializable==2.1.0
 pyarrow==24.0.0
