@@ -314,7 +314,7 @@ tinyhtml5==2.1.0
 toml==0.10.2
 tomli==2.4.1
 tomli_w==1.2.0
-topfarm==2.6.2
+topfarm==2.7.1
 tornado==6.6
 tqdm==4.70.0
 traitlets==5.16.1
