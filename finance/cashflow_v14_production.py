@@ -250,6 +250,10 @@ def calculate_net_production_for_year(
     the result is the sum over technologies of :func:`_calculate_net_production`,
     each with its own capacity / capacity factor / degradation. Absent that key, it
     is exactly the legacy single-tech call (byte-identical wind-only behaviour).
+
+    ``params["first_year_grid_unavailable_months"]`` (#1403, default 0.0) scales the
+    first operating year's gross and net energy by ``1 - months / 12``: the plant is
+    ready but cannot export until its grid connection is. Other years are untouched.
     """
     grid_loss = float(params["grid_loss_pct"])
     curtailment = float(params.get("curtailment_pct", 0.0))
@@ -270,16 +274,24 @@ def calculate_net_production_for_year(
             )
             gross_total += gross
             net_total += net
-        return gross_total, net_total
-    return _calculate_net_production(
-        float(params["capacity_mw"]),
-        float(params["capacity_factor"]),
-        float(params["degradation"]),
-        grid_loss,
-        year_index,
-        curtailment_pct=curtailment,
-        grid_outage_pct=grid_outage,
-    )
+    else:
+        gross_total, net_total = _calculate_net_production(
+            float(params["capacity_mw"]),
+            float(params["capacity_factor"]),
+            float(params["degradation"]),
+            grid_loss,
+            year_index,
+            curtailment_pct=curtailment,
+            grid_outage_pct=grid_outage,
+        )
+    # #1403: months of operating year 1 with no grid export. Skipped at the 0.0
+    # default, so no committed scenario's energy is touched (byte-identical).
+    unavailable_months = float(params.get("first_year_grid_unavailable_months", 0.0))
+    if year_index == 0 and unavailable_months > 0.0:
+        share = 1.0 - unavailable_months / 12.0
+        gross_total *= share
+        net_total *= share
+    return gross_total, net_total
 
 
 def _calculate_revenue_lkr(net_kwh: float, tariff_lkr_per_kwh: float) -> float:
