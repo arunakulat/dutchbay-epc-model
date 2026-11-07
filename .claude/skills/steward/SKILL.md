@@ -267,8 +267,12 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
 
    ```bash
    set -euo pipefail
+   unset GIT_CONFIG_PARAMETERS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
+   unset GIT_ALTERNATE_OBJECT_DIRECTORIES
    export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
-   export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+   export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+   export GIT_CONFIG_KEY_1=advice.graftFileDeprecated GIT_CONFIG_VALUE_1=false
+   test "$(git config --get core.commitGraph)" = false
    git fetch origin refs/heads/main:refs/remotes/origin/main
    for sha in "$MERGE_SHA" "$HEAD_SHA" "$MAIN_SHA"; do
      [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1
@@ -288,8 +292,11 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
    The block stops at its first failed `test` and passes only when it prints `Merge check: OK`.
    Object checks use the stored commits, without local replacement refs, grafts or a local
    commit-graph file, whose cached parents and trees Git otherwise trusts without re-reading the
-   commits. Keep both exported lines in every block; a clean worktree alone does not establish
-   object identity.
+   commits. The `unset` lines drop inherited Git settings that would outrank these controls or
+   point the block at another repository, object store or index, such as the
+   `GIT_CONFIG_PARAMETERS` an enclosing `git -c` leaves behind. The `test` line after the exports
+   refuses a Git older than 2.31, which ignores `GIT_CONFIG_COUNT` without an error. Keep these
+   lines in every block; a clean worktree alone does not establish object identity.
    Silence, or a missing `OK` line, is a failure. If it fails, stop. Report the mismatch on the pull
    request and take no further action on it until the mismatch is resolved (`RECRUIT-01` module 3
    §7).
@@ -336,8 +343,12 @@ train that carries a car it wrote. A pull request may always land alone instead.
 
    ```bash
    set -euo pipefail
+   unset GIT_CONFIG_PARAMETERS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
+   unset GIT_ALTERNATE_OBJECT_DIRECTORIES
    export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
-   export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+   export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+   export GIT_CONFIG_KEY_1=advice.graftFileDeprecated GIT_CONFIG_VALUE_1=false
+   test "$(git config --get core.commitGraph)" = false
    git fetch origin refs/heads/main:refs/remotes/origin/main
    [[ $CAR_DIR = /* && -d $CAR_DIR ]] || exit 1
    record='[1-9][0-9]*:[0-9a-f]{40}:[0-9a-f]{40}:[0-9a-f]{40}'
@@ -397,8 +408,12 @@ train that carries a car it wrote. A pull request may always land alone instead.
 
    ```bash
    set -euo pipefail
+   unset GIT_CONFIG_PARAMETERS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
+   unset GIT_ALTERNATE_OBJECT_DIRECTORIES
    export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
-   export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+   export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+   export GIT_CONFIG_KEY_1=advice.graftFileDeprecated GIT_CONFIG_VALUE_1=false
+   test "$(git config --get core.commitGraph)" = false
    [[ $DUTCHBAY_VENV = /* && -x $DUTCHBAY_VENV/bin/python ]] || exit 1
    for sha in "$REFERENCE_SHA" "$TRAIN_SHA"; do
      [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1
@@ -460,10 +475,10 @@ train that carries a car it wrote. A pull request may always land alone instead.
    numeric = set("""
    average_equity_cash_on_cash avg_dscr balloon_covenant_breach balloon_pct balloon_residual
    discount_rate_used dscr_max dscr_mean dscr_median dscr_min dscr_p10 dscr_p90 dscr_std
-   equity_irr equity_moic equity_multiple equity_npv final_cfads_usd irr llcr max_debt_usd
+   equity_debt_service_shortfall_years equity_irr equity_moic equity_multiple equity_npv final_cfads_usd irr llcr max_debt_usd
    mean_operational_cfads_usd min_dscr min_dscr_period npv plcr project_irr project_npv
    project_npv_prudential prudential_rate_used total_cfads_usd total_equity_distributed_usd
-   total_idc_usd
+   equity_sponsor_cure_usd total_idc_usd
    """.split())
    labels = {"scenario_name", "wacc_label", "equity_distribution_status"}
    expected = numeric | labels | {"dscr_series", "wacc_is_real", "equity_covenant_locked_years"}
@@ -494,20 +509,24 @@ train that carries a car it wrote. A pull request may always land alone instead.
    )
    want=$(measure "$REFERENCE_SHA")
    got=$(measure "$TRAIN_SHA")
-   receipt='^39 [0-9a-f]{64}$'
+   receipt='^41 [0-9a-f]{64}$'
    [[ $want =~ $receipt && $got =~ $receipt ]] || exit 1
    printf 'reference: %s\ntrain: %s\n' "$want" "$got"
    test "$got" = "$want"
    echo "TRAIN-01 KPI check: OK"
    ```
 
-   It prints the count and SHA-256 of the 39-KPI lender vector at each revision, and passes only
+   It prints the count and SHA-256 of the 41-KPI lender vector at each revision, and passes only
    when they are equal. The schema describes the current lender vector. A changed schema needs a
-   reviewed contract update. Scratch worktrees are retained on success and failure: Git status
+   reviewed contract update, and `tests/lint/test_train_policy.py` runs this schema check on the
+   real lender case so that a new or removed KPI fails a test before it fails a train. Scratch worktrees are retained on success and failure: Git status
    is not proof that deleting a directory preserves every filesystem object. Index flags that
    can conceal tracked changes and special files also refuse the check. Inspect the named
    locations and reconcile ownership before any separately authorized retirement; this block
-   performs no automatic removal.
+   performs no automatic removal. After inspection, retire each scratch with
+   `git worktree remove <checkout>` and then `git worktree prune`. The operating system may clear
+   `TMPDIR` on its own schedule (on macOS, under `/var/folders`), which leaves registrations that
+   only `git worktree prune` removes. Both are owned scratch under `CLEANUP-01`.
 5. **If the train goes red,** edit no car on it. Split the train and run each part as a smaller
    train or a single pull request. A fix goes on the car's own branch, which restarts its reviews
    (module 3 §6).
@@ -520,8 +539,12 @@ train that carries a car it wrote. A pull request may always land alone instead.
 
    ```bash
    set -euo pipefail
+   unset GIT_CONFIG_PARAMETERS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
+   unset GIT_ALTERNATE_OBJECT_DIRECTORIES
    export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
-   export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+   export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+   export GIT_CONFIG_KEY_1=advice.graftFileDeprecated GIT_CONFIG_VALUE_1=false
+   test "$(git config --get core.commitGraph)" = false
    git fetch origin refs/heads/main:refs/remotes/origin/main
    for sha in "$MAIN_SHA" "$TRAIN_SHA"; do
      [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1
@@ -578,6 +601,10 @@ train that carries a car it wrote. A pull request may always land alone instead.
    messages swapped, a stray file, part of one car's diff in another car's commit, or a merge
    commit fails here, although every tree comparison would pass it (module 3 §8).
 
+   Land the train with the merge call's expected head SHA set to `TRAIN_SHA`, as a single pull
+   request's merge pins its head, so a late push to the train branch refuses the merge rather
+   than reaching `main`.
+
    After it lands, set `LANDED_SHA` to the SHA the merge returned, `TRAIN_SHA` to the reviewed train
    head, `MAIN_SHA` to the base recorded before landing, and `CAR_COUNT` to the recorded count. The
    returned SHA must equal the fetched tip of protected main. If main advanced again, stop and
@@ -585,8 +612,12 @@ train that carries a car it wrote. A pull request may always land alone instead.
 
    ```bash
    set -euo pipefail
+   unset GIT_CONFIG_PARAMETERS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
+   unset GIT_ALTERNATE_OBJECT_DIRECTORIES
    export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
-   export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+   export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+   export GIT_CONFIG_KEY_1=advice.graftFileDeprecated GIT_CONFIG_VALUE_1=false
+   test "$(git config --get core.commitGraph)" = false
    git fetch origin refs/heads/main:refs/remotes/origin/main
    for sha in "$MAIN_SHA" "$TRAIN_SHA" "$LANDED_SHA"; do
      [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1

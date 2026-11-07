@@ -160,7 +160,7 @@ STEWARD_REQUIRED_CONTROLS = (
     "that the recorded `main` is `origin/main`",
     "each train commit is exactly its car's reviewed diff, under its recorded message and author",
     "with each car's reviewed head still its pull request's head",
-    "It prints the count and SHA-256 of the 39-KPI lender vector at each revision",
+    "It prints the count and SHA-256 of the 41-KPI lender vector at each revision",
     "The loop compares train commit `k` with car `k`",
     "Silence, or a missing `OK` line, is a failure.",
     "never drop its `set -euo pipefail` line",
@@ -1034,7 +1034,7 @@ def _fake_python(tmp: Path) -> str:
     fake.write_text(
         f"#!{sys.executable}\n"
         "import hashlib\nfrom pathlib import Path\n"
-        "print('39', hashlib.sha256(Path('kpi.txt').read_bytes()).hexdigest())\n",
+        "print('41', hashlib.sha256(Path('kpi.txt').read_bytes()).hexdigest())\n",
         "utf-8",
     )
     fake.chmod(0o755)
@@ -1229,9 +1229,10 @@ def test_car_directory_is_data_even_with_shell_punctuation(rig: Rig) -> None:
     ("output", "exit_code"),
     [
         ("identical diagnostic", 17),
-        ("39 " + "a" * 64, 17),
+        ("41 " + "a" * 64, 17),
         ("0 " + "a" * 64, 0),
-        ("39 not-a-digest", 0),
+        ("39 " + "a" * 64, 0),
+        ("41 not-a-digest", 0),
     ],
 )
 def test_kpi_refuses_failed_or_malformed_matching_runs(
@@ -1352,7 +1353,7 @@ def test_kpi_preserves_unexpected_scratch_dirt(rig: Rig, tmp_path: Path) -> None
     executable.write_text(
         f"#!{sys.executable}\nfrom pathlib import Path\n"
         "Path('unexpected-evidence.txt').write_text('preserve me')\n"
-        "print('39', 'a' * 64)\n",
+        "print('41', 'a' * 64)\n",
         encoding="utf-8",
     )
     executable.chmod(0o755)
@@ -1366,8 +1367,16 @@ def test_kpi_preserves_unexpected_scratch_dirt(rig: Rig, tmp_path: Path) -> None
     assert all(path.read_text(encoding="utf-8") == "preserve me" for path in preserved)
 
 
+HYGIENE_CONTROL = (
+    "unset GIT_CONFIG_PARAMETERS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY\n"
+    "unset GIT_ALTERNATE_OBJECT_DIRECTORIES"
+)
 REPLACE_CONTROL = "export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null"
-GRAPH_CONTROL = "export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false"
+GRAPH_CONTROL = (
+    "export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false\n"
+    "export GIT_CONFIG_KEY_1=advice.graftFileDeprecated GIT_CONFIG_VALUE_1=false\n"
+    'test "$(git config --get core.commitGraph)" = false'
+)
 
 
 @pytest.mark.parametrize("ok", ALL_OK)
@@ -1419,7 +1428,7 @@ def test_kpi_preserves_state_that_porcelain_misses(
         f"#!{sys.executable}\nimport os, subprocess\nfrom pathlib import Path\n"
         + action
         + "assert not subprocess.check_output(['git', 'status', '--porcelain'])\n"
-        + "print('39', 'a' * 64)\n",
+        + "print('41', 'a' * 64)\n",
         encoding="utf-8",
     )
     executable.chmod(0o755)
@@ -1495,6 +1504,7 @@ def _point_first_parent_in_commit_graph(rig: Rig, commit: str, parent: str) -> N
     rig.git("commit-graph", "write", "--no-progress", "--reachable")
     path = rig.repo / ".git" / "objects" / "info" / "commit-graph"
     data = bytearray(path.read_bytes())
+    path.chmod(0o644)  # Git writes the file read-only; a non-root owner must unlock it.
     chunks = {}
     for i in range(data[6] + 1):
         offset = 8 + 12 * i
@@ -1523,3 +1533,115 @@ def test_commit_graph_cannot_certify_a_different_physical_parent(rig: Rig) -> No
     assert _failed_closed(run_merge(rig, wrong, head, 1), MERGE_OK)
     weakened = _block(MERGE_OK).replace(GRAPH_CONTROL, "")
     assert _passed(run_merge(rig, wrong, head, 1, block=weakened), MERGE_OK)
+
+
+def _lender_case_evaluator() -> str:
+    """The KPI block's embedded Python, exactly as printed between its heredoc markers."""
+    block = _block(KPI_OK)
+    start = block.index("<<'PY'\n") + len("<<'PY'\n")
+    end = block.index("\nPY\n", start)
+    return block[start:end] + "\n"
+
+
+def _evaluate_lender_case(source: str) -> subprocess.CompletedProcess[str]:
+    """Run the evaluator on the real strict lender case at this checkout, as the block does."""
+    env = {
+        **_ENV,
+        "DUTCHBAY_VENV": sys.prefix,
+        "PYTHONPATH": str(REPO_ROOT),
+        "PYTHONDONTWRITEBYTECODE": "1",
+    }
+    return subprocess.run(
+        [sys.executable, "-"],
+        input=source,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=600,
+        env=env,
+    )
+
+
+def test_kpi_schema_matches_the_real_lender_vector() -> None:
+    """The KPI block's key schema and count must accept the lender case this checkout produces.
+
+    Every other KPI test replaces the evaluator with a stand-in, so a KPI added to or removed
+    from the pipeline would otherwise surface only when the first train fails its KPI step
+    (#1542 domain lane D-1, after #1452 added two equity KPIs).
+    """
+    source = _lender_case_evaluator()
+    result = _evaluate_lender_case(source)
+    assert result.returncode == 0, result.stderr[-2000:]
+    receipt = result.stdout.strip()
+    assert re.fullmatch(r"41 [0-9a-f]{64}", receipt), receipt
+    assert "receipt='^41 [0-9a-f]{64}$'" in _block(KPI_OK)
+    # Negative control: a schema that has fallen one key behind the vector refuses.
+    stale = source.replace("equity_sponsor_cure_usd ", "", 1)
+    assert stale != source
+    refused = _evaluate_lender_case(stale)
+    assert refused.returncode != 0
+    assert "Unexpected lender KPI key set" in refused.stderr
+
+
+def test_object_controls_refuse_a_git_that_ignores_config_from_the_environment(
+    rig: Rig, tmp_path: Path
+) -> None:
+    """A Git that drops GIT_CONFIG_COUNT (older than 2.31) must stop each block, not run it bare."""
+    real_git = shutil.which("git")
+    assert real_git
+    bindir = tmp_path / "oldgit" / "bin"
+    bindir.mkdir(parents=True)
+    wrapper = bindir / "git"
+    wrapper.write_text(
+        "#!/bin/sh\n"
+        "unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0 "
+        "GIT_CONFIG_KEY_1 GIT_CONFIG_VALUE_1\n"
+        f'exec {shlex.quote(real_git)} "$@"\n',
+        encoding="utf-8",
+    )
+    wrapper.chmod(0o755)
+    old_git = f"{bindir}:{_ENV['PATH']}"
+    for ok in ALL_OK:
+        block = _block(ok)
+        # The guard follows the exports and precedes every other Git command in the block.
+        prologue, _, rest = block.partition(GRAPH_CONTROL)
+        assert rest
+        assert prologue.count("git ") == 0, ok
+        guard = prologue + GRAPH_CONTROL + "\necho guarded\n"
+        assert _passed(_run(rig, guard), "guarded")
+        assert _failed_closed(_run(rig, guard, path=old_git), "guarded")
+    head = _pr_head(rig)
+    faithful = _squash(rig, head)
+    rig.publish(faithful)
+    script = _fill(
+        _block(MERGE_OK),
+        {
+            "<merge-sha>": faithful,
+            "<head-sha>": head,
+            "<main-sha-recorded-in-step-2>": rig.main,
+            "<1 or 2>": "1",
+        },
+    )
+    assert _passed(_run(rig, script), MERGE_OK)
+    assert _failed_closed(_run(rig, script, path=old_git), MERGE_OK)
+    unguarded = script.replace(
+        'test "$(git config --get core.commitGraph)" = false\n', ""
+    )
+    assert unguarded != script
+    assert _passed(_run(rig, unguarded, path=old_git), MERGE_OK)
+
+
+def test_inherited_git_settings_cannot_override_the_object_controls(rig: Rig) -> None:
+    """An enclosing ``git -c core.commitGraph=true`` or a foreign GIT_DIR is dropped first."""
+    hostile = (
+        "export GIT_CONFIG_PARAMETERS=\"'core.commitgraph'='true'\"\n"
+        "export GIT_DIR=/nonexistent GIT_OBJECT_DIRECTORY=/nonexistent\n"
+    )
+    for ok in ALL_OK:
+        block = _block(ok)
+        assert HYGIENE_CONTROL in block
+        prologue, _, _ = block.partition(GRAPH_CONTROL)
+        assert prologue.index(HYGIENE_CONTROL) < prologue.index(REPLACE_CONTROL)
+        guard = hostile + prologue + GRAPH_CONTROL + "\necho guarded\n"
+        assert _passed(_run(rig, guard), "guarded"), ok
+        assert _failed_closed(_run(rig, guard.replace(HYGIENE_CONTROL, "")), "guarded")

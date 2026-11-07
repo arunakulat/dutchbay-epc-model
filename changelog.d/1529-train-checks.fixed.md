@@ -11,8 +11,10 @@
   - **The landing check is anchored to `main`.** It now confirms that the landed SHA equals the freshly fetched
     `origin/main` tip, that the landing has no merge commit, and that every landed author matches.
   - **The build is a fail-closed block.** It reads the same car records.
-  - **A new KPI block compares the lender KPI vector** at the train head with the vector at the
-    KPI car's reviewed head, or at `main`.
+  - **A new KPI block compares the 41-KPI lender vector** at the train head with the vector at
+    the KPI car's reviewed head, or at `main`. A test runs its schema check on the real strict
+    lender case, so a KPI added to or removed from the pipeline fails a test before it fails a
+    train. The train is landed with its expected head pinned.
   - **The single pull-request merge check fails closed.** It opens with `set -euo pipefail`,
     prints an `OK` line, and confirms that the merge equals the freshly fetched `origin/main` tip with the stated parent
     count.
@@ -25,7 +27,9 @@
   evaluation or malformed output cannot satisfy the comparator. Scratch worktrees are retained
   for owner inspection on success and failure; concealed index state and special files refuse
   the check. Object checks disable local replacement refs, grafts and the local commit-graph
-  file, whose cached parents Git would otherwise trust. Specific destination-mode and
+  file, whose cached parents Git would otherwise trust. They drop inherited Git settings such as
+  `GIT_CONFIG_PARAMETERS` and `GIT_DIR` first, and refuse a Git too old to honour
+  `GIT_CONFIG_COUNT`. Specific destination-mode and
   issued-message tampering controls cover the later review findings. Standalone Bash conditionals
   explicitly exit on refusal, including on the governed Mac Bash where `set -e` alone did not stop
   them.
