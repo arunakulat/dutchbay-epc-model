@@ -53,6 +53,7 @@ from analytics.gis.pv_array_layout import (
     size_array,
 )
 from analytics.gis.shadow_flicker import CoastalSetbackConfig, LocalFrame
+from solar_resource.pv_array_turbine_shading import shading_source_from_unit
 from solar_resource.pv_bess_dispatch import (
     BessConfig,
     DispatchConfig,
@@ -66,7 +67,6 @@ from solar_resource.pv_bess_dispatch import (
     summarise,
     with_array,
 )
-from solar_resource.pv_array_turbine_shading import shading_source_from_unit
 from solar_resource.pv_producer import compute_solar_aep
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
