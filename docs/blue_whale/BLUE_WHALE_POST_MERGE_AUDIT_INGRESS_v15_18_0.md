@@ -192,9 +192,12 @@ state.
   `MERGE-01` is lifted. GitHub shows when the lift was reported and acted on, not when the owner
   decided it; comment 6702662913 says the lift was until then recorded only in owner-side memory.
   `MERGE-01` is in force as written in `go_with_the_flow_rules_v3_0_clean.csv` (SHA-256
-  `230743289f135338344cba0740061935af461325d6729f3d210db3f3aee2e7a4`), where its status is
-  `active`, and it is exercised through the merge lease (see "Who merges"). No ruleset row
-  changes.
+  `230743289f135338344cba0740061935af461325d6729f3d210db3f3aee2e7a4`, as read on 2026-11-07),
+  where its status is `active`, and it is exercised through the merge lease (see "Who merges").
+  This addendum changes no ruleset row. Later the same day #1542 changed the `TRAIN-01` row and
+  #1563 the `CLEANUP-01` row (CSV SHA-256 at `main` `39048e89`:
+  `9e0e36d29f39b566199df927047fbe0799a08f5c4461bf6554dd439eef36171b`); the `MERGE-01` row is
+  byte-identical in both versions.
 - **Sources.**
   - *Where the lift is stated:* [#1353 comment 6702632645](https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6702632645) ("The owner states that
     the `MERGE-01` suspension is lifted") and [#1353 comment 6702662913](https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6702662913). Another
@@ -214,8 +217,9 @@ state.
   let any other session merge.
 - **What it does not change.** `MERGE-01` is delivery authority only. The lift waives no
   `REVIEW-01` lane, required check, `VERIFY-01` receipt or owner KPI sign-off, and it lifts no
-  other HOLD: #1110, `v15.6.1` and F-5 remain, and so does the hold on merge trains until #1529's
-  pull request (#1542) lands.
+  other HOLD: #1110, `v15.6.1` and F-5 remain. The separate hold on merge trains lasted until
+  #1529's pull request (#1542) landed; #1542 landed on 2026-11-07 as `e23bd9fe`, so trains now run
+  under `TRAIN-01` as #1542 amended it.
 - **§4.5 item 1.** That item records an action taken on 2026-11-06: owner-side memory files were
   updated to document the Checkpoint 9 hold. It stays as a dated receipt. Those files are outside
   this repository; whether they still describe the hold as current is not verified here.
