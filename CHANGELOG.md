@@ -5,6 +5,14 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **An unresolved project IRR is reported as undefined, not 0.0 (15.23.0, #1494).** New
+  `kpis.project_irr_status` (`computed`, `undefined`, `not_computed`); `ScenarioResult.project_irr`
+  is `float | None`; API contract 2.0 -> 2.1. One committed KPI moves: the Blue Whale solar +
+  BESS project IRR, 0.0 -> undefined (its NPV changes sign twice, at two negative rates).
+  `approx_project_irr` now accepts a bisection bracket narrower than 1e-10 in rate. The
+  lender KPI vector has 42 keys. HOLDs that survive: #1110's Board and lender circulation
+  hold; the F-5 covenant bar (no quarterly CFADS or intra-year DSCR figure supports a lender
+  representation); and the `v15.6.1` release hold. Detail in the compiled fragment.
 - **Blue Whale: the turbine stands on DutchBay T2, with zero wake (15.22.0).** Owner decision
   of 7 Nov 2026: the turbine replaces T2 at T2's position, so T2 casts no wake; the T1/T3 wake
   risk is disclosed, not quantified. The wind yield is unchanged. The lot holds 186 PV tables

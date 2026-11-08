@@ -219,7 +219,7 @@ STEWARD_REQUIRED_CONTROLS = (
     "that the recorded `main` is `origin/main`",
     "each train commit is exactly its car's reviewed diff, under its recorded message and author",
     "with each car's reviewed head still its pull request's head",
-    "It prints the count and SHA-256 of the 41-KPI lender vector at each revision",
+    "It prints the count and SHA-256 of the 42-KPI lender vector at each revision",
     "The loop compares train commit `k` with car `k`",
     "Silence, or a missing `OK` line, is a failure.",
     "never drop its `set -euo pipefail` line",
@@ -1207,7 +1207,7 @@ def _fake_python(tmp: Path) -> str:
     fake.write_text(
         f"#!{sys.executable}\n"
         "import hashlib\nfrom pathlib import Path\n"
-        "print('41', hashlib.sha256(Path('kpi.txt').read_bytes()).hexdigest())\n",
+        "print('42', hashlib.sha256(Path('kpi.txt').read_bytes()).hexdigest())\n",
         "utf-8",
     )
     fake.chmod(0o755)
@@ -1402,10 +1402,10 @@ def test_car_directory_is_data_even_with_shell_punctuation(rig: Rig) -> None:
     ("output", "exit_code"),
     [
         ("identical diagnostic", 17),
-        ("41 " + "a" * 64, 17),
+        ("42 " + "a" * 64, 17),
         ("0 " + "a" * 64, 0),
-        ("39 " + "a" * 64, 0),
-        ("41 not-a-digest", 0),
+        ("41 " + "a" * 64, 0),
+        ("42 not-a-digest", 0),
     ],
 )
 def test_kpi_refuses_failed_or_malformed_matching_runs(
@@ -1526,7 +1526,7 @@ def test_kpi_preserves_unexpected_scratch_dirt(rig: Rig, tmp_path: Path) -> None
     executable.write_text(
         f"#!{sys.executable}\nfrom pathlib import Path\n"
         "Path('unexpected-evidence.txt').write_text('preserve me')\n"
-        "print('41', 'a' * 64)\n",
+        "print('42', 'a' * 64)\n",
         encoding="utf-8",
     )
     executable.chmod(0o755)
@@ -1601,7 +1601,7 @@ def test_kpi_preserves_state_that_porcelain_misses(
         f"#!{sys.executable}\nimport os, subprocess\nfrom pathlib import Path\n"
         + action
         + "assert not subprocess.check_output(['git', 'status', '--porcelain'])\n"
-        + "print('41', 'a' * 64)\n",
+        + "print('42', 'a' * 64)\n",
         encoding="utf-8",
     )
     executable.chmod(0o755)
@@ -1746,12 +1746,18 @@ def test_kpi_schema_matches_the_real_lender_vector() -> None:
     result = _evaluate_lender_case(source)
     assert result.returncode == 0, result.stderr[-2000:]
     receipt = result.stdout.strip()
-    assert re.fullmatch(r"41 [0-9a-f]{64}", receipt), receipt
-    assert "receipt='^41 [0-9a-f]{64}$'" in _block(KPI_OK)
+    assert re.fullmatch(r"42 [0-9a-f]{64}", receipt), receipt
+    assert "receipt='^42 [0-9a-f]{64}$'" in _block(KPI_OK)
     # Negative control: a schema that has fallen one key behind the vector refuses.
     stale = source.replace("equity_sponsor_cure_usd ", "", 1)
     assert stale != source
     refused = _evaluate_lender_case(stale)
+    assert refused.returncode != 0
+    assert "Unexpected lender KPI key set" in refused.stderr
+    # The project-IRR status label (#1494) is part of the schema too.
+    unlabelled = source.replace(', "project_irr_status"}', "}", 1)
+    assert unlabelled != source
+    refused = _evaluate_lender_case(unlabelled)
     assert refused.returncode != 0
     assert "Unexpected lender KPI key set" in refused.stderr
 
