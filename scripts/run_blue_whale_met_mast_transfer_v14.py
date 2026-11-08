@@ -169,7 +169,7 @@ def load_mast(cfg: Mapping[str, Any]) -> Tuple[pd.DataFrame, Dict[str, Any]]:
         flagged += int(bad.sum())
         frame.loc[bad, col] = np.nan
     tlo, thi = cfg["temperature_valid_range_c"]
-    for col in (cfg["temperature_10m_c"], cfg["temperature_120m_c"]):
+    for col in cfg["temperature_c"].values():
         frame.loc[(frame[col] < tlo) | (frame[col] > thi), col] = np.nan
     return frame, {
         "sha256_verified": actual == expected,
@@ -237,11 +237,17 @@ def timezone_evidence(
         ValueError: If the evidence does not support the configured offset (the run's
             timezone stop condition).
     """
+    speeds = mcfg["speed_avg"]
+    scan_col = speeds[_channel_key(speeds, float(tcfg["scan_speed_height_m"]))]
+    anomaly_col = speeds[_channel_key(speeds, float(tcfg["anomaly_speed_height_m"]))]
+    t_key = _channel_key(
+        mcfg["temperature_c"], float(tcfg["temperature_height_m"]), "mast.temperature_c"
+    )
     lon = float(mcfg["longitude_deg_e"])
     mi = _dt(mast.index)
     hour = mi.hour + mi.minute / 60.0
     p = mmt.harmonic_phase_hours(mast[mcfg["pressure_10m_kpa"]], hour, 12.0)
-    t = mmt.harmonic_phase_hours(mast[mcfg["temperature_10m_c"]], hour, 24.0)
+    t = mmt.harmonic_phase_hours(mast[mcfg["temperature_c"][t_key]], hour, 24.0)
     implied = p["max_at_h"] - float(tcfg["s2_solar_time_of_maximum_h"]) + lon / 15.0
     by_month = []
     for _, g in mast.groupby(mi.month):
@@ -252,7 +258,7 @@ def timezone_evidence(
         by_month.append(
             mmt.harmonic_phase_hours(g[mcfg["pressure_10m_kpa"]], hh, 12.0)["max_at_h"]
         )
-    spd = mast[mcfg["speed_avg"]["100"]]
+    spd = mast[scan_col]
     sc = tcfg["scan_offsets_minutes"]
     scan = mmt.offset_correlation_scan(
         spd,
@@ -268,7 +274,7 @@ def timezone_evidence(
     for off in tcfg["candidate_offsets_minutes"]:
         hr = mmt.hourly_means(
             mast,
-            speed_columns={"v": mcfg["speed_avg"]["80"]},
+            speed_columns={"v": anomaly_col},
             direction_columns={"d": mcfg["direction"]},
             clock_offset_minutes=int(off),
             samples_per_hour=int(mcfg["samples_per_hour"]),
@@ -326,7 +332,7 @@ def timezone_evidence(
             tcfg["s2_solar_time_of_maximum_h"]
         ),
         "s2_implied_clock_offset_h": implied,
-        "temperature_10m_daily_maximum_mast_clock_h": t["max_at_h"],
+        f"temperature_{t_key}m_daily_maximum_mast_clock_h": t["max_at_h"],
         "hourly_speed_correlation_peak_offset_h": best["offset_h"],
         "hourly_speed_correlation_peak_r": best["pearson_r"],
         "hourly_speed_correlation_at_configured_offset": at_cfg["pearson_r"],
@@ -458,10 +464,14 @@ class Chain:
             n_quantiles=int(m["direction_quantiles"]),
         )
         s = c["shear"]
-        sh = j.dropna(subset=["v100", "v120", "d80"])
+        # The hourly columns of the configured pair: the labels h_low and h_high below
+        # must describe the speeds they are given (#1585 domain D-1).
+        v_lo = "v" + _channel_key(c["mast"]["speed_avg"], float(s["low_height_m"]))
+        v_hi = "v" + _channel_key(c["mast"]["speed_avg"], float(s["high_height_m"]))
+        sh = j.dropna(subset=[v_lo, v_hi, "d80"])
         shear = mmt.shear_table(
-            sh["v100"].to_numpy(),
-            sh["v120"].to_numpy(),
+            sh[v_lo].to_numpy(),
+            sh[v_hi].to_numpy(),
             sh["d80"].to_numpy(),
             is_day(
                 _dt(sh.index),
@@ -586,14 +596,14 @@ def local_index(index_utc: pd.DatetimeIndex, offset_min: int) -> pd.DatetimeInde
     return index_utc + pd.Timedelta(minutes=offset_min)
 
 
-def _speed_key(cols: Mapping[str, str], height_m: float) -> str:
-    """The ``mast.speed_avg`` key whose height equals ``height_m``, or raise."""
+def _channel_key(
+    cols: Mapping[str, str], height_m: float, what: str = "mast.speed_avg"
+) -> str:
+    """The key of a height-keyed channel map (``what``) at ``height_m``, or raise."""
     for key in cols:
         if float(key) == float(height_m):
             return key
-    raise ValueError(
-        f"no mast.speed_avg channel at {height_m:g} m; channels: {sorted(cols)}"
-    )
+    raise ValueError(f"no {what} channel at {height_m:g} m; channels: {sorted(cols)}")
 
 
 def measured_profiles(
@@ -618,8 +628,8 @@ def measured_profiles(
         JSON-serialisable aggregates.
     """
     cols = mcfg["speed_avg"]
-    lo = _speed_key(cols, float(shear_cfg["low_height_m"]))
-    hi = _speed_key(cols, float(shear_cfg["high_height_m"]))
+    lo = _channel_key(cols, float(shear_cfg["low_height_m"]))
+    hi = _channel_key(cols, float(shear_cfg["high_height_m"]))
     lo_m, hi_m = float(lo), float(hi)
     pair = f"alpha_{lo}_{hi}"
     day_start = int(shear_cfg["day_start_local_h"])
@@ -686,23 +696,57 @@ def measured_profiles(
     }
 
 
+def shear_uncertainty_pct(
+    alpha: Any, counts: Any, *, from_height_m: float, hub_height_m: float
+) -> float:
+    """Speed uncertainty (%) of carrying the correlated height's speed to hub height.
+
+    The power law gives ``d ln v = ln(hub / from) * d alpha``, so one count-weighted
+    standard deviation of the measured shear exponents moves the hub speed by
+    ``100 * ln(hub / from) * std`` percent. ``from_height_m`` is the height the chain
+    extrapolates from, ``mcp.primary_height_m`` (#1585 domain D-2), not the top of the
+    measured pair.
+    """
+    a = np.asarray(alpha, dtype=float)
+    cnt = np.asarray(counts, dtype=float)
+    a_mean = float((a * cnt).sum() / cnt.sum())
+    a_std = float(math.sqrt((((a - a_mean) ** 2) * cnt).sum() / cnt.sum()))
+    return 100.0 * math.log(hub_height_m / from_height_m) * a_std
+
+
 def air_density(
-    mast: pd.DataFrame, mcfg: Mapping[str, Any], hub_m: float
+    mast: pd.DataFrame,
+    mcfg: Mapping[str, Any],
+    hub_m: float,
+    *,
+    temperature_height_m: float,
+    sensor_height_m: float,
 ) -> Dict[str, Any]:
-    """Mean moist-air density at hub height from the mast's pressure, temperature and RH."""
+    """Mean moist-air density at hub height from the mast's pressure, temperature and RH.
+
+    The air temperature is the ``mast.temperature_c`` channel at ``temperature_height_m``.
+    Pressure and RH are read at ``sensor_height_m`` (the mast's pressure and RH channels),
+    and the humidity conversion uses the temperature channel at that same height.
+    """
+    temps = mcfg["temperature_c"]
+    t_key = _channel_key(temps, temperature_height_m, "mast.temperature_c")
+    s_key = _channel_key(temps, sensor_height_m, "mast.temperature_c")
     p = mast[mcfg["pressure_10m_kpa"]] * 1000.0
-    t120 = mast[mcfg["temperature_120m_c"]]
-    t10 = mast[mcfg["temperature_10m_c"]]
+    t_air = mast[temps[t_key]]
+    t10 = mast[temps[s_key]]
     rh = mast[mcfg["humidity_10m_pct"]].clip(0, 100)
-    ok = p.notna() & t120.notna() & t10.notna() & rh.notna() & (p > 90000)
+    ok = p.notna() & t_air.notna() & t10.notna() & rh.notna() & (p > 90000)
     e = rh[ok] / 100.0 * 610.94 * np.exp(17.625 * t10[ok] / (t10[ok] + 243.04))
     q_ratio = 0.622 * e / (p[ok] - 0.378 * e)
-    tk = t120[ok] + 273.15
+    tk = t_air[ok] + 273.15
     tv = tk * (1 + 0.61 * q_ratio)
-    p_hub = p[ok] * np.exp(-9.80665 * (hub_m - 10.0) / (287.05 * tv))
+    p_hub = p[ok] * np.exp(-9.80665 * (hub_m - sensor_height_m) / (287.05 * tv))
     rho = p_hub / (287.05 * tv)
     return {
-        "basis": "p(10 m) moved hydrostatically to hub height, T(120 m), humidity from RH(10 m) at T(10 m)",
+        "basis": (
+            f"p({sensor_height_m:g} m) moved hydrostatically to hub height, "
+            f"T({t_key} m), humidity from RH({sensor_height_m:g} m) at T({s_key} m)"
+        ),
         "n_10min": int(ok.sum()),
         "mean_kgm3": float(rho.mean()),
         "monthly_mean_kgm3": {
@@ -795,6 +839,10 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
     s_cfg = yaml.safe_load(_repo_path(cfg["turbine"]["siting_config"]).read_text())
     check_turbine_reference_point(cfg, s_cfg)
     mcfg, tz = cfg["mast"], cfg["timezone"]
+    rho_heights = {
+        k: float(cfg["air_density"][k])
+        for k in ("temperature_height_m", "sensor_height_m")
+    }
     mast, mast_prov = load_mast(mcfg)
     rm = load_reference(cfg["reference"], "mast")
     rt = load_reference(cfg["reference"], "turbine")
@@ -940,7 +988,7 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
     no_transfer["speed"] = base["speed_mast_hub"]
     no_transfer["direction"] = base["direction_mast"]
     sens[f"no_site_transfer_mast_at_{hub_tag}m"] = summarise(no_transfer)
-    rho_mast = air_density(mast, mcfg, hub_m)["mean_kgm3"]
+    rho_mast = air_density(mast, mcfg, hub_m, **rho_heights)["mean_kgm3"]
     f_mast = density_velocity_factor(
         rho_mast, float(t_cfg["power_curve_air_density_kgm3"])
     )
@@ -995,11 +1043,12 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
         for o in tz["sensitivity_offsets_minutes"]
     ]
     tz_pct = 100.0 * (max(tz_vals) - min(tz_vals)) / 2.0 / mean_v
-    alpha = np.asarray(base["shear"]["alpha"], dtype=float)
-    cnt = np.asarray(base["shear"]["n"], dtype=float)
-    a_mean = float((alpha * cnt).sum() / cnt.sum())
-    a_std = float(math.sqrt((((alpha - a_mean) ** 2) * cnt).sum() / cnt.sum()))
-    shear_pct = 100.0 * math.log(hub_m / float(cfg["shear"]["high_height_m"])) * a_std
+    shear_pct = shear_uncertainty_pct(
+        base["shear"]["alpha"],
+        base["shear"]["n"],
+        from_height_m=float(m["primary_height_m"]),
+        hub_height_m=hub_m,
+    )
     method_e_pct = (
         100.0
         * abs(
@@ -1074,10 +1123,12 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
     # Turbulence (10-minute aggregates)
     tcfg = cfg["turbulence"]
     ti = {}
-    for h in ("100", "120"):
+    for height in tcfg["heights_m"]:
+        h = _channel_key(mcfg["speed_avg"], float(height))
+        h_sd = _channel_key(mcfg["speed_sd"], float(height), "mast.speed_sd")
         ti[f"{h}m"] = mmt.turbulence_table(
             mast[mcfg["speed_avg"][h]].to_numpy(),
-            mast[mcfg["speed_sd"][h]].to_numpy(),
+            mast[mcfg["speed_sd"][h_sd]].to_numpy(),
             mast[mcfg["direction"]].to_numpy(),
             bin_edges_ms=tcfg["bin_edges_ms"],
             n_sectors=n,
@@ -1152,7 +1203,7 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
         },
         "turbulence": ti,
         "air_density": {
-            **air_density(mast, mcfg, hub_m),
+            **air_density(mast, mcfg, hub_m, **rho_heights),
             "model_value_kgm3": basis["air_density_site_kgm3"],
         },
         "yield": {
