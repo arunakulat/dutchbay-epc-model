@@ -141,6 +141,15 @@ def run_capex_mc(
         run_cfg["capex"] = cap
         kpis = run_v14_pipeline(config=run_cfg)["kpis"]
         capex_s.append(base * float(factor))
+        if kpis.get("project_irr") is None:
+            # #1494: an undefined project IRR has no number to put in a percentile;
+            # refuse rather than coerce it to 0.0 (break-even) or drop the trial.
+            raise ValueError(
+                f"project IRR is undefined (the solver resolved no rate for the project "
+                f"cashflows) at capex factor {float(factor):.6f}; the capex "
+                f"Monte Carlo cannot place it in a percentile. Narrow capex_sigma_pct or "
+                f"inspect the scenario's CFADS against its capex."
+            )
         irr.append(float(kpis["project_irr"]))
         if kpis["equity_irr"] is None:
             # #1436: an undefined equity IRR has no number to put in a percentile;

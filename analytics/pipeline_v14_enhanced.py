@@ -943,6 +943,18 @@ def _build_debt_covenant_snapshot(
     )
 
 
+def _format_irr_for_log(value: float | None) -> str:
+    """Format an IRR for a log line, naming an undefined one rather than crashing.
+
+    Args:
+        value: The IRR as a fraction, or ``None`` when no rate solves the cashflows.
+
+    Returns:
+        ``"12.34%"`` for a defined rate, ``"undefined"`` for ``None``.
+    """
+    return "undefined" if value is None else f"{value * 100:.2f}%"
+
+
 def _update_kpis_with_equity_distribution(
     kpis: dict[str, Any], equity_distribution: Mapping[str, Any]
 ) -> EquityPerformance | None:
@@ -1282,7 +1294,11 @@ def run_v14_pipeline_enhanced(
         )
 
         project_npv = float(kpis.get("project_npv", 0.0))
-        project_irr = float(kpis.get("project_irr", 0.0))
+        # #1494: an undefined project IRR arrives as None (kpis["project_irr_status"]
+        # says why) and stays None on the contract; float(None) would raise, and a 0.0
+        # here would read as a genuine break-even.
+        raw_project_irr = kpis.get("project_irr", 0.0)
+        project_irr = None if raw_project_irr is None else float(raw_project_irr)
         # `ScenarioResult.dscr_series` is typed `list[float]` and the D3B/D3C accepted
         # -origin protocols reject any entry that is not an exact finite float. Since
         # F-2 the engine publishes ONE positional series carrying `None` for every
@@ -1357,8 +1373,8 @@ def run_v14_pipeline_enhanced(
         metrics.fx_integration_time_sec = time.perf_counter() - _fx_t0
 
         logger.info(
-            "ScenarioResult assembled: project_irr=%.2f%%, min_dscr=%.2f, project_npv=%.0f",
-            project_irr * 100,
+            "ScenarioResult assembled: project_irr=%s, min_dscr=%.2f, project_npv=%.0f",
+            _format_irr_for_log(project_irr),
             min_dscr,
             project_npv,
         )
@@ -1392,9 +1408,9 @@ def run_v14_pipeline_enhanced(
         }
 
         logger.info(
-            "Pipeline complete in %.3f sec: project_irr=%.2f%%, min_dscr=%.2f",
+            "Pipeline complete in %.3f sec: project_irr=%s, min_dscr=%.2f",
             metrics.total_runtime_sec,
-            project_irr * 100,
+            _format_irr_for_log(project_irr),
             min_dscr,
         )
         return result

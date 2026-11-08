@@ -64,6 +64,24 @@ def resolve_project_discount_rate(config: Optional[Mapping[str, Any]]) -> float:
         )
     return rate
 
+#: ``project_irr_status`` vocabulary (#1494). The status says which of three different
+#: statements a ``project_irr`` value makes, so a consumer never has to guess from the
+#: number alone.
+#:
+#: - ``computed``: a finite rate solved the project cashflows (a genuine 0.0 included).
+#: - ``undefined``: the solver ran and returned no rate, or raised. ``project_irr`` and
+#:   ``irr`` are ``None``. This is "unresolved by ``finance.irr.approx_project_irr``",
+#:   not proof that no root exists: the solver needs the NPV to change sign between the
+#:   ends of its search range, so it also returns no rate for a root above that range,
+#:   and for cashflows that change sign more than once and so have several roots (CFADS
+#:   that turn negative late in life, for example).
+#: - ``not_computed``: the inputs needed to attempt a solve (CFADS and capex) were absent.
+#:   ``project_irr`` keeps its 0.0 API-stability default, which this status marks as a
+#:   placeholder rather than a result.
+PROJECT_IRR_COMPUTED = "computed"
+PROJECT_IRR_UNDEFINED = "undefined"
+PROJECT_IRR_NOT_COMPUTED = "not_computed"
+
 
 def _summary_stats(values: Iterable[float]) -> Dict[str, float]:
     """Return robust statistics for a numeric series."""
@@ -415,6 +433,8 @@ def calculate_scenario_kpis(
                 project_irr = float(valuation["irr"])
             except (TypeError, ValueError):
                 project_irr = None
+            if project_irr is not None and not math.isfinite(project_irr):
+                project_irr = None
 
     # Construction lag for project NPV/IRR: operating CFADS must be discounted
     # AFTER the build period, not from t=0 (audit 2026-06-22, finding 2.0). Use the
@@ -460,27 +480,42 @@ def calculate_scenario_kpis(
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning("Prudential NPV calculation failed: %s", exc)
 
+    project_irr_status = (
+        PROJECT_IRR_COMPUTED if project_irr is not None else PROJECT_IRR_NOT_COMPUTED
+    )
     if project_irr is None and cfads and capex_total > 0.0:
         try:
             project_irr = approx_project_irr(
                 cfads, capex_total, construction_years=construction_years
             )
-            if project_irr is None:
-                # IRR genuinely undefined (no root in [-0.99, 5.0]); leave it unset rather
-                # than report a misleading 0.0. Downstream KPI readers default a missing
-                # project_irr to 0.0 for display.
-                logger.warning(
-                    "Project IRR undefined (no root in [-0.99, 5.0]); leaving unset."
-                )
         except Exception as exc:  # pragma: no cover - defensive
             logger.warning("Project IRR calculation failed: %s", exc)
-            project_irr = 0.0
+            project_irr = None
+        if project_irr is not None and math.isfinite(project_irr):
+            project_irr_status = PROJECT_IRR_COMPUTED
+        else:
+            # #1494: the solver ran and could not resolve a single rate for the project
+            # cashflows. Report that as undefined (None), never as 0.0: a 0.0 here is
+            # finite and reads as a genuine break-even (#782), which is the same
+            # substitution #1436 removed for the equity IRR.
+            project_irr = None
+            project_irr_status = PROJECT_IRR_UNDEFINED
+            logger.warning(
+                "Project IRR undefined (the solver found no root it could bracket in "
+                "its search range); reporting project_irr=None, not 0.0."
+            )
 
     if project_npv is not None:
         result["project_npv"] = project_npv
         result["npv"] = project_npv
 
-    if project_irr is not None:
+    result["project_irr_status"] = project_irr_status
+    if project_irr_status == PROJECT_IRR_UNDEFINED:
+        # Present and None means "undefined", as distinct from the 0.0 placeholder of
+        # "not computed". The ``irr`` alias always mirrors ``project_irr``.
+        result["project_irr"] = None
+        result["irr"] = None
+    elif project_irr is not None:
         result["project_irr"] = project_irr
         result["irr"] = project_irr
 
@@ -535,11 +570,14 @@ def calculate_scenario_kpis(
 
     # Stable lender KPI surface. Keep keys present even when a metric cannot be
     # computed from a minimal/hand-authored scenario. This is API stability, not
-    # economic substitution: callers can still inspect the zero default.
+    # economic substitution: callers can still inspect the zero default, and
+    # ``project_irr_status == "not_computed"`` marks the project IRR's 0.0 as one.
+    # An undefined project IRR is already present as None, so these defaults leave it
+    # alone (#1494).
     result.setdefault("project_npv", 0.0)
     result.setdefault("npv", float(result.get("project_npv", 0.0)))
     result.setdefault("project_irr", 0.0)
-    result.setdefault("irr", float(result.get("project_irr", 0.0)))
+    result.setdefault("irr", result.get("project_irr", 0.0))
     result.setdefault(
         "equity_irr", 0.0
     )  # neutral sentinel, NOT the unlevered project_irr
