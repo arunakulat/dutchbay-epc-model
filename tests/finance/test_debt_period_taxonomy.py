@@ -78,6 +78,12 @@ UNIFICATION_KEYS = frozenset({"dscr_periods"})
 # None unless the balloon is refinanced. Tracked separately for the same reason.
 REFINANCE_KEYS = frozenset({"refinance"})
 
+# The key #1503 appends after that: interest accrued on the balloon after maturity,
+# period-indexed, under every treatment that carries the balloon past maturity.
+# #1505 appends the part of it settled in cash, which the levered tax pass deducts on
+# the default `paid` basis.
+BALLOON_INTEREST_KEYS = frozenset({"balloon_interest", "balloon_interest_paid"})
+
 # Every key ``plan_debt`` published BEFORE the taxonomy was added, captured from
 # the pre-change engine across all evaluable scenarios (the set is identical for
 # each). This is the additive-only guard: the sweep asserts that the published
@@ -187,7 +193,7 @@ def test_scenario_sweep_is_additive_and_taxonomy_is_consistent(scenario: Path) -
     # 1. Nothing removed or renamed; exactly the three taxonomy keys added.
     missing = PRE_EXISTING_KEYS - published
     assert not missing, f"plan_debt dropped pre-existing keys: {sorted(missing)}"
-    additive = TAXONOMY_KEYS | UNIFICATION_KEYS | REFINANCE_KEYS
+    additive = TAXONOMY_KEYS | UNIFICATION_KEYS | REFINANCE_KEYS | BALLOON_INTEREST_KEYS
     assert published - PRE_EXISTING_KEYS == set(additive), (
         "plan_debt published unexpected keys: "
         f"{sorted(published - PRE_EXISTING_KEYS - additive)}"
@@ -398,22 +404,25 @@ def test_published_key_order_places_the_taxonomy_last() -> None:
     guard the claim is prose. Reordering the mapping would leave every other test in
     this module passing.
 
-    F-2/F-3 appended ``dscr_periods`` AFTER the F-6 taxonomy, and #1396 appended
-    ``refinance`` after that, so the tail is five keys in dolphin order. The pin is
-    extended rather than relaxed: the exact list is still asserted, in order, and
-    everything before it is still exactly the pre-existing surface.
+    F-2/F-3 appended ``dscr_periods`` AFTER the F-6 taxonomy, #1396 appended
+    ``refinance`` after that, #1503 appended ``balloon_interest`` and #1505
+    ``balloon_interest_paid`` last, so the tail is seven keys in dolphin order. The pin is extended rather than relaxed: the exact
+    list is still asserted, in order, and everything before it is still exactly the
+    pre-existing surface.
     """
     _cfg, debt_result = _plan_for(Path(LENDER_CONFIG))
     published = list(debt_result)
-    assert published[-5:] == [
+    assert published[-7:] == [
         "construction_periods",
         "bridge_debt_period",
         "first_operating_period",
         "dscr_periods",
         "refinance",
+        "balloon_interest",
+        "balloon_interest_paid",
     ]
     # Everything before the additive tail is exactly the pre-existing surface, in order.
-    assert set(published[:-5]) == PRE_EXISTING_KEYS
+    assert set(published[:-7]) == PRE_EXISTING_KEYS
 
 
 def test_first_mapped_period_zero_is_reported_as_zero() -> None:

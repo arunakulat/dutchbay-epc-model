@@ -21,10 +21,10 @@ from .cashflow_v14_fx import (
 from .cashflow_v14_params import _build_cashflow_params, validate_parameters
 from .cashflow_v14_production import (
     _apply_risk_haircut,
-    _calculate_opex_lkr,
     _calculate_revenue_lkr,
     _calculate_statutory_deductions,
     calculate_net_production_for_year,
+    opex_for_year,
     resolve_tech_generation_specs,
     validate_storage_capex_declared,
 )
@@ -39,6 +39,11 @@ from .cashflow_v14_tax import (
 )
 from .cashflow_v14_utils import as_float, get_nested
 from .import_levies import capex_uplift_from_config
+from .tariff_indexation import (
+    OmIndexation,
+    resolve_om_indexation,
+    tariff_lkr_per_kwh_for_year,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +113,29 @@ Key improvements over v13:
 # =============================================================================
 
 
+def _resolve_tariff_om_indexation(
+    config: Dict[str, Any], params_dict: Dict[str, Any]
+) -> Optional[OmIndexation]:
+    """Resolve ``tariff.om_indexation`` (L-9) and check the BESS specs that ride it.
+
+    Returns ``None`` when the scenario declares no block. A ``type: bess`` energy-tariff
+    block that declares an ``escalable_om_lkr_per_kwh`` needs the scenario's index, so
+    without the block it is refused rather than silently held flat (FRAMEWORK-02).
+    """
+    indexation = resolve_om_indexation(
+        config, base_tariff_lkr_per_kwh=float(params_dict["tariff_lkr_per_kwh"])
+    )
+    if indexation is None:
+        for spec in params_dict.get("bess_revenue_specs") or []:
+            if float(spec.get("escalable_om_lkr_per_kwh", 0.0)) > 0.0:
+                raise ValueError(
+                    f"generation.technologies['{spec.get('technology')}'].revenue declares "
+                    "escalable_om_lkr_per_kwh, but the scenario has no "
+                    "tariff.om_indexation block to index it on"
+                )
+    return indexation
+
+
 def _prepare_cashflow_context(
     config: Dict[str, Any],
     fx_curve: Optional[List[float]],
@@ -161,6 +189,13 @@ def _prepare_cashflow_context(
     # None when no BESS block is present -> wind/solar runs stay byte-identical.
     params_dict["bess_revenue_specs"] = resolve_bess_specs(config)
 
+    # L-9: yearly indexation of the tariff's escalable O&M component (PUCSL 2026
+    # methodology s.3.1 item 2). None without a tariff.om_indexation block -> the
+    # tariff is flat and every run is byte-identical.
+    params_dict["tariff_om_indexation"] = _resolve_tariff_om_indexation(
+        config, params_dict
+    )
+
     # BESS-3 / CESSPIT: reject a storage asset booked as free revenue — a revenue-
     # producing type:bess block must declare a positive capex_usd (it must then be
     # included in the financed capex.usd_total; full per-tech coupling is ARCH-3).
@@ -203,6 +238,28 @@ def _prepare_cashflow_context(
         if financial_close_spot is not None
         else fx_curve_resolved[0]
     )
+
+    # Opex currency split (opex.currency_split): the LKR share is fixed in LKR at the
+    # same financial-close FX the capex is translated at; the USD share may carry its own
+    # parametric FX path (usd_lkr_depreciation_pct), anchored on the financial-close spot
+    # and advanced through construction exactly as the model curve is. Unset -> no keys
+    # are read and the opex line is byte-identical.
+    if params_dict.get("opex_usd_share") is not None:
+        params_dict["opex_lkr_base_fx"] = tax_basis_fx
+        depr = params_dict.get("opex_usd_lkr_depreciation_pct")
+        if depr is None:
+            params_dict["opex_usd_fx_path"] = None
+        else:
+            if financial_close_spot is None:
+                raise ValueError(
+                    "opex.currency_split.usd_lkr_depreciation_pct needs a scalar "
+                    "fx.start_lkr_per_usd (the financial-close spot) to anchor the USD "
+                    "share's FX path"
+                )
+            params_dict["opex_usd_fx_path"] = [
+                financial_close_spot * (1.0 + float(depr)) ** (construction_periods + i)
+                for i in range(years)
+            ]
 
     # Depreciable capex base in LKR – explicit tax base takes precedence.
     capex_dep_resolved = capex_depreciable_lkr
@@ -468,14 +525,18 @@ def calculate_single_year_cfads(
 
     gross_kwh, net_kwh = calculate_net_production_for_year(params, year_index)
 
-    generation_revenue_lkr = _calculate_revenue_lkr(
-        net_kwh, float(params["tariff_lkr_per_kwh"])
+    # L-9: the escalable O&M part of the tariff is indexed yearly when the scenario
+    # declares tariff.om_indexation; otherwise this is the flat tariff (byte-identical).
+    om_indexation = params.get("tariff_om_indexation")
+    tariff_lkr_per_kwh = tariff_lkr_per_kwh_for_year(
+        float(params["tariff_lkr_per_kwh"]), om_indexation, year_index
     )
+    generation_revenue_lkr = _calculate_revenue_lkr(net_kwh, tariff_lkr_per_kwh)
 
     # BESS capacity-charge revenue (availability tolling), additive to generation
     # revenue. 0.0 when no `type: bess` block -> byte-identical wind/solar behaviour.
     bess_revenue_lkr = bess_revenue_lkr_for_year(
-        params.get("bess_revenue_specs"), year_index
+        params.get("bess_revenue_specs"), year_index, om_indexation
     )
     revenue_lkr = generation_revenue_lkr + bess_revenue_lkr
 
@@ -487,18 +548,14 @@ def calculate_single_year_cfads(
         float(params["social_levy_pct"]),
     )
 
-    # OpEx escalates in USD at opex_escalation_pct/yr (O&M inflation), THEN is
-    # translated to LKR at the per-year FX rate — so the LKR cost carries both the
-    # inflation and the FX-depreciation effect. year_index is 0-based (ops year 1 = base).
-    opex_escalation = float(params.get("opex_escalation_pct", 0.0))
-    opex_usd_year = (
-        float(params["opex_usd_per_year"]) * (1.0 + opex_escalation) ** year_index
-    )
-    # #738: unrecoverable O&M input VAT multiplies the escalated figure inside the
-    # shared helper (0.0 -> byte-identical); deductible automatically (EBITDA line).
-    opex_lkr = _calculate_opex_lkr(
-        opex_usd_year, fx_rate, float(params.get("opex_vat_pct", 0.0))
-    )
+    # OpEx: the shared helper (cashflow_v14_production.opex_for_year). Without an
+    # opex.currency_split the whole amount escalates in USD at opex_escalation_pct/yr and
+    # is translated at the per-year FX rate (inflation AND FX effect). With a split, the
+    # USD share does that at its own escalation and the LKR share is fixed in LKR at the
+    # financial-close FX and escalates at LKR inflation. year_index is 0-based (ops year
+    # 1 = base). #738: unrecoverable O&M input VAT multiplies the sum inside the helper
+    # (0.0 -> byte-identical); deductible automatically (EBITDA line).
+    opex_usd_year, opex_lkr = opex_for_year(params, year_index, fx_rate)
 
     # For this engine, EBITDA and EBIT coincide (no other non-cash items)
     # Depreciation is NOT in EBIT; it's a tax deduction.
@@ -595,7 +652,7 @@ def calculate_single_year_cfads(
         "env_surcharge_lkr": statutory["environmental_surcharge"],
         "social_levy_lkr": statutory["social_services_levy"],
         "total_statutory_deductions_lkr": statutory["total_statutory_deductions"],
-        "opex_usd": opex_usd_year,  # escalated (year-1 base x (1+esc)^year_index)
+        "opex_usd": opex_usd_year,  # pre-VAT, escalated; with a split, LKR cost / fx_rate
         "fx_rate": fx_rate,
         "opex_lkr": opex_lkr,
         "senior_fee_lkr": senior_fee_lkr,
@@ -841,13 +898,15 @@ def build_annual_rows_efficient(
 
         gross_kwh, net_kwh = calculate_net_production_for_year(params, year_index)
 
-        generation_revenue_lkr = _calculate_revenue_lkr(
-            net_kwh, float(params["tariff_lkr_per_kwh"])
+        # L-9 tariff indexation and BESS revenue — mirror calculate_single_year_cfads
+        # so the two builders stay identical (flat without tariff.om_indexation).
+        om_indexation = params.get("tariff_om_indexation")
+        tariff_lkr_per_kwh = tariff_lkr_per_kwh_for_year(
+            float(params["tariff_lkr_per_kwh"]), om_indexation, year_index
         )
-        # BESS capacity-charge revenue (additive; 0.0 when no `type: bess` block) —
-        # mirrors calculate_single_year_cfads so the two builders stay identical.
+        generation_revenue_lkr = _calculate_revenue_lkr(net_kwh, tariff_lkr_per_kwh)
         bess_revenue_lkr = bess_revenue_lkr_for_year(
-            params.get("bess_revenue_specs"), year_index
+            params.get("bess_revenue_specs"), year_index, om_indexation
         )
         revenue_lkr = generation_revenue_lkr + bess_revenue_lkr
 
@@ -858,16 +917,9 @@ def build_annual_rows_efficient(
             float(params["social_levy_pct"]),
         )
 
-        # OpEx escalates in USD at opex_escalation_pct/yr, then x the per-year FX rate.
-        opex_escalation = float(params.get("opex_escalation_pct", 0.0))
-        opex_usd_year = (
-            float(params["opex_usd_per_year"]) * (1.0 + opex_escalation) ** year_index
-        )
-        # #738: O&M input VAT inside the shared helper — mirrors
+        # OpEx (currency split and #738 VAT) through the shared helper — mirrors
         # calculate_single_year_cfads so the two builders stay identical.
-        opex_lkr = _calculate_opex_lkr(
-            opex_usd_year, fx_rate, float(params.get("opex_vat_pct", 0.0))
-        )
+        opex_usd_year, opex_lkr = opex_for_year(params, year_index, fx_rate)
 
         # Senior credit-support fee at the EBITDA line (#737) — mirrors
         # calculate_single_year_cfads so the two builders stay identical.
@@ -894,7 +946,7 @@ def build_annual_rows_efficient(
                 "total_statutory_deductions_lkr": statutory[
                     "total_statutory_deductions"
                 ],
-                "opex_usd": opex_usd_year,  # escalated (year-1 base x (1+esc)^year_index)
+                "opex_usd": opex_usd_year,  # pre-VAT, escalated; with a split, LKR cost / fx_rate
                 "fx_rate": fx_rate,
                 "opex_lkr": opex_lkr,
                 "senior_fee_lkr": senior_fee_lkr,
@@ -1046,6 +1098,7 @@ def _register_cashflow_schema() -> None:
     """
     # Imported inside the registration so the engine keeps no module-level dependency
     # on the period-grid modules, which import nothing from the engine in return.
+    from finance.event_calendar_v14 import EVENT_CALENDAR_KEY
     from finance.period_grid_v14 import CASHFLOW_RESOLUTION_KEY
     from finance.subannual_rows_v14 import WITHIN_YEAR_PROFILE_KEY
 
@@ -1218,6 +1271,21 @@ def _register_cashflow_schema() -> None:
                 "Within-year allocation weights, one per period of the resolved grid "
                 "(opt-in; absent means an even split). Validated at pre-flight by "
                 "finance.subannual_rows_v14.resolve_within_year_profile."
+            ),
+            validator=None,
+        ),
+        RequiredFieldSpec(
+            module="cashflow",
+            name="cashflow_event_calendar",
+            paths=(tuple(EVENT_CALENDAR_KEY.split(".")),),
+            required=False,
+            severity="error",
+            description=(
+                "Within-year event dates for discrete items on a sub-annual grid. An "
+                "undeclared kind takes an illustrative default date, flagged as an "
+                "assumption; 'profile' keeps a kind on the within-year profile. "
+                "Validated at pre-flight by "
+                "finance.event_calendar_v14.resolve_event_calendar."
             ),
             validator=None,
         ),

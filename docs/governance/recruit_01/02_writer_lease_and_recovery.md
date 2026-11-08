@@ -108,7 +108,18 @@ established.
 
 ## 8. Closure
 
-After merge, verify protected-main ancestry and tree/delivered-blob identity, synchronize the clean
-primary checkout, and retire only the dolphin's own branch and worktree. Preserve unrelated, dirty,
-unfamiliar, backup, and concurrently owned state. The final PERSIST-01 handover records what was
-removed, what remains, and whether recovery is possible.
+After merge, follow `CLEANUP-01`: verify protected-main ancestry and tree/delivered-blob identity,
+inform the tasklist and capability tracker (`#1353`), close only the focused issue named by number
+on the merged pull request's `Work item:` or closing line, and only when its deliverable is
+complete, synchronize the clean primary checkout when no other session is using it, retire only the
+dolphin's own branch and worktree (`git worktree remove`, `git worktree prune`, `git branch -D`,
+`git push origin --delete`), and remove any temporary or worktree-local virtual environments while
+NEVER touching the protected persistent environment at
+`/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` (`THREAD-01`, `ENV-01`). Cleanup never closes a
+pull request: closing an unmerged one needs a cited owner decision, posted as a comment on it
+before it is closed. A `Work item:` line that names a #1353 comment closes nothing, and cleanup
+never closes tracker #1353. A branch is deleted only when its pull request's `merged_at` is set and
+every ref still present (remote and local) equals the merged head, read from the GitHub API
+immediately before deleting, as the steward skill's step 4 block checks.
+Preserve unrelated, dirty, unfamiliar, backup, and concurrently owned state. The final PERSIST-01
+handover records what was removed, what remains, and whether recovery is possible.

@@ -353,8 +353,8 @@ def _validate_cashflow_period_fields(
     as ``_validate_run_mode`` (#733a) and ``_validate_taxes_indirect`` (#738): a guard
     must reuse the engine's exact resolution, or pre-flight and call time drift apart.
 
-    Three delegations, in dependency order, because each needs the one before it to
-    have succeeded:
+    Four delegations, in dependency order. The first two must succeed before the
+    last two can run, because both measure against the resolved grid:
 
     * ``resolve_period_grid`` rejects a non-string, blank or unrecognised resolution,
       and a ``cashflow`` node that is a mapping but not a ``dict`` -- the silent
@@ -371,6 +371,11 @@ def _validate_cashflow_period_fields(
     * ``resolve_within_year_profile`` rejects a profile whose length does not match the
       resolved grid, or that carries a non-numeric, negative or non-finite weight, or
       that does not sum to 1.
+    * :func:`finance.event_calendar_v14.resolve_event_calendar` (#1395 (b)) rejects a
+      ``cashflow.event_calendar`` declared on the annual grid, an unknown or unmodelled
+      event kind (``working_capital``), and malformed periods or weights. On a
+      sub-annual grid it also names, in a warning, any kind left on its illustrative
+      default date.
 
     The cross-field consequence is the reason the grid is resolved first, and it is the
     mistake most likely to reach a real config: a four-weight
@@ -390,6 +395,15 @@ def _validate_cashflow_period_fields(
 
     try:
         resolve_within_year_profile(raw_config, grid)
+    except ValueError as exc:
+        errors.append(str(exc))
+
+    # #1395 (b): the within-year event calendar, resolved against the same grid. It is
+    # independent of the profile, so a bad profile does not hide a bad calendar.
+    from finance.event_calendar_v14 import resolve_event_calendar
+
+    try:
+        resolve_event_calendar(raw_config, grid)
     except ValueError as exc:
         errors.append(str(exc))
 
@@ -427,6 +441,49 @@ def _validate_project_discount_rate(
         resolve_project_discount_rate(raw_config)
     except ValueError as exc:
         errors.append(str(exc))
+
+
+#: P3-COV-05 (#1399 part A): a declared receivables guarantee that nothing models.
+RECEIVABLES_GUARANTEE_KEY = "receivables_guarantee_months"
+
+
+def _validate_no_receivables_guarantee(
+    raw_config: Mapping[str, Any], errors: list[str]
+) -> None:
+    """Refuse ``receivables_guarantee_months``, which has no consumer (#1399 part A).
+
+    The key was declared in every committed scenario, usually as nine months of "CEB
+    payment risk", yet nothing in the engine read it: no receivables guarantee, standby
+    letter of credit or other payment-support cash flow is modelled, so the value changed
+    nothing while reading as a modelled protection (``FRAMEWORK-02``: no silent dead
+    config). Refused wherever it appears under ``Financing_Terms``, either directly or
+    under ``reserves``, until a consumer exists. The real support terms await an
+    authenticated term sheet (#920, #1399 part B).
+    """
+    if not isinstance(raw_config, Mapping):
+        return
+    for section_key, section in raw_config.items():
+        if not (
+            isinstance(section_key, str) and section_key.lower() == "financing_terms"
+        ):
+            continue
+        if not isinstance(section, Mapping):
+            continue
+        candidates = [(f"{section_key}.{RECEIVABLES_GUARANTEE_KEY}", section)]
+        reserves = section.get("reserves")
+        if isinstance(reserves, Mapping):
+            candidates.append(
+                (f"{section_key}.reserves.{RECEIVABLES_GUARANTEE_KEY}", reserves)
+            )
+        for path, node in candidates:
+            if RECEIVABLES_GUARANTEE_KEY in node:
+                errors.append(
+                    f"{path} is not modelled: nothing in the engine reads it, so no "
+                    "receivables guarantee, standby letter of credit or payment-support "
+                    "cash flow follows from it and the value would be silently ignored "
+                    "(FRAMEWORK-02, audit P3-COV-05). Remove the key. Receivables support "
+                    "awaits authenticated term-sheet terms (#920)."
+                )
 
 
 def _validate_grid_conditionals(
@@ -523,6 +580,10 @@ def validate_config_for_v14(
     # an even profile, no error, byte-identical. A present-but-unsupported value fails
     # here, before evaluation begins, naming the path and the accepted values.
     _validate_cashflow_period_fields(raw_config, errors)
+
+    # 1g. Refuse Financing_Terms receivables_guarantee_months, which nothing in the
+    # engine reads (P3-COV-05, #1399 part A). Present-only: an absent key is no error.
+    _validate_no_receivables_guarantee(raw_config, errors)
 
     # 2. Ensure modules are imported so they can register field specs
     module_list = list(modules) if modules is not None else []

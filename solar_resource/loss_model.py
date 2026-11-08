@@ -52,6 +52,7 @@ DEFAULT_SOLAR_LOSS_TAXONOMY: Dict[str, str] = {
     "transmission_loss_pct": "reduction",
     "curtailment_pct": "reduction",
     "other_pct": "reduction",
+    "turbine_shading_pct": "reduction",  # #1518, solar_resource.turbine_shading
     "availability_pct": "uptime",
     "grid_availability_pct": "uptime",
 }

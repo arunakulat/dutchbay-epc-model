@@ -2,8 +2,10 @@
 
 **Subject:** the platform development plan received from the project owner on 26 September 2026,
 recorded verbatim at `docs/source_materials/platform_strategy_2026/`.
-**Base:** `main` at `b87ee32`. **Status:** evaluation draft. The project owner decided D1, D2 and
-D4 on 26 September 2026 (see "Decisions"); the record itself authorizes nothing.
+**Base:** `main` at `b87ee32`. **Status:** evaluation draft. The project owner decided D1, D2, D4
+and D5 on 26 September 2026 (see "Decisions"); the record itself authorizes nothing.
+**Corrected:** 28 October 2026, after the post-merge domain review of #1296 returned seven
+blocking findings (#1477 to #1483). The comprehensive analysis, section 13, lists every change.
 
 ## Verdict
 
@@ -20,33 +22,40 @@ already in progress.
    of "simple Python/Excel scripts". The six engine packages hold 109,991 lines of Python, with
    392 test modules, 37 committed scenarios across wind, solar, BESS and hybrids for several
    projects, a FastAPI service with JWT, async jobs and SSE progress, and a Fly.io deployment.
-2. **Most of the plan already exists.** Of 38 line items, 14 are implemented and 11 partly
-   implemented. Several exceed the plan's specification: dual P50/downside DSCR sizing,
-   fee-inclusive sculpting, separable calendar-and-cycle battery ageing, PyWake wake modelling,
-   an interest-parity FX hedge, a vintage-tracked loss carry-forward with expiry, and a
-   three-statement output with tie-out checks.
-3. **Nine technical corrections are needed.** The most consequential: the plan sizes maximum
-   debt as the NPV of CFADS, which is sizing at 1.00x coverage and oversizes debt by the target
-   DSCR factor, 30% at 1.30x (checked numerically against the repository's own function). It
+2. **Most of the plan already exists.** Of 38 line items, 16 are implemented and 10 partly
+   implemented, though two of the 16 only as an opt-in mode or with named gaps. Several exceed the
+   plan's specification: gearing solved on the real schedule to a DSCR target (opt-in, with an
+   optional P90 downside case that is off in the lender case), fee-inclusive sculpting, separable
+   calendar-and-cycle battery ageing, PyWake wake modelling, an interest-parity FX hedge, a
+   vintage-tracked loss carry-forward with expiry, and a three-statement output with tie-out checks.
+3. **Nine technical corrections are needed.** The most consequential: the plan bases maximum
+   debt "on the NPV of CFADS" without saying how. Read literally, as capacity equal to that NPV,
+   it sizes at 1.00x coverage and oversizes a sculpted facility by the target DSCR factor, 30% at
+   1.30x (checked numerically against the repository's closed-form capacity helper, which the
+   engine uses only for lender-pack metadata, not to size the facility). It
    also relies on LIBOR, which ceased in September 2024; cites a "WDAT for EU" depreciation
    schedule that this review could not identify (the writing-down allowance is a United Kingdom
    mechanism); misstates the OECD interest-limitation recommendation; drives hourly dispatch
    from Weibull and flow-duration distributions, which carry no chronology; and proposes battery
    arbitrage, which has no revenue basis under the committed CEB contracts, where the buyer
    dispatches the asset.
-4. **Its finance content is the audit's open work.** Eleven items touch findings of the August
-   2026 audit that block Board and lender release under #1110, including a critical finding on
-   scheduled-maturity balance and cash sweep, debt sizing on an unlevered tax basis, DSRA
+4. **Its finance content is the audit's open work.** At least 19 of the 38 items touch findings
+   of the August 2026 audit that block Board and lender release under #1110. They include three
+   critical findings, on the scheduled-maturity balance and cash sweep, the DSCR threshold and
+   the absence of on-site wind measurement, and also debt sizing on an unlevered tax basis, DSRA
    characterisation, the absent maintenance reserve and the LKR tranche currency. That work
    should be done, finding by finding, not by building a parallel engine.
 5. **The infrastructure rewrite has no present need.** A database, a React client, Kubernetes
-   and a Polars migration answer a multi-tenant product that has not been decided. Today's scope
-   is a small set of known clients, served by the existing stack. The global feasibility contract
-   DBAY-FRC-001 already defines how the platform becomes multi-jurisdiction, through versioned
-   packs, and lists a rewrite among its non-goals.
+   and a Polars migration answer a multi-tenant service. The owner has planned that as a later
+   extension (D2) but has not scoped it. Today's scope is a small set of known clients, served by
+   the existing stack. The global feasibility contract DBAY-FRC-001 already defines how the
+   platform becomes multi-jurisdiction, through versioned packs, and lists a rewrite among its
+   non-goals.
 6. **Hourly resolution belongs in producers and dispatch, not in the debt engine.** Lenders
-   test coverage quarterly or semi-annually. The right design aggregates hourly results onto the
-   finance period grid that Sprint 20 Lane A is building (draft #1231).
+   test coverage on the payment period the term sheet sets; the #1225 record states the lender
+   convention as at least quarterly, which this evaluation did not verify. The right design
+   aggregates hourly results onto the finance period grid that Sprint 20 Lane A is building
+   (#1231, a draft at the base, merged since).
 7. **The schedule conflicts with the delivery rules.** Five phases over twenty weeks is the
    "whale" that `DELIVERY-01` forbids.
 
@@ -55,12 +64,14 @@ already in progress.
 For the owner's decision:
 
 - **Lane A:** complete review of #1231 (A1 and A2), then A3, sub-annual debt service and DSCR.
+  #1231 has since merged, so Lane A continues at A3.
 - **Lane B:** B2, the waterfall shortfall treatment (P2-F3-01), and B3, a maintenance reserve and
-  multi-tier lock-up mechanism defaulting to off (P3-COV-08). Prepare B1, the levered-tax CFADS
-  basis (P2-F4-01), as the one KPI-moving dolphin, with its independent oracle.
+  multi-tier lock-up mechanism defaulting to off (P3-COV-08), both `R3`. Prepare B1, the
+  levered-tax CFADS basis (P2-F4-01), as the one KPI-moving dolphin, with its independent oracle.
 - **Lane C, evidence only:** the F5-02 lender and legal evidence; the Sri Lankan Inland Revenue
   Act text for the interest-limitation dolphin; reserve requirements from the term sheet and
-  LTSA; measured wind data (#1290).
+  LTSA; measured wind data (#1290 has since merged a partial met-mast export held under a
+  `HOLD`, which is not that evidence).
 
 Everything else in the plan is deferred to later sprints, each behind a named decision. The owner
 accepted this direction (D1). The dolphin list above is still a proposal: each dolphin needs its

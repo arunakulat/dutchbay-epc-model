@@ -108,7 +108,8 @@ Financing_Terms:
   min_dscr_covenant: 1.2
   reserves:
     dsra_months: 6
-    receivables_guarantee_months: 9
+    # receivables_guarantee_months removed (#1399): nothing in the engine reads it, and
+    # v14 pre-flight refuses it. Receivables support awaits the term sheet (#920).
   use_revenue_guarantee: false
   guarantee_revenue_pct: 0.0075
   fees:

@@ -138,3 +138,117 @@ check passed on the exact PR head. Otherwise merge verification fails closed.
 
 Green CI is delivery evidence, not independent semantic review. Neither CI nor review lifts a
 release, lender, Board, professional, evidence, deployment, publication, or `HOLD` boundary.
+
+## 8. Merge trains (`TRAIN-01`)
+
+A merge train lets two or three reviewed pull requests, the cars, share one full-suite run and still
+land as separate commits on `main`. This section is how a car's disposition reaches the train head and
+how the landing is verified. It adds a second carry-forward beside §7 and does not change §7.
+
+**Carry-forward.** A car's disposition, bound to its frozen draft head, carries onto the train head
+only when its lane records all three of §7's proofs, applied to the train:
+
+1. **BLOB-HASH IDENTITY** for every file the lane judged, between the car's reviewed head and the
+   train head.
+2. **BIDIRECTIONAL IMPORT ISOLATION** between the car and everything else the train head changes,
+   meaning the other cars and any advance of `main`. For non-code sources, also account for normative
+   references and dependencies. Count shared runtime inputs as dependencies too: a scenario or
+   configuration file, a test fixture, a `conftest.py`, `pyproject.toml`, `VERSION`, a module that
+   `tests/conftest.py` loads, an installed library, or anything else that two cars' code or tests
+   both read. A shared runtime input links the car to another part of the train head only when one
+   side changes bytes in it that the other side's code or tests consume. Two kinds of change are
+   links whatever the consumption artifact shows:
+   - **Import references.** The narrowing covers only an input shared by loading it, through
+     `tests/conftest.py`, pytest's configuration or the installed environment. A module or test file
+     that one side changes and that imports a module the other side changes is a link under the
+     import-reference test, whatever the consumption artifact shows. Applied in both directions,
+     this also covers a changed module that is imported by the other side's changed files.
+   - **Load-time effects.** Changed bytes that take effect when a file is loaded or tests are
+     collected, without a consumer naming them, are consumed by every test that loads them, so they
+     are a link: an autouse fixture, a pytest hook, a module-level statement with a side effect (an
+     environment variable, a warnings filter, a random seed, a plotting backend, a patch or a
+     registration), and pytest's or coverage's own configuration in `pyproject.toml`.
+
+   Otherwise, loading a file is not consuming the bytes changed in it: a definition or constant that
+   only a named reference reaches is consumed only where something names it. A module that every
+   test imports through `tests/conftest.py`, in which one car changes a constant that the other car
+   never reads, is not a link once the consumption artifact below shows that. Whether changed bytes
+   are consumed is shown by that artifact, never by a judgement. Path-disjoint cars that share an
+   input whose changed bytes are consumed are not isolated, and neither are cars whose consumption
+   artifact is missing or incomplete.
+3. The **complete diff from the car's reviewed head to the train head**, shown in full, not a summary.
+
+**Consumption artifact.** For every runtime input that one side changes and the other side's code or
+tests read, the lane records the artifact in both directions: whether the car consumes what the rest
+of the train head changes, and whether the rest consumes what the car changes. A side is a car or an
+advance of `main`. Anyone may produce the artifact, and the lane re-runs what it needs before relying
+on it. It has three parts, and any hit or difference is a link:
+
+- **The changed bytes:** the input's full diff, and the names, keys, lines or distribution versions
+  that it changes, with their old and new literal values.
+- **A reference search:** every reference to those names, keys, distributions and old or new literal
+  values in the other side's changed files and test selection, each hit listed with its file and
+  line. A hit is a link even when the test that holds it would pass either way.
+- **A differential run:** a side's test selection run on two trees that differ only by the other
+  side's changes. Each car's selection runs on `main` plus that car alone and on the train head, which
+  differ only by the other cars; because every car records its own pair, the pairs cover both
+  directions between cars. Each car's selection also runs on its own train commit, the tree it lands
+  as on `main`. Where `main` has advanced past a car's reviewed base, the car's selection also runs
+  on its reviewed head and on `main` plus the car, and the advance's selection runs on `main` and on
+  `main` plus the car. All runs of a car's selection must collect the same test IDs with the same
+  outcomes. Where a side changes the lock or an installed library, each run uses an environment
+  installed from its own tree's lock.
+
+A side's test selection is the test files it adds or changes, and every test file whose own import
+statements name a module it changes. An empty selection is recorded as empty, and the reference
+search then carries the direction alone. §7's proof 2 for a single pull request's base advance is
+unchanged: this narrower link test applies only to a train.
+
+If any proof is absent, incomplete or fails, the car leaves the train and its disposition stays bound
+to its own head. A judgement that another car cannot matter never substitutes for these artifacts.
+The cars are never edited on the train branch. A fix belongs on the car's own branch, which is a
+subject change, so §6 restarts both of the car's reviews.
+
+**Landing check.** Run the pre-landing check twice: on the built train before it is opened ready, so a
+mis-built train never spends a full-suite run, and again just before landing. Each time, record the
+protected `main` SHA, which must be `origin/main` at that moment. The train head's commits must form a
+chain of non-merge commits, one per car, whose first parent is that `main` SHA. **Each train commit
+must be exactly its car's reviewed diff:** it changes the same paths that the car's reviewed head
+changes from its merge base, with the same modes and blobs. Compare both old and new modes and blob IDs, change status, and
+every path byte using unambiguous framing. Its message and author equal the car's
+recorded merge message and author, where the author is the car pull request's author as a squash
+merge of that pull request would record it, and its subject ends with that car's pull-request number.
+Each car's reviewed head must still be its pull request's head, so a car list that pairs a number with
+another car's head fails. The three proofs above compare trees, so they cannot say which commit carries
+which car. Without this check, a train whose cars' messages were swapped, or whose commit for one car
+also carries a stray file or part of another car, passes every tree comparison. It would then land
+under the wrong message on a `main` whose history is never rewritten, and reverting one car would
+revert another. If `main` moves before landing, the train is rebuilt from the new `main`, never
+refreshed with a merge commit, and the three proofs and the pre-landing check are repeated on the new
+train head. The train lands by rebase-merge, never squash. After it lands, verification passes only
+if:
+
+- the SHA the merge returned equals the freshly fetched `origin/main` tip, so a side-parent or
+  stale reachable commit cannot substitute for the protected landing; reconcile before proceeding
+  if protected main has advanced again;
+- the landed commits contain no merge commit;
+- each landed commit's tree, message and author equal those of the matching train commit;
+- each landed commit's parent is the previous landed commit, and the first one's parent is the
+  recorded `main` SHA; and
+- the last landed commit's tree equals the train head's tree.
+
+Any mismatch fails merge verification closed, exactly as a squash whose tree differs from the accepted
+head does under §7. The commands that run these checks must fail closed on their own: each stops at its
+first failed comparison and reports success only with an explicit line. A check that passes in silence
+is not a check.
+
+**What a train does not prove.** The full suite ran on the union of the cars. The intermediate commits
+between cars on `main` were never run by the full suite on their own, which is why the cars must be
+path-disjoint and import-isolated. The differential run narrows that gap without closing it: each
+car's own test selection ran on `main` plus that car alone, but the rest of the suite did not. The
+artifact also has known blind spots. A value that one side reads through code neither side changed
+(a configuration key read by unchanged finance code, a transitive library dependency, a shared test
+helper or fixture) is invisible to the reference search, and the differential run sees it only if
+it changes a test outcome. The full suite on the train head and the KPI-vector check bound that
+residual; they do not remove it. A train lifts no `HOLD`, and it confers no release, lender, Board,
+professional, evidence, deployment or publication authority.

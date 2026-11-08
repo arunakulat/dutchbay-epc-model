@@ -92,8 +92,9 @@ def test_gross_up_charges_a_real_cash_cost_without_touching_dscr() -> None:
 
 
 def test_per_year_wht_equals_interest_times_rate_aligned() -> None:
-    """Proves the period alignment: each year's charged WHT equals that year's scheduled
-    interest * rate (including the bridge-period interest folded into operating year 1).
+    """Proves the period alignment: each year's charged WHT equals that year's interest
+    paid * rate: scheduled interest (including the bridge-period interest folded into
+    operating year 1) plus the balloon interest paid after maturity (#1505).
     """
     rate = 0.10
     full = evaluate_with_overrides(
@@ -110,7 +111,11 @@ def test_per_year_wht_equals_interest_times_rate_aligned() -> None:
     # year 1 must carry real (bridge-inclusive) interest, not zero
     assert rows[0]["interest_usd"] > 0.0
     for row, d in zip(rows, dist):
-        expected = float(row["interest_usd"]) * rate
+        # #1505: the balloon interest paid after maturity (the refinanced tranche's,
+        # years 15-17 here) goes to the same lenders and bears the same WHT.
+        expected = (
+            float(row["interest_usd"]) + float(row["balloon_interest_paid_usd"])
+        ) * rate
         assert d["wht_on_interest_usd"] == pytest.approx(expected, abs=1.0)
 
 
@@ -145,17 +150,24 @@ def test_interest_deductibility_flag_is_live_on_the_equity_path() -> None:
     facility leaves a LARGER balloon (USD 31.55m vs 28.63m) whose refinance service
     equity must fund (tranche coverage 0.25x vs 0.28x). So the band's upper bound moves
     from 0.02 to 0.08; the lower bound still catches the flag going decorative.
+
+    #1505 widened it once more, to +929bps: with the flag on, the levered tax now also
+    deducts the refinanced tranche's interest when it is paid (the off case deducts
+    nothing, so it does not move). The upper bound moves from 0.08 to 0.12.
     """
     on = evaluate_with_overrides(LENDER, overrides={})  # default True
     off = evaluate_with_overrides(
         LENDER, overrides={"tax.interest_deductibility": False}
     )
     assert on["equity_irr"] == pytest.approx(_CANON_EQ_IRR, abs=1e-9)
-    assert off["equity_irr"] == pytest.approx(-0.3590084845235719, abs=1e-9)
+    # #1504 (2026-10-31): both cases now charge the post-maturity senior fee on the
+    # refinanced balance actually outstanding; off moves -35.90% -> -32.30% and the
+    # gap stays inside the band (+586bps).
+    assert off["equity_irr"] == pytest.approx(-0.32300741810736144, abs=1e-9)
     # Still material to equity. Both bounds matter: the lower one catches the flag going
     # decorative again, the upper one catches the refinance gap between the two cases
     # growing beyond what the balloon difference explains.
-    assert 0.001 < on["equity_irr"] - off["equity_irr"] < 0.08
+    assert 0.001 < on["equity_irr"] - off["equity_irr"] < 0.12
     # The shield now reaches the sizing path as well, in these directions.
     assert on["llcr"] > off["llcr"]
     assert on["min_dscr"] < off["min_dscr"]
