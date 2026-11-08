@@ -50,6 +50,8 @@ EXPECTED_PAYLOAD_SHA256 = {
     "profile/generation_profile.csv": "cefa4b9e37f85e5f7774a14727bf35a43c9c3bd8b3219bd730a35aff4f36ab76",
 }
 EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
+    # Re-pinned for 15.23.0 (#1525, undefined project IRR: only VERSION moved; the lender
+    # scenario did not).
     # Re-pinned for 15.22.0 (Blue Whale turbine on DutchBay T2: only VERSION moved; the
     # lender scenario did not).
     # Re-pinned for 15.21.0 (PUCSL O&M indexation: only VERSION moved; the scenario did not).
@@ -75,7 +77,7 @@ EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
     # and profile are byte-identical - so this moved only because the manifest
     # records which sources produced them, which is the guard working, not
     # drifting. Verified deterministic across repeated runs (MRM-01).
-    "6182a4d88fc7ea1439fff598d69ad69e8911ac7deac70d5a12e3fe84db53c70c"
+    "b581f2a960b2a064e5d00558a9c08e3bf53670360cd1422150aff5df8b55ba45"
 )
 
 MASTER_REDIRECT_MUTATIONS = [
