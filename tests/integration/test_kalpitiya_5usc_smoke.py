@@ -58,8 +58,17 @@ RESPONSIVE_KPIS = (
 MIN_RELATIVE_MOVE = 1e-4
 DRIVERS = (
     ("tariff +10%", {"tariff.lkr_per_kwh": 18.359}),
-    ("opex +10%", {"opex.usd_per_year": 3_861_000.0}),
+    # #1577: 3.861M was +10% on the 15-turbine 3.51M; on the 14-turbine 3.33M it is +15.9%.
+    ("opex +15.9%", {"opex.usd_per_year": 3_861_000.0}),
 )
+
+# driver label -> KPIs the shock leaves UNDEFINED. #1577 x #1525: on 14 turbines the opex
+# shock turns year-20 CFADS negative (the LKR tariff is fixed and opex escalates), so the
+# project cashflows end below zero, the NPV has the same sign at both ends of the solver's
+# bracket, and the project IRR is reported undefined (None), never 0.0 (#1525). That is a
+# move away from the finite base value, so it still proves the KPI is computed; the
+# tariff driver proves project_irr responds as a number.
+DRIVER_UNDEFINED_KPIS: dict[str, tuple[str, ...]] = {"opex +15.9%": ("project_irr",)}
 FINANCIAL_TARGETS = {
     "project_irr": ("project_irr", 1.0, 0.005),
     "equity_irr": ("equity_irr", 1.0, 0.005),
@@ -96,11 +105,27 @@ def _evaluate_kpis(
 
 
 def _assert_kpis_respond(
-    base_kpis: Mapping[str, Any], shocked_kpis: Mapping[str, Any], label: str
+    base_kpis: Mapping[str, Any],
+    shocked_kpis: Mapping[str, Any],
+    label: str,
+    undefined: tuple[str, ...] = (),
 ) -> None:
-    """Fail with an actionable list when any fixture value remains frozen."""
+    """Fail with an actionable list when any fixture value remains frozen.
+
+    A key named in ``undefined`` must be finite at base and undefined (absent or None)
+    under the shock: undefined is a move, while a returned base value would not be.
+    """
     unmoved = []
     for key in RESPONSIVE_KPIS:
+        if key in undefined:
+            if not math.isfinite(float(base_kpis[key])) or (
+                shocked_kpis.get(key) is not None
+            ):
+                unmoved.append(
+                    f"{key}: expected finite -> undefined, got "
+                    f"{base_kpis.get(key)!r} -> {shocked_kpis.get(key)!r}"
+                )
+            continue
         base, shocked = float(base_kpis[key]), float(shocked_kpis[key])
         if not math.isfinite(base) or not math.isfinite(shocked):
             unmoved.append(f"{key}: non-finite value {base!r} -> {shocked!r}")
@@ -162,34 +187,44 @@ def test_resource_and_turbine_equal_the_canonical(cfg: dict) -> None:
     assert float(cfg["fx"]["start_lkr_per_usd"]) == pytest.approx(333.79, abs=0.001)
     assert float(cfg["wind_resource"]["weibull_a"]) == pytest.approx(8.199, abs=0.01)
     assert float(cfg["wind_resource"]["weibull_k"]) == pytest.approx(2.665, abs=0.01)
-    assert cfg["resource"]["turbines"]["count"] == 15
-    # AEP tracks the canonical (shared 10MW summary mock); 464.3 GWh post 2% P50 haircut.
+    # #1577: DutchBay drops to 14 turbines (T2 is the Blue Whale turbine's).
+    assert cfg["resource"]["turbines"]["count"] == 14
+    # AEP tracks the canonical (shared 10MW summary mock); 433.2 GWh post 2% P50 haircut
+    # (464.3 for 15 turbines).
     assert float(cfg["expected_results"]["net_aep_p50_gwh"]) == pytest.approx(
-        464.3, abs=0.5
+        433.2, abs=0.5
     )
 
 
 def test_capex_is_granular_bottom_up(cfg: dict) -> None:
-    """CAPEX is a bottom-up line-item build the engine sums to $207.5M ($1,300/kW)."""
+    """CAPEX is a bottom-up line-item build the engine sums to $196.85M ($1,322/kW).
+
+    #1577 (14 turbines): the count-driven lines scale 14/15 and the fixed lines stay, so
+    the total falls from $207.5M and $/kW rises from $1,300.
+    """
     from finance.debt_v14 import _extract_capex_usd
 
     cx = cfg["capex"]
     assert cx["derive_from_breakdown"] is True
     line_sum = sum(v for v in cx["breakdown"].values() if isinstance(v, (int, float)))
-    assert line_sum == pytest.approx(207_500_000, rel=1e-6)  # line items sum
+    assert line_sum == pytest.approx(196_846_666, rel=1e-6)  # line items sum
     assert line_sum == pytest.approx(float(cx["usd_total"]), rel=0.005)  # cross-check
     # the engine derives CAPEX from the breakdown, not the flat total
-    assert _extract_capex_usd(dict(cfg)) == pytest.approx(207_500_000, rel=1e-6)
-    assert _extract_capex_usd(dict(cfg)) / 159_600 == pytest.approx(
-        1300.0, abs=1.0
-    )  # $/kW
+    assert _extract_capex_usd(dict(cfg)) == pytest.approx(196_846_666, rel=1e-6)
+    assert _extract_capex_usd(dict(cfg)) / 148_900 == pytest.approx(
+        1322.0, abs=1.0
+    )  # $/kW on 148.9 MW
 
 
 def test_opex_is_granular_and_escalates(cfg: dict) -> None:
-    """OPEX is a bottom-up build at $22/kW-yr that escalates 2.5%/yr in USD (plus FX)."""
+    """OPEX is a bottom-up build at $22.36/kW-yr that escalates 2.5%/yr in USD (plus FX).
+
+    #1577 (14 turbines): the per-turbine service contract scales 14/15 and the land lease
+    is the per-turbine lease rule (14 x 20,000); was $3.51M at $22/kW-yr.
+    """
     op = cfg["opex"]
     line_sum = sum(v for v in op["breakdown"].values() if isinstance(v, (int, float)))
-    assert line_sum == pytest.approx(3_510_000, rel=1e-6)
+    assert line_sum == pytest.approx(3_330_000, rel=1e-6)
     assert line_sum == pytest.approx(float(op["usd_per_year"]), rel=1e-6)
     assert float(op["escalation_pct"]) == pytest.approx(2.5, abs=0.01)
 
@@ -227,20 +262,22 @@ def test_pipeline_runs_config_driven_and_is_uneconomic(cfg: dict) -> None:
     # The IRR-floor fix (approx_project_irr now searches negative rates) lets it report
     # the true negative result instead of a clamped 0.0%. F5-01 then aligns the operating
     # FX path to COD while retaining the close-date tax basis.
-    assert kpis["project_irr"] == pytest.approx(-0.0518, abs=0.005)
+    # #1577 (14 turbines): -5.18% -> -5.45%, equity -16.18% -> -16.44%, NPV -148.6M ->
+    # -142.3M, facility 48.76M -> 45.27M.
+    assert kpis["project_irr"] == pytest.approx(-0.0545, abs=0.005)
     assert kpis["project_irr"] < 0.0  # NEGATIVE — below break-even even undiscounted
     assert kpis["equity_irr"] == pytest.approx(
-        -0.16183, abs=0.005
+        -0.16438, abs=0.005
     )  # PR-B UIP LKR rate deepens it; #1397's levered-tax sizing deepens it again
     # (the facility grows 48.24M -> 48.76M and absorbs more than the shield returns)
     assert kpis["equity_irr"] < 0.0  # NEGATIVE — the headline finding
     assert kpis["project_npv"] == pytest.approx(
-        -148.63e6, rel=0.05
+        -142.31e6, rel=0.05
     )  # PR-B higher WACC deepens NPV
     assert kpis["project_npv"] < 0.0  # deeply underwater
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=0.02)
     assert kpis["max_debt_usd"] == pytest.approx(
-        48.7625e6, rel=0.02
+        45.2747e6, rel=0.02
     )  # PR-B UIP LKR rate de-levers; #1397's levered-tax basis adds two steps back
 
 
@@ -284,7 +321,14 @@ def test_kalpitiya_fixture_kpis_respond_to_economic_drivers(
 ) -> None:
     """TEST-01: every non-solved fixture KPI responds to a real driver."""
     shocked = _evaluate_kpis(raw_config, overrides)
-    _assert_kpis_respond(gateway_kpis, shocked, label)
+    undefined = DRIVER_UNDEFINED_KPIS.get(label, ())
+    _assert_kpis_respond(gateway_kpis, shocked, label, undefined)
+    for key in undefined:
+        # An undefined KPI must be backed by another driver that moves it as a number.
+        assert any(
+            other != label and key not in DRIVER_UNDEFINED_KPIS.get(other, ())
+            for other, _ in DRIVERS
+        )
     financing = raw_config["Financing_Terms"]
     target_dscr = float(financing["target_dscr"])
     assert financing["debt_sizing"] == "dual_dscr"

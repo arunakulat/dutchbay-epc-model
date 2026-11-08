@@ -46,13 +46,15 @@ _EXPECTED_KPIS = json.loads(
 CASES = {
     "lean_977": {
         "file": SCEN_DIR / "dutchbay_capex_sinohydro_lean_2025Q4.yaml",
-        "usd_total": 155_929_200,
-        "per_kw": 977,
+        # #1577 (14 turbines): count-driven lines scale 14/15, fixed lines stay, so $/kW
+        # rises (was 155,929,200 at $977/kW). The case keys keep their original names.
+        "usd_total": 147_924_835,
+        "per_kw": 993,
     },
     "prudent_1420": {
         "file": SCEN_DIR / "dutchbay_capex_eia_prudent_2025Q4.yaml",
-        "usd_total": 226_632_000,
-        "per_kw": 1420,
+        "usd_total": 214_998_224,  # #1577 (was 226,632,000 at $1,420/kW)
+        "per_kw": 1443,
     },
 }
 
@@ -81,8 +83,21 @@ RESPONSIVE_KPIS = (
 MIN_RELATIVE_MOVE = 1e-4
 DRIVERS = (
     ("tariff +10%", {"tariff.lkr_per_kwh": 22.33}),
-    ("opex +25%", {"opex.usd_per_year": 3_750_000.0}),
+    # #1577: 3.75M was +25% on the 15-turbine 3.0M; on the 14-turbine 2.846667M it is +31.7%.
+    ("opex +31.7%", {"opex.usd_per_year": 3_750_000.0}),
 )
+
+# (case, driver) -> KPIs exempt from the move check for that one driver, each with the
+# driver that still proves it is computed. Under the DSCR sculpt the facility re-sizes with
+# a uniform revenue scale, so LLCR (PV of CFADS over the debt it sizes) is invariant to a
+# tariff shock up to the 0.0025 gearing-step quantisation, and the sign of that residual
+# depends on where the step lands (#1577: on 14 turbines the prudent case moves 0.2725 ->
+# 0.305 and LLCR moves 5e-7; on 15 it moved 1.5e-3, and the lean case moves the other way).
+# The opex driver moves LLCR by 1.6% on the same case, which the opex parametrisation of
+# the test below asserts, so the guard against a returned vector still covers it.
+DRIVER_INVARIANT_KPIS: dict[tuple[str, str], tuple[str, ...]] = {
+    ("prudent_1420", "tariff +10%"): ("llcr",),
+}
 
 
 @pytest.fixture(scope="module")
@@ -107,11 +122,16 @@ def _evaluate_kpis(
 
 
 def _assert_kpis_respond(
-    base_kpis: Mapping[str, Any], shocked_kpis: Mapping[str, Any], label: str
+    base_kpis: Mapping[str, Any],
+    shocked_kpis: Mapping[str, Any],
+    label: str,
+    exempt: tuple[str, ...] = (),
 ) -> None:
     """Fail with an actionable list when any fixture value remains frozen."""
     unmoved = []
     for key in RESPONSIVE_KPIS:
+        if key in exempt:
+            continue
         base, shocked = float(base_kpis[key]), float(shocked_kpis[key])
         relative = abs(shocked - base) / max(abs(base), 1e-6)
         if relative <= MIN_RELATIVE_MOVE:
@@ -138,14 +158,15 @@ def test_capex_block_sums_and_per_kw(name: str) -> None:
 def test_resource_invariant_to_capex(name: str) -> None:
     """Only capex changed — resource fields equal the canonical lender case."""
     cfg = load_scenario_config(str(CASES[name]["file"]))
-    assert float(cfg["project"]["capacity_mw"]) == pytest.approx(159.6, abs=0.01)
+    # #1577: 14 turbines (159.6 MW / 464.3 / 404.4 GWh for 15).
+    assert float(cfg["project"]["capacity_mw"]) == pytest.approx(148.9, abs=0.01)
     assert float(cfg["expected_results"]["net_aep_p50_gwh"]) == pytest.approx(
-        464.3, abs=0.5
+        433.2, abs=0.5
     )
     # #996 D3b: net_aep_p90_gwh stays in the scenario (a runtime input for reconciliation
     # + downside debt); only the financial-KPI oracle moved to the fixture.
     assert float(cfg["expected_results"]["net_aep_p90_gwh"]) == pytest.approx(
-        404.4, abs=0.5
+        377.3, abs=0.5
     )
     assert float(cfg["expected_results"]["capacity_factor"]) == pytest.approx(
         0.332, abs=0.001
@@ -191,7 +212,14 @@ def test_capex_fixture_kpis_respond_to_economic_drivers(
     raw_config = yaml.safe_load(Path(CASES[name]["file"]).read_text(encoding="utf-8"))
     base = _evaluate_kpis(raw_config, {})
     shocked = _evaluate_kpis(raw_config, overrides)
-    _assert_kpis_respond(base, shocked, f"{name} / {label}")
+    exempt = DRIVER_INVARIANT_KPIS.get((name, label), ())
+    _assert_kpis_respond(base, shocked, f"{name} / {label}", exempt)
+    for key in exempt:
+        # An exemption must be backed by another driver in DRIVERS.
+        assert any(
+            other != label and key not in DRIVER_INVARIANT_KPIS.get((name, other), ())
+            for other, _ in DRIVERS
+        ), f"{name}: {key} is exempt from every driver"
     assert shocked["min_dscr"] == pytest.approx(base["min_dscr"], abs=1e-9)
 
 

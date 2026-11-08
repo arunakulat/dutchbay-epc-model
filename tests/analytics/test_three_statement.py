@@ -240,7 +240,8 @@ def test_lendercase_paid_in_equity_ties_to_sources_and_uses_with_levies() -> Non
     config = load_scenario_config(lender)
     # The capitalised base is the levy-inclusive financed capex (delegated to the
     # single finance.debt_v14._extract_capex_usd resolver), not the pre-levy usd_total.
-    assert _resolve_capex_usd(config) == pytest.approx(167_859_300.0, abs=1e-6)
+    # #1577 (14 turbines): 151.4072M + 7.70814M duties (was 159.6M + 8.2593M = 167.8593M).
+    assert _resolve_capex_usd(config) == pytest.approx(159_115_340.552, abs=1e-6)
 
     result = run_v14_pipeline(config=lender, validation_mode="strict")
     ts = build_three_statement_from_run(result, config)
@@ -248,10 +249,11 @@ def test_lendercase_paid_in_equity_ties_to_sources_and_uses_with_levies() -> Non
     # Paid-in equity ties EXACTLY to the Sources & Uses equity (levy-inclusive):
     # the same levy-inclusive capex base, less the facility actually sized.
     debt_total = float((result["debt_result"] or {})["debt_total"])
-    assert debt_total == pytest.approx(63_366_885.75, abs=1e-6)
+    # #1577 (14 turbines): facility 63.367M -> 58.873M on the 159.115M levy-inclusive base.
+    assert debt_total == pytest.approx(58_872_676.00424, abs=1e-6)
     paid_in_equity = float(ts.balance_sheet[0].paid_in_equity)
-    assert paid_in_equity == pytest.approx(167_859_300.0 - debt_total, abs=1e-6)
-    assert paid_in_equity == pytest.approx(104_492_414.25, abs=1e-6)
+    assert paid_in_equity == pytest.approx(159_115_340.552 - debt_total, abs=1e-6)
+    assert paid_in_equity == pytest.approx(100_242_664.54776, abs=1e-6)
     # And the balance sheet still articulates: every tie-out passes.
     assert ts.tie_outs.balance_sheet_balances
     assert ts.tie_outs.debt_retires_to_residual

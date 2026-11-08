@@ -44,7 +44,7 @@ def _valid_kwargs(**overrides: Any) -> Dict[str, Any]:
     """The same reconciling lender-case inputs used across the API tests."""
     base: Dict[str, Any] = {
         "site_name": "DutchBay",
-        "capacity_mw": 159.6,
+        "capacity_mw": 148.9,  # 14 turbines (#1577); was 159.6
         "capacity_factor": 0.332,
         "project_life_years": 20,
         "ppa_price_lkr_per_kwh": 20.30,
