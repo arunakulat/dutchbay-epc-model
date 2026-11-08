@@ -1046,7 +1046,8 @@ def test_solar_bess_kpi_pins_and_responsiveness() -> None:
         assert base[key] == pytest.approx(pinned, rel=1e-9, abs=1e-12), key
     # No project IRR resolves (#1494). The 20-year CFADS sum is below the capex, so the NPV
     # is negative at every non-negative rate, but the CFADS turn negative after the 15-year
-    # priority term, so the NPV changes sign twice at negative rates (near -19% and -2%).
+    # priority term, so the NPV changes sign twice at negative rates (near -25% and -0.5%
+    # on the 15.22.0 scenario, v0.7).
     # The solver resolves no single rate, and the KPI surface reports that as undefined
     # (None), not the 0.0 it used to substitute. The numeric surface drops a None KPI.
     assert "project_irr" not in base
