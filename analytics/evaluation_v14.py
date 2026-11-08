@@ -11,6 +11,7 @@ from analytics.contracts_v14 import SensitivitySuite
 # Canonical lender-grade pipeline (analytics.pipeline_v14_enhanced).
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 from analytics.scenario_loader import load_scenario_config
+from finance.capex_price_basis import apply_capex_price_basis
 from finance.cashflow_v14_utils import pct_to_decimal
 from finance.self_curtailment_v14 import (
     compose_curtailment,
@@ -342,6 +343,20 @@ def _run_pipeline_with_config(
         )
 
     return dict(payload)
+
+
+def evaluated_scenario_config(config: Mapping[str, Any]) -> Dict[str, Any]:
+    """Return a scenario as the engine prices it, for a surface that re-loads the YAML.
+
+    The canonical pipeline resolves a declared ``capex.price_basis`` once, on the evaluated
+    configuration (#1569): ``capex.usd_total`` becomes the capex escalated to the
+    construction draws, and the run manifest's ``config_sha256`` binds that configuration.
+    A surface that re-loads the scenario file after the run (the out-of-band report
+    emitters) holds the stated, price-year figure instead. Passing it through here gives the
+    configuration the engine financed. Idempotent; a configuration without the block is
+    returned as a copy.
+    """
+    return apply_capex_price_basis(config)
 
 
 def evaluate_scenario_from_dict(
@@ -693,6 +708,7 @@ __all__ = [
     "evaluate_with_overrides",
     "evaluate_scenario",
     "evaluate_scenario_from_dict",
+    "evaluated_scenario_config",
     "expand_dotted_overrides",
     "normalize_kpi_dict",
     "evaluate_with_casper_tail_risk",

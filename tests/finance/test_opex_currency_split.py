@@ -55,6 +55,11 @@ def _opex_lkr(rows: List[Dict[str, float]]) -> List[float]:
     return [r["opex_lkr"] for r in rows]
 
 
+# #1569: the wind opex is priced in 2026 (opex.price_year) and COD is 2028, so operating
+# year t carries t + 2 years of escalation. Written out, not read back from the engine.
+PRE_COD_YEARS = 2028 - 2026
+
+
 # ---------------------------------------------------------------------------
 # No split: the original path, byte-identical
 # ---------------------------------------------------------------------------
@@ -65,7 +70,7 @@ def test_without_a_split_the_opex_line_is_the_original_expression() -> None:
     total = float(cfg["opex"]["usd_per_year"])
     esc = 0.05  # opex.escalation_pct 5.0, the single-currency reading
     for t, row in enumerate(rows):
-        usd = total * (1.0 + esc) ** t
+        usd = total * (1.0 + esc) ** (t + PRE_COD_YEARS)
         assert row["opex_usd"] == usd  # bit-exact
         assert row["opex_lkr"] == usd * (1.0 + 0.0) * row["fx_rate"]
 
@@ -92,8 +97,11 @@ def test_split_opex_matches_its_closed_form_on_the_own_fx_path() -> None:
     # usd_lkr_depreciation_pct: relative_ppp, derived from the block's inflation inputs.
     depr = 1.05 / 1.025 - 1.0
     for t, row in enumerate(rows):
+        # The FX path is the engine's own, anchored at the financial-close spot; the
+        # escalation runs from the 2026 price date (#1569).
         usd_fx = spot * (1.0 + depr) ** (construction + t)
-        expected = total * s * 1.025**t * usd_fx + total * (1.0 - s) * spot * 1.05**t
+        n = t + PRE_COD_YEARS
+        expected = total * s * 1.025**n * usd_fx + total * (1.0 - s) * spot * 1.05**n
         assert row["opex_lkr"] == pytest.approx(expected, rel=1e-12)
         # The model curve stays flat (constant-LKR reporting), so the USD view is LKR / spot.
         assert row["fx_rate"] == spot
@@ -182,10 +190,13 @@ def test_usd_depreciation_lowers_the_wind_project_npv() -> None:
     harder = evaluate_with_overrides(
         str(WIND), overrides={"opex.currency_split.usd_lkr_depreciation_pct": 8.0}
     )
-    unsplit = evaluate_with_overrides(
-        str(WIND), overrides={"opex.currency_split": None}
+    # #1569: compared with a split that carries no depreciation. The unsplit single-rate
+    # line is no longer a bound: it escalates every dollar at the LKR rate from the 2026
+    # price date, while the split's USD share moves with FX only from financial close.
+    flat = evaluate_with_overrides(
+        str(WIND), overrides={"opex.currency_split.usd_lkr_depreciation_pct": 0.0}
     )
-    assert harder["project_npv"] < base["project_npv"] < unsplit["project_npv"]
+    assert harder["project_npv"] < base["project_npv"] < flat["project_npv"]
 
 
 def test_relative_ppp_derives_the_depreciation_from_the_inflation_inputs() -> None:

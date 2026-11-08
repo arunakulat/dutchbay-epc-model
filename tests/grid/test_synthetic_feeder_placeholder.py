@@ -50,6 +50,8 @@ EXPECTED_PAYLOAD_SHA256 = {
     "profile/generation_profile.csv": "cefa4b9e37f85e5f7774a14727bf35a43c9c3bd8b3219bd730a35aff4f36ab76",
 }
 EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
+    # Re-pinned for 15.26.0 (#1569, Blue Whale price dates: only VERSION moved; the pinned
+    # 15-turbine lender scenario did not).
     # Re-pinned for 15.25.0 (#1577, DutchBay drops to 14 turbines: VERSION moved, and the
     # pinned scenario path moved to legacy_scenarios/dutchbay_lendercase_2025Q4_15_turbines.yaml,
     # a byte-identical freeze of the 15-turbine lender case, because the feeder needs gross
@@ -83,7 +85,7 @@ EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
     # and profile are byte-identical - so this moved only because the manifest
     # records which sources produced them, which is the guard working, not
     # drifting. Verified deterministic across repeated runs (MRM-01).
-    "ed010dcb547fcb1270aff36eaaf9c4afd550511e90fb11545c1810d6f875a3dc"
+    "fc44c5540347e27b50f9dc370a686c391957f406e657c82bf945610757392017"
 )
 
 MASTER_REDIRECT_MUTATIONS = [
