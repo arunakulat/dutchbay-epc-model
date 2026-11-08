@@ -9,7 +9,7 @@ private corpus. This directory holds no PGF content.
 | Item | Value |
 |---|---|
 | Private location | `arunakulat/DutchBay_RAG`, `corpus/planet_green_force_2026/` |
-| Pinned commit | `e60a1392dfb4178420358d4507f02402fa0d2fca`, on branch `claude/private-scmc-pgf-corpus` until `arunakulat/DutchBay_RAG#41` merges |
+| Pinned commit | `e60a1392dfb4178420358d4507f02402fa0d2fca`, on the private repository's `main` since `arunakulat/DutchBay_RAG#41` landed by merge commit `50127dbc` on 8 November 2026 |
 | Snapshot | 7 November 2026, 963 files, integrity-checked by that area's `MANIFEST.sha256` |
 | Refresh | Whoever starts PGF work files a snapshot first. See #1559 |
 

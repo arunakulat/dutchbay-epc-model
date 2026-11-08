@@ -104,6 +104,8 @@ SIZING_OPEX_BASIS = {
     "opex.currency_split": None,
     "opex.usd_per_year": 257030,
     "Financing_Terms.construction_periods": 2,
+    # #1570: the count must equal the declared build time, so the basis states both.
+    "timeline.construction_years": 2,
     "tariff.om_indexation": None,
     "generation.technologies.bess_1.revenue.escalable_om_lkr_per_kwh": None,
 }
@@ -1044,12 +1046,19 @@ def test_solar_bess_kpi_pins_and_responsiveness() -> None:
     base = _kpis(SOLAR_BESS)
     for key, pinned in SOLAR_BESS_PINS.items():
         assert base[key] == pytest.approx(pinned, rel=1e-9, abs=1e-12), key
-    # No project IRR: the 20-year CFADS sum is below the capex, so NPV < 0 at every rate.
-    assert base["project_irr"] == 0.0
+    # No project IRR resolves (#1494). The 20-year CFADS sum is below the capex, so the NPV
+    # is negative at every non-negative rate, but the CFADS turn negative after the 15-year
+    # priority term, so the NPV changes sign twice at negative rates (near -25% and -0.5%
+    # on the 15.22.0 scenario, v0.7).
+    # The solver resolves no single rate, and the KPI surface reports that as undefined
+    # (None), not the 0.0 it used to substitute. The numeric surface drops a None KPI.
+    assert "project_irr" not in base
     full = evaluate_with_overrides(
         str(SOLAR_BESS), overrides={}, return_full_result=True
     )
     assert isinstance(full, dict)
+    assert full["kpis"]["project_irr"] is None
+    assert full["kpis"]["project_irr_status"] == "undefined"
     assert "project_irr" not in full["metrics"]
     cfads = sum(r["cfads_usd"] for r in full["annual_rows"])
     assert cfads < _yaml(SOLAR_BESS)["capex"]["usd_total"]
