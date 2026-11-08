@@ -1,6 +1,6 @@
 # Blue Whale: project status
 
-Last updated: 2026-11-07. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
+Last updated: 2026-11-08. Stage: **concept screening (skeleton model, owner inputs outstanding)**.
 
 ## Configuration under study
 
@@ -383,9 +383,11 @@ Relayed on #1353 (comments 6554212671 and 6554297502):
 | BESS all-in, USD/kWh | 78.75 | 135.00 | 143.41 | Public NSO 250 variants (bid-implied, base, stress) in `scenarios/nso250_ltl_unit_*.yaml` |
 | Turbine | fixed | 1,300/kW | fixed | Placeholder B09, inside the public 977-1,420 USD/kW range of `docs/knowledge_base/01_wind_epc_costs_and_scaling.md` |
 
-No private Envision BESS offer price and no internal turbine price was used. The internal turbine
-prices are in private developer packages whose handling notes allow no trace here, and the turbine
-cost does not change which unit size is best.
+This sizing used no private Envision BESS offer price and no internal turbine price, and the
+turbine cost does not change which unit size is best. The internal turbine prices are in private
+developer packages. Since PR 6 (#1540) the capex config and its methods note cite one of those
+packages by its handling-note identifier; the owner confirmed on 2026-11-07 that this reference is
+within her decision of 2026-11-01. No figure from it is given here.
 
 ### Inverter match
 
@@ -899,8 +901,25 @@ constant-rate translation of LKR.
 none set there, defaulted to 2 for the debt drawdown, interest during construction and the FX
 start. The owner chose on 2026-11-07 to "Set 1 year for the whole model now", so both projects now
 set `Financing_Terms.construction_periods: 1`. This is most of the move below: on its own it lifts
-the wind NPV from 69,109 to 1,382,093 and the solar + BESS NPV from -4,997,611 to -4,607,829,
-mainly through lower interest during construction (wind 1.14M to 0.41M).
+the wind NPV from 69,109 to 1,382,093 and the solar + BESS NPV from -4,997,611 to -4,607,829.
+
+Why the project NPV rises (corrected 2026-11-08, #1571: this text first gave lower interest during
+construction as the main reason, which is wrong). Project NPV and IRR are unlevered. They discount
+the CFADS against `capex.usd_total`, which carries no interest during construction, after
+`construction_years` build periods with no cash (`analytics/core/metrics.py`, `finance/irr.py`).
+The shorter build moves project NPV in two ways, and interest during construction enters only
+indirectly, through the second:
+- The CFADS start one period sooner. At an unchanged discount rate this gives wind +1,176,115
+  (at 10.72209%) and solar + BESS +375,961 (at 11.48627%).
+- The build-up WACC falls, to 10.54870% for wind and 11.41563% for solar + BESS. With less interest
+  during construction (wind 1.14M to 0.41M), more of the DSCR-sculpted debt funds capex: wind
+  senior debt rises from 5,422,740 to 6,158,489, so debt to capex rises from 0.4975 to 0.565, and
+  the higher debt weight lowers the WACC. This gives wind +136,869 and solar + BESS +13,822.
+
+Lower interest during construction does explain the larger debt and the better equity figures.
+Measured instead at 15.20.0, with the opex split in place (2 periods against 1), the same two parts
+are wind +1,208,432 and +141,268; the first includes about +40k because the USD opex share's own FX
+path also advances through one fewer build year.
 
 Through `analytics.evaluation_v14.evaluate_with_overrides`, base case only. The "was" figures are
 `main` at 15.19.0, after the turbine's shadow on the PV (the next section):
