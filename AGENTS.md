@@ -162,11 +162,23 @@ overlap judgment or the time the first edit occurred.
   §8's three proofs. The steward skill's "Merge trains" section has the build and landing checks.
 - `CLEANUP-01`: immediately after any pull request or merge train lands on `origin/main` and
   ancestry/tree verification passes, inform the tasklist and capability tracker (`#1353`), close
-  completed focused GitHub issues, synchronize `main`, remove and prune the merged worktree and
-  branch (`git worktree remove`, `git worktree prune`, `git branch -d`, `git push origin --delete`),
-  and clean any temporary or worktree-local virtual environments while NEVER deleting, clearing,
-  pruning, or modifying the protected persistent Python 3.12 environment at
-  `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` (`THREAD-01`, `ENV-01`).
+  only the focused issue named by number on the merged pull request's `Work item:` or closing
+  line, and only when its deliverable is complete, synchronize the clean primary checkout when no
+  other session is using it, remove and prune the merged
+  worktree and branch (`git worktree remove`, `git worktree prune`, `git branch -D`,
+  `git push origin --delete`), and clean any temporary or
+  worktree-local virtual environments while NEVER deleting, clearing, pruning, or modifying the
+  protected persistent Python 3.12 environment at `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`
+  (`THREAD-01`, `ENV-01`). Two guards bind every cleanup:
+  - Cleanup never closes a pull request. Closing an unmerged pull request needs a
+    cited owner decision, posted as a comment on that pull request before it is closed. The one
+    exception is a `TRAIN-01` car, closed only after the train's post-landing check proves its
+    commit is on `origin/main`, with the pointer comment posted first. A `Work item:` line that
+    names a #1353 comment closes nothing, and cleanup never closes tracker #1353.
+  - Delete a branch only when its pull request's `merged_at` is set, its `head.ref` names the
+    branch, and every ref still present (remote and local) equals the merged head, read from the
+    GitHub API immediately before deleting. Skip a remote ref GitHub already auto-deleted, and
+    delete nothing that an open pull request uses as its base.
 
 ## Runtime logging and evidence retention
 
@@ -376,5 +388,8 @@ request as unrelated to the governed QSTS/grid execution surface.
 Report the outcome first, then list material files changed and exact checks run. State
 clearly whether work is uncommitted, committed, pushed, opened as a PR, or merged. After a
 successful merge, follow `CLEANUP-01`: update the tasklist and GitHub Issues (`#1353`),
-synchronize `main`, remove obsolete task branches/worktrees only when it is safe to do so,
+synchronize the clean primary checkout when no other session is using it, remove obsolete task
+branches/worktrees only when it is safe to do so,
 and clean any non-protected venvs while preserving `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`.
+Cleanup never closes a pull request, never closes tracker #1353, and never deletes a branch
+unless its pull request's `merged_at` is set and the branch is still at the merged head.

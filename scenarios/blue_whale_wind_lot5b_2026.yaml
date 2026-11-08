@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # Blue Whale Wind project (Lot 5B, Kalpitiya): 1 x Envision EN-206/10.5 de-rated to 9.5 MW
 # ═══════════════════════════════════════════════════════════════════════════════
-# Version: 0.3 (SKELETON: screening placeholders, not a basis for any decision)
+# Version: 0.5 (SKELETON: screening placeholders, not a basis for any decision)
 # Path: scenarios/blue_whale_wind_lot5b_2026.yaml
 #
 # A SEPARATE PROJECT, BUILT FIRST (owner, 2026-11-01, #1353 comment 6556854201): "We will
@@ -12,9 +12,11 @@
 # scenarios/blue_whale_solar_bess_lot5b_2026.yaml; the combined view
 # scenarios/blue_whale_hybrid_lot5b_2026.yaml is superseded.
 #
-# The turbine and its position are #1530's: one EN-206/10.5 de-rated to 9.5 MW at 130 m hub
-# on the placeholder lot, at the CZ&CRMP 2024-2029 coastal setback
-# (docs/blue_whale/site_placeholder_lot5b.geojson, conf/blue_whale_wind_siting.yaml).
+# The turbine is #1530's: one EN-206/10.5 de-rated to 9.5 MW at 130 m hub on the placeholder
+# lot. Its position is DutchBay T2's (owner, 2026-11-07: "Blue Whale Turbine is replacing the
+# T2 Dutchbay turbine - its on the exact same location"; docs/blue_whale/site_placeholder_lot5b.geojson,
+# conf/blue_whale_wind_siting.yaml). It stood 224 m west of T2 at the coastal setback until
+# then; the move changes no wind figure below (same reanalysis cells, no wake either way).
 #
 # WIND RESOURCE (v0.2, PR 5, work item #1353 comment 6556910250). The capacity factor and
 # energy now rest on met-mast export 617725 (docs/source_materials/met_mast_617725_2025/),
@@ -36,8 +38,8 @@
 # uncertainty is about 13.2% (P90 1-year 33.73 GWh, 20-year 33.92 GWh, in the summary).
 #
 # Tariff: PUCSL Annex 2 (effective 25 Aug 2026), wind 25.73 LKR/kWh (20.80 non-escalable +
-# 4.93 escalable O&M), plants < 10 MW. The 2026 methodology's BESS tariff (s.5) covers solar
-# PV only, so this project has no BESS and no solar.
+# 4.93 escalable O&M, indexed yearly from v0.5), plants < 10 MW. The 2026 methodology's BESS
+# tariff (s.5) covers solar PV only, so this project has no BESS and no solar.
 #
 # OPEN LEGAL RISK: THE 10 MW LIMIT. The Electricity Act No. 36 of 2024, s.11(3) proviso:
 # "the maximum capacity of such renewable energy plants to be procured from a contiguous
@@ -91,7 +93,9 @@ generation:
                                   # corrected (MCP, NASA POWER / MERRA-2 2015-2025) and transferred to the turbine,
                                   # 16 sector Weibulls at 130 m (mean 8.24 m/s); gross 43.99 GWh (CF 0.5287);
                                   # #1530's density (1.15 kg/m3) and losses 7.77% (availability 97%, electrical 2%,
-                                  # curtailment 2%, other 1%, no wake). NOT LENDER-GRADE (HOLD above).
+                                  # curtailment 2%, other 1%, no wake: the turbine replaces DutchBay T2, owner
+                                  # 2026-11-07; T1/T3 wake is an open risk in docs/blue_whale/STATUS.md).
+                                  # NOT LENDER-GRADE (HOLD above).
                                   # Was 0.374256 (#1530: DutchBay ERA5-fitted Weibull, 7.14 m/s at 130 m)
       degradation_pct: 0.6        # PLACEHOLDER: DutchBay turbine-ageing assumption
       aep_gwh: 40.57              # net P50: 9.5 MW x 8760 h x 0.487560 (reporting). Was 31.15
@@ -108,9 +112,24 @@ generation:
 
 tariff:
   # Input F03: PUCSL feed-in tariff effective 25 Aug 2026 for plants < 10 MW (Annex 2), wind
-  # 25.73 (20.80 non-escalable + 4.93 escalable O&M). One technology, so no blend. The O&M
-  # part's yearly indexation and the month-12 adjustment are not modelled.
+  # 25.73 (20.80 non-escalable + 4.93 escalable O&M). One technology, so no blend. The
+  # month-12 FX/CCPI adjustment of the non-escalable part is not modelled.
   lkr_per_kwh: 25.73
+  om_indexation:                # L-9 (owner, 2026-11-07: index it): only the escalable O&M part moves
+    escalable_om_lkr_per_kwh: 4.93  # Annex 2 s.1, wind base O&M; the 20.80 non-escalable part stays flat
+    basis: ccpi_fx_weighted     # PUCSL 2026 methodology s.3.1 item 2: the Commission publishes the yearly
+                                # rate "considering CCPI and LKR/USD exchange rate variations"
+    ccpi_weight: 0.30           # PLACEHOLDER (input B35): the methodology states no weights for the O&M
+    lkr_usd_weight: 0.70        # rate; these are its own s.3.1 item 1 weights for the non-escalable
+                                # adjustment (70% LKR/USD, 30% CCPI)
+    ccpi_inflation_pct: 5.0     # PLACEHOLDER (input B29): the CBSL 5% target, as the O&M's LKR inflation
+    lkr_usd_depreciation_pct: relative_ppp  # (1 + CCPI) / (1 + USD inflation) - 1 = 2.44%/yr
+    usd_inflation_pct: 2.5      # PLACEHOLDER (input B34): as the O&M's USD inflation
+                                # -> 0.30 x 5.0% + 0.70 x 2.44% = 3.21%/yr (PUCSL's consultation assumed
+                                #    3.85%/yr O&M escalation in its BESS case)
+    pre_operation_years: 0      # index 1.0 in operating year 1, the date the opex is stated at; any
+                                # escalation between the 2026 base year and COD is not modelled
+    source: "PUCSL Methodology for RE Feed-in Tariffs 2026 (Approved), s.3.1 item 2; conf/blue_whale_pucsl_fit_2026.yaml PUCSL-METHOD-2026"
   tariff_type: fixed            # input F04
   ppa_term_years: 20            # input F01: the hybrid's basis (the CEB standardised PPA draft, June 2025,
                                 # 20 years from COD); the methodology's s.3.1 tariff rests on a 20-year cash flow
@@ -143,9 +162,35 @@ capex:
 
 opex:
   usd_per_year: 500000          # PLACEHOLDER (inputs B10, B28): wind O&M 0.35M + insurance, land lease and
-                                # SPV overhead 0.15M (the hybrid's lines)
+                                # SPV overhead 0.15M (the hybrid's lines). Stated in USD at fx.start_lkr_per_usd;
+                                # the components below must add up to it (a test checks)
   opex_per_kw_yr_usd: 52.6      # 500k / 9.5 MW; high because a single turbine carries full O&M overheads
-  escalation_pct: 5.0           # PLACEHOLDER (input B29): LKR O&M inflation at the CBSL 5% target
+  escalation_pct: 5.0           # = currency_split.lkr_escalation_pct (the engine refuses a mismatch); kept
+                                # for the single-rate screening tools that read it
+  # v0.4 (input B34): the owner's rule (2026-11-02): "all CAPEX is fixed at project start in LKR. The debt
+  # will be in LKR. However, a percentage of OPEX will be in USD". Her decision of 2026-11-02: wind O&M
+  # stays 0.35M, 70% USD / 30% LKR. The USD share is
+  # 245,000 / 500,000 = 49% of the total; it escalates in USD and is translated on its own FX path, while
+  # the model curve stays flat (fx block: constant-LKR reporting rate). The LKR share is fixed in LKR at
+  # 333.79 and escalates at LKR inflation.
+  currency_split:
+    usd_escalation_pct: 2.5     # PLACEHOLDER (input B34): USD O&M inflation (no USD index is sourced in
+                                # either corpus)
+    lkr_escalation_pct: 5.0     # PLACEHOLDER (input B29): LKR O&M inflation at the CBSL 5% target
+    usd_lkr_depreciation_pct: relative_ppp  # LKR depreciation for the USD share only, derived from the two
+                                    # inflation inputs above: 1.05 / 1.025 - 1 = 2.44%/yr (the owner, 2026-11-07:
+                                    # "fix for inflation"). Was 5.89%, the DutchBay cases' BIS 2005-2026 nominal
+                                    # rate, which with these inflation inputs implied ~3.3%/yr real LKR
+                                    # depreciation. Advanced through construction as the model curve would be
+    components:
+      - name: wind_om
+        usd_per_year: 350000    # PLACEHOLDER (input B10): no OEM has priced a wind LTSA in either corpus;
+                                # 3.9% of turbine capex, the top of the 3-4% benchmark band
+        usd_share: 0.70         # parts and OEM service in USD; 30% local labour (a typical labour / plant
+                                # split for wind O&M; the owner's decision of 2026-11-02)
+      - name: insurance_land_spv
+        usd_per_year: 150000    # PLACEHOLDER (inputs B02, B28)
+        usd_share: 0.0          # LKR (the owner has not said otherwise)
 
 tax:
   corporate_tax_rate: 0.30      # input F31
@@ -178,6 +223,9 @@ risk_adjustment:
   cfads_haircut_pct: 0.1
 
 Financing_Terms:                # PLACEHOLDER pending the term sheet (inputs F11-F24); the 100% LKR mix is the owner's (F10)
+  construction_periods: 1       # = timeline.construction_years (input B30). The engine reads this key for
+                                # debt, IDC and the FX start, and defaulted to 2 without it (owner, 2026-11-07:
+                                # "Set 1 year for the whole model now")
   debt_ratio: 0.7
   debt_sizing: dual_dscr
   dscr_p99_downside_factor: 0.80
@@ -241,12 +289,14 @@ wacc:
   description: "Build-up WACC drives the project discount rate."
 
 metadata:
-  version: '0.3'
-  last_updated: '2026-11-01'
+  version: '0.5'
+  last_updated: '2026-11-07'
   author: DutchBay V14 Financial Modeling Team
   review_status: SKELETON - screening placeholders pending owner inputs (docs/blue_whale/INPUTS_REQUIRED.md)
   assumptions_source: 'Split from blue_whale_hybrid_lot5b_2026 v0.6 (wind block and finance blocks)'
   changes:
+    - 'v0.5 (2026-11-07): the PUCSL escalable O&M tariff component indexed yearly (L-9; owner, 2026-11-07: yes; model 15.21.0). tariff.om_indexation: the 4.93 O&M part of 25.73 grows at 0.30 x CCPI 5% + 0.70 x LKR/USD 2.44% (relative PPP on USD 2.5%) = 3.21%/yr from operating year 1 (PUCSL 2026 methodology s.3.1 item 2; weights placeholder input B35); the 20.80 non-escalable part stays flat. Project IRR 12.41% -> 13.13%, equity IRR 10.54% -> 11.55%, project NPV USD 1,342,632 -> 1,956,797; year-1 DSCR unchanged'
+    - 'v0.4 (2026-11-07): opex split by currency (input B34; owner rule and decision of 2026-11-02): wind O&M 0.35M 70% USD / 30% LKR, insurance, land and SPV 0.15M LKR; USD share 49% escalates at 2.5%/yr in USD on an LKR depreciation path of 2.44%/yr, derived by relative PPP from the inflation inputs (owner, 2026-11-07: "fix for inflation"; was 5.89%); LKR share at 5%/yr. Total unchanged at 500,000. Financing_Terms.construction_periods 1 (= B30; the engine had defaulted to 2; owner, 2026-11-07)'
     - 'v0.3 (2026-11-01): wind capex BLENDED (PR 6, #1353 comment 6556975196): 12,350,000 ($1,300/kW placeholder) -> 8,899,980 (USD 936.84/kW, range 728.16-1,341.16, conf/blue_whale_capex_solar_resource.yaml); capex total 14,350,000 -> 10,899,980. A blend that includes private commercial inputs, published on the owner''s decision'
     - 'v0.2 (2026-11-01): wind resource from met mast 617725 (PR 5, #1353 comment 6556910250): sector-wise variance-ratio MCP at 120 m against NASA POWER / MERRA-2, long-term 2015-2025, transferred 26.7 km to the turbine through the reference, sheared to 130 m. Wind CF 0.374256 -> 0.487560, net AEP 31.15 -> 40.57 GWh (P90 1-year 33.73, 20-year 33.92). Not lender-grade; the met-mast HOLD stands'
     - 'v0.1 (2026-11-01): the turbine as its own project, built first (owner decision, #1353 comment 6556854201). Wind block unchanged from the hybrid v0.6 (#1530: 9.5 MW, CF 0.374256, 31.15 GWh, capex 12.35M placeholder); tariff 25.73 (PUCSL Annex 2 wind); capex 14.35M with the 2.0M grid/civils/development placeholder; O&M 0.5M; no solar, no BESS'

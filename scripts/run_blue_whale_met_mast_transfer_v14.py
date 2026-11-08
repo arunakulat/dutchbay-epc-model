@@ -1358,9 +1358,9 @@ def shadow_flicker(
         json.loads(_repo_path(site["coastline_geojson"]).read_text()), frame
     )
     coastal = sf.CoastalSetbackConfig.from_mapping(s_cfg["coastal_setback"])
-    placement = sf.place_at_coastal_setback(
+    placement = sf.place_turbine(
         lines,
-        north_m=0.0,
+        rule=str(site["turbine_placement"]),
         min_distance_m=coastal.tower_distance_from_coastline_m,
         search_east_m=float(site["placement_search_east_m"]),
     )

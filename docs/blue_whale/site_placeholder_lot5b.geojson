@@ -47,13 +47,13 @@
       "properties": {
         "name": "Blue Whale turbine (PLACEHOLDER POSITION)",
         "placeholder": true,
-        "derivation": "Westernmost point on T2's latitude at least 60 m from the OpenStreetMap coastline (CZ&CRMP 2024-2029 segment 2 setback, measured from the coastline as a bound because the vegetation line is not mapped)."
+        "derivation": "DutchBay T2's recorded position: the Blue Whale turbine replaces T2 at the same location (owner, 2026-11-07). It lies 108.3 m from the OpenStreetMap coastline, clear of the 60 m CZ&CRMP 2024-2029 segment 2 setback."
       },
       "geometry": {
         "type": "Point",
         "coordinates": [
-          79.752665966,
-          8.292499995
+          79.7547,
+          8.2925
         ]
       }
     }

@@ -3,10 +3,11 @@
 Three calculations for one wind turbine on a small coastal lot, all driven by config
 (``conf/blue_whale_wind_siting.yaml``; ``ARCH-01``, ``FRAMEWORK-02``):
 
-1. **Coastal placement.** The westernmost point on a given latitude whose distance from a
-   coastline polyline is at least the coastal setback, found by buffering the coastline with
-   :func:`analytics.gis.exclusion_mask.build_setback_zone` and cutting the latitude line
-   with that zone.
+1. **Coastal placement.** Either the westernmost point on a given latitude whose distance
+   from a coastline polyline is at least the coastal setback, found by buffering the
+   coastline with :func:`analytics.gis.exclusion_mask.build_setback_zone` and cutting the
+   latitude line with that zone; or a given reference point, checked against the same
+   setback (:func:`place_turbine` chooses by the configured rule).
 2. **Tip-height setback.** The distance from the turbine to each edge of the lot against
    a setback of a configured multiple of tip height, and the area of the setback disc
    that falls outside the lot. The disc is again built by
@@ -436,6 +437,89 @@ def place_at_coastal_setback(
         turbine_east_m=east,
         turbine_north_m=float(north_m),
         distance_to_coastline_m=float(Point(east, north_m).distance(coast)),
+    )
+
+
+TURBINE_PLACEMENT_RULES: Tuple[str, ...] = ("coastal_setback", "reference_point")
+
+
+def place_at_reference_point(
+    lines: Sequence[Sequence[EastNorth]],
+    *,
+    min_distance_m: float,
+) -> CoastalPlacement:
+    """Put the tower on the frame origin and check that it clears the coastal setback.
+
+    Used when the tower position is given rather than searched for: the origin of the
+    local frame is the reference point (for Blue Whale, DutchBay T2's recorded position).
+
+    Args:
+        lines: Coastline polylines in the local frame, with sea to the west of the
+            westernmost crossing of the origin's latitude.
+        min_distance_m: Required distance from the coastline to the tower centre.
+
+    Returns:
+        The placement, with the tower at ``(0, 0)``.
+
+    Raises:
+        ValueError: If no coastline crosses the origin's latitude, or the origin lies
+            inside the coastal setback.
+    """
+    _require_shapely()
+    from shapely.geometry import MultiLineString, Point
+
+    crossings = _latitude_crossings(lines, 0.0)
+    if not crossings:
+        raise ValueError("no coastline crosses north=0.0 m")
+    coast = MultiLineString([list(map(tuple, ln)) for ln in lines])
+    distance = float(Point(0.0, 0.0).distance(coast))
+    if distance < min_distance_m:
+        raise ValueError(
+            f"the reference point is {distance:.1f} m from the coastline, inside the "
+            f"{min_distance_m:g} m coastal setback"
+        )
+    return CoastalPlacement(
+        coastline_crossing_east_m=float(crossings[0]),
+        turbine_east_m=0.0,
+        turbine_north_m=0.0,
+        distance_to_coastline_m=distance,
+    )
+
+
+def place_turbine(
+    lines: Sequence[Sequence[EastNorth]],
+    *,
+    rule: str,
+    min_distance_m: float,
+    search_east_m: float,
+) -> CoastalPlacement:
+    """Place the tower by the configured rule, on the frame origin's latitude.
+
+    Args:
+        lines: Coastline polylines in the local frame.
+        rule: ``"reference_point"`` puts the tower on the frame origin
+            (:func:`place_at_reference_point`); ``"coastal_setback"`` puts it at the
+            westernmost point that clears the setback (:func:`place_at_coastal_setback`).
+        min_distance_m: Required distance from the coastline to the tower centre.
+        search_east_m: East limit of the ``coastal_setback`` search.
+
+    Returns:
+        The placement.
+
+    Raises:
+        ValueError: If the rule is unknown, or the chosen rule cannot place the tower.
+    """
+    if rule == "reference_point":
+        return place_at_reference_point(lines, min_distance_m=min_distance_m)
+    if rule == "coastal_setback":
+        return place_at_coastal_setback(
+            lines,
+            north_m=0.0,
+            min_distance_m=min_distance_m,
+            search_east_m=search_east_m,
+        )
+    raise ValueError(
+        f"turbine placement rule {rule!r} is not one of {list(TURBINE_PLACEMENT_RULES)}"
     )
 
 
@@ -1133,6 +1217,7 @@ __all__ = [
     "SunPath",
     "TipSetbackConfig",
     "TipSetbackResult",
+    "TURBINE_PLACEMENT_RULES",
     "TurbineGeometry",
     "coast_aligned_square_lot",
     "coastline_lines_east_north",
@@ -1140,6 +1225,8 @@ __all__ = [
     "flicker_grid",
     "grid_summary",
     "place_at_coastal_setback",
+    "place_at_reference_point",
+    "place_turbine",
     "receptor_as_dict",
     "oriented_shadow_mask",
     "receptor_flicker",

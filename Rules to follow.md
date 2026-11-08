@@ -1,14 +1,16 @@
 # Rules to Follow — Unified Governance, Frameworks & Multi-Agent Reference
 
 > **Authority & Non-Forking Notice (`GOV-01`, `RECRUIT-01`)**
-> The single canonical source of truth for project governance is [`go_with_the_flow_rules_v3_0_clean.csv`](go_with_the_flow_rules_v3_0_clean.csv). This document is a unified index and summary across all governance modules, architectural frameworks, and AI agent hosts (Claude, OpenAI Codex, Google Antigravity / Gemini, Kimi, Perplexity, GitHub Copilot, and CI bots). Where any summary disagrees with [`go_with_the_flow_rules_v3_0_clean.csv`](go_with_the_flow_rules_v3_0_clean.csv), the CSV wins.
+> The single canonical source of truth for project governance is [`go_with_the_flow_rules_v3_0_clean.csv`](go_with_the_flow_rules_v3_0_clean.csv). This document is an index and summary across the governance modules, the architectural frameworks, and the AI agent hosts that work in this repository (Claude, OpenAI Codex, Google Antigravity / Gemini, Kimi, Perplexity, GitHub Copilot, and CI bots). Where any summary disagrees with [`go_with_the_flow_rules_v3_0_clean.csv`](go_with_the_flow_rules_v3_0_clean.csv), the CSV wins. Cite a rule by its ID and read its text in the CSV; the rule index in §3.0 gives each ID's exact CSV title, and `tests/lint/test_rules_to_follow_index.py` keeps that index, and every bold heading that pairs a rule ID with a title, equal to the CSV.
 > This document grants no merge, review, lease, release, grade, lender, or Board authority to any session.
 
 ---
 
-## 1. Mandatory Session Bootstrap (Run First in Every Session)
+## 1. Session Bootstrap (`THREAD-01`, `ENV-01`)
 
-Before editing any file, opening a PR, or claiming verification, every agent or developer session must execute the environment and ruleset bootstrap:
+Before editing any file, opening a PR, or claiming verification, run the bootstrap from the active checkout or its dedicated worktree, with that checkout first on `PYTHONPATH`. Which Python 3.12 environment you use depends on the host.
+
+**Local sessions on the owner's machine** use the persistent governed environment that `THREAD-01` names:
 
 ```bash
 export DUTCHBAY_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"
@@ -22,19 +24,28 @@ git status --short --branch
 git worktree list
 ```
 
+**Ephemeral CI or container hosts, and unconfigured developer hosts,** leave `DUTCHBAY_VENV` unset and use the checkout-local `.venv`. `THREAD-01` and `ENV-01` permit it only as this portable fallback, never as a per-task replacement for the persistent environment on the owner's machine. In a Claude Code cloud session, `.claude/hooks/session-start.sh` provisions it ([`CLAUDE.md`](CLAUDE.md)):
+
+```bash
+CLAUDE_CODE_REMOTE=true CLAUDE_PROJECT_DIR="$PWD" bash .claude/hooks/session-start.sh
+.venv/bin/python -VV   # must report Python 3.12
+DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" PYTHONPATH="$PWD" \
+  .venv/bin/python dutchbay_bootstrap_rules.py
+```
+
 ### Core Primary Sources (Click to Open)
 
 | Document | Scope & Authority |
 |---|---|
-| [`go_with_the_flow_rules_v3_0_clean.csv`](go_with_the_flow_rules_v3_0_clean.csv) | **Canonical GWTF v3.0 Ruleset** (79 active rules across 19 categories; validated by [`dutchbay_bootstrap_rules.py`](dutchbay_bootstrap_rules.py) and [`tests/lint/test_gwtf_canonical_source.py`](tests/lint/test_gwtf_canonical_source.py)). |
+| [`go_with_the_flow_rules_v3_0_clean.csv`](go_with_the_flow_rules_v3_0_clean.csv) | **Canonical GWTF v3.0 Ruleset** (79 active rules across 41 categories; validated by [`dutchbay_bootstrap_rules.py`](dutchbay_bootstrap_rules.py) and [`tests/lint/test_gwtf_canonical_source.py`](tests/lint/test_gwtf_canonical_source.py)). |
 | [`AGENTS.md`](AGENTS.md) | **Codex & Universal Agent Gateway** — runtime requirements (`ENV-01`, `THREAD-01`), intake (`INTAKE-01`), delivery (`DELIVERY-01`, `REVIEW-01`, `TRAIN-01`, `MERGE-01`, `CLEANUP-01`), corpus manifest rules (`DATA-01`), and `DBPL-01`. Guarded by [`tests/lint/test_codex_project_guidance.py`](tests/lint/test_codex_project_guidance.py). |
-| [`CLAUDE.md`](CLAUDE.md) | **Claude Code Gateway** — build/lint/test commands, architecture map, config-first rules, and pointer to [`AGENTS.md`](AGENTS.md). |
+| [`CLAUDE.md`](CLAUDE.md) | **Claude Code entry point** — what changes in a cloud session (the checkout-local `.venv`, Codex-only steps), the formats the repository checks, and a pointer to [`AGENTS.md`](AGENTS.md). |
 | [`docs/governance/agent_session_routing.md`](docs/governance/agent_session_routing.md) | **Multi-Agent Session Router** — routes any non-Codex or cloud session to its governing documents. Guarded by [`tests/lint/test_agent_session_routing.py`](tests/lint/test_agent_session_routing.py). |
 | [`.claude/skills/steward/SKILL.md`](.claude/skills/steward/SKILL.md) | **Steward Skill** — PR driving, base-currency maintenance, `Evidence pack` formatting, Grid Study classification, `MERGE-01` boundary checks, and `TRAIN-01` merge-train execution. |
-| [`docs/governance/recruit_01/01_capability_and_risk.md`](docs/governance/recruit_01/01_capability_and_risk.md) | **`RECRUIT-01` Module 1** — Capability classes (`C1`–`C7`), semantic risk classes (`R0`–`R3`), and §3.1 bounded low-risk classes (`REVIEW-01`). |
-| [`docs/governance/recruit_01/02_writer_lease_and_recovery.md`](docs/governance/recruit_01/02_writer_lease_and_recovery.md) | **`RECRUIT-01` Module 2** — One-active-writer lease state machine, interruption revocation, and dead-worker takeover. |
-| [`docs/governance/recruit_01/03_independent_review_and_attestation.md`](docs/governance/recruit_01/03_independent_review_and_attestation.md) | **`RECRUIT-01` Module 3** — Read-only exact-object review (`subject_head_sha`, `subject_tree_sha`, `base_sha`), §7 base fast-forward proofs, and §8 `TRAIN-01` merge-train carry-forward. |
-| [`docs/governance/recruit_01/04_staged_delegation_and_ingress.md`](docs/governance/recruit_01/04_staged_delegation_and_ingress.md) | **`RECRUIT-01` Module 4** — Capacity admission, 5-tier worker ingress order, and outcome classification (`EVIDENCE_RETURNED`, `NO_FINDING_WITH_EVIDENCE`, `NO_EVIDENCE`, `BLOCKED_WITH_RECEIPT`). |
+| [`docs/governance/recruit_01/01_capability_and_risk.md`](docs/governance/recruit_01/01_capability_and_risk.md) | **`RECRUIT-01` Module 1** — Written capability profiles, semantic risk classes (`R0_READ_ONLY` to `R3_CONSEQUENTIAL`), and the §3.1 bounded low-risk classes (`REVIEW-01`). |
+| [`docs/governance/recruit_01/02_writer_lease_and_recovery.md`](docs/governance/recruit_01/02_writer_lease_and_recovery.md) | **`RECRUIT-01` Module 2** — One-writer invariant, lease fields, the mandatory state machine, interruption recovery, and dead-worker takeover. |
+| [`docs/governance/recruit_01/03_independent_review_and_attestation.md`](docs/governance/recruit_01/03_independent_review_and_attestation.md) | **`RECRUIT-01` Module 3** — Independence, the frozen subject manifest, structured disposition receipts, §7 base movement and merge continuity, and §8 `TRAIN-01` merge-train carry-forward. |
+| [`docs/governance/recruit_01/04_staged_delegation_and_ingress.md`](docs/governance/recruit_01/04_staged_delegation_and_ingress.md) | **`RECRUIT-01` Module 4** — Source hierarchy, safety preflight, substantive ingress order, capacity admission, and evidence-yield states (`EVIDENCE_RETURNED`, `NO_FINDING_WITH_EVIDENCE`, `NO_EVIDENCE`, `BLOCKED_WITH_RECEIPT`). |
 | [`.github/SPRINT_WORKFLOW_CHECKLIST.md`](.github/SPRINT_WORKFLOW_CHECKLIST.md) | **Sprint Workflow Checklist** — pre-sprint, implementation, review, and pre-merge compliance checklist derived from the CSV. |
 | [`docs/AGENTIC_DELIVERY_PRACTICE.md`](docs/AGENTIC_DELIVERY_PRACTICE.md) | **Agentic Delivery Practice** — empirical practitioner evidence, anti-gaming controls ([`tests/finance/test_canon_vector_is_computed.py`](tests/finance/test_canon_vector_is_computed.py)), verification capacity principle, and explicitly rejected agent patterns. |
 
@@ -46,213 +57,302 @@ git worktree list
 
 ### `FRAMEWORK-01`: CASPER
 - **Primary Definition**: **CASPER** — *Clear API Surfaces with Predictable Error Responses*.
-  - Modules expose clean, documented interfaces with explicit error types (`ValueError`, `TypeError`, `RuntimeError`).
-  - Optional dependencies (`openpyxl`, `pandas`, `matplotlib`, `scipy`, `pyyaml`, `salib`, `rasterio`, etc.) must be import-safe and fail gracefully at call time via `_require_*()` guards, never at import time.
+  - Modules expose clean, documented interfaces with consistent error handling patterns.
+  - Optional dependencies fail gracefully at call time, not import time, with actionable error messages (in this codebase, call-time `_require_*()` guards). `DBPL-01` is the deliberate exception: a DBPL print fails loud with `DbplDependencyError`.
 - **Secondary Definition**: *Contract-Assured Scenario Pipeline for Energy & Renewables*.
 - **Monte Carlo Integration** ([`docs/CASPER_MC_INTEGRATION.md`](docs/CASPER_MC_INTEGRATION.md)):
   - [`analytics/casper/casper_payload.py`](analytics/casper/casper_payload.py) (`build_casper_payload()`) auto-wires top-level `mc_risk` (`{"lender_risk_table": [...], "covenant": {...}}`) into `casper_result_v1` payloads via `build_casper_risk_blocks()` and `CovenantSpec`, resolving `dscr_floor` config-first via [`analytics/mc/covenant.py`](analytics/mc/covenant.py) (`resolve_min_dscr_covenant`).
 
 ### `FRAMEWORK-02`: CESSPIT
 - **Primary Definition**: **CESSPIT** — *Config Explicit, Schema Strict, Pre-flight Integrity Tests*.
-  - All scenario parameters live in `YAML`/`JSON` configs; no hardcoded business constants or silent defaults for FX, tax, or debt terms.
-  - [`analytics/schema_guard.py`](analytics/schema_guard.py) (`validate_config_for_v14(cfg, strict=True)`) is the strict-by-default pre-flight gatekeeper. Never weaken validation with `strict=False` in production code.
+  - All scenario parameters live in `YAML`/`JSON` configs; no silent defaults or fallbacks for critical parameters (FX, tax, debt terms).
+  - [`analytics/schema_guard.py`](analytics/schema_guard.py) (`validate_config_for_v14`) is the pre-flight gatekeeper, strict by default (`R5`, `R22`). Never weaken validation with `strict=False`.
 - **Secondary Definition**: *Config-Enforced Schema Safety Pipeline Integration Triad*.
 
 ### `FRAMEWORK-03`: CCCDIR
 - **Primary Definition**: **CCCDIR** — *Contracts Centralized, Compliance Documented, Import Relationships explicit*.
   - All canonical result types (`ScenarioResult`, `SensitivityResult`, `MonteCarloResult`, `CasperPayload`) live in [`analytics/contracts_v14.py`](analytics/contracts_v14.py).
-  - Analytics and presentation consumers invoke evaluation exclusively through [`analytics/evaluation_v14.py`](analytics/evaluation_v14.py) (`evaluate_with_overrides()`). Direct imports of internal evaluation state or `finance/` pipeline internals are banned ([`tests/lint/test_contracts_gateway_imports.py`](tests/lint/test_contracts_gateway_imports.py), [`tests/lint/test_no_direct_finance_pipeline_imports.py`](tests/lint/test_no_direct_finance_pipeline_imports.py)).
+  - Analytics modules import result types from `contracts_v14` and evaluation only through [`analytics/evaluation_v14.py`](analytics/evaluation_v14.py) (`evaluate_with_overrides()`); direct imports of internal evaluation logic are forbidden ([`tests/lint/test_contracts_gateway_imports.py`](tests/lint/test_contracts_gateway_imports.py), [`tests/lint/test_no_direct_finance_pipeline_imports.py`](tests/lint/test_no_direct_finance_pipeline_imports.py)).
 - **Secondary Definition**: *Config-Centric Contract-Driven Integration Rules*.
 
 ---
 
-## 3. Complete GWTF v3.0 Ruleset Summary (All 79 Active Rules by Category)
+## 3. GWTF v3.0 Ruleset Summary
 
-### 3.1 Governance & Intake (`GOV-01`, `GOV-02`, `INTAKE-01`)
-- **`GOV-01` (AI-Assisted Development Governance)**: AI agents are bound to the same engineering, verification, and provenance standards as human contributors. Human project owner retains all release, grade, audit, lender, and Board reliance authority.
-- **`GOV-02` (Branch Protection & Commit Safety)**: `main` and `master` are strictly read-only. Verify `git branch --show-current` before **every** commit. Never commit or push directly to a protected branch.
-- **`INTAKE-01` (Tracker-First Intake & Open-PR Sweep)**: Before editing any file or opening a PR:
+### 3.0 Rule Index (exact CSV IDs, categories and titles)
+
+Every active rule in the CSV, in CSV order. A bold heading below that pairs a rule ID with a title uses that rule's exact CSV title; the explanation that follows it is a summary, and the CSV text governs.
+
+| Rule | Category | Title |
+|---|---|---|
+| `GOV-01` | Governance | AI-assisted development contract |
+| `INTAKE-01` | Governance & Workflow | Record work before development and reconcile the live queue |
+| `ARCH-01` | Architecture & Config | Config-first architecture |
+| `R1` | CLI Entry | Canonical v14 entrypoints |
+| `CLI-01` | CLI & Tooling | CLI framework scope |
+| `ADD-01` | Addendum - Hydra & LibCST | Hydra integration rationale and pattern |
+| `VAL-01` | Validation & Schema Guard | Schema-first validation for v14 scenarios |
+| `CST-01` | LibCST & Banned APIs | LibCST guardrails for imports and hot-spot APIs |
+| `TYPE-01` | Types & Tests & CI | Typed-first v14 code |
+| `TEST-01` | Types & Tests & CI | Regression tests and pins for financial behaviour |
+| `FIN-01` | Financial Modelling | Numeric robustness and IRR/NPV safety |
+| `DOC-01` | Documentation | Documented scenarios and assumptions |
+| `MRM-01` | Model Risk & Reproducibility | Deterministic runs for stochastic components |
+| `R2` | Config Model | Config-first CLIs via Hydra |
+| `CST-02` | LibCST & Banned APIs | Safe refactoring with LibCST |
+| `DOC-02` | Documentation | Model change log for IRR/DSCR-impacting changes |
+| `DOC-03` | Documentation | Board-ready and lender-DD-safe documentation |
+| `ADD-02` | Addendum - Hydra & LibCST | LibCST enforcement of CLI framework rules |
+| `FIN-02` | Financial Modelling | Explicit units and naming conventions |
+| `TEST-02` | Types & Tests & CI | Coverage philosophy and fast-lane CI |
+| `TEST-03` | Types & Tests & CI | Bound stochastic model evaluations in the ordinary pytest suite |
+| `TEST-04` | Types & Tests & CI | Separate report transport contracts from live report qualification |
+| `TEST-05` | Types & Tests & CI | Require independent CI evidence for QSTS execution claims |
+| `VAL-02` | Validation & Schema Guard | ScenarioAnalytics batch behaviour |
+| `CLI-02` | CLI & Tooling | Canonical v14 entrypoints |
+| `MRM-02` | Model Risk & Reproducibility | Reproducible artefacts and audit trail |
+| `ARCH-02` | Architecture & Config | IRR / NPV isolation |
+| `CLI-03` | CLI & Tooling | JSON-first outputs for automation |
+| `ADD-03` | Addendum - Hydra & LibCST | Extending Hydra + LibCST to new tasks |
+| `ARCH-03` | Architecture & Config | Tranche-aware debt result surface |
+| `R3` | Banned APIs | No argparse anywhere in repo |
+| `R4` | Banned APIs | No Typer in v14 CLIs |
+| `R5` | Schema Guard | Schema guard as pre-flight gatekeeper |
+| `R6` | FX Config | FX is a mapping, not a scalar |
+| `R7` | IRR/NPV Location | IRR/NPV live only in finance/irr.py |
+| `R8` | Coverage | Coverage philosophy (fast lane vs full suite) |
+| `R9` | Debt & KPIs | Tranche-aware debt_result surface |
+| `R10` | Code Quality | Pre-commit hooks mandatory |
+| `R11` | Testing | v14 API tests are canonical |
+| `R12` | Repository Structure | Legacy code isolation |
+| `R13` | Data Organization | FX data in inputs/fxdata/ |
+| `R14` | Module Organization | Scripts belong in scripts/ |
+| `R15` | Type Safety | mypy strict mode for new code |
+| `R16` | Import Safety | No circular imports |
+| `R17` | Documentation | Docstrings for public APIs |
+| `R18` | Git Workflow | Descriptive commit messages |
+| `R19` | File Naming | No spaces in filenames |
+| `R20` | Output Management | Generated files in outputs/ |
+| `R21` | Developer Workflow | Standard local workflow: bootstrap + pytest |
+| `R22` | Schema Guard | Test configs must be v14-compliant |
+| `R23` | Git Workflow | Branch-based development with full CI gate |
+| `ARCH-04` | Architecture & Config | Contract gateway pattern for analytics evaluation |
+| `SPRINT16_DOC_MGMT_R1` | Documentation Delivery | AI-Generated docs pushed to feature branch first |
+| `SPRINT_BOOTSTRAP_PROC_R1` | Sprint Initialization | Mandatory Sprint Bootstrap Documentation Delivery Procedure |
+| `R24` | Code Quality | Docstring-first development minimal external documentation |
+| `R25` | Git Workflow | Protected-main PR and worktree integration strategy |
+| `FRAMEWORK-01` | Framework Principles | CASPER - Clear API Surfaces with Predictable Error Responses |
+| `FRAMEWORK-02` | Framework Principles | CESSPIT - Config Explicit Schema Strict Pre-flight Integrity Tests |
+| `FRAMEWORK-03` | Framework Principles | CCCDIR - Contracts Centralized Compliance Documented Import Relationships explicit |
+| `DELIVERY-01` | Delivery Cadence | Dolphins, not whales - incremental delivery as the default |
+| `REFACTOR-01` | Refactoring Strategy | Dolphin Strategy - Zero-Breakage Incremental Migration |
+| `REFACTOR-02` | Refactoring Strategy | Import Safety Patterns for Migration |
+| `REFACTOR-03` | Refactoring Strategy | Migration Commit Standards |
+| `REFACTOR-04` | Refactoring Strategy | Shim Lifecycle Management |
+| `WORKTREE-01` | Concurrency & Isolation | Dedicated git worktree per concurrent agent or session |
+| `GOV-02` | Governance & Workflow | No direct commits to protected branches; verify the active branch |
+| `R26` | CLI & Tooling | Convert PDFs with governed MarkItDown before parsing |
+| `DATA-01` | Data & Ingestion | Lossless ingestion - capture every data point from ingested material |
+| `PERSIST-01` | Continuity & Persistence | Checkpoint durable state early and often to survive interruptions |
+| `ENV-01` | Continuity & Persistence | Root repository work at the active checkout and bind shared Python imports to it |
+| `THREAD-01` | Continuity & Persistence | Create every new thread in the DutchBay_EPC_Model project and use its persistent venv |
+| `DBPL-01` | Documentation Delivery | DutchBay Presentation Layer - DBPL PDFs use the full [report] stack and house style |
+| `VERIFY-01` | Verification | A claimed check without a receipt is not a check |
+| `MERGE-01` | Git Workflow | Merge on green - standing authorization, no per-PR go-ahead |
+| `RECRUIT-01` | Recruitment & Review | Recruit through globally applicable, risk-scaled operational modules |
+| `SECDEP-01` | Dependency Security | A suppressed advisory declares the cap that forces it and the release that lifts it |
+| `REVIEW-01` | Recruitment & Review | Review before the full suite: one lane for bounded low-risk work, two for load-bearing |
+| `TRAIN-01` | Git Workflow | Merge trains: reviewed pull requests share one full-suite run and land as separate commits |
+| `CLEANUP-01` | Git Workflow | Post-merge tracker notification, issue closure, and worktree/branch/venv retirement |
+
+### 3.1 Governance & Intake
+- **`GOV-01`: AI-assisted development contract**: AI tools are bound by the Go-with-the-Flow ruleset. They must not bypass tests, CI, schema guard, or code review, and AI-generated changes meet the same standards as human-written code, including typing, tests, and documentation. (The owner's release, grade, lender and Board authority boundaries are stated in `MERGE-01`, `REVIEW-01`, `TRAIN-01` and `RECRUIT-01`, not in `GOV-01`.)
+- **`GOV-02`: No direct commits to protected branches; verify the active branch**: Never commit directly to `main` or any protected branch. Verify `git branch --show-current` before every commit, and recover commits that landed on the wrong branch remote-first.
+- **`INTAKE-01`: Record work before development and reconcile the live queue**: Before editing any file or opening a PR:
   1. Fetch and verify `origin/main`.
   2. Read the live capability tracker ([Issue #1353](https://github.com/arunakulat/dutchbay-epc-model/issues/1353)) and enumerate every open PR.
   3. Advance an actionable overlapping PR first; record a blocked or owner-deferred PR with its revisit trigger.
-  4. Record a scoped work item on `#1353` (with named deliverable and done-when criterion) or a focused issue **before** opening the PR, and cite the work-item link, base SHA, and overlap disposition in the PR body. Enforced by [`scripts/ci/check_pr_intake.py`](scripts/ci/check_pr_intake.py) and [`tests/lint/test_pr_intake_policy.py`](tests/lint/test_pr_intake_policy.py).
+  4. Record the scoped work on `#1353` or a focused issue linked from it **before editing**, and cite the work item, base SHA, and open-PR sweep disposition in the PR body. CI ([`scripts/ci/check_pr_intake.py`](scripts/ci/check_pr_intake.py), [`tests/lint/test_pr_intake_policy.py`](tests/lint/test_pr_intake_policy.py)) can check that the record predates the PR, not that it predates the first edit.
 
-### 3.2 Architecture (`ARCH-01` – `ARCH-04`)
-- **`ARCH-01` (Config-First Design)**: Business values, tariffs, FX curves, debt terms, and pipeline modes belong in `scenarios/*.yaml` or `conf/*.yaml`, never hardcoded in Python.
-- **`ARCH-02` (Single IRR / NPV / XIRR Source)**: Define `irr`, `npv`, and `xirr` only in [`finance/irr.py`](finance/irr.py). Enforced by [`tests/lint/test_irr_location_v14.py`](tests/lint/test_irr_location_v14.py).
-- **`ARCH-03` (Tranche-Aware Debt Result Surface)**: Debt sizing and schedule results expose explicit tranche-level and aggregate metrics cleanly without conflating senior, subordinated, or DFI tranches.
-- **`ARCH-04` (Contract Gateway Pattern for Analytics Evaluation)**: Use [`analytics/contracts_v14.py`](analytics/contracts_v14.py) and `analytics.evaluation_v14.evaluate_with_overrides()` as the sole evaluation gateway, and keep optional dependencies import-safe behind call-time `_require_*()` helpers (`CASPER` / `FRAMEWORK-01`).
+### 3.2 Architecture & Config
+- **`ARCH-01`: Config-first architecture**: All scenario parameters and pipeline modes live in YAML/JSON config files, not hardcoded; no hidden config switches in code.
+- **`ARCH-02`: IRR / NPV isolation**: `irr`, `xirr`, and `npv` are defined only in [`finance/irr.py`](finance/irr.py) (also `R7`). Enforced by [`tests/lint/test_irr_location_v14.py`](tests/lint/test_irr_location_v14.py).
+- **`ARCH-03`: Tranche-aware debt result surface**: `finance.debt_v14.plan_debt` returns tranche-keyed metrics plus aggregates such as `total_idc`; legacy flat keys are deprecated (also `R9`).
+- **`ARCH-04`: Contract gateway pattern for analytics evaluation**: Analytics modules use [`analytics/contracts_v14.py`](analytics/contracts_v14.py) for result types and `analytics.evaluation_v14.evaluate_with_overrides()` as the only evaluation entry point (`FRAMEWORK-03`).
 
-### 3.3 CLI & Tooling (`CLI-01` – `CLI-03`, `R1` – `R9`, `ADD-01` – `ADD-03`, `R26`)
-- **`CLI-01` / `R1` (Hydra Standard)**: All canonical CLIs (`run_*_v14.py`, `scripts/run_*_v14.py`) use `@hydra.main(version_base="1.3", config_path=..., config_name=...)`. Enforced by [`tests/lint/test_entrypoints_hydra_only.py`](tests/lint/test_entrypoints_hydra_only.py).
-- **`CLI-02` / `R2` (JSON-First Output)**: CLIs emit structured JSON on stdout (`logging.disable(logging.WARNING)` when emitting pure JSON stdout).
-- **`CLI-03` / `R3` (No `argparse` / Frozen Legacy CLIs)**: `argparse` is banned repo-wide ([`tests/lint/test_no_argparse_anywhere.py`](tests/lint/test_no_argparse_anywhere.py)); legacy Typer/Click scripts are frozen ([`tests/lint/test_no_typer_v14.py`](tests/lint/test_no_typer_v14.py)).
-- **`R4` – `R9` & `ADD-01` – `ADD-03`**: Structured config composition via OmegaConf `DictConfig`, pre-flight `validate_config_for_v14`, deterministic CLI exit codes, and reproducible JSON/CSV export artifacts.
-- **`R26` (MarkItDown-First PDF Ingestion)**: Convert PDFs using the governed Python 3.12 MarkItDown toolchain (`"$DUTCHBAY_VENV/bin/python" -m markitdown` or `pdfplumber`/`PyMuPDF`) before interpreting them. Never infer claims from raw PDF bytes.
+### 3.3 CLI & Tooling
+- **`CLI-01`: CLI framework scope**: All v14 CLIs use Hydra (`hydra-core`). `argparse` is banned repo-wide, and legacy Typer/Click tools are frozen. Enforced by [`tests/lint/test_entrypoints_hydra_only.py`](tests/lint/test_entrypoints_hydra_only.py).
+- **`CLI-02`: Canonical v14 entrypoints**: The single-scenario entrypoint is `run_full_pipeline_v14.py` and the batch ScenarioAnalytics entrypoint is `run_scenario_analytics_v14.py`; both are Hydra-based and emit JSON plus artefacts (also `R1`).
+- **`CLI-03`: JSON-first outputs for automation**: Hydra CLIs emit a single JSON object to stdout summarising the run (KPIs, counts, paths); logging may share stdout only if tests can reliably slice out the JSON block.
+- **`R2`: Config-first CLIs via Hydra**: Defaults live under `conf/*.yaml`; runtime changes use Hydra overrides; no manual `sys.argv` parsing.
+- **`R3`: No argparse anywhere in repo**: Enforced by [`tests/lint/test_no_argparse_anywhere.py`](tests/lint/test_no_argparse_anywhere.py).
+- **`R4`: No Typer in v14 CLIs**: Enforced by [`tests/lint/test_no_typer_v14.py`](tests/lint/test_no_typer_v14.py).
+- **`ADD-01`, `ADD-02`, `ADD-03`** (Hydra & LibCST addendum): why Hydra centralises CLI configuration, how LibCST enforces the CLI framework bans, and how new pipeline components extend both.
+- **`R26`: Convert PDFs with governed MarkItDown before parsing**: Never parse a PDF from raw WebFetch/HTTP output. Convert it with the governed Python 3.12 MarkItDown toolchain (`.venv/bin/python -m markitdown <file-or-url.pdf>`), corroborate with `pdfplumber`/`PyMuPDF` where layout or completeness matters, and render/OCR image-only PDFs before drawing claims.
 
-### 3.4 Validation, LibCST & Typing (`VAL-01`, `VAL-02`, `CST-01`, `TYPE-01`)
-- **`VAL-01` & `VAL-02`**: Strict v14 schema validation and explicit unit suffixes in field and contract names (`*_pct`, `*_years`, `*_usd`, `*_lkr`, `*_mw`, `*_mwh`). Never silently mix percentage (`0.15` vs `15.0`) or currency (`USD` vs `LKR`) scales.
-- **`CST-01`**: LibCST structural AST guardrails in `tests/lint/` enforce import boundaries, ban hardcoded FX/discount/grid constants, and block `argparse`.
-- **`TYPE-01`**: Full type annotations on all public modules, classes, and functions, verified by `mypy` (`mypy.ini`) and Google-style docstrings ([`tests/lint/test_docstring_coverage.py`](tests/lint/test_docstring_coverage.py)).
+### 3.4 Validation, Schema Guard, LibCST & Typing
+- **`VAL-01`: Schema-first validation for v14 scenarios**: `validate_config_for_v14` is the pre-flight gatekeeper; in strict mode a config must provide a valid FX mapping and a corporate tax rate, and invalid configs fail fast (also `R5`, `R6`, `R22`).
+- **`VAL-02`: ScenarioAnalytics batch behaviour**: One bad scenario never crashes the batch; invalid scenarios are logged with reasons and skipped, and the summary exposes `n_success`, `n_failed`, and per-scenario failure messages.
+- **`FIN-02`: Explicit units and naming conventions**: Config fields encode units in their names (`*_pct`, `*_years`, `*_usd`, `*_lkr`); never mix percentage forms such as `5` and `0.05` without explicit naming, and never conflate currency, MW, and hours.
+- **`CST-01`: LibCST guardrails for imports and hot-spot APIs**: LibCST-based tests ban `argparse` imports anywhere and Typer/Click imports in v14-critical paths, forbid interactive `input()` in CI-covered code, and confine IRR/NPV definitions to `finance/irr.py`.
+- **`TYPE-01`: Typed-first v14 code**: New v14 modules are fully type-annotated, and `mypy` is clean for `analytics/`, `finance/`, and `dutchbay_v14chat/` (also `R15`). Docstrings are `R17` and `R24`, guarded by [`tests/lint/test_docstring_coverage.py`](tests/lint/test_docstring_coverage.py).
 
-### 3.5 Testing, Verification & Oracles (`TEST-01` – `TEST-05`, `VERIFY-01`)
-- **`TEST-01` (Regression Pins & Independent Oracle Clause)**:
-  - Finance-material code must answer to an **independent oracle** that did not originate in the same change (pre-existing test, external benchmark, closed-form check, independent implementation, or property/invariant test).
-  - A pinned constant proves only that a number did not move, not that it is still computed; pair pinned constants with a **responsiveness guard** (e.g., [`tests/finance/test_canon_vector_is_computed.py`](tests/finance/test_canon_vector_is_computed.py)).
-- **`TEST-02` – `TEST-04`**: Unit, contract, integration, and stochastic test separation; ordinary test runs do not establish Monte Carlo convergence, tail adequacy, or bankability ([`tests/lint/test_stochastic_suite_policy.py`](tests/lint/test_stochastic_suite_policy.py)).
-- **`TEST-05` (Coverage Gate & Independent Grid Study)**:
-  - Enforces the repository coverage floor ([`tests/lint/test_coverage_gate_policy.py`](tests/lint/test_coverage_gate_policy.py)).
-  - Any PR touching governed QSTS/grid execution paths must independently run and pass the GitHub-hosted `Grid Study` job on the exact PR head SHA ([`tests/lint/test_grid_ci_policy.py`](tests/lint/test_grid_ci_policy.py)).
-- **`VERIFY-01` ("A Claimed Check Without a Receipt Is Not a Check")**:
-  - Every PR must carry an explicit verification receipts table (`.github/pull_request_template.md`) with exact commands and outcomes, or an explicit `not run — <reason>` / `required-not-run` declaration. Enforced by required CI check `Verification receipts (VERIFY-01)` ([`scripts/ci/check_pr_receipts.py`](scripts/ci/check_pr_receipts.py), [`.github/workflows/pr-receipts.yml`](.github/workflows/pr-receipts.yml), [`tests/lint/test_pr_receipts_policy.py`](tests/lint/test_pr_receipts_policy.py)).
-  - Every new lint/policy guard must include a **negative control** that mutates the input and watches the guard fail.
+### 3.5 Testing, Coverage & Verification
+- **`TEST-01`: Regression tests and pins for financial behaviour**:
+  - Core financial behaviour is covered by regression tests with stable pins, and tests are updated whenever business logic changes.
+  - A pin proves only that a number did not change; pair it with a **responsiveness guard** (for example [`tests/finance/test_canon_vector_is_computed.py`](tests/finance/test_canon_vector_is_computed.py)).
+  - Finance-material code must also answer to an **independent oracle** that did not originate in the same change (a pre-existing test, an external benchmark, a closed-form check, an independent implementation, or a property/invariant).
+- **`TEST-02`: Coverage philosophy and fast-lane CI**: Fast-lane CI covers style, `mypy`, and CLI smoke tests; coverage thresholds apply to the full suite (also `R8`). The full-suite gate is `coverage report --fail-under=95` in [`.github/workflows/test-suite.yml`](.github/workflows/test-suite.yml), checked by [`tests/lint/test_coverage_gate_policy.py`](tests/lint/test_coverage_gate_policy.py).
+- **`TEST-03`: Bound stochastic model evaluations in the ordinary pytest suite**: The ordinary suite is a deterministic regression and coverage gate; a test that repeatedly executes the Monte Carlo model or full pipeline uses no more than 200 effective model evaluations ([`tests/lint/test_stochastic_suite_policy.py`](tests/lint/test_stochastic_suite_policy.py)).
+- **`TEST-04`: Separate report transport contracts from live report qualification**: Ordinary report and API tests exercise transport and renderer contracts without repeatedly recomputing the full supplemental-sensitivity stack.
+- **`TEST-05`: Require independent CI evidence for QSTS execution claims**: A PR whose acceptance depends on QSTS execution needs a GitHub-hosted `Grid Study` on Python 3.12 bound to the exact head SHA ([`tests/lint/test_grid_ci_policy.py`](tests/lint/test_grid_ci_policy.py)).
+- **`VERIFY-01`: A claimed check without a receipt is not a check**:
+  - Every PR records each check's command and result, or an explicit `not run - <reason>`, in the receipts table of `.github/pull_request_template.md`. Enforced by the required check `Verification receipts (VERIFY-01)` ([`scripts/ci/check_pr_receipts.py`](scripts/ci/check_pr_receipts.py), [`.github/workflows/pr-receipts.yml`](.github/workflows/pr-receipts.yml), [`tests/lint/test_pr_receipts_policy.py`](tests/lint/test_pr_receipts_policy.py)).
+  - A new guard ships with the negative control demonstrating that it fires.
 
-### 3.6 Finance, Model Risk Management & Presentation (`FIN-01`, `FIN-02`, `MRM-01`, `MRM-02`, `DOC-01`, `DOC-02`, `DBPL-01`)
-- **`FIN-01` & `FIN-02`**: Explicit impact disclosure for any change affecting IRR, DSCR, NPV, covenants, debt sizing, tax, tariff, FX, or AEP; like-for-like scenario comparisons only; bump [`VERSION`](VERSION) and update [`CHANGELOG.md`](CHANGELOG.md) (via `changelog.d/`) when committed financial behavior changes.
-- **`MRM-01` & `MRM-02`**: Stochastic simulations require an explicit `seed`; governed output artifacts must record `schema`, `model_version`, config hash, and provenance.
-- **`DOC-01` & `DOC-02`**: Keep documentation candid, source-grounded, and assumption-explicit; archive superseded sprint notes rather than leaving conflicting instructions live.
-- **`DBPL-01` (DutchBay Presentation Layer)**:
-  - Any PDF described as a DBPL document must be rendered through [`app/reports/dbpl/print_core.py`](app/reports/dbpl/print_core.py) (`render_dbpl_pdf`), requiring the complete `[report]` extra (`weasyprint`, `reportlab`, `geopandas`, `contextily`) and failing loud with `DbplDependencyError` if any dependency or font is missing.
-  - Design tokens live only in [`app/reports/dbpl/style.py`](app/reports/dbpl/style.py). Running header, running footer (`Page n of m`), and section caveat bands are un-suppressible, and font substitutions must be surfaced ([`docs/dbpl_styleguide.md`](docs/dbpl_styleguide.md)).
+### 3.6 Finance, Documentation, Model Risk & Presentation
+- **`FIN-01`: Numeric robustness and IRR/NPV safety**: IRR/NPV routines use stable numeric methods with sensible tolerances, handle non-convergence gracefully (for example return `None` and log), and never fall back silently in a way that changes financial meaning.
+- **`DOC-01`: Documented scenarios and assumptions**: Key financial assumptions (tariff, FX regime, tax rules, leverage, DSCR thresholds) are documented both in YAML configs and in generated summary tables usable with lenders and stakeholders.
+- **`DOC-02`: Model change log for IRR/DSCR-impacting changes**: Any change that can affect IRR, DSCR, NPV, or covenant logic updates the model [`CHANGELOG.md`](CHANGELOG.md) (via `changelog.d/`) and bumps [`VERSION`](VERSION), with regression test updates and explicit reviewer sign-off.
+- **`DOC-03`: Board-ready and lender-DD-safe documentation**: Documentation meets institutional review standards: verified claims with explicit sources, documented contract changes, and no hyperbole or informal tone.
+- **`MRM-01`: Deterministic runs for stochastic components**: Monte Carlo and other stochastic routines accept an explicit seed or RNG config; CI uses fixed seeds and production runs log the seed.
+- **`MRM-02`: Reproducible artefacts and audit trail**: Exported artefacts carry the scenario name, config path or hash, and model version, so any reported KPI set can be reconstructed.
+- **`DBPL-01`: DutchBay Presentation Layer - DBPL PDFs use the full [report] stack and house style**:
+  - Any PDF described as a DBPL document must be rendered through [`app/reports/dbpl/print_core.py`](app/reports/dbpl/print_core.py) (`render_dbpl_pdf`), requiring the complete `[report]` extra (`weasyprint`, `reportlab`, `geopandas`, `contextily`) and failing loud with `DbplDependencyError` if any dependency is missing.
+  - Design tokens are generated from [`app/reports/dbpl/style.py`](app/reports/dbpl/style.py); document control and the running page furniture are mandatory ([`docs/dbpl_styleguide.md`](docs/dbpl_styleguide.md)).
 
-### 3.7 Git Workflow, Delivery & Refactoring (`R10` – `R25`, `DELIVERY-01`, `REFACTOR-01` – `REFACTOR-04`, `WORKTREE-01`, `MERGE-01`, `REVIEW-01`, `TRAIN-01`, `CLEANUP-01`)
-- **`R10` – `R17` & `R19` – `R25`**: Pre-commit hooks enabled (never use `--no-verify`), ruff/black/isort formatting clean, legacy code isolated under `legacy/` ([`tests/lint/test_no_legacy_imports.py`](tests/lint/test_no_legacy_imports.py)), branch-PR-CI-merge workflow against `origin/main`.
-- **`R18` (Conventional Commits)**: Commit subjects must use `type(scope): summary` from the 11 sanctioned types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert` (`deploy` is unsanctioned). Guarded by [`tests/lint/test_commit_message_conformance.py`](tests/lint/test_commit_message_conformance.py).
-- **`R21` (Graduated Verification Cadence)**: Run the narrowest meaningful check before each commit while iterating, and run the full relevant suite before pushing.
-- **`DELIVERY-01` ("Dolphins, Not Whales") & `REFACTOR-01` – `REFACTOR-04`**:
+### 3.7 Git Workflow, Delivery & Refactoring
+- **`R10`–`R25`** (code quality, repository layout and workflow): pre-commit hooks are mandatory (`R10`); legacy code is isolated under `legacy/` (`R12`, [`tests/lint/test_no_legacy_imports.py`](tests/lint/test_no_legacy_imports.py)); Python filenames carry no spaces or special characters (`R19`); generated files go to `outputs/` (`R20`); development is branch-based with a full CI gate (`R23`) on a protected `main` (`R25`). The index in §3.0 lists every title.
+- **`R18`: Descriptive commit messages**: Subjects use `type: summary` or `type(scope): summary` from the eleven Conventional Commits types (`feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`); `deploy` is not sanctioned. There is no commit-message linter; [`tests/lint/test_commit_message_conformance.py`](tests/lint/test_commit_message_conformance.py) measures conformance and binds its type set to the CSV.
+- **`R21`: Standard local workflow: bootstrap + pytest**: Run the narrowest meaningful check before each commit while iterating, and the full suite before pushing.
+- **`DELIVERY-01`: Dolphins, not whales - incremental delivery as the default** and **`REFACTOR-01`: Dolphin Strategy - Zero-Breakage Incremental Migration** (with `REFACTOR-02`–`REFACTOR-04`):
   - Ship work as small, complete, independently reversible PRs ("dolphins"), never monolithic "whale" mega-PRs.
   - Incremental refactoring follows `MOVE → SHIM → UPDATE → DEPRECATE` one module at a time with zero breakage.
-- **`WORKTREE-01` (Dedicated Worktree Isolation)**: Every concurrent or background writing agent must use its own dedicated `git worktree` and branch. Never use `git stash` for cross-branch peeking.
-- **`REVIEW-01` (Review Before Full Suite)**:
+- **`WORKTREE-01`: Dedicated git worktree per concurrent agent or session**: Every concurrent or background agent that mutates the working tree uses its own dedicated `git worktree` and branch. Never use `git stash` for cross-branch peeking.
+- **`REVIEW-01`: Review before the full suite: one lane for bounded low-risk work, two for load-bearing**:
   1. Open PR as a **draft** (`test-suite.yml` runs fast gates only and reports `Test Summary (draft: full suite deferred)`).
   2. Freeze the draft HEAD and post one `Evidence pack` comment.
   3. Bind independent review lanes to that exact draft HEAD (`R1` including Module 1 §3.1's 3 bounded classes = 1 lane; `R2`/`R3` = 2 lanes: Domain + Assurance).
   4. Mark the PR **ready for review** so the full sharded suite runs once. Any subsequent change to the PR's files restarts all reviews (Module 3 §6). Enforced by [`tests/lint/test_review_first_policy.py`](tests/lint/test_review_first_policy.py).
-- **`TRAIN-01` (Merge Trains)**:
-  - The merge coordinator (who is not the writer of any car) may combine 2 or 3 reviewed draft PRs ("cars") that are path-disjoint, unstacked, and bidirectionally import-isolated (with at most one `R3`/KPI-changing car) onto a branch `train/<date>-<n>` starting at `origin/main` (one non-merge commit per car).
-  - Review bindings carry forward onto the train head only via `RECRUIT-01` Module 3 §8's three proofs (blob-hash identity, bidirectional import isolation, complete reviewed-to-updated diff).
-  - The train runs the full suite once and lands via **rebase-merge** (never squash), verified before and after landing by the fail-closed shell blocks in [`.claude/skills/steward/SKILL.md`](.claude/skills/steward/SKILL.md) and [`tests/lint/test_train_policy.py`](tests/lint/test_train_policy.py).
-- **`MERGE-01` (Standing Merge-on-Green Authority & Boundaries)**:
-  - Standing authorization to merge a PR as soon as every required check reports success on the exact current HEAD (`Test Summary`, `Code Quality Checks`, `Security Scan`, `Verification receipts (VERIFY-01)`, and conditional `Coverage Gate` / `Grid Study`) with no conflict and up-to-date base.
-  - **Boundary**: Merging is delivery authority only; it lifts no `HOLD` (such as `#1110`), and confers no grade, release, audit, lender, or Board authority. *(Note: When the project owner places a temporary session hold on `MERGE-01`, honour that hold until explicitly lifted.)*
-- **`CLEANUP-01` (Post-Merge Tracker Notification, Issue Closure & Worktree/Branch/Venv Retirement)**:
+- **`TRAIN-01`: Merge trains: reviewed pull requests share one full-suite run and land as separate commits**:
+  - The coordinator holding the merge lease (who writes no subject bytes and is not the writer of any car) may combine 2 or 3 reviewed draft PRs ("cars") whose lanes are bound to their frozen draft heads under `REVIEW-01`. The cars are path-disjoint and unstacked, and at most one is `R3` or changes a KPI. The train branch `train/<date>-<n>` starts at `origin/main` and carries one non-merge commit per car, in queue order: exactly that car's diff from its merge base, the car pull request's author as a squash merge of that pull request would record it, and the car's hand-written merge message (`R18`, ending with the car's PR number). A car whose diff does not apply cleanly leaves the train. The train PR is opened ready, with a focused train issue as its `INTAKE-01` work item, so the full suite runs once on the union.
+  - Review bindings carry forward onto the train head only via `RECRUIT-01` Module 3 §8's three proofs (blob-hash identity, bidirectional import isolation against the other cars and any advance of main, complete reviewed-to-train diff). If any proof fails, that car leaves the train. If a car is `R3` or changes a KPI, the train head's lender KPI vector must equal the vector the owner signed off for that car, or else the train waits for her sign-off on the train head's vector. Where no car changes a KPI, the train head's vector must equal main's.
+  - Before the train is opened ready and again just before landing, the recorded main SHA must be `origin/main` and each train commit must be exactly its car's reviewed diff (same paths, modes and old and new blobs), with the car's recorded message and author, while the car's reviewed head is still its PR's head. If main moves, the train is rebuilt from the new main, never refreshed with a merge commit.
+  - The train lands via **rebase-merge** (never squash). After landing, the returned SHA must equal the fetched `origin/main` tip, the landed commits contain no merge commit, and each landed commit's tree, message and author equal its train commit's. Each car's PR is then closed with a pointer to its commit on main. A red train is split, never edited; a fix goes to the car's own branch and restarts its reviews. The checks are the fail-closed shell blocks in [`.claude/skills/steward/SKILL.md`](.claude/skills/steward/SKILL.md), pinned by [`tests/lint/test_train_policy.py`](tests/lint/test_train_policy.py).
+- **`MERGE-01`: Merge on green - standing authorization, no per-PR go-ahead**:
+  - Standing authorization to merge a PR as soon as every required status check reports success on the exact current HEAD, including `Verification receipts (VERIFY-01)` and the coverage gate, with no failed, pending or unreported required check and no merge conflict. GitHub branch protection decides which checks are required. If a required check is red or unreported, or the branch is behind or conflicted, `R23`, `R25` and `GOV-02` govern instead. (The `MERGE-01` row calls the coverage gate "the TEST-05 coverage gate"; the coverage threshold is `TEST-02`'s, and `TEST-05` is the Grid Study rule.)
+  - **Boundary**: Merging is delivery authority only; it lifts no `HOLD` (such as `#1110`), and confers no grade, release, audit, lender, or Board authority. Nor does it check an issue control or confer deployment authority. It does not replace an independent review that another rule makes mandatory: the row says such a review belongs in the required-check set, so that it forms part of green, never an unwritten extra gate. *(Practice, not CSV text: when the project owner places a temporary hold on merging, honour it until she lifts it.)*
+- **`CLEANUP-01`: Post-merge tracker notification, issue closure, and worktree/branch/venv retirement**:
   - Immediately after any PR or `TRAIN-01` merge train lands on `origin/main` and protected-main ancestry/tree verification succeeds:
-    1. **Inform Tasklist & GitHub Issues**: Update the session/project tasklist, post a closure/reconciliation receipt on [Issue #1353](https://github.com/arunakulat/dutchbay-epc-model/issues/1353) naming the merged PR and commit SHA on `origin/main`, and close completed focused GitHub issue(s) (or each car PR and train issue for a train).
-    2. **Clear, Prune & Close Worktrees**: Synchronize the primary checkout (`git fetch origin main && git checkout main && git pull --ff-only origin main`), remove the merged task worktree (`git worktree remove <worktree-path>`), and run `git worktree prune` (preserving any dirty or concurrently owned worktrees belonging to other active tasks).
-    3. **Delete Merged Branches**: Delete the merged branch locally (`git branch -d <branch>`) and remotely (`git push origin --delete <branch>`), and run `git fetch --prune origin`.
+    1. **Inform Tasklist & GitHub Issues**: Update the session/project tasklist, post a closure/reconciliation receipt on [Issue #1353](https://github.com/arunakulat/dutchbay-epc-model/issues/1353) naming the merged PR and commit SHA on `origin/main`, and close only the focused GitHub issue named by number on the merged PR's own `Work item:` or closing line (for a train, the train issue and the focused issue named on each car's line), and only when its deliverable is complete. A `Work item:` line that names a #1353 comment closes nothing, and cleanup never closes tracker #1353. Cleanup never closes a pull request.
+    2. **Clear, Prune & Close Worktrees**: Synchronize the clean primary checkout, when no other session is using it (`git fetch origin main && git checkout main && git pull --ff-only origin main`), remove the merged task worktree (`git worktree remove <worktree-path>`), and run `git worktree prune` (preserving any dirty or concurrently owned worktrees belonging to other active tasks).
+    3. **Delete Merged Branches**: Only when the branch's pull request has `merged_at` set, its `head.ref` names the branch, every ref still present (remote and local) equals the merged head, and no open pull request uses the branch as its base (all read immediately before deleting), delete the branch locally (`git branch -D <branch>`, since a squash merge makes `-d` refuse) and remotely (`git push origin --delete <branch>`, skipped if GitHub already auto-deleted it), and run `git fetch --prune origin`. A `TRAIN-01` car branch qualifies only when the train PR merged, the car PR was closed as a landed car, and each ref equals the car head recorded in the train issue. A branch whose pull request is open, closed unmerged, or whose head moved after the merge is never deleted by cleanup.
     4. **Clean Non-Protected Venvs**: Remove any temporary, per-task, or worktree-local virtual environments (`.venv`, `.venv311`, or ad-hoc venvs) associated with the retired worktree/task, while **NEVER** deleting, clearing, pruning, or modifying the protected persistent Python 3.12 environment at `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` (`THREAD-01`, `ENV-01`). Guarded by [`tests/lint/test_gwtf_canonical_source.py`](tests/lint/test_gwtf_canonical_source.py).
+  - **No pull request closure**: Cleanup never closes a pull request, and closing an unmerged pull request is never a cleanup step. It needs a cited owner decision, posted as a comment on that pull request before it is closed. The one exception is a `TRAIN-01` car, closed only after the train's post-landing verification proves its commit is on `origin/main`, with the pointer comment posted first. (On 2026-11-05 #1520 and #1525 were closed unmerged seconds after #1531 and #1537 merged.)
 
 ### 3.8 Data Ingestion, Persistence, Environment & Dependency Security (`DATA-01`, `PERSIST-01`, `ENV-01`, `THREAD-01`, `SECDEP-01`)
-- **`DATA-01` (Lossless Ingestion & Corpus Manifest Integrity)**:
+- **`DATA-01`: Lossless ingestion - capture every data point from ingested material**:
   - Capture every source datum, table cell, unit, caveat, precision, and provenance location. Preserve raw values alongside interpretation.
-  - Every corpus area under `docs/source_materials/` must maintain a verified `MANIFEST.sha256` and registered handling statement. After any manifest edit, refresh parent pins with [`scripts/analysis/refresh_corpus_manifest.py`](scripts/analysis/refresh_corpus_manifest.py) and verify via [`tests/lint/test_nso_corpus_manifest_integrity.py`](tests/lint/test_nso_corpus_manifest_integrity.py).
-  - Never quote confidential/hash-only commercial terms in public docs, changelogs, or review records.
-- **`PERSIST-01` (Early & Frequent Durable Checkpointing)**:
-  - Commit coherent slices early, write subagent/review outputs and workflow journals to durable files immediately on completion, and resolve session handovers strictly via [`scripts/list_session_handover_records.py`](scripts/list_session_handover_records.py).
-- **`ENV-01` & `THREAD-01` (Repository Rooting & Persistent Python 3.12 Runtime)**:
-  - Bind every local session to the durable project `/Users/aruna/Downloads/Dutchbay_EPC_Model` and its governed Python 3.12 virtual environment `DUTCHBAY_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"`, with the active checkout/worktree first on `PYTHONPATH`.
-  - Never create or use `.venv311`, per-task/worktree-local `.venv`s, or bare/system Python. Shared-venv governance changes must pass [`scripts/verify_shared_venv_worktrees.py`](scripts/verify_shared_venv_worktrees.py) across two clean worktrees during a quiet window.
-- **`SECDEP-01` (Dependency Advisory Suppression Discipline)**:
-  - Every suppressed `pip-audit` advisory in `Makefile` (`PIP_AUDIT_IGNORES`) is a dated claim that must declare the exact package pin, the dependency/constraint cap forcing it, the upstream release that lifts it, and why runtime exposure is defensible. Re-check before `make lock` ([`RELEASING.md`](RELEASING.md), [`tests/lint/test_pip_audit_allowlist.py`](tests/lint/test_pip_audit_allowlist.py), [`tests/lint/test_security_gate_coverage.py`](tests/lint/test_security_gate_coverage.py)).
+  - *(Repository practice, not CSV text: the `DATA-01` row says nothing about manifests. AGENTS.md "Four ways a corpus commit goes wrong" and CLAUDE.md route corpus commits here.)* Every corpus area under `docs/source_materials/` must maintain a verified `MANIFEST.sha256` and registered handling statement. After any manifest edit, refresh parent pins with [`scripts/analysis/refresh_corpus_manifest.py`](scripts/analysis/refresh_corpus_manifest.py) and verify via [`tests/lint/test_nso_corpus_manifest_integrity.py`](tests/lint/test_nso_corpus_manifest_integrity.py).
+- **`PERSIST-01`: Checkpoint durable state early and often to survive interruptions**: Commit coherent slices early, write workflow, subagent and review results to durable files the moment they land, and resolve session handovers via [`scripts/list_session_handover_records.py`](scripts/list_session_handover_records.py).
+- **`ENV-01`: Root repository work at the active checkout and bind shared Python imports to it** and **`THREAD-01`: Create every new thread in the DutchBay_EPC_Model project and use its persistent venv**:
+  - Root every task at the active checkout or its dedicated worktree, with that worktree first on `PYTHONPATH`. Local threads bind to the governed Python 3.12 environment `DUTCHBAY_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"`.
+  - Do not create or select a temporary or per-thread replacement venv, `.venv311`, or bare/system Python. The one exception is the checkout-local `.venv` as the portable fallback when `DUTCHBAY_VENV` is unset on an unconfigured developer host or an ephemeral CI/container host (§1).
+  - Shared-venv governance changes must pass [`scripts/verify_shared_venv_worktrees.py`](scripts/verify_shared_venv_worktrees.py) against two distinct clean worktrees from the same Git common directory.
+- **`SECDEP-01`: A suppressed advisory declares the cap that forces it and the release that lifts it**:
+  - Every suppressed `pip-audit` advisory in `Makefile` (`PIP_AUDIT_IGNORES`) is a dated claim that must declare the exact package pin, the dependency/constraint cap forcing it, the upstream release that lifts it, and why the suppression is defensible. Re-check the cap before `make lock` ([`RELEASING.md`](RELEASING.md), [`tests/lint/test_pip_audit_allowlist.py`](tests/lint/test_pip_audit_allowlist.py), [`tests/lint/test_security_gate_coverage.py`](tests/lint/test_security_gate_coverage.py)).
 
 ---
 
 ## 4. `RECRUIT-01` — Multi-Agent Recruitment, Lease & Review Architecture
 
-[`RECRUIT-01`](docs/governance/recruit_01/01_capability_and_risk.md) governs all multi-agent and single-agent task execution across four normative modules:
+**`RECRUIT-01`: Recruit through globally applicable, risk-scaled operational modules**. Its executable requirements live in four canonical modules:
 
-1. **Module 1 — Capability & Semantic Risk Classification ([`01_capability_and_risk.md`](docs/governance/recruit_01/01_capability_and_risk.md))**:
-   - **Risk Classes**:
-     - `R0_READ_ONLY`: Inspection/research with zero repository mutation.
-     - `R1_ROUTINE`: Routine low-risk docs and §3.1's **three bounded low-risk classes**: (a) presentation-only code, (b) test-only guard tightening that never removes/weakens an assertion, and (c) record corrections. Takes **1 independent reviewer lane**.
-     - `R2_LOAD_BEARING`: All other code, CI/merge gates, dependency bumps, governance, oracle-defining tests, or writer-authorizing handovers. Takes **2 independent reviewer lanes** (Domain + Assurance).
-     - `R3_CONSEQUENTIAL`: Finance/KPI-moving changes, canonical contracts, grid/QSTS execution, or corpus-handling boundaries. Takes **2 independent reviewer lanes** (R3 Domain + R3 Assurance) plus owner KPI sign-off when canonical KPIs move.
-2. **Module 2 — Writer Lease & Recovery ([`02_writer_lease_and_recovery.md`](docs/governance/recruit_01/02_writer_lease_and_recovery.md))**:
-   - At most **one participant holds an active writer lease** on a branch/worktree (`GRANTED → ACTIVE → CHECKPOINTED → COMPLETED`).
-   - Subagents never commit (`D-1`); the sole-writer coordinator verifies and commits.
-   - Any session interruption, timeout, crash, or rate-limit immediately revokes lease continuity (`INTERRUPTED → REVOKED`), requiring `DEAD_WORKER_TAKEOVER` preflight before writing resumes.
-3. **Module 3 — Independent Exact-Object Review & Attestation ([`03_independent_review_and_attestation.md`](docs/governance/recruit_01/03_independent_review_and_attestation.md))**:
-   - Reviewers are strictly read-only (`READ_ONLY_NO_MUTATION`) and never self-approve writer work ([`tests/lint/test_recruit_01_reviewer_supplied_code.py`](tests/lint/test_recruit_01_reviewer_supplied_code.py)).
-   - Every review disposition (`ACCEPT`, `CONDITIONAL_ACCEPT`, `REJECT`, `HOLD`) binds to the exact frozen candidate `subject_head_sha`, `subject_tree_sha`, `base_sha`, and sorted subject blob manifest.
-   - **§7 Base Fast-Forward & §8 Merge-Train Carry-Forward**: A review disposition survives a base advance or train assembly **only** when three recorded proofs hold: (1) **blob-hash identity** for every reviewed file, (2) **bidirectional import isolation**, and (3) **complete diff** from reviewed head to updated/train head.
-4. **Module 4 — Staged Delegation & 5-Tier Worker Ingress ([`04_staged_delegation_and_ingress.md`](docs/governance/recruit_01/04_staged_delegation_and_ingress.md))**:
-   - **5-Tier Ingress Order**: Tier 1 (normative contracts & ruleset) → Tier 2 (prior accepted implementation & review chain) → Tier 3 (open residuals & predecessor findings) → Tier 4 (live code, configs, tests) → Tier 5 (live GitHub CI, PRs, tracker `#1353`).
-   - Prior assistant, handover, or memory claims are **claims to verify, never authority**.
-   - Classify every delegated task outcome as `EVIDENCE_RETURNED`, `NO_FINDING_WITH_EVIDENCE`, `NO_EVIDENCE` (never treated as acceptance), or `BLOCKED_WITH_RECEIPT`.
+1. **Module 1 — Capability profiles and semantic risk ([`01_capability_and_risk.md`](docs/governance/recruit_01/01_capability_and_risk.md))**:
+   - A written capability profile precedes dispatch; a worker's self-description is a claim to verify.
+   - **Risk classes** (classify the highest semantic consequence; filename and language do not lower the class):
+     - `R0_READ_ONLY`: inspection, inventory, diagnosis, or discussion with no governed mutation.
+     - `R1_ROUTINE`: non-authoritative prose and other clearly reversible changes with no behavioural or authority effect, plus §3.1's **three bounded low-risk classes**: (a) presentation-only code, (b) test-only guard tightening that never removes or weakens an assertion, and (c) record corrections. One independent reviewer.
+     - `R2_LOAD_BEARING`: any code outside §3.1's classes, contracts, schemas, oracle-defining tests, governance, charters, handovers, review records, provenance, security, data ingestion, and similar work. Two independent reviewers: one task-domain and one separate assurance reviewer.
+     - `R3_CONSEQUENTIAL`: finance/KPI behaviour, lender or Board-facing evidence, grade/release logic, security boundaries, and similar consequential work. At least the `R2` pair plus every specialist, oracle, human authority and gate the controlling rules require.
+2. **Module 2 — Writer leases, recovery, and closure ([`02_writer_lease_and_recovery.md`](docs/governance/recruit_01/02_writer_lease_and_recovery.md))**:
+   - One delivery coordinator; at most **one participant holds an active writer lease** for a worktree and checkpoint, and every other participant, including all reviewers, stays read-only.
+   - Leases follow a mandatory state machine from `READ_ONLY` through `LEASED`, `FROZEN`, `UNDER_REVIEW`, `MERGED` and `WORKTREE_AND_BRANCH_RETIRED` to `CLOSED`; a writer lease expires at `CHECKPOINT_VERIFIED`.
+   - Any interruption, drift, or unexpected writer activity revokes the lease (`PRESERVE_OBSERVED_STATE → REVOKE_LEASE → READ_ONLY`); a non-responsive worker is replaced only through `DEAD_WORKER_TAKEOVER`.
+3. **Module 3 — Independent review and exact-object attestation ([`03_independent_review_and_attestation.md`](docs/governance/recruit_01/03_independent_review_and_attestation.md))**:
+   - Required reviewers are distinct from the writer, the coordinator and each other, stay read-only, and return their initial dispositions independently. One veto blocks acceptance. A reviewer supplies findings, not subject bytes ([`tests/lint/test_recruit_01_reviewer_supplied_code.py`](tests/lint/test_recruit_01_reviewer_supplied_code.py)).
+   - Every disposition binds to an exact frozen object and is recorded as a structured receipt (`candidate_commit`, `candidate_tree`, `base_sha`, `subject_manifest_sha256`, and the other §4 fields). A disposition naming no exact object is not a disposition.
+   - **§7 Base movement & §8 Merge-train carry-forward**: an acceptance survives a base advance or train assembly **only** when three recorded proofs hold: (1) **blob-hash identity** for every reviewed file, (2) **bidirectional import isolation**, and (3) the **complete diff** from the reviewed head to the updated or train head.
+4. **Module 4 — Staged delegation, ingress, and evidence yield ([`04_staged_delegation_and_ingress.md`](docs/governance/recruit_01/04_staged_delegation_and_ingress.md))**:
+   - Safety preflight first, then **substantive ingress in authority order**: (1) governing contracts, standards, sources and charters → (2) prior accepted implementation and the review chain → (3) predecessor findings and open residuals → (4) live code, configs, tests and evidence → (5) current external state.
+   - Prior assistant, handover, memory, and worker statements are **claims to verify, never authority**.
+   - Every worker outcome is `EVIDENCE_RETURNED`, `NO_FINDING_WITH_EVIDENCE`, `NO_EVIDENCE` (never treated as acceptance), or `BLOCKED_WITH_RECEIPT`.
 
 ---
 
 ## 5. AI-Specific Governance & Host Directives Across the Codebase
 
-Every AI system interacting with this repository is bound to [`go_with_the_flow_rules_v3_0_clean.csv`](go_with_the_flow_rules_v3_0_clean.csv) and [`docs/governance/agent_session_routing.md`](docs/governance/agent_session_routing.md), plus the host-specific controls below:
+Every AI system interacting with this repository is bound to [`go_with_the_flow_rules_v3_0_clean.csv`](go_with_the_flow_rules_v3_0_clean.csv) and [`docs/governance/agent_session_routing.md`](docs/governance/agent_session_routing.md). The host-specific notes below describe each host's surfaces. Anything they list that is not a CSV row, such as files under a host's home directory, is host-local guidance that this repository cannot verify. It is never a rule, and the CSV wins.
 
 ### 5.1 OpenAI Codex (`AGENTS.md`, `.codex/`, `~/.codex/`)
 - **Repo Surfaces**: [`AGENTS.md`](AGENTS.md), [`.codex/config.toml`](.codex/config.toml), [`.codex/environments/environment.toml`](.codex/environments/environment.toml) (guarded by [`tests/lint/test_codex_project_guidance.py`](tests/lint/test_codex_project_guidance.py) and [`tests/lint/test_codex_local_environment.py`](tests/lint/test_codex_local_environment.py)).
-- **Host Global Surfaces**: `~/.codex/AGENTS.md`, `~/.codex/config.toml`, `~/.codex/hooks.json`, `~/.codex/hooks/session-root-check.sh`, `~/.codex/memories/skills/dutchbay-shared-venv-quiet-window/SKILL.md`, and `~/.codex/automations/continue-dutchbay-oldest-first-delivery/automation.toml`.
-- **Key Rules**:
-  - Every Codex task must originate from the `DutchBay_EPC_Model` project and bind to `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` (`THREAD-01`).
-  - Runtime diagnostic logs are ephemeral by default; suppress routine `INFO` output during long runs and retain only structured validation facts and governed evidence artifacts.
-  - Shared-venv verification (`scripts/verify_shared_venv_worktrees.py`) must run in a quiet window with zero concurrent `$DUTCHBAY_VENV` processes.
+- **Host-local surfaces** (outside the repository): Codex's global instructions, config, hooks, memories, skills and automations under `~/.codex/`.
+- **Repository rules that apply**:
+  - Every Codex thread is created from the `DutchBay_EPC_Model` project and binds to `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` (`THREAD-01`).
+  - Shared-venv verification (`scripts/verify_shared_venv_worktrees.py`) runs against two clean worktrees (`ENV-01`). Running it during a quiet window is host-local Codex guidance, not CSV text.
 
 ### 5.2 Anthropic Claude Code (`CLAUDE.md`, `.claude/`, `~/.claude/`)
 - **Repo Surfaces**: [`CLAUDE.md`](CLAUDE.md), [`.claude/settings.json`](.claude/settings.json), [`.claude/hooks/session-start.sh`](.claude/hooks/session-start.sh), and [`.claude/skills/steward/SKILL.md`](.claude/skills/steward/SKILL.md).
-- **Host Global Surfaces**: `~/.claude/CLAUDE.md`, `~/.claude/settings.json`, `~/.claude/hooks/session-root-check.sh`, and `~/.claude/projects/-Users-aruna-Downloads/memory/` (including `dutchbay_gwtf_ruleset_and_framework_acronyms.md` and `global_commit_and_delegation_directives.md`).
-- **Global Operating Directives (`G1` – `G6`)**:
-  - **`G1` (Atomic Commits)**: Standing authorization for small, coherent commits on a verified feature branch (`git branch --show-current` first; explicit `git add <paths>`; never `git add -A`/`.`; no `--no-verify`; `R18` commit message; `R21` narrowest check before commit, full suite before push).
-  - **`G2` (Risk-Floored Model Tiers)**: Subagent model selection is floored by `RECRUIT-01` risk class (`R0`/`R1` → haiku/sonnet; `R2` → sonnet writer floor, opus reviewers; `R3` → opus writer and reviewers).
-  - **`G3` (Self-Contained Briefs)**: Subagent prompts must include exact file paths, line numbers, constraints, and verification commands; subagents never commit (`D-1`).
-  - **`G4` (Verify-Then-Accept)**: Inspect `git diff`/`git status`, verify the `TEST-01` independent oracle, and reject `NO_EVIDENCE` returns.
-  - **`G5` (Durable Workflow Journals)**: Stream per-agent results immediately to durable storage under `PERSIST-01`.
-  - **`G6` (Coordinator Discipline)**: When delegating, the coordinator manages leases, verification, and integration rather than duplicating worker edits.
+- **Host-local surfaces** (outside the repository): Claude Code's global `~/.claude/` instructions, settings, hooks and memory on the owner's machine. Any operating directives kept there are host-local guidance, not GWTF rules.
+- **Repository rules that apply**: local sessions follow `THREAD-01` and `ENV-01`; cloud sessions use the checkout-local `.venv` fallback that [`CLAUDE.md`](CLAUDE.md) provisions (§1).
 
 ### 5.3 Google Antigravity / Gemini (`~/.gemini/antigravity/`, `.agents/`)
-- **Surfaces**: [`AGENTS.md`](AGENTS.md) (loaded as workspace rule), [`docs/governance/agent_session_routing.md`](docs/governance/agent_session_routing.md), `~/.gemini/antigravity/worktrees/`, conversation artifacts under `~/.gemini/antigravity/brain/<conversation-id>/`, and read-only subagent definitions (`r3_domain_reviewer`, `r3_assurance_reviewer` with `EnableWriteTools=false`).
-- **Key Rules**:
-  - Starts from [`docs/governance/agent_session_routing.md`](docs/governance/agent_session_routing.md) and [`AGENTS.md`](AGENTS.md).
-  - Uses dedicated worktrees under `WORKTREE-01` and the persistent `DUTCHBAY_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"` runtime with `PYTHONPATH="$PWD"` (`ENV-01`, `THREAD-01`).
-  - Preserves durable artifacts and checkpoints state early (`PERSIST-01`), enforces read-only R3 Domain and R3 Assurance subagent attestation on frozen commit/tree/base SHAs (`RECRUIT-01` Module 3), and formats responses with clickable `file://` links.
+- **Surfaces**: [`AGENTS.md`](AGENTS.md) (loaded as workspace rule), [`docs/governance/agent_session_routing.md`](docs/governance/agent_session_routing.md), and host-local worktrees and conversation artifacts under `~/.gemini/antigravity/`.
+- **Repository rules that apply**:
+  - Start from [`docs/governance/agent_session_routing.md`](docs/governance/agent_session_routing.md) and [`AGENTS.md`](AGENTS.md).
+  - Use dedicated worktrees under `WORKTREE-01` and the persistent `DUTCHBAY_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"` runtime with `PYTHONPATH="$PWD"` (`ENV-01`, `THREAD-01`).
+  - Sub-agents that a session spawns for itself are not `RECRUIT-01` review lanes. Module 3 requires reviewers distinct from the writer and the coordinator, recruited per Module 1.
 
 ### 5.4 Moonshot Kimi (`docs/knowledge_base/`, `docs/PR1336_D1_DOMAIN_REVIEW_R1.md`, `~/.kimi-*`)
-- **Surfaces**: [`docs/knowledge_base/06_finance_python_renewables_comparative_review.md`](docs/knowledge_base/06_finance_python_renewables_comparative_review.md) (§ *"Disposition of the KIMI Q4 2026 comparison"*), [`docs/PR1336_D1_DOMAIN_REVIEW_R1.md`](docs/PR1336_D1_DOMAIN_REVIEW_R1.md) (`KIMI-FALSE-BESS-GAP`), and host bridge directories `~/.kimi-webbridge/` and `~/.kimi-work/`.
-- **Key Rules**:
-  - External AI research reports (such as Kimi comparative reviews) are treated strictly as **unverified claim sets (`Tier 3/4` claims to verify), never as primary sources or authority** (`DATA-01`, `RECRUIT-01` Module 4).
-  - Opaque search markers or inaccessible third-party figures (e.g., unverified Lazard/IEA numbers) are **rejected** until primary source documents are ingressed and hash-pinned.
+- **Surfaces**: [`docs/knowledge_base/06_finance_python_renewables_comparative_review.md`](docs/knowledge_base/06_finance_python_renewables_comparative_review.md) (§ *"Disposition of the KIMI Q4 2026 comparison"*), [`docs/PR1336_D1_DOMAIN_REVIEW_R1.md`](docs/PR1336_D1_DOMAIN_REVIEW_R1.md) (`KIMI-FALSE-BESS-GAP`), and host-local bridge directories under `~/.kimi-*`.
+- **Repository rules that apply**:
+  - External AI research reports (such as Kimi comparative reviews) are claims to verify, never primary sources or authority (`DATA-01`, `RECRUIT-01` Module 4).
   - False capability gap claims (such as `KIMI-FALSE-BESS-GAP`, which overlooked [`finance/bess_revenue.py`](finance/bess_revenue.py), [`finance/bess_lcos.py`](finance/bess_lcos.py), and [`finance/bess_project_economics.py`](finance/bess_project_economics.py)) must be verified against the live codebase before opening work items.
 
 ### 5.5 Perplexity, Grok & External Research LLMs (`legacy/dev_scripts/`, `docs/AGENTIC_DELIVERY_PRACTICE.md`)
-- **Surfaces**: [`legacy/dev_scripts/AAA - instructions for make clean zip.md`](legacy/dev_scripts/AAA - instructions for make clean zip.md) (historical Perplexity snapshot workflow, now isolated under `legacy/`) and [`docs/AGENTIC_DELIVERY_PRACTICE.md`](docs/AGENTIC_DELIVERY_PRACTICE.md).
-- **Key Rules**:
-  - Legacy instructions in `legacy/` (including retired sprint integration branches like `feature/add-finance-contracts-pydantic-v2-20251219` or autonomous-mode overrides) are **retired historical artifacts** and must never be restored ([`tests/lint/test_gwtf_canonical_source.py`](tests/lint/test_gwtf_canonical_source.py)).
-  - Any external LLM output (Perplexity, Grok, ChatGPT, etc.) is subject to `DATA-01` primary-source verification, `TEST-01` independent-oracle checks, and `GOV-01` authority boundaries.
+- **Surfaces**: [`legacy/dev_scripts/AAA - instructions for make clean zip.md`](<legacy/dev_scripts/AAA - instructions for make clean zip.md>) (historical Perplexity snapshot workflow, now isolated under `legacy/`) and [`docs/AGENTIC_DELIVERY_PRACTICE.md`](docs/AGENTIC_DELIVERY_PRACTICE.md).
+- **Repository rules that apply**:
+  - Instructions in `legacy/` (including retired sprint integration branches like `feature/add-finance-contracts-pydantic-v2-20251219`) are retired historical artifacts and must never be restored (`R25`, [`tests/lint/test_gwtf_canonical_source.py`](tests/lint/test_gwtf_canonical_source.py)).
+  - Any external LLM output (Perplexity, Grok, ChatGPT, etc.) is subject to `DATA-01` lossless capture, `TEST-01` independent-oracle checks, and `RECRUIT-01` Module 4's claims-to-verify rule.
 
 ### 5.6 GitHub Copilot, Dependabot, Renovate & GitHub Actions Bots (`scripts/ci/`)
 - **Surfaces**: [`scripts/ci/check_pr_intake.py`](scripts/ci/check_pr_intake.py), [`scripts/ci/check_pr_receipts.py`](scripts/ci/check_pr_receipts.py), [`tests/lint/test_pr_intake_policy.py`](tests/lint/test_pr_intake_policy.py), and [`tests/lint/test_pr_receipts_policy.py`](tests/lint/test_pr_receipts_policy.py).
-- **Key Rules**:
-  - The recognized bot set `{dependabot[bot], github-actions[bot], copilot[bot], renovate[bot]}` is exempt from author-side PR body template formatting only at initial PR creation.
-  - Under `INTAKE-01` and [`.claude/skills/steward/SKILL.md`](.claude/skills/steward/SKILL.md), **before** any human or agent steward modifies, updates, or merges an automated/bot PR, a **non-bot tracker comment** naming the exact PR (`#N`) must be posted on [Issue #1353](https://github.com/arunakulat/dutchbay-epc-model/issues/1353), and attribution must be verified by comparing `commits[].author.login` against the PR `user.login`.
+- **Repository rules that apply**:
+  - `check_pr_receipts.py` exempts the bot set `{dependabot[bot], github-actions[bot], copilot[bot], renovate[bot]}` from the receipts table (`VERIFY-01`).
+  - Under `INTAKE-01`, a bot PR is an intake event: `check_pr_intake.py` passes it only after a non-bot comment on [Issue #1353](https://github.com/arunakulat/dutchbay-epc-model/issues/1353), posted after the PR was created, names it. No follow-up modification or merge proceeds before that record.
 
 ---
 
 ## 6. Quick Pre-Commit & Pre-Push Verification Commands
 
-Run the narrowest meaningful checks before each commit (`R21`), and broaden before pushing:
+Run the narrowest meaningful checks before each commit (`R21`), and broaden before pushing. `PY` is the environment chosen in §1: `"$DUTCHBAY_VENV/bin/python"` on the owner's machine, `.venv/bin/python` on a CI or container host.
 
 ```bash
+# 0. Choose the interpreter (§1): the owner's venv locally, the checkout-local .venv on CI or a container
+PY="${DUTCHBAY_VENV:+$DUTCHBAY_VENV/bin/python}"; PY="${PY:-.venv/bin/python}"
+
 # 1. Confirm branch is NOT main/master (GOV-02)
 git branch --show-current
 git status --short --branch
 
 # 2. Validate canonical GWTF CSV & handover chain (PERSIST-01)
 DUTCHBAY_FLOW_RULESET_CSV="$PWD/go_with_the_flow_rules_v3_0_clean.csv" \
-  PYTHONPATH="$PWD" /Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python \
-  dutchbay_bootstrap_rules.py
-/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python scripts/list_session_handover_records.py
+  PYTHONPATH="$PWD" "$PY" dutchbay_bootstrap_rules.py
+"$PY" scripts/list_session_handover_records.py
 
 # 3. Run focused pytest, ruff & whitespace checks (R21, VERIFY-01)
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" \
-  /Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/python -m pytest \
-  -p no:cacheprovider tests/lint/ -q
-/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/ruff check <changed-paths>
-/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv/bin/ruff format --check <changed-paths>
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PWD" "$PY" -m pytest -p no:cacheprovider tests/lint/ -q
+"$PY" -m ruff check <changed-paths>
+"$PY" -m ruff format --check <changed-paths>
 git diff --check
 ```

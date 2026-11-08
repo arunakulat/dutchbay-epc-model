@@ -5,6 +5,40 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Blue Whale: the turbine stands on DutchBay T2, with zero wake (15.22.0).** Owner decision
+  of 7 Nov 2026: the turbine replaces T2 at T2's position, so T2 casts no wake; the T1/T3 wake
+  risk is disclosed, not quantified. The wind yield is unchanged. The lot holds 186 PV tables
+  (was 191), the shadow on the PV rises to 0.20% of irradiance, and the owner's battery takes
+  152 tables (was 151). Solar + BESS project NPV USD -4.44M (unchanged to 2 dp); hybrid project
+  IRR 9.28% (unchanged to 2 dp). Detail in the compiled fragment.
+- **PUCSL escalable O&M tariff indexed yearly (15.21.0).** New optional `tariff.om_indexation`
+  (the escalable O&M part in LKR/kWh, and a yearly index weighted on CCPI and LKR/USD or a fixed
+  rate), plus an optional `escalable_om_lkr_per_kwh` on an energy-tariff BESS premium. Without
+  them every scenario is byte-identical. The Blue Whale scenarios take it on the owner's answer of
+  2026-11-07 (audit residual L-9, #1353 comment 6705449182), on the PUCSL 2026 methodology's basis
+  (s.3.1 item 2) with placeholder weights (input B35): 3.21%/yr. Wind project IRR 12.41% ->
+  13.13%; solar + BESS NPV USD -4.52M -> -4.44M; year-1 DSCR unchanged. Detail in the compiled
+  fragment.
+- **Opex split by currency (15.20.0).** New optional `opex.currency_split` (a USD share, given
+  directly or weighted from components, USD and LKR escalation, and an optional LKR depreciation
+  path for the USD share). Without it every scenario is byte-identical. The Blue Whale projects
+  take it on the owner's rule and decision of 2026-11-02 (#1353 comment 6702129557): wind O&M
+  70% USD / 30% LKR; BESS O&M at USD 1.80/kWh-yr of DC installed (a vendor LTSA benchmark),
+  converted to LKR at the wind project's value date (owner, 2026-11-07).
+  Both projects also set `Financing_Terms.construction_periods: 1` to match input B30 (the engine had
+  defaulted to 2; owner, 2026-11-07). Wind project IRR 10.81% -> 12.41%, NPV USD +69k -> +1.34M;
+  solar + BESS NPV USD -5.00M -> -4.52M. Most of the move is the construction period.
+  Detail in the compiled fragment. 15.20.0 also carries #1452's release record (`P2-F3-01`,
+  merged as `cd283c5d` without a version move; its equity figures are PROVISIONAL pending
+  #1564) and the corrected `1398-debt-service-shortfall-carried` fragment. HOLDs that
+  survive this release: #1110's Board and lender circulation hold; the F-5 covenant bar (no
+  quarterly CFADS or intra-year DSCR figure supports a lender representation); and the
+  `v15.6.1` release hold.
+- **Blue Whale: the turbine's shadow on the PV, input B33 (15.19.0).** The rotor and tower
+  shadow is computed per PV table and the hourly PV is derated before BESS dispatch. The
+  electrical-mismatch treatment is the optical floor. The loss is 0.13% of the solar + BESS
+  array's energy, and no size changes. Solar + BESS project NPV USD -4.99M -> -5.00M; hybrid
+  project IRR 8.73% (unchanged to 2 dp). Detail in the compiled fragment.
 - **Blue Whale solar + BESS: the owner's 5 MW / 20 MWh battery (15.18.0).** The sizing ranks on
   the after-tax project NPV and the project commits the owner's 5 MW / 20 MWh with 151 tables at
   5.0 MW AC (#1353 comment 6563070978). The value-based size stays 1 MW / 4 MWh; the choice

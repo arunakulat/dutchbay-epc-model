@@ -1109,17 +1109,17 @@
   "operating_probability_1530": 0.930293125243161,
   "receptors": [
    {
-    "distance_m": 194.11965967031023,
+    "distance_m": 388.0789456942496,
     "exceeds_expected_limit_yawed": true,
-    "expected_1530_hours_per_year": 236.26344404092146,
-    "expected_no_yaw_long_term_operating_hours_per_year": 239.100851930203,
-    "expected_yawed_long_term_hours_per_year": 110.47434273922018,
+    "expected_1530_hours_per_year": 209.1453994400833,
+    "expected_no_yaw_long_term_operating_hours_per_year": 211.65713293650794,
+    "expected_yawed_long_term_hours_per_year": 171.79864429781688,
     "name": "corner_sw",
-    "worst_case_hours_per_year": 266.4,
-    "worst_case_max_minutes_per_day": 190.0
+    "worst_case_hours_per_year": 273.0,
+    "worst_case_max_minutes_per_day": 127.0
    },
    {
-    "distance_m": 306.8282926218499,
+    "distance_m": 294.07556140372265,
     "exceeds_expected_limit_yawed": false,
     "expected_1530_hours_per_year": 0.0,
     "expected_no_yaw_long_term_operating_hours_per_year": 0.0,
@@ -1129,27 +1129,27 @@
     "worst_case_max_minutes_per_day": 0.0
    },
    {
-    "distance_m": 273.08648371353036,
+    "distance_m": 49.72266127822393,
     "exceeds_expected_limit_yawed": true,
-    "expected_1530_hours_per_year": 346.2395963300838,
-    "expected_no_yaw_long_term_operating_hours_per_year": 350.39776377827553,
-    "expected_yawed_long_term_hours_per_year": 157.25950048080904,
+    "expected_1530_hours_per_year": 1856.5859900477765,
+    "expected_no_yaw_long_term_operating_hours_per_year": 1878.8826756678282,
+    "expected_yawed_long_term_hours_per_year": 733.2826354274997,
     "name": "corner_ne",
-    "worst_case_hours_per_year": 539.55,
-    "worst_case_max_minutes_per_day": 161.0
+    "worst_case_hours_per_year": 2194.4333333333334,
+    "worst_case_max_minutes_per_day": 400.0
    },
    {
-    "distance_m": 134.59223121821628,
+    "distance_m": 258.0642852485301,
     "exceeds_expected_limit_yawed": true,
-    "expected_1530_hours_per_year": 504.23437876721397,
-    "expected_no_yaw_long_term_operating_hours_per_year": 510.2899859313644,
-    "expected_yawed_long_term_hours_per_year": 142.26547790005472,
+    "expected_1530_hours_per_year": 340.8904108599356,
+    "expected_no_yaw_long_term_operating_hours_per_year": 344.9843372186273,
+    "expected_yawed_long_term_hours_per_year": 167.28259141823622,
     "name": "corner_nw",
-    "worst_case_hours_per_year": 580.1333333333333,
-    "worst_case_max_minutes_per_day": 286.0
+    "worst_case_hours_per_year": 423.46666666666664,
+    "worst_case_max_minutes_per_day": 183.0
    },
    {
-    "distance_m": 206.50368449952245,
+    "distance_m": 308.6642220164778,
     "exceeds_expected_limit_yawed": false,
     "expected_1530_hours_per_year": 0.0,
     "expected_no_yaw_long_term_operating_hours_per_year": 0.0,
@@ -1159,34 +1159,34 @@
     "worst_case_max_minutes_per_day": 0.0
    },
    {
-    "distance_m": 247.16525720685325,
-    "exceeds_expected_limit_yawed": true,
-    "expected_1530_hours_per_year": 181.03504217231912,
-    "expected_no_yaw_long_term_operating_hours_per_year": 183.20918408826947,
-    "expected_yawed_long_term_hours_per_year": 32.20119720593027,
+    "distance_m": 145.6267126242703,
+    "exceeds_expected_limit_yawed": false,
+    "expected_1530_hours_per_year": 0.0,
+    "expected_no_yaw_long_term_operating_hours_per_year": 0.0,
+    "expected_yawed_long_term_hours_per_year": 0.0,
     "name": "mid_east",
-    "worst_case_hours_per_year": 250.86666666666667,
-    "worst_case_max_minutes_per_day": 169.0
+    "worst_case_hours_per_year": 0.0,
+    "worst_case_max_minutes_per_day": 0.0
    },
    {
-    "distance_m": 151.9091772924172,
+    "distance_m": 106.1391029861844,
     "exceeds_expected_limit_yawed": true,
-    "expected_1530_hours_per_year": 811.3396442954021,
-    "expected_no_yaw_long_term_operating_hours_per_year": 821.083434821083,
-    "expected_yawed_long_term_hours_per_year": 493.44790546096885,
+    "expected_1530_hours_per_year": 1260.7642531003733,
+    "expected_no_yaw_long_term_operating_hours_per_year": 1275.9054123803994,
+    "expected_yawed_long_term_hours_per_year": 445.1428502710086,
     "name": "mid_north",
-    "worst_case_hours_per_year": 1036.0,
-    "worst_case_max_minutes_per_day": 258.0
+    "worst_case_hours_per_year": 1425.9,
+    "worst_case_max_minutes_per_day": 320.0
    },
    {
-    "distance_m": 68.04046948256186,
+    "distance_m": 292.1163667205204,
     "exceeds_expected_limit_yawed": true,
-    "expected_1530_hours_per_year": 1815.994200016333,
-    "expected_no_yaw_long_term_operating_hours_per_year": 1837.8033981804103,
-    "expected_yawed_long_term_hours_per_year": 826.1845819508835,
+    "expected_1530_hours_per_year": 359.3102147397502,
+    "expected_no_yaw_long_term_operating_hours_per_year": 363.62535389359,
+    "expected_yawed_long_term_hours_per_year": 208.0295428251851,
     "name": "mid_west",
-    "worst_case_hours_per_year": 2053.6666666666665,
-    "worst_case_max_minutes_per_day": 367.0
+    "worst_case_hours_per_year": 437.4166666666667,
+    "worst_case_max_minutes_per_day": 152.0
    }
   ]
  },
