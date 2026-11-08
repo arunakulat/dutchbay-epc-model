@@ -533,6 +533,46 @@ def _resolve_opex_currency_split(raw: Mapping[str, Any]) -> OpexCurrencySplit | 
     )
 
 
+def _whole_year(value: Any, where: str) -> int:
+    """Return ``value`` as a calendar year, refusing anything that is not a whole number."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"{where} must be a whole calendar year, got {value!r}")
+    return int(value)
+
+
+def _resolve_opex_pre_cod_years(raw: Mapping[str, Any]) -> int:
+    """Return the opex escalation steps between its price date and COD (#1569).
+
+    ``opex.price_year`` states the year the opex amounts are priced in. Opex then
+    escalates from that year, so operating year 1 (``project.cod_year``) carries
+    ``cod_year - price_year`` years of escalation before its own. Absent -> 0, the
+    convention before #1569 (opex stated at COD), so undeclared scenarios do not move.
+
+    Raises:
+        ValueError: If the price year is declared without ``project.cod_year``, is not a
+            whole year, or falls after COD.
+    """
+    opex = raw.get("opex")
+    price_raw = opex.get("price_year") if isinstance(opex, Mapping) else None
+    if price_raw is None:
+        return 0
+    price_year = _whole_year(price_raw, "opex.price_year")
+    project = raw.get("project")
+    cod_raw = project.get("cod_year") if isinstance(project, Mapping) else None
+    if cod_raw is None:
+        raise ValueError(
+            "opex.price_year needs project.cod_year: opex escalates from its price year "
+            "to operating year 1, so the engine must know when operation starts"
+        )
+    cod_year = _whole_year(cod_raw, "project.cod_year")
+    if price_year > cod_year:
+        raise ValueError(
+            f"opex.price_year={price_year} is after project.cod_year={cod_year}; "
+            "a price date after COD would de-escalate the first operating years"
+        )
+    return cod_year - price_year
+
+
 def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
     """Extract and normalize parameters required for v14 CFADS calculation."""
     project_life_years = _extract_project_life_years(raw, log=True)
@@ -759,6 +799,7 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         opex_usd_lkr_depreciation_pct=(
             opex_split.usd_lkr_depreciation if opex_split is not None else None
         ),
+        opex_pre_cod_years=_resolve_opex_pre_cod_years(raw),
     )
 
     missing_or_invalid: List[str] = []
