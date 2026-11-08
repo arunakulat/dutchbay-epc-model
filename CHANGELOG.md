@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Construction-period count tied to the declared build time (15.24.0, #1570).** A financing
+  count that disagrees with `timeline.construction_years` is refused; a scenario that declares
+  only the timeline runs on it instead of the engine's default of two; the placeholder draw and
+  phasing are sized to the count, with the one-year IDC convention stated. Only the superseded
+  Blue Whale hybrid and the two CEB 10 MW scenarios move (hybrid project IRR 9.28% -> 10.61%).
+  The lender case and both live Blue Whale projects are bit-identical. Detail in the compiled
+  fragment.
 - **Blue Whale: the turbine stands on DutchBay T2, with zero wake (15.22.0).** Owner decision
   of 7 Nov 2026: the turbine replaces T2 at T2's position, so T2 casts no wake; the T1/T3 wake
   risk is disclosed, not quantified. The wind yield is unchanged. The lot holds 186 PV tables

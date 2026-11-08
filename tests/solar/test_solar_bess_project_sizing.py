@@ -104,6 +104,8 @@ SIZING_OPEX_BASIS = {
     "opex.currency_split": None,
     "opex.usd_per_year": 257030,
     "Financing_Terms.construction_periods": 2,
+    # #1570: the count must equal the declared build time, so the basis states both.
+    "timeline.construction_years": 2,
     "tariff.om_indexation": None,
     "generation.technologies.bess_1.revenue.escalable_om_lkr_per_kwh": None,
 }
