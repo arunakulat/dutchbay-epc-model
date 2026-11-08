@@ -119,13 +119,13 @@ _HYBRID = "scenarios/dutchbay_hybrid_windsolar_2025Q4.yaml"
 
 
 def test_frozen_hybrid_p90_reconciles_with_the_summary_export() -> None:
-    """The hybrid frozen net_aep_p90_gwh (471.0) reconciles with the bankable P90 export
+    """The hybrid frozen net_aep_p90_gwh (443.9; 471.0 before #1577's 14 turbines) reconciles with the bankable P90 export
     (aep_summary exceedance.net_aep_p90_1yr_gwh), which drives the P90-binds-gearing."""
     cfg = load_scenario_config(str(REPO_ROOT / _HYBRID))
     refs = collect_bankable_net_aep_p90_gwh(cfg)
-    assert refs["expected_results.net_aep_p90_gwh"] == pytest.approx(471.0)
+    assert refs["expected_results.net_aep_p90_gwh"] == pytest.approx(443.9)
     summary_key = next(k for k in refs if k.endswith("net_aep_p90_1yr_gwh"))
-    assert refs[summary_key] == pytest.approx(471.0)
+    assert refs[summary_key] == pytest.approx(443.9)
     reconcile_frozen_p90_with_bankable_summary(cfg, _HYBRID)  # must not raise
 
 

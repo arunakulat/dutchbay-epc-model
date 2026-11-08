@@ -5,6 +5,30 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **The project discount rate is a required scenario input (15.27.0, #1429).**
+  `returns.project_discount_rate` must be declared and is validated as a fraction in `[0, 1)`;
+  the hard-coded `DEFAULT_DISCOUNT_RATE = 0.10` is gone. A scenario whose WACC does not drive
+  the rate is discounted at the declared rate. One committed KPI moves: the
+  `edge_extreme_stress` fixture declared 12% but was discounted at 10%, so its project NPV
+  goes from USD -110.99M to -119.80M (equity IRR unchanged). The canonical lender case and
+  every other committed scenario are unchanged; five scenarios that declared no rate now
+  declare the 10% they were discounted at. HOLDs that survive: #1110's Board and lender
+  circulation hold; the F-5 covenant bar (no quarterly CFADS or intra-year DSCR figure
+  supports a lender representation); and the `v15.6.1` release hold. Detail in the compiled
+  fragment.
+- **Blue Whale capex and opex price dates (15.26.0, #1569).** `capex.price_basis` escalates
+  capex from its price year to the construction draws, and `opex.price_year` escalates opex from
+  its price year rather than from COD. Both live Blue Whale projects declare 2026 (input B36) and
+  start the PUCSL O&M index there too. Wind project IRR 13.13% -> 12.41% (NPV USD 1.96M ->
+  1.40M); solar + BESS project NPV USD -4.44M -> -5.58M, and its equity IRR no longer exists.
+  Every other scenario, the canonical lender case included, is bit-identical. Detail in the
+  compiled fragment.
+- **DutchBay drops to 14 turbines (15.25.0, #1577).** Owner decision of 8 Nov 2026: the Blue Whale
+  turbine stands on T2, so DutchBay keeps T1 and T3-T15, 148.9 MW (was 159.6). Wake 7.28% ->
+  7.32% (the turbine at T2 still wakes T1 and T3); bankable P50 464.3 -> 433.2 GWh; per-turbine
+  capex and opex lines at 14/15. Lender case project IRR -0.06% -> -0.25%, equity IRR -23.0% ->
+  -23.4%, project NPV USD -91.4M -> -88.0M, min DSCR 1.220 -> 1.221. Detail in the compiled
+  fragment.
 - **Construction-period count tied to the declared build time (15.24.0, #1570).** A financing
   count that disagrees with `timeline.construction_years` is refused; a scenario that declares
   only the timeline runs on it instead of the engine's default of two; the placeholder draw and

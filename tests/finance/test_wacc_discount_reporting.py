@@ -21,8 +21,9 @@ import math
 from pathlib import Path
 
 import pytest
+import yaml
 
-from analytics.core.metrics import DEFAULT_DISCOUNT_RATE, calculate_scenario_kpis
+from analytics.core.metrics import calculate_scenario_kpis
 from analytics.evaluation_v14 import evaluate_with_overrides
 from analytics.pipeline_v14_enhanced import run_v14_pipeline
 
@@ -43,9 +44,10 @@ def test_build_up_wacc_drives_and_is_reported_consistently() -> None:
     # so a distance check no longer discriminates; pin the computed value instead
     # (the wacc_is_real/wacc_label assertions below prove the BASIS). #1397 re-measured
     # it to 0.1017719098011085: sizing on levered-tax CFADS raises the solved gearing,
-    # which puts more 10%-ish debt and less 12% equity in the stack.
+    # which puts more 10%-ish debt and less 12% equity in the stack. #1577 (14 turbines)
+    # lowers the solved gearing 0.3775 -> 0.37 and the rate rises to 0.1021340572885037.
     assert math.isfinite(drate)
-    assert drate == pytest.approx(0.1017719098011085, abs=1e-9)
+    assert drate == pytest.approx(0.1021340572885037, abs=1e-9)
     assert 0.05 < drate < 0.12
 
     # The flag/label no longer contradict the rate that was actually used.
@@ -64,12 +66,15 @@ def test_build_up_wacc_drives_and_is_reported_consistently() -> None:
     # lender-facing payload reports the real basis instead of None.
 
 
-def test_disabling_drives_falls_back_to_legacy_and_says_so() -> None:
-    """With drives_discount_rate off, the basis is the legacy default + labelled base."""
+def test_disabling_drives_falls_back_to_declared_rate_and_says_so() -> None:
+    """With drives_discount_rate off, the basis is the scenario's declared
+    returns.project_discount_rate (#1429), labelled base."""
+    with open(LENDER, encoding="utf-8") as fh:
+        declared = float(yaml.safe_load(fh)["returns"]["project_discount_rate"])
     kpis = evaluate_with_overrides(
         LENDER, overrides={"wacc.drives_discount_rate": False}
     )
-    assert abs(kpis["discount_rate_used"] - DEFAULT_DISCOUNT_RATE) < 1e-9
+    assert abs(kpis["discount_rate_used"] - declared) < 1e-9
     assert not kpis["wacc_is_real"]
 
 

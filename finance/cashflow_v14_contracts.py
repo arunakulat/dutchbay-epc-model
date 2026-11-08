@@ -84,6 +84,10 @@ class CashflowParams:
       financial-close FX and escalated at opex_lkr_escalation_pct.
     - opex_usd_escalation_pct, opex_lkr_escalation_pct: decimals per year, read only when
       opex_usd_share is set.
+    - opex_pre_cod_years: int. Escalation steps between the opex price date
+      (``opex.price_year``) and operating year 1 (``project.cod_year``), applied on every
+      opex escalation path (#1569). 0 when no price date is declared: opex is then stated
+      at COD, the convention before #1569, and every such scenario is byte-identical.
     - opex_usd_lkr_depreciation_pct: Optional[float] (decimal per year). When set, the USD
       share is translated on its own parametric path (financial-close spot depreciating at
       this rate, advanced through construction exactly as the model curve is) instead of
@@ -118,6 +122,7 @@ class CashflowParams:
     opex_usd_escalation_pct: float = 0.0
     opex_lkr_escalation_pct: float = 0.0
     opex_usd_lkr_depreciation_pct: Optional[float] = None
+    opex_pre_cod_years: int = 0
 
 
 __all__ = ["CashflowParams", "FxHedge"]

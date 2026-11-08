@@ -24,7 +24,46 @@ from finance.irr import approx_project_irr, project_npv_from_cfads
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DISCOUNT_RATE = 0.10
+#: Where every scenario declares its project discount rate (#1429). There is no code
+#: default: the rate is a project input, so a scenario that omits it is refused at v14
+#: pre-flight rather than discounted at a figure nobody chose for that site.
+PROJECT_DISCOUNT_RATE_PATH = "returns.project_discount_rate"
+
+
+def resolve_project_discount_rate(config: Optional[Mapping[str, Any]]) -> float:
+    """Return the scenario's declared project discount rate, or refuse (#1429).
+
+    Reads ``returns.project_discount_rate`` as a fraction (0.10 for 10%). The value
+    must be a finite number in ``[0, 1)``; a missing, null, boolean, non-numeric or
+    out-of-range value raises ``ValueError`` naming the path. v14 pre-flight
+    (``analytics.schema_guard``) and the pipeline both call this, so they cannot
+    disagree about what is accepted.
+    """
+    returns = config.get("returns") if isinstance(config, Mapping) else None
+    value = (
+        returns.get("project_discount_rate") if isinstance(returns, Mapping) else None
+    )
+    if value is None:
+        raise ValueError(
+            f"{PROJECT_DISCOUNT_RATE_PATH} is required: declare the project discount "
+            "rate as a fraction (e.g. 0.10); there is no code default (#1429)"
+        )
+    if isinstance(value, bool):
+        raise ValueError(
+            f"{PROJECT_DISCOUNT_RATE_PATH} must be a number, not a boolean: {value!r}"
+        )
+    try:
+        rate = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"{PROJECT_DISCOUNT_RATE_PATH} must be a number: {value!r}"
+        ) from None
+    if not math.isfinite(rate) or not 0.0 <= rate < 1.0:
+        raise ValueError(
+            f"{PROJECT_DISCOUNT_RATE_PATH} must be a finite fraction in [0, 1): {value!r}"
+        )
+    return rate
+
 
 #: ``project_irr_status`` vocabulary (#1494). The status says which of three different
 #: statements a ``project_irr`` value makes, so a consumer never has to guess from the
@@ -272,8 +311,17 @@ def calculate_scenario_kpis(
     passes the resolved truth (whether the build-up WACC actually drove the
     project discount); when omitted they are derived from ``config['wacc']``
     (config-first, ARCH-01), so standalone callers stay correct too.
+
+    ``discount_rate`` is the rate the caller resolved (the pipeline passes the
+    driving WACC or the declared rate). When it is omitted the rate comes from
+    ``config['returns']['project_discount_rate']``; with neither, the call raises
+    ``ValueError`` instead of assuming a rate (#1429).
     """
-    drate = float(discount_rate if discount_rate is not None else DEFAULT_DISCOUNT_RATE)
+    drate = (
+        float(discount_rate)
+        if discount_rate is not None
+        else resolve_project_discount_rate(config)
+    )
     capex_total = _derive_capex_usd(config)
 
     if cfads_series_usd:
@@ -562,7 +610,9 @@ def compute_kpis(
 
 
 __all__ = [
+    "PROJECT_DISCOUNT_RATE_PATH",
     "_summary_stats",
     "calculate_scenario_kpis",
     "compute_kpis",
+    "resolve_project_discount_rate",
 ]

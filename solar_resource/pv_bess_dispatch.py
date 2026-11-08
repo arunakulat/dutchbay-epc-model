@@ -281,10 +281,12 @@ class BessConfig:
         if kw["grid_charging"] is not False:
             raise ValueError("bess.grid_charging must be false: PV-only charging")
         out = cls(**kw)
-        if not out.round_trip_efficiency <= out.charge_efficiency <= 1.0:
-            raise ValueError("bess.charge_efficiency must lie in [RTE, 1]")
+        # RTE first: with RTE above 1 the charge-efficiency range below is empty, so that
+        # guard would always fire instead and this one could never be reached.
         if out.round_trip_efficiency > 1.0:
             raise ValueError("bess.round_trip_efficiency must be <= 1")
+        if not out.round_trip_efficiency <= out.charge_efficiency <= 1.0:
+            raise ValueError("bess.charge_efficiency must lie in [RTE, 1]")
         if not 0.0 <= out.min_soc_fraction < out.max_soc_fraction <= 1.0:
             raise ValueError("bess: need 0 <= min_soc_fraction < max_soc_fraction <= 1")
         return out
@@ -443,9 +445,20 @@ class TariffConfig:
             raise ValueError("tariff: the priority rate is below the other rate")
         return out
 
+    def rate_name(self, window_rate: Optional[str], year: int) -> str:
+        """The rate paid for energy exported under ``window_rate`` in operating ``year``.
+
+        A ``priority`` window earns the priority rate for the first
+        ``priority_term_years`` operating years; every other kWh, and every kWh after
+        the term, earns the ``other`` rate. :func:`summarise` books energy by this name.
+        """
+        if window_rate == "priority" and year <= self.priority_term_years:
+            return "priority"
+        return "other"
+
     def rate(self, window_rate: Optional[str], year: int) -> float:
         """LKR/kWh for energy exported under ``window_rate`` in operating ``year``."""
-        if window_rate == "priority" and year <= self.priority_term_years:
+        if self.rate_name(window_rate, year) == "priority":
             return self.priority_lkr_per_kwh
         return self.other_lkr_per_kwh
 
@@ -667,11 +680,7 @@ def summarise(
         mask = series.window == k
         by_win_d[name] = float(series.discharge_mw[mask].sum())
         by_win_pv[name] = float(series.pv_export_mw[mask].sum())
-        rate_name = (
-            "priority"
-            if cfg.windows[k].rate == "priority" and year <= tariff.priority_term_years
-            else "other"
-        )
+        rate_name = tariff.rate_name(cfg.windows[k].rate, year)
         by_rate[rate_name] += by_win_d[name] + by_win_pv[name]
     revenue = {
         "priority": by_rate["priority"] * _KWH_PER_MWH * tariff.priority_lkr_per_kwh,

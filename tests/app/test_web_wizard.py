@@ -80,12 +80,14 @@ def _prefilled_form(**overrides: Any) -> Dict[str, Any]:
     form: Dict[str, Any] = {
         "scenario_variant": "lendercase",
         "site_name": "Dutch Bay",
-        "capacity_mw": 150,
-        "capacity_factor": 0.35,
+        # #1577: 14 turbines. 148.9 MW x 0.332 reconciles with the 433.2 GWh lender-case
+        # AEP; the former 150 x 0.35 (460 GWh) sits 6% above it and is refused.
+        "capacity_mw": 148.9,
+        "capacity_factor": 0.332,
         "project_life_years": 25,
         "ppa_price_lkr_per_kwh": 22,
         "ppa_term_years": 20,
-        "capex_total_usd": 167_860_000,
+        "capex_total_usd": 159_120_000,
         "opex_annual_usd": 6_000_000,
         "fx_start_lkr_per_usd": 333.79,
     }

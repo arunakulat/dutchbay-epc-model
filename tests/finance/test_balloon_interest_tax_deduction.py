@@ -39,7 +39,10 @@ _N = len(_DS)
 # The canonical lender-case equity IRR before #1505 (#1504's canon, tests/_canon.py at
 # #1510). With the basis set to `none` the engine must reproduce it exactly: the only
 # thing #1505 changes is which interest the levered tax pass deducts.
-_PRE_1505_LENDER_EQUITY_IRR = -0.2643679102024472
+# Re-measured by #1577 (14 turbines, 2026-11-08): the `none` basis on the 14-turbine lender
+# case is -26.73% (it was -26.44% on 15). The pin is the engine's output with the #1505
+# deduction switched off, so it moves with the scenario, not with #1505.
+_PRE_1505_LENDER_EQUITY_IRR = -0.26733287852795706
 
 
 def _path(treatment: str, cfads: List[float], **kw: Any) -> Dict[str, Any]:

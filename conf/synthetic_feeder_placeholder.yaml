@@ -28,7 +28,11 @@ source:
   synthetic_chronology_decision_sha256: 0b09e9bb8bbb6c07bbf3ad87ed9212c507f1a04b9393342a5ba275c4a8cd6787
 
   scenario:
-    path: scenarios/dutchbay_lendercase_2025Q4.yaml
+    # The 15-turbine lender case frozen byte-for-byte at 39048e89 (#1577; same SHA-256 as
+    # before). On 2026-11-08 DutchBay dropped to 14 turbines (148.9 MW), which can never
+    # exceed the 150 MW export cap this package exists to exercise, so the synthetic
+    # wiring basis stays at 15 turbines. It is not the live plant.
+    path: legacy_scenarios/dutchbay_lendercase_2025Q4_15_turbines.yaml
     sha256: e16ad10125f1fcac68114d6da5dd56060b66e4c0ea4004fe04c9720322939eb8
   era5_summary:
     # This is a clean, hashed summary only. It is not the absent hourly NetCDF.
@@ -45,7 +49,7 @@ source:
     sha256: fb9298b4d4e319b84da5a2725277d6f70567dd124f289f9e5eedfcc22cd1718b
   version_file:
     path: VERSION
-    sha256: c61e46a6a80cc4944b1f442b3019166d7cb6b1ee6268fb2b813e1475d329a178
+    sha256: 2edbe28e3aa911204aaff8966e30c0ff827d087db966e97d7635e0099dd4a00e
 
 profile:
   # 2021 supplies a non-leap 8,760-hour UTC timestamp shape only. The values are
