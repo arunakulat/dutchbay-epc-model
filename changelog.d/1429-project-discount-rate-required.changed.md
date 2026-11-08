@@ -11,6 +11,7 @@
   equity IRR is unchanged. Five scenarios that declared no rate (`example_a`,
   `example_b`, `good_unit_test`, `test_base_scenario` and `test/base_scenario`) now
   declare 0.10 and do not move. Every other committed scenario is byte-identical,
-  including the canonical lender case. Scenarios that already failed pre-flight still
-  fail, and six of them now also name the missing rate in the same error. Released as
-  15.26.0.
+  including the canonical lender case. The 12 committed scenario files that already
+  failed pre-flight still fail with the same exception type; 10 of them (six top-level
+  scenarios, the three `scenarios/overrides/` fragments and one scratch file) now also
+  name the missing rate in the same error. Released as 15.26.0.
