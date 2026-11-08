@@ -23,7 +23,7 @@ defaults:
 site:
   # DutchBay turbine T2, WGS84. Source: scripts/process_era5_wind_data.py TURBINE_LOCATIONS,
   # which cites ENVISION_ROAD-DATA.pdf (not in this repository). The local metric frame is
-  # centred here, and the search for the turbine position runs along this latitude.
+  # centred here, and the Blue Whale turbine stands here (turbine_placement below).
   reference_point_name: T2
   reference_lat_deg: 8.2925
   reference_lon_deg: 79.7547
@@ -38,7 +38,15 @@ site:
   coastline_geojson: docs/blue_whale/osm_coastline_near_t2.geojson
   site_geojson: docs/blue_whale/site_placeholder_lot5b.geojson
   geojson_decimals: 9
-  # East limit of the westward placement search, metres from T2.
+  # Where the tower goes. "reference_point": on the reference point above, checked against
+  # the coastal setback. "coastal_setback": the westernmost point on the reference latitude
+  # that clears the setback (the #1530 position, 224 m west of T2, used until 2026-11-07).
+  # Owner decision, 2026-11-07, verbatim: "Blue Whale Turbine is replacing the T2 Dutchbay
+  # turbine - its on the exact same location - if not, recalculate location to match T2
+  # location. As such wake does not apply". This supersedes the 2026-11-01 direction to
+  # "push the turbine as much as possible westwards towards the shore".
+  turbine_placement: reference_point
+  # East limit of the westward placement search, metres from T2 (coastal_setback only).
   placement_search_east_m: 500.0
 
 coastal_setback:
@@ -54,10 +62,10 @@ coastal_setback:
   # The vegetation line and dune toe are not mapped here. OpenStreetMap's coastline is the
   # high-water line, which lies seaward of the vegetation line by the beach width, so the
   # true setback line is farther east by that unknown width. 0.0 is a BOUND, not an
-  # estimate: it gives the westernmost position the setback could allow.
+  # estimate: the tower on T2 must clear at least this (the run refuses a point inside it).
   seaward_reference_offset_m: 0.0
-  # Tower centre on the setback line. A real foundation and hardstand push it east by their
-  # radius (not known; input B05). 0.0 is again the westernmost bound.
+  # Clearance from the tower centre to the setback line. A real foundation and hardstand
+  # need their radius (not known; input B05). 0.0 is again a bound.
   foundation_clearance_m: 0.0
   source: "CZ&CRMP 2024-2029 (Coast Conservation and Coastal Resource Management Department), Table 6-1 segment 2 and section 6.4.1; https://coastal.gov.lk/images/pdf/CZMP_24-29/SRI_LANKA_REVISED_COASTAL_ZONE_AND_COASTAL_RESOURCE_MANAGEMENT_PLAN_2024.pdf (retrieved 2026-11-01, SHA-256 368c0e75ee757132473e668bc26b40d1ab1a39275c9aac33074ede7349265033)"
 
@@ -82,7 +90,11 @@ resource:
   # DutchBay array centroid (8.27 N, 79.75 E), about 2.5 km from T2 in the same 0.25° ERA5
   # cell, so the basis does not change with a move of a few hundred metres.
   source_scenario: scenarios/dutchbay_hybrid_bess_2025Q4.yaml
-  # One turbine: no wake. Every other loss line is taken from the source scenario.
+  # No wake. The turbine stands alone on the lot, and it REPLACES DutchBay T2 at T2's own
+  # position (owner, 2026-11-07: "As such wake does not apply"), so there is no T2 to wake
+  # it. DutchBay T1 (624 m, bearing 21 degrees) and T3 (529 m, bearing 202 degrees) are not
+  # modelled as wake sources: docs/blue_whale/STATUS.md records that open risk. Every other
+  # loss line is taken from the source scenario.
   loss_overrides:
     wake_loss_pct: 0.0
   # Agreement required between the production gross-AEP integrator

@@ -86,19 +86,23 @@ POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 # O&M part and the premium's 0.30 indexed at 3.21%/yr). Before, at 15.20.0 (v0.5): project NPV
 # -4517260.638496677, equity NPV -5146449.112710573, equity IRR -0.06998004779138234, min DSCR
 # 0.8673920535047875.
+# Re-pinned at 15.22.0 for the turbine standing on DutchBay T2 (v0.7: the shadow moves and the
+# fixed-battery run picks 152 tables; solar O&M on 5,703.04 kWp). Before, at 15.21.0 (v0.6):
+# project NPV -4439869.942132653, equity NPV -5073779.560724569, equity IRR
+# -0.051245236683051254, min DSCR 0.8673920535047875.
 SOLAR_BESS_PINS = {
-    "project_npv": -4439869.942132653,
-    "equity_npv": -5073779.560724569,
-    "equity_irr": -0.051245236683051254,
-    "min_dscr": 0.8673920535047875,
+    "project_npv": -4439999.608625973,
+    "equity_npv": -5075831.700126602,
+    "equity_irr": -0.04998720726172046,
+    "min_dscr": 0.8681005901376199,
 }
-# The basis the sizing runs priced (v0.3): opex in one currency, BESS O&M at USD 2.5/kWh-yr,
-# the engine's default of 2 construction periods (from 15.20.0 the scenario sets 1, B30), and
-# flat tariffs (no L-9 indexation of the escalable O&M parts; from 15.21.0 the scenario indexes
-# them).
+# The basis the sizing runs priced (v0.3 to v0.7): opex in one currency, BESS O&M at USD
+# 2.5/kWh-yr, the engine's default of 2 construction periods (from 15.20.0 the scenario sets 1,
+# B30), and flat tariffs (no L-9 indexation of the escalable O&M parts; from 15.21.0 the scenario
+# indexes them). From 15.22.0 the solar O&M is on 152 tables (257,030; was 256,655 on 151).
 SIZING_OPEX_BASIS = {
     "opex.currency_split": None,
-    "opex.usd_per_year": 256655,
+    "opex.usd_per_year": 257030,
     "Financing_Terms.construction_periods": 2,
     "tariff.om_indexation": None,
     "generation.technologies.bess_1.revenue.escalable_om_lkr_per_kwh": None,
@@ -717,10 +721,14 @@ def test_fixed_bess_summary_holds_the_owners_battery_and_chooses_the_pv() -> Non
     assert spec["seed"] == _summary()["spec"]["seed"]
     assert n == cfg["monte_carlo"]["n_trials"] == 256
     assert spec["objective"] == {"metric": "project_npv", "statistic": "p50"}
-    assert spec["land_max_tables_by_bess_power_mw"] == {"5.0": 191}
+    # The turbine on DutchBay T2 (15.22.0) moves its crane pad onto the lot's west side and
+    # its shadow onto the array, so the lot holds 186 tables (191 before).
+    assert spec["land_max_tables_by_bess_power_mw"] == {"5.0": 186}
     rows = _rows_of(summary)
-    # Every whole table count from DC/AC 1.0 at 5 MW AC to the lot's maximum, once each.
+    # Every whole table count from DC/AC 1.0 at 5 MW AC to 191, once each; the five above the
+    # lot's maximum are listed as not fitting and are not evaluated.
     assert sorted(r["pv_tables"] for r in rows) == list(range(134, 192))
+    assert {r["pv_tables"] for r in rows if not r["fits"]} == set(range(187, 192))
     assert 133 * 37.52 / 5000.0 < 1.0 <= 134 * 37.52 / 5000.0
     for r in rows:
         # The owner's battery, E = 4P: 5 MW / 20 MWh.
@@ -755,11 +763,11 @@ def test_fixed_bess_summary_holds_the_owners_battery_and_chooses_the_pv() -> Non
 
 def test_fixed_bess_run_reproduces_the_full_grid_at_every_shared_point() -> None:
     """MRM-01 at production scale: two runs with the same seed draw the same trials, so the
-    sizes both evaluate (5 MW AC, 5 MW / 20 MWh at 134, 147, 160, 174 and 191 tables) carry
+    sizes both evaluate (5 MW AC, 5 MW / 20 MWh at 134, 147, 160, 174 and 186 tables) carry
     identical statistics."""
     full = {_key(r): r for r in _grid_rows()}
     shared = [r for r in _rows_of(_fixed_summary()) if _key(r) in full]
-    assert sorted(r["pv_tables"] for r in shared) == [134, 147, 160, 174, 191]
+    assert sorted(r["pv_tables"] for r in shared) == [134, 147, 160, 174, 186]
     for r in shared:
         assert r == full[_key(r)], _key(r)
 
