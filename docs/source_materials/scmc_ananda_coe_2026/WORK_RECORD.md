@@ -64,7 +64,7 @@ The commercial figures, individuals and source terms are deliberately left out. 
 
 | Item | Owner | Note |
 |---|---|---|
-| Merge the private corpus | Project owner | `arunakulat/DutchBay_RAG#41`, held while `MERGE-01` is suspended. A squash merge means updating the pinned commit in `README.md` |
+| Merge the private corpus | Merge-lease holder, after review | `arunakulat/DutchBay_RAG#41` lands by merge commit only, so the pinned commit stays in the private repository's `main` history and `README.md` needs no change. A squash or rebase merge would mean updating the pin |
 | Confirm which pack the Board holds | Project owner | The 5 September feedback cites page 37 of the 105-page pack. In v2.0 the same items are on page 35 |
 | AV expectations of the remaining centres | COE | Requested on 5 September, not received in this record |
 | Written TVEC mapping | COE | Approval gate before any qualification claim |
