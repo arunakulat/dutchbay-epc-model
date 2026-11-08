@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Construction-period count tied to the declared build time (15.24.0, #1570).** A financing
+  count that disagrees with `timeline.construction_years` is refused; a scenario that declares
+  only the timeline runs on it instead of the engine's default of two; the placeholder draw and
+  phasing are sized to the count, with the one-year IDC convention stated. Only the superseded
+  Blue Whale hybrid and the two CEB 10 MW scenarios move (hybrid project IRR 9.28% -> 10.61%).
+  The lender case and both live Blue Whale projects are bit-identical. Detail in the compiled
+  fragment.
 - **An unresolved project IRR is reported as undefined, not 0.0 (15.23.0, #1494).** New
   `kpis.project_irr_status` (`computed`, `undefined`, `not_computed`); `ScenarioResult.project_irr`
   is `float | None`; API contract 2.0 -> 2.1. One committed KPI moves: the Blue Whale solar +
