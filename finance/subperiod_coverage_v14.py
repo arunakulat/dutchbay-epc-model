@@ -65,10 +65,34 @@ the calculation period is the sub-period itself. With semi-annual instalments
 (``periods: [2, 4]``) and flat CFADS, each instalment's cover equals the annual DSCR,
 where a one-quarter numerator would have read half of it.
 
+Which sub-periods are instalments
+---------------------------------
+A sub-period carries an instalment when the placement gives it a positive weight and
+the amount being placed is positive. That is decided from the declared WEIGHTS, never
+from whether an allocated float came out non-zero. A2's :func:`allocate_flow` closes its
+rounding residual on the year's last sub-period whatever that sub-period's weight, so a
+placement that leaves the last sub-period at zero weight (``periods: [1, 2, 3]``, or
+``[1, 3]`` with weights ``[0.7, 0.3]``) would put about 1e-9 USD there in many years. Read
+as an instalment, that residual would reset the calculation period and roughly halve the
+next real instalment's cover (#1556 domain DOM-8). The debt cash is therefore allocated
+by :func:`_allocate_on_placement`, which applies the same closing-residual rule but
+closes on the last POSITIVE-weight sub-period, so a zero-weight sub-period carries
+exactly ``0.0`` of every debt series.
+
+Two consequences of the dates follow and are worth stating. When ``debt_service`` is
+declared but ``bridge_service`` is not, the bridge takes the even-spread assumption, so
+each of year 1's sub-periods becomes an instalment and year 1's declared instalments are
+covered by less cash than their dates imply; declare the bridge on the same dates as the
+scheduled service. And the first calculation period starts at the first operating
+sub-period, because no pre-COD cash or DSRA funding is modelled here, so an instalment
+declared in year 1's first sub-period is covered by that one sub-period's cash. A
+zero-service year inside the tenor (a grace period) would carry its cash into the next
+instalment's window; the committed lender case has none.
+
 Reconciliation
 --------------
 Every allocated series closes on the annual engine's own figure by A2's closing-residual
-rule, so each operating year's sub-periods re-aggregate to the debt period's CFADS,
+rule (on the last positive-weight sub-period for the debt series), so each operating year's sub-periods re-aggregate to the debt period's CFADS,
 fee, service and interest within 1 ULP, and year 1's bridge parts to the bridge
 period's service. A year's re-aggregated coverage, ``(CFADS - fee) / service``, therefore
 reproduces ``dscr_by_year`` for that year, the folded year 1 included.
@@ -242,15 +266,22 @@ def build_subperiod_coverage(
         interest = _at(interest_total, debt_period)
         fee = _at(fees, debt_period)
 
-        scheduled = allocate_flow(service, service_weights)
-        scheduled_interest = allocate_flow(interest, service_weights)
+        scheduled = _allocate_on_placement(service, service_weights)
+        scheduled_interest = _allocate_on_placement(interest, service_weights)
         fee_parts = allocate_flow(fee, even_profile(grid))
-        balloon_parts = allocate_flow(
+        balloon_parts = _allocate_on_placement(
             _at(balloon_paid_total, debt_period), service_weights
         )
+        paying = [service > 0 and weight > 0 for weight in service_weights]
         if year_index == 0:
-            bridge_parts = allocate_flow(bridge_service, bridge_weights)
-            bridge_interest_parts = allocate_flow(bridge_interest, bridge_weights)
+            bridge_parts = _allocate_on_placement(bridge_service, bridge_weights)
+            bridge_interest_parts = _allocate_on_placement(
+                bridge_interest, bridge_weights
+            )
+            paying = [
+                pays or (bridge_service > 0 and weight > 0)
+                for pays, weight in zip(paying, bridge_weights, strict=True)
+            ]
         else:
             bridge_parts = [0.0] * per_year
             bridge_interest_parts = [0.0] * per_year
@@ -265,7 +296,9 @@ def build_subperiod_coverage(
             window_fee.append(fee_parts[position])
             dscr: Optional[float] = None
             covered: Optional[float] = None
-            if total > 0:
+            if paying[position]:
+                # Decided from the placement weights (see "Which sub-periods are
+                # instalments"), not from ``total``, so no residual is an instalment.
                 dscr = (math.fsum(window_cash) - math.fsum(window_fee)) / total
                 covered = float(len(window_cash))
                 window_cash, window_fee = [], []
@@ -294,6 +327,32 @@ def build_subperiod_coverage(
         assumptions=assumptions,
         min_subperiod_dscr=min(finite) if finite else None,
     )
+
+
+def _allocate_on_placement(value: float, weights: Sequence[float]) -> List[float]:
+    """Allocate debt cash over a placement, closing on its last positive-weight period.
+
+    The same closing-residual rule as A2's :func:`allocate_flow`, and the same floats
+    wherever the last sub-period has positive weight. A sub-period with zero weight gets
+    exactly ``0.0``, and the residual closes on the last sub-period that has a positive
+    weight, so a placement such as ``[1, 2, 3]`` never leaves a rounding residual on a
+    sub-period with no instalment (#1556 domain DOM-8).
+
+    Args:
+        value: The annual (or bridge) amount to place.
+        weights: The placement's weights, one per sub-period, summing to 1.
+
+    Returns:
+        One value per sub-period, in order.
+    """
+    positive = [index for index, weight in enumerate(weights) if weight > 0]
+    if not positive or len(weights) == 1:
+        return allocate_flow(value, weights)
+    parts = [0.0] * len(weights)
+    for index in positive[:-1]:
+        parts[index] = value * weights[index]
+    parts[positive[-1]] = value - math.fsum(parts[index] for index in positive[:-1])
+    return parts
 
 
 def _weights(

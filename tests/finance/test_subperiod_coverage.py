@@ -14,7 +14,8 @@ properties carry the weight here:
    with no events gives every quarter the annual DSCR; declared instalment periods carry
    the service, leave the other quarters with no ratio, and cover each instalment over
    its calculation period, so flat CFADS gives every instalment the annual DSCR; the
-   bridge lands in year 1 alone; a lumpy tax quarter shows its dip.
+   bridge lands in year 1 alone; a lumpy tax quarter shows its dip. A quarter the
+   placement gives zero weight is never an instalment, whatever the float residual.
 4. It divides the right CFADS. Project-basis rows, and rows that do not match the debt
    result one to one, are refused.
 5. Assumptions are flagged. An even spread used in place of a declared date is recorded
@@ -40,10 +41,11 @@ from finance.event_calendar_v14 import (
     resolve_event_calendar,
 )
 from finance.period_grid_v14 import PeriodGrid
-from finance.subannual_rows_v14 import RECONCILIATION_ULP_TOLERANCE
+from finance.subannual_rows_v14 import RECONCILIATION_ULP_TOLERANCE, allocate_flow
 from finance.subperiod_coverage_v14 import (
     COVENANT_USE,
     DEBT_ENRICHMENT_KEYS,
+    _allocate_on_placement,
     build_subperiod_coverage,
 )
 
@@ -355,6 +357,115 @@ def test_cash_after_the_last_instalment_counts_towards_the_next_years_first(
     assert current[0]["dscr"] == want
 
 
+#: Placements whose last quarter has zero weight and whose weights do not multiply back
+#: exactly, so A2's allocate_flow would leave a ~1e-9 USD residual on that quarter
+#: (#1556 domain DOM-8). Dyadic splits such as [2, 4] are exact and would hide it.
+ZERO_WEIGHT_LAST = [
+    {"periods": [1, 2, 3]},
+    {"periods": [1, 3], "weights": [0.7, 0.3]},
+]
+
+#: An amount whose weighted parts do not sum back exactly under either placement above,
+#: so A2's allocate_flow leaves about 9.3e-10 on Q4 (most amounts give exactly zero).
+RESIDUAL_SERVICE = 7_321_208.521842453
+
+
+@pytest.mark.parametrize("placement", ZERO_WEIGHT_LAST, ids=["1-2-3", "1-3-70-30"])
+def test_a_zero_weight_quarter_is_never_an_instalment(
+    sized_lender, placement: Dict[str, Any]
+) -> None:
+    """The residual closes on the last instalment, so Q4 carries exactly nothing, and
+    each following Q1 is covered by the two quarters since the previous instalment."""
+    debt, rows = sized_lender
+    view = build_subperiod_coverage(
+        rows,
+        debt,
+        _calendar({**ALL_EVEN, "debt_service": placement, "bridge_service": placement}),
+    )
+    mapping = debt["annual_row_debt_period_map"]
+    serviced = [
+        year_index
+        for year_index, entry in enumerate(mapping)
+        if float(debt["debt_service_total"][int(entry["debt_period"])]) > 0.0
+    ]
+    assert len(serviced) >= 10, "the lender case services most years"
+    for year_index in range(len(mapping)):
+        q4 = _year(view, year_index)[3]
+        for key in (
+            "scheduled_service_usd",
+            "bridge_service_usd",
+            "debt_service_usd",
+            "interest_usd",
+            "principal_usd",
+            "balloon_interest_paid_usd",
+        ):
+            assert q4[key] == 0.0, (year_index, key, q4[key])
+        assert q4["dscr"] is None and q4["calculation_periods"] is None
+    for year_index in serviced:
+        q1 = _year(view, year_index)[0]
+        assert q1["calculation_periods"] == (1.0 if year_index == 0 else 2.0)
+        # Ties to the annual engine: the quarters still re-aggregate.
+        period = int(mapping[year_index]["debt_period"])
+        scheduled = math.fsum(
+            q["scheduled_service_usd"] for q in _year(view, year_index)
+        )
+        assert _within_ulp(scheduled, float(debt["debt_service_total"][period]))
+
+
+def test_a_zero_weight_residual_cannot_halve_the_view_minimum(sized_lender) -> None:
+    """The domain lane's synthetic case: with [1, 3] at [0.7, 0.3] and a year of heavier
+    service, every instalment after year 1 is a two-quarter cover, so no residual can
+    reset a window and halve the minimum."""
+    _, rows = sized_lender
+    debt = _synthetic_debt(rows, service=RESIDUAL_SERVICE, interest=1_000_000.0)
+    debt["debt_service_total"][6] *= 1.2
+    # The case is only a control if A2's rule would leave a residual on Q4.
+    assert allocate_flow(RESIDUAL_SERVICE, (0.7, 0.0, 0.3, 0.0))[3] != 0.0
+    view = build_subperiod_coverage(
+        rows,
+        debt,
+        _calendar({**ALL_EVEN, "debt_service": ZERO_WEIGHT_LAST[1]}),
+    )
+    for year_index in range(1, len(rows)):
+        quarters = _year(view, year_index)
+        assert quarters[3]["dscr"] is None
+        q1 = quarters[0]
+        previous_q4 = _year(view, year_index - 1)[3]
+        want = (
+            math.fsum([previous_q4["cfads_usd"], q1["cfads_usd"]])
+            - math.fsum([previous_q4["senior_fee_usd"], q1["senior_fee_usd"]])
+        ) / q1["debt_service_usd"]
+        assert q1["dscr"] == want
+    ratios = [p["dscr"] for p in view.periods if p["dscr"] is not None]
+    assert view.min_subperiod_dscr == min(ratios)
+    assert all(
+        p["calculation_periods"] == 2.0
+        for p in view.periods[4:]
+        if p["dscr"] is not None
+    )
+
+
+@pytest.mark.parametrize(
+    "weights",
+    [
+        (0.25, 0.25, 0.25, 0.25),
+        (0.0, 0.5, 0.0, 0.5),
+        (0.0, 0.0, 0.0, 1.0),
+        (1 / 3, 1 / 3, 1 / 3, 0.0),
+        (0.7, 0.0, 0.3, 0.0),
+        (0.0, 1.0, 0.0, 0.0),
+    ],
+)
+def test_debt_cash_closes_on_the_last_positive_weight_quarter(weights) -> None:
+    value = RESIDUAL_SERVICE
+    parts = _allocate_on_placement(value, weights)
+    assert [part == 0.0 for part in parts] == [weight == 0.0 for weight in weights]
+    assert _within_ulp(math.fsum(parts), value)
+    if weights[-1] > 0:
+        # Where the last quarter carries weight, this is A2's rule, float for float.
+        assert parts == allocate_flow(value, weights)
+
+
 def test_the_bridge_lands_in_year_one_on_its_declared_quarter(sized_lender) -> None:
     _, rows = sized_lender
     debt = _synthetic_debt(rows, service=1_000_000.0, interest=0.0, bridge=600_000.0)
@@ -472,7 +583,58 @@ def test_every_view_carries_the_f5_bar(sized_lender) -> None:
     debt, rows = sized_lender
     view = build_subperiod_coverage(rows, debt, _calendar(ALL_EVEN))
     assert view.covenant_use == COVENANT_USE
-    assert "F-5" in COVENANT_USE and "covenant" in COVENANT_USE
+    assert COVENANT_USE == (
+        "barred (F-5): an allocation of the annual engine plus declared or assumed "
+        "dates; not for a covenant, lender or IC representation"
+    )
+
+
+def test_the_period_labels_are_zero_based_and_carried_from_the_rows(
+    sized_lender,
+) -> None:
+    debt, rows = sized_lender
+    view = build_subperiod_coverage(rows, debt, _calendar(ALL_EVEN))
+    assert [p["period_index"] for p in view.periods] == [
+        float(index) for index in range(len(view.periods))
+    ]
+    assert [p["period_in_year"] for p in view.periods] == [0.0, 1.0, 2.0, 3.0] * len(
+        rows
+    )
+    assert [p["year"] for p in view.periods[::4]] == [float(r["year"]) for r in rows]
+
+
+def test_the_live_fee_accrues_evenly_and_nets_over_the_whole_calculation_period(
+    sized_lender,
+) -> None:
+    """The lender case carries a senior fee. It accrues evenly whatever the instalment
+    dates, and each instalment nets every quarter's fee in its calculation period."""
+    debt, rows = sized_lender
+    view = build_subperiod_coverage(
+        rows, debt, _calendar({**ALL_EVEN, "debt_service": {"periods": [2, 4]}})
+    )
+    mapping = debt["annual_row_debt_period_map"]
+    feed = [
+        year_index
+        for year_index, entry in enumerate(mapping)
+        # Year 1 also carries the bridge, on every quarter under ALL_EVEN.
+        if year_index > 0
+        and float(debt["senior_fee_usd"][int(entry["debt_period"])]) > 0.0
+        and float(debt["debt_service_total"][int(entry["debt_period"])]) > 0.0
+    ]
+    assert feed, "the lender case carries a senior fee in serviced years"
+    for year_index in feed:
+        quarters = _year(view, year_index)
+        fee = float(debt["senior_fee_usd"][int(mapping[year_index]["debt_period"])])
+        for quarter in quarters:
+            assert math.isclose(quarter["senior_fee_usd"], fee / 4.0, rel_tol=1e-12)
+        for paid, window in (
+            (quarters[1], quarters[0:2]),
+            (quarters[3], quarters[2:4]),
+        ):
+            cash = math.fsum(q["cfads_usd"] for q in window)
+            fees = math.fsum(q["senior_fee_usd"] for q in window)
+            assert paid["calculation_periods"] == 2.0
+            assert paid["dscr"] == (cash - fees) / paid["debt_service_usd"]
 
 
 def test_debt_service_is_a_calendar_kind_without_a_default_date() -> None:
