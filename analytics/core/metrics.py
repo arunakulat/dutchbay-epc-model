@@ -64,6 +64,7 @@ def resolve_project_discount_rate(config: Optional[Mapping[str, Any]]) -> float:
         )
     return rate
 
+
 #: ``project_irr_status`` vocabulary (#1494). The status says which of three different
 #: statements a ``project_irr`` value makes, so a consumer never has to guess from the
 #: number alone.
