@@ -90,7 +90,7 @@ POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 # fixed-battery run picks 152 tables; solar O&M on 5,703.04 kWp). Before, at 15.21.0 (v0.6):
 # project NPV -4439869.942132653, equity NPV -5073779.560724569, equity IRR
 # -0.051245236683051254, min DSCR 0.8673920535047875.
-# Re-pinned at 15.NN.0 for the 2026 price dates (#1569, v0.8: capex escalated 5%/yr to the
+# Re-pinned at 15.26.0 for the 2026 price dates (#1569, v0.8: capex escalated 5%/yr to the
 # 2028 draw, x 1.1025; opex and the PUCSL O&M index escalated from 2026, three years before the
 # 2029 COD). The equity cash flows then have no IRR: their NPV is negative at every rate (the
 # sponsor cures in years 16-20 outweigh the distributions at any negative rate). Before, at
@@ -134,7 +134,7 @@ SIZING_OPEX_BASIS = {
 # Re-pinned at 15.21.0 for the PUCSL escalable O&M indexation (L-9, wind v0.5: the 4.93 O&M
 # part indexed at 3.21%/yr). Before, at 15.20.0 (v0.4): project IRR 0.1240563483741687,
 # equity IRR 0.10542705973481747, min DSCR 0.8668689564723109.
-# Re-pinned at 15.NN.0 for the 2026 price dates (#1569, wind v0.6: capex escalated 5% to the
+# Re-pinned at 15.26.0 for the 2026 price dates (#1569, wind v0.6: capex escalated 5% to the
 # 2027 draw; opex and the PUCSL O&M index escalated from 2026, two years before the 2028 COD).
 # Before, at 15.24.0 (v0.5): project IRR 0.13126573271197758, equity IRR 0.11548743505017844,
 # min DSCR 0.8668689564723109.

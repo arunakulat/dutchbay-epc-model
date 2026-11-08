@@ -5,7 +5,7 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
-- **Blue Whale capex and opex price dates (15.NN.0, set at the merge slot, #1569).** `capex.price_basis` escalates
+- **Blue Whale capex and opex price dates (15.26.0, #1569).** `capex.price_basis` escalates
   capex from its price year to the construction draws, and `opex.price_year` escalates opex from
   its price year rather than from COD. Both live Blue Whale projects declare 2026 (input B36) and
   start the PUCSL O&M index there too. Wind project IRR 13.13% -> 12.41% (NPV USD 1.96M ->

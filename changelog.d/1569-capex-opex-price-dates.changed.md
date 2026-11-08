@@ -1,4 +1,4 @@
-- **Capex and opex price dates (15.NN.0, set at the merge slot, #1569).** A scenario can now state the year its capex
+- **Capex and opex price dates (15.26.0, #1569).** A scenario can now state the year its capex
   and opex are priced in, and the engine escalates from there. Before, capex was spent at the
   amount it was priced at, whatever the year, and opex was stated at COD.
   - `capex.price_basis` (`price_year`, `escalation_pct`, `source`) escalates
