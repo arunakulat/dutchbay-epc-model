@@ -48,8 +48,8 @@ def lender_cfg() -> dict:
 def test_base_reproduces_canonical(lender_cfg: dict) -> None:
     df = tornado_from_config(lender_cfg)
     assert df["base_aep_gwh"].iloc[0] == pytest.approx(
-        473.8, abs=1.0
-    )  # ERA5-fitted Weibull
+        442.06, abs=1.0
+    )  # ERA5-fitted Weibull, pre-haircut; 14 turbines (#1577, was 473.8 for 15)
 
 
 def test_all_drivers_present(lender_cfg: dict) -> None:

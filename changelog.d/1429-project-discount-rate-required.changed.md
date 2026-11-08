@@ -14,4 +14,4 @@
   including the canonical lender case. The 12 committed scenario files that already
   failed pre-flight still fail with the same exception type; 10 of them (six top-level
   scenarios, the three `scenarios/overrides/` fragments and one scratch file) now also
-  name the missing rate in the same error. Released as 15.26.0.
+  name the missing rate in the same error. Released as 15.27.0.

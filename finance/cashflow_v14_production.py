@@ -346,6 +346,10 @@ def opex_for_year(
       financial-close FX the capex is translated at) and escalates in LKR at
       ``opex_lkr_escalation_pct``. It carries no FX movement.
 
+    Every escalation runs ``year_index + opex_pre_cod_years`` steps: the amounts are
+    priced at ``opex.price_year`` (#1569), and with no price date declared the extra steps
+    are 0. The USD share's FX path is the year's own and is not shifted.
+
     Unrecoverable O&M VAT multiplies the sum. ``opex_usd`` is then the pre-VAT LKR cost
     at the year's model FX, so ``opex_lkr == opex_usd * (1 + vat) * fx_rate`` holds on
     both paths.
@@ -356,9 +360,12 @@ def opex_for_year(
     total = float(params["opex_usd_per_year"])
     vat = float(params.get("opex_vat_pct", 0.0))
     share = params.get("opex_usd_share")
+    # #1569: the amounts are priced at opex.price_year, so escalation runs from there,
+    # not from COD. 0 when no price date is declared (byte-identical).
+    steps = year_index + int(params.get("opex_pre_cod_years", 0) or 0)
     if share is None:
         escalation = float(params.get("opex_escalation_pct", 0.0))
-        opex_usd_year = total * (1.0 + escalation) ** year_index
+        opex_usd_year = total * (1.0 + escalation) ** steps
         return opex_usd_year, _calculate_opex_lkr(opex_usd_year, fx_rate, vat)
 
     lkr_base_fx = params.get("opex_lkr_base_fx")
@@ -373,14 +380,14 @@ def opex_for_year(
     usd_part_lkr = (
         total
         * usd_share
-        * (1.0 + float(params["opex_usd_escalation_pct"])) ** year_index
+        * (1.0 + float(params["opex_usd_escalation_pct"])) ** steps
         * usd_fx
     )
     lkr_part_lkr = (
         total
         * (1.0 - usd_share)
         * float(lkr_base_fx)
-        * (1.0 + float(params["opex_lkr_escalation_pct"])) ** year_index
+        * (1.0 + float(params["opex_lkr_escalation_pct"])) ** steps
     )
     pre_vat_lkr = usd_part_lkr + lkr_part_lkr
     opex_usd = pre_vat_lkr / fx_rate if fx_rate > 0.0 else 0.0

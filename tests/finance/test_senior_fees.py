@@ -57,11 +57,15 @@ FEE_RATE = 0.0075 + 0.01
 # #1505 (2026-11-01) re-measured the equity pin alone (-6.35% -> -6.19%): the levered
 # tax pass now deducts the refinanced tranche's interest when it is paid, which sits
 # below CFADS on the project pass, so the other four pins are untouched.
-PRE_737_PROJECT_IRR = 0.010987826287926005
-PRE_737_EQUITY_IRR = -0.06191598501790474
-PRE_737_PROJECT_NPV = -78603674.58182944
-PRE_737_TOTAL_CFADS = 176293763.9319677
-PRE_737_DEBT_TOTAL = 63042000.0
+#
+# #1577 (2026-11-08) re-measured all five: DutchBay drops to 14 turbines (148.9 MW, P50
+# 433.2 GWh, pre-levy capex 151.4072M). Project IRR 1.099% -> 0.900%, equity IRR -6.19%
+# -> -6.37%, NPV -78.60M -> -76.05M, CFADS 176.29M -> 164.29M, facility 63.04M -> 58.67M.
+PRE_737_PROJECT_IRR = 0.008996955120966568
+PRE_737_EQUITY_IRR = -0.06371847819016674
+PRE_737_PROJECT_NPV = -76053345.56834905
+PRE_737_TOTAL_CFADS = 164292211.42458466
+PRE_737_DEBT_TOTAL = 58670290.0
 
 
 def _fee_only_off_config() -> Dict[str, Any]:
@@ -175,8 +179,9 @@ def test_a_signature_dscr_holds_with_smaller_debt(
     # They now sit BELOW the target rather than on it, at the year-1 fold value #1397
     # re-baselined (1.2196; the orphaned bridge service folded into year 1 -- #1353,
     # issuecomment-6433557550). This docstring used to record the same gap at ~1.288.
+    # #1577 (14 turbines) moves the fold to 1.2214.
     assert on["min_dscr"] == pytest.approx(debt_on["min_dscr"], abs=1e-9)
-    assert debt_on["min_dscr"] == pytest.approx(1.2196, abs=1e-3)
+    assert debt_on["min_dscr"] == pytest.approx(1.2214, abs=1e-3)
     by_year = [v for v in debt_on["dscr_by_year"].values() if v is not None]
     assert min(by_year) >= 1.21
     assert sorted(by_year)[1] >= 1.29, "only year 1 may sit under the target"

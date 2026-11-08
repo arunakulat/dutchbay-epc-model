@@ -93,7 +93,7 @@ def test_adapter_maps_scenario_to_request(scenario: dict) -> None:
     assert (cfg.start_year, cfg.end_year, cfg.reference_mode) == (2005, 2024, "fixed")
     # turbine identity comes from config, NOT the EN-171/23 defaults.
     assert cfg.turbine_model == "iea_reference_10mw"
-    assert cfg.num_turbines == 15
+    assert cfg.num_turbines == 14  # #1577: T2 is the Blue Whale turbine's
     assert cfg.hub_height_m == 150.0
     assert cfg.strict_coverage is True
 
@@ -182,9 +182,10 @@ def test_assessment_validates_without_mutating(scenario: dict) -> None:
     assert res["mode"] == "validate"
     assert scenario == before  # no mutation of the caller's scenario
     assert res["drift"]["within_tolerance"] is True
-    # implied AEP comes from the analytic engine on the fitted Weibull, near 464.3
-    # (post 2% pre-construction P50 over-prediction haircut).
-    assert res["implied_aep"]["net_aep_gwh"] == pytest.approx(464.3, abs=8.0)
+    # implied AEP comes from the analytic engine on the fitted Weibull, near 433.2
+    # (post 2% pre-construction P50 over-prediction haircut; 14 turbines since #1577,
+    # was 464.3 for 15).
+    assert res["implied_aep"]["net_aep_gwh"] == pytest.approx(433.2, abs=8.0)
 
 
 def test_assessment_implied_block_satisfies_wind_contract(scenario: dict) -> None:

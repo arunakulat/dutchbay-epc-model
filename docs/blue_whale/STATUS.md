@@ -54,7 +54,15 @@ record under `DATA-01`.
    of the DutchBay array is built, T1 (624 m, bearing 21 degrees, 3.0 Blue Whale rotor
    diameters) and T3 (529 m, bearing 202 degrees, 2.6 diameters) stand roughly upwind in
    the north-east and south-west monsoons and would wake it. The owner chose zero wake
-   with this risk disclosed (2026-11-07); it is not quantified.
+   with this risk disclosed (2026-11-07); it is not quantified. On 2026-11-08 the owner
+   decided DutchBay drops to 14 turbines (#1577): DutchBay keeps T1 and T3, so the risk
+   stands. DutchBay's own model now counts this turbine as a neighbour that wakes T1 and T3
+   (its 14-turbine wake loss rises from 7.28% to 7.32%;
+   `docs/wind/dutchbay_14_turbine_wake_summary.json`), but the Blue Whale yield still
+   assumes none: the owner's 2026-11-07 zero-wake decision covers the Blue Whale yield
+   only, not the wake this turbine casts on DutchBay. At about 2.5 to 3 rotor diameters this is also a loads and
+   site-suitability question (IEC 61400-1 effective turbulence, OEM approval) for both
+   projects, not only one of wake energy (#1568 domain review N-1). It is not solved.
 3. **Coastal permitting.** Most of the lot is likely inside the Coast Conservation Act zone
    (CC&CRMD permit, IEE or EIA), with lagoon ecology and bird collision in scope.
 4. **Component transport.** Blade and tower delivery over a 9 m right of way, or by the

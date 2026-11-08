@@ -90,11 +90,17 @@ POLICY = REPO_ROOT / "config" / "stochastic_test_policy.yaml"
 # fixed-battery run picks 152 tables; solar O&M on 5,703.04 kWp). Before, at 15.21.0 (v0.6):
 # project NPV -4439869.942132653, equity NPV -5073779.560724569, equity IRR
 # -0.051245236683051254, min DSCR 0.8673920535047875.
+# Re-pinned at 15.26.0 for the 2026 price dates (#1569, v0.8: capex escalated 5%/yr to the
+# 2028 draw, x 1.1025; opex and the PUCSL O&M index escalated from 2026, three years before the
+# 2029 COD). The equity cash flows then have no IRR: their NPV is negative at every rate (the
+# sponsor cures in years 16-20 outweigh the distributions at any negative rate). Before, at
+# 15.24.0 (v0.7): project NPV -4439999.608625973, equity NPV -5075831.700126602, equity IRR
+# -0.04998720726172046, min DSCR 0.8681005901376199.
 SOLAR_BESS_PINS = {
-    "project_npv": -4439999.608625973,
-    "equity_npv": -5075831.700126602,
-    "equity_irr": -0.04998720726172046,
-    "min_dscr": 0.8681005901376199,
+    "project_npv": -5579964.010141663,
+    "equity_npv": -6167136.817522649,
+    "equity_irr": None,
+    "min_dscr": 0.868213653807526,
 }
 # The basis the sizing runs priced (v0.3 to v0.7): opex in one currency, BESS O&M at USD
 # 2.5/kWh-yr, the engine's default of 2 construction periods (from 15.20.0 the scenario sets 1,
@@ -104,8 +110,13 @@ SIZING_OPEX_BASIS = {
     "opex.currency_split": None,
     "opex.usd_per_year": 257030,
     "Financing_Terms.construction_periods": 2,
+    # #1570: the count must equal the declared build time, so the basis states both.
+    "timeline.construction_years": 2,
     "tariff.om_indexation": None,
     "generation.technologies.bess_1.revenue.escalable_om_lkr_per_kwh": None,
+    # #1569: the sizing priced capex and opex as stated, with no price dates.
+    "capex.price_basis": None,
+    "opex.price_year": None,
 }
 # WIND_PINS re-pinned at 15.16.0 for the PR 5 met-mast transfer (wind v0.2: CF 0.374256 ->
 # 0.487560). Before, at 15.15.0 (v0.1): project IRR 0.04085210230412145, equity IRR
@@ -123,10 +134,14 @@ SIZING_OPEX_BASIS = {
 # Re-pinned at 15.21.0 for the PUCSL escalable O&M indexation (L-9, wind v0.5: the 4.93 O&M
 # part indexed at 3.21%/yr). Before, at 15.20.0 (v0.4): project IRR 0.1240563483741687,
 # equity IRR 0.10542705973481747, min DSCR 0.8668689564723109.
+# Re-pinned at 15.26.0 for the 2026 price dates (#1569, wind v0.6: capex escalated 5% to the
+# 2027 draw; opex and the PUCSL O&M index escalated from 2026, two years before the 2028 COD).
+# Before, at 15.24.0 (v0.5): project IRR 0.13126573271197758, equity IRR 0.11548743505017844,
+# min DSCR 0.8668689564723109.
 WIND_PINS = {
-    "project_irr": 0.13126573271197758,
-    "equity_irr": 0.11548743505017844,
-    "min_dscr": 0.8668689564723109,
+    "project_irr": 0.12408437995891264,
+    "equity_irr": 0.10545894876814677,
+    "min_dscr": 0.8671021075351333,
 }
 
 
@@ -880,7 +895,9 @@ def test_after_tax_objective_is_recomputed_from_the_engine_cfads_by_finance_irr(
     assert isinstance(full, dict)
     kpis, rows = full["kpis"], full["annual_rows"]
     lag = int(full["debt_result"]["construction_years"])
-    capex = _yaml(SOLAR_BESS)["capex"]["usd_total"]
+    # #1569: usd_total is priced in 2026 and spent in the one construction year, 2028
+    # (COD 2029 - 1), so the engine escalates it two years at 5% (capex.price_basis).
+    capex = _yaml(SOLAR_BESS)["capex"]["usd_total"] * 1.05 ** (2028 - 2026)
     flows = [-capex] + [0.0] * lag + [r["cfads_usd"] for r in rows]
     assert npv(kpis["discount_rate_used"], flows) == pytest.approx(
         kpis["project_npv"], rel=1e-12
@@ -910,7 +927,19 @@ def test_after_tax_objective_is_recomputed_from_the_engine_cfads_by_finance_irr(
     point = _committed_point()
     sized = _kpis(SOLAR_BESS, SIZING_OPEX_BASIS)
     assert sized["project_npv"] == pytest.approx(point["base"]["project_npv"], rel=1e-4)
-    assert kpis["project_npv"] > sized["project_npv"]
+    # On the stated prices the v0.5+ opex and L-9 indexation beat the sizing basis; the 2026
+    # price dates (#1569: capex escalated to the 2028 draw, opex and the O&M index from 2026)
+    # then lower the scenario below it.
+    undated = _kpis(
+        SOLAR_BESS,
+        {
+            "capex.price_basis": None,
+            "opex.price_year": None,
+            "tariff.om_indexation.pre_operation_years": 0,
+        },
+    )
+    assert undated["project_npv"] > sized["project_npv"]
+    assert kpis["project_npv"] < undated["project_npv"]
 
 
 def _committed_point() -> Dict[str, Any]:
@@ -963,7 +992,8 @@ def _indexed_dispatcher_revenue(out: Dict[str, Any], scen: Dict[str, Any]) -> li
 
     Each exported kWh earns ``escalable x (index - 1)`` more than the flat rate: 2.72
     (ground solar, other periods) on every unit kWh, plus 0.30 on a priority kWh (the
-    priority rate's 3.02 = 2.72 / 0.90, less 2.72), with ``index = (1 + g) ** (year - 1)``
+    priority rate's 3.02 = 2.72 / 0.90, less 2.72), with ``index = (1 + g) ** (year + 2)``
+    (from the 2026 price date to a 2029 COD, #1569)
     and ``g`` written out in closed form from the scenario's inputs, apart from
     ``finance.tariff_indexation`` (TEST-01). The project has no wind.
     """
@@ -984,7 +1014,8 @@ def _indexed_dispatcher_revenue(out: Dict[str, Any], scen: Dict[str, Any]) -> li
     ):
         assert step["year"] == year
         assert rev == pytest.approx(step["revenue_lkr"], rel=1e-12)  # no wind
-        uplift = (1.0 + g) ** (year - 1) - 1.0
+        # #1569: the index starts at the 2026 price date, three years before the 2029 COD.
+        uplift = (1.0 + g) ** (year - 1 + (2029 - 2026)) - 1.0
         indexed.append(
             rev
             + uplift
@@ -1042,7 +1073,16 @@ def test_solar_bess_engine_revenue_equals_the_pr2_dispatcher() -> None:
 # ---------------------------------------------------------------------------
 def test_solar_bess_kpi_pins_and_responsiveness() -> None:
     base = _kpis(SOLAR_BESS)
+    reported = evaluate_with_overrides(
+        str(SOLAR_BESS), overrides={}, return_full_result=True
+    )
+    assert isinstance(reported, dict)
     for key, pinned in SOLAR_BESS_PINS.items():
+        if pinned is None:
+            # The engine reports the key as None; the evaluation summary leaves it out.
+            assert key in reported["kpis"] and reported["kpis"][key] is None, key
+            assert key not in base, key
+            continue
         assert base[key] == pytest.approx(pinned, rel=1e-9, abs=1e-12), key
     # No project IRR resolves (#1494). The 20-year CFADS sum is below the capex, so the NPV
     # is negative at every non-negative rate, but the CFADS turn negative after the 15-year
@@ -1106,8 +1146,12 @@ def test_wind_project_revenue_closed_form_pins_and_responsiveness() -> None:
     full = evaluate_with_overrides(str(WIND), overrides={}, return_full_result=True)
     assert isinstance(full, dict)
     w = techs["wind"]
+    # #1569: operating year 1 (2028) carries two years of the 3.21%/yr index on the 4.93
+    # escalable O&M part, from the 2026 price date (g in closed form, as the L-9 tests).
+    g = 0.30 * 0.05 + 0.70 * (1.05 / 1.025 - 1.0)
+    rate_y1 = 25.73 + 4.93 * ((1.0 + g) ** (2028 - 2026) - 1.0)
     assert full["annual_rows"][0]["generation_revenue_lkr"] == pytest.approx(
-        w["capacity_mw"] * w["capacity_factor"] * 8760.0 * 1000.0 * 25.73, rel=1e-9
+        w["capacity_mw"] * w["capacity_factor"] * 8760.0 * 1000.0 * rate_y1, rel=1e-9
     )
     base = _kpis(WIND)
     for key, pinned in WIND_PINS.items():

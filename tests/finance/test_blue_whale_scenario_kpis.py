@@ -66,10 +66,14 @@ SCRIPT = (
 # shadow moves on the PV, solar CF 0.164864 -> 0.164771, tariff blend 24.97308 -> 24.97345,
 # escalable O&M blend 4.596111 -> 4.596271). Before, at 15.21.0 (v0.10): project IRR
 # 0.09282901849371646, equity IRR 0.06792211828140893, min DSCR 0.8678177667918598.
+# Re-pinned at 15.24.0 for #1570: the hybrid declares a one-year build in
+# timeline.construction_years only, and the engine now runs it on one period instead of
+# its default of two (no scenario byte changed). Before, at 15.22.0 (v0.11): project IRR
+# 0.09281689612238768, equity IRR 0.0679064018838691, min DSCR 0.8677878013266592.
 PINS = {
-    "project_irr": 0.09281689612238768,
-    "equity_irr": 0.0679064018838691,
-    "min_dscr": 0.8677878013266592,
+    "project_irr": 0.10611756549994622,
+    "equity_irr": 0.08201291001414934,
+    "min_dscr": 0.8681364992015315,
 }
 
 
