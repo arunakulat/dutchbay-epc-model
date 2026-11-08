@@ -119,6 +119,46 @@ def test_preflight_refuses_a_rate_even_when_the_wacc_drives() -> None:
         validate_config_for_v14(raw, "lendercase", ["cashflow", "debt"])
 
 
+def _committed_scenario_files() -> list[Path]:
+    """Every committed scenario YAML, in sub-directories too (assurance F-2 on #1524:
+    ``scenarios/test/base_scenario.yaml`` was missed by a top-level-only sweep)."""
+    root = REPO_ROOT / "scenarios"
+    return sorted(p for p in root.rglob("*") if p.suffix in {".yaml", ".yml"})
+
+
+def test_every_otherwise_valid_committed_scenario_declares_its_rate() -> None:
+    """Census: no committed scenario that passes pre-flight once a rate is supplied may be
+    refused only because it lacks one. Such a file ran before #1429 at the removed 0.10
+    default, so it must declare the rate it was discounted at."""
+    files = _committed_scenario_files()
+    assert len(files) > 30, "the census found too few scenario files to mean anything"
+    checked = 0
+    missing: list[str] = []
+    for path in files:
+        try:
+            raw = _raw(path)
+        except (
+            Exception
+        ):  # not a single loadable scenario mapping (e.g. multi-document)
+            continue
+        supplied = copy.deepcopy(raw)
+        returns = supplied.get("returns")
+        if not isinstance(returns, dict):
+            supplied["returns"] = returns = {}
+        returns.setdefault("project_discount_rate", 0.10)
+        try:
+            validate_config_for_v14(supplied, path.stem, ["cashflow", "debt"])
+        except ConfigValidationError:
+            continue  # refused for some other reason as well; not this guard's concern
+        checked += 1
+        try:
+            validate_config_for_v14(raw, path.stem, ["cashflow", "debt"])
+        except ConfigValidationError:
+            missing.append(str(path.relative_to(REPO_ROOT)))
+    assert checked > 20, "too few otherwise-valid scenarios for the census to bite"
+    assert not missing, f"scenarios refused only for a missing rate: {missing}"
+
+
 def test_a_validation_that_computes_no_cashflow_does_not_ask_for_a_rate() -> None:
     """Scope: only a ``cashflow`` validation discounts. An FX-only check (no modules)
     is not asked for a rate, so the guard does not leak into unrelated validators."""

@@ -431,8 +431,9 @@ def _validate_project_discount_rate(
     """Refuse a scenario that declares no project discount rate (#1429).
 
     Runs whenever the ``cashflow`` module is validated, which every pipeline caller
-    requests: such a scenario must carry ``returns.project_discount_rate``. Delegates to :func:`analytics.core.metrics.resolve_project_discount_rate`, the
-    resolver the pipeline uses, so pre-flight and the KPI pass cannot disagree.
+    requests: such a scenario must carry ``returns.project_discount_rate``. Delegates to
+    :func:`analytics.core.metrics.resolve_project_discount_rate`, the resolver the
+    pipeline uses, so pre-flight and the KPI pass cannot disagree.
     There is no code default.
     """
     from analytics.core.metrics import resolve_project_discount_rate
