@@ -12,9 +12,9 @@ from typing import Final
 
 ENGINE_VERSION_SOURCE_PATH: Final = "VERSION"
 ENGINE_VERSION_SOURCE_SHA256: Final = (
-    "10c3d8a5bdfd4d84f7af3e753c2bf323b2c6afb129baa6d4ff2a1d2594d57663"
+    "5834f95df74634cb02dbeda33bf1663d151380c3aedeb5eeae14c15ffb9c37ce"
 )
-ENGINE_VERSION_IDENTITY: Final = "15.22.0"
+ENGINE_VERSION_IDENTITY: Final = "15.23.0"
 
 MANIFEST_SCHEMA_SOURCE_PATH: Final = "analytics/run_manifest.py"
 MANIFEST_SCHEMA_SOURCE_SHA256: Final = (
