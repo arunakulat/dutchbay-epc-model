@@ -1,0 +1,224 @@
+# Blue Whale wind: measure-correlate-predict of met-mast export 617725 to the turbine site.
+#
+# Read by scripts/run_blue_whale_met_mast_transfer_v14.py (Hydra, one JSON object on stdout:
+# CLI-01, CLI-03), which calls analytics.wind.met_mast_transfer. Every key is required
+# (FRAMEWORK-02). Methods and sources: docs/blue_whale/MET_MAST_TRANSFER_METHODS.md.
+#
+# Owner direction (2026-11-01, #1353 comment 6556910250), verbatim: "use the kalpitiya
+# met-mast evidence from RAG repo and interpolate to obtain wind rose and more detailed wind
+# evidence. the two locations are near to each other on the same coastline"
+#
+# Three inputs are read at run time from OUTSIDE this repository and are never written,
+# printed or hashed into it beyond what is pinned below:
+#   DUTCHBAY_MET_MAST_617725_SOURCE  the private 10-minute mast export (hash-pinned by the
+#                                    package's PRIVATE_SOURCE_MANIFEST.sha256)
+#   DUTCHBAY_NASA_POWER_DIR          the public NASA POWER hourly reference, one JSON file per
+#                                    year per point, as <dir>/<point>/wsd_<year>.json
+#   BLUE_WHALE_POWER_CURVE_CSV       the confidential OEM curve (derived results only)
+#
+# HOLD: every result rests on a partial, pre-filtered, undocumented mast record, a
+# reanalysis reference and a placeholder site. Nothing here is lender-grade.
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+mast:
+  source_env: DUTCHBAY_MET_MAST_617725_SOURCE
+  source_path: ${oc.env:DUTCHBAY_MET_MAST_617725_SOURCE,null}
+  # The package's own pin; the run refuses a source whose size or SHA-256 differs.
+  private_manifest: docs/source_materials/met_mast_617725_2025/PRIVATE_SOURCE_MANIFEST.sha256
+  size_bytes: 8758675
+  header_lines: 12
+  latitude_deg_n: 8.056318
+  longitude_deg_e: 79.70815
+  # The package's documented QC (evaluation section 3 and extracted/qc_events.csv): the
+  # assessment starts after the commissioning block; channel nulls (the 120 m outage
+  # QC-020, the 120 m direction outages QC-021..024) are excluded per channel, never filled;
+  # the 97 absent intervals of 28 October (QC-012) stay absent.
+  assessment_start_local: "2025-03-21 18:00:00"
+  samples_per_hour: 6
+  # Plausibility limits applied on top of the package's QC (none is hit in this record).
+  speed_range_ms: [0.0, 50.0]
+  direction_range_deg: [0.0, 360.0]
+  speed_avg: {"30": "Speed 30 m Avg [m/s]", "50": "Speed 50 m Avg [m/s]", "80": "Speed 80 m Avg [m/s]", "100": "Speed 100 m Avg [m/s]", "120": "Speed 120 m Avg [m/s]"}
+  speed_sd: {"100": "Speed 100 m SD [m/s]", "120": "Speed 120 m SD [m/s]"}
+  # 80 m is the most complete high-level direction channel (package evaluation section 5).
+  direction: "Direction 80 m Avg [°]"
+  direction_120m: "Direction 120 m Avg [°]"
+  pressure_10m_kpa: "Pressure 10 m Avg [kPa]"
+  temperature_10m_c: "Temp 10 m Avg [℃]"
+  temperature_120m_c: "Temp 120 m Avg [℃]"
+  humidity_10m_pct: "RH 10 m Avg [%]"
+  # Temperature rows outside this range are the reset/glitch rows of QC-030 and QC-031.
+  temperature_valid_range_c: [10.0, 45.0]
+
+timezone:
+  # The export states no timezone. The clock offset (mast clock minus UTC) is established
+  # by the evidence the run recomputes and checks against this value; it refuses to run if
+  # the evidence does not support it. Sri Lanka Standard Time is UTC+05:30.
+  clock_offset_minutes: 330
+  candidate_offsets_minutes: [0, 300, 330, 360, 480]
+  scan_offsets_minutes: {start: -720, stop: 720, step: 30}
+  # The semidiurnal (S2) pressure tide peaks near 10:00 local SOLAR time in the tropics
+  # (Dai and Wang, J. Atmos. Sci. 56, 1999; Haurwitz and Cowley, Pure Appl. Geophys. 102,
+  # 1973). The run converts the mast's S2 phase to an implied offset and requires it within
+  # the tolerance of the configured offset.
+  s2_solar_time_of_maximum_h: 10.0
+  s2_tolerance_h: 1.0
+  # The configured offset's hourly correlation must lie within this of the scan's maximum.
+  correlation_tolerance: 0.002
+  # Window for the sub-daily anomaly correlation of the wind components (hours).
+  anomaly_window_h: 24
+  sensitivity_offsets_minutes: [300, 360]
+
+reference:
+  name: "NASA POWER hourly (MERRA-2), parameters WS50M, WD50M, WS10M"
+  dir_env: DUTCHBAY_NASA_POWER_DIR
+  dir: ${oc.env:DUTCHBAY_NASA_POWER_DIR,null}
+  api: "https://power.larc.nasa.gov/api/temporal/hourly/point"
+  request: "parameters=WS50M,WD50M,WS10M&community=RE&longitude=<lon>&latitude=<lat>&start=<year>0101&end=<year>1231&format=JSON&time-standard=UTC"
+  api_version: "v2.10.3"
+  retrieved: "2026-11-01"
+  height_m: 50.0
+  first_year: 2015
+  last_year: 2025
+  # SHA-256 of each year's properties.parameter block serialised as
+  # json.dumps(block, sort_keys=True, separators=(",", ":")). The files themselves carry a
+  # timing field that changes per request, so the data block is what is pinned.
+  points:
+    mast:
+      subdir: power_mast
+      latitude_deg_n: 8.056318
+      longitude_deg_e: 79.70815
+      parameter_sha256:
+        "2015": bc0e59354265e051d0d42d7603badc65d6af2a46c5777097b95d237f427459d1
+        "2016": b433c3e573d69eb712fc2d5a254aa2b01a6c19150972a01b30fe1f33388cf7af
+        "2017": fbf42d7291b783d79be4b985c4edda77cc0635e8f0c3360af8cdd1836a5b0f4e
+        "2018": 991c6492f6fa87a2fcc9fd1da92100876d65a8794e94dbaf343e1e45b143c79f
+        "2019": 096985038cb53c9b31634bbb2d684350343bebf454414c56d1aa05b792bb2961
+        "2020": c52cb0f09f99a763c55a90ec568c0aa11c3a936c0846ad4747966c1ad5a2b4cb
+        "2021": 3787755c0ab6b721568c67bb8c360c973f9e762b3c89c28d398893863b0f90b5
+        "2022": d48b8f153c48bcb1ddd9dba607903401abd2948efe3ce216a2a4f10f7d17b97e
+        "2023": 9dcced0b1f83b17becf3cb153504aaf2a29cd21fd02e9e90dc2d350ac7649a7b
+        "2024": fa881c363a023119cb7ec8b8fd44eba15cebe3fab522e751221402cffbccf70c
+        "2025": e8123ea9deddb4da911903411f16bc8dafe9b69299a5edd6a29aef52b167a5fa
+    turbine:
+      subdir: power_t2
+      # DutchBay T2, where the turbine stands (owner, 2026-11-07; was 79.752666, the #1530
+      # setback position 224 m west). The same MERRA-2 cell: every year's parameter block
+      # below is byte-identical at both points, so the pins did not change.
+      latitude_deg_n: 8.2925
+      longitude_deg_e: 79.7547
+      parameter_sha256:
+        "2015": db413372df0b3657e4a9fab13b777bd94576669e0707177d486643535d701259
+        "2016": 1e3d8868dea3b65f360e45c0578dd081c47f8e3b963fde6356b263384a50459b
+        "2017": 40d860bb624415aedd07cb22615cb689c57ebfb01f725dccfc1b729543618733
+        "2018": 4e08d8194584f500710dfd38a7263311bf62d93e02e65ebd32618886b5460211
+        "2019": 0dd6c9343b6b381a9c493a125ff635de5741c68713e4e448e3edc751120a23b8
+        "2020": 9b3bcf472a0be3c183e1f0bea06a4d5a394c8e8aa168d4a119d93c363ef521f9
+        "2021": bf6bf1bb2094b5abddbb6b28080f3a3e0613a13436c86011f9d82dd6a2da0fd0
+        "2022": 97ad81c02a8314025e11d90393342750bac898943c64696063a562cacdbd31f7
+        "2023": 65fb07dc25db2cf3ef791b6a02a88a15cabb0deede7cb6a6ab3285226656a31f
+        "2024": 0c0b054b3e611aeee5ebac72050ab9e02782d0fb1e2220097cf67521b66cfbf9
+        "2025": 3fbb48c56e483c553a70415a160977f431b09e286ac840111281b3ef86e0f952
+
+mcp:
+  # Variance ratio by 16 reference-direction sectors: it keeps the mast's variance, which
+  # an energy estimate needs (wind_resource.mcp module note; IEC 61400-15-2 practice). OLS
+  # is reported beside it as a sensitivity.
+  method: variance_ratio
+  sensitivity_method: linear_regression
+  n_sectors: 16
+  # A sector fits its own transfer only with this many concurrent hours and this R^2;
+  # otherwise the omnidirectional transfer stands in (and is reported as such).
+  min_sector_hours: 200
+  min_sector_r_squared: 0.3
+  # Direction: each long-term hour is carried as this many equal copies, rotated by the
+  # mid-point quantiles of the measured (80 m) minus reference direction in its reference
+  # sector (pooled where the sector is sparse), so the measured scatter is kept.
+  direction_quantiles: 10
+  # Sensitivity: sectors on the omnidirectional fallback with at least this many concurrent
+  # hours take their own mean bias (the NE-monsoon sectors have 29-105 such hours).
+  sparse_bias_min_hours: 30
+  # STOP CONDITION: below either threshold the correlation is too weak to support a
+  # transfer and the run fails (hourly r >= 0.7 and daily r >= 0.8).
+  min_hourly_r_squared: 0.49
+  min_daily_r: 0.8
+  # Heights correlated. The primary is the one nearest hub height; the other is a
+  # sensitivity carried to hub height on the measured 100-120 m shear.
+  primary_height_m: 120
+  sensitivity_height_m: 100
+  # Primary long-term window (all complete years, including the concurrent 2025) and the
+  # windows run as sensitivities.
+  long_term_window: [2015, 2025]
+  sensitivity_windows: [[2015, 2024], [2016, 2025]]
+
+transfer:
+  # Mast to turbine through the reference: per mast-cell direction sector, the ratio of the
+  # turbine cell's to the mast cell's mean WS50M and the circular-mean direction difference,
+  # both over the primary long-term window.
+  min_sector_hours: 200
+  distance_km_expected: 26.7
+
+shear:
+  hub_height_m: 130.0
+  # 100 -> 120 m, the measured pair bracketing the extrapolation from 120 to 130 m.
+  low_height_m: 100.0
+  high_height_m: 120.0
+  min_speed_ms: 3.0
+  min_cell_hours: 100
+  # Local clock hours counted as day (06:00 to 17:59 local).
+  day_start_local_h: 6
+  day_end_local_h: 18
+
+turbine:
+  rated_power_kw: 9500.0
+  power_curve_csv: ${oc.env:BLUE_WHALE_POWER_CURVE_CSV,null}
+  power_curve_air_density_kgm3: 1.148
+  # #1530's basis, kept: the DutchBay site density and loss stack (single turbine, no wake),
+  # read from the siting config's source scenario. The mast's own density is reported.
+  siting_config: conf/blue_whale_wind_siting.yaml
+  integrator_tolerance_pct: 0.5
+
+turbulence:
+  bin_edges_ms: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20]
+  min_speed_ms: 3.0
+  min_count: 30
+
+uncertainty:
+  # 1-sigma, % of WIND SPEED unless noted; converted to energy with the yield's own
+  # speed-to-energy sensitivity. Data-derived terms are computed by the run.
+  # Undocumented sensors, booms, calibration and logger (package evaluation section 9):
+  # above the 2-2.5% typical of a MEASNET-calibrated cup because nothing is documented.
+  measurement_speed_pct: 3.0
+  # Horizontal transfer over 26.7 km through a 0.5 x 0.625 degree reanalysis that cannot
+  # resolve the coastal gradient. Assumed; the reference's own ratio is reported beside it.
+  transfer_speed_pct: 4.0
+  # Power-curve term (% of ENERGY): the repository default (wind_resource.bankable_aep
+  # UncertaintyBudget.power_curve_pct), plus nothing for the unverified de-rate.
+  power_curve_energy_pct: 5.0
+  life_years: 20
+  inter_category_correlation: 0.0
+
+shadow_flicker:
+  # The expected case with the rotor yawed into the long-term wind (month x sector) and
+  # turning only inside the curve's producing range, at the siting config's receptors.
+  sub_directions_per_sector: 5
+
+output:
+  # Paths relative to the repository root; null writes nothing.
+  summary_json: null
+  rose_csv: null
+  rose_png: null
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null

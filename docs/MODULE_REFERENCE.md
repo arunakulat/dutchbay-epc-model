@@ -475,6 +475,7 @@ Files read (repo-relative): `analytics/mc/{__init__,samplers,correlation,converg
 | `cashflow_v14_tax.py` | Single canonical tax engine (the contradictory `tax_v14.py` wrapper was deleted, FIN-1). Sri Lanka regime: CIT 30%, straight-line depreciation with plant/civil split, vintage-tracked 6-year loss carry-forward, WHT on interest (10%) and dividends (15%), SSCL 2.5%; VAT deliberately excluded as pass-through with the reasoning documented in-code. |
 | `cashflow_v14_fx.py` / `_contracts.py` | FX curve builder (explicit or parametric LKR/USD depreciation) and the immutable `FxHedge`/`CashflowParams` contracts. The engine is USD-equivalent-numeraire; FX enters only at LKR→USD conversion, with an opt-in CIP-forward hedge replacing part of the spot conversion. |
 | `cashflow_v14_params.py` / `_utils.py` | Parameter resolution and `validate_parameters` (schema-strict, fail-loud coercion), capacity/CF path precedence, indirect-tax resolution, and the default-off self-curtailment composition into `curtailment_pct`. |
+| `event_calendar_v14.py` | Within-year event calendar (#1395 (b)). On a sub-annual grid it places BESS augmentation capex, tax cash and the bridge period's debt service on sub-periods instead of spreading them by the within-year profile, re-derives each period's post-tax CFADS, CFADS and USD CFADS, and keeps the 1-ULP reconciliation to the annual engine. `cashflow.event_calendar` declares the periods; an undeclared kind takes an illustrative default (tax in the year's last period, augmentation in its first), listed in `EventCalendar.assumed` and named in a warning because the real dates are #920 facts; `profile` keeps a kind on the profile spread; bridge service has no default. `working_capital` is refused because the engine has no such flow. Nothing runs on the annual grid, so the annual canon is untouched. A calendar-placed quarterly figure is still an allocation and is covered by the F-5 hold. |
 | `debt_v14.py` | Tranche-aware debt engine: construction drawdowns/IDC, annuity and DSCR-sculpted schedules, gearing auto-solve to a DSCR target, and DSCR/LLCR/PLCR coverage series. Config-selectable balloon treatment (cash_sweep default, refinance, bullet, amortize, legacy_ignore) and amortization style, each whitelisted with warn-on-unknown; LLCR/PLCR discount CFADS-available-for-debt-service on documented windows. |
 | `equity_v14.py` | Equity investor metrics (`calculate_equity_performance`, IRR/NPV/MOIC-style summaries) delegating IRR/NPV to `finance.irr`; emits the `EquityPerformance` contract. |
 | `equity_distribution_v14_hydra.py` | Turns the canonical pipeline payload (`{config, annual_rows, debt_result, kpis}`) into a JSON-safe equity distribution waterfall with config-first sweep/threshold rules; Pydantic v2 validated, downstream of the v14 gateway, no direct cashflow/debt internals. |
@@ -742,14 +743,27 @@ examined in full in the separately delivered deep-research credibility report.
   IEC 61400-15-1 / MEASNET. A Measure-Correlate-Predict module (`wind_resource/mcp.py`) exists
   but is not wired into the committed path. Treat P50/P90 as pre-measurement until a real mast
   campaign is run through the MCP module.
-- **Debt service reserve account.** The DSRA is modelled as a fund-at-close sources-and-uses
-  item with no dynamic operating draw and release to cure a low-DSCR year, and it is opt-in.
+- **Debt service reserve account.** Funding the DSRA at close is an opt-in sources-and-uses
+  item. Otherwise the equity waterfall builds the reserve from operating cash and releases it
+  as the requirement falls. Since P2-F3-01 (#1398) a year whose CFADS falls short of debt
+  service draws the reserve first, then cash the SPV holds for the sponsor, then a sponsor
+  cure booked as negative equity cash flow; each step is a row field, and the shortfall is
+  no longer clamped to zero.
 - **Monte Carlo default.** The Monte Carlo engine allows a toy fallback by default
   (`allow_toy_fallback=True`); a failed trial substitutes tagged, counted placeholder KPIs. A
   lender or production run should set this to `false`.
 - **Default breach probability.** Because debt is sculpted to the covenant floor, the default
   DSCR-breach probability is structurally near zero; the honest breach distribution requires
   the opt-in `monte_carlo.fixed_debt_stress` path.
+- **Payment support.** No receivables guarantee, standby letter of credit or other
+  payment-support cash flow is modelled. `Financing_Terms.use_revenue_guarantee` only adds
+  `guarantee_revenue_pct` to the cost of debt, and the committed scenarios leave it off.
+  `receivables_guarantee_months` had no consumer and is refused at v14 pre-flight. The
+  committed scenarios also leave `Financing_Terms.dsra.fund_at_close` off, so the DSRA at
+  close is zero and the six-month target is built from operating cash. `debt_result.funding`
+  records both bases (`dsra_at_close_basis`, `payment_support`). Sri Lanka payment-security
+  precedents, such as CEB's escrow and standby letter of credit, are not DSRA requirements.
+  Actual reserve and support terms await an authenticated term sheet (#920).
 - **Statutory and structural levers.** Several levers (dividend withholding, interest
   withholding gross-up, senior credit-support fees, import levies, P90 debt binding, FX
   hedging) default off. Confirm which are enabled before citing headline KPIs.

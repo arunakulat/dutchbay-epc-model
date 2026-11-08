@@ -21,7 +21,7 @@ Version: 2.0.0 (Added degradation)
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from .tech_types import (
     is_generation_type,
@@ -337,6 +337,68 @@ def _calculate_opex_lkr(
     return opex_usd_per_year * (1.0 + vat_pct) * fx_rate
 
 
+def opex_for_year(
+    params: Dict[str, Any], year_index: int, fx_rate: float
+) -> Tuple[float, float]:
+    """Return ``(opex_usd, opex_lkr)`` for one operating year (0-based ``year_index``).
+
+    The ONE place both row builders compute the opex line, so they cannot drift.
+
+    Without a currency split (``params["opex_usd_share"]`` is None) this is the original
+    path, byte-identical: the whole of ``opex_usd_per_year`` is USD, escalates at
+    ``opex_escalation_pct`` and is translated at ``fx_rate``.
+
+    With a split (``opex.currency_split``, owner rule of 2026-11-02 that part of opex is
+    USD and the rest LKR):
+
+    * the USD share ``s`` of the total escalates in USD at ``opex_usd_escalation_pct``
+      and is translated at ``fx_rate`` or, when ``opex_usd_fx_path`` was resolved from
+      ``usd_lkr_depreciation_pct``, at that path's rate for the year;
+    * the LKR share ``1 - s`` is fixed in LKR at ``opex_lkr_base_fx`` (the
+      financial-close FX the capex is translated at) and escalates in LKR at
+      ``opex_lkr_escalation_pct``. It carries no FX movement.
+
+    Unrecoverable O&M VAT multiplies the sum. ``opex_usd`` is then the pre-VAT LKR cost
+    at the year's model FX, so ``opex_lkr == opex_usd * (1 + vat) * fx_rate`` holds on
+    both paths.
+
+    Raises:
+        ValueError: If a split is declared but the context did not resolve its FX anchor.
+    """
+    total = float(params["opex_usd_per_year"])
+    vat = float(params.get("opex_vat_pct", 0.0))
+    share = params.get("opex_usd_share")
+    if share is None:
+        escalation = float(params.get("opex_escalation_pct", 0.0))
+        opex_usd_year = total * (1.0 + escalation) ** year_index
+        return opex_usd_year, _calculate_opex_lkr(opex_usd_year, fx_rate, vat)
+
+    lkr_base_fx = params.get("opex_lkr_base_fx")
+    if lkr_base_fx is None:
+        raise ValueError(
+            "opex.currency_split needs the financial-close FX anchor "
+            "(params['opex_lkr_base_fx']); build params through the cashflow context"
+        )
+    usd_path = params.get("opex_usd_fx_path")
+    usd_fx = float(usd_path[year_index]) if usd_path is not None else fx_rate
+    usd_share = float(share)
+    usd_part_lkr = (
+        total
+        * usd_share
+        * (1.0 + float(params["opex_usd_escalation_pct"])) ** year_index
+        * usd_fx
+    )
+    lkr_part_lkr = (
+        total
+        * (1.0 - usd_share)
+        * float(lkr_base_fx)
+        * (1.0 + float(params["opex_lkr_escalation_pct"])) ** year_index
+    )
+    pre_vat_lkr = usd_part_lkr + lkr_part_lkr
+    opex_usd = pre_vat_lkr / fx_rate if fx_rate > 0.0 else 0.0
+    return opex_usd, pre_vat_lkr * (1.0 + vat)
+
+
 def _apply_risk_haircut(cfads_lkr: float, risk_haircut_pct: float) -> float:
     """Apply a conservative risk haircut to CFADS.
 
@@ -362,4 +424,5 @@ __all__ = [
     "_calculate_statutory_deductions",
     "_calculate_opex_lkr",
     "_apply_risk_haircut",
+    "opex_for_year",
 ]

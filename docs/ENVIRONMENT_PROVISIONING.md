@@ -61,7 +61,7 @@ about this file — see §4.
 | `micrositing` | ✅ (v15.4.0) | TopFarm |
 | `ingestion` | ✅ | MarkItDown with PDF support, pdfplumber, PyMuPDF |
 | `report` | ✅ | WeasyPrint, reportlab, geopandas, contextily |
-| `solar` | ❌ | pvlib |
+| `solar` | ✅ (2026-11-07) | pvlib (+ h5py) |
 | `jobs` | ✅ | arq, redis with hiredis |
 | `pareto` | ❌ | pymoo |
 | `feasibility` | ❌ (composite) | `wind,micrositing,gis,report,grid` + mistune + SALib |

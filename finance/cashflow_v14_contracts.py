@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Tuple
+from typing import Optional, Tuple
 
 
 @dataclass(frozen=True)
@@ -75,6 +75,20 @@ class CashflowParams:
       relief.vat_opex_relieved is true). Applied multiplicatively to the
       ESCALATED USD opex before FX translation (ad-valorem, order-independent),
       so it lands above the EBITDA line and is tax-deductible automatically.
+    - opex_usd_share: Optional[float] (decimal, 0–1). None (the default) keeps the
+      single-currency path: all opex is a USD amount escalated at opex_escalation_pct and
+      translated at each year's FX rate. A number declares an ``opex.currency_split``
+      (finance.cashflow_v14_params._resolve_opex_currency_split): that share of
+      opex_usd_per_year is USD-denominated, escalates at opex_usd_escalation_pct and is
+      translated at each year's FX; the rest is LKR-denominated, fixed in LKR at the
+      financial-close FX and escalated at opex_lkr_escalation_pct.
+    - opex_usd_escalation_pct, opex_lkr_escalation_pct: decimals per year, read only when
+      opex_usd_share is set.
+    - opex_usd_lkr_depreciation_pct: Optional[float] (decimal per year). When set, the USD
+      share is translated on its own parametric path (financial-close spot depreciating at
+      this rate, advanced through construction exactly as the model curve is) instead of
+      the model FX curve. For a scenario whose model curve is held flat as a constant-LKR
+      reporting rate.
 
     NOTE: the corporate tax RATE and the tax-detail inputs (enhanced_capital_allowance_multiple,
     depreciation_years, tax_holiday_years, tax_holiday_start_year) are NOT CashflowParams
@@ -100,6 +114,10 @@ class CashflowParams:
     grid_outage_pct: float = 0.0
     opex_vat_pct: float = 0.0
     first_year_grid_unavailable_months: float = 0.0
+    opex_usd_share: Optional[float] = None
+    opex_usd_escalation_pct: float = 0.0
+    opex_lkr_escalation_pct: float = 0.0
+    opex_usd_lkr_depreciation_pct: Optional[float] = None
 
 
 __all__ = ["CashflowParams", "FxHedge"]

@@ -29,7 +29,7 @@ source:
 
   scenario:
     path: scenarios/dutchbay_lendercase_2025Q4.yaml
-    sha256: 69d92ef97fc924ca4b682410357d170508b75a1ad77a2348d080a07447e96dc3
+    sha256: e16ad10125f1fcac68114d6da5dd56060b66e4c0ea4004fe04c9720322939eb8
   era5_summary:
     # This is a clean, hashed summary only. It is not the absent hourly NetCDF.
     path: feasibility_reproduce/cache/expected/era5_result.json
@@ -45,7 +45,7 @@ source:
     sha256: fb9298b4d4e319b84da5a2725277d6f70567dd124f289f9e5eedfcc22cd1718b
   version_file:
     path: VERSION
-    sha256: 450c2674f538ab02c92eeaae49e944d640539d75aa9b713d5da767b7eb6f4fc8
+    sha256: 10c3d8a5bdfd4d84f7af3e753c2bf323b2c6afb129baa6d4ff2a1d2594d57663
 
 profile:
   # 2021 supplies a non-leap 8,760-hour UTC timestamp shape only. The values are
