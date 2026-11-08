@@ -12,9 +12,11 @@
 # scenarios/blue_whale_solar_bess_lot5b_2026.yaml; the combined view
 # scenarios/blue_whale_hybrid_lot5b_2026.yaml is superseded.
 #
-# The turbine and its position are #1530's: one EN-206/10.5 de-rated to 9.5 MW at 130 m hub
-# on the placeholder lot, at the CZ&CRMP 2024-2029 coastal setback
-# (docs/blue_whale/site_placeholder_lot5b.geojson, conf/blue_whale_wind_siting.yaml).
+# The turbine is #1530's: one EN-206/10.5 de-rated to 9.5 MW at 130 m hub on the placeholder
+# lot. Its position is DutchBay T2's (owner, 2026-11-07: "Blue Whale Turbine is replacing the
+# T2 Dutchbay turbine - its on the exact same location"; docs/blue_whale/site_placeholder_lot5b.geojson,
+# conf/blue_whale_wind_siting.yaml). It stood 224 m west of T2 at the coastal setback until
+# then; the move changes no wind figure below (same reanalysis cells, no wake either way).
 #
 # WIND RESOURCE (v0.2, PR 5, work item #1353 comment 6556910250). The capacity factor and
 # energy now rest on met-mast export 617725 (docs/source_materials/met_mast_617725_2025/),
@@ -91,7 +93,9 @@ generation:
                                   # corrected (MCP, NASA POWER / MERRA-2 2015-2025) and transferred to the turbine,
                                   # 16 sector Weibulls at 130 m (mean 8.24 m/s); gross 43.99 GWh (CF 0.5287);
                                   # #1530's density (1.15 kg/m3) and losses 7.77% (availability 97%, electrical 2%,
-                                  # curtailment 2%, other 1%, no wake). NOT LENDER-GRADE (HOLD above).
+                                  # curtailment 2%, other 1%, no wake: the turbine replaces DutchBay T2, owner
+                                  # 2026-11-07; T1/T3 wake is an open risk in docs/blue_whale/STATUS.md).
+                                  # NOT LENDER-GRADE (HOLD above).
                                   # Was 0.374256 (#1530: DutchBay ERA5-fitted Weibull, 7.14 m/s at 130 m)
       degradation_pct: 0.6        # PLACEHOLDER: DutchBay turbine-ageing assumption
       aep_gwh: 40.57              # net P50: 9.5 MW x 8760 h x 0.487560 (reporting). Was 31.15

@@ -135,11 +135,15 @@ site_fit:
   coastline_geojson: docs/blue_whale/osm_coastline_near_t2.geojson
   wind_siting_config: conf/blue_whale_wind_siting.yaml
   # ASSUMPTIONS (input B05 owes the OEM foundation and hardstand): a 30 m gravity
-  # foundation, and a 40 m x 80 m crane hardstand with its long side east-west, its west
-  # edge at the foundation edge, centred on the tower.
+  # foundation, and a 40 m x 80 m crane hardstand with its long side east-west, one end at
+  # the foundation edge, centred on the tower's latitude.
   foundation_diameter_m: 30.0
   crane_pad_length_ew_m: 80.0
   crane_pad_width_ns_m: 40.0
+  # West of the foundation (ASSUMPTION). The turbine stands on DutchBay T2 (owner,
+  # 2026-11-07), 47 m from the lot's east edge, so an east-side hardstand would lie mostly
+  # off the lot. It was "east" while the turbine stood at the coastal setback (#1530).
+  crane_pad_side: west
   # Placement of the BESS and MV group: as far east as fits (towards the landward side,
   # where the access road and grid connection are expected; ASSUMPTION).
   equipment_search_step_m: 5.0

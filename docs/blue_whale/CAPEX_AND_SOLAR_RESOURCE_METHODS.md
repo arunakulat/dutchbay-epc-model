@@ -230,8 +230,9 @@ re-run the same way, does not move (DC/AC 1.1, 5 MW / 24 MWh). Details: `STATUS.
 
 PR 7 (owner decisions of 2026-11-01, #1353 comment 6563070978): the sizing ranks on the P50
 after-tax project NPV, which chooses the same 107 tables, 3.5 MW AC and 1.0 MW / 4.0 MWh, but
-the project commits the owner's 5 MW / 20 MWh battery with 151 tables (5.66552 MWp) at 5.0 MW AC.
-The cost of that choice and the PV curve are in `STATUS.md`.
+the project commits the owner's 5 MW / 20 MWh battery with 151 tables (5.66552 MWp) at 5.0 MW AC
+(152 tables, 5.70304 MWp, from 15.22.0 with the turbine on DutchBay T2). The cost of that
+choice and the PV curve are in `STATUS.md`.
 
 ## 7. References
 

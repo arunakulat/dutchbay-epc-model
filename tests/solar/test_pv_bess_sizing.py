@@ -433,8 +433,10 @@ def _small_cfg() -> Dict[str, Any]:
     cfg = {
         k: v for k, v in _yaml(SIZING_CONF).items() if k not in ("defaults", "hydra")
     }
+    # DC/AC 1.3, not 1.4: with the turbine on DutchBay T2 (15.22.0) the lot holds 186 tables,
+    # one short of DC/AC 1.4 at 5 MW AC, and a point that does not fit is not evaluated.
     cfg["grid"] = {
-        "dc_ac_ratios": [1.2, 1.4],
+        "dc_ac_ratios": [1.2, 1.3],
         "bess_energy_mwh": [20.0, 30.0],
         "bess_power_mw": 5.0,
     }

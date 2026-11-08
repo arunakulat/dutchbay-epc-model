@@ -62,10 +62,14 @@ SCRIPT = (
 # 4.596111 O&M part and the premium's 0.30 indexed at 3.21%/yr). Before, at 15.20.0 (v0.9):
 # project IRR 0.08731517255077664, equity IRR 0.060488952949803165, min DSCR
 # 0.8678177667918598 (year 1; unchanged).
+# Re-pinned at 15.22.0 for the turbine standing on DutchBay T2 (hybrid v0.11: the turbine's
+# shadow moves on the PV, solar CF 0.164864 -> 0.164771, tariff blend 24.97308 -> 24.97345,
+# escalable O&M blend 4.596111 -> 4.596271). Before, at 15.21.0 (v0.10): project IRR
+# 0.09282901849371646, equity IRR 0.06792211828140893, min DSCR 0.8678177667918598.
 PINS = {
-    "project_irr": 0.09282901849371646,
-    "equity_irr": 0.06792211828140893,
-    "min_dscr": 0.8678177667918598,
+    "project_irr": 0.09281689612238768,
+    "equity_irr": 0.0679064018838691,
+    "min_dscr": 0.8677878013266592,
 }
 
 

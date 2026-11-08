@@ -5,6 +5,12 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Blue Whale: the turbine stands on DutchBay T2, with zero wake (15.22.0).** Owner decision
+  of 7 Nov 2026: the turbine replaces T2 at T2's position, so T2 casts no wake; the T1/T3 wake
+  risk is disclosed, not quantified. The wind yield is unchanged. The lot holds 186 PV tables
+  (was 191), the shadow on the PV rises to 0.20% of irradiance, and the owner's battery takes
+  152 tables (was 151). Solar + BESS project NPV USD -4.44M (unchanged to 2 dp); hybrid project
+  IRR 9.28% (unchanged to 2 dp). Detail in the compiled fragment.
 - **PUCSL escalable O&M tariff indexed yearly (15.21.0).** New optional `tariff.om_indexation`
   (the escalable O&M part in LKR/kWh, and a yearly index weighted on CCPI and LKR/USD or a fixed
   rate), plus an optional `escalable_om_lkr_per_kwh` on an energy-tariff BESS premium. Without
