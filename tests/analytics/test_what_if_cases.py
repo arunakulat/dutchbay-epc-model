@@ -243,6 +243,31 @@ def test_delay_appends_idle_periods_and_moves_the_calendar_on_any_site() -> None
         assert "first_year_grid_unavailable_months" not in config["project"]
 
 
+def test_delay_moves_a_legacy_financing_construction_years_key() -> None:
+    raw = _synthetic_case(
+        "grid_connection_delay",
+        {"delay_months": {"presets": [24], "provenance": "x"}},
+    )
+    case = parse_what_if_case(raw)
+    base = _synthetic_base()
+    terms = base["Financing_Terms"]
+    del terms["construction_periods"]
+    terms["construction_years"] = 3
+    pristine = copy.deepcopy(base)
+
+    (variant,) = case.variants()
+    config, changes = build_case_config(case, base, variant)
+    assert base == pristine, "the base config must never be modified"
+    # Both keys state the same longer window, so the section never declares two counts.
+    assert config["Financing_Terms"]["construction_periods"] == 5
+    assert config["Financing_Terms"]["construction_years"] == 5
+    assert {
+        "path": "Financing_Terms.construction_years",
+        "base": 3,
+        "case": 5,
+    } in changes
+
+
 def test_months_under_a_year_use_the_partial_year_lever_on_any_site() -> None:
     raw = _synthetic_case(
         "grid_connection_delay",

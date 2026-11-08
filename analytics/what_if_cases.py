@@ -434,6 +434,23 @@ def _extend_construction(config: Dict[str, Any], periods: int) -> List[Dict[str,
     terms["construction_periods"] = construction + periods
     terms["construction_schedule"] = schedule + [0.0] * periods
     terms["debt_drawdown_pct"] = drawdown + [0.0] * periods
+    # A base that states its build time with the legacy Financing_Terms key moves it
+    # too, so the section never declares two different counts (the engine refuses a
+    # financing section whose construction_periods and construction_years disagree).
+    if terms.get("construction_years") is not None:
+        old_years = int(
+            _finite_number(
+                terms["construction_years"], "Financing_Terms.construction_years"
+            )
+        )
+        terms["construction_years"] = old_years + periods
+        changes.append(
+            {
+                "path": "Financing_Terms.construction_years",
+                "base": old_years,
+                "case": old_years + periods,
+            }
+        )
 
     # Calendar labels that restate the construction window move with it, when the
     # base carries them, so the case does not report a COD the cash flows contradict.
