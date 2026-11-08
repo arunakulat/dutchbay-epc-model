@@ -907,7 +907,8 @@ Why the project NPV rises (corrected 2026-11-08, #1571: this text first gave low
 construction as the main reason, which is wrong). Project NPV and IRR are unlevered. They discount
 the CFADS against `capex.usd_total`, which carries no interest during construction, after
 `construction_years` build periods with no cash (`analytics/core/metrics.py`, `finance/irr.py`).
-The shorter build moves project NPV in two ways, and neither is interest during construction:
+The shorter build moves project NPV in two ways, and interest during construction enters only
+indirectly, through the second:
 - The CFADS start one period sooner. At an unchanged discount rate this gives wind +1,176,115
   (at 10.72209%) and solar + BESS +375,961 (at 11.48627%).
 - The build-up WACC falls, to 10.54870% for wind and 11.41563% for solar + BESS. With less interest
