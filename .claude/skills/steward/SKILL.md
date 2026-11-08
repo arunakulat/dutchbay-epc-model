@@ -550,7 +550,7 @@ train that carries a car it wrote. A pull request may always land alone instead.
    project_npv_prudential prudential_rate_used total_cfads_usd total_equity_distributed_usd
    equity_sponsor_cure_usd total_idc_usd
    """.split())
-   labels = {"scenario_name", "wacc_label", "equity_distribution_status"}
+   labels = {"scenario_name", "wacc_label", "equity_distribution_status", "project_irr_status"}
    expected = numeric | labels | {"dscr_series", "wacc_is_real", "equity_covenant_locked_years"}
    if not isinstance(kpis, dict) or kpis.keys() != expected:
        sys.exit("Unexpected lender KPI key set")
@@ -558,8 +558,11 @@ train that carries a car it wrote. A pull request may always land alone instead.
    def finite(value):
        return type(value) in (float, int) and math.isfinite(value)
 
+   undefined_ok = {"equity_irr"}  # An undefined IRR is a supported value.
+   if kpis.get("project_irr_status") == "undefined":
+       undefined_ok |= {"project_irr", "irr"}
    for name in numeric:
-       if name == "equity_irr" and kpis[name] is None:  # Undefined IRR is a supported value.
+       if name in undefined_ok and kpis[name] is None:
            continue
        if not finite(kpis[name]):
            sys.exit(f"Invalid lender KPI: {name}")
@@ -579,14 +582,14 @@ train that carries a car it wrote. A pull request may always land alone instead.
    )
    want=$(measure "$REFERENCE_SHA")
    got=$(measure "$TRAIN_SHA")
-   receipt='^41 [0-9a-f]{64}$'
+   receipt='^42 [0-9a-f]{64}$'
    [[ $want =~ $receipt && $got =~ $receipt ]] || exit 1
    printf 'reference: %s\ntrain: %s\n' "$want" "$got"
    test "$got" = "$want"
    echo "TRAIN-01 KPI check: OK"
    ```
 
-   It prints the count and SHA-256 of the 41-KPI lender vector at each revision, and passes only
+   It prints the count and SHA-256 of the 42-KPI lender vector at each revision, and passes only
    when they are equal. The schema describes the current lender vector. A changed schema needs a
    reviewed contract update, and `tests/lint/test_train_policy.py` runs this schema check on the
    real lender case so that a new or removed KPI fails a test before it fails a train. Scratch worktrees are retained on success and failure: Git status
