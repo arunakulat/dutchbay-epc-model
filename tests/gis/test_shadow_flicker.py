@@ -42,6 +42,7 @@ from analytics.gis.shadow_flicker import (  # noqa: E402
     place_at_reference_point,
     place_turbine,
     receptor_flicker,
+    sea_side_name,
     shadow_mask,
     tip_height_setback,
 )
@@ -52,6 +53,7 @@ COAST = REPO_ROOT / "docs" / "blue_whale" / "osm_coastline_near_t2.geojson"
 SITE = REPO_ROOT / "docs" / "blue_whale" / "site_placeholder_lot5b.geojson"
 T2 = (8.2925, 79.7547)
 TURBINE = TurbineGeometry(hub_height_m=130.0, rotor_diameter_m=206.0)
+SEA_WEST = 270.0  # bearing from land to sea for the committed (west-facing) coast
 
 
 def _flicker_cfg(**changes: object) -> ShadowFlickerConfig:
@@ -286,7 +288,11 @@ def test_placement_on_a_straight_coast_matches_closed_form(bearing_deg: float) -
         (e0 + 2000.0 * math.sin(b), 2000.0 * math.cos(b)),
     ]
     got = place_at_coastal_setback(
-        [line], north_m=0.0, min_distance_m=60.0, search_east_m=500.0
+        [line],
+        north_m=0.0,
+        min_distance_m=60.0,
+        search_east_m=500.0,
+        sea_side_bearing_deg=SEA_WEST,
     )
     assert got.coastline_crossing_east_m == pytest.approx(e0, abs=1e-9)
     assert got.turbine_east_m == pytest.approx(e0 + 60.0 / math.cos(b), abs=0.05)
@@ -330,6 +336,7 @@ def test_placement_on_the_committed_coastline_is_exactly_at_the_setback() -> Non
         north_m=0.0,
         min_distance_m=setback.tower_distance_from_coastline_m,
         search_east_m=500.0,
+        sea_side_bearing_deg=SEA_WEST,
     )
     tower = (got.turbine_east_m, 0.0)
     assert _min_distance(tower, lines) == pytest.approx(60.0, abs=0.05)
@@ -341,10 +348,18 @@ def test_placement_on_the_committed_coastline_is_exactly_at_the_setback() -> Non
 def test_placement_moves_east_with_each_offset() -> None:
     lines = _committed_lines()
     base = place_at_coastal_setback(
-        lines, north_m=0.0, min_distance_m=60.0, search_east_m=500.0
+        lines,
+        north_m=0.0,
+        min_distance_m=60.0,
+        search_east_m=500.0,
+        sea_side_bearing_deg=SEA_WEST,
     )
     wider = place_at_coastal_setback(
-        lines, north_m=0.0, min_distance_m=90.0, search_east_m=500.0
+        lines,
+        north_m=0.0,
+        min_distance_m=90.0,
+        search_east_m=500.0,
+        sea_side_bearing_deg=SEA_WEST,
     )
     assert wider.turbine_east_m > base.turbine_east_m
 
@@ -356,7 +371,9 @@ def test_reference_point_placement_on_a_straight_coast() -> None:
         (e0 - 2000.0 * math.sin(b), -2000.0 * math.cos(b)),
         (e0 + 2000.0 * math.sin(b), 2000.0 * math.cos(b)),
     ]
-    got = place_at_reference_point([line], min_distance_m=60.0)
+    got = place_at_reference_point(
+        [line], min_distance_m=60.0, sea_side_bearing_deg=SEA_WEST
+    )
     assert (got.turbine_east_m, got.turbine_north_m) == (0.0, 0.0)
     assert got.coastline_crossing_east_m == pytest.approx(e0, abs=1e-9)
     # Perpendicular distance from the origin to the line.
@@ -366,34 +383,60 @@ def test_reference_point_placement_on_a_straight_coast() -> None:
 def test_reference_point_inside_the_setback_is_refused() -> None:
     line = [(-50.0, -2000.0), (-50.0, 2000.0)]
     with pytest.raises(ValueError, match="inside the 60 m coastal setback"):
-        place_at_reference_point([line], min_distance_m=60.0)
+        place_at_reference_point(
+            [line], min_distance_m=60.0, sea_side_bearing_deg=SEA_WEST
+        )
     # Exactly on the setback line is allowed.
-    got = place_at_reference_point([line], min_distance_m=50.0)
+    got = place_at_reference_point(
+        [line], min_distance_m=50.0, sea_side_bearing_deg=SEA_WEST
+    )
     assert got.distance_to_coastline_m == pytest.approx(50.0, abs=1e-9)
     with pytest.raises(ValueError, match="no coastline crosses"):
-        place_at_reference_point([[(-50.0, 10.0), (-40.0, 20.0)]], min_distance_m=0.0)
+        place_at_reference_point(
+            [[(-50.0, 10.0), (-40.0, 20.0)]],
+            min_distance_m=0.0,
+            sea_side_bearing_deg=SEA_WEST,
+        )
 
 
 def test_place_turbine_dispatches_by_rule() -> None:
     lines = _committed_lines()
     at_t2 = place_turbine(
-        lines, rule="reference_point", min_distance_m=60.0, search_east_m=500.0
+        lines,
+        rule="reference_point",
+        min_distance_m=60.0,
+        search_east_m=500.0,
+        sea_side_bearing_deg=SEA_WEST,
     )
     assert (at_t2.turbine_east_m, at_t2.turbine_north_m) == (0.0, 0.0)
     assert at_t2.distance_to_coastline_m == pytest.approx(
         _min_distance((0.0, 0.0), lines), abs=1e-6
     )
     west = place_turbine(
-        lines, rule="coastal_setback", min_distance_m=60.0, search_east_m=500.0
+        lines,
+        rule="coastal_setback",
+        min_distance_m=60.0,
+        search_east_m=500.0,
+        sea_side_bearing_deg=SEA_WEST,
     )
     assert west == place_at_coastal_setback(
-        lines, north_m=0.0, min_distance_m=60.0, search_east_m=500.0
+        lines,
+        north_m=0.0,
+        min_distance_m=60.0,
+        search_east_m=500.0,
+        sea_side_bearing_deg=SEA_WEST,
     )
     # The #1530 position was 224 m west of T2; T2 itself is farther from the sea.
     assert west.turbine_east_m == pytest.approx(-224.1, abs=0.1)
     assert at_t2.distance_to_coastline_m > west.distance_to_coastline_m
     with pytest.raises(ValueError, match="not one of"):
-        place_turbine(lines, rule="nearest", min_distance_m=60.0, search_east_m=500.0)
+        place_turbine(
+            lines,
+            rule="nearest",
+            min_distance_m=60.0,
+            search_east_m=500.0,
+            sea_side_bearing_deg=SEA_WEST,
+        )
 
 
 def test_coast_aligned_lot_on_a_straight_coast() -> None:
@@ -403,7 +446,11 @@ def test_coast_aligned_lot_on_a_straight_coast() -> None:
         (-300.0 + 900.0 * math.sin(b), 900.0 * math.cos(b)),
     ]
     lot = coast_aligned_square_lot(
-        [line], north_m=0.0, area_m2=93077.0, sample_step_m=5.0
+        [line],
+        north_m=0.0,
+        area_m2=93077.0,
+        sample_step_m=5.0,
+        sea_side_bearing_deg=SEA_WEST,
     )
     assert lot.edge_bearing_deg == pytest.approx(28.0, abs=1e-6)
     assert lot.edge_max_deviation_m == pytest.approx(0.0, abs=1e-6)
@@ -452,6 +499,154 @@ def test_committed_config_places_the_turbine_on_t2() -> None:
     assert site["turbine_placement"] == "reference_point"
     assert site["reference_point_name"] == "T2"
     assert (site["reference_lat_deg"], site["reference_lon_deg"]) == T2
+    # The Lot 5B sea lies to the west of T2 (#1530 domain D-2: now an input, not code).
+    assert site["sea_side_bearing_deg"] == SEA_WEST
+
+
+# ---------------------------------------------------------------------------
+# Sea side as an input (#1530 domain D-2). Oracles: a mirror image and a rigid
+# rotation of the committed coastline, solved by the west-facing path and transformed
+# here by hand.
+# ---------------------------------------------------------------------------
+def _cw(p: Tuple[float, float], deg: float) -> Tuple[float, float]:
+    """Rotate clockwise about the origin (adds ``deg`` to every bearing)."""
+    r = math.radians(deg)
+    return (
+        p[0] * math.cos(r) + p[1] * math.sin(r),
+        -p[0] * math.sin(r) + p[1] * math.cos(r),
+    )
+
+
+def _placements(
+    lines: List[List[Tuple[float, float]]], bearing: float, rule: str
+) -> Tuple[object, SquareLot]:
+    placement = place_turbine(
+        lines,
+        rule=rule,
+        min_distance_m=60.0,
+        search_east_m=500.0,
+        sea_side_bearing_deg=bearing,
+    )
+    lot = coast_aligned_square_lot(
+        lines,
+        north_m=0.0,
+        area_m2=93077.0,
+        sample_step_m=5.0,
+        sea_side_bearing_deg=bearing,
+    )
+    return placement, lot
+
+
+def test_an_east_facing_coast_is_the_mirror_image_of_the_west_facing_one() -> None:
+    west_lines = _committed_lines()
+    east_lines = [[(-e, n) for e, n in ln] for ln in west_lines]
+    w_place, w_lot = _placements(west_lines, SEA_WEST, "coastal_setback")
+    e_place, e_lot = _placements(east_lines, 90.0, "coastal_setback")
+    # The tower sits the same distance inland, on the other side of the origin.
+    assert e_place.turbine_east_m == pytest.approx(-w_place.turbine_east_m, abs=1e-6)
+    assert e_place.turbine_north_m == pytest.approx(0.0, abs=1e-6)
+    assert e_place.turbine_east_m > 0.0  # east of T2 and west of the coast: landward
+    assert e_place.distance_to_coastline_m == pytest.approx(
+        w_place.distance_to_coastline_m, abs=1e-6
+    )
+    assert _min_distance(
+        (e_place.turbine_east_m, e_place.turbine_north_m), east_lines
+    ) == pytest.approx(60.0, abs=0.05)
+    # One metre farther toward the sea (east) breaches the setback.
+    assert _min_distance((e_place.turbine_east_m + 1.0, 0.0), east_lines) < 60.0
+    # The crossing is reported along the landward axis, so it is the same number.
+    assert e_place.coastline_crossing_east_m == pytest.approx(
+        w_place.coastline_crossing_east_m, abs=1e-6
+    )
+    # The lot is the mirror image: same corners as a set, mirrored.
+    mirrored = sorted((-e, n) for e, n in w_lot.corners)
+    for got_c, want_c in zip(sorted(e_lot.corners), mirrored, strict=True):
+        assert got_c == pytest.approx(want_c, abs=1e-6)
+    assert e_lot.side_m == pytest.approx(w_lot.side_m, rel=1e-12)
+    assert e_lot.edge_max_deviation_m == pytest.approx(
+        w_lot.edge_max_deviation_m, abs=1e-6
+    )
+    # The mirrored coast runs north-north-west; walking it with the sea (east) on the
+    # left runs south-south-east, at 180 degrees minus the west-facing bearing.
+    assert e_lot.edge_bearing_deg == pytest.approx(
+        (180.0 - w_lot.edge_bearing_deg) % 360.0, abs=1e-6
+    )
+
+
+@pytest.mark.parametrize("turn_deg", [30.0, 90.0, 180.0, 241.5])
+@pytest.mark.parametrize("rule", ["coastal_setback", "reference_point"])
+def test_a_rotated_coast_gives_the_rotated_placement_and_lot(
+    turn_deg: float, rule: str
+) -> None:
+    lines = _committed_lines()
+    turned = [[_cw(p, turn_deg) for p in ln] for ln in lines]
+    bearing = (SEA_WEST + turn_deg) % 360.0
+    ref_place, ref_lot = _placements(lines, SEA_WEST, rule)
+    got_place, got_lot = _placements(turned, bearing, rule)
+    want = _cw((ref_place.turbine_east_m, ref_place.turbine_north_m), turn_deg)
+    assert (got_place.turbine_east_m, got_place.turbine_north_m) == pytest.approx(
+        want, abs=1e-6
+    )
+    assert got_place.distance_to_coastline_m == pytest.approx(
+        ref_place.distance_to_coastline_m, abs=1e-6
+    )
+    assert got_place.coastline_crossing_east_m == pytest.approx(
+        ref_place.coastline_crossing_east_m, abs=1e-6
+    )
+    want_corners = [_cw(c, turn_deg) for c in ref_lot.corners]
+    for got_c, want_c in zip(got_lot.corners, want_corners, strict=True):
+        assert got_c == pytest.approx(want_c, abs=1e-6)
+    assert got_lot.edge_bearing_deg == pytest.approx(
+        (ref_lot.edge_bearing_deg + turn_deg) % 360.0, abs=1e-6
+    )
+
+
+def test_the_west_facing_path_is_unchanged_by_the_sea_side_input() -> None:
+    """Bearing 270 runs the original geometry with no rotation, bit for bit."""
+    lines = _committed_lines()
+    place, lot = _placements(lines, SEA_WEST, "coastal_setback")
+    again, lot_again = _placements(lines, 270.0, "coastal_setback")
+    assert place == again and lot == lot_again
+    assert place.turbine_north_m == 0.0  # no rotation round trip
+    assert place.turbine_east_m == pytest.approx(-224.1, abs=0.1)
+
+
+@pytest.mark.parametrize(
+    ("bearing", "name"),
+    [
+        (0.0, "north"),
+        (90.0, "east"),
+        (180.0, "south"),
+        (270.0, "west"),
+        (271.0, "seaward"),
+    ],
+)
+def test_sea_side_name(bearing: float, name: str) -> None:
+    assert sea_side_name(bearing) == name
+
+
+@pytest.mark.parametrize("bad", [-1.0, 360.0, float("nan"), float("inf"), True])
+def test_an_invalid_sea_side_bearing_is_refused(bad: object) -> None:
+    lines = _committed_lines()
+    with pytest.raises(ValueError, match="sea_side_bearing_deg"):
+        sea_side_name(bad)  # type: ignore[arg-type]
+    for rule in ("coastal_setback", "reference_point"):
+        with pytest.raises(ValueError, match="sea_side_bearing_deg"):
+            place_turbine(
+                lines,
+                rule=rule,
+                min_distance_m=60.0,
+                search_east_m=500.0,
+                sea_side_bearing_deg=bad,  # type: ignore[arg-type]
+            )
+    with pytest.raises(ValueError, match="sea_side_bearing_deg"):
+        coast_aligned_square_lot(
+            lines,
+            north_m=0.0,
+            area_m2=93077.0,
+            sample_step_m=5.0,
+            sea_side_bearing_deg=bad,  # type: ignore[arg-type]
+        )
 
 
 # ---------------------------------------------------------------------------
