@@ -153,9 +153,42 @@ only when its lane records all three of §7's proofs, applied to the train:
 2. **BIDIRECTIONAL IMPORT ISOLATION** between the car and everything else the train head changes,
    meaning the other cars and any advance of `main`. For non-code sources, also account for normative
    references and dependencies. Count shared runtime inputs as dependencies too: a scenario or
-   configuration file, a test fixture, a `conftest.py`, or anything else that two cars' code or tests
-   both read. Path-disjoint cars that share such an input are not isolated.
+   configuration file, a test fixture, a `conftest.py`, `pyproject.toml`, `VERSION`, a module that
+   `tests/conftest.py` loads, an installed library, or anything else that two cars' code or tests
+   both read. A shared runtime input links the car to another part of the train head only when one
+   side changes bytes in it that the other side's code or tests consume. Loading a file is not
+   consuming the bytes changed in it. A module that every test imports through `tests/conftest.py`,
+   in which one car changes a constant that the other car never reads, is not a link once the
+   consumption artifact below shows that. Whether
+   changed bytes are consumed is shown by that artifact, never by a judgement.
+   Path-disjoint cars that share an input whose changed bytes are consumed are not isolated, and
+   neither are cars whose consumption artifact is missing or incomplete.
 3. The **complete diff from the car's reviewed head to the train head**, shown in full, not a summary.
+
+**Consumption artifact.** For every runtime input that one side changes and the other side's code or
+tests read, the lane records the artifact in both directions: whether the car consumes what the rest
+of the train head changes, and whether the rest consumes what the car changes. A side is a car or an
+advance of `main`. Anyone may produce the artifact, and the lane re-runs what it needs before relying
+on it. It has three parts, and any hit or difference is a link:
+
+- **The changed bytes:** the input's full diff, and the names, keys, lines or distribution versions
+  that it changes.
+- **A reference search:** every reference to those names, keys and distributions in the other
+  side's changed files and test selection, each hit listed with its file and line. A hit is a link
+  even when the test that holds it would pass either way.
+- **A differential run:** a side's test selection run on two trees that differ only by the other
+  side's changes. Each car's selection runs on `main` plus that car alone and on the train head, which
+  differ only by the other cars; because every car records its own pair, the pairs cover both
+  directions between cars. Where `main` has advanced past a car's reviewed base, the car's selection
+  also runs on its reviewed head and on `main` plus the car, and the advance's selection runs on
+  `main` and on `main` plus the car. Both runs of a pair must collect the same test IDs with the same
+  outcomes. Where a side changes the lock or an installed library, each run uses an environment
+  installed from its own tree's lock.
+
+A side's test selection is the test files it adds or changes, and every test file whose own import
+statements name a module it changes. An empty selection is recorded as empty, and the reference search then
+carries the direction alone. §7's proof 2 for a single pull request's base advance is unchanged:
+this narrower link test applies only to a train.
 
 If any proof is absent, incomplete or fails, the car leaves the train and its disposition stays bound
 to its own head. A judgement that another car cannot matter never substitutes for these artifacts.
@@ -197,5 +230,6 @@ is not a check.
 
 **What a train does not prove.** The full suite ran on the union of the cars. The intermediate commits
 between cars on `main` were never run by the full suite on their own, which is why the cars must be
-path-disjoint and import-isolated. A train lifts no `HOLD`, and it confers no release, lender, Board,
+path-disjoint and import-isolated. The differential run narrows that gap without closing it: each
+car's own test selection ran on `main` plus that car alone, but the rest of the suite did not. A train lifts no `HOLD`, and it confers no release, lender, Board,
 professional, evidence, deployment or publication authority.

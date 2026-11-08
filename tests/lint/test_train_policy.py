@@ -19,6 +19,12 @@ printing its OK line, and each fails closed with no OK line. The cases below exe
 failure modes and targeted mutations; they do not establish exhaustive mutation coverage. Hostile
 controls strip a block's ``set -euo pipefail`` and watch bad landings exit 0, and strip the
 pre-landing loop and watch a swapped train pass (#1515 assurance F-1, domain D-1).
+
+On 2026-11-08 the owner narrowed proof 2 for trains (option A on the project thread's decision
+card). A shared runtime input, such as ``VERSION`` or a module ``tests/conftest.py`` loads, links
+two cars only when one side's changed bytes are consumed by the other side's code or tests, shown
+by module 3 section 8's consumption artifact. The guards pin that text, and a separate guard keeps
+the narrowing out of section 7, which still governs a single pull request's base advance.
 """
 
 from __future__ import annotations
@@ -66,6 +72,11 @@ TRAIN_01_REQUIRED_CONTROLS = (
     "blob-hash identity for every file the lane judged",
     "bidirectional import isolation between the car and everything else the train head changes",
     "the complete diff from the car's reviewed head to the train head",
+    "links a car to another part of the train head only when one side changes bytes in it that the other side's code or tests consume",
+    "Loading a file is not consuming the bytes changed in it.",
+    "the changed bytes, a reference search, and a differential run of each side's test selection",
+    "Without that artifact the input is a link, and a judgement never substitutes for it.",
+    "Single pull requests keep module 3 section 7's proof 2 unchanged.",
     "If any proof fails, that car leaves the train.",
     "the lender KPI vector on the train head must equal the vector the owner signed off",
     "otherwise the train waits for her sign-off on the train head's vector",
@@ -91,6 +102,7 @@ TRAIN_01_REQUIRED_CONTROLS = (
     "tests/lint/test_train_policy.py",
     "GitHub's merge queue is not used",
     "'Trains now' on the decision card in the project thread, 2026-10-31T17:40:55Z",
+    "option A on the decision card in the project thread ('A please.', 2026-11-08T01:34:54Z)",
 )
 
 DELIVERY_01_TRAIN_SENTENCE = (
@@ -127,7 +139,23 @@ MODULE_3_REQUIRED_CONTROLS = (
     "The commands that run these checks must fail closed on their own",
     "A check that passes in silence is not a check.",
     "Count shared runtime inputs as dependencies too",
-    "Path-disjoint cars that share such an input are not isolated.",
+    "A shared runtime input links the car to another part of the train head only when one",
+    "side changes bytes in it that the other side's code or tests consume.",
+    "Loading a file is not consuming the bytes changed in it.",
+    "changed bytes are consumed is shown by that artifact, never by a judgement.",
+    "Path-disjoint cars that share an input whose changed bytes are consumed are not isolated, and",
+    "neither are cars whose consumption artifact is missing or incomplete.",
+    "**Consumption artifact.**",
+    "the lane records the artifact in both directions",
+    "and any hit or difference is a link",
+    "A hit is a link even when the test that holds it would pass either way.",
+    "Each car's selection runs on `main` plus that car alone and on the train head",
+    "the advance's selection runs on `main` and on `main` plus the car",
+    "Both runs of a pair must collect the same test IDs with the same outcomes.",
+    "each run uses an environment installed from its own tree's lock",
+    "A side's test selection is the test files it adds or changes",
+    "An empty selection is recorded as empty",
+    "§7's proof 2 for a single pull request's base advance is unchanged",
     "were never run by the full suite on their own",
     "A train lifts no `HOLD`",
 )
@@ -137,6 +165,8 @@ AGENTS_REQUIRED_CONTROLS = (
     "at most one of them changes a KPI",
     "the train lands by rebase-merge, never squash",
     "only through module 3 §8's three proofs",
+    "A shared runtime input links two cars only when one car's changed bytes are",
+    "shown by §8's recorded consumption artifact",
 )
 
 STEWARD_REQUIRED_CONTROLS = (
@@ -155,6 +185,9 @@ STEWARD_REQUIRED_CONTROLS = (
     "never merge `main` into the train",
     "Rebuild the train from the new `main` instead",
     "module 3 §8's three proofs",
+    "is a link only when one side's changed bytes are consumed by the other side's code or tests",
+    "Attach §8's consumption artifact for each such input, in both directions",
+    "with the same test IDs and outcomes. Without the artifact the input is a link.",
     "edit no car on it",
     "**Land it with rebase-merge, never squash.**",
     "that the recorded `main` is `origin/main`",
@@ -309,6 +342,67 @@ def test_text_guards_fail_when_a_control_is_removed(
     )
     with pytest.raises(AssertionError):
         _assert_contains_all(altered, controls, where)
+
+
+# The owner narrowed proof 2's shared-input test for trains on 2026-11-08 (option A). The
+# narrowing is train-only: a single pull request's base advance keeps section 7's proof 2 as
+# it was, and the blanket sentence it replaced must not come back beside it.
+_SECTION_7 = re.compile(r"^## 7\. .*?(?=^## 8\. )", re.MULTILINE | re.DOTALL)
+STRICT_SHARED_INPUT_SENTENCE = (
+    "Path-disjoint cars that share such an input are not isolated."
+)
+TRAIN_ONLY_MARKERS = (
+    "consumption artifact",
+    "Loading a file is not consuming",
+    "is a link only when",
+    "links the car to another part of the train head only when",
+)
+
+
+def _assert_shared_input_narrowing_is_train_only(text: str) -> None:
+    """Section 7 carries none of the train-only narrowing, and the blanket sentence is gone."""
+    section_7 = _SECTION_7.search(text)
+    assert section_7, "module 3 section 7 not found before section 8"
+    flat_7 = _normalize(section_7.group(0))
+    leaked = [m for m in TRAIN_ONLY_MARKERS if m in flat_7]
+    assert not leaked, f"section 7 picked up the train-only shared-input test: {leaked}"
+    assert (
+        "**BIDIRECTIONAL IMPORT ISOLATION**: no changed module references a reviewed module"
+        in flat_7
+    )
+    blanket = _normalize(STRICT_SHARED_INPUT_SENTENCE) in _normalize(text)
+    assert not blanket, "the blanket shared-input sentence came back"
+
+
+def test_shared_input_narrowing_stays_in_section_8() -> None:
+    """The narrower link test applies to trains only; section 7 is unchanged."""
+    _assert_shared_input_narrowing_is_train_only(MODULE_3.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("marker", TRAIN_ONLY_MARKERS)
+def test_shared_input_guard_fails_if_section_7_is_narrowed(marker: str) -> None:
+    """Negative control: copying any narrowing phrase into section 7 fails."""
+    text = MODULE_3.read_text(encoding="utf-8")
+    altered = text.replace(
+        "If any proof is absent, incomplete or fails, the disposition LAPSES.",
+        f"A shared input {marker} applies here too. "
+        "If any proof is absent, incomplete or fails, the disposition LAPSES.",
+        1,
+    )
+    assert altered != text
+    with pytest.raises(AssertionError):
+        _assert_shared_input_narrowing_is_train_only(altered)
+
+
+def test_shared_input_guard_fails_if_the_blanket_sentence_returns() -> None:
+    """Negative control: restoring the old blanket sentence beside the narrowed test fails."""
+    text = MODULE_3.read_text(encoding="utf-8").replace(
+        "**Consumption artifact.**",
+        STRICT_SHARED_INPUT_SENTENCE + "\n\n**Consumption artifact.**",
+        1,
+    )
+    with pytest.raises(AssertionError):
+        _assert_shared_input_narrowing_is_train_only(text)
 
 
 # --------------------------------------------------------------------------- #
