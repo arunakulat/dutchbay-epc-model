@@ -68,8 +68,10 @@ def test_lender_case_carries_a_covenant_breaching_balloon(results: dict) -> None
     # #737 credit-support fees (senior to debt service, inside the sculpt) divert
     # sculpted service capacity from principal, so the structural balloon grows
     # ($34.3M/0.413 -> $38.4M/0.487).
-    assert dr["balloon_remaining"] == pytest.approx(28_629_209, rel=0.02)
-    assert dr["balloon_pct"] == pytest.approx(0.391, abs=0.01)
+    # #1577 (14 turbines): the smaller facility leaves a smaller balloon, $28.63M ->
+    # $26.56M, at much the same fraction (0.391 -> 0.390).
+    assert dr["balloon_remaining"] == pytest.approx(26_560_552, rel=0.02)
+    assert dr["balloon_pct"] == pytest.approx(0.390, abs=0.01)
     assert dr["balloon_covenant_breach"] is True
     assert dr["max_balloon_pct"] == pytest.approx(0.10)
 
@@ -87,8 +89,9 @@ def test_legacy_ignore_reproduces_free_pass(results: dict) -> None:
     # F5-01's COD-aligned operating path pulled the free pass to -4.35%; #1397's
     # levered-tax sizing moves it to -5.34%, because the larger facility costs equity
     # more service than the extra CFADS returns to it. It stays well above the serviced
-    # treatments below, which is the invariant this test is for.
-    assert kpis["equity_irr"] == pytest.approx(-0.0534, abs=0.002)
+    # treatments below, which is the invariant this test is for. #1577 (14 turbines):
+    # -5.34% -> -5.57%.
+    assert kpis["equity_irr"] == pytest.approx(-0.0557, abs=0.002)
     # No servicing: residual equals the structural balloon, resolution all zero.
     assert dr["balloon_residual"] == pytest.approx(dr["balloon_remaining"], rel=1e-6)
     assert sum(dr["balloon_resolution"]) == pytest.approx(0.0, abs=1.0)

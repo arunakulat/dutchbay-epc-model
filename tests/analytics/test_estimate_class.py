@@ -72,5 +72,6 @@ def test_cost_block_surfaces_estimate_class() -> None:
     assert resp.cost.accuracy_high_pct == 22.0
     # #738: the cost block reports the FINANCED (levy-inclusive) capex — base
     # 159.6M + the PRUDENT $8.2593M duties. projIRR is the #738 canon.
-    assert resp.cost.capex_total_usd == pytest.approx(167_859_300, rel=1e-4)
+    # #1577 (14 turbines): 151.4072M + 7.70814M duties.
+    assert resp.cost.capex_total_usd == pytest.approx(159_115_340.552, rel=1e-4)
     assert resp.kpis.project_irr == pytest.approx(-0.00117, abs=0.003)

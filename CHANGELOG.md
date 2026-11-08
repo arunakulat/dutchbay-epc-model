@@ -5,6 +5,12 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **DutchBay drops to 14 turbines (15.23.0).** Owner decision of 8 Nov 2026: the Blue Whale
+  turbine stands on T2, so DutchBay keeps T1 and T3-T15, 148.9 MW (was 159.6). Wake 7.28% ->
+  7.32% (the turbine at T2 still wakes T1 and T3); bankable P50 464.3 -> 433.2 GWh; per-turbine
+  capex and opex lines at 14/15. Lender case project IRR -0.06% -> -0.25%, equity IRR -23.0% ->
+  -23.4%, project NPV USD -91.4M -> -88.0M, min DSCR 1.220 -> 1.221. Detail in the compiled
+  fragment.
 - **Blue Whale: the turbine stands on DutchBay T2, with zero wake (15.22.0).** Owner decision
   of 7 Nov 2026: the turbine replaces T2 at T2's position, so T2 casts no wake; the T1/T3 wake
   risk is disclosed, not quantified. The wind yield is unchanged. The lot holds 186 PV tables

@@ -141,9 +141,11 @@ def test_reconciliation_drift_is_zero_or_one_ulp_never_more(
     """Pin the drift distribution, so a regression that widens it cannot hide.
 
     The firewall test above would still pass if every figure drifted a full ULP. This
-    records what actually happens on the seasonal profile — 510 of 540 exact, 30 at one
+    records what actually happens on the seasonal profile — 508 of 540 exact, 32 at one
     ULP, none worse — so a change that degrades the allocation shows up as a shifted
-    distribution rather than staying silently inside the bound.
+    distribution rather than staying silently inside the bound. The split depends on the
+    figures: #1577's 14-turbine lender case moved it from 510/30 to 508/32 with no change
+    to the allocation code, and the one-ULP bound above still holds for every figure.
     """
     sub = build_subannual_rows(lendercase_annual_rows, QUARTERLY, SEASONAL)
     exact = off_by_one = 0
@@ -162,8 +164,8 @@ def test_reconciliation_drift_is_zero_or_one_ulp_never_more(
                 off_by_one += 1
 
     assert (exact, off_by_one) == (
-        510,
-        30,
+        508,
+        32,
     ), f"reconciliation drift distribution moved: exact={exact} off_by_one={off_by_one}"
 
 

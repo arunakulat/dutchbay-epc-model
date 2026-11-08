@@ -48,7 +48,9 @@ HYBRID_BESS_SCENARIO = SCEN / "dutchbay_hybrid_bess_2025Q4.yaml"
 #: #1397 re-baseline: sizing on levered-tax CFADS supports nine more 0.0025 solver
 #: steps on the wind lendercase, 0.355 -> 0.3775. Solar is unchanged at 0.1775 (its
 #: binding period is not the one the extra shield relieves).
-_CANON_GEARING = 0.3775
+#: #1577: 14 turbines shrink the levy-inclusive capex and CFADS, and the solver lands three
+#: steps lower, 0.3775 -> 0.37.
+_CANON_GEARING = 0.37
 
 
 # --------------------------------------------------------------------------- #
@@ -105,7 +107,9 @@ def test_hybrid_bess_books_financed_additive_capacity_charge() -> None:
         hybrid["debt_result"]["debt_total"]
         / hybrid["debt_result"]["dual_dscr"]["solved_gearing"]
     )
-    assert bess_total == pytest.approx(224_600_000)
+    assert bess_total == pytest.approx(
+        216_407_200
+    )  # #1577: 14-turbine wind (was 224.6M)
     assert bess_total == pytest.approx(hybrid_total + 25_000_000)
 
     # The battery gives the fourth column distinct, non-trivial economics, and the IRR stays
@@ -113,8 +117,9 @@ def test_hybrid_bess_books_financed_additive_capacity_charge() -> None:
     # of 1,752,500 LKR/MW/month. At that rate the tolling revenue no longer covers the financed
     # USD 25M battery, so the BESS now LOWERS project IRR below the plain hybrid (0.164% against
     # 0.307%). Before v15.11.0 it raised it (1.774%). The direction is asserted, not assumed.
+    # #1577 (14 turbines): -0.018% against the plain hybrid's 0.111%.
     b_irr = out["kpis"]["project_irr"]
-    assert b_irr == pytest.approx(0.0016420248064584783)
+    assert b_irr == pytest.approx(-0.0001794208130251876)
     assert b_irr < hybrid["kpis"]["project_irr"]
 
 

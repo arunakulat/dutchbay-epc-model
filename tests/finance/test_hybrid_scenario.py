@@ -48,11 +48,14 @@ def test_hybrid_scenario_runs_and_pins_economics() -> None:
     # facility does not re-size and project_irr, project_npv, min_dscr and total CFADS
     # below are all unchanged. What moves is the covenant DSCR the distribution waterfall
     # tests against, which now reads the levered-tax coverage series.
-    assert kpis["project_irr"] == pytest.approx(0.003071064562196713, rel=1e-6)
-    assert kpis["equity_irr"] == pytest.approx(-0.04067851985434856, rel=1e-6)
-    assert kpis["project_npv"] == pytest.approx(-107326563.09575932, rel=1e-6)
+    # #1577 (2026-11-08): DutchBay's wind drops to 14 turbines (148.9 MW, P50 433.2 GWh,
+    # wind capex 151.4072M), so project_irr 0.307% -> 0.111%, equity_irr -4.07% -> -4.28%,
+    # NPV -107.33M -> -104.61M and total CFADS 205.30M -> 193.36M; min_dscr holds 1.30.
+    assert kpis["project_irr"] == pytest.approx(0.001106519897835912, rel=1e-6)
+    assert kpis["equity_irr"] == pytest.approx(-0.04283297582286927, rel=1e-6)
+    assert kpis["project_npv"] == pytest.approx(-104611914.41813616, rel=1e-6)
     assert kpis["min_dscr"] == pytest.approx(1.30, abs=1e-6)
-    assert kpis["total_cfads_usd"] == pytest.approx(205298303.73391378, rel=1e-6)
+    assert kpis["total_cfads_usd"] == pytest.approx(193364431.99320891, rel=1e-6)
 
 
 def test_hybrid_reports_per_technology_split() -> None:
@@ -62,12 +65,13 @@ def test_hybrid_reports_per_technology_split() -> None:
     assert gen is not None and breakdown is not None
     assert set(gen.technologies) == {"wind", "solar"}
     rows = {r.technology: r for r in breakdown}
-    # wind 464.3 / 538.1 = 86.3% ; solar 73.8 (pvlib P50, #529 TMY) / 538.1 = 13.7%
-    assert rows["wind"].share_of_aep_pct == pytest.approx(86.3, abs=0.2)
-    assert rows["solar"].share_of_aep_pct == pytest.approx(13.7, abs=0.2)
-    # wind 159.6 / 199.6 = 80% ; solar 40 / 199.6 = 20%
-    assert rows["wind"].share_of_capex_pct == pytest.approx(80.0, abs=0.2)
-    assert rows["solar"].share_of_capex_pct == pytest.approx(20.0, abs=0.2)
+    # #1577 (14 turbines): wind 433.2 / 507.0 = 85.4% ; solar 73.8 (pvlib P50, #529 TMY)
+    # / 507.0 = 14.6%. Was 464.3 / 538.1 = 86.3% and 13.7% on 15 turbines.
+    assert rows["wind"].share_of_aep_pct == pytest.approx(85.4, abs=0.2)
+    assert rows["solar"].share_of_aep_pct == pytest.approx(14.6, abs=0.2)
+    # wind 151.4072 / 191.4072 = 79.1% ; solar 40 / 191.4072 = 20.9% (was 80% / 20%)
+    assert rows["wind"].share_of_capex_pct == pytest.approx(79.1, abs=0.2)
+    assert rows["solar"].share_of_capex_pct == pytest.approx(20.9, abs=0.2)
 
 
 def test_hybrid_net_p90_is_model_derived() -> None:
@@ -87,5 +91,6 @@ def test_hybrid_net_p90_is_model_derived() -> None:
     res = compute_solar_aep(SolarResourceConfig.from_scenario(sc), emit_exceedance=True)
     solar_p90 = res.exceedance.p90_1yr_gwh
     declared = sc["expected_results"]["net_aep_p90_gwh"]
-    # net_aep_p90 == wind 404.4 + model solar P90-1yr, within reporting rounding.
-    assert declared == pytest.approx(404.4 + solar_p90, abs=0.1)
+    # net_aep_p90 == wind 377.3 (14 turbines, #1577; 404.4 for 15) + model solar P90-1yr,
+    # within reporting rounding.
+    assert declared == pytest.approx(377.3 + solar_p90, abs=0.1)

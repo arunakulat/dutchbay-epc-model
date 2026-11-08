@@ -41,7 +41,9 @@ def test_capex_mc_distribution_is_monotonic_and_sound() -> None:
     res = run_capex_mc(LENDER, n_samples=48, sigma_pct=12.0, seed=7)
 
     assert res.sigma_pct == 12.0
-    assert res.base_capex_usd == pytest.approx(159_600_000, rel=0.001)
+    assert res.base_capex_usd == pytest.approx(
+        151_407_200, rel=0.001
+    )  # #1577 (was 159.6M)
 
     # CAPEX percentiles ordered; base sits inside the p10-p90 band
     assert res.capex_usd["p10"] < res.capex_usd["p50"] < res.capex_usd["p90"]

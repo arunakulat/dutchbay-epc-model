@@ -1,0 +1,157 @@
+{
+  "frame_origin": {
+    "lat_deg": 8.273851400000002,
+    "lon_deg": 79.74892253333334
+  },
+  "frozen_wake_15_pct": 7.28,
+  "layout": [
+    {
+      "id": "T1",
+      "role": "dutchbay",
+      "x_m": 856.23,
+      "y_m": 2643.46
+    },
+    {
+      "id": "T2",
+      "role": "external_waker",
+      "x_m": 636.46,
+      "y_m": 2062.49
+    },
+    {
+      "id": "T3",
+      "role": "dutchbay",
+      "x_m": 436.52,
+      "y_m": 1575.75
+    },
+    {
+      "id": "T4",
+      "role": "dutchbay",
+      "x_m": 210.91,
+      "y_m": 959.06
+    },
+    {
+      "id": "T5",
+      "role": "dutchbay",
+      "x_m": -195.05,
+      "y_m": 529.39
+    },
+    {
+      "id": "T6",
+      "role": "dutchbay",
+      "x_m": 491.62,
+      "y_m": 593.98
+    },
+    {
+      "id": "T7",
+      "role": "dutchbay",
+      "x_m": -377.05,
+      "y_m": 104.91
+    },
+    {
+      "id": "T8",
+      "role": "dutchbay",
+      "x_m": 582.18,
+      "y_m": 152.03
+    },
+    {
+      "id": "T9",
+      "role": "dutchbay",
+      "x_m": -465.19,
+      "y_m": -348.53
+    },
+    {
+      "id": "T10",
+      "role": "dutchbay",
+      "x_m": 346.64,
+      "y_m": -420.53
+    },
+    {
+      "id": "T11",
+      "role": "dutchbay",
+      "x_m": -83.79,
+      "y_m": -597.49
+    },
+    {
+      "id": "T12",
+      "role": "dutchbay",
+      "x_m": -612.72,
+      "y_m": -1140.63
+    },
+    {
+      "id": "T13",
+      "role": "dutchbay",
+      "x_m": -697.89,
+      "y_m": -1628.36
+    },
+    {
+      "id": "T14",
+      "role": "dutchbay",
+      "x_m": -311.3,
+      "y_m": -2124.06
+    },
+    {
+      "id": "T15",
+      "role": "dutchbay",
+      "x_m": -817.77,
+      "y_m": -2361.4
+    }
+  ],
+  "method": "frozen_wake_15_pct x (live PyWake loss over the 14 DutchBay turbines with T2 standing and waking / live loss over all 15), real layout",
+  "real_layout": {
+    "all_15": {
+      "aep_gross_gwh": 575.7950188924701,
+      "aep_wake_gwh": 464.4803334115528,
+      "deficit_model": "Bastankhah-PorteAgel 2014 (Gaussian, k*=0.0420)",
+      "n_turbines_counted": 15,
+      "wake_loss_pct": 19.332346030889404
+    },
+    "dutchbay_14_t2_removed": {
+      "aep_gross_gwh": 537.4086842996388,
+      "aep_wake_gwh": 435.4104946612903,
+      "deficit_model": "Bastankhah-PorteAgel 2014 (Gaussian, k*=0.0420)",
+      "n_turbines_counted": 14,
+      "wake_loss_pct": 18.979631818059385
+    },
+    "dutchbay_14_t2_waking": {
+      "aep_gross_gwh": 537.4086842996388,
+      "aep_wake_gwh": 432.961666307966,
+      "deficit_model": "Bastankhah-PorteAgel 2014 (Gaussian, k*=0.0420)",
+      "n_turbines_counted": 14,
+      "wake_loss_pct": 19.43530520497452
+    },
+    "ratio_t2_removed": 0.9817552296929484,
+    "ratio_t2_waking": 1.0053257464934988
+  },
+  "sensitivities_pct": {
+    "t2_removed_from_flow_real_layout": 7.15,
+    "t2_waking_synthetic_row": 7.24
+  },
+  "synthetic_row": {
+    "all_15": {
+      "aep_gross_gwh": 575.7950188924701,
+      "aep_wake_gwh": 528.6428341266894,
+      "deficit_model": "Bastankhah-PorteAgel 2014 (Gaussian, k*=0.0420)",
+      "n_turbines_counted": 15,
+      "wake_loss_pct": 8.18905742819328
+    },
+    "dutchbay_14_t2_removed": {
+      "aep_gross_gwh": 537.4086842996388,
+      "aep_wake_gwh": 495.6217756707045,
+      "deficit_model": "Bastankhah-PorteAgel 2014 (Gaussian, k*=0.0420)",
+      "n_turbines_counted": 14,
+      "wake_loss_pct": 7.775629581310506
+    },
+    "dutchbay_14_t2_waking": {
+      "aep_gross_gwh": 537.4086842996388,
+      "aep_wake_gwh": 493.62786899322174,
+      "deficit_model": "Bastankhah-PorteAgel 2014 (Gaussian, k*=0.0420)",
+      "n_turbines_counted": 14,
+      "wake_loss_pct": 8.146651996045263
+    },
+    "ratio_t2_removed": 0.9495145991455103,
+    "ratio_t2_waking": 0.9948216955956343
+  },
+  "t2_proxy_note": "The turbine at T2 is modelled with the IEA 10 MW reference machine as a proxy for the Blue Whale machine, whose curves are confidential and not read.",
+  "wake_loss_14_pct": 7.32,
+  "work_item": "#1577"
+}

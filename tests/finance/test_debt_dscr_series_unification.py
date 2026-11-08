@@ -424,15 +424,19 @@ def test_lender_case_min_dscr_and_series_shape_are_pinned() -> None:
     Before F-2 ``dscr_series`` had 15 entries against a 23-period timeline and
     ``dscr_series[3]`` read ``1.3`` while the row-0 period actually held
     ``2.604704706563112``. Both series are now the same positional list.
+
+    #1577 (14 turbines, 2026-11-08): row 0 now holds ``2.5922041122119635`` and the folded
+    year-1 covenant coverage ``1.2961020561059817`` sits under the 1.30 sculpt target
+    (it was 1.3024 at 15 turbines), so ``min_dscr`` is that fold, not 1.3.
     """
     _cfg, debt_result = _plan_for(LENDER_CONFIG)
 
     assert debt_result["timeline_periods"] == 23
     assert len(debt_result["dscr_series"]) == 23
     assert debt_result["first_operating_period"] == 3
-    assert debt_result["dscr_series"][3] == 2.604704706563112
+    assert debt_result["dscr_series"][3] == 2.5922041122119635
     assert debt_result["dscr_periods"][3]["operating_year"] == 1
-    assert float(debt_result["min_dscr"]) == 1.3
+    assert float(debt_result["min_dscr"]) == 1.2961020561059817
 
 
 # ---------------------------------------------------------------------------
@@ -578,7 +582,12 @@ def test_covenant_years_survive_a_map_that_does_not_start_at_year_one() -> None:
 @pytest.mark.parametrize(
     ("scenario_name", "years_below", "first_year", "last_year", "status"),
     [
-        ("dutchbay_lendercase_2025Q4.yaml", 0, None, None, "PASS"),
+        # Re-baselined by #1577 (14 turbines). Before: lendercase (0, None, None, PASS).
+        # Year 1 is a real sub-target year (folded coverage 1.2961 < 1.30). Year 5 reads
+        # 1.2999999999999996, one ULP under the threshold: the strict `<` comparison in
+        # _build_debt_covenant_snapshot counts it, a pre-existing boundary fragility that
+        # tests/api/test_debt_construction_idc_regression_v14.py already documents.
+        ("dutchbay_lendercase_2025Q4.yaml", 2, 1, 5, "REVIEW"),
         # Re-baselined in v15.11.0. Before: CEB (3, 1, 7, FAIL), solar+BESS (2, 1, 4, REVIEW).
         # The hostile-input tests keep the former CEB FAIL through _plan_for_ceb_fixture.
         ("ceb_bess_10mw_capacity_charge.yaml", 1, 1, 1, "REVIEW"),

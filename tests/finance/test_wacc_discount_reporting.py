@@ -43,9 +43,10 @@ def test_build_up_wacc_drives_and_is_reported_consistently() -> None:
     # so a distance check no longer discriminates; pin the computed value instead
     # (the wacc_is_real/wacc_label assertions below prove the BASIS). #1397 re-measured
     # it to 0.1017719098011085: sizing on levered-tax CFADS raises the solved gearing,
-    # which puts more 10%-ish debt and less 12% equity in the stack.
+    # which puts more 10%-ish debt and less 12% equity in the stack. #1577 (14 turbines)
+    # lowers the solved gearing 0.3775 -> 0.37 and the rate rises to 0.1021340572885037.
     assert math.isfinite(drate)
-    assert drate == pytest.approx(0.1017719098011085, abs=1e-9)
+    assert drate == pytest.approx(0.1021340572885037, abs=1e-9)
     assert 0.05 < drate < 0.12
 
     # The flag/label no longer contradict the rate that was actually used.

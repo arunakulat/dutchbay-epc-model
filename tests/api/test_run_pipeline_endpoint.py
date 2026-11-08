@@ -44,16 +44,18 @@ def test_run_pipeline_returns_full_report() -> None:
     assert resp.kpis.min_dscr == pytest.approx(1.22, abs=0.02)
 
     # AEP (bankable, from the committed summary; post 2% P50 over-prediction haircut).
-    assert resp.aep.net_p50_gwh == pytest.approx(464.3, abs=0.5)
-    assert resp.aep.net_p90_gwh == pytest.approx(404.4, abs=1.0)
+    # #1577: 14 turbines (464.3 / 404.4 for 15).
+    assert resp.aep.net_p50_gwh == pytest.approx(433.2, abs=0.5)
+    assert resp.aep.net_p90_gwh == pytest.approx(377.3, abs=1.0)
     assert resp.aep.capacity_factor == pytest.approx(0.332, abs=0.005)
 
     # Sculpted debt: DSCR-bound, three tranches, a per-period schedule. #738 grosses
     # the financed capex to ~$167.86M; F5-01's COD-aligned operating path plus #1397's
     # levered-tax coverage basis make the fee+levy-inclusive sculpt solve ~0.3775
-    # gearing (debt ~$63.37M; was 0.355 / ~$59.59M on the pre-tax basis).
-    assert resp.debt.debt_total_usd == pytest.approx(63.37e6, rel=0.02)
-    assert resp.debt.gearing == pytest.approx(0.3775, abs=0.01)
+    # gearing (debt ~$63.37M; was 0.355 / ~$59.59M on the pre-tax basis). #1577's 14
+    # turbines shrink the financed capex to ~$159.12M and the sculpt to ~0.37 (~$58.87M).
+    assert resp.debt.debt_total_usd == pytest.approx(58.87e6, rel=0.02)
+    assert resp.debt.gearing == pytest.approx(0.37, abs=0.01)
     assert resp.debt.binding_constraint == "P50"
     # Default P50-only solve (bind_downside unset): the P90 sizing-detail fields stay
     # absent (None) so the lender pack renders no P90 rows for this case (#613).
@@ -84,7 +86,9 @@ def test_debt_block_surfaces_p90_sizing_detail_when_bind_downside() -> None:
     # P90 detail is present and sourced from the real bankable P90/P50 AEP ratio.
     assert d.target_dscr_p90 is not None
     assert d.downside_source == "p90_aep"
-    assert d.downside_ratio == pytest.approx(471.0 / 538.1, abs=0.005)
+    assert d.downside_ratio == pytest.approx(
+        443.9 / 507.0, abs=0.005
+    )  # #1577 (471.0 / 538.1)
 
 
 def test_overrides_change_economics() -> None:

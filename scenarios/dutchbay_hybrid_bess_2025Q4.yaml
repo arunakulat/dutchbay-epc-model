@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════════════════════
-# DutchBay 209.6 MW Hybrid + 50 MW / 200 MWh BESS — Lender Case (tech-comparison, #821)
+# DutchBay 198.9 MW Hybrid + 50 MW / 200 MWh BESS — Lender Case (tech-comparison, #821)
 # ═══════════════════════════════════════════════════════════════════════════════
 # Version: 1.0 (a hybrid+BESS lender column for the #745/#821 cross-technology table)
 # Path: scenarios/dutchbay_hybrid_bess_2025Q4.yaml
@@ -28,13 +28,14 @@
 project:
   name: "DutchBay Hybrid Wind+Solar+BESS"
   location: "Dutch Bay, Kalpitiya, Puttalam District, North Western Province, Sri Lanka"
-  # Combined plant: 159.6 MW wind + 50 MW solar. Per-technology generation (each
+  # Combined plant: 148.9 MW wind (14 turbines; T2 is the Blue Whale turbine's, #1577; was
+  # 159.6 MW) + 50 MW solar. Per-technology generation (each
   # tech's own capacity factor AND degradation) is declared in the `generation:`
   # block below, which the cashflow sums (M3 true per-tech finance). capacity_mw /
   # capacity_factor are the reconciling headline (the engine cross-checks them vs
-  # the per-tech sum within 1%): 0.292997 = (159.6*0.332 + 50*0.1685) / 209.6.
-  capacity_mw: 209.6  # 159.6 MW wind + 50 MW solar
-  capacity_factor: 0.292997  # capacity-weighted blended P50 net CF (reconciles per-tech; #529 solar re-baseline)
+  # the per-tech sum within 1%): 0.290899 = (148.9*0.332 + 50*0.1685) / 198.9.
+  capacity_mw: 198.9  # 148.9 MW wind + 50 MW solar (was 209.6 with 15 turbines)
+  capacity_factor: 0.290899  # (was 0.292997) capacity-weighted blended P50 net CF (reconciles per-tech; #529 solar re-baseline)
   # INCREMENTAL financed grid-curtailment haircut (default 0.0 -> byte-identical). The
   # ~2% PHYSICAL curtailment is at resource.losses.curtailment_pct, already embedded in
   # the bankable net AEP and the 0.339 net CF above. This separate finance lever models
@@ -62,16 +63,16 @@ project:
 # CFADS). aep_gwh / capex_usd / availability_pct drive the lender per-tech reporting
 # split (analytics.portfolio + casper_payload). The per-tech year-1 generation
 # reconciles with project.capacity_mw * capacity_factor (engine-enforced, ±1%):
-#   wind  159.6 MW * 0.332 = 52.987 ; solar 50 MW * 0.1685 = 8.425 ; sum 61.412
-#   project 209.6 MW * 0.292997 = 61.412  ✓ (#529 solar TMY re-baseline)
+#   wind  148.9 MW * 0.332 = 49.435 ; solar 50 MW * 0.1685 = 8.425 ; sum 57.860
+#   project 198.9 MW * 0.290899 = 57.860  ✓ (14 turbines, #1577; #529 solar TMY re-baseline)
 generation:
   technologies:
     wind:
-      capacity_mw: 159.6
-      capacity_factor: 0.332      # net P50 (15 x IEA-10MW, ERA5-fitted Weibull)
+      capacity_mw: 148.9          # 14 turbines (#1577); was 159.6
+      capacity_factor: 0.332      # net P50 (14 x IEA-10MW, ERA5-fitted Weibull)
       degradation_pct: 0.6        # 0.6%/yr turbine aging (percent, /100 by the engine)
-      aep_gwh: 464.3              # net P50 AEP (reporting)
-      capex_usd: 159600000        # $1,000/kW x 159.6 MW
+      aep_gwh: 433.2              # net P50 AEP (reporting); 14 turbines (was 464.3)
+      capex_usd: 151407200        # the lender case's 14-turbine wind WBS (#1577; was $159.6M)
       availability_pct: 97.0
     solar:
       capacity_mw: 50.0
@@ -116,17 +117,17 @@ generation:
 # ═════════════════════════════════════════════════════════════════════════════
 turbine:
   model: "IEA Reference 10MW (198m)"
-  n_turbines: 15
+  n_turbines: 14                # T1, T3-T15; T2 is the Blue Whale turbine (#1577)
   rated_power_mw: 10.6383
   rated_power_kw: 10638
-  total_capacity_mw: 159.6
+  total_capacity_mw: 148.9
   rotor_diameter_m: 198
   hub_height_m: 150
   cut_in_ms: 3.0
   cut_out_ms: 25.0
   rated_wind_speed_ms: 11.0
   certification_status: "OPEN_REFERENCE"  # IEA Wind Task 37 reference design (not OEM-certified)
-  notes: "IEA Wind Task 37 10 MW reference (198 m, 345 W/m2), low-specific-power machine for the 7.85 m/s site. 15 x 10.638 MW = 159.6 MW. Representative open reference (Ct curve), substitutes for a future low-wind 10 MW OEM machine. Supersedes the 23 x EN-171/6.5 (149.5 MW) base; EN-171 kept as a characterization/sensitivity case."
+  notes: "IEA Wind Task 37 10 MW reference (198 m, 345 W/m2), low-specific-power machine for the 7.85 m/s site. 14 x 10.638 MW = 148.9 MW (T2 displaced by the Blue Whale turbine, #1577; was 15 x = 159.6 MW). Representative open reference (Ct curve), substitutes for a future low-wind 10 MW OEM machine. Supersedes the 23 x EN-171/6.5 (149.5 MW) base; EN-171 kept as a characterization/sensitivity case."
 
 wind_resource:
   # Weibull distribution parameters (for AEP calculation). ERA5-FITTED (3-method
@@ -161,9 +162,9 @@ layout:
 resource:
   # Turbine specifications (for backward compatibility)
   turbines:
-    count: 15
+    count: 14
     rated_power_mw: 10.6383
-    total_capacity_mw: 159.6
+    total_capacity_mw: 148.9
     model: "IEA Reference 10MW (198m)"
     rotor_diameter_m: 198
     hub_height_m: 150
@@ -179,16 +180,16 @@ resource:
     air_density_ref_kgm3: 1.225
     alt_curve_key: "dtu_reference_10mw"  # comparable 10 MW machine for the AEP-tornado power-curve sensitivity driver
 
-  aep_summary_path: "scenarios/aep_summary_dutchbay_hybrid.json"  # combined wind+solar bankable AEP (538.1 GWh net P50; #529)
+  aep_summary_path: "scenarios/aep_summary_dutchbay_hybrid.json"  # combined wind+solar bankable AEP (507.0 GWh net P50, 14 turbines; #1577, #529)
 
   uncertainty:
 
     p50_haircut_pct: 2.0  # 2% pre-construction P50 over-prediction haircut on the WIND component (EIA EN220 P50 corroboration)
 
-  # Technical losses (pre-grid). Wake is now MODELLED (PyWake Bastankhah 7.28%),
+  # Technical losses (pre-grid). Wake is now MODELLED (PyWake Bastankhah 7.32%, 14 turbines, #1577),
   # not the old flat placeholder; the stack totals 14.48% (see the AEP summary).
   losses:
-    wake_loss_pct: 7.28  # PyWake Bastankhah-Porte-Agel granular wake (15-turbine layout); TurbOPark bound 8.93%
+    wake_loss_pct: 7.32  # PyWake Bastankhah-Porte-Agel granular wake, 14 DutchBay turbines with the Blue Whale turbine at T2 still waking T1/T3: the 15-turbine 7.28% x the live PyWake ratio 1.0053 (#1577, docs/wind/dutchbay_14_turbine_wake_summary.json); TurbOPark bound 8.93% (15 turbines, not re-derived)
     availability_pct: 97.0  # Contractual availability target
     electrical_loss_pct: 2.0  # Cable + transformer + auxiliary consumption
     curtailment_pct: 2.0  # Grid curtailment (ERA5 stack)
@@ -209,7 +210,7 @@ resource:
     ws150_mean_ms: 7.29       # Mean hub-height (150 m) wind speed (ERA5-fitted)
     ws150_std_ms: 2.95        # Weibull-derived (A=8.199, k=2.665)
     capacity_factor: 0.332    # Net P50 CF (canonical; matches aep_summary)
-    aep_gwh: 464.3            # Net P50 AEP, GWh (canonical; matches aep_summary)
+    aep_gwh: 433.2            # Net P50 AEP, GWh, 14 turbines (canonical; matches aep_summary; was 464.3)
     source_id: "IEA_REFERENCE_10MW_198_PC"
     source_type: "REFERENCE"
 
@@ -219,7 +220,7 @@ resource:
   # 20-yr window backs the ERA5-FITTED wind_resource.weibull_a/k (8.199/2.665). VALIDATE mode:
   # the ARCO fit reports drift vs the declared baseline; it never overwrites it.
   era5:
-    latitude: 8.27            # turbine-array centroid (T1-T15), Kalpitiya, Puttalam
+    latitude: 8.27            # turbine-array centroid (T1-T15; unchanged without T2 at this 0.01 deg precision), Kalpitiya, Puttalam
     longitude: 79.75
     hub_height_m: 150         # MUST equal turbine.hub_height_m (cross-asserted)
     reference:
@@ -345,20 +346,20 @@ capex:
   cost_basis_year: 2026  # USD vintage of the whole cost stack (anchored, ATB-style)
   estimate_class: 3  # AACE Class 3 (budget authorization); $/kW sanity-checked vs
   #                    the IRENA 2024 benchmark (wind ~$1,041/kW, SL utility PV ~$800/kW)
-  # Combined cost stack: wind $159.6M + solar $40M + BESS $25M. The engine reads
+  # Combined cost stack: wind $151.4072M + solar $40M + BESS $25M. The engine reads
   # usd_total; the per-technology capex split is in the `generation:` block above (the
   # BESS capex_usd MUST roll up into this total so the battery is financed — BESS-3).
-  usd_total: 224600000  # combined: wind $159.6M + solar $40M + BESS $25M (200 MWh x ~$125/kWh)
-  capex_per_kw_usd: 1072  # 224.6M / 209.6 MW generation nameplate (BESS power not in the denom)
+  usd_total: 216407200  # combined: wind $151.4072M (14 turbines, #1577; was $159.6M) + solar $40M + BESS $25M (200 MWh x ~$125/kWh)
+  capex_per_kw_usd: 1088  # 216.4072M / 198.9 MW (was 1072 on 209.6 MW) generation nameplate (BESS power not in the denom)
 
 opex:
-  usd_per_year: 3500000  # combined: wind $3.0M (fixed O&M) + solar $0.5M (~$10/kW-yr x 50 MW)
-  opex_per_kw_yr_usd: 16.7  # 3.5M / 209.6 MW combined
+  usd_per_year: 3346667  # combined: wind $2.846667M (14 turbines, #1577; was $3.0M) + solar $0.5M (~$10/kW-yr x 50 MW)
+  opex_per_kw_yr_usd: 16.8  # 3.346667M / 198.9 MW combined
 
   breakdown:
-    om_contract_usd: 2000000  # Full-service O&M
+    om_contract_usd: 1866667  # Full-service O&M, per turbine: 2,000,000 x 14/15 (#1577)
     insurance_usd: 500000  # Property + BI
-    land_lease_usd: 300000  # 15 turbine sites
+    land_lease_usd: 280000  # 14 turbine sites (was 300,000 for 15)
     admin_usd: 200000  # SPV overhead
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -408,7 +409,7 @@ Financing_Terms:
   dscr_p99_downside_factor: 0.80   # P99 CFADS = 80% of P50 (~P90 AEP) for the dual-DSCR (P50/P99) capacity detail
   # Bind the bankable P90 downside to the gearing (D4.6): the engine sizes a SECOND gearing
   # against a P90 cashflow (annual CFADS rescaled by the real net P90/P50 AEP ratio,
-  # 471.0/538.1 = 0.8753, from expected_results; #529) and uses min(P50, P90) gearing — so the
+  # 443.9/507.0 = 0.8755, from expected_results; 14 turbines, #1577; #529) and uses min(P50, P90) gearing — so the
   # structure must clear the DSCR floor even at P90 production, not only at P50. This makes
   # the MODELLED P90 (#469 dolphin 4c) actually bind debt rather than be reporting-only.
   # downside_aep_source: p90 reads the real P90/P50 ratio (vs the legacy flat 0.80 proxy);
@@ -529,21 +530,21 @@ monte_carlo:
   # (so the wider the declared std, the wider the band). CCCDIR: paths explicit,
   # no implicit name->path mapping. ARCH-01: all values from config.
   parameters:
-    - name: project.capacity_factor   # base 0.292997, rel_std 0.05 -> +/-10% (#529 re-baseline)
-      low: 0.2637
-      high: 0.3223
+    - name: project.capacity_factor   # base 0.290899 (14 turbines, #1577), rel_std 0.05 -> +/-10% (#529 re-baseline)
+      low: 0.2618
+      high: 0.3200
       distribution: uniform
     - name: tariff.lkr_per_kwh        # base 20.3, rel_std 0.10 -> +/-20%
       low: 16.24
       high: 24.36
       distribution: uniform
     - name: opex.usd_per_year         # base 3.0e6, rel_std 0.15 -> +/-30%
-      low: 2100000.0
-      high: 3900000.0
+      low: 1992666.9                   # 14 turbines (#1577): base 2.846667e6 +/-30%
+      high: 3700667.1
       distribution: uniform
     - name: capex.usd_total           # base 224.6e6 (combined incl BESS), rel_std 0.08 -> +/-16%
-      low: 188664000.0
-      high: 260536000.0
+      low: 181782048.0                 # base 216.4072e6 (14 turbines, #1577) +/-16%
+      high: 251032352.0
       distribution: uniform
     - name: fx.start_lkr_per_usd      # base 333.79, rel_std 0.05 -> +/-10%
       low: 300.0
@@ -581,14 +582,14 @@ timeline:
 # EXPECTED RESULTS (For Pipeline Validation)
 # ═════════════════════════════════════════════════════════════════════════════
 expected_results:
-  # Combined bankable AEP for the 209.6 MW hybrid = wind 464.3 GWh (15 x IEA-10MW,
-  # ERA5-fitted Weibull, PyWake 7.28% wake, 14.48% losses) + solar 73.8 GWh (50 MW
+  # Combined bankable AEP for the 198.9 MW hybrid = wind 433.2 GWh (14 x IEA-10MW, #1577;
+  # ERA5-fitted Weibull, PyWake 7.32% wake, 14.52% losses) + solar 73.8 GWh (50 MW
   # fixed-tilt, pvlib-modelled P50 CF 0.1685 on a frozen PVGIS TMY; #529 SOLAR-6/12
   # re-baseline from 0.179). The aep_reconciliation guard cross-checks this against
-  # capacity_mw * capacity_factor (538.0 GWh), so a stale headline cannot creep in.
-  net_aep_p50_gwh: 538.1   # wind 464.3 (post 2% over-prediction haircut) + solar 73.8 (pvlib P50)
-  net_aep_p90_gwh: 471.0   # wind 404.4 (post haircut) + solar 66.6 (pvlib P90-1yr from solar_resource.exceedance, default IEA-PVPS Task 13 budget, sigma ~7.65%). BINDS debt (D4.6): with Financing_Terms.bind_downside true, the P90/P50 ratio (471.0/538.1 = 0.8753) rescales CFADS to size the gearing, so this P90 constrains debt/equity-IRR/DSCR (not reporting-only).
-  capacity_factor: 0.292997
+  # capacity_mw * capacity_factor (506.9 GWh), so a stale headline cannot creep in.
+  net_aep_p50_gwh: 507.0   # wind 433.2 (post 2% over-prediction haircut; 14 turbines, was 464.3) + solar 73.8 (pvlib P50)
+  net_aep_p90_gwh: 443.9   # wind 377.3 (post haircut; was 404.4) + solar 66.6 (pvlib P90-1yr from solar_resource.exceedance, default IEA-PVPS Task 13 budget, sigma ~7.65%). BINDS debt (D4.6): with Financing_Terms.bind_downside true, the P90/P50 ratio (443.9/507.0 = 0.8755) rescales CFADS to size the gearing, so this P90 constrains debt/equity-IRR/DSCR (not reporting-only).
+  capacity_factor: 0.290899
   # Financial KPIs for the hybrid are pinned by the regression test
   # tests/finance/test_hybrid_scenario.py (the engine output is the single source of
   # truth) rather than hand-maintained here — solar's distinct degradation makes them

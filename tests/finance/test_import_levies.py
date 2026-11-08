@@ -63,6 +63,11 @@ PRUDENT_BLOCK: Dict[str, Any] = {
     },
 }
 
+# The committed lender-case block. #1577 (14 turbines) moved its import share from 0.69 to
+# 0.6788 (= the WTG line over usd_total, round 4). PRUDENT_BLOCK keeps 0.69 for the pure
+# cascade arithmetic below; the overlay and pin tests use this mirror of the YAML.
+COMMITTED_BLOCK: Dict[str, Any] = {**PRUDENT_BLOCK, "import_share_pct": 0.6788}
+
 
 def _levied_lender_config(block: Dict[str, Any]) -> Dict[str, Any]:
     """The committed lender case with a (replaced) taxes_indirect overlay."""
@@ -275,7 +280,7 @@ def test_relieved_everything_is_row_identical_to_no_block() -> None:
 
 @pytest.fixture(scope="module")
 def levied_cfg() -> Dict[str, Any]:
-    return _levied_lender_config(PRUDENT_BLOCK)
+    return _levied_lender_config(COMMITTED_BLOCK)
 
 
 @pytest.fixture(scope="module")
@@ -293,7 +298,8 @@ def test_three_resolvers_agree_on_the_levy_inclusive_gross(
     assert it is not None
     base = _extract_capex_base_usd(dict(levied_cfg))
     gross = base + compute_capex_uplift_usd(base, it)
-    assert base == pytest.approx(159_600_000.0, rel=1e-12)  # pre-levy base intact
+    # pre-levy base intact (#1577: 14 turbines, was 159.6M)
+    assert base == pytest.approx(151_407_200.0, rel=1e-12)
     assert _extract_capex_usd(dict(levied_cfg)) == gross
     assert _derive_capex_usd(levied_cfg) == gross
     assert equity_capex(levied_cfg) == gross
@@ -311,7 +317,8 @@ def test_depreciable_base_grosses_the_same_uplift_at_financial_close_fx(
     from finance.cashflow_v14_fx import _financial_close_spot
 
     uplift = capex_uplift_from_config(levied_cfg)
-    assert uplift == pytest.approx(8_259_300.0, rel=1e-12)
+    # 151.4072M x 0.6788 x 7.5% (#1577; was 159.6M x 0.69 x 7.5% = 8.2593M)
+    assert uplift == pytest.approx(7_708_140.552, rel=1e-12)
     close_fx = _financial_close_spot(dict(levied_cfg))
     assert close_fx is not None
     tax = levied_cfg["tax"]
@@ -404,7 +411,7 @@ def test_mc_capex_perturbs_the_pre_levy_base(levied_cfg: Dict[str, Any]) -> None
 
     res = run_capex_mc(copy.deepcopy(levied_cfg), n_samples=4, sigma_pct=5.0, seed=7)
     # base_capex_usd is the PRE-LEVY base, not the levy-inclusive gross.
-    assert res.base_capex_usd == pytest.approx(159_600_000.0, rel=1e-12)
+    assert res.base_capex_usd == pytest.approx(151_407_200.0, rel=1e-12)  # #1577
 
 
 def test_mc_trial_write_path_reproduces_the_levied_pipeline(
@@ -438,7 +445,7 @@ def test_breakdown_cross_check_operates_on_the_pre_levy_base(
 ) -> None:
     """derive_from_breakdown + levies: no tolerance interaction, gross = sum + uplift.
 
-    The committed WBS breakdown sums exactly to usd_total (159.6M); with the ~5.2%
+    The committed WBS breakdown sums exactly to usd_total (151.4072M since #1577); with the ~5.1%
     prudent uplift a GROSS-basis cross-check would blow the 0.5% tolerance and
     raise — passing here proves the check operates on the pre-levy base.
     """
@@ -446,8 +453,8 @@ def test_breakdown_cross_check_operates_on_the_pre_levy_base(
     cfg["capex"]["derive_from_breakdown"] = True
     it = resolve_indirect_taxes(cfg)
     assert it is not None
-    base = _extract_capex_base_usd(dict(cfg))  # breakdown sum == 159.6M
-    assert base == pytest.approx(159_600_000.0, rel=1e-9)
+    base = _extract_capex_base_usd(dict(cfg))  # breakdown sum == 151.4072M (#1577)
+    assert base == pytest.approx(151_407_200.0, rel=1e-9)
     assert _extract_capex_usd(dict(cfg)) == pytest.approx(
         base + compute_capex_uplift_usd(base, it), rel=1e-12
     )
@@ -473,8 +480,8 @@ def test_qra_contingency_base_attracts_levies(levied_cfg: Dict[str, Any]) -> Non
     assert it is not None
     qra_base = _extract_capex_base_usd(dict(cfg))
     # QRA recomputes contingency off the ex-contingency line sum (157.206M), so
-    # the base differs from (here: exceeds) the fixed-breakdown 159.6M total.
-    assert qra_base > 159_600_000.0
+    # the base differs from (here: exceeds) the fixed-breakdown 151.4072M total (#1577).
+    assert qra_base > 151_407_200.0
     assert _extract_capex_usd(dict(cfg)) == pytest.approx(
         qra_base + compute_capex_uplift_usd(qra_base, it), rel=1e-12
     )
@@ -511,11 +518,15 @@ FULL_STACK_OVERRIDE = str(
 # Re-measured by #1505 (2026-11-01): the levered tax pass deducts the refinanced
 # tranche's interest (paid basis), so equity IRR -18.46% -> -15.49%. The project
 # figures, CFADS and the facility do not move.
-LEVY_OFF_PROJECT_IRR = 0.008422903814629845
-LEVY_OFF_EQUITY_IRR = -0.15485745093533887
-LEVY_OFF_PROJECT_NPV = -80457071.06813467
-LEVY_OFF_TOTAL_CFADS = 172406889.7900688
-LEVY_OFF_DEBT_TOTAL = 65036999.99999999
+# Re-measured by #1577 (2026-11-08): DutchBay drops to 14 turbines (148.9 MW, bankable P50
+# 433.2 GWh, pre-levy capex 151.4072M), so project IRR 0.842% -> 0.645%, equity IRR
+# -15.49% -> -15.97%, NPV -80.46M -> -77.80M, CFADS 172.41M -> 160.65M and the
+# facility 65.04M -> 60.56M.
+LEVY_OFF_PROJECT_IRR = 0.006450277019732536
+LEVY_OFF_EQUITY_IRR = -0.15966299994282762
+LEVY_OFF_PROJECT_NPV = -77801356.7980196
+LEVY_OFF_TOTAL_CFADS = 160654472.4417483
+LEVY_OFF_DEBT_TOTAL = 60562880.0
 
 
 def _merged_with_override(path: str) -> Dict[str, Any]:
@@ -530,14 +541,15 @@ def _merged_with_override(path: str) -> Dict[str, Any]:
 def test_committed_lendercase_carries_the_prudent_posture() -> None:
     """The YAML flip is the locked user decision — pin it so it cannot drift.
 
-    PRUDENT: PAL 5% + import-SSCL 2.5% PAID on the 0.69 imported share, capex
+    PRUDENT: PAL 5% + import-SSCL 2.5% PAID on the 0.6788 imported share (0.69 before
+    #1577), capex
     VAT relieved (BOI s.17/bonded), opex VAT 18% paid — and the revenue SSCL
     ZEROED on the statutory exemption (IPP-to-CEB supply).
     """
     cfg = dict(load_scenario_config(LENDER))
     it = resolve_indirect_taxes(cfg)
     assert it is not None
-    assert it.import_share_pct == 0.69
+    assert it.import_share_pct == 0.6788
     assert it.cid_pct == 0.0
     assert it.pal_pct == 0.05
     assert it.sscl_import_pct == 0.025
@@ -554,7 +566,7 @@ def test_committed_lendercase_carries_the_prudent_posture() -> None:
     # Revenue-side SSCL: statutory exemption committed (was 0.025 pre-#738).
     assert float(cfg["statutory"]["social_services_levy_pct"]) == 0.0
     # And the in-test PRUDENT_BLOCK mirror used above matches the committed one.
-    assert resolve_indirect_taxes({"taxes_indirect": PRUDENT_BLOCK}) == it
+    assert resolve_indirect_taxes({"taxes_indirect": COMMITTED_BLOCK}) == it
 
 
 def test_levy_off_strip_reproduces_the_relieved_economics_exactly() -> None:
@@ -578,7 +590,7 @@ def test_full_relief_overlay_equals_the_levy_free_economics() -> None:
     assert debt["debt_total"] == pytest.approx(LEVY_OFF_DEBT_TOTAL, rel=1e-12)
     # Financed capex back to the pre-levy base; zero disclosed levies.
     uses = debt["funding"]["sources_and_uses"]["uses"]
-    assert uses["capex_usd"] == pytest.approx(159_600_000.0, abs=0.01)
+    assert uses["capex_usd"] == pytest.approx(151_407_200.0, abs=0.01)  # #1577
     assert uses["import_levies_usd"] == 0.0
 
 
@@ -601,8 +613,9 @@ def test_full_stack_paid_overlay_directional_signature() -> None:
     g_canon = (canon["debt_result"] or {}).get("dual_dscr") or {}
     g_paid = (paid["debt_result"] or {}).get("dual_dscr") or {}
     assert g_paid["solved_gearing"] < g_canon["solved_gearing"]
-    # Uplift hand-check: duties 8.2593M + VAT 18% on (import+duties+domestic).
+    # Uplift hand-check: duties + VAT 18% on (import+duties+domestic). #1577: 14
+    # turbines, base 151.4072M at the 0.6788 import share (was 159.6M x 0.69).
     uses = (paid["debt_result"] or {})["funding"]["sources_and_uses"]["uses"]
-    duties = 159_600_000.0 * 0.69 * 0.075
-    vat = (159_600_000.0 + duties) * 0.18
+    duties = 151_407_200.0 * 0.6788 * 0.075
+    vat = (151_407_200.0 + duties) * 0.18
     assert uses["import_levies_usd"] == pytest.approx(duties + vat, abs=0.01)

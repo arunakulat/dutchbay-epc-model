@@ -380,11 +380,11 @@ def test_get_current_subject_no_secret_500(monkeypatch: pytest.MonkeyPatch) -> N
 # HTTP end-to-end (gated on httpx)
 # --------------------------------------------------------------------------- #
 def _valid_case_body() -> dict[str, Any]:
-    # Matches tests/app/test_api.py::_valid_kwargs — the 159.6 MW x 0.332 CF figures
+    # Matches tests/app/test_api.py::_valid_kwargs — the 148.9 MW x 0.332 CF figures (#1577)
     # reconcile with the frozen lendercase AEP so the service-seam guard passes.
     return {
         "site_name": "DutchBay",
-        "capacity_mw": 159.6,
+        "capacity_mw": 148.9,
         "capacity_factor": 0.332,
         "project_life_years": 20,
         "ppa_price_lkr_per_kwh": 20.30,
@@ -489,7 +489,7 @@ def test_http_cross_client_job_isolation(monkeypatch: pytest.MonkeyPatch) -> Non
             "site_lat": 8.33,
             "site_lon": 79.76,
             "turbine_model": "iea_reference_10mw",
-            "num_turbines": 15,
+            "num_turbines": 14,  # #1577
             "hub_height_m": 119.0,
         }
         accepted = client.post("/v1/jobs", json=body, headers=alice)

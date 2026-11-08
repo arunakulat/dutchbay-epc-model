@@ -177,6 +177,7 @@ def test_api_surfaces_funding_block() -> None:
     assert resp.funding.fund_at_close is False
     # #738: the S&U capex line is the LEVY-INCLUSIVE gross (base 159.6M + the
     # PRUDENT $8.2593M duties), with the levy share disclosed as an of-which line.
-    assert resp.funding.capex_usd == pytest.approx(167_859_300, rel=1e-4)
-    assert resp.funding.import_levies_usd == pytest.approx(8_259_300, rel=1e-4)
+    # #1577 (14 turbines): base 151.4072M + 7.70814M duties (was 159.6M + 8.2593M).
+    assert resp.funding.capex_usd == pytest.approx(159_115_340.552, rel=1e-4)
+    assert resp.funding.import_levies_usd == pytest.approx(7_708_140.552, rel=1e-4)
     assert resp.funding.equity_usd is not None and resp.funding.equity_usd > 0

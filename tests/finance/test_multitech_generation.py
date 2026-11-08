@@ -291,7 +291,12 @@ def test_canonical_lendercase_economics_unchanged() -> None:
 
     lender = str(REPO_ROOT / "scenarios" / "dutchbay_lendercase_2025Q4.yaml")
     kpis = run_v14_pipeline(config=lender, validation_mode="strict")["kpis"]
-    # Re-baselined by #1505 (2026-11-01, owner decision: deductible when paid,
+    # Re-baselined by #1577 (2026-11-08, owner decision): DutchBay drops to 14 turbines
+    # because the Blue Whale turbine stands on T2. 148.9 MW, wake 7.28% -> 7.32%, bankable
+    # P50 464.3 -> 433.2 GWh, per-turbine capex/opex lines x 14/15. Project IRR -0.060% ->
+    # -0.251%, equity IRR -23.01% -> -23.37%, NPV -91.40M -> -88.03M, min_dscr 1.2196 ->
+    # 1.2214, CFADS 166.93M -> 155.46M, facility 63.37M -> 58.87M (values in tests/_canon.py).
+    # Prior: re-baselined by #1505 (2026-11-01, owner decision: deductible when paid,
     # tax.balloon_interest_tax_basis): the levered tax pass deducts the refinanced
     # tranche's USD 7.24M of interest, paid in operating years 15-17, which it deducted
     # nowhere before. Equity IRR -26.44% -> -23.01% (equity NPV -95.53M -> -95.27M);
