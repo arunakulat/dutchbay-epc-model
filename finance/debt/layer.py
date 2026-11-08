@@ -20,6 +20,8 @@ from finance.debt.terms import (
     _build_cfads_timeline,
     _extract_financing_terms,
     _resolve_construction_periods,
+    placeholder_construction_schedule,
+    placeholder_debt_drawdown_pct,
 )
 
 # The engine logged as ``finance.debt_v14`` before the split; keep that name so
@@ -38,8 +40,14 @@ def apply_debt_layer(
     p = _extract_financing_terms(params)
 
     construction_periods = _resolve_construction_periods(params)
-    construction_schedule = p.get("construction_schedule", [40.0, 60.0])
-    drawdown_pct = p.get("debt_drawdown_pct", [0.5, 0.5])
+    # The compact ``financing`` schema passes through extraction without
+    # placeholders; size them to the period count here too (#1570).
+    construction_schedule = p.get("construction_schedule")
+    if construction_schedule is None:
+        construction_schedule = placeholder_construction_schedule(construction_periods)
+    drawdown_pct = p.get("debt_drawdown_pct")
+    if drawdown_pct is None:
+        drawdown_pct = placeholder_debt_drawdown_pct(construction_periods)
     debt_ratio = _as_float(p.get("debt_ratio"), 0.70)
     tenor = max(0, int(_as_float(p.get("tenor_years"), 15)))
     years_io = max(0, int(_as_float(p.get("interest_only_years"), 0)))

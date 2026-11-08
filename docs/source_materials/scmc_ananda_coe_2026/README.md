@@ -17,7 +17,7 @@ and this area links to it for sanitised use.
 | Item | Value |
 |---|---|
 | Private location | `arunakulat/DutchBay_RAG`, `corpus/scmc_ananda_coe_2026/held/` |
-| Pinned commit | `e60a1392dfb4178420358d4507f02402fa0d2fca`, on branch `claude/private-scmc-pgf-corpus` until `arunakulat/DutchBay_RAG#41` merges |
+| Pinned commit | `e60a1392dfb4178420358d4507f02402fa0d2fca`, on the private repository's `main` since `arunakulat/DutchBay_RAG#41` landed by merge commit `50127dbc` on 8 November 2026 |
 | Files | 175, each checked against `ARTIFACT_REGISTER.tsv` when copied |
 
 | Material | Where it is | Why |

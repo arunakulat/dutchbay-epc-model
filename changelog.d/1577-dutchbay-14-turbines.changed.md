@@ -1,5 +1,5 @@
-- DutchBay drops from 15 to 14 turbines, because the Blue Whale turbine stands on T2 (15.22.0 ->
-  15.23.0). Owner decision of 8 Nov 2026, asked "does DutchBay drop to 14 turbines now that
+- DutchBay drops from 15 to 14 turbines, because the Blue Whale turbine stands on T2 (15.24.0 ->
+  15.25.0). Owner decision of 8 Nov 2026, asked "does DutchBay drop to 14 turbines now that
   Blue Whale replaces T2?": "yes". Work item #1577 (#1353 comment 6716047327).
   - Six scenarios on the IEA 10 MW layout move: the lender case, the 5 US-cent case, the two
     capex cases and the two hybrids. 14 x 10.6383 MW = 148.9 MW (was 159.6); the hybrids are

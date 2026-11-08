@@ -666,6 +666,9 @@ for _path, _disposition in (
             "total_idc_usd",
             "npv",
             "irr",
+            # #1494: says whether project_irr is computed, undefined or a not-computed
+            # placeholder; a label, not a carried figure.
+            "project_irr_status",
             "discount_rate_used",
             "wacc_label",
             "wacc_is_real",

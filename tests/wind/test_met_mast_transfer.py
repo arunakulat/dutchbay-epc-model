@@ -624,6 +624,103 @@ def test_expected_hours_with_orientation_is_linear_and_bounded() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Heights, sectors, day window and the turbine point come from the config
+# (#1538 domain D-1)
+# ---------------------------------------------------------------------------
+def _planted_mast(mcfg: Dict[str, Any], alpha: float, days: int) -> pd.DataFrame:
+    """A 10-minute mast record whose mean speeds follow one power law exactly."""
+    idx = pd.date_range("2025-04-01", periods=days * 144, freq="10min")
+    rng = np.random.default_rng(1538)
+    base = 6.0 + rng.uniform(-1.0, 1.0, len(idx))  # speed at 100 m
+    cols: Dict[str, Any] = {
+        name: base * (float(h) / 100.0) ** alpha
+        for h, name in mcfg["speed_avg"].items()
+    }
+    cols[mcfg["direction"]] = np.linspace(0.0, 359.9, len(idx)) % 360.0
+    return pd.DataFrame(cols, index=idx)
+
+
+def test_measured_profiles_read_the_configured_pair_window_and_sectors() -> None:
+    raw = yaml.safe_load(CONF.read_text())
+    mcfg, shear = raw["mast"], raw["shear"]
+    n = int(raw["mcp"]["n_sectors"])
+    days = 70  # about 630 rows per 22.5 degree sector: above the 600-row floor
+    mast = _planted_mast(mcfg, alpha=0.21, days=days)
+    got = cli.measured_profiles(mast, mcfg, shear, n)
+    # The committed config's keys are the ones the summary has always carried.
+    assert got["alpha_100_120"] == pytest.approx(0.21, abs=1e-12)
+    assert set(got["day_night_local_06_18"]) == {"day", "night"}
+    assert got["day_night_local_06_18"]["day"]["n_10min"] == days * 12 * 6
+    assert [r["label"] for r in got["by_sector_80m_direction"]] == list(mmt.COMPASS_16)
+    assert all(
+        r["alpha_100_120"] == pytest.approx(0.21, abs=1e-12)
+        for r in got["by_sector_80m_direction"]
+    )
+    assert sorted(got["diurnal_mean_ms_by_local_hour"]) == ["100", "120"]
+    # Change the config and the profile follows it.
+    moved = dict(shear, low_height_m=80.0, day_start_local_h=7, day_end_local_h=19)
+    alt = cli.measured_profiles(mast, mcfg, moved, 8)
+    assert "alpha_100_120" not in alt
+    assert alt["alpha_80_120"] == pytest.approx(0.21, abs=1e-12)
+    assert alt["day_night_local_07_19"]["day"]["n_10min"] == days * 12 * 6
+    assert [r["label"] for r in alt["by_sector_80m_direction"]] == [
+        str(i) for i in range(8)
+    ]
+    assert sorted(alt["diurnal_mean_ms_by_local_hour"]) == ["120", "80"]
+    # A sector reports a pair exponent only with shear.min_cell_hours of rows.
+    sparse = dict(shear, min_cell_hours=10_000)
+    assert all(
+        r["alpha_100_120"] is None
+        for r in cli.measured_profiles(mast, mcfg, sparse, n)["by_sector_80m_direction"]
+    )
+    with pytest.raises(ValueError, match="no mast.speed_avg channel at 90 m"):
+        cli.measured_profiles(mast, mcfg, dict(shear, low_height_m=90.0), n)
+
+
+def test_the_turbine_reference_point_must_be_the_placed_turbine() -> None:
+    raw = yaml.safe_load(CONF.read_text())
+    s_cfg = yaml.safe_load((REPO_ROOT / raw["turbine"]["siting_config"]).read_text())
+    lat, lon = cli.check_turbine_reference_point(raw, s_cfg)
+    assert (lat, lon) == pytest.approx((8.2925, 79.7547), abs=1e-9)
+    moved = json.loads(json.dumps(raw))
+    moved["reference"]["points"]["turbine"][
+        "longitude_deg_e"
+    ] = 79.752666  # the #1530 spot
+    with pytest.raises(ValueError, match="not where the siting config places"):
+        cli.check_turbine_reference_point(moved, s_cfg)
+    # Moving the turbine in the siting config is caught the same way.
+    s_moved = json.loads(json.dumps(s_cfg))
+    s_moved["site"]["turbine_placement"] = "coastal_setback"
+    with pytest.raises(ValueError, match="not where the siting config places"):
+        cli.check_turbine_reference_point(raw, s_moved)
+
+
+def test_the_script_carries_no_hub_height_literal() -> None:
+    """130 m lives in shear.hub_height_m; the script reads it (#1538 domain D-1)."""
+    import ast
+
+    hub = float(yaml.safe_load(CONF.read_text())["shear"]["hub_height_m"])
+    tree = ast.parse(SCRIPT.read_text())
+    literals = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, (int, float))
+        and not isinstance(node.value, bool)
+        and float(node.value) == hub
+    ]
+    assert literals == []
+
+
+def test_committed_summary_keys_follow_the_configured_hub_height() -> None:
+    raw = yaml.safe_load(CONF.read_text())
+    tag = f"{float(raw['shear']['hub_height_m']):g}"
+    summary = json.loads(SUMMARY.read_text())
+    assert f"long_term_{tag}m" in summary
+    assert f"weibull_a_{tag}m_ms" in summary["yield"]["era5_weibull_basis_1530"]
+
+
+# ---------------------------------------------------------------------------
 # Committed outputs and scenarios
 # ---------------------------------------------------------------------------
 def test_scenarios_carry_the_summary_yield_and_the_hold() -> None:

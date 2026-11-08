@@ -387,7 +387,7 @@ def correlation_gate(
 
 
 class Chain:
-    """One configured transfer: mast fit -> long-term -> 130 m -> turbine site."""
+    """One configured transfer: mast fit -> long-term -> hub height -> turbine site."""
 
     def __init__(
         self,
@@ -490,7 +490,7 @@ class Chain:
             int(s["day_start_local_h"]),
             int(s["day_end_local_h"]),
         )
-        v130 = mmt.apply_shear(
+        v_hub = mmt.apply_shear(
             v_hour[src],
             d_mast,
             day,
@@ -511,7 +511,7 @@ class Chain:
             n_sectors=self.n,
             min_sector_hours=int(c["transfer"]["min_sector_hours"]),
         )
-        v_site = v130 * ratio[sec_ref]
+        v_site = v_hub * ratio[sec_ref]
         d_site = np.mod(d_mast + mmt.continuous_veer(ref_d, tveer)[src], 360.0)
         # In-sample check of the direction method: the measured 80 m rose over the
         # concurrent hours against the rose the method predicts from the reference.
@@ -538,7 +538,7 @@ class Chain:
             "index": index,
             "speed": v_site,
             "direction": d_site,
-            "speed_mast_130": v130,
+            "speed_mast_hub": v_hub,
             "direction_mast": d_mast,
             "lt_ref_mast": lt_m,
             "copies": int(m["direction_quantiles"]),
@@ -556,12 +556,17 @@ class Chain:
 # ---------------------------------------------------------------------------
 # Aggregates
 # ---------------------------------------------------------------------------
-def fit_rows(fits: Sequence[mmt.SectorFit]) -> List[Dict[str, Any]]:
+def _sector_label(sector: int, n_sectors: int) -> str:
+    """Compass label of a sector for 16 sectors, else its index (as the library does)."""
+    return mmt.COMPASS_16[sector] if n_sectors == 16 else str(sector)
+
+
+def fit_rows(fits: Sequence[mmt.SectorFit], n_sectors: int) -> List[Dict[str, Any]]:
     """JSON rows of the sector fits."""
     return [
         {
             "sector": f.sector,
-            "label": mmt.COMPASS_16[f.sector] if f.sector >= 0 else "omni",
+            "label": _sector_label(f.sector, n_sectors) if f.sector >= 0 else "omni",
             "n_hours": f.n,
             "source": f.source,
             "slope": f.slope,
@@ -581,38 +586,75 @@ def local_index(index_utc: pd.DatetimeIndex, offset_min: int) -> pd.DatetimeInde
     return index_utc + pd.Timedelta(minutes=offset_min)
 
 
-def measured_profiles(mast: pd.DataFrame, mcfg: Mapping[str, Any]) -> Dict[str, Any]:
-    """Shear profile, day/night and diurnal means measured at the mast (mast clock)."""
+def _speed_key(cols: Mapping[str, str], height_m: float) -> str:
+    """The ``mast.speed_avg`` key whose height equals ``height_m``, or raise."""
+    for key in cols:
+        if float(key) == float(height_m):
+            return key
+    raise ValueError(
+        f"no mast.speed_avg channel at {height_m:g} m; channels: {sorted(cols)}"
+    )
+
+
+def measured_profiles(
+    mast: pd.DataFrame,
+    mcfg: Mapping[str, Any],
+    shear_cfg: Mapping[str, Any],
+    n_sectors: int,
+) -> Dict[str, Any]:
+    """Shear profile, day/night and diurnal means measured at the mast (mast clock).
+
+    The shear pair, the day window and the sector count come from the config (``shear``
+    and ``mcp.n_sectors``), the same values the transfer chain uses (#1538 domain D-1).
+    A sector reports a pair exponent only with ``shear.min_cell_hours`` of 10-minute rows.
+
+    Args:
+        mast: The assessment-window mast record.
+        mcfg: The ``mast`` block of the config.
+        shear_cfg: The ``shear`` block of the config.
+        n_sectors: Direction sectors (``mcp.n_sectors``).
+
+    Returns:
+        JSON-serialisable aggregates.
+    """
     cols = mcfg["speed_avg"]
+    lo = _speed_key(cols, float(shear_cfg["low_height_m"]))
+    hi = _speed_key(cols, float(shear_cfg["high_height_m"]))
+    lo_m, hi_m = float(lo), float(hi)
+    pair = f"alpha_{lo}_{hi}"
+    day_start = int(shear_cfg["day_start_local_h"])
+    day_end = int(shear_cfg["day_end_local_h"])
+    min_rows = int(shear_cfg["min_cell_hours"]) * int(mcfg["samples_per_hour"])
     common = mast.dropna(subset=list(cols.values()))
     heights = [float(h) for h in cols]
     means = [float(common[c].mean()) for c in cols.values()]
-    sec = mmt.sector_index(common[mcfg["direction"]].to_numpy(), 16)
+    mean_by_key = dict(zip(cols, means, strict=True))
+    sec = mmt.sector_index(common[mcfg["direction"]].to_numpy(), n_sectors)
     by_sector = []
-    for s in range(16):
+    for s in range(n_sectors):
         g = common[sec == s]
         by_sector.append(
             {
                 "sector": s,
-                "label": mmt.COMPASS_16[s],
+                "label": _sector_label(s, n_sectors),
                 "n_10min": int(len(g)),
                 "mean_ms_by_height": {
                     h: (float(g[c].mean()) if len(g) else None) for h, c in cols.items()
                 },
-                "alpha_100_120": (
+                pair: (
                     mmt.shear_exponent(
-                        float(g[cols["100"]].mean()),
-                        float(g[cols["120"]].mean()),
-                        100,
-                        120,
+                        float(g[cols[lo]].mean()),
+                        float(g[cols[hi]].mean()),
+                        lo_m,
+                        hi_m,
                     )
-                    if len(g) >= 600
+                    if len(g) >= min_rows
                     else None
                 ),
             }
         )
     ci = _dt(common.index)
-    day = (ci.hour >= 6) & (ci.hour < 18)
+    day = (ci.hour >= day_start) & (ci.hour < day_end)
     dn = {}
     for name, sel in (("day", day), ("night", ~day)):
         g = common[sel]
@@ -622,12 +664,12 @@ def measured_profiles(mast: pd.DataFrame, mcfg: Mapping[str, Any]) -> Dict[str, 
             "alpha_log_fit_30_120": mmt.log_law_fit_exponent(
                 heights, [float(g[c].mean()) for c in cols.values()]
             ),
-            "alpha_100_120": mmt.shear_exponent(
-                float(g[cols["100"]].mean()), float(g[cols["120"]].mean()), 100, 120
+            pair: mmt.shear_exponent(
+                float(g[cols[lo]].mean()), float(g[cols[hi]].mean()), lo_m, hi_m
             ),
         }
     diurnal = {}
-    for h in ("100", "120"):
+    for h in (lo, hi):
         s = mast[cols[h]].dropna()
         diurnal[h] = mmt.profile_means(s.to_numpy(), s.index.hour, list(range(24)))
     return {
@@ -637,9 +679,9 @@ def measured_profiles(mast: pd.DataFrame, mcfg: Mapping[str, Any]) -> Dict[str, 
         "concurrent_mean_ms": means,
         "alpha_log_fit_30_120": mmt.log_law_fit_exponent(heights, means),
         "alpha_log_fit_80_120": mmt.log_law_fit_exponent(heights[2:], means[2:]),
-        "alpha_100_120": mmt.shear_exponent(means[3], means[4], 100, 120),
+        pair: mmt.shear_exponent(mean_by_key[lo], mean_by_key[hi], lo_m, hi_m),
         "by_sector_80m_direction": by_sector,
-        "day_night_local_06_18": dn,
+        f"day_night_local_{day_start:02d}_{day_end:02d}": dn,
         "diurnal_mean_ms_by_local_hour": diurnal,
     }
 
@@ -688,7 +730,9 @@ def write_rose_csv(path: Path, rose: Sequence[Mapping[str, Any]], header: str) -
     path.write_text("\n".join(lines) + "\n")
 
 
-def write_rose_png(path: Path, rose: Sequence[Mapping[str, Any]], footer: str) -> None:
+def write_rose_png(
+    path: Path, rose: Sequence[Mapping[str, Any]], footer: str, *, hub_tag: str
+) -> None:
     """Two single-series polar panels: frequency and wind-energy share by sector."""
     import matplotlib
 
@@ -731,7 +775,7 @@ def write_rose_png(path: Path, rose: Sequence[Mapping[str, Any]], footer: str) -
         )
         ax.set_ylim(0, vals.max() * 1.25)
     fig.suptitle(
-        "Blue Whale turbine site, 130 m, long-term (MCP of met mast 617725)",
+        f"Blue Whale turbine site, {hub_tag} m, long-term (MCP of met mast 617725)",
         color=ink,
         fontsize=11,
     )
@@ -748,6 +792,8 @@ def write_rose_png(path: Path, rose: Sequence[Mapping[str, Any]], footer: str) -
 def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pipeline
     """Run the transfer, yield, uncertainty and flicker; return the JSON summary."""
     siting = _load_siting_cli()
+    s_cfg = yaml.safe_load(_repo_path(cfg["turbine"]["siting_config"]).read_text())
+    check_turbine_reference_point(cfg, s_cfg)
     mcfg, tz = cfg["mast"], cfg["timezone"]
     mast, mast_prov = load_mast(mcfg)
     rm = load_reference(cfg["reference"], "mast")
@@ -771,6 +817,8 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
     )
     v, d, idx = base["speed"], base["direction"], base["index"]
     n = int(m["n_sectors"])
+    hub_m = float(cfg["shear"]["hub_height_m"])
+    hub_tag = f"{hub_m:g}"
     rose = mmt.sector_rose(v, d, n)
     for r in rose:  # equivalent hours: each long-term hour is carried as K equal copies
         r["hours"] = r["hours"] / base["copies"]
@@ -784,7 +832,6 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
     iav_cov = float(annual.std(ddof=1) / annual.mean())
 
     # Yield (#1530's density and loss stack, from the siting config's source scenario)
-    s_cfg = yaml.safe_load(_repo_path(cfg["turbine"]["siting_config"]).read_text())
     basis = siting.resource_basis(s_cfg["resource"])
     t_cfg = cfg["turbine"]
     ws, pw = siting.load_private_power_curve(t_cfg["power_curve_csv"])
@@ -820,7 +867,7 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
     a_hub_1530 = siting.weibull_scale_at_height(
         basis["weibull_a_ref_ms"],
         basis["reference_height_m"],
-        130.0,
+        hub_m,
         basis["shear_exponent"],
     )
     era5 = siting.single_turbine_yield(
@@ -890,10 +937,10 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
             )
         )
     no_transfer = dict(base)
-    no_transfer["speed"] = base["speed_mast_130"]
+    no_transfer["speed"] = base["speed_mast_hub"]
     no_transfer["direction"] = base["direction_mast"]
-    sens["no_site_transfer_mast_at_130m"] = summarise(no_transfer)
-    rho_mast = air_density(mast, mcfg, 130.0)["mean_kgm3"]
+    sens[f"no_site_transfer_mast_at_{hub_tag}m"] = summarise(no_transfer)
+    rho_mast = air_density(mast, mcfg, hub_m)["mean_kgm3"]
     f_mast = density_velocity_factor(
         rho_mast, float(t_cfg["power_curve_air_density_kgm3"])
     )
@@ -952,7 +999,7 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
     cnt = np.asarray(base["shear"]["n"], dtype=float)
     a_mean = float((alpha * cnt).sum() / cnt.sum())
     a_std = float(math.sqrt((((alpha - a_mean) ** 2) * cnt).sum() / cnt.sum()))
-    shear_pct = 100.0 * math.log(130.0 / 120.0) * a_std
+    shear_pct = 100.0 * math.log(hub_m / float(cfg["shear"]["high_height_m"])) * a_std
     method_e_pct = (
         100.0
         * abs(
@@ -1001,6 +1048,8 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
     )
 
     evidence = change_evidence(
+        hub_tag=hub_tag,
+        n_sectors=n,
         base=base,
         x=x,
         prim_h=prim_h,
@@ -1065,8 +1114,8 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
             "target_height_m": prim_h,
             "correlation_gates": gates,
             "campaign": campaign,
-            "omni": fit_rows([base["omni"]])[0],
-            "sectors": fit_rows(base["fits"]),
+            "omni": fit_rows([base["omni"]], n)[0],
+            "sectors": fit_rows(base["fits"], n),
             "direction_veer_mast80_minus_reference_deg": base["veer"].tolist(),
             "direction_veer_omni_deg": base["veer_omni"],
             "direction_residual_quantiles_deg": base["direction_quantiles"].tolist(),
@@ -1082,9 +1131,11 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
         },
         "shear": {
             "extrapolation": base["shear"],
-            "measured": measured_profiles(mast, mcfg),
+            "measured": measured_profiles(
+                mast, mcfg, cfg["shear"], int(cfg["mcp"]["n_sectors"])
+            ),
         },
-        "long_term_130m": {
+        f"long_term_{hub_tag}m": {
             "window": list(window),
             "hours": int(len(v)) // base["copies"],
             "direction_copies_per_hour": base["copies"],
@@ -1101,11 +1152,14 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
         },
         "turbulence": ti,
         "air_density": {
-            **air_density(mast, mcfg, 130.0),
+            **air_density(mast, mcfg, hub_m),
             "model_value_kgm3": basis["air_density_site_kgm3"],
         },
         "yield": {
-            "basis": "frequency-weighted sector Weibulls at 130 m; curve clipped at 9.5 MW; #1530 density and losses",
+            "basis": (
+                f"frequency-weighted sector Weibulls at {hub_tag} m; curve clipped at "
+                f"{float(t_cfg['rated_power_kw']) / 1000.0:g} MW; #1530 density and losses"
+            ),
             "gross_aep_gwh": gross,
             "net_aep_gwh": net_p50,
             "gross_capacity_factor": cf(gross),
@@ -1119,9 +1173,11 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
             "operating_fraction": float(operating.mean()),
             "speed_to_energy_sensitivity": sens_s,
             "era5_weibull_basis_1530": {
-                "weibull_a_130m_ms": a_hub_1530,
+                f"weibull_a_{hub_tag}m_ms": a_hub_1530,
                 "weibull_k": basis["weibull_k"],
-                "mean_speed_130m_ms": mmt.weibull_mean(a_hub_1530, basis["weibull_k"]),
+                f"mean_speed_{hub_tag}m_ms": mmt.weibull_mean(
+                    a_hub_1530, basis["weibull_k"]
+                ),
                 "gross_aep_gwh": era5["gross_aep_gwh"],
                 "net_aep_gwh": era5["net_aep_gwh"],
                 "net_capacity_factor": era5["net_capacity_factor"],
@@ -1170,11 +1226,11 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
         write_rose_csv(
             _repo_path(o["rose_csv"]),
             rose,
-            f"Blue Whale 130 m long-term wind rose (aggregates). Model {version}. "
+            f"Blue Whale {hub_tag} m long-term wind rose (aggregates). Model {version}. "
             "conf/blue_whale_met_mast_transfer.yaml. " + HOLD,
         )
     if o.get("rose_png"):
-        write_rose_png(_repo_path(o["rose_png"]), rose, footer)
+        write_rose_png(_repo_path(o["rose_png"]), rose, footer, hub_tag=hub_tag)
     if o.get("summary_json"):
         p = _repo_path(o["summary_json"])
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -1184,6 +1240,8 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
 
 def change_evidence(
     *,
+    hub_tag: str,
+    n_sectors: int,
     base: Mapping[str, Any],
     x: pd.DataFrame,
     prim_h: int,
@@ -1218,7 +1276,7 @@ def change_evidence(
     a_shape = mean_new / math.gamma(1.0 + 1.0 / k_1530)
     steps = [
         {
-            "step": "1530 ERA5 Weibull at 130 m",
+            "step": f"1530 ERA5 Weibull at {hub_tag} m",
             "mean_speed_ms": mmt.weibull_mean(a_hub_1530, k_1530),
             "weibull_a_ms": a_hub_1530,
             "weibull_k": k_1530,
@@ -1239,7 +1297,7 @@ def change_evidence(
             "net_aep_gwh": omni_net(omni_fit.weibull_a, omni_fit.weibull_k),
         },
         {
-            "step": "transferred long-term 16 sector Weibulls (primary)",
+            "step": f"transferred long-term {n_sectors} sector Weibulls (primary)",
             "mean_speed_ms": mean_new,
             "net_aep_gwh": net(gross_of(rose)),
         },
@@ -1256,11 +1314,11 @@ def change_evidence(
     level = {
         "reference_mast_cell_50m_long_term_ms": float(lt["WS50M"].mean()),
         f"mast_{prim_h}m_long_term_ms": float(np.mean(v_h)),
-        "mast_130m_long_term_ms": float(np.mean(base["speed_mast_130"])),
-        "turbine_130m_long_term_ms": mean_new,
-        "shear_factor_mean": float(np.mean(base["speed_mast_130"]) / np.mean(v_h)),
-        "site_transfer_factor_mean": float(mean_new / np.mean(base["speed_mast_130"])),
-        "1530_era5_130m_ms": mmt.weibull_mean(a_hub_1530, k_1530),
+        f"mast_{hub_tag}m_long_term_ms": float(np.mean(base["speed_mast_hub"])),
+        f"turbine_{hub_tag}m_long_term_ms": mean_new,
+        "shear_factor_mean": float(np.mean(base["speed_mast_hub"]) / np.mean(v_h)),
+        "site_transfer_factor_mean": float(mean_new / np.mean(base["speed_mast_hub"])),
+        f"1530_era5_{hub_tag}m_ms": mmt.weibull_mean(a_hub_1530, k_1530),
     }
 
     # Long-term correction of the concurrent period, overall and by calendar month.
@@ -1338,6 +1396,79 @@ def change_evidence(
     }
 
 
+def place_siting_turbine(s_cfg: Mapping[str, Any]) -> Tuple[Any, Any, Any]:
+    """Place the turbine and the lot exactly as the siting run does.
+
+    Args:
+        s_cfg: The siting config (``turbine.siting_config``).
+
+    Returns:
+        The local frame, the turbine placement and the placeholder lot.
+    """
+    from analytics.gis import shadow_flicker as sf
+
+    site = s_cfg["site"]
+    frame = sf.LocalFrame(
+        float(site["reference_lat_deg"]), float(site["reference_lon_deg"])
+    )
+    lines = sf.coastline_lines_east_north(
+        json.loads(_repo_path(site["coastline_geojson"]).read_text()), frame
+    )
+    coastal = sf.CoastalSetbackConfig.from_mapping(s_cfg["coastal_setback"])
+    sea_bearing = float(site["sea_side_bearing_deg"])
+    placement = sf.place_turbine(
+        lines,
+        rule=str(site["turbine_placement"]),
+        min_distance_m=coastal.tower_distance_from_coastline_m,
+        search_east_m=float(site["placement_search_east_m"]),
+        sea_side_bearing_deg=sea_bearing,
+    )
+    lot = sf.coast_aligned_square_lot(
+        lines,
+        north_m=0.0,
+        area_m2=float(site["lot_area_m2"]),
+        sample_step_m=float(site["coastline_sample_step_m"]),
+        sea_side_bearing_deg=sea_bearing,
+    )
+    return frame, placement, lot
+
+
+def check_turbine_reference_point(
+    cfg: Mapping[str, Any], s_cfg: Mapping[str, Any]
+) -> Tuple[float, float]:
+    """Refuse a reference turbine point that is not where the siting run puts the turbine.
+
+    The NASA POWER request for the turbine cell names a point
+    (``reference.points.turbine``), and the siting config places the turbine. They are
+    two copies of one position (#1538 domain D-1), so the run checks that they agree
+    within ``transfer.turbine_point_tolerance_deg`` before reading any private input.
+
+    Args:
+        cfg: The met-mast transfer config.
+        s_cfg: The siting config.
+
+    Returns:
+        The placed turbine's ``(latitude, longitude)``.
+
+    Raises:
+        ValueError: If either coordinate differs by more than the tolerance.
+    """
+    frame, placement, _ = place_siting_turbine(s_cfg)
+    lon, lat = frame.to_lon_lat(placement.turbine_east_m, placement.turbine_north_m)
+    point = cfg["reference"]["points"]["turbine"]
+    tol = float(cfg["transfer"]["turbine_point_tolerance_deg"])
+    if (
+        abs(float(point["latitude_deg_n"]) - lat) > tol
+        or abs(float(point["longitude_deg_e"]) - lon) > tol
+    ):
+        raise ValueError(
+            "reference.points.turbine is not where the siting config places the turbine: "
+            f"({point['latitude_deg_n']}, {point['longitude_deg_e']}) against "
+            f"({lat:.6f}, {lon:.6f}); move the point and re-pin its reference data"
+        )
+    return lat, lon
+
+
 def shadow_flicker(
     cfg: Mapping[str, Any],
     s_cfg: Mapping[str, Any],
@@ -1350,26 +1481,7 @@ def shadow_flicker(
     """Worst case, #1530's expected case and the yawed, long-term expected case."""
     from analytics.gis import shadow_flicker as sf
 
-    site = s_cfg["site"]
-    frame = sf.LocalFrame(
-        float(site["reference_lat_deg"]), float(site["reference_lon_deg"])
-    )
-    lines = sf.coastline_lines_east_north(
-        json.loads(_repo_path(site["coastline_geojson"]).read_text()), frame
-    )
-    coastal = sf.CoastalSetbackConfig.from_mapping(s_cfg["coastal_setback"])
-    placement = sf.place_turbine(
-        lines,
-        rule=str(site["turbine_placement"]),
-        min_distance_m=coastal.tower_distance_from_coastline_m,
-        search_east_m=float(site["placement_search_east_m"]),
-    )
-    lot = sf.coast_aligned_square_lot(
-        lines,
-        north_m=0.0,
-        area_m2=float(site["lot_area_m2"]),
-        sample_step_m=float(site["coastline_sample_step_m"]),
-    )
+    frame, placement, lot = place_siting_turbine(s_cfg)
     tower = (placement.turbine_east_m, placement.turbine_north_m)
     lon_t, lat_t = frame.to_lon_lat(*tower)
     turbine = sf.TurbineGeometry(

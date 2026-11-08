@@ -97,7 +97,12 @@ class AepBlock(BaseModel):
 
 
 class KpiBlock(BaseModel):
+    #: None when the engine reports the project IRR as undefined (#1494); see
+    #: ``project_irr_status``.
     project_irr: Optional[float] = None
+    #: ``computed`` | ``undefined`` | ``not_computed`` (#1494). Says whether a null
+    #: ``project_irr`` means no rate solves the cashflows or the IRR was never attempted.
+    project_irr_status: Optional[str] = None
     equity_irr: Optional[float] = None
     project_npv_usd: Optional[float] = None
     equity_npv_usd: Optional[float] = None
@@ -479,6 +484,11 @@ def _extract_cost(cfg: Mapping[str, Any]) -> CostBlock:
 def _extract_kpis(kpis: Mapping[str, Any]) -> KpiBlock:
     return KpiBlock(
         project_irr=_f(kpis.get("project_irr")),
+        project_irr_status=(
+            str(kpis["project_irr_status"])
+            if kpis.get("project_irr_status") is not None
+            else None
+        ),
         equity_irr=_f(kpis.get("equity_irr")),
         project_npv_usd=_f(kpis.get("project_npv")),
         equity_npv_usd=_f(kpis.get("equity_npv")),
