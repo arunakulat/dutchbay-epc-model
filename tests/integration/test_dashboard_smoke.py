@@ -14,6 +14,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DASHBOARD = REPO_ROOT / "analytics" / "dashboard" / "streamlit_app.py"
 
@@ -33,14 +35,44 @@ _DEAD_SYMBOLS = (
     "use_container_width",
 )
 
+# Names the LIVE dashboard must carry. They are its engine contract — the same three
+# targets test_dashboard_engine_imports_resolve asserts exist — so a subject missing
+# them is not the dashboard, whatever file it came from.
+_SUBJECT_MARKERS = (
+    "ParameterRangeConfig",
+    "run_sensitivity_analysis",
+    "suite_to_records",
+)
+
 
 def _removed_api_offenders(src: str) -> list[str]:
     """Dead names appearing in ``src``. Shared by the guard and its negative control."""
     return [s for s in _DEAD_SYMBOLS if re.search(rf"\b{s}\b", src)]
 
 
+def _assert_reads_the_dashboard(src: str, origin: str) -> None:
+    """Fail unless ``src`` is recognisably the dashboard.
+
+    ``_removed_api_offenders`` returns an empty list for any source carrying no dead
+    name, an empty file included, so a guard that only checks that list is empty passes
+    whether or not it ever read the dashboard. Recorded as #1353 A-2 — the same shape as
+    P-9 one level up, a check that cannot fail on the input it most needs to reject.
+    A missing file already raises from ``read_text``; the empty and wrong-file cases are
+    the ones that slipped through.
+    """
+    assert src.strip(), f"{origin} is empty, so the removed-API guard proves nothing"
+    missing = [m for m in _SUBJECT_MARKERS if m not in src]
+    assert not missing, (
+        f"{origin} is not recognisably the sensitivity dashboard (missing: "
+        + ", ".join(missing)
+        + "), so the removed-API guard proves nothing"
+    )
+
+
 def test_dashboard_does_not_reference_removed_api() -> None:
-    offenders = _removed_api_offenders(DASHBOARD.read_text())
+    src = DASHBOARD.read_text()
+    _assert_reads_the_dashboard(src, str(DASHBOARD))
+    offenders = _removed_api_offenders(src)
     assert not offenders, (
         "Dashboard references removed sensitivity API symbols (the rot returned): "
         + ", ".join(offenders)
@@ -61,6 +93,34 @@ def test_removed_api_guard_fails_on_source_that_carries_a_dead_name() -> None:
     # One control per dead name, so the tuple cannot be quietly emptied either.
     for symbol in _DEAD_SYMBOLS:
         assert _removed_api_offenders(f"value = {symbol}") == [symbol]
+
+
+def test_removed_api_guard_rejects_a_subject_that_is_not_the_dashboard() -> None:
+    """Negative control for the subject check: the guard must know what it read.
+
+    #1353 A-2. The control above proves the guard can fail on source that carries a
+    dead name. It does not prove the guard is reading the dashboard: an empty file and
+    a clean dashboard produce the same empty offender list, so emptying the dashboard
+    or repointing ``DASHBOARD`` at another file left the guard green.
+    """
+    src = DASHBOARD.read_text()
+    # The real subject must pass, or the guard above could never run.
+    _assert_reads_the_dashboard(src, str(DASHBOARD))
+
+    for blank in ("", "   ", "\n\t\n"):
+        with pytest.raises(AssertionError, match="is empty"):
+            _assert_reads_the_dashboard(blank, "<blank subject>")
+
+    with pytest.raises(AssertionError, match="not recognisably"):
+        _assert_reads_the_dashboard('print("not the dashboard")\n', "<foreign subject>")
+
+    # One control per marker, so the marker set cannot be quietly emptied either.
+    for marker in _SUBJECT_MARKERS:
+        with pytest.raises(AssertionError, match=re.escape(marker)):
+            _assert_reads_the_dashboard(
+                src.replace(marker, "_removed_for_the_control_"),
+                f"<{marker} removed>",
+            )
 
 
 def test_dashboard_engine_imports_resolve() -> None:

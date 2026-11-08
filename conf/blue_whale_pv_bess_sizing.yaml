@@ -1,0 +1,134 @@
+# Blue Whale Lot 5B: seeded Monte Carlo sizing of the solar + BESS unit (PR 3 of 3).
+#
+# Read by scripts/run_blue_whale_pv_bess_sizing_v14.py (Hydra, one JSON object on stdout:
+# CLI-01, CLI-03) and solar_resource.pv_bess_sizing (strict: every key below is required and
+# unknown keys are refused; FRAMEWORK-02). The turbine is fixed by PR 1; the decision
+# variables are the PV DC capacity (as DC/AC on the unit's 5 MW AC) and the BESS energy at
+# 5 MW. The array, string, land, dispatch and tariff rules are PR 2's, read from
+# unit_config, not restated. Prices are frozen, with sources, in pricing_config.
+#
+# Owner decision (as the coordinator's writer lease quotes it; #1353 comment 6554212671
+# records it in its own words): "We will fix the turbine and then run a new Montecarlo
+# simulation to decide on the best sizing for the solar array and the BESS, given the
+# current prices ...".
+#
+# TEST-03: a production run has n_trials x grid points + grid points (base cases) +
+# grid points (curtailment scenario) model evaluations, far above the ordinary suite's 200,
+# so it runs only through this CLI. The ordinary tests use reduced grids and trial counts.
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+schema_version: blue_whale_pv_bess_sizing_v1
+unit_config: conf/blue_whale_solar_bess.yaml
+pricing_config: conf/blue_whale_pv_bess_pricing.yaml
+scenario: scenarios/blue_whale_hybrid_lot5b_2026.yaml
+
+grid:
+  # DC/AC on the unit's fixed 5.0 MW AC (DC rounded up to whole 37.52 kWp tables). 1.4
+  # (187 tables, 7.0 MWp) is the largest step inside the 191 table positions PR 2 found on
+  # the placeholder lot; every point is still checked for fit.
+  dc_ac_ratios: [1.0, 1.1, 1.2, 1.3, 1.4]
+  # BESS energy at 5 MW. The owner's 4 h evening window takes 20 MWh at 5 MW; the rest
+  # serves 05:30-07:30 (owner, 2026-11-01). 24 MWh is the first step that can deliver
+  # 4 h at 5 MW (20 / 0.85 = 23.53 MWh charge-side; see constraints).
+  bess_energy_mwh: [10.0, 15.0, 20.0, 24.0, 25.0, 30.0, 35.0, 40.0]
+  bess_power_mw: 5.0
+
+monte_carlo:
+  seed: 20261101            # MRM-01: explicit, recorded in the output
+  n_trials: 256             # per grid point; the same LHS draws at every point
+  sampler: lhs              # analytics.mc.samplers.generate_lhs_samples
+  include_base_case: true   # every input at its mode: the case written to the scenario
+
+uncertainty:
+  # Long-term PV yield (one multiplier for all years; year-to-year noise averages out over
+  # the 20-year NPV). Solargis states a P90 uncertainty of +/-4% to +/-8% for annual
+  # satellite GHI outside validation sites (pricing source SOLARGIS-UNCERTAINTY); the
+  # midpoint 6% at z = 1.2816 is a standard deviation of 4.7%. ASSUMPTION: PVGIS's
+  # irradiance is as uncertain as a satellite estimate of that class, and the PV model
+  # adds nothing further.
+  yield_sigma_pct: 4.7
+  yield_clip_sigma: 3.0
+  # ASSUMPTION: +/-0.03 around the repository's AC-AC 0.85 (NREL ATB 2024 basis, #588).
+  rte_low: 0.82
+  rte_high: 0.88
+  # Battery energy fade NOT recovered by augmentation, % of nameplate per year, linear.
+  # The BESS price includes an augmentation reserve (USD 8.00/kWh), which the repository's
+  # NSO 250 case treats as holding the energy floor (so fade 0 there). ASSUMPTION: the base
+  # case follows that convention (mode 0), and the trials allow the reserve to fall short
+  # by up to 2%/yr.
+  residual_fade_pct_per_year:
+    low: 0.0
+    mode: 0.0
+    high: 2.0
+
+plant:
+  # Capex and O&M outside the unit, unchanged from the scenario: grid, civils and
+  # development $2.0M (input B26); wind O&M $0.35M and insurance, land and SPV $0.15M
+  # (inputs B10, B28).
+  grid_civils_development_usd: 2000000.0
+  fixed_opex_usd_per_year: 500000.0
+
+objective:
+  # PRIMARY: the P50 of the Blue Whale project NPV (USD), from the engine at its own
+  # discount rate (the build-up WACC the scenario uses). With the turbine fixed, the
+  # change in project NPV between sizes is the unit's contribution after tax and the
+  # engine's debt sizing, which is the value the owner's investment decision rests on.
+  # The alternatives are reported, not used.
+  metric: project_npv
+  statistic: p50
+  alternatives:
+    - [project_npv, p90]
+    - [project_npv, mean]
+    - [project_irr, p50]
+    - [equity_irr, p50]
+    - [equity_npv, p50]
+    - [unit_pretax_npv_usd, p50]
+    - [min_dscr, p50]
+
+constraints:
+  # A size is ELIGIBLE only if a full battery can export the whole 4 h priority window at
+  # 5 MW (deliverable = energy x usable fraction x base RTE >= 4 h x 5 MW = 20 MWh), and
+  # its lot fit and inverter match pass. Every size is still evaluated and reported.
+  # Added after the first full run (seed 20261101, 7 energy steps), whose primary
+  # objective chose the grid corner DC/AC 1.0 with 10 MWh: a battery that delivers 8.5 MWh
+  # into a 20 MWh window. That is not the dispatch rule the owner set, and the repository
+  # records the PUCSL rate as a "solar + 4 h BESS" tariff. The unconstrained choice is
+  # still reported (recommendation.unconstrained_best).
+  min_priority_window_discharge_hours: 4.0
+  basis: "owner's dispatch rule (4 h at the priority rate 17:30-21:30, the remainder 05:30-07:30) and the PUCSL 2026 ground solar + 4 h BESS FiT as recorded in scenarios/ceb_solar_bess_nightpeak_10mw.yaml"
+
+curtailment_scenario:
+  # A SCENARIO, not a base case: the owner's research doc "Sri Lanka small-plant tariffs,
+  # BESS methodology and curtailment (Nov 2026)" reports 10-15% daytime curtailment for
+  # ground solar as an industry claim only. The midpoint is applied to PV exported directly
+  # outside the windows (charging behind the meter is not curtailed), base case only.
+  enabled: true
+  daytime_export_curtailment_fraction: 0.125
+  basis: "industry-claimed 10-15% daytime curtailment for ground solar (owner's Nov 2026 research doc); midpoint; scenario only"
+
+recommendation:
+  # The sizing written to the Blue Whale scenario: the primary objective's choice in the
+  # committed run docs/blue_whale/pv_bess_sizing_summary.json (a test checks they agree).
+  # Run of 2026-11-01 at 31036d40 (result_sha256 92f718e6...0d9e): DC/AC 1.1 (147 tables,
+  # 5.51544 MWp) with 5 MW / 24 MWh, P50 project NPV USD -8,499,899, P90 -8,962,702.
+  dc_ac_ratio: 1.1
+  bess_energy_mwh: 24.0
+
+output:
+  # Optional, relative to the repository root; null writes nothing. The committed summary
+  # was written with output.summary_json=docs/blue_whale/pv_bess_sizing_summary.json
+  summary_json: null
+
+hydra:
+  run:
+    dir: .
+  sweep:
+    dir: .
+    subdir: .
+  job:
+    chdir: false
+  output_subdir: null

@@ -1,10 +1,42 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # CEB Solar+BESS night-peak — 10 MW / 40 MWh BESS (energy-tariff scheme)
 # ═══════════════════════════════════════════════════════════════════════════════
-# Models the incremental BESS economics under the CEB Solar-PV + BESS night-peak scheme
-# (Cabinet approval 16/06/2025): a BESS co-located with an EXISTING solar PV plant is
-# charged from that PV during the day and exports during the night peak (18:30-22:30),
-# paid a flat tariff of 45.80 LKR/kWh over a 10-year term.
+# Models the incremental BESS economics of a ground-mounted solar PV + 4 h BESS plant under
+# the PUCSL feed-in tariff schedule effective 25 Aug 2026 (Electricity Act No. 36 of 2024,
+# s.29; PUCSL Annex 2, "Summary of Approved Feed-in Tariffs", open for new SPPAs until
+# 24 Feb 2027): energy exported in the "Prioritized Feed-in Time" is paid LKR 50.10/kWh
+# (47.08 non-escalable + 3.02 escalable O&M) for the first 15 years of the SPPA. The BESS
+# is charged from co-located PV during the day and exports in the evening peak.
+#
+# SUPERSEDED BASIS. Until v15.11.0 this file modelled CEB's 2025 night-peak scheme: a flat
+# 45.80 LKR/kWh for 18:30-22:30 export over 10 years. That scheme is treated as superseded:
+# its 10-year term rests only on a developers' federation statement, no battery tariff was
+# found in the Cabinet decision of 16 Jun 2025, and in Jan 2026 the solar association said
+# no guidelines or contract amendments had followed. Run it only as a sensitivity, with
+# overrides tariff_lkr_per_kwh=45.80, contract_years=10 and a 10-year life.
+#
+# STILL ASSUMPTIONS (no official figure, internally or publicly, as of 2026-11-01):
+#   - the clock hours of the Prioritized Feed-in Time (Annex 2 does not define them);
+#     18:30-22:30 is CEB's 2025 window, carried over;
+#   - cycles_per_year 365 (the methodology sizes 4 h of discharge but sets no cycle count);
+#   - the escalable O&M part (3.02) is indexed yearly on a basis not confirmed, and the
+#     non-escalable part takes a one-time adjustment at month 12 (70% LKR/USD from 341.09,
+#     30% CCPI from 207.70). Neither is modelled: the tariff is held flat in nominal LKR;
+#   - after year 15 the SPPA pays the other-period rate (20.72), which this BESS-only file
+#     does not model: its life ends with the prioritised term;
+#   - CHARGING ENERGY IS FREE. The engine books no cost for the energy that charges the
+#     BESS (finance/bess_revenue.py, BESS-6). Under one SPPA covering the PV and the BESS,
+#     every kWh stored is a kWh of PV not sold at the other-period rate (20.72), so this
+#     revenue is overstated. Netting that forgone revenue (50.10 - 20.72 / 0.85 = 25.72
+#     LKR/kWh exported) takes project IRR from 10.04% to 0.82%, equity IRR from 9.79% to
+#     -5.81% and project NPV from +0.47m to -2.33m USD (#1528 domain review, O4). Read
+#     the headline IRR as an upper bound until the charging cost is modelled;
+#   - FiT ELIGIBILITY. The 2026 FiT is for plants under 10 MW (Annex 2, as the research
+#     record describes it). This case is a 10 MW / 40 MWh BESS plus enough PV to charge
+#     40 MWh a day, so it is not under 10 MW whether the limit counts per technology or
+#     per plant. Whether it qualifies at all is unresolved.
+# Research record: "Sri Lanka small-plant tariffs, BESS methodology and curtailment
+# (Nov 2026)", owner's Claude Docs doc, 2026-11-01.
 #
 # REVENUE MODEL — ENERGY TARIFF (night-peak export), NOT a capacity charge.
 #   The engine's `type: bess` path (finance/bess_revenue.py, model: energy_tariff) books:
@@ -14,18 +46,20 @@
 #   availability tolling — see ceb_bess_10mw_capacity_charge.yaml); and (2) the Kolonnawa
 #   100 MW EPC project (a construction-margin deal, out of the operational engine).
 #
-# SCOPE: this models the BESS's INCREMENTAL night-peak revenue; the existing solar PV (the
-# charging source) is treated as a separate asset, so generation `tariff.lkr_per_kwh` is
-# 0.0 and `project.capacity_factor` is a nominal validation placeholder.
+# SCOPE: this models the BESS's INCREMENTAL night-peak revenue only. The co-located PV that
+# charges it is inside the same SPPA (see the header), but its generation and its revenue
+# are not modelled here, so generation `tariff.lkr_per_kwh` is 0.0 and
+# `project.capacity_factor` is a nominal validation placeholder. The cost of the PV energy
+# the BESS absorbs is not booked either (STILL ASSUMPTIONS, "charging energy is free").
 # ═══════════════════════════════════════════════════════════════════════════════
 
 project:
-  name: "CEB Solar+BESS night-peak 10MW/40MWh (energy tariff)"
-  location: "Existing ground-mounted solar PV site, Sri Lanka (CEB Solar+BESS scheme)"
+  name: "Solar+BESS prioritised feed-in 10MW/40MWh (PUCSL 2026 FiT, energy tariff)"
+  location: "Ground-mounted solar PV site, Sri Lanka (PUCSL 2026 solar + 4 h BESS FiT)"
   capacity_mw: 10.0           # BESS power rating (MW)
   capacity_factor: 0.0         # BESS-incremental: no generation CF (revenue is the night-peak energy tariff)
   degradation: 0.0            # generation degradation N/A (storage)
-  life_years: 10             # matches the 10-year night-peak BESS contract term
+  life_years: 15             # matches the 15-year prioritised-rate term (PUCSL Annex 2)
   cod_year: 2027
   developer: "DutchBay Storage SPV (illustrative)"
   jurisdiction: Sri Lanka
@@ -40,33 +74,35 @@ generation:
       type: bess               # explicit class discriminator (storage, not generation)
       power_mw: 10.0           # power rating (MW)
       energy_mwh: 40.0         # 4-hour duration (40 MWh / 10 MW); drives the night-peak export
-      duration_h: 4.0          # matches the 4-hour 18:30-22:30 export window
+      duration_h: 4.0          # the FiT's 4 h BESS; export window 18:30-22:30 is an ASSUMPTION (see header)
       capex_usd: 5000000       # reporting split; the financed capex is capex.usd_total below
       availability_pct: 97.0   # availability target (reporting)
       revenue:
         model: energy_tariff
-        # Night-peak export tariff (CEB Solar+BESS scheme, Cabinet 16/06/2025): the BESS
-        # is charged by the existing PV and exports during the 18:30-22:30 window.
-        tariff_lkr_per_kwh: 45.80
-        cycles_per_year: 365       # one charge/discharge per day
+        # PUCSL 2026 FiT, ground solar + BESS, prioritised window: 47.08 + 3.02 = 50.10
+        # LKR/kWh (Annex 2, effective 25 Aug 2026). Floating solar + BESS would be 57.64.
+        # Was 45.80 (CEB 2025 night-peak scheme, superseded; sensitivity only).
+        tariff_lkr_per_kwh: 50.10
+        cycles_per_year: 365       # ASSUMPTION: one charge/discharge per day; no official cycle count
         round_trip_efficiency: 0.85  # AC-AC; exported energy = stored x RTE (NREL ATB 2024 utility LFP, #588)
         availability_factor: 1.0
-        contract_years: 10         # the scheme's 10-year BESS contract term
+        contract_years: 15         # PUCSL Annex 2: prioritised rate for the first 15 years of the SPPA
         # MDSC state-of-health fade (#470d): the night-peak export energy declines as the pack
-        # degrades over the 10-year contract. 0.005/yr (~0.5%) is an OPTIMISTIC / calendar-
+        # degrades over the 15-year contract. 0.005/yr (~0.5%) is an OPTIMISTIC / calendar-
         # dominated bound for a shallow-DoD daily cycle; a daily-cycling LFP at deeper DoD would
         # fade faster (~0.010-0.015/yr), so treat 0.005 as the best-case edge. No mid-life
-        # augmentation is modelled over the shorter 10-year term.
+        # augmentation is modelled over the 15-year term (an open item: 15 years of daily
+        # cycling may need one).
         mdsc_fade_pct_annual: 0.005
 
 # ═════════════════════════════════════════════════════════════════════════════
-# TARIFF — generation tariff is 0: this scenario models only the BESS night-peak
-# export; the existing solar PV (the charging source) is a separate asset.
+# TARIFF — generation tariff is 0: this scenario models only the BESS's prioritised-window
+# export. The PV that charges it is not modelled (see SCOPE and STILL ASSUMPTIONS).
 # ═════════════════════════════════════════════════════════════════════════════
 tariff:
   lkr_per_kwh: 0.0
   tariff_type: fixed
-  ppa_term_years: 10
+  ppa_term_years: 15          # prioritised-rate term (PUCSL Annex 2)
 
 # ═════════════════════════════════════════════════════════════════════════════
 # CAPEX & OPEX (LFP, 2026 ex-China/US benchmark ~ $125/kWh turnkey; ~2%/yr opex)
@@ -118,7 +154,7 @@ risk_adjustment:
   cfads_haircut_pct: 0.1
 
 # ═════════════════════════════════════════════════════════════════════════════
-# FX (LKR-primary; the night-peak tariff 45.80 LKR/kWh is LKR-denominated)
+# FX (LKR-primary; the prioritised-window tariff 50.10 LKR/kWh is LKR-denominated)
 # ═════════════════════════════════════════════════════════════════════════════
 fx:
   enabled: true
@@ -163,7 +199,7 @@ Financing_Terms:
   enforce_hard_covenants: false
 
 returns:
-  project_life_years: 10
+  project_life_years: 15
   project_discount_rate: 0.1
   equity_discount_rate: 0.12
 
@@ -187,8 +223,8 @@ constraints:
 timeline:
   ppa_to_fc_years: 1
   construction_years: 1
-  ops_years: 10
-  lifetime_years: 11
+  ops_years: 15
+  lifetime_years: 16
 
 wacc:
   mode: build_up
@@ -198,8 +234,8 @@ wacc:
   description: "Build-up WACC drives the project discount rate."
 
 metadata:
-  version: '1.0'
-  last_updated: '2026-06-24'
+  version: '1.1'
+  last_updated: '2026-11-02'
   author: DutchBay V14 Financial Modeling Team
-  review_status: Illustrative — night-peak tariff per the CEB Solar+BESS scheme
+  review_status: Illustrative — PUCSL 2026 solar + 4 h BESS FiT, prioritised window; charging energy not costed
   sprint: 'BESS energy-tariff model'

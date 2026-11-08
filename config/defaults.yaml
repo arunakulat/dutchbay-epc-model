@@ -284,8 +284,37 @@ defaults:
       transmission_loss_pct: reduction
       curtailment_pct: reduction
       other_pct: reduction
+      # Wind-turbine tower and rotor shadow on co-located PV (#1518). Estimated by
+      # solar_resource.turbine_shading; no committed scenario declares it yet.
+      turbine_shading_pct: reduction
       availability_pct: uptime
       grid_availability_pct: uptime
+
+    # Method defaults for solar_resource.turbine_shading (#1518). A scenario overrides any of
+    # them in resource.solar.turbine_shading. Values are generic, not site-specific:
+    #   tower_diameter_to_rotor_radius: tower shadow width as a share of the rotor radius when
+    #     the scenario gives no tower_diameter_m. 1/16 is the average ratio used by Mamia &
+    #     Appelbaum (2016, RSER 55:713) and carried into NREL HOPP's shadow geometry.
+    #   blade_solidity: share of the swept disc covered by the blades; modern three-blade
+    #     rotors sit around 3-5%. Replace with the OEM blade planform when available.
+    #   panel_height_m: mean module height above ground.
+    #   yaw_samples: rotor yaw angles averaged over 180 degrees for the low (yaw-averaged) case.
+    #   grid_step_m / grid_extent_rotor_diameters: the ground grid around one turbine. Beyond
+    #     ~3.5 rotor diameters only low-sun shadows reach, and they carry little beam energy.
+    #   substeps_per_hour: sun positions per hour of the irradiance year.
+    #   min_sun_elevation_deg: steps with a lower sun are ignored.
+    #   setbacks_m / distance_bands_m: reporting breakpoints, metres from the tower.
+    turbine_shading:
+      tower_diameter_to_rotor_radius: 0.0625
+      blade_solidity: 0.04
+      panel_height_m: 1.0
+      yaw_samples: 4
+      grid_step_m: 5.0
+      grid_extent_rotor_diameters: 3.5
+      substeps_per_hour: 2
+      min_sun_elevation_deg: 1.0
+      setbacks_m: [0, 50, 100, 150, 200]
+      distance_bands_m: [0, 50, 100, 150, 200, 300, 500, 700]
 
 # ═══════════════════════════════════════════════════════════════════
 # VERSION CONTROL
