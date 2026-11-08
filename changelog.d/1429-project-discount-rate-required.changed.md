@@ -8,6 +8,9 @@
   no longer assumes a rate: a caller passes one or a config that declares one.
   `scenarios/edge_extreme_stress.yaml` declared 0.12 but was discounted at 0.10. It is
   now discounted at 0.12, so its project NPV moves from USD -110.99m to -119.80m; its
-  equity IRR is unchanged. Four scenarios that declared no rate (`example_a`,
-  `example_b`, `good_unit_test`, `test_base_scenario`) now declare 0.10 and do not move.
-  Every other committed scenario is byte-identical, including the canonical lender case.
+  equity IRR is unchanged. Five scenarios that declared no rate (`example_a`,
+  `example_b`, `good_unit_test`, `test_base_scenario` and `test/base_scenario`) now
+  declare 0.10 and do not move. Every other committed scenario is byte-identical,
+  including the canonical lender case. Scenarios that already failed pre-flight still
+  fail, and six of them now also name the missing rate in the same error. Released as
+  15.26.0.
