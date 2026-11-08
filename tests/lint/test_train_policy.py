@@ -73,7 +73,11 @@ TRAIN_01_REQUIRED_CONTROLS = (
     "bidirectional import isolation between the car and everything else the train head changes",
     "the complete diff from the car's reviewed head to the train head",
     "links a car to another part of the train head only when one side changes bytes in it that the other side's code or tests consume",
-    "Loading a file is not consuming the bytes changed in it.",
+    "The narrowing covers only an input shared by loading it, through tests/conftest.py, pytest's configuration or the installed environment",
+    "a module or test file that one side changes and that imports a module the other side changes is a link under the import-reference test, whatever the consumption artifact shows",
+    "Changed bytes that take effect when a file is loaded or tests are collected, without a consumer naming them, are a link too",
+    "an autouse fixture, a pytest hook, a module-level statement with a side effect, and pytest's or coverage's own configuration in pyproject.toml",
+    "Otherwise, loading a file is not consuming the bytes changed in it.",
     "the changed bytes, a reference search, and a differential run of each side's test selection",
     "Without that artifact the input is a link, and a judgement never substitutes for it.",
     "Single pull requests keep module 3 section 7's proof 2 unchanged.",
@@ -141,20 +145,37 @@ MODULE_3_REQUIRED_CONTROLS = (
     "Count shared runtime inputs as dependencies too",
     "A shared runtime input links the car to another part of the train head only when one",
     "side changes bytes in it that the other side's code or tests consume.",
-    "Loading a file is not consuming the bytes changed in it.",
-    "changed bytes are consumed is shown by that artifact, never by a judgement.",
+    "Two kinds of change are links whatever the consumption artifact shows:",
+    "**Import references.** The narrowing covers only an input shared by loading it, through",
+    "that one side changes and that imports a module the other side changes is a link under the",
+    "import-reference test, whatever the consumption artifact shows.",
+    "**Load-time effects.** Changed bytes that take effect when a file is loaded or tests are",
+    "collected, without a consumer naming them, are consumed by every test that loads them, so they",
+    "an autouse fixture, a pytest hook, a module-level statement with a side effect",
+    "and pytest's or coverage's own configuration in `pyproject.toml`.",
+    "Otherwise, loading a file is not consuming the bytes changed in it: a definition or constant that",
+    "only a named reference reaches is consumed only where something names it.",
+    "are consumed is shown by that artifact, never by a judgement.",
     "Path-disjoint cars that share an input whose changed bytes are consumed are not isolated, and",
     "neither are cars whose consumption artifact is missing or incomplete.",
     "**Consumption artifact.**",
     "the lane records the artifact in both directions",
+    "the lane re-runs what it needs before relying on it",
+    "with their old and new literal values",
+    "old or new literal values in the other side's changed files and test selection",
     "and any hit or difference is a link",
     "A hit is a link even when the test that holds it would pass either way.",
     "Each car's selection runs on `main` plus that car alone and on the train head",
+    "Each car's selection also runs on its own train commit, the tree it lands as on `main`.",
+    "the car's selection also runs on its reviewed head and on `main` plus the car",
     "the advance's selection runs on `main` and on `main` plus the car",
-    "Both runs of a pair must collect the same test IDs with the same outcomes.",
-    "each run uses an environment installed from its own tree's lock",
-    "A side's test selection is the test files it adds or changes",
-    "An empty selection is recorded as empty",
+    "All runs of a car's selection must collect the same test IDs with the same outcomes.",
+    "Where a side changes the lock or an installed library, each run uses an environment",
+    "installed from its own tree's lock",
+    "A side's test selection is the test files it adds or changes, and every test file whose own import statements name a module it changes.",
+    "An empty selection is recorded as empty, and the reference search then carries the direction alone.",
+    "A value that one side reads through code neither side changed",
+    "bound that residual; they do not remove it.",
     "§7's proof 2 for a single pull request's base advance is unchanged",
     "were never run by the full suite on their own",
     "A train lifts no `HOLD`",
@@ -165,8 +186,10 @@ AGENTS_REQUIRED_CONTROLS = (
     "at most one of them changes a KPI",
     "the train lands by rebase-merge, never squash",
     "only through module 3 §8's three proofs",
-    "A shared runtime input links two cars only when one car's changed bytes are",
+    "A shared runtime input links a car to another car or to an advance of `main`",
+    "only when one side's changed bytes are consumed by the other's code or tests",
     "shown by §8's recorded consumption artifact",
+    "A changed file that imports a module the other side changes, and a change that acts when files load or tests are collected, are links whatever the artifact shows.",
 )
 
 STEWARD_REQUIRED_CONTROLS = (
@@ -186,7 +209,10 @@ STEWARD_REQUIRED_CONTROLS = (
     "Rebuild the train from the new `main` instead",
     "module 3 §8's three proofs",
     "is a link only when one side's changed bytes are consumed by the other side's code or tests",
+    "A changed file that imports a module the other side changes is a link whatever the artifact shows",
+    "a change that acts when files load or tests are collected",
     "Attach §8's consumption artifact for each such input, in both directions",
+    "on its own train commit and on the train head, plus §8's reviewed-head and advance pairs when `main` has moved",
     "with the same test IDs and outcomes. Without the artifact the input is a link.",
     "edit no car on it",
     "**Land it with rebase-merge, never squash.**",
@@ -353,7 +379,9 @@ STRICT_SHARED_INPUT_SENTENCE = (
 )
 TRAIN_ONLY_MARKERS = (
     "consumption artifact",
-    "Loading a file is not consuming",
+    "loading a file is not consuming",
+    "import-reference test, whatever",
+    "load-time effects",
     "is a link only when",
     "links the car to another part of the train head only when",
 )
@@ -364,7 +392,7 @@ def _assert_shared_input_narrowing_is_train_only(text: str) -> None:
     section_7 = _SECTION_7.search(text)
     assert section_7, "module 3 section 7 not found before section 8"
     flat_7 = _normalize(section_7.group(0))
-    leaked = [m for m in TRAIN_ONLY_MARKERS if m in flat_7]
+    leaked = [m for m in TRAIN_ONLY_MARKERS if m in flat_7.lower()]
     assert not leaked, f"section 7 picked up the train-only shared-input test: {leaked}"
     assert (
         "**BIDIRECTIONAL IMPORT ISOLATION**: no changed module references a reviewed module"
@@ -403,6 +431,50 @@ def test_shared_input_guard_fails_if_the_blanket_sentence_returns() -> None:
     )
     with pytest.raises(AssertionError):
         _assert_shared_input_narrowing_is_train_only(text)
+
+
+# Domain lane D-1 on #1576: bytes that act when a file is loaded or tests are collected are
+# consumed by every test that loads them. "Loading a file is not consuming" holds only for the
+# remaining case, so wherever the sentence appears it must be the qualified "Otherwise," form.
+_LOADING_SENTENCE = re.compile(
+    r"(\S+\s+)?loading a file is not consuming", re.IGNORECASE
+)
+
+
+def _assert_loading_sentence_is_qualified(text: str, where: str) -> None:
+    """Every "loading a file is not consuming" follows "Otherwise," and is not the blanket form."""
+    hits = list(_LOADING_SENTENCE.finditer(_normalize(text)))
+    assert hits, f"{where} lost the qualified loading sentence"
+    bare = [m.group(0) for m in hits if (m.group(1) or "").strip() != "Otherwise,"]
+    assert not bare, f"{where} states the unqualified loading sentence: {bare}"
+
+
+def _train_01_text() -> str:
+    return _policy_text(_rules_by_id()["TRAIN-01"])
+
+
+def test_loading_sentence_is_qualified_in_module_3_and_the_rule() -> None:
+    """Load-time effects stay links; only the remaining case is "not consuming"."""
+    _assert_loading_sentence_is_qualified(
+        MODULE_3.read_text(encoding="utf-8"), "module 3"
+    )
+    _assert_loading_sentence_is_qualified(_train_01_text(), "TRAIN-01")
+
+
+@pytest.mark.parametrize("where", ["module 3", "TRAIN-01"])
+def test_loading_sentence_guard_fails_on_the_blanket_form(where: str) -> None:
+    """Negative control: dropping "Otherwise," restores the blanket sentence and fails."""
+    text = (
+        MODULE_3.read_text(encoding="utf-8")
+        if where == "module 3"
+        else _train_01_text()
+    )
+    altered = _normalize(text).replace(
+        "Otherwise, loading a file is not consuming", "Loading a file is not consuming"
+    )
+    assert altered != _normalize(text)
+    with pytest.raises(AssertionError):
+        _assert_loading_sentence_is_qualified(altered, where)
 
 
 # --------------------------------------------------------------------------- #

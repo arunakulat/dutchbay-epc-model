@@ -159,8 +159,10 @@ overlap judgment or the time the first edit occurred.
   merge train, so they share one full-suite run. The cars are path-disjoint, and at most one of
   them changes a KPI. Each car keeps its own commit, carrying its own message, and the train lands
   by rebase-merge, never squash. A car's binding carries onto the train head only through module 3
-  §8's three proofs. A shared runtime input links two cars only when one car's changed bytes are
-  consumed by the other's code or tests, shown by §8's recorded consumption artifact. The steward skill's "Merge trains" section has the build and landing checks.
+  §8's three proofs. A shared runtime input links a car to another car or to an advance of `main`
+  only when one side's changed bytes are consumed by the other's code or tests, shown by §8's
+  recorded consumption artifact. A changed file that imports a module the other side changes, and
+  a change that acts when files load or tests are collected, are links whatever the artifact shows. The steward skill's "Merge trains" section has the build and landing checks.
 - `CLEANUP-01`: immediately after any pull request or merge train lands on `origin/main` and
   ancestry/tree verification passes, inform the tasklist and capability tracker (`#1353`), close
   only the focused issue named by number on the merged pull request's `Work item:` or closing

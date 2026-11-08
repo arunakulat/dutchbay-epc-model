@@ -472,10 +472,14 @@ train that carries a car it wrote. A pull request may always land alone instead.
 4. **Carry the bindings.** Each car's lanes record module 3 §8's three proofs against the train
    head. A car whose proof fails leaves the train. For proof 2, a shared runtime input such as
    `pyproject.toml`, `VERSION`, a module `tests/conftest.py` loads, or an installed library is a link
-   only when one side's changed bytes are consumed by the other side's code or tests. Attach §8's
+   only when one side's changed bytes are consumed by the other side's code or tests. A changed file
+   that imports a module the other side changes is a link whatever the artifact shows, and so is a
+   change that acts when files load or tests are collected (a `conftest.py` hook or autouse
+   fixture, a module-level side effect, pytest's or coverage's configuration). Attach §8's
    consumption artifact for each such input, in both directions: the changed bytes, a reference
-   search, and each car's test selection run on `main` plus that car alone and on the train head,
-   with the same test IDs and outcomes. Without the artifact the input is a link. For a KPI car, the train head's lender KPI vector
+   search, and each car's test selection run on `main` plus that car alone, on its own train commit
+   and on the train head, plus §8's reviewed-head and advance pairs when `main` has moved, with the
+   same test IDs and outcomes. Without the artifact the input is a link. For a KPI car, the train head's lender KPI vector
    must equal the vector the owner signed off, which is the vector at the car's reviewed head. If no
    car changes a KPI, it must equal `main`'s. Set `REFERENCE_SHA` to the signed-off car's reviewed head, or to the recorded
    `main` SHA when no car changes a KPI. Set `TRAIN_SHA` to the verified train head. From the

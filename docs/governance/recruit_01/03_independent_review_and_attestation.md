@@ -156,13 +156,26 @@ only when its lane records all three of §7's proofs, applied to the train:
    configuration file, a test fixture, a `conftest.py`, `pyproject.toml`, `VERSION`, a module that
    `tests/conftest.py` loads, an installed library, or anything else that two cars' code or tests
    both read. A shared runtime input links the car to another part of the train head only when one
-   side changes bytes in it that the other side's code or tests consume. Loading a file is not
-   consuming the bytes changed in it. A module that every test imports through `tests/conftest.py`,
-   in which one car changes a constant that the other car never reads, is not a link once the
-   consumption artifact below shows that. Whether
-   changed bytes are consumed is shown by that artifact, never by a judgement.
-   Path-disjoint cars that share an input whose changed bytes are consumed are not isolated, and
-   neither are cars whose consumption artifact is missing or incomplete.
+   side changes bytes in it that the other side's code or tests consume. Two kinds of change are
+   links whatever the consumption artifact shows:
+   - **Import references.** The narrowing covers only an input shared by loading it, through
+     `tests/conftest.py`, pytest's configuration or the installed environment. A module or test file
+     that one side changes and that imports a module the other side changes is a link under the
+     import-reference test, whatever the consumption artifact shows. Applied in both directions,
+     this also covers a changed module that is imported by the other side's changed files.
+   - **Load-time effects.** Changed bytes that take effect when a file is loaded or tests are
+     collected, without a consumer naming them, are consumed by every test that loads them, so they
+     are a link: an autouse fixture, a pytest hook, a module-level statement with a side effect (an
+     environment variable, a warnings filter, a random seed, a plotting backend, a patch or a
+     registration), and pytest's or coverage's own configuration in `pyproject.toml`.
+
+   Otherwise, loading a file is not consuming the bytes changed in it: a definition or constant that
+   only a named reference reaches is consumed only where something names it. A module that every
+   test imports through `tests/conftest.py`, in which one car changes a constant that the other car
+   never reads, is not a link once the consumption artifact below shows that. Whether changed bytes
+   are consumed is shown by that artifact, never by a judgement. Path-disjoint cars that share an
+   input whose changed bytes are consumed are not isolated, and neither are cars whose consumption
+   artifact is missing or incomplete.
 3. The **complete diff from the car's reviewed head to the train head**, shown in full, not a summary.
 
 **Consumption artifact.** For every runtime input that one side changes and the other side's code or
@@ -172,23 +185,24 @@ advance of `main`. Anyone may produce the artifact, and the lane re-runs what it
 on it. It has three parts, and any hit or difference is a link:
 
 - **The changed bytes:** the input's full diff, and the names, keys, lines or distribution versions
-  that it changes.
-- **A reference search:** every reference to those names, keys and distributions in the other
-  side's changed files and test selection, each hit listed with its file and line. A hit is a link
-  even when the test that holds it would pass either way.
+  that it changes, with their old and new literal values.
+- **A reference search:** every reference to those names, keys, distributions and old or new literal
+  values in the other side's changed files and test selection, each hit listed with its file and
+  line. A hit is a link even when the test that holds it would pass either way.
 - **A differential run:** a side's test selection run on two trees that differ only by the other
   side's changes. Each car's selection runs on `main` plus that car alone and on the train head, which
   differ only by the other cars; because every car records its own pair, the pairs cover both
-  directions between cars. Where `main` has advanced past a car's reviewed base, the car's selection
-  also runs on its reviewed head and on `main` plus the car, and the advance's selection runs on
-  `main` and on `main` plus the car. Both runs of a pair must collect the same test IDs with the same
+  directions between cars. Each car's selection also runs on its own train commit, the tree it lands
+  as on `main`. Where `main` has advanced past a car's reviewed base, the car's selection also runs
+  on its reviewed head and on `main` plus the car, and the advance's selection runs on `main` and on
+  `main` plus the car. All runs of a car's selection must collect the same test IDs with the same
   outcomes. Where a side changes the lock or an installed library, each run uses an environment
   installed from its own tree's lock.
 
 A side's test selection is the test files it adds or changes, and every test file whose own import
-statements name a module it changes. An empty selection is recorded as empty, and the reference search then
-carries the direction alone. §7's proof 2 for a single pull request's base advance is unchanged:
-this narrower link test applies only to a train.
+statements name a module it changes. An empty selection is recorded as empty, and the reference
+search then carries the direction alone. §7's proof 2 for a single pull request's base advance is
+unchanged: this narrower link test applies only to a train.
 
 If any proof is absent, incomplete or fails, the car leaves the train and its disposition stays bound
 to its own head. A judgement that another car cannot matter never substitutes for these artifacts.
@@ -231,5 +245,10 @@ is not a check.
 **What a train does not prove.** The full suite ran on the union of the cars. The intermediate commits
 between cars on `main` were never run by the full suite on their own, which is why the cars must be
 path-disjoint and import-isolated. The differential run narrows that gap without closing it: each
-car's own test selection ran on `main` plus that car alone, but the rest of the suite did not. A train lifts no `HOLD`, and it confers no release, lender, Board,
+car's own test selection ran on `main` plus that car alone, but the rest of the suite did not. The
+artifact also has known blind spots. A value that one side reads through code neither side changed
+(a configuration key read by unchanged finance code, a transitive library dependency, a shared test
+helper or fixture) is invisible to the reference search, and the differential run sees it only if
+it changes a test outcome. The full suite on the train head and the KPI-vector check bound that
+residual; they do not remove it. A train lifts no `HOLD`, and it confers no release, lender, Board,
 professional, evidence, deployment or publication authority.
