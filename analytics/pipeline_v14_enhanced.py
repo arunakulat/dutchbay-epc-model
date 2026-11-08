@@ -1062,6 +1062,13 @@ def run_v14_pipeline_enhanced(
 
         metrics.validation_time_sec = time.time() - phase_start
 
+        # #1569: a declared capex price date escalates capex.usd_total to the
+        # construction draws, once, on the configuration evaluated below. Without a
+        # capex.price_basis block the config is unchanged.
+        from finance.capex_price_basis import apply_capex_price_basis
+
+        cfg = apply_capex_price_basis(cfg)
+
         # Reproducibility stamp (#577): built INSIDE the engine from the ALREADY-
         # RESOLVED ``cfg`` (no config re-load), immediately after resolution + schema
         # validation, so ``config_sha256`` binds to the exact post-override config the

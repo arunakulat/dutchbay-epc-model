@@ -32,6 +32,7 @@ import pandas as pd
 from analytics.core.epc_helper import epc_breakdown_from_config
 from analytics.core.metrics import calculate_scenario_kpis
 from analytics.cost.benchmark import lcos_benchmark
+from finance.capex_price_basis import apply_capex_price_basis
 from analytics.export_helpers import DSCR_HIGHLIGHT_THRESHOLD
 from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import load_scenario_config
@@ -274,6 +275,10 @@ class ScenarioAnalytics:
                 config_path=str(config_path),
                 modules=["cashflow"],
             )
+
+            # #1569: escalate capex from its declared price date to the construction
+            # draws, as the canonical pipeline does. No capex.price_basis -> unchanged.
+            config = apply_capex_price_basis(config)
 
             # Determine discount rate (scenario, config, global)
             discount_rate = self._effective_discount_rate(config)

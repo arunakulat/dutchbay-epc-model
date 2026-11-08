@@ -5,6 +5,13 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **Blue Whale capex and opex price dates (15.NN.0, set at the merge slot, #1569).** `capex.price_basis` escalates
+  capex from its price year to the construction draws, and `opex.price_year` escalates opex from
+  its price year rather than from COD. Both live Blue Whale projects declare 2026 (input B36) and
+  start the PUCSL O&M index there too. Wind project IRR 13.13% -> 12.41% (NPV USD 1.96M ->
+  1.40M); solar + BESS project NPV USD -4.44M -> -5.58M, and its equity IRR no longer exists.
+  Every other scenario, the canonical lender case included, is bit-identical. Detail in the
+  compiled fragment.
 - **Construction-period count tied to the declared build time (15.24.0, #1570).** A financing
   count that disagrees with `timeline.construction_years` is refused; a scenario that declares
   only the timeline runs on it instead of the engine's default of two; the placeholder draw and

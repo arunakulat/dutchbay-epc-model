@@ -127,8 +127,9 @@ tariff:
     usd_inflation_pct: 2.5      # PLACEHOLDER (input B34): as the O&M's USD inflation
                                 # -> 0.30 x 5.0% + 0.70 x 2.44% = 3.21%/yr (PUCSL's consultation assumed
                                 #    3.85%/yr O&M escalation in its BESS case)
-    pre_operation_years: 0      # index 1.0 in operating year 1, the date the opex is stated at; any
-                                # escalation between the 2026 base year and COD is not modelled
+    pre_operation_years: 2      # #1569: index 1.0 at the PUCSL component's 2026 base year, which is also
+                                # opex.price_year, so revenue and cost escalate from the same date:
+                                # 2028 COD - 2026 = 2 steps before operating year 1 (a test checks the two agree)
     source: "PUCSL Methodology for RE Feed-in Tariffs 2026 (Approved), s.3.1 item 2; conf/blue_whale_pucsl_fit_2026.yaml PUCSL-METHOD-2026"
   tariff_type: fixed            # input F04
   ppa_term_years: 20            # input F01: the hybrid's basis (the CEB standardised PPA draft, June 2025,
@@ -154,6 +155,12 @@ fx:
 
 capex:
   cost_basis_year: 2026
+  price_basis:                  # #1569 (input B36): the capex is priced in 2026 and spent at financial close
+    price_year: 2026            # PLACEHOLDER (input B36): the year the blended capex quotes are priced in
+    escalation_pct: 5.0         # PLACEHOLDER (input B29): LKR inflation at the CBSL 5% target; the owner's rule
+                                # of 2026-11-02 fixes all capex in LKR at project start. The engine escalates
+                                # usd_total from 2026 to each construction draw (close = cod_year - 1)
+    source: "capex quotes and blends of 2026 (conf/blue_whale_capex_solar_resource.yaml); #1569"
   estimate_class: 5             # AACE Class 5 (concept screening)
   usd_total: 10899980           # wind 8,899,980 (blended, v0.3) + grid/civils/development 2.0M (PLACEHOLDER B26, the
                                 # hybrid's whole line carried to each project: separate SPPAs, separate connections).
@@ -165,6 +172,9 @@ opex:
                                 # SPV overhead 0.15M (the hybrid's lines). Stated in USD at fx.start_lkr_per_usd;
                                 # the components below must add up to it (a test checks)
   opex_per_kw_yr_usd: 52.6      # 500k / 9.5 MW; high because a single turbine carries full O&M overheads
+  price_year: 2026              # PLACEHOLDER (input B36): the opex amounts are priced in 2026 (the LTSA and O&M
+                                # benchmarks of 2026, at the 2026-Q2 FX); every line escalates from 2026, so
+                                # operating year 1 carries cod_year - 2026 years of escalation (#1569)
   escalation_pct: 5.0           # = currency_split.lkr_escalation_pct (the engine refuses a mismatch); kept
                                 # for the single-rate screening tools that read it
   # v0.4 (input B34): the owner's rule (2026-11-02): "all CAPEX is fixed at project start in LKR. The debt
@@ -289,12 +299,13 @@ wacc:
   description: "Build-up WACC drives the project discount rate."
 
 metadata:
-  version: '0.5'
-  last_updated: '2026-11-07'
+  version: '0.6'
+  last_updated: '2026-11-08'
   author: DutchBay V14 Financial Modeling Team
   review_status: SKELETON - screening placeholders pending owner inputs (docs/blue_whale/INPUTS_REQUIRED.md)
   assumptions_source: 'Split from blue_whale_hybrid_lot5b_2026 v0.6 (wind block and finance blocks)'
   changes:
+    - 'v0.6 (2026-11-08): the 2026 PRICE DATES (#1569; input B36, placeholder; model 15.NN.0). capex.price_basis: usd_total 10,899,980 is priced in 2026 and escalated at 5%/yr (B29) to the one construction draw in 2027 (COD 2028 - 1 period), x 1.05 = 11,444,979 in the engine. opex.price_year 2026: every opex line escalates from 2026, two years before operating year 1, and tariff.om_indexation.pre_operation_years 0 -> 2 starts the PUCSL O&M index at the same date. Project IRR 13.13% -> 12.41%, equity IRR 11.55% -> 10.55%, project NPV USD 1,956,797 -> 1,398,803'
     - 'v0.5 (2026-11-07): the PUCSL escalable O&M tariff component indexed yearly (L-9; owner, 2026-11-07: yes; model 15.21.0). tariff.om_indexation: the 4.93 O&M part of 25.73 grows at 0.30 x CCPI 5% + 0.70 x LKR/USD 2.44% (relative PPP on USD 2.5%) = 3.21%/yr from operating year 1 (PUCSL 2026 methodology s.3.1 item 2; weights placeholder input B35); the 20.80 non-escalable part stays flat. Project IRR 12.41% -> 13.13%, equity IRR 10.54% -> 11.55%, project NPV USD 1,342,632 -> 1,956,797; year-1 DSCR unchanged'
     - 'v0.4 (2026-11-07): opex split by currency (input B34; owner rule and decision of 2026-11-02): wind O&M 0.35M 70% USD / 30% LKR, insurance, land and SPV 0.15M LKR; USD share 49% escalates at 2.5%/yr in USD on an LKR depreciation path of 2.44%/yr, derived by relative PPP from the inflation inputs (owner, 2026-11-07: "fix for inflation"; was 5.89%); LKR share at 5%/yr. Total unchanged at 500,000. Financing_Terms.construction_periods 1 (= B30; the engine had defaulted to 2; owner, 2026-11-07)'
     - 'v0.3 (2026-11-01): wind capex BLENDED (PR 6, #1353 comment 6556975196): 12,350,000 ($1,300/kW placeholder) -> 8,899,980 (USD 936.84/kW, range 728.16-1,341.16, conf/blue_whale_capex_solar_resource.yaml); capex total 14,350,000 -> 10,899,980. A blend that includes private commercial inputs, published on the owner''s decision'
