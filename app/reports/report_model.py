@@ -26,6 +26,7 @@ from analytics.capital_risk_layer_v14 import CapitalRiskReport
 from analytics.conditions_precedent import CpReport, build_cp_report
 from analytics.contracts_v14 import ProjectEquityIrrBridge, TwoFactorInteractionGrid
 from analytics.development_readiness import build_readiness_report
+from analytics.evaluation_v14 import evaluated_scenario_config
 from analytics.evidence_register import build_evidence_report
 from analytics.evidence_score import build_evidence_score
 from analytics.feasibility_sections import (
@@ -2540,13 +2541,12 @@ def build_report_context(
     # draws. The out-of-band emitters re-load the scenario YAML, which still states the
     # price-year figure, so without this the statements would book PP&E and paid-in equity
     # on capex the engine never financed (equity is the plug, so the tie-outs would still
-    # pass), and the manifest-digest check below would withhold the FX methodology. Apply the
-    # same function here. It is idempotent: an already-evaluated config (no ``price_basis``
-    # block) comes back unchanged, and a config without the block is returned as a copy.
+    # pass), and the manifest-digest check below would withhold the FX methodology. Resolve it
+    # through the evaluation gateway, as the pipeline does. It is idempotent: an
+    # already-evaluated config (no ``price_basis`` block) comes back unchanged, and a config
+    # without the block is returned as a copy.
     if scenario_config is not None:
-        from finance.capex_price_basis import apply_capex_price_basis
-
-        scenario_config = apply_capex_price_basis(scenario_config)
+        scenario_config = evaluated_scenario_config(scenario_config)
     readiness_rows, overall_readiness = _build_readiness(scenario_config)
     # The verdict is built once and shared: the IC summary reads its covenant/return
     # judgments (single source) rather than re-deriving them.
