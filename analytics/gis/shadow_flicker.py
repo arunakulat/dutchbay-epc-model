@@ -3,11 +3,14 @@
 Three calculations for one wind turbine on a small coastal lot, all driven by config
 (``conf/blue_whale_wind_siting.yaml``; ``ARCH-01``, ``FRAMEWORK-02``):
 
-1. **Coastal placement.** Either the westernmost point on a given latitude whose distance
-   from a coastline polyline is at least the coastal setback, found by buffering the
-   coastline with :func:`analytics.gis.exclusion_mask.build_setback_zone` and cutting the
-   latitude line with that zone; or a given reference point, checked against the same
-   setback (:func:`place_turbine` chooses by the configured rule).
+1. **Coastal placement.** Either the most seaward point on the landward axis through the
+   reference point whose distance from a coastline polyline is at least the coastal
+   setback, found by buffering the coastline with
+   :func:`analytics.gis.exclusion_mask.build_setback_zone` and cutting the axis with that
+   zone; or a given reference point, checked against the same setback
+   (:func:`place_turbine` chooses by the configured rule). The sea side is an input
+   (``sea_side_bearing_deg``, the bearing from land to sea): the geometry is solved with
+   the sea to the west and rotated, so a coast facing any direction is handled.
 2. **Tip-height setback.** The distance from the turbine to each edge of the lot against
    a setback of a configured multiple of tip height, and the area of the setback disc
    that falls outside the lot. The disc is again built by
@@ -348,6 +351,70 @@ def coastline_lines_east_north(
 
 
 # ---------------------------------------------------------------------------
+# Sea side: the placement and lot geometry is written for a coast with the sea to the
+# west of the frame origin. Any other sea side is handled by rotating the coastline into
+# that orientation, solving there, and rotating the result back.
+# ---------------------------------------------------------------------------
+_SEA_WEST_BEARING_DEG = 270.0
+_CARDINAL_SIDES: Dict[float, str] = {
+    0.0: "north",
+    90.0: "east",
+    180.0: "south",
+    270.0: "west",
+}
+
+
+def _check_sea_side_bearing(sea_side_bearing_deg: float) -> float:
+    """Return the sea-side bearing as a float in ``[0, 360)``, or raise."""
+    if isinstance(sea_side_bearing_deg, bool):
+        raise ValueError("sea_side_bearing_deg must be a number")
+    bearing = float(sea_side_bearing_deg)
+    if not math.isfinite(bearing) or not 0.0 <= bearing < 360.0:
+        raise ValueError(
+            f"sea_side_bearing_deg must lie in [0, 360); got {sea_side_bearing_deg!r}"
+        )
+    return bearing
+
+
+def sea_side_name(sea_side_bearing_deg: float) -> str:
+    """Name the sea side for labels: a cardinal direction, or ``"seaward"`` otherwise.
+
+    Args:
+        sea_side_bearing_deg: Bearing from the land towards the sea, clockwise from true
+            north, in ``[0, 360)``.
+
+    Returns:
+        ``"north"``, ``"east"``, ``"south"`` or ``"west"`` for those exact bearings, and
+        ``"seaward"`` for any other.
+    """
+    return _CARDINAL_SIDES.get(_check_sea_side_bearing(sea_side_bearing_deg), "seaward")
+
+
+def _sea_west_rotation_deg(sea_side_bearing_deg: float) -> float:
+    """Clockwise rotation that turns the sea-side bearing into due west (270 degrees)."""
+    return (
+        _SEA_WEST_BEARING_DEG - _check_sea_side_bearing(sea_side_bearing_deg)
+    ) % 360.0
+
+
+def _rotate_cw(point: EastNorth, angle_deg: float) -> EastNorth:
+    """Rotate ``(east, north)`` clockwise about the frame origin by ``angle_deg``.
+
+    A clockwise rotation adds ``angle_deg`` to the bearing of every point.
+    """
+    rad = math.radians(angle_deg)
+    c, s = math.cos(rad), math.sin(rad)
+    e, n = point
+    return (e * c + n * s, -e * s + n * c)
+
+
+def _rotate_lines_cw(
+    lines: Sequence[Sequence[EastNorth]], angle_deg: float
+) -> List[List[EastNorth]]:
+    return [[_rotate_cw(p, angle_deg) for p in line] for line in lines]
+
+
+# ---------------------------------------------------------------------------
 # 1. Coastal placement
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
@@ -355,8 +422,10 @@ class CoastalPlacement:
     """Result of placing the turbine at the coastal setback.
 
     Attributes:
-        coastline_crossing_east_m: East coordinate where the latitude line meets the
-            westernmost coastline (local frame).
+        coastline_crossing_east_m: Where the search line meets the most seaward
+            coastline crossing, as a coordinate along the landward axis (the axis through
+            the frame origin pointing away from the sea). For a coast with the sea to the
+            west (bearing 270) the landward axis is east, so this is the east coordinate.
         turbine_east_m: East coordinate of the placed tower centre.
         turbine_north_m: North coordinate of the placed tower centre.
         distance_to_coastline_m: Shortest distance from the tower to the coastline.
@@ -383,33 +452,65 @@ def _latitude_crossings(
     return sorted(out)
 
 
+def _rotated_placement(
+    placement: CoastalPlacement, angle_deg: float
+) -> CoastalPlacement:
+    """Carry a placement solved in the sea-west frame back to the real frame."""
+    east, north = _rotate_cw(
+        (placement.turbine_east_m, placement.turbine_north_m), -angle_deg
+    )
+    return CoastalPlacement(
+        coastline_crossing_east_m=placement.coastline_crossing_east_m,
+        turbine_east_m=east,
+        turbine_north_m=north,
+        distance_to_coastline_m=placement.distance_to_coastline_m,
+    )
+
+
 def place_at_coastal_setback(
     lines: Sequence[Sequence[EastNorth]],
     *,
     north_m: float,
     min_distance_m: float,
     search_east_m: float,
+    sea_side_bearing_deg: float,
 ) -> CoastalPlacement:
-    """Find the westernmost point east of the coast that clears the setback.
+    """Find the most seaward point that clears the setback, moving inland from the coast.
 
-    The search runs along the line ``north = north_m`` from the westernmost coastline
-    crossing to ``search_east_m``, and returns the first point whose distance from every
-    coastline is at least ``min_distance_m``.
+    The search runs along a line parallel to the landward axis (the axis pointing away
+    from the sea), offset ``north_m`` from the frame origin, from the most seaward
+    coastline crossing to ``search_east_m``, and returns the first point whose distance
+    from every coastline is at least ``min_distance_m``. With the sea to the west
+    (``sea_side_bearing_deg`` 270) the search line is ``north = north_m`` and it runs east.
 
     Args:
-        lines: Coastline polylines in the local frame, with sea to the west of the
-            westernmost crossing.
-        north_m: North coordinate of the search line.
+        lines: Coastline polylines in the local frame.
+        north_m: Offset of the search line from the frame origin, at right angles to
+            the landward axis (positive to the right when facing the sea). With the sea
+            to the west, it is the search line's north coordinate.
         min_distance_m: Required distance from the coastline to the tower centre.
-        search_east_m: East limit of the search.
+        search_east_m: Landward limit of the search, along the landward axis.
+        sea_side_bearing_deg: Bearing from the land towards the sea, clockwise from true
+            north, in ``[0, 360)``.
 
     Returns:
-        The placement.
+        The placement, in the real (east, north) frame.
 
     Raises:
-        ValueError: If no coastline crosses the search line, or no compliant point lies
-            within the search range.
+        ValueError: If the bearing is out of range, no coastline crosses the search line,
+            or no compliant point lies within the search range.
     """
+    angle = _sea_west_rotation_deg(sea_side_bearing_deg)
+    if angle != 0.0:
+        solved = place_at_coastal_setback(
+            _rotate_lines_cw(lines, angle),
+            north_m=north_m,
+            min_distance_m=min_distance_m,
+            search_east_m=search_east_m,
+            sea_side_bearing_deg=_SEA_WEST_BEARING_DEG,
+        )
+        return _rotated_placement(solved, angle)
+
     _require_shapely()
     from shapely.geometry import LineString, MultiLineString, Point
 
@@ -447,6 +548,7 @@ def place_at_reference_point(
     lines: Sequence[Sequence[EastNorth]],
     *,
     min_distance_m: float,
+    sea_side_bearing_deg: float,
 ) -> CoastalPlacement:
     """Put the tower on the frame origin and check that it clears the coastal setback.
 
@@ -454,17 +556,27 @@ def place_at_reference_point(
     local frame is the reference point (for Blue Whale, DutchBay T2's recorded position).
 
     Args:
-        lines: Coastline polylines in the local frame, with sea to the west of the
-            westernmost crossing of the origin's latitude.
+        lines: Coastline polylines in the local frame.
         min_distance_m: Required distance from the coastline to the tower centre.
+        sea_side_bearing_deg: Bearing from the land towards the sea, clockwise from true
+            north, in ``[0, 360)``. It fixes the landward axis through the origin, on which
+            the reported coastline crossing lies.
 
     Returns:
         The placement, with the tower at ``(0, 0)``.
 
     Raises:
-        ValueError: If no coastline crosses the origin's latitude, or the origin lies
-            inside the coastal setback.
+        ValueError: If the bearing is out of range, no coastline crosses the landward axis
+            through the origin, or the origin lies inside the coastal setback.
     """
+    angle = _sea_west_rotation_deg(sea_side_bearing_deg)
+    if angle != 0.0:
+        return place_at_reference_point(
+            _rotate_lines_cw(lines, angle),
+            min_distance_m=min_distance_m,
+            sea_side_bearing_deg=_SEA_WEST_BEARING_DEG,
+        )
+
     _require_shapely()
     from shapely.geometry import MultiLineString, Point
 
@@ -492,16 +604,19 @@ def place_turbine(
     rule: str,
     min_distance_m: float,
     search_east_m: float,
+    sea_side_bearing_deg: float,
 ) -> CoastalPlacement:
-    """Place the tower by the configured rule, on the frame origin's latitude.
+    """Place the tower by the configured rule, on the landward axis through the origin.
 
     Args:
         lines: Coastline polylines in the local frame.
         rule: ``"reference_point"`` puts the tower on the frame origin
-            (:func:`place_at_reference_point`); ``"coastal_setback"`` puts it at the
-            westernmost point that clears the setback (:func:`place_at_coastal_setback`).
+            (:func:`place_at_reference_point`); ``"coastal_setback"`` puts it at the most
+            seaward point that clears the setback (:func:`place_at_coastal_setback`).
         min_distance_m: Required distance from the coastline to the tower centre.
-        search_east_m: East limit of the ``coastal_setback`` search.
+        search_east_m: Landward limit of the ``coastal_setback`` search.
+        sea_side_bearing_deg: Bearing from the land towards the sea, clockwise from true
+            north, in ``[0, 360)``.
 
     Returns:
         The placement.
@@ -510,13 +625,18 @@ def place_turbine(
         ValueError: If the rule is unknown, or the chosen rule cannot place the tower.
     """
     if rule == "reference_point":
-        return place_at_reference_point(lines, min_distance_m=min_distance_m)
+        return place_at_reference_point(
+            lines,
+            min_distance_m=min_distance_m,
+            sea_side_bearing_deg=sea_side_bearing_deg,
+        )
     if rule == "coastal_setback":
         return place_at_coastal_setback(
             lines,
             north_m=0.0,
             min_distance_m=min_distance_m,
             search_east_m=search_east_m,
+            sea_side_bearing_deg=sea_side_bearing_deg,
         )
     raise ValueError(
         f"turbine placement rule {rule!r} is not one of {list(TURBINE_PLACEMENT_RULES)}"
@@ -524,18 +644,23 @@ def place_turbine(
 
 
 # ---------------------------------------------------------------------------
-# Placeholder lot: a square whose west edge lies along the coastline
+# Placeholder lot: a square whose seaward edge lies along the coastline
 # ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class SquareLot:
     """A square lot in the local frame.
 
+    The lot's own axes put the sea to its west: "west" in the corner and receptor names
+    means seaward, and "north" is along the coast with the sea on the left. With the sea
+    to the true west (bearing 270), the lot's axes are close to the compass ones.
+
     Attributes:
         corners: ``(east, north)`` corners, counter-clockwise, first not repeated, in the
             order: south-west, south-east, north-east, north-west of the lot's own axes.
-        edge_bearing_deg: Bearing of the west edge, clockwise from true north.
+        edge_bearing_deg: Bearing of the seaward edge, clockwise from true north, taken
+            along the edge in the direction that keeps the sea on the left.
         side_m: Side length.
-        edge_max_deviation_m: Largest perpendicular distance between the west edge and
+        edge_max_deviation_m: Largest perpendicular distance between the seaward edge and
             the coastline points it was fitted to.
     """
 
@@ -545,7 +670,7 @@ class SquareLot:
     edge_max_deviation_m: float
 
     def receptors(self) -> Dict[str, EastNorth]:
-        """Corner and edge-midpoint receptors, keyed by name."""
+        """Corner and edge-midpoint receptors, keyed by name (the lot's own axes)."""
         sw, se, ne, nw = self.corners
 
         def mid(a: EastNorth, b: EastNorth) -> EastNorth:
@@ -580,25 +705,49 @@ def coast_aligned_square_lot(
     north_m: float,
     area_m2: float,
     sample_step_m: float,
+    sea_side_bearing_deg: float,
 ) -> SquareLot:
-    """Square lot whose west edge is the straight-line fit of the coast beside it.
+    """Square lot whose seaward edge is the straight-line fit of the coast beside it.
 
-    The coastline points within half a side of the west crossing at ``north_m`` are fitted
-    with a total-least-squares line. The lot's west edge is parallel to that line and
-    passes through the crossing, which is its midpoint; the lot extends landward (east).
+    The anchor is the most seaward point where the coastline crosses the search line of
+    :func:`place_at_coastal_setback` (the landward axis, offset ``north_m``). The
+    coastline points within half a side of the anchor are fitted with a total-least-squares
+    line. The lot's seaward edge is parallel to that line and passes through the anchor,
+    which is its midpoint; the lot extends landward.
 
     Args:
         lines: Coastline polylines in the local frame.
-        north_m: North coordinate of the crossing that the west edge is centred on.
+        north_m: Offset of the anchor's search line from the frame origin, as in
+            :func:`place_at_coastal_setback`.
         area_m2: Lot area.
         sample_step_m: Spacing at which the coastline is sampled for the fit.
+        sea_side_bearing_deg: Bearing from the land towards the sea, clockwise from true
+            north, in ``[0, 360)``.
 
     Returns:
-        The lot.
+        The lot, in the real (east, north) frame.
 
     Raises:
-        ValueError: If the coastline does not cross ``north_m`` or the fit is degenerate.
+        ValueError: If the bearing is out of range, the coastline does not cross the
+            search line, or the fit is degenerate.
     """
+    angle = _sea_west_rotation_deg(sea_side_bearing_deg)
+    if angle != 0.0:
+        solved = coast_aligned_square_lot(
+            _rotate_lines_cw(lines, angle),
+            north_m=north_m,
+            area_m2=area_m2,
+            sample_step_m=sample_step_m,
+            sea_side_bearing_deg=_SEA_WEST_BEARING_DEG,
+        )
+        sw, se, ne, nw = (_rotate_cw(c, -angle) for c in solved.corners)
+        return SquareLot(
+            corners=(sw, se, ne, nw),
+            edge_bearing_deg=(solved.edge_bearing_deg - angle) % 360.0,
+            side_m=solved.side_m,
+            edge_max_deviation_m=solved.edge_max_deviation_m,
+        )
+
     if area_m2 <= 0 or sample_step_m <= 0:
         raise ValueError("area and sample step must be positive")
     crossings = _latitude_crossings(lines, north_m)

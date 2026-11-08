@@ -161,6 +161,9 @@ transfer:
   # both over the primary long-term window.
   min_sector_hours: 200
   distance_km_expected: 26.7
+  # reference.points.turbine must be where conf/blue_whale_wind_siting.yaml places the
+  # turbine, to within this many degrees (about 0.1 m); the run refuses otherwise.
+  turbine_point_tolerance_deg: 1.0e-6
 
 shear:
   hub_height_m: 130.0

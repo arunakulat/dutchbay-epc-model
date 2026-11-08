@@ -35,6 +35,7 @@ import yaml
 from omegaconf import DictConfig, OmegaConf
 
 from analytics.gis.shadow_flicker import (
+    TURBINE_PLACEMENT_RULES,
     CoastalSetbackConfig,
     LocalFrame,
     ShadowFlickerConfig,
@@ -47,6 +48,7 @@ from analytics.gis.shadow_flicker import (
     place_turbine,
     receptor_as_dict,
     receptor_flicker,
+    sea_side_name,
     site_feature_collection,
     solar_path,
     sunny_steps,
@@ -323,23 +325,74 @@ def resource_basis(resource_cfg: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _turbine_derivation(
-    rule: str, reference_name: str, setback_m: float, distance_m: float
+LABEL_KEYS: Tuple[str, ...] = (
+    "lot_name",
+    "lot_input_owed",
+    "turbine_name",
+    "reference_label",
+    "coastline_source",
+    "setback_name",
+    "lot_derivation",
+    "turbine_derivation",
+)
+
+
+def label_fields(
+    site: Mapping[str, Any],
+    labels: Mapping[str, Any],
+    *,
+    setback_m: float,
+    distance_m: float,
+) -> Dict[str, str]:
+    """The values the site GeoJSON's label templates are filled with.
+
+    Every number comes from the config or the run, so a label cannot go stale when the
+    config changes (#1530 domain D-2).
+
+    Args:
+        site: The ``site`` block of the CLI config.
+        labels: The ``labels`` block of the CLI config.
+        setback_m: Required distance from the coastline to the tower centre.
+        distance_m: The placed tower's distance from the coastline.
+
+    Returns:
+        Template field name to text.
+
+    Raises:
+        ValueError: If the ``labels`` block is missing a key or has an unknown one.
+    """
+    missing = sorted(set(LABEL_KEYS) - set(labels))
+    extra = sorted(set(labels) - set(LABEL_KEYS))
+    if missing or extra:
+        raise ValueError(
+            f"labels: missing keys {missing} and unknown keys {extra}; "
+            f"expected exactly {sorted(LABEL_KEYS)}."
+        )
+    lat = float(site["reference_lat_deg"])
+    return {
+        "area_ha": f"{float(site['lot_area_m2']) / 10_000.0:.4f}",
+        "sea_side": sea_side_name(float(site["sea_side_bearing_deg"])),
+        "coastline_source": str(labels["coastline_source"]),
+        "reference_label": str(labels["reference_label"]),
+        "reference_name": str(site["reference_point_name"]),
+        "reference_lat": f"{abs(lat):.6f} {'N' if lat >= 0 else 'S'}",
+        "setback_name": str(labels["setback_name"]),
+        "setback_m": f"{setback_m:g}",
+        "distance_m": f"{distance_m:.1f}",
+    }
+
+
+def turbine_derivation(
+    labels: Mapping[str, Any], rule: str, fields_: Mapping[str, str]
 ) -> str:
     """The site GeoJSON's account of how the turbine position was chosen."""
-    if rule == "reference_point":
-        return (
-            f"DutchBay {reference_name}'s recorded position: the Blue Whale turbine "
-            f"replaces {reference_name} at the same location (owner, 2026-11-07). It lies "
-            f"{distance_m:.1f} m from the OpenStreetMap coastline, clear of the "
-            f"{setback_m:g} m CZ&CRMP 2024-2029 segment 2 setback."
+    texts = labels["turbine_derivation"]
+    if set(texts) != set(TURBINE_PLACEMENT_RULES):
+        raise ValueError(
+            "labels.turbine_derivation needs exactly one text per placement rule "
+            f"{sorted(TURBINE_PLACEMENT_RULES)}; got {sorted(texts)}"
         )
-    return (
-        f"Westernmost point on {reference_name}'s latitude at least {setback_m:g} m "
-        "from the OpenStreetMap coastline (CZ&CRMP 2024-2029 segment 2 setback, "
-        "measured from the coastline as a bound because the vegetation line is not "
-        "mapped)."
-    )
+    return str(texts[rule]).format(**fields_)
 
 
 def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:
@@ -392,17 +445,21 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:
     lines = coastline_lines_east_north(coast_doc, frame)
     coastal = CoastalSetbackConfig.from_mapping(cfg["coastal_setback"])
     rule = str(site["turbine_placement"])
+    sea_bearing = float(site["sea_side_bearing_deg"])
+    sea_side = sea_side_name(sea_bearing)
     placement = place_turbine(
         lines,
         rule=rule,
         min_distance_m=coastal.tower_distance_from_coastline_m,
         search_east_m=float(site["placement_search_east_m"]),
+        sea_side_bearing_deg=sea_bearing,
     )
     lot = coast_aligned_square_lot(
         lines,
         north_m=0.0,
         area_m2=float(site["lot_area_m2"]),
         sample_step_m=float(site["coastline_sample_step_m"]),
+        sea_side_bearing_deg=sea_bearing,
     )
     tower = (placement.turbine_east_m, placement.turbine_north_m)
     tip = tip_height_setback(
@@ -410,37 +467,32 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:
     )
     lon_t, lat_t = frame.to_lon_lat(*tower)
 
+    labels = cfg["labels"]
+    texts = label_fields(
+        site,
+        labels,
+        setback_m=coastal.tower_distance_from_coastline_m,
+        distance_m=placement.distance_to_coastline_m,
+    )
     site_doc = site_feature_collection(
         frame=frame,
         lot=lot,
         placement=placement,
         properties={
-            "name": "Blue Whale Lot 5B (PLACEHOLDER, NOT SURVEYED)",
+            "name": str(labels["lot_name"]),
             "surveyed": False,
             "placeholder": True,
-            "input_owed": "B03 (site survey with WGS84 coordinates)",
+            "input_owed": str(labels["lot_input_owed"]),
             "area_m2": float(site["lot_area_m2"]),
             "side_m": lot.side_m,
-            "west_edge_bearing_deg": lot.edge_bearing_deg,
-            "derivation": (
-                "Square of the deeded area (9.3077 ha). Its west edge is the "
-                "total-least-squares line through the OpenStreetMap coastline within half "
-                "a side of the point where the coastline crosses DutchBay T2's latitude "
-                "(8.292500 N); the edge is centred on that point and the lot extends "
-                "landward. Generated by scripts/run_blue_whale_wind_siting_v14.py from "
-                "conf/blue_whale_wind_siting.yaml."
-            ),
+            f"{sea_side}_edge_bearing_deg": lot.edge_bearing_deg,
+            "derivation": str(labels["lot_derivation"]).format(**texts),
             "every_result_depends_on_this_placeholder": True,
         },
         turbine_properties={
-            "name": "Blue Whale turbine (PLACEHOLDER POSITION)",
+            "name": str(labels["turbine_name"]),
             "placeholder": True,
-            "derivation": _turbine_derivation(
-                rule,
-                str(site["reference_point_name"]),
-                coastal.tower_distance_from_coastline_m,
-                placement.distance_to_coastline_m,
-            ),
+            "derivation": turbine_derivation(labels, rule, texts),
         },
         decimals=int(site["geojson_decimals"]),
     )
@@ -555,8 +607,8 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:
         "lot": {
             "area_m2": float(site["lot_area_m2"]),
             "side_m": lot.side_m,
-            "west_edge_bearing_deg": lot.edge_bearing_deg,
-            "west_edge_max_deviation_from_coastline_m": lot.edge_max_deviation_m,
+            f"{sea_side}_edge_bearing_deg": lot.edge_bearing_deg,
+            f"{sea_side}_edge_max_deviation_from_coastline_m": lot.edge_max_deviation_m,
             "site_geojson_matches_committed": matches,
         },
         "tip_setback": {
