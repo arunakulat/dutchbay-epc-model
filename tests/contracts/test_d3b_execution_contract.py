@@ -705,6 +705,8 @@ def _authored_config(
             "interest_rate_pct": 6,
             "term_years": 18,
         },
+        # Required since #1429: no code default for the project discount rate.
+        "returns": {"project_discount_rate": 0.10},
     }
     if include_storage:
         config["generation"]["technologies"]["bess"] = {

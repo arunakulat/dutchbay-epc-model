@@ -78,6 +78,9 @@ _MODULE = Path(
 ).resolve()
 _UTC = timezone.utc
 # Moves with the canonical lender-case result and engine identity; last re-pinned by
+# #1429 (15.27.0), whose D3B fixture now declares returns.project_discount_rate 0.10 (the
+# rate it was always discounted at): the new config key is echoed into the result, the
+# engine identity moves, and no computed value moves. Before that by
 # the Blue Whale capex and opex price dates, #1569 (15.26.0: only the engine identity
 # moved), before that by
 # DutchBay dropping to 14 turbines (#1577, 15.25.0: the lender-case result and the engine
@@ -101,7 +104,7 @@ _UTC = timezone.utc
 # #1510 (post-maturity balloon carry, 15.9.0: the engine identity moved) and by #1396
 # part B (refinance canon, 15.8.0).
 _KNOWN_D3B_SUCCESS_DIGEST = (
-    "d46183e73c4b4d6895cb2031ffc7887dc254e08c2471eee1dc39321c4848ba4b"
+    "9c38dbf771273a12b73a7dd362de8da605f36e9fb8160d8488319d80389a866b"
 )
 _FX_RATE_INPUT_ID = (
     "input:project_case.currency_conversion.fx:lkr-to-usd:2026-08-29.rate"

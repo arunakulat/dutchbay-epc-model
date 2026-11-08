@@ -5,6 +5,17 @@ All notable changes to this project will be documented here.
 ## [Unreleased]
 
 ### Changed
+- **The project discount rate is a required scenario input (15.27.0, #1429).**
+  `returns.project_discount_rate` must be declared and is validated as a fraction in `[0, 1)`;
+  the hard-coded `DEFAULT_DISCOUNT_RATE = 0.10` is gone. A scenario whose WACC does not drive
+  the rate is discounted at the declared rate. One committed KPI moves: the
+  `edge_extreme_stress` fixture declared 12% but was discounted at 10%, so its project NPV
+  goes from USD -110.99M to -119.80M (equity IRR unchanged). The canonical lender case and
+  every other committed scenario are unchanged; five scenarios that declared no rate now
+  declare the 10% they were discounted at. HOLDs that survive: #1110's Board and lender
+  circulation hold; the F-5 covenant bar (no quarterly CFADS or intra-year DSCR figure
+  supports a lender representation); and the `v15.6.1` release hold. Detail in the compiled
+  fragment.
 - **Blue Whale capex and opex price dates (15.26.0, #1569).** `capex.price_basis` escalates
   capex from its price year to the construction draws, and `opex.price_year` escalates opex from
   its price year rather than from COD. Both live Blue Whale projects declare 2026 (input B36) and
