@@ -204,8 +204,9 @@ recommendation:
   # scenarios/blue_whale_solar_bess_lot5b_2026.yaml (a test checks they agree). Each entry is
   # the primary objective's choice under its reading in
   # docs/blue_whale/solar_bess_project_sizing_summary.json (a test checks that too).
-  # RUN PENDING: the values below are the exploratory run's (#1557 head 202f8f7e, 0.1-10 MW,
-  # 256 trials), to be replaced by the committed run.
+  # Committed run (seed 20261101, 256 trials, 414 points): both readings choose 107 tables
+  # (4.01464 MWp), 3.5 MW AC and 0.5 MW / 2.0 MWh, the smallest PV and battery on the grid.
+  # P50 after-tax project NPV USD -3,817,369, P90 -4,056,854 (STATUS.md, "Latest run").
   # PR 7 re-run (after-tax project NPV P50; 1.0-10 MW grid, BESS O&M at the 2.5 placeholder):
   # both readings chose 107 tables, 3.5 MW AC and 1.0 MW / 4.0 MWh, then reported only; the
   # scenario carried the owner's fixed 5 MW / 20 MWh. PR 4's run (NSO 250 price 135.00, unit
