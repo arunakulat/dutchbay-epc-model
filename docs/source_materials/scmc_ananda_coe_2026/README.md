@@ -1,8 +1,8 @@
 # SCMC / Ananda College COE STEAM Hub — corpus area
 
-This is the entry point for the Sumathi Convergence Media Centre (SCMC) work and the wider STEAM Hub
-at the Ananda College Centre of Excellence. It is separate from the DutchBay wind model: nothing here
-changes a model input, a KPI or a canon value.
+This is the entry point for the SCMC work and the wider STEAM Hub at the Ananda College Centre of
+Excellence. It is separate from the DutchBay wind model: nothing here changes a model input, a KPI
+or a canon value.
 
 **Read [`WORK_RECORD.md`](WORK_RECORD.md) next.** It gives the state of the work, the governing
 version, the open decisions and every session that contributed.
