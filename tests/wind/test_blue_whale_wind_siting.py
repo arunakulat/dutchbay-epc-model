@@ -24,7 +24,7 @@ import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 import numpy as np
 import pytest
@@ -278,6 +278,95 @@ def test_run_on_a_synthetic_curve(tmp_path: Path) -> None:
     text = json.dumps(out)
     for value in _synthetic_curve()[1:-1]:
         assert f"{value:.6f}" not in text  # no curve value leaks into the output
+
+
+def test_an_east_facing_coast_runs_end_to_end(tmp_path: Path) -> None:
+    """The whole screen on the committed coast mirrored about T2's meridian (#1530 D-2).
+
+    The local frame is a transverse Mercator centred on T2's meridian, which is symmetric
+    about that meridian, so the mirrored coast is an exact mirror in the frame.
+    """
+    pytest.importorskip("pvlib")
+    pytest.importorskip("shapely")
+    curve = _write_curve(tmp_path / "curve.csv", WS, _synthetic_curve())
+    cfg = _config(curve)
+    lon0 = float(cfg["site"]["reference_lon_deg"])
+    coast = json.loads((REPO_ROOT / cfg["site"]["coastline_geojson"]).read_text())
+    for feature in coast["features"]:
+        feature["geometry"]["coordinates"] = [
+            [2.0 * lon0 - lon, lat] for lon, lat in feature["geometry"]["coordinates"]
+        ]
+    mirrored = tmp_path / "coast_east.geojson"
+    mirrored.write_text(json.dumps(coast))
+    cfg["site"]["coastline_geojson"] = str(mirrored)
+    cfg["site"]["sea_side_bearing_deg"] = 90.0
+    cfg["output"]["site_geojson"] = str(tmp_path / "site.geojson")
+    west = cli.run(_config(curve))
+    east = cli.run(cfg)
+    assert east["coastal_placement"]["tower_distance_to_coastline_m"] == pytest.approx(
+        west["coastal_placement"]["tower_distance_to_coastline_m"], abs=1e-6
+    )
+    assert east["lot"]["east_edge_bearing_deg"] == pytest.approx(
+        (180.0 - west["lot"]["west_edge_bearing_deg"]) % 360.0, abs=1e-6
+    )
+    assert "west_edge_bearing_deg" not in east["lot"]
+    assert east["lot"]["site_geojson_matches_committed"] is False
+    for w, e in zip(
+        west["shadow_flicker"]["receptors"],
+        east["shadow_flicker"]["receptors"],
+        strict=True,
+    ):
+        assert e["name"] == w["name"]
+    site = json.loads((tmp_path / "site.geojson").read_text())
+    props = site["features"][0]["properties"]
+    assert "Its east edge is" in props["derivation"]
+    assert props["east_edge_bearing_deg"] == east["lot"]["east_edge_bearing_deg"]
+
+
+def _label_inputs() -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    raw = yaml.safe_load(CONF.read_text())
+    return dict(raw["site"]), dict(raw["labels"])
+
+
+def test_labels_are_built_from_the_config_values() -> None:
+    """The GeoJSON's words carry no number of their own (#1530 domain D-2)."""
+    site, labels = _label_inputs()
+    committed = json.loads((REPO_ROOT / site["site_geojson"]).read_text())
+    lot_props, turbine_props = (f["properties"] for f in committed["features"])
+    fields_ = cli.label_fields(site, labels, setback_m=60.0, distance_m=108.25)
+    assert fields_["area_ha"] == "9.3077" and fields_["reference_lat"] == "8.292500 N"
+    assert fields_["sea_side"] == "west" and fields_["setback_m"] == "60"
+    assert labels["lot_derivation"].format(**fields_) == lot_props["derivation"]
+    assert lot_props["name"] == labels["lot_name"]
+    assert turbine_props["name"] == labels["turbine_name"]
+    # Change the config and the words follow.
+    site.update(lot_area_m2=90000.0, reference_lat_deg=-8.5, sea_side_bearing_deg=123.0)
+    moved = cli.label_fields(site, labels, setback_m=45.5, distance_m=70.04)
+    assert moved["area_ha"] == "9.0000"
+    assert moved["reference_lat"] == "8.500000 S"
+    assert moved["sea_side"] == "seaward"
+    assert (moved["setback_m"], moved["distance_m"]) == ("45.5", "70.0")
+    text = labels["lot_derivation"].format(**moved)
+    assert "9.0000 ha" in text and "8.500000 S" in text and "seaward edge" in text
+    turbine = cli.turbine_derivation(labels, "reference_point", moved)
+    assert "70.0 m" in turbine and "45.5 m" in turbine
+
+
+def test_label_block_is_strict() -> None:
+    site, labels = _label_inputs()
+    with pytest.raises(ValueError, match="missing keys \\['lot_name'\\]"):
+        cli.label_fields(
+            site,
+            {k: v for k, v in labels.items() if k != "lot_name"},
+            setback_m=60.0,
+            distance_m=1.0,
+        )
+    with pytest.raises(ValueError, match="unknown keys \\['extra'\\]"):
+        cli.label_fields(site, {**labels, "extra": "x"}, setback_m=60.0, distance_m=1.0)
+    fields_ = cli.label_fields(site, labels, setback_m=60.0, distance_m=1.0)
+    one_rule = {**labels, "turbine_derivation": {"reference_point": "x"}}
+    with pytest.raises(ValueError, match="one text per placement rule"):
+        cli.turbine_derivation(one_rule, "reference_point", fields_)
 
 
 def test_hydra_entrypoint_prints_one_json_object(tmp_path: Path) -> None:
