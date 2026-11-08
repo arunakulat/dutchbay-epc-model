@@ -24,12 +24,12 @@ from typing import Any, Dict
 import pytest
 import yaml
 
+from analytics.evaluation_v14 import evaluate_with_overrides
 from finance.capex_price_basis import (
     APPLIED_KEY,
     apply_capex_price_basis,
     capex_escalation_factor,
 )
-from analytics.evaluation_v14 import evaluate_with_overrides
 from finance.cashflow_v14 import build_annual_rows
 from finance.cashflow_v14_params import _resolve_opex_pre_cod_years
 
@@ -268,9 +268,8 @@ def test_blue_whale_dates_agree_with_each_other(path: Path) -> None:
     price = cfg["capex"]["price_basis"]["price_year"]
 
     assert price == cfg["capex"]["cost_basis_year"] == cfg["opex"]["price_year"]
-    assert (
-        cfg["capex"]["price_basis"]["escalation_pct"]
-        == (cfg["opex"]["currency_split"]["lkr_escalation_pct"])
+    assert cfg["capex"]["price_basis"]["escalation_pct"] == (
+        cfg["opex"]["currency_split"]["lkr_escalation_pct"]
     )
     assert cfg["tariff"]["om_indexation"]["pre_operation_years"] == cod - price
     assert _resolve_opex_pre_cod_years(cfg) == cod - price

@@ -32,12 +32,12 @@ import pandas as pd
 from analytics.core.epc_helper import epc_breakdown_from_config
 from analytics.core.metrics import calculate_scenario_kpis
 from analytics.cost.benchmark import lcos_benchmark
-from finance.capex_price_basis import apply_capex_price_basis
 from analytics.export_helpers import DSCR_HIGHLIGHT_THRESHOLD
 from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
 from finance.bess_lcos import compute_lcos_suite
+from finance.capex_price_basis import apply_capex_price_basis
 from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import apply_debt_layer
 
