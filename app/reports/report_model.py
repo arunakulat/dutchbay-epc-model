@@ -1000,6 +1000,13 @@ def _build_verdict(
             f"Project IRR {project_irr * 100:.2f}% is {rel} the "
             f"{hurdle * 100:.2f}% cost of capital."
         )
+    elif project_irr is None and "project_irr" in kpis:
+        # #1494: present and None is the engine saying "undefined". It is not judged
+        # viable, and the note says why rather than leaving the reader to infer it.
+        notes.append(
+            "Project IRR is undefined: the solver resolved no single rate for the "
+            "project cashflows, so it is not compared with the cost of capital."
+        )
     if equity_irr is not None:
         # The sign word must reflect the IRR's OWN sign, not the equity-NPV value flag
         # (equity_positive). A positive IRR that is still below the equity hurdle has a

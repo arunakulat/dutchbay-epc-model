@@ -52,6 +52,8 @@ EXPECTED_PAYLOAD_SHA256 = {
 EXPECTED_PRODUCTION_MANIFEST_SHA256 = (
     # Re-pinned for 15.24.0 (#1570 construction-period guard: only VERSION moved; the
     # lender scenario did not).
+    # Re-pinned for 15.23.0 (#1525, undefined project IRR: only VERSION moved; the lender
+    # scenario did not).
     # Re-pinned for 15.22.0 (Blue Whale turbine on DutchBay T2: only VERSION moved; the
     # lender scenario did not).
     # Re-pinned for 15.21.0 (PUCSL O&M indexation: only VERSION moved; the scenario did not).
