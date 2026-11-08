@@ -78,9 +78,10 @@ _MODULE = Path(
 ).resolve()
 _UTC = timezone.utc
 # Moves with the canonical lender-case result and engine identity; last re-pinned by
-# #1525's undefined project IRR (15.23.0: only the engine identity moved), before that by
-# the Blue Whale turbine on DutchBay T2 (15.22.0: only the engine identity moved), before
-# that by the PUCSL escalable O&M indexation (15.21.0: only the engine identity moved), before
+# the construction-period guard, #1570 (15.24.0: only the engine identity moved), before
+# that by #1525's undefined project IRR (15.23.0: only the engine identity moved), before
+# that by the Blue Whale turbine on DutchBay T2 (15.22.0: only the engine identity moved),
+# before that by the PUCSL escalable O&M indexation (15.21.0: only the engine identity moved), before
 # that by the opex currency split (15.20.0: only the engine identity moved), before that by
 # the Blue Whale turbine shadow (15.19.0: only the engine identity moved), before that by
 # Blue Whale PR 7 (15.18.0: only the engine identity moved), before that by
@@ -96,7 +97,7 @@ _UTC = timezone.utc
 # #1510 (post-maturity balloon carry, 15.9.0: the engine identity moved) and by #1396
 # part B (refinance canon, 15.8.0).
 _KNOWN_D3B_SUCCESS_DIGEST = (
-    "d12ca0e43c74bbc0f94f14941169fe3b6fc672eef9fda585cc6f29ecc3c8864d"
+    "5697af935ddc44ba83ac760d62cc24fee1b9d85bce677c6efb98206406c29ccf"
 )
 _FX_RATE_INPUT_ID = (
     "input:project_case.currency_conversion.fx:lkr-to-usd:2026-08-29.rate"

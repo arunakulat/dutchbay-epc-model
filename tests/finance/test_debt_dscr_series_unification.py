@@ -81,14 +81,20 @@ DSCR_PERIOD_FIELDS = frozenset(
 
 
 def _plan_for(
-    path: Path, capacity_charge_lkr_per_mw_month: Optional[float] = None
+    path: Path,
+    capacity_charge_lkr_per_mw_month: Optional[float] = None,
+    construction_years: Optional[int] = None,
 ) -> tuple[Dict[str, Any], Dict[str, Any]]:
     """Run the engine exactly as ``run_v14_pipeline`` does, returning (cfg, result).
 
     ``capacity_charge_lkr_per_mw_month``, when given, replaces the rate on every
-    ``type: bess`` capacity-charge block before the run.
+    ``type: bess`` capacity-charge block before the run. ``construction_years``, when
+    given, replaces ``timeline.construction_years``, which sets the engine's
+    construction-period count when the financing section declares none (#1570).
     """
     cfg = load_scenario_config(str(path))
+    if construction_years is not None:
+        cfg["timeline"]["construction_years"] = construction_years
     if capacity_charge_lkr_per_mw_month is not None:
         for tech in cfg["generation"]["technologies"].values():
             revenue = tech.get("revenue") or {}
@@ -110,13 +116,20 @@ def _plan_for(
 # scenario to the NSO 250 MW bid-clearing level (1,752,500), where the snapshot is a single
 # breach (REVIEW). These tests check covenant mechanics, not the tariff, so they pin the
 # former rate as fixture input; their expected values are unchanged.
+# #1570 (15.24.0) runs the committed scenario on the one-year build its timeline declares;
+# it had run on the engine's default of two periods. The fixture pins the two-period count
+# the same way it pins the rate, so the mechanics it exercises, and its expected values, are
+# unchanged.
 CEB_FIXTURE = SCENARIO_DIR / "ceb_bess_10mw_capacity_charge.yaml"
 CEB_FIXTURE_RATE_LKR_PER_MW_MONTH = 2_500_000.0
+CEB_FIXTURE_CONSTRUCTION_YEARS = 2
 
 
 def _plan_for_ceb_fixture() -> tuple[Dict[str, Any], Dict[str, Any]]:
-    """The CEB covenant-mechanics fixture: the committed scenario at the pinned rate."""
-    return _plan_for(CEB_FIXTURE, CEB_FIXTURE_RATE_LKR_PER_MW_MONTH)
+    """The CEB covenant-mechanics fixture: the scenario at the pinned rate and count."""
+    return _plan_for(
+        CEB_FIXTURE, CEB_FIXTURE_RATE_LKR_PER_MW_MONTH, CEB_FIXTURE_CONSTRUCTION_YEARS
+    )
 
 
 def _operating_minimum(debt_result: Dict[str, Any]) -> Optional[float]:
@@ -302,13 +315,16 @@ def test_min_dscr_is_the_operating_minimum_folded_with_dscr_by_year(
 @pytest.mark.parametrize(
     ("scenario_name", "expected_min_dscr", "expected_fold_min"),
     [
+        # Re-baselined in v15.24.0 (#1570: both run on the one-year build their timeline
+        # declares; the engine had defaulted to two periods). Before: 0.9019916469950849 and
+        # 0.8942466976990286.
         # Re-baselined in v15.11.0 (CEB rate 2,500,000 -> 1,752,500; solar+BESS 45.80 / 10 y
         # -> 50.10 / 15 y). Before: 0.9069456485322224 and 0.8724193845452927.
-        ("ceb_bess_10mw_capacity_charge.yaml", 0.9019916469950849, 0.9019916469950849),
+        ("ceb_bess_10mw_capacity_charge.yaml", 0.9011847533626354, 0.9011847533626354),
         (
             "ceb_solar_bess_nightpeak_10mw.yaml",
-            0.8942466976990286,
-            0.8942466976990286,
+            0.9387210732131591,
+            0.9387210732131591,
         ),
     ],
 )
@@ -579,10 +595,12 @@ def test_covenant_years_survive_a_map_that_does_not_start_at_year_one() -> None:
     ("scenario_name", "years_below", "first_year", "last_year", "status"),
     [
         ("dutchbay_lendercase_2025Q4.yaml", 0, None, None, "PASS"),
+        # Re-baselined in v15.24.0 (#1570: one construction period, as the timeline
+        # declares). Before: CEB (1, 1, 1, REVIEW) unchanged, solar+BESS (4, 1, 9, FAIL).
         # Re-baselined in v15.11.0. Before: CEB (3, 1, 7, FAIL), solar+BESS (2, 1, 4, REVIEW).
         # The hostile-input tests keep the former CEB FAIL through _plan_for_ceb_fixture.
         ("ceb_bess_10mw_capacity_charge.yaml", 1, 1, 1, "REVIEW"),
-        ("ceb_solar_bess_nightpeak_10mw.yaml", 4, 1, 9, "FAIL"),
+        ("ceb_solar_bess_nightpeak_10mw.yaml", 1, 1, 1, "REVIEW"),
     ],
 )
 def test_covenant_snapshot_end_to_end_against_the_real_engine(
