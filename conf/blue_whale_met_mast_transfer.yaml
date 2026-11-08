@@ -106,8 +106,11 @@ reference:
         "2025": e8123ea9deddb4da911903411f16bc8dafe9b69299a5edd6a29aef52b167a5fa
     turbine:
       subdir: power_t2
+      # DutchBay T2, where the turbine stands (owner, 2026-11-07; was 79.752666, the #1530
+      # setback position 224 m west). The same MERRA-2 cell: every year's parameter block
+      # below is byte-identical at both points, so the pins did not change.
       latitude_deg_n: 8.2925
-      longitude_deg_e: 79.752666
+      longitude_deg_e: 79.7547
       parameter_sha256:
         "2015": db413372df0b3657e4a9fab13b777bd94576669e0707177d486643535d701259
         "2016": 1e3d8868dea3b65f360e45c0578dd081c47f8e3b963fde6356b263384a50459b

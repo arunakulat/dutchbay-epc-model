@@ -1,7 +1,7 @@
 # Blue Whale Post-Merge Audit & Clean-Up (`v15.18.0`) — Ingress Brief & Receipt
 
-**Document Version:** `1.0.0`
-**Date:** 2026-11-06
+**Document Version:** `1.1.0`
+**Date:** 2026-11-06 (amended 2026-11-07: §5 records the owner's confirmation that the `MERGE-01` suspension is lifted)
 **Governing Authority:** GWTF Ruleset `v3.0` (`go_with_the_flow_rules_v3_0_clean.csv`), `RECRUIT-01` Modules 1–4, `PERSIST-01`, `ENV-01`, `THREAD-01`
 **Base Commit:** `cc4d1b59a7d9554ae9c6919d74fff623f62aa045` (`origin/main`, `VERSION 15.18.0`)
 **Worktree / Branch:** `/Users/aruna/.gemini/antigravity/worktrees/dutchbay-epc-model/add_ingress_file` (`add_ingress_file`)
@@ -19,7 +19,7 @@ Every prospective worker must complete the safety preflight before substantive i
 | Ruleset Canon | Canonical CSV (`23074328...`) | `dutchbay_bootstrap_rules.py` | 79 rules, all active, latest `v3.0`, SHA-256 `230743289f135338344cba0740061935af461325d6729f3d210db3f3aee2e7a4` (`eb14d836...` at 78 rules prior to `CLEANUP-01`) | **PASS** |
 | Handover Continuity | Resolver lineage verification | `scripts/list_session_handover_records.py` | Lineage verified back to founding records; latest introduction is `docs/SESSION_HANDOVER_2026-10-22_AUDIT_GATE_CLEARED_ON_MERIT.md` (`86ca5732`) | **PASS** |
 | Protected Branch | Protected `main` read-only | `git branch --show-current` | Working on dedicated worktree branch `add_ingress_file` | **PASS** |
-| Merge Authority | `MERGE-01` standing authority | Standing merge authority check | **SUSPENDED** by project owner at 2026-11-05T20:15:19+05:30 (Checkpoint 9 in `blue_whale_merge_train_ledger.md`). Strictly non-merging. | **HELD** |
+| Merge Authority | `MERGE-01` standing authority | Standing merge authority check | **SUSPENDED** by project owner at 2026-11-05T20:15:19+05:30 (Checkpoint 9 in `blue_whale_merge_train_ledger.md`). Strictly non-merging. *As recorded on 2026-11-06. The owner confirmed on 2026-11-07 that it is lifted; see §5.* | **HELD** on 2026-11-06; **LIFTED**, confirmed by the owner 2026-11-07 (§5) |
 
 ---
 
@@ -47,7 +47,7 @@ All 7 Blue Whale PRs along with prerequisite CI PR `#1548` have landed on `main`
 - **Owner KPI Sign-off**: Owner decision card `cmsg_01NZBxgCsuANZNkiqqCY1a9FUtcMyBiLppgPwkXDFZJqzd` (`2026-11-02T02:50:17Z`).
 
 ### Tier 3: Predecessor Findings & Open Residuals
-- Standing merge authority suspended at Checkpoint 9.
+- Standing merge authority suspended at Checkpoint 9. *(Residual as of 2026-11-06. Closed on 2026-11-07, when the owner confirmed that the suspension is lifted; see §5.)*
 - Capability tracker `#1353` reconciled on 2026-11-06 06:50 Asia/Colombo (comment `6674071397`): 98 open issues, 13 open PRs (8 draft, 5 ready).
 - Local branch `fix/blue-whale-audit-cleanup` carries commit `cc0fa69a` addressing initial audit findings.
 
@@ -95,9 +95,9 @@ All 7 Blue Whale PRs along with prerequisite CI PR `#1548` have landed on `main`
 
 ### 4.1 Canonical GWTF Ruleset (`go_with_the_flow_rules_v3_0_clean.csv`)
 - **Verified Count & Digest**: **79 active rules** (`79 rules; versions: v3.0; latest = v3.0; active=79`), SHA-256 `230743289f135338344cba0740061935af461325d6729f3d210db3f3aee2e7a4` (updated from 78 active rules / `eb14d836513fef208b59029c35bf6add826aa0c24dd764bb8a62f3a3acfee560` with owner-directed `CLEANUP-01`).
-- **Complete Rule Family Synthesis**:
+- **Complete Rule Family Synthesis** (rule-ID attributions corrected against the CSV on 2026-11-07 after the retrospective #1549 domain review; the CSV wins):
   - **Governance & Intake (`GOV-01`, `GOV-02`, `INTAKE-01`)**:
-    - `GOV-01`: AI-assisted development contract (human product owner retains all release, grade, lender, and Board authority).
+    - `GOV-01`: AI-assisted development contract (AI tools are bound by the ruleset and meet the same standards as human-written code; the owner's release, grade, lender, and Board authority boundaries are stated in `MERGE-01`, `REVIEW-01`, `TRAIN-01` and `RECRUIT-01`).
     - `GOV-02`: Never commit or push directly to `main`/`master`; verify `git branch --show-current` before every commit.
     - `INTAKE-01`: Before any edit or PR opening, fetch `origin/main`, inspect live capability tracker (`#1353`), enumerate all open PRs, record a scoped item in `#1353` or a linked focused issue **predating** the PR, and include work-item link, base SHA, and overlap disposition in the PR body (enforced by `scripts/ci/check_pr_intake.py` inside `Verification receipts (VERIFY-01)`).
   - **Architecture & Contracts (`ARCH-01..04`)**:
@@ -117,15 +117,15 @@ All 7 Blue Whale PRs along with prerequisite CI PR `#1548` have landed on `main`
       - **Primary**: *Contracts Centralized, Compliance Documented, Import Relationships explicit* (`analytics.contracts_v14` + `evaluate_with_overrides()` gateway only).
       - **Secondary**: *Config-Centric Contract-Driven Integration Rules*.
   - **CLI & Tooling (`CLI-01..03`, `R1..R9`, `ADD-01..03`, `R26`)**:
-    - `CLI-01` / `R1`: Hydra (`@hydra.main(version_base="1.3", ...)`) is the sole canonical CLI framework.
-    - `CLI-02` / `R2`: JSON-first output on stdout; suppress routine `INFO` logging in long-running calculations (`logging.disable(logging.WARNING)` when emitting JSON stdout).
-    - `CLI-03` / `R3`: `argparse` is banned repo-wide; legacy Typer/Click CLIs are frozen.
+    - `CLI-01`: Hydra (`hydra-core`) is the CLI framework for all v14 CLIs; `argparse` is banned repo-wide (also `R3`) and legacy Typer/Click CLIs are frozen (Typer: `R4`).
+    - `CLI-02` / `R1`: Canonical v14 entrypoints (`run_full_pipeline_v14.py`, `run_scenario_analytics_v14.py`); `R2`: config-first CLIs via Hydra overrides.
+    - `CLI-03`: JSON-first output on stdout (a single JSON object summarising the run).
     - `R26`: Convert PDFs via local MarkItDown in `$DUTCHBAY_VENV` before parsing; never infer from raw PDF bytes.
   - **Validation, Typing, Testing, Finance & Presentation (`VAL-01..02`, `CST-01`, `TYPE-01`, `TEST-01..05`, `FIN-01..02`, `MRM-01..02`, `DOC-01..02`, `DBPL-01`)**:
-    - `VAL-01..02` / `CST-01`: Strict v14 schema validation; explicit units in field names (`*_pct`, `*_years`, `*_usd`, `*_lkr`, `*_mw`).
+    - `VAL-01`: Strict v14 schema validation (`validate_config_for_v14`); `VAL-02`: ScenarioAnalytics batch behaviour; `CST-01`: LibCST import and hot-spot API guardrails; `FIN-02`: explicit units in field names (`*_pct`, `*_years`, `*_usd`, `*_lkr`).
     - `TEST-01`: Independent-oracle requirement — finance-material code must answer to an oracle that did not originate in the same change (pre-existing test, external benchmark, closed-form identity, independent implementation, or invariant), and any pinned constant must be paired with a responsiveness guard.
-    - `TEST-05`: Coverage gate (`--cov-fail-under=80` across `finance/` and `analytics/`).
-    - `FIN-01..02` / `MRM-01..02`: Explicit seed for stochastic runs; version/changelog update when committed financial outputs change; `schema` and `model_version` provenance in governed artifacts.
+    - `TEST-02` / `R8`: Coverage thresholds apply to the full suite (the gate is `coverage report --fail-under=95` in `.github/workflows/test-suite.yml`); `TEST-05`: independent GitHub-hosted Grid Study evidence for QSTS execution claims.
+    - `FIN-01`: Numeric robustness and IRR/NPV safety; `MRM-01`: explicit seed for stochastic runs; `MRM-02`: scenario name, config path or hash, and model version on exported artefacts; `DOC-02`: VERSION and CHANGELOG update for any change that can affect IRR, DSCR, NPV or covenant logic.
     - `DBPL-01`: DutchBay Presentation Layer PDFs must route through `app.reports.dbpl.print_core.render_dbpl_pdf` with the complete `[report]` extra (`weasyprint`, `reportlab`, `geopandas`, `contextily`), fail loud via `DbplDependencyError`, keep all design tokens in `app/reports/dbpl/style.py`, keep running header/footer/caveat band un-suppressible, and surface font substitutions (`docs/dbpl_styleguide.md`).
   - **Git Workflow, Delivery, Persistence, Environment, Recruitment & Security (`R10..R25`, `DELIVERY-01`, `REFACTOR-01..04`, `WORKTREE-01`, `DATA-01`, `PERSIST-01`, `ENV-01`, `THREAD-01`, `VERIFY-01`, `MERGE-01`, `RECRUIT-01`, `SECDEP-01`, `REVIEW-01`, `TRAIN-01`, `CLEANUP-01`)**:
     - `R18`: Eleven sanctioned Conventional Commit types (`build`, `chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`); `deploy` is unsanctioned.
@@ -136,7 +136,7 @@ All 7 Blue Whale PRs along with prerequisite CI PR `#1548` have landed on `main`
     - `PERSIST-01`: Checkpoint durable state early and often to survive session interruptions; maintain the linear handover chain verified by `scripts/list_session_handover_records.py`.
     - `ENV-01` & `THREAD-01`: Root repository work at the active checkout/worktree with `PYTHONPATH="$PWD"` first, bound to the persistent governed Python 3.12 environment `DUTCHBAY_VENV="/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv"` (`./check_venv.sh`); shared-venv governance edits require `scripts/verify_shared_venv_worktrees.py` across two clean worktrees during a quiet window.
     - `VERIFY-01`: "A claimed check without a receipt is not a check" — enforced by required CI check `Verification receipts (VERIFY-01)`.
-    - `MERGE-01`: Standing authorization to merge when all required checks are green on the exact current HEAD (delivery authority only; **currently suspended by owner at Checkpoint 9 on `2026-11-05T20:15:19+05:30` unless explicitly authorized per PR**).
+    - `MERGE-01`: Standing authorization to merge when all required checks are green on the exact current HEAD (delivery authority only; suspended by owner at Checkpoint 9 on `2026-11-05T20:15:19+05:30` unless explicitly authorized per PR, as recorded on 2026-11-06. **The owner confirmed on 2026-11-07 that the suspension is lifted; see §5. `MERGE-01` is in force as written in the CSV, exercised through the merge lease.**)
     - `SECDEP-01`: Every suppressed `pip-audit` advisory in `PIP_AUDIT_IGNORES` must declare exact package pin, forcing cap, lifting release, and runtime defensibility (`tests/lint/test_pip_audit_allowlist.py`).
     - `REVIEW-01`: Open PR as draft first (fast gates only; shards, Coverage Gate, and Grid Study defer and report `Test Summary (draft: full suite deferred)`), freeze HEAD, post `Evidence pack` comment, bind required review lanes (`R1` = 1 lane; `R2`/`R3` = Domain + Assurance pair) to the draft HEAD, then mark ready for review so the full suite runs once.
     - `TRAIN-01`: Merge coordinator may combine 2–3 path-disjoint, import-isolated reviewed draft PRs ("cars", at most one `R3`/KPI-changing) onto `train/<date>-<n>` so they share one full-suite run and land by **rebase-merge** (never squash) with Module 3 §8 carry-forward proofs and pre/post-landing checks.
@@ -178,3 +178,48 @@ All 7 Blue Whale PRs along with prerequisite CI PR `#1548` have landed on `main`
 2. **Broken `@import` Paths in `/Users/aruna/.codex/AGENTS.md` (REMEDIATED)**:
    - Lines 5, 14, and 23 of `/Users/aruna/.codex/AGENTS.md` contained `@/Users/aruna/.Codex/projects/-Users-aruna-Downloads/memory/...`.
    - Repaired to point to the live directory `/Users/aruna/.claude/projects/-Users-aruna-Downloads/memory/...`.
+
+---
+
+## 5. Addendum (2026-11-07): `MERGE-01` suspension lifted
+
+This addendum supersedes every statement above that the standing merge authority is suspended
+(the §1 Merge Authority row, the §2 Tier 3 residual, and the `MERGE-01` entry in §4.1). Those
+statements are kept as the receipts recorded on 2026-11-06. They do not describe the current
+state.
+
+- **What changed.** On 2026-11-07 the project owner confirmed that the Checkpoint 9 suspension of
+  `MERGE-01` is lifted. GitHub shows when the lift was reported and acted on, not when the owner
+  decided it; comment 6702662913 says the lift was until then recorded only in owner-side memory.
+  `MERGE-01` is in force as written in `go_with_the_flow_rules_v3_0_clean.csv` (SHA-256
+  `230743289f135338344cba0740061935af461325d6729f3d210db3f3aee2e7a4`, as read on 2026-11-07),
+  where its status is `active`, and it is exercised through the merge lease (see "Who merges").
+  This addendum changes no ruleset row. Later the same day #1542 changed the `TRAIN-01` row and
+  #1563 the `CLEANUP-01` row (CSV SHA-256 at `main` `39048e89`:
+  `9e0e36d29f39b566199df927047fbe0799a08f5c4461bf6554dd439eef36171b`); the `MERGE-01` row is
+  byte-identical in both versions.
+- **Sources.**
+  - *Where the lift is stated:* [#1353 comment 6702632645](https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6702632645) ("The owner states that
+    the `MERGE-01` suspension is lifted") and [#1353 comment 6702662913](https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6702662913). Another
+    Claude session wrote both on the owner's behalf.
+  - *The owner's own act:* her project-thread message of 2026-11-07T05:26:34Z, in which she
+    forwards those statements for action, including the request to record the lift "so no agent
+    reads MERGE-01 as suspended". It is transcribed verbatim, with its time and message id, in
+    [#1353 comment 6704847345](https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6704847345), which marks which words are hers and which she
+    forwarded.
+  - *Context, not the lift itself:* [#1353 comment 6702383287](https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6702383287) records the owner
+    returning merge execution to the merge-lease holder (04:41:21Z), and
+    [#1353 comment 6702809373](https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6702809373) records the split of roles. Neither mentions
+    `MERGE-01` or the suspension.
+  - The work item for this addendum is [#1353 comment 6702818232](https://github.com/arunakulat/dutchbay-epc-model/issues/1353#issuecomment-6702818232).
+- **Who merges.** The project coordinator orders the queue and grants merge slots, and the
+  merge-lease holder executes merges (#1353 comment 6702809373). Lifting the suspension does not
+  let any other session merge.
+- **What it does not change.** `MERGE-01` is delivery authority only. The lift waives no
+  `REVIEW-01` lane, required check, `VERIFY-01` receipt or owner KPI sign-off, and it lifts no
+  other HOLD: #1110, `v15.6.1` and F-5 remain. The separate hold on merge trains lasted until
+  #1529's pull request (#1542) landed; #1542 landed on 2026-11-07 as `e23bd9fe`, so trains now run
+  under `TRAIN-01` as #1542 amended it.
+- **§4.5 item 1.** That item records an action taken on 2026-11-06: owner-side memory files were
+  updated to document the Checkpoint 9 hold. It stays as a dated receipt. Those files are outside
+  this repository; whether they still describe the hold as current is not verified here.

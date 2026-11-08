@@ -263,9 +263,16 @@ def test_run_on_a_synthetic_curve(tmp_path: Path) -> None:
     assert out["placeholder_site"] is True
     assert out["lot"]["site_geojson_matches_committed"] is True
     assert out["turbine"]["derated_power_mw"] == 9.5
-    assert out["coastal_placement"]["tower_distance_to_coastline_m"] == pytest.approx(
-        60.0, abs=0.05
+    # The turbine stands on DutchBay T2 (owner, 2026-11-07), clear of the 60 m setback.
+    assert out["turbine"]["placement_rule"] == "reference_point"
+    assert (out["turbine"]["lat_deg"], out["turbine"]["lon_deg"]) == pytest.approx(
+        (8.2925, 79.7547), abs=1e-9
     )
+    assert out["coastal_placement"]["tower_distance_to_coastline_m"] == pytest.approx(
+        108.25, abs=0.05
+    )
+    assert out["coastal_placement"]["tower_distance_to_setback_line_m"] > 0.0
+    assert out["coastal_placement"]["rotor_reach_seaward_of_coastline_m"] == 0.0
     assert out["tip_setback"]["setback_m"] == 233.0
     assert len(out["shadow_flicker"]["receptors"]) == 8
     text = json.dumps(out)

@@ -23,10 +23,10 @@ Quoted verbatim from the work item:
 
 **The disclosure surface moves on the owner's authority** (`AGENTS.md` "Four ways a corpus
 commit goes wrong", item 2). The wind and BESS figures below are blends that include private
-commercial inputs. This figure is a blend that includes private commercial inputs; a reader may
-be able to back out a private input. Published on the owner's decision of 2026-11-01 (#1353
-comment 6556975196). No raw private figure is in this repository; the private anchors are read
-at run time from a file outside it.
+commercial inputs, and those inputs can be recovered exactly from the published figures.
+Published on the owner's decision of 2026-11-01 (#1353 comment 6556975196); the owner accepted
+the exact recoverability on 2026-11-07 (#1353 comment 6702419885). The private anchors are not
+written out in this repository; they are read at run time from a file outside it.
 
 ## 1. Capex anchors
 
@@ -230,8 +230,9 @@ re-run the same way, does not move (DC/AC 1.1, 5 MW / 24 MWh). Details: `STATUS.
 
 PR 7 (owner decisions of 2026-11-01, #1353 comment 6563070978): the sizing ranks on the P50
 after-tax project NPV, which chooses the same 107 tables, 3.5 MW AC and 1.0 MW / 4.0 MWh, but
-the project commits the owner's 5 MW / 20 MWh battery with 151 tables (5.66552 MWp) at 5.0 MW AC.
-The cost of that choice and the PV curve are in `STATUS.md`.
+the project commits the owner's 5 MW / 20 MWh battery with 151 tables (5.66552 MWp) at 5.0 MW AC
+(152 tables, 5.70304 MWp, from 15.22.0 with the turbine on DutchBay T2). The cost of that
+choice and the PV curve are in `STATUS.md`.
 
 ## 7. References
 

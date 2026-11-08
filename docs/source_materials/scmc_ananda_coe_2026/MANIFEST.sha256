@@ -1,0 +1,8 @@
+# SCMC / Ananda College COE STEAM Hub — corpus area manifest
+#
+# Records the files tracked in this area. ARTIFACT_REGISTER.tsv separately records the artifacts
+# held outside this repository, by SHA-256. Issue #1554.
+#
+147801daa41ba06e8485cc4e5ea531d05099fd0c2519e1210276c68caf1eb323  ARTIFACT_REGISTER.tsv
+f936ab3b79cd528224a78c77627475f789ad92e531865583b622c17b5da3d181  README.md
+3b7b707119e9f97c98f782dcdbdb8e8b9455f9f86bcec464bd1f9c9dbe9da37b  WORK_RECORD.md

@@ -1356,6 +1356,7 @@ def run_sizing(
     warranty = tuple(module.warranted_power_fraction(y) for y in range(1, years + 1))
     resource = dict(unit_cfg["pv_yield"]["resource_solar"])
     resource["inverter_eff_nom"] = pricing.inverter.european_efficiency
+    turbine_shade = site.get("shading")
 
     points: List[Dict[str, Any]] = []
     results: List[Optional[PointResult]] = []
@@ -1383,7 +1384,7 @@ def run_sizing(
             azimuth_deg=array.azimuth_deg,
             gamma_pdc_per_c=module.temp_coeff_pmax_pct_per_c / 100.0,
         )
-        pv = hourly_pv(solar)
+        pv_unshaded = hourly_pv(solar)
         pitch = row_pitch(
             lat_deg=float(site["lot_lat"]),
             lon_deg=float(site["lot_lon"]),
@@ -1412,6 +1413,17 @@ def run_sizing(
                 equipment=equipment,
                 required_fenced_area_m2=area.fenced_area_m2,
             )
+            # The turbine's shadow on this layout's tables (input B33), when the unit
+            # config models it and every table is placed; a point that does not fit is
+            # not evaluated, so it keeps the unshaded series.
+            pv = pv_unshaded
+            if turbine_shade is not None and len(layout.tables) >= sizing.tables:
+                pv = hourly_pv(
+                    solar,
+                    poa_retention=turbine_shade.retention(
+                        layout.tables, sizing.tables, solar
+                    ),
+                )
             point = PointInputs(
                 dc_ac_ratio=ratio,
                 dc_mwp=sizing.dc_capacity_mw,
@@ -2116,6 +2128,7 @@ def run_project_sizing(
     warranty = tuple(module.warranted_power_fraction(y) for y in range(1, years + 1))
     resource = dict(unit["pv_yield"]["resource_solar"])
     resource["inverter_eff_nom"] = pricing.inverter.european_efficiency
+    turbine_shade = site.get("shading")
     base_array = dict(unit["array"])
     table_w = size_array(
         module, strings_design, ArrayConfig.from_mapping(base_array)
@@ -2133,7 +2146,7 @@ def run_project_sizing(
         return arr, sizing
 
     pitch_cache: Dict[int, Any] = {}
-    pv_cache: Dict[Tuple[int, float], Any] = {}
+    pv_cache: Dict[Tuple[Any, ...], Any] = {}
     land_max: Dict[float, int] = {}
     points: List[Dict[str, Any]] = []
     results: List[Optional[PointResult]] = []
@@ -2261,7 +2274,13 @@ def run_project_sizing(
                 if not (fits and meets_rule and any(allowed.values())):
                     results.append(None)
                     continue
-                pv_key = (n_tables, ac)
+                # With the turbine's shadow modelled (input B33), the PV depends on
+                # which tables the layout places, and the packing moves with the BESS
+                # footprint, so the packing is part of the key.
+                packing = (
+                    tuple(layout.tables[:n_tables]) if turbine_shade is not None else ()
+                )
+                pv_key = (n_tables, ac, packing)
                 if pv_key not in pv_cache:
                     solar = with_array(
                         resource,
@@ -2271,7 +2290,12 @@ def run_project_sizing(
                         azimuth_deg=arr.azimuth_deg,
                         gamma_pdc_per_c=module.temp_coeff_pmax_pct_per_c / 100.0,
                     )
-                    pv_cache[pv_key] = hourly_pv(solar)
+                    retention = (
+                        None
+                        if turbine_shade is None
+                        else turbine_shade.retention(layout.tables, n_tables, solar)
+                    )
+                    pv_cache[pv_key] = hourly_pv(solar, poa_retention=retention)
                 pv = pv_cache[pv_key]
                 entry["pv_ac_mwh_factor_1"] = pv.annual_mwh
                 point = PointInputs(
@@ -2580,16 +2604,33 @@ def _json_safe(obj: Any) -> Any:
 
 
 def site_context(
-    unit_cfg: Mapping[str, Any], read_json: Callable[[str], Any]
+    unit_cfg: Mapping[str, Any],
+    read_json: Callable[[str], Any],
+    read_text: Optional[Callable[[str], str]] = None,
 ) -> Dict[str, Any]:
     """PR 1's lot, coastline and setback for the land fit (as PR 2's runner builds them).
+
+    Also the turbine-shadow source the unit config declares (``shading``; None when
+    ``pv_yield.turbine_shading_modelled`` is false), built as PR 2's runner builds it.
 
     Args:
         unit_cfg: PR 2's unit config.
         read_json: Reads a repository-relative JSON or YAML file.
+        read_text: Reads a repository-relative text file (the wind rose CSV); defaults to
+            the repository root.
     """
+    from pathlib import Path
+
     from analytics.gis.pv_array_layout import SiteFitConfig, site_geometry
     from analytics.gis.shadow_flicker import CoastalSetbackConfig, LocalFrame
+    from solar_resource.pv_array_turbine_shading import shading_source_from_unit
+
+    if read_text is None:
+        root = Path(__file__).resolve().parents[1]
+
+        def read_text(rel: str) -> str:
+            p = Path(rel)
+            return (p if p.is_absolute() else root / p).read_text()
 
     fit_cfg = SiteFitConfig.from_mapping(unit_cfg["site_fit"])
     wind_siting = read_json(fit_cfg.wind_siting_config)
@@ -2603,12 +2644,19 @@ def site_context(
     ce = sum(p[0] for p in geometry.lot_ring) / len(geometry.lot_ring)
     cn = sum(p[1] for p in geometry.lot_ring) / len(geometry.lot_ring)
     lon, lat = frame.to_lon_lat(ce, cn)
+    shading = shading_source_from_unit(
+        unit_cfg["pv_yield"],
+        turbine=wind_siting["turbine"],
+        turbine_en=geometry.turbine,
+        read_text=read_text,
+    )
     return {
         "geometry": geometry,
         "coastal": CoastalSetbackConfig.from_mapping(wind_siting["coastal_setback"]),
         "frame": frame,
         "lot_lat": lat,
         "lot_lon": lon,
+        "shading": shading,
     }
 
 

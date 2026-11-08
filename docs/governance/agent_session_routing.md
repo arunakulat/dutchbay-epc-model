@@ -12,6 +12,10 @@ This note grants no merge, review, lease or approval authority to any session.
 - `MERGE-01` says *when* a green pull request may merge. `REVIEW-01` names the merge coordinator
   as the party that merges, and `CLEANUP-01` governs post-merge tracker/issue closure and
   worktree/branch/venv retirement (while preserving `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`).
+  Cleanup closes only the focused issue its merged pull request names, and never closes tracker #1353.
+  Cleanup never closes a pull request: closing an unmerged one needs a cited owner decision, posted
+  as a comment on it first. It deletes a branch only when its pull request's `merged_at` is set and
+  every ref still present equals the merged head.
   Reading this note does not make a session the merge coordinator.
 - The coordinator recruits each worker to a written profile, and that profile names the
   authorities the worker does not hold, merge among them, unless they are separately and
@@ -53,6 +57,14 @@ Notes for a host this table does not name:
 `INTAKE-01` and `AGENTS.md` "Start every task safely" give the order. `scripts/ci/check_pr_intake.py`
 compares creation times: for a human or agent pull request, the work record must exist before the
 pull request does. A record posted afterwards cannot clear it.
+
+## STEAM, SCMC and Planet Green Force work
+
+These programmes run through this repository so that other agents and programmers can follow and add
+to them. Start at `docs/source_materials/scmc_ananda_coe_2026/README.md` or
+`docs/source_materials/planet_green_force_2026/README.md`. `INTAKE-01` and the branch and pull request
+rules apply as they do to model work. This repository is public: private material goes to
+`arunakulat/DutchBay_RAG`, and only sanitised derivatives and hashes come here.
 
 ## Rules and formats
 

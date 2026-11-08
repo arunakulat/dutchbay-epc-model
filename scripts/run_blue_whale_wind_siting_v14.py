@@ -44,7 +44,7 @@ from analytics.gis.shadow_flicker import (
     coastline_lines_east_north,
     flicker_grid,
     grid_summary,
-    place_at_coastal_setback,
+    place_turbine,
     receptor_as_dict,
     receptor_flicker,
     site_feature_collection,
@@ -323,6 +323,25 @@ def resource_basis(resource_cfg: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _turbine_derivation(
+    rule: str, reference_name: str, setback_m: float, distance_m: float
+) -> str:
+    """The site GeoJSON's account of how the turbine position was chosen."""
+    if rule == "reference_point":
+        return (
+            f"DutchBay {reference_name}'s recorded position: the Blue Whale turbine "
+            f"replaces {reference_name} at the same location (owner, 2026-11-07). It lies "
+            f"{distance_m:.1f} m from the OpenStreetMap coastline, clear of the "
+            f"{setback_m:g} m CZ&CRMP 2024-2029 segment 2 setback."
+        )
+    return (
+        f"Westernmost point on {reference_name}'s latitude at least {setback_m:g} m "
+        "from the OpenStreetMap coastline (CZ&CRMP 2024-2029 segment 2 setback, "
+        "measured from the coastline as a bound because the vegetation line is not "
+        "mapped)."
+    )
+
+
 def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:
     """Run the whole screen from a resolved config mapping.
 
@@ -372,9 +391,10 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:
     coast_doc = json.loads(_repo_path(str(site["coastline_geojson"])).read_text())
     lines = coastline_lines_east_north(coast_doc, frame)
     coastal = CoastalSetbackConfig.from_mapping(cfg["coastal_setback"])
-    placement = place_at_coastal_setback(
+    rule = str(site["turbine_placement"])
+    placement = place_turbine(
         lines,
-        north_m=0.0,
+        rule=rule,
         min_distance_m=coastal.tower_distance_from_coastline_m,
         search_east_m=float(site["placement_search_east_m"]),
     )
@@ -415,11 +435,11 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:
         turbine_properties={
             "name": "Blue Whale turbine (PLACEHOLDER POSITION)",
             "placeholder": True,
-            "derivation": (
-                "Westernmost point on T2's latitude at least "
-                f"{coastal.tower_distance_from_coastline_m:g} m from the OpenStreetMap "
-                "coastline (CZ&CRMP 2024-2029 segment 2 setback, measured from the "
-                "coastline as a bound because the vegetation line is not mapped)."
+            "derivation": _turbine_derivation(
+                rule,
+                str(site["reference_point_name"]),
+                coastal.tower_distance_from_coastline_m,
+                placement.distance_to_coastline_m,
             ),
         },
         decimals=int(site["geojson_decimals"]),
@@ -487,6 +507,7 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:
             "hub_height_m": turbine.hub_height_m,
             "rotor_diameter_m": turbine.rotor_diameter_m,
             "tip_height_m": turbine.tip_height_m,
+            "placement_rule": rule,
             "lat_deg": lat_t,
             "lon_deg": lon_t,
             "east_of_reference_m": tower[0],

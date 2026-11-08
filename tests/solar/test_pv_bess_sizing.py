@@ -433,8 +433,10 @@ def _small_cfg() -> Dict[str, Any]:
     cfg = {
         k: v for k, v in _yaml(SIZING_CONF).items() if k not in ("defaults", "hydra")
     }
+    # DC/AC 1.3, not 1.4: with the turbine on DutchBay T2 (15.22.0) the lot holds 186 tables,
+    # one short of DC/AC 1.4 at 5 MW AC, and a point that does not fit is not evaluated.
     cfg["grid"] = {
-        "dc_ac_ratios": [1.2, 1.4],
+        "dc_ac_ratios": [1.2, 1.3],
         "bess_energy_mwh": [20.0, 30.0],
         "bess_power_mw": 5.0,
     }
@@ -507,6 +509,46 @@ def test_priority_window_capability_closed_form(unit: Dict[str, Any]) -> None:
         assert cap["deliverable_hours_at_power"] == pytest.approx(energy * rte / 5.0)
     # The 4 h threshold sits at 20 / 0.85 = 23.53 MWh.
     assert 23.0 * 0.85 / 5.0 < 4.0 < 24.0 * 0.85 / 5.0
+
+
+def test_the_turbine_shadow_reaches_the_sized_pv(unit: Dict[str, Any]) -> None:
+    """A one-point run derates its PV when the site carries the turbine's shadow (B33).
+
+    The same point, run with and without the shading source, must report less PV with
+    it. A run that skipped the shading branch would report the unshaded figure twice.
+    """
+    pytest.importorskip("pvlib")
+    pytest.importorskip("shapely")
+    pytest.importorskip("pyproj")
+    from analytics.evaluation_v14 import evaluate_with_overrides
+
+    cfg = _small_cfg()
+    cfg["grid"] = {
+        "dc_ac_ratios": [1.1],
+        "bess_energy_mwh": [24.0],
+        "bess_power_mw": 5.0,
+    }
+    cfg["monte_carlo"] = {**cfg["monte_carlo"], "n_trials": 1}
+    site = sz.site_context(unit, _read_repo)
+    assert site["shading"] is not None  # the committed unit config models the shadow
+
+    def pv_of(s: Dict[str, Any]) -> float:
+        run = sz.run_sizing(
+            cfg,
+            unit_cfg=unit,
+            pricing_cfg=_yaml(PRICING_CONF),
+            scenario=_yaml(SCENARIO),
+            site=s,
+            evaluator=evaluate_with_overrides,
+        )
+        (point,) = run.points
+        assert point["land"]["lot_fits"]  # every table placed, so the branch applies
+        return float(point["pv_ac_mwh_factor_1"])
+
+    shaded = pv_of(site)
+    unshaded = pv_of({**site, "shading": None})
+    # The optical floor costs about 0.13% of the AC energy; anything from a hair to 1%.
+    assert unshaded * 0.99 < shaded < unshaded * (1.0 - 1.0e-4)
 
 
 def test_the_turbine_is_not_a_sizing_variable(unit: Dict[str, Any]) -> None:
@@ -586,16 +628,19 @@ def test_scenario_carries_the_recommended_base_case() -> None:
     # tariff is checked against the blend formula on the CURRENT wind CF; the same formula
     # on PR 3's frozen wind CF must still reproduce PR 3's frozen tariff (the original
     # oracle, kept rather than dropped).
-    def blend(wind_cf: float) -> float:
+    def blend(wind_cf: float, solar_cf: float | None = None) -> float:
         e_w = techs["wind"]["capacity_mw"] * wind_cf
-        e_s = solar["capacity_mw"] * eng["solar_capacity_factor"]
+        cf = eng["solar_capacity_factor"] if solar_cf is None else solar_cf
+        e_s = solar["capacity_mw"] * cf
         return (e_w * 25.73 + e_s * 20.72) / (e_w + e_s)
 
     # PR 6 capex re-ran this sizing on the current hybrid, so the committed summary's engine
     # tariff is again the blend on the CURRENT wind CF (PR 3's original oracle, restored).
     # PR 5's frozen check is kept as a closed form against PR 3's frozen tariff value,
     # 24.785983774583563 (the summary no longer records it).
-    assert blend(0.374256) == pytest.approx(24.785983774583563, abs=5e-5)
+    # 15.19.0 (turbine shadow, input B33) moved the solar CF, so that frozen check runs on
+    # the solar CF PR 3 had then, 0.165096 (unshaded), stated here as a constant.
+    assert blend(0.374256, 0.165096) == pytest.approx(24.785983774583563, abs=5e-5)
     assert eng["tariff_lkr_per_kwh"] == pytest.approx(
         blend(techs["wind"]["capacity_factor"]), abs=5e-5
     )
