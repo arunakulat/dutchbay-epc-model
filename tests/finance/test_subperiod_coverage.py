@@ -448,6 +448,7 @@ def test_a_zero_weight_residual_cannot_halve_the_view_minimum(sized_lender) -> N
 @pytest.mark.parametrize(
     "weights",
     [
+        (1.0,),
         (0.25, 0.25, 0.25, 0.25),
         (0.0, 0.5, 0.0, 0.5),
         (0.0, 0.0, 0.0, 1.0),
