@@ -143,9 +143,20 @@ def test_a_config_without_the_block_is_returned_unchanged() -> None:
     assert capex_escalation_factor({"capex": None}) is None
 
 
-@pytest.mark.parametrize("path", sorted(SCENARIOS.glob("*.yaml")), ids=lambda p: p.name)
+# Every committed scenario, subfolders included (overrides/, test/, _scrtch/ and any added
+# later), in both YAML spellings (assurance lane A-3).
+COMMITTED_SCENARIOS = sorted(
+    p for suffix in ("*.yaml", "*.yml") for p in SCENARIOS.rglob(suffix)
+)
+
+
+@pytest.mark.parametrize(
+    "path",
+    COMMITTED_SCENARIOS,
+    ids=lambda p: p.relative_to(SCENARIOS).as_posix(),
+)
 def test_undeclared_committed_scenarios_are_untouched(path: Path) -> None:
-    """Every scenario without the block passes through with no key changed."""
+    """Only the two live Blue Whale projects declare a price date; the rest pass through."""
     try:
         cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError:
@@ -153,10 +164,21 @@ def test_undeclared_committed_scenarios_are_untouched(path: Path) -> None:
     if not isinstance(cfg, dict):
         pytest.skip("not a single-document mapping")
     capex = cfg.get("capex")
-    if isinstance(capex, dict) and "price_basis" in capex:
+    opex = cfg.get("opex")
+    declares_capex = isinstance(capex, dict) and "price_basis" in capex
+    declares_opex = isinstance(opex, dict) and "price_year" in opex
+    if declares_capex or declares_opex:
         assert path in (WIND, SOLAR_BESS)
+        assert declares_capex and declares_opex
         return
     assert apply_capex_price_basis(cfg) == cfg
+    assert _resolve_opex_pre_cod_years(cfg) == 0
+
+
+def test_the_scenario_census_reaches_the_subfolders() -> None:
+    """The census above is recursive: it sees the files outside the top level."""
+    nested = [p for p in COMMITTED_SCENARIOS if p.parent != SCENARIOS]
+    assert nested, "expected committed scenarios under scenarios/<subfolder>/"
 
 
 # --- Capex: refusals ---------------------------------------------------------------
@@ -298,6 +320,30 @@ def test_engine_spends_the_escalated_capex(path: Path, years: int) -> None:
     uses = debt["funding"]["sources_and_uses"]["uses"]
 
     assert uses["capex_usd"] == pytest.approx(stated * 1.05**years, abs=0.01)
+
+
+@pytest.mark.parametrize("path", [WIND, SOLAR_BESS], ids=["wind", "solar_bess"])
+def test_batch_analytics_runs_the_escalated_config(path: Path) -> None:
+    """The batch surface (ScenarioAnalytics) applies the price date too (assurance A-2).
+
+    Its run manifest binds the configuration it priced. That digest must be the escalated
+    configuration's, the same one the canonical pipeline binds, and not the stated one's.
+    """
+    from analytics.run_manifest import config_sha256
+    from analytics.scenario_analytics import ScenarioAnalytics
+    from analytics.scenario_loader import load_scenario_config
+
+    stated = load_scenario_config(str(path))
+    escalated = apply_capex_price_basis(stated)
+    assert escalated["capex"]["usd_total"] > stated["capex"]["usd_total"]
+
+    result = ScenarioAnalytics(scenarios_dir=SCENARIOS)._run_single(path)
+    assert result.fail_reason is None
+    assert result.run_manifest is not None
+    bound = result.run_manifest["config_sha256"]
+
+    assert bound == config_sha256(escalated)
+    assert bound != config_sha256(stated)
 
 
 def test_wind_npv_responds_to_the_price_dates() -> None:

@@ -9,7 +9,10 @@
     evaluated configuration and recorded as `capex.price_basis_applied`. A price year after
     financial close, a price year that contradicts `capex.cost_basis_year`, an unknown key or a
     missing `project.cod_year` is refused. The canonical pipeline and the batch scenario
-    analytics both apply it.
+    analytics both apply it, and so does the report gateway (`build_report_context`), because
+    the out-of-band report emitters re-load the scenario YAML: their three statements now book
+    PP&E and paid-in equity on the capex the engine financed, and their FX methodology is no
+    longer withheld for a dated scenario.
   - `opex.price_year` makes every opex escalation run from the price year: operating year 1
     carries `cod_year - price_year` years. The USD share of a currency split keeps the
     engine's own FX path, anchored at the financial-close spot.

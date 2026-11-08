@@ -2535,6 +2535,18 @@ def build_report_context(
         A fully populated :class:`ReportContext` ready for the renderer.
     """
     cfg = config if config is not None else load_report_config()
+    # #1569 (domain lane D-2): the engine prices the evaluated configuration, in which a
+    # declared ``capex.price_basis`` has escalated ``capex.usd_total`` to the construction
+    # draws. The out-of-band emitters re-load the scenario YAML, which still states the
+    # price-year figure, so without this the statements would book PP&E and paid-in equity
+    # on capex the engine never financed (equity is the plug, so the tie-outs would still
+    # pass), and the manifest-digest check below would withhold the FX methodology. Apply the
+    # same function here. It is idempotent: an already-evaluated config (no ``price_basis``
+    # block) comes back unchanged, and a config without the block is returned as a copy.
+    if scenario_config is not None:
+        from finance.capex_price_basis import apply_capex_price_basis
+
+        scenario_config = apply_capex_price_basis(scenario_config)
     readiness_rows, overall_readiness = _build_readiness(scenario_config)
     # The verdict is built once and shared: the IC summary reads its covenant/return
     # judgments (single source) rather than re-deriving them.
