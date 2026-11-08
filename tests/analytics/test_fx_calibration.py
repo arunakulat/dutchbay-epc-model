@@ -175,12 +175,13 @@ class TestEngineIntegration:
             res = eng.run(n_trials=64)
             assert res.failed_iterations == 0
             assert res.metadata.get("degenerate_sweep") is False
-            irr = [
-                float(x)
-                for x in (res.trials or {}).get("project_irr", [])
-                if x is not None
-            ]
-            assert len(irr) == 64
+            raw_irr = (res.trials or {}).get("project_irr", [])
+            assert len(raw_irr) == 64
+            irr = [float(x) for x in raw_irr if x is not None]
+            # #1577 x #1525: on 14 turbines one FX draw of this seed (trial 48) leaves the
+            # lender case's project IRR with no root the solver can bracket, so it is
+            # reported undefined (None, never 0.0); the trial itself does not fail.
+            assert len(irr) == 63
             assert max(irr) - min(irr) > 1e-4  # FX genuinely moves the IRR
         finally:
             logging.disable(logging.NOTSET)

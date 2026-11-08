@@ -58,8 +58,17 @@ RESPONSIVE_KPIS = (
 MIN_RELATIVE_MOVE = 1e-4
 DRIVERS = (
     ("tariff +10%", {"tariff.lkr_per_kwh": 18.359}),
-    ("opex +10%", {"opex.usd_per_year": 3_861_000.0}),
+    # #1577: 3.861M was +10% on the 15-turbine 3.51M; on the 14-turbine 3.33M it is +15.9%.
+    ("opex +15.9%", {"opex.usd_per_year": 3_861_000.0}),
 )
+
+# driver label -> KPIs the shock leaves UNDEFINED. #1577 x #1525: on 14 turbines the opex
+# shock turns year-20 CFADS negative (the LKR tariff is fixed and opex escalates), so the
+# project cashflows end below zero, the NPV has the same sign at both ends of the solver's
+# bracket, and the project IRR is reported undefined (None), never 0.0 (#1525). That is a
+# move away from the finite base value, so it still proves the KPI is computed; the
+# tariff driver proves project_irr responds as a number.
+DRIVER_UNDEFINED_KPIS: dict[str, tuple[str, ...]] = {"opex +15.9%": ("project_irr",)}
 FINANCIAL_TARGETS = {
     "project_irr": ("project_irr", 1.0, 0.005),
     "equity_irr": ("equity_irr", 1.0, 0.005),
@@ -96,11 +105,27 @@ def _evaluate_kpis(
 
 
 def _assert_kpis_respond(
-    base_kpis: Mapping[str, Any], shocked_kpis: Mapping[str, Any], label: str
+    base_kpis: Mapping[str, Any],
+    shocked_kpis: Mapping[str, Any],
+    label: str,
+    undefined: tuple[str, ...] = (),
 ) -> None:
-    """Fail with an actionable list when any fixture value remains frozen."""
+    """Fail with an actionable list when any fixture value remains frozen.
+
+    A key named in ``undefined`` must be finite at base and undefined (absent or None)
+    under the shock: undefined is a move, while a returned base value would not be.
+    """
     unmoved = []
     for key in RESPONSIVE_KPIS:
+        if key in undefined:
+            if not math.isfinite(float(base_kpis[key])) or (
+                shocked_kpis.get(key) is not None
+            ):
+                unmoved.append(
+                    f"{key}: expected finite -> undefined, got "
+                    f"{base_kpis.get(key)!r} -> {shocked_kpis.get(key)!r}"
+                )
+            continue
         base, shocked = float(base_kpis[key]), float(shocked_kpis[key])
         if not math.isfinite(base) or not math.isfinite(shocked):
             unmoved.append(f"{key}: non-finite value {base!r} -> {shocked!r}")
@@ -296,7 +321,14 @@ def test_kalpitiya_fixture_kpis_respond_to_economic_drivers(
 ) -> None:
     """TEST-01: every non-solved fixture KPI responds to a real driver."""
     shocked = _evaluate_kpis(raw_config, overrides)
-    _assert_kpis_respond(gateway_kpis, shocked, label)
+    undefined = DRIVER_UNDEFINED_KPIS.get(label, ())
+    _assert_kpis_respond(gateway_kpis, shocked, label, undefined)
+    for key in undefined:
+        # An undefined KPI must be backed by another driver that moves it as a number.
+        assert any(
+            other != label and key not in DRIVER_UNDEFINED_KPIS.get(other, ())
+            for other, _ in DRIVERS
+        )
     financing = raw_config["Financing_Terms"]
     target_dscr = float(financing["target_dscr"])
     assert financing["debt_sizing"] == "dual_dscr"
