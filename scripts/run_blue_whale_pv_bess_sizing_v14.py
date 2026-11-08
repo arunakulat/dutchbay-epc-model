@@ -6,7 +6,9 @@ pricing config and the Blue Whale scenario) and prints one JSON object (CLI-01, 
 the run spec with its seed and its requested and effective evaluation counts
 (``MRM-01``, ``TEST-03``), every grid point's fit, inverter match, base case and
 distribution summary, the recommendation and the curtailment scenario. Per-trial values
-are not written; ``output.summary_json`` writes the same summary to a file.
+are not written; ``output.summary_json`` writes the same summary to a file. The spec names
+the code that ran by content (``code_sha256``) as well as by commit (``git_sha``), because a
+squash merge leaves the run's commit outside ``main`` (MRM-02).
 
 Usage::
 
@@ -34,9 +36,10 @@ import hashlib
 import json
 import logging
 import subprocess
+import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, Iterable, Mapping
 
 import hydra
 import yaml
@@ -78,6 +81,62 @@ def _git_head() -> str:
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
+
+
+def code_sha256(files: Iterable[Path], root: Path = REPO_ROOT) -> Dict[str, Any]:
+    """Digest the repository code a run executed (MRM-02).
+
+    ``git_sha`` names the commit a run started from, but a squash merge leaves that commit
+    outside ``main`` (#1568's summaries cite f5b45904, held only by its pull-request ref). The
+    file digests are checkable against any checkout: ``tree`` is the SHA-256 of the
+    ``sha256sum`` listing (``"<sha256>  <path>"`` lines, sorted by path, newline-terminated),
+    so ``sha256sum -c`` verifies each file and the listing reproduces ``tree``.
+    ``uncommitted`` names the files that differed from ``git_sha`` when the run ended (empty
+    for a clean run; ``None`` when git could not be asked).
+    """
+    rels = sorted({p.resolve().relative_to(root.resolve()).as_posix() for p in files})
+    digests = {r: hashlib.sha256((root / r).read_bytes()).hexdigest() for r in rels}
+    listing = "".join(f"{digests[r]}  {r}\n" for r in rels)
+    try:
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain", "--", *rels],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        uncommitted: list[str] | None = sorted(
+            line[3:] for line in dirty.splitlines() if line.strip()
+        )
+    except (OSError, subprocess.CalledProcessError):
+        uncommitted = None
+    return {
+        "tree": hashlib.sha256(listing.encode()).hexdigest(),
+        "files": digests,
+        "uncommitted": uncommitted,
+    }
+
+
+def loaded_repo_modules(root: Path = REPO_ROOT) -> list[Path]:
+    """The source files of every imported module that lives in this repository.
+
+    Modules under a virtual environment or ``site-packages`` inside the checkout are third
+    party and are left out (the lock file pins them).
+    """
+    base = root.resolve()
+    out: list[Path] = []
+    for mod in list(sys.modules.values()):
+        name = getattr(mod, "__file__", None)
+        if not name:
+            continue
+        path = Path(name).resolve()
+        if path.suffix != ".py" or not path.is_relative_to(base):
+            continue
+        rel = path.relative_to(base).parts
+        if rel[0].startswith(".") or "site-packages" in rel:
+            continue
+        out.append(path)
+    return out
 
 
 PROJECT_SCHEMA = "blue_whale_solar_bess_project_sizing_v1"
@@ -130,6 +189,7 @@ def run(
         ).encode()
     ).hexdigest()
     spec["git_sha"] = _git_head()
+    spec["code_sha256"] = code_sha256([*loaded_repo_modules(), Path(__file__)])
     spec["model_version"] = (REPO_ROOT / "VERSION").read_text().strip()
     spec["limitations"] = [
         "Placeholder site (PR 1) and placeholder O&M, financing and grid inputs.",
