@@ -48,8 +48,9 @@ mast:
   direction: "Direction 80 m Avg [°]"
   direction_120m: "Direction 120 m Avg [°]"
   pressure_10m_kpa: "Pressure 10 m Avg [kPa]"
-  temperature_10m_c: "Temp 10 m Avg [℃]"
-  temperature_120m_c: "Temp 120 m Avg [℃]"
+  # Temperature channels by height (m), as speed_avg. timezone.temperature_height_m and
+  # air_density.temperature_height_m pick the one each step reads.
+  temperature_c: {"10": "Temp 10 m Avg [℃]", "120": "Temp 120 m Avg [℃]"}
   humidity_10m_pct: "RH 10 m Avg [%]"
   # Temperature rows outside this range are the reset/glitch rows of QC-030 and QC-031.
   temperature_valid_range_c: [10.0, 45.0]
@@ -71,6 +72,12 @@ timezone:
   correlation_tolerance: 0.002
   # Window for the sub-daily anomaly correlation of the wind components (hours).
   anomaly_window_h: 24
+  # Mast channels the evidence reads, by height (m): the speed scanned against the
+  # reference's WS50M, the speed paired with mast.direction for the sub-daily anomaly
+  # check, and the temperature whose daily maximum is reported.
+  scan_speed_height_m: 100
+  anomaly_speed_height_m: 80
+  temperature_height_m: 10
   sensitivity_offsets_minutes: [300, 360]
 
 reference:
@@ -186,9 +193,19 @@ turbine:
   integrator_tolerance_pct: 0.5
 
 turbulence:
+  # Heights (m) with both a mast.speed_avg and a mast.speed_sd channel.
+  heights_m: [100, 120]
   bin_edges_ms: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20]
   min_speed_ms: 3.0
   min_count: 30
+
+air_density:
+  # The mast.temperature_c channel used as the air temperature at height.
+  temperature_height_m: 120
+  # Height of the pressure and RH channels (pressure_10m_kpa, humidity_10m_pct); pressure
+  # is moved hydrostatically from here, and RH is converted at the temperature channel of
+  # this same height.
+  sensor_height_m: 10
 
 uncertainty:
   # 1-sigma, % of WIND SPEED unless noted; converted to energy with the yield's own
