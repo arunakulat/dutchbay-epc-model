@@ -39,6 +39,8 @@ from analytics.gis.shadow_flicker import (  # noqa: E402
     flicker_grid,
     grid_summary,
     place_at_coastal_setback,
+    place_at_reference_point,
+    place_turbine,
     receptor_flicker,
     shadow_mask,
     tip_height_setback,
@@ -347,6 +349,53 @@ def test_placement_moves_east_with_each_offset() -> None:
     assert wider.turbine_east_m > base.turbine_east_m
 
 
+def test_reference_point_placement_on_a_straight_coast() -> None:
+    b = math.radians(28.0)
+    e0 = -300.0
+    line = [
+        (e0 - 2000.0 * math.sin(b), -2000.0 * math.cos(b)),
+        (e0 + 2000.0 * math.sin(b), 2000.0 * math.cos(b)),
+    ]
+    got = place_at_reference_point([line], min_distance_m=60.0)
+    assert (got.turbine_east_m, got.turbine_north_m) == (0.0, 0.0)
+    assert got.coastline_crossing_east_m == pytest.approx(e0, abs=1e-9)
+    # Perpendicular distance from the origin to the line.
+    assert got.distance_to_coastline_m == pytest.approx(300.0 * math.cos(b), abs=1e-6)
+
+
+def test_reference_point_inside_the_setback_is_refused() -> None:
+    line = [(-50.0, -2000.0), (-50.0, 2000.0)]
+    with pytest.raises(ValueError, match="inside the 60 m coastal setback"):
+        place_at_reference_point([line], min_distance_m=60.0)
+    # Exactly on the setback line is allowed.
+    got = place_at_reference_point([line], min_distance_m=50.0)
+    assert got.distance_to_coastline_m == pytest.approx(50.0, abs=1e-9)
+    with pytest.raises(ValueError, match="no coastline crosses"):
+        place_at_reference_point([[(-50.0, 10.0), (-40.0, 20.0)]], min_distance_m=0.0)
+
+
+def test_place_turbine_dispatches_by_rule() -> None:
+    lines = _committed_lines()
+    at_t2 = place_turbine(
+        lines, rule="reference_point", min_distance_m=60.0, search_east_m=500.0
+    )
+    assert (at_t2.turbine_east_m, at_t2.turbine_north_m) == (0.0, 0.0)
+    assert at_t2.distance_to_coastline_m == pytest.approx(
+        _min_distance((0.0, 0.0), lines), abs=1e-6
+    )
+    west = place_turbine(
+        lines, rule="coastal_setback", min_distance_m=60.0, search_east_m=500.0
+    )
+    assert west == place_at_coastal_setback(
+        lines, north_m=0.0, min_distance_m=60.0, search_east_m=500.0
+    )
+    # The #1530 position was 224 m west of T2; T2 itself is farther from the sea.
+    assert west.turbine_east_m == pytest.approx(-224.1, abs=0.1)
+    assert at_t2.distance_to_coastline_m > west.distance_to_coastline_m
+    with pytest.raises(ValueError, match="not one of"):
+        place_turbine(lines, rule="nearest", min_distance_m=60.0, search_east_m=500.0)
+
+
 def test_coast_aligned_lot_on_a_straight_coast() -> None:
     b = math.radians(28.0)
     line = [
@@ -386,12 +435,23 @@ def test_committed_site_geojson_geodesic_area_and_flags() -> None:
     lons, lats = zip(*ring)
     area, _ = pyproj.Geod(ellps="WGS84").polygon_area_perimeter(lons, lats)
     assert abs(area) == pytest.approx(93077.0, abs=0.05)  # 9-decimal rounding: 0.1 mm
-    # The turbine is the setback point on T2's latitude, 60 m from the coastline.
+    # The turbine stands on DutchBay T2 (owner, 2026-11-07: it replaces T2 at the same
+    # location), clear of the 60 m coastal setback.
     lon_t, lat_t = turbine["geometry"]["coordinates"]
-    assert lat_t == pytest.approx(T2[0], abs=1e-7)
+    assert (lat_t, lon_t) == pytest.approx(T2, abs=1e-9)
     frame = LocalFrame(*T2)
     tower = frame.to_east_north(lon_t, lat_t)
-    assert _min_distance(tower, _committed_lines()) == pytest.approx(60.0, abs=0.05)
+    assert _min_distance(tower, _committed_lines()) > 60.0
+    assert "T2" in turbine["properties"]["derivation"]
+
+
+def test_committed_config_places_the_turbine_on_t2() -> None:
+    import yaml
+
+    site = yaml.safe_load(CONF.read_text())["site"]
+    assert site["turbine_placement"] == "reference_point"
+    assert site["reference_point_name"] == "T2"
+    assert (site["reference_lat_deg"], site["reference_lon_deg"]) == T2
 
 
 # ---------------------------------------------------------------------------
