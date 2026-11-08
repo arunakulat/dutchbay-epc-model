@@ -230,6 +230,7 @@ def model_wake_loss(
     wind_rose_freq: Optional[Sequence[float]] = None,
     turbulence_intensity: float = DEFAULT_TURBULENCE_INTENSITY,
     deficit_model: str = "bastankhah",
+    counted: Optional[Sequence[bool]] = None,
 ) -> WakeResult:
     """Per-turbine wake loss via PyWake over the real layout + wind rose.
 
@@ -240,9 +241,17 @@ def model_wake_loss(
             None an omnidirectional rose is used (conservative for a single row).
         deficit_model: 'bastankhah' (primary) or 'turbopark' (conservative
             deep-array cross-check).
+        counted: optional per-turbine flags, aligned to the layout. A turbine flagged
+            ``False`` stands in the flow and wakes its neighbours, but its energy is left
+            out of the gross, waked and loss figures (#1577: a neighbouring project's
+            turbine inside the array). ``None`` counts every turbine, as before.
 
     Returns:
-        A :class:`WakeResult` with the modeled wake loss percentage.
+        A :class:`WakeResult` with the modeled wake loss percentage over the counted
+        turbines; ``n_turbines`` is the number counted.
+
+    Raises:
+        ValueError: If ``counted`` does not match the layout or counts no turbine.
     """
     _require_pywake()
     from py_wake.literature.gaussian_models import Bastankhah_PorteAgel_2014
@@ -295,14 +304,33 @@ def model_wake_loss(
 
     x = np.asarray(layout_x_m, dtype=float)
     y = np.asarray(layout_y_m, dtype=float)
+    if counted is None:
+        mask = np.ones(len(x), dtype=bool)
+    else:
+        mask = np.asarray([bool(c) for c in counted], dtype=bool)
+        if mask.shape != x.shape:
+            raise ValueError(
+                f"counted has {mask.size} flags for a layout of {x.size} turbines; "
+                "give one flag per turbine."
+            )
+        if not mask.any():
+            raise ValueError("counted flags no turbine; at least one must be counted.")
     sim = wfm(x, y)
-    aep_wake = float(sim.aep().sum())
-    aep_gross = float(sim.aep(with_wake_loss=False).sum())
+    if counted is None:
+        aep_wake = float(sim.aep().sum())
+        aep_gross = float(sim.aep(with_wake_loss=False).sum())
+    else:
+        per_wt_wake = np.asarray(sim.aep().sum(["wd", "ws"]).values, dtype=float)
+        per_wt_gross = np.asarray(
+            sim.aep(with_wake_loss=False).sum(["wd", "ws"]).values, dtype=float
+        )
+        aep_wake = float(per_wt_wake[mask].sum())
+        aep_gross = float(per_wt_gross[mask].sum())
     wake_loss = 1.0 - aep_wake / aep_gross if aep_gross > 0 else 0.0
     return WakeResult(
         wake_loss_pct=100.0 * wake_loss,
         deficit_model=model_name,
-        n_turbines=len(x),
+        n_turbines=int(mask.sum()),
         aep_gross_gwh=aep_gross,
         aep_wake_gwh=aep_wake,
     )

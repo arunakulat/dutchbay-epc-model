@@ -16,10 +16,13 @@ from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import plan_debt
 
 SCENARIO = "scenarios/dutchbay_lendercase_2025Q4.yaml"
-CAPEX = 159_600_000.0  # 15 x IEA-10MW re-model (was 150M at 23 x EN-171/6.5)
+# 14 x IEA-10MW (#1577: T2 is the Blue Whale turbine's). Was 159.6M for 15 turbines, and
+# 150M at 23 x EN-171/6.5 before that.
+CAPEX = 151_407_200.0
 # #738: the engine finances the LEVY-INCLUSIVE gross — pre-levy base + the PRUDENT
-# import duties (0.69 share x 7.5% = $8.2593M capitalized). Debt sizes on this.
-CAPEX_GROSS = CAPEX + 8_259_300.0
+# import duties (0.6788 share x 7.5% = $7.70814M capitalized; 0.69 x 159.6M = $8.2593M
+# before #1577). Debt sizes on this.
+CAPEX_GROSS = CAPEX + 7_708_140.552
 
 
 @pytest.fixture(scope="module")
@@ -48,8 +51,9 @@ def test_dual_dscr_autosolve_sizes_to_target(base_config):
     # reported honestly.
     assert res["min_dscr"] == pytest.approx(1.30, abs=0.01)
     assert res["debt_total"] == pytest.approx(
-        0.355 * CAPEX_GROSS, rel=3e-3
-    )  # DSCR-solved, below cap (PR-B UIP LKR rate + #737 fees + #738 levies de-lever)
+        0.35 * CAPEX_GROSS, rel=3e-3
+    )  # DSCR-solved, below cap (PR-B UIP LKR rate + #737 fees + #738 levies de-lever;
+    # #1577's 14 turbines move the solve two 0.0025 steps down, 0.355 -> 0.35)
     detail = res["dual_dscr"]
     assert detail is not None
     assert (

@@ -440,8 +440,16 @@ def test_oracle_self_curtailment_moves_kpis_down_when_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The KPI oracle diff: a canonical-contract 8% test double
-    reduces net energy → CFADS, so projIRR / eqIRR / min_dscr all move DOWN, and the
-    committed default stays byte-identical. This is the sole authorized KPI move.
+    reduces net energy → CFADS, so projIRR / eqIRR move DOWN and the sculpt sizes a
+    smaller facility, and the committed default stays byte-identical. This is the sole
+    authorized KPI move.
+
+    The headline ``min_dscr`` is not a signed oracle here. It is the year-1 fold, and the
+    bridge service folded into year 1 scales with the facility the sculpt re-sizes, so
+    its direction under an energy cut depends on the case: on 15 turbines it fell
+    1.2196 -> 1.2191 at 8%; on 14 (#1577) it rises 1.2214 -> 1.2232. The per-period
+    sculpt holds 1.30 either way, and the facility always shrinks, which is what is
+    asserted instead.
     """
     monkeypatch.setattr(
         "analytics.grid.curtailment_qsts.run_qsts_curtailment",
@@ -460,7 +468,8 @@ def test_oracle_self_curtailment_moves_kpis_down_when_enabled(
     # After: a strictly-worse, correctly-signed contract-oracle move on every headline KPI.
     assert after["project_irr"] < before["project_irr"] - 1e-6
     assert after["equity_irr"] < before["equity_irr"] - 1e-6
-    assert after["min_dscr"] < before["min_dscr"] - 1e-6
+    assert after["max_debt_usd"] < before["max_debt_usd"] - 1.0  # the sculpt de-levers
+    assert after["min_dscr_period"] == pytest.approx(1.30, abs=1e-6)
     assert after["total_cfads_usd"] < before["total_cfads_usd"]  # less net energy
     assert after["project_npv"] < before["project_npv"]
 
@@ -499,4 +508,6 @@ def test_oracle_magnitude_scales_with_self_curtailment(
     small = _kpis_for(4.0)
     large = _kpis_for(12.0)
     assert large["project_irr"] < small["project_irr"] - 1e-6
-    assert large["min_dscr"] < small["min_dscr"] - 1e-6
+    # The facility, not the year-1 fold, is the signed debt-side measure (see the
+    # docstring of test_oracle_self_curtailment_moves_kpis_down_when_enabled).
+    assert large["max_debt_usd"] < small["max_debt_usd"] - 1.0

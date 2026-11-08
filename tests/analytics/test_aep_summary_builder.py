@@ -72,17 +72,20 @@ def test_unknown_source_raises(cfg: dict) -> None:
 def test_regen_reproduces_canonical(cfg: dict) -> None:
     summary = build_aep_summary_from_config(cfg)
     assert summary["net_site_aep_gwh"] == pytest.approx(
-        464.3, abs=0.5
-    )  # ERA5-fitted Weibull, post 2% P50 over-prediction haircut
-    assert summary["gross_aep_gwh"] == pytest.approx(554.1, abs=1.0)
+        433.2, abs=0.5
+    )  # ERA5-fitted Weibull, post 2% P50 haircut; 14 turbines (#1577, was 464.3 for 15)
+    assert summary["gross_aep_gwh"] == pytest.approx(
+        517.2, abs=1.0
+    )  # #1577 (554.1 on 15)
     assert summary["capacity_factor"] == pytest.approx(0.332, abs=0.002)
     assert summary["power_curve_key"] == "iea_reference_10mw"
     assert summary["source_id"] == "IEA_REFERENCE_10MW_198_PC"
     assert summary["provenance"]["aep"]["is_placeholder"] is False
     # WIND-2 (#478): the committed lender supplies no live-wake spec -> the frozen config wake
-    # path is used and DISCLOSED, and the headline is byte-identical (still ~464.3).
+    # path is used and DISCLOSED, and the headline is byte-identical (~433.2 since #1577).
     assert summary["wake_source"] == "frozen_config_pct"
-    assert summary["losses"]["wake_loss_pct"] == pytest.approx(7.28, abs=1e-9)
+    # #1577: the 14-turbine frozen wake (docs/wind/dutchbay_14_turbine_wake_summary.json).
+    assert summary["losses"]["wake_loss_pct"] == pytest.approx(7.32, abs=1e-9)
 
 
 # ── WIND-2 (#478): wake-source resolution + fail-loud live path ────────────────
@@ -97,7 +100,9 @@ def test_wake_resolves_frozen_when_no_live_spec(cfg: dict) -> None:
         cfg["resource"], curve, weibull_a=8.199, weibull_k=2.665, hub_height_m=150.0
     )
     assert source == "frozen_config_pct"
-    assert pct == pytest.approx(7.28, abs=1e-9)
+    # #1577: the 14-turbine re-baseline (docs/wind/dutchbay_14_turbine_wake_summary.json);
+    # 7.28 was the 15-turbine figure.
+    assert pct == pytest.approx(7.32, abs=1e-9)
 
 
 def test_wake_live_with_incomplete_inputs_fails_loud(cfg: dict) -> None:
@@ -511,7 +516,9 @@ def test_regen_summary_is_loader_compatible(cfg: dict, tmp_path: Path) -> None:
     out = write_aep_summary(cfg, str(tmp_path / "regen_summary.json"))
     assert out.exists()
     loaded = load_aep_from_summary(str(out), validate_manifest=True)
-    assert loaded["net_site_aep_gwh"] == pytest.approx(464.3, abs=0.5)
+    assert loaded["net_site_aep_gwh"] == pytest.approx(
+        433.2, abs=0.5
+    )  # 14 turbines (#1577)
     assert loaded["power_curve_key"] == "iea_reference_10mw"
     assert "aep" in loaded["provenance"]
 

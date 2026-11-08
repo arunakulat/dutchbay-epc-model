@@ -90,11 +90,11 @@ class TestNoSilentDefaults:
             )
 
     def test_lender_scenario_still_builds(self, scenario: dict) -> None:
-        """The compliant lender scenario provides every field — no raise, 464.3 GWh (post 2% haircut)."""
+        """The compliant lender scenario provides every field — no raise, 433.2 GWh (post 2% haircut; 14 turbines, #1577)."""
         summary = build_aep_summary_from_config(scenario)
         assert summary["net_site_aep_gwh"] == pytest.approx(
-            464.3, abs=1.0
-        )  # ERA5-fitted, post 2% P50 haircut
+            433.2, abs=1.0
+        )  # ERA5-fitted, post 2% P50 haircut (464.3 for 15 turbines before #1577)
 
 
 # ── Layer 2: source scan (masking literals can't creep back) ────────────────────

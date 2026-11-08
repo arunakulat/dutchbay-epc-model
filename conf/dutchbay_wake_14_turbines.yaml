@@ -1,0 +1,85 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# DutchBay 14-turbine wake re-baseline (#1577)
+# ═══════════════════════════════════════════════════════════════════════════════
+# Read by scripts/run_dutchbay_wake_rebaseline_v14.py. Results:
+# docs/wind/dutchbay_14_turbine_wake_summary.json.
+#
+# Owner decisions. 2026-11-07: the Blue Whale turbine stands on DutchBay T2's exact
+# position (#1568). 2026-11-08 02:10:16Z, asked "does DutchBay drop to 14 turbines now that
+# Blue Whale replaces T2?": "yes". DutchBay keeps T1 and T3 to T15.
+#
+# Why the wake is re-derived rather than kept. The committed frozen wake loss (7.28%,
+# PyWake Bastankhah-Porte-Agel) is a 15-turbine figure. With T2 no longer DutchBay's, the
+# farm average changes in two ways: T2's own wake loss leaves the average, and the turbine
+# that now stands at T2 still wakes T1 and T3.
+#
+# Method (ratio, so the frozen calibration is kept). The offline inputs behind 7.28% are
+# not all recorded: the live PyWake path on the committed single-row layout and rose gives
+# about 8.19% at TI 0.10 (docs/knowledge_base/02_dutch_bay_project_dossier.md). So this does
+# not replace 7.28% with a fresh absolute value. It scales it by the ratio of two live
+# PyWake runs on the same inputs:
+#
+#   wake_14 = frozen_wake_15 x (loss over the 14 DutchBay turbines, T2 standing and waking)
+#                             / (loss over all 15 turbines)
+#
+# The T2 turbine is kept in the flow field and excluded from the energy count
+# (wind_resource.bankable_aep.model_wake_loss, counted=). It is modelled with DutchBay's own
+# IEA 10 MW reference machine as a PROXY: the Blue Whale machine's power and thrust curves
+# are confidential and are not read here, and its rotor (206 m) and hub (130 m) differ from
+# the proxy's (198 m, 150 m). The summary also reports two sensitivities: T2 removed from the
+# flow altogether, and the synthetic single row the frozen value cites.
+#
+# Not solved here (#1568 domain N-1): T1 and T3 stand about 2.5 to 3 rotor diameters from
+# the turbine at T2. That is a loads and site-suitability question (IEC 61400-1 effective
+# turbulence, OEM approval) as well as a wake-energy one. Wake energy cannot answer it.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
+  - override hydra/hydra_logging: disabled
+
+wake_rebaseline:
+  frozen_wake_15_pct: 7.28          # resource.losses.wake_loss_pct before #1577 (15 turbines)
+  output_decimals: 2                # the scenarios carry the wake loss to 2 dp
+
+  turbine:
+    curve_key: iea_reference_10mw   # wind_resource/config/power_curves.yaml (carries Ct)
+    rotor_diameter_m: 198
+    hub_height_m: 150
+
+  resource:                         # the lender case's ERA5-fitted Weibull (wind_resource block)
+    weibull_a: 8.199
+    weibull_k: 2.665
+    turbulence_intensity: 0.10      # the engine default (DEFAULT_TURBULENCE_INTENSITY)
+    deficit_model: bastankhah
+    # 12 sectors from 0 deg (north), clockwise. The SW-dominant rose of the committed
+    # single-row wake tests (tests/analytics/test_bankable_aep.py); normalised at run time.
+    wind_rose_freq: [3, 3, 3, 4, 6, 9, 14, 20, 16, 9, 6, 4]
+
+  layout:
+    # Turbine positions, WGS84, from ENVISION_ROAD-DATA.pdf as committed in
+    # scripts/process_era5_wind_data.py (TURBINE_LOCATIONS). Projected to a local transverse
+    # Mercator frame at the centroid (analytics.gis.shadow_flicker.LocalFrame).
+    # role: dutchbay = counted DutchBay energy; external_waker = stands in the flow, not counted.
+    turbines:
+      - {id: T1,  lat_deg: 8.297753, lon_deg: 79.756695, role: dutchbay}
+      - {id: T2,  lat_deg: 8.292500, lon_deg: 79.754700, role: external_waker}  # Blue Whale (#1568)
+      - {id: T3,  lat_deg: 8.288099, lon_deg: 79.752885, role: dutchbay}
+      - {id: T4,  lat_deg: 8.282523, lon_deg: 79.750837, role: dutchbay}
+      - {id: T5,  lat_deg: 8.278638, lon_deg: 79.747152, role: dutchbay}
+      - {id: T6,  lat_deg: 8.279222, lon_deg: 79.753385, role: dutchbay}
+      - {id: T7,  lat_deg: 8.274800, lon_deg: 79.745500, role: dutchbay}
+      - {id: T8,  lat_deg: 8.275226, lon_deg: 79.754207, role: dutchbay}
+      - {id: T9,  lat_deg: 8.270700, lon_deg: 79.744700, role: dutchbay}
+      - {id: T10, lat_deg: 8.270049, lon_deg: 79.752069, role: dutchbay}
+      - {id: T11, lat_deg: 8.268449, lon_deg: 79.748162, role: dutchbay}
+      - {id: T12, lat_deg: 8.263538, lon_deg: 79.743361, role: dutchbay}
+      - {id: T13, lat_deg: 8.259128, lon_deg: 79.742588, role: dutchbay}
+      - {id: T14, lat_deg: 8.254646, lon_deg: 79.746097, role: dutchbay}
+      - {id: T15, lat_deg: 8.252500, lon_deg: 79.741500, role: dutchbay}
+
+  synthetic_row:                    # the cross-check layout the frozen value cites
+    n_turbines: 15
+    spacing_m: 650.0
+    external_waker_index: 1         # T2: second from the north end of a north-south row

@@ -137,8 +137,8 @@ def test_equity_irr_stays_negative_and_plateaus_at_the_dscr_cap() -> None:
     # #1504 (2026-10-31): the senior fee after maturity is charged on the refinanced
     # balance actually outstanding, so the clamped canon moves -30.54% -> -26.44%.
     # #1505 (2026-11-01): the refinanced tranche's interest is deducted in the levered
-    # tax pass, -26.44% -> -23.01%.
-    assert plateau[0] == pytest.approx(-0.2301, abs=0.002)
+    # tax pass, -26.44% -> -23.01%. #1577 (2026-11-08): 14 turbines, -23.01% -> -23.37%.
+    assert plateau[0] == pytest.approx(-0.2337, abs=0.002)
     assert all(irr < 0.0 for irr in irrs), f"equity unexpectedly profitable: {irrs}"
     # The sub-cap 0.35 point is ABOVE the clamped plateau: the project IRR is negative,
     # so the extra leverage the cap allows costs equity rather than paying it.

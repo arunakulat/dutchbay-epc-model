@@ -89,13 +89,13 @@ def test_builder_default_reproduces_canonical_exceedance() -> None:
     """LENDER YAML carries the 2% pre-construction P50 haircut -> canonical post-haircut exceedance."""
     summary = build_aep_summary_from_config(load_scenario_config(LENDER))
     assert summary["net_site_aep_gwh"] == pytest.approx(
-        464.3, abs=0.5
-    )  # 464.36 post 2% haircut
+        433.2, abs=0.5
+    )  # 433.22 post 2% haircut (14 turbines, #1577; was 464.36 for 15)
     exc = summary["exceedance"]
     assert exc["sigma_1yr_pct"] == pytest.approx(10.07, abs=0.05)
     assert exc["net_aep_p90_1yr_gwh"] == pytest.approx(
-        404.4, abs=1.0
-    )  # 412.7 -> 404.4 post 2% haircut
+        377.3, abs=1.0
+    )  # 385.0 -> 377.3 post 2% haircut (#1577; was 412.7 -> 404.4)
     assert (
         summary["uncertainty"]["p50_haircut_pct"] == 2.0
     )  # 2% pre-construction P50 haircut now in LENDER YAML
@@ -106,10 +106,12 @@ def test_builder_haircut_reduces_bankable_p50() -> None:
     cfg = copy.deepcopy(dict(load_scenario_config(LENDER)))
     cfg["resource"]["uncertainty"] = {"p50_haircut_pct": 5.0}
     summary = build_aep_summary_from_config(cfg)
-    assert summary["net_site_aep_gwh"] == pytest.approx(473.8 * 0.95, abs=0.5)  # 450.1
+    assert summary["net_site_aep_gwh"] == pytest.approx(
+        442.06 * 0.95, abs=0.5
+    )  # 419.96 (#1577; 450.1 for 15)
     # the modelled (pre-haircut) P50 is preserved for provenance
-    assert summary["uncertainty"]["modelled_p50_gwh"] == pytest.approx(473.8, abs=0.5)
-    assert summary["exceedance"]["net_aep_p50_gwh"] == pytest.approx(450.1, abs=0.5)
+    assert summary["uncertainty"]["modelled_p50_gwh"] == pytest.approx(442.06, abs=0.5)
+    assert summary["exceedance"]["net_aep_p50_gwh"] == pytest.approx(420.0, abs=0.5)
 
 
 def test_builder_defaults_to_recommended_haircut_when_silent() -> None:
@@ -122,10 +124,10 @@ def test_builder_defaults_to_recommended_haircut_when_silent() -> None:
     summary = build_aep_summary_from_config(cfg)
     assert summary["uncertainty"]["p50_haircut_pct"] == RECOMMENDED_P50_HAIRCUT_PCT
     assert summary["net_site_aep_gwh"] == pytest.approx(
-        473.8 * (1.0 - RECOMMENDED_P50_HAIRCUT_PCT / 100.0), abs=0.5
+        442.06 * (1.0 - RECOMMENDED_P50_HAIRCUT_PCT / 100.0), abs=0.5
     )
     # provenance: the modelled (pre-haircut) P50 is still preserved
-    assert summary["uncertainty"]["modelled_p50_gwh"] == pytest.approx(473.8, abs=0.5)
+    assert summary["uncertainty"]["modelled_p50_gwh"] == pytest.approx(442.06, abs=0.5)
 
 
 def test_builder_correlation_widens_uncertainty() -> None:
@@ -135,9 +137,13 @@ def test_builder_correlation_widens_uncertainty() -> None:
     # the "P50 unchanged by correlation" assertion.
     cfg["resource"]["uncertainty"] = {"correlation": 0.5, "p50_haircut_pct": 0.0}
     summary = build_aep_summary_from_config(cfg)
-    assert summary["net_site_aep_gwh"] == pytest.approx(473.8, abs=0.5)  # P50 unchanged
+    assert summary["net_site_aep_gwh"] == pytest.approx(
+        442.06, abs=0.5
+    )  # P50 unchanged
     assert summary["exceedance"]["sigma_1yr_pct"] > 10.07  # wider than RSS baseline
-    assert summary["exceedance"]["net_aep_p90_1yr_gwh"] < 412.7
+    assert (
+        summary["exceedance"]["net_aep_p90_1yr_gwh"] < 385.0
+    )  # the 0-haircut RSS P90 (412.7 before #1577)
 
 
 # --- #1275: the policy knobs are range-validated at the config layer -----------------
