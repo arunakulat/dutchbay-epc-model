@@ -10,7 +10,10 @@
     results in `docs/wind/dutchbay_14_turbine_wake_summary.json`, from
     `scripts/run_dutchbay_wake_rebaseline_v14.py`. The turbine at T2 is modelled with the IEA
     machine as a proxy. Sensitivities: 7.15% with T2 removed from the flow, 7.24% on the 650 m
-    row.
+    row. The owner's 2026-11-07 zero-wake decision covers the Blue Whale turbine's own yield
+    only; it does not stop that turbine waking DutchBay's T1 and T3, which is what this counts.
+    On the recorded layout the live PyWake absolute wake is about 19.3%, far above the frozen
+    7.28% calibration; the ratio method keeps the calibration, and the gap is open (#1589).
   - Energy: gross 554.1 -> 517.2 GWh; modelled net P50 473.8 -> 442.1; bankable P50 464.3 ->
     433.2; P90 (1 yr) 404.4 -> 377.3; net CF 0.332 (unchanged). Hybrid P50 538.1 -> 507.0.
   - Costs: the per-turbine capex lines (WTG supply, foundations, erection) and opex lines (O&M
@@ -23,10 +26,12 @@
   - Lender case: project IRR -0.060% -> -0.251%; equity IRR -23.01% -> -23.37%; project NPV
     USD -91.40M -> -88.03M; min DSCR 1.2196 -> 1.2214; total CFADS USD 166.93M -> 155.46M;
     senior debt USD 63.37M -> 58.87M.
-  - The lender covenant snapshot moves PASS -> REVIEW. The per-period sculpt still lands at
-    1.30, but the folded year-1 coverage `plan_debt` reports is 1.2961 (was 1.3024), under the
-    1.30 target. Year 5 also counts, at one ULP under 1.30, through the snapshot's strict `<`
-    (a pre-existing boundary fragility).
+  - Lender covenant: the published `debt_covenants` snapshot is FAIL both before and after
+    (breach years 3 -> 4; last breach year 7 -> 14). Only operating year 1 is a real breach
+    (1.2196 -> 1.2214); the other counted years read one or two ULP under 1.30 and are
+    counted by the snapshot's strict `<`, a pre-existing boundary fragility (#1588). The bare
+    `plan_debt` view, which folds the bridge period into year 1, moves PASS -> REVIEW
+    (year-1 coverage 1.3024 -> 1.2961).
   - The web wizard's prefilled form is 148.9 MW at CF 0.332 and USD 159.12M. Its former
     150 MW x 0.35 (460 GWh) no longer reconciles with the 433.2 GWh lender AEP, so a
     one-click run would have been refused.

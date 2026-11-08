@@ -83,7 +83,8 @@ RESPONSIVE_KPIS = (
 MIN_RELATIVE_MOVE = 1e-4
 DRIVERS = (
     ("tariff +10%", {"tariff.lkr_per_kwh": 22.33}),
-    ("opex +25%", {"opex.usd_per_year": 3_750_000.0}),
+    # #1577: 3.75M was +25% on the 15-turbine 3.0M; on the 14-turbine 2.846667M it is +31.7%.
+    ("opex +31.7%", {"opex.usd_per_year": 3_750_000.0}),
 )
 
 # (case, driver) -> KPIs exempt from the move check for that one driver, each with the

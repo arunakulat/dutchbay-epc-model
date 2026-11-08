@@ -602,7 +602,9 @@ def test_covenant_years_survive_a_map_that_does_not_start_at_year_one() -> None:
         # Year 1 is a real sub-target year (folded coverage 1.2961 < 1.30). Year 5 reads
         # 1.2999999999999996, one ULP under the threshold: the strict `<` comparison in
         # _build_debt_covenant_snapshot counts it, a pre-existing boundary fragility that
-        # tests/api/test_debt_construction_idc_regression_v14.py already documents.
+        # tests/api/test_debt_construction_idc_regression_v14.py already documents (#1588).
+        # This is the bare plan_debt view; the published pipeline snapshot, on the
+        # pipeline's own debt result, is FAIL both before and after #1577 (3 -> 4 years).
         ("dutchbay_lendercase_2025Q4.yaml", 2, 1, 5, "REVIEW"),
         # Re-baselined in v15.24.0 (#1570: one construction period, as the timeline
         # declares). Before: CEB (1, 1, 1, REVIEW) unchanged, solar+BESS (4, 1, 9, FAIL).

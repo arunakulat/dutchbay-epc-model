@@ -59,7 +59,8 @@ record under `DATA-01`.
    stands. DutchBay's own model now counts this turbine as a neighbour that wakes T1 and T3
    (its 14-turbine wake loss rises from 7.28% to 7.32%;
    `docs/wind/dutchbay_14_turbine_wake_summary.json`), but the Blue Whale yield still
-   assumes none. At about 2.5 to 3 rotor diameters this is also a loads and
+   assumes none: the owner's 2026-11-07 zero-wake decision covers the Blue Whale yield
+   only, not the wake this turbine casts on DutchBay. At about 2.5 to 3 rotor diameters this is also a loads and
    site-suitability question (IEC 61400-1 effective turbulence, OEM approval) for both
    projects, not only one of wake energy (#1568 domain review N-1). It is not solved.
 3. **Coastal permitting.** Most of the lot is likely inside the Coast Conservation Act zone

@@ -511,7 +511,7 @@ monte_carlo:
       low: 16.24
       high: 24.36
       distribution: uniform
-    - name: opex.usd_per_year         # base 3.0e6, rel_std 0.15 -> +/-30%
+    - name: opex.usd_per_year         # wind-only base 2.846667e6 (14 turbines, #1577; usd_per_year is the 3.346667e6 combined, a pre-existing mismatch), rel_std 0.15 -> +/-30%
       low: 1992666.9                   # 14 turbines (#1577): base 2.846667e6 +/-30%
       high: 3700667.1
       distribution: uniform
