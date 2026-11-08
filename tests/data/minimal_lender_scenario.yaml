@@ -62,6 +62,9 @@ fx:
   start_lkr_per_usd: 300.0
   annual_depr: 0.02              # 2 %/yr LKR depreciation (decimal, scalar)
 
+returns:
+  project_discount_rate: 0.10    # required since #1429 (no code default)
+
 debt:
   target_dscr: 1.4
   interest_rate_pct: 6.0
