@@ -2,3 +2,9 @@ approval_policy = "never"
 sandbox_mode = "danger-full-access"
 model_verbosity = "medium"
 model_reasoning_summary = "concise"
+
+[shell_environment_policy]
+inherit = "core"
+
+[shell_environment_policy.set]
+DUTCHBAY_EXTRAS = "dev,feasibility,jobs,solar,pareto"
