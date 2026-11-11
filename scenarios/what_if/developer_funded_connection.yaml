@@ -1,0 +1,50 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# What-if case: developer-funded grid connection assets  (#1403; NON-CANONICAL)
+#
+# The developer pays for grid connection assets that the grid owner would
+# otherwise build. The amount is added to the base capex total as its own
+# breakdown line, so it is financed and depreciated like the rest of the capex.
+# Reimbursement or annuity stays at zero: the engine has no channel for one, and
+# #1403 keeps it at zero until a written instrument evidences it.
+#
+# The committed amount is 0 (the owner's default), so this case reproduces the
+# base until the owner sets an amount. Any amount set here is ILLUSTRATIVE.
+#
+#   from analytics.what_if_cases import load_what_if_case, run_what_if_case
+#   result = run_what_if_case(load_what_if_case("scenarios/what_if/developer_funded_connection.yaml"))
+# ─────────────────────────────────────────────────────────────────────────────
+what_if_case:
+  id: developer_funded_connection
+  kind: developer_funded_connection
+  label: "Developer-funded connection assets: illustrative, non-canonical what-if"
+  canonical: false
+  base_scenario: scenarios/dutchbay_lendercase_2025Q4.yaml
+  parameters:
+    connection_capex_usd:
+      value: 0
+      provenance: >-
+        Owner decision on #1403 (issuecomment-6407662515, 2026-10-26):
+        developer-funded connection as a YAML amount, defaulting to 0 and
+        labelled illustrative. No owner amount has been set.
+    reimbursement_usd_per_year:
+      value: 0
+      provenance: >-
+        #1403: any reimbursement or annuity stays at zero unless evidenced by a
+        written instrument. None has been located.
+  source: >-
+    #1403 basis, recorded 2026-10-26: no written CEB instrument covering this
+    project's connection assets, their funding or any reimbursement was located.
+    The amount is owner-defined and illustrative.
+  limitations:
+    - "Illustrative: the amount is an owner input, not a quoted or contracted cost."
+    - "The amount is added to capex.usd_total, so it is debt-sized, depreciated and subject to import levies like the base capex. A contribution treated differently for tax or levies is not modelled."
+    - "It is spent on the base construction schedule. No separate timing for the connection works is modelled."
+    - "Reimbursement must be zero. The engine has no reimbursement or annuity channel, and a non-zero value is refused."
+  report_kpis:
+    - project_irr
+    - project_npv
+    - equity_irr
+    - equity_npv
+    - total_idc_usd
+    - max_debt_usd
+    - min_dscr

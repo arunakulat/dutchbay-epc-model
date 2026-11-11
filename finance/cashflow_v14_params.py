@@ -262,6 +262,37 @@ def _extract_project_life_years(
     )
 
 
+def _resolve_first_year_grid_unavailable_months(raw: Dict[str, Any]) -> float:
+    """Return ``project.first_year_grid_unavailable_months`` (#1403), default 0.0.
+
+    The value is the number of months of the first operating year in which the plant
+    cannot export because its grid connection is not ready. It must be a finite number
+    in ``[0, 12)``. A delay of a whole year or more is modelled as a longer construction
+    window, so 12 or more is refused rather than silently capped.
+    """
+    project = raw.get("project")
+    value = (
+        project.get("first_year_grid_unavailable_months")
+        if isinstance(project, dict)
+        else None
+    )
+    if value is None:
+        return 0.0
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(
+            "project.first_year_grid_unavailable_months must be a number of months; "
+            f"got {value!r}."
+        )
+    months = float(value)
+    if not math.isfinite(months) or months < 0.0 or months >= 12.0:
+        raise ValueError(
+            "project.first_year_grid_unavailable_months must be in [0, 12); got "
+            f"{value!r}. Model a delay of a whole year or more as additional "
+            "Financing_Terms.construction_periods."
+        )
+    return months
+
+
 @dataclass(frozen=True)
 class OpexCurrencySplit:
     """A resolved ``opex.currency_split`` block (decimals throughout).
@@ -668,6 +699,13 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
     )
     grid_outage_pct = _pct_to_decimal(grid_outage_raw) or 0.0
 
+    # #1403: months of operating year 1 with no grid export (a sub-year grid-connection
+    # delay). Absent -> 0.0, and production skips the scaling at 0.0 (byte-identical).
+    # Refused outside [0, 12): a whole year or more is a longer construction window.
+    first_year_grid_unavailable_months = _resolve_first_year_grid_unavailable_months(
+        raw
+    )
+
     tariff_lkr_per_kwh = _resolve_tariff_lkr_per_kwh(raw)
 
     opex_usd_per_year = _as_float_or_none(
@@ -789,6 +827,7 @@ def _build_cashflow_params(raw: Dict[str, Any]) -> CashflowParams:
         social_levy_pct=float(social_levy_pct),
         risk_haircut_pct=float(risk_haircut_pct),
         opex_vat_pct=float(opex_vat_pct),
+        first_year_grid_unavailable_months=first_year_grid_unavailable_months,
         opex_usd_share=opex_split.usd_share if opex_split is not None else None,
         opex_usd_escalation_pct=(
             opex_split.usd_escalation if opex_split is not None else 0.0
