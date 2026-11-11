@@ -34,11 +34,11 @@ Example:
     >>> result = optimize_parameter(
     ...     "scenarios/dutchbay_lendercase_2025Q4.yaml",
     ...     param_path="Financing_Terms.debt_ratio",
-    ...     objective_key="equity_irr", direction="max",
+    ...     objective_key="equity_npv", direction="max",
     ...     lower=0.45, upper=0.70, n_steps=11,
     ...     constraint_key="min_dscr", constraint_min=1.20,
     ... )
-    >>> result.best.value          # gearing cap maximizing equity IRR within covenant
+    >>> result.best.value          # gearing cap maximizing equity NPV within covenant
 
 Context:
     Sprint 11 - Issue #30 (optimization_v14 using evaluate_with_overrides).
@@ -436,7 +436,9 @@ def optimize_parameter(
         config_path: Path to the v14 scenario config.
         param_path: Dotted config path to optimize (e.g.
             ``Financing_Terms.debt_ratio``).
-        objective_key: KPI key to optimize (e.g. ``equity_irr``).
+        objective_key: KPI key to optimize (e.g. ``equity_npv``). Prefer equity
+            NPV to ``equity_irr`` for ranking: the IRR can order candidates
+            backwards when equity cashflows change sign more than once (#1456).
         lower, upper: Inclusive bounds for the parameter. The bounded method
             additionally requires a finite bracket with ``lower < upper``.
         direction: ``"max"`` or ``"min"``.

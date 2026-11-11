@@ -55,7 +55,7 @@ _ALIASES: dict[str, str] = {
 }
 UNRELEASED = "## [Unreleased]"
 
-# A fragment body carries bullets only. ``fold`` splices every non-blank fragment line
+# A fragment body carries bullets only. ``fold`` splices fragment bodies
 # into ``[Unreleased]`` VERBATIM, so a markdown heading in a fragment becomes a heading in
 # CHANGELOG.md: a ``## X`` renders at release level, and because ``_section_end`` stops at
 # the first ``## `` after the anchor it also truncates the ``[Unreleased]`` window that
@@ -85,7 +85,7 @@ def validate_body(name: str, lines: list[str]) -> None:
 
     Args:
         name: The fragment's filename, used in the error message.
-        lines: The fragment's non-blank body lines.
+        lines: The fragment's body lines, including paragraph separators.
 
     Raises:
         ValueError: If any line is a markdown heading (``#`` through ``######``).
@@ -163,8 +163,10 @@ def _insert_one(lines: list[str], category: str, bullets: list[str]) -> list[str
                 heading_idx = i
 
     if heading_idx is not None:
-        # Newest-first: insert directly below the existing heading.
-        return lines[: heading_idx + 1] + bullets + lines[heading_idx + 1 :]
+        # A blank separates the last new entry from previously compiled prose.
+        tail = lines[heading_idx + 1 :]
+        separator = [""] if bullets[-1].strip() and tail and tail[0].strip() else []
+        return lines[: heading_idx + 1] + bullets + separator + tail
 
     # Create the subsection at its Keep-a-Changelog position.
     order = CATEGORIES.index(category)
@@ -194,15 +196,18 @@ def fold(changelog_text: str, bullets_by_category: dict[str, list[str]]) -> str:
 
 
 def _collect(selected: list[Path] | None = None) -> dict[str, list[str]]:
-    """Read selected fragments into categories (fragment order preserved)."""
+    """Read fragment bodies verbatim, separated by a blank within each category."""
     by_cat: dict[str, list[str]] = {}
     for frag in fragments() if selected is None else selected:
         cat = category_of(frag.name)
         body = frag.read_text(encoding="utf-8").strip("\n")
-        frag_lines = [ln for ln in body.split("\n") if ln.strip() != ""]
+        frag_lines = body.split("\n")
         validate_body(frag.name, frag_lines)
-        if frag_lines:
-            by_cat.setdefault(cat, []).extend(frag_lines)
+        if any(line.strip() for line in frag_lines):
+            category_lines = by_cat.setdefault(cat, [])
+            if category_lines:
+                category_lines.append("")
+            category_lines.extend(frag_lines)
     return by_cat
 
 
@@ -272,7 +277,7 @@ def main(argv: list[str]) -> int:
     CHANGELOG.write_text(new_text, encoding="utf-8")
     for frag in selected:
         frag.unlink()
-    n = sum(len(v) for v in by_cat.values())
+    n = sum(bool(line.strip()) for lines in by_cat.values() for line in lines)
     print(
         f"folded {len(selected)} fragment(s) ({n} bullet line(s)) into "
         f"{CHANGELOG.name} [Unreleased] and removed them"

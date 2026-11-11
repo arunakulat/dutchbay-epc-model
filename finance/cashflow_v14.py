@@ -188,6 +188,19 @@ def _prepare_cashflow_context(
     # availability-based Capacity Charge (LKR/MW/month), NOT generation revenue.
     # None when no BESS block is present -> wind/solar runs stay byte-identical.
     params_dict["bess_revenue_specs"] = resolve_bess_specs(config)
+    # #1403: the first-year grid-unavailability lever scales generated energy only. A
+    # BESS capacity charge is not energy and is not scaled, so a grid-delayed BESS
+    # would keep earning it. Refuse the combination rather than report that revenue.
+    if (
+        params_dict["bess_revenue_specs"]
+        and params_obj.first_year_grid_unavailable_months
+    ):
+        raise ValueError(
+            "project.first_year_grid_unavailable_months is not supported with a "
+            "type: bess revenue block: the lever scales generated energy only, so "
+            "the BESS capacity charge would still be earned while the grid is "
+            "unavailable."
+        )
 
     # L-9: yearly indexation of the tariff's escalable O&M component (PUCSL 2026
     # methodology s.3.1 item 2). None without a tariff.om_indexation block -> the

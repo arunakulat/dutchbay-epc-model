@@ -69,6 +69,40 @@ def calculate_equity_irr(cashflows: Sequence[Number]) -> Optional[float]:
     return _irr_wrapper(cashflows)
 
 
+def count_cashflow_sign_changes(cashflows: Sequence[Number]) -> int:
+    """Count sign changes in a cashflow series, ignoring zero and non-finite entries.
+
+    By Descartes' rule of signs, a series with at most one sign change has at most one
+    positive real root of its NPV polynomial, so its IRR (where it exists) is unique and
+    moves the expected way when a cashflow improves. With two or more sign changes the
+    IRR may have several roots, or one root that late cashflows dominate (for example a
+    refinanced tail that calls equity back after distributions, #1456), and it can rank
+    alternatives in the opposite order to NPV. The count is a property of the series
+    alone: it reads no site, technology or currency.
+    """
+    count = 0
+    previous = 0
+    for value in cashflows:
+        number = float(value)
+        if not math.isfinite(number) or number == 0.0:
+            continue
+        sign = 1 if number > 0.0 else -1
+        if previous and sign != previous:
+            count += 1
+        previous = sign
+    return count
+
+
+def equity_irr_ranks_reliably(cashflows: Sequence[Number]) -> bool:
+    """Return True when the IRR of ``cashflows`` is safe to rank alternatives on.
+
+    True means at most one sign change (the conventional invest-then-receive shape).
+    False means the series changes sign more than once, so rank on equity NPV instead
+    and present the IRR only with a caveat (#1456).
+    """
+    return count_cashflow_sign_changes(cashflows) <= 1
+
+
 def calculate_equity_npv(
     cashflows: Sequence[Number],
     *,
@@ -215,6 +249,8 @@ __all__ = [
     "summarise_equity_cashflows",
     "calculate_equity_irr",
     "calculate_equity_npv",
+    "count_cashflow_sign_changes",
+    "equity_irr_ranks_reliably",
     "calculate_cash_on_cash",
     "calculate_moic",
     "calculate_payback_period",

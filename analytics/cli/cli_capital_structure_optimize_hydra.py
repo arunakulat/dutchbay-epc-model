@@ -6,10 +6,12 @@ explicitly and never participates in ``run_v14_pipeline``, so committed
 scenarios are byte-identical whether or not this CLI is ever run.
 
 Usage (run with the repo root on PYTHONPATH, as with the sibling Hydra CLIs):
-    # Maximize equity IRR over the debt mix, DSCR + LLCR covenants:
+    # Maximize equity NPV over the debt mix, DSCR + LLCR covenants (#1456: equity
+    # NPV is the default objective; equity IRR can rank mixes backwards when the
+    # equity cashflows change sign more than once):
     PYTHONPATH=. python analytics/cli/cli_capital_structure_optimize_hydra.py \\
         config=scenarios/dutchbay_lendercase_2025Q4.yaml \\
-        mode=debt_mix objective_key=equity_irr direction=max \\
+        mode=debt_mix objective_key=equity_npv direction=max \\
         'constraints=[{key: min_dscr_period, minimum: 1.30, maximum: null}, {key: llcr, minimum: 1.0, maximum: null}]'
 
     # Search the capex contingency fraction against the same objective:
@@ -48,6 +50,7 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 from analytics.capital_structure_optimizer_v14 import (
+    DEFAULT_OBJECTIVE_KEY,
     optimize_capex_contingency,
     optimize_debt_mix,
 )
@@ -139,7 +142,7 @@ def main(cfg: DictConfig) -> None:
         if mode not in _MODES:
             raise ValueError(f"mode must be one of {_MODES}, got {mode!r}")
 
-        objective_key = str(cfg.get("objective_key", "equity_irr"))
+        objective_key = str(cfg.get("objective_key", DEFAULT_OBJECTIVE_KEY))
         direction = str(cfg.get("direction", "max"))
         n_steps = int(cfg.get("n_steps", 6))
         constraints = _parse_constraints(cfg.get("constraints"))
