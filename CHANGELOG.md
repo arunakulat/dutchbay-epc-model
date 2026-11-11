@@ -6,7 +6,9 @@ All notable changes to this project will be documented here.
 
 ### Changed
 Narrow `TRAIN-01`'s shared-input test for merge trains. A runtime input shared by loading it, such as `VERSION`, `pyproject.toml`, a module `tests/conftest.py` loads, or an installed library, now links two cars only when one car's changed bytes are consumed by the other's code or tests, shown in both directions by `RECRUIT-01` module 3 §8's consumption artifact (the changed bytes with their old and new values, a reference search, and a differential run). Two kinds of change stay links whatever the artifact shows: a changed file that imports a module the other side changes, and a change that acts when files load or tests are collected (a `conftest.py` hook or autouse fixture, a module-level side effect, pytest's or coverage's configuration). Without the artifact the input is still a link. Single pull requests keep §7 unchanged, and the train's other limits stay as they were.
+
 Reconcile the 11 October capability roadmap with the subsequent PR queue, live tracker and carried-forward handover work without changing financial behavior or release authority.
+
 - **A `cashflow.within_year_profile` declared with no `cashflow.resolution` is now refused at
   pre-flight rather than ignored** (`F-03`, #1394). It is the one behaviour change the F-03 gate
   produces, recorded here rather than under Added because an operator holding such a file looks
@@ -19,6 +21,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
   that names the fix instead of a plausible wrong answer. The same gate also refuses an unsupported
   `cashflow.resolution`, which previously reached evaluation before anything objected. `validation_mode="off"`
   still skips pre-flight entirely, as it did for every other check.
+
 - Resolve the lender case's scheduled-maturity balloon by refinance instead of cash sweep
   (#1396 part B, audit P3-COV-03, owner decision 1A). Since #1397 the structural balloon
   is USD 28.63m. Cash sweep retired USD 18.83m of it and left USD 9.80m unpaid at project
@@ -52,6 +55,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
   Equity NPV keeps the correct ordering (cheap DFI first, contingency strictly costly).
   The analytical finding is #1456. The tornado crash this exposes on an assessed
   low-wind case is fixed separately under #1457, which lands first.
+
 - Require explicit YAML `power_mw` and `duration_h` for BESS at v14 preflight and
   finance resolution. One immutable nameplate contract derives omitted
   `energy_mwh` and reconciles authored energy within the existing 1% tolerance;
@@ -59,6 +63,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
   boolean or inconsistent ratings fail loudly. The hybrid's 50 MW input is
   explicitly illustrative. Committed scenario ratings and KPIs are unchanged;
   legacy power-only or energy-only diagnostic configs must author duration.
+
 - Require `returns.project_discount_rate` in every v14 scenario and remove the hard-coded
   `DEFAULT_DISCOUNT_RATE = 0.10` (#1429). The pipeline now discounts at the declared rate
   whenever `wacc.drives_discount_rate` is not set, and falls back to it, rather than to
@@ -76,6 +81,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
   failed pre-flight still fail with the same exception type; 10 of them (six top-level
   scenarios, the three `scenarios/overrides/` fragments and one scratch file) now also
   name the missing rate in the same error. Released as 15.27.0.
+
 - **The required `Security Scan` is hardened against a stale, partial or one-sided advisory
   answer (#1464).** On 2026-10-27 the gate reported a lock pinning `hydra-core==1.3.7` clean
   minutes after the same workflow redded the same pin on `GHSA-wf6j-7hvr-gr93` (#1353 D-10).
@@ -89,12 +95,14 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
   `bandit` and `pip-audit` are installed from one pins file held to the lock, with their
   versions printed to the log. `tests/lint/test_security_gate_coverage.py` and
   `tests/lint/test_pip_audit_allowlist.py` hold all of it, with negative controls.
+
 - The new `tests/finance/test_gearing_warm_start_walk.py` pins the warm-started
   gearing walk's one-step boundaries (a hint one grid step above or below the answer,
   and a hint at the step floor) and the walk up to a binding `debt_ratio` cap (#1514
   follow-up to #1527, review findings A-1 and D-1). Seven walk mutants, including the
   two that survived #1527's tests, now each fail a test. Three code comments about the
   warm start are corrected. No engine behaviour changes.
+
 - **Capex and opex price dates (15.26.0, #1569).** A scenario can now state the year its capex
   and opex are priced in, and the engine escalates from there. Before, capex was spent at the
   amount it was priced at, whatever the year, and opex was stated at COD.
@@ -122,6 +130,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
     and the equity cash flows no longer have an IRR (their NPV is negative at every rate; it was
     -5.00%). Every other scenario, the superseded hybrid and the canonical lender case included,
     is bit-identical. Applied under the owner's KPI delegation of 2026-11-07.
+
 - **The construction-period count must equal the declared build time (15.24.0, #1570).**
   `finance/debt/terms.py::_resolve_construction_periods` read only the financing section and
   fell back to two periods, so a scenario that declared a one-year build in
@@ -144,6 +153,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
     +0.25M, covenant FAIL with four breach years -> REVIEW with one). The canonical lender case,
     both live Blue Whale projects, every DutchBay and NSO 250 scenario are bit-identical.
     Applied under the owner's KPI delegation of 2026-11-07.
+
 - DutchBay drops from 15 to 14 turbines, because the Blue Whale turbine stands on T2 (15.24.0 ->
   15.25.0). Owner decision of 8 Nov 2026, asked "does DutchBay drop to 14 turbines now that
   Blue Whale replaces T2?": "yes". Work item #1577 (#1353 comment 6716047327).
@@ -186,18 +196,22 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
     export cap that a 148.9 MW plant never reaches.
   - Not solved: T1 and T3 stand about 2.5-3 rotor diameters from the turbine at T2, a loads and
     site-suitability question as well as a wake one (#1568 domain review N-1).
+
 - Blue Whale met-mast transfer: the last mast heights that were fixed in code or inferred from channel order now come from the config (#1578, L-4 remainder; #1592 domain F-1 to F-4, assurance A-1, A-2 and A-5). For the committed config, no output, scenario or KPI moves.
   - `measured_profiles` labels its two log-law fits from the heights they use: every `mast.speed_avg` channel, and the channels from the new `shear.log_fit_upper_from_height_m` up. Before, the upper fit took the third channel onwards and was always labelled 80-120 m, and the basis text always said "five" speeds.
   - The pressure and RH channels become height-keyed maps, `mast.pressure_kpa` and `mast.humidity_pct` (replacing `pressure_10m_kpa` and `humidity_10m_pct`). The air-density step reads them at `air_density.sensor_height_m` and refuses a height with no such channel. Before, a sensor height of 120 m was accepted and moved the 10 m pressure as if it had been measured at 120 m. The clock-offset evidence reads its pressure channel at the new `timezone.pressure_height_m`, and its month floor is the new `timezone.monthly_phase_min_days` (20, as before).
   - The turbulence tables are built by `turbulence_tables()`, which the tests call directly. New tests move each configured height off its committed value.
+
 - Blue Whale met-mast transfer: the shear pair and more of the mast heights move from code to YAML (#1578, lane residual L-4 follow-up; #1585 domain D-1 and D-2, assurance A-2). For the committed config, no output, scenario or KPI moves.
   - `scripts/run_blue_whale_met_mast_transfer_v14.py`: the transfer chain's shear table read the 100 m and 120 m hourly columns whatever `shear.low_height_m` and `high_height_m` said. It now reads the configured pair's columns, or refuses a height with no channel. Before, setting the low height to 80 m would have mislabelled the 100-120 m speeds as an 80-120 m pair, with no error (D-1).
   - The shear-uncertainty term is now `shear_uncertainty_pct()`. It is based on the correlated height the chain extrapolates from, `mcp.primary_height_m`, rather than the top of the measured pair. Both are 120 m in the committed config (D-2).
   - The turbulence heights (`turbulence.heights_m`), the clock-offset evidence's speed and temperature channels (`timezone.scan_speed_height_m`, `anomaly_speed_height_m`, `temperature_height_m`) and the air-density temperature and sensor heights (new `air_density` block) are read from the config. The two temperature channels are now one height-keyed map, `mast.temperature_c`, like `mast.speed_avg` (A-2).
+
 - Blue Whale wind siting and met-mast transfer: site inputs move from code to YAML (#1578, lane residuals L-2 and L-4). No KPI moves, and every committed scenario is unchanged.
   - `analytics/gis/shadow_flicker.py`: the coastal placement and the coast-aligned lot take a required `sea_side_bearing_deg` (the bearing from land to sea) instead of assuming the sea lies to the west. The west-facing geometry is unchanged. Any other bearing is solved by rotating the coastline to west-facing and rotating the result back. `conf/blue_whale_wind_siting.yaml` declares `site.sea_side_bearing_deg: 270.0` (#1530 domain D-2).
   - `scripts/run_blue_whale_wind_siting_v14.py`: the site GeoJSON's names and derivation texts now come from a new strict `labels` block. The run fills in the area, latitude, setback and distance from the config. The edge keys are named for the sea side (`west_edge_*` for this site). The committed `docs/blue_whale/site_placeholder_lot5b.geojson` is reproduced exactly.
   - `scripts/run_blue_whale_met_mast_transfer_v14.py` previously hard-coded the hub height, the measured shear pair, the sector count and the day window. It now reads them from `shear.hub_height_m`, `shear.low_height_m` / `high_height_m`, `mcp.n_sectors` and `shear.day_start_local_h` / `day_end_local_h`. These were the #1530 ERA5 comparison, the mast-density sensitivity, the shear-uncertainty term and the measured-profile block. The summary keys that name the hub height are built from the config, and for the committed config they are the same keys as before. The run now refuses to start if `reference.points.turbine` differs from the position where the siting config places the turbine. The tolerance is `transfer.turbine_point_tolerance_deg`, 1e-6 degrees (#1538 domain D-1).
+
 - Blue Whale capex blend and solar resource (15.17.0). On the owner's request and decision of
   1 Nov 2026 (#1353 comment 6556975196, "Derived blend may publish"), the wind and BESS capex
   become blends of China FOB pricing and internal anchors, and the solar resource at the site is
@@ -223,6 +237,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
     6.90% -> 8.73%; solar + BESS project NPV USD -4.77M -> -4.03M (no project IRR).
   - The handling notes NSO250MW-OFFERS-HANDLING-2026-09-04 and
     KALPITIYA60MW-WIND-HANDLING-2026-09-21 record the decision; parent manifest pins refreshed.
+
 - Blue Whale solar + BESS: the owner's 5 MW / 20 MWh battery, ranked on the after-tax project
   NPV (15.17.0 -> 15.18.0). Owner decisions of 1 Nov 2026 (#1353 comment 6563070978):
   "Fix 5 MW / 20 MWh", "After-tax project NPV (Recommended)" and "Keep ERA5, fix README
@@ -242,6 +257,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
     -4,027,656); equity IRR -3.58% (was -11.32%); no project IRR. Wind and hybrid unchanged.
   - `inputs/solar_tmy/README.md` now names PVGIS-ERA5, not SARAH3 (#1540's finding), with the
     satellite figures as upside; no data file changed.
+
 - Blue Whale wind resource from met mast 617725 (15.16.0). On the owner's direction of 1 Nov
   2026 (#1353 comment 6556910250), the Kalpitiya met-mast record is transferred 26.7 km to the
   Blue Whale turbine and its yield re-derived. Not lender-grade: the met-mast package's HOLD on
@@ -268,6 +284,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
     refreshed. Four existing Blue Whale tests are re-pointed under the coordinator's ruling:
     two KPI re-pins, PR 3's tariff oracle (now the blend formula, with PR 3's frozen value
     still reproduced) and #1530's private-curve check (now against the recorded ERA5 basis).
+
 - Blue Whale solar + BESS sizing (15.14.0). Owner decisions of 1 Nov 2026: fix the turbine and
   run a new Monte Carlo to size the solar array and the BESS on current prices, pricing the
   inverter from Huawei or another tier-1 maker matched to the JinkoSolar string; the BESS
@@ -302,6 +319,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
     `tests/finance/test_blue_whale_scenario_kpis.py`, which now has capex responsiveness guards.
     PR 2's dispatcher tests run at the chosen size. The VERSION digests in the synthetic feeder
     placeholder and the D3B success digest move with the version only.
+
 - Blue Whale wind: turbine, placeholder site, coastal placement, setbacks and shadow
   flicker (15.12.0). Owner decisions of 1 Nov 2026: the Envision EN-206/10.5 de-rated to
   9.5 MW, its yield derived from the confidential curve PMD-004447 Rev A; an assumed square
@@ -338,6 +356,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
     minimum DSCR 0.869 -> 0.869. Pinned in `tests/finance/test_blue_whale_scenario_kpis.py`
     with responsiveness guards. The VERSION digests in the synthetic feeder placeholder and
     the D3B success digest move with the version only.
+
 - Blue Whale solar + BESS unit (15.13.0). Owner decisions of 1 Nov 2026: a 5 MW PV array on
   the latest JinkoSolar panel and a 5 MW x 6 h BESS, run as one unit beside the turbine; the
   BESS discharged 17:30-21:30 at the priority rate and 05:30-07:30 at the other rate.
@@ -373,6 +392,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
     `tests/finance/test_blue_whale_scenario_kpis.py` with responsiveness guards and an
     engine-against-dispatcher revenue test. The VERSION digests in the synthetic feeder
     placeholder and the D3B success digest move with the version only.
+
 - Blue Whale split into two projects and the solar + BESS sized under the PUCSL 2026 rules
   (15.15.0). Owner decisions of 1 Nov 2026 (#1353 comment 6556854201): the 9.5 MW turbine is a
   separate project built first; maximise the BESS within the solar + BESS parameters for the
@@ -403,6 +423,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
   - KPIs: hybrid unchanged; wind project IRR 4.09%; solar + BESS project NPV USD -4.77M,
     equity IRR -3.28%, no project IRR. Pinned with responsiveness guards in
     `tests/solar/test_solar_bess_project_sizing.py`.
+
 - Blue Whale: the turbine stands on DutchBay T2, with zero wake (15.21.0 -> 15.22.0). Owner
   decision of 7 Nov 2026: "Blue Whale Turbine is replacing the T2 Dutchbay turbine - its on the
   exact same location - if not, recalculate location to match T2 location. As such wake does
@@ -430,6 +451,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
     unchanged.
   - The sizings keep the basis they have had since 15.19.0 (single-currency opex, two
     construction periods, flat tariffs); the battery-size work moves them to the current basis.
+
 - Blue Whale: the turbine's shadow on the PV, input B33 (15.18.0 -> 15.19.0). Owner decisions of
   2 Nov 2026: "#1520 as is, Blue Whale PR next" and "This PR has a material effect on Blue
   Whale". Work item: #1353 comment 6568242480.
@@ -448,7 +470,9 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
     Sizes are unchanged in all three re-runs. Scenario v0.4: project NPV USD -4,992,409 ->
     -4,997,611; equity IRR -8.32% -> -8.44%. A x3 mismatch stress gives -5,008,092.
   - Hybrid v0.9 (superseded): project IRR 8.7349% -> 8.7315%. Wind is unchanged.
+
 - **Governance (`CLEANUP-01`)**: post-merge cleanup now closes only the focused issue named by number on the merged pull request's own `Work item:` or closing line, and only when its deliverable is complete. A `Work item:` that names a #1353 comment closes nothing, and cleanup never closes tracker #1353 or any pull request. Closing an unmerged pull request needs a cited owner decision, posted as a comment on it before it is closed. The one exception is a `TRAIN-01` car, closed only after the train's post-landing check proves its commit is on `origin/main`. A branch is deleted only when its pull request's `merged_at` is set, its `head.ref` names the branch, every ref still present (remote and local) equals the merged head, and no open pull request uses the branch as its base. A remote ref that GitHub already auto-deleted is skipped. The steward skill carries this as a fail-closed block that takes its inputs as validated environment variables and opens with the same Git hygiene lines as the merge and train checks. A failed GitHub call stops it before any delete, a train car's branch is deleted only when the train carries the car's landed commit, and the remote delete is leased to the checked head. `tests/lint/test_gwtf_canonical_source.py` runs that block against stubbed `gh` and `git`, including a failure of each GitHub call. Cleanup synchronizes the clean primary checkout only when no other session is using it. The row now quotes the owner's decisions: her 2026-11-06T02:22:07Z instruction that created the rule, her confirmation of the rule with amendments ("clean and amend please", 11:06:49Z), her approval of the guards (05:29:05Z) and the train-car exception (05:33:39Z). This follows the 2026-11-05 closure of #1520 and #1525, which were closed unmerged seconds after #1531 and #1537 merged. The rule text, `AGENTS.md`, `CLAUDE.md`, the steward skill, `docs/governance/agent_session_routing.md`, RECRUIT-01 module 2 §8 and `Rules to follow.md` carry the guards, and the same test pins each of them. The ruleset still has 79 active rules, and no model output changes.
+
 - **Four dependency bumps in one lock change, two frozen surfaces re-cleared** — `pymupdf`
   1.28.2 → 2.0 with `markitdown` 0.1.8 → 0.1.9 (the ingestion surface), `hiredis` 3.4.2 → 3.5.0
   (the report/jobs surface), `soupsieve` 2.9.2 → 3.0.4 and `pandera` 0.32.1 → 0.34.1. They replace
@@ -469,6 +493,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
   custom selectors) touch no code path here: this repository never imports `bs4` or `soupsieve`,
   and no installed dependent passes a `:has()` selector or custom selectors.
 - `pandera` arrives only through `pandapower` (`pandera~=0.32`), which admits 0.34.1.
+
 - **Five dependency bumps in one lock change** — `starlette` 1.9.0 → 1.10.0, `types-pytz`
   2026.3.1.20260727 → 2026.5.0.20261006, `cryptography` 50.0.0 → 50.0.2, `debugpy` 1.8.21 →
   1.8.22 and `fonttools` 4.63.0 → 4.67.0. They supersede Dependabot's #1467, #1468, #1469, #1470
@@ -483,6 +508,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
 - `types-pytz` reaches the lock only through `pandas-stubs`; this repository never imports
   `pytz`. `debugpy` arrives through `ipykernel`. `fonttools` arrives through WeasyPrint
   (`>=4.59.2`) and matplotlib (`>=4.28.2`), both of which admit 4.67.0.
+
 - **Five dependency bumps in one lock change** — `hybgensea` 0.1.1 → 0.2.0, `topfarm` 2.6.2 →
   2.7.1, `kiwisolver` 1.5.0 → 1.5.1, `tzdata` 2026.3 → 2026.6 and `rasterio` 1.5.1 → 1.5.2. They
   supersede Dependabot's #1543, #1544, #1545, #1546 and #1547, which all edit `requirements.txt`
@@ -504,6 +530,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
 - **`rasterio` 1.5.2 raises its Apple-silicon wheel floor** from macOS 14 (`macosx_14_0_arm64`)
   to macOS 15 (`macosx_15_0_arm64`). On an arm64 Mac older than macOS 15, pip finds no wheel and
   falls back to building from source, which needs a local GDAL. Linux CI is unaffected.
+
 - Tightened the test-side guards around the `finance.debt` package (the #1502 review's
   P-7 and P-8 follow-up; tests only, no engine byte changes). The boundary lint's rule 2
   no longer advises patching the module that defines a function, which misses the calls
@@ -518,6 +545,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
   makes the package's own modules import names, never another package module as a
   module, so a seam can't be called through a module attribute. The refinance
   no-default guard and the #586a header guard now read `finance/debt/__init__.py` too.
+
 - Split the debt engine's code out of `finance/debt_v14.py` into the `finance.debt`
   package (14 modules) without changing it. `scripts/refactor/split_debt_v14.py` copies
   every top-level statement verbatim, with its docstring and the comments above it, and
@@ -531,6 +559,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
   (relative imports included) and fails any write to the façade, which the engine
   would never read. No computed value moves. Every committed scenario that runs gives the
   same output at every key before and after, and VERSION is unchanged.
+
 - Opex split by currency (15.19.0 -> 15.20.0). Owner rule of 2 Nov 2026: "all CAPEX is fixed at
   project start in LKR. The debt will be in LKR. However, a percentage of OPEX will be in USD".
   Work item #1353 comment 6702129557.
@@ -562,6 +591,7 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
     construction and the FX start (owner, 2026-11-07: "Set 1 year for the whole model now").
     The superseded hybrid keeps the default. The sizing runs are
     not re-run; the test that ties the scenario to them now evaluates it on their opex basis.
+
 - PUCSL escalable O&M tariff indexed yearly (15.20.0 -> 15.21.0). Audit residual L-9 (#1537 domain
   F-3). The owner answered "should it be indexed?" with "yes" on 2026-11-07. Work item #1353
   comment 6705449182.
@@ -592,10 +622,12 @@ Reconcile the 11 October capability roadmap with the subsequent PR queue, live t
   - Year-1 DSCR does not move in any scenario: the index is 1.0 in operating year 1.
   - Not modelled: the month-12 FX/CCPI adjustment of the non-escalable part, the three-yearly
     true-up to market rates and any escalation between the 2026 base year and COD.
+
 `RECRUIT-01` module 3 §1 now states that a reviewer supplies findings, not subject bytes: where a
 reviewer demonstrates a gap with code, that snippet is a description of the gap and the writer
 reimplements it in its own terms rather than committing the reviewer's lines. The steward skill
 carries the same instruction to the writer at the step where a review forces a change.
+
 This closes a gap #1381 exposed, where a writer committed test lines copied verbatim from a
 reviewer's record and nothing said who reviewed those lines. A writer that adopts them makes the
 reviewer a co-author of the subject, so that lane's disposition on those bytes is a pass over its
@@ -603,9 +635,11 @@ own work rather than an independent review, and the two required dispositions st
 independent. Reimplementing is what keeps the lane eligible to review the result, which is the
 point: the reviewer who found the gap is usually best placed to judge whether the writer's own
 version closes it. The finding stays credited to the reviewer.
+
 The rule is a clarification of `RECRUIT-01`'s existing independence requirement rather than a new
 canonical rule row, and `tests/lint/test_recruit_01_reviewer_supplied_code.py` pins the text,
 its placement in the independence section, and its resistance to an exception added beside it.
+
 - Apply the November 2026 tariff and BESS research to four scenarios (15.11.0). Source: the
   owner's research record "Sri Lanka small-plant tariffs, BESS methodology and curtailment
   (Nov 2026)" and, for the capacity charge, the repository's own NSO 250 MW record.
@@ -639,6 +673,7 @@ its placement in the independence section, and its resistance to an exception ad
   (2, REVIEW) -> (4, FAIL). The covenant-mechanics tests keep their former CEB FAIL fixture
   by pinning the former rate as fixture input; their expected values are unchanged. The
   canonical lender case is unchanged.
+
 - **The project discount rate is a required scenario input (15.27.0, #1429).**
   `returns.project_discount_rate` must be declared and is validated as a fraction in `[0, 1)`;
   the hard-coded `DEFAULT_DISCOUNT_RATE = 0.10` is gone. A scenario whose WACC does not drive
@@ -788,10 +823,16 @@ its placement in the independence section, and its resistance to an exception ad
   vector; it does not change the Board/lender circulation HOLD.
 
 ### Fixed
+- **Changelog fragment boundaries (#1603).** Compilation retains internal blank lines and
+  separates fragment bodies from one another and from earlier entries. The 111 entries
+  compiled by #1602 have their source paragraph boundaries restored; wording, category order
+  and released content are unchanged. No financial behavior, VERSION or HOLD change.
+
 Run pandapower short-circuit, reactive, and harmonic screens in fresh processes
 using the vendor's Python auxiliary and Ybus helpers, avoiding the remaining
 Numba compilation paths. Preserve screening calculations, provenance and advisory
 contracts; report worker failures explicitly without accepting fallback results.
+
 - **Grid Study CI now records how a run was classified, and names why evidence is missing (#1323).**
   - The `Classify changed paths` step writes a labelled block to its log and to its job summary.
     The block records the event `pull_request.base.sha`, its merge base with the head, the head
@@ -811,6 +852,7 @@ contracts; report worker failures explicitly without accepting fallback results.
     classify step runs against widening, narrowing, unmerged and empty-diff bases, and against
     a classifier crash. The evidence step runs against a missing JUnit file, a failed grid test,
     and skipped, absent, unwritten, empty and complete receipts.
+
 - **Dependabot stops proposing the unmergeable `mpmath` bump** — its `.github/dependabot.yml`
   ignore rule now blocks minor bumps as well as majors. `sympy 1.14.0` requires
   `mpmath<1.4,>=1.1.0`, and `1.3.0` to `1.4.1` reads as semver-minor. Nothing filtered the
@@ -822,6 +864,7 @@ contracts; report worker failures explicitly without accepting fallback results.
   `sympy`'s published cap, not from those logs.
   Patch bumps within `1.3.x` stay welcome. Lift in lockstep with a `sympy` release that
   raises the ceiling.
+
 - **Dependabot stops regenerating the unmergeable `numpy-typing-compat` bump** — its
   `.github/dependabot.yml` ignore rule now blocks minor and patch bumps as well as majors.
   The package carries its target numpy range in the patch segment (`20260602.2.4` requires
@@ -829,6 +872,7 @@ contracts; report worker failures explicitly without accepting fallback results.
   bump read as semver-patch and the major-only rule let it through three times
   (PRs #1249, #1301 and #1325). numpy is held at 2.4.6 by pandapower, so no bump of this
   package is resolvable until that ceiling lifts (issue #1169).
+
 - **`llvmlite` 0.50.0 lands with the `numba` bump that allows it** — `numba 0.67.0` requires
   `llvmlite<0.50,>=0.49.0dev0`, so the standalone bump proposed in #1326 was an unconditional
   `ResolutionImpossible` at `pip install` (every shard died in under 45s with 0 tests run).
@@ -838,10 +882,13 @@ contracts; report worker failures explicitly without accepting fallback results.
   manylinux wheels exist for both releases. Suppressing the bump with a `dependabot.yml` ignore
   rule was considered and rejected: the ceiling is liftable today, so holding `llvmlite` back
   would have hidden a resolvable upgrade.
+
 - Raise the Hydra runtime and reproducibility-lock floor to 1.3.7, which fixes
   CVE-2026-106439, CVE-2026-106441 and CVE-2026-106442; explicitly exclude the affected
   1.4.0.dev0-dev9 prereleases; and add a dependency-policy regression guard (#1339).
+
 Batch handover history and whole-tree rename/copy detection so startup resolution remains fail-closed while avoiding repeated Git traversal per record.
+
 - **The dashboard's removed-API guard now proves it read the dashboard** —
   `tests/integration/test_dashboard_smoke.py` asserted only that no removed API name appeared in
   its subject, which an empty or unrelated file satisfies exactly as well as a clean dashboard, so
@@ -850,6 +897,7 @@ Batch handover history and whole-tree rename/copy detection so startup resolutio
   a blank subject, a foreign subject and each individually missing marker. A missing file already
   raised from `read_text`; the empty and wrong-file cases are the ones that slipped through. No
   existing assertion was removed. (#1353 A-2.)
+
 - **The sensitivity dashboard stops passing `use_container_width`** — both call sites in
   `analytics/dashboard/streamlit_app.py` now pass `width="stretch"`, the replacement Streamlit's
   own deprecation notice prescribes. The pinned `1.66.1` still accepts the old parameter, so
@@ -866,7 +914,9 @@ Batch handover history and whole-tree rename/copy detection so startup resolutio
   `96cf5bb1` carried and omits a `Verification receipts (VERIFY-01)` failure that was re-run green
   before the merge. Corrected against the check runs, with the amendment noted in the record.
   (#1353 D-6.)
+
 - **Governance (`Rules to follow.md`)**: corrected the rule IDs that the summary attached to the wrong meanings (`CLI-02`/`CLI-03`/`R1`–`R4`, `GOV-01`, `FIN-01`/`FIN-02`/`DOC-02`, `VAL-02`, `TEST-02`/`TEST-05`, the `RECRUIT-01` module summaries) and the category count (41, not 19); added a §3.0 index of every rule's exact CSV category and title; stated the checkout-local `.venv` fallback that `THREAD-01` and `ENV-01` permit on CI and container hosts; and relabelled host-local directives as guidance rather than rules. The `TRAIN-01`, `MERGE-01` and `CLEANUP-01` summaries now follow the current CSV rows (after #1542 and #1563), and their headings and the `DATA-01` heading carry the exact CSV titles; the manifest practice filed under `DATA-01` is labelled repository practice, and the "quiet window" is no longer attributed to `ENV-01`. `tests/lint/test_rules_to_follow_index.py` pins the index, the counts and every titled heading to the CSV, rejects a parenthesised `**`ID` (Title)**` heading, and has negative controls. The same rule-ID corrections are applied to §4.1 of the Blue Whale ingress record. No model, finance or KPI behaviour changes.
+
 - **The reproducibility lock closes again after the `joblib 1.6.0` bump** — `requirements.txt`
   now pins `cloudpickle==3.1.2`. `joblib 1.5.3` vendored its own copy of cloudpickle; `1.6.0`,
   merged in #1359, declares `cloudpickle>=3.0` as an unconditional requirement instead, so the
@@ -880,11 +930,13 @@ Batch handover history and whole-tree rename/copy detection so startup resolutio
   and includes cloudpickle 3.1.2. What the pin restores is reproducibility, not audit coverage.
   Raised as condition C-1 on #1359's review and discharged here rather than by holding that
   bump.
+
 - Raise `black` from `26.5.1` to `26.10.1`, `brotli` from `1.2.0` to `1.2.1`,
   `filelock` from `3.32.3` to `4.2.1`, and `setuptools` from `84.0.0` to `84.1.0`
   in the reproducibility lock. These fixed versions clear seven advisory records from the
   mandatory `pip-audit` gate without adding an allowlist exception; no model, scenario, KPI,
   release, or HOLD behavior changes.
+
 - Make the balloon `refinance` treatment honest before any scenario relies on it (#1396,
   P3-COV-03). Its tenor and rate premium now come only from
   `constraints.refinancing.refinance_tenor_years` and `refinance_rate_premium`: the engine's
@@ -897,6 +949,7 @@ Batch handover history and whole-tree rename/copy detection so startup resolutio
   refinance payments as interest rather than debt retirement, so the debt tie-out holds
   under refinance. No committed scenario selects `refinance`, so the canonical KPI vector is
   unchanged; switching the lender case onto it is a separate, owner-held re-baseline.
+
 - Size the senior facility, and report DSCR, LLCR and PLCR, on CFADS bearing the levered
   tax the SPV actually pays (#1397, audit P2-F4-01). The pipeline built its sizing rows
   with `interest_expense=0`, so `plan_debt` sculpted against — and coverage was published
@@ -967,6 +1020,7 @@ Batch handover history and whole-tree rename/copy detection so startup resolutio
   infeasibility diagnostics already speak; a warning names the KPI and the parameter value,
   so a mistyped `objective_key` surfaces rather than disappearing into "no feasible optimum".
   No substituted 0.0: a 0.0 equity IRR reads as break-even (#782).
+
 - **`P2-F3-01` — the equity waterfall carries a debt-service shortfall instead of clamping
   it to zero.** `finance/equity_distribution_v14_hydra.py` used to compute cash after debt
   service as `max(0, CFADS - debt service - interest WHT)`, so a year whose CFADS could
@@ -994,6 +1048,7 @@ Batch handover history and whole-tree rename/copy detection so startup resolutio
   a synthetic half-year bridge period that the equity rows receive no CFADS for; that
   asymmetry predates this change and is tracked on #1564. The `F-5` bar and #1110's `HOLD`
   are untouched.
+
 - **`P3-COV-05` part A — dead payment-support config is refused, and the reserve and
   guarantee bases are stated.** `Financing_Terms.reserves.receivables_guarantee_months` was
   declared in 16 committed scenarios and two reproduction copies, usually as nine months of
@@ -1012,10 +1067,12 @@ Batch handover history and whole-tree rename/copy detection so startup resolutio
   for reasons that predate this change. Part B (funding form, target months and any
   receivables support) waits on authenticated term-sheet terms (#920). The `F-5` bar and
   #1110's `HOLD` are untouched.
+
 - Disclose that D4's full reconciliation zero is an arithmetic identity rather
   than independent component validation. Add direct controls for defensive input
   refusals and an explicit refusal audit. D4 remains noncanonical, default-off,
   and without finance or KPI authority; the Board/lender HOLD remains unchanged.
+
 - **Factual corrections to uncompiled changelog fragments and to two config comments, made
   before the next compile publishes them** (#1405). Each correction was checked against the
   repository itself, or against the Actions record of the runs it describes, rather than against
@@ -1050,12 +1107,14 @@ Batch handover history and whole-tree rename/copy detection so startup resolutio
   the argument pinning, dry-run comparison and forced-fail sentinels are blind to it by
   construction, while the direct suppression channel through the environment is closed. No
   runtime, financial formula, scenario, model input or KPI change.
+
 - Stage the invalid-byte handover record with `git update-index` instead of writing it
   into the worktree, so
   `test_handover_resolver_rejects_control_character_filenames` builds on Darwin —
   which rejects a non-UTF-8 filename with `EILSEQ` — as well as on Linux. The
   resolver is still proven to reject the invalid-byte name itself; no test is skipped
   or weakened, and no model, scenario, KPI, release or HOLD behaviour changes.
+
 - Report an undefined equity IRR as undefined rather than 0.0 (#1436). When no discount
   rate solves the equity cashflows, the waterfall already returned `None`, but the KPI
   surface kept the metrics layer's 0.0 sentinel, so the worst cases (for example a 6-year
@@ -1073,6 +1132,7 @@ Batch handover history and whole-tree rename/copy detection so startup resolutio
   now leaves the DSCR, IRR and NPV distributions too. That drops the worst draws and moves
   the minimum and P10 DSCR optimistically (a measured three-trial example: 1.05 to 1.31).
   Before this change the same trial was kept, at a false 0% equity IRR.
+
 - **Release record for #1452 (`P2-F3-01`).** It merged on 2026-11-06 as `cd283c5d`, moved
   equity KPIs in 16 committed scenarios, and left `VERSION` at 15.18.0, so `DOC-02` was
   not met at merge. From `cd283c5d` until this release, main reported 15.18.0 while
@@ -1084,6 +1144,7 @@ Batch handover history and whole-tree rename/copy detection so startup resolutio
   quotes them as final until #1564 (year-1 bridge-period service charged to equity with no
   matching CFADS) is resolved. Retrospective review records: #1452 issuecomment-6705659480
   (domain) and issuecomment-6707928571 (assurance).
+
 - **#1457: a tornado survives an undefined KPI at a driver point.**
   `analytics/sensitivity/engine.py` raised `KeyError` when the swept metric was missing
   from an evaluation, which is how the KPI surface reports an equity IRR with no solving
@@ -1102,6 +1163,7 @@ Batch handover history and whole-tree rename/copy detection so startup resolutio
   `:466` for an equity IRR with no equity-distribution result) is recorded as defined,
   so `undefined_points: 0` does not show that every point solved. A sweep whose metric
   is defined everywhere is unchanged, and no KPI or canon figure moves.
+
 Correct Monte Carlo complete-case selection bias: retain aligned nullable trial rows and
 compute each KPI from its own defined observations, with explicit per-metric coverage.
 Undefined equity IRR no longer discards the same trial's valid DSCR or project returns.
@@ -1112,6 +1174,7 @@ trial evaluation, finance mathematics and the lender/IC toy-fallback ceiling are
 The solar assessment report's Monte Carlo summary now uses every trial with a defined
 project IRR (all 1,000 at its default seed, where 999 were previously dropped) and states
 equity IRR's coverage beside its statistics.
+
 - **The Sprint 21 evaluation of the owner's platform plan is corrected after its domain review.**
   #1296 merged `docs/SPRINT_21_BOOTSTRAP/` without its review pair; the post-merge domain review
   (#1371) returned REJECT with seven blocking findings, each now an issue (#1477 to #1483). Four
@@ -1131,6 +1194,7 @@ equity IRR's coverage beside its statistics.
   or KPI change. The post-merge assurance review of #1296 also returned REJECT; its one blocking
   finding is the same handover trap. Both review records and a reconciliation record are now under
   `docs/PLATFORM_PLAN_*`.
+
 - Report an unresolved project IRR as undefined rather than 0.0 (#1494). When no rate in
   `finance/irr.py`'s search range solves the project cashflows, `calculate_scenario_kpis`
   logged "Project IRR undefined" and then let its stable-surface default write
@@ -1172,12 +1236,14 @@ equity IRR's coverage beside its statistics.
   that status is `undefined`, and its receipt is `42 <sha256>`.
   `tests/lint/test_train_policy.py` checks the schema on the real lender case and refuses a
   schema without the new label.
+
 Advance the existing Tornado lock pin from 6.5.9 to 6.6 for #1496. Upstream
 identifies 6.6 as the fix for GHSA-pcg2-g6cj-q92c (folded-header parsing CPU
 complexity), GHSA-pw9p-v7r6-gx4p (RedirectHandler open redirect), and
 GHSA-r4j5-9xpp-3985 (chunked-body event-loop blocking and excessive memory).
 No abstract dependency, policy constraint, advisory suppression, application
 source, or financial assumption changes.
+
 - After maturity the debt engine now carries the balloon as the debt it is (#1503,
   #1504). Under `cash_sweep` and `bullet` it accrues interest at the facility's blended
   rate (`avg_debt_rate`) until it is repaid, as the refinance already did; a sweep whose
@@ -1194,6 +1260,7 @@ source, or financial assumption changes.
   -8.89%); those whose sweep never clears keep their equity IRR and report a larger
   unpaid balance. None of these figures supports a lender, IC, covenant or Board
   representation while the F-5 and #1110 holds stand.
+
 - The levered tax pass now deducts the interest paid on the balloon after maturity
   (#1505). It deducted only scheduled interest (`interest_usd`), so the interest inside
   `balloon_resolution` (the refinanced tranche's, a sweep's or a bullet's) reduced no
@@ -1217,6 +1284,7 @@ source, or financial assumption changes.
   eia_prudent -8.89% to -8.81%) and those that never clear retire more of it. None of
   these figures supports a lender, IC, covenant or Board representation while the F-5
   and #1110 holds stand.
+
 - Debt sizing no longer deep-copies the whole scenario for every trial gearing (#1514).
   Since #1451 sized debt as a fixed point, each pipeline run makes several sizing passes,
   and each pass's gearing scan copied the scenario about 130 times to change one number.
@@ -1227,6 +1295,7 @@ source, or financial assumption changes.
   committed scenario that runs are byte-identical, and
   `tests/finance/test_gearing_trial_config_copy.py` pins each solve against the
   deep-copy recipe.
+
 - The levered-tax debt-sizing fixed point now warm-starts each pass's gearing scan at
   the previous pass's answer (#1514 follow-up, after #1516). Each pass used to rescan
   about 130 trial gearings from `debt_ratio` down, although the answer moves by at most
@@ -1238,6 +1307,7 @@ source, or financial assumption changes.
   difference. Full results on every committed scenario are byte-identical, and
   `tests/finance/test_gearing_warm_start.py` re-checks each warm-started solve of the
   lender case against the cold scan.
+
 - **The merge-train and merge checks now catch what #1515's reviewers showed they missed.** The
   steward skill's `TRAIN-01` blocks and its single pull-request merge check (`#1529`):
   - **Each train commit is checked against its car in full.** The pre-landing check now compares
@@ -1273,11 +1343,13 @@ source, or financial assumption changes.
   issued-message tampering controls cover the later review findings. Standalone Bash conditionals
   explicitly exit on refusal, including on the governed Mac Bash where `set -e` alone did not stop
   them.
+
 - **SCMC and PGF pointer records match the private corpus as merged.** Both pointer READMEs now
   say the pinned private commit is on the private repository's `main` after
   `arunakulat/DutchBay_RAG#41` landed by merge commit, instead of naming its deleted branch, and
   the SCMC work record no longer lists that merge as open. The pinned commit is unchanged. Docs
   only; no model input, output or KPI changes.
+
 - Blue Whale status note: the reason given for the project NPV move at 15.20.0 (docs only, no KPI
   moves; #1571). `docs/blue_whale/STATUS.md` said one construction period lifts the project NPV
   "mainly through lower interest during construction". Project NPV and IRR are unlevered and
@@ -1288,10 +1360,12 @@ source, or financial assumption changes.
   longer says their handling notes allow no trace here: since #1540 the capex config cites one
   such package by its handling-note identifier, within the owner's decision of 1 Nov 2026
   (#1353 comment 6705572435). No figure, config value or generated output changes.
+
 - Blue Whale solar + BESS dispatch and layout hygiene (#1578, lane residual L-3; #1531 assurance A-3 to A-5). No KPI moves, and every committed scenario and Blue Whale output is unchanged.
   - `solar_resource/pv_bess_dispatch.py`: the round-trip-efficiency guard now runs before the charge-efficiency guard. With a round-trip efficiency above 1 the charge-efficiency range is empty, so the old order always gave the charge-efficiency message and the round-trip guard could never fire. Each refusal guard in the BESS, dispatch-window and tariff configs, and in the dispatcher's inputs, now has a negative-control test (A-3).
   - `TariffConfig.rate()` was never called, and `summarise()` repeated its priority-term rule inline. Both now read one rule, `TariffConfig.rate_name()`, and a test pins that they agree year by year (A-4).
   - `analytics/gis/pv_array_layout.py`: `layout_feature_collection()` takes a required keyword `note` instead of writing a Blue Whale note itself. The Blue Whale runner passes the same text, so the layout GeoJSON is unchanged, and a test pins that the library carries no site wording (A-5).
+
 - Enforce the existing lender/IC run-mode prohibition on toy Monte Carlo trial
   fallback, including an explicit `monte_carlo.allow_toy_fallback: true` override.
   Malformed mode declarations fail before trials. Screening, developer and
@@ -1299,6 +1373,7 @@ source, or financial assumption changes.
   metrics are unchanged. This closes only the mode-ceiling slice of #962;
   undeclared production configs still need explicit fail-closed configuration,
   and the direct engine does not certify the lender-report sample floor.
+
 - The audit review image bootstrap (`.devcontainer/bootstrap_audit_review.sh`) no
   longer makes an editable install of the checkout. Since #1377 the environment
   contract sees that install and refuses it, so "build and boot audit review image"
@@ -1308,12 +1383,14 @@ source, or financial assumption changes.
   `scripts/development_environment.sh` and `config/development_environment.json`,
   the files `check_venv.sh` executes. No runtime, financial formula, scenario, or
   KPI change.
+
 - **Blue Whale sizing summaries carry their as-run model version again.** The 2026-11-02 renumbering
   of the Blue Whale stack (#1530 to #1541) relabelled `spec.model_version` in
   `docs/blue_whale/pv_bess_sizing_summary.json`, `solar_bess_project_sizing_summary.json` and
   `solar_bess_fixed_bess_sizing_summary.json` from the as-run 15.15.0 to 15.17.0. As a result,
   `pv_bess_sizing_summary.json`'s own `spec.result_sha256` no longer verified. The three files are
   restored, byte for byte, to the bytes their runs wrote. No figure changes, and no KPI moves.
+
 - Blue Whale stack audit cleanup: resolve cross-platform GeoJSON precision matching, provenance, CLI hygiene, and documentation drift.
   - `scripts/run_blue_whale_wind_siting_v14.py` and `tests/wind/test_blue_whale_wind_siting.py`: compare committed and generated site GeoJSON trees with `abs_tol=1e-9` via `_json_matches` so cross-platform BLAS/SVD float differences ($2.38 \times 10^{-12}$ in `west_edge_bearing_deg` on macOS Apple Silicon) do not break `site_geojson_matches_committed`, while rejecting any $\ge 10^{-9}$ coordinate or property drift.
   - `scripts/run_blue_whale_capex_solar_resource_v14.py`: set `@hydra.main(version_base="1.3")`,
@@ -1329,6 +1406,7 @@ source, or financial assumption changes.
   - `tests/finance/test_blue_whale_scenario_kpis.py`: update docstring regression pin reference to `(v0.8, model 15.18.0)`.
   - `solar_resource/pv_bess_dispatch.py`: update docstring to reflect that `#1472` (`analytics.storage_dispatch`) is on `main`.
   - `docs/blue_whale/STATUS.md`: add historical reference banners to PR 3 and PR 4 sections clarifying they are intermediate design iterations superseded by PR 5–PR 7.
+
 - Blue Whale capex disclosure wording (docs only, no KPI moves). The 15.17.0 statements that no
   raw private figure is published, or that a reader "may be able to back out" a private input,
   understated what the published capex blend discloses: the private commercial inputs that
@@ -1338,6 +1416,7 @@ source, or financial assumption changes.
   `NSO250MW-OFFERS-HANDLING-2026-09-04` (parent manifest pin refreshed), the Blue Whale status and
   methods notes, and the three Blue Whale scenario comments. No figure, config value or
   generated output changes.
+
 - Raise the `certifi` pin in the reproducibility lock from `2026.7.22` to `2026.10.19`, which
   fixes PYSEC-2026-4320 (GHSA-6q48-6c7w-9gw2) and clears it from the `pip-audit` leg of the
   `Security Scan` gate. No abstract dependency changes: `pyproject.toml` does not constrain
@@ -1358,7 +1437,9 @@ source, or financial assumption changes.
   `PIL.Image.open`, which sniffs format from the response bytes, so that path depends on the tile
   service rather than on the tile type. The allowlist recorded a capped finding, not an accepted
   exposure.
+
 - **CI coverage gate (`test-suite.yml`)**: install the `[solar]` (`pvlib`) optional extra alongside `[wind,gis]` in the `test`, `coverage`, and `lint` jobs so `pvlib`-gated tests under `tests/solar/` and `tests/gis/` execute in the sharded test suite instead of skipping while `solar_resource` and `analytics/gis` remain in the 95% coverage denominator.
+
 - The environment probe behind `./check_venv.sh` now reads the project's install record from
   the selected environment only. A git-ignored `dutchbay_epc_model.egg-info` in the checkout
   root sits first on the probe's `sys.path` and carries no `direct_url.json`, so it hid an
@@ -1377,6 +1458,7 @@ source, or financial assumption changes.
   dependencies of the selected extras, imports the checkout through `PYTHONPATH` as the
   shared environment does, and removes an editable install left by an earlier version of
   the hook. The owner's shared environment was never affected.
+
 - **The handover resolver no longer fails closed on a Git older than 2.45.0.** The batched
   lineage timestamp guard added in #1358 accepted a zero UTC offset only when Git spelled it
   `Z`. Git writes `iso-strict` that way from 2.45.0 onwards and writes `+00:00` in every older
@@ -1398,15 +1480,18 @@ source, or financial assumption changes.
   - No repository control declares a Git version. CI runs `ubuntu-latest`, whose Git moves, and
     the guard's version dependency was never stated; `docs/ISSUE_1342_IMPLEMENTATION_RECORD.md`
     describes the control as admitting "the exact Git `%cI` form", which is what it now does.
+
 The cloud SessionStart hook now writes a path-only `dutchbay-checkout.pth` into the
 selected environment's `site-packages`, naming the active checkout, so the project
 imports from any working directory rather than only from the repository root.
+
 Before this, the hook's `PYTHONPATH` export was written to `CLAUDE_ENV_FILE`, which
 only the harness sets. The manual invocation documented in `CLAUDE.md` sets no env
 file, and a hook is a subprocess that cannot export into the shell that started it,
 so a hand-run hook left `import analytics` working only from the checkout root. That
 was a regression against the earlier hook, which had made the project importable
 everywhere as a side effect of the `pip install -e` that #1376 correctly removed.
+
 The `.pth` is not an installation and does not reinstate one: it writes no
 `dist-info`, no `direct_url.json` and no checkout `egg-info`, so the environment
 contract still reports `editable_project_install` false and `project_install_url`
@@ -1416,6 +1501,7 @@ contract permits. The file holds one path on one line and is written on every
 session start -- including a warm start, where the matching manifest stamp skips the
 dependency install -- and rewritten rather than appended, so it cannot accumulate
 entries and a moved checkout self-corrects.
+
 One consequence is worth stating plainly: a virtual environment that one checkout's
 hook has stamped is now refused for any *other* checkout. `validate_environment`
 raises on a non-empty `foreign_checkout_paths`, so a second checkout pointed at the
@@ -1425,6 +1511,7 @@ the contract working as intended, because the `.pth` really would make the secon
 checkout import the first's code. The hook itself never shares an environment: it
 selects `$REPO/.venv` only and rewrites the `.pth` on every start, so any checkout
 that runs the hook corrects the file to name itself.
+
 - **`hydra-core` 1.3.7 → 1.3.8, clearing GHSA-wf6j-7hvr-gr93 (#1460).** The advisory affects
   1.3.6–1.3.7 and the 1.4.0.dev9, dev10, rc1 and rc2 prereleases, so the locked 1.3.7 was
   vulnerable: `pip-audit` over the previous `requirements.txt` reports this one finding in both
@@ -1432,12 +1519,15 @@ that runs the hook corrects the file to name itself.
   guard test now all reject every affected version. 1.3.8 keeps `omegaconf<2.4,>=2.2` and
   `antlr4-python3-runtime==4.9.*`, so no other lock line moves, and this repository does not call
   `hydra.utils.instantiate()`.
+
 - **Reproducibility lock (`requirements.txt`, `Makefile`)**: add `solar` to `LOCK_EXTRAS` and regenerate the lock on Python 3.12 under `constraints.txt`, which pins `pvlib==0.16.1` and `h5py==3.16.0` (pvlib's one dependency not already pinned) and brings both into the `pip-audit` gate. Since #1548 the test, coverage and lint jobs install `[solar]`, so every CI run had resolved pvlib fresh from PyPI, unaudited. No other pin moved. `tests/lint/test_extra_pin_consistency.py` drops `solar` from the declared not-locked extras, so the `pvlib>=0.11` spec is now checked against the lock. KPI-neutral: no model input, code path or output changes.
+
 - **Blue Whale v15.18.0 ingress record no longer reads `MERGE-01` as suspended.**
   `docs/blue_whale/BLUE_WHALE_POST_MERGE_AUDIT_INGRESS_v15_18_0.md` gains a dated 2026-11-07
   addendum recording the owner's confirmation that the Checkpoint 9 suspension is lifted, with
   its sources on #1353. The three statements of the suspension stay as 2026-11-06 receipts and
   each points to the addendum. Docs only; no model input, output or KPI changes.
+
 - **Correction to the `msgpack` 1.2.1 → 1.2.3 entry for CVE-2026-114613.** That entry says the
   advisory "made the required Security Scan (`pip-audit` over `requirements.txt`) fail on every
   pull request". It did not fail on every pull request, and the Actions record shows what did
@@ -1452,11 +1542,13 @@ that runs the hook corrects the file to name itself.
   was published, because nothing had re-run them. A `Security Scan` result describes the lock as
   it stood when that run executed, not the lock as it stands now. No runtime, financial formula,
   scenario, model input or KPI change.
+
 - **`msgpack` 1.2.1 → 1.2.3 in the lock, clearing CVE-2026-114613.** The new advisory made the
   required Security Scan (`pip-audit` over `requirements.txt`) fail on every pull request. `msgpack`
   is transitive only (`CacheControl` requires `>=0.5.2,<2.0.0`, `blosc2` unbounded), it is not
   frozen in `constraints.txt` or pinned in `pyproject.toml`, and this repository does not import it
   directly, so only the lock line moves.
+
 - Raise `pillow` in the reproducibility lock from `12.3.0` to `13.0.0` and `streamlit` from
   `1.62.0` to `1.66.1`, and **remove all eight `--ignore-vuln` entries** from
   `PIP_AUDIT_IGNORES`. The eight advisories accepted in #1369 are now fixed rather than
@@ -1474,6 +1566,7 @@ that runs the hook corrects the file to name itself.
   dependency changes: `pyproject.toml` does not mention `pillow` or `virtualenv`, and bounds
   `streamlit` only by a `>=1.40` floor on the optional `dashboard` extra, which `1.66.1`
   satisfies.
+
 - **Two blind spots in the dependency audit, both measured before being fixed.** First,
   `make security` audited 310 of the lock's 312 pins. `pip-audit -r requirements.txt` resolves
   the file in a temporary virtual environment, but `VirtualEnv.post_setup` runs
@@ -1520,6 +1613,7 @@ that runs the hook corrects the file to name itself.
   than enumerating the bad literals — `continue-on-error: ${{ github.event_name ==
   'schedule' }}` would otherwise have neutered the daily run alone. No runtime, financial
   formula, scenario or KPI change.
+
 - **Steward skill: merge conditions across multiple review chains, and a Grid Study prediction
   that matches CI after a push.** This answers the residuals both review lanes accepted on
   #1295, and the skill side of the Grid Study `base.sha` finding from #1231's review (#1323).
@@ -1557,11 +1651,13 @@ that runs the hook corrects the file to name itself.
     `Classify changed paths` job remains the authority.
   - The cloud sandbox failure count in `CLAUDE.md` is now "up to five, timing-dependent", and
     the skill cites it there instead of repeating it.
+
 - Interactive `scripts/venv_up.sh` activation now honors an optional
   `DUTCHBAY_VENV_LOCK` absolute path and fails before provisioning or activation when
   the resolved environment differs. Unconfigured developer and CI hosts retain the
   portable config-first fallback. No runtime, financial formula, scenario, or KPI
   change.
+
 - **Balloon interest paid after maturity is deducted for tax (15.10.0).** #1505: the
   levered tax pass deducted scheduled interest only, so the interest on the balloon after
   maturity (the refinanced tranche's, a sweep's or a bullet's) reduced no taxable income,
@@ -1625,8 +1721,10 @@ that runs the hook corrects the file to name itself.
 
 ### Added
 Add deterministic, provenance-bound non-canonical operational energy and explicit loss-attribution results with exact matched-boundary reconciliation and unavailable-not-zero semantics.
+
 Add an exact, provenance-bound EYA-to-actual operational reconciliation bridge with
 explicit unavailable gap categories and a structurally inert, default-off finance proposal.
+
 - **`F-03` — the v14 pre-flight gate refuses an unsupported `cashflow.resolution` or
   `cashflow.within_year_profile`.** Both A3 period fields are now registered in the v14 field
   specs, so the schema surface lists them, and `validate_config_for_v14` refuses a bad value
@@ -1654,7 +1752,9 @@ explicit unavailable gap categories and a structurally inert, default-off financ
   `SUPPORTED_RESOLUTIONS` and `ENGINE_SUPPORTED_RESOLUTIONS` are the same set today and no
   real value can exercise it. No financial formula, scenario, model input or KPI change; the
   `F-5` bar and #1110's `HOLD` are untouched.
+
 Add a within-year event calendar (`cashflow.event_calendar`, #1395 part b): on a sub-annual grid, BESS augmentation capex, tax cash and the bridge period's debt service can be placed on declared sub-periods, so a discrete payment shows as a discrete dip rather than being spread by the profile. An undeclared tax or augmentation payment takes an illustrative default date (tax in the year's last period, augmentation in its first), flagged as an assumption in `EventCalendar.assumed` and in a warning, because the real dates are not yet evidenced (#920). Placed and re-derived CFADS lines still reconcile to the annual engine within 1 ULP. Every committed scenario is annual, so no KPI moves, and F-5 still applies to any quarterly figure.
+
 - Add a default-off, standalone chronological BESS instruction-feasibility ledger
   with immutable required inputs, the shared YAML sizing and SOC contracts,
   source/destination energy custody, explicit conversion/outage/curtailment
@@ -1662,6 +1762,7 @@ Add a within-year event calendar (`cashflow.event_calendar`, #1395 part b): on a
   mismatch remain visible. The authored conservative gross-flow convention and
   allocation policy are disclosed. No optimization, dispatch right, merchant
   value, network-study acceptance or cashflow/KPI apply path is introduced.
+
 - **`TRAIN-01`: reviewed pull requests can share one full-suite run as a merge train.** This is a
   new canonical rule in `go_with_the_flow_rules_v3_0_clean.csv`, on the project owner's decision of
   2026-10-31 ("Trains now"). The merge coordinator may land two or three reviewed draft pull
@@ -1684,26 +1785,35 @@ Add a within-year event calendar (`cashflow.event_calendar`, #1395 part b): on a
   the steward skill route to the new rule. `tests/lint/test_train_policy.py` pins every control,
   with a negative control for each. No workflow or ruleset changes: the main ruleset already
   allows rebase merges.
+
 Add `solar_resource.turbine_shading`, a location-agnostic estimate of the plane-of-array irradiance that wind-turbine towers and rotors take from co-located PV, read from the scenario's `turbine:` and `resource.solar` blocks, and add `turbine_shading_pct` to the solar loss taxonomy (#1518). It reports an optical floor and moves no KPI.
+
 - Add the `docs/source_materials/scmc_ananda_coe_2026/` corpus area: a public record of the SCMC and STEAM Hub work with a SHA-256 register of its artifacts, and routing for STEAM, SCMC and Planet Green Force work through this repository. Add `docs/source_materials/planet_green_force_2026/` as a pointer. Private material is held in `arunakulat/DutchBay_RAG` and linked for sanitised use. KPI-neutral.
+
 - **Agent session routing note.** `docs/governance/agent_session_routing.md` sends a
   session on any agent host to the rules and files that govern it, restates none of
   them, and grants no merge, review, lease or approval authority. `AGENTS.md` points
   non-Codex sessions at it, and `tests/lint/test_agent_session_routing.py` checks that
   every rule ID, path and quoted section it cites still exists. It replaces draft #1498
   and adds no ruleset row.
+
 - **Blue Whale hybrid skeleton** — `scenarios/blue_whale_hybrid_lot5b_2026.yaml` (1 x 10 MW
   wind, 5 MWp PV, 10 MW / 40 MWh BESS on Lot 5B, Kalpitiya) on screening placeholders, fully
   LKR funded (100% LKR debt, FX held flat), with `docs/blue_whale/STATUS.md` and the owner
   inputs register `docs/blue_whale/INPUTS_REQUIRED.md`. No existing scenario or engine
   behaviour changes.
+
 Added a source-grounded capability and assurance roadmap that reconciles the live PR queue, finance and evidence gaps, and conditional platform expansion without changing model behaviour or release authority.
+
 - **Governance (`CLEANUP-01` & `Rules to follow.md`)**: Added `CLEANUP-01` to `go_with_the_flow_rules_v3_0_clean.csv` requiring post-merge tasklist and GitHub Issue / `#1353` closure receipts, synchronization of `main`, removal and pruning of merged worktrees and branches (`git worktree remove`, `git worktree prune`, `git branch -d`, `git push origin --delete`), and cleanup of non-protected virtual environments while strictly preserving the protected persistent Python 3.12 environment at `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv`; echoed `CLEANUP-01` across `AGENTS.md`, `CLAUDE.md`, `.claude/skills/steward/SKILL.md`, `docs/governance/agent_session_routing.md`, `docs/governance/recruit_01/02_writer_lease_and_recovery.md`, `Rules to follow.md`, `docs/blue_whale/BLUE_WHALE_POST_MERGE_AUDIT_INGRESS_v15_18_0.md`, and `tests/lint/test_gwtf_canonical_source.py`.
+
 Track the Codex project defaults in `.codex/config.toml` (no approval prompts, full-access sandbox, medium verbosity, concise reasoning summaries) and pin their values and exact bytes, so a change to local Codex agent permissions arrives as a reviewed diff.
+
 - **Persistent finance, Python, and renewable-production comparison** — preserve the
   5 October 2026 analyst briefing in the public knowledge base, with source links,
   specialist-program boundaries, reproducibility limitations, and the active Board/lender
   reliance `HOLD` stated explicitly.
+
 - **Merge-coordination handover for #1231 and #1295** (`docs/SESSION_HANDOVER_2026-10-06_MERGE_COORDINATION.md`).
   It is a scoped successor to the 2026-10-05 release handover, which remains the startup record.
   - It records what landed and where each review record lives.
@@ -1711,6 +1821,7 @@ Track the Codex project defaults in `.codex/config.toml` (no approval prompts, f
     C3-A-01 errors; two errors in the `d3157e0d` squash message; C3-D-01's widening of F-5; F-03;
     the Grid Study gate's dependence on `base.sha`; and the steward-skill residuals.
   - No model, KPI, rule or release changes, and no `HOLD` is lifted.
+
 - **Merge-coordination handover for #1322 and #1324**
   (`docs/SESSION_HANDOVER_2026-10-07_MERGE_COORDINATION.md`). It is a scoped successor to the
   2026-10-06 merge-coordination record. The 2026-10-05 release handover remains the startup record.
@@ -1722,6 +1833,7 @@ Track the Codex project defaults in `.codex/config.toml` (no approval prompts, f
     and adds two follow-up dolphins with their gates: steward-skill residuals and Grid Study test
     hardening.
   - No model, KPI, rule or release changes, and no `HOLD` is lifted.
+
 - **Merge-coordination handover for 2026-10-07 to 2026-10-11**
   (`docs/SESSION_HANDOVER_2026-10-11_MERGE_COORDINATION.md`). It is a scoped successor to the
   2026-10-07 merge-coordination record. The 2026-10-05 release handover remains the startup record.
@@ -1737,12 +1849,14 @@ Track the Codex project defaults in `.codex/config.toml` (no approval prompts, f
     configuration follow-ups, and the open Dependabot pull requests (the owner's open #1326
     decision, and #1345 and #1346, which need two review lanes or an owner waiver).
   - No model, KPI, rule or release changes, and no `HOLD` is lifted.
+
 - Add a frozen, provenance-bound post-COD operational evidence contract with closed dataset,
   purpose, role, unit, timezone-treatment, observation-status and interval-basis vocabularies;
   OpenOA-aligned dataset, role and cadence minima; explicit UTC coverage; one-product completeness;
   portable named-zone/DST policy declarations; provenance-bound derived-estimate lineage with
   mutually disjoint artifact roles; hostile validation guards; and hard fences against canonical
   finance or reliance use (#1331).
+
 - Add deterministic, provenance-bound operational CSV normalization and QA receipts with exact
   source, upstream-lineage, method and derived-artifact digests; complete mapped/excluded column
   accounting; explicit row-exclusion receipts; strict canonical units; UTC/DST treatment using
@@ -1757,6 +1871,7 @@ Track the Codex project defaults in `.codex/config.toml` (no approval prompts, f
   and receipts at construction, including deterministic source replay that rejects substituted
   normalized measurements. The layer performs no silent sorting, imputation, unit conversion or
   resampling and remains hard-fenced from AEP, finance and reliance outputs (#1332).
+
 - **`REVIEW-01`: review comes before the full suite, and the lane count follows the risk** — a
   new canonical rule in `go_with_the_flow_rules_v3_0_clean.csv`, on the project owner's decision
   of 2026-10-25. A writer opens the pull request as a draft, freezes the head and posts one
@@ -1780,6 +1895,7 @@ Track the Codex project defaults in `.codex/config.toml` (no approval prompts, f
   for review runs it once. `tests/lint/test_grid_ci_policy.py` executes the classify step for a
   draft and a non-draft event, and `tests/lint/test_review_first_policy.py` pins the trigger, the
   summary job's name and the draft summary.
+
 - **Bind both committed security gates to their declarative execution context.**
   `tests/lint/test_security_gate_coverage.py` now parses the main-branch audit and
   pull-request test workflows, requires exactly one `make security` step in each,
@@ -1797,6 +1913,7 @@ Track the Codex project defaults in `.codex/config.toml` (no approval prompts, f
   runtime environment files. Carries forward the change first proposed in #1446.
   No dependency, runtime, financial formula, model input, scenario, KPI, release,
   or HOLD changes.
+
 - **`SECDEP-01` gate integrity — the security gate cannot be neutered from inside the
   repository.** Closes the limit the declaration half stated: that the rule bound what is
   suppressed but not that the gate runs. The governed recipes are now exact — `audit` is
@@ -1831,6 +1948,7 @@ Track the Codex project defaults in `.codex/config.toml` (no approval prompts, f
   environment default for `--ignore-vuln`. What a hostile vulnerability service would do to a
   real audit is not something this file can guard. No runtime, financial formula, scenario or
   KPI change.
+
 - **`SECDEP-01` — a suppressed advisory declares what would lift it.** A new canonical GWTF
   rule row plus its fence, `tests/lint/test_pip_audit_allowlist.py`. The Makefile permits one
   literal `PIP_AUDIT_IGNORES :=` assignment: computed assignment names, includes, `eval`, Make
@@ -1859,12 +1977,15 @@ Track the Codex project defaults in `.codex/config.toml` (no approval prompts, f
   whether the governed recipes really invoke the audits, and whether a failing audit really
   fails the target, is a separate property delivered on its own. No runtime, financial
   formula, scenario or KPI change.
+
 - Add `docs/SESSION_HANDOVER_2026-10-22_AUDIT_GATE_CLEARED_ON_MERIT.md`, the `PERSIST-01`
   successor record for the session that merged #1368, #1369 and #1372. It records the handover
   resolver's git-version dependency and its fix, both halves of the audit-gate work and why the
   same gate needed two changes twelve hours apart, the receipts taken on each merged head, and the
   live queue it hands on (P-1, P-5, P-7, P-8 and the five stale Dependabot pull requests).
+
 Require a tracker-linked work item and open-PR sweep before development, with a PR intake receipt checked at the merge gate.
+
 - Record the v15.6.1 release receipts, completed fragment/branch cleanup, surviving Board/lender reliance HOLD, and clean-thread startup checklist in the successor session handover.
 
 ## v15.6.1 - 2026-10-04
