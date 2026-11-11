@@ -9,7 +9,7 @@ This skill collects the pull-request conventions that sessions otherwise redisco
 cites rules rather than restating them. The authority is `go_with_the_flow_rules_v3_0_clean.csv`
 and `AGENTS.md`, and where they disagree with this file, they win.
 
-Load the ruleset and the three framework principles before acting. `AGENTS.md` "Rules and
+Load the ruleset and the three framework principles before acting. `CLAUDE.md` "Rules and
 formats that govern this repository" has the command and the rule IDs.
 
 ## Tracker-first intake (`INTAKE-01`)
@@ -57,7 +57,7 @@ rebinds are still in flight (#1231, comment 5849143748 §5).
 
 ## What green means here (`MERGE-01`)
 
-Green means every check on the exact head succeeded, or was skipped for a stated reason:
+Green means every *required* check reports success on the exact current head with no failed, pending or unreported required check and no conflict; a skipped advisory job is neither a blocker nor a substitute (`MERGE-01`):
 - `Stochastic Qualification` and `Report Qualification` run only on schedule or manual
   dispatch, so they skip on pull requests.
 - `Grid Study` may skip only when `Classify changed paths` classified the diff as unrelated to
@@ -72,7 +72,7 @@ Green means every check on the exact head succeeded, or was skipped for a stated
   workflow changes into the diff, so the prediction tends to say Grid Study will run where CI
   will skip it. It can also under-predict: for example when the branch reverts a change `main`
   made, or when its own diff is empty. Either way, the `Classify changed paths` job decides.
-  The snippet refuses to predict unless the checkout is at the pull request's head.
+  The snippet refuses to predict unless the checkout is at the pull request's head; the snippet's head check refuses in that window (S-A5-07(a)).
 
   ```bash
   PR=$(gh api repos/arunakulat/dutchbay-epc-model/pulls/<number> --jq '.base.sha + " " + .head.sha')
@@ -103,9 +103,9 @@ Green means every check on the exact head succeeded, or was skipped for a stated
 
 - **Receipts.** For a CI fix, reproduce the failure, then show the same check passing. Paste
   the command and its result into the body's receipts table (`VERIFY-01`).
-- **Changelog.** Add one fragment, `changelog.d/<id-or-slug>.<category>.md`, whose body has no
-  Markdown headings. Never edit `CHANGELOG.md` directly. Validate with
-  `.venv/bin/python scripts/compile_changelog.py --dry-run`.
+- **Changelog.** Add one fragment, `changelog.d/<id-or-slug>.<category>.md` (use `.changed.md`
+  for governance and practice changes), whose body has no Markdown headings. Never edit
+  `CHANGELOG.md` directly. Validate with `.venv/bin/python scripts/compile_changelog.py --dry-run`.
 - **Commits.** Follow `R18`, which admits only the eleven Conventional Commits types.
 - **Corpus and manifests.** Work through `AGENTS.md` "Four ways a corpus commit goes wrong".
   `sha256sum -c MANIFEST.sha256` must exit 0. Refresh parent manifests with
@@ -114,7 +114,7 @@ Green means every check on the exact head succeeded, or was skipped for a stated
   impact disclosure, `VERSION` and `CHANGELOG.md`, and `TEST-01`'s independent oracle.
 - **Local runs.** Use `PYTHONDONTWRITEBYTECODE=1` and `-p no:cacheprovider`. Some failures in
   `tests/lint/test_cloud_audit_review_sandbox.py` are local to cloud containers and
-  pre-existing; `AGENTS.md` "Known local-only failures" says which and how many. Declare the
+  pre-existing; `CLAUDE.md` "Known local-only failures" says which and how many. Declare the
   count you observed in your receipts; never skip a test.
 - **Size.** Keep each fix minimal. One validated push beats several speculative ones
   (`DELIVERY-01`).
@@ -146,6 +146,11 @@ changelog erratum records what happens when that goes wrong.
 The lane count follows the risk class. The three bounded low-risk classes in module 1 §3.1
 are `R1` and take one lane: presentation-only code, test-only guard tightening, and record
 corrections. Everything else takes the domain and assurance pair. When unsure, it is `R2`.
+Before recruiting reviewers or starting work, run a same-package search across open pull
+requests and active writer leases (`docs/governance/recruit_01/02_writer_lease_and_recovery.md`)
+to verify no overlapping change touches the same package or surface. Dispositions must be
+posted as issue comments; pull-request review objects show no edit time in REST and cannot
+support merge verification (S-A5-08(b)).
 
 ## Merging
 
@@ -158,18 +163,29 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
    - Look in the pull-request body, its comments and review threads, and the durable records they
      cite. List every condition, including ones carried forward from earlier cycles and re-imposed
      unchanged.
+   - Distinguish mechanical conditions self-verifiable by the merger (head green, unedited
+     comment, digest match, body format) from substantive conditions requiring independent
+     records (waivers, discharges, withdrawals) (S-A5-04).
    - More than one review chain may have reviewed the same head; #1231 had two. Take the union
      of every chain's conditions. One veto in any chain blocks.
    - The records that can clear a condition are those of the project owner, any coordinator on
      record, and the reviewers any of them recruited on record.
    - **A login is not an identity.** In this repository the owner, coordinators, writers and review
-     threads all post as `arunakulat` or `Codex[bot]`. Attribute a record to the session that
+     threads all post as `arunakulat` or `claude[bot]`. Attribute a record to the session that
      posted it: the session it names as its author, not the sessions it addresses or cites.
      Check that against a recruitment, appointment, lease or reconciliation record. A record that
      names only a role, such as "the #1231 review thread", is attributed through a coordinator
      record that binds that role to a session. Name your own session in every record you post.
+     An author-less record cannot attribute itself; attribute it from another record on which the
+     party is named (S-D5-01). A record cannot attribute text that is not on record; cite the
+     record that holds it (S-D5-02).
    - The owner posts without a session. Take an owner decision from a record in which a session on
-     record quotes it and says where the owner gave it, or ask the owner.
+     record quotes it and says where the owner gave it, or ask the owner. Where the owner's
+     words answer a question, quote the question with them; the waiver names what the question
+     names (S-D5-03).
+   - A coordinator that attributes a block to itself, to the writer, or to a session it
+     succeeded cites a record from the time of posting that shows who posted it. Without one,
+     only the owner can clear the block (S-A5-03).
    - **Attribution decides what can clear a condition, never what can raise one.** A record you
      cannot attribute can never withdraw, discharge or waive a condition, and can never supply a
      disposition, a §7 proof or a rebind. It never removes a block: a veto, `HOLD`, condition or
@@ -182,33 +198,45 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
      that a coordinator posts stays the reviewer's: posting it does not make its findings the
      coordinator's. Restating a reviewer's finding in a reconciliation does not either, and
      nobody discharges a condition on their own fix.
-   - The owner may also withdraw or waive a condition, or decide that a lane need not run.
+   - Only the owner can waive a condition or decide that a lane need not run (S-D5-05);
      `RECRUIT-01` contains no such waiver, so it rests on the owner's own authority.
-     - A waiver names each condition or lane it waives. A general instruction to merge, such as
-       "merge on CI green", restates `MERGE-01`, whose boundary says it does not replace a
-       required review, so it waives nothing.
+     - An owner waiver or withdrawal names each condition or lane it covers (S-A5-01). A general
+       instruction to merge, such as "merge on CI green", restates `MERGE-01`, whose boundary
+       says it does not replace a required review, so it waives and withdraws nothing. Neither
+       lifts a `HOLD`.
      - It counts only on record, as above. The relaying session must have received the owner's
        words directly, and quotes them exactly with when and where it received them. A
-       second-hand relay counts only once the owner confirms it.
+       second-hand relay counts only once the owner confirms it. If a different session merges,
+       owner instructions relayed from chat must be confirmed (S-A5-06, S-D4-02).
      - It lifts no `HOLD`, and the merge message quotes it.
+   - Every reviewer recruited on record for a cycle must have a posted disposition. A
+     recruitment with none, or a second recruitment for the same lane and manifest, is a
+     stated blocker until the earlier reviewer's record is posted. A reviewer's withdrawal says
+     what it was shown since its disposition (S-A5-02).
    - Confirm that no veto is outstanding. Confirm that each required disposition is non-blocking
-     and bound to the exact head, or carried to it under module 3 §7. A required disposition is
-     one from each reviewer role that `RECRUIT-01` module 1 requires for the risk class.
-     Handovers, review records, governance, dependency bumps and any code outside module 1
-     §3.1's bounded low-risk classes are `R2` there; those classes are `R1` and take one lane
-     (`REVIEW-01`). A required lane that has
-     not run, and that the owner has not waived on record, is a stated blocker, not a silent hold
-     (`MERGE-01`): say on the pull request which lane is missing.
+     and bound to the exact head, or carried/rebound to it under module 3 §6 or §7 (S-A5-07(c)). A
+     required disposition is one from each reviewer role that `RECRUIT-01` module 1 requires for
+     the risk class. Handovers, review records, governance, dependency bumps (which are `R2`
+     load-bearing because they alter runtime/CI boundaries, S-A5-08(d)) and any code outside
+     module 1 §3.1's bounded low-risk classes are `R2` there; those classes are `R1` and take
+     one lane (`REVIEW-01`). A required lane that has not run, and that the owner has not
+     waived on record, is a stated blocker, not a silent hold (`MERGE-01`): say on the pull
+     request which lane is missing.
    - The head you merge must equal the head the dispositions are bound to. A later push or base
      merge, by anyone, voids the binding. A base update needs module 3 §7's three proofs and a
      rebind. A documentation-only receipt commit needs §6's proofs and a rebind, and so does any
-     other push that changes no file, such as a reworded commit message. Any change to a subject
-     byte restarts both reviews.
+     other push that changes no file, such as a reworded commit message. For such a push, also
+     show `git range-diff <old-base>..<old-head> <new-base>..<new-head>` in full, as §7's third
+     proof does for a base update (S-D5-04). Any change to a subject byte restarts both reviews.
+   - If security audit receipts are stale (> 24 hours) or the lockfile moved, re-run `make audit`
+     on the exact head before merge (D1340-A-04).
    - At merge, re-verify every disposition the merge relies on, whether a rebind or a review
      bound directly to the final head (module 3 §6). All of these must hold:
      - the comment you cite still exists at the URL or ID you recorded;
      - it is unedited: `updated_at` equals `created_at`. Record dispositions as issue comments:
-       a pull-request review shows no edit time, so it cannot pass this check;
+       a pull-request review shows no edit time in the REST review object (GraphQL exposes
+       `lastEditedAt`), so it cannot pass this check and cannot support merge; dispositions must
+       go in issue comments (S-A5-07(b), S-A5-08(b));
      - the SHA-256 of the record it transcribes equals both the digest it states and its
        durable record, which is the file the comment names and hashes. Hash the bytes between
        the `8<` markers, drop the blank line next to each marker, and end with one LF. A hash of
@@ -216,9 +244,11 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
      - it names the reviewer, the exact commit, tree and base, and the subject-manifest digest.
 
      An edit, deletion or mismatch invalidates the disposition until the reviewer issues a new
-     one. So does a comment that states no content digest, and a durable record you cannot
-     read: ask the reviewer to reissue the record, or merge from where the durable record is
-     kept. Name in every record you post where its durable record is kept.
+     one, or a fresh review by a new reviewer is conducted, or merge is performed from the
+     container holding the durable file (S-A5-07(d)). So does a comment that states no content
+     digest, and a durable record you cannot read: ask the reviewer to reissue the record, or
+     merge from where the durable record is kept. Name in every record you post where its durable
+     record is kept.
    - A condition set by a review overrides the defaults in step 2, except the restricted-material
      rule. Publishing restricted material is the owner's decision (`AGENTS.md` "Four ways a
      corpus commit goes wrong", item 2), so a review condition cannot authorise it. If a
@@ -228,9 +258,14 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
      State on the pull request what blocks and who can clear it.
 2. **Merge.** Record the protected `main` SHA, and pin the expected head SHA so that a late push
    cannot slip in.
+   - `main` enforces linear history. Merges to `main` use squash-merge or rebase-merge (`TRAIN-01`);
+     two-parent merge commits cannot run on `main` and apply only to feature-branch updates (H-A1-06).
+     If a condition requires a two-parent merge commit on `main`, prefer a squash that meets the
+     condition or state the block.
    - The default is a squash merge titled as the pull-request title followed by
      ` (#<number>)`.
-   - The message body must carry:
+   - The squash message is part of the subject and must be verified against all merge-boundary
+     conditions. The message body must carry:
      - the text each merge-boundary condition requires, verbatim where the condition names
        words or references;
      - every `HOLD` that survives the merge, and every item carried past it as a gate on later
@@ -252,35 +287,129 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
        it. Cite the single home of the material instead, and tell the owner, who decides whether
        the record is redacted.
      - If you cannot tell whether text is restricted, treat it as restricted.
-   - Use a two-parent merge commit instead of a squash when a condition requires it. A merge
-     commit brings every branch commit into `main`. Check the subjects of its non-merge commits
-     against `R18` first; `R18`'s own measurement excludes merge commits. If a non-merge subject
-     fails and the condition allows only a merge commit, do not merge; state it as a blocker.
-     Otherwise prefer a squash that meets the condition.
    - Before submitting, re-read each condition against the final message text.
-3. **Verify against the SHA the merge returned.** The commit the merge created must have the
-   head's tree, and its first parent must be the `main` SHA recorded in step 2. A two-parent merge
-   commit must also have the head as its second parent:
+3. **Verify against the SHA the merge returned.** The commit the merge created must equal the freshly fetched tip of
+   `origin/main` and have the head's tree, and its first parent must be the `main` SHA recorded in
+   step 2. A squash has one parent. A two-parent merge commit (on branches supporting it) must also have the head as its second
+   parent. Supply `MERGE_SHA`, `HEAD_SHA` and `MAIN_SHA` as full commit IDs and `PARENTS` as `1`
+   for a squash or `2` for a merge commit. Run each Bash fence in a fresh shell with its named
+   environment variables set from the recorded data. Never interpolate record text into shell code.
 
    ```bash
-   git fetch origin main
-   test "$(git rev-parse <merge-sha>^{tree})" = "$(git rev-parse <head-sha>^{tree})"
-   test "$(git rev-parse <merge-sha>^1)" = "<main-sha-recorded-in-step-2>"
-   test "$(git rev-parse <merge-sha>^2)" = "<head-sha>"   # two-parent merge commit only
+   set -euo pipefail
+   unset GIT_CONFIG_PARAMETERS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
+   unset GIT_ALTERNATE_OBJECT_DIRECTORIES
+   export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
+   export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+   export GIT_CONFIG_KEY_1=advice.graftFileDeprecated GIT_CONFIG_VALUE_1=false
+   test "$(git config --get core.commitGraph)" = false
+   git fetch origin refs/heads/main:refs/remotes/origin/main
+   for sha in "$MERGE_SHA" "$HEAD_SHA" "$MAIN_SHA"; do
+     [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1
+     test "$(git cat-file -t "$sha")" = commit
+   done
+   [[ $PARENTS = 1 || $PARENTS = 2 ]] || exit 1
+   test "$(git rev-parse refs/remotes/origin/main)" = "$MERGE_SHA"
+   expected_parents=$MAIN_SHA
+   if [[ $PARENTS = 2 ]]; then expected_parents+=" $HEAD_SHA"; fi
+   parents=$(git show -s --format=%P "$MERGE_SHA")
+   test "$parents" = "$expected_parents"
+   head_tree=$(git rev-parse "$HEAD_SHA^{tree}")
+   test "$(git rev-parse "$MERGE_SHA^{tree}")" = "$head_tree"
+   echo "Merge check: OK"
    ```
 
-   If any test fails, stop. Report the mismatch on the pull request and take no further action on
-   it until the mismatch is resolved (`RECRUIT-01` module 3 §7).
+   The block stops at its first failed `test` and passes only when it prints `Merge check: OK`.
+   Object checks use the stored commits, without local replacement refs, grafts or a local
+   commit-graph file, whose cached parents and trees Git otherwise trusts without re-reading the
+   commits. The `unset` lines drop inherited Git settings that would outrank these controls or
+   point the block at another repository, object store or index, such as the
+   `GIT_CONFIG_PARAMETERS` an enclosing `git -c` leaves behind. The `test` line after the exports
+   refuses a Git older than 2.31, which ignores `GIT_CONFIG_COUNT` without an error. Keep these
+   lines in every block; a clean worktree alone does not establish object identity.
+   Silence, or a missing `OK` line, is a failure. If it fails, stop. Report the mismatch on the pull
+   request and take no further action on it until the mismatch is resolved (`RECRUIT-01` module 3
+   §7).
 4. **Retire only branches, worktrees and non-protected venvs you own (`CLEANUP-01`).** Immediately
    after step 3's merge verification succeeds:
    - Inform the session/project tasklist, post a closure/reconciliation receipt on #1353 naming
-     the merged pull request and commit SHA on `origin/main`, and close any completed focused
-     GitHub issue (or each car pull request and the train issue for a train).
-   - Synchronize the clean primary checkout (`git fetch origin main && git checkout main && git pull --ff-only origin main`),
+     the merged pull request and commit SHA on `origin/main`, and close only the focused issue
+     named by number on the merged pull request's own `Work item:` or closing line (for a train,
+     the train issue and the focused issue named on each car's line), and only when its
+     deliverable is complete. A `Work item:` line that names a #1353 comment closes nothing, and
+     cleanup never closes tracker #1353.
+   - Cleanup never closes a pull request. Closing an unmerged pull request needs a
+     cited owner decision (where and when the owner decided), posted as a comment on that pull
+     request before it is closed. The one exception is a train car, closed under "Merge trains"
+     step 5 below.
+   - Synchronize the clean primary checkout, when no other session is using it (`git fetch origin main && git checkout main && git pull --ff-only origin main`),
      remove the merged task worktree (`git worktree remove <worktree-path>`), and run
      `git worktree prune`, preserving any dirty or concurrently owned worktrees (`WORKTREE-01`).
-   - Delete the merged branch locally (`git branch -d <branch>`) and remotely
-     (`git push origin --delete <branch>`), and run `git fetch --prune origin`.
+   - Delete a branch only when its pull request's `merged_at` is set and every ref still present
+     equals the merged head. Run this block in a fresh shell with `PR` and `BRANCH` set from the
+     merged pull request, and for a train car also `CAR_HEAD` (the car head recorded in the train
+     issue) and `TRAIN_PR` (the train pull request). Never paste record text into the code. The
+     block reads everything immediately before deleting and stops at the first failed check,
+     before any delete. A missing `OK` line is a failure. The pull request's `head.ref` must name
+     the branch. No open pull request may use the branch as its base; that pull request's writer
+     retargets it first. The remote ref is checked if it still exists, and skipped if GitHub
+     already auto-deleted it (`delete_branch_on_merge` is on). The local ref is checked if it
+     exists. A squash merge makes `git branch -d` refuse, so the local delete uses `-D`, but only
+     after the check. A train car's pull request must be closed under "Merge trains" step 5, the
+     train pull request must have merged, and the train must carry the car's landed commit, whose
+     subject ends `(#<car PR>)`. Every GitHub read is assigned or compared before anything uses it,
+     so a failed API call stops the block rather than reading as "no open pull request". The remote
+     delete carries a lease on the checked head, so a push between the check and the delete makes
+     the delete fail.
+
+     ```bash
+     set -euo pipefail
+     unset GIT_CONFIG_PARAMETERS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
+     unset GIT_ALTERNATE_OBJECT_DIRECTORIES
+     export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
+     export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+     export GIT_CONFIG_KEY_1=advice.graftFileDeprecated GIT_CONFIG_VALUE_1=false
+     test "$(git config --get core.commitGraph)" = false
+     repo=arunakulat/dutchbay-epc-model
+     CAR_HEAD=${CAR_HEAD:-}; TRAIN_PR=${TRAIN_PR:-}
+     [[ $PR =~ ^[1-9][0-9]*$ ]] || exit 1
+     test "$(git check-ref-format --branch "$BRANCH")" = "$BRANCH"
+     if [ -n "$CAR_HEAD$TRAIN_PR" ]; then
+       [[ $CAR_HEAD =~ ^[0-9a-f]{40}$ && $TRAIN_PR =~ ^[1-9][0-9]*$ ]] || exit 1
+     fi
+     test "$(gh api "repos/$repo/pulls/$PR" --jq '.head.ref')" = "$BRANCH"
+     if [ -z "$CAR_HEAD" ]; then
+       test -n "$(gh api "repos/$repo/pulls/$PR" --jq '.merged_at // ""')"
+       want=$(gh api "repos/$repo/pulls/$PR" --jq '.head.sha')
+     else
+       test "$(gh api "repos/$repo/pulls/$PR" --jq '.state')" = "closed"
+       test "$(gh api "repos/$repo/pulls/$PR" --jq '.head.sha')" = "$CAR_HEAD"
+       test -n "$(gh api "repos/$repo/pulls/$TRAIN_PR" --jq '.merged_at // ""')"
+       train_subjects=$(gh api "repos/$repo/pulls/$TRAIN_PR/commits" --paginate --jq '.[].commit.message | split("\n")[0]')
+       grep -qE " \(#$PR\)\$" <<<"$train_subjects"
+       want=$CAR_HEAD
+     fi
+     [[ $want =~ ^[0-9a-f]{40}$ ]] || exit 1
+     open_on_base=$(gh api -X GET "repos/$repo/pulls" -f state=open -f base="$BRANCH" --jq '.[].number')
+     test -z "$open_on_base"
+     remote_head=$(git ls-remote origin "refs/heads/$BRANCH" | cut -f1)
+     if [ -n "$remote_head" ]; then test "$remote_head" = "$want"; fi
+     local_present=no
+     if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+       local_present=yes
+       test "$(git rev-parse --verify "refs/heads/$BRANCH")" = "$want"
+     fi
+     if [ -n "$remote_head" ]; then
+       git push origin --delete --force-with-lease="refs/heads/$BRANCH:$want" "$BRANCH"
+     fi
+     if [ "$local_present" = yes ]; then git branch -D "$BRANCH"; fi
+     git fetch --prune origin
+     echo "CLEANUP-01 branch retirement: OK: #$PR $BRANCH at $want (remote: ${remote_head:-auto-deleted}; local: $local_present)"
+     ```
+
+     A branch whose pull request is open, closed unmerged, or whose head moved after the merge is
+     never deleted by cleanup. `tests/lint/test_gwtf_canonical_source.py` runs this block against
+     stubbed `gh` and `git` for the passing and failing cases.
    - Remove any temporary, per-task or worktree-local virtual environments (`.venv`, `.venv311` or
      ad-hoc venvs) associated with the retired worktree, while NEVER deleting, clearing, pruning
      or modifying the protected persistent Python 3.12 environment at
@@ -296,81 +425,346 @@ train that carries a car it wrote. A pull request may always land alone instead.
    (`REVIEW-01`), with its merge-boundary conditions collected (step 1 above). Take two or three
    adjacent cars in queue order. They must be path-disjoint, none may be stacked on another, and
    at most one may be `R3` or change a KPI.
-2. **Build the train.** Open a focused train issue that lists every car and record it on #1353.
-   Then build `train/<date>-<n>` from the current `main`, one non-merge commit per car:
-
-   ```bash
-   git fetch origin main && git switch -c train/<date>-<n> origin/main
-   # for each car, in queue order:
-   base=$(git merge-base origin/main <car-head>)
-   git diff --binary "$base" <car-head> | git apply --index
-   git commit --author="<car author>" -F <car-merge-message.txt>   # R18; ends with (#<car>)
-   ```
-
-   If a car's diff does not apply cleanly, leave that car out. Commit nothing else. Open the train
-   as one pull request, ready for review, with the train issue as its `Work item:` and a `VERIFY-01`
-   receipts table. The full suite runs once.
-3. **Carry the bindings.** Each car's lanes record module 3 §8's three proofs against the train
-   head. A car whose proof fails leaves the train. For a KPI car, the train head's lender KPI vector
-   must equal the vector the owner signed off; if no car changes a KPI, it must equal `main`'s.
-4. **If the train goes red,** edit no car on it. Split the train and run each part as a smaller
-   train or a single pull request. A fix goes on the car's own branch, which restarts its reviews
-   (module 3 §6).
-5. **Land it with rebase-merge, never squash.** Record the protected `main` SHA first. Then check
-   that the train is exactly one non-merge commit per car on top of it, and that each train commit
-   is exactly its car's reviewed diff. Set `cars` to every car as `<pr>:<reviewed-head-sha>`,
-   separated by spaces, in queue order as the train issue lists them:
+2. **Record the cars.** Open a focused train issue that lists every car and record it on #1353. For
+   each car, take the pull-request number and the reviewed head from the car's lane records, and
+   check the head against `refs/pull/<pr>/head`. Record the check against both lane records and
+   the live ref on the train PR. In a private directory outside the train checkout, prepare
+   `<pr>.msg` (the car's hand-written merge message, which meets `R18` and whose subject ends with
+   `(#<pr>)`) and `<pr>.author` (one line, `Name <email>`). The author is the car pull request's
+   author, as a squash merge of that pull request would record it. List the same values on the
+   train issue. Use canonical LF-terminated text for both files and confirm the entire message meets
+   every merge-boundary and restricted-material condition above. Record each file's Git blob ID
+   (`git hash-object --stdin < "$file"`) alongside its text on the issue. Verify the files against
+   that authoritative issue record and the PR author before using them. Set `CAR_DIR` to the
+   absolute directory and take `TRAIN_CARS` from the verified issue record in queue order, as two or
+   three space-separated `pr:reviewed_head:message_blob:author_blob` records. Keep the records fixed
+   through build and pre-landing verification. Set `TRAIN_BRANCH` to the new `train/<date>-<n>` name.
+3. **Build the train** in its clean, dedicated checkout from the current `main`, one non-merge commit per car.
 
    ```bash
    set -euo pipefail
-   main=<main-sha>; train=<train-head-sha>; cars="<car list>"
-   set -- $cars; n=$#
-   test "$n" -ge 2
-   test "$n" -le 3
-   test "$(git rev-list --count "$main..$train")" = "$n"
-   test -z "$(git rev-list --merges "$main..$train")"
-   test "$(git rev-parse "$train~$n")" = "$main"
-   k=0
-   for car in "$@"; do
-     k=$((k + 1)); pr=${car%%:*}; head=${car#*:}
-     commit=$(git rev-parse --verify "$train~$((n - k))^{commit}")
+   unset GIT_CONFIG_PARAMETERS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
+   unset GIT_ALTERNATE_OBJECT_DIRECTORIES
+   export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
+   export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+   export GIT_CONFIG_KEY_1=advice.graftFileDeprecated GIT_CONFIG_VALUE_1=false
+   test "$(git config --get core.commitGraph)" = false
+   git fetch origin refs/heads/main:refs/remotes/origin/main
+   [[ $CAR_DIR = /* && -d $CAR_DIR ]] || exit 1
+   record='[1-9][0-9]*:[0-9a-f]{40}:[0-9a-f]{40}:[0-9a-f]{40}'
+   list="^$record( $record){1,2}$"
+   [[ $TRAIN_CARS =~ $list ]] || exit 1
+   IFS=' ' read -r -a cars <<< "$TRAIN_CARS"
+   [[ $TRAIN_BRANCH = train/* ]] || exit 1
+   git check-ref-format --branch "$TRAIN_BRANCH" >/dev/null
+   dirty=$(git status --porcelain)
+   test -z "$dirty"
+   seen=" "
+   for car in "${cars[@]}"; do
+     IFS=: read -r pr head msg_blob author_blob <<< "$car"
+     [[ $seen != *" $pr "* ]] || exit 1
+     seen+="$pr "
+     test "$(git cat-file -t "$head")" = commit
+     remote=$(git ls-remote --exit-code origin "refs/pull/$pr/head")
+     test "$remote" = "$head"$'\t'"refs/pull/$pr/head"
+     msg="$CAR_DIR/$pr.msg"; ident="$CAR_DIR/$pr.author"
+     test "$(git hash-object --stdin < "$msg")" = "$msg_blob"
+     test "$(git hash-object --stdin < "$ident")" = "$author_blob"
+     author=$(cat "$ident")
+     identity='^[^<>[:space:]][^<>[:cntrl:]]* <[^<>[:space:]]+@[^<>[:space:]]+>$'
+     [[ $author =~ $identity ]] || exit 1
+     test "$(printf '%s\n' "$author" | git hash-object --stdin)" = "$author_blob"
+     normalized=$(git stripspace < "$msg" | git hash-object --stdin)
+     test "$normalized" = "$msg_blob"
+     IFS= read -r subject < "$msg"
+     [[ $subject = *" (#$pr)" ]] || exit 1
+   done
+   main=$(git rev-parse refs/remotes/origin/main)
+   git switch -c "$TRAIN_BRANCH" "$main"
+   for car in "${cars[@]}"; do
+     IFS=: read -r pr head msg_blob author_blob <<< "$car"
      base=$(git merge-base "$main" "$head")
-     want=$(git diff --raw --no-renames --no-abbrev "$base" "$head" | cut -d' ' -f2,4-)
-     got=$(git diff --raw --no-renames --no-abbrev "$commit^" "$commit" | cut -d' ' -f2,4-)
+     git diff --binary --no-ext-diff --no-textconv "$base" "$head" -- | git apply --index
+     author=$(cat "$CAR_DIR/$pr.author")
+     git commit -q --cleanup=verbatim --author="$author" -F "$CAR_DIR/$pr.msg"
+   done
+   built=$(git rev-parse HEAD)
+   echo "TRAIN-01 train built: $built"
+   ```
+
+   If a car's diff does not apply cleanly, the block stops: delete the branch and rebuild without
+   that car. Commit nothing else. **Run the pre-landing check (step 6) on the train before you open
+   it.** Supply the built `TRAIN_SHA`, current `MAIN_SHA` and the verified car records. Then open the train as one pull request, ready for review, with the train issue as its
+   `Work item:` and a `VERIFY-01` receipts table. The full suite runs once. If `main` moves before
+   the train lands, never merge `main` into the train: a merge commit on it fails the pre-landing
+   check. Rebuild the train from the new `main` instead, and repeat module 3 §8's proofs and the
+   pre-landing check on the new train head.
+4. **Carry the bindings.** Each car's lanes record module 3 §8's three proofs against the train
+   head. A car whose proof fails leaves the train. For proof 2, a shared runtime input such as
+   `pyproject.toml`, `VERSION`, a module `tests/conftest.py` loads, or an installed library is a link
+   only when one side's changed bytes are consumed by the other side's code or tests. A changed file
+   that imports a module the other side changes is a link whatever the artifact shows, and so is a
+   change that acts when files load or tests are collected (a `conftest.py` hook or autouse
+   fixture, a module-level side effect, pytest's or coverage's configuration). Attach §8's
+   consumption artifact for each such input, in both directions: the changed bytes, a reference
+   search, and each car's test selection run on `main` plus that car alone, on its own train commit
+   and on the train head, plus §8's reviewed-head and advance pairs when `main` has moved, with the
+   same test IDs and outcomes. Without the artifact the input is a link. For a KPI car, the train head's lender KPI vector
+   must equal the vector the owner signed off, which is the vector at the car's reviewed head. If no
+   car changes a KPI, it must equal `main`'s. Set `REFERENCE_SHA` to the signed-off car's reviewed head, or to the recorded
+   `main` SHA when no car changes a KPI. Set `TRAIN_SHA` to the verified train head. From the
+   repository root, use the absolute `DUTCHBAY_VENV` verified by the environment preflight.
+
+   ```bash
+   set -euo pipefail
+   unset GIT_CONFIG_PARAMETERS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
+   unset GIT_ALTERNATE_OBJECT_DIRECTORIES
+   export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
+   export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+   export GIT_CONFIG_KEY_1=advice.graftFileDeprecated GIT_CONFIG_VALUE_1=false
+   test "$(git config --get core.commitGraph)" = false
+   [[ $DUTCHBAY_VENV = /* && -x $DUTCHBAY_VENV/bin/python ]] || exit 1
+   for sha in "$REFERENCE_SHA" "$TRAIN_SHA"; do
+     [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1
+     test "$(git cat-file -t "$sha")" = commit
+   done
+   measure() (
+     set -euo pipefail
+     rev=$1
+     private=$(mktemp -d "${TMPDIR:-/tmp}/dutchbay-kpi.XXXXXXXX")
+     private=$(cd -P -- "$private" && pwd -P)
+     checkout="$private/checkout"
+     printf 'KPI scratch for %s: %s\n' "$rev" "$private" >&2
+     [[ ! -e $checkout && ! -L $checkout ]] || exit 1
+     git worktree add -q --detach "$checkout" "$rev"
+     owner=$(git -C "$checkout" rev-parse --absolute-git-dir)
+     inspect_scratch() {
+       previous=$1
+       # Never delete from an evaluation trap: retain even apparently clean scratch state.
+       [[ -d $checkout && ! -L $checkout ]] || exit 1
+       test "$(git -C "$checkout" rev-parse --show-toplevel)" = "$checkout"
+       test "$(git -C "$checkout" rev-parse --absolute-git-dir)" = "$owner"
+       test "$(git -C "$checkout" rev-parse --abbrev-ref HEAD)" = HEAD
+       test "$(git -C "$checkout" rev-parse HEAD)" = "$rev"
+       flags=$(git -C "$checkout" ls-files -v | sed '/^H /d')
+       test -z "$flags"
+       special=$(find "$checkout" -mindepth 1 ! -type f ! -type d ! -type l -print)
+       test -z "$special"
+       dirty=$(git -C "$checkout" -c core.fsmonitor=false -c core.filemode=true status --porcelain --ignored --untracked-files=all --ignore-submodules=none)
+       test -z "$dirty"
+       printf 'KPI scratch retained for owner inspection: %s\n' "$private" >&2
+       exit "$previous"
+     }
+     trap 'inspect_scratch "$?"' EXIT
+     (
+       cd -- "$checkout"
+       PYTHONPATH="$checkout" PYTHONDONTWRITEBYTECODE=1 "$DUTCHBAY_VENV/bin/python" - <<'PY'
+   import hashlib
+   import json
+   import logging
+   import math
+   import os
+   import sys
+   from pathlib import Path
+   from contextlib import redirect_stdout
+
+   if Path(sys.prefix).resolve() != Path(os.environ["DUTCHBAY_VENV"]).resolve():
+       sys.exit("Unexpected lender-case interpreter")
+   logging.disable(logging.INFO)
+   with redirect_stdout(sys.stderr):
+       from analytics import pipeline_v14_enhanced as pipeline
+       if Path(pipeline.__file__).resolve() != Path.cwd() / "analytics/pipeline_v14_enhanced.py":
+           sys.exit("The lender pipeline did not come from the measured checkout")
+       result = pipeline.run_v14_pipeline(
+           config="scenarios/dutchbay_lendercase_2025Q4.yaml", validation_mode="strict"
+       )
+   if result["status"] != "success" or result["validation_mode"] != "strict":
+       sys.exit("Strict lender-case evaluation did not succeed")
+   kpis = result["kpis"]
+   numeric = set("""
+   average_equity_cash_on_cash avg_dscr balloon_covenant_breach balloon_pct balloon_residual
+   discount_rate_used dscr_max dscr_mean dscr_median dscr_min dscr_p10 dscr_p90 dscr_std
+   equity_debt_service_shortfall_years equity_irr equity_moic equity_multiple equity_npv final_cfads_usd irr llcr max_debt_usd
+   mean_operational_cfads_usd min_dscr min_dscr_period npv plcr project_irr project_npv
+   project_npv_prudential prudential_rate_used total_cfads_usd total_equity_distributed_usd
+   equity_sponsor_cure_usd total_idc_usd
+   """.split())
+   labels = {"scenario_name", "wacc_label", "equity_distribution_status", "project_irr_status"}
+   expected = numeric | labels | {"dscr_series", "wacc_is_real", "equity_covenant_locked_years"}
+   if not isinstance(kpis, dict) or kpis.keys() != expected:
+       sys.exit("Unexpected lender KPI key set")
+
+   def finite(value):
+       return type(value) in (float, int) and math.isfinite(value)
+
+   undefined_ok = {"equity_irr"}  # An undefined IRR is a supported value.
+   if kpis.get("project_irr_status") == "undefined":
+       undefined_ok |= {"project_irr", "irr"}
+   for name in numeric:
+       if name in undefined_ok and kpis[name] is None:
+           continue
+       if not finite(kpis[name]):
+           sys.exit(f"Invalid lender KPI: {name}")
+   if not all(isinstance(kpis[key], str) and kpis[key].strip() for key in labels):
+       sys.exit("Invalid lender KPI label")
+   series = kpis["dscr_series"]
+   if not isinstance(series, list) or not series or not all(map(finite, series)):
+       sys.exit("Invalid lender DSCR series")
+   if (type(kpis["wacc_is_real"]) is not bool or type(kpis["equity_covenant_locked_years"]) is not int
+           or kpis["equity_covenant_locked_years"] < 0 or kpis["equity_distribution_status"] != "computed"):
+       sys.exit("Invalid lender KPI metadata")
+   vector = {key: repr(value) if isinstance(value, float) else value for key, value in kpis.items()}
+   encoded = json.dumps(vector, sort_keys=True, allow_nan=False).encode()
+   print(len(kpis), hashlib.sha256(encoded).hexdigest())
+   PY
+     )
+   )
+   want=$(measure "$REFERENCE_SHA")
+   got=$(measure "$TRAIN_SHA")
+   receipt='^42 [0-9a-f]{64}$'
+   [[ $want =~ $receipt && $got =~ $receipt ]] || exit 1
+   printf 'reference: %s\ntrain: %s\n' "$want" "$got"
+   test "$got" = "$want"
+   echo "TRAIN-01 KPI check: OK"
+   ```
+
+   It prints the count and SHA-256 of the 42-KPI lender vector at each revision, and passes only
+   when they are equal. The schema describes the current lender vector. A changed schema needs a
+   reviewed contract update, and `tests/lint/test_train_policy.py` runs this schema check on the
+   real lender case so that a new or removed KPI fails a test before it fails a train. Scratch worktrees are retained on success and failure: Git status
+   is not proof that deleting a directory preserves every filesystem object. Index flags that
+   can conceal tracked changes and special files also refuse the check. Inspect the named
+   locations and reconcile ownership before any separately authorized retirement; this block
+   performs no automatic removal. After inspection, retire each scratch with
+   `git worktree remove <checkout>` and then `git worktree prune`. The operating system may clear
+   `TMPDIR` on its own schedule (on macOS, under `/var/folders`), which leaves registrations that
+   only `git worktree prune` removes. Both are owned scratch under `CLEANUP-01`.
+5. **If the train goes red,** edit no car on it. Split the train and run each part as a smaller
+   train or a single pull request. A fix goes on the car's own branch, which restarts its reviews
+   (module 3 §6).
+6. **Land it with rebase-merge, never squash.** Run the pre-landing check before the train is
+   opened ready (step 3), and again just before landing, with the protected `main` SHA recorded at
+   that moment. It checks that the recorded `main` is `origin/main`, that the train is exactly one
+   non-merge commit per car on top of it, and that each train commit is exactly its car's reviewed
+   diff, under its recorded message and author, with each car's reviewed head still its pull
+   request's head:
+
+   ```bash
+   set -euo pipefail
+   unset GIT_CONFIG_PARAMETERS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
+   unset GIT_ALTERNATE_OBJECT_DIRECTORIES
+   export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
+   export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+   export GIT_CONFIG_KEY_1=advice.graftFileDeprecated GIT_CONFIG_VALUE_1=false
+   test "$(git config --get core.commitGraph)" = false
+   git fetch origin refs/heads/main:refs/remotes/origin/main
+   for sha in "$MAIN_SHA" "$TRAIN_SHA"; do
+     [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1
+     test "$(git cat-file -t "$sha")" = commit
+   done
+   [[ $CAR_DIR = /* && -d $CAR_DIR ]] || exit 1
+   record='[1-9][0-9]*:[0-9a-f]{40}:[0-9a-f]{40}:[0-9a-f]{40}'
+   list="^$record( $record){1,2}$"
+   [[ $TRAIN_CARS =~ $list ]] || exit 1
+   IFS=' ' read -r -a cars <<< "$TRAIN_CARS"
+   test "$(git rev-parse refs/remotes/origin/main)" = "$MAIN_SHA"
+   n=${#cars[@]}
+   merges=$(git rev-list --merges "$MAIN_SHA..$TRAIN_SHA")
+   test -z "$merges"
+   test "$(git rev-parse --verify "$TRAIN_SHA~$n")" = "$MAIN_SHA"
+   raw_diff() {
+     git diff --raw -z --no-renames --no-abbrev --no-ext-diff --ignore-submodules=none "$1" "$2" -- |
+       od -An -v -tx1
+   }
+   seen=" "
+   k=0
+   for car in "${cars[@]}"; do
+     IFS=: read -r pr head msg_blob author_blob <<< "$car"
+     [[ $seen != *" $pr "* ]] || exit 1
+     seen+="$pr "
+     test "$(git cat-file -t "$head")" = commit
+     remote=$(git ls-remote --exit-code origin "refs/pull/$pr/head")
+     test "$remote" = "$head"$'\t'"refs/pull/$pr/head"
+     msg="$CAR_DIR/$pr.msg"; ident="$CAR_DIR/$pr.author"
+     test "$(git hash-object --stdin < "$msg")" = "$msg_blob"
+     test "$(git hash-object --stdin < "$ident")" = "$author_blob"
+     k=$((k + 1))
+     commit=$(git rev-parse --verify "$TRAIN_SHA~$((n - k))^{commit}")
+     base=$(git merge-base "$MAIN_SHA" "$head")
+     want=$(raw_diff "$base" "$head")
+     got=$(raw_diff "$commit^" "$commit")
      test -n "$want"
      test "$got" = "$want"
-     subject=$(git log -1 --format=%s "$commit")
-     test "${subject%"(#$pr)"}" != "$subject"
+     message=$(git show -s --format=format:%B "$commit" | git hash-object --stdin)
+     author=$(git show -s --format='%an <%ae>' "$commit" | git hash-object --stdin)
+     test "$message" = "$msg_blob"
+     test "$author" = "$author_blob"
+     subject=$(git show -s --format=%s "$commit")
+     [[ $subject = *" (#$pr)" ]] || exit 1
    done
    echo "TRAIN-01 pre-landing check: OK"
    ```
 
-   The loop compares train commit `k` with car `k`: the same changed paths, modes and blobs as the
-   car's reviewed head shows against its merge base, and a subject ending with `(#<pr>)`. A train
-   with two cars' messages swapped, a stray file, or part of one car's diff in another car's commit
-   fails here, although every tree comparison would pass it (module 3 §8).
+   The loop compares train commit `k` with car `k` using the complete NUL-framed raw diff. The hex
+   encoding preserves every path byte, change status and both sides' modes and object IDs. The
+   loop also compares the car's recorded message and author, and a
+   subject ending with `(#<pr>)`. It also checks that `refs/pull/<pr>/head` is still the reviewed
+   head, so a car list that pairs a number with another car's head fails. A train with two cars'
+   messages swapped, a stray file, part of one car's diff in another car's commit, or a merge
+   commit fails here, although every tree comparison would pass it (module 3 §8).
 
-   After it lands, verify every landed commit against its train commit, walking back from the SHA
-   the merge returned:
+   Land the train with the merge call's expected head SHA set to `TRAIN_SHA`, as a single pull
+   request's merge pins its head, so a late push to the train branch refuses the merge rather
+   than reaching `main`.
+
+   After it lands, set `LANDED_SHA` to the SHA the merge returned, `TRAIN_SHA` to the reviewed train
+   head, `MAIN_SHA` to the base recorded before landing, and `CAR_COUNT` to the recorded count. The
+   returned SHA must equal the fetched tip of protected main. If main advanced again, stop and
+   reconcile the landing evidence. Verify the final tree and every car in both first-parent chains.
 
    ```bash
    set -euo pipefail
-   git fetch origin main
-   n=<number of cars>; landed=<sha-the-merge-returned>; train=<train-head-sha>
-   test "$(git rev-parse "$landed^{tree}")" = "$(git rev-parse "$train^{tree}")"
-   for i in $(seq 0 $((n - 1))); do
-     test "$(git rev-parse "$landed~$i^{tree}")" = "$(git rev-parse "$train~$i^{tree}")"
-     test "$(git log -1 --format=%B "$landed~$i")" = "$(git log -1 --format=%B "$train~$i")"
+   unset GIT_CONFIG_PARAMETERS GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY
+   unset GIT_ALTERNATE_OBJECT_DIRECTORIES
+   export GIT_NO_REPLACE_OBJECTS=1 GIT_GRAFT_FILE=/dev/null
+   export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=core.commitGraph GIT_CONFIG_VALUE_0=false
+   export GIT_CONFIG_KEY_1=advice.graftFileDeprecated GIT_CONFIG_VALUE_1=false
+   test "$(git config --get core.commitGraph)" = false
+   git fetch origin refs/heads/main:refs/remotes/origin/main
+   for sha in "$MAIN_SHA" "$TRAIN_SHA" "$LANDED_SHA"; do
+     [[ $sha =~ ^[0-9a-f]{40}$ ]] || exit 1
+     test "$(git cat-file -t "$sha")" = commit
    done
-   test "$(git rev-parse "$landed~$n")" = "<main-sha-recorded-before-landing>"
+   [[ $CAR_COUNT = 2 || $CAR_COUNT = 3 ]] || exit 1
+   test "$(git rev-parse refs/remotes/origin/main)" = "$LANDED_SHA"
+   merges=$(git rev-list --merges "$MAIN_SHA..$LANDED_SHA" "$MAIN_SHA..$TRAIN_SHA")
+   test -z "$merges"
+   test "$(git rev-parse --verify "$LANDED_SHA~$CAR_COUNT")" = "$MAIN_SHA"
+   test "$(git rev-parse --verify "$TRAIN_SHA~$CAR_COUNT")" = "$MAIN_SHA"
+   final_tree=$(git rev-parse --verify "$TRAIN_SHA^{tree}")
+   test "$(git rev-parse --verify "$LANDED_SHA^{tree}")" = "$final_tree"
+   for ((i=0; i<CAR_COUNT; i++)); do
+     landed=$(git rev-parse --verify "$LANDED_SHA~$i^{commit}")
+     train=$(git rev-parse --verify "$TRAIN_SHA~$i^{commit}")
+     if ((i > 0)); then
+       tree=$(git rev-parse "$train^{tree}")
+       test "$(git rev-parse "$landed^{tree}")" = "$tree"
+     fi
+     format='format:%B%x00%an <%ae>'
+     want=$(git show -s --format="$format" "$train" | git hash-object --stdin)
+     got=$(git show -s --format="$format" "$landed" | git hash-object --stdin)
+     test "$got" = "$want"
+   done
    echo "TRAIN-01 landing check: OK"
    ```
 
    Each block stops at its first failed `test` and passes only when it prints its `OK` line.
    Silence, or a missing `OK` line, is a failure. Run each block whole, as written, and never
    drop its `set -euo pipefail` line. If a block fails, stop and report it on the train pull
-   request (module 3 §8). Otherwise close each car's pull request with a pointer to its commit
-   on `main`.
+   request (module 3 §8). Otherwise, on each car's pull request, first post a pointer comment
+   naming its commit on `main`, then close that pull request. This is `CLEANUP-01`'s one exception
+   to never closing a pull request, and it covers only the cars listed in the train issue whose
+   commits the block above proved are on `main`.
 
 The full suite ran on the union only. The commits between cars on `main` were never run by the
 full suite on their own, and the train lifts no `HOLD`.
