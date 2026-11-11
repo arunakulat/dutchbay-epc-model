@@ -69,7 +69,7 @@ def _make_mix_eval(
         ov = overrides or {}
         lkr = float(ov[_MIX_LKR_PATH])
         dfi = float(ov[_MIX_DFI_PATH])
-        kpis: Dict[str, Any] = {"equity_irr": objective_fn(lkr, dfi)}
+        kpis: Dict[str, Any] = {"equity_npv": objective_fn(lkr, dfi)}
         for key, fn in (constraint_fns or {}).items():
             kpis[key] = fn(lkr, dfi)
         return kpis
@@ -91,7 +91,7 @@ def _make_contingency_eval(
     ) -> Dict[str, Any]:
         total = float((overrides or {})[_CAPEX_TOTAL_PATH])
         frac = total / base_capex - 1.0
-        kpis: Dict[str, Any] = {"equity_irr": objective_fn(frac)}
+        kpis: Dict[str, Any] = {"equity_npv": objective_fn(frac)}
         for key, fn in (constraint_fns or {}).items():
             kpis[key] = fn(frac)
         return kpis

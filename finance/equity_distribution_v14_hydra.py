@@ -37,6 +37,7 @@ from finance.equity_v14 import (
     calculate_equity_npv,
     calculate_moic,
     calculate_payback_period,
+    count_cashflow_sign_changes,
 )
 
 logger = logging.getLogger(__name__)
@@ -798,6 +799,21 @@ def calculate_equity_distribution_from_pipeline(
     equity_npv = calculate_equity_npv(
         cashflows, discount_rate=distribution_config.discount_rate
     )
+    # #1456 (owner decision 2026-11-01: rank on NPV, caveat the IRR): when equity is
+    # called back after distributions (e.g. a refinanced tail serviced from equity), the
+    # series changes sign more than once and the IRR can rank alternatives backwards.
+    # The IRR is still reported; the count and the flag below are its caveat.
+    sign_changes = count_cashflow_sign_changes(cashflows)
+    irr_ranks_reliably = sign_changes <= 1
+    if not irr_ranks_reliably:
+        logger.warning(
+            "Equity cashflows for %r change sign %d times; equity IRR (%s) may have "
+            "several roots or be dominated by late equity calls, and can rank options "
+            "in the opposite order to equity NPV. Rank on equity_npv (#1456).",
+            distribution_config.scenario_name,
+            sign_changes,
+            "undefined" if equity_irr is None else f"{equity_irr:.4%}",
+        )
     total_distributed = float(sum(distribution_values))
     equity_multiple = (
         total_distributed / float(equity_investment) if equity_investment > 0 else None
@@ -845,6 +861,8 @@ def calculate_equity_distribution_from_pipeline(
             "equity_irr": equity_irr,
             "equity_irr_pct": equity_irr * 100.0 if equity_irr is not None else None,
             "equity_npv": equity_npv,
+            "equity_cashflow_sign_changes": sign_changes,
+            "equity_irr_ranks_reliably": irr_ranks_reliably,
             "equity_multiple": equity_multiple,
             "moic": moic,
             "payback_period_years": payback,

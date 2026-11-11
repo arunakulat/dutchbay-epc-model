@@ -20,8 +20,11 @@ config: ""
 # Which optimizer to run: "debt_mix" or "capex_contingency".
 mode: debt_mix
 
-# Objective KPI to optimize and the direction.
-objective_key: equity_irr
+# Objective KPI to optimize and the direction. Default equity_npv, maximised
+# (#1456): equity IRR can rank options backwards when the equity cashflows change
+# sign more than once (e.g. equity calls to service a refinanced tail).
+# objective_key=equity_irr is still accepted, with a logged warning.
+objective_key: equity_npv
 direction: max
 
 # Deterministic grid resolution.
