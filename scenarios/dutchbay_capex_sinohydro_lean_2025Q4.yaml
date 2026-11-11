@@ -12,13 +12,19 @@
 # 2.99% < WACC ~8.1%, equity IRR +0.09%, NPV -$49.4M) — the flat-nominal-LKR tariff, not
 # capex, is the binding constraint. expected_results are binding (asserted by
 # tests/integration/test_capex_cases_smoke.py).
+#
+# 14 TURBINES (#1577, 2026-11-08): DutchBay T2 is the Blue Whale turbine's position (#1568) and
+# the owner decided DutchBay drops to 14 turbines. This case follows the canonical lender case:
+# 148.9 MW, wake 7.32%, net P50 433.2 GWh, and the per-turbine capex lines (WTG supply,
+# foundations, erection) and opex lines (O&M contract, land lease) at 14/15 of their
+# 15-turbine figures, site-wide lines unchanged. See the lender case's header.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 project:
   name: "DutchBay Wind Farm"
   location: "Dutch Bay, Kalpitiya, Puttalam District, North Western Province, Sri Lanka"
-  capacity_mw: 159.6  # 15 x IEA 10MW (10.638 MW rated)
-  capacity_factor: 0.332  # Net P50 CF, 15 x IEA-10MW-198, ERA5-fitted Weibull (was 0.346 @ declared A=8.32/k=2.1)
+  capacity_mw: 148.9  # 14 x IEA 10MW (10.6383 MW rated); T2 is Blue Whale's (#1577). Was 159.6 (15 turbines)
+  capacity_factor: 0.332  # Net P50 CF, 14 x IEA-10MW-198, ERA5-fitted Weibull (was 0.346 @ declared A=8.32/k=2.1)
   # INCREMENTAL financed grid-curtailment haircut (default 0.0 -> byte-identical). The
   # ~2% PHYSICAL curtailment is at resource.losses.curtailment_pct, already embedded in
   # the bankable net AEP and the 0.339 net CF above. This separate finance lever models
@@ -43,17 +49,17 @@ project:
 # ═════════════════════════════════════════════════════════════════════════════
 turbine:
   model: "IEA Reference 10MW (198m)"
-  n_turbines: 15
+  n_turbines: 14                # T1, T3-T15; T2 is the Blue Whale turbine (#1577)
   rated_power_mw: 10.6383
   rated_power_kw: 10638
-  total_capacity_mw: 159.6
+  total_capacity_mw: 148.9
   rotor_diameter_m: 198
   hub_height_m: 150
   cut_in_ms: 3.0
   cut_out_ms: 25.0
   rated_wind_speed_ms: 11.0
   certification_status: "OPEN_REFERENCE"  # IEA Wind Task 37 reference design (not OEM-certified)
-  notes: "IEA Wind Task 37 10 MW reference (198 m, 345 W/m2), low-specific-power machine for the 7.85 m/s site. 15 x 10.638 MW = 159.6 MW. Representative open reference (Ct curve), substitutes for a future low-wind 10 MW OEM machine. Supersedes the 23 x EN-171/6.5 (149.5 MW) base; EN-171 kept as a characterization/sensitivity case."
+  notes: "IEA Wind Task 37 10 MW reference (198 m, 345 W/m2), low-specific-power machine for the 7.85 m/s site. 14 x 10.638 MW = 148.9 MW (T2 displaced by the Blue Whale turbine, #1577; was 15 x = 159.6 MW). Representative open reference (Ct curve), substitutes for a future low-wind 10 MW OEM machine. Supersedes the 23 x EN-171/6.5 (149.5 MW) base; EN-171 kept as a characterization/sensitivity case."
 
 wind_resource:
   # Weibull distribution parameters (for AEP calculation). ERA5-FITTED (3-method
@@ -88,9 +94,9 @@ layout:
 resource:
   # Turbine specifications (for backward compatibility)
   turbines:
-    count: 15
+    count: 14
     rated_power_mw: 10.6383
-    total_capacity_mw: 159.6
+    total_capacity_mw: 148.9
     model: "IEA Reference 10MW (198m)"
     rotor_diameter_m: 198
     hub_height_m: 150
@@ -114,10 +120,10 @@ resource:
   uncertainty:
     p50_haircut_pct: 2.0
 
-  # Technical losses (pre-grid). Wake is now MODELLED (PyWake Bastankhah 7.28%),
+  # Technical losses (pre-grid). Wake is now MODELLED (PyWake Bastankhah 7.32%, 14 turbines, #1577),
   # not the old flat placeholder; the stack totals 14.48% (see the AEP summary).
   losses:
-    wake_loss_pct: 7.28  # PyWake Bastankhah-Porte-Agel granular wake (15-turbine layout); TurbOPark bound 8.93%
+    wake_loss_pct: 7.32  # PyWake Bastankhah-Porte-Agel granular wake, 14 DutchBay turbines with the Blue Whale turbine at T2 still waking T1/T3: the 15-turbine 7.28% x the live PyWake ratio 1.0053 (#1577, docs/wind/dutchbay_14_turbine_wake_summary.json); TurbOPark bound 8.93% (15 turbines, not re-derived)
     availability_pct: 97.0  # Contractual availability target
     electrical_loss_pct: 2.0  # Cable + transformer + auxiliary consumption
     curtailment_pct: 2.0  # Grid curtailment (ERA5 stack)
@@ -138,7 +144,7 @@ resource:
     ws150_mean_ms: 7.29       # Mean hub-height (150 m) wind speed (ERA5-fitted)
     ws150_std_ms: 2.95        # Weibull-derived (A=8.199, k=2.665)
     capacity_factor: 0.332    # Net P50 CF (canonical; matches aep_summary)
-    aep_gwh: 464.3            # Net P50 AEP, GWh (canonical; matches aep_summary)
+    aep_gwh: 433.2            # Net P50 AEP, GWh, 14 turbines (canonical; matches aep_summary; was 464.3)
     source_id: "IEA_REFERENCE_10MW_198_PC"
     source_type: "REFERENCE"
 
@@ -148,7 +154,7 @@ resource:
   # 20-yr window backs the ERA5-FITTED wind_resource.weibull_a/k (8.199/2.665). VALIDATE mode:
   # the ARCO fit reports drift vs the declared baseline; it never overwrites it.
   era5:
-    latitude: 8.27            # turbine-array centroid (T1-T15), Kalpitiya, Puttalam
+    latitude: 8.27            # turbine-array centroid (T1-T15; unchanged without T2 at this 0.01 deg precision), Kalpitiya, Puttalam
     longitude: 79.75
     hub_height_m: 150         # MUST equal turbine.hub_height_m (cross-asserted)
     reference:
@@ -252,18 +258,20 @@ capex:
   cost_basis_year: 2026  # USD vintage of the cost stack
   estimate_class: 3  # AACE Class 3 (budget authorization)
   # CAPEX CASE: SINOHYDRO-rebuilt LEAN $977/kW. Derived from the canonical lender case
-  # (15 x IEA-10MW, 159.6 MW; resource/debt/tariff IDENTICAL) — ONLY the capex level
+  # (14 x IEA-10MW, 148.9 MW since #1577; resource/debt/tariff IDENTICAL) — ONLY the capex level
   # differs, to isolate capex sensitivity vs the canonical $1,000/kW base.
   # Source: SINOHYDRO Mannar 50MW EPC scaled to 150MW (Chinese-bid turbine $390/kW), substituted into
   # the EIA build keeping owner costs; BESS excluded. See ~/Downloads/EIA_Annexures_KEY_FACTS.md.
   # The engine reads usd_total; the breakdown is the canonical NREL/LandBOSSE WBS
   # proportionally rescaled (sums to usd_total; derive_from_breakdown off).
-  usd_total: 155929200  # = $977/kW x 159.6 MW
-  capex_per_kw_usd: 977
+  # 14 TURBINES (#1577): WTG supply, foundations and erection are the 15-turbine lines x 14/15;
+  # the rest is site-wide and stays. Was $155.9292M = $977/kW x 159.6 MW for 15 turbines.
+  usd_total: 147924835  # = sum of the breakdown; $993.45/kW on 148.9 MW
+  capex_per_kw_usd: 993.45
   breakdown:
-    wtg_supply_usd: 107591148
-    foundation_usd: 7484602
-    erection_usd: 4989734
+    wtg_supply_usd: 100418405   # 107,591,148 x 14/15
+    foundation_usd: 6985629     # 7,484,602 x 14/15
+    erection_usd: 4657085       # 4,989,734 x 14/15
     collection_system_usd: 4989734
     site_preparation_usd: 2993841
     site_development_usd: 1995894
@@ -275,13 +283,13 @@ capex:
     contingency_usd: 2338938
 
 opex:
-  usd_per_year: 3000000  # Fixed O&M contract
-  opex_per_kw_yr_usd: 20.0  # 3M / 150MW
+  usd_per_year: 2846667  # = sum of the breakdown; 14 turbines (#1577), was 3,000,000
+  opex_per_kw_yr_usd: 19.12  # 2.846667M / 148.9 MW (was 20.0)
   
   breakdown:
-    om_contract_usd: 2000000  # Full-service O&M
-    insurance_usd: 500000  # Property + BI
-    land_lease_usd: 300000  # 15 turbine sites
+    om_contract_usd: 1866667  # Full-service O&M, per turbine: 2,000,000 x 14/15 (#1577)
+    insurance_usd: 500000  # Property + BI; held at the 15-turbine figure (not re-quoted; conservative)
+    land_lease_usd: 280000  # 14 turbine sites at 20,000 each (was 300,000 for 15)
     admin_usd: 200000  # SPV overhead
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -447,13 +455,13 @@ monte_carlo:
       low: 16.24
       high: 24.36
       distribution: uniform
-    - name: opex.usd_per_year         # base 3.0e6, rel_std 0.15 -> +/-30%
-      low: 2100000.0
-      high: 3900000.0
+    - name: opex.usd_per_year         # base 2.846667e6 (14 turbines, #1577), rel_std 0.15 -> +/-30%
+      low: 1992666.9                   # 14 turbines (#1577): base 2.846667e6 +/-30%
+      high: 3700667.1
       distribution: uniform
-    - name: capex.usd_total           # base 155.93e6, rel_std 0.08 -> +/-16%
-      low: 130980528.0
-      high: 180877872.0
+    - name: capex.usd_total           # base 147.924835e6 (14 turbines, #1577), rel_std 0.08 -> +/-16%
+      low: 124256861.4
+      high: 171592808.6
       distribution: uniform
     - name: fx.start_lkr_per_usd      # base 333.79, rel_std 0.05 -> +/-10%
       low: 300.0
@@ -491,21 +499,21 @@ timeline:
 # EXPECTED RESULTS (For Pipeline Validation)
 # ═════════════════════════════════════════════════════════════════════════════
 expected_results:
-  # Wind resource assessment — 15 x IEA Reference 10MW (198m) via
+  # Wind resource assessment — 14 x IEA Reference 10MW (198m; T2 is Blue Whale's, #1577) via
   # wind_resource.bankable_aep: IEC 61400-12-1 density correction (rho 1.15),
-  # PyWake Bastankhah granular wake 7.28%, IEC 61400-15-2 P50/P75/P90 uncertainty.
+  # PyWake Bastankhah granular wake 7.32%, IEC 61400-15-2 P50/P75/P90 uncertainty.
   # (IEC 61400-15-2 = the Energy Yield Assessment loss/uncertainty part, still DRAFT
   #  as of 2025 — NOT the published -15-1:2025, which is the separate site-suitability
   #  part. Knobs to vary it: resource.uncertainty.p50_haircut_pct / .correlation.)
   # Supersedes the 23 x EN-171/6.5 base (402.6 / 322.1 / 0.307).
-  net_aep_p50_gwh: 464.3  # ERA5-fitted Weibull (was 483.6 @ declared); 14.48% total losses
-  net_aep_p90_gwh: 404.4  # IEC 61400-15-2 build-up (1-yr; P90/P50 0.871)
+  net_aep_p50_gwh: 433.2  # ERA5-fitted Weibull, 14 turbines (was 464.3 for 15; 483.6 @ declared); 14.52% total losses
+  net_aep_p90_gwh: 377.3  # IEC 61400-15-2 build-up (1-yr; P90/P50 0.871); was 404.4
   capacity_factor: 0.332
 
   # Revenue (LKR-basis calculations, EUR-equivalent for reference)
-  annual_revenue_p50_m_lkr: 9618.1  # 473.8 GWh × 20.3 LKR/kWh
-  annual_revenue_p50_m_eur: 29.1  # Reference: 473.8 GWh × 61.5 EUR/MWh
-  revenue_20yr_undiscounted_m_lkr: 183553.8  # With 0.5%/yr degradation (M3e) + CPI
+  annual_revenue_p50_m_lkr: 8974.6  # 442.1 GWh × 20.3 LKR/kWh (14 turbines; was 9618.1 on 473.8)
+  annual_revenue_p50_m_eur: 27.2  # Reference: 442.1 GWh × 61.5 EUR/MWh (was 29.1)
+  revenue_20yr_undiscounted_m_lkr: 171273.1  # 14 turbines: the 15-turbine 183,553.8 x 8,974.6/9,618.1 (#1577). With 0.5%/yr degradation (M3e) + CPI
   
   # Financial-KPI regression targets (project/equity IRR, NPV, DSCR, LLCR, PLCR) moved to
   # tests/fixtures/finance/capex_cases_expected_kpis.json (#996 D3b: a runtime-input scenario

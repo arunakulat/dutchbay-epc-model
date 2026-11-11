@@ -139,11 +139,14 @@ model_limitations:
   - topic: "Construction draw and capex phasing"
     detail: >
       Where a scenario does not supply Financing_Terms.debt_drawdown_pct or
-      construction_schedule, the debt engine substitutes documented placeholders (an even
-      [50, 50] draw and a [40, 60] capex phasing) and logs a warning. IDC (capitalised
-      construction interest) is draw-timing-sensitive, so figures derived under these
-      placeholders are indicative until the EPC milestone payment schedule is supplied.
-      The committed DutchBay lender case currently uses both placeholders.
+      construction_schedule, the debt engine substitutes documented placeholders sized to
+      the construction-period count and logs a warning: for two periods an even [50, 50]
+      draw and a [40, 60] capex phasing; for a one-year build half the debt drawn at
+      financial close and the rest at COD, so interest during construction is a year's
+      interest on the average balance. IDC (capitalised construction interest) is
+      draw-timing-sensitive, so figures derived under these placeholders are indicative
+      until the EPC milestone payment schedule is supplied. The committed DutchBay lender
+      case and both Blue Whale projects currently use both placeholders.
   - topic: "Wind resource measurement basis (screening-grade)"
     detail: >
       The headline wind P50/P90 AEP is fitted from a single-cell ERA5 reanalysis timeseries

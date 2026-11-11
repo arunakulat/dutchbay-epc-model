@@ -33,14 +33,15 @@ from app.services.pipeline_service import run_finance_case
 GENERATED_AT = "2026-07-01T00:00:00+00:00"
 
 
-# The real 15 x 10.64 MW nameplate (159.6 MW x 0.332) reconciles with the frozen lender-case AEP,
+# The real 14 x 10.638 MW nameplate (148.9 MW x 0.332; 159.6 MW / 15 turbines before #1577)
+# reconciles with the frozen lender-case AEP,
 # so the service-seam AEP-reconciliation guard passes — the same inputs the API smoke uses. Typed
 # Dict[str, Any] so the ``**`` unpacking does not trip the WindFarmInputs default-arg check (the
 # pattern test_api.py uses).
 _VALID_KW: Dict[str, Any] = {
     "site_name": "DutchBay E2E",
     "location": "Kalpitiya",
-    "capacity_mw": 159.6,
+    "capacity_mw": 148.9,
     "capacity_factor": 0.332,
     "project_life_years": 20,
     "ppa_price_lkr_per_kwh": 20.30,

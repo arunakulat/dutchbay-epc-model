@@ -313,6 +313,157 @@ def test_overlapping_windows_and_grid_charging_are_refused(cfg: Dict[str, Any]) 
 
 
 # ---------------------------------------------------------------------------
+# Negative controls for every refusal guard (#1531 assurance A-3). Each case first
+# shows the committed block is accepted, then that one changed value is refused with
+# that guard's own message, so the guard and nothing else is what refuses it.
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"charge_efficiency": 0.80}, r"charge_efficiency must lie in \[RTE, 1\]"),
+        ({"charge_efficiency": 1.01}, r"charge_efficiency must lie in \[RTE, 1\]"),
+        (
+            {"round_trip_efficiency": 1.02, "charge_efficiency": 1.0},
+            "round_trip_efficiency must be <= 1",
+        ),
+        ({"min_soc_fraction": -0.1}, "bess.min_soc_fraction out of range"),
+        ({"min_soc_fraction": 0.5, "max_soc_fraction": 0.5}, "min_soc_fraction <"),
+        ({"max_soc_fraction": 1.1}, "max_soc_fraction <= 1"),
+        ({"energy_mwh": 0.0}, "bess.energy_mwh"),
+    ],
+)
+def test_bess_guards_refuse_each_bad_value(
+    cfg: Dict[str, Any], changes: Dict[str, Any], message: str
+) -> None:
+    assert pbd.BessConfig.from_mapping(cfg["bess"]).round_trip_efficiency == 0.85
+    with pytest.raises(ValueError, match=message):
+        pbd.BessConfig.from_mapping({**cfg["bess"], **changes})
+
+
+def _window(**changes: Any) -> Dict[str, Any]:
+    return {"start_local": "17:30", "end_local": "21:30", "rate": "priority", **changes}
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"windows": {}}, "non-empty mapping"),
+        ({"windows": [_window()]}, "non-empty mapping"),
+        ({"windows": {"evening": {"start_local": "17:30"}}}, "needs exactly"),
+        ({"windows": {"evening": _window(extra=1)}}, "needs exactly"),
+        ({"windows": {"evening": _window(start_local="5pm")}}, "must be HH:MM"),
+        (
+            {"windows": {"evening": _window(end_local="17:30")}},
+            "end must be after start",
+        ),
+        ({"windows": {"evening": _window(end_local="01:00")}}, "no midnight wrap"),
+        ({"windows": {"evening": _window(rate="peak")}}, "rate must be one of"),
+        ({"cyclic_soc_max_iterations": 0}, "positive integer"),
+        ({"cyclic_soc_max_iterations": 2.5}, "positive integer"),
+        ({"cyclic_soc_max_iterations": True}, "positive integer"),
+        ({"export_limit_mw": 0.0}, "dispatch.export_limit_mw"),
+    ],
+)
+def test_dispatch_config_guards_refuse_each_bad_value(
+    cfg: Dict[str, Any], changes: Dict[str, Any], message: str
+) -> None:
+    assert len(pbd.DispatchConfig.from_mapping(cfg["dispatch"]).windows) == 2
+    with pytest.raises(ValueError, match=message):
+        pbd.DispatchConfig.from_mapping({**cfg["dispatch"], **changes})
+
+
+@pytest.mark.parametrize(
+    ("changes", "message"),
+    [
+        ({"priority_term_years": 0}, "positive integer"),
+        ({"priority_term_years": 15.5}, "positive integer"),
+        ({"priority_term_years": True}, "positive integer"),
+        ({"priority_lkr_per_kwh": 20.0}, "priority rate is below the other rate"),
+    ],
+)
+def test_tariff_guards_refuse_each_bad_value(
+    cfg: Dict[str, Any], changes: Dict[str, Any], message: str
+) -> None:
+    assert pbd.TariffConfig.from_mapping(cfg["tariff"]).priority_term_years == 15
+    with pytest.raises(ValueError, match=message):
+        pbd.TariffConfig.from_mapping({**cfg["tariff"], **changes})
+
+
+def test_dispatcher_input_guards(
+    bess: pbd.BessConfig, dcfg: pbd.DispatchConfig
+) -> None:
+    import pandas as pd
+
+    pv, hours = _ample_pv(2), _hours(2)
+    assert pbd.dispatch(pv, hours, bess, dcfg).iterations >= 1
+    with pytest.raises(ValueError, match="one value per timestamp"):
+        pbd.dispatch(pv[:-1], hours, bess, dcfg)
+    with pytest.raises(ValueError, match="one value per timestamp"):
+        pbd.dispatch(pv[:1], hours[:1], bess, dcfg)
+    gappy = hours.delete(5)
+    with pytest.raises(ValueError, match="consecutive hourly timestamps"):
+        pbd.dispatch(pv[:-1], gappy, bess, dcfg)
+    half_hourly = pd.date_range("2026-01-01", periods=len(pv), freq="30min", tz="UTC")
+    with pytest.raises(ValueError, match="consecutive hourly timestamps"):
+        pbd.dispatch(pv, half_hourly, bess, dcfg)
+    for bad in (-1e-9, float("nan"), float("inf")):
+        hostile = pv.copy()
+        hostile[3] = bad
+        with pytest.raises(ValueError, match="finite and non-negative"):
+            pbd.dispatch(hostile, hours, bess, dcfg)
+
+
+def test_cyclic_state_that_does_not_converge_is_refused(
+    cfg: Dict[str, Any], bess: pbd.BessConfig
+) -> None:
+    converged = pbd.dispatch(
+        _ample_pv(2), _hours(2), bess, pbd.DispatchConfig.from_mapping(cfg["dispatch"])
+    )
+    # The first pass starts empty and ends holding energy, so it needs a second pass.
+    assert converged.iterations >= 2
+    one_pass = pbd.DispatchConfig.from_mapping(
+        {**cfg["dispatch"], "cyclic_soc_max_iterations": 1}
+    )
+    with pytest.raises(ValueError, match="did not converge"):
+        pbd.dispatch(_ample_pv(2), _hours(2), bess, one_pass)
+
+
+# ---------------------------------------------------------------------------
+# One priority-term rule (#1531 assurance A-4): summarise books energy by
+# TariffConfig.rate_name, and TariffConfig.rate prices that name.
+# ---------------------------------------------------------------------------
+def test_summarise_and_rate_share_one_priority_term_rule(
+    bess: pbd.BessConfig, dcfg: pbd.DispatchConfig, tariff: pbd.TariffConfig
+) -> None:
+    s = pbd.dispatch(_ample_pv(2), _hours(2), bess, dcfg)
+    term = tariff.priority_term_years
+    for year in (1, term, term + 1, term + 10):
+        summary = pbd.summarise(s, bess, dcfg, tariff, year=year)
+        expected = {
+            "priority": 0.0,
+            "other": summary.pv_export_mwh_by_window["outside"],
+        }
+        revenue = (
+            summary.pv_export_mwh_by_window["outside"]
+            * 1000.0
+            * tariff.rate(None, year)
+        )
+        for k, w in enumerate(dcfg.windows):
+            mwh = summary.discharge_mwh_by_window[w.name]
+            mwh += summary.pv_export_mwh_by_window[w.name]
+            expected[tariff.rate_name(w.rate, year)] += mwh
+            revenue += mwh * 1000.0 * tariff.rate(w.rate, year)
+        assert summary.export_mwh_by_rate == pytest.approx(expected, rel=1e-12)
+        assert summary.revenue_lkr == pytest.approx(revenue, rel=1e-12)
+    assert tariff.rate_name("priority", term) == "priority"
+    assert tariff.rate_name("priority", term + 1) == "other"
+    assert tariff.rate_name("other", 1) == "other"
+    assert tariff.rate_name(None, 1) == "other"
+    assert tariff.rate("priority", 1) == tariff.priority_lkr_per_kwh
+    assert tariff.rate("priority", term + 1) == tariff.other_lkr_per_kwh
+
+
+# ---------------------------------------------------------------------------
 # The TMY year: invariants and the committed result
 # ---------------------------------------------------------------------------
 def test_tmy_year_invariants(

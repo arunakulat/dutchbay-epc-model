@@ -37,6 +37,7 @@ from analytics.run_manifest import build_run_manifest
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
 from finance.bess_lcos import compute_lcos_suite
+from finance.capex_price_basis import apply_capex_price_basis
 from finance.cashflow_v14 import build_annual_rows
 from finance.debt_v14 import apply_debt_layer
 
@@ -274,6 +275,10 @@ class ScenarioAnalytics:
                 config_path=str(config_path),
                 modules=["cashflow"],
             )
+
+            # #1569: escalate capex from its declared price date to the construction
+            # draws, as the canonical pipeline does. No capex.price_basis -> unchanged.
+            config = apply_capex_price_basis(config)
 
             # Determine discount rate (scenario, config, global)
             discount_rate = self._effective_discount_rate(config)

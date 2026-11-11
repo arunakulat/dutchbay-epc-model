@@ -37,11 +37,11 @@ def _scenario() -> Dict[str, Any]:
 
 
 def _valid_wind_export() -> Dict[str, Any]:
-    """A schema-valid P75 wind export (CF in percent; capacity = the 159.6 MW nameplate).
+    """A schema-valid P75 wind export (CF in percent; capacity = the 148.9 MW nameplate).
 
-    Uses the real 159.6 MW (not the round 150) so that when the adapter overwrites the
-    scenario's capacity, capacity x CF reconciles with the lendercase frozen AEP (473.8)
-    at the service-seam reconciliation guard.
+    Uses the real 148.9 MW (14 turbines since #1577; was 159.6 MW / 15) so that when the
+    adapter overwrites the scenario's capacity, capacity x CF reconciles with the
+    lendercase frozen AEP at the service-seam reconciliation guard.
     """
     return {
         "scenario": "P75",
@@ -49,8 +49,8 @@ def _valid_wind_export() -> Dict[str, Any]:
         "capacity_factor_percent": 33.2,
         "revenue_annual_usd": 19_400_000.0,
         "revenue_cumulative_usd": 388_000_000.0,
-        "project_capacity_mw": 159.6,
-        "num_turbines": 15,
+        "project_capacity_mw": 148.9,
+        "num_turbines": 14,
         "rated_capacity_per_turbine_kw": 10_000.0,
         "ppa_years": 20,
         "tariff_lkr_per_kwh": 20.30,
@@ -165,9 +165,9 @@ def test_run_finance_case_rejects_stale_capacity_vs_bankable_aep() -> None:
 
     scen = (
         _scenario()
-    )  # lendercase: 159.6 MW reconciles with the frozen 464.3 GWh AEP (post haircut)
+    )  # lendercase: 148.9 MW reconciles with the frozen 433.2 GWh AEP (post haircut, #1577)
     scen["project"] = dict(scen["project"])
-    scen["project"]["capacity_mw"] = 200.0  # 200 x 0.332 x 8.760 = 582 GWh >> 464.3
+    scen["project"]["capacity_mw"] = 200.0  # 200 x 0.332 x 8.760 = 582 GWh >> 433.2
     with pytest.raises(AepReconciliationError):
         run_finance_case(scen)
 
@@ -206,7 +206,7 @@ def test_run_integrated_case_drift_raises_in_fill_mode() -> None:
     # fill_if_absent compares a present scenario value against the export; a
     # large capacity mismatch must trip the drift guard.
     export = _valid_wind_export()
-    export["project_capacity_mw"] = 999.0  # far from the scenario's 159.6 MW
+    export["project_capacity_mw"] = 999.0  # far from the scenario's 148.9 MW
     with pytest.raises(WindAdapterDriftError):
         run_integrated_case(
             _scenario(), export, adapter_mode="fill_if_absent", tolerance_pct=0.5

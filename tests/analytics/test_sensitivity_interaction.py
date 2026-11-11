@@ -291,7 +291,8 @@ def test_lendercase_integration_grid() -> None:
     """End-to-end: a real 3x3 grid on the committed lender case.
 
     Declared bases match the committed scenario exactly (project.capacity_factor
-    0.332, capex.usd_total 159.6e6), so the declared-base cell must agree with
+    0.332, capex.usd_total 151.4072e6 since #1577's 14 turbines), so the declared-base
+    cell must agree with
     the evaluated true base (no base_mismatch) and the whole surface be finite.
     """
     cfg = load_scenario_config(LENDER)
@@ -299,7 +300,7 @@ def test_lendercase_integration_grid() -> None:
         base_config=cfg,
         base_config_path=LENDER,
         param_a=_param("project.capacity_factor", 0.332),
-        param_b=_param("capex.usd_total", 159_600_000.0),
+        param_b=_param("capex.usd_total", 151_407_200.0),
         metric_key="project_irr",
         run_cfg=SensitivityRunConfig(strict=True),
     )

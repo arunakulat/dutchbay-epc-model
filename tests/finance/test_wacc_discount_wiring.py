@@ -61,8 +61,9 @@ def test_wacc_drives_project_discount_rate() -> None:
     used = kpis["discount_rate_used"]
     assert used != pytest.approx(0.10)
     assert used == pytest.approx(
-        0.1017719098011085, abs=1e-9
-    )  # ke=12%, gearing ~45%, kd up (PR-B UIP LKR rate 13.39%)
+        0.1021340572885037, abs=1e-9
+    )  # ke=12%, kd up (PR-B UIP LKR rate 13.39%); #1577's 14 turbines lower the solved
+    # gearing 0.3775 -> 0.37, so a little more 12% equity sits in the stack (was 0.10177)
     # The project IRR (2.75%) is BELOW the WACC (~8.10% after the 5.9% FX-drift re-baseline),
     # so the project NPV is NEGATIVE (-$53.3M). The prior "+$5.9M / IRR 8.85%" was the
     # operating-year-1 off-by-one (year 1 undiscounted + the 2-yr lag ignored).

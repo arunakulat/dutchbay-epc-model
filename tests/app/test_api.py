@@ -35,11 +35,11 @@ from app.reports.report_model import ReportContext, build_report_context
 def _valid_kwargs(**overrides: Any) -> Dict[str, Any]:
     base: Dict[str, Any] = {
         "site_name": "DutchBay",
-        # The real 15 x 10.64 MW nameplate (not the round "150 MW" label): 159.6 x 0.332
-        # x 8.760 = 464.2 GWh reconciles with the lendercase frozen AEP (464.3, post the
+        # The real 14 x 10.638 MW nameplate (not the round "150 MW" label): 148.9 x 0.332
+        # x 8.760 = 433.0 GWh reconciles with the lendercase frozen AEP (433.2, post the
         # 2% pre-construction P50 over-prediction haircut), so the service-seam
-        # reconciliation guard passes.
-        "capacity_mw": 159.6,
+        # reconciliation guard passes. Was 159.6 MW / 15 turbines before #1577.
+        "capacity_mw": 148.9,
         "capacity_factor": 0.332,
         "project_life_years": 20,
         "ppa_price_lkr_per_kwh": 20.30,
@@ -504,7 +504,7 @@ def test_http_smoke_jobs_if_httpx_available(monkeypatch: pytest.MonkeyPatch) -> 
             "site_lat": 8.33,
             "site_lon": 79.76,
             "turbine_model": "iea_reference_10mw",
-            "num_turbines": 15,
+            "num_turbines": 14,  # #1577: T2 is the Blue Whale turbine's
             "hub_height_m": 119.0,
         }
         accepted = client.post("/v1/jobs", json=body)

@@ -162,8 +162,8 @@ def test_interest_deductibility_flag_is_live_on_the_equity_path() -> None:
     assert on["equity_irr"] == pytest.approx(_CANON_EQ_IRR, abs=1e-9)
     # #1504 (2026-10-31): both cases now charge the post-maturity senior fee on the
     # refinanced balance actually outstanding; off moves -35.90% -> -32.30% and the
-    # gap stays inside the band (+586bps).
-    assert off["equity_irr"] == pytest.approx(-0.32300741810736144, abs=1e-9)
+    # gap stays inside the band (+586bps). #1577 (14 turbines): off -32.30% -> -33.61%.
+    assert off["equity_irr"] == pytest.approx(-0.33607122614329477, abs=1e-9)
     # Still material to equity. Both bounds matter: the lower one catches the flag going
     # decorative again, the upper one catches the refinance gap between the two cases
     # growing beyond what the balloon difference explains.

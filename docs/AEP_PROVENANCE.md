@@ -83,7 +83,10 @@ The corroboration therefore bounds model-vs-EYA drift, not EYA-vs-operations
 bias. The 2.0% sits well below the WES-2026 measured bias and is a deliberate,
 separately-authorized calibration choice (documented rationale: uncertain
 SL-transferability of the WES-2026 sample), not a claim that the model beats
-the measured bias. Any move of the flagship 2.0% toward the WES-2026 range is
+the measured bias. Since #1577 (2026-11-08) the model carries 14 turbines, because the
+Blue Whale turbine stands on T2: its bankable P50 is 433.2 GWh. The EYA's 464.5 GWh is a
+15-turbine figure, so the corroboration above holds for the 15-turbine farm only; scaled by
+14/15 the EYA reads about 433.5 GWh. Any move of the flagship 2.0% toward the WES-2026 range is
 KPI-moving and requires separate user authorization (explicitly declined for
 #587). The canonical caveat lives on
 `wind_resource.bankable_aep.RECOMMENDED_P50_HAIRCUT_PCT` (the no-EYA config

@@ -21,7 +21,9 @@ from analytics.portfolio.generation_aggregator import build_multi_tech_from_run
 from app.models.inputs import WindFarmInputs
 from app.services.pipeline_service import run_finance_case
 
-WIND_AEP_GWH = 473.8
+# The lender case's modelled (pre-haircut) wind AEP: 442.06 GWh on 14 turbines (#1577;
+# 473.8 on 15).
+WIND_AEP_GWH = 442.06
 SOLAR_AEP_GWH = 87.6
 COMBINED_MW = 200.0
 HOURS_PER_YEAR = 8760
@@ -67,8 +69,9 @@ def _hybrid_scenario() -> dict:
             },
         }
     }
-    # This synthetic hybrid keeps the lendercase variant's frozen WIND-ONLY AEP (473.8),
-    # but the combined wind+solar nameplate x blended CF is ~561 GWh — the per-tech
+    # This synthetic hybrid keeps the lendercase variant's frozen WIND-ONLY AEP (433.2
+    # bankable since #1577), but the combined wind+solar nameplate x blended CF is ~530 GWh
+    # (22% over it) — the per-tech
     # generation block above is the real generation driver. Relax the headline-vs-wind-only
     # reconciliation guard for this illustrative combined plant (an audited override; logged
     # at WARNING). The single-tech scenarios elsewhere reconcile at the default 2%.

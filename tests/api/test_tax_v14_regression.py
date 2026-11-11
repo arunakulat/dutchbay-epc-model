@@ -121,8 +121,13 @@ class TestSplitDepreciationSchedule:
     ) -> None:
         tc = TaxConfig.from_yaml(lender_cfg)
         sched = _split_schedule(lender_cfg, tc)
-        assert sum(sched.annual_amounts) == pytest.approx(_capex_lkr(lender_cfg))
-        assert sched.book_value[-1] == pytest.approx(0.0)
+        base_lkr = _capex_lkr(lender_cfg)
+        assert sum(sched.annual_amounts) == pytest.approx(base_lkr)
+        # The residual book value is float round-off on a ~LKR 5e10 base. approx(0.0) alone
+        # means abs=1e-12 LKR, which only held while the 15-turbine base happened to cancel
+        # exactly; the 14-turbine base (#1577) leaves 4.6e-05 LKR, i.e. ~1e-15 of the base.
+        # Bound it relative to the base instead: one part in 1e12.
+        assert sched.book_value[-1] == pytest.approx(0.0, abs=base_lkr * 1e-12)
 
     def test_plant_writes_off_first_then_civil_only(
         self, lender_cfg: Dict[str, Any]

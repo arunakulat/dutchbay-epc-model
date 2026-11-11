@@ -63,7 +63,10 @@ GOVERNED_OUTPUT_DIR = "outputs/synthetic_placeholders/issue_923"
 PINNED_REPOSITORY_SOURCE_TRIPLES = (
     (
         "scenario",
-        "scenarios/dutchbay_lendercase_2025Q4.yaml",
+        # The 15-turbine lender case, frozen byte-for-byte at 39048e89 (#1577). The live
+        # lender case has 14 turbines (148.9 MW) and never reaches this package's 150 MW
+        # export cap, so the synthetic wiring exercise keeps its own 15-turbine basis.
+        "legacy_scenarios/dutchbay_lendercase_2025Q4_15_turbines.yaml",
         "e16ad10125f1fcac68114d6da5dd56060b66e4c0ea4004fe04c9720322939eb8",
     ),
     (
@@ -89,7 +92,7 @@ PINNED_REPOSITORY_SOURCE_TRIPLES = (
     (
         "version_file",
         "VERSION",
-        "5834f95df74634cb02dbeda33bf1663d151380c3aedeb5eeae14c15ffb9c37ce",
+        "2edbe28e3aa911204aaff8966e30c0ff827d087db966e97d7635e0099dd4a00e",
     ),
 )
 
@@ -1516,7 +1519,7 @@ def _dss_payloads(
     electrical = {
         "copied_screening_estimates": {
             **dict(copied),
-            "source_path": "scenarios/dutchbay_lendercase_2025Q4.yaml:grid",
+            "source_path": "legacy_scenarios/dutchbay_lendercase_2025Q4_15_turbines.yaml:grid",
             "classification": "existing_scenario_screening_estimate_not_bankable",
         },
         "synthetic_assumptions": {
@@ -2141,7 +2144,7 @@ def verify_synthetic_feeder_package(
         copied_electrical.get("classification")
         != "existing_scenario_screening_estimate_not_bankable"
         or copied_electrical.get("source_path")
-        != "scenarios/dutchbay_lendercase_2025Q4.yaml:grid"
+        != "legacy_scenarios/dutchbay_lendercase_2025Q4_15_turbines.yaml:grid"
         or synthetic_electrical.get("classification")
         != "synthetic_assumption_not_project_fact"
         or derived_electrical.get("classification")
