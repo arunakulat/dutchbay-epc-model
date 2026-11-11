@@ -144,8 +144,9 @@ def test_capex_optimizer_non_convergence_warns_and_returns_last_midpoint(
 ) -> None:
     """Zero tolerance + finite cap exhausts the loop on the warning branch.
 
-    IRR (~0.0543) clears the floor (0.04) every step, so ``high = mid`` each pass;
-    with tolerance=0 the bracket never satisfies ``(high - low) < tolerance``, so
+    The floor is 0.03 (#1577: on 14 turbines a 0.04 floor is no longer reachable inside
+    the bounds, so the bracketing guard would raise before the loop runs). With
+    tolerance=0 the bracket never satisfies ``(high - low) < tolerance``, so
     the optimizer warns and returns the last midpoint inside the bracket.
     """
     low, high = 100.0e6, 500.0e6
@@ -153,7 +154,7 @@ def test_capex_optimizer_non_convergence_warns_and_returns_last_midpoint(
         capex = solve_for_min_capex_given_irr_floor(
             LENDER_CONFIG,
             None,
-            irr_floor=0.04,
+            irr_floor=0.03,
             bounds=(low, high),
             tolerance=0.0,
             max_iterations=3,
@@ -170,7 +171,7 @@ def test_capex_optimizer_zero_iterations_raises_no_midpoint() -> None:
         solve_for_min_capex_given_irr_floor(
             LENDER_CONFIG,
             None,
-            irr_floor=0.04,
+            irr_floor=0.03,
             bounds=(100.0e6, 500.0e6),
             max_iterations=0,
         )

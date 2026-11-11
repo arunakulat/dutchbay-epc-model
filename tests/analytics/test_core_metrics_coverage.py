@@ -22,7 +22,6 @@ from typing import Any, Dict
 
 from analytics.core import metrics
 from analytics.core.metrics import (
-    DEFAULT_DISCOUNT_RATE,
     _clean_dscr_series,
     _derive_capex_usd,
     _derive_cfads_series,
@@ -32,6 +31,10 @@ from analytics.core.metrics import (
     compute_kpis,
 )
 from finance.irr import approx_project_irr, project_npv_from_cfads
+
+# A project discount rate is a scenario input with no code default (#1429), so these
+# unit tests declare one the way a scenario does.
+_RATE = 0.10
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +227,7 @@ def test_derive_cfads_series_missing_fx_or_lkr_yields_zero() -> None:
 def test_calculate_kpis_minimal_no_inputs_stable_surface() -> None:
     # With no config/rows/debt the function must still return the stable lender
     # KPI surface with zero defaults (API stability, not economic substitution).
-    result = calculate_scenario_kpis()
+    result = calculate_scenario_kpis(discount_rate=_RATE)
     for key in (
         "project_npv",
         "npv",
@@ -242,7 +245,7 @@ def test_calculate_kpis_minimal_no_inputs_stable_surface() -> None:
         assert key in result
     assert result["project_npv"] == 0.0
     assert result["irr"] == 0.0
-    assert result["discount_rate_used"] == DEFAULT_DISCOUNT_RATE
+    assert result["discount_rate_used"] == _RATE
     # No debt -> llcr/plcr fall back to dscr_mean (here 0.0).
     assert result["llcr"] == 0.0
     assert result["plcr"] == 0.0
@@ -250,7 +253,7 @@ def test_calculate_kpis_minimal_no_inputs_stable_surface() -> None:
 
 def test_calculate_kpis_cfads_aggregates_conserve() -> None:
     cfads = [100.0, 200.0, 300.0]
-    result = calculate_scenario_kpis(cfads_series_usd=cfads)
+    result = calculate_scenario_kpis(discount_rate=_RATE, cfads_series_usd=cfads)
     assert result["total_cfads_usd"] == sum(cfads)
     assert result["final_cfads_usd"] == cfads[-1]
     assert math.isclose(result["mean_operational_cfads_usd"], sum(cfads) / len(cfads))
@@ -262,7 +265,9 @@ def test_calculate_kpis_explicit_discount_rate_used() -> None:
 
 
 def test_calculate_kpis_scenario_name_override_skips_derivation() -> None:
-    result = calculate_scenario_kpis(scenario_name="Explicit", config={"name": "Cfg"})
+    result = calculate_scenario_kpis(
+        discount_rate=_RATE, scenario_name="Explicit", config={"name": "Cfg"}
+    )
     assert result["scenario_name"] == "Explicit"
 
 
@@ -366,6 +371,7 @@ def test_calculate_kpis_construction_years_bad_values_default_zero() -> None:
 def test_calculate_kpis_valuation_overrides_npv_irr() -> None:
     # When a valuation block is supplied, its npv/irr win over engine derivation.
     result = calculate_scenario_kpis(
+        discount_rate=_RATE,
         config={"capex_total_usd": 1_000.0},
         cfads_series_usd=[300.0] * 6,
         valuation={"npv": -123.0, "irr": 0.042},
@@ -382,20 +388,21 @@ def test_calculate_kpis_valuation_uncoercible_falls_back_to_engine() -> None:
     capex = 1_000.0
     cfads = [300.0] * 6
     result = calculate_scenario_kpis(
+        discount_rate=_RATE,
         config={"capex_total_usd": capex},
         cfads_series_usd=cfads,
         valuation={"npv": "bad", "irr": None},
     )
     assert math.isclose(
         result["project_npv"],
-        project_npv_from_cfads(DEFAULT_DISCOUNT_RATE, cfads, capex),
+        project_npv_from_cfads(_RATE, cfads, capex),
         rel_tol=1e-9,
     )
 
 
 def test_calculate_kpis_no_capex_keeps_zero_npv_default() -> None:
     # CFADS present but capex == 0 -> engine NPV branch skipped, stable zero.
-    result = calculate_scenario_kpis(cfads_series_usd=[300.0] * 6)
+    result = calculate_scenario_kpis(discount_rate=_RATE, cfads_series_usd=[300.0] * 6)
     assert result["project_npv"] == 0.0
     assert result["project_irr"] == 0.0
 
@@ -411,7 +418,7 @@ def test_calculate_kpis_dscr_stats_and_debt_magnitudes() -> None:
         "final_debt_usd": 36_000_000.0,
         "total_idc_usd": 5_000_000.0,
     }
-    result = calculate_scenario_kpis(debt_result=debt)
+    result = calculate_scenario_kpis(discount_rate=_RATE, debt_result=debt)
     # DSCR stats reduce over the cleaned series.
     assert result["min_dscr"] == min(dscr)
     assert result["dscr_min"] == min(dscr)
@@ -430,7 +437,7 @@ def test_calculate_kpis_debt_total_alias_and_idc_alias() -> None:
         "debt_total": 80_000_000.0,
         "total_idc": 2_000_000.0,
     }
-    result = calculate_scenario_kpis(debt_result=debt)
+    result = calculate_scenario_kpis(discount_rate=_RATE, debt_result=debt)
     assert result["max_debt_usd"] == 80_000_000.0
     assert result["total_idc_usd"] == 2_000_000.0
 
@@ -439,14 +446,16 @@ def test_calculate_kpis_debt_magnitudes_uncoercible_skipped() -> None:
     # Non-numeric debt magnitudes hit the TypeError/ValueError continue and are
     # simply absent from the result (no key emitted).
     debt = {"dscr_series": [1.4], "max_debt_usd": "NaNish", "final_debt_usd": object()}
-    result = calculate_scenario_kpis(debt_result=debt)
+    result = calculate_scenario_kpis(discount_rate=_RATE, debt_result=debt)
     assert "max_debt_usd" not in result
     assert "final_debt_usd" not in result
 
 
 def test_calculate_kpis_dscr_series_not_a_sequence() -> None:
     # A non-Sequence dscr_series collapses to empty -> zeroed DSCR stats.
-    result = calculate_scenario_kpis(debt_result={"dscr_series": 1234})
+    result = calculate_scenario_kpis(
+        discount_rate=_RATE, debt_result={"dscr_series": 1234}
+    )
     assert result["dscr_series"] == []
     assert result["min_dscr"] == 0.0
 
@@ -456,7 +465,7 @@ def test_calculate_kpis_dscr_series_not_a_sequence() -> None:
 # ---------------------------------------------------------------------------
 def test_calculate_kpis_llcr_plcr_from_debt_result() -> None:
     debt = {"dscr_series": [1.4, 1.5], "llcr": 1.8, "plcr": 1.9}
-    result = calculate_scenario_kpis(debt_result=debt)
+    result = calculate_scenario_kpis(discount_rate=_RATE, debt_result=debt)
     assert result["llcr"] == 1.8
     assert result["plcr"] == 1.9
 
@@ -464,14 +473,14 @@ def test_calculate_kpis_llcr_plcr_from_debt_result() -> None:
 def test_calculate_kpis_llcr_plcr_uncoercible_fall_back_to_dscr_mean() -> None:
     # Non-numeric llcr/plcr -> fall back to dscr_mean (lines 368-370).
     debt = {"dscr_series": [1.4, 1.6], "llcr": "bad", "plcr": object()}
-    result = calculate_scenario_kpis(debt_result=debt)
+    result = calculate_scenario_kpis(discount_rate=_RATE, debt_result=debt)
     assert result["llcr"] == result["dscr_mean"]
     assert result["plcr"] == result["dscr_mean"]
 
 
 def test_calculate_kpis_no_debt_result_llcr_plcr_branch() -> None:
     # Without a debt_result the explicit else-branch sets llcr/plcr = dscr_mean.
-    result = calculate_scenario_kpis(cfads_series_usd=[1.0])
+    result = calculate_scenario_kpis(discount_rate=_RATE, cfads_series_usd=[1.0])
     assert result["llcr"] == result["dscr_mean"]
     assert result["plcr"] == result["dscr_mean"]
 
@@ -483,7 +492,7 @@ def test_calculate_kpis_balloon_surface_numeric() -> None:
         "balloon_residual": 36_000_000.0,
         "balloon_covenant_breach": True,
     }
-    result = calculate_scenario_kpis(debt_result=debt)
+    result = calculate_scenario_kpis(discount_rate=_RATE, debt_result=debt)
     assert result["balloon_pct"] == 0.36
     assert result["balloon_residual"] == 36_000_000.0
     # Breach flag normalised to numeric 1.0.
@@ -491,7 +500,9 @@ def test_calculate_kpis_balloon_surface_numeric() -> None:
 
 
 def test_calculate_kpis_balloon_no_breach_zero() -> None:
-    result = calculate_scenario_kpis(debt_result={"dscr_series": [1.4]})
+    result = calculate_scenario_kpis(
+        discount_rate=_RATE, debt_result={"dscr_series": [1.4]}
+    )
     assert result["balloon_covenant_breach"] == 0.0
     assert result["balloon_pct"] == 0.0
 
@@ -501,7 +512,10 @@ def test_calculate_kpis_balloon_no_breach_zero() -> None:
 # ---------------------------------------------------------------------------
 def test_calculate_kpis_wacc_explicit_args_passthrough() -> None:
     result = calculate_scenario_kpis(
-        cfads_series_usd=[1.0], wacc_is_real=True, wacc_label="real_buildup"
+        discount_rate=_RATE,
+        cfads_series_usd=[1.0],
+        wacc_is_real=True,
+        wacc_label="real_buildup",
     )
     assert result["wacc_is_real"] is True
     assert result["wacc_label"] == "real_buildup"
@@ -510,7 +524,9 @@ def test_calculate_kpis_wacc_explicit_args_passthrough() -> None:
 def test_calculate_kpis_wacc_derived_from_config_drives_discount() -> None:
     # wacc.drives_discount_rate + mode -> wacc_is_real True, label == mode.
     cfg = {"wacc": {"drives_discount_rate": True, "mode": "nominal"}}
-    result = calculate_scenario_kpis(config=cfg, cfads_series_usd=[1.0])
+    result = calculate_scenario_kpis(
+        discount_rate=_RATE, config=cfg, cfads_series_usd=[1.0]
+    )
     assert result["wacc_is_real"] is True
     assert result["wacc_label"] == "nominal"
 
@@ -518,14 +534,18 @@ def test_calculate_kpis_wacc_derived_from_config_drives_discount() -> None:
 def test_calculate_kpis_wacc_default_label_when_not_driving() -> None:
     # No driving flag -> wacc_is_real False, label falls back to "base".
     cfg = {"wacc": {"drives_discount_rate": False, "mode": "nominal"}}
-    result = calculate_scenario_kpis(config=cfg, cfads_series_usd=[1.0])
+    result = calculate_scenario_kpis(
+        discount_rate=_RATE, config=cfg, cfads_series_usd=[1.0]
+    )
     assert result["wacc_is_real"] is False
     assert result["wacc_label"] == "base"
 
 
 def test_calculate_kpis_wacc_no_config_section() -> None:
     # No wacc section at all -> still safe defaults.
-    result = calculate_scenario_kpis(config={}, cfads_series_usd=[1.0])
+    result = calculate_scenario_kpis(
+        discount_rate=_RATE, config={}, cfads_series_usd=[1.0]
+    )
     assert result["wacc_is_real"] is False
     assert result["wacc_label"] == "base"
 
@@ -535,7 +555,7 @@ def test_calculate_kpis_wacc_no_config_section() -> None:
 # ---------------------------------------------------------------------------
 def test_calculate_kpis_uses_annual_rows_when_no_series() -> None:
     rows = [{"cfads_usd": 100.0}, {"cfads_usd": 200.0}]
-    result = calculate_scenario_kpis(annual_rows=rows)
+    result = calculate_scenario_kpis(discount_rate=_RATE, annual_rows=rows)
     assert result["total_cfads_usd"] == 300.0
     assert result["final_cfads_usd"] == 200.0
 
@@ -570,9 +590,11 @@ def test_compute_kpis_adapter_matches_calculate() -> None:
 def test_module_exports_public_surface() -> None:
     # __all__ documents the supported entry points.
     assert set(metrics.__all__) == {
+        "PROJECT_DISCOUNT_RATE_PATH",
         "_summary_stats",
         "calculate_scenario_kpis",
         "compute_kpis",
+        "resolve_project_discount_rate",
     }
 
 

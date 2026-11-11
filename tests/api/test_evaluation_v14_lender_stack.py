@@ -160,6 +160,7 @@ def test_evaluate_scenario_from_dict_returns_lender_kpis():
             "start_lkr_per_usd": 300.0,  # Initial LKR/USD exchange rate
             "annual_depr": 0.02,  # 2% annual LKR depreciation (scalar)
         },
+        "returns": {"project_discount_rate": 0.10},  # required since #1429
         "debt": {
             "target_dscr": 1.4,
             "interest_rate_pct": 6.0,
@@ -235,6 +236,7 @@ def test_evaluation_can_apply_parameter_overrides():
             "start_lkr_per_usd": 300.0,
             "annual_depr": 0.02,  # 2% annual depreciation (scalar)
         },
+        "returns": {"project_discount_rate": 0.10},  # required since #1429
         "debt": {
             "target_dscr": 1.4,
             "interest_rate_pct": 6.0,

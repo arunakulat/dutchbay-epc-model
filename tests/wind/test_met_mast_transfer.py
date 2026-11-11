@@ -624,6 +624,500 @@ def test_expected_hours_with_orientation_is_linear_and_bounded() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Heights, sectors, day window and the turbine point come from the config
+# (#1538 domain D-1)
+# ---------------------------------------------------------------------------
+def _planted_mast(mcfg: Dict[str, Any], alpha: float, days: int) -> pd.DataFrame:
+    """A 10-minute mast record whose mean speeds follow one power law exactly."""
+    idx = pd.date_range("2025-04-01", periods=days * 144, freq="10min")
+    rng = np.random.default_rng(1538)
+    base = 6.0 + rng.uniform(-1.0, 1.0, len(idx))  # speed at 100 m
+    cols: Dict[str, Any] = {
+        name: base * (float(h) / 100.0) ** alpha
+        for h, name in mcfg["speed_avg"].items()
+    }
+    cols[mcfg["direction"]] = np.linspace(0.0, 359.9, len(idx)) % 360.0
+    return pd.DataFrame(cols, index=idx)
+
+
+def test_measured_profiles_read_the_configured_pair_window_and_sectors() -> None:
+    raw = yaml.safe_load(CONF.read_text())
+    mcfg, shear = raw["mast"], raw["shear"]
+    n = int(raw["mcp"]["n_sectors"])
+    days = 70  # about 630 rows per 22.5 degree sector: above the 600-row floor
+    mast = _planted_mast(mcfg, alpha=0.21, days=days)
+    got = cli.measured_profiles(mast, mcfg, shear, n)
+    # The committed config's keys are the ones the summary has always carried.
+    assert got["alpha_100_120"] == pytest.approx(0.21, abs=1e-12)
+    assert set(got["day_night_local_06_18"]) == {"day", "night"}
+    assert got["day_night_local_06_18"]["day"]["n_10min"] == days * 12 * 6
+    assert [r["label"] for r in got["by_sector_80m_direction"]] == list(mmt.COMPASS_16)
+    assert all(
+        r["alpha_100_120"] == pytest.approx(0.21, abs=1e-12)
+        for r in got["by_sector_80m_direction"]
+    )
+    assert sorted(got["diurnal_mean_ms_by_local_hour"]) == ["100", "120"]
+    # Change the config and the profile follows it.
+    # The window is 10 hours here, not 12, so the day count shows the window is applied
+    # and not only named (#1585 assurance A-2(a)).
+    moved = dict(shear, low_height_m=80.0, day_start_local_h=8, day_end_local_h=18)
+    alt = cli.measured_profiles(mast, mcfg, moved, 8)
+    assert "alpha_100_120" not in alt
+    assert alt["alpha_80_120"] == pytest.approx(0.21, abs=1e-12)
+    assert alt["day_night_local_08_18"]["day"]["n_10min"] == days * 10 * 6
+    assert alt["day_night_local_08_18"]["night"]["n_10min"] == days * 14 * 6
+    assert [r["label"] for r in alt["by_sector_80m_direction"]] == [
+        str(i) for i in range(8)
+    ]
+    assert sorted(alt["diurnal_mean_ms_by_local_hour"]) == ["120", "80"]
+    # A sector reports a pair exponent only with shear.min_cell_hours of rows.
+    sparse = dict(shear, min_cell_hours=10_000)
+    assert all(
+        r["alpha_100_120"] is None
+        for r in cli.measured_profiles(mast, mcfg, sparse, n)["by_sector_80m_direction"]
+    )
+    with pytest.raises(ValueError, match="no mast.speed_avg channel at 90 m"):
+        cli.measured_profiles(mast, mcfg, dict(shear, low_height_m=90.0), n)
+
+
+def test_the_turbine_reference_point_must_be_the_placed_turbine() -> None:
+    raw = yaml.safe_load(CONF.read_text())
+    s_cfg = yaml.safe_load((REPO_ROOT / raw["turbine"]["siting_config"]).read_text())
+    lat, lon = cli.check_turbine_reference_point(raw, s_cfg)
+    assert (lat, lon) == pytest.approx((8.2925, 79.7547), abs=1e-9)
+    moved = json.loads(json.dumps(raw))
+    moved["reference"]["points"]["turbine"][
+        "longitude_deg_e"
+    ] = 79.752666  # the #1530 spot
+    with pytest.raises(ValueError, match="not where the siting config places"):
+        cli.check_turbine_reference_point(moved, s_cfg)
+    # A latitude-only move is caught too (#1585 domain D-3).
+    north = json.loads(json.dumps(raw))
+    north["reference"]["points"]["turbine"]["latitude_deg_n"] += 1e-5
+    with pytest.raises(ValueError, match="not where the siting config places"):
+        cli.check_turbine_reference_point(north, s_cfg)
+    # Moving the turbine in the siting config is caught the same way.
+    s_moved = json.loads(json.dumps(s_cfg))
+    s_moved["site"]["turbine_placement"] = "coastal_setback"
+    with pytest.raises(ValueError, match="not where the siting config places"):
+        cli.check_turbine_reference_point(raw, s_moved)
+
+
+def test_the_script_carries_no_hub_height_literal() -> None:
+    """130 m lives in shear.hub_height_m; the script reads it (#1538 domain D-1)."""
+    import ast
+
+    hub = float(yaml.safe_load(CONF.read_text())["shear"]["hub_height_m"])
+    tree = ast.parse(SCRIPT.read_text())
+    literals = [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, (int, float))
+        and not isinstance(node.value, bool)
+        and float(node.value) == hub
+    ]
+    assert literals == []
+
+
+def test_committed_summary_keys_follow_the_configured_hub_height() -> None:
+    raw = yaml.safe_load(CONF.read_text())
+    tag = f"{float(raw['shear']['hub_height_m']):g}"
+    summary = json.loads(SUMMARY.read_text())
+    assert f"long_term_{tag}m" in summary
+    assert f"weibull_a_{tag}m_ms" in summary["yield"]["era5_weibull_basis_1530"]
+
+
+# ---------------------------------------------------------------------------
+# The chain's shear pair, the shear term and the remaining mast heights come from the
+# config (#1585 domain D-1, D-2 and assurance A-2)
+# ---------------------------------------------------------------------------
+_PLANTED_ALPHA_80 = 0.35  # the 80 m channel breaks the 100-120 m power law on purpose
+
+
+def _planted_chain(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Hourly reference and a 10-minute mast whose 100-120 m shear is exactly 0.2.
+
+    The 80 m channel follows a different exponent, so a shear table that reads the
+    100 m column under an 80 m label gives a different answer from one that reads 80 m.
+    """
+    utc = pd.date_range("2025-04-01", "2025-06-30 23:00", freq="1h")
+    rng = np.random.default_rng(1585)
+    ref = pd.DataFrame(
+        {
+            "WS50M": 6.0 + 2.0 * rng.random(utc.size),
+            "WD50M": rng.uniform(0.0, 360.0, utc.size),
+        },
+        index=utc,
+    )
+    ten = ref.resample("10min").ffill()
+    mcfg = raw["mast"]
+    v100 = ten["WS50M"].to_numpy() * 1.1
+    cols: Dict[str, Any] = {}
+    for h, name in mcfg["speed_avg"].items():
+        a = _PLANTED_ALPHA_80 if float(h) == 80.0 else 0.2
+        cols[name] = v100 * (float(h) / 100.0) ** a
+    cols[mcfg["direction"]] = ten["WD50M"].to_numpy()
+    cols[mcfg["direction_120m"]] = ten["WD50M"].to_numpy()
+    return {"mast": pd.DataFrame(cols, index=ten.index), "ref": ref}
+
+
+def _chain_shear(raw: Dict[str, Any], planted: Dict[str, Any]) -> Dict[str, Any]:
+    chain = cli.Chain(raw, planted["mast"], planted["ref"], planted["ref"])
+    out = chain.run(
+        height=int(raw["mcp"]["primary_height_m"]),
+        method=raw["mcp"]["method"],
+        window=[2025, 2025],
+        offset_min=0,
+    )
+    shear: Dict[str, Any] = out["shear"]
+    return shear
+
+
+def test_the_chain_shear_reads_the_configured_pair() -> None:
+    raw = yaml.safe_load(CONF.read_text())
+    planted = _planted_chain(raw)
+    assert _chain_shear(raw, planted)["alpha_all"] == pytest.approx(0.2, abs=1e-12)
+    # Move the low height to 80 m: the table must read the 80 m speeds, not the 100 m
+    # speeds under an 80 m label (#1585 domain D-1).
+    moved = json.loads(json.dumps(raw))
+    moved["shear"]["low_height_m"] = 80.0
+    expected = (0.2 * math.log(1.2) - _PLANTED_ALPHA_80 * math.log(0.8)) / math.log(1.5)
+    mislabelled = 0.2 * math.log(1.2) / math.log(1.5)
+    got = _chain_shear(moved, planted)["alpha_all"]
+    assert got == pytest.approx(expected, abs=1e-12)
+    assert abs(got - mislabelled) > 0.1
+    moved["shear"]["low_height_m"] = 90.0
+    with pytest.raises(ValueError, match="no mast.speed_avg channel at 90 m"):
+        _chain_shear(moved, planted)
+
+
+def test_shear_uncertainty_closed_form_and_base_height() -> None:
+    # Two equally weighted exponents 0.1 and 0.3: standard deviation 0.1.
+    got = cli.shear_uncertainty_pct(
+        [[0.1, 0.3]], [[5, 5]], from_height_m=120.0, hub_height_m=130.0
+    )
+    assert got == pytest.approx(100.0 * math.log(130.0 / 120.0) * 0.1, rel=1e-12)
+    # Extrapolating from 100 m is a longer lever, so the term is larger.
+    longer = cli.shear_uncertainty_pct(
+        [[0.1, 0.3]], [[5, 5]], from_height_m=100.0, hub_height_m=130.0
+    )
+    assert longer == pytest.approx(100.0 * math.log(1.3) * 0.1, rel=1e-12)
+    # The run takes the base height from the correlated height, mcp.primary_height_m
+    # (#1585 domain D-2), not from the top of the measured shear pair.
+    src = SCRIPT.read_text()
+    assert 'from_height_m=float(m["primary_height_m"])' in src
+    assert 'high_height_m"])) * a_std' not in src
+
+
+def _planted_density_mast(raw: Dict[str, Any]) -> pd.DataFrame:
+    mcfg = raw["mast"]
+    idx = pd.date_range("2025-04-01", periods=144, freq="10min")
+    temps = {"10": 30.0, "120": 25.0}
+    cols: Dict[str, Any] = {
+        mcfg["pressure_kpa"]["10"]: np.full(idx.size, 100.5),
+        mcfg["humidity_pct"]["10"]: np.full(idx.size, 70.0),
+    }
+    for h, name in mcfg["temperature_c"].items():
+        cols[name] = np.full(idx.size, temps[h])
+    return pd.DataFrame(cols, index=idx)
+
+
+def test_air_density_reads_the_configured_channels() -> None:
+    raw = yaml.safe_load(CONF.read_text())
+    mast = _planted_density_mast(raw)
+    hub = float(raw["shear"]["hub_height_m"])
+    heights = {k: float(v) for k, v in raw["air_density"].items()}
+    got = cli.air_density(mast, raw["mast"], hub, **heights)
+    # The committed summary's basis text is what the committed config produces.
+    summary = json.loads(SUMMARY.read_text())
+    assert got["basis"] == summary["air_density"]["basis"]
+    assert got["n_10min"] == 144
+    # Reading the 10 m temperature (30 C) as the air temperature gives thinner air than
+    # the 120 m channel (25 C): the configured height decides which channel is read.
+    warm = cli.air_density(
+        mast, raw["mast"], hub, **{**heights, "temperature_height_m": 10.0}
+    )
+    assert warm["mean_kgm3"] < got["mean_kgm3"]
+    assert "T(10 m), humidity" in warm["basis"]
+    with pytest.raises(ValueError, match="no mast.temperature_c channel at 80 m"):
+        cli.air_density(
+            mast, raw["mast"], hub, **{**heights, "temperature_height_m": 80.0}
+        )
+
+
+def test_timezone_evidence_reads_the_configured_channels() -> None:
+    raw = yaml.safe_load(CONF.read_text())
+    s = _synthetic_mast_for_timezone(330)
+    tz = dict(raw["timezone"])
+    tz["scan_offsets_minutes"] = {"start": 0, "stop": 600, "step": 30}
+    out = cli.timezone_evidence(s["mast"], s["ref"], raw["mast"], tz)
+    # The committed summary carries the same keys as the committed config produces.
+    summary = json.loads(SUMMARY.read_text())
+    assert set(out) == set(summary["timezone"])
+    for key, value in (
+        ("scan_speed_height_m", 90),
+        ("anomaly_speed_height_m", 90),
+    ):
+        with pytest.raises(ValueError, match="no mast.speed_avg channel at 90 m"):
+            cli.timezone_evidence(s["mast"], s["ref"], raw["mast"], {**tz, key: value})
+    with pytest.raises(ValueError, match="no mast.temperature_c channel at 50 m"):
+        cli.timezone_evidence(
+            s["mast"], s["ref"], raw["mast"], {**tz, "temperature_height_m": 50}
+        )
+
+
+def test_committed_turbulence_keys_follow_the_configured_heights() -> None:
+    raw = yaml.safe_load(CONF.read_text())
+    summary = json.loads(SUMMARY.read_text())
+    assert sorted(summary["turbulence"]) == sorted(
+        f"{cli._channel_key(raw['mast']['speed_avg'], float(h))}m"
+        for h in raw["turbulence"]["heights_m"]
+    )
+    for h in raw["turbulence"]["heights_m"]:
+        cli._channel_key(raw["mast"]["speed_sd"], float(h), "mast.speed_sd")
+
+
+def test_the_script_names_no_mast_speed_or_temperature_channel() -> None:
+    """The script picks every mast speed, temperature, pressure and RH channel by height
+    from the config (#1585 A-2, #1592 A-2). The direction channels are named, and the
+    direction-derived output labels still carry 80 m and 120 m (left on #1578 L-4)."""
+    import ast
+
+    raw = yaml.safe_load(CONF.read_text())
+    mcfg = raw["mast"]
+    keys = (
+        set(mcfg["speed_avg"])
+        | set(mcfg["speed_sd"])
+        | set(mcfg["temperature_c"])
+        | set(mcfg["pressure_kpa"])
+        | set(mcfg["humidity_pct"])
+    )
+    banned = keys | {f"v{k}" for k in keys}
+    tree = ast.parse(SCRIPT.read_text())
+    hits = [
+        (node.lineno, node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and node.value in banned
+    ]
+    assert hits == []
+    for gone in (
+        "temperature_10m_c",
+        "temperature_120m_c",
+        "pressure_10m_kpa",
+        "humidity_10m_pct",
+        "alpha_log_fit_30_120",
+        "alpha_log_fit_80_120",
+        "144 * 20",
+    ):
+        assert gone not in SCRIPT.read_text()
+
+
+# ---------------------------------------------------------------------------
+# Each remaining configured height is exercised off its committed value
+# (#1592 domain F-1 to F-4, assurance A-1, A-2 and A-5)
+# ---------------------------------------------------------------------------
+def test_measured_profiles_label_the_log_fits_from_the_heights() -> None:
+    raw = yaml.safe_load(CONF.read_text())
+    mcfg, shear = raw["mast"], raw["shear"]
+    n = int(raw["mcp"]["n_sectors"])
+    mast = _planted_mast(mcfg, alpha=0.21, days=7)
+    got = cli.measured_profiles(mast, mcfg, shear, n)
+    # The committed config gives the keys and basis text the summary has always carried.
+    measured = json.loads(SUMMARY.read_text())["shear"]["measured"]
+    for key in ("basis", "alpha_log_fit_30_120", "alpha_log_fit_80_120"):
+        assert key in got and key in measured
+    assert got["basis"] == measured["basis"]
+    # Five other heights, with the lower three on a different power law: the labels name
+    # the heights each fit uses, and the upper fit reads only the channels from
+    # log_fit_upper_from_height_m up, not the third channel onwards.
+    names = {h: f"Speed {h} m Avg [m/s]" for h in ("40", "60", "75", "90", "110")}
+    idx = mast.index
+    base = mast[mcfg["speed_avg"]["100"]].to_numpy()
+    cols: Dict[str, Any] = {
+        names[h]: base * (float(h) / 100.0) ** (0.35 if float(h) < 90.0 else 0.2)
+        for h in names
+    }
+    cols[mcfg["direction"]] = mast[mcfg["direction"]].to_numpy()
+    four = pd.DataFrame(cols, index=idx)
+    alt_m = dict(mcfg, speed_avg=names)
+    alt_s = dict(
+        shear, low_height_m=90.0, high_height_m=110.0, log_fit_upper_from_height_m=90.0
+    )
+    alt = cli.measured_profiles(four, alt_m, alt_s, n)
+    assert "alpha_log_fit_30_120" not in alt and "alpha_log_fit_80_120" not in alt
+    assert alt["alpha_log_fit_90_110"] == pytest.approx(0.2, abs=1e-12)
+    means = [float(four[c].mean()) for c in names.values()]
+    assert alt["alpha_log_fit_40_110"] == pytest.approx(
+        mmt.log_law_fit_exponent([40.0, 60.0, 75.0, 90.0, 110.0], means), abs=1e-15
+    )
+    assert abs(alt["alpha_log_fit_40_110"] - 0.2) > 0.01
+    assert alt["day_night_local_06_18"]["day"]["alpha_log_fit_40_110"] is not None
+    assert alt["basis"].startswith("10-minute rows with all five mean speeds")
+    four_m = dict(alt_m, speed_avg={h: names[h] for h in ("40", "60", "90", "110")})
+    assert cli.measured_profiles(four, four_m, alt_s, n)["basis"].startswith(
+        "10-minute rows with all four mean speeds"
+    )
+    with pytest.raises(ValueError, match="no mast.speed_avg channel at 80 m"):
+        cli.measured_profiles(
+            four, alt_m, dict(alt_s, log_fit_upper_from_height_m=80), n
+        )
+
+
+def _density_closed_form(
+    p_kpa: float, rh_pct: float, t_rh_c: float, t_air_c: float, lift_m: float
+) -> float:
+    p = p_kpa * 1000.0
+    e = rh_pct / 100.0 * 610.94 * math.exp(17.625 * t_rh_c / (t_rh_c + 243.04))
+    tv = (t_air_c + 273.15) * (1 + 0.61 * 0.622 * e / (p - 0.378 * e))
+    return p * math.exp(-9.80665 * lift_m / (287.05 * tv)) / (287.05 * tv)
+
+
+def test_air_density_sensor_height_moves_the_channels_and_the_lift() -> None:
+    raw = yaml.safe_load(CONF.read_text())
+    hub = float(raw["shear"]["hub_height_m"])
+    idx = pd.date_range("2025-04-01", periods=144, freq="10min")
+    mcfg = dict(
+        raw["mast"],
+        pressure_kpa={"10": "P10", "20": "P20"},
+        humidity_pct={"10": "RH10", "20": "RH20"},
+        temperature_c={"10": "T10", "20": "T20", "120": "T120"},
+    )
+    mast = pd.DataFrame(
+        {
+            "P10": np.full(idx.size, 100.5),
+            "RH10": np.full(idx.size, 75.0),
+            "T10": np.full(idx.size, 30.0),
+            "P20": np.full(idx.size, 100.2),
+            "RH20": np.full(idx.size, 60.0),
+            "T20": np.full(idx.size, 29.0),
+            "T120": np.full(idx.size, 26.0),
+        },
+        index=idx,
+    )
+    got = cli.air_density(
+        mast, mcfg, hub, temperature_height_m=120.0, sensor_height_m=20.0
+    )
+    assert got["mean_kgm3"] == pytest.approx(
+        _density_closed_form(100.2, 60.0, 29.0, 26.0, hub - 20.0), rel=1e-12
+    )
+    assert got["basis"] == (
+        "p(20 m) moved hydrostatically to hub height, T(120 m), "
+        "humidity from RH(20 m) at T(20 m)"
+    )
+    # The committed config has pressure and RH at 10 m only. A sensor height of 120 m,
+    # which does have a temperature channel, is refused rather than moving the 10 m
+    # pressure as if it were measured at 120 m (#1592 assurance A-2, domain F-4).
+    committed = _planted_density_mast(raw)
+    with pytest.raises(ValueError, match="no mast.pressure_kpa channel at 120 m"):
+        cli.air_density(
+            committed,
+            raw["mast"],
+            hub,
+            temperature_height_m=120.0,
+            sensor_height_m=120.0,
+        )
+    no_rh = dict(mcfg, humidity_pct={"10": "RH10"})
+    assert cli.air_density(
+        mast, mcfg, hub, temperature_height_m=120.0, sensor_height_m=10.0
+    )["mean_kgm3"] == pytest.approx(
+        _density_closed_form(100.5, 75.0, 30.0, 26.0, hub - 10.0), rel=1e-12
+    )
+    with pytest.raises(ValueError, match="no mast.humidity_pct channel at 20 m"):
+        cli.air_density(
+            mast, no_rh, hub, temperature_height_m=120.0, sensor_height_m=20.0
+        )
+
+
+def test_turbulence_tables_follow_the_configured_heights() -> None:
+    raw = yaml.safe_load(CONF.read_text())
+    mcfg, tcfg = raw["mast"], raw["turbulence"]
+    n = int(raw["mcp"]["n_sectors"])
+    rng = np.random.default_rng(1592)
+    idx = pd.date_range("2025-04-01", periods=2000, freq="10min")
+    cols: Dict[str, Any] = {
+        name: 4.0 + 10.0 * rng.random(idx.size) for name in mcfg["speed_avg"].values()
+    }
+    for name in mcfg["speed_sd"].values():
+        cols[name] = 0.1 + 1.5 * rng.random(idx.size)
+    cols[mcfg["direction"]] = rng.uniform(0.0, 360.0, idx.size)
+    mast = pd.DataFrame(cols, index=idx)
+
+    def table(h: str) -> Dict[str, Any]:
+        out: Dict[str, Any] = mmt.turbulence_table(
+            mast[mcfg["speed_avg"][h]].to_numpy(),
+            mast[mcfg["speed_sd"][h]].to_numpy(),
+            mast[mcfg["direction"]].to_numpy(),
+            bin_edges_ms=tcfg["bin_edges_ms"],
+            n_sectors=n,
+            min_speed_ms=float(tcfg["min_speed_ms"]),
+            min_count=int(tcfg["min_count"]),
+        )
+        return out
+
+    both = cli.turbulence_tables(mast, mcfg, tcfg, n)
+    assert list(both) == ["100m", "120m"]
+    assert both["120m"] == table("120") and both["100m"] == table("100")
+    only = cli.turbulence_tables(mast, mcfg, dict(tcfg, heights_m=[120]), n)
+    assert only == {"120m": table("120")}
+    with pytest.raises(ValueError, match="no mast.speed_sd channel at 80 m"):
+        cli.turbulence_tables(mast, mcfg, dict(tcfg, heights_m=[80]), n)
+    src = SCRIPT.read_text()
+    assert 'ti = turbulence_tables(mast, mcfg, cfg["turbulence"], n)' in src
+
+
+def test_timezone_evidence_moves_with_its_temperature_pressure_and_month_floor() -> (
+    None
+):
+    raw = yaml.safe_load(CONF.read_text())
+    s = _synthetic_mast_for_timezone(330)
+    mast = s["mast"].copy()
+    mi = mast.index
+    clock_h = mi.hour + mi.minute / 60.0
+    # A 120 m temperature whose daily maximum falls at 17:00 on the mast clock; the 10 m
+    # channel peaks elsewhere.
+    mast["Temp 120 m Avg [℃]"] = 26 + 2 * np.cos(2 * np.pi * (clock_h - 17.0) / 24)
+    # A second pressure channel whose semidiurnal maximum is 2 h later on the mast clock.
+    p10 = mast["Pressure 10 m Avg [kPa]"].to_numpy()
+    mast["Pressure 50 m"] = np.roll(p10, 12)  # 12 rows of 10 minutes = 2 h later
+    mcfg = dict(
+        raw["mast"],
+        pressure_kpa={**raw["mast"]["pressure_kpa"], "50": "Pressure 50 m"},
+    )
+    tz = dict(raw["timezone"])
+    tz["scan_offsets_minutes"] = {"start": 0, "stop": 600, "step": 30}
+    ten = cli.timezone_evidence(mast, s["ref"], raw["mast"], tz)
+    high = cli.timezone_evidence(
+        mast, s["ref"], raw["mast"], {**tz, "temperature_height_m": 120}
+    )
+    assert "temperature_120m_daily_maximum_mast_clock_h" not in ten
+    assert high["temperature_120m_daily_maximum_mast_clock_h"] == pytest.approx(
+        17.0, abs=0.01
+    )
+    assert abs(ten["temperature_10m_daily_maximum_mast_clock_h"] - 17.0) > 1.0
+    # April to July: four whole months. A 31-day floor keeps only May and July.
+    assert len(ten["s2_maximum_mast_clock_h_by_month"]) == 4
+    strict = cli.timezone_evidence(
+        mast, s["ref"], raw["mast"], {**tz, "monthly_phase_min_days": 31}
+    )
+    assert len(strict["s2_maximum_mast_clock_h_by_month"]) == 2
+    # The configured pressure height picks the channel whose S2 phase is read. The 50 m
+    # channel implies a different clock offset, which the evidence then refuses.
+    at10 = cli.timezone_evidence(mast, s["ref"], mcfg, tz)
+    assert at10["s2_pressure_tide_maximum_mast_clock_h"] == pytest.approx(
+        ten["s2_pressure_tide_maximum_mast_clock_h"], abs=1e-12
+    )
+    with pytest.raises(ValueError, match="does not support"):
+        cli.timezone_evidence(mast, s["ref"], mcfg, {**tz, "pressure_height_m": 50})
+    with pytest.raises(ValueError, match="no mast.pressure_kpa channel at 50 m"):
+        cli.timezone_evidence(
+            mast, s["ref"], raw["mast"], {**tz, "pressure_height_m": 50}
+        )
+
+
+# ---------------------------------------------------------------------------
 # Committed outputs and scenarios
 # ---------------------------------------------------------------------------
 def test_scenarios_carry_the_summary_yield_and_the_hold() -> None:

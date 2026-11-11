@@ -100,6 +100,8 @@ from finance.debt.terms import (  # noqa: F401
     _resolve_construction_periods,
     _resolve_first_operating_period,
     _warn_if_decorative_tranches,
+    placeholder_construction_schedule,
+    placeholder_debt_drawdown_pct,
 )
 
 logger = logging.getLogger(__name__)

@@ -30,7 +30,8 @@ def ke_band_npv(
     Returns:
         One row per ke with ``ke``, ``wacc`` (achieved discount rate), ``project_npv``,
         ``equity_npv``, ``project_irr``, ``equity_irr`` — all floats, except that
-        ``equity_irr`` is ``None`` when no rate solves the equity cashflows (#1436).
+        ``equity_irr`` is ``None`` when no rate solves the equity cashflows (#1436),
+        and ``project_irr`` is ``None`` when none solves the project cashflows (#1494).
     """
     rows: List[Dict[str, Optional[float]]] = []
     for ke in ke_values:
@@ -45,7 +46,13 @@ def ke_band_npv(
                 "wacc": float(kpis.get("discount_rate_used", 0.0)),
                 "project_npv": float(kpis.get("project_npv", 0.0)),
                 "equity_npv": float(kpis.get("equity_npv", 0.0)),
-                "project_irr": float(kpis.get("project_irr", 0.0)),
+                # #1494: the numeric KPI surface drops an undefined project IRR, so
+                # absent means undefined here; report None, never a 0.0 stand-in.
+                "project_irr": (
+                    None
+                    if kpis.get("project_irr") is None
+                    else float(kpis["project_irr"])
+                ),
                 # #1436: None when the equity IRR is undefined, never a 0.0 stand-in.
                 "equity_irr": (
                     None

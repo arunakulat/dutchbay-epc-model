@@ -47,7 +47,10 @@ from analytics.contracts_v14 import WaccComponents as ContractWaccComponents
 from analytics.contracts_v14 import (
     WaccResult,
 )
-from analytics.core.metrics import DEFAULT_DISCOUNT_RATE, calculate_scenario_kpis
+from analytics.core.metrics import (
+    calculate_scenario_kpis,
+    resolve_project_discount_rate,
+)
 from analytics.run_manifest import build_run_manifest, engine_version
 from analytics.scenario_loader import load_scenario_config
 from analytics.schema_guard import validate_config_for_v14
@@ -608,8 +611,10 @@ def _resolve_wacc_and_discounts(
     ``build_up`` mode computes the after-tax WACC from the ACTUAL sized debt (gearing
     + blended rate from the debt engine) plus the configured cost of equity. When
     ``wacc.drives_discount_rate`` is set, the project NPV is discounted at the WACC and
-    equity at the cost of equity; otherwise the legacy default rate is used and the
-    WACC stays informational (contract only) — preserving pre-existing behaviour.
+    equity at the cost of equity; otherwise the scenario's declared
+    ``returns.project_discount_rate`` is used and the WACC stays informational
+    (contract only). The declared rate is also the fallback when a driving WACC
+    resolves no ``wacc_nominal``. There is no code default (#1429).
     """
     wacc_cfg = config.get("wacc", {}) or {}
     mode = str(wacc_cfg.get("mode", "")).lower()
@@ -627,24 +632,26 @@ def _resolve_wacc_and_discounts(
     else:
         wacc_dict = compute_wacc_from_config(dict(config))
 
-    project_discount = DEFAULT_DISCOUNT_RATE
+    declared_discount = resolve_project_discount_rate(config)
+    project_discount = declared_discount
     equity_discount: float | None = None
     if wacc_dict and wacc_cfg.get("drives_discount_rate"):
-        project_discount = float(wacc_dict.get("wacc_nominal") or DEFAULT_DISCOUNT_RATE)
+        project_discount = float(wacc_dict.get("wacc_nominal") or declared_discount)
         ke = wacc_dict.get("cost_of_equity")
         equity_discount = float(ke) if ke else None
     elif wacc_dict and not wacc_cfg.get("drives_discount_rate"):
         # A1/#45: the scenario built a WACC / cost-of-equity block but did not opt it in
-        # (drives_discount_rate falsy), so the published NPV is discounted at the bare
-        # DEFAULT_DISCOUNT_RATE — the computed WACC is informational-only and the declared
+        # (drives_discount_rate falsy), so the published NPV is discounted at the declared
+        # returns.project_discount_rate — the computed WACC is informational-only and the declared
         # equity hurdle is ignored for the equity NPV. Surface that loudly rather than let
         # the gap pass silently. (Re-pointing the default to returns.equity_discount_rate
         # would MOVE equity NPV — a re-baseline, deliberately out of scope for this guard.)
         logger.warning(
             "wacc block present but drives_discount_rate is not set — project/equity NPV is "
-            "discounted at the default %.2f, NOT the computed WACC (wacc_nominal=%s). Set "
-            "wacc.drives_discount_rate to discount at the built WACC.",
-            DEFAULT_DISCOUNT_RATE,
+            "discounted at the declared returns.project_discount_rate %.4f, NOT the computed "
+            "WACC (wacc_nominal=%s). Set wacc.drives_discount_rate to discount at the built "
+            "WACC.",
+            declared_discount,
             wacc_dict.get("wacc_nominal"),
         )
     return wacc_dict, project_discount, equity_discount
@@ -936,6 +943,18 @@ def _build_debt_covenant_snapshot(
     )
 
 
+def _format_irr_for_log(value: float | None) -> str:
+    """Format an IRR for a log line, naming an undefined one rather than crashing.
+
+    Args:
+        value: The IRR as a fraction, or ``None`` when no rate solves the cashflows.
+
+    Returns:
+        ``"12.34%"`` for a defined rate, ``"undefined"`` for ``None``.
+    """
+    return "undefined" if value is None else f"{value * 100:.2f}%"
+
+
 def _update_kpis_with_equity_distribution(
     kpis: dict[str, Any], equity_distribution: Mapping[str, Any]
 ) -> EquityPerformance | None:
@@ -1050,6 +1069,13 @@ def run_v14_pipeline_enhanced(
 
         metrics.validation_time_sec = time.time() - phase_start
 
+        # #1569: a declared capex price date escalates capex.usd_total to the
+        # construction draws, once, on the configuration evaluated below. Without a
+        # capex.price_basis block the config is unchanged.
+        from finance.capex_price_basis import apply_capex_price_basis
+
+        cfg = apply_capex_price_basis(cfg)
+
         # Reproducibility stamp (#577): built INSIDE the engine from the ALREADY-
         # RESOLVED ``cfg`` (no config re-load), immediately after resolution + schema
         # validation, so ``config_sha256`` binds to the exact post-override config the
@@ -1141,8 +1167,8 @@ def run_v14_pipeline_enhanced(
 
         # WACC + discount rates resolved BEFORE the NPV so a build_up WACC (derived
         # from the sized debt) can drive the project/equity discounting instead of a
-        # hardcoded rate. Default (no drives_discount_rate flag) preserves the legacy
-        # DEFAULT_DISCOUNT_RATE and leaves the WACC informational.
+        # hardcoded rate. Without the drives_discount_rate flag the scenario's declared
+        # returns.project_discount_rate is used and the WACC stays informational (#1429).
         phase_start = time.time()
         wacc_dict, project_discount, equity_discount = _resolve_wacc_and_discounts(
             cfg, debt_result
@@ -1150,8 +1176,9 @@ def run_v14_pipeline_enhanced(
         wacc_contract = _build_wacc_contract(wacc_dict)
         # Single source of truth for the discount basis: `drives_discount_rate`
         # is what made `project_discount` the build-up WACC instead of the
-        # legacy default. Both the KPI surface and the ScenarioResult contract
-        # below report from these same values so they cannot disagree.
+        # declared returns.project_discount_rate. Both the KPI surface and the
+        # ScenarioResult contract below report from these same values so they
+        # cannot disagree.
         wacc_cfg = cfg.get("wacc", {}) or {}
         wacc_drives = bool(wacc_dict) and bool(wacc_cfg.get("drives_discount_rate"))
         wacc_label_val = (
@@ -1274,7 +1301,11 @@ def run_v14_pipeline_enhanced(
         )
 
         project_npv = float(kpis.get("project_npv", 0.0))
-        project_irr = float(kpis.get("project_irr", 0.0))
+        # #1494: an undefined project IRR arrives as None (kpis["project_irr_status"]
+        # says why) and stays None on the contract; float(None) would raise, and a 0.0
+        # here would read as a genuine break-even.
+        raw_project_irr = kpis.get("project_irr", 0.0)
+        project_irr = None if raw_project_irr is None else float(raw_project_irr)
         # `ScenarioResult.dscr_series` is typed `list[float]` and the D3B/D3C accepted
         # -origin protocols reject any entry that is not an exact finite float. Since
         # F-2 the engine publishes ONE positional series carrying `None` for every
@@ -1349,8 +1380,8 @@ def run_v14_pipeline_enhanced(
         metrics.fx_integration_time_sec = time.perf_counter() - _fx_t0
 
         logger.info(
-            "ScenarioResult assembled: project_irr=%.2f%%, min_dscr=%.2f, project_npv=%.0f",
-            project_irr * 100,
+            "ScenarioResult assembled: project_irr=%s, min_dscr=%.2f, project_npv=%.0f",
+            _format_irr_for_log(project_irr),
             min_dscr,
             project_npv,
         )
@@ -1384,9 +1415,9 @@ def run_v14_pipeline_enhanced(
         }
 
         logger.info(
-            "Pipeline complete in %.3f sec: project_irr=%.2f%%, min_dscr=%.2f",
+            "Pipeline complete in %.3f sec: project_irr=%s, min_dscr=%.2f",
             metrics.total_runtime_sec,
-            project_irr * 100,
+            _format_irr_for_log(project_irr),
             min_dscr,
         )
         return result

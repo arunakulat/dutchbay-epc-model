@@ -468,10 +468,15 @@ def test_multi_covenant_fails_loud_under_dual_dscr_sizing() -> None:
 def test_min_capex_solves_breakeven_capex_at_the_floor() -> None:
     """Returns the MAX capex at which projIRR still meets the floor (breakeven). With the
     live capex path + the corrected bisection direction (IRR falls as capex rises), the
-    achieved IRR at the returned capex equals the floor."""
+    achieved IRR at the returned capex equals the floor.
+
+    The floor is 3%: on 14 turbines (#1577) the lender case reaches only ~3.76% even at the
+    $100M low bound, so the former 4% floor is no longer bracketed (the solver correctly
+    refuses it; test_min_capex_floor_unreachable_raises covers that path).
+    """
     low, high = 100.0e6, 500.0e6
     capex = solve_for_min_capex_given_irr_floor(
-        LENDER_CONFIG, None, irr_floor=0.04, bounds=(low, high), tolerance=10_000.0
+        LENDER_CONFIG, None, irr_floor=0.03, bounds=(low, high), tolerance=10_000.0
     )
     assert low < capex < high  # interior breakeven, not a bound
     achieved = float(
@@ -479,7 +484,7 @@ def test_min_capex_solves_breakeven_capex_at_the_floor() -> None:
             base_config_path=LENDER_CONFIG, overrides={"capex": {"usd_total": capex}}
         )["project_irr"]
     )
-    assert achieved == pytest.approx(0.04, abs=1e-3)
+    assert achieved == pytest.approx(0.03, abs=1e-3)
 
 
 def test_min_capex_floor_unreachable_raises() -> None:

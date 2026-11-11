@@ -26,6 +26,7 @@ from analytics.capital_risk_layer_v14 import CapitalRiskReport
 from analytics.conditions_precedent import CpReport, build_cp_report
 from analytics.contracts_v14 import ProjectEquityIrrBridge, TwoFactorInteractionGrid
 from analytics.development_readiness import build_readiness_report
+from analytics.evaluation_v14 import evaluated_scenario_config
 from analytics.evidence_register import build_evidence_report
 from analytics.evidence_score import build_evidence_score
 from analytics.feasibility_sections import (
@@ -999,6 +1000,13 @@ def _build_verdict(
         notes.append(
             f"Project IRR {project_irr * 100:.2f}% is {rel} the "
             f"{hurdle * 100:.2f}% cost of capital."
+        )
+    elif project_irr is None and "project_irr" in kpis:
+        # #1494: present and None is the engine saying "undefined". It is not judged
+        # viable, and the note says why rather than leaving the reader to infer it.
+        notes.append(
+            "Project IRR is undefined: the solver resolved no single rate for the "
+            "project cashflows, so it is not compared with the cost of capital."
         )
     if equity_irr is not None:
         # The sign word must reflect the IRR's OWN sign, not the equity-NPV value flag
@@ -2528,6 +2536,17 @@ def build_report_context(
         A fully populated :class:`ReportContext` ready for the renderer.
     """
     cfg = config if config is not None else load_report_config()
+    # #1569 (domain lane D-2): the engine prices the evaluated configuration, in which a
+    # declared ``capex.price_basis`` has escalated ``capex.usd_total`` to the construction
+    # draws. The out-of-band emitters re-load the scenario YAML, which still states the
+    # price-year figure, so without this the statements would book PP&E and paid-in equity
+    # on capex the engine never financed (equity is the plug, so the tie-outs would still
+    # pass), and the manifest-digest check below would withhold the FX methodology. Resolve it
+    # through the evaluation gateway, as the pipeline does. It is idempotent: an
+    # already-evaluated config (no ``price_basis`` block) comes back unchanged, and a config
+    # without the block is returned as a copy.
+    if scenario_config is not None:
+        scenario_config = evaluated_scenario_config(scenario_config)
     readiness_rows, overall_readiness = _build_readiness(scenario_config)
     # The verdict is built once and shared: the IC summary reads its covenant/return
     # judgments (single source) rather than re-deriving them.

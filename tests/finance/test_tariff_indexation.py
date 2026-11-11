@@ -10,6 +10,7 @@ every non-Blue-Whale scenario also guard.
 from __future__ import annotations
 
 import copy
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Dict
 
@@ -202,16 +203,23 @@ def test_bess_premium_indexes_its_escalable_part_and_stops_with_its_term() -> No
     assert spec["escalable_om_lkr_per_kwh"] == pytest.approx(0.30)
     ix = resolve_om_indexation(cfg)
     assert ix is not None
+    # #1569: the index starts at the 2026 price date, three steps before the 2029 COD.
+    pre = ix.pre_operation_years
+    assert pre == 3
     for t in (0, 7, 14):
         flat = bess_revenue_lkr_for_year(specs, t)
         indexed = bess_revenue_lkr_for_year(specs, t, ix)
         tariff = spec["tariff_lkr_per_kwh"]
         assert indexed == pytest.approx(
-            flat * (tariff + 0.30 * ((1.0 + ix.annual_rate) ** t - 1.0)) / tariff,
+            flat
+            * (tariff + 0.30 * ((1.0 + ix.annual_rate) ** (t + pre) - 1.0))
+            / tariff,
             rel=1e-12,
         ), t
     assert bess_revenue_lkr_for_year(specs, 15, ix) == 0.0
-    assert bess_revenue_lkr_for_year(specs, 0, ix) == bess_revenue_lkr_for_year(
+    # With the index at 1.0 in operating year 1 the premium starts flat.
+    at_cod = replace(ix, pre_operation_years=0)
+    assert bess_revenue_lkr_for_year(specs, 0, at_cod) == bess_revenue_lkr_for_year(
         specs, 0
     )
 
@@ -262,9 +270,10 @@ def test_blue_whale_escalable_parts_match_the_annex_2_components() -> None:
     assert reg["solar_bess_priority"][1] == pytest.approx(
         reg["solar_bess_other"][1] / 0.90, abs=0.005
     )
-    # The three scenarios share one index basis.
+    # The three scenarios share one index basis. The index start is each project's own
+    # (#1569: cod_year - opex.price_year; tests/finance/test_price_dates_1569.py).
     hybrid = _cfg(_REPO / "scenarios" / "blue_whale_hybrid_lot5b_2026.yaml")
-    keys = set(_BLOCK) - {"escalable_om_lkr_per_kwh"}
+    keys = set(_BLOCK) - {"escalable_om_lkr_per_kwh", "pre_operation_years"}
     for cfg in (sb, hybrid):
         block = cfg["tariff"]["om_indexation"]
         assert {k: block[k] for k in keys} == {

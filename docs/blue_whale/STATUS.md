@@ -54,7 +54,15 @@ record under `DATA-01`.
    of the DutchBay array is built, T1 (624 m, bearing 21 degrees, 3.0 Blue Whale rotor
    diameters) and T3 (529 m, bearing 202 degrees, 2.6 diameters) stand roughly upwind in
    the north-east and south-west monsoons and would wake it. The owner chose zero wake
-   with this risk disclosed (2026-11-07); it is not quantified.
+   with this risk disclosed (2026-11-07); it is not quantified. On 2026-11-08 the owner
+   decided DutchBay drops to 14 turbines (#1577): DutchBay keeps T1 and T3, so the risk
+   stands. DutchBay's own model now counts this turbine as a neighbour that wakes T1 and T3
+   (its 14-turbine wake loss rises from 7.28% to 7.32%;
+   `docs/wind/dutchbay_14_turbine_wake_summary.json`), but the Blue Whale yield still
+   assumes none: the owner's 2026-11-07 zero-wake decision covers the Blue Whale yield
+   only, not the wake this turbine casts on DutchBay. At about 2.5 to 3 rotor diameters this is also a loads and
+   site-suitability question (IEC 61400-1 effective turbulence, OEM approval) for both
+   projects, not only one of wake energy (#1568 domain review N-1). It is not solved.
 3. **Coastal permitting.** Most of the lot is likely inside the Coast Conservation Act zone
    (CC&CRMD permit, IEE or EIA), with lagoon ecology and bird collision in scope.
 4. **Component transport.** Blade and tower delivery over a 9 m right of way, or by the
@@ -648,7 +656,7 @@ Best size at each PV level:
   Carlo ranks sizes; it does not show that the project is viable.
 - 97.8% of the sizes reading A allows, and 95.7% of those reading B allows, have a negative P50 unit NPV. The P90 unit NPV is negative at every size.
 - On the engine's own terms the project loses value at every size: project NPV P50 about
-  USD -4.5M to -6.8M, and no project IRR exists, because with O&M escalating 5% a year against
+  USD -4.5M to -6.8M, and no non-negative project IRR exists, because with O&M escalating 5% a year against
   a flat tariff, the CFADS turn negative after the 15-year priority term and the 20-year CFADS
   sum stays below the capex. The engine's project NPV prefers the smallest battery on the grid
   (1 MW / 4 MWh); after the 30% tax and the 10% CFADS haircut, the battery's margin is negative.
@@ -1116,7 +1124,7 @@ Through `analytics.evaluation_v14.evaluate_with_overrides`, base case only, on t
 | Scenario | Project IRR | Equity IRR | Min DSCR | Project NPV (USD) | Equity NPV (USD) |
 |---|---|---|---|---|---|
 | Wind project (v0.5) | 13.13% (unchanged) | 11.55% | 0.867 | 1,956,797 | -215,852 |
-| Solar + BESS project (v0.7, 5 MW / 20 MWh, 152 tables) | undefined (reported as 0.0) | -5.00% | 0.868 | -4,440,000 | -5,075,832 |
+| Solar + BESS project (v0.7, 5 MW / 20 MWh, 152 tables) | undefined (reported as 0.0 here; `None` from 15.23.0, #1525) | -5.00% | 0.868 | -4,440,000 | -5,075,832 |
 | Hybrid (v0.11, superseded) | 9.28% | 6.79% | 0.868 | -2,067,303 | -4,614,880 |
 
 Every other input is still a placeholder, so these are not results.
@@ -1186,8 +1194,9 @@ Through `analytics.evaluation_v14.evaluate_with_overrides`, constant LKR, base c
 The hybrid does not move (its file gained only a header note). The two projects do not add up
 to the hybrid: each carries its own USD 2.0M grid line and USD 0.15M a year of overhead, the
 solar + BESS project is a different size, and it earns the priority rate only in 17:30-21:30.
-The solar + BESS project has no project IRR: its 20-year CFADS sum stays below its capex, so
-its NPV is negative at every discount rate. Every other input is still a placeholder, so these
+The solar + BESS project has no single project IRR: its 20-year CFADS sum stays below its
+capex, so its NPV is negative at every non-negative discount rate (it changes sign twice, at
+two negative rates, so the solver resolves none; corrected by #1525). Every other input is still a placeholder, so these
 are not results.
 
 ## Earlier run (v0.6, sized and priced solar + BESS unit, 2026-11-01)

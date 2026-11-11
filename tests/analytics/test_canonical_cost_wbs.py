@@ -28,7 +28,9 @@ def test_canonical_breakdown_sums_to_total() -> None:
     assert line_sum == pytest.approx(
         float(capex["usd_total"]), rel=0.005
     )  # WBS == total
-    assert line_sum == pytest.approx(159_600_000, rel=1e-6)
+    assert line_sum == pytest.approx(
+        151_407_200, rel=1e-6
+    )  # 14 turbines (#1577; was 159.6M)
 
 
 def test_canonical_wbs_has_real_line_items() -> None:
@@ -78,7 +80,9 @@ def test_run_pipeline_reports_cost_block() -> None:
     # base + the PRUDENT $8.2593M duties = $1,051.75/kW, still within the IRENA
     # band (1.01x the 2024 global average). The WBS breakdown itself still sums
     # to the PRE-LEVY usd_total (the invariant asserted elsewhere is untouched).
-    assert resp.cost.capex_total_usd == pytest.approx(167_859_300, rel=0.001)
-    assert resp.cost.capex_per_kw_usd == pytest.approx(1051.75, abs=1.0)
+    # #1577 (14 turbines): 151.4072M + 7.70814M = 159.1153M on 148.9 MW = $1,068.6/kW
+    # (1.03x the IRENA average, still within the band).
+    assert resp.cost.capex_total_usd == pytest.approx(159_115_340.552, rel=0.001)
+    assert resp.cost.capex_per_kw_usd == pytest.approx(1068.6, abs=1.0)
     assert resp.cost.within_band is True
     assert resp.kpis.project_irr == pytest.approx(-0.00117, abs=0.005)  # F5-01 canon

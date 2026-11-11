@@ -212,12 +212,13 @@ def test_evaluate_with_casper_tail_risk_real_engine(tmp_path: object) -> None:
     assert p10 <= result.monte_carlo.project_irr_p50 <= p90
 
     # Multi-tech generation view is now POPULATED (previously always None): the
-    # wind profile carries the run's real P50 AEP (464.3 GWh, post 2% haircut)
+    # wind profile carries the run's real P50 AEP (433.2 GWh, post 2% haircut; 464.3 for
+    # 15 turbines before #1577)
     # and a 100% share.
     assert result.generation is not None
     assert "wind" in result.generation.technologies
     wind = result.generation.technologies["wind"]
-    assert wind.annual_aep_kwh == pytest.approx(464.3e6, rel=1e-6)
+    assert wind.annual_aep_kwh == pytest.approx(433.2e6, rel=1e-6)
     assert wind.annual_cfads_usd > 0.0
     assert result.multi_tech_generation_breakdown is not None
     wind_share = result.multi_tech_generation_breakdown[0]

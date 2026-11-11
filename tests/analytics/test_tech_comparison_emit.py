@@ -123,7 +123,8 @@ def test_build_for_scenarios_reconciles_wind_column_to_canonical() -> None:
     # #1397: levered-tax CFADS sizes a larger facility, so the dual-DSCR solver
     # lands nine 0.0025 steps higher, 0.355 -> 0.3775. The line above is the real
     # assertion (the column reconciles to the report's own source); this pins it.
-    assert wind.gearing == pytest.approx(0.3775)
+    # #1577: 14 turbines move the solve three steps down, 0.3775 -> 0.37.
+    assert wind.gearing == pytest.approx(0.37)
     # The hybrid column is a distinct, non-trivial economics (a real second column).
     assert hybrid.project_irr is not None
     assert hybrid.project_irr != wind.project_irr
@@ -152,9 +153,9 @@ def test_emit_renders_comparison_section_through_canonical_runs(tmp_path) -> Non
     # Both column labels render; the wind column carries the reconciled headline IRR.
     assert "Wind" in html and "Hybrid" in html
     # The report's own Project IRR (-0.06% since #1504 charged the post-maturity fee on
-    # the balance actually outstanding; -0.14% after #1397, -0.12% before) appears —
-    # proving reconciliation.
-    assert "-0.06%" in html
+    # the balance actually outstanding; -0.14% after #1397, -0.12% before; -0.25% since
+    # #1577 dropped DutchBay to 14 turbines) appears — proving reconciliation.
+    assert "-0.25%" in html
     # No server filesystem path is leaked into the lender document.
     assert str(tmp_path) not in html
 

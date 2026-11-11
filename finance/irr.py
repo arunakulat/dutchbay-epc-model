@@ -44,6 +44,15 @@ _DEFAULT_XIRR_UPPER_BOUND = 2.0  # 200% p.a. cap for dated cashflows
 # numerically safe out to ~150 periods.
 _PROJECT_IRR_LOWER_BOUND = -0.99
 
+# Rate-width convergence for approx_project_irr's bisection (#1494). ``tol`` is an absolute
+# NPV tolerance in currency units, and on a large project the NPV slope near the root is
+# large enough (about 1e9 USD per unit of rate on a USD 500m capex) that 50 halvings pin the
+# rate to ~1e-15 while |NPV| at the midpoint can still exceed ``tol``. A bracket that still
+# straddles a sign change and is narrower than this holds a root within half its width (the
+# NPV is continuous on the search range), so its midpoint is the root to well below any
+# reported precision. Only reached once ``max_iter`` is exhausted.
+_PROJECT_IRR_RATE_TOL = 1e-10
+
 
 # ============================================================================
 # Internal helpers
@@ -557,7 +566,15 @@ def approx_project_irr(
     # may be far from a root; a silent unverified number is worse than an explicit "no result"
     # (matches this function's other undefined-IRR cases). Converged runs returned at line 490.
     mid = 0.5 * (a + b)
-    return mid if abs(npv_gap(mid)) < tol else None
+    if abs(npv_gap(mid)) < tol:
+        return mid
+    # #1494: the bracket [a, b] still straddles a sign change (the loop only ever keeps the
+    # half that does), so once it is narrower than _PROJECT_IRR_RATE_TOL the bisection HAS
+    # converged in rate, and only the currency tolerance is unmet. Return the midpoint. A
+    # bracket still wider than that has not converged, and stays None (FIN-10).
+    if (b - a) <= _PROJECT_IRR_RATE_TOL:
+        return mid
+    return None
 
 
 __all__ = [

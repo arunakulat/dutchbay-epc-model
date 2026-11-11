@@ -536,4 +536,4 @@ def test_dscr_index_space_collision_is_resolved() -> None:
     # And the value at a mapped period is that PERIOD's DSCR, which is the substance of
     # the fix — not merely two lists that happen to be equal.
     assert public[period] == debt_result["dscr_periods"][period]["dscr"]
-    assert public[period] == pytest.approx(2.604704706563112)
+    assert public[period] == pytest.approx(2.5922041122119635)  # #1577 (was 2.6047)
