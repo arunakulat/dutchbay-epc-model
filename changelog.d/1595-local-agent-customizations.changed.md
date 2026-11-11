@@ -1,0 +1,1 @@
+Track local Codex steward skill (`.agents/skills/steward/SKILL.md`), hooks configuration (`.codex/hooks.json`), and session bootstrap script (`.codex/hooks/session-start.sh`), and declare the `DUTCHBAY_EXTRAS` shell environment policy in `.codex/config.toml` (#1595).

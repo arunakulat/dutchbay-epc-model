@@ -15,6 +15,7 @@ ENVIRONMENT_FILE = ROOT / ".codex" / "environments" / "environment.toml"
 ENVRC = ROOT / ".envrc"
 SETUP_SCRIPT = ROOT / "setup_venv.sh"
 SESSION_HOOK = ROOT / ".claude" / "hooks" / "session-start.sh"
+CODEX_SESSION_HOOK = ROOT / ".codex" / "hooks" / "session-start.sh"
 SOURCED_SETUP_SCRIPT = ROOT / "scripts" / "venv_up.sh"
 SHELL_ENVIRONMENT_HELPER = ROOT / "scripts" / "development_environment.sh"
 VENV_CHECK_SCRIPT = ROOT / "check_venv.sh"
@@ -48,10 +49,16 @@ def test_codex_project_config_tracks_the_recorded_defaults() -> None:
         "sandbox_mode": "danger-full-access",
         "model_verbosity": "medium",
         "model_reasoning_summary": "concise",
+        "shell_environment_policy": {
+            "inherit": "core",
+            "set": {
+                "DUTCHBAY_EXTRAS": "dev,feasibility,jobs,solar,pareto",
+            },
+        },
     }
     assert (
         hashlib.sha256(PROJECT_CONFIG.read_bytes()).hexdigest()
-        == "42dac680fc1f9e47c5cbc864ca50984445019be946ac09b470981fd25bd2969d"
+        == "50969ca101a1d4f5a8315ee3bc38c078461d651e3e5240294290c05090a44ad1"
     )
 
 
@@ -85,6 +92,7 @@ def test_bootstrap_prefers_the_supported_ci_python() -> None:
     for path in (
         SETUP_SCRIPT,
         SESSION_HOOK,
+        CODEX_SESSION_HOOK,
         SHELL_ENVIRONMENT_HELPER,
     ):
         script = path.read_text(encoding="utf-8")
