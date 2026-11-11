@@ -336,7 +336,7 @@ def test_flat_cfads_gives_every_instalment_the_annual_dscr(
     for quarter in paid:
         assert math.isclose(quarter["dscr"], 1.30, rel_tol=1e-14), quarter
     assert [q["calculation_periods"] for q in paid] == [
-        float(b - a) for a, b in zip([0] + periods[:-1], periods)
+        float(b - a) for a, b in zip([0] + periods[:-1], periods, strict=True)
     ]
 
 
