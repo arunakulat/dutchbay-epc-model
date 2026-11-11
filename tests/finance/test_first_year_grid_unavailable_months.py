@@ -71,7 +71,7 @@ def test_six_months_halves_year_one_energy_and_leaves_later_years_alone(
     )
     assert rows[0]["generation_revenue_lkr"] < lender_rows[0]["generation_revenue_lkr"]
     assert rows[0]["opex_lkr"] == lender_rows[0]["opex_lkr"]
-    for new, old in zip(rows[1:], lender_rows[1:]):
+    for new, old in zip(rows[1:], lender_rows[1:], strict=True):
         assert new["net_kwh"] == old["net_kwh"]
         assert new["generation_revenue_lkr"] == old["generation_revenue_lkr"]
 
