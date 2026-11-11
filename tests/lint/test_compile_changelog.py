@@ -75,7 +75,7 @@ def test_fold_prepends_within_existing_subsection() -> None:
     out = CL.fold(_BASE, {"added": ["- newest added"]})
     unrel = out.split("## v1.0.0")[0]
     # Newest-first: the new bullet sits directly below the heading, above the old one.
-    assert "### Added\n- newest added\n- existing added entry" in unrel
+    assert "### Added\n- newest added\n\n- existing added entry" in unrel
 
 
 def test_fold_only_touches_unreleased_not_released_sections() -> None:
@@ -143,6 +143,48 @@ def test_collect_fails_closed_on_a_heading_fragment(
         CL._collect()
 
 
+def test_collect_retains_internal_paragraphs(tmp_path: Path) -> None:
+    frag = tmp_path / "paragraphs.fixed.md"
+    body = "- A finding\n  with a continuation.\n\n\nA separate paragraph."
+    frag.write_text("\n" + body + "\n\n", encoding="utf-8")
+
+    assert "\n".join(CL._collect([frag])["fixed"]) == body
+
+
+@pytest.mark.parametrize(
+    "first",
+    [
+        "- First entry\n  with a continuation.",
+        "First entry\nwith a wrapped line.",
+        "- First entry\n\n  With another paragraph.",
+    ],
+)
+def test_collect_keeps_each_fragment_separate(tmp_path: Path, first: str) -> None:
+    left = tmp_path / "a.fixed.md"
+    right = tmp_path / "b.fixed.md"
+    left.write_text(first + "\n", encoding="utf-8")
+    right.write_text("Independent entry.\n", encoding="utf-8")
+
+    out = CL.fold(_BASE, CL._collect([left, right]))
+
+    assert first + "\n\nIndependent entry.\n\n- existing fixed entry" in out
+
+
+def test_fold_separates_new_and_existing_prose() -> None:
+    base = _BASE.replace("- existing added entry", "Previously compiled paragraph.")
+
+    out = CL.fold(base, {"added": ["New paragraph."]})
+
+    assert "New paragraph.\n\nPreviously compiled paragraph." in out
+
+
+def test_collect_ignores_empty_fragments(tmp_path: Path) -> None:
+    empty = tmp_path / "empty.fixed.md"
+    empty.write_text("\n \n\t\n", encoding="utf-8")
+
+    assert CL._collect([empty]) == {}
+
+
 def test_select_batch_takes_sorted_suffix() -> None:
     frags = [Path(name) for name in ["a.added.md", "b.fixed.md", "c.changed.md"]]
     assert CL.select_batch(frags, 2) == frags[1:]
@@ -153,10 +195,10 @@ def test_select_batch_takes_sorted_suffix() -> None:
 def test_repeated_suffix_batches_equal_one_full_fold(tmp_path: Path) -> None:
     frags = []
     for name, body in [
-        ("a.added.md", "- a\n"),
-        ("b.fixed.md", "- b\n"),
-        ("c.added.md", "- c\n"),
-        ("d.fixed.md", "- d\n"),
+        ("a.added.md", "- a\n\n  A separate paragraph.\n"),
+        ("b.fixed.md", "Plain b\n\nAnother paragraph.\n"),
+        ("c.added.md", "Plain c\n"),
+        ("d.fixed.md", "- d\n  A continuation.\n"),
     ]:
         frag = tmp_path / name
         frag.write_text(body, encoding="utf-8")
