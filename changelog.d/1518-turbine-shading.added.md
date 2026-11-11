@@ -1,1 +1,0 @@
-Add `solar_resource.turbine_shading`, a location-agnostic estimate of the plane-of-array irradiance that wind-turbine towers and rotors take from co-located PV, read from the scenario's `turbine:` and `resource.solar` blocks, and add `turbine_shading_pct` to the solar loss taxonomy (#1518). It reports an optical floor and moves no KPI.
