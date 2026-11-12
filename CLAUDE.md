@@ -96,7 +96,9 @@ the merged worktree and branch, and clean any
 temporary/worktree-local venvs while never touching the protected local
 `/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` (`THREAD-01`, `ENV-01`). Cleanup never closes a
 pull request: closing an unmerged one needs a cited owner decision, posted as a comment on it
-first. Cleanup never closes tracker #1353. Delete a branch only when its pull request's `merged_at`
+first. The one exception is a `TRAIN-01` car, closed only after the train's post-landing check
+proves its commit is on `origin/main`, with the pointer comment posted first. Cleanup never
+closes tracker #1353. Delete a branch only when its pull request's `merged_at`
 is set and every ref still present equals the merged head.
 
 ## Known local-only failures

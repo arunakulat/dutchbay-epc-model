@@ -648,6 +648,7 @@ CLEANUP_01_SURFACE_CONTROLS = (
     "never closes tracker #1353",
     "Cleanup never closes a pull request",
     "cited owner decision",
+    "The one exception is a",
     "merged_at",
     "merged head",
 )
@@ -667,6 +668,7 @@ STEWARD_SKILL = ".claude/skills/steward/SKILL.md"
 # The steward's executable branch deletion gate, pinned line by line, and the train-car order.
 CLEANUP_01_STEWARD_CONTROLS = (
     'test "$(gh api "repos/$repo/pulls/$PR" --jq \'.head.ref\')" = "$BRANCH"',
+    'test "$(gh api "repos/$repo/pulls/$PR" --jq \'.head.repo.full_name\')" = "$repo"',
     'test -n "$(gh api "repos/$repo/pulls/$PR" --jq \'.merged_at // ""\')"',
     "want=$(gh api \"repos/$repo/pulls/$PR\" --jq '.head.sha')",
     'test "$(gh api "repos/$repo/pulls/$PR" --jq \'.state\')" = "closed"',
@@ -831,6 +833,8 @@ elif args[:2] == ["check-ref-format", "--branch"]:
         sys.exit(128)
     print(args[2])
 elif args[0] == "ls-remote":
+    if refs.get("fail_ls_remote"):
+        sys.exit(1)
     sha = refs.get("remote")
     if sha:
         print(sha + "\\t" + args[2])
@@ -870,6 +874,7 @@ _TRAIN_COMMITS = (
 def _gh_answers(
     *,
     head_ref: str = "feature",
+    head_repo: str = "arunakulat/dutchbay-epc-model",
     merged_at: str = "2026-11-07T00:00:00Z",
     head_sha: str = _MERGED,
     state: str = "closed",
@@ -880,6 +885,7 @@ def _gh_answers(
     pr = "repos/arunakulat/dutchbay-epc-model/pulls/7"
     return {
         f"{pr} --jq .head.ref": head_ref,
+        f"{pr} --jq .head.repo.full_name": head_repo,
         f'{pr} --jq .merged_at // ""': merged_at,
         f"{pr} --jq .head.sha": head_sha,
         f"{pr} --jq .state": state,
@@ -981,6 +987,7 @@ def test_cleanup_01_branch_gate_passes_a_merged_branch(
     [
         (_gh_answers(merged_at=""), {"remote": _MERGED}),
         (_gh_answers(head_ref="other"), {"remote": _MERGED}),
+        (_gh_answers(head_repo="fork/dutchbay-epc-model"), {"remote": _MERGED}),
         (_gh_answers(), {"remote": _MOVED}),
         (_gh_answers(), {"local": _MOVED}),
         (_gh_answers(), {"remote": _MERGED, "local": _MOVED}),
@@ -991,6 +998,7 @@ def test_cleanup_01_branch_gate_passes_a_merged_branch(
     ids=[
         "unmerged",
         "head-ref-mismatch",
+        "fork-repo-mismatch",
         "remote-moved",
         "local-moved",
         "local-moved-remote-ok",
@@ -1019,6 +1027,15 @@ def test_cleanup_01_branch_gate_remote_delete_is_leased_to_the_checked_head(
     assert "OK:" not in out
     assert _deletes(calls) == [_PUSH_DELETE]
     assert "branch -D feature" not in calls
+
+
+def test_cleanup_01_branch_gate_refuses_when_ls_remote_fails(tmp_path: Path) -> None:
+    """A failing git ls-remote halts before any deletion under set -euo pipefail (#1573 R-1)."""
+    refs = {"remote": _MERGED, "fail_ls_remote": "yes"}
+    code, out, calls = _run_branch_block(tmp_path, _gh_answers(), refs)
+    assert code != 0
+    assert "OK:" not in out
+    assert _deletes(calls) == []
 
 
 def test_cleanup_01_branch_gate_passes_a_landed_train_car(tmp_path: Path) -> None:
@@ -1074,6 +1091,7 @@ def test_cleanup_01_branch_gate_refuses_an_unproven_train_car(
 _PR_7 = "repos/arunakulat/dutchbay-epc-model/pulls/7"
 _GH_KEYS = {
     "head-ref": f"{_PR_7} --jq .head.ref",
+    "head-repo": f"{_PR_7} --jq .head.repo.full_name",
     "merged-at": f'{_PR_7} --jq .merged_at // ""',
     "head-sha": f"{_PR_7} --jq .head.sha",
     "car-state": f"{_PR_7} --jq .state",
@@ -1088,10 +1106,12 @@ _GH_KEYS = {
     ("failing", "car"),
     [
         ("head-ref", False),
+        ("head-repo", False),
         ("merged-at", False),
         ("head-sha", False),
         ("open-base", False),
         ("head-ref", True),
+        ("head-repo", True),
         ("car-state", True),
         ("head-sha", True),
         ("train-merged-at", True),

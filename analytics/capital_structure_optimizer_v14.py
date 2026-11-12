@@ -6,7 +6,7 @@ engine's existing single-lever gearing solve (``finance.debt_v14._solve_gearing_
 
 * :func:`optimize_debt_mix` — search the debt tranche MIX (the lkr/usd/dfi
   split under ``Financing_Terms.mix``) to maximize (or minimize) an objective KPI
-  (e.g. ``equity_irr``, or minimize a WACC proxy) SUBJECT TO covenant constraints
+  (default ``equity_npv``, or minimize a WACC proxy) SUBJECT TO covenant constraints
   (``min_dscr_period >= floor``, ``llcr``/``plcr`` floors, a balloon ceiling, ...).
   Two free proportions (LKR share, DFI share) span a 2-simplex; USD_Commercial
   absorbs the residual, mirroring the engine's ``_solve_mix``.
@@ -38,13 +38,23 @@ Determinism (MRM-01):
     ``numpy.arange`` on a fixed lattice) — no stochastic sampling, so repeated
     runs are bit-for-bit identical.
 
+Default objective (#1456):
+    Both optimizers default to ``objective_key="equity_npv"``, ``direction="max"``.
+    Equity IRR is not a safe ranking metric when the equity cashflows change sign
+    more than once (e.g. a refinanced tail that calls equity back after
+    distributions): measured on the refinance canon it picked the dearest debt mix
+    and a non-monotone contingency. Equity NPV ranks those probes correctly. An
+    explicit ``objective_key="equity_irr"`` is still honoured, with a warning.
+
 Context:
     Issue #740 (debt-mix & capex-contingency optimizers). Follow-up #741
-    (infeasibility diagnostics + optimization audit log).
+    (infeasibility diagnostics + optimization audit log). Issue #1456 (default
+    objective moved from equity IRR to equity NPV, owner decision 2026-11-01).
 """
 
 from __future__ import annotations
 
+import logging
 import math
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -65,6 +75,28 @@ from analytics.infeasibility_diagnostics import (
 )
 
 _DIRECTIONS = ("max", "min")
+
+logger = logging.getLogger(__name__)
+
+# #1456: the default ranking objective. Equity NPV, maximised (a less negative NPV is
+# better). Equity IRR ranks perversely when equity cashflows change sign more than once.
+DEFAULT_OBJECTIVE_KEY = "equity_npv"
+_IRR_RANKING_KEYS = frozenset({"equity_irr"})
+
+
+def _warn_if_irr_objective(objective_key: str, kind: str) -> None:
+    """Log the #1456 caveat when a caller explicitly ranks on equity IRR."""
+    if objective_key in _IRR_RANKING_KEYS:
+        logger.warning(
+            "%s optimizer ranking on %r: equity IRR can rank options in the opposite "
+            "order to equity NPV when equity cashflows change sign more than once "
+            "(e.g. equity calls to service a refinanced tail). Prefer "
+            "objective_key=%r (#1456).",
+            kind,
+            objective_key,
+            DEFAULT_OBJECTIVE_KEY,
+        )
+
 
 # Feasibility comparisons need a floating-point tolerance for the same reason
 # ``optimization_v14`` does: the dual-DSCR debt sculpt pins the achieved DSCR
@@ -264,7 +296,7 @@ def _score_candidate(
 def optimize_debt_mix(
     config_path: str,
     *,
-    objective_key: str = "equity_irr",
+    objective_key: str = DEFAULT_OBJECTIVE_KEY,
     direction: str = "max",
     constraints: Optional[Sequence[CovenantConstraint]] = None,
     lkr_bounds: Tuple[float, float] = (0.0, 1.0),
@@ -284,8 +316,10 @@ def optimize_debt_mix(
 
     Args:
         config_path: Path to the v14 scenario config (the base to perturb).
-        objective_key: KPI key to optimize (default ``equity_irr``). To minimize
-            a WACC proxy, pass e.g. ``discount_rate_used`` with ``direction="min"``.
+        objective_key: KPI key to optimize (default ``equity_npv``, #1456). To
+            minimize a WACC proxy, pass e.g. ``discount_rate_used`` with
+            ``direction="min"``. ``equity_irr`` is accepted but logs a warning: it
+            can rank mixes backwards when equity cashflows change sign more than once.
         direction: ``"max"`` or ``"min"``.
         constraints: Covenant constraints (e.g. ``min_dscr_period >= 1.30``,
             ``llcr >= 1.0``, ``balloon_pct <= 0.10``). Empty -> unconstrained.
@@ -319,6 +353,7 @@ def optimize_debt_mix(
                 f"{name} must satisfy 0 <= low <= high <= 1, got ({lo!r}, {hi!r})"
             )
 
+    _warn_if_irr_objective(objective_key, "debt_mix")
     cons = _normalize_constraints(constraints)
     base = dict(base_overrides or {})
 
@@ -375,7 +410,7 @@ def optimize_capex_contingency(
     config_path: str,
     *,
     base_capex_usd: float,
-    objective_key: str = "equity_irr",
+    objective_key: str = DEFAULT_OBJECTIVE_KEY,
     direction: str = "max",
     constraints: Optional[Sequence[CovenantConstraint]] = None,
     contingency_bounds: Tuple[float, float] = (0.0, 0.20),
@@ -399,7 +434,8 @@ def optimize_capex_contingency(
             contingency line. Must be finite and > 0. The optimizer sets
             ``capex.usd_total = base_capex_usd * (1 + f)`` so the search is
             self-consistent regardless of the committed contingency line.
-        objective_key: KPI key to optimize (default ``equity_irr``).
+        objective_key: KPI key to optimize (default ``equity_npv``, #1456;
+            ``equity_irr`` is accepted with a warning, as in :func:`optimize_debt_mix`).
         direction: ``"max"`` or ``"min"``.
         constraints: Covenant constraints (as in :func:`optimize_debt_mix`).
         contingency_bounds: Inclusive ``(low, high)`` fraction range to search
@@ -435,6 +471,7 @@ def optimize_capex_contingency(
             f"contingency_bounds must satisfy 0 <= low <= high, got ({lo!r}, {hi!r})"
         )
 
+    _warn_if_irr_objective(objective_key, "capex_contingency")
     cons = _normalize_constraints(constraints)
     base = dict(base_overrides or {})
 

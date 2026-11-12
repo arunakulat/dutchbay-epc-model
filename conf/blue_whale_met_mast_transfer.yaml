@@ -47,11 +47,13 @@ mast:
   # 80 m is the most complete high-level direction channel (package evaluation section 5).
   direction: "Direction 80 m Avg [°]"
   direction_120m: "Direction 120 m Avg [°]"
-  pressure_10m_kpa: "Pressure 10 m Avg [kPa]"
+  # Pressure and RH channels by height (m), as temperature_c. air_density.sensor_height_m
+  # and timezone.pressure_height_m pick the one each step reads.
+  pressure_kpa: {"10": "Pressure 10 m Avg [kPa]"}
   # Temperature channels by height (m), as speed_avg. timezone.temperature_height_m and
   # air_density.temperature_height_m pick the one each step reads.
   temperature_c: {"10": "Temp 10 m Avg [℃]", "120": "Temp 120 m Avg [℃]"}
-  humidity_10m_pct: "RH 10 m Avg [%]"
+  humidity_pct: {"10": "RH 10 m Avg [%]"}
   # Temperature rows outside this range are the reset/glitch rows of QC-030 and QC-031.
   temperature_valid_range_c: [10.0, 45.0]
 
@@ -78,6 +80,10 @@ timezone:
   scan_speed_height_m: 100
   anomaly_speed_height_m: 80
   temperature_height_m: 10
+  # The pressure channel whose semidiurnal (S2) phase dates the clock.
+  pressure_height_m: 10
+  # A month enters the month-by-month S2 phase only with this many days of 10-minute rows.
+  monthly_phase_min_days: 20
   sensitivity_offsets_minutes: [300, 360]
 
 reference:
@@ -182,6 +188,9 @@ shear:
   # Local clock hours counted as day (06:00 to 17:59 local).
   day_start_local_h: 6
   day_end_local_h: 18
+  # The measured profile reports two log-law fits: over every mast.speed_avg height, and
+  # over the heights from this one up (a mast.speed_avg height).
+  log_fit_upper_from_height_m: 80.0
 
 turbine:
   rated_power_kw: 9500.0
@@ -202,9 +211,9 @@ turbulence:
 air_density:
   # The mast.temperature_c channel used as the air temperature at height.
   temperature_height_m: 120
-  # Height of the pressure and RH channels (pressure_10m_kpa, humidity_10m_pct); pressure
-  # is moved hydrostatically from here, and RH is converted at the temperature channel of
-  # this same height.
+  # The mast.pressure_kpa and mast.humidity_pct channels read, which needs a channel of
+  # each (and a mast.temperature_c channel) at this height; pressure is moved
+  # hydrostatically from here, and RH is converted at the temperature of this same height.
   sensor_height_m: 10
 
 uncertainty:

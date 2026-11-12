@@ -348,6 +348,7 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
        [[ $CAR_HEAD =~ ^[0-9a-f]{40}$ && $TRAIN_PR =~ ^[1-9][0-9]*$ ]] || exit 1
      fi
      test "$(gh api "repos/$repo/pulls/$PR" --jq '.head.ref')" = "$BRANCH"
+     test "$(gh api "repos/$repo/pulls/$PR" --jq '.head.repo.full_name')" = "$repo"
      if [ -z "$CAR_HEAD" ]; then
        test -n "$(gh api "repos/$repo/pulls/$PR" --jq '.merged_at // ""')"
        want=$(gh api "repos/$repo/pulls/$PR" --jq '.head.sha')

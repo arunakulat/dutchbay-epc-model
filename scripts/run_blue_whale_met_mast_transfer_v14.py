@@ -243,21 +243,27 @@ def timezone_evidence(
     t_key = _channel_key(
         mcfg["temperature_c"], float(tcfg["temperature_height_m"]), "mast.temperature_c"
     )
+    p_col = mcfg["pressure_kpa"][
+        _channel_key(
+            mcfg["pressure_kpa"], float(tcfg["pressure_height_m"]), "mast.pressure_kpa"
+        )
+    ]
+    min_month_rows = (
+        24 * int(mcfg["samples_per_hour"]) * int(tcfg["monthly_phase_min_days"])
+    )
     lon = float(mcfg["longitude_deg_e"])
     mi = _dt(mast.index)
     hour = mi.hour + mi.minute / 60.0
-    p = mmt.harmonic_phase_hours(mast[mcfg["pressure_10m_kpa"]], hour, 12.0)
+    p = mmt.harmonic_phase_hours(mast[p_col], hour, 12.0)
     t = mmt.harmonic_phase_hours(mast[mcfg["temperature_c"][t_key]], hour, 24.0)
     implied = p["max_at_h"] - float(tcfg["s2_solar_time_of_maximum_h"]) + lon / 15.0
     by_month = []
     for _, g in mast.groupby(mi.month):
-        if len(g) < 144 * 20:
+        if len(g) < min_month_rows:
             continue
         gi = _dt(g.index)
         hh = gi.hour + gi.minute / 60.0
-        by_month.append(
-            mmt.harmonic_phase_hours(g[mcfg["pressure_10m_kpa"]], hh, 12.0)["max_at_h"]
-        )
+        by_month.append(mmt.harmonic_phase_hours(g[p_col], hh, 12.0)["max_at_h"])
     spd = mast[scan_col]
     sc = tcfg["scan_offsets_minutes"]
     scan = mmt.offset_correlation_scan(
@@ -606,6 +612,14 @@ def _channel_key(
     raise ValueError(f"no {what} channel at {height_m:g} m; channels: {sorted(cols)}")
 
 
+_COUNT_WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight")
+
+
+def _count_word(n: int) -> str:
+    """A small count in words, as the summary's basis text has always written it."""
+    return _COUNT_WORDS[n] if 0 <= n < len(_COUNT_WORDS) else str(n)
+
+
 def measured_profiles(
     mast: pd.DataFrame,
     mcfg: Mapping[str, Any],
@@ -617,6 +631,9 @@ def measured_profiles(
     The shear pair, the day window and the sector count come from the config (``shear``
     and ``mcp.n_sectors``), the same values the transfer chain uses (#1538 domain D-1).
     A sector reports a pair exponent only with ``shear.min_cell_hours`` of 10-minute rows.
+    The two log-law fits are labelled from the heights they use: every ``mast.speed_avg``
+    channel, and the channels from ``shear.log_fit_upper_from_height_m`` up (#1592 domain
+    F-1, assurance A-5).
 
     Args:
         mast: The assessment-window mast record.
@@ -639,6 +656,17 @@ def measured_profiles(
     heights = [float(h) for h in cols]
     means = [float(common[c].mean()) for c in cols.values()]
     mean_by_key = dict(zip(cols, means, strict=True))
+    top = max(cols, key=float)
+    fit_all = f"alpha_log_fit_{min(cols, key=float)}_{top}"
+    upper_from = _channel_key(cols, float(shear_cfg["log_fit_upper_from_height_m"]))
+    upper = [k for k in cols if float(k) >= float(upper_from)]
+    if len(upper) < 2:
+        raise ValueError(
+            f"shear.log_fit_upper_from_height_m ({upper_from} m) leaves fewer than 2 speed "
+            f"channels at or above it (found {len(upper)}: {[float(k) for k in upper]}); "
+            "a log-law fit requires at least 2 heights."
+        )
+    fit_upper = f"alpha_log_fit_{upper_from}_{top}"
     sec = mmt.sector_index(common[mcfg["direction"]].to_numpy(), n_sectors)
     by_sector = []
     for s in range(n_sectors):
@@ -671,7 +699,7 @@ def measured_profiles(
         dn[name] = {
             "n_10min": int(len(g)),
             "mean_ms_by_height": {h: float(g[c].mean()) for h, c in cols.items()},
-            "alpha_log_fit_30_120": mmt.log_law_fit_exponent(
+            fit_all: mmt.log_law_fit_exponent(
                 heights, [float(g[c].mean()) for c in cols.values()]
             ),
             pair: mmt.shear_exponent(
@@ -683,12 +711,17 @@ def measured_profiles(
         s = mast[cols[h]].dropna()
         diurnal[h] = mmt.profile_means(s.to_numpy(), s.index.hour, list(range(24)))
     return {
-        "basis": "10-minute rows with all five mean speeds present, assessment window",
+        "basis": (
+            f"10-minute rows with all {_count_word(len(cols))} mean speeds present, "
+            "assessment window"
+        ),
         "n_10min": int(len(common)),
         "heights_m": heights,
         "concurrent_mean_ms": means,
-        "alpha_log_fit_30_120": mmt.log_law_fit_exponent(heights, means),
-        "alpha_log_fit_80_120": mmt.log_law_fit_exponent(heights[2:], means[2:]),
+        fit_all: mmt.log_law_fit_exponent(heights, means),
+        fit_upper: mmt.log_law_fit_exponent(
+            [float(k) for k in upper], [mean_by_key[k] for k in upper]
+        ),
         pair: mmt.shear_exponent(mean_by_key[lo], mean_by_key[hi], lo_m, hi_m),
         "by_sector_80m_direction": by_sector,
         f"day_night_local_{day_start:02d}_{day_end:02d}": dn,
@@ -714,6 +747,33 @@ def shear_uncertainty_pct(
     return 100.0 * math.log(hub_height_m / from_height_m) * a_std
 
 
+def turbulence_tables(
+    mast: pd.DataFrame,
+    mcfg: Mapping[str, Any],
+    tcfg: Mapping[str, Any],
+    n_sectors: int,
+) -> Dict[str, Any]:
+    """Turbulence tables at each ``turbulence.heights_m``, keyed ``<height>m``.
+
+    Each height needs both a ``mast.speed_avg`` and a ``mast.speed_sd`` channel, or it is
+    refused.
+    """
+    out: Dict[str, Any] = {}
+    for height in tcfg["heights_m"]:
+        h = _channel_key(mcfg["speed_avg"], float(height))
+        h_sd = _channel_key(mcfg["speed_sd"], float(height), "mast.speed_sd")
+        out[f"{h}m"] = mmt.turbulence_table(
+            mast[mcfg["speed_avg"][h]].to_numpy(),
+            mast[mcfg["speed_sd"][h_sd]].to_numpy(),
+            mast[mcfg["direction"]].to_numpy(),
+            bin_edges_ms=tcfg["bin_edges_ms"],
+            n_sectors=n_sectors,
+            min_speed_ms=float(tcfg["min_speed_ms"]),
+            min_count=int(tcfg["min_count"]),
+        )
+    return out
+
+
 def air_density(
     mast: pd.DataFrame,
     mcfg: Mapping[str, Any],
@@ -725,16 +785,20 @@ def air_density(
     """Mean moist-air density at hub height from the mast's pressure, temperature and RH.
 
     The air temperature is the ``mast.temperature_c`` channel at ``temperature_height_m``.
-    Pressure and RH are read at ``sensor_height_m`` (the mast's pressure and RH channels),
-    and the humidity conversion uses the temperature channel at that same height.
+    Pressure and RH are the ``mast.pressure_kpa`` and ``mast.humidity_pct`` channels at
+    ``sensor_height_m``, and the humidity conversion uses the temperature channel at that
+    same height. A height with no such channel is refused, so pressure measured at one
+    height cannot be moved as if it were measured at another (#1592 assurance A-2).
     """
     temps = mcfg["temperature_c"]
     t_key = _channel_key(temps, temperature_height_m, "mast.temperature_c")
     s_key = _channel_key(temps, sensor_height_m, "mast.temperature_c")
-    p = mast[mcfg["pressure_10m_kpa"]] * 1000.0
+    p_key = _channel_key(mcfg["pressure_kpa"], sensor_height_m, "mast.pressure_kpa")
+    rh_key = _channel_key(mcfg["humidity_pct"], sensor_height_m, "mast.humidity_pct")
+    p = mast[mcfg["pressure_kpa"][p_key]] * 1000.0
     t_air = mast[temps[t_key]]
     t10 = mast[temps[s_key]]
-    rh = mast[mcfg["humidity_10m_pct"]].clip(0, 100)
+    rh = mast[mcfg["humidity_pct"][rh_key]].clip(0, 100)
     ok = p.notna() & t_air.notna() & t10.notna() & rh.notna() & (p > 90000)
     e = rh[ok] / 100.0 * 610.94 * np.exp(17.625 * t10[ok] / (t10[ok] + 243.04))
     q_ratio = 0.622 * e / (p[ok] - 0.378 * e)
@@ -1121,20 +1185,7 @@ def run(cfg: Mapping[str, Any]) -> Dict[str, Any]:  # noqa: C901 - one linear pi
     flicker = shadow_flicker(cfg, s_cfg, v, d, loc, operating, p_op_1530)
 
     # Turbulence (10-minute aggregates)
-    tcfg = cfg["turbulence"]
-    ti = {}
-    for height in tcfg["heights_m"]:
-        h = _channel_key(mcfg["speed_avg"], float(height))
-        h_sd = _channel_key(mcfg["speed_sd"], float(height), "mast.speed_sd")
-        ti[f"{h}m"] = mmt.turbulence_table(
-            mast[mcfg["speed_avg"][h]].to_numpy(),
-            mast[mcfg["speed_sd"][h_sd]].to_numpy(),
-            mast[mcfg["direction"]].to_numpy(),
-            bin_edges_ms=tcfg["bin_edges_ms"],
-            n_sectors=n,
-            min_speed_ms=float(tcfg["min_speed_ms"]),
-            min_count=int(tcfg["min_count"]),
-        )
+    ti = turbulence_tables(mast, mcfg, cfg["turbulence"], n)
 
     version = (REPO_ROOT / "VERSION").read_text().strip()
     out: Dict[str, Any] = {

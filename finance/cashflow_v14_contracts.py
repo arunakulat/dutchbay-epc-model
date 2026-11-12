@@ -60,6 +60,13 @@ class CashflowParams:
       curtailment_pct (economic/constraint-dispatch curtailment); this is grid
       unavailability. Do NOT also declare resource.losses.grid_availability_pct for the
       SAME downtime (that reduces the AEP summary) or the haircut double-counts.
+    - first_year_grid_unavailable_months: float, 0 <= months < 12. Months of the FIRST
+      operating year in which the plant is ready but cannot export because its grid
+      connection is not (#1403). Operating-year-1 gross and net energy are scaled by
+      ``1 - months / 12``; every other year, and every other line of year 1, is
+      unchanged. Default 0.0, and at 0.0 the scaling is skipped, so the engine is
+      byte-identical. A delay of a whole year or more belongs in the construction
+      window instead (``Financing_Terms.construction_periods``).
     - success_fee_pct, env_surcharge_pct, social_levy_pct: decimals (0–1)
     - risk_haircut_pct: float (decimal, 0–1)
     - opex_vat_pct: float (decimal, 0–1). Unrecoverable input VAT on O&M (#738,
@@ -110,6 +117,7 @@ class CashflowParams:
     curtailment_pct: float = 0.0
     grid_outage_pct: float = 0.0
     opex_vat_pct: float = 0.0
+    first_year_grid_unavailable_months: float = 0.0
     opex_usd_share: Optional[float] = None
     opex_usd_escalation_pct: float = 0.0
     opex_lkr_escalation_pct: float = 0.0
