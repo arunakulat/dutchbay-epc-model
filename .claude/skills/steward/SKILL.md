@@ -11,6 +11,9 @@ and `AGENTS.md`, and where they disagree with this file, they win.
 
 Load the ruleset and the three framework principles before acting. `CLAUDE.md` "Rules and
 formats that govern this repository" has the command and the rule IDs.
+Run the commands below from the active checkout root. Set `DUTCHBAY_VENV` to the absolute
+environment verified for your host. For local Codex tasks, `AGENTS.md` specifies
+`/Users/aruna/Downloads/Dutchbay_EPC_Model/.venv` (`THREAD-01`, `ENV-01`).
 
 ## Tracker-first intake (`INTAKE-01`)
 
@@ -57,7 +60,7 @@ rebinds are still in flight (#1231, comment 5849143748 §5).
 
 ## What green means here (`MERGE-01`)
 
-Green means every check on the exact head succeeded, or was skipped for a stated reason:
+Green means every *required* check reports success on the exact current head with no failed, pending or unreported required check and no conflict; a skipped advisory job is neither a blocker nor a substitute (`MERGE-01`):
 - `Stochastic Qualification` and `Report Qualification` run only on schedule or manual
   dispatch, so they skip on pull requests.
 - `Grid Study` may skip only when `Classify changed paths` classified the diff as unrelated to
@@ -72,11 +75,11 @@ Green means every check on the exact head succeeded, or was skipped for a stated
   workflow changes into the diff, so the prediction tends to say Grid Study will run where CI
   will skip it. It can also under-predict: for example when the branch reverts a change `main`
   made, or when its own diff is empty. Either way, the `Classify changed paths` job decides.
-  The snippet refuses to predict unless the checkout is at the pull request's head.
+  The snippet refuses to predict unless the checkout is at the pull request's head; the snippet's head check refuses in that window (S-A5-07(a)).
 
   ```bash
   PR=$(gh api repos/arunakulat/dutchbay-epc-model/pulls/<number> --jq '.base.sha + " " + .head.sha')
-  .venv/bin/python - "$PR" <<'PY'
+  PYTHONPATH="$PWD" "$DUTCHBAY_VENV/bin/python" - "$PR" <<'PY'
   import re, subprocess, sys
   from scripts.ci.classify_grid_study_paths import requires_grid_study
   parts = sys.argv[1].split()
@@ -103,9 +106,10 @@ Green means every check on the exact head succeeded, or was skipped for a stated
 
 - **Receipts.** For a CI fix, reproduce the failure, then show the same check passing. Paste
   the command and its result into the body's receipts table (`VERIFY-01`).
-- **Changelog.** Add one fragment, `changelog.d/<id-or-slug>.<category>.md`, whose body has no
-  Markdown headings. Never edit `CHANGELOG.md` directly. Validate with
-  `.venv/bin/python scripts/compile_changelog.py --dry-run`.
+- **Changelog.** Add one fragment, `changelog.d/<id-or-slug>.<category>.md` (use `.changed.md`
+  for governance and practice changes), whose body has no Markdown headings. Never edit
+  `CHANGELOG.md` directly. Validate with
+  `PYTHONPATH="$PWD" "$DUTCHBAY_VENV/bin/python" scripts/compile_changelog.py --dry-run`.
 - **Commits.** Follow `R18`, which admits only the eleven Conventional Commits types.
 - **Corpus and manifests.** Work through `AGENTS.md` "Four ways a corpus commit goes wrong".
   `sha256sum -c MANIFEST.sha256` must exit 0. Refresh parent manifests with
@@ -146,6 +150,11 @@ changelog erratum records what happens when that goes wrong.
 The lane count follows the risk class. The three bounded low-risk classes in module 1 §3.1
 are `R1` and take one lane: presentation-only code, test-only guard tightening, and record
 corrections. Everything else takes the domain and assurance pair. When unsure, it is `R2`.
+Before recruiting reviewers or starting work, search open issues and open pull requests for the
+same package and check active writer leases for overlapping work on that package or surface
+(`docs/governance/recruit_01/02_writer_lease_and_recovery.md`). Dispositions must be
+posted as issue comments; pull-request review objects show no edit time in REST and cannot
+support merge verification (S-A5-08(b)).
 
 ## Merging
 
@@ -158,6 +167,9 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
    - Look in the pull-request body, its comments and review threads, and the durable records they
      cite. List every condition, including ones carried forward from earlier cycles and re-imposed
      unchanged.
+   - Distinguish mechanical conditions self-verifiable by the merger (head green, unedited
+     comment, digest match, body format) from substantive conditions requiring independent
+     records (waivers, discharges, withdrawals) (S-A5-04).
    - More than one review chain may have reviewed the same head; #1231 had two. Take the union
      of every chain's conditions. One veto in any chain blocks.
    - The records that can clear a condition are those of the project owner, any coordinator on
@@ -168,57 +180,83 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
      Check that against a recruitment, appointment, lease or reconciliation record. A record that
      names only a role, such as "the #1231 review thread", is attributed through a coordinator
      record that binds that role to a session. Name your own session in every record you post.
+     An author-less record cannot attribute itself; attribute it from another record on which the
+     party is named (S-D5-01). Cite the record that contains the text being attributed.
    - The owner posts without a session. Take an owner decision from a record in which a session on
-     record quotes it and says where the owner gave it, or ask the owner.
+     record quotes it and says where the owner gave it, or ask the owner. Where the owner's
+     words answer a question, quote the question with them; the waiver names what the question
+     names (S-D5-03).
+   - A coordinator that attributes a block to itself, to the writer, or to a session it
+     succeeded cites a record from the time of posting that shows who posted it. Without that
+     evidence, the block remains unattributed (S-A5-03).
    - **Attribution decides what can clear a condition, never what can raise one.** A record you
      cannot attribute can never withdraw, discharge or waive a condition, and can never supply a
-     disposition, a §7 proof or a rebind. It never removes a block: a veto, `HOLD`, condition or
-     stated blocker in it stands until a coordinator on record attributes it, after which the
-     next rule applies, or until the owner withdraws it. State it on the pull request as a
-     blocker.
+     disposition, a §7 proof or a rebind. State every veto, `HOLD`, condition or stated blocker
+     it raises on the pull request. If a coordinator on record establishes attribution, apply
+     the next rule. While the author is unknown, only the owner may withdraw the block. An
+     independent reviewer who did not make the fix may discharge a satisfied condition by
+     citing the unattributed record and the evidence of fulfillment (S-D5-02).
    - Drop a condition that a later record withdrew or discharged, citing that record. Only the
      party whose finding it is, or the owner, can withdraw it, and only the party whose finding
      it is, or a reviewer other than whoever made the fix, can discharge it. A reviewer's record
      that a coordinator posts stays the reviewer's: posting it does not make its findings the
      coordinator's. Restating a reviewer's finding in a reconciliation does not either, and
      nobody discharges a condition on their own fix.
-   - The owner may also withdraw or waive a condition, or decide that a lane need not run.
+   - Only the owner can waive a condition or decide that a lane need not run (S-D5-05);
      `RECRUIT-01` contains no such waiver, so it rests on the owner's own authority.
-     - A waiver names each condition or lane it waives. A general instruction to merge, such as
-       "merge on CI green", restates `MERGE-01`, whose boundary says it does not replace a
-       required review, so it waives nothing.
+     - An owner waiver or withdrawal names each condition or lane it covers (S-A5-01). A general
+       instruction to merge, such as "merge on CI green", restates `MERGE-01`, whose boundary
+       says it does not replace a required review, so it waives and withdraws nothing. Neither
+       lifts a `HOLD`.
      - It counts only on record, as above. The relaying session must have received the owner's
        words directly, and quotes them exactly with when and where it received them. A
-       second-hand relay counts only once the owner confirms it.
+       second-hand relay counts only once the owner confirms it. If a different session merges,
+       owner instructions relayed from chat must be confirmed (S-A5-06, S-D4-02).
      - It lifts no `HOLD`, and the merge message quotes it.
+   - Every reviewer recruited on record for a cycle must have a posted disposition. A
+     recruitment with none, or a second recruitment for the same lane and manifest, is a
+     stated blocker until the earlier reviewer's record is posted. A reviewer's withdrawal says
+     what it was shown since its disposition (S-A5-02).
    - Confirm that no veto is outstanding. Confirm that each required disposition is non-blocking
-     and bound to the exact head, or carried to it under module 3 §7. A required disposition is
-     one from each reviewer role that `RECRUIT-01` module 1 requires for the risk class.
-     Handovers, review records, governance, dependency bumps and any code outside module 1
-     §3.1's bounded low-risk classes are `R2` there; those classes are `R1` and take one lane
-     (`REVIEW-01`). A required lane that has
-     not run, and that the owner has not waived on record, is a stated blocker, not a silent hold
-     (`MERGE-01`): say on the pull request which lane is missing.
+     and bound to the exact head, or carried/rebound to it under module 3 §6 or §7 (S-A5-07(c)). A
+     required disposition is one from each reviewer role that `RECRUIT-01` module 1 requires for
+     the risk class. Handovers, review records, governance, dependency bumps (which are `R2`
+     load-bearing because they alter runtime/CI boundaries, S-A5-08(d)) and any code outside
+     module 1 §3.1's bounded low-risk classes are `R2` there; those classes are `R1` and take
+     one lane (`REVIEW-01`). A required lane that has not run, and that the owner has not
+     waived on record, is a stated blocker, not a silent hold (`MERGE-01`): say on the pull
+     request which lane is missing.
    - The head you merge must equal the head the dispositions are bound to. A later push or base
      merge, by anyone, voids the binding. A base update needs module 3 §7's three proofs and a
      rebind. A documentation-only receipt commit needs §6's proofs and a rebind, and so does any
-     other push that changes no file, such as a reworded commit message. Any change to a subject
-     byte restarts both reviews.
+     other push that changes no file, such as a reworded commit message. For such a push, also
+     show `git range-diff <old-base>..<old-head> <new-base>..<new-head>` in full, as §7's third
+     proof does for a base update (S-D5-04). Any change to a subject byte restarts both reviews.
+   - Before merging each dependency pull request, re-run `make audit` on the exact head
+     (D1340-A-04). Advisory data can change after CI passes even when the lockfile is unchanged.
+     For a local run, verify `"$DUTCHBAY_VENV/bin/pip-audit"` is executable, then run
+     `PATH="$DUTCHBAY_VENV/bin:$PATH" PYTHONPATH="$PWD" make audit` from that checkout.
    - At merge, re-verify every disposition the merge relies on, whether a rebind or a review
      bound directly to the final head (module 3 §6). All of these must hold:
      - the comment you cite still exists at the URL or ID you recorded;
      - it is unedited: `updated_at` equals `created_at`. Record dispositions as issue comments:
-       a pull-request review shows no edit time, so it cannot pass this check;
+       a pull-request review shows no edit time in the REST review object (GraphQL exposes
+       `lastEditedAt`), so it cannot pass this check and cannot support merge; dispositions must
+       go in issue comments (S-A5-07(b), S-A5-08(b));
      - the SHA-256 of the record it transcribes equals both the digest it states and its
        durable record, which is the file the comment names and hashes. Hash the bytes between
        the `8<` markers, drop the blank line next to each marker, and end with one LF. A hash of
        the whole comment body does not match;
      - it names the reviewer, the exact commit, tree and base, and the subject-manifest digest.
 
-     An edit, deletion or mismatch invalidates the disposition until the reviewer issues a new
-     one. So does a comment that states no content digest, and a durable record you cannot
-     read: ask the reviewer to reissue the record, or merge from where the durable record is
-     kept. Name in every record you post where its durable record is kept.
+     An edited or deleted comment, a missing content digest or a mismatch invalidates the
+     disposition. Require a replacement on the exact merge head from the original reviewer
+     or from a new independent reviewer after a fresh review.
+
+     If the only obstacle is access to the named durable file, the merger may perform all
+     the checks above in the container holding that file and merge there once they pass.
+     Otherwise obtain a replacement disposition as above (S-A5-07(d)). Name the durable
+     file's location in each record you post.
    - A condition set by a review overrides the defaults in step 2, except the restricted-material
      rule. Publishing restricted material is the owner's decision (`AGENTS.md` "Four ways a
      corpus commit goes wrong", item 2), so a review condition cannot authorise it. If a
@@ -228,9 +266,14 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
      State on the pull request what blocks and who can clear it.
 2. **Merge.** Record the protected `main` SHA, and pin the expected head SHA so that a late push
    cannot slip in.
+   - `main` enforces linear history. Merges to `main` use squash-merge or rebase-merge (`TRAIN-01`);
+     two-parent merge commits cannot run on `main` and apply only to feature-branch updates (H-A1-06).
+     If a condition requires a two-parent merge commit on `main`, prefer a squash that meets the
+     condition or state the block.
    - The default is a squash merge titled as the pull-request title followed by
      ` (#<number>)`.
-   - The message body must carry:
+   - The squash message is part of the subject and must be verified against all merge-boundary
+     conditions. The message body must carry:
      - the text each merge-boundary condition requires, verbatim where the condition names
        words or references;
      - every `HOLD` that survives the merge, and every item carried past it as a gate on later
@@ -252,15 +295,10 @@ corrections. Everything else takes the domain and assurance pair. When unsure, i
        it. Cite the single home of the material instead, and tell the owner, who decides whether
        the record is redacted.
      - If you cannot tell whether text is restricted, treat it as restricted.
-   - Use a two-parent merge commit instead of a squash when a condition requires it. A merge
-     commit brings every branch commit into `main`. Check the subjects of its non-merge commits
-     against `R18` first; `R18`'s own measurement excludes merge commits. If a non-merge subject
-     fails and the condition allows only a merge commit, do not merge; state it as a blocker.
-     Otherwise prefer a squash that meets the condition.
    - Before submitting, re-read each condition against the final message text.
 3. **Verify against the SHA the merge returned.** The commit the merge created must equal the freshly fetched tip of
    `origin/main` and have the head's tree, and its first parent must be the `main` SHA recorded in
-   step 2. A squash has one parent. A two-parent merge commit must also have the head as its second
+   step 2. A squash has one parent. A two-parent merge commit (on branches supporting it) must also have the head as its second
    parent. Supply `MERGE_SHA`, `HEAD_SHA` and `MAIN_SHA` as full commit IDs and `PARENTS` as `1`
    for a squash or `2` for a merge commit. Run each Bash fence in a fresh shell with its named
    environment variables set from the recorded data. Never interpolate record text into shell code.
