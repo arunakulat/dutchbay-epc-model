@@ -1,0 +1,1 @@
+Blue Whale met-mast transfer: enforce minimum 2-speed channel floor on `shear.log_fit_upper_from_height_m`, pin day/night log-law fit exponent equality on day subset, assert stability under unordered `speed_avg` key mappings, and add passing-evidence verification at a second pressure height.
