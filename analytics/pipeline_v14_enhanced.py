@@ -838,6 +838,16 @@ def _validated_covenant_periods(debt_result: dict[str, Any]) -> list[dict[str, A
     return expected
 
 
+DSCR_COVENANT_EPSILON: float = 1e-6
+"""Tolerance for DSCR covenant comparison to absorb floating-point rounding noise.
+
+Operating years sculpted to hit target_dscr (e.g. 1.30) can evaluate to 1.2999999999999996
+(one ULP under the threshold). An epsilon well below the gearing step (0.0025) and credit
+spread prevents sub-ULP noise from triggering false breach counts across platforms (#1588).
+Matches the fp_eps tolerance used in debt sizing solvers.
+"""
+
+
 def _build_debt_covenant_snapshot(
     config: dict[str, Any],
     debt_result: dict[str, Any],
@@ -892,7 +902,7 @@ def _build_debt_covenant_snapshot(
         if value is None:
             continue
         dscr_value = float(value)
-        if dscr_value < dscr_threshold:
+        if dscr_value < (dscr_threshold - DSCR_COVENANT_EPSILON):
             year_label = int(operating_year)
             years_below += 1
             first_breach_year = (
