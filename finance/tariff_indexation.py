@@ -102,34 +102,40 @@ class OmIndexation:
         return self.escalable_om_lkr_per_kwh * (self.index(year_index) - 1.0)
 
 
-def _number(block: Mapping[str, Any], key: str) -> float:
+def _number(
+    block: Mapping[str, Any], key: str, *, prefix: str = "tariff.om_indexation"
+) -> float:
     """A required finite number from the block, refusing booleans and strings."""
     value = block.get(key)
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ValueError(f"tariff.om_indexation.{key} must be a number, got {value!r}")
+        raise ValueError(f"{prefix}.{key} must be a number, got {value!r}")
     number = float(value)
     if number != number or number in (float("inf"), float("-inf")):
-        raise ValueError(f"tariff.om_indexation.{key} must be finite, got {value!r}")
+        raise ValueError(f"{prefix}.{key} must be finite, got {value!r}")
     return number
 
 
-def _rate_pct(block: Mapping[str, Any], key: str) -> float:
+def _rate_pct(
+    block: Mapping[str, Any], key: str, *, prefix: str = "tariff.om_indexation"
+) -> float:
     """A required yearly rate in percent, inside ``_RATE_PCT_BOUNDS``."""
-    pct = _number(block, key)
+    pct = _number(block, key, prefix=prefix)
     low, high = _RATE_PCT_BOUNDS
     if not low < pct < high:
         raise ValueError(
-            f"tariff.om_indexation.{key}={pct} is outside ({low}, {high}) percent a "
+            f"{prefix}.{key}={pct} is outside ({low}, {high}) percent a "
             "year; state rates in percent (5.0 = 5%/yr)"
         )
     return pct
 
 
-def _weight(block: Mapping[str, Any], key: str) -> float:
+def _weight(
+    block: Mapping[str, Any], key: str, *, prefix: str = "tariff.om_indexation"
+) -> float:
     """A required weight in [0, 1]."""
-    weight = _number(block, key)
+    weight = _number(block, key, prefix=prefix)
     if not 0.0 <= weight <= 1.0:
-        raise ValueError(f"tariff.om_indexation.{key}={weight} must be in [0, 1]")
+        raise ValueError(f"{prefix}.{key}={weight} must be in [0, 1]")
     return weight
 
 
@@ -241,9 +247,6 @@ _NON_ESCALABLE_ALLOWED_KEYS = frozenset(
         "usd_inflation_pct",
         "sppa_signing_offset_months",
         "start_operating_year",
-        "sppa_signing_date",
-        "cod_date",
-        "cod_year",
         "source",
     }
 )
@@ -273,7 +276,37 @@ class NonEscalableAdjustment:
 
 
 def _resolve_start_year_index(block: Mapping[str, Any]) -> int:
-    """Derive 0-based operating start year from offset or explicit start year."""
+    """Derive 0-based operating start year from offset or explicit start year.
+
+    PUCSL s.3.1 item 1 specifies a one-off adjustment to the non-escalable
+    tariff component, taking effect exactly 12 months after the SPPA signing date.
+
+    The ``sppa_signing_offset_months`` parameter records the SPPA signing date
+    relative to Commercial Operation Date (COD) in calendar months (typically a
+    negative integer, e.g. -12 means SPPA was signed 12 months before COD).
+
+    The effective adjustment date relative to COD is therefore:
+        months_after_cod = sppa_signing_offset_months + 12
+
+    Three operational regimes arise:
+    1. Signed 12+ months prior to COD (offset <= -12):
+       The 12-month post-signing window has already elapsed before or at COD
+       (months_after_cod <= 0). The adjustment applies from COD day 1, which
+       is operating year 1 (0-based index 0).
+       Worked example: offset = -12 -> months_after_cod = 0 -> year_index = 0.
+       Worked example: offset = -24 -> months_after_cod = -12 <= 0 -> year_index = 0.
+
+    2. Signed within 12 months before COD (-12 < offset < 0):
+       The 12-month post-signing window elapses during operating year 1.
+       The adjustment takes effect from operating year 2 (0-based index 1).
+       Worked example: offset = -6 -> months_after_cod = +6 -> ceil(6/12) = 1 (year index 1).
+
+    3. Signed at or after COD (offset >= 0):
+       Worked example: offset = 0 (signed at COD) -> months_after_cod = 12 ->
+       ceil(12/12) = 1 (year index 1).
+       Worked example: offset = +6 (signed 6 mo post-COD) -> months_after_cod = 18 ->
+       ceil(18/12) = 2 (year index 2).
+    """
     if "start_operating_year" in block:
         val = block["start_operating_year"]
         if isinstance(val, bool) or not isinstance(val, int) or val < 1:
@@ -317,10 +350,11 @@ def resolve_non_escalable_adjustment(
             f"tariff.non_escalable_adjustment has unknown keys {unknown}; allowed: {sorted(_NON_ESCALABLE_ALLOWED_KEYS)}"
         )
 
+    prefix = "tariff.non_escalable_adjustment"
     if "adjusted_component_lkr_per_kwh" in block:
-        adjusted_comp = _number(block, "adjusted_component_lkr_per_kwh")
+        adjusted_comp = _number(block, "adjusted_component_lkr_per_kwh", prefix=prefix)
     elif "non_escalable_lkr_per_kwh" in block:
-        adjusted_comp = _number(block, "non_escalable_lkr_per_kwh")
+        adjusted_comp = _number(block, "non_escalable_lkr_per_kwh", prefix=prefix)
     else:
         raise ValueError(
             "tariff.non_escalable_adjustment requires 'adjusted_component_lkr_per_kwh' (or 'non_escalable_lkr_per_kwh')"
@@ -335,17 +369,17 @@ def resolve_non_escalable_adjustment(
             f"tariff.non_escalable_adjustment component={adjusted_comp} exceeds tariff.lkr_per_kwh={base_tariff_lkr_per_kwh}"
         )
 
-    ccpi_weight = _weight(block, "ccpi_weight")
-    fx_weight = _weight(block, "lkr_usd_weight")
+    ccpi_weight = _weight(block, "ccpi_weight", prefix=prefix)
+    fx_weight = _weight(block, "lkr_usd_weight", prefix=prefix)
     if abs(ccpi_weight + fx_weight - 1.0) > _WEIGHT_SUM_TOLERANCE:
         raise ValueError(
             f"tariff.non_escalable_adjustment ccpi_weight + lkr_usd_weight must equal 1, got {ccpi_weight} + {fx_weight}"
         )
 
-    ccpi_move = _rate_pct(block, "ccpi_inflation_pct") / 100.0
+    ccpi_move = _rate_pct(block, "ccpi_inflation_pct", prefix=prefix) / 100.0
     deprec_raw = block.get("lkr_usd_depreciation_pct")
     if deprec_raw == RELATIVE_PPP:
-        usd_move = _rate_pct(block, "usd_inflation_pct") / 100.0
+        usd_move = _rate_pct(block, "usd_inflation_pct", prefix=prefix) / 100.0
         fx_move = (1.0 + ccpi_move) / (1.0 + usd_move) - 1.0
     else:
         if "usd_inflation_pct" in block:
@@ -353,7 +387,7 @@ def resolve_non_escalable_adjustment(
                 "tariff.non_escalable_adjustment.usd_inflation_pct is read only when "
                 f"lkr_usd_depreciation_pct is {RELATIVE_PPP!r}"
             )
-        fx_move = _rate_pct(block, "lkr_usd_depreciation_pct") / 100.0
+        fx_move = _rate_pct(block, "lkr_usd_depreciation_pct", prefix=prefix) / 100.0
 
     multiplier = ccpi_weight * (1.0 + ccpi_move) + fx_weight * (1.0 + fx_move)
     start_year_index = _resolve_start_year_index(block)

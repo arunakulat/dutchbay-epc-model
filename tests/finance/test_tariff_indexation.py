@@ -188,6 +188,7 @@ def test_tariff_override_moves_only_the_non_escalable_base() -> None:
         raw_config=cfg, overrides={"tariff.lkr_per_kwh": 20.0}, return_full_result=True
     )
     rows = out["annual_rows"]
+    assert isinstance(rows, list)
     for t in (0, 5, 19):
         want = rows[t]["net_kwh"] * (20.0 + 4.93 * ((1.0 + _G) ** t - 1.0))
         assert rows[t]["generation_revenue_lkr"] == pytest.approx(want, rel=1e-12)
@@ -418,3 +419,155 @@ def test_non_escalable_adjustment_responsiveness() -> None:
     cfg_high["tariff"]["non_escalable_adjustment"]["ccpi_inflation_pct"] = 10.0
     r_high = evaluate_with_overrides(raw_config=cfg_high, overrides={})
     assert r_high["project_npv"] > r_base["project_npv"]
+
+
+@pytest.mark.parametrize(
+    ("offset", "expected_start_year"),
+    [
+        (-24, 0),  # Signed 24 months before COD -> window elapsed before COD -> Year 1
+        (-18, 0),  # Signed 18 months before COD -> window elapsed before COD -> Year 1
+        (
+            -12,
+            0,
+        ),  # Signed 12 months before COD -> window elapsed exactly at COD -> Year 1
+        (-11, 1),  # Signed 11 months before COD -> elapses 1 month post-COD -> Year 2
+        (-6, 1),  # Signed 6 months before COD -> elapses 6 months post-COD -> Year 2
+        (-1, 1),  # Signed 1 month before COD -> elapses 11 months post-COD -> Year 2
+        (0, 1),  # Signed at COD -> elapses 12 months post-COD -> Year 2
+        (1, 2),  # Signed 1 month after COD -> elapses 13 months post-COD -> Year 3
+        (6, 2),  # Signed 6 months after COD -> elapses 18 months post-COD -> Year 3
+        (12, 2),  # Signed 12 months after COD -> elapses 24 months post-COD -> Year 3
+        (13, 3),  # Signed 13 months after COD -> elapses 25 months post-COD -> Year 4
+    ],
+)
+def test_start_year_index_derivation_edge_cases(
+    offset: int, expected_start_year: int
+) -> None:
+    """Verify sppa_signing_offset_months arithmetic across regimes (PUCSL s.3.1 item 1)."""
+    block = dict(_NON_ESC_BLOCK, sppa_signing_offset_months=offset)
+    adj = resolve_non_escalable_adjustment(
+        {"tariff": {"non_escalable_adjustment": block}}
+    )
+    assert adj is not None
+    assert adj.start_year_index == expected_start_year
+
+
+@pytest.mark.parametrize("invalid_offset", [-12.5, "minus_twelve", True, None])
+def test_start_year_index_refuses_non_integer_offsets(invalid_offset: Any) -> None:
+    """Float offsets, strings, and booleans fail loud."""
+    block = dict(_NON_ESC_BLOCK, sppa_signing_offset_months=invalid_offset)
+    with pytest.raises(
+        ValueError, match="sppa_signing_offset_months must be an integer"
+    ):
+        resolve_non_escalable_adjustment(
+            {"tariff": {"non_escalable_adjustment": block}}
+        )
+
+
+@pytest.mark.parametrize("invalid_year", [0, -1, 1.5, True, "year_1"])
+def test_start_year_index_refuses_invalid_explicit_years(invalid_year: Any) -> None:
+    """Explicit start_operating_year must be an integer >= 1."""
+    block = dict(_NON_ESC_BLOCK)
+    block.pop("sppa_signing_offset_months", None)
+    block["start_operating_year"] = invalid_year
+    with pytest.raises(
+        ValueError, match="start_operating_year must be an integer >= 1"
+    ):
+        resolve_non_escalable_adjustment(
+            {"tariff": {"non_escalable_adjustment": block}}
+        )
+
+
+def test_pruned_dead_keys_raise_unknown_key_error() -> None:
+    """Dead keys (sppa_signing_date, cod_date, cod_year) are refused under FRAMEWORK-02."""
+    for dead_key in ("sppa_signing_date", "cod_date", "cod_year"):
+        block = dict(_NON_ESC_BLOCK, **{dead_key: "2026-01-01"})
+        with pytest.raises(ValueError, match="unknown keys"):
+            resolve_non_escalable_adjustment(
+                {"tariff": {"non_escalable_adjustment": block}}
+            )
+
+
+def test_dynamic_error_prefix_in_non_escalable_adjustment() -> None:
+    """Error messages report tariff.non_escalable_adjustment prefix instead of om_indexation."""
+    # Invalid component type
+    bad_comp = dict(_NON_ESC_BLOCK, adjusted_component_lkr_per_kwh="not_a_number")
+    with pytest.raises(
+        ValueError,
+        match=r"^tariff\.non_escalable_adjustment\.adjusted_component_lkr_per_kwh must be a number",
+    ):
+        resolve_non_escalable_adjustment(
+            {"tariff": {"non_escalable_adjustment": bad_comp}}
+        )
+
+    # Invalid weight type
+    bad_weight = dict(_NON_ESC_BLOCK, ccpi_weight=True)
+    with pytest.raises(
+        ValueError,
+        match=r"^tariff\.non_escalable_adjustment\.ccpi_weight must be a number",
+    ):
+        resolve_non_escalable_adjustment(
+            {"tariff": {"non_escalable_adjustment": bad_weight}}
+        )
+
+    # Out of bounds weight
+    oob_weight = dict(_NON_ESC_BLOCK, ccpi_weight=1.5, lkr_usd_weight=-0.5)
+    with pytest.raises(
+        ValueError,
+        match=r"^tariff\.non_escalable_adjustment\.ccpi_weight=1\.5 must be in \[0, 1\]",
+    ):
+        resolve_non_escalable_adjustment(
+            {"tariff": {"non_escalable_adjustment": oob_weight}}
+        )
+
+    # Out of bounds rate
+    oob_rate = dict(_NON_ESC_BLOCK, ccpi_inflation_pct=150.0)
+    with pytest.raises(
+        ValueError,
+        match=r"^tariff\.non_escalable_adjustment\.ccpi_inflation_pct=150\.0 is outside",
+    ):
+        resolve_non_escalable_adjustment(
+            {"tariff": {"non_escalable_adjustment": oob_rate}}
+        )
+
+
+def test_bess_revenue_multi_year_step_interaction() -> None:
+    """Verify year-by-year BESS revenue step when offset=0 vs offset=-12."""
+    cfg_base = _cfg(_SOLAR_BESS)
+    base_rows = build_annual_rows_efficient(cfg_base)
+
+    # Case A: Signed at COD (offset=0) -> Adjustment takes effect in Year 2 (index 1)
+    cfg_offset0 = copy.deepcopy(cfg_base)
+    cfg_offset0["tariff"]["non_escalable_adjustment"] = dict(
+        _NON_ESC_BLOCK,
+        adjusted_component_lkr_per_kwh=18.00,
+        sppa_signing_offset_months=0,
+    )
+    cfg_offset0["generation"]["technologies"]["bess_1"]["revenue"][
+        "non_escalable_lkr_per_kwh"
+    ] = 29.08
+    rows_offset0 = build_annual_rows_efficient(cfg_offset0)
+
+    # Year 1 (index 0): identical to base
+    assert rows_offset0[0]["revenue_lkr"] == pytest.approx(
+        base_rows[0]["revenue_lkr"], rel=1e-12
+    )
+    # Year 2 (index 1) & Year 3 (index 2): elevated revenue
+    assert rows_offset0[1]["revenue_lkr"] > base_rows[1]["revenue_lkr"]
+    assert rows_offset0[2]["revenue_lkr"] > base_rows[2]["revenue_lkr"]
+
+    # Case B: Signed 12 months before COD (offset=-12) -> Takes effect Year 1 (index 0)
+    cfg_offset12 = copy.deepcopy(cfg_base)
+    cfg_offset12["tariff"]["non_escalable_adjustment"] = dict(
+        _NON_ESC_BLOCK,
+        adjusted_component_lkr_per_kwh=18.00,
+        sppa_signing_offset_months=-12,
+    )
+    cfg_offset12["generation"]["technologies"]["bess_1"]["revenue"][
+        "non_escalable_lkr_per_kwh"
+    ] = 29.08
+    rows_offset12 = build_annual_rows_efficient(cfg_offset12)
+
+    # Year 1 (index 0): already elevated
+    assert rows_offset12[0]["revenue_lkr"] > base_rows[0]["revenue_lkr"]
+    assert rows_offset12[1]["revenue_lkr"] > base_rows[1]["revenue_lkr"]
